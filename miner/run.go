@@ -410,6 +410,25 @@ func provide(opts docopt.Opts) {
 		localUserNatSettings := connect.DefaultLocalUserNatSettings()
 		localUserNatSettings.TcpBufferSettings.ConnectSettings = clientStrategySettings.ConnectSettings
 		localUserNatSettings.UdpBufferSettings.ConnectSettings = clientStrategySettings.ConnectSettings
+
+		// TEST BUILD ONLY -- DO NOT MERGE.
+		// Raises the egress netstack's ceiling so a single flow is not bounded
+		// by the default 1 MiB receive window. A tcp flow can have at most one
+		// window in flight per round trip, so per-flow throughput is capped at
+		// window/rtt: 1 MiB at 80ms rtt is ~105 Mbps regardless of the link.
+		// 16 MiB lifts that to ~1.7 Gbps at the same rtt.
+		//
+		// 16 MiB is a power-of-2 multiple of the 64 KiB MinWindowSize, which
+		// the MaxWindowSize contract requires (the doubling ladder must land
+		// exactly on the max -- see scaledPow2WindowSize in connect/ip.go).
+		//
+		// The flow limits are raised rather than removed: the window is per
+		// flow, so window x flows is the real memory exposure, and this box
+		// has 2 GB. 128 concurrent tcp flows at 16 MiB is a 2 GB worst case,
+		// so keep the flow cap where it is and let a single flow go fast.
+		localUserNatSettings.TcpBufferSettings.MaxWindowSize = uint32(16 * 1024 * 1024)
+		localUserNatSettings.TcpBufferSettings.ReadBufferByteCount = 1024 * 1024
+		localUserNatSettings.UdpBufferSettings.MaxWindowSize = uint32(4 * 1024 * 1024)
 		remoteUserNatProviderSettings := connect.DefaultRemoteUserNatProviderSettings()
 
 		clientStrategy := connect.NewClientStrategy(proxyCtx, clientStrategySettings)
