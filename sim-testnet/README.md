@@ -1,0 +1,327 @@
+# `sim-testnet` release 1.0 harness
+
+`sim-testnet` is the only supported release-1.0 testnet installer and integration
+test. It converges an **existing** Bittensor testnet subnet, deploys the reviewed
+reserve/vault/coordinator contract set, provisions two operators, eight miners,
+two validators, two independently keyed three-client head fleets and two tail
+miners, then leaves the topology running for inspection and named scenarios.
+Each head fleet stays within one operator and whole fleets are balanced across
+operators, so the affiliated-validator self-dealing mask leaves an independent
+head and pool instead of contaminating every head UID.
+
+It never creates a subnet. Every write is bounded by an approved, content-hashed
+plan. `doctor`, `plan`, `status`, `inspect` and `analyze` are read-only. `setup`,
+`launch`, `resume`, `scenario` and `retire` are dry-runs unless both `--apply`
+and the exact `--plan-hash` are supplied.
+
+## Pre-launch approval
+
+The testnet inputs are stored under testnet-prefixed keys in
+`../vault/main/st.yml`. Do not run `setup --apply` or `launch --apply` until
+`doctor` is green and the printed plan hash and maximum spend have been reviewed.
+Loading the configuration does not itself write to either chain.
+
+Required `testnet-` keys:
+
+| key | required value |
+|---|---|
+| `testnet-wallet` | A portable `vault-wallet:relative/path` to a standard encrypted Bittensor wallet directory, or the legacy signer forms `env:VARIABLE` and `file:/absolute/owner-only/path`. The coldkey is decrypted only in memory and must match `coldkeypub.txt`; its public default hotkey is also identity-checked. |
+| `testnet-wallet-password` | A contained, non-symlink `vault-file:relative/path` to the encrypted wallet password. On execution hosts it must be owner-readable with no group/other permission bits (for example `chmod 600 vault/subtensor/testnet_wallet.password`). It is never accepted as a CLI flag or emitted in evidence. |
+| `testnet-netuid` | The existing nonzero netuid owned by that wallet. |
+| `testnet-spending-limit-tao-rao` | Maximum total testTAO outflow, as an integer number of rao. |
+| `testnet-spending-limit-alpha-rao` | Maximum existing subnet-alpha transferred into release roles, as integer rao. The wallet must already control a staking hotkey with at least this topology's planned alpha. |
+| `testnet-spending-limit-evm-gas-wei` | Maximum aggregate EVM gas funding/use, as integer wei. |
+| `testnet-operator-api-origins` | Exactly two distinct bare `http(s)://host[:port]` origins, in NO 1/NO 2 order. Each must externally route to the corresponding API port and expose `/status`, `/verify/*`, `/sn/artifact*`, and `/sn/evidence*`. Launch verifies the signed content and history through these origins before publishing a portable manifest. |
+
+The checked-in testnet governance value is `single-owner`; the harness generates
+a dedicated capped testnet owner and a separate guardian. Unprefixed values are
+mainnet-only and retain `safe-2-of-3`; `sim-testnet` refuses to resolve them.
+
+`testnet-authority` must resolve `sim-testnet:9944` to the deployed runtime-447
+RPC gateway from the execution host. Map that name to the reachable local or
+overlay gateway address for the execution host. Evidence uses the existing
+shared `server/blob` MinIO configuration and bucket; no second object store is
+started. MinIO and Subtensor are the only external shared services.
+
+Runtime 447 distinguishes atomic alpha transfers (`TransferToggle`, managed by
+`sudo_set_toggle_transfer`) from the one-time trading/emission activation
+(`SubtokenEnabled`, managed by the subnet owner's `start_call`). The harness
+checks these as distinct storage postconditions.
+
+Runtime 447 also raises a subnet's burn after successful registration. The
+release plan therefore reserves at most `100000000` rao per registration and
+binds that same ceiling into every native `register_limit` and EVM
+`registerLimit` action. EVM callers are funded at their SS58 mirrors and pass
+zero value to the neuron precompile; the runtime deducts the burn from the
+caller mirror. Contract registrations supply the full ceiling and return the
+unburned surplus, so an in-flight price increase cannot produce an underfunded
+call below the approved cap.
+
+## Host prerequisites
+
+- Linux amd64, Go 1.26.x, Git, and a running user systemd manager.
+- At least 20 GiB free on the simulator state filesystem. Immediately before a
+  launch/resume can construct a chain-capable executor, the harness also binds
+  every required loopback process port and rejects any unrelated or stale listener.
+- Docker with direct permission for the invoking user or passwordless `sudo -n
+  docker`. The harness prefers direct access and never opens an interactive sudo
+  prompt. One isolated PostgreSQL 18 and Redis 8 pair is created per operator from the exact digests in
+  `deploy/testnet/release.lock.yml`. Their locale, database initialization,
+  connection capacity, Redis threading, and persistence settings mirror
+  `server/local`; they never use shared PG or Redis services. PostgreSQL data
+  volumes and containers carry the same complete release/config hash, and stale
+  or unlabelled volumes are rejected instead of silently reusing old init hooks.
+- The locked `sn`, `server`, `vault`, platform `config`, `connect`, `sdk`, `glog`,
+  `goidenticons`, `proxy`, `userwireguard`, and `xops` repositories checked out
+  beneath one parent. Repository discovery uses Go module identity plus required
+  resource files; `--sn-repo`, `--server-repo`, `--vault-repo`, and
+  `--platform-config-repo` are available when the layout differs. Both executable
+  Go sources and the non-secret operator config tree are content-locked.
+- Network reachability to the private Substrate/EVM gateway, public comparison
+  endpoints, and existing MinIO service.
+- Foundry 1.7.1 only for developer rebuild/review. A launch embeds locked bytecode
+  and never compiles Solidity at runtime.
+
+On this checkout Foundry is installed at `/home/by/.foundry/bin`.
+
+## Build and read-only preflight
+
+From the `sn` repository:
+
+```bash
+go build -trimpath -o build/sim-testnet ./sim-testnet
+
+./build/sim-testnet doctor \
+  --config sim-testnet/testnet.yml \
+  --format json
+
+./build/sim-testnet plan \
+  --config sim-testnet/testnet.yml \
+  --format json > /tmp/ur-subnet-testnet-plan.json
+```
+
+`doctor` checks the release lock, repository source hashes, wallet proof,
+ownership, balances, budget, runtime/genesis/chain identity, metadata and call
+shapes, finalized subnet-token/emission activation, recent historical EVM state,
+gateway methods, connected consensus peers, the signed finalized-head lag
+bound, a canonical common checkpoint, distinct physical private/public Subtensor
+peers, precompiles, MinIO's exact HTTP live endpoint, the Docker daemon and systemd.
+`plan` repeats those gates, reads finalized setup facts, and prints every intended
+action, dependency, maximum spend and the canonical `plan_hash`. That approval
+hash binds the complete release lock, harness/public/hyperparameter manifests and
+all non-secret values resolved from the vault, not only their YAML references. The
+signed policy has its own canonical hash. Neither command submits a transaction or
+extrinsic.
+
+The public-chain integration probes are opt-in:
+
+```bash
+SIM_TESTNET_LIVE_WALLET=1 go test ./sim-testnet -run TestLiveVaultWalletResolution -v
+SIM_TESTNET_LIVE_READ=1 go test ./sim-testnet -run TestLiveBalanceProbe -v
+```
+
+The alpha-bootstrap integration test additionally requires its exact
+`SIM_TESTNET_STAKE_ALPHA` confirmation string. It is idempotent once the target
+alpha position exists and otherwise journals activation and staking before
+checking finalized storage. It is not part of the ordinary unit-test suite.
+
+## Approved setup and launch
+
+Use the exact hash from the reviewed plan. A changed config, resolved vault input,
+policy, release lock, role derivation, source checkout, artifact, runtime fact, or
+persisted plan fails closed. Every apply reruns `doctor` and rechecks finalized
+economic facts against the exact unverified remainder. Docker dependencies and
+all release binaries are preflighted before a transaction-capable executor opens.
+
+```bash
+# Optional: converge chain/contracts/config without starting services.
+./build/sim-testnet setup \
+  --config sim-testnet/testnet.yml \
+  --apply --plan-hash 0xREVIEWED_PLAN_HASH
+
+# Converge setup, start the persistent topology, run the mandatory M0B
+# precompile-conformance gate, prove readiness, and run smoke.
+./build/sim-testnet launch \
+  --config sim-testnet/testnet.yml \
+  --apply --plan-hash 0xREVIEWED_PLAN_HASH \
+  --detach
+```
+
+The journal records intent, signed bytes/nonce, broadcast, inclusion, finality and
+postcondition. If the command is interrupted, use the same approval:
+
+```bash
+./build/sim-testnet resume \
+  --config sim-testnet/testnet.yml \
+  --apply --plan-hash 0xREVIEWED_PLAN_HASH \
+  --detach
+```
+
+Host reboot is an intentional stop boundary. The supervisor unit is started but
+never enabled, managed PostgreSQL/Redis containers use Docker restart policy
+`no`, and loginctl linger is not required. After a reboot, run `resume` explicitly;
+it re-runs doctor and reconciles the journal and finalized chain before starting
+any dependency or process.
+
+Before smoke, `launch` automatically runs the named `precompile-conformance`
+scenario. It finalized-reads and replaces/restores a native commitment, deploys
+the locked disposable probe, checks Blake2/Ed25519/sr25519/metagraph/neuron/staking,
+converts only the plan-approved TAO dust into alpha, performs an exact two-hotkey
+round trip, observes a take-zero dividend cycle, and transfers every attributable
+alpha unit to a controlled provider coldkey. Each phase has a separate transaction
+intent, ceiling, finalized receipt, postcondition and signed evidence record.
+
+## Observe and run release campaigns
+
+```bash
+./build/sim-testnet status  --config sim-testnet/testnet.yml --format json
+./build/sim-testnet inspect --config sim-testnet/testnet.yml --format json
+./build/sim-testnet analyze --config sim-testnet/testnet.yml --format json
+./build/sim-testnet tail    --config sim-testnet/testnet.yml
+
+./build/sim-testnet scenario --name precompile-conformance \
+  --config sim-testnet/testnet.yml \
+  --apply --plan-hash 0xREVIEWED_PLAN_HASH
+
+./build/sim-testnet scenario --name release-1.0 \
+  --config sim-testnet/testnet.yml \
+  --apply --plan-hash 0xREVIEWED_PLAN_HASH
+
+./build/sim-testnet scenario --name production-soak \
+  --config sim-testnet/testnet.yml \
+  --apply --plan-hash 0xREVIEWED_PLAN_HASH
+```
+
+`release-1.0` requires 20 accelerated epochs, real two-NO verification,
+independently applied CRv4 vectors and self masks, isolated deposits and conviction,
+public roots, claims from both pools, cryptographically reconstructed head bindings,
+a nonzero native head weight, exact signed-policy max-weight-cap compliance, reserve
+principal plus auto-compounded yield, process fault recovery and exact rao
+conservation. `production-soak` schedules the canonical
+50,400-block policy and immunity period, rotates each operator verification key while
+retaining old proof verification, runs two complete production epochs, and genuinely
+restarts (new PID, healthy replacement) every operator service, miner/claim daemon
+and validator without overlapping faults.
+
+## Continuous adversarial campaign
+
+The `release-1.0` and `production-soak` scenarios always load the release-locked
+[`adversarial-matrix-v1.json`](../docs/spec/adversarial-matrix-v1.json). Its 54
+rows cover Yuma/YC3 cabals, stale and reveal-following weight copies, liquid-alpha
+bond timing and validator-permit churn, all eight published Subtensor security
+advisories, historical runtime atomicity/accounting/identity/resource failures,
+subnet reserve/registration/liquidity/eviction pressure, hidden root-basket rewards,
+proxy-stake MEV/slippage, four security-relevant Bittensor SDK/transport issue
+families (missing signatures, finality-era expiry, plaintext unauthenticated
+transport, and constant body hashes), runtime/precompile drift, identity
+and proxy churn, commitment-field parser confusion, operator/verification abuse, artifact equivocation, contract
+authorization/custody, settlement, and dependency failures.
+
+Seven attributed actors start before the happy path and remain active until
+after its final reconciliation:
+
+- bounded operator API and real `/verify` pressure, including simultaneous
+  identical EXTENDs, replays, invalid signatures, poison-shape comparisons, and
+  per-source vpk rotation;
+- independent private/public finalized-RPC agreement, observed runtime-spec and
+  transaction-version identity, plus common-height subnet UID,
+  spot/moving-price, and TAO/alpha-reserve reads;
+- artifact fetch/reconstruction/tamper pressure and fleet identity-generation
+  mutations; and
+- deterministic consensus, liquid-alpha, custody, unit/domain, rounding,
+  root-index, and upstream reserve-flow emulation.
+
+Every fifth sample is a control and the other four are adversarial. Release
+configuration requires at least 100 non-skipped samples per actor, both phases,
+zero unexpected actor errors, p99 latency at most 15 seconds, attack/control p95
+latency no worse than 20×, at most eight
+operator requests/second and two RPC requests/second. Expected 400/409/429
+rejections are recorded separately from faults. Campaign evidence includes the
+matrix hash, lifecycle overlap, request/in-flight totals, latency distributions,
+per-vector required and actually sampled metric names, and full-run minima/maxima
+for on-chain numeric sentinels in
+`runs/<deployment-id>/runs/<run-id>/adversaries.json`.
+
+The release schedules non-overlapping outages for every simulator-owned
+PostgreSQL/Redis pair and the simulator-owned loopback Subtensor RPC proxy, then
+rolls every persistent process. It records exact downstream impact windows and
+requires healthy replacement PIDs. The external shared Subtensor and MinIO
+services are not destructively faulted; MinIO remains under continuous
+history/reconstruction/tamper pressure.
+
+Every run also writes `anomalies.json`. It is built from failed assertions,
+deployment warnings, component errors, unresolved claims, supervisor health and
+restart deltas, incomplete faults, and adversary actor/vector failures. Scheduled
+restart faults are reconciled exactly; any excess or missing restart is an
+anomaly. A release run passes only when this append-only ledger is `clean` with
+zero entries. Failed runs leave entries `open` for the root-cause, minimized
+reproduction, regression, and clean-rerun evidence required by the mainnet
+readiness dossier.
+
+Shared-testnet safety is structural: live actors touch only loopback operator
+endpoints, our deployment/netuid identities, and capped read RPC. Chain-wide
+flooding, proxy takeover, cooldown bypass, and global state-bloat exploits run
+only against the exact pinned local runtime; their live actors are read-only
+sentinels or bounded state-machine emulators. Any unexplained error, drift,
+latency breach, missing sample, process restart, or happy-path discrepancy fails
+the scenario and remains a root-cause investigation item—it is never waived as
+“adversarial noise.”
+
+For independent inspection, use any signed deployment-manifest evidence URL from
+`runs/ur-subnet-testnet-v1/public/deployment-manifest.locators.json` on a clean
+compatible checkout:
+
+```bash
+./build/sim-testnet inspect \
+  --config sim-testnet/testnet.yml \
+  --manifest 'https://NO/sn/evidence?hash=sha256:...'
+
+./build/sim-testnet analyze \
+  --config sim-testnet/testnet.yml \
+  --manifest 'https://NO/sn/evidence?hash=sha256:...'
+```
+
+## Stop and retire
+
+`stop` terminates only local supervised processes; it preserves containers,
+secrets, evidence and all chain state. Retirement is a separate future-effective,
+hash-approved on-chain plan and is dry-run by default:
+
+```bash
+./build/sim-testnet stop --config sim-testnet/testnet.yml
+./build/sim-testnet retire --config sim-testnet/testnet.yml --format json
+./build/sim-testnet retire --config sim-testnet/testnet.yml \
+  --apply --plan-hash 0xREVIEWED_RETIREMENT_PLAN_HASH
+```
+
+Retirement deactivates operator versions at the next epoch. It never deletes the
+immutable vault, reserve, prior entitlements, claims, MinIO history, role store, or
+local run evidence.
+
+## Local verification
+
+These commands are safe before launch approval and perform no testnet writes:
+
+```bash
+go test ./...
+go test -race ./crv4 ./miner/... ./protocol ./sim-testnet ./validator
+
+PATH=/home/by/.foundry/bin:$PATH \
+  bash -c 'cd evm && forge fmt --check && forge build --sizes && forge test --summary'
+
+cd ../server
+WARP_ENV=main \
+BRINGYOUR_MINIO_HOSTNAME=172.28.208.177 \
+SIM_TESTNET_LIVE_BLOB=1 \
+go test . -run '^TestLiveBlobStoreContentAddressedCanary$' -count=1
+```
+
+The opt-in blob test writes one fixed content-addressed canary, then reads and
+lists it through the real server/blob service account. Repeated runs overwrite
+the same bytes at the same key; ordinary tests never access external storage.
+
+Database-backed server tests additionally need the hermetic PostgreSQL/Redis/vault
+profile that `launch` materializes after verified contract addresses exist. Running
+them with only `RUN_SERVER_DB_TESTS=1` and no `WARP_ENV` is an expected fail-closed
+configuration error, not a database-health result. The release campaign runs them
+against both rendered managed-operator databases before the final go/no-go decision.
