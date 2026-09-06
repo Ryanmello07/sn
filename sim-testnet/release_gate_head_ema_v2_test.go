@@ -21,7 +21,7 @@ func TestProducerGateStateSelectionCoversHeadEMAStoreV2(t *testing.T) {
 		t.Fatal(err)
 	}
 	var sources []string
-	for _, path := range []string{"../validator/head_ema_test.go", "../validator/head_ema_v2_test.go"} {
+	for _, path := range []string{"../validator/head_ema_test.go", "../validator/head_ema_v2_test.go", "../validator/head_ema_v2_control_test.go"} {
 		source, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)

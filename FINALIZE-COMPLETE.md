@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 20:25 UTC before the final source freeze. Refresh every item marked
+2026-09-06 21:44 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,20 +36,25 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 20:25 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 21:44 UTC; exact evidence in section 12):
 
-- The previously pushed checkpoint `c55ce7f` includes the qualified shutdown64
-  repair. Server remains `5fcb1d56`. Bounded EMA loader source/tests and the
-  additive producer selector now match their qualified source exactly in
-  primary; this is not a complete-primary qualification or source freeze.
+- Checkpoint `a1f9549` is committed, pulled and pushed. It includes the qualified
+  shutdown64 repair and bounded EMA loader32. Server is now `f478db80` after
+  the monitoring-documentation checkpoint and clean upstream rebase/push.
+  Primary has four new exact EMA read-budget tests awaiting formatting and
+  execution. The new historical validator-identity reader is also unformatted,
+  untested and unwired. Its gate currently references a not-yet-authored test
+  file; that gate cannot pass until the implementation/test slice is finished.
+  This is a WIP checkpoint, not a complete-primary qualification or source freeze.
 - Canonical neutral27 is complete: actual validator26 has13 expected causal
   FAIL and13 PASS, simulator1 PASS, foreground terminal0 and a distinct verified
   final index. Root reviewed full raw output/censuses/commands and strict index.
   Repaired-source run session42827/owner40372 is now terminal with actual outer1:
   normal repair27/widened115 and focused validator26 race pass, but widened
   validator race timed out at3m. Its distinct final index is preserved and
-  root-verified. Astra is repairing the observed JSON-clone CPU/allocation path,
-  preserving the full positive202/top200 test and all real cryptographic work.
+  root-verified. The typed-clone successor is frozen and source-reviewed with16
+  new roots, unchanged positive202/top200 and real cryptographic work. FORMAT4
+  is accepted; causal16 and repaired/widened131 execution are pending.
 - The new read-only bounded EMA startup loader has25 authored validator tests,
   retains five legacy EMA tests, and adds two simulator guards. Its full673
   source is frozen separately; fresh FORMAT10 passed and its seven exact byte
@@ -58,16 +63,26 @@ Current launch status (2026-09-06 20:25 UTC; exact evidence in section 12):
   post-owner20:24:20 seal strictly verifies; root reviewed all four raw logs,
   censuses and actual exits. This does not activate runtime startup or qualify
   the whole release.
-- Head collector review found missing combined/output control accounting and
-  late retained-state/arithmetic admission. A fresh accounting successor with13
-  new tests is source-reviewed, preserving original16 tests/two guards. The original
-  full682 draft has source-only formatting evidence, not a product pass.
-- Terminal v2 recovery has a frozen full687/28-path handoff with60 authored
-  roots. Review found incomplete final directory-Close witnesses and eight
-  uncapped new-v2 metadata reads. Its successor adds final all-root witnesses
-  and explicit snapshot/journal bounds. Ordinary recovery's fresh49+2 successor
-  is source-reviewed, including retained native publication/read/Sync ownership
-  and deterministic late-Close/replay-retarget controls; it is not tested yet.
+- Head accounting's launcher repair passed99 actual controls and a distinct
+  post-owner audit. The corrected causal13 capture then reached Go compilation
+  and failed on an inherited undefined `maxReleaseMeasurementArtifactBytes`.
+  The failed owner is terminal and its final index verified. A fresh full686
+  candidate aliases the existing64 MiB envelope ceiling, preserves the original
+  accounting causal/repair distinction, and adds8 unexecuted dependency controls.
+  Neither the head product tests nor the wider release are qualified by this fix.
+- Terminal recovery's full694 successor has99 authored, unexecuted roots:
+  retained60 plus18 byte-bound,11 final-witness,7 pre-copy and3 UTF-8 controls.
+  The bounded EMA write-owner proposal is now frozen with40 new/widened72 roots,
+  but unexecuted and not composed into live collector ownership/budgets.
+  Ordinary49+2 remains unexecuted. Its separate generic snapshot-custody successor
+  is frozen with29 new validator/two simulator roots;12 validator roots target
+  the minimally adapted old implementation,17 are explicitly repair-only
+  controls. No helper test is being counted as live runtime activation.
+- Server `monitor/SIGNALS.md` now defines48 prospective correctness alert
+  classes; three documentation tests plus registry consistency pass normally
+  and under race on the pre-pull source. The rebase only added unrelated native
+  storage-recovery prose; post-pull focused verification is pending. These
+  definitions do not implement or register the proposed monitor probes.
 - Runtime routing, bounded persistence, authenticated history, on-chain
   evidence storage, all held adjacent qualifications, seven-day capacity, both
   full gates, source freeze, doctor/matching plans and both live phases remain.
@@ -2004,10 +2019,95 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and continuation record (2026-09-06 20:25 UTC)
+### Current qualification and continuation record (2026-09-06 21:44 UTC)
 
-The previous primary checkpoint is `c55ce7f00f346b1edf98d6d6dc1503c8f463d8ca`;
-all13 shutdown repair64 paths were committed/pulled/pushed there. Primary server
+This is a user-requested WIP checkpoint after `a1f9549`, not a source freeze.
+Server monitoring changes are committed, rebased over `f8d0ae63`, pushed and
+remote-verified as `f478db8014fb8f01ce7e102645f2bc27cefe3d05`. The pre-existing
+qualified private server dependency is unchanged; a new main HEAD does not
+silently update any captured module closure.
+
+Primary additionally contains `crv4/validator_identity.go`, a read-only draft
+for exact historical validator registration/ownership/alpha-stake/permit
+observations. It checks genesis, canonical/finalized block selection and the
+reviewed runtime/Wasm/metadata identity, uses that historical metadata rather
+than mutating `Chain.Meta`, verifies both `Keys` and `Uids`, and bounds complete
+storage/permit decoding. It is **not formatted, tested or activated**. Its
+referenced `crv4/validator_identity_test.go` has not yet been written; the
+modified producer-gate retention test therefore cannot currently pass. Finish
+that file with exact-block/runtime, reverse-registration, absent/default stake,
+malformed/trailing/oversized SCALE, final canonicality and cancellation controls;
+use the `TestRuntimeArtifactMetadata` prefix selected by the real gate. Then
+qualify the reader and adjacent runtime/RPC tests and wire it into activation
+verification. A successful helper read alone is not activation inclusion.
+The four new exact EMA read-budget controls are also unexecuted; their
+independent fixed-owner allowance needs explicit composition with the new EMA
+write owner before any combined qualification.
+
+Head-accounting execution advanced past the initial launcher defect:
+
+- The guard repair has99 actual outcomes (four accepted,95 expected refusals),
+  verified under the distinct post-owner audit
+  `sn-head-output-controls-postowner-audit-v1-yruijY`, final index
+  `fefddb1e9f21fc037d1f16c6b7fae191520d42d9c8ef6e65fb5a1d4676f71894`.
+  The actual adapter invocation included `--help`; that adapter had no CLI
+  parser and executed the suite. Do not relabel it as the proposed invocation.
+- Corrected capture `sn-head-accounting-causal13-admission-v2-zzr0QP` reached
+  normal compilation after owned preflight0. Build actual1 reported undefined
+  `maxReleaseMeasurementArtifactBytes` in head and measurement v2 sources.
+  No product test ran. Session93475/owner420002 ended1; its distinct21:18:26
+  final index is `0dbeb51c0459ee7793974a71943e2f2071ae243a08e2b9ea44714600d1b7d106`.
+  Root read the full compiler error and strictly verified the sealed index.
+- `sn-artifact-bound-repair-v1-Xddeuf` preserves both original accounting
+  roles, adds only a product alias to the existing64 MiB signed-envelope
+  ceiling, and adds8 dependency/control roots. Handoff
+  `fd9f79aeea9f7f35465f4fe8c548844acf08b2a0817e8f2a9616cb0d78919a69`
+  and review20 index
+  `26bba3fab4fd295bb84a387de4070f21da6608c78be3172cd85f54f5fea85601`
+  are frozen. Original accounting13 causal9FAIL/4PASS and repaired13/retained31
+  still need actual execution; optional widened39 is separately declared.
+  The alias removes a source dependency error, not the intended causal defect.
+
+Additional completed source proposals are unqualified:
+
+- EMA runtime `sn-head-ema-runtime-repair-v1-IEHBs1` has13 owned paths and
+  full683 causal/repair source, with40 new and72 widened roots. Handoff
+  `bb9162a5de36400c37e857ee8d870b25763fa31bb3ae5046be63b9151a550174`
+  and review20 index
+  `76f4fba824a713622fe8e5fffb8424e1974ef6b88cd4dbdb15b03ae97c4a368e`
+  are frozen. Collector context/budget/ownership composition and ambiguous
+  crash reconciliation remain distinct obligations.
+- Terminal99 `sn-terminal-v2-custody-bounds-v2-edYFxA` is full694, not the
+  older known-incomplete full687/60-root recovery branch. Snapshot successor
+  `sn-stats-snapshot-custody-v1-Ky6eqV` also has full694 source:29 new validator
+  roots and two simulator roots. Only12 validator roots run against the
+  minimally API-adapted original implementation (expected8FAIL/4PASS);
+  17 are explicitly repair-only syscall/ownership controls. Generic Load,
+  other journal/coordinator custody and full runtime integration are not
+  implied by this snapshot fix. No new product result exists yet.
+
+The server `monitor/SIGNALS.md` addition is a specification for48 alert classes,
+not installed probes. In `sn-monitor-docs4-capture-v2-PnLhSq`, the normal
+documentation test failed47/48 because its identifier regex excluded the digit
+in `subnet-crv4-lifecycle`; the entry was present. Astra corrected the grammar,
+added nine deterministic valid/invalid-key controls, and audited adjacent
+patterns. V3 `sn-monitor-docs4-capture-v3-xjzJy8` then passed exactly four roots
+normally and under race (0.151s/2.085s; both actual exits0). Root read both full
+logs, source pins and the terminal index
+`5a3d9baacb8834c51aa8209ca0a7b39a7032763f32d8d76f0a9017d75763c4d9`.
+The earlier30-second race-list watchdog124 remains a separate harness result.
+V3's document pin is `3c2c987d1d83b86132fa324bd1276e48916ef86ef58a88787a6987d3971729cc`;
+after pulling unrelated native-storage prose, the document pin is
+`b5cf9b3674d4036a338fe3b04be78ebbde94692cf17b00cb497bb480823bf46b`.
+The formatted test pin remains
+`a16efa8354ff1c831c90b0ca365e9b8abcd217babeae37f255952faaac9e3ddf`.
+Post-pull focused verification is pending; neither this documentation nor its
+tests establishes new on-chain or automated subnet-monitor coverage.
+
+### Previous qualification and continuation record (2026-09-06 20:51 UTC)
+
+The primary checkpoint is `a1f9549519898782b5fe74f49685ce12d59fdfd8`;
+qualified shutdown64 and bounded EMA loader32 are committed/pulled/pushed. Primary server
 is unchanged at `5fcb1d5624fcacbcba5d28b2eb915f6c2bc05341`. The current
 working source below is not a full-primary qualification or final source freeze.
 
@@ -2018,6 +2118,7 @@ Recovery-only Git snapshots are pushed and remote hashes checked:
 | Reviewed head-accounting684 | `checkpoint/20260906-head-accounting-wip` | `59646dc2f7a7b6a46eb1c2b5bb6194b7cbb0caaf` |
 | Reviewed ordinary-custody687 | `checkpoint/20260906-ordinary-custody-wip` | `57cb7a13a67a85fb1a8eb49d087a18f3d5d278f6` |
 | Known-incomplete terminal60/full687 | `checkpoint/20260906-terminal60-wip` | `0416d5020277a16ee079844f90354d6dde0fb46a` |
+| Reviewed typed-clone651 | `checkpoint/20260906-attempt-clone-wip` | `4cd3512dc9683921069bef8fb3c8dbfdd26ff003` |
 
 These preserve exact source trees without changing their original frozen
 checkout files, HEAD, index or status. Root used separate temporary indexes and
@@ -2025,8 +2126,9 @@ primary Git objects, verified full source checks before/after and exact Git
 tree/worktree equality/counts, and did not merge them. Their source manifests
 remain the same; their new checkpoint commit IDs are recovery identities, not
 the original qualification-source Git bases. Unqualified means unqualified.
-Active typed-clone HbLMfZ and terminal-bounds edYFxA repairs are separate and
-were not silently included in these snapshots.
+The typed-clone checkpoint preserves the original reviewed HbLMfZ source, not
+its later formatted copy. Terminal-bounds edYFxA and the newer EMA write owner
+remain separate unfinished sources, not silently included in these snapshots.
 
 #### Canonical baseline closed; repaired-source wider race failed
 
@@ -2093,6 +2195,24 @@ regressions. Preserve positive202 unchanged. The separate negative may use the
 existing padded two-fleet fixture; homogeneous mutation loops may share a local
 raw signed base, but every case owns a clone and runs full real verification.
 No cap, deadline, live1000 workload or verification requirement is reduced.
+
+The typed-clone source is frozen in `sn-attempt-record-clone-repair-v1-HbLMfZ`.
+Handoff hash is `616ced0f4b9fef1c3996ba9b56d718c43b147726943aaca48dcbaaad64c1cd0c`;
+strict24 review index is
+`72a8781ca2e8c1831b8f0b07a8bd85447c95c13d8f30af4ac0a0045c776afe79`.
+Root read the complete typed/fallback implementation, wrapper,863 test lines,
+fixture delta and causal census. The new16 roots expect4 causal failures and12
+controls, then16 repaired passes; the full131 union is121 validator plus10
+simulator roots normally/race under unchanged bounds. These are expectations.
+Fresh `sn-attempt-record-clone-format4-capture-v1-GtQL9h` passed formatting and
+static checks only. Its strict124 index is
+`8f5f83b89af53bf892e851d2f8e149d77c8c0f892c4d5b7055481b981c805a5b`;
+formatted full651 causal/repair manifests are respectively
+`753d23e8a9d5739e68378fefe31ac5c8a1849bea37fe0fcdd9c03b682caa44e2`
+and `11c6d101b16cc125b790532f5d26c3564ad8a2a7f4fc15108ad3e61225be6507`.
+Root strictly verified both and read the four formatting-only hunks. Product
+execution must use a fresh reviewed capture, including the corrected owned
+preflight described below; no clone qualification has run yet.
 
 #### Qualified bounded EMA restart loader, integrated in primary
 
@@ -2168,6 +2288,24 @@ This closes the loader's focused qualification, not the newer complete primary
 or production routing. The existing constructor and legacy Preview/Commit
 routes remain unchanged and are not thereby bounded.
 
+Independent review found no new blocking defect in that read/decode slice, but
+the existing low/high decimal test did not establish exact control-budget
+equality. Root authored four additional tests in
+`validator/head_ema_v2_control_test.go` and added that file to the source gate.
+They independently enumerate the documented read allowance, require one-short
+refusal before rational parsing, and exact-limit success for actual combined
+entry/history state, history-only state, legacy entries and escaped JSON with
+multibyte physical paths. They are not formatted or executed. Compose them with
+the new owner's explicitly documented fixed charge, not by hiding that charge.
+
+The separate runtime successor is
+`sn-head-ema-runtime-repair-v1-IEHBs1/sn`, based directly on committed `a1f9549`.
+It is implementing bounded context-taking Preview/Commit/Fold, retained native
+publication authority and explicit uncertainty faults. Legacy-created stores
+retain their original semantics. A fail-closed unresolved commit marker is not
+automatic crash reconciliation; crash recovery remains a distinct required
+qualification. This successor has not been frozen or tested.
+
 #### Recovery/head source findings and next actions
 
 Terminal handoff is `sn-terminal-v2-runtime-v1-w4cNnN/TERMINAL60-HANDOFF-v1.md`,
@@ -2192,6 +2330,21 @@ earlier roots, before attach/publication/gate release. Test-only4MiB snapshot
 and32MiB journal allowances are explicit fixtures, not production defaults.
 Preserve terminal60 as authored, not qualified. Its stale
 no-refold comment and unsupported-platform boundary must also remain visible.
+
+The successor now has99 authored validator roots, not a qualification: retained60
+plus18 persistence-byte controls,11 final-owner witnesses,7 borrowed pre-copy
+controls and3 path-encoding controls. The new pre-copy finding was real:
+`acquireAttemptSettlementV2Owners` cloned live maps before admitting the bounds,
+and the first admission itself materialized `snapshotStats` maps. The repair
+holds every writer token, borrows only headers/scalars under short state locks,
+counts the complete provider union, egress census and exact wire image before
+any clone, then repeats admission after the deterministic callback boundary.
+All borrowed collections must remain protected by writer ownership; a shallow
+map header alone is not race safety. Invalid UTF-8 physical paths must be refused
+before I/O because JSON replacement would change persisted path authority.
+Root read the complete new borrowed/counter implementation and both new test
+files containing seven and three roots; frozen causal/repair handoff and
+normal/race execution remain.
 
 Ordinary source `sn-ordinary-journal-custody-v2-zosqo7` retains its full685
 red/green and37 original roots/two guards. Root reviewed its real causal reader,
@@ -2230,11 +2383,102 @@ Full684 causal is
 repair `d1dcc0f9d582af68b179b36e5b0d23e00a3683456c2ff2ded173f06b7e3220b4`.
 New13 expects causal9FAIL4PASS then repair13PASS; four helper contracts do not
 claim old-production acceptance. Original16 tests/two guards remain, widened31
-normal/race required. Fresh FORMAT39 preparation is authorized, not a product
-pass. Original
+normal/race required. FORMAT39 in
+`sn-head-accounting-format39-capture-v1-D0c5ej` passed all source-format/static
+checks. Root strictly verified its194-entry review index
+`e1c7f5d9ea4130c0d8b13ec714728bd6bb307959ca4df5a6db91f0a0ac93cb70`,
+both full684 sources, the14 in-scope byte deltas and the real Hq/npipe layout.
+Formatted causal/repair manifests are
+`148e3a5dd1f916f4b029bb579e51ea9c3fbe02b978492f6ffb2afdc44863dca4`
+and `7f9f45634f6a3a76eb4a2576706cf8e3ff6b7bdd43652b57f9a5b9ea8c1e3350`.
+This is not a product pass. Original
 head682 formatting in `sn-live-head-v2-format37-capture-v2-2PZIQk` is source
 preparation only; its known budget gaps bar a product qualification of that
 original source. Preserve the failed first FORMAT preparation as well.
+
+The first actual causal13 capture,
+`sn-head-accounting-causal13-proposal-v1-r010SR`, was admitted under frozen68
+`820865a6a5e859c8414a11d4ea4acc1464de0ea4fe7b4ed8ae5d7a4b28929e0d`.
+Root read its complete647-line adapter delta, root-local outcome/message
+contracts, actual layout9 and unchanged3m/4m limits; review106, frozen68 and
+full684 strict checks exited0. The foreground owner359292 started20:47:31 and
+terminated1; the actual outer ended20:47:39. Static preflight passed, but owned
+preflight incorrectly required the already-created owner/stdout/stderr and
+outer-start/raw files to be absent. No Go build/list/test began. Its distinct
+post-owner20:48:43 seal index is
+`e1af80533bdf483d449df0ff58295269eb21e3c94d7c43f1b8a144010d2b3881`;
+root independently checked absence and strictly verified this failed capture.
+Astra's isolated preflight-only successor must preserve exact owner ancestry,
+phase-specific authority, stale/product/final-output refusal, and add dangling
+symlink controls. Run its deterministic actual-foreground controls before a
+fresh head capture; do not patch or retry r010SR in place. This is a harness
+failure, not nine observed product failures or a passing causal qualification.
+
+The shutdown-selector repair is frozen/source-reviewed in
+`sn-shutdown-gate-retention-v1-EMJ1rx`: only two missing selector alternatives
+are added, with three source guards. Handoff
+`21ac33c1811125c52ca579bfa4915577ab239f46a0dc2b61399da872b243846d`
+and strict19 index
+`dcf05f0faa3d55f684154dcf7caab78fef9e39930bdcf2f1ebd88ed25d50722c`
+were independently checked. Causal3 expects2 failures/1 control, repair3 all
+pass, then41 retained validator/simulator roots normally/race. No run yet.
+
+#### Concrete live-wiring obligations, still open
+
+The20:51 source audit rechecked `validator/config.go`, `release_run.go`,
+`release_steer.go`, `sim-testnet/executor.go` and the private runtime APIs.
+Neither ReleaseConfig nor the runtime renderer yet carries the compact
+activation/storage contract. Do not interpret new standalone APIs as activated.
+
+1. Add explicit, strictly parsed runtime bounds for disk ledger, record/proof
+   streams, replay/scratch, snapshots/journal, transition/closure, measurement
+   wire/control and head EMA. No candidate-derived limits or zero fallbacks.
+   Bind the same values into rendering, runtime identity and public replay.
+   Complete source-derived maximum-wire and all-pair capacity admission before
+   filling production values; four independent checks are not aggregate safety.
+2. Provision owner-private canonical physical namespaces before runtime startup.
+   Reject invalid UTF-8, ancestor symlinks, overlaps and protected state before
+   mutation. Coordinator may contain operator directories, but never the reverse;
+   operator directories are mutually disjoint and replay/seal scratch must be
+   fresh and separate from all durable state and other operation scratch.
+3. Authenticate exact earlier `protocol.ValidatorEvidenceActivation` bytes,
+   both signatures, historical native UID/permit/hotkey and EVM operator/policy
+   context, then separately prove inclusion/finality and migration prefix.
+   `EvidenceDomain()` computes a digest; it is not chain-inclusion evidence.
+   Never synthesize this authority from a candidate cut or newly loaded stats.
+4. Replace `loadReleaseAttemptState`'s `NewAttemptLedger` and unbounded Stats.Load
+   route with context-owned `NewDiskAttemptLedger` and bounded full-batch startup.
+   `RecoverAttemptSettlementEpochV2` takes fresh unattached Stats and root-owned
+   disk ledgers before any worker; `InitializeAttemptSettlementEpochV2` is only
+   for an authenticated exact drained empty applied activation prefix. Both
+   require explicit `AttemptSettlementRuntimeV2PersistenceBounds`.
+5. Route startup/refresh/terminal advancement through the complete V2 batch.
+   Refresh of the same epoch must not finish a pending native reservation;
+   terminal advancement must seal/replay/persist all operators before publishing
+   the successor. Restore proof projections through their context-aware disk API.
+   Preserve failed journals and stop on unresolved durability, not silent replay
+   through a legacy writer. Test crash, partial write, retry and actual restart.
+6. Replace `NewReleaseSteerer`'s legacy EMA constructor and connect ordinary
+   input persistence, `gatherHeadV2`, V2 artifact signing and `SubmitOnce` to the
+   same authenticated context. Use explicit operation contexts for bounded EMA
+   writes. The existing IntentStore legacy verification must not hide V2 I/O
+   under a state lock or accept a V2 artifact through a legacy verifier.
+7. Bind server/blob's two real replicas to typed public readers and runtime
+   producers, capture independent activation/history and complete closed-epoch
+   proof census, then implement the selected on-chain evidence-storage route.
+   The public reviewer must reconstruct all required windows, including missed
+   roots and dishonest operators, without depending on a payout or operator
+   cooperation. Preserve legacy signed history without claiming it is V2.
+8. Add deterministic end-to-end startup-to-submission coverage over these actual
+   entry points, qualify the composed sources and both complete gates, freeze,
+   then execute both live phases and independent FINAL.md replay. Tests that
+   directly call a helper do not close these runtime-routing obligations.
+
+Read-only public RPC probe at20:31:11 used
+`https://test.chain.opentensor.ai`: chain945, block7,948,701, runtime454,
+`isSyncing=false`,23 peers. It submitted no transaction. Host observation at
+20:51:20:24 cores,121GiB available memory and569GiB free disk; this does not
+qualify mainnet retention or the four candidate160GiB database ceilings.
 
 After these slices: qualify/integrate exact method-level changes; fix shutdown
 producer selector retention while preserving HeadEMA/HeadV2/StatsV2 and every

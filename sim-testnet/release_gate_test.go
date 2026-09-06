@@ -320,6 +320,15 @@ func TestProducerGatePinsExactBlockRuntimeClientRegressions(t *testing.T) {
 			t.Errorf("producer gate has %d copies of %q, want exactly 1", strings.Count(script, command), command)
 		}
 	}
+	for _, path := range []string{"../crv4/validator_identity_test.go"} {
+		source, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := verifyReleaseSourceTestCoverage(selector, "^Test", []string{string(source)}); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+	}
 }
 
 // Both gates explicitly execute the RPC identity regressions at each live
