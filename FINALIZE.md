@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 13:23 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 13:46 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,7 +14,37 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current local checkpoint (2026-09-06 13:23 UTC):
+Current working integration (2026-09-06 13:46 UTC):
+
+- Checkpoint `26ba4c8` and all three recovery branches below were committed,
+  pulled and pushed; primary server remains `5fcb1d56`. This subsequent work
+  is not a source freeze or qualification of the complete primary composition.
+- Root read all four raw logs and exact result censuses for Stats55 plus
+  simulator15, then integrated its three paths byte-identically from the
+  qualified donor. Joint65 plus simulator16 subsequently passed normally and
+  under race. Its actual owner terminated0 at13:38, and root verified the
+  distinct final index and all four raw logs/censuses before integrating the
+  five-path joint delta. The final five primary blobs match `8f50a978` exactly.
+- Activation's full651 source is formatted and pinned for54 protocol roots
+  normally/race and28 Solidity roots. Product execution remains pending;
+  adapting the existing capture engine is authorized, with the Go and Solidity
+  phases separable. Static input preparation is not a passing qualification.
+- Root reviewed the ordinary and terminal v2 source/tests. A missing closing
+  parenthesis in an ordinary test was corrected in a fresh successor before
+  any formatter/product execution. Their product qualifications remain held
+  for the shared fixed-width-before-normalization repair; no coverage is waived.
+- The runtime audit found lost final-save/worker errors, leaked prepared-ledger
+  ownership and inner cancellation paths that erase real failures. It also
+  found pending diagnostic writes that make intents unreadable on restart.
+  Private deterministic causal tests and scoped repairs are in preparation;
+  these findings are not yet executed failures or passing repairs.
+- Runtime v2 promotion/history and evidence anchoring remain incomplete, as
+  do timeout/admission, process/service ownership and seven-day capacity gates.
+  Both complete release gates, freeze, doctor, matching plans, both live phases
+  and independently reviewed FINAL.md remain mandatory. No new transaction,
+  final-soak pass or from-now completion ETA is claimed.
+
+Previous local checkpoint (2026-09-06 13:23 UTC; superseded above):
 
 - The preceding main checkpoint is `dc144be`. This successor integrates all
   four comparison paths byte-identically from the isolated qualified donor.

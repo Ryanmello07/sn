@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 13:23 UTC before the final source freeze. Refresh every item marked
+2026-09-06 13:46 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,34 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 13:23 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 13:46 UTC; exact evidence in section 12):
+
+- Checkpoint `26ba4c8` and the three newer feature recovery branches are pushed.
+  Server remains `5fcb1d56`. Subsequent primary integration contains qualified
+  Stats admission and joint statistics/head replay deltas; this is not a freeze.
+- Stats55/15 and Joint65/16 each pass normally and under race. Root read every
+  raw log and exact result census and verified their post-owner final indexes.
+  Stats was integrated first; the final five joint paths match `8f50a978`
+  exactly. The newer whole-primary composition still requires qualification.
+- Activation's formatted full651 source is pinned for54 Go/28 Solidity roots.
+  A narrow adaptation of the existing foreground capture engine is authorized;
+  no product result exists yet. Ordinary and terminal v2 drafts remain held
+  for a shared bounded-normalization repair before product qualification.
+- An ordinary test's missing closing parenthesis was found by source review
+  and corrected in a fresh successor before any formatter was run. This is
+  not a fabricated observed formatter or product failure. Both feature slices
+  retain complete replay, per-operator activation domains and original budgets.
+- Runtime shutdown/restart source review found real paths that drop persistence
+  errors or ledger ownership and write unreadable pending intents. Astra is
+  preparing deterministic causal tests and scoped repairs; no RED/GREEN result
+  is claimed until Terra executes the exact sources and expected censuses.
+- Final live validation has not started. Runtime v2 ownership/promotion,
+  historical authority, evidence anchoring, timeout/admission, service ownership
+  and seven-day capacity remain open. Both complete gates, freeze, doctor,
+  matching plans, both live phases and independently reviewed FINAL.md remain
+  required. No new transaction or final-soak result is claimed.
+
+Previous launch status (2026-09-06 13:23 UTC; superseded above):
 
 - Final live validation has not started. The preceding main checkpoint is
   `dc144be`; this successor integrates the exact four qualified comparison
@@ -1839,7 +1866,105 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and checkpoint record (2026-09-06 13:23 UTC)
+### Current qualification and integration record (2026-09-06 13:46 UTC)
+
+The previous checkpoint request is complete: SN `26ba4c8be7ea9c89a13fa45b7ace85e8e3709688`
+and all three recovery refs recorded below were pulled/pushed and verified
+against the remote. Server `5fcb1d5624fcacbcba5d28b2eb915f6c2bc05341` was
+already current and clean; its pull/push completed without a source change.
+Neither that checkpoint nor the integration below is the final source freeze.
+
+Stats capture `sn-stats55-v4-run-mtvPv5` is now fully reviewed: all four raw
+logs and exact55/15 normal/race censuses, actual terminal0 and final index
+`a10ed4e423b47c88bbcbdbed2445867216800873c9070480b2ce83b24bb1f121`.
+Root integrated the three exact paths from `b8077bb83fb2cf1e56935a500502c047ec1e6eab`
+after verifying their primary preimages. All three resulting blobs matched.
+The preserved harness failures and missing original seal remain as recorded.
+
+Joint capture is `/home/by/urnetwork/temp/sn-joint65-v2-run-vstUUv`, frozen-input
+SHA256 `93fb17ccab1f8cb04eb9134bcbb95771a6211869ad43f74bd5855face002789f`.
+Terra retained session95355/owner3656894 through actual terminal0. Summary
+ended13:38:04 UTC; all65 validator and16 simulator roots pass normally/race,
+with build/list/execute/census validations and pre/post external fences0.
+The actual post-owner seal is13:38:23 UTC; final-index SHA256 is
+`d1e2005ac6a6349aac77d0706e0187159ce27cd1bdd30b1b629b349e56cf44e5`.
+Root read all four complete raw logs and censuses and independently verified
+that final index. The absent original post-launch seal is still recorded as
+missing, and the earlier live-outer index remains intermediate, not backfilled.
+
+Root then integrated the exact five-path `b8077bb` to `8f50a978` joint delta,
+preserving comparison and all other newer primary changes:
+
+| Primary path | Verified qualified donor Git blob |
+| --- | --- |
+| `sim-testnet/release_gate_state_test.go` | `ef886e3309eeb52d605729aa3bb9b37de560fb2a` |
+| `validator/attempt_cut_v2_stats.go` | `da953e0d3e2f475693ff5a57a1d242957b2c7568` |
+| `validator/attempt_cut_v2_stats_admission_test.go` | `ac9d1ee986c7a36634b8a062c62e013259e2cbed` |
+| `validator/attempt_cut_v2_measurement.go` | `1a2437aff64a2c81b0bfc1fc403898e46758f57a` |
+| `validator/attempt_cut_v2_measurement_test.go` | `8dae1512afb5a84e66160432f8ae71a5e03b7aa5` |
+
+Every final blob matches the donor and diff-check passes. This is exact-slice
+integration, not a complete current-primary or release-gate pass.
+
+Activation preparation v4 is `temp/sn-evidence-activation-prep-v4-mMtZZy`:
+full651 source SHA256 `e39660f9f19d0c1c59f96837cfdd926e3ec68b7708b5b0d852a4d2182a83f811`,
+prep index `066e6a68ac9327173b7aab37d5ec16fe28a8003411d60186b90f7c6bc00e7074`.
+All six feature files are formatted, including the two-operator consent test.
+The authorized exact54 protocol normal/race and28 targeted Solidity roots
+have not executed. No scope-specific runner previously existed: Terra may
+adapt the already qualified foreground capture engine to these exact inputs,
+with separate Go and Solidity phases. Preserve fixed product budgets, real
+owner status and independent source/runtime/dependency/census fences. The
+same narrow adapter authority applies to the existing timeout132/382 scope;
+absence of an old scope-named runner is not a reason to leave the queue idle.
+
+Ordinary source review found exactly one missing `)` at the test fixture's
+append expression before formatting. The fresh corrected source is
+`temp/sn-release-measurement-v2-parse-v2-8qSLiD/sn`, preformat653 SHA256
+`4605eb3821b935a02f7bdd9bdaa8d3271f568c069675c1e2c43461f0d56696ba`.
+Its exact one-character `ORDINARY-V2-PARSE-v2.patch` SHA256 is
+`6ed667a26b0aca67f5eb3159ec9c9c2e98ed59e5bd09127755c4d52a99b32bbd`.
+Root read the full ordinary production/test/guard source, the correction and
+strict eight-input review index. Format only the existing12-path list in this
+successor; preserve original `sn-release-measurement-v2-kGvWAl/sn` unchanged.
+No actual formatter refusal occurred. Terminal's exact8-path formatting is
+complete in `temp/sn-v2-terminal-settlement-1hueIB/sn`, postformat655 SHA256
+`aab1cc4388c055021004df217a0433c897fef50771f2eda994e69d143a04c5b0`.
+Root read all production and22 validator/2 guard tests. Neither wire slice is
+product-qualified; shared normalization admission must compose first.
+
+Two private source-derived repair lanes are active, with no execution claim:
+
+- `sn-canonical-hex-red-v1-yKYuzh/sn` starts from committed `26ba4c8` and
+  investigates actual normalization-before-width boundaries in canonical
+  attempt/release hashes, content hashes, addresses, envelope signatures and
+  prepared-input/statistics callers. Observe the real normalizer call locally,
+  retain accepted40/42-character address semantics and all real cryptography,
+  and prove malformed oversized input is refused before that work. Do not
+  mutate the held ordinary/terminal sources or equate parser bounds with
+  complete capacity. Its final causal source/census is still being prepared.
+- `sn-release-shutdown-red-eiFmuR/sn` holds a neutral six-path extraction at
+  `26ba4c8`; full650 preformat SHA256
+  `9b4a10404bde913ebb4f413c62c9bf6ef9395849a5d8fecb7ab75b3aca9b61ca`.
+  Root reviewed the whole patch and proposed19 roots: four intended physical/
+  lifecycle failures and15 controls. Actual final-save failure, real signed
+  M8 proof failure at cancellation, late joined worker failures and an acquired
+  ledger after failed proof reconciliation are the causal witnesses. An
+  additive successor covers inner refresh/steering cancellation erasers and
+  pending diagnostic writes that restart validation rejects. Preserve the
+  durable pending image on uncertain submission; do not relax lifecycle or
+  finality/nonce rules. Validate newly completed lifecycle states before
+  persistence. Return actual causes and join all owners/cleanup errors without
+  treating a joined durability error as harmless cancellation. No actual
+  external Background client-close failure is claimed by contract-level tests.
+
+The stopped native file-number task remains stopped. The unanswered evidence
+storage question, runtime v2 journal/promotion, full history/activation authority,
+both complete gates and all live acceptance obligations are unchanged. The
+scheduled chain interval remains10:00:48--14:36:00 after engineering, not an
+estimate from now. No new chain write or final validation occurred here.
+
+### Previous qualification and checkpoint record (2026-09-06 13:23 UTC)
 
 The preceding pushed primary SN checkpoint is
 `dc144be9745edc03afc47a07b9e5e7a5583426b3`; primary server remains
