@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 21:44 UTC before the final source freeze. Refresh every item marked
+2026-09-06 21:51 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,9 +36,9 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 21:44 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 21:51 UTC; exact evidence in section 12):
 
-- Checkpoint `a1f9549` is committed, pulled and pushed. It includes the qualified
+- Checkpoint `300c3b0` is committed, pulled and pushed. It includes the qualified
   shutdown64 repair and bounded EMA loader32. Server is now `f478db80` after
   the monitoring-documentation checkpoint and clean upstream rebase/push.
   Primary has four new exact EMA read-budget tests awaiting formatting and
@@ -80,8 +80,8 @@ Current launch status (2026-09-06 21:44 UTC; exact evidence in section 12):
   controls. No helper test is being counted as live runtime activation.
 - Server `monitor/SIGNALS.md` now defines48 prospective correctness alert
   classes; three documentation tests plus registry consistency pass normally
-  and under race on the pre-pull source. The rebase only added unrelated native
-  storage-recovery prose; post-pull focused verification is pending. These
+  and under race both before and after the clean rebase of unrelated native
+  storage-recovery prose. Root reviewed the actual post-pull output and pins. These
   definitions do not implement or register the proposed monitor probes.
 - Runtime routing, bounded persistence, authenticated history, on-chain
   evidence storage, all held adjacent qualifications, seven-day capacity, both
@@ -2019,13 +2019,31 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and continuation record (2026-09-06 21:44 UTC)
+### Current qualification and continuation record (2026-09-06 21:51 UTC)
 
-This is a user-requested WIP checkpoint after `a1f9549`, not a source freeze.
+Implementation checkpoint `300c3b072d2a0ba1c23099e45172c8d00ddae3f1` is
+committed, pulled, pushed and remote-verified. It is a user-requested WIP
+checkpoint after `a1f9549`, not a source freeze.
 Server monitoring changes are committed, rebased over `f8d0ae63`, pushed and
 remote-verified as `f478db8014fb8f01ce7e102645f2bc27cefe3d05`. The pre-existing
 qualified private server dependency is unchanged; a new main HEAD does not
 silently update any captured module closure.
+
+Four additional complete source trees are now pushed on recovery-only branches:
+
+| Frozen source | Recovery branch | Commit |
+|---|---|---|
+| Artifact-bound repair/full686 | `checkpoint/20260906-artifact-bound-wip` | `c0501de0d2796adc11ca393bd1ec24f0055dda70` |
+| Bounded EMA runtime/full683 | `checkpoint/20260906-ema-runtime-wip` | `ed6cb17dbe2c22f9d8c5fa1d94cfa112bcb359c3` |
+| Stats snapshot custody/full694 | `checkpoint/20260906-stats-snapshot-custody-wip` | `eb50021de1172e5bee21b9db6640bcd7ed2b437b` |
+| Terminal99/full694 | `checkpoint/20260906-terminal99-wip` | `7f4b6a36d6dfcec7928222c9431bacd04dfcfba1` |
+
+Independent temporary indexes preserve the original frozen source files, HEADs,
+indexes and statuses. Their full Git trees were compared with the corresponding
+complete source manifests before/after; counts and bytes match. Root separately
+verified the remote branch ids and actual commit parents: artifact-bound and
+Stats use `f9a45d9`, EMA uses `a1f9549`, and terminal99 uses `60597ddb`, not
+an invented common base. No candidate was merged into main or called qualified.
 
 Primary additionally contains `crv4/validator_identity.go`, a read-only draft
 for exact historical validator registration/ownership/alpha-stake/permit
@@ -2101,8 +2119,12 @@ after pulling unrelated native-storage prose, the document pin is
 `b5cf9b3674d4036a338fe3b04be78ebbde94692cf17b00cb497bb480823bf46b`.
 The formatted test pin remains
 `a16efa8354ff1c831c90b0ca365e9b8abcd217babeae37f255952faaac9e3ddf`.
-Post-pull focused verification is pending; neither this documentation nor its
-tests establishes new on-chain or automated subnet-monitor coverage.
+Post-pull capture `sn-monitor-docs4-postpull-v1-F4hZUL` passes the same four
+roots normally and under race (0.132s/2.136s; sessions23520/6255 terminal0).
+Root read both complete logs, both actual exits and the unchanged source pins;
+its index `ced5f2d7ad26a3d9d6885798506be1892d2e65b0c1aeba0ad6c7721c4fbe9623`
+strictly verifies. Neither this documentation nor its tests establishes new
+on-chain or automated subnet-monitor coverage.
 
 ### Previous qualification and continuation record (2026-09-06 20:51 UTC)
 

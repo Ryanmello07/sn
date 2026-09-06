@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 21:44 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 21:51 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,9 +14,9 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current working integration (2026-09-06 21:44 UTC):
+Current working integration (2026-09-06 21:51 UTC):
 
-- Checkpoint `a1f9549` is committed, pulled and pushed with qualified shutdown64
+- Checkpoint `300c3b0` is committed, pulled and pushed with qualified shutdown64
   and bounded EMA loader32; server is `f478db80`. Four new exact read-budget
   tests are authored but unexecuted in primary. This is not a complete-primary
   gate or source freeze. The historical validator-identity reader is a separate
@@ -54,8 +54,8 @@ Current working integration (2026-09-06 21:44 UTC):
   complete startup/persistence integration.
 - The server monitoring catalog defines48 subnet correctness alert classes;
   its three new documentation checks plus registry consistency pass normally
-  and under race on the pre-pull source. Post-pull verification is pending after
-  a clean merge of unrelated native-storage documentation. New probes are not
+  and under race before and after the clean rebase of unrelated native-storage
+  documentation. Root reviewed the post-pull logs and pins. New probes are not
   implemented or registered by that documentation checkpoint.
 - All full-scope runtime/history/evidence-storage and adjacent qualifications,
   seven-day capacity, both full gates, freeze, doctor/plans, live RC/three final
@@ -66,7 +66,10 @@ Current working integration (2026-09-06 21:44 UTC):
 The reviewed unfinished head-accounting, ordinary-custody, known-incomplete
 terminal60 and typed-clone sources have pushed recovery-only checkpoint branches
 at `59646dc`, `57cb7a1`, `0416d50` and `4cd3512`, respectively. They are not merged
-or qualified. The current handoff now maps the exact remaining config,
+or qualified. Newer artifact-bound, EMA-runtime, Stats snapshot and terminal99
+full-tree recovery checkpoints are also pushed at `c0501de0`, `ed6cb17d`,
+`eb50021d` and `7f4b6a36`; section12 of the handoff records exact branch ids,
+parents and source-preservation checks. The current handoff maps the remaining config,
 activation, startup, refresh, ordinary/terminal persistence, head/submission,
 replica and public-history call-site obligations; none is waived by helper tests.
 An agent usage-limit interruption occurred before EMA product launch; root
