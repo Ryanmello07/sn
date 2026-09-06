@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 10:00 UTC before the final source freeze. Refresh every item marked
+2026-09-06 10:22 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,34 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 10:00 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 10:22 UTC; exact evidence in section 12):
+
+- This is a work-in-progress checkpoint, not a source freeze or release. Final
+  live validation has not started, and this update makes no testnet transaction.
+- Server24 now passes all 11 store, 12 handler and 1 API roots normally and under
+  race. Root verified its terminal index and all six raw execution logs. Its
+  exact eight-file implementation remains in the private successor, not primary
+  server; production integration and complete service gates remain required.
+- Namespace33 now reproduces both intended duplicate-decode failures with 31
+  controls passing. Lazy1 now reproduces the intended transient-configuration
+  failure inside its owned, joined transient unit. Both captures are terminal
+  and sealed; neither is a passing product qualification. Astra owns their
+  repairs and deterministic adjacent coverage.
+- The normal historical profile now has a verified true post-owner seal. Its
+  one selected root passes; this does not close the combined91 race timeout.
+  The exact historical race-profile adapter is held for review, not executed.
+- Primary SN contains a new replicated cut-sealing draft and 13 authored tests.
+  No Go build or test has run for these files. Independent review found a
+  callback `runtime.Goexit` path that can falsely report a second replica as
+  published. This is a blocking source-derived finding, not an executed causal
+  test. The draft must not be activated before repair and qualification.
+- Open9, Legacy66, Gate6, real process/service ownership, producer v2 routing,
+  signed activation/history, storage choice and seven-day capacity remain open.
+  Both complete gates, source freeze, doctor, matching plans, both live phases,
+  FINAL.md and independent on-chain review are still mandatory. The scheduled
+  chain interval remains 10:00:48--14:36:00 after engineering, not a from-now ETA.
+
+Previous launch status (2026-09-06 10:00 UTC; superseded above):
 
 - Final live validation is not running. No new chain transaction, activation,
   source freeze or final acceptance is claimed by these local changes.
@@ -1671,7 +1698,87 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and repair record (2026-09-06 10:00 UTC)
+### Current qualification and repair record (2026-09-06 10:22 UTC)
+
+The preceding commit/pull/push checkpoint is primary SN
+`159d7e18cf4d418aca70e50252e005a0c807bb51`; primary server remains
+`6e438476982b724d42024c1b81a1f301d1b0b1c6`. The current checkpoint adds only the
+two replica draft files and these working-document updates. Unfinished private
+candidates are preserved under `temp/sn-*`, not silently merged into primary.
+No product process is running or holding primary source at this checkpoint.
+
+New terminal evidence beneath `/home/by/urnetwork/temp`, with indexes and actual
+raw outcomes independently checked by root:
+
+| Scope | Capture | Final index SHA256 |
+| --- | --- | --- |
+| Server24: all 24 normal/race PASS | `sn-server24-module-v2-capture-BgPde9` | `bc64e84e2c2b82fd1f8cf63c6b318a9fdc3db966d84c311385294730feaad059` |
+| Namespace33: 2 causal FAIL, 31 PASS | `sn-namespace33-foreground-QdfLoO` | `f0f6b78644eac036af8ed83a9a69837f09211532c909b6376bf4fb5332c34161` |
+| Lazy1: 1 causal FAIL, 0 PASS | `sn-test-process-lazy1-v3-stage-rEeMNg` | `a61d2dffc5d0506eed843b8e4cf5467749da61fcbda8d937b09b0ec50952f451` |
+| Historical normal profile: 1 PASS; true post-owner index | `sn-profile-historical-v4-run-kLILFm` | `5e09fcb37ec1871d5134cf5a17e14e927aaa14edc40a6a2024721179e336d731` |
+
+Server24's foreground session 9152/owner 3122777 returned 0 at 10:15:20 UTC.
+All build/list/execute stages and source/runtime/external fences pass. The
+qualified source remains `sn-server24-module-repair-nQdwJ3/server`, with the
+full 3943-path manifest recorded below. Integrate only its five new files and exact
+`api/api.go`, `go.mod`, `go.sum` deltas after releasing any primary-server holds;
+do not replace newer server files with the older private snapshot. These 24
+transport/storage tests do not prove PG/Redis ownership or producer activation.
+
+Namespace33's foreground session 44860/owner 3121396 returned 0 at 10:09:46 UTC;
+the actual Go exit is 1 and the expected-outcome validation is 0. Both own-root
+assertions observe two decodes instead of one for the same 12,380,812 bytes,
+SHA256 `3e4e5a706bb1cf2c99536f4f89bba598922e97966adef55c80fa34010db2e64c`:
+`TestFinalNamespaceFixtureDecodesCompleteInputOnce` observes fixture/replay,
+and `TestFinalNamespaceArtifactReplayDecodesCompleteInputOnce` observes public
+cache-miss fleet/historical replay. The full census and cryptography remain.
+Astra's unqualified narrow successor is `sn-namespace-reuse-6uUivZ/sn`; preserve
+independent-call authentication, exact input/context matching and owned outputs.
+
+Lazy1's foreground session 4112/owner 3160306 returned 0 at 10:17:36 UTC; its
+actual test and systemd-run exits are 1, with expected-outcome validation 0.
+The assertion at `test_util_process_lifecycle_linux_test.go:543` is
+`owned lazy resolver observed transient configuration rewrite: got=tampered want=original`.
+The fresh owned unit was joined, `nested_directory_count=0`, and the post-owner
+seal was written at 10:18:08 UTC. This is now causal resolver evidence, unlike
+the earlier executable-admission refusal. No shared service was changed.
+
+The historical profile's distinct `post-owner-final-artifact-index.sha256` was
+sealed at 10:02:37 UTC after the actual owner exited. Its earlier intermediate
+index remains unchanged. The one normal root took 22.11s wall/926812 KiB peak RSS.
+The held race-profile adapter is `sn-race91-profile-inputs-auwUlD`; it retains
+the real old race binary and its historical dependency closure. No race-profile
+execution, full 91-root retry, crypto/census reduction or deadline extension occurred.
+
+New primary draft, not yet compiled or tested:
+
+- `validator/attempt_cut_v2_replica.go`, SHA256
+  `90377a15873dc115fe3f687bb0952441de343dc69dbef877697bef72c6dd9c7c`;
+- `validator/attempt_cut_v2_replica_test.go`, SHA256
+  `b18045735ff520eacacdcabcdb5e61e31bbc1699c19fb07530063797bf4cc68e`.
+
+The draft wraps the real policy-aware sealer with two object writers, typed
+public readback and final signed-header publication. It has no release-callsite
+activation, storage factory or on-chain submission. Astra's read-only review
+found that a writer calling `runtime.Goexit` runs `workers.Done` but leaves its
+result nil, bypassing that replica's mandatory write/readback. Before activation,
+add a pessimistic per-worker completion latch and deterministic real-M8/empty
+causal controls. Also propagate the sealer's no-nested-Walk/no-Close callback
+contract; test full-policy replay rejection after both copies stage but before
+headers publish; cover final-header cancellation and HTTP sibling joining;
+isolate each typed size bound with a matching hash and exact-limit control;
+correct metadata memory accounting for bounded `ReadAll` bodies. Review the
+partial-write fixture's ordering and join all test-owned workers on failure.
+The 13 current test bodies do not establish these missing protections.
+
+Next: repair/qualify the replica and namespace findings; review the held Open9
+and race-profile adapters; obtain Open9 causal evidence before its repair;
+qualify Legacy66/Gate6 and the actual lazy-resolver repair; integrate exact
+qualified server/aggregate deltas; then complete the still-open production and
+release requirements below. CoreRedis remains a source-level concern with a
+private neutral witness prepared, not an observed shared-service failure.
+
+### Previous qualification and repair record (2026-09-06 10:00 UTC)
 
 The09:39 commit/pull/push request completed without new source changes: primary
 SN is clean at `9341b71d774b38c11dac17bd9ad7aa6b1cba137e`, primary server is clean
