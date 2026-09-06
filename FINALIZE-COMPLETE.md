@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 12:51 UTC before the final source freeze. Refresh every item marked
+2026-09-06 13:23 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,34 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 12:51 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 13:23 UTC; exact evidence in section 12):
+
+- Final live validation has not started. The preceding main checkpoint is
+  `dc144be`; this successor integrates the exact four qualified comparison
+  paths and saves three newer feature drafts on separate recovery branches.
+  The active private worktrees and qualification inputs remain unchanged.
+- Comparison14 plus closure1 passes normally and under race on its isolated
+  donor. All four integrated Git blobs match that donor exactly. The newer
+  primary composition still requires qualification and both complete gates.
+- Stats55 plus simulator15 now records actual normal/race PASS, terminal0,
+  and a distinct post-owner final index. Root checked the summary, seal and
+  strict final-index verification. Complete raw-log review and integration
+  into primary remain pending; the earlier harness failures stay preserved.
+- The activation draft now includes a packed decoder, matching Solidity
+  implementation and17 Go/15 Solidity authored tests. Ordinary and terminal
+  wire drafts add20/22 validator roots respectively and two guards each.
+  These recovery snapshots are unqualified; they do not activate production.
+- Each operator's activation hash binds that operator's identity and prefix.
+  Inter-operator checks compare the eight common deployment fields while
+  independently authenticating each member's full expected activation domain.
+  Copying one operator's activation hash across a batch is not valid.
+- Joint projection, timeout and Open qualifications remain pending, along
+  with runtime v2 ownership/durability, historical authority, evidence storage,
+  process/service ownership and seven-day capacity. Both complete gates,
+  freeze, doctor, matching plans, both live phases and independently reviewed
+  FINAL.md remain mandatory. No new transaction or final-soak result is claimed.
+
+Previous launch status (2026-09-06 12:51 UTC; superseded above):
 
 - Final live validation has not started. The preceding main checkpoint is
   `e216932`; this successor records five more exact recovery snapshots without
@@ -1812,7 +1839,104 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and checkpoint record (2026-09-06 12:51 UTC)
+### Current qualification and checkpoint record (2026-09-06 13:23 UTC)
+
+The preceding pushed primary SN checkpoint is
+`dc144be9745edc03afc47a07b9e5e7a5583426b3`; primary server remains
+`5fcb1d5624fcacbcba5d28b2eb915f6c2bc05341`. This successor integrates only
+the four comparison paths from `6a88c4f2e685596c31f7dad57dd18e24bc5d6d5e`:
+`validator/attempt_ledger.go`, `validator/attempt_comparison.go`,
+`validator/attempt_comparison_test.go` and
+`sim-testnet/release_gate_closure_test.go`. Existing preimages matched before
+integration; all four resulting Git blobs match the qualified donor exactly.
+The accepted15-root normal/race capture remains `sn-comparison-json15-green-run-l5RN4g`
+with final index `cc0deadb25df30289d1c1fa19e28d61c97218d737651ccd81fbed27dc03077d2`.
+This is not qualification of the complete newer primary composition.
+
+Three additional recovery-only source snapshots, all parented at `e216932`:
+
+| SN checkpoint branch | Commit | Source snapshot boundary |
+| --- | --- | --- |
+| `checkpoint/20260906-activation-wire-v2-wip` | `7c39cb9948b8a8a6de087cd728360f43a90b8c03` | Six files;17 Go and15 Solidity authored tests; newest operator test not yet formatted; no product execution |
+| `checkpoint/20260906-measurement-v2-wire-wip` | `7c024f59712969b520c937fb6e59414206f31040` | Twelve files;20 new validator roots and2 guards; ordinary wire/math and same-epoch join; terminal fail-closed; unqualified |
+| `checkpoint/20260906-terminal-v2-wire-wip` | `516f594f728671f503166efa51213ce9922921d6` | Twelve files;22 new validator roots and2 guards; full batch/closure wire and replay draft; unformatted and unqualified |
+
+Separate Git indexes captured the explicitly enumerated paths without changing
+their original HEADs or staged contents. Source blobs match the snapshots;
+the terminal clone's real index was also hash-checked before and after.
+Its separate object store was fetched locally into primary before publishing
+the recovery ref. No generated capture, handoff directory, credential or
+wallet file is included. Source work resumed after each snapshot; these refs
+are immutable savepoints, not claims that the live private trees remain frozen.
+Do not merge whole older snapshot trees over newer primary source.
+
+Stats qualification now has an actual successful successor:
+`/home/by/urnetwork/temp/sn-stats55-v4-run-mtvPv5`, frozen-input SHA256
+`7cdff08cc416584184cb453e1e89e7fb062020ac0853b2e277d6b846053a8433`.
+Terra retained session91724/owner3605193 through actual terminal0. Summary
+ended13:22:49 UTC; validator55 and simulator15 each pass build/list/execute
+and exact census normally and under race. All stage validations and pre/post
+external fences record0. The distinct post-owner seal is13:23:09 UTC; its
+`post-owner-final-artifact-index.sha256` SHA256 is
+`a10ed4e423b47c88bbcbdbed2445867216800873c9070480b2ce83b24bb1f121`.
+Root checked the actual summary, seal and strict final-index verification0.
+The earlier live-outer index remains intermediate; the absent original
+post-launch seal remains honestly recorded as missing. Complete root raw-log
+review and the three-path Stats integration are still pending at this checkpoint.
+The qualified source remains `sn-stats55-guard-v2-D5NnNT/sn`, full646 manifest
+`0d8a870970e015b409ff30a38bcf1bb694ace24f545bc4978d0b7ec04e51e6d0`,
+already saved in `checkpoint/20260906-stats55-guard`.
+
+Preserved harness history, not product passes:
+
+- `sn-stats55-guard-v2-run-CfFC2s` refused before Go on over-escaped census
+  regexes. The v3 adapter fixes exactly two regex lines and passes17 actual
+  command-line controls, independently repeated by Terra.
+- `sn-stats55-v3-run-8t68JX` reached the real owner but terminated1 before
+  Go metadata/build/list/tests: the runner referenced the missing legacy
+  `SHARED-SERVER-STATUS-v1.txt` instead of its pinned composed status file.
+  Its distinct final index is
+  `094cd1dccc458e80f4950f60f85a86715d0447f634b78483e43ddc72eab3716c`.
+- `sn-stats55-runner-alias-v4-A7JMjc` corrects that one reference and adds
+  five actual-entry controls. An initial control scanner defect and Terra's
+  too-short30s control wrapper refusal are preserved. The corrected controls
+  pass in57.092s in `sn-stats55-v4-controls-33eBTe` under a90s control-only
+  bound. Product bounds, source, roots and real cryptography are unchanged.
+
+Joint's initial `sn-joint65-run-Hq57rn` preparation also refused before Go on
+newlines inside its two stored selectors. The reviewed successor
+`sn-joint65-selector-v2-RAPaXU` has frozen37-input SHA256
+`93fb17ccab1f8cb04eb9134bcbb95771a6211869ad43f74bd5855face002789f`.
+Its13 actual-entry/non-Go controls and subsequent65-validator/16-simulator
+normal/race qualification are authorized, not yet passing at this checkpoint.
+Fresh captures must preserve all37 inputs and the nine exact links to Hq's
+physical private module layout. The120s control-only bound does not widen
+any product deadline. Full648 product source remains the exact h10 composition.
+
+Activation now signs a389-byte fixed-width domain/identity/migration-prefix
+payload without a self-referential activation hash. Its digest becomes each
+operator's later evidence-domain activation hash. The strict owned decoder,
+matching Solidity consent checks and genuine two-operator tests are authored;
+independent source review found no remaining blocker in this slice. Refresh
+the full651-source pin after the last formatting-only change, then qualify
+the complete54 protocol roots normally/race and targeted28 Solidity roots.
+The earlier650-source/52-root preparation is superseded, not an executed pass.
+No new public precompile execution, historical role proof, activation storage
+or on-chain publication is supplied by these wire helpers.
+
+Ordinary and terminal integration must retain distinct per-operator activation
+hashes while checking the eight common fields: chain ID, genesis, netuid,
+coordinator, vault, deployment ID, policy and activation epoch. Each member
+still requires its exact independently authenticated full expected domain;
+never normalize or copy an activation hash to force inter-operator equality.
+Runtime disk/aggregate ownership, durable all-operator journal promotion,
+prior EMA and complete legacy history, global terminal trail-ID uniqueness,
+authenticated activation/history and the independent on-chain commitment
+remain outer obligations. The user's proof-storage choice in section10.1
+remains unanswered. Existing timeout132/382, Open45/242, process/service and
+capacity obligations, both full gates and all live-acceptance steps are unchanged.
+
+### Previous qualification and checkpoint record (2026-09-06 12:51 UTC)
 
 The preceding pushed primary SN checkpoint is
 `e2169325a7946a97525146440fe55359b0f443f4`; primary server remains

@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 12:51 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 13:23 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,7 +14,32 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current local checkpoint (2026-09-06 12:51 UTC):
+Current local checkpoint (2026-09-06 13:23 UTC):
+
+- The preceding main checkpoint is `dc144be`. This successor integrates all
+  four comparison paths byte-identically from the isolated qualified donor.
+  Comparison14 plus closure1 passes normally and under race; neither complete
+  release gate nor the newer primary composition is thereby qualified.
+- Three new recovery-only branches save the six-file activation protocol/
+  Solidity draft and the twelve-file ordinary and terminal wire drafts.
+  FINALIZE-COMPLETE.md section12 records their exact commits and source
+  boundaries. Active worktrees and qualification inputs remain intact;
+  unqualified drafts are not merged into primary or activated.
+- Stats55 plus simulator15 now records actual normal/race PASS and terminal0.
+  Root verified the summary and distinct post-owner final index. Complete
+  raw-log review and primary integration remain pending. All earlier census,
+  status-alias and control-wrapper refusals are preserved in the handoff.
+- Joint65/16 is queued on the reviewed selector/actual-entry adapter. The
+  activation draft has17 Go/15 Solidity authored tests, including strict
+  packed decoding and genuine distinct per-operator activation hashes.
+  Its full54 protocol and targeted28 Solidity qualifications remain pending.
+- Real runtime v2 migration, atomic settlement durability, historical authority,
+  evidence anchoring, ownership and seven-day capacity remain incomplete.
+  Both full gates, freeze, doctor, matching plans, both live phases and the
+  independently reviewed FINAL.md are mandatory. No new transaction or
+  final-soak result is claimed by this checkpoint.
+
+Previous local checkpoint (2026-09-06 12:51 UTC; superseded above):
 
 - The preceding main checkpoint is `e216932`. Five additional exact source
   snapshots preserve the comparison repair, Stats55 guard successor, earlier
