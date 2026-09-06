@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 11:30 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 11:58 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,7 +14,39 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current local checkpoint (2026-09-06 11:30 UTC):
+Current local checkpoint (2026-09-06 11:58 UTC):
+
+- SN checkpoint `ac53273` is committed, pulled and pushed. This successor adds
+  the bounded compact-head projection, nine head tests, three above-minimum
+  statistics tests and source-coverage guards. These new files have not passed
+  a build or test run; this is a work-in-progress checkpoint, not source freeze.
+  The projection preserves signed fleet/hotkey/generation/UID attribution and
+  discards partial results on late stream failure. Production v2 routing and
+  independent current-state/history authentication remain separate obligations.
+- Lazy32 passes all32 ordinary and32 race roots in its isolated source/layout.
+  Both terminal ownership and the final seal are verified. The three actual
+  process tests, primary server integration and full process/service ownership
+  remain pending; pure configuration tests do not establish those guarantees.
+- Stats16 reproduces all three fixed-width admission failures with13 controls
+  passing, including all nine original real-stream statistics tests. This is
+  accepted causal evidence, not a passing repair. The reviewed private repair
+  still requires normal/race qualification and integration. The next composed
+  selection preserves these16 roots and adds the12 new tests, Replica27, the
+  six simulator bridge tests and every affected source-coverage guard.
+- Comparison14's unexpected failure was an incorrect invalid-UTF8 JSON-byte
+  oracle, not a comparator defect. The corrected test retains the original
+  vectors and adds adjacent wire-byte controls. Its fresh causal run and the
+  repaired comparison qualification remain pending. Namespace41's current-main
+  dependency composition is in progress; its historical race timeout is open.
+- Open9 admission repair remains private and unqualified. Its updated native
+  producer-boundary/memory-accounting note awaits review; unsupported histories
+  must be preserved without mutation. No storage or policy limit is waived.
+- Both full release gates, real producer v2 integration, signed activation and
+  history, evidence-storage choice, seven-day capacity, source freeze, doctor,
+  matching plans, both live phases and independently reviewed FINAL.md remain
+  mandatory. No new testnet transaction or final acceptance is claimed here.
+
+Previous local checkpoint (2026-09-06 11:30 UTC; superseded above):
 
 - Replica16 now reproduces the three actual callback-exit publication failures,
   with thirteen controls passing. Its repair passes all27 roots normally and

@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 11:30 UTC before the final source freeze. Refresh every item marked
+2026-09-06 11:58 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,32 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 11:30 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 11:58 UTC; exact evidence in section 12):
+
+- Final live validation has not started. Checkpoint `ac53273` is pushed; this
+  successor is another work-in-progress checkpoint, not a source freeze.
+- Primary adds a compact-head projection with nine tests, three real
+  above-minimum statistics tests and their source guards. These new paths are
+  not built or product-qualified, and do not switch the producer to v2.
+- Lazy32 passes32 ordinary and32 race roots with verified terminal ownership
+  and final artifacts. Actual process tests and primary integration are still
+  pending. Stats16 causally reproduces all three missing fixed-width admission
+  checks with13 controls passing; its reviewed private repair is not yet green.
+- The unexpected Comparison14 failure was an invalid-UTF8 wire-byte oracle
+  error. A reviewed fresh source corrects that oracle without changing the
+  production comparator or dropping original vectors. Its actual qualification
+  remains pending. Current-main namespace/comparison dependency composition is
+  being prepared; the original race timeout remains unresolved.
+- The bounded read-only Open9 repair and updated native-producer boundary note
+  remain private, unqualified work. Do not equate source review or causal
+  failures with a passing production repair.
+- Continue with exact current-source composition, both complete gates and
+  source freeze. Runtime v2 routing, authenticated activation/history, complete
+  process/service ownership, evidence storage and seven-day capacity are still
+  launch blockers. Doctor, matching plans, both live phases, FINAL.md and its
+  independent on-chain review remain mandatory. No new transaction is claimed.
+
+Previous launch status (2026-09-06 11:30 UTC; superseded above):
 
 - Final live validation is not running. No source freeze, production v2
   activation or new testnet transaction is claimed by these local changes.
@@ -1737,7 +1762,100 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and repair record (2026-09-06 11:30 UTC)
+### Current qualification and repair record (2026-09-06 11:58 UTC)
+
+The preceding SN checkpoint is `ac5327311ca897a34976dee59fb4850698167763`,
+committed, pulled and pushed. Primary server remains
+`5fcb1d5624fcacbcba5d28b2eb915f6c2bc05341`. This successor checkpoints new
+unqualified source and the evidence below; it does not activate v2 or establish
+a final source freeze. Private repair directories are not part of this commit.
+
+New primary source is `validator/attempt_cut_v2_head.go`, its nine-root test
+file and `validator/attempt_cut_v2_stats_quality_test.go` with three roots.
+`sim-testnet/release_gate_state_test.go` pins both test files. The head projection
+owns a bounded copy of independently supplied current bindings, retains exact
+fleet/hotkey/generation/UID attribution, counts distinct fleet/prefix pairs and
+publishes nothing before complete signed replay and successful stream Close.
+UID zero remains valid. These tests include stale/reassigned/absent bindings,
+signed cursor exclusion, exact and exceeded count limits, shared-prefix
+accounting, admission-before-I/O, copied-input ownership, late Close refusal
+and a signed empty window. The shared-prefix control is explicitly a projection
+unit test with edited inputs, not a claim of signed validity for those inputs.
+
+The quality fixture uses the unchanged real M8/minimum8 policy and original
+16-trail/128-record store caps:15 complete trails plus one failure yield122
+records and106 exposures across at most15 non-seed providers. At least one
+provider must reach minimum8 regardless of assignment order. Its three tests
+check actual engine/legacy/stream score agreement, the exact prior-quality EMA
+transform and refusal after a real proof-stream Close error. Historical prior
+authentication remains an outer obligation; the close witness may fail at the
+first proof chunk after all records, not necessarily the final proof EOF.
+All12 new tests are unqualified. Neither standalone projection is yet wired
+into ordinary or settlement-tail production measurement.
+
+New terminal captures under `/home/by/urnetwork/temp`:
+
+| Scope | Capture | True final index SHA256 |
+| --- | --- | --- |
+| Lazy32:32 ordinary PASS,32 race PASS | `sn-lazy32-capture-d3IH5y` | `31d5aaf3c16dad7c9e454c08b870dbe1fa2cbe1bd1de5028c52d0b6e702de834` |
+| Stats16:3 causal FAIL,13 PASS | `sn-stats16-red-capture-0B9Dn9` | `99293fc3d2f386c55b939548a0f6c1e75b99d7787a447711dae08f1f64baa83d` |
+
+Lazy32 retained session26104/owner3347952 through outer exit0. All64 selected
+root outcomes and non-repetitive diagnostics were inspected; the true
+`final-artifact-index.sha256` strictly verifies. Summary ended11:45:09 UTC,
+and the separate post-owner seal is11:45:33 UTC. The46-input launcher pin is
+`d92304aa5f0b56829846bd77572b859b72337241775c3cb99f332fca5a4639e7`.
+Build/list/execution and source/layout/external fences pass. This qualifies
+only the32 pure roots on `sn-lazy-resolver-repair-mOOCuk/server`; it does not
+qualify the three actual process roots, the nine deferred process roots or
+the current primary server composition.
+
+Stats16 retained session78443/owner3372557 through outer exit0. The actual
+binary exits1 and the exact expected-outcome check exits0: client-ID, hash
+and histogram-width witnesses all reach generic verification before refusal.
+All13 controls, including the nine original signed-stream tests, pass. Root
+read the complete raw output/census and strictly verified
+`post-owner-final-artifact-index.sha256`; the actual owner is terminal.
+Summary ended11:53:58 UTC and the distinct final seal is11:54:30 UTC. The39-input
+pin is `c16b1c6ee8d9b1e6edbfe99d3eceab5588a0e106128e1a4567d385283b37a558`.
+An initial sealer invocation used the obsolete two-argument interface and
+refused before writing artifacts; the corrected three-argument seal is not a
+product retry. Preserve the intermediate index and this orchestration record.
+
+The private Stats repair is `sn-attempt-stats-admission-green-xmCtJm/sn`;
+its33-line production change checks widths36/66/31 before generic verification
+without changing canonical grammar or complete policy replay. The source is
+reviewed, not product-qualified. Fresh current-primary qualification must keep
+the original16 roots unchanged and compose quality3, head9 and Replica27
+(55 validator roots), plus simulator bridge6 and every affected source guard.
+Derive the exact simulator census rather than guessing it. Add the new
+admission-test pathname to the statistics source guard during integration.
+
+Corrected Comparison14 RED/GREEN are
+`sn-attempt-comparison-red-jsonbytes-sYOJ88/sn` and
+`sn-attempt-comparison-green-jsonbytes-jmoQgR/sn`. The source-level oracle fix
+preserves all14 roots and all original vectors; invalid UTF-8 encodes as the
+JSON escape for U+FFFD, whereas a valid literal U+FFFD has distinct wire bytes.
+Decoded-string equality is not the legacy two-Marshal byte comparator's
+contract. Fresh causal and repaired normal/race runs are still pending; the
+earlier unexpected3FAIL/11PASS capture remains a failure, not relabeled green.
+Current-main namespace/comparison composition is being prepared in
+`sn-current-timeout-compose-pJUdrR/sn`, including missing fixture/worker
+prerequisites while preserving current operator-authority code. The old
+three-minute race timeout remains open until the actual repaired workload and
+wider gates pass without reduced assertions, census or limits.
+
+Open9's private implementation is
+`sn-aggregate-open-admission-green-oJDkVS/sn`. The adjacent
+`OPEN-ADMISSION-PRODUCER-BOUNDARY-v2.md` has SHA256
+`5856c02454fe399f9ab53d42c9f94fc3e69b7d45746c8cd0734883e22a1379c0`;
+it awaits root review and product qualification. It proposes four64-KiB
+history windows,608 KiB fixed parser/journal buffers plus bounded metadata,
+and a pinned producer's native-representable level domain, not unrestricted
+LevelDB compatibility. Unsupported histories must remain physically unchanged.
+Do not treat this pending design as an accepted capacity or durability result.
+
+### Previous qualification and repair record (2026-09-06 11:30 UTC)
 
 Primary SN checkpoint `4188f629594a9449216d4b7c19c58daacabf743c` is committed,
 pulled and pushed; its five-file typed-storage bridge/gate/README delta is an
