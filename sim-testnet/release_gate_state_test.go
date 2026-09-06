@@ -71,6 +71,15 @@ func TestProducerGateStateSelectionCoversAttemptStreamPublication(t *testing.T) 
 		"../validator/attempt_cut_v2_seal_policy_test.go",
 		"../validator/attempt_cut_v2_seal_lifecycle_test.go",
 		"../validator/attempt_cut_v2_seal_scratch_test.go",
+		"../validator/attempt_cut_v2_replica_test.go",
+	})
+}
+
+// Simulator storage bindings must qualify before public replication can use
+// their per-operator namespaces, independent typed limits and origin profile.
+func TestProducerGateStateSelectionCoversAttemptReplicaStorage(t *testing.T) {
+	assertProducerStateRegressionCoverage(t, "capture_tests", "./sim-testnet", "attempt-replica-storage", []string{
+		"attempt_replicas_test.go",
 	})
 }
 

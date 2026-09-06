@@ -136,7 +136,7 @@ Required `testnet-` keys:
 | `testnet-spending-limit-tao-rao` | Maximum total testTAO outflow, as an integer number of rao. |
 | `testnet-spending-limit-alpha-rao` | Maximum existing subnet-alpha transferred into release roles, as integer rao. The wallet must already control a registered staking hotkey with enough transferable alpha after conviction-lock and miner-collateral restrictions. The release profile reserves 20,000 alpha for demand custody plus reserve/independent validator bootstrap. |
 | `testnet-spending-limit-evm-gas-wei` | Maximum aggregate EVM gas funding/use, as a canonical nonnegative decimal integer in wei. Quote values above `uint64` in YAML; the release profile uses `"100000000000000000000"` (100 testTAO). |
-| `testnet-operator-api-origins` | Exactly two distinct bare `http(s)://host[:port]` origins, in NO 1/NO 2 order. Each must externally route to the corresponding API port and expose `/status`, `/verify/*`, `/sn/artifact*`, and `/sn/evidence*`. Launch verifies the signed content and history through these origins before publishing a portable manifest. |
+| `testnet-operator-api-origins` | Exactly two distinct bare `http(s)://host[:port]` origins, in NO 1/NO 2 order. Each must externally route to the corresponding API port and expose `/status`, `/verify/*`, `/sn/artifact*`, `/sn/attempt-artifact`, and `/sn/evidence*`. Launch verifies the signed content and history through these origins before publishing a portable manifest. |
 
 The checked-in testnet governance value is `single-owner`; the harness generates
 a dedicated capped testnet owner and a separate guardian. Unprefixed values are
