@@ -347,7 +347,12 @@ func TestAttemptCutV2ReplicaWritesRunConcurrently(t *testing.T) {
 	}
 	raw := []byte("{}\n")
 	result := make(chan error, 1)
-	go func() { result <- publisher.writer("metadata")(ctx, attemptHex32(sha256.Sum256(raw)), raw) }()
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		result <- publisher.writer("metadata")(ctx, attemptHex32(sha256.Sum256(raw)), raw)
+	}()
+	defer joinAttemptCutV2ReplicaTestWorker(cancel, joined)
 	for range 2 {
 		select {
 		case <-entered:

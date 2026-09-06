@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 10:41 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 11:30 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,7 +14,36 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current local checkpoint (2026-09-06 10:41 UTC):
+Current local checkpoint (2026-09-06 11:30 UTC):
+
+- Replica16 now reproduces the three actual callback-exit publication failures,
+  with thirteen controls passing. Its repair passes all27 roots normally and
+  under race; the exact five-file delta is integrated into primary SN. The
+  source-coverage guard now includes all three new regression files. This is
+  an isolated qualification, not a pass of the newer primary composition.
+- Namespace41 passes all41 ordinary roots, including both original duplicate-
+  decode witnesses and eight adjacent controls. Race and wider semantic gates
+  remain pending; the historical race timeout has not been declared resolved.
+- SN checkpoint `4188f62` adds the real typed per-operator storage bridge and
+  six tests. A new nine-test streaming statistics verifier now joins raw scores
+  to complete policy-aware v2 record/proof replay with bounded provider/hash
+  state. Both new integration slices are unqualified and do not activate v2.
+  Fixed-width input admission still needs a causal regression and repair before
+  the statistics draft can claim a complete byte bound.
+- Comparison14's actual run reports three failures and eleven passes: the two
+  intended causal failures plus an unexpected invalid-UTF8 oracle failure.
+  Its expected-outcome check correctly refuses the run; diagnosis and a fresh
+  qualified successor are required. The capture is preserved, with no retry.
+- A fresh read-only check of the configured public endpoints succeeds at
+  11:13 UTC: EVM chain945 and Subtensor runtime454. This is availability/runtime
+  evidence, not a ready doctor, finalized campaign result or transaction.
+- Open9's bounded read-only admission design is accepted for implementation.
+  Comparison and immutable lazy-resolver repairs still require qualification.
+  Legacy66, Gate6, complete process/service ownership, production v2 routing,
+  signed activation/history, storage choice, seven-day capacity, both complete
+  release gates, source freeze and the full live campaign remain mandatory.
+
+Previous local checkpoint (2026-09-06 10:41 UTC; superseded above):
 
 - Server24 now passes all 24 roots normally and under race; its exact eight-file
   delta is integrated into primary server at `5fcb1d56`, preserving newer server

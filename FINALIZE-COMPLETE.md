@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 10:41 UTC before the final source freeze. Refresh every item marked
+2026-09-06 11:30 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,41 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 10:41 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 11:30 UTC; exact evidence in section 12):
+
+- Final live validation is not running. No source freeze, production v2
+  activation or new testnet transaction is claimed by these local changes.
+- Replica16 causally reproduces all three early-exit false-publication failures
+  with thirteen controls passing. The exact five-file repair passes27 ordinary
+  and27 race roots and is integrated into primary SN. New source guards retain
+  every callback/read/close, joined-worker, immutable-retry and real-M8 control.
+- Namespace41 passes all41 ordinary roots on its pinned private source/server
+  composition. Its race and complete semantic qualifications remain pending;
+  the historical single-root race timeout is still a recorded failure.
+- Checkpoint4188f62 is pushed. Its simulator storage bridge and six tests remain
+  unqualified. A new bounded v2 score-reconstruction draft and nine real-stream
+  tests are now authored in primary, with an explicit producer source guard.
+  It calls complete policy-aware replay, not a header-only or counters-only
+  substitute. Runtime routing, prior EMA lineage, historical identity and
+  cross-cut terminal census are not implemented by this standalone slice.
+  Its provider/hash count limits do not yet establish a complete byte bound:
+  fixed-width identity, hash and histogram admission is being prepared in
+  private causal/repair successors. The nine primary tests are still unrun.
+- Comparison14 has terminated with three failures and eleven passes. Two are
+  the intended causal witnesses; the invalid-UTF8 oracle control unexpectedly
+  fails. The expected-outcome check refuses the run. Preserve this failure and
+  diagnose it before any successor or repaired comparison qualification.
+- Both configured public RPC endpoints answer fresh read-only requests:
+  chain945 and runtime454 at11:13 UTC. This is not the ready doctor or a live
+  acceptance result. Open9 admission implementation is now authorized from the
+  reviewed bounded retained-descriptor design; no storage cap changes are
+  authorized. Comparison and lazy-resolver source qualification remain open.
+- Legacy66, Gate6, actual process/service ownership, full producer v2 wiring,
+  signed activation/history, the evidence-storage choice and seven-day capacity
+  remain open. Both complete gates, final freeze, doctor, matching plans, both
+  live phases, FINAL.md and independent on-chain review are still required.
+
+Previous launch status (2026-09-06 10:41 UTC; superseded above):
 
 - This is a work-in-progress checkpoint, not a source freeze or release. Final
   live validation has not started, and this update makes no testnet transaction.
@@ -1703,7 +1737,120 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and repair record (2026-09-06 10:41 UTC)
+### Current qualification and repair record (2026-09-06 11:30 UTC)
+
+Primary SN checkpoint `4188f629594a9449216d4b7c19c58daacabf743c` is committed,
+pulled and pushed; its five-file typed-storage bridge/gate/README delta is an
+explicitly unqualified source checkpoint. Primary server remains
+`5fcb1d5624fcacbcba5d28b2eb915f6c2bc05341`. Later primary edits described below
+are not a source freeze and must enter a fresh composed qualification.
+
+Root read every selected raw test result and strictly verified the true
+post-owner final indexes for these terminal captures under
+`/home/by/urnetwork/temp`:
+
+| Scope | Capture | Final index SHA256 |
+| --- | --- | --- |
+| Replica16:3 causal FAIL,13 PASS | `sn-replica16-capture-pexuxS` | `fc7a9336856001720d7e8e8c4cfa3bda8e3465d87ff5cb479beb6f58ee8ca36c` |
+| Replica27:27 ordinary PASS and27 race PASS | `sn-replica27-capture-tvvIiX` | `d1472c7f41497bf6b39df8aa7682c463812d25aa1d062466f50cf703a5ae317d` |
+| Namespace41:41 ordinary PASS, race unrun | `sn-namespace41-capture-2ni31h` | `684e44785a16c10971d2e6338b257296d4908343db04bec3cb1ba16cd0480a42` |
+
+Replica16 retained session87865/owner3247158 through outer exit0; actual Go
+exit1 and exact-outcome validation0 prove the three intended failures. Both
+real-M8 and empty sealing can falsely acknowledge the absent second replica,
+and joined workers can acknowledge an object with no writes/readbacks. The
+earlier two launcher-only census/policy-path errors and their six actual
+controls remain separately preserved; neither is relabeled as product evidence.
+
+Replica27 retained session29515/owner3280439 through actual outer exit0. Both
+compiled-binary lists and executions match all27 roots, with no fail or skip;
+all source/runtime/private-server/external fences pass. Summary ended11:15:04
+UTC and the separate final seal is11:16:16 UTC. The qualified source is
+`sn-replica-completion-repair-SS05vr/sn`, full638 fingerprint
+`bd22a61613c1e9b3422d316a2484d5d655ea7eb2e5e48b4c3063385a0a977e5c`.
+Only its five declared production/test files were integrated, and all five
+compare byte-for-byte with the qualified slice. The per-worker result starts
+failed, is published before joining, and becomes successful only after actual
+storage and public verification return; data-reader Close is also owned on
+early exit. All original assertions remain, plus the exact causal and eleven
+adjacent controls. This fixes the observed false-publication path, not producer
+activation, full-campaign availability or the new primary composition.
+
+Namespace41 retained session55914/owner3258281 through actual outer exit0;
+ordinary build/list/execute and every fence pass. Summary ended11:04:30 UTC,
+and the true final seal is11:08:22 UTC. Its private TtLDLL source uses the
+reviewed605 fingerprint
+`95bf7f1a9ea6177e2cfbf2374164d88b9a44b5e3a7f7855fae0244df585b362e`
+and an explicitly rebound private server5fcb snapshot. It checks the full
+12,380,812-byte lineage input once within each owning invocation while retaining
+changed-wire/context, history-row and detached-result checks. No race or wider
+pass follows from this ordinary result; the source is not yet integrated.
+
+The separate read-only network capture `sn-public-rpc-readonly-6qOf8J` has
+strictly verified index
+`0336d18e44acd800361d9f034e3c7e52e49afb75b428bbf82b704871f7aed1eb`.
+Between11:13:27 and11:13:30 UTC, the configured EVM endpoint answered chain ID
+`0x3b1` and head `0x793eb9`; the configured Substrate endpoint answered finalized
+hash `0x02e92685ef33c5587f1e41ff3e51e398f1b571cf938b1c5f65303e0ea7e71e9b`
+and `node-subtensor` specVersion454. Exact request/response/timestamp/exit bytes
+are preserved. These requests do not prove all historical RPC capabilities,
+full runtime-code compatibility, service readiness or any transaction.
+
+Remaining immediate work is executable, not waived:
+
+1. Diagnose Comparison14's unexpected invalid-UTF8 oracle control failure,
+   preserving the actual failed capture described below. Qualify a reviewed
+   fresh causal successor with all controls passing, then its matching repair
+   ordinarily/race together with the changed simulator closure-edge guard.
+   Compose with namespace/fixture work before the original wider race gates.
+2. Qualify current primary bridge, the integrated replicas, the new
+   `attempt_cut_v2_stats.go`/nine-root test file and both source guards. The new
+   verifier bounds state by declared provider/hash census, checks every signed
+   terminal assignment, confirmation, histogram and egress cursor through
+   complete policy-aware replay, and discards results after any late failure.
+   This is authored source, not a test result or version-activation claim.
+   First reproduce and repair the fixed-width admission gap: count limits do
+   not prevent a single oversized identity from entering an input-sized error
+   formatter or an oversized hash from entering case normalization. Preserve
+   all nine existing tests; qualify the private admission successor and add
+   its new test file to the primary statistics source-coverage guard.
+3. Implement Open9 admission from
+   `sn-aggregate-open-admission-design-ine05I/OPEN-ADMISSION-DESIGN-v1.md`, SHA256
+   `1e18184fe3dc9e73878cd8cb6a79d5aadfdcf7c4ce0312af3a7af4d4decd4b69`.
+   Its retained directory gate and streaming actual metadata precede writable
+   recovery. The fixed64-KiB Snappy window is justified only for the audited
+   pinned producer; it is not a generic decoder claim or storage-budget change.
+   Preserve original9 and add actual long-history, bootstrap, cancellation and
+   adjacent direct-store/import witnesses before claiming the family closed.
+4. Qualify the immutable lazy-resolver repair and original real transient-unit
+   witness, then Legacy66/Gate6 and complete service/process ownership.
+5. Finish production v2 scoring/capture routing, ordinary and settlement-tail
+   formats, authenticated activation/history, complete cross-cut terminal
+   census, contract evidence storage/publication and seven-day capacity. The
+   storage-choice question remains unanswered; automatic continuation is not
+   selection of either transport. Both choices still require on-chain anchors.
+
+Comparison14 checkpoint evidence: capture
+`/home/by/urnetwork/temp/sn-comparison14-capture-vmyk5q` retained
+session80498/owner3315856 through actual outer exit1. Build/list passed; test
+execution exit1 and expected-outcome validation1 are distinct recorded results.
+Both intended witnesses fail with the exact16-to0 serialization and8-to7
+comparison counts, but `TestAttemptComparisonInvalidUTF8Parity` also fails at
+its independent oracle assertion for field0 with invalid byte0xff versus a
+literal replacement character. Eleven other roots pass. Root read the complete
+raw result and strictly verified the separate post-owner final index
+`67484ecb221a2cce5492f4cb6a5a79f966e13c1243bab7fc22bddee8461bdbfa`.
+Summary ended11:29:17 UTC; pre/post external fences pass. This is not a clean
+causal qualification, no repaired run has been launched, and no outcome has
+been relabeled. The cause remains under source review.
+
+Both complete release gates, source freeze/lock, ready doctor, matching plans,
+the accelerated and production live phases, complete FINAL.md and independent
+on-chain review remain required. The scheduled10:00:48--14:36:00 chain interval
+starts after engineering; it is not a from-now ETA. No final live validation or
+new testnet transaction took place in this local qualification interval.
+
+### Previous qualification and repair record (2026-09-06 10:41 UTC)
 
 This documentation checkpoint descends from primary SN
 `b9d40bc5fc929079eb98812f0fdc67a009095aa9`. Primary server now contains

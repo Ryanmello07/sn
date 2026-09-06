@@ -24,6 +24,10 @@ import (
 // Each publisher must own a distinct immutable storage namespace behind its
 // trusted public origin. Callbacks own their byte slices, honor cancellation,
 // and return only after their storage work has joined. They receive no key.
+// Shared configurations require concurrency-safe callbacks. Callbacks may read
+// Head or append, but must not close the source ledger or enter any operation
+// that starts a nested Walk: the sealer owns its fixed-prefix walk throughout
+// the callback, including when the callback runs on a publisher worker.
 type AttemptCutV2Replica struct {
 	Origin        string
 	WriteRecords  AttemptStreamV2ObjectWriter
@@ -54,6 +58,8 @@ type AttemptCutV2Publication struct {
 // Seals through the real complete replay, then publishes the canonical signed
 // header to both replicas. The VPK stays local; operator storage callbacks do
 // not sign validator evidence or replace record/proof authentication.
+// Inputs must remain unchanged for this invocation. The caller retains all
+// scratch/staged objects and the sealer's cut/drain ownership obligations.
 func SealReplicatedAttemptCutV2(ctx context.Context, ledger *AttemptLedger, expected AttemptCutV2Context, policy protocol.Policy, privateKey ed25519.PrivateKey, bounds AttemptCutV2Bounds, options AttemptCutV2ReplicaOptions) (publication *AttemptCutV2Publication, resultErr error) {
 	if ctx == nil {
 		return nil, errors.New("replicated attempt cut context is missing")
@@ -141,8 +147,9 @@ func newAttemptCutV2Replicas(bounds AttemptCutV2Bounds, replicas [2]AttemptCutV2
 	return self, nil
 }
 
-// No callback sees another callback's mutable bytes. At most two chunk copies
-// and two fixed-size HTTP read buffers exist for this object, never a history.
+// No callback sees another callback's mutable bytes. This operation owns two
+// object copies, fixed data-read buffers, and at most two bounded metadata
+// readback bodies. No buffer or retained result grows with the stream history.
 // Any failure cancels siblings, but cancellation never substitutes for joining.
 func (self *attemptCutV2Replicas) writer(kind string) AttemptStreamV2ObjectWriter {
 	return func(ctx context.Context, contentHash string, raw []byte) error {
@@ -187,15 +194,26 @@ func (self *attemptCutV2Replicas) writer(kind string) AttemptStreamV2ObjectWrite
 			data := append([]byte(nil), raw...)
 			workers.Add(1)
 			go func(index int, write AttemptStreamV2ObjectWriter, data []byte) {
-				defer workers.Done()
-				err := write(ownedCtx, contentHash, data)
-				if err == nil {
-					err = self.verify(ownedCtx, index, kind, contentHash, size)
+				// Goexit runs defers without returning from a callback or reader.
+				// Keep failure until all required work returns, and publish it
+				// before Done so joining cannot manufacture an acknowledgment.
+				outcome := errors.New("attempt replica worker did not complete publication")
+				defer func() {
+					if err := errors.Join(outcome, ownedCtx.Err()); err != nil {
+						results[index] = fmt.Errorf("attempt replica %d: %w", index+1, err)
+						cancel()
+					}
+					workers.Done()
+				}()
+				if err := ownedCtx.Err(); err != nil {
+					outcome = err
+					return
 				}
-				if err = errors.Join(err, ownedCtx.Err()); err != nil {
-					results[index] = fmt.Errorf("attempt replica %d: %w", index+1, err)
-					cancel()
+				if err := write(ownedCtx, contentHash, data); err != nil {
+					outcome = err
+					return
 				}
+				outcome = self.verify(ownedCtx, index, kind, contentHash, size)
 			}(index, write, data)
 		}
 		workers.Wait()
@@ -205,7 +223,7 @@ func (self *attemptCutV2Replicas) writer(kind string) AttemptStreamV2ObjectWrite
 
 // Public retrieval is mandatory even after a successful local storage write.
 // The reader enforces media type, exact length/hash, EOF, Close and cancellation.
-func (self *attemptCutV2Replicas) verify(ctx context.Context, index int, kind, contentHash string, size uint64) error {
+func (self *attemptCutV2Replicas) verify(ctx context.Context, index int, kind, contentHash string, size uint64) (resultErr error) {
 	if kind == "metadata" {
 		_, err := self.readers[index].ReadMetadata(ctx, contentHash, size)
 		return err
@@ -214,6 +232,7 @@ func (self *attemptCutV2Replicas) verify(ctx context.Context, index int, kind, c
 	if err != nil {
 		return err
 	}
-	_, readErr := io.CopyBuffer(io.Discard, reader, make([]byte, 32*1024))
-	return errors.Join(readErr, reader.Close(), ctx.Err())
+	defer func() { resultErr = errors.Join(resultErr, reader.Close(), ctx.Err()) }()
+	_, resultErr = io.CopyBuffer(io.Discard, reader, make([]byte, 32*1024))
+	return resultErr
 }

@@ -72,6 +72,17 @@ func TestProducerGateStateSelectionCoversAttemptStreamPublication(t *testing.T) 
 		"../validator/attempt_cut_v2_seal_lifecycle_test.go",
 		"../validator/attempt_cut_v2_seal_scratch_test.go",
 		"../validator/attempt_cut_v2_replica_test.go",
+		"../validator/attempt_cut_v2_replica_goexit_test.go",
+		"../validator/attempt_cut_v2_replica_lifecycle_test.go",
+		"../validator/attempt_cut_v2_replica_publication_test.go",
+	})
+}
+
+// Compact score reconstruction must retain complete signed replay and all of
+// its negative census, cursor, publication and independent-bound controls.
+func TestProducerGateStateSelectionCoversAttemptStreamStats(t *testing.T) {
+	assertProducerStateRegressionCoverage(t, "producer_tests", "./validator", "attempt-stream-statistics", []string{
+		"../validator/attempt_cut_v2_stats_test.go",
 	})
 }
 
