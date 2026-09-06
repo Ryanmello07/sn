@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 17:17 UTC before the final source freeze. Refresh every item marked
+2026-09-06 20:25 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,45 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 17:17 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 20:25 UTC; exact evidence in section 12):
+
+- The previously pushed checkpoint `c55ce7f` includes the qualified shutdown64
+  repair. Server remains `5fcb1d56`. Bounded EMA loader source/tests and the
+  additive producer selector now match their qualified source exactly in
+  primary; this is not a complete-primary qualification or source freeze.
+- Canonical neutral27 is complete: actual validator26 has13 expected causal
+  FAIL and13 PASS, simulator1 PASS, foreground terminal0 and a distinct verified
+  final index. Root reviewed full raw output/censuses/commands and strict index.
+  Repaired-source run session42827/owner40372 is now terminal with actual outer1:
+  normal repair27/widened115 and focused validator26 race pass, but widened
+  validator race timed out at3m. Its distinct final index is preserved and
+  root-verified. Astra is repairing the observed JSON-clone CPU/allocation path,
+  preserving the full positive202/top200 test and all real cryptographic work.
+- The new read-only bounded EMA startup loader has25 authored validator tests,
+  retains five legacy EMA tests, and adds two simulator guards. Its full673
+  source is frozen separately; fresh FORMAT10 passed and its seven exact byte
+  deltas are integrated in primary. All32 roots pass normally and under race;
+  retained session36171 ended0 at20:24:09 and owner271570 is absent. The distinct
+  post-owner20:24:20 seal strictly verifies; root reviewed all four raw logs,
+  censuses and actual exits. This does not activate runtime startup or qualify
+  the whole release.
+- Head collector review found missing combined/output control accounting and
+  late retained-state/arithmetic admission. A fresh accounting successor with13
+  new tests is source-reviewed, preserving original16 tests/two guards. The original
+  full682 draft has source-only formatting evidence, not a product pass.
+- Terminal v2 recovery has a frozen full687/28-path handoff with60 authored
+  roots. Review found incomplete final directory-Close witnesses and eight
+  uncapped new-v2 metadata reads. Its successor adds final all-root witnesses
+  and explicit snapshot/journal bounds. Ordinary recovery's fresh49+2 successor
+  is source-reviewed, including retained native publication/read/Sync ownership
+  and deterministic late-Close/replay-retarget controls; it is not tested yet.
+- Runtime routing, bounded persistence, authenticated history, on-chain
+  evidence storage, all held adjacent qualifications, seven-day capacity, both
+  full gates, source freeze, doctor/matching plans and both live phases remain.
+  Section10.1's storage choice is unanswered. No final soak or new testnet
+  transaction is claimed; the chain interval is not a from-now ETA.
+
+Previous launch status (2026-09-06 17:17 UTC; superseded above):
 
 - Checkpoint `59eb71a` is committed, pulled and pushed. Qualified activation
   Go54 normal/race and Solidity28 are integrated; server remains `5fcb1d56`.
@@ -1966,7 +2004,250 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and continuation record (2026-09-06 17:17 UTC)
+### Current qualification and continuation record (2026-09-06 20:25 UTC)
+
+The previous primary checkpoint is `c55ce7f00f346b1edf98d6d6dc1503c8f463d8ca`;
+all13 shutdown repair64 paths were committed/pulled/pushed there. Primary server
+is unchanged at `5fcb1d5624fcacbcba5d28b2eb915f6c2bc05341`. The current
+working source below is not a full-primary qualification or final source freeze.
+
+Recovery-only Git snapshots are pushed and remote hashes checked:
+
+| Source | Recovery branch | Commit |
+|---|---|---|
+| Reviewed head-accounting684 | `checkpoint/20260906-head-accounting-wip` | `59646dc2f7a7b6a46eb1c2b5bb6194b7cbb0caaf` |
+| Reviewed ordinary-custody687 | `checkpoint/20260906-ordinary-custody-wip` | `57cb7a13a67a85fb1a8eb49d087a18f3d5d278f6` |
+| Known-incomplete terminal60/full687 | `checkpoint/20260906-terminal60-wip` | `0416d5020277a16ee079844f90354d6dde0fb46a` |
+
+These preserve exact source trees without changing their original frozen
+checkout files, HEAD, index or status. Root used separate temporary indexes and
+primary Git objects, verified full source checks before/after and exact Git
+tree/worktree equality/counts, and did not merge them. Their source manifests
+remain the same; their new checkpoint commit IDs are recovery identities, not
+the original qualification-source Git bases. Unqualified means unqualified.
+Active typed-clone HbLMfZ and terminal-bounds edYFxA repairs are separate and
+were not silently included in these snapshots.
+
+#### Canonical baseline closed; repaired-source wider race failed
+
+`sn-canonical-neutral27-capture-v2-YupOGD` completed its actual foreground
+owner4181019/session20406 with outer exit0 at17:20:35 UTC. The exact validator
+normal26 census is13 expected causal FAIL and13 PASS, with13 root-local
+messages/17 normalization observations; simulator1 PASS. Both package
+build/list phases succeeded; validator execution1 is the expected causal
+baseline, not a passing repaired suite. No children or race execution occurred.
+The separate post-owner seal at17:20:44 has final index
+`2b6bb724817f5990f01f508c339f383ab3b93895f90d80365996fb564b7c7ca0`.
+Root reviewed the complete raw logs, actual commands, censuses and exits, and
+strictly checked that final index with actual exit0. Keep its causal identity.
+
+The next actual capture is
+`sn-canonical-repair27-widened115-proposal-v1-jQ8qIY`:
+
+- Exact formatted649 source:
+  `9e135e27aa3744f6621b006f3455b4f2c8ee1b6d2417051ffa012e1baf01288d`.
+- Frozen103 inputs:
+  `363e2db96e6fb0747e1ab09725e3397486460043808acecfefd32f00c627611c`.
+- Review7 index, in `sn-canonical-repair27-widened115-review-v1-yGg95O`:
+  `12d7a3270096090b6e63d432f47fc429d7972da8904fe869adc00e7efb47d7e5`.
+- Own layout9:
+  `007897cedf377e182a51b838bd0d1090e7f55b6ec2b50bf5f3dd9a5a4ea8b9f8`;
+  private npipe inode41969101. Closure8 is
+  `3cc7e77f40782aead3bcad3bba2c9fd6e710599c9be1968cdc6ab399d0445480`,
+  retaining `sn-joint65-run-Hq57rn/server`, not a substituted physical server.
+
+Root reviewed the complete261-line runner delta, all changed owner adapters,
+unchanged event-state-machine behavior, actual guards/layout/closure and exact
+static census; strict source/frozen/review checks passed. The superseded
+unexecuted102-input pin `de0a8eda...` and review `8cc1b95e...` are not the
+authorized invocation. The final proposal adds an exact green-origin status
+guard and was frozen before approval; do not edit it during or after execution.
+
+Static preflight actual0 preceded foreground owner40372/session42827, started
+17:35:34 UTC with the103-input pin. Normal validator repair26/widened105 and
+simulator repair1/widened10 independently listed/executed stages have actual and
+validation exit0, as does focused validator26 race. The same normal binary is reused only inside this immutable
+source/dependency/runtime capture. Each selection has its own census; the
+repair roots intentionally overlap the widened set and cannot be double-counted
+as distinct coverage. Full plan is26+1 repair and105+10 widened, normal/race,
+with no children; original3m inner/4m outer and all source/runtime/binary/list
+fences remain. Widened validator race exited2 on its internal3m timeout; census
+validation exited1 and race simulator stages were not reached. Foreground
+outer exited1 at17:49:19 and the owner is absent. The separate final seal at
+17:50:09 records that actual failure; its index is
+`58999fe9118f98b79d1d0325cd5731edf92b9fe7a093a3e90c2881d418348342`.
+Root read the real failure, summary and seal and strictly verified the final
+index with exit0. This verifies failed-capture integrity, not product success.
+
+The timeout stack is in JSON Marshal inside `cloneAttemptRecord`, reached from
+the second202-fleet fixture's real Append. The positive202 top200/pool-clamp test
+passed in108.86s under race; the negative unproven-prefix fixture was still being
+built54s when the shared3m alarm fired. Astra's source census identifies5,184
+clone JSON roundtrips per202 fixture, separate from required signatures, hashes
+and JSONL serialization. This is observed CPU/allocation work, not evidence of a
+deadlock or a percentage CPU profile. Its generic valid M16/M12 fixture is not
+relabeled M8. Approved fresh repair: typed independent record/assignment/proof
+copies with exact invalid-UTF8 JSON compatibility fallback, causal real-M8
+serialization-boundary and every-field/ownership/Append/Walk/BuildCut/reopen
+regressions. Preserve positive202 unchanged. The separate negative may use the
+existing padded two-fleet fixture; homogeneous mutation loops may share a local
+raw signed base, but every case owns a clone and runs full real verification.
+No cap, deadline, live1000 workload or verification requirement is reduced.
+
+#### Qualified bounded EMA restart loader, integrated in primary
+
+Immutable source-only copy:
+`sn-head-ema-loader-source-v1-45yd6N/sn`, Git basec55ce7f. The parent
+`HEAD-EMA-LOADER-HANDOFF-v1.md` is
+`e21db5314986058760749b56c1b356645b357e506e1c17c6043a27ff9c9d3137`;
+review7 index is
+`9420efbe92df9b9a2362e1827ef9560b4882b79417152d24870862ce67e71ce9`.
+Full673 manifest is
+`a0d19d3e6bb2cffffa84de01a8327c3c747c97d338f3ccda94fcc37783c1dc24`;
+owned11 manifest is
+`447fd0c7689e447829f30fe60d3e9252e51025d7b933385a1c54f4b7bbbcbfda`;
+complete patch is
+`8a8d28a67d29845de5fa0a6555ddb9992665f945e68769da7dc501211818ee19`.
+Root strict-checked both the isolated full source and identical primary11
+paths. Ten new Go files include the five unchanged shared native primitives;
+the one existing script change adds HeadEMA to the producer selector.
+
+`NewHeadEMAStoreV2` accepts explicit trusted file/count/control limits and
+only an already provisioned canonical physical owner-private directory. It
+does not create/chmod/repair/normalize/write state. Native no-follow/nonblocking
+custody detects FIFO/alias/rewrite/late-disappearance and nil-returning close
+retargets; a final unhooked witness runs after the last owned close observer.
+Schema-limited admission checks complete JSON, duplicate/unknown fields, exact
+array widths, both row censuses, decoded/index payload and rational-work reserve
+before typed decode/math. The existing canonical and exact fold/entry checks
+remain. File/control are finite logical allowances, not an RSS guarantee.
+
+The25 new validator roots plus five unchanged legacy roots and two simulator
+guards form32 expected-PASS roots. Their census hash is
+`a592e7a2ead2e5beaf378738fd01f4660bc3dd17f1b7893faf4d5dffea22f8f3`.
+Positive cases use actual persisted preview/commit/fold, including same-epoch
+restart and zero-entry/nonempty-history state. Negative cases deterministically
+force framing, bound, native replacement, actual and injected-late Close,
+cancellation, ownership and no-repair failures; no sleeps or ordinary subtests.
+Fresh format capture `sn-head-ema-loader-format10-capture-v1-es9crP` has actual
+FORMAT10/postcheck/diff-check/status-projection/closure8/layout9 exit0. Its
+full673 formatted source is
+`8ba5415eb1b4866eabb822c85ed40e04fb156e4f988edd28ac108e075885f62f`;
+static review64 index is
+`092596ffe74686dff5fa3627c7a83ae078b66163add8da5017df23afcaffe3ba`.
+Root strict-verified it, reviewed the actual command/source/delta, and applied
+only its seven in-scope formatting changes to primary via checked preimages.
+All11 primary owned paths now exactly match the formatted source. The original
+unformatted source remains immutable. Source preparation is not execution.
+The fresh product capture is `sn-head-ema32-proposal-v1-SBlxZk`. Frozen113 pin:
+`4108025a60051bf1708ebc50e3699e068b7a313a81e7bb41b26819ef679fa1e8`.
+Review9 index in `sn-head-ema32-review-v1-nKxzwj`:
+`107ddf9e0b3121a9919817b2b2f248241c256e80aa0f9acd853e217bd0b355f4`.
+Root reviewed all270 adapter-delta lines, the full static census, actual layout9
+and unchanged3m inner/4m outer bounds, and strictly checked review/frozen/full673
+with exit0. Fresh npipe inode42085434 and the exact Hq server closure are pinned.
+
+The prescribed agents reported usage-limit errors after approval but before
+product launch. At20:11 root found no EMA owner/start/result artifacts or live
+process. The same Terra agent resumed successfully and, after frozen preflight0,
+launched the original approved pin at20:12:52 under retained session36171,
+owner271570. Root confirmed that exact owner live at20:13:41 and20:17:02. No
+duplicate run, substituted model or changed budget was used. Both Astra agents
+also resumed from their preserved work; capacity is no longer the blocker.
+
+All30 validator and two simulator roots pass normally and under race. Each
+build/list/execute stage has actual0 and validation0; all four censuses match
+with no failures or child tests. Root read all four complete raw logs, censuses,
+commands and actual exits. Retained session36171 ended with actual0; the outer
+exit is0 at20:24:09 and root independently confirmed owner271570 absent.
+The distinct post-owner seal is timestamped20:24:20; its final artifact index:
+`e3755c3c37830765bd32fe1b85bb5afd90dcbb0cdb4d52bfbdeb1fb6a7f19762`.
+Root's strict final index check exits0, and all11 primary owned paths match the
+qualified capture byte-for-byte. The earlier live-outer index remains preserved.
+This closes the loader's focused qualification, not the newer complete primary
+or production routing. The existing constructor and legacy Preview/Commit
+routes remain unchanged and are not thereby bounded.
+
+#### Recovery/head source findings and next actions
+
+Terminal handoff is `sn-terminal-v2-runtime-v1-w4cNnN/TERMINAL60-HANDOFF-v1.md`,
+hash `1bbba91c31dfaa5f585e413fbf9c2a1c1516ec6b831e4b8263613a589ce6abf2`.
+Review index
+`6a5404758c279df5d92062a89643bec799e464aae390bcfb796b765f1087459d`
+strictly verifies; full687 source is
+`303029aaa47fafd10ebff75dbe742df344e87d71d11ba27168a5203faeb07a10`.
+All28 owned paths and60 authored root names are pinned, but source review and
+normal/race qualification are incomplete. Root found `closeRoots` lacks an
+all-root namespace witness after its last observable directory Close; public
+closure read has the corresponding ordering concern. The existing leaf-close
+test does not cover that gap. Astra confirmed eight new-v2 snapshot/journal
+reads pass0 into size-selected ReadAll; this is not merely legacy compatibility.
+Fresh `sn-terminal-v2-custody-bounds-v2-edYFxA/sn` adds explicit required
+`AttemptSettlementRuntimeV2PersistenceBounds{MaxSnapshotBytes, MaxJournalBytes}`
+to Init/Recover/runtime options, with no zero/default fallback. It propagates
+all eight reads and counts actual indented JSON/base64 output before allocation.
+A copied witness registry must check every acquired root and final leaf after
+all observable closes, including closure children and last-close retargets of
+earlier roots, before attach/publication/gate release. Test-only4MiB snapshot
+and32MiB journal allowances are explicit fixtures, not production defaults.
+Preserve terminal60 as authored, not qualified. Its stale
+no-refold comment and unsupported-platform boundary must also remain visible.
+
+Ordinary source `sn-ordinary-journal-custody-v2-zosqo7` retains its full685
+red/green and37 original roots/two guards. Root reviewed its real causal reader,
+repair and shared native primitives; its index21 strictly verifies. Source
+review then found the after-real-Close namespace and pathname publication gaps.
+The new `sn-ordinary-journal-commit-v1-p1BnUb/sn` successor owns native parent
+creation, temp/Linkat/Unlinkat/Sync and a single retained read/admission/Sync
+owner, plus optional post-replay/pre-Save and post-Save journal guards in
+`measurement_stats_v2.go`. No callback may hold a Stats state mutex. Existing
+paths are refused rather than chmod-repaired. The unrelated pathname snapshot
+writer is still a separate boundary, not proved safe merely by these guards.
+
+The successor is now frozen/source-reviewed: handoff
+`87d258a69f107b6365d66338615226107ac0b3179745aefa81677cee0259c32c`,
+strict21 index
+`dad1e2aae70cc8d6436e3c9e04d2e19e8298c1ca42acc78c9c42a6a168db7b5b`.
+Full687 repair is
+`a5d25a72922b9318e77393cb9c62781d189848dc8087f9976b82ff9d349bcbfe`;
+causal is `4cbd2ae932857c5614c47c7f4ae2ad904c36494a02fef9737439fbb392e0bcda`.
+Root read every changed product path, all12 new tests and both source guards.
+Run three distinct groups: original zosqo7 causal13 (expected10FAIL3PASS), fresh
+causal49 (expected10FAIL39PASS, coverage guardPASS/strong graphFAIL), then fresh
+repair49+2 allPASS normally/race. These are expectations, not observed results.
+Fresh source-format/capture preparation is authorized; no product run yet.
+
+The head accounting successor is `sn-head-accounting-repair-v1-RXWqvN`.
+It now reserves combined draft/native/binding/current/history/generated EMA
+and final score/UID output storage, admit known retained state before callbacks,
+admit the union before proof replay, reserve rational growth before allocation,
+and rechecks after callbacks. Root reviewed the complete helper, product/gate
+diffs,13 new tests and accounting proof; strict21 index verifies0. Handoff is
+`64815445c20d409b85575d1738cba2797750e0850ffcf7400532f05775284fae`;
+index `9861ed413fb2f30d3501536181638241821e4b99bdf424e177dfb70b7f9b9dda`.
+Full684 causal is
+`d06c2141248f2c3d59351a8df83bf528a978886cbb908e148a73665031b776ac`;
+repair `d1dcc0f9d582af68b179b36e5b0d23e00a3683456c2ff2ded173f06b7e3220b4`.
+New13 expects causal9FAIL4PASS then repair13PASS; four helper contracts do not
+claim old-production acceptance. Original16 tests/two guards remain, widened31
+normal/race required. Fresh FORMAT39 preparation is authorized, not a product
+pass. Original
+head682 formatting in `sn-live-head-v2-format37-capture-v2-2PZIQk` is source
+preparation only; its known budget gaps bar a product qualification of that
+original source. Preserve the failed first FORMAT preparation as well.
+
+After these slices: qualify/integrate exact method-level changes; fix shutdown
+producer selector retention while preserving HeadEMA/HeadV2/StatsV2 and every
+old alternative; finish v2 config/physical-path doctor/startup/submission,
+bounded commit/persistence, independent activation/history and evidence storage;
+complete held adjacent suites/capacity, both full gates and freeze. Then run
+doctor/matching plans, live release candidate and all three final windows,
+produce FINAL.md and have its full on-chain evidence independently reviewed.
+Section10.1's unanswered storage choice still blocks storage-specific design,
+not independent common engineering. No final soak, new transaction, mainnet
+readiness or from-now ETA is claimed by this local progress.
+
+### Previous qualification and continuation record (2026-09-06 17:17 UTC)
 
 Primary is checkpoint `59eb71acf0fcf2a81aae3a343b67d56c83862153`, committed,
 pulled and pushed before this continuation. Primary server is unchanged at

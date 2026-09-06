@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 17:17 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 20:25 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,7 +14,51 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current working integration (2026-09-06 17:17 UTC):
+Current working integration (2026-09-06 20:25 UTC):
+
+- The previously pushed checkpoint `c55ce7f` contains the qualified shutdown64
+  repair; server remains `5fcb1d56`. The bounded EMA loader/tests now match their
+  qualified source exactly in primary. This is not a complete-primary gate or
+  source freeze.
+- Canonical neutral27 completed with exactly13 expected failures/14 passing
+  controls, real terminal0 and a separately verified final index. Root reviewed
+  full output. Repaired-source qualification failed: normal repair27/widened115
+  and focused validator26 race pass, but wider validator race hit its fixed3m
+  timeout. Actual outer1 and distinct final seal are preserved. Repeated JSON
+  record cloning is the observed active work; typed-copy repair and deterministic
+  ownership/compatibility regressions are underway, without a timeout increase.
+- A new read-only bounded EMA startup loader adds25 tests, preserves five
+  legacy tests and adds two simulator guards. Its exact full673 source is
+  frozen; fresh FORMAT10 passed and its exact seven formatting deltas are in
+  primary. All32 roots pass normally and under race, with actual build/list/test
+  and census-validation exits0. Retained session36171 ended0 at20:24:09; the
+  distinct20:24:20 post-owner index strictly verifies and root reviewed all four
+  raw logs/censuses. Existing live startup and commit routes are not thereby
+  activated or made bounded.
+- Head review found combined/generated-output and admission-order budget gaps;
+  the fresh successor is source-reviewed with13 new roots and retained18.
+  The original head682 FORMAT37 result is source preparation, not a test pass.
+- Terminal recovery has a full687/28-path/60-test authored handoff, with final
+  directory-Close witness gaps and eight uncapped new-v2 metadata reads. A fresh
+  successor adds complete post-close witnesses and explicit persistence bounds.
+  Ordinary recovery's fresh successor closes native publication and retained
+  read/Sync ownership, including replay-callback/Save guards; snapshot writer
+  custody remains separate. Its49 validator/two simulator roots are source-reviewed
+  and await execution; no known gap is credited as already covered.
+- All full-scope runtime/history/evidence-storage and adjacent qualifications,
+  seven-day capacity, both full gates, freeze, doctor/plans, live RC/three final
+  windows and independently verifiable FINAL.md remain required. Section10.1's
+  storage choice remains unanswered. The final soak has not begun, and the
+  scheduled10:00:48--14:36:00 chain interval starts after engineering and gates.
+
+The reviewed unfinished head-accounting, ordinary-custody and known-incomplete
+terminal60 sources now have pushed recovery-only checkpoint branches at
+`59646dc`, `57cb7a1` and `0416d50`, respectively. They are not merged or qualified.
+An agent usage-limit interruption occurred before EMA product launch; root
+confirmed no owner at20:11, then the same approved capture launched at20:12:52.
+All three prescribed agents resumed; no duplicate run or model substitution.
+
+Previous working integration (2026-09-06 17:17 UTC; superseded above):
 
 - Checkpoint `59eb71a` is committed, pulled and pushed; qualified activation
   Go54 normal/race and Solidity28 remain integrated. No complete-primary gate
