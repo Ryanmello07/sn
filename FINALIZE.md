@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 13:46 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 14:49 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,7 +14,38 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current working integration (2026-09-06 13:46 UTC):
+Current working integration (2026-09-06 14:49 UTC):
+
+- Checkpoint `60597dd` is committed, pulled and pushed. It contains the
+  qualified Stats admission and joint statistics/head replay changes. Primary
+  server remains `5fcb1d56`; neither complete release gate nor source freeze
+  is claimed for the newer primary composition.
+- Activation's complete54 Go protocol roots now pass normally and under race.
+  The actual foreground owner exited0; root reviewed both full raw logs,
+  exact54-root censuses and the distinct post-owner final index. Its four Go
+  files are integrated byte-identically from that qualified source. The two
+  matching Solidity files and their28-root qualification remain separate and
+  pending; Go qualification does not install or activate an on-chain registry.
+- A stale physical source/npipe mapping was refused by activation's actual
+  static preflight before any Go execution. The narrow three-file metadata
+  repair preserves the original refusal, passes11 actual namespace controls,
+  and changes no protocol source, population, limit or deadline.
+- Shutdown's original53 causal tests and63-root repair are reviewed and
+  authorized for execution. The fixed-width parser's27-root causal/repair
+  candidates are also reviewed. No expected failure or proposed repair outcome
+  is counted as observed until Terra runs the exact frozen candidates.
+- The private ordinary/terminal v2 composition now implements cross-settlement
+  admission, complete terminal replay, successor quality joins and actual
+  prefix checkpoints. Its new real-stream tests and independent review are
+  ongoing. It is not yet formatted, qualified, integrated or runtime promotion.
+- Remaining launch blockers include runtime v2 atomic ownership/promotion,
+  authenticated history and evidence anchoring, adjacent persistence/parser
+  fixes, the held timeout/admission/process suites and seven-day capacity.
+  Both full gates, freeze, doctor, matching plans, live release candidate and
+  final soak, and independently reviewed on-chain FINAL.md remain required.
+  No new transaction or from-now completion ETA is claimed.
+
+Previous working integration (2026-09-06 13:46 UTC; superseded above):
 
 - Checkpoint `26ba4c8` and all three recovery branches below were committed,
   pulled and pushed; primary server remains `5fcb1d56`. This subsequent work

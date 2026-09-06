@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 13:46 UTC before the final source freeze. Refresh every item marked
+2026-09-06 14:49 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,33 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 13:46 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 14:49 UTC; exact evidence in section 12):
+
+- Checkpoint `60597dd` is committed, pulled and pushed. Stats55/15 and
+  Joint65/16 qualified normal/race changes are integrated; primary server
+  remains `5fcb1d56`. This is not a complete-primary qualification or freeze.
+- Activation54 Go roots now pass normally and under race. The actual owner
+  exited0 and a separate final index was sealed after it terminated. Root
+  reviewed both complete logs, exact result censuses and final index, then
+  integrated the four qualified protocol Go files byte-identically. Matching
+  Solidity28 remains pending and no registry is deployed by this change.
+- Activation's stale physical-layout preflight refusal is preserved. Its
+  three-file metadata repair passes11 actual non-Go namespace controls; the
+  subsequent Go run keeps every source/runtime/dependency fence and budget.
+- Shutdown neutral53 and repair63, plus canonical parser neutral/repair27,
+  are source-reviewed and authorized for execution with unchanged bounds.
+  These expected outcomes are not observed failures or passing repairs yet.
+- Root's private ordinary/terminal v2 composition adds cross-settlement replay
+  and lineage. Its real-stream tests and independent review remain in progress;
+  it is not formatted, qualified, integrated, or wired to runtime atomic state.
+- Final live validation has not started. Runtime ownership/promotion,
+  authenticated history, evidence anchoring, adjacent persistence/parser
+  repairs, held timeout/admission/process suites and seven-day capacity remain
+  open. Both complete gates, freeze, doctor, matching plans, both live phases
+  and independently reviewed FINAL.md remain mandatory. No new transaction or
+  from-now completion estimate is claimed.
+
+Previous launch status (2026-09-06 13:46 UTC; superseded above):
 
 - Checkpoint `26ba4c8` and the three newer feature recovery branches are pushed.
   Server remains `5fcb1d56`. Subsequent primary integration contains qualified
@@ -1866,7 +1892,88 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and integration record (2026-09-06 13:46 UTC)
+### Current qualification and continuation record (2026-09-06 14:49 UTC)
+
+Primary checkpoint `60597ddb4d573d033c95456971b2c3ca3ea22b17` was committed,
+pulled and pushed with exact remote equality. The current subsequent integration
+adds only the four qualified Go activation paths and this working record; it
+does not merge the unqualified Solidity or ordinary/terminal feature sources.
+
+Activation's exact capture is
+`/home/by/urnetwork/temp/sn-evidence-activation-go54-proposal-v3-zbcHOH`.
+Its source full651 manifest remains
+`e39660f9f19d0c1c59f96837cfdd926e3ec68b7708b5b0d852a4d2182a83f811`.
+The original static preflight refused the stale EcQRnL module/npipe physical
+mapping before any Go command. Preserve the old bytes and actual generated
+layout in `sn-activation-layout-repair-v1-3WGQtt/before`; do not reconstruct a
+missing original summary. The only repair changes the layout's module_dir,
+npipe resolved path and inode, its expected layout hash, and the corresponding
+two frozen-index entries. All other38 indexed inputs and product code remain
+unchanged. The repaired frozen40 input index is
+`0c5c7ccf2f1e4a8f3bf1ac99281d43dbbb6d64a019ea74216a2f129e0d960d50`.
+Actual11 CLI/byte-comparison controls pass in
+`sn-activation-layout-controls-run-v1-81U7qQ`; subsequent actual static admission
+and all normal/race build/list/execute stages exit0. Both exact censuses contain
+54 roots,54 PASS and no extra/missing roots. Root read both complete raw logs.
+
+The retained foreground owner3812942 exited0. The summary ended14:48:16 UTC;
+the separate post-owner seal is14:48:43 UTC. The final index is
+`20d0f31b2fb63fd753278b15028b0a3b632f6c08f763c823d88f66e9e3ddd96d` and
+strict verification passes. The intermediate live-outer index is preserved;
+the separate missing post-launch seal remains honestly recorded as missing.
+The four integrated Go paths are `protocol/validator_evidence_activation.go`,
+its `_test.go`, `_wire_test.go` and `_operators_test.go`; all compare exactly to
+the captured source. The two Solidity paths are still held for actual28-root
+qualification. This does not prove historical activation eligibility, install
+an on-chain registry, or qualify the complete newer primary composition.
+
+Next execution/source owners (Terra max executes; Astra max diagnoses/repairs):
+
+1. Finish separate local-only Solidity28 activation qualification with unchanged
+   cryptography, inputs and bounds. Integrate its two paths only after root
+   reviews actual terminal results and the final evidence index.
+2. Run reviewed shutdown neutral53 from
+   `sn-release-shutdown-adjacent-red-0r4C0B/sn`: validator50 expects10 causal
+   failures/40 controls and simulator3 controls. The repair is
+   `sn-release-shutdown-repair-v2-DUeWvP/sn`, full653
+   `8d024734f5f6bd7c201683252555d9a9d6a182b2c1cd32500eb8b3a430257d9e`.
+   Its exact63 roots retain all53 and add10; validator60/simulator3 expect PASS.
+   Root reviewed all repair code/tests and authorized FORMAT12 plus ordinary/
+   race qualification after the genuine causal capture. Preserve pending
+   journal bytes, strict lifecycle checks, joined errors and ledger ownership.
+3. Canonical normalization neutral `sn-canonical-hex-red-v1-yKYuzh/sn` full649
+   `da6cee5948cb3ef770a7266071a622fee10b6d3082e600ae22773c134836cf9f`
+   and repair `sn-canonical-hex-green-v1-1t8875/sn` full649
+   `d19b22193840dc9119750e7fdc5ecc7f258446112f9fd227186f8c901b72ad3e`
+   are fully reviewed. FORMAT9 then exact27 causal/repair runs are authorized;
+   neutral expects13 own-root failures/14 controls, repair27 PASS normally and
+   under race. Wider115 remains separate. Compose only methods into newer
+   Stats/common-identity/intent files; never overwrite newer full files.
+4. Root composition `sn-v2-composed-lineage-VkN2iI/sn` starts from60597dd and
+   preserves both formatted ordinary/terminal donors. It now adds independent
+   terminal authority, complete all-operator terminal/current replay, exact
+   successor folds, cross-window record checkpoints and strict nested decoding.
+   Twelve initial real-stream roots and additional source guards are authored,
+   not run. Astra is checking real fork/strict-extension evidence, deterministic
+   prior-quality prerequisites and direct-lineage scratch admission. Finish and
+   review this bounded source, compose qualified parser fixes, then format and
+   qualify the full affected union without dropping prior roots.
+5. Adjacent payout parsing, JWT/rejection persistence, generic secondary Close
+   handling and mixed expected-sentinel settlement refresh failures remain
+   separate open repairs. Payout must preserve padded/uppercase inputs and its
+   exported Unicode-prefix compatibility; it is not covered by canonical27.
+   The stopped native-file-number task stays stopped. Continue the previously
+   authorized timeout/Open/process qualifications with their original censuses
+   and budgets, then finish runtime v2 atomic state/history/activation anchoring,
+   capacity and both complete gates before any final live launch.
+
+No owner overlaps another expensive product run; independent source work may
+continue. A copied physical source must derive its own actual module/npipe
+layout instead of reusing its predecessor's path/inode pin. Never count a
+source review, expected outcome table, fake-product harness control or formatter
+as product evidence. No new testnet transaction or final-soak pass occurs here.
+
+### Previous qualification and integration record (2026-09-06 13:46 UTC)
 
 The previous checkpoint request is complete: SN `26ba4c8be7ea9c89a13fa45b7ace85e8e3709688`
 and all three recovery refs recorded below were pulled/pushed and verified
