@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 14:49 UTC before the final source freeze. Refresh every item marked
+2026-09-06 14:59 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,24 +36,27 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 14:49 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 14:59 UTC; exact evidence in section 12):
 
-- Checkpoint `60597dd` is committed, pulled and pushed. Stats55/15 and
-  Joint65/16 qualified normal/race changes are integrated; primary server
+- Checkpoint `71a6905` is committed, pulled and pushed. Stats55/15,
+  Joint65/16 and Go activation54 qualified changes are integrated; primary server
   remains `5fcb1d56`. This is not a complete-primary qualification or freeze.
 - Activation54 Go roots now pass normally and under race. The actual owner
   exited0 and a separate final index was sealed after it terminated. Root
   reviewed both complete logs, exact result censuses and final index, then
   integrated the four qualified protocol Go files byte-identically. Matching
-  Solidity28 remains pending and no registry is deployed by this change.
+  Solidity28 now also passes and its two exact files are integrated. Both
+  isolated qualifications are fully reviewed; no registry is deployed here.
 - Activation's stale physical-layout preflight refusal is preserved. Its
   three-file metadata repair passes11 actual non-Go namespace controls; the
   subsequent Go run keeps every source/runtime/dependency fence and budget.
-- Shutdown neutral53 and repair63, plus canonical parser neutral/repair27,
+- Shutdown neutral53 and repair63, canonical parser neutral/repair27 and
+  adjacent payout-parser12,
   are source-reviewed and authorized for execution with unchanged bounds.
   These expected outcomes are not observed failures or passing repairs yet.
-- Root's private ordinary/terminal v2 composition adds cross-settlement replay
-  and lineage. Its real-stream tests and independent review remain in progress;
+- Root's private ordinary/terminal v2 composition adds cross-settlement replay,
+  lineage and the method-composed reviewed canonical parser repair. Its
+  real-stream tests and independent review remain in progress;
   it is not formatted, qualified, integrated, or wired to runtime atomic state.
 - Final live validation has not started. Runtime ownership/promotion,
   authenticated history, evidence anchoring, adjacent persistence/parser
@@ -1892,12 +1895,13 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and continuation record (2026-09-06 14:49 UTC)
+### Current qualification and continuation record (2026-09-06 14:59 UTC)
 
-Primary checkpoint `60597ddb4d573d033c95456971b2c3ca3ea22b17` was committed,
+Primary checkpoint `71a69052dacb06a26d7304827c0ee5a4d52bc670` was committed,
 pulled and pushed with exact remote equality. The current subsequent integration
-adds only the four qualified Go activation paths and this working record; it
-does not merge the unqualified Solidity or ordinary/terminal feature sources.
+adds the two qualified Solidity activation paths and this working record;
+the four Go activation paths are already in that checkpoint. The unqualified
+ordinary/terminal feature sources remain private.
 
 Activation's exact capture is
 `/home/by/urnetwork/temp/sn-evidence-activation-go54-proposal-v3-zbcHOH`.
@@ -1923,15 +1927,35 @@ strict verification passes. The intermediate live-outer index is preserved;
 the separate missing post-launch seal remains honestly recorded as missing.
 The four integrated Go paths are `protocol/validator_evidence_activation.go`,
 its `_test.go`, `_wire_test.go` and `_operators_test.go`; all compare exactly to
-the captured source. The two Solidity paths are still held for actual28-root
-qualification. This does not prove historical activation eligibility, install
+the captured source. Matching Solidity qualification is now complete below.
+This does not prove historical activation eligibility, install
 an on-chain registry, or qualify the complete newer primary composition.
+
+Solidity's separate capture is
+`/home/by/urnetwork/temp/sn-evidence-activation-sol28-proposal-v1-egGv0Z`, with
+frozen input index
+`429a91ce57f3caabb763c5c81c4b643abb7a77ccace0807e0ee066ac0a066d26`.
+Offline build/list/test all exit0 with validation0 under the original four-minute
+stage limits. The exact13 existing plus15 activation roots all pass, none fail
+or skip. The full651 source, all1,675 local library files, three dependency
+revisions and exact Forge/solc binaries match every pre/post fence. No RPC,
+FFI or broadcast command ran. Root read all three raw logs, the exact listed
+and passing roots, summary, owner status and final seal. Owner3836593 exited0;
+summary14:56:52 and post-owner seal14:57:08 UTC. The distinct final index
+`bbb8cdf9efa51ab9db7da6f3baed9c09f99ba40fb3d0514b4eada5f5fe019024`
+verifies strictly. Preserve the intermediate index and honestly missing separate
+post-launch seal. `evm/src/lib/ValidatorEvidenceActivation.sol` and
+`evm/test/ValidatorEvidenceActivation.t.sol` are integrated byte-identically.
+Compiler warnings2018 at the existing header library's verify and the new
+activation library's verify were inspected: both conservatively declare view
+while calling only the declared-pure signature precompile interfaces. They are
+annotation suggestions, not ignored test failures or historical state checks.
 
 Next execution/source owners (Terra max executes; Astra max diagnoses/repairs):
 
-1. Finish separate local-only Solidity28 activation qualification with unchanged
-   cryptography, inputs and bounds. Integrate its two paths only after root
-   reviews actual terminal results and the final evidence index.
+1. Both activation component suites are qualified. Preserve exact byte/domain
+   compatibility while adding actual historical authority and registry wiring;
+   stateless dual-key consent is not sufficient runtime activation authority.
 2. Run reviewed shutdown neutral53 from
    `sn-release-shutdown-adjacent-red-0r4C0B/sn`: validator50 expects10 causal
    failures/40 controls and simulator3 controls. The repair is
@@ -1941,6 +1965,11 @@ Next execution/source owners (Terra max executes; Astra max diagnoses/repairs):
    Root reviewed all repair code/tests and authorized FORMAT12 plus ordinary/
    race qualification after the genuine causal capture. Preserve pending
    journal bytes, strict lifecycle checks, joined errors and ledger ownership.
+   FORMAT12 is now complete in DUeWvP; formatted full653 is
+   `cc1c5717c5d4f076091b95065c908c501183d43c59b23b97a6d0b9507cdf0651`,
+   with evidence in `sn-release-shutdown-repair-v2-format12-v1-OkXH6c`.
+   Do not mistake the earlier preformat manifest for the current formatted
+   bytes. Only the approved12 paths were formatted; neutral53 is unchanged.
 3. Canonical normalization neutral `sn-canonical-hex-red-v1-yKYuzh/sn` full649
    `da6cee5948cb3ef770a7266071a622fee10b6d3082e600ae22773c134836cf9f`
    and repair `sn-canonical-hex-green-v1-1t8875/sn` full649
@@ -1956,12 +1985,24 @@ Next execution/source owners (Terra max executes; Astra max diagnoses/repairs):
    Twelve initial real-stream roots and additional source guards are authored,
    not run. Astra is checking real fork/strict-extension evidence, deterministic
    prior-quality prerequisites and direct-lineage scratch admission. Finish and
-   review this bounded source, compose qualified parser fixes, then format and
-   qualify the full affected union without dropping prior roots.
+   review this bounded source, then format and qualify the full affected union
+   without dropping prior roots. Root has method-composed the reviewed (still
+   unqualified) canonical repair into this private source: common identity
+   normalization is shared by both explicit wire verifiers, all original
+   cryptographic checks remain and AST edges follow the actual new call graph.
+   Frozen canonical neutral/repair candidates remain unchanged for causal runs.
 5. Adjacent payout parsing, JWT/rejection persistence, generic secondary Close
    handling and mixed expected-sentinel settlement refresh failures remain
    separate open repairs. Payout must preserve padded/uppercase inputs and its
    exported Unicode-prefix compatibility; it is not covered by canonical27.
+   Its separate neutral `sn-payout-hex-adjacent-red-v1-DCLKae/sn` and repair
+   `sn-payout-hex-adjacent-green-v1-UK5G58/sn` are fully reviewed and FORMAT4 /
+   exact12 causal then ordinary/race repair runs are authorized. Wider existing9
+   and producer retention remain obligations. Astra is also repairing a real
+   refresh classification defect: a failed stats rename can be treated as a
+   transient RPC failure when its configured directory appears in error text.
+   Real signed advance/save witnesses and separate joined-error contract
+   controls must distinguish that reachable cause from synthetic combinations.
    The stopped native-file-number task stays stopped. Continue the previously
    authorized timeout/Open/process qualifications with their original censuses
    and budgets, then finish runtime v2 atomic state/history/activation anchoring,
