@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 12:28 UTC before the final source freeze. Refresh every item marked
+2026-09-06 12:51 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,32 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 12:28 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 12:51 UTC; exact evidence in section 12):
+
+- Final live validation has not started. The preceding main checkpoint is
+  `e216932`; this successor records five more exact recovery snapshots without
+  altering active worktrees, HEADs, indexes or qualification inputs. These
+  are work-in-progress branches, not integration or a source freeze.
+- Repaired Comparison14 plus simulator closure1 now passes all15 roots
+  normally and under race. Root checked all four raw logs, actual terminal
+  ownership and the distinct post-owner final index. The earlier causal
+  failures and launcher refusals remain preserved.
+- Stats55's source guard and exact55/15 selector corrections are held. The
+  new capture refused before any Go command because its census helper
+  over-escaped regex tokens. This is a harness failure, not a product pass;
+  Astra diagnosis/repair and deterministic controls are required before rerun.
+- Joint projection qualification remains pending. Separate ordinary and
+  terminal compact-v2 wire drafts now share initial transition types. The
+  earlier activation protocol has11 authored tests and formatting only.
+  Their verifiers, runtime ownership/durability, migration/history and
+  contract anchoring are not complete or activated by these snapshots.
+- Complete timeout and Open admission qualifications, the native file-number
+  issue, service/process ownership and seven-day capacity remain open. Both
+  full gates, source freeze, ready doctor, matching plans, both live phases,
+  FINAL.md and its independent on-chain review are still required. No new
+  transaction or final-soak result is claimed.
+
+Previous launch status (2026-09-06 12:28 UTC; superseded above):
 
 - Final live validation has not started. Implementation checkpoint `57dca2d`
   is pushed; this handoff update is not a source freeze. Four held source
@@ -1787,7 +1812,83 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and checkpoint record (2026-09-06 12:28 UTC)
+### Current qualification and checkpoint record (2026-09-06 12:51 UTC)
+
+The preceding pushed primary SN checkpoint is
+`e2169325a7946a97525146440fe55359b0f443f4`; primary server remains
+`5fcb1d5624fcacbcba5d28b2eb915f6c2bc05341`. The four earlier source recovery
+branches below remain available. Five more snapshots use separate Git indexes
+and preserve each active source tree, original HEAD and real index. All
+changed/new paths were explicitly enumerated and their Git blobs matched the
+snapshot; no generated capture, vault value or wallet file is included.
+
+| SN checkpoint branch | Commit | Qualification boundary |
+| --- | --- | --- |
+| `checkpoint/20260906-comparison-qualified` | `6a88c4f2e685596c31f7dad57dd18e24bc5d6d5e` | Exact isolated Comparison14 + closure1 normal/race pass; no current-main or full-gate claim |
+| `checkpoint/20260906-stats55-guard` | `b8077bb83fb2cf1e56935a500502c047ec1e6eab` | Source guard corrected; fresh harness refused before Go |
+| `checkpoint/20260906-evidence-activation` | `634e1ce4c7d075abd7a9e8a127dc6325fca59652` | Two formatted files,11 authored tests; no build or test |
+| `checkpoint/20260906-measurement-v2-wip` | `5e99c877d3ce28ae0293839ecddf017877f5958e` | Incomplete ordinary v2 integration and shared type snapshot; no build or test |
+| `checkpoint/20260906-terminal-v2-wip` | `afd5b34930c403eb0458cb724381c6e6c7e44d5d` | Initial terminal types/digest helpers plus joint prerequisites; no verifier, producer or qualification |
+
+Comparison snapshot retains parent `9b29827`, Stats retains `57dca2d`, and
+the other three retain `e216932`. Do not merge their complete older trees over
+current main. Recover the exact source in a fresh `temp/sn-*` checkout and
+compose reviewed deltas with current source/dependencies before qualification.
+Snapshot commits do not upload local capture directories or sibling handoffs.
+
+Accepted comparison capture:
+`/home/by/urnetwork/temp/sn-comparison-json15-green-run-l5RN4g`.
+The frozen45-input pin is
+`4d2f4f268c3d90ac86a50e607025dd4df21ee1db7bfd9f2a2824c696233d9105`.
+Session51789/owner3498673 was retained through actual terminal0. All14 validator
+roots and the simulator closure root pass normally and under race; every
+build/list/execute validator and source/runtime fence records0. Summary ended
+12:40:33 UTC. The distinct post-owner seal is12:41:05 UTC and its true final
+`post-owner-final-artifact-index.sha256` SHA256 is
+`cc0deadb25df30289d1c1fa19e28d61c97218d737651ccd81fbed27dc03077d2`.
+Root read all four raw logs, the summary and terminal seal, and independently
+verified the final index with strict SHA checks. The earlier intermediate
+index remains preserved. This closes only that isolated qualification.
+
+Stats successor source is
+`temp/sn-stats55-guard-v2-D5NnNT/sn`, full646 manifest SHA256
+`0d8a870970e015b409ff30a38bcf1bb694ace24f545bc4978d0b7ec04e51e6d0`.
+Compared with the earlier held Stats55 composition, only the missing
+admission-test source-guard path changes product source.
+Both metadata selectors were also corrected to remove an unintended newline
+before the closing anchor; the original55 validator and15 simulator names
+remain unchanged. Fresh capture `sn-stats55-guard-v2-run-CfFC2s` records
+`static-preflight.actual.exit=1`: its new `stats55-census.py` over-escapes
+root/declaration regexes and rejects valid roots. No owner, build, list or
+product test started. Preserve that capture and fix the adapter with focused
+deterministic controls; do not relabel it or retry unchanged.
+
+New runtime worktree recovery points, all under `/home/by/urnetwork/temp`:
+
+- `sn-evidence-activation-TWbAQv/sn`: earlier fixed-width, dual-consent record
+  excludes its own activation hash. Its11 tests are authored, not executed.
+  The Solidity counterpart, authenticated historical inclusion, migration
+  state and independent on-chain publication remain required.
+- `sn-release-measurement-v2-kGvWAl/sn`: common binding/eligibility/final-math
+  extraction, explicit compact fields, legacy refusal and private same-call
+  replay observation. Full ordinary v2 verification and its tests are not yet
+  written at this checkpoint. Cross-epoch acceptance remains incomplete.
+- `sn-v2-terminal-settlement-1hueIB/sn`: matching transition/closure types and
+  domain-separated digest/message helpers. Full participant verification,
+  pre/post-fold continuity, terminal producer and durable all-operator
+  promotion are still required. The ordinary/terminal type snapshot is
+  identical; neither tree is activated or qualified.
+
+Next: repair the Stats harness admission and resume the already authorized
+Stats55/15 and joint65/16 qualifications without dropping roots or widening
+timeouts. Continue ordinary and terminal implementation in parallel. Qualify
+the complete timeout132/382 and Open45/242 successors, then integrate only
+reviewed deltas. Actual process ownership, the earlier native-counter finding,
+full v2 runtime/evidence storage, both complete gates and all live acceptance
+steps remain open. No final live validation or from-now completion ETA is
+implied by these commits.
+
+### Previous qualification and checkpoint record (2026-09-06 12:28 UTC)
 
 The preceding pushed primary SN checkpoint is
 `57dca2db1dc440b7f34231585b77eae30a4518ba`; primary server remains

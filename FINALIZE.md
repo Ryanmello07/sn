@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 12:28 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 12:51 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,7 +14,31 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current local checkpoint (2026-09-06 12:28 UTC):
+Current local checkpoint (2026-09-06 12:51 UTC):
+
+- The preceding main checkpoint is `e216932`. Five additional exact source
+  snapshots preserve the comparison repair, Stats55 guard successor, earlier
+  activation record, ordinary v2 measurement draft and terminal v2 types.
+  Section 12 of FINALIZE-COMPLETE.md records their recovery branches and
+  commits. Active worktrees, HEADs, indexes and qualification inputs are
+  preserved. Unqualified drafts are not merged into primary or activated.
+- Repaired Comparison14 plus the simulator closure root passes all15 roots
+  normally and under race. The actual owner is terminal0; root independently
+  checked all four raw logs and the distinct post-owner final index. This is
+  an isolated source qualification, not a pass of either complete release gate.
+- Stats55's corrected source guard and exact55/15 selections are held. Its
+  fresh capture refused before Go because the new census helper over-escaped
+  its regular expressions. Preserve that failure; Astra must correct and test
+  the adapter before Terra reruns it. No Stats product result is claimed.
+- Ordinary and terminal compact-v2 wire integration is in progress in separate
+  private trees. The earlier activation record and11 tests are formatted but
+  unbuilt and unrun. Runtime migration, all-operator settlement durability,
+  historical authority and on-chain evidence anchoring remain incomplete.
+- All previously required timeout, admission, ownership, capacity, release
+  gate, source-freeze and live-acceptance obligations remain mandatory. The
+  final campaign has not started; this checkpoint makes no new transaction.
+
+Previous local checkpoint (2026-09-06 12:28 UTC; superseded above):
 
 - Primary SN remains on the implementation checkpoint `57dca2d`; this
   successor updates the handoff. Four exact held source snapshots are now
