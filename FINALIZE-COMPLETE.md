@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 11:58 UTC before the final source freeze. Refresh every item marked
+2026-09-06 12:28 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,32 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 11:58 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 12:28 UTC; exact evidence in section 12):
+
+- Final live validation has not started. Implementation checkpoint `57dca2d`
+  is pushed; this handoff update is not a source freeze. Four held source
+  drafts are separately committed on checkpoint branches without changing
+  their active checkouts, original HEADs, indexes or qualification inputs.
+- Corrected Comparison14 is accepted causal evidence: two intended failures
+  and twelve passing controls. The actual launcher admission defect is fixed
+  and its sixteen launcher-only controls pass. Repaired Comparison14 plus
+  closure1 normal/race is staging-only, not yet a passing qualification.
+- Stats55 is staging-only. The separate joint statistics/head projection
+  adds ten real-stream tests and shares one complete policy-aware replay;
+  its source is held and unqualified, with no runtime activation.
+- The full timeout successor restores every original382 semantic root and
+  required PreFold/transcript dependencies. The aggregate admission successor
+  includes the qualified fixture prerequisites. Both new compositions require
+  qualification; the original timeout and physical-mutation failures stay open.
+- Native level12 arithmetic is not safe during Open; the corrected reviewed
+  boundary admits levels0 through11 with an explicit caller-budget ceiling.
+  A separate unchecked native file-number exhaustion edge remains unresolved.
+- Both complete gates, real producer v2 wiring, authenticated activation and
+  history, process/service ownership, evidence storage and seven-day capacity
+  remain required. Doctor, matching plans, both live phases, FINAL.md and its
+  independent on-chain review remain mandatory. No new transaction is claimed.
+
+Previous launch status (2026-09-06 11:58 UTC; superseded above):
 
 - Final live validation has not started. Checkpoint `ac53273` is pushed; this
   successor is another work-in-progress checkpoint, not a source freeze.
@@ -1762,7 +1787,118 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and repair record (2026-09-06 11:58 UTC)
+### Current qualification and checkpoint record (2026-09-06 12:28 UTC)
+
+The preceding pushed primary SN checkpoint is
+`57dca2db1dc440b7f34231585b77eae30a4518ba`; primary server remains
+`5fcb1d5624fcacbcba5d28b2eb915f6c2bc05341`. This main-branch update records
+progress and recoverable source checkpoints, not integration or release
+approval. Separate Git indexes preserve each exact draft without mutating
+its original working tree, index, HEAD or retained qualification inputs.
+
+| Repository | Checkpoint branch | Commit | Qualification boundary |
+| --- | --- | --- | --- |
+| SN | `checkpoint/20260906-joint-projection` | `8f50a978e9c7d0cba29ed26b313ab4731bff9811` | New joint projection and ten tests; no build or test yet |
+| SN | `checkpoint/20260906-timeout-complete` | `7dd2de657897a6c4c4d3181f8d327d98df377cde` | Complete dependency composition; no qualification of this composition |
+| SN | `checkpoint/20260906-aggregate-admission` | `6fe2abb1d3cf20274af1fd8f4475800b2ab8b20b` | Admission plus fixture prerequisites; repair unqualified |
+| Server | `checkpoint/20260906-lazy-resolver` | `552615c2f5e9dfb30a252250bd2ae819e60abb5e` | Pure32 normal/race pass; actual3 and broader ownership still pending |
+
+These branches retain their actual older parents where applicable. Do not
+blindly merge their old documentation, formatted-head predecessors or unrelated
+historical source over newer primary changes. Extract reviewed method/file
+deltas into a fresh current-source composition, then qualify it. Source pins
+below describe files, not a newly approved runtime/dependency layout. Local
+captures and sibling handoff files are not uploaded by committing source.
+
+Exact held sources under `/home/by/urnetwork/temp`:
+
+- Joint: `sn-v2-measurement-projections-h10Txt/sn`, full648 manifest
+  `JOINT-PROJECTION-SOURCE-v1.SHA256SUMS`, SHA256
+  `13f2aa528d6c6e5a3cb60d7d9d07418ca0a2e8b563271d2ce6f9117d1996648c`.
+- Timeout: `sn-current-timeout-complete-agq9oL/sn`, full671 manifest
+  `COMPOSE-COMPLETE671-v2.SHA256SUMS`, SHA256
+  `8fdc1c763eec6b11369743206595146f1570f5341e637a9aafa0cb76715ae0d8`.
+- Aggregate: `sn-aggregate-open-admission-compose-rZ3eaI/sn`, full637 manifest
+  `OPEN-ADMISSION-SOURCE-v1.SHA256SUMS`, SHA256
+  `f8a2f6cc35fbbcfeb092ce0e89eeb950123efee5fbcab1d845dc1891820469a2`.
+- Lazy resolver: `sn-lazy-resolver-repair-mOOCuk/server`, full3960 manifest
+  `LAZY-SOURCE-green-v2.SHA256SUMS`, SHA256
+  `cf3a1fc3fddb34e9a8c37a3c4f30ec0eed9f545295e4eb5b3cd5d92dd609b753`.
+
+New accepted terminal records:
+
+| Scope | Capture under temp | Final index SHA256 |
+| --- | --- | --- |
+| Comparison launcher admission refusal; no Go ran | `sn-comparison-json14-capture-u6QdKd` | `2c63b0064b1219663b8226f20550e0b8488d23cb80586b557a8b22ce4ee88a6d` |
+| Owned-launcher controls: sixteen PASS, no product commands | `sn-comparison-owner-controls-parent-VcQSG0/record` | Parent control index `a4fe0e87539f6d57aca1d3a94b15f84a4143d0a8a468da323c1c63e8ca93fab9` |
+| Corrected Comparison14: two causal FAIL, twelve PASS | `sn-comparison-json14-v2-capture-d1LJO7` | `5daa059c6b396dfff48e6af232c775ad1f626cac8ede0d3cfa6ebdb94e9af2db` |
+
+The first actual outer created its started marker before invoking a preflight
+that required the marker to be absent. It therefore refused before compilation;
+the preceding static preflight was not product evidence. The corrected adapter
+separates unused static admission from authenticated live-owner admission,
+retaining metadata, parentage, command-line and source-pin checks. Its sixteen
+controls exercise the actual launcher with a pre-product sentinel, not fake Go.
+The initial control-driver invocation also refused a pre-existing record
+directory before case1; that orchestration refusal remains preserved separately.
+
+Corrected Comparison14 retained session51624/owner3440181 through actual outer
+exit0. The binary exits1 and its exact-outcome validator exits0: the real-M8
+comparison performs16 JSON serializations instead of0, and terminal completion
+runs8 times instead of7. The corrected invalid-UTF8 oracle and all other twelve
+controls pass. Summary ended12:17:23 UTC and the distinct final post-owner seal
+is12:17:48 UTC. Root inspected the complete raw output/census and strictly
+verified the final index. The frozen40-input pin is
+`b8d67e089a22dd46e3701c87a434dd100a3a734c31fee2b3e45d9f164e3ef492`.
+The previous unexpected oracle failure is preserved, not relabeled as passing.
+Repaired Comparison14 plus simulator closure1 remains staging-only in
+`sn-comparison-json15-green-Iolw0E`; no product result is claimed for it.
+
+The new joint projection invokes complete policy-aware v2 replay once, feeds
+statistics and head projections from that same authenticated stream, and
+publishes both only after complete verification and successful Close. Ten new
+top-level tests cover real replay/read census, raw-stat drift, head-budget
+refusal, rebinding, late Close, cancellation, copied-input ownership, repeated
+calls, pre-I/O admission and a signed empty window. This is a held feature
+draft, not production wiring. Proposed qualification retains validator65 and
+every affected simulator bridge/source guard; derive actual binary membership.
+Current Stats55 preparation remains separate. Its source-path audit found the
+admission test pathname absent from the actual source-coverage guard despite
+inclusion in the runner selection. Preserve that snapshot and compose the
+minimal guard correction into a fresh successor before qualification.
+
+The full timeout successor includes the exact three-file PreFold dependency
+and all ten original public-transcript normalization/work controls with their
+production prerequisite. Its source-derived semantic inventory is375 mandatory
+plus7 original extras, exactly the original382 names; focused union132 is110
+simulator plus22 validator roots. These are source inventories, not executed
+test results. Preserve current operator authority and all original workloads,
+assertions and deadlines when qualifying this fresh composition.
+
+The corrected native Open boundary note is
+`sn-aggregate-open-admission-green-oJDkVS/OPEN-ADMISSION-PRODUCER-BOUNDARY-v3.md`,
+SHA256 `dc5fff877c20b5ffebc1960aa9ffaefd72990e10536805a746708725cc65bc51`.
+The earlier v2 allowance of level12 is unsafe: native compaction scoring visits
+allocated levels during Open, even before a level11 compaction emits level12.
+The reviewed replacement admits levels0 through11 and requires caller storage
+budget at most `1,048,576,000,000,000,000` bytes; existing operational caps are
+unchanged. Fixed parser/journal buffers total608 KiB plus bounded metadata.
+The fixture-complete successor preserves original Open9 and all five qualified
+fixture-donor files; its focused45 and validator242 inventories remain unrun.
+Unchecked native file-number increments near MaxInt64 are a separate unresolved
+source finding; require actual native causal fixtures and a principled repair,
+not an arbitrary startup reserve or silent cap waiver. Seven-day capacity and
+the adjacent direct record-store/ledger admission paths remain open obligations.
+
+Next: qualify the comparison and current Stats compositions; review and qualify
+the complete timeout and Open successors; qualify actual lazy-process ownership;
+then integrate exact reviewed deltas and continue real v2 runtime/evidence
+wiring. Both complete gates, source freeze, ready doctor, matching plans,
+accelerated release candidate, three production UR windows, FINAL.md and an
+independent on-chain peer review are still required. No new testnet transaction,
+final live validation or from-now completion ETA follows from this checkpoint.
+
+### Previous qualification and repair record (2026-09-06 11:58 UTC)
 
 The preceding SN checkpoint is `ac5327311ca897a34976dee59fb4850698167763`,
 committed, pulled and pushed. Primary server remains

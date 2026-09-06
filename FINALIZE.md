@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 11:58 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 12:28 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,7 +14,37 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current local checkpoint (2026-09-06 11:58 UTC):
+Current local checkpoint (2026-09-06 12:28 UTC):
+
+- Primary SN remains on the implementation checkpoint `57dca2d`; this
+  successor updates the handoff. Four exact held source snapshots are now
+  committed on separate `checkpoint/20260906-*` branches in SN and server.
+  Section 12 of FINALIZE-COMPLETE.md records their commits, source pins and
+  qualification boundaries. The active private checkouts and test inputs are
+  unchanged. These branches are work-in-progress backups, not release merges.
+- Corrected Comparison14 now reproduces exactly the two intended failures,
+  with all twelve controls passing. Its actual launcher admission initially
+  failed before Go; the fixed ownership adapter passes sixteen launcher-only
+  controls, and the new causal capture is terminal and independently sealed.
+  Repaired Comparison14 plus its simulator closure root remains unqualified.
+- Current-source Stats55 qualification is being prepared. A separate held
+  joint statistics/head projection uses one complete authenticated replay and
+  adds ten deterministic real-stream tests. It has not been built or tested,
+  integrated into primary, or wired into production measurement.
+- The complete timeout successor now retains all original382 semantic roots,
+  including all ten public-transcript controls and the qualified PreFold
+  dependency. Its new composition still needs focused and complete gates;
+  the historical race timeout remains unresolved.
+- Open admission's reviewed native boundary is levels0 through11, not12.
+  The held fixture-complete successor preserves original Open9 and production
+  limits. Native file-number exhaustion is a newly identified, unresolved
+  adjacent risk. Neither source review nor parser bounds establish seven-day
+  capacity or a passing repair.
+- All runtime activation, ownership, evidence, capacity and live acceptance
+  obligations below remain mandatory. No final soak or new testnet transaction
+  is claimed by this checkpoint.
+
+Previous local checkpoint (2026-09-06 11:58 UTC; superseded above):
 
 - SN checkpoint `ac53273` is committed, pulled and pushed. This successor adds
   the bounded compact-head projection, nine head tests, three above-minimum
