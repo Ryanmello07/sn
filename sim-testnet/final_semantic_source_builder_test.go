@@ -1432,6 +1432,7 @@ func finalSemanticBuilderCollectedManifest(cfg *ResolvedConfig, runID, resultHas
 	for validatorID := 1; validatorID <= cfg.Config.Topology.Validators; validatorID++ {
 		id := new(big.Int).SetUint64(uint64(validatorID)).String()
 		validator := FinalCollectedValidatorInputs{ValidatorID: uint64(validatorID), PathVPK: finalTestHex(byte(0x70 + validatorID)), IntentStore: dummy("validator-steering-intent-store", "intent-store-"+id)}
+		validator.OperatorPaths = finalSharedPathIdentityTestVector(validator.PathVPK, cfg.Config.Topology.Operators)
 		for offset := uint64(0); offset < window.EpochCount; offset++ {
 			epoch := window.FirstEpoch + offset
 			name := id + "-" + new(big.Int).SetUint64(epoch).String()

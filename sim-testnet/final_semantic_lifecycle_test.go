@@ -769,6 +769,11 @@ func attachFinalFleetLifecycleFixture(t *testing.T, source *FinalSemanticEvidenc
 			identities.Clients[label] = finalPublicClientIdentity{ClientID: "0x" + role.ClientIDHex, ClientKey: "0x" + role.PublicKeyHex}
 		}
 	}
+	for _, validator := range source.Validators {
+		for _, path := range validator.OperatorPaths {
+			identities.Clients[fmt.Sprintf("validator-%d-no-%d", validator.ValidatorID, path.NoID)] = finalPublicClientIdentity{ClientID: fmt.Sprintf("0x%032x", 2000+validator.ValidatorID*10+path.NoID), ClientKey: path.PathVPK}
+		}
+	}
 
 	coordinator := common.HexToAddress(source.Deployment.CoordinatorProxy)
 	manifestByVariant := map[string]protocol.FleetManifest{}

@@ -78,15 +78,19 @@ func TestReleaseSemanticCensusPinsSettlementClosureRegressions(t *testing.T) {
 		}
 	}
 	for _, check := range []struct{ path, function, callee string }{
-		{path: "../validator/attempt_settlement.go", function: "advanceAttemptSettlementEpochWithIOMode", callee: "publishAttemptSettlementClosure"},
+		{path: "../validator/attempt_settlement.go", function: "advanceAttemptSettlementEpochWithIOMode", callee: "advanceAttemptSettlementEpochWithIOModeContext"},
+		{path: "../validator/attempt_settlement.go", function: "advanceAttemptSettlementEpochWithIOModeContext", callee: "advanceAttemptSettlementCandidatesOwned"},
+		{path: "../validator/attempt_settlement.go", function: "advanceAttemptSettlementCandidatesOwned", callee: "publishAttemptSettlementClosure"},
 		{path: "../validator/attempt_settlement.go", function: "recoverAttemptSettlementEpochWithRemove", callee: "publishAttemptSettlementClosure"},
 		{path: "../validator/release_run.go", function: "RunRelease", callee: "runReleaseSettlementRefresh"},
 		{path: "../validator/release_run.go", function: "RunRelease", callee: "Wait"},
 		{path: "../validator/trail.go", function: "RunTrail", callee: "beginAttempt"},
 		{path: "../validator/trail.go", function: "RunTrail", callee: "captureAttemptAssignment"},
 		{path: "scenario.go", function: "runScenarioWithProbe", callee: "waitClosures"},
-		{path: "final_semantic_collect.go", function: "collectFinalValidatorInputs", callee: "ReadAttemptSettlementClosure"},
-		{path: "final_semantic_collect.go", function: "collectFinalValidatorInputs", callee: "collectFinalSettlementClosure"},
+		{path: "final_semantic_collect.go", function: "collectFinalValidatorInputs", callee: "collectFinalValidatorInputsWithSeedObserver"},
+		{path: "final_semantic_collect.go", function: "collectFinalValidatorInputsWithSeedObserver", callee: "collectFinalValidatorInputsWithPathAuthority"},
+		{path: "final_semantic_collect.go", function: "collectFinalValidatorInputsWithPathAuthority", callee: "ReadAttemptSettlementClosure"},
+		{path: "final_semantic_collect.go", function: "collectFinalValidatorInputsWithPathAuthority", callee: "collectFinalSettlementClosure"},
 		{path: "final_semantic_settlement_closure.go", function: "collectFinalSettlementClosure", callee: "DecodeAttemptSettlementClosureWithServerKeys"},
 		{path: "../validator/attempt_closure.go", function: "DecodeAttemptSettlementClosureWithServerKeys", callee: "decodeAttemptSettlementClosureWithServerKeysAndVerifier"},
 		{path: "../validator/attempt_closure.go", function: "decodeAttemptSettlementClosureWithServerKeysAndVerifier", callee: "decodeAttemptSettlementClosureWithCutVerifier"},
@@ -97,10 +101,12 @@ func TestReleaseSemanticCensusPinsSettlementClosureRegressions(t *testing.T) {
 		{path: "../validator/release_measurement.go", function: "releaseAttemptCutExtends", callee: "releaseBlockAtOrBefore"},
 		{path: "../validator/release_measurement.go", function: "loadOrDetachReleaseMeasurementInput", callee: "releaseBlockAtOrBefore"},
 		{path: "../validator/release_steer.go", function: "takeHeadEvidence", callee: "releaseBlockAtOrBefore"},
-		{path: "final_semantic_collect.go", function: "collectFinalValidatorInputs", callee: "verifyFinalMeasurementSettlementClosures"},
+		{path: "final_semantic_collect.go", function: "collectFinalValidatorInputsWithPathAuthority", callee: "verifyFinalMeasurementSettlementClosures"},
 		{path: "final_semantic_collect.go", function: "verifyFinalCollectedClosedGraph", callee: "verifyFinalCollectedSettlementAuthority"},
-		{path: "final_semantic_settlement_closure.go", function: "verifyFinalSettlementClosureArtifacts", callee: "verifyFinalMeasurementSettlementClosures"},
-		{path: "final_semantic_evidence.go", function: "VerifyFinalSemanticArtifacts", callee: "verifyFinalSettlementClosureArtifacts"},
+		{path: "final_semantic_settlement_closure.go", function: "verifyFinalSettlementClosureArtifacts", callee: "verifyFinalSettlementClosureArtifactsWithLineage"},
+		{path: "final_semantic_settlement_closure.go", function: "verifyFinalSettlementClosureArtifactsWithLineage", callee: "verifyFinalSettlementClosureArtifactsWithAuthority"},
+		{path: "final_semantic_settlement_closure.go", function: "verifyFinalSettlementClosureArtifactsWithAuthority", callee: "verifyFinalMeasurementSettlementClosures"},
+		{path: "final_semantic_evidence.go", function: "VerifyFinalSemanticArtifacts", callee: "verifyFinalSettlementClosureArtifactsWithAuthority"},
 	} {
 		if !releaseClosureFunctionCalls(t, check.path, check.function)[check.callee] {
 			t.Errorf("%s omits actual call %s", check.function, check.callee)

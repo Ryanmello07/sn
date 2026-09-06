@@ -1,15 +1,14 @@
 package validator
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -78,30 +77,14 @@ type releaseAttemptState struct {
 	store  *ProofStore
 }
 
+// Release clients consume provisioned keys only, with their original raw or
+// bare-hex grammar over the shared bounded descriptor custody implementation.
 func loadClientSeed(path string) ([]byte, error) {
-	b, err := os.ReadFile(path)
+	seed, err := crv4.LoadRawOrBareHexSeedFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if len(b) == ed25519.SeedSize {
-		return append([]byte(nil), b...), nil
-	}
-	decoded, decodeErr := hex.DecodeString(string(bytesTrimSpace(b)))
-	if decodeErr == nil && len(decoded) == ed25519.SeedSize {
-		return decoded, nil
-	}
-	return nil, fmt.Errorf("%s: expected a raw or hex %d-byte Ed25519 seed", path, ed25519.SeedSize)
-}
-
-func bytesTrimSpace(b []byte) []byte {
-	start, end := 0, len(b)
-	for start < end && (b[start] == ' ' || b[start] == '\n' || b[start] == '\r' || b[start] == '\t') {
-		start++
-	}
-	for start < end && (b[end-1] == ' ' || b[end-1] == '\n' || b[end-1] == '\r' || b[end-1] == '\t') {
-		end--
-	}
-	return b[start:end]
+	return seed[:], nil
 }
 
 // Restricts startup retries to transport, provider-capacity, and timeout
@@ -257,7 +240,23 @@ func releasePriorSettlementBoundary(ctx context.Context, chain *ChainClient, sna
 	return AttemptBoundary{SettlementEpoch: epoch.Uint64(), EVMBlock: block, EVMBlockHash: attemptHex32(hash)}, nil
 }
 
+// Runtime startup shares one call path with deterministic identity-admission
+// tests. Production has no observer and cannot bypass the same admission.
 func startReleaseOperator(ctx context.Context, cfg *ReleaseConfig, op OperatorConfig, epochFn func() uint64, attemptResolver AttemptBoundaryResolver, attemptState *releaseAttemptState) (*releaseOperatorRuntime, error) {
+	return startReleaseOperatorWithAdmission(ctx, cfg, op, epochFn, attemptResolver, attemptState, nil)
+}
+
+// A private synchronous observer exposes only the copied public key and may
+// stop tests before API, JWT, strategy or transport ownership begins.
+func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, op OperatorConfig, epochFn func() uint64, attemptResolver AttemptBoundaryResolver, attemptState *releaseAttemptState, beforeRuntime func([32]byte) error) (*releaseOperatorRuntime, error) {
+	if ctx == nil || cfg == nil || epochFn == nil || attemptResolver == nil || attemptState == nil || attemptState.stats == nil || attemptState.ledger == nil || attemptState.store == nil {
+		return nil, fmt.Errorf("no_id %d prepared attempt state is incomplete", op.NoID)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	stats, ledger := attemptState.stats, attemptState.ledger
+	store := attemptState.store
 	seedAttemptInterval, err := releaseSeedAttemptInterval(cfg.Policy.Verify.HardSeedPerMinutePerSource)
 	if err != nil {
 		return nil, fmt.Errorf("no_id %d seed pacing: %w", op.NoID, err)
@@ -265,6 +264,29 @@ func startReleaseOperator(ctx context.Context, cfg *ReleaseConfig, op OperatorCo
 	seed, err := loadClientSeed(op.ClientKeySeedFile)
 	if err != nil {
 		return nil, fmt.Errorf("no_id %d client key: %w", op.NoID, err)
+	}
+	privateKey := ed25519.NewKeyFromSeed(seed)
+	publicKey := privateKey.Public().(ed25519.PublicKey)
+	if !bytes.Equal(publicKey, ledger.vpk) || validateAttemptLedgerIdentity(ledger.identity, publicKey) != nil {
+		return nil, fmt.Errorf("no_id %d client key differs from prepared attempt ledger", op.NoID)
+	}
+	identity := ledger.identity
+	if identity.DeploymentID != cfg.DeploymentID || identity.ChainID != cfg.ChainID || identity.GenesisHash != strings.ToLower(cfg.GenesisHash) ||
+		identity.Netuid != cfg.Netuid || identity.ValidatorID != cfg.ValidatorID || identity.NoID != op.NoID {
+		return nil, fmt.Errorf("no_id %d prepared attempt ledger identity differs from operator configuration", op.NoID)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if beforeRuntime != nil {
+		var copiedPublicKey [32]byte
+		copy(copiedPublicKey[:], publicKey)
+		if err := beforeRuntime(copiedPublicKey); err != nil {
+			return nil, err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	artifactReader, err := NewHTTPArtifactReader(op.APIURL, cfg.DeploymentID, cfg.Netuid)
 	if err != nil {
@@ -314,14 +336,8 @@ func startReleaseOperator(ctx context.Context, cfg *ReleaseConfig, op OperatorCo
 		})
 	}
 
-	if epochFn == nil || attemptResolver == nil || attemptState == nil || attemptState.stats == nil || attemptState.ledger == nil || attemptState.store == nil {
-		closeResources()
-		return nil, fmt.Errorf("no_id %d prepared attempt state is incomplete", op.NoID)
-	}
-	stats, ledger := attemptState.stats, attemptState.ledger
-	store := attemptState.store
 	transport := NewTunnelTransport(ctx, strategy, TunnelTransportConfig{ApiUrl: op.APIURL, ConnectUrl: op.ConnectURL, ByClientJwt: api.GetByJwt, SourceClientId: clientID})
-	engine := NewTrailEngine(clientID, ed25519.NewKeyFromSeed(seed), transport, NewApiServerKeyRing(api), NewFindProvidersSeedPicker(api, clientID), stats, store, epochFn, TrailEngineConfig{
+	engine := NewTrailEngine(clientID, privateKey, transport, NewApiServerKeyRing(api), NewFindProvidersSeedPicker(api, clientID), stats, store, epochFn, TrailEngineConfig{
 		M:                   cfg.Policy.Verify.TrailDepth,
 		StepTimeout:         time.Duration(cfg.Policy.Verify.StepTimeoutSeconds) * time.Second,
 		SeedAttemptInterval: seedAttemptInterval,

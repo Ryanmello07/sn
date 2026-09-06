@@ -60,6 +60,35 @@ func TestProducerGateStateSelectionCoversPolicyDepth(t *testing.T) {
 	})
 }
 
+// Transport framing and complete public sealing must both qualify before a
+// launch can publish signed cuts; the generic Attempt prefix selects neither.
+func TestProducerGateStateSelectionCoversAttemptStreamPublication(t *testing.T) {
+	assertProducerStateRegressionCoverage(t, "producer_tests", "./validator", "attempt-stream-publication", []string{
+		"../validator/attempt_stream_v2_http_test.go",
+		"../validator/attempt_stream_v2_http_replay_test.go",
+		"../validator/attempt_cut_v2_seal_test.go",
+		"../validator/attempt_cut_v2_seal_integrity_test.go",
+		"../validator/attempt_cut_v2_seal_policy_test.go",
+		"../validator/attempt_cut_v2_seal_lifecycle_test.go",
+		"../validator/attempt_cut_v2_seal_scratch_test.go",
+	})
+}
+
+// Write ownership spans startup, every event writer, persistence, multi-engine
+// ordering and runtime routing; a broad Attempt prefix omits the Stats roots.
+func TestProducerGateStateSelectionCoversStatsWriteOwnership(t *testing.T) {
+	assertProducerStateRegressionCoverage(t, "producer_tests", "./validator", "statistics-write-ownership", []string{
+		"../validator/attempt_stats_callbacks_test.go",
+		"../validator/attempt_stats_replay_test.go",
+		"../validator/stats_write_test.go",
+		"../validator/stats_multibatch_order_test.go",
+		"../validator/stats_multibatch_adjacent_test.go",
+		"../validator/stats_settlement_routing_test.go",
+		"../validator/stats_settlement_routing_adjacent_test.go",
+		"../validator/stats_settlement_publication_test.go",
+	})
+}
+
 // State protection is required at inner classification and the actual render,
 // launch-before-migration and render-before-payload-recovery entry points.
 func TestProducerGateStateSelectionCoversAllNamespaceEntryPoints(t *testing.T) {

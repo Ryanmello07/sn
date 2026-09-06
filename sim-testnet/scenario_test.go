@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1178,6 +1179,7 @@ func TestInspectValidatorIntentRejectsUnauthenticatedCurrentHeadEvidence(t *test
 func TestInspectValidatorPathProofsRequiresEveryOperatorDomain(t *testing.T) {
 	cfg := testResolvedConfig(t)
 	stateDir := t.TempDir()
+	publicPaths := map[uint64][]FinalOperatorPathIdentity{2: finalSharedPathIdentityTestVector(finalTestHex(0x72), cfg.Config.Topology.Operators)}
 	serverSeed := []byte(strings.Repeat("s", ed25519.SeedSize))
 	serverKey := ed25519.NewKeyFromSeed(serverSeed)
 	serverPublic := serverKey.Public().(ed25519.PublicKey)
@@ -1193,6 +1195,7 @@ func TestInspectValidatorPathProofsRequiresEveryOperatorDomain(t *testing.T) {
 		}
 		validatorKey := ed25519.NewKeyFromSeed(seed)
 		vpk := validatorKey.Public().(ed25519.PublicKey)
+		publicPaths[1] = append(publicPaths[1], FinalOperatorPathIdentity{NoID: uint64(noID), PathVPK: "0x" + hex.EncodeToString(vpk)})
 		trailID := connect.Id{byte(noID)}
 		nonce := []byte(strings.Repeat(string(rune('n'+noID)), connect.VerifyNonceSize))
 		hops := make([]connect.VerifyProofHop, cfg.Policy.Verify.TrailDepth)
@@ -1225,6 +1228,7 @@ func TestInspectValidatorPathProofsRequiresEveryOperatorDomain(t *testing.T) {
 		}
 		operators = append(operators, OperatorObservation{NoID: noID, VerifyKeys: []VerifyKeyObservation{{ServerKeyID: 1, PublicKey: serverPublic}}})
 	}
+	writeFinalPathIdentityTestPublic(t, stateDir, cfg.Config.Deployment.DeploymentID, publicPaths)
 	counts, err := inspectValidatorPathProofs(cfg, stateDir, 1, operators)
 	if err != nil || counts[1] != 1 || counts[2] != 1 || len(counts) != 2 {
 		t.Fatalf("validator path counts=%v error=%v", counts, err)

@@ -100,13 +100,18 @@ func TestFinalCollectorIncludesCompletedSettlementTail(t *testing.T) {
 	tails := make(map[uint64]*validatorpkg.ProofRecord, len(participants))
 	for index := range ordinary.Inputs {
 		input := &ordinary.Inputs[index]
-		stateDir := t.TempDir()
+		stateDir := filepath.Join(t.TempDir(), "state")
 		config := input.Stats.Config
 		stats := validatorpkg.NewStatsEngine(validatorpkg.StatsConfig{AMin: config.AMin, AlphaNumerator: config.AlphaNumerator, AlphaDenominator: config.AlphaDenominator, LatRefMillis: config.LatRefMillis})
 		ledger, err := validatorpkg.NewAttemptLedger(stateDir, input.Stats.AttemptCut.Identity, validatorKey)
 		if err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() {
+			if err := ledger.Close(); err != nil {
+				t.Error(err)
+			}
+		})
 		if err := stats.AttachAttemptLedger(ledger, stateDir); err != nil {
 			t.Fatal(err)
 		}
@@ -218,7 +223,7 @@ func TestFinalCollectorIncludesCompletedSettlementTail(t *testing.T) {
 		recordsByNO[participant.NoID] = map[uint64]validatorpkg.AttemptRecord{}
 	}
 	for _, encoded := range [][]byte{ordinaryBytes, successorBytes} {
-		if err := collectFinalAttemptCuts(int(ordinary.ValidatorID), encoded, vpk, keys, recordsByNO); err != nil {
+		if err := collectFinalAttemptCuts(int(ordinary.ValidatorID), encoded, map[uint64]ed25519.PublicKey{1: vpk, 2: vpk}, keys, recordsByNO); err != nil {
 			t.Fatal(err)
 		}
 	}

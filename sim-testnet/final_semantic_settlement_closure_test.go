@@ -71,6 +71,7 @@ func finalSettlementClosureTestFixture(t *testing.T) (*FinalSemanticEvidence, ma
 	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x41}, ed25519.SeedSize))
 	vpk := "0x" + hex.EncodeToString(key.Public().(ed25519.PublicKey))
 	evidence := &FinalSemanticEvidence{DeploymentID: "closure-test", ChainID: 945, Netuid: 521, GenesisHash: finalTestHex(5), Window: ScenarioAcceptanceWindow{FirstEpoch: 42, EpochCount: 2, StartBlock: 100, EpochBlocks: 10}, Validators: []FinalValidatorIdentityEvidence{{ValidatorID: 1, UID: 12, PathVPK: vpk}}}
+	evidence.Validators[0].OperatorPaths = finalSharedPathIdentityTestVector(vpk, 2)
 	participants := make([]validatorpkg.AttemptSettlementParticipant, 2)
 	ledgers := make([]*validatorpkg.AttemptLedger, 2)
 	keys := make([]ed25519.PrivateKey, 2)
@@ -78,12 +79,17 @@ func finalSettlementClosureTestFixture(t *testing.T) (*FinalSemanticEvidence, ma
 		noID := uint64(index + 1)
 		keys[index] = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{byte(0x51 + index)}, ed25519.SeedSize))
 		evidence.Pools = append(evidence.Pools, FinalPoolUIDEvidence{NoID: noID, ServerKeyHistory: []FinalServerKey{{KeyID: 1, PublicKey: "0x" + hex.EncodeToString(keys[index].Public().(ed25519.PublicKey))}}})
-		stateDir := t.TempDir()
+		stateDir := filepath.Join(t.TempDir(), "state")
 		stats := validatorpkg.NewStatsEngine(validatorpkg.StatsConfig{AMin: 1})
 		ledger, err := validatorpkg.NewAttemptLedger(stateDir, validatorpkg.AttemptLedgerIdentity{DeploymentID: evidence.DeploymentID, ChainID: evidence.ChainID, GenesisHash: evidence.GenesisHash, Netuid: evidence.Netuid, ValidatorID: 1, ValidatorUID: 12, NoID: noID}, key)
 		if err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() {
+			if err := ledger.Close(); err != nil {
+				t.Error(err)
+			}
+		})
 		if err := stats.AttachAttemptLedger(ledger, stateDir); err != nil {
 			t.Fatal(err)
 		}
@@ -137,6 +143,7 @@ func finalSettlementClosureTestFixture(t *testing.T) (*FinalSemanticEvidence, ma
 		locator := FinalArtifactLocator{Kind: "validator-path-proofs", URI: uri, ContentHash: bytesSHA256(data), SizeBytes: uint64(len(data))}
 		evidence.PathProofs = append(evidence.PathProofs, FinalValidatorPathProofEvidence{ValidatorID: 1, NoID: noID, FirstEpoch: 42, LastEpoch: 43, ProofCount: count, TrailDepth: connect.VerifyMMin, Artifact: locator, ProofsHash: locator.ContentHash, SettlementClosures: append([]FinalCollectedSettlementClosure(nil), closures...)})
 	}
+	attachFinalPathIdentityTestLineage(t, evidence, loaded)
 	if err := verifyFinalSettlementClosureArtifacts(evidence, loaded); err != nil {
 		t.Fatalf("production closure fixture: %v", err)
 	}
@@ -321,6 +328,9 @@ func TestFinalSettlementClosureRejectsDomainCensusAndBoundaryChanges(t *testing.
 		switch kind {
 		case "domain":
 			evidence.DeploymentID += "-other"
+			// Keep the independently checked envelope/public domain aligned;
+			// only the existing signed closure retains the original domain.
+			attachFinalPathIdentityTestLineage(t, evidence, loaded)
 		case "validator-key":
 			evidence.Validators[0].PathVPK = finalTestHex(0x71)
 		case "last-epoch":
@@ -440,6 +450,13 @@ func TestFinalSettlementClosureWaitAuthenticatesLastWindow(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "operators", "no-1", "client.key"), bytes.Repeat([]byte{0x41}, ed25519.SeedSize), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(root, "operators", "no-2"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "operators", "no-2", "client.key"), bytes.Repeat([]byte{0x41}, ed25519.SeedSize), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeFinalPathIdentityTestPublic(t, stateRoot, evidence.DeploymentID, map[uint64][]FinalOperatorPathIdentity{1: evidence.Validators[0].OperatorPaths})
 	if err := os.MkdirAll(filepath.Join(root, "settlement-closures"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -457,6 +474,7 @@ func TestFinalSettlementClosureWaitAuthenticatesLastWindow(t *testing.T) {
 	if err != nil || waits != 1 {
 		t.Fatalf("actual terminal handoff waits=%d: %v", waits, err)
 	}
+	writeFinalPathIdentityTestPublic(t, stateRoot, cfg.Config.Deployment.DeploymentID+"-other", map[uint64][]FinalOperatorPathIdentity{1: evidence.Validators[0].OperatorPaths})
 	cfg.Config.Deployment.DeploymentID += "-other"
 	if err := waitFinalValidatorSettlementClosuresWithWait(context.Background(), cfg, stateRoot, terminal, &evidence.Window, time.Now().Add(time.Hour), time.Hour, func(context.Context, time.Duration) error {
 		t.Error("permanent wrong domain retried")
@@ -482,6 +500,7 @@ func TestFinalSettlementClosureCollectedGraphRejectsAttemptOmission(t *testing.T
 		terminal.Operators = append(terminal.Operators, OperatorObservation{NoID: int(pool.NoID), VerifyKeys: []VerifyKeyObservation{{ServerKeyID: 1, PublicKey: key}}})
 	}
 	validator := FinalCollectedValidatorInputs{ValidatorID: 1, PathVPK: evidence.Validators[0].PathVPK, SettlementClosures: evidence.PathProofs[0].SettlementClosures}
+	validator.OperatorPaths = append([]FinalOperatorPathIdentity(nil), evidence.Validators[0].OperatorPaths...)
 	for _, proof := range evidence.PathProofs {
 		records := map[uint64]validatorpkg.AttemptRecord{}
 		for _, declared := range validator.SettlementClosures {
@@ -507,6 +526,7 @@ func TestFinalSettlementClosureCollectedGraphRejectsAttemptOmission(t *testing.T
 		validator.PathProofs = append(validator.PathProofs, FinalCollectedValidatorPathProof{NoID: proof.NoID, FirstEpoch: proof.FirstEpoch, LastEpoch: proof.LastEpoch, ProofCount: proof.ProofCount, Artifact: proof.Artifact})
 	}
 	value := &FinalSemanticCollectedInputs{Window: evidence.Window, Validators: []FinalCollectedValidatorInputs{validator}}
+	attachFinalPathIdentityTestCollectedBundle(t, value, loaded, finalPathIdentityTestPublicBytes(t, evidence.DeploymentID, map[uint64][]FinalOperatorPathIdentity{1: validator.OperatorPaths}))
 	if err := verifyFinalCollectedSettlementAuthority(cfg, value, terminal, loaded); err != nil {
 		t.Fatal(err)
 	}

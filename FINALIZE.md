@@ -1,9 +1,103 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-05 19:18 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 09:08 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
+
+Last combined-main qualification: the captured checkout passes all476 selected
+roots normally and under race: 24 CRV4, 402 validator and 50 simulator. This
+includes Stats v4, both client-key repairs, the complete per-operator public-key
+repair and composed gate coverage. Root independently checked the exact raw
+root membership and final indexes; recorded build/list/execution and input
+fences pass. All owners are terminal and primary source, including docs, is
+released. The subsequent HTTP transport and gate edits require a fresh composed
+qualification. This is not the final source freeze or complete semantic gate.
+
+Remaining local repair status:
+
+- HTTP51 passes normally and under race. Its three transport/replay files are
+  integrated into primary SN. The producer gate now selects the HTTP and sealing
+  families, and a new source-coverage guard pins all51 roots; that guard is not
+  yet qualified. The real server typed immutable store, API route, and24 local
+  storage/HTTP/integration tests are implemented in an isolated successor and
+  awaiting qualification. Its private HTTP-reader dependency is reviewed.
+  The corrected third runner's18 deterministic actual-launcher controls pass,
+  but its actual24 capture stopped before compilation: handlers metadata needs
+  a server go.mod update for the new real validator import. The frozen result
+  is preserved; no product root ran. A source-pinned dependency diagnostic is
+  approved on a fresh copy, without primary writes or dependency upgrades.
+  The two earlier unlaunched proposals remain preserved. A
+  partial gate-check snapshot omitted the changed selector and referenced Stats
+  sources; review rejected it for gate qualification before execution. Gate6
+  now has a held complete631-path primary snapshot; its runner is being prepared.
+  Producer activation and replicas
+  remain unwired.
+- Measured83 passes81 roots ordinarily, including every new parallel-work check,
+  but fails two mandatory selector/census guards; race did not run. The fresh
+  combined91 successor includes the separately reviewed historical reuse and
+  complete357-root gate census. Its first run stopped before compilation because
+  five local module links were absent. The failed capture is sealed and preserved.
+  A source-identical layout repair now checks every actual replacement before Go
+  metadata, with28 passing deterministic synthetic checks. The fresh91 run
+  passes ordinary build/list/execution but race execution times out at the
+  unchanged3m bound, with91 starts and11 passes. Its post-owner capture is
+  verified and preserved; Astra is diagnosing the new exact failure. A normal
+  profiling attempt failed pre-Go on382 absent relative metadata referents;
+  its preserved capture contains no samples. The staging repair is under review,
+  and a namespace33 observation-only causal source is separately reviewed. No cold,
+  wide or unchanged retry is authorized. Corrected historical
+  RED8 reproduces exactly one decoder-work failure with seven controls passing.
+  Both the older noncausal historical capture and the generation67 race timeout
+  remain preserved. No cold or wider qualification has passed.
+- Aggregate durability13 now reproduces both intended failures with eleven
+  controls passing, including a real rotated row WAL that is not synced before
+  the aggregate header. The bounded synchronous-batch repair and19 adjacent
+  controls are source-reviewed in `temp/sn-stats-aggregate-batch-repair-k9ORUe`;
+  its exact52 ordinary qualification is terminal:44 PASS and8 fixture-capacity
+  FAIL, with race unstarted. The large fixture requires162 records/21 trails,
+  but inherited128-record/16-trail test bounds. A fresh explicit fixture-only
+  provisioning correction is authorized; production limits, full census and
+  aggregate128-operation/64-KiB batch limits must remain unchanged. The fresh
+  five-test-file correction and two adjacent controls are now source-reviewed
+  for exact54 normal/race qualification; it has not run yet.
+  Wrong-domain writable Open
+  is a separate unresolved admission defect. Its fresh nine-root physical-
+  mutation neutral set is now source-reviewed for ordinary causal qualification,
+  expecting four exact failures and five controls. Neither repair is qualified.
+- Cleanup lifetime5 reproduces both post-Run wrong-client failures with three
+  controls passing. DNS fixture4 and pure process-configuration9 pass both
+  modes; sealed process/configuration16 now also passes both modes. Actual child-process tests,
+  whole-root service harness integration, lease-fenced cleanup and safe PG
+  reaping remain unqualified. Actual lazy-process1 failed before child readiness,
+  not at its intended resolver witness: the existing executable security check
+  correctly rejected the reused group-writable binary. Preserve that noncausal
+  capture. A fresh diagnostic successor with five pure controls is source-reviewed;
+  its next binary must be private before first attestation. Router4 reproduces
+  both exact abort failures with both controls passing; its10-root repair now
+  passes normal/race and its exact three paths are integrated in primary server.
+  A separate zero-byte committed-write regression is held for an exact4 causal
+  run. Legacy payout/evidence reader ownership now reproduces all five expected
+  failures with seven controls passing; root verified its post-owner seal and
+  exact assertions. The fresh reader repair and25 adjacent tests are now
+  source-reviewed; an affected66 normal/race capture is being prepared.
+  Service tests remain paused; local router success does not prove
+  the whole typed API or service/process lifecycle.
+- Typed public evidence/replication, authenticated activation, global terminal
+  history, bounded aggregates and seven-day capacity are unfinished. On-chain
+  validator evidence publication is also unfinished; hash commitments versus
+  full on-chain bytes remains an unanswered user choice. Both complete gates,
+  source lock, doctor, matching plans, both live phases, FINAL.md and independent
+  public-chain review remain mandatory.
+
+The full scheduled live path still needs3,004--4,380 blocks after preparation
+(10:00:48--14:36:00 at12 seconds/block), before final reporting/review. It is not
+a from-now completion estimate. Section12 of the handoff records exact captures,
+preserved failures and next actions. No deadline, crypto or population waiver
+is authorized, and no new live transaction is claimed by this update.
+
+The implementation snapshot below was recorded at 20:10 UTC. Where its pending
+test status differs, the latest qualification above and the handoff take precedence.
 
 Landed in sn: metadata c9f066a, bounded writer8e9d0fc, full replay2d179bd,
 namespace protection5cddac6/64a6e32, qualification launcher1db13f5 and the
@@ -12,9 +106,11 @@ The latter's complete99-path reviewed source manifest matched that checkpoint; i
 validator341 suite passes normally and under race. Launcher4 also passes both
 modes. These are implementation checkpoints, not a final release qualification.
 Source checkpointc878a13 now also commits the exact qualified13-file seed-custody
-repair and producer-selection fixes described below; the preceding pushed
-checkpoint was744c0f4. All8 composed gate checks pass normal/race. Active Stats
-and timeout repairs remain in isolated temp/sn-* trees.
+repair and producer-selection fixes described below; current pushed checkpoint
+is1cc8014. Its8 composed gate checks pass normal/race. Main now also contains
+the uncommitted Stats v4 repair and new Stats/server gate coverage; these newer
+composed changes are not yet qualified. Client-key and timeout candidates remain
+in isolated temp/sn-* trees.
 
 The composed disk/settlement candidate passes validator285 and simulator6
 normally/race. Cold durable-parity still fails its3m race deadline; broader
@@ -24,26 +120,42 @@ semantic/settlement verification is a larger cost than plan decoding. The
 two smaller transcript/plan work-count defects have exact causal reproductions;
 the dominant same-call duplicate-lineage/cut checks now have two additional
 causal failures and twelve passing controls. Their pure-projection/batch-join
-repair is reviewed and its focused29 qualification is authorized, followed by
-the original cold comparison only after focused GREEN. No coverage or deadline
-is waived; the full semantic rerun remains mandatory.
+repair passes validator8 normal/race and simulator21 normally. Simulator21's
+race run fails at3m in the cold fixture constructor; the cold durable comparison
+and full semantic rerun were not executed. The captured-binary profile identifies
+cycle sealing and fleet-generation work as the remaining critical paths. Bounded
+fixture parallelization is being prepared with private mutable ownership and
+unchanged full crypto/chronology. No coverage or deadline is waived.
 
 The engine policy-depth repair passes all51 normal/race roots after genuine
 signed M4/M16-under-M8 causal reproductions and is included in c86effa. Two
 adjacent wrong-clamp/invalid-encoding failures are also causally reproduced.
-The server-side signed-byte alias remains open. Key custody v3 passes all24
+The server-side signed-byte alias now has two causal failures and a nine-root
+normal/race GREEN repair. Its exact two files are integrated in primary server,
+and both main SN gates now select it explicitly. Composed gate and service-backed
+full-trail qualification remain. Key custody v3 passes all24
 CRV4/validator roots normally and under race after explicit private-parent
 fixture preparation; both earlier failed captures remain preserved. All18
 reviewed source paths match the integrated main checkout. Both packages also
 compile for Linux/Darwin on amd64/arm64 (eight builds); actual deployment-path
-compatibility and platform runtime evidence remain separate obligations.
+compatibility and platform runtime evidence remain separate obligations. The
+actual release client.key reader has six newly reproduced custody, identity-drift
+and incomplete-state admission failures, with five compatibility controls passing.
+An additional genuine-ledger regression proves accepting that same key in a
+different configured operator domain. Its reviewed repair is authorized for
+exact52 normal/race tests; the raw-only simulator readers remain separately in scope.
 Stats has five deterministic callback lock-inversion reproductions. Review of
 its first repair also found caller-controlled cross-batch lock ordering and
 wrong-operator admission mutation; both now have causal failures. A separate
 Load regression proves partial state survives a rejected snapshot. Their
-unchanged positive controls pass; held v2 focused27/structural1 is under
-qualification. A separate exact4 neutral candidate now targets state-directory
-misrouting and mixed-domain admission; the complete repair remains unqualified.
+unchanged positive controls pass; v2 focused27/structural1 is GREEN. Routing exact4
+then reproduces wrong-directory publication and mixed-domain admission mutation.
+V3's focused35/structural1 passes normal/race, but affected316 ordinary failed
+on the unchanged closure-before-removal root (315 passed; race did not run).
+The cause is delayed public-generation publication, not demonstrated early
+write-token release. V4's narrow repair and six deterministic adjacent tests
+are integrated in main; all15 Stats paths match the reviewed delta. Focused42/
+structural1 and conditional affected322 are authorized; composed qualification remains.
 
 Bounded aggregates, collector/public typed replication, authenticated activation,
 global cross-cut terminal history, aggregate capacity and on-chain validator
@@ -52,6 +164,10 @@ causally reproduced. The working gate now selects disk/depth, all namespace,
 launcher and its own guard tests, and explicitly runs both custody entry points
 normally and under race. All8 focused source/invocation guards now pass both
 modes; they do not stand in for execution of the complete selected suites.
+A subsequent exact3 capture also proves omitted Stats test families while the
+disk/depth controls pass. Main's new selector/guard now covers all37 added Stats
+roots, and both scripts explicitly include server signed-depth admission tests.
+These latest source/invocation changes still require their own qualification.
 Both release gates, final source lock,
 Ready doctor, matching plans, real live phases, FINAL.md and independent
 on-chain verification are still outstanding. Section12 of the handoff records

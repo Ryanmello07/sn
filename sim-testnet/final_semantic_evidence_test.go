@@ -3017,6 +3017,7 @@ func buildFinalSemanticFixture(t *testing.T) (FinalSemanticEvidence, map[string]
 	}
 	for index := range validators {
 		validator := &validators[index]
+		validator.OperatorPaths = finalSharedPathIdentityTestVector(validator.PathVPK, cfg.Config.Topology.Operators)
 		registrationCall, callErr := finalNativeRegistrationCallEvidence(validator.Coldkey, uint32(1000+index), 521, validator.Hotkey, validator.UID, cfg.Config.Budgets.MaximumRegistrationBurnRao)
 		if callErr != nil {
 			t.Fatal(callErr)

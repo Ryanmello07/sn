@@ -377,6 +377,7 @@ func writeFinalSemanticCaptureCampaignFixture(t *testing.T, cfg *ResolvedConfig,
 	}
 	for validatorID := 1; validatorID <= cfg.Config.Topology.Validators; validatorID++ {
 		validator := FinalCollectedValidatorInputs{ValidatorID: uint64(validatorID), PathVPK: "0x" + strings.Repeat(fmt.Sprintf("%02x", validatorID), 32), IntentStore: common["intent-store"]}
+		validator.OperatorPaths = finalSharedPathIdentityTestVector(validator.PathVPK, cfg.Config.Topology.Operators)
 		if result.Name == "production-soak" {
 			if collected.Window.FirstEpoch == 0 {
 				t.Fatal("production fixture dishonest-deposit epoch underflows")

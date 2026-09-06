@@ -44,6 +44,25 @@ the wrapper's bytes in the execution provenance. Never edit a live runner or
 change a running capture to this wrapper. Preserve failed prelaunch records as
 observer failures, not product test failures or qualifying passes.
 
+Preflight all selector inputs together before compiling: root lists must be
+sorted uniquely with `LC_ALL=C`, contain no blank records, and end in one newline;
+anchored selectors and expected-outcome tables must describe exactly the same
+roots. Keep expected causal assertion text unchanged. If historical input files
+need a canonical projection, preserve the originals and record the transformation
+before launch; do not drop tests or replace a failed product run with a formatting
+retry. Current source locations and qualified scopes are recorded in
+[`FINALIZE-COMPLETE.md`](../FINALIZE-COMPLETE.md#12-freeze-and-execution-record).
+
+Validate the exact filenames and invocation consumed by the frozen body, not
+only a staging convention: a package-prefixed `sim-testnet.expected.txt` does
+not satisfy a runner that opens `expected.txt`. Any adapter must explicitly
+bind and check that mapping before build, along with selector, outcome and
+root-bound assertion files. Keep package working directory, Go build target
+and artifact label distinct (`server` root builds `.`). Parallel causal output
+must bind each assertion to its actual test identity, not an overlapping
+`RUN`-to-`FAIL` text interval. A failure before build/list/test is a preserved
+launcher failure; only a fresh reviewed capture can follow its correction.
+
 Both release gates export `WARP_TEST_ENV_FAIL_FAST=1` before running tests.
 This makes the server's default test environment fail on its first assertion,
 fatal error, or panic instead of accepting a later successful retry. Abandoned
@@ -84,8 +103,9 @@ tampered-graph cases, five fleet-projection mutations, and test-fixture
 supplement-file preparation. Each file
 still uses the production preparation/signing path; the complete supplement
 is signed only after every file worker joins. Shared identity derivation uses
-the exact-key cache's detached copies. The semantic census contains 237 roots:
-all previous 236 plus the affected artifact-verification cache regression.
+the exact-key cache's detached copies. The authoritative semantic census is
+[`semantic-integrity-tests.txt`](semantic-integrity-tests.txt); source/invocation
+guards must prove every listed root is actually selected by both release gates.
 Deterministic worker-bound/join and callback-nonreturn regressions remain
 selected. A callback that exits without returning must produce an explicit
 failure and cannot exhaust the worker pool or hide a later case. All 18 public

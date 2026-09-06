@@ -339,6 +339,9 @@ func openFinalSemanticArchive(ctx context.Context, cfg *ResolvedConfig, stateDir
 	}
 	archive := &finalSemanticArchive{ctx: ctx, cfg: cfg, stateRoot: stateRoot, runRoot: runRoot, load: load, collected: &collected, files: map[string][]byte{}, locators: map[string]FinalArtifactLocator{}}
 	addDirect := func(locator FinalArtifactLocator) error {
+		if prior, exists := archive.locators[locator.URI]; exists && prior != locator {
+			return fmt.Errorf("closed semantic graph has conflicting locator %s", locator.URI)
+		}
 		data, err := archive.loadChecked(locator)
 		if err != nil {
 			return err
@@ -2794,8 +2797,26 @@ func (a *finalSemanticArchive) buildValidatorView(source *FinalSemanticEvidence)
 }
 
 func (a *finalSemanticArchive) buildValidators(source *FinalSemanticEvidence, identities *finalPublicIdentities, chain *FinalCollectedChainSnapshot, events *finalSemanticEventIndex) error {
-	if source == nil || identities == nil || chain == nil || events == nil {
+	if a == nil || a.collected == nil || source == nil || identities == nil || chain == nil || events == nil {
 		return errors.New("validator construction context is incomplete")
+	}
+	if len(a.collected.Validators) != source.ExpectedValidators {
+		return errors.New("validator source public identity census differs")
+	}
+	authority, err := decodeFinalOperatorPathAuthority(a.files["public/identities.json"], source.DeploymentID, source.ExpectedValidators, source.ExpectedOperators)
+	if err != nil {
+		return err
+	}
+	if !finalJSONEqual(authority.identities, identities) {
+		return errors.New("validator source public identities differ from captured bytes")
+	}
+	for index, collected := range a.collected.Validators {
+		if collected.ValidatorID != uint64(index+1) {
+			return errors.New("validator source public identity census is not canonical")
+		}
+		if err := authority.verify(collected.ValidatorID, collected.PathVPK, collected.OperatorPaths); err != nil {
+			return err
+		}
 	}
 	nativeByUID := make(map[uint16]FinalCollectedNativeUIDState, len(chain.NativeUIDs))
 	for _, state := range chain.NativeUIDs {
@@ -2843,7 +2864,7 @@ func (a *finalSemanticArchive) buildValidators(source *FinalSemanticEvidence, id
 		source.Validators = append(source.Validators, FinalValidatorIdentityEvidence{
 			ValidatorID: collected.ValidatorID, UID: selfUID, Hotkey: hotkey.SS58, Coldkey: coldkey.SS58, Registered: true,
 			Registration: registration, StakeRao: state.StakeRao, ValidatorPermit: state.ValidatorPermit, ValidatorTrustU16: state.ValidatorTrustU16,
-			PathVPK: strings.ToLower(collected.PathVPK), Snapshot: chain.NativeHead, SnapshotArtifact: snapshot, Cycles: cycles,
+			PathVPK: collected.PathVPK, OperatorPaths: append([]FinalOperatorPathIdentity(nil), collected.OperatorPaths...), Snapshot: chain.NativeHead, SnapshotArtifact: snapshot, Cycles: cycles,
 		})
 	}
 	sort.Slice(source.Validators, func(i, j int) bool { return source.Validators[i].ValidatorID < source.Validators[j].ValidatorID })

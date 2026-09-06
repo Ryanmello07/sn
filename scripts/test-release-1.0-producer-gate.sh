@@ -59,9 +59,17 @@ echo "[release-1.0 producer] exact runtime client and cancellation boundaries"
 echo "[release-1.0 producer] non-replacing validator and hotkey seed custody"
 (
   cd "$sn_repo"
-  seed_custody_tests='^Test(Keypair|LoadOrCreateSeedFile|SeedFileFormats|SeedCustody|VpkSeed|EvmKeyLoadingAndMirror|HotkeyLoadOrCreate|IdentityCustody)'
+  seed_custody_tests='^Test(Keypair|LoadOrCreateSeedFile|SeedFileFormats|SeedCustody|VpkSeed|EvmKeyLoadingAndMirror|HotkeyLoadOrCreate|IdentityCustody|ReleaseClientSeed)'
   go test ./crv4 ./validator -run "$seed_custody_tests" -count=1
   go test -race ./crv4 ./validator -run "$seed_custody_tests" -count=1
+)
+
+echo "[release-1.0 producer] raw simulator client-key custody"
+(
+  cd "$sn_repo"
+  simulator_seed_custody_tests='^Test(SimulatorClientSeedCustody|SimulatorOperatorPath|InspectValidatorPathProofsRequiresEveryOperatorDomain$|FinalSettlementClosureWaitHonorsPublicationAndCancellation$|FinalLifecycleIntentRequirementsKeepSettlementAndNativeClocksDistinct$)'
+  go test ./sim-testnet -run "$simulator_seed_custody_tests" -count=1 -parallel=4 -timeout 3m
+  go test -race ./sim-testnet -run "$simulator_seed_custody_tests" -count=1 -parallel=4 -timeout 3m
 )
 
 echo "[release-1.0 producer] synthetic EVM block identity and canonical recovery"
@@ -94,7 +102,7 @@ echo "[release-1.0 producer] strict proof and configuration framing"
 echo "[release-1.0 producer] signed validator evidence and settlement"
 (
   cd "$sn_repo"
-  producer_tests='^Test(Attempt|DiskAttempt|TrailPolicyDepth|Deposited|ReleaseMeasurement|IntentStore|SteeringIntent|MeasurementStats|ExactPoolQuality|ReleaseSteeringLoop|ReleaseSettlementRefresh)'
+  producer_tests='^Test(Attempt|DiskAttempt|HTTPAttemptStreamV2|SealAttemptCutV2|TrailPolicyDepth|StatsWrite|StatsMultiBatch|StatsSettlement|Deposited|ReleaseMeasurement|IntentStore|SteeringIntent|MeasurementStats|ExactPoolQuality|ReleaseSteeringLoop|ReleaseSettlementRefresh)'
   go test ./validator -run "$producer_tests" -count=1
   go test -race ./validator -run "$producer_tests" -count=1
 )
@@ -156,6 +164,10 @@ echo "[release-1.0 producer] operator proof and artifact APIs"
   provider_input_tests='^Test(StCanonicalProviderUsages|StBuildReleaseProviderInputs)'
   go test ./controller -run "$provider_input_tests" -count=1
   go test -race ./controller -run "$provider_input_tests" -count=1
+  # Requested depth must fit its signed byte before settings or state admission.
+  seed_admission_tests='^Test(VerifySeedAdmission|VerifySeedRejectsMissingSignature|VerifyClampM)'
+  go test ./controller -run "$seed_admission_tests" -count=1
+  go test -race ./controller -run "$seed_admission_tests" -count=1
   payout_allocation_tests='^Test(EvenContractPayoutShare|AllocateContractParticipantPayouts|AllocateContractParticipantPayoutEligibilityMatrix)$'
   go test ./model -run "$payout_allocation_tests" -count=1
   go test -race ./model -run "$payout_allocation_tests" -count=1

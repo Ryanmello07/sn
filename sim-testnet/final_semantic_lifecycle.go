@@ -1288,31 +1288,62 @@ func verifyFinalFleetLifecycle(evidence *FinalSemanticEvidence) error {
 }
 
 func verifyFinalFleetLifecycleArtifacts(evidence *FinalSemanticEvidence, data []byte) error {
-	if evidence == nil || evidence.FleetLifecycle == nil {
-		return errors.New("fleet lifecycle artifact evidence is unavailable")
-	}
-	var lineage finalFleetLifecycleLineageArtifact
-	if err := decodeStrictJSONBytes(data, &lineage); err != nil {
-		return fmt.Errorf("decode fleet lifecycle lineage artifact: %w", err)
-	}
-	lifecycle := evidence.FleetLifecycle
-	if lineage.Schema != finalFleetLifecycleLineageSchema || lineage.DeploymentID != evidence.DeploymentID || lineage.PlanHash != evidence.PlanHash || lineage.RunID != evidence.RunID {
-		return errors.New("fleet lifecycle lineage artifact identity differs from semantic evidence")
-	}
-	wantPaths, err := finalFleetLifecycleExpectedPaths(lifecycle.ClientsPerHeadFleet)
+	files, err := decodeFinalFleetLifecycleLineageFiles(evidence, data)
 	if err != nil {
 		return err
 	}
+	return verifyFinalFleetLifecycleArtifactsWithFiles(evidence, files)
+}
+
+// One owned decode validates the entire envelope before its public identity
+// bytes can authorize path replay or its other files can drive fleet replay.
+func decodeFinalFleetLifecycleLineageFiles(evidence *FinalSemanticEvidence, data []byte) (map[string][]byte, error) {
+	if evidence == nil || evidence.FleetLifecycle == nil {
+		return nil, errors.New("fleet lifecycle artifact evidence is unavailable")
+	}
+	var lineage finalFleetLifecycleLineageArtifact
+	if err := decodeStrictJSONBytes(data, &lineage); err != nil {
+		return nil, fmt.Errorf("decode fleet lifecycle lineage artifact: %w", err)
+	}
+	lifecycle := evidence.FleetLifecycle
+	if lineage.Schema != finalFleetLifecycleLineageSchema || lineage.DeploymentID != evidence.DeploymentID || lineage.PlanHash != evidence.PlanHash || lineage.RunID != evidence.RunID {
+		return nil, errors.New("fleet lifecycle lineage artifact identity differs from semantic evidence")
+	}
+	wantPaths, err := finalFleetLifecycleExpectedPaths(lifecycle.ClientsPerHeadFleet)
+	if err != nil {
+		return nil, err
+	}
 	if len(lineage.Files) != len(wantPaths) {
-		return fmt.Errorf("fleet lifecycle lineage artifact file count=%d, want %d", len(lineage.Files), len(wantPaths))
+		return nil, fmt.Errorf("fleet lifecycle lineage artifact file count=%d, want %d", len(lineage.Files), len(wantPaths))
 	}
 	files := make(map[string][]byte, len(lineage.Files))
 	for index, item := range lineage.Files {
 		if index >= len(wantPaths) || item.Path != wantPaths[index] || files[item.Path] != nil || item.SizeBytes != uint64(len(item.Data)) || item.ContentHash != bytesSHA256(item.Data) {
-			return fmt.Errorf("fleet lifecycle lineage file %d is unexpected, duplicate, or content-address mismatch", index)
+			return nil, fmt.Errorf("fleet lifecycle lineage file %d is unexpected, duplicate, or content-address mismatch", index)
 		}
 		files[item.Path] = append([]byte(nil), item.Data...)
 	}
+	return files, nil
+}
+
+// Reuses the full invocation's checked envelope without decoding it again.
+func verifyFinalFleetLifecycleArtifactsWithFiles(evidence *FinalSemanticEvidence, files map[string][]byte) error {
+	if evidence == nil || evidence.FleetLifecycle == nil || files == nil {
+		return errors.New("fleet lifecycle artifact evidence is unavailable")
+	}
+	var identities finalPublicIdentities
+	if err := decodeStrictJSONBytes(files["public/identities.json"], &identities); err != nil || identities.DeploymentID != evidence.DeploymentID {
+		return stateMismatchError(err, "fleet lifecycle public identities differ from semantic deployment")
+	}
+	return verifyFinalFleetLifecycleArtifactsWithIdentities(evidence, files, &identities)
+}
+
+// Full replay shares the exact owned public document used to authorize paths.
+func verifyFinalFleetLifecycleArtifactsWithIdentities(evidence *FinalSemanticEvidence, files map[string][]byte, identities *finalPublicIdentities) error {
+	if evidence == nil || evidence.FleetLifecycle == nil || files == nil || identities == nil || identities.DeploymentID != evidence.DeploymentID {
+		return errors.New("fleet lifecycle public identity context is incomplete")
+	}
+	lifecycle := evidence.FleetLifecycle
 	var state FleetLifecycleEvidence
 	if err := decodeStrictJSONBytes(files["public/fleet-lifecycle.json"], &state); err != nil || !finalJSONEqual(state, lifecycle.State) {
 		return stateMismatchError(err, "fleet lifecycle terminal state differs from its lineage artifact")
@@ -1325,15 +1356,11 @@ func verifyFinalFleetLifecycleArtifacts(evidence *FinalSemanticEvidence, data []
 	if err != nil {
 		return err
 	}
-	var identities finalPublicIdentities
-	if err := decodeStrictJSONBytes(files["public/identities.json"], &identities); err != nil || identities.DeploymentID != evidence.DeploymentID {
-		return stateMismatchError(err, "fleet lifecycle public identities differ from semantic deployment")
-	}
-	roles, err := finalFleetLifecycleRoles(&identities)
+	roles, err := finalFleetLifecycleRoles(identities)
 	if err != nil || !finalJSONEqual(roles, lifecycle.Roles) {
 		return stateMismatchError(err, "fleet lifecycle role census differs from captured public identities")
 	}
-	indexed, err := verifyAndIndexFinalFleetLifecycle(evidence, lifecycle, plan, entries, &identities, files)
+	indexed, err := verifyAndIndexFinalFleetLifecycle(evidence, lifecycle, plan, entries, identities, files)
 	if err != nil {
 		return err
 	}
@@ -1352,7 +1379,7 @@ func verifyFinalFleetLifecycleArtifacts(evidence *FinalSemanticEvidence, data []
 		}
 		return errors.New("fleet lifecycle replay index differs from its exact plan/journal/artifact graph")
 	}
-	roleSecrets, err := finalFleetLifecycleRoleSecrets(&identities)
+	roleSecrets, err := finalFleetLifecycleRoleSecrets(identities)
 	if err != nil {
 		return err
 	}

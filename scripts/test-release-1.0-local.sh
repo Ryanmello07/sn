@@ -45,6 +45,15 @@ echo "[release-1.0] sn Go tests"
   parser_framing_tests='^Test((Policy|ReleaseConfig|ClaimDaemonConfig|StrictYAML|RenderedValidatorPolicy)RejectsMalformedTrailingYAML|FinalSemanticPathProofArtifact(Count|RejectsMalformedTrailingJSON)|ParseFleetManifestStrictCanonicalRoundTrip|PolicyStrictAndFailClosed|LoadReleaseConfigStrictAndNormalizesOperatorSecrets|ClaimDaemonConfigStrictAndPortable|StrictYAMLRejectsUnknownAndMultipleDocuments|ReleaseGatesPinProviderAndTransportRegressions)$'
   go test ./protocol ./miner ./validator ./sim-testnet -run "$parser_framing_tests" -count=1 -parallel=4 -timeout 2m
   go test -race ./protocol ./miner ./validator ./sim-testnet -run "$parser_framing_tests" -count=1 -parallel=4 -timeout 2m
+  # Provisioned release keys use the same strict custody as hotkeys and VPKs.
+  # Keep the actual runtime's two-read identity boundary explicit in both modes.
+  seed_custody_tests='^Test(Keypair|LoadOrCreateSeedFile|SeedFileFormats|SeedCustody|VpkSeed|EvmKeyLoadingAndMirror|HotkeyLoadOrCreate|IdentityCustody|ReleaseClientSeed)'
+  go test ./crv4 ./validator -run "$seed_custody_tests" -count=1
+  go test -race ./crv4 ./validator -run "$seed_custody_tests" -count=1
+  # The simulator's provisioned client keys retain their narrower raw32 grammar.
+  simulator_seed_custody_tests='^Test(SimulatorClientSeedCustody|SimulatorOperatorPath|InspectValidatorPathProofsRequiresEveryOperatorDomain$|FinalSettlementClosureWaitHonorsPublicationAndCancellation$|FinalLifecycleIntentRequirementsKeepSettlementAndNativeClocksDistinct$)'
+  go test ./sim-testnet -run "$simulator_seed_custody_tests" -count=1 -parallel=4 -timeout 3m
+  go test -race ./sim-testnet -run "$simulator_seed_custody_tests" -count=1 -parallel=4 -timeout 3m
   # sim-testnet contains launch-scale 1,000-miner fixtures. The package has an
   # isolated 90-minute race deadline below; do not let Go's implicit 10-minute
   # package deadline terminate the faster ordinary pass while its independent
@@ -103,6 +112,10 @@ echo "[release-1.0] operator pure/unit suites"
   provider_input_tests='^Test(StCanonicalProviderUsages|StBuildReleaseProviderInputs)'
   go test ./controller -run "$provider_input_tests" -count=1
   go test -race ./controller -run "$provider_input_tests" -count=1
+  # Requested depth must fit its signed byte before settings or state admission.
+  seed_admission_tests='^Test(VerifySeedAdmission|VerifySeedRejectsMissingSignature|VerifyClampM)'
+  go test ./controller -run "$seed_admission_tests" -count=1
+  go test -race ./controller -run "$seed_admission_tests" -count=1
   payout_allocation_tests='^Test(EvenContractPayoutShare|AllocateContractParticipantPayouts|AllocateContractParticipantPayoutEligibilityMatrix)$'
   go test ./model -run "$payout_allocation_tests" -count=1
   go test -race ./model -run "$payout_allocation_tests" -count=1

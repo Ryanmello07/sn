@@ -62,6 +62,7 @@ func TestFinalSemanticPathProofArtifactRejectsMalformedTrailingJSON(t *testing.T
 		t.Fatal(err)
 	}
 	validator := FinalValidatorIdentityEvidence{ValidatorID: 1, PathVPK: "0x" + hex.EncodeToString(validatorPublicKey)}
+	validator.OperatorPaths = finalSharedPathIdentityTestVector(validator.PathVPK, 1)
 	pool := FinalPoolUIDEvidence{NoID: 1, ServerKeyHistory: []FinalServerKey{{KeyID: 1, PublicKey: "0x" + hex.EncodeToString(serverPublicKey)}}}
 	cases := []struct {
 		name      string

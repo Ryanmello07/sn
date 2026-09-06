@@ -36,9 +36,9 @@ import (
 )
 
 const (
-	// v9 joins every accepted proof to a complete signed terminal settlement
-	// batch; prior objects cannot prove the absence of an omitted valid tail.
-	finalSemanticEvidenceSchema                  = "urnetwork-final-semantic-evidence-v9"
+	// v10 binds every operator path key to its independent public provisioner
+	// role; prior single-key objects cannot express that complete authority.
+	finalSemanticEvidenceSchema                  = "urnetwork-final-semantic-evidence-v10"
 	finalReleaseArchiveMinimumSpanBlocks         = uint64(3_570)
 	finalReleaseArchiveMinimumSafetyMarginBlocks = uint64(7_200)
 	finalHeadCandidateCount                      = 202
@@ -210,19 +210,20 @@ type FinalServerKey struct {
 }
 
 type FinalValidatorIdentityEvidence struct {
-	ValidatorID       uint64               `json:"validator_id"`
-	UID               uint16               `json:"uid"`
-	Hotkey            string               `json:"hotkey"`
-	Coldkey           string               `json:"coldkey"`
-	Registered        bool                 `json:"registered"`
-	Registration      FinalNativeReceipt   `json:"registration"`
-	StakeRao          string               `json:"stake_rao"`
-	ValidatorPermit   bool                 `json:"validator_permit"`
-	ValidatorTrustU16 uint16               `json:"validator_trust_u16"`
-	PathVPK           string               `json:"path_vpk"`
-	Snapshot          ChainHead            `json:"snapshot"`
-	SnapshotArtifact  FinalArtifactLocator `json:"snapshot_artifact"`
-	Cycles            []FinalCRv4Cycle     `json:"crv4_cycles"`
+	ValidatorID       uint64                      `json:"validator_id"`
+	UID               uint16                      `json:"uid"`
+	Hotkey            string                      `json:"hotkey"`
+	Coldkey           string                      `json:"coldkey"`
+	Registered        bool                        `json:"registered"`
+	Registration      FinalNativeReceipt          `json:"registration"`
+	StakeRao          string                      `json:"stake_rao"`
+	ValidatorPermit   bool                        `json:"validator_permit"`
+	ValidatorTrustU16 uint16                      `json:"validator_trust_u16"`
+	PathVPK           string                      `json:"path_vpk"`
+	OperatorPaths     []FinalOperatorPathIdentity `json:"operator_paths"`
+	Snapshot          ChainHead                   `json:"snapshot"`
+	SnapshotArtifact  FinalArtifactLocator        `json:"snapshot_artifact"`
+	Cycles            []FinalCRv4Cycle            `json:"crv4_cycles"`
 }
 
 type FinalHeadCandidateEvidence struct {
@@ -1972,9 +1973,18 @@ func verifyFinalValidatorIdentity(evidence *FinalSemanticEvidence, validator *Fi
 	if err != nil || stake.Sign() == 0 || seenUIDs[validator.UID] || validator.Hotkey == "" || validator.Coldkey == "" || !validator.Registered || !validator.ValidatorPermit || validator.ValidatorTrustU16 == 0 {
 		return fmt.Errorf("validator %d registration/stake/permit/vtrust evidence is incomplete", validator.ValidatorID)
 	}
-	vpk, err := finalEd25519PublicKey("validator path VPK", validator.PathVPK)
-	if err != nil || seenVPKs[string(vpk)] {
+	operatorCount := evidence.ExpectedOperators
+	if operatorCount == 0 {
+		operatorCount = len(evidence.Pools)
+	}
+	keys, err := finalOperatorPathKeys(validator.PathVPK, validator.OperatorPaths, operatorCount)
+	if err != nil {
 		return fmt.Errorf("validator %d path VPK is invalid or reused", validator.ValidatorID)
+	}
+	for _, vpk := range keys {
+		if seenVPKs[string(vpk)] {
+			return fmt.Errorf("validator %d path VPK is invalid or reused", validator.ValidatorID)
+		}
 	}
 	if err := verifyFinalNativeReceipt("validator registration", validator.Registration, 0, evidence.NativeTerminalHead.Number, true, finalNativeOperationRegistration); err != nil {
 		return fmt.Errorf("validator %d: %w", validator.ValidatorID, err)
@@ -1989,7 +1999,9 @@ func verifyFinalValidatorIdentity(evidence *FinalSemanticEvidence, validator *Fi
 		return err
 	}
 	seenUIDs[validator.UID] = true
-	seenVPKs[string(vpk)] = true
+	for _, vpk := range keys {
+		seenVPKs[string(vpk)] = true
+	}
 	return nil
 }
 
@@ -3336,6 +3348,7 @@ func loadFinalSemanticArtifactUsesWithHash(ctx context.Context, uses []finalSema
 	}
 	cache := map[string][]byte{}
 	artifactURIHashes := map[string]string{}
+	artifactURILocators := map[string]FinalArtifactLocator{}
 	for _, item := range uses {
 		data, ok := cache[item.locator.URI]
 		if !ok {
@@ -3364,6 +3377,10 @@ func loadFinalSemanticArtifactUsesWithHash(ctx context.Context, uses []finalSema
 		if digest != item.locator.ContentHash {
 			return nil, fmt.Errorf("final artifact %s size or content hash mismatch", item.locator.URI)
 		}
+		if prior, exists := artifactURILocators[item.locator.URI]; exists && prior != item.locator {
+			return nil, fmt.Errorf("artifact %s has conflicting locator declarations", item.locator.URI)
+		}
+		artifactURILocators[item.locator.URI] = item.locator
 	}
 	return cache, nil
 }
@@ -3395,7 +3412,15 @@ func VerifyFinalSemanticArtifacts(ctx context.Context, evidence *FinalSemanticEv
 	if finalSemanticArtifactVerificationCacheHit(cacheKey) {
 		return nil
 	}
-	if err := verifyFinalSettlementClosureArtifacts(evidence, cache); err != nil {
+	lineageFiles, err := decodeFinalFleetLifecycleLineageFiles(evidence, cache[evidence.FleetLifecycle.LineageArtifact.URI])
+	if err != nil {
+		return err
+	}
+	pathAuthority, err := decodeFinalOperatorPathAuthority(lineageFiles["public/identities.json"], evidence.DeploymentID, evidence.ExpectedValidators, evidence.ExpectedOperators)
+	if err != nil {
+		return err
+	}
+	if err := verifyFinalSettlementClosureArtifactsWithAuthority(evidence, cache, pathAuthority); err != nil {
 		return err
 	}
 	matrix, err := verifyFinalAdversarialMatrixArtifact(evidence.Adversaries, cache[evidence.Adversaries.MatrixArtifact.URI])
@@ -3458,7 +3483,7 @@ func VerifyFinalSemanticArtifacts(ctx context.Context, evidence *FinalSemanticEv
 		return err
 	}
 	if evidence.FleetLifecycle != nil {
-		if err := verifyFinalFleetLifecycleArtifacts(evidence, cache[evidence.FleetLifecycle.LineageArtifact.URI]); err != nil {
+		if err := verifyFinalFleetLifecycleArtifactsWithIdentities(evidence, lineageFiles, pathAuthority.identities); err != nil {
 			return err
 		}
 		decisionCount := len(evidence.FleetLifecycle.AppliedDecisions)
@@ -4601,12 +4626,16 @@ func finalPoolByNO(evidence *FinalSemanticEvidence, noID uint64) *FinalPoolUIDEv
 }
 
 func verifyFinalPathProofArtifactBound(proof *FinalValidatorPathProofEvidence, data []byte, validator *FinalValidatorIdentityEvidence, pool *FinalPoolUIDEvidence, seenPathIDs, seenTrailIDs map[string]bool) error {
-	if proof == nil || validator == nil || pool == nil {
+	if proof == nil || validator == nil || pool == nil || proof.ValidatorID != validator.ValidatorID || proof.NoID != pool.NoID {
 		return errors.New("path proof identity is unavailable")
 	}
-	vpk, err := finalEd25519PublicKey("validator path VPK", validator.PathVPK)
+	keys, err := finalOperatorPathKeys(validator.PathVPK, validator.OperatorPaths, len(validator.OperatorPaths))
 	if err != nil {
 		return err
+	}
+	vpk := keys[proof.NoID]
+	if len(vpk) != ed25519.PublicKeySize {
+		return errors.New("path proof operator key is unavailable")
 	}
 	serverKeys := make(map[byte]ed25519.PublicKey, len(pool.ServerKeyHistory))
 	for _, key := range pool.ServerKeyHistory {

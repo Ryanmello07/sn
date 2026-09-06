@@ -25,9 +25,10 @@ var errSeedFileMissing = errors.New("seed leaf is absent at initial observation"
 // Private deterministic seams observe acquisition and durability boundaries.
 // No seed bytes are passed to hooks or errors, and no state lock is held.
 type seedFileHooks struct {
-	step   func(operation, name string) error
-	random io.Reader
-	write  func(*os.File, []byte) (int, error)
+	step       func(operation, name string) error
+	random     io.Reader
+	write      func(*os.File, []byte) (int, error)
+	afterClose func(*os.File) error
 }
 
 // Each path component is anchored to its actual opened directory, not merely
@@ -52,10 +53,20 @@ func (self *seedFileDirectory) step(operation, name string) error {
 func (self *seedFileDirectory) close() error {
 	var err error
 	for index := len(self.files) - 1; index >= 0; index-- {
-		err = errors.Join(err, self.files[index].Close())
+		err = errors.Join(err, self.closeFile(self.files[index]))
 	}
 	for index := len(self.roots) - 1; index >= 0; index-- {
 		err = errors.Join(err, self.roots[index].Close())
+	}
+	return err
+}
+
+// Observers receive only a closed descriptor. The real close always runs,
+// even when a deterministic post-close fault must refuse returned authority.
+func (self *seedFileDirectory) closeFile(file *os.File) error {
+	err := file.Close()
+	if self.hooks.afterClose != nil {
+		err = errors.Join(err, self.hooks.afterClose(file))
 	}
 	return err
 }
@@ -194,6 +205,16 @@ func openSeedFileDirectory(path string, create bool, hooks seedFileHooks) (direc
 // Reads at most one bounded seed from a checked no-follow descriptor. Syncing
 // a concurrent winner's file and parent establishes durability for this caller.
 func (self *seedFileDirectory) read(name string, rawOnly bool) (seed [32]byte, observed os.FileInfo, resultErr error) {
+	parse := parseSeedFile
+	if rawOnly {
+		parse = parseRawSeedFile
+	}
+	return self.readWithParser(name, parse)
+}
+
+// Every format shares acquisition, byte bounds, write-state checks and close
+// ownership. Parsers are private pure functions; they cannot choose a path.
+func (self *seedFileDirectory) readWithParser(name string, parse func([]byte) ([32]byte, error)) (seed [32]byte, observed os.FileInfo, resultErr error) {
 	if err := self.check(); err != nil {
 		return seed, nil, err
 	}
@@ -219,7 +240,7 @@ func (self *seedFileDirectory) read(name string, rawOnly bool) (seed [32]byte, o
 		return seed, nil, err
 	}
 	defer func() {
-		resultErr = errors.Join(resultErr, file.Close())
+		resultErr = errors.Join(resultErr, self.closeFile(file))
 		if resultErr != nil {
 			seed, observed = [32]byte{}, nil
 		}
@@ -235,14 +256,10 @@ func (self *seedFileDirectory) read(name string, rawOnly bool) (seed [32]byte, o
 	if err := self.step("seed-read", name); err != nil {
 		return seed, nil, err
 	}
-	if rawOnly {
-		if len(raw) != len(seed) {
-			return seed, nil, errors.New("seed must contain exactly 32 raw bytes")
-		}
-		copy(seed[:], raw)
-	} else if len(raw) > maximumSeedFileBytes {
+	if len(raw) > maximumSeedFileBytes {
 		return seed, nil, errors.New("seed exceeds its file-byte bound")
-	} else if seed, err = parseSeedFile(raw); err != nil {
+	}
+	if seed, err = parse(raw); err != nil {
 		return seed, nil, err
 	}
 	if err := self.step("load-sync", name); err != nil {
@@ -312,7 +329,7 @@ func loadSeedFileOwned(path string, create, rawOnly bool, hooks seedFileHooks) (
 	}
 	info, statErr := file.Stat()
 	defer func() {
-		resultErr = errors.Join(resultErr, file.Close())
+		resultErr = errors.Join(resultErr, directory.closeFile(file))
 		entry, err := root.Lstat(temporaryName)
 		if err == nil {
 			if info != nil && seedFilePrivate(entry) && os.SameFile(info, entry) {

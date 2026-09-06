@@ -54,30 +54,35 @@ func finalCollectedAttemptIdentity(cfg *ResolvedConfig, terminal *ScenarioObserv
 }
 
 // Authenticates every operator before exposing any records to the collector.
-func collectFinalSettlementClosure(data []byte, epoch uint64, identity validatorpkg.AttemptLedgerIdentity, serverKeys map[uint64]map[byte]ed25519.PublicKey, recordsByNO map[uint64]map[uint64]validatorpkg.AttemptRecord) (*validatorpkg.AttemptSettlementClosure, error) {
+func collectFinalSettlementClosure(data []byte, epoch uint64, identity validatorpkg.AttemptLedgerIdentity, operatorKeys map[uint64]ed25519.PublicKey, serverKeys map[uint64]map[byte]ed25519.PublicKey, recordsByNO map[uint64]map[uint64]validatorpkg.AttemptRecord) (*validatorpkg.AttemptSettlementClosure, error) {
 	closure, err := validatorpkg.DecodeAttemptSettlementClosureWithServerKeys(data, serverKeys)
 	if err != nil {
 		return nil, err
 	}
-	if closure.Epoch != epoch || len(closure.Transitions) != len(serverKeys) || len(recordsByNO) != len(serverKeys) {
+	if closure.Epoch != epoch || len(closure.Transitions) != len(serverKeys) || len(recordsByNO) != len(serverKeys) || len(operatorKeys) != len(serverKeys) {
 		return nil, errors.New("settlement closure epoch or configured operator census differs")
 	}
 	_, err = finalEd25519PublicKey("settlement closure validator", identity.ValidatorVPK)
 	if err != nil {
 		return nil, err
 	}
+	if len(operatorKeys[1]) != ed25519.PublicKeySize || identity.ValidatorVPK != "0x"+hex.EncodeToString(operatorKeys[1]) {
+		return nil, errors.New("settlement closure validator path summary differs")
+	}
+	var incoming []*validatorpkg.AttemptLedgerCut
 	for _, transition := range closure.Transitions {
 		want := identity
 		want.NoID = transition.Identity.NoID
+		key := operatorKeys[want.NoID]
+		want.ValidatorVPK = "0x" + hex.EncodeToString(key)
 		keys := serverKeys[want.NoID]
-		if transition.Identity != want || len(keys) == 0 || recordsByNO[want.NoID] == nil {
+		if want.NoID == 0 || want.NoID > uint64(len(operatorKeys)) || len(key) != ed25519.PublicKeySize || transition.Identity != want || len(keys) == 0 || recordsByNO[want.NoID] == nil {
 			return nil, errors.New("settlement closure signed validator/operator domain differs")
 		}
+		incoming = append(incoming, transition.PreFold.AttemptCut)
 	}
-	for _, transition := range closure.Transitions {
-		if err := mergeFinalAttemptCut(transition.PreFold.AttemptCut, recordsByNO[transition.Identity.NoID]); err != nil {
-			return nil, err
-		}
+	if err := mergeFinalAttemptCutsAtomically(incoming, recordsByNO); err != nil {
+		return nil, err
 	}
 	return closure, nil
 }
@@ -186,6 +191,44 @@ func finalAcceptedAttemptProofBytes(records map[uint64]validatorpkg.AttemptRecor
 // Joins all accepted batches once per validator, then every operator's exact
 // proof projection. Loaded bytes participate in the existing owned-byte cache.
 func verifyFinalSettlementClosureArtifacts(evidence *FinalSemanticEvidence, loaded map[string][]byte) error {
+	if evidence == nil || evidence.FleetLifecycle == nil {
+		return errors.New("settlement closure public path lineage is absent")
+	}
+	locator := evidence.FleetLifecycle.LineageArtifact
+	data := loaded[locator.URI]
+	if uint64(len(data)) != locator.SizeBytes || bytesSHA256(data) != locator.ContentHash {
+		return errors.New("settlement closure public path lineage content differs")
+	}
+	files, err := decodeFinalFleetLifecycleLineageFiles(evidence, data)
+	if err != nil {
+		return err
+	}
+	return verifyFinalSettlementClosureArtifactsWithLineage(evidence, loaded, files)
+}
+
+// Full public replay reuses its already-validated lineage envelope once.
+func verifyFinalSettlementClosureArtifactsWithLineage(evidence *FinalSemanticEvidence, loaded, lineageFiles map[string][]byte) error {
+	if evidence == nil {
+		return errors.New("settlement closure public path context is absent")
+	}
+	authority, err := decodeFinalOperatorPathAuthority(lineageFiles["public/identities.json"], evidence.DeploymentID, len(evidence.Validators), len(evidence.Pools))
+	if err != nil {
+		return err
+	}
+	return verifyFinalSettlementClosureArtifactsWithAuthority(evidence, loaded, authority)
+}
+
+// The public replay owns this authority decoded from the complete lineage.
+func verifyFinalSettlementClosureArtifactsWithAuthority(evidence *FinalSemanticEvidence, loaded map[string][]byte, authority *finalOperatorPathAuthority) error {
+	if evidence == nil || authority == nil {
+		return errors.New("settlement closure public path context is absent")
+	}
+	if len(evidence.Validators) != len(authority.pathsByValidator) || evidence.Window.FirstEpoch == 0 || evidence.Window.EpochCount == 0 {
+		return errors.New("settlement closure public path census is incomplete")
+	}
+	if _, ok := checkedAdd(evidence.Window.FirstEpoch, evidence.Window.EpochCount-1); !ok {
+		return errors.New("settlement closure public path epoch range overflows")
+	}
 	serverKeys := map[uint64]map[byte]ed25519.PublicKey{}
 	for _, pool := range evidence.Pools {
 		keys := map[byte]ed25519.PublicKey{}
@@ -198,7 +241,14 @@ func verifyFinalSettlementClosureArtifacts(evidence *FinalSemanticEvidence, load
 		}
 		serverKeys[pool.NoID] = keys
 	}
-	for _, validator := range evidence.Validators {
+	for index, validator := range evidence.Validators {
+		if validator.ValidatorID != uint64(index+1) {
+			return errors.New("settlement closure public validator census is not canonical")
+		}
+		if err := authority.verify(validator.ValidatorID, validator.PathVPK, validator.OperatorPaths); err != nil {
+			return err
+		}
+		operatorKeys := authority.keysByValidator[validator.ValidatorID]
 		records := map[uint64]map[uint64]validatorpkg.AttemptRecord{}
 		for noID := range serverKeys {
 			records[noID] = map[uint64]validatorpkg.AttemptRecord{}
@@ -221,7 +271,7 @@ func verifyFinalSettlementClosureArtifacts(evidence *FinalSemanticEvidence, load
 		var previous *validatorpkg.AttemptSettlementClosure
 		closuresByEpoch := map[uint64]*validatorpkg.AttemptSettlementClosure{}
 		for _, declared := range closures {
-			closure, err := collectFinalSettlementClosure(loaded[declared.Artifact.URI], declared.Epoch, identity, serverKeys, records)
+			closure, err := collectFinalSettlementClosure(loaded[declared.Artifact.URI], declared.Epoch, identity, operatorKeys, serverKeys, records)
 			if err != nil {
 				return err
 			}
@@ -259,6 +309,23 @@ func verifyFinalSettlementClosureArtifacts(evidence *FinalSemanticEvidence, load
 // Replays the live collector's exact authority union from the closed graph.
 // Attempt summaries and proof file hashes alone are not evidence of completeness.
 func verifyFinalCollectedSettlementAuthority(cfg *ResolvedConfig, value *FinalSemanticCollectedInputs, terminal *ScenarioObservation, loaded map[string][]byte) error {
+	publicBytes, err := finalCollectedPublicIdentityBytes(value, loaded)
+	if err != nil {
+		return err
+	}
+	if cfg == nil || cfg.Config == nil || terminal == nil {
+		return errors.New("collected path identity context is incomplete")
+	}
+	if len(value.Validators) != cfg.Config.Topology.Validators || value.Window.FirstEpoch == 0 || value.Window.EpochCount == 0 {
+		return errors.New("collected path identity census is incomplete")
+	}
+	if _, ok := checkedAdd(value.Window.FirstEpoch, value.Window.EpochCount-1); !ok {
+		return errors.New("collected path identity epoch range overflows")
+	}
+	authority, err := decodeFinalOperatorPathAuthority(publicBytes, cfg.Config.Deployment.DeploymentID, cfg.Config.Topology.Validators, cfg.Config.Topology.Operators)
+	if err != nil {
+		return err
+	}
 	serverKeys := map[uint64]map[byte]ed25519.PublicKey{}
 	for _, operator := range terminal.Operators {
 		keys := map[byte]ed25519.PublicKey{}
@@ -276,7 +343,14 @@ func verifyFinalCollectedSettlementAuthority(cfg *ResolvedConfig, value *FinalSe
 	if len(serverKeys) != cfg.Config.Topology.Operators {
 		return errors.New("collected closure operator count differs")
 	}
-	for _, validator := range value.Validators {
+	for index, validator := range value.Validators {
+		if validator.ValidatorID != uint64(index+1) {
+			return errors.New("collected path validator census is not canonical")
+		}
+		if err := authority.verify(validator.ValidatorID, validator.PathVPK, validator.OperatorPaths); err != nil {
+			return err
+		}
+		operatorKeys := authority.keysByValidator[validator.ValidatorID]
 		vpk, err := finalEd25519PublicKey("collected closure validator", validator.PathVPK)
 		if err != nil {
 			return err
@@ -292,7 +366,7 @@ func verifyFinalCollectedSettlementAuthority(cfg *ResolvedConfig, value *FinalSe
 		var previous *validatorpkg.AttemptSettlementClosure
 		closuresByEpoch := map[uint64]*validatorpkg.AttemptSettlementClosure{}
 		for _, declared := range validator.SettlementClosures {
-			closure, err := collectFinalSettlementClosure(loaded[declared.Artifact.URI], declared.Epoch, identity, serverKeys, records)
+			closure, err := collectFinalSettlementClosure(loaded[declared.Artifact.URI], declared.Epoch, identity, operatorKeys, serverKeys, records)
 			if err != nil {
 				return err
 			}
@@ -308,7 +382,7 @@ func verifyFinalCollectedSettlementAuthority(cfg *ResolvedConfig, value *FinalSe
 		}
 		for _, intents := range [][]FinalCollectedValidatorIntent{validator.Intents, validator.LifecycleIntents} {
 			for _, intent := range intents {
-				if err := collectFinalAttemptCuts(int(validator.ValidatorID), loaded[intent.Measurement.URI], vpk, serverKeys, records); err != nil {
+				if err := collectFinalAttemptCuts(int(validator.ValidatorID), loaded[intent.Measurement.URI], operatorKeys, serverKeys, records); err != nil {
 					return err
 				}
 				if err := verifyFinalMeasurementSettlementClosures(loaded[intent.Measurement.URI], closuresByEpoch); err != nil {
@@ -360,8 +434,11 @@ func waitFinalValidatorSettlementClosures(ctx context.Context, cfg *ResolvedConf
 // Keeps the real file/key verifier while deterministic tests drive publication
 // between polls without substituting the collector or manufacturing a closure.
 func waitFinalValidatorSettlementClosuresWithWait(ctx context.Context, cfg *ResolvedConfig, stateRoot string, terminal *ScenarioObservation, window *ScenarioAcceptanceWindow, deadline time.Time, poll time.Duration, wait func(context.Context, time.Duration) error) error {
-	if ctx == nil || cfg == nil || terminal == nil || window == nil || poll <= 0 {
+	if ctx == nil || cfg == nil || cfg.Config == nil || terminal == nil || window == nil || poll <= 0 {
 		return errors.New("settlement closure wait context is incomplete")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	serverKeys := map[uint64]map[byte]ed25519.PublicKey{}
 	for _, operator := range terminal.Operators {
@@ -380,13 +457,13 @@ func waitFinalValidatorSettlementClosuresWithWait(ctx context.Context, cfg *Reso
 	if len(serverKeys) != cfg.Config.Topology.Operators {
 		return errors.New("terminal closure configured operator count differs")
 	}
+	authority, err := loadFinalOperatorPathAuthority(cfg, stateRoot, finalConfiguredValidatorIDs(cfg))
+	if err != nil {
+		return fmt.Errorf("terminal closure path identity is unavailable: %w", err)
+	}
 	identities := map[int]validatorpkg.AttemptLedgerIdentity{}
 	for validatorID := 1; validatorID <= cfg.Config.Topology.Validators; validatorID++ {
-		seed, err := os.ReadFile(filepath.Join(stateRoot, "runtime", fmt.Sprintf("validator-%d", validatorID), "state", "operators", "no-1", "client.key"))
-		if err != nil || len(seed) != ed25519.SeedSize {
-			return fmt.Errorf("validator %d terminal closure path identity is unavailable", validatorID)
-		}
-		identity, err := finalCollectedAttemptIdentity(cfg, terminal, uint64(validatorID), ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey))
+		identity, err := finalCollectedAttemptIdentity(cfg, terminal, uint64(validatorID), authority.keysByValidator[uint64(validatorID)][1])
 		if err != nil {
 			return err
 		}
@@ -417,7 +494,7 @@ func waitFinalValidatorSettlementClosuresWithWait(ctx context.Context, cfg *Reso
 				for noID := range serverKeys {
 					records[noID] = map[uint64]validatorpkg.AttemptRecord{}
 				}
-				closure, err := collectFinalSettlementClosure(data, epoch, identities[validatorID], serverKeys, records)
+				closure, err := collectFinalSettlementClosure(data, epoch, identities[validatorID], authority.keysByValidator[uint64(validatorID)], serverKeys, records)
 				if err != nil {
 					return false, err
 				}

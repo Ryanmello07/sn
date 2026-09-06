@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	finalSemanticCollectedInputsSchema = "urnetwork-final-semantic-collected-inputs-v3"
+	finalSemanticCollectedInputsSchema = "urnetwork-final-semantic-collected-inputs-v4"
 	finalCollectedProofRecordSchema    = "urnetwork-final-validator-path-proof-record-v1"
 	finalCollectedAttemptRecordsSchema = "urnetwork-final-validator-attempt-records-v1"
 	finalSemanticCaptureStatusSchema   = "urnetwork-final-semantic-capture-status-v1"
@@ -66,6 +66,7 @@ type FinalCollectedPayoutArtifact struct {
 type FinalCollectedValidatorInputs struct {
 	ValidatorID            uint64                             `json:"validator_id"`
 	PathVPK                string                             `json:"path_vpk"`
+	OperatorPaths          []FinalOperatorPathIdentity        `json:"operator_paths"`
 	IntentStore            FinalArtifactLocator               `json:"intent_store"`
 	DishonestDepositIntent *FinalCollectedValidatorIntent     `json:"dishonest_deposit_intent,omitempty"`
 	Intents                []FinalCollectedValidatorIntent    `json:"intents"`
@@ -221,6 +222,13 @@ func CollectFinalSemanticInputs(ctx context.Context, cfg *ResolvedConfig, stateD
 	if err := awaitFinalPriorSemanticReady(ctx, cfg, stateRoot, result); err != nil {
 		return nil, err
 	}
+	pathAuthority, err := loadFinalOperatorPathAuthority(cfg, stateRoot, finalConfiguredValidatorIDs(cfg))
+	if err != nil {
+		return nil, fmt.Errorf("path identity seed is unavailable: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	policyBytes, err := cfg.Policy.CanonicalBytes()
 	if err != nil {
 		return nil, err
@@ -269,7 +277,7 @@ func CollectFinalSemanticInputs(ctx context.Context, cfg *ResolvedConfig, stateD
 	if err != nil || result.CompletedAt != completedAt.UTC().Format(time.RFC3339Nano) || completedAt.Before(startedAt) {
 		return nil, errors.New("final semantic campaign completion time is not canonical UTC")
 	}
-	collected.Validators, err = collectFinalValidatorInputs(cfg, stateRoot, runRoot, terminal, result.Name, result.AcceptanceWindow, startedAt, completedAt)
+	collected.Validators, err = collectFinalValidatorInputsWithPathAuthority(cfg, stateRoot, runRoot, terminal, result.Name, result.AcceptanceWindow, startedAt, completedAt, pathAuthority, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1139,6 +1147,24 @@ func finalLifecycleIntentMismatch(intent *validatorpkg.SteeringIntent, expected 
 }
 
 func collectFinalValidatorInputs(cfg *ResolvedConfig, stateRoot, runRoot string, terminal *ScenarioObservation, phase string, window *ScenarioAcceptanceWindow, startedAt, completedAt time.Time) ([]FinalCollectedValidatorInputs, error) {
+	return collectFinalValidatorInputsWithSeedObserver(cfg, stateRoot, runRoot, terminal, phase, window, startedAt, completedAt, nil)
+}
+
+// Observes only a copied public key after the real seed read and before any
+// collection artifact write; production has no observer or alternate reader.
+func collectFinalValidatorInputsWithSeedObserver(cfg *ResolvedConfig, stateRoot, runRoot string, terminal *ScenarioObservation, phase string, window *ScenarioAcceptanceWindow, startedAt, completedAt time.Time, observeSeed func(int, [ed25519.PublicKeySize]byte) error) ([]FinalCollectedValidatorInputs, error) {
+	authority, err := loadFinalOperatorPathAuthority(cfg, stateRoot, finalConfiguredValidatorIDs(cfg))
+	if err != nil {
+		return nil, fmt.Errorf("path identity seed is unavailable: %w", err)
+	}
+	return collectFinalValidatorInputsWithPathAuthority(cfg, stateRoot, runRoot, terminal, phase, window, startedAt, completedAt, authority, observeSeed)
+}
+
+// Consumes the complete invocation-owned authority admitted before any output.
+func collectFinalValidatorInputsWithPathAuthority(cfg *ResolvedConfig, stateRoot, runRoot string, terminal *ScenarioObservation, phase string, window *ScenarioAcceptanceWindow, startedAt, completedAt time.Time, authority *finalOperatorPathAuthority, observeSeed func(int, [ed25519.PublicKeySize]byte) error) ([]FinalCollectedValidatorInputs, error) {
+	if authority == nil || cfg == nil || cfg.Config == nil || terminal == nil || window == nil {
+		return nil, errors.New("validator path collection authority is incomplete")
+	}
 	lifecycleRequired, err := finalLifecycleIntentRequirements(terminal, phase)
 	if err != nil {
 		return nil, err
@@ -1169,13 +1195,17 @@ func collectFinalValidatorInputs(cfg *ResolvedConfig, stateRoot, runRoot string,
 		if err != nil {
 			return nil, err
 		}
-		seedPath := filepath.Join(root, "operators", "no-1", "client.key")
-		seed, err := os.ReadFile(seedPath)
-		if err != nil || len(seed) != ed25519.SeedSize {
-			return nil, fmt.Errorf("validator %d path identity seed is unavailable", validatorID)
+		operatorKeys := authority.keysByValidator[uint64(validatorID)]
+		paths := authority.pathsByValidator[uint64(validatorID)]
+		if len(paths) != cfg.Config.Topology.Operators || len(operatorKeys) != cfg.Config.Topology.Operators {
+			return nil, errors.New("validator path collection authority census differs")
 		}
-		privateKey := ed25519.NewKeyFromSeed(seed)
-		vpk := privateKey.Public().(ed25519.PublicKey)
+		vpk := operatorKeys[1]
+		if observeSeed != nil {
+			if err := observeSeed(validatorID, [ed25519.PublicKeySize]byte(vpk)); err != nil {
+				return nil, err
+			}
+		}
 		attemptRecords := make(map[uint64]map[uint64]validatorpkg.AttemptRecord, cfg.Config.Topology.Operators)
 		var selectedMeasurements [][]byte
 		for noID := 1; noID <= cfg.Config.Topology.Operators; noID++ {
@@ -1185,14 +1215,14 @@ func collectFinalValidatorInputs(cfg *ResolvedConfig, stateRoot, runRoot string,
 		if err != nil {
 			return nil, err
 		}
-		collected := FinalCollectedValidatorInputs{ValidatorID: uint64(validatorID), PathVPK: "0x" + hex.EncodeToString(vpk), IntentStore: storeLocator}
+		collected := FinalCollectedValidatorInputs{ValidatorID: uint64(validatorID), PathVPK: paths[0].PathVPK, OperatorPaths: append([]FinalOperatorPathIdentity(nil), paths...), IntentStore: storeLocator}
 		captureIntent := func(sequence int, intent *validatorpkg.SteeringIntent, collectAttempts bool) (FinalCollectedValidatorIntent, error) {
 			measurement, measurementData, err := collectFinalValidatorMeasurement(cfg, stateRoot, root, runRoot, validatorID, intent, terminal)
 			if err != nil {
 				return FinalCollectedValidatorIntent{}, err
 			}
 			if collectAttempts {
-				if err := collectFinalAttemptCuts(validatorID, measurementData, vpk, serverKeys, attemptRecords); err != nil {
+				if err := collectFinalAttemptCuts(validatorID, measurementData, operatorKeys, serverKeys, attemptRecords); err != nil {
 					return FinalCollectedValidatorIntent{}, err
 				}
 				selectedMeasurements = append(selectedMeasurements, measurementData)
@@ -1311,7 +1341,7 @@ func collectFinalValidatorInputs(cfg *ResolvedConfig, stateRoot, runRoot string,
 			if err != nil {
 				return nil, fmt.Errorf("validator %d closed settlement epoch %d: %w", validatorID, epoch, err)
 			}
-			closure, err := collectFinalSettlementClosure(data, epoch, identity, serverKeys, attemptRecords)
+			closure, err := collectFinalSettlementClosure(data, epoch, identity, operatorKeys, serverKeys, attemptRecords)
 			if err != nil {
 				return nil, err
 			}
@@ -1364,7 +1394,7 @@ func collectFinalValidatorInputs(cfg *ResolvedConfig, stateRoot, runRoot string,
 				if record.Epoch < window.FirstEpoch || record.Epoch > lastEpoch {
 					continue
 				}
-				if err := validatorpkg.VerifyProofRecord(&record, vpk, serverKeys[uint64(noID)], cfg.Policy.Verify.TrailDepth); err != nil {
+				if err := validatorpkg.VerifyProofRecord(&record, operatorKeys[uint64(noID)], serverKeys[uint64(noID)], cfg.Policy.Verify.TrailDepth); err != nil {
 					return nil, fmt.Errorf("validator %d operator %d proof projection line %d: %w", validatorID, noID, lineIndex+1, err)
 				}
 				want, ok := authoritative[record.TrailId]
@@ -1411,17 +1441,23 @@ func collectFinalValidatorInputs(cfg *ResolvedConfig, stateRoot, runRoot string,
 	return result, nil
 }
 
-func collectFinalAttemptCuts(validatorID int, measurementData []byte, validatorVPK ed25519.PublicKey, serverKeys map[uint64]map[byte]ed25519.PublicKey, recordsByNO map[uint64]map[uint64]validatorpkg.AttemptRecord) error {
+func collectFinalAttemptCuts(validatorID int, measurementData []byte, operatorKeys map[uint64]ed25519.PublicKey, serverKeys map[uint64]map[byte]ed25519.PublicKey, recordsByNO map[uint64]map[uint64]validatorpkg.AttemptRecord) error {
 	artifact, _, err := validatorpkg.DecodeReleaseMeasurementArtifact(measurementData)
 	if err != nil {
 		return fmt.Errorf("validator %d decode attempt-backed measurement: %w", validatorID, err)
 	}
+	if len(operatorKeys) == 0 || len(operatorKeys) != len(serverKeys) || len(recordsByNO) != len(operatorKeys) {
+		return errors.New("measurement operator authority census differs")
+	}
+	var incoming []*validatorpkg.AttemptLedgerCut
+	seenOperators := map[uint64]bool{}
 	for _, input := range artifact.Inputs {
 		records, ok := recordsByNO[input.NoID]
 		keys := serverKeys[input.NoID]
-		if !ok || len(keys) == 0 || input.Stats.AttemptCut == nil {
+		if !ok || records == nil || seenOperators[input.NoID] || len(keys) == 0 || len(operatorKeys[input.NoID]) != ed25519.PublicKeySize || input.Stats.AttemptCut == nil {
 			return fmt.Errorf("validator %d operator %d attempt authority is incomplete", validatorID, input.NoID)
 		}
+		seenOperators[input.NoID] = true
 		cuts := []*validatorpkg.AttemptLedgerCut{input.Stats.AttemptCut}
 		if transition := input.Stats.SettlementTransition; transition != nil {
 			cuts = append(cuts, transition.PreFold.AttemptCut)
@@ -1430,15 +1466,16 @@ func collectFinalAttemptCuts(validatorID int, measurementData []byte, validatorV
 			if cut == nil || cut.Identity.DeploymentID != artifact.DeploymentID || cut.Identity.ChainID != artifact.ChainID || !strings.EqualFold(cut.Identity.GenesisHash, artifact.GenesisHash) || cut.Identity.Netuid != artifact.Netuid || cut.Identity.ValidatorID != uint64(validatorID) || cut.Identity.NoID != input.NoID {
 				return errors.New("measurement attempt cut domain differs")
 			}
-			if err := validatorpkg.VerifyAttemptLedgerCut(cut, validatorVPK, keys); err != nil {
+			if err := validatorpkg.VerifyAttemptLedgerCut(cut, operatorKeys[input.NoID], keys); err != nil {
 				return fmt.Errorf("validator %d operator %d attempt cut: %w", validatorID, input.NoID, err)
 			}
-			if err := mergeFinalAttemptCut(cut, records); err != nil {
-				return err
-			}
+			incoming = append(incoming, cut)
 		}
 	}
-	return nil
+	if len(seenOperators) != len(operatorKeys) {
+		return errors.New("measurement omits configured operator path authority")
+	}
+	return mergeFinalAttemptCutsAtomically(incoming, recordsByNO)
 }
 
 func persistFinalAttemptRecords(runRoot string, validatorID, noID int, recordsBySequence map[uint64]validatorpkg.AttemptRecord) ([]validatorpkg.AttemptRecord, FinalCollectedValidatorAttempts, error) {
@@ -1764,7 +1801,7 @@ func verifyFinalSemanticCollectedInputs(cfg *ResolvedConfig, value *FinalSemanti
 		if validator.ValidatorID != uint64(i+1) || len(validator.Intents) < int(value.Window.EpochCount) || len(validator.Attempts) != cfg.Config.Topology.Operators || len(validator.PathProofs) != cfg.Config.Topology.Operators {
 			return errors.New("collected validator input coverage is incomplete")
 		}
-		if _, err := finalEd25519PublicKey("collected validator VPK", validator.PathVPK); err != nil {
+		if _, err := finalOperatorPathKeys(validator.PathVPK, validator.OperatorPaths, cfg.Config.Topology.Operators); err != nil {
 			return err
 		}
 		if err := verifyFinalArtifact("collected validator intent store", validator.IntentStore, "validator-steering-intent-store"); err != nil {
@@ -1863,6 +1900,9 @@ func verifyFinalCollectedClosedGraph(ctx context.Context, cfg *ResolvedConfig, s
 		for _, closure := range validator.SettlementClosures {
 			locators = append(locators, closure.Artifact)
 		}
+	}
+	if err := validateFinalArtifactLocatorReuse(locators); err != nil {
+		return err
 	}
 	seen := map[string]bool{}
 	loaded := map[string][]byte{}

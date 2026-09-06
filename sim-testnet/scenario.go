@@ -1821,14 +1821,14 @@ func inspectValidatorPathProofs(cfg *ResolvedConfig, stateDir string, validatorI
 			serverKeys[operator.NoID][key.ServerKeyID] = append(ed25519.PublicKey(nil), key.PublicKey...)
 		}
 	}
+	authority, err := loadFinalOperatorPathAuthority(cfg, stateDir, []uint64{uint64(validatorID)})
+	if err != nil {
+		return nil, fmt.Errorf("validator %d client seed is unavailable or invalid: %w", validatorID, err)
+	}
 	counts := make(map[int]int, cfg.Config.Topology.Operators)
 	for noID := 1; noID <= cfg.Config.Topology.Operators; noID++ {
 		root := filepath.Join(stateDir, "runtime", fmt.Sprintf("validator-%d", validatorID), "state", "operators", fmt.Sprintf("no-%d", noID))
-		seed, err := os.ReadFile(filepath.Join(root, "client.key"))
-		if err != nil || len(seed) != ed25519.SeedSize {
-			return nil, fmt.Errorf("validator %d operator %d client seed is unavailable or invalid", validatorID, noID)
-		}
-		expectedVPK := ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey)
+		expectedVPK := authority.keysByValidator[uint64(validatorID)][uint64(noID)]
 		lines, err := completedReleaseProofLines(filepath.Join(root, "proofs.jsonl"))
 		if err != nil {
 			return nil, fmt.Errorf("validator %d operator %d path proofs: %w", validatorID, noID, err)

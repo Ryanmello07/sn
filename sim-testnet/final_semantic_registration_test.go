@@ -137,6 +137,7 @@ func finalSemanticValidatorUIDZeroFixture(t *testing.T, source *FinalSemanticEvi
 		ValidatorID: 1, UID: 0, Hotkey: hotkey, Coldkey: coldkey, Registered: true,
 		Registration: FinalNativeReceipt{ExtrinsicHash: finalTestHex(6), Block: ChainHead{Number: 6, Hash: finalTestHex(7)}, Call: &call, Proof: FinalArtifactLocator{Kind: "native-receipt", URI: "artifacts/validator-registration-1.json", ContentHash: bytesSHA256([]byte("registration")), SizeBytes: 12}},
 		StakeRao:     "1000000", ValidatorPermit: true, ValidatorTrustU16: 42, PathVPK: "0x" + hex.EncodeToString(bytes.Repeat([]byte{3}, 32)), Snapshot: source.NativeTerminalHead,
+		OperatorPaths:    finalSharedPathIdentityTestVector("0x"+hex.EncodeToString(bytes.Repeat([]byte{3}, 32)), source.ExpectedOperators),
 		SnapshotArtifact: FinalArtifactLocator{Kind: "native-validator-state", URI: "artifacts/validator-1.json", ContentHash: bytesSHA256([]byte("validator")), SizeBytes: 9},
 	}
 }
