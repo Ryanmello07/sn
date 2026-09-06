@@ -771,12 +771,10 @@ func (s *ReleaseSteerer) reconcilePending(ctx context.Context, current *Steering
 	}
 	result, err := crv4.SubmitPrepared(ctx, s.native, current.Prepared)
 	if err != nil {
-		_ = s.intents.update(current.VectorHash, "pending", func(i *SteeringIntent) error { i.Error = err.Error(); return nil })
-		return false, err
+		return false, s.recordReleasePendingError(current.VectorHash, err)
 	}
 	if err := authenticatePinnedNativeRuntimeAtContext(ctx, s.native, s.cfg, result.FinalizedBlockHash); err != nil {
-		_ = s.intents.update(current.VectorHash, "pending", func(i *SteeringIntent) error { i.Error = err.Error(); return nil })
-		return false, fmt.Errorf("authenticate replayed steering finality at %s: %w", result.FinalizedBlockHash.Hex(), err)
+		return false, fmt.Errorf("authenticate replayed steering finality at %s: %w", result.FinalizedBlockHash.Hex(), s.recordReleasePendingError(current.VectorHash, err))
 	}
 	if err := s.intents.MarkFinalized(current.VectorHash, result.TxHash.Hex(), result.FinalizedBlock, result.FinalizedBlockHash.Hex(), result.RevealBlock, result.Values); err != nil {
 		return false, err
@@ -980,12 +978,10 @@ func (s *ReleaseSteerer) SubmitOnce(ctx context.Context) error {
 	if err != nil {
 		// The error can occur after broadcast but before finality was observed.
 		// Preserve an uncertain pending state so a restart cannot double-submit.
-		_ = s.intents.update(intent.VectorHash, "pending", func(i *SteeringIntent) error { i.Error = err.Error(); return nil })
-		return err
+		return s.recordReleasePendingError(intent.VectorHash, err)
 	}
 	if err := authenticatePinnedNativeRuntimeAtContext(ctx, s.native, s.cfg, result.FinalizedBlockHash); err != nil {
-		_ = s.intents.update(intent.VectorHash, "pending", func(i *SteeringIntent) error { i.Error = err.Error(); return nil })
-		return fmt.Errorf("authenticate steering finality at %s: %w", result.FinalizedBlockHash.Hex(), err)
+		return fmt.Errorf("authenticate steering finality at %s: %w", result.FinalizedBlockHash.Hex(), s.recordReleasePendingError(intent.VectorHash, err))
 	}
 	return s.intents.MarkFinalized(intent.VectorHash, result.TxHash.Hex(), result.FinalizedBlock, result.FinalizedBlockHash.Hex(), result.RevealBlock, result.Values)
 }
@@ -1022,48 +1018,55 @@ func runReleaseSteeringLoopWithWait(ctx context.Context, epoch func() (uint64, e
 	targetKnown := false
 	completed := false
 	failures := 0
+	// At most the existing failure budget is retained. Expected drain polls
+	// keep prior causes; a completed retry clears the recovered failures.
+	var pendingErr error
 	for {
 		// A ready poll may win alongside cancellation; never let that
 		// decision authorize another scheduler read or submission.
 		if ctx.Err() != nil {
-			return nil
+			return releaseRuntimeError(ctx, pendingErr)
 		}
 		currentEpoch, err := epoch()
 		if ctx.Err() != nil {
-			return nil
+			return releaseRuntimeError(ctx, errors.Join(pendingErr, err))
 		}
 		if err == nil {
 			if targetKnown && currentEpoch < targetEpoch {
-				return fmt.Errorf("release steering epoch regressed from %d to %d", targetEpoch, currentEpoch)
+				return errors.Join(fmt.Errorf("release steering epoch regressed from %d to %d", targetEpoch, currentEpoch), pendingErr)
 			}
 			if !targetKnown || currentEpoch > targetEpoch {
 				if targetKnown && !completed {
-					return fmt.Errorf("release steering advanced from incomplete epoch %d to %d", targetEpoch, currentEpoch)
+					return errors.Join(fmt.Errorf("release steering advanced from incomplete epoch %d to %d", targetEpoch, currentEpoch), pendingErr)
 				}
 				targetEpoch, targetKnown, completed, failures = currentEpoch, true, false, 0
+				pendingErr = nil
 			}
 			if !completed {
 				err = submit()
-				if err == nil || errors.Is(err, ErrSteeringAlreadyFinal) {
+				if err == nil || releaseOnlyErrors(err, ErrSteeringAlreadyFinal) {
 					completed, failures = true, 0
-				} else if errors.Is(err, errAttemptCutPending) {
+					pendingErr = nil
+				} else if releaseOnlyErrors(err, errAttemptCutPending) {
 					// Admitted trails drain under their existing contexts. Waiting
 					// neither spends nor resets the real native-failure budget;
 					// the next scheduler read still enforces exact epoch continuity.
 				} else {
 					failures++
+					pendingErr = errors.Join(pendingErr, err)
 					fmt.Printf("release steer: subnet epoch %d attempt %d: %v\n", targetEpoch, failures, err)
 				}
 			}
 		} else {
 			failures++
+			pendingErr = errors.Join(pendingErr, err)
 			fmt.Printf("release steer: finalized scheduler attempt %d: %v\n", failures, err)
 		}
 		if failures >= releaseSteeringFailureLimit {
-			return fmt.Errorf("release steering failed %d consecutive attempts: %w", failures, err)
+			return releaseRuntimeError(ctx, fmt.Errorf("release steering failed %d consecutive attempts: %w", failures, pendingErr))
 		}
 		if !wait() {
-			return nil
+			return releaseRuntimeError(ctx, pendingErr)
 		}
 	}
 }

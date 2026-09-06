@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 16:18 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 17:17 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,7 +14,44 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current working integration (2026-09-06 16:18 UTC):
+Current working integration (2026-09-06 17:17 UTC):
+
+- Checkpoint `59eb71a` is committed, pulled and pushed; qualified activation
+  Go54 normal/race and Solidity28 remain integrated. No complete-primary gate
+  or source freeze is claimed.
+- Shutdown repair63 ran and failed because its physical-close fixture used a
+  legacy ledger without a retained directory. The failed output is preserved.
+  Astra corrected only the disk fixture and added a legacy-close regression;
+  fresh repair64 passes validator61/simulator3 normally and under race. Actual
+  foreground terminal0, distinct final seal, strict index verification and root
+  full raw-log/census review are complete. All13 qualified paths are integrated
+  exactly; this does not qualify the newer whole-primary composition.
+- Canonical neutral27 is now running after actual static admission0. Its
+  expected13 causal failures/14 controls are not yet observed. A separate
+  shutdown producer-gate selector/retention gap was found at integration and
+  remains an explicit repair; it does not erase isolated64 qualification.
+- Envelope admission repair is source-reviewed with24 compact roots, including
+  eight new fixed-storage/exact-wire/pre-replay/ownership controls. Its expected
+  causal5-failure/3-control outcome and repaired normal/race passes are not yet
+  observed. Legacy4 and simulator coverage remain required.
+- A frozen private compact head collector adds real pinned binding batches and
+  full signed M8 replay, with16 validator tests/two guards. Top200-of1000 scoring
+  and pool exclusion are explicitly a separate math control, not a live1000
+  miner pass. The37 affected Go files still await formatting/qualification.
+  Its full682 source is saved/pushed on recovery-only branch
+  `checkpoint/20260906-live-head-v2-wip` at `d0b5de9`, not merged into primary.
+- Ordinary and terminal recovery are correcting real FIFO/symlink custody gaps
+  using shared native descriptor operations and distinct existing leaf policies.
+  New deterministic tests and all-target legacy-v1/v6 recovery guards remain
+  source-only. Runtime routing/history/commitment work is still implementation,
+  not just waiting for test periods.
+- The final live campaign has not started. Both full gates, source freeze,
+  doctor/matching plans, live RC/three final windows, seven-day capacity and
+  independently verifiable FINAL.md remain mandatory. Section10.1's on-chain
+  storage choice remains unanswered. The scheduled10:00:48--14:36:00 chain
+  interval starts after engineering/launch gates; no from-now ETA is claimed.
+
+Previous working integration (2026-09-06 16:18 UTC; superseded above):
 
 - Checkpoint `f9a45d9` is committed, pulled and pushed. Go activation54 passes
   normally/race and Solidity28 passes; their exact qualified files are now in

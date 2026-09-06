@@ -311,9 +311,10 @@ func TestProducerGateCustodySelectionCoversReleaseStartup(t *testing.T) {
 	for _, check := range []struct{ path, function, callee string }{
 		{path: "../validator/release_run.go", function: "RunRelease", callee: "loadReleaseAttemptState"},
 		{path: "../validator/release_run.go", function: "RunRelease", callee: "startReleaseOperator"},
-		{path: "../validator/release_run.go", function: "loadReleaseAttemptState", callee: "loadClientSeed"},
-		{path: "../validator/release_run.go", function: "loadReleaseAttemptState", callee: "NewAttemptLedger"},
-		{path: "../validator/release_run.go", function: "loadReleaseAttemptState", callee: "AttachAttemptLedger"},
+		{path: "../validator/release_run.go", function: "loadReleaseAttemptState", callee: "loadReleaseAttemptStateWithObserver"},
+		{path: "../validator/release_run.go", function: "loadReleaseAttemptStateWithObserver", callee: "loadClientSeed"},
+		{path: "../validator/release_run.go", function: "loadReleaseAttemptStateWithObserver", callee: "NewAttemptLedger"},
+		{path: "../validator/release_run.go", function: "loadReleaseAttemptStateWithObserver", callee: "AttachAttemptLedger"},
 		{path: "../validator/release_run.go", function: "loadClientSeed", callee: "LoadRawOrBareHexSeedFile"},
 		{path: "../validator/release_run.go", function: "startReleaseOperator", callee: "startReleaseOperatorWithAdmission"},
 		{path: "../validator/release_run.go", function: "startReleaseOperatorWithAdmission", callee: "loadClientSeed"},

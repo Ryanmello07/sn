@@ -57,8 +57,8 @@ type releaseSnapshotRetryWait func(context.Context, time.Duration) error
 type releaseOperatorRuntime struct {
 	measurement *ReleaseMeasurementContext
 	stats       *StatsEngine
-	engine      *TrailEngine
-	close       func()
+	engine      releaseTrailRunner
+	close       func() error
 }
 
 type releaseTrailRunner interface {
@@ -66,7 +66,7 @@ type releaseTrailRunner interface {
 }
 
 func reportReleaseTrailEngineError(ctx context.Context, runner releaseTrailRunner, noID uint64, concurrency int, output chan<- error) {
-	if err := runner.Run(ctx, concurrency); err != nil && ctx.Err() == nil {
+	if err := releaseRuntimeError(ctx, runner.Run(ctx, concurrency)); err != nil {
 		output <- fmt.Errorf("validator no_id %d trail engine: %w", noID, err)
 	}
 }
@@ -187,6 +187,12 @@ func newReleaseAttemptBoundaryResolver(chain *ChainClient, cfg *ReleaseConfig) *
 }
 
 func loadReleaseAttemptState(cfg *ReleaseConfig, op OperatorConfig, validatorUID uint16) (*releaseAttemptState, error) {
+	return loadReleaseAttemptStateWithObserver(cfg, op, validatorUID, nil)
+}
+
+// A call-local observer retains the actual acquired ledger for deterministic
+// ownership tests. It cannot skip any production load or recovery operation.
+func loadReleaseAttemptStateWithObserver(cfg *ReleaseConfig, op OperatorConfig, validatorUID uint16, ledgerOpened func(*AttemptLedger)) (state *releaseAttemptState, returnErr error) {
 	seed, err := loadClientSeed(op.ClientKeySeedFile)
 	if err != nil {
 		return nil, fmt.Errorf("no_id %d client key: %w", op.NoID, err)
@@ -207,6 +213,15 @@ func loadReleaseAttemptState(cfg *ReleaseConfig, op OperatorConfig, validatorUID
 	if err != nil {
 		return nil, fmt.Errorf("no_id %d attempt ledger: %w", op.NoID, err)
 	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			returnErr = errors.Join(returnErr, releaseStageError(fmt.Sprintf("no_id %d refused attempt ledger shutdown", op.NoID), ledger.Close()))
+		}
+	}()
+	if ledgerOpened != nil {
+		ledgerOpened(ledger)
+	}
 	if err := stats.AttachAttemptLedger(ledger, op.StateDir); err != nil {
 		return nil, fmt.Errorf("no_id %d attempt ledger recovery: %w", op.NoID, err)
 	}
@@ -217,6 +232,7 @@ func loadReleaseAttemptState(cfg *ReleaseConfig, op OperatorConfig, validatorUID
 	if err := store.ReconcileAttemptProofs(ledger); err != nil {
 		return nil, fmt.Errorf("no_id %d proof projection reconciliation: %w", op.NoID, err)
 	}
+	transferred = true
 	return &releaseAttemptState{stats: stats, ledger: ledger, store: store}, nil
 }
 
@@ -296,9 +312,9 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 	api := sdk.NewApi(ctx, strategy, op.APIURL)
 	byClientJWT, clientID, err := clientauth.LoadOrCreateClientJwt(ctx, api, op.NetworkJWTFile, op.ClientJWTFile, fmt.Sprintf("validator-%d no-%d release-1.0", cfg.ValidatorID, op.NoID))
 	if err != nil {
-		_ = api.CloseAndWait(context.Background())
+		closeErr := api.CloseAndWait(context.Background())
 		strategy.Close()
-		return nil, fmt.Errorf("no_id %d authentication: %w", op.NoID, err)
+		return nil, errors.Join(fmt.Errorf("no_id %d authentication: %w", op.NoID, err), releaseStageError("authentication API shutdown", closeErr))
 	}
 
 	cancelled := atomic.Bool{}
@@ -324,16 +340,18 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 	}))
 	api.StartJwtRefresh()
 	var closeOnce sync.Once
-	closeResources := func() {
+	var closeErr error
+	closeResources := func() error {
 		closeOnce.Do(func() {
 			refreshSub.Close()
 			logoutSub.Close()
-			_ = platformTransport.CloseAndWait(context.Background())
-			_ = identityClient.CloseAndWait(context.Background())
-			_ = clientOOB.CloseAndWait(context.Background())
-			_ = api.CloseAndWait(context.Background())
+			closeErr = errors.Join(closeErr, releaseStageError("platform transport", platformTransport.CloseAndWait(context.Background())))
+			closeErr = errors.Join(closeErr, releaseStageError("identity client", identityClient.CloseAndWait(context.Background())))
+			closeErr = errors.Join(closeErr, releaseStageError("out-of-band control", clientOOB.CloseAndWait(context.Background())))
+			closeErr = errors.Join(closeErr, releaseStageError("API", api.CloseAndWait(context.Background())))
 			strategy.Close()
 		})
+		return closeErr
 	}
 
 	transport := NewTunnelTransport(ctx, strategy, TunnelTransportConfig{ApiUrl: op.APIURL, ConnectUrl: op.ConnectURL, ByClientJwt: api.GetByJwt, SourceClientId: clientID})
@@ -371,10 +389,7 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 		measurement: measurement,
 		stats:       stats,
 		engine:      engine,
-		close: func() {
-			_ = stats.Save(op.StateDir)
-			closeResources()
-		},
+		close:       newReleaseOperatorClose(stats, op.StateDir, closeResources),
 	}, nil
 }
 
@@ -419,7 +434,7 @@ func typesHash(value [32]byte) [32]byte { return value }
 
 // RunRelease starts the production validator modules under a caller-owned
 // lifecycle. CLIs and integration harnesses share this exact entry point.
-func RunRelease(ctx context.Context, configPath string) error {
+func RunRelease(ctx context.Context, configPath string) (returnErr error) {
 	cfg, err := LoadReleaseConfig(configPath)
 	if err != nil {
 		return err
@@ -464,6 +479,10 @@ func RunRelease(ctx context.Context, configPath string) error {
 		return fmt.Errorf("recover validator settlement transaction: %w", err)
 	}
 	attemptStates := make(map[uint64]*releaseAttemptState, len(cfg.Operators))
+	defer func() {
+		cancel()
+		returnErr = errors.Join(returnErr, closeReleaseAttemptStates(attemptStates))
+	}()
 	for index, operator := range cfg.Operators {
 		state, err := loadReleaseAttemptState(cfg, operator, validatorUID)
 		if err != nil {
@@ -486,79 +505,34 @@ func RunRelease(ctx context.Context, configPath string) error {
 	for _, op := range cfg.Operators {
 		runtime, err := startReleaseOperator(ctx, cfg, op, settlementEpoch.Load, attemptBoundaryResolver.Resolve, attemptStates[op.NoID])
 		if err != nil {
+			cancel()
 			for _, started := range runtimes {
-				started.close()
+				err = errors.Join(err, started.close())
 			}
 			return err
 		}
 		runtimes = append(runtimes, runtime)
 	}
-	runtimeErrors := make(chan error, len(runtimes)+3)
-	var workers sync.WaitGroup
-	defer func() {
-		cancel()
-		workers.Wait()
-		for _, runtime := range runtimes {
-			runtime.close()
-		}
-	}()
-	workers.Go(func() {
-		err := runReleaseSettlementRefresh(ctx, time.Duration(cfg.PollSeconds)*time.Second, chain.ReleaseSnapshotContext, func(ctx context.Context, snapshot *ReleaseSnapshot) error {
-			return advanceReleaseSettlementSnapshotWithMode(ctx, cfg.StateDir, snapshot, settlementParticipants, func(ctx context.Context, snapshot *ReleaseSnapshot) (AttemptBoundary, error) {
-				return releasePriorSettlementBoundary(ctx, chain, snapshot)
-			}, false)
-		}, func(snapshot *ReleaseSnapshot) {
-			if settlementEpoch.Load() < snapshot.Epoch.Uint64() {
-				attemptBoundaryResolver.invalidateLatest()
-				settlementEpoch.Store(snapshot.Epoch.Uint64())
-			}
-		}, waitReleaseSnapshotRetry)
-		if err != nil && ctx.Err() == nil {
-			runtimeErrors <- err
-		}
-	})
-	for index, runtime := range runtimes {
-		operatorID := cfg.Operators[index].NoID
-		concurrency := cfg.Operators[index].Concurrency
-		workers.Go(func() { reportReleaseTrailEngineError(ctx, runtime.engine, operatorID, concurrency, runtimeErrors) })
-	}
-	measurements := make([]*ReleaseMeasurementContext, len(runtimes))
-	for i, runtime := range runtimes {
-		measurements[i] = runtime.measurement
-	}
-	steerer, err := NewReleaseSteerer(cfg, chain, native, hotkey, measurements)
-	if err != nil {
-		return err
-	}
-	workers.Go(func() {
-		if err := steerer.Run(ctx); err != nil {
-			runtimeErrors <- err
-		}
-	})
-	workers.Go(func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				for i, runtime := range runtimes {
-					if err := runtime.stats.Save(cfg.Operators[i].StateDir); err != nil {
-						runtimeErrors <- fmt.Errorf("validator no_id %d stats save: %w", cfg.Operators[i].NoID, err)
-						return
-					}
+	return runReleaseOperatorWorkers(ctx, cancel, cfg, runtimes, releaseRuntimeOperations{
+		refresh: func(ctx context.Context) error {
+			return runReleaseSettlementRefresh(ctx, time.Duration(cfg.PollSeconds)*time.Second, chain.ReleaseSnapshotContext, func(ctx context.Context, snapshot *ReleaseSnapshot) error {
+				return advanceReleaseSettlementSnapshotWithMode(ctx, cfg.StateDir, snapshot, settlementParticipants, func(ctx context.Context, snapshot *ReleaseSnapshot) (AttemptBoundary, error) {
+					return releasePriorSettlementBoundary(ctx, chain, snapshot)
+				}, false)
+			}, func(snapshot *ReleaseSnapshot) {
+				if settlementEpoch.Load() < snapshot.Epoch.Uint64() {
+					attemptBoundaryResolver.invalidateLatest()
+					settlementEpoch.Store(snapshot.Epoch.Uint64())
 				}
-			}
-		}
+			}, waitReleaseSnapshotRetry)
+		},
+		newSteerer: func(measurements []*ReleaseMeasurementContext) (releaseSteererRunner, error) {
+			return NewReleaseSteerer(cfg, chain, native, hotkey, measurements)
+		},
+		running: func() {
+			fmt.Printf("validator release 1.0 running: validator=%d netuid=%d hotkey=%s operators=%d\n", cfg.ValidatorID, cfg.Netuid, hotkey.Address(), len(runtimes))
+		},
 	})
-	fmt.Printf("validator release 1.0 running: validator=%d netuid=%d hotkey=%s operators=%d\n", cfg.ValidatorID, cfg.Netuid, hotkey.Address(), len(runtimes))
-	select {
-	case <-ctx.Done():
-		return nil
-	case err := <-runtimeErrors:
-		return err
-	}
 }
 
 func runReleaseConfig(configPath string) {

@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 16:18 UTC before the final source freeze. Refresh every item marked
+2026-09-06 17:17 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,46 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 16:18 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 17:17 UTC; exact evidence in section 12):
+
+- Checkpoint `59eb71a` is committed, pulled and pushed. Qualified activation
+  Go54 normal/race and Solidity28 are integrated; server remains `5fcb1d56`.
+  This document update is not a source freeze or whole-primary qualification.
+- Shutdown repair63 ran and failed: a physical-close test incorrectly used the
+  legacy in-memory ledger, which deliberately has no retained directory. The
+  nil dereference is retained as an actual failed qualification, not waived.
+  Astra corrected the fixture to use real disk ledgers and added an explicit
+  legacy-close control. Only two test files changed; production code did not.
+- The fresh repair64 run passes all61 validator and3 simulator roots normally
+  and under race. Its actual foreground owner exited0, the separate post-owner
+  index verifies, and root reviewed all four full raw logs/censuses/exits. All13
+  qualified paths are integrated byte-identically into primary; the complete
+  newer primary composition still needs qualification and both full gates.
+- Canonical neutral27 passed actual static admission and is running under a
+  retained foreground owner; expected13 causal failures/14 controls are not
+  yet observed. The shutdown test prefix also needs an explicit producer-gate
+  retention repair; isolated64 passes do not prove the full gate selects it.
+- Envelope admission repair source is frozen and reviewed: original16 roots
+  plus8 new deterministic controls, with5 expected causal failures/3 controls
+  still awaiting execution. The repair is copied exactly into the private live
+  head composition, not primary; no observed envelope pass is claimed.
+- Root's new compact head collector uses the real pinned ChainClient binding
+  census and complete signed M8 record/proof replay. Its16 validator tests and
+  two gate guards are authored, not run. Top-200-of1000 math coverage is labeled
+  separately from actual two-operator M8 replay and full live acceptance.
+  The full682 draft is committed/pushed as recovery-only `d0b5de9` on
+  `checkpoint/20260906-live-head-v2-wip`, not merged into primary.
+- Ordinary and terminal recovery now share a reviewed native-descriptor
+  design to avoid FIFO/symlink replacement gaps. Their distinct existing leaf
+  permissions/link policies are preserved. Additional recovery/admission tests
+  and legacy-v1/v6 downgrade guards remain unformatted implementation work.
+- Runtime routing, authenticated history, on-chain evidence storage, adjacent
+  persistence/parser/process/timeout qualifications, seven-day capacity, both
+  full gates, freeze, doctor/matching plans and both live phases remain open.
+  Section10.1's storage choice is unanswered. The final soak has not started;
+  no new transaction, from-now completion ETA or mainnet readiness is claimed.
+
+Previous launch status (2026-09-06 16:18 UTC; superseded above):
 
 - Checkpoint `f9a45d9` is committed, pulled and pushed. The exact qualified Go54
   and Solidity28 activation sources are integrated; server remains `5fcb1d56`.
@@ -1927,7 +1966,247 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and continuation record (2026-09-06 16:18 UTC)
+### Current qualification and continuation record (2026-09-06 17:17 UTC)
+
+Primary is checkpoint `59eb71acf0fcf2a81aae3a343b67d56c83862153`, committed,
+pulled and pushed before this continuation. Primary server is unchanged at
+`5fcb1d5624fcacbcba5d28b2eb915f6c2bc05341`. No final live campaign or new
+testnet transaction has begun. This successor integrates the13 qualified
+shutdown paths below. New feature drafts remain private and unqualified;
+the already qualified activation Go54/Solidity28 remain in main.
+
+#### Observed shutdown failure and corrected qualification
+
+The actual repair63 capture is `sn-release-shutdown-repair63-capture-v2-A0mR8Q`.
+Its653-path source is
+`cc1c5717c5d4f076091b95065c908c501183d43c59b23b97a6d0b9507cdf0651`;
+frozen83 input hash is
+`9b5ad84ba0f8904136beaf6c24b70540487bcc1e2ac54f4df2cd13fe16853022`.
+After reviewed static admission, foreground session26759/owner4041920 started
+16:33:13 UTC. Validator normal build/list exited0; actual execution exited2
+with a nil-pointer panic in
+`TestReleaseShutdownClosesAllPreparedLedgersDespitePhysicalCloseFailure`.
+There were38 parent PASS, three declared child PASS, one failed parent and21
+remaining validator roots not run; simulator and race did not run. Converter0
+does not hide failed census1. The normal raw output sha256 is
+`0f838f47ec54445d3110cdb02e66edfdaf3eb11bea75bddec64ebbeafc224960`;
+the188-event stream sha256 is
+`84af1a50ea3585312d51f1d9f58722c7406ad74f20f37c6bca7c29734926b1f8`.
+The summary ended16:35:55, actual owner/outer exited1, and a separate final seal
+was written16:36:22. Root reviewed the failure/census/actual exits and strictly
+verified final index
+`2ab917a5680bf81966ce7346f8a8ef752f6988f3d026a7a32ed34e92c8baed56`.
+Keep this capture unchanged and failed; intermediate/missing seals retain their
+original labels.
+
+Astra diagnosed a fixture/backend mismatch: `loadReleaseAttemptState` uses
+the legacy ledger, where a retained disk directory is intentionally nil. The
+test attempted to close that nonexistent descriptor. The corrected fixture
+constructs actual disk ledgers with the operator identity chosen before any
+persisted bytes, loads/attaches real Stats, and asserts descriptor ownership
+before forcing a physical directory-close failure. It verifies both prepared
+owners join, the actual close cause survives, and healthy/repeated close
+semantics remain. A new explicit legacy prepared-ledger control covers the
+adjacent non-disk backend. This is not evidence of a production nil panic.
+
+Reviewed fixture donor: `sn-shutdown-repair64-fixture-v2-PLC3jo/sn`; handoff
+sha256 `e7ebe12e3c89cf7647ce5b419fe8ab7e148f55ed865c18ba01ea3b55fa3a64f5`.
+The11-artifact review index is
+`1ea68f81065b4369e61dbac1b67621f3217981b457588d4e47d13cd7cf2e21cb`;
+the complete two-test-file patch is
+`5c3a017e9524bc534e2b7c7c8bba9fb228a2ea1c91fbc4bf46327339b03fff7f`.
+Root read both complete changes and verified the source/review indexes.
+No product source changed from the failed63 capture.
+
+Fresh capture: `sn-release-shutdown-repair64-capture-v1-3TF8xT`. FORMAT2 exited0
+with no byte changes. Its complete654-path pre/post source hash is
+`dbe5a36eb49708f945aaf8eda4d3485b7193b3916bd6c539ccdc42fed66c2a89`;
+frozen95 inputs hash to
+`ebe81d3a8804e3beccc3bc4517d1be3f39883ed6777d1f7d23e5550f370d1c2a`.
+Root read all seven literal capture patches and strict-verified source,
+frozen inputs and review10 index
+`56c6d97a5388f7d5e8b97a50b4385e8c8f0c0e26ee8d8aba34ae56c31d769dbf`.
+Actual layout9 and dependency8 custody, original wrappers/budgets, all old63
+roots, three declared nested PASS cases and16 causal literals remain retained.
+The new root is
+`TestReleaseShutdownClosesLegacyPreparedLedgersWithoutRetainedDescriptors`.
+
+At17:03 UTC the normal phase had passed while race was still pending. The
+completed record is now: retained foreground session81349/owner4109193 started
+16:57:22, summary ended17:08:44, and the actual outer/foreground exited0
+at17:08:54. All validator61 and simulator3 build/list/execute/census stages
+passed in both normal and race modes, retaining three declared validator child
+PASS cases per mode. The separate post-owner seal is timestamped17:10:14 and
+retains the original intermediate index and honestly missing post-launch seal.
+Its final index hash is
+`3f0cee921c1d92379acf85a8911b48cd1f7ef7c60321a000876e974b72e620d8`;
+root's strict final verification exited0. Root read all four complete raw logs,
+their exact censuses, stage exits, summary and final seal. Raw log hashes:
+
+- Validator normal: `21cb85dcff13de6491341cc1cb70d0c27ced15186304c9f1df576b7e7e8ed8ae`.
+- Validator race: `7b1d194ea2612feb5f307a3aed7caca2b113beea9912878226ffd0090aa0a19b`.
+- Simulator normal: `2a6bc57ede85f6e3952caa1029f19e0d811c64fd450d225705f3c01847a7859f`.
+- Simulator race: `549eb1da8a007ce847e2b0ab3750c0974c94b20f074fc317362bda276ae7c4c6`.
+
+All13 qualified Go paths are integrated byte-identically into primary. Each
+of the six changed existing paths matched the donor's exact preimage before
+integration; seven new paths did not exist. Thus no newer primary edit was
+replaced. Root re-read the complete production delta and verified all13 final
+byte comparisons plus `git diff --check`. This isolated qualification is not
+a pass of the newer whole-primary composition or either complete gate. The
+prior causal53 record remains the demonstrated pre-fix baseline.
+
+Integration review found a separate gate-retention omission: the producer
+validator selector does not yet include `ReleaseShutdown`, and its simulator
+capture selector omits `TestReleaseShutdownPublicRuntimeReturnsOwnedWorkerResult`.
+These roots did execute in the isolated64 normal/race run. Astra must add the
+missing alternatives without removing any old ones and add deterministic
+source/selection regressions for all four shutdown validator test files, the
+public-runtime simulator guard and the new guard itself. A full-gate pass is
+not acceptable until this adjacent selection repair is qualified and composed.
+
+#### Compact envelope and live-head source handoff
+
+Envelope repair is `sn-envelope-admission-repair-v1-sOlE3z/sn`; its complete
+678-path source hash is
+`d618f39a3d1f69248e4106fb6cc32a48d2d3f4189546c1fc062ebe18a38534b4`.
+Root read the complete product/test/gate changes and handoff, and verified the
+17-artifact index
+`1db0951cb8fda26b686cbc2eb064dbaede9c9b4c8c7d52415a4fa1174f6a2bdd`.
+The preserved causal source has hash
+`26cbb24e8f41af582a76793a917a4b8cc3fa50eb2e257af2b96538b04f59a41e`.
+Its8 new roots expect5 FAIL/3 PASS on the original product and8 PASS repaired;
+none has executed yet. Retain all24 compact envelope roots plus4 legacy roots
+and the simulator guard in wider normal/race qualification.
+
+The repair charges root-struct control storage, exactly counts escaped JSON
+wire bytes before replay, reserves exactly201 signing-field bytes, and owns
+the native signer before callbacks. Direct verify and producer seal keep full
+record/proof replay and their old/v2 domain separation. Injected post-close
+error controls are labeled as such, not physical descriptor failures.
+
+Root's new frozen proposal is `sn-live-head-v2-v1-3ildul/sn`. Its full682
+source manifest is
+`2c20d1fc9691f26140ed5dbfcc5c3b43c8ba8fcf5ea5d94fdc678f452e967fc7`;
+handoff `LIVE-HEAD-V2-HANDOFF-v1.md` sha256 is
+`5aafa10ff1342c42a4e292c4d02be4749b26f39f4fa065b30dc366b934465cd7`.
+Exactly ten paths differ from the preserved678 preimage: the three exact
+envelope-repair files and seven new collector/shared-math/gate paths. Root
+verified this complete manifest delta and strict full-source hash. The37-file
+formatter list is pinned at
+`fceb7e6c14d800ba7d00c91deca4f63c97a71062dfb65cf1b57051e95263a2e9`.
+No Go or formatting result is claimed for this proposal. Its exact full682
+source is also saved and pushed as
+`d0b5de9edbe7b89486f0d61234328b8b38a86b9e` on
+`checkpoint/20260906-live-head-v2-wip`, using a separate worktree beneath
+`temp/sn-live-head-v2-checkpoint-85Kwf2/sn`. All38 changed/new Git paths are
+included and the full682 manifest verifies there. The original frozen draft
+and its Git identity are untouched; this is recovery-only, not primary merge.
+
+Its16 collector tests plus two simulator guards cover actual two-operator M8
+replay through real pinned ChainClient binding batches, generation/stale-UID
+changes, no-I/O authority/census/signing-key admission, changed proofs, first
+client-key and later proof callback ownership, late Close/cancel causes,
+durable same-epoch EMA parity and retained/current/transcript/union bounds.
+The separate1000-fleet control proves exact top200/800 rejection, tie ordering,
+controlled-operator masking and pool exclusion; it does not claim1000 live
+miners or1000 real M8 streams. Both wire versions share exact scoring/selection
+and the original locked EMA preview. No RunRelease/config/SubmitOnce routing,
+durable terminal promotion, history authentication or on-chain anchor is added
+by this draft. Method-compose shutdown changes later; never overwrite them
+with the draft's older release_steer source.
+
+#### Parallel repair work and next owner
+
+Ordinary custody began at `sn-ordinary-journal-custody-v1-2aqjsc/sn`, initially
+identical to frozen envelope repair full678. The explicit-admission successor
+is `sn-ordinary-journal-custody-v2-zosqo7/sn`, preserving prior neutral/green
+sources and all original24 roots. Its13 new roots expect10 causal FAIL/3 PASS,
+then13 repaired PASS; widened37 plus two gate roots remain unexecuted.
+The frozen handoff SHA256 is
+`43fd4def49337ac4f0dd6b3eaa70b4d3b182cd724b7efb66000798803bbdb41a`;
+the21-artifact index is
+`74bc8cb566a1350ba916b5496951659730acd9876b8ed260c45dcc47fb0b976d`.
+Full685 causal source is
+`abcef7a01c4c2fe287d5c931f30fcb4169ce9a7e1fc2c7649292fb5f6de8a9f6`;
+repair source is
+`98f8acf2786bf0b22dc352976d437cacda6d9987d91c1ae4a454dbc8f524c8af`.
+Root's complete handoff/source review and Terra's qualification remain pending.
+This reader repair does not close the unchanged ordinary publication path's
+CreateTemp/Link/Remove namespace custody; that adjacent transaction issue is
+explicitly open and must be implemented/tested before runtime readiness.
+Terminal remains at
+`sn-terminal-v2-runtime-v1-w4cNnN/sn`. Actual local standard-library review
+showed `os.OpenRoot` can open before checking directory type, while
+`Root.OpenFile` may follow an in-root symlink despite supplied O_NOFOLLOW.
+The shared new primitive uses retained native directory descriptors acquired
+with O_DIRECTORY/O_NOFOLLOW/O_NONBLOCK and genuine descriptor-relative native
+operations. Ordinary and terminal adapters retain their distinct existing
+mode/link policies. Requiring physical, non-symlink directory ancestors is an
+explicit new-v2 admission tightening, not a preexisting ordinary guarantee.
+Config/doctor must explain and admit actual physical paths before startup,
+including Darwin /var or /tmp aliases and symlinked state/checkout roots. No
+candidate-time EvalSymlinks fallback is authorized in v2. The new deterministic
+control pairs physical-path success with initial parent/intermediate-ancestor
+alias refusal. Legacy-v1 path compatibility is separate. Only clean initial
+absence can authorize ordinary journal
+creation; late ENOENT, cancellation or directory-close failure must not.
+
+Original ordinary24 and terminal17 behavioral roots remain retained, with new
+deterministic FIFO/symlink/callback/cancellation controls in preparation. A
+narrow ordinary source-guard update is approved to follow wrapper-to-hooked implementation and
+all five prior real-runtime edges. Terminal adds approved legacy-v1 advance/
+recovery guards so no participant's v6 state is partially overwritten or
+admitted through a v1 API. All-target admission must precede the first write;
+recovery authenticates signed suffixes and rechecks heads after callbacks.
+These are source-only proposals, not observed passing repairs.
+
+Additional approved v6 boundaries remain in the terminal lane: generic
+AttachAttemptLedgerContext must refuse an unauthenticated loaded v6 candidate
+before recovery append/write, and generic Stats.Fold must return an error before
+v6 mutation. Its sole production caller in generic steer.go must refuse v6
+before external submission and update lastFoldedEpoch only after success;
+v1 behavior and authorized private v2 exact folds stay intact. Legacy recovery
+must retain admitted native target descriptors through its complete batch,
+preserving stable-v1 ancestor aliases without allowing alias retargeting to
+redirect snapshots into v6 state. Admit every target before the first write,
+use exact atomic bytes/mode/rename+directory-sync through the retained owner,
+recheck logical parent identities and join closes. Deterministic stable-v1,
+alias-to-v6 and pre-write retarget controls are required. Coordinator journal
+publication/removal custody is an adjacent audit obligation, not covered merely
+by making target snapshot writes descriptor-relative.
+
+Canonical neutral27 actual-input capture is
+`sn-canonical-neutral27-capture-v2-YupOGD`; full649 formatted source is
+`efaf91a9b93f5a41152fab1b1488e9f153f4da93d7b8e675b322b9725dc0f31d`.
+Its94 frozen inputs hash to
+`886d9f7bd1b1c7cc76e59f71d290befd406cc2fe397ecd0b2fce6df717b7b1b9`.
+Root read the actual handoff, five owner-adapter differences, complete static
+census/event/fence checkers, budget, layout9 and private dependency8 closure;
+review6 index
+`a1050af13a320645d7685bdbd666ca78be072d6f73f97163c8aec1449138c8ab`
+and actual source/frozen-input hashes verify strictly. Hq57rn/private-server
+binding is preserved. Static preflight exited0; retained session20406,
+owner4181019 started17:15:40 UTC. The ordinary-only expected outcome is13
+causal validator FAIL,13 validator PASS and1 simulator PASS, with13 root-local
+messages/17 normalization observations and no children. Actual outcomes,
+terminal and distinct final seal are pending; no causal/repair pass is claimed.
+
+Next: finish the actual canonical neutral27, then repair27/wider115, retry13/
+wider76, payout12/wider9, and the held wire/ordinary/terminal/head/envelope
+qualifications. Preserve the existing timeout/Open/process/namespace/capacity
+obligations. One normal/race binary per package may serve separately censused
+selections only within a single reviewed immutable composition; no cross-source
+reuse. Astra diagnoses every actual failure with adjacent deterministic tests.
+
+Both full release gates, final source freeze, doctor/matching plans, live RC,
+three final windows and independently replayable on-chain FINAL.md remain
+mandatory. The scheduled10:00:48--14:36:00 chain interval starts after remaining
+engineering and launch gates, not from now. Section10.1's unanswered storage
+choice does not block unrelated work and is not automatic consent to either
+storage design or a new registry/history authority.
+
+### Previous qualification and continuation record (2026-09-06 16:18 UTC)
 
 Primary remains `f9a45d98771d2c0884b271dd7098340c463d148a`; only these
 continuation documents are dirty in primary. No final source freeze or new

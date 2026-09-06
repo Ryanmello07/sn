@@ -496,6 +496,9 @@ func (s *IntentStore) Begin(intent SteeringIntent) (*SteeringIntent, error) {
 		return nil, err
 	}
 	f.Current = &intent
+	if err := validateSteeringIntentLifecycle(f.Current, false); err != nil {
+		return nil, err
+	}
 	if err := s.writeLocked(f); err != nil {
 		return nil, err
 	}
@@ -527,6 +530,9 @@ func (s *IntentStore) update(vectorHash, status string, mutate func(*SteeringInt
 	}
 	f.Current.Status = status
 	f.Current.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if err := validateSteeringIntentLifecycle(f.Current, false); err != nil {
+		return err
+	}
 	return s.writeLocked(f)
 }
 

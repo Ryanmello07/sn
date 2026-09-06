@@ -99,7 +99,10 @@ func runReleaseSettlementRefresh(ctx context.Context, poll time.Duration, load r
 		}
 		if err != nil {
 			if ctx.Err() != nil {
-				return ctx.Err()
+				if releaseOnlyErrors(err, context.Canceled, context.DeadlineExceeded, errAttemptCutPending, errAttemptSettlementSnapshotStale) {
+					return ctx.Err()
+				}
+				return errors.Join(err, ctx.Err())
 			}
 			if errors.Is(err, errAttemptCutPending) || errors.Is(err, errAttemptSettlementSnapshotStale) || transientReleaseSnapshotError(err) {
 				continue
