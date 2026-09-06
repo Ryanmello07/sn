@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 14:59 UTC before the final source freeze. Refresh every item marked
+2026-09-06 16:18 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,7 +36,39 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 14:59 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 16:18 UTC; exact evidence in section 12):
+
+- Checkpoint `f9a45d9` is committed, pulled and pushed. The exact qualified Go54
+  and Solidity28 activation sources are integrated; server remains `5fcb1d56`.
+  This does not qualify the entire current primary or freeze the release.
+- The harness repair passes55 actual controls. A fresh shutdown neutral53 run
+  now reproduces exactly10 intended failures/40 passing validator controls,
+  retains the three existing nested PASS cases and16 causal literals, and
+  passes all3 simulator controls. Root reviewed the full raw output/censuses
+  and verified its distinct post-owner final index. This proves the pre-fix
+  baseline, not the repair; repair63 ordinary/race is next. The original failed
+  capture remains unchanged, with its separate later custody audit labeled.
+- Root's complete private v2 wire proposal has completed FORMAT23 preparation;
+  initial validator87/simulator16 ordinary/race execution awaits canonical qualification.
+  It retains all original roots, adds real interior-prefix/fork and nonempty
+  successor controls, and corrects a source-found test return-type mismatch.
+  No product result or runtime promotion is claimed by those source checks.
+- Retry13 causal/repair source is reviewed and queued, including actual M8
+  persistence and ABI-decode witnesses plus separately labeled joined-error
+  contract controls. Widened76 and the other held parser/process/timeout suites
+  remain required. JWT/rejection persistence and secondary Close handling are
+  additional open repairs, not covered by shutdown63 or retry13.
+- Ordinary v2 durable input/restart work is being frozen for review; terminal
+  atomic promotion is being implemented with approved journal-first commit
+  and fresh-only recovery. Root's separate signing-envelope v2 feature has16
+  real-stream tests and a simulator retention guard authored, not run. Live
+  configuration/startup/submission/collector routing remains incomplete.
+  Public history/activation and on-chain commitment work,
+  capacity, both full gates, freeze, doctor, matching plans, both live phases
+  and independent FINAL.md review remain. Section10.1's storage choice is still
+  unanswered. No new transaction or from-now completion ETA is claimed.
+
+Previous launch status (2026-09-06 14:59 UTC; superseded below in section 12):
 
 - Checkpoint `71a6905` is committed, pulled and pushed. Stats55/15,
   Joint65/16 and Go activation54 qualified changes are integrated; primary server
@@ -1895,7 +1927,224 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and continuation record (2026-09-06 14:59 UTC)
+### Current qualification and continuation record (2026-09-06 16:18 UTC)
+
+Primary remains `f9a45d98771d2c0884b271dd7098340c463d148a`; only these
+continuation documents are dirty in primary. No final source freeze or new
+testnet transaction is claimed. The previous15:28 record below is preserved.
+
+The reviewed harness repair at `sn-shutdown53-harness-repair-v2-9tYBq0`
+passes its actual55 controls in `sn-shutdown53-harness-controls-v2-EPojg8`.
+Terra's foreground owner3940390 exited0 at15:35:39 UTC; root read all55
+outcomes, the exact55/55 census and actual exits, and verified the distinct
+final index `8b5ee7763c21a54f44a2a6221cc4ce0658d10a9e47760982f643247b4d4e4b47`.
+These are harness tests, not product qualification. The strict33 source pins
+match before and after execution. The original failed DC2vQ1 capture remains
+unchanged. Its separate15:37:50 custody-only audit is
+`sn-shutdown53-terminal-audit-v1-fENXCB`, final index
+`0f5c62372c6de2519f3fe399d81bfa205a714122bbb66f22f5239444c1585486`,
+root-verified. It explicitly records original qualification failed, simulator
+not run and original final seal missing; it does not reconstruct a missing pass.
+
+The fresh causal product capture is
+`sn-release-shutdown-neutral53-capture-v2-SM6j0t`. Its actual formatted652
+source remains `db9763ffedcfa24be4080ad059897a01f3c82ba5f539da42f6c63e1e47f30da4`;
+its80 frozen inputs hash to
+`03d628d06eae33a7a9fa0ca8e9ed052d8006ed0bd619fce1b3c274321aaded9c`.
+All actual source/dependency8/runtime/layout9 fences remain required and pass.
+Terra retained foreground session65193/owner3984833 from16:11:27 UTC through
+terminal0; summary ended16:16:25. Validator build/list validate0; actual binary
+exit1 is the intended pre-fix outcome: exactly50 roots,40 PASS,10 causal FAIL,
+three declared child PASS and16 root-local literals. Checker0. Simulator
+build/list/execute validate0 with exact3 PASS/checker0. Root read both complete
+raw logs, both censuses and actual statuses. The post-owner seal at16:16:44
+records the observed owner3984833/exit0; its1503-row final index
+`53bffd08fc2a192218dcea083dc0b50c028d3b7c4f6614a55dea8dc9edc1f828`
+verifies strictly. The intermediate live-outer index and honestly missing
+separate post-launch seal remain unchanged. No causal race run is required or
+claimed. Next is repair63 ordinary/race against this demonstrated baseline,
+after actual-input review of its fresh corrected-adapter capture.
+
+The composed wire FORMAT23 successor is `sn-v2-composed-capture-v1-8sGVmL/sn`,
+formatted full664 `00c36ff1b2535d5cacbbca0f735e824ec473aafaa8dc2ae4fb32eb8346470e8c`.
+Only three of the23 approved paths changed under formatting. Initial validator87
+and simulator16 normal/race product execution remains pending canonical
+qualification. This is preparation, not a product pass.
+
+Runtime owners now work independently in these private proposals:
+
+- Ordinary: `sn-ordinary-v2-runtime-v1-NX8qkd/sn`, four new measurement/input
+  files; real signed M8, restart, journal retry and exact-generation tests.
+  Require retained activation equality before composing with terminal state.
+- Terminal: `sn-terminal-v2-runtime-v1-w4cNnN/sn`, Stats v6 marker plus new
+  terminal runtime/persistence files. Approved order is all-operator reserve,
+  actual seals/fold, durable full transaction journal, exact snapshots, immutable
+  closure, coherent publication with admission closed, durable journal removal,
+  then release. Recovery is fresh/unattached-only and fully authenticates
+  authority/closure before writes. Permit only exact prior-disk, prior-live and
+  postimage hashes so a legitimate shutdown Save cannot force a rollback or
+  accept arbitrary same-generation data. Nonempty unauthenticated prior EMA
+  requires explicit migration; never silently reset signed work or derive exact
+  values from legacy floats.
+- Root: `sn-runtime-v2-routing-v1-Z52iCX/sn`, based on primary f9a45d9 plus the
+  exact formatted23 wire paths. New explicit v2 envelope uses a separate native
+  signature domain and full terminal/current replay; old public entrypoints
+  stay old-only. Sixteen new real-stream envelope tests and one simulator source/
+  retention guard are authored, unformatted and unexecuted. Independent review
+  is requested. Config/startup, ordinary/terminal call sites, intent ownership,
+  public history/activation, on-chain commitments and collector routing are
+  still required; the new envelope alone does not make runtime v2 operational.
+
+Source-review update at16:26 UTC: root read all four ordinary files and the
+complete24-root census, and verified the668-path source and15-artifact index
+`92b649a8a86e3593b95d2bf71bbf088e99bef2fb75aa53a6a9ab795e3f718c78`.
+The four new files were copied byte-identically into Z52iCX only, not primary;
+root added explicit producer retention for all14 `TestReleaseStatsV2Runtime`
+roots (the prior selector omitted that prefix) and two simulator coverage/edge
+checks. Z52iCX now has678 source paths and is held unchanged for a successor.
+Its initial private implementation is not qualified or release-ready.
+
+Astra's six-path envelope review found two real source-level budget gaps:
+the direct-value storage check omitted fixed root-struct storage, and canonical
+envelope wire size was not consistently admitted before full replay. A fresh
+successor repair with exact-bound, escaping-amplification and no-I/O controls
+is authorized; preserve the original16 envelope roots and old domain behavior.
+The reader-close sentinel test must be labeled an injected error-contract
+control after a real close, not a physical close failure. No observed Go failure
+or passing repair is claimed yet. Root also found ordinary journal `Lstat`
+followed by blocking `os.Open` could hang if the leaf changes to a FIFO before
+open; a descriptor-relative no-follow/nonblocking custody follow-on and actual
+replacement controls are required. Existing journal metadata checks alone do
+not prove this race safe. V6 retained-activation/root guards remain mandatory.
+
+For speed, Terra may propose one immutable composed capture with a normal and
+race binary per package reused across independently censused selections. Each
+selection must retain its own actual list/events/exit and pre/post binary,
+source, runtime and dependency fences under unchanged limits. The canonical
+neutral source still runs separately; no binary may cross changed source or
+layout. This optimization is not authorization to run an unreviewed union or
+to omit any affected suite or either full release gate.
+
+Continue the reviewed canonical27, retry13/widened76, payout12/widened9 and
+held timeout/Open/process suites without weakening their original censuses,
+caps or source fences. JWT/rejection and secondary Close repairs remain open.
+Both full release gates, source freeze, doctor/matching plans, live release
+candidate plus final soak and independent on-chain FINAL.md review remain.
+Section10.1's unanswered storage choice applies only to storage-specific work;
+do not infer a new registry/history authority or a completion ETA from this record.
+
+### Previous qualification and continuation record (2026-09-06 15:28 UTC)
+
+Primary is the committed/pulled/pushed checkpoint
+`f9a45d98771d2c0884b271dd7098340c463d148a`. Qualified activation Go54 and
+Solidity28 are integrated exactly. The preceding14:59 record below retains
+their complete source/capture/index evidence. No live final campaign has begun.
+
+Shutdown's actual pre-fix capture is
+`/home/by/urnetwork/temp/sn-release-shutdown-neutral53-capture-v1-DC2vQ1`.
+Its full652 formatted source index is
+`db9763ffedcfa24be4080ad059897a01f3c82ba5f539da42f6c63e1e47f30da4`;
+its77 frozen execution inputs hash to
+`e52758decb1fd6008027a84db213098a5a76e5b808e94d9c665e33766934d09a`.
+Actual foreground owner3891926, retained tool handle10564, exited1. Summary
+ended15:17:45 UTC. Validator build/list exit0 and validate0; actual execution
+exit1 was expected for the pre-fix source, but census validation also exits1.
+The exact refusal is the undeclared child
+`TestReleaseNativeEndpointTimeoutReservesMetadataHeadroom/nil_config`.
+The same existing parent also owns `default_polling` and
+`slow_configured_polling`, all three PASS in the real captured stream. The
+planned50 parent roots/16 causal literals must remain unchanged. Root read
+all202 raw lines; this is not an accepted complete causal qualification, and
+the simulator3 product stage never started. Do not infer execution from its
+pre/post source-fence filenames.
+
+The raw validator stream hashes to
+`5f2ef867a5304903ffff5b1b4772742d5a90282cf64c18afd0ebf71d15dd9db0`,
+converted events to
+`7b85abefdea3b127df450dcd7a89fd2f2bc73db8a6902435331e38e5a880e615`,
+and the checker refusal to
+`d7176e6e1f171826dcdba404cd4ef741dcda7ecf0b05915ff806cb8104d02b61`.
+The intermediate artifact index and frozen-input checks pass. The final sealer
+cannot run under its reviewed contract because its reserved output filename
+was already used for a frozen input. There is no original post-owner seal.
+Do not delete/overwrite that input or reconstruct a successful original seal.
+Any supplemental terminal audit must be a distinct, later-timestamped directory
+that leaves DC2vQ1 untouched and labels the original validation/seal failures.
+
+Astra's harness successor is
+`sn-shutdown53-harness-repair-v2-9tYBq0`. Required fixes: explicitly census
+exactly the three existing children, enforce their owner/run/terminal/order
+and expected PASS outcomes, never let child output satisfy parent causal
+markers, and preserve every root-local marker. Add deterministic actual-stream
+and missing/duplicate/wrong-owner/wrong-outcome/premature-parent controls.
+Freeze the external sealer as `post-owner-seal.template.frozen.sh`; a read-only
+prelaunch check must ensure the reserved final output is absent and disjoint.
+No blanket child admission or product-test deletion is acceptable. Root reviews;
+Terra executes controls then the fresh shutdown53 and repair63 qualifications.
+The prepared repair63 capture is `sn-release-shutdown-repair63-capture-v1-d5sFlg`;
+it has only source/layout/template preparation, not a product result.
+
+The stable reviewed wire proposal is
+`/home/by/urnetwork/temp/sn-v2-composed-lineage-VkN2iI/sn`, retained HEAD60597dd.
+Its corrected full664 index is
+`fb216038bf1d30e27d71c9a00e07ca3e72973721607f98dc13c499500fff22f6` in
+`COMPOSED-V2-SOURCE-v2.SHA256SUMS` beside the tree. The adjacent
+`COMPOSED-V2-HANDOFF-v2.md` pins FORMAT23 and exact source-declared validator87
+(terminal24/ordinary21/cross16/canonical26) plus all16 simulator state-selection
+guards. No Go/gofmt/build/test has run on this source. Preserve the independent
+seven-path review in `sn-v2-lineage-review-ukOqPl` and its explicit fixture-only
+boundaries. The later nonempty-fixture correction uses the real verifier for
+replay results, the real sealer for bytes/hash, and the real decoder for restart;
+it fixes a source-found return-type mismatch, not an observed product failure.
+The corrected test hash is
+`a8c98609ed95e925c36d285a9e0aef9d56bf988564d77c515cad17f8b6f45eab`.
+Terra may prepare a fresh format/layout successor now; product qualification
+follows canonical causal/repair and actual capture review. Wider canonical115,
+joint65, affected real-M8/sealer helpers and both full gates remain mandatory.
+
+Retry's reviewed neutral is `sn-refresh-retry-red-v1-Ff3xO7/sn`, full654
+`be52d5be6de9373fb070a43e5f5af5067cf59b0dfa994ea073bfd7318d96964a`;
+repair is `sn-refresh-retry-green-v1-KNfEz6/sn`, full654
+`e3030a9dbf3bfa4ab4ea8f4c710fd1e057ce25f11ec90d96bcea36492dd357f5`.
+The single365-line causal file is identical; the repair only changes
+release_run.go/release_settlement.go. Root read all code/tests and both exact
+indexes. Authorize fresh FORMAT3, neutral ordinary13 (7 FAIL/6 PASS), repair13
+ordinary/race, then widened76 (validator73/simulator3). These are expected,
+not observed, outcomes. The actual M8 persistence witness prevents a real
+rename error containing transport-looking path text from being silently retried;
+real ABI-decode cancellation must retain the original cause. Joined-error
+synthetic controls stay labeled as such. No old retry count or delay increases.
+
+The separate read-only persistence inventory is
+`sn-runtime-persistence-adjacent-audit-v1-kfyvIA/RUNTIME-PERSISTENCE-ADJACENT-v1.md`.
+It records ignored JWT callback write errors, removing client credentials
+before durably recording rejection, missing parent-directory sync on token
+write/delete, and secondary Close errors omitted after earlier failures.
+These still require scoped Astra fixes and deterministic real ordering/restart
+tests. Do not credit shutdown63/retry13 with these distinct behaviors. The
+stopped native-file-number task stays stopped.
+
+Ordinary v2 runtime source owner is Astra canonical in
+`sn-ordinary-v2-runtime-v1-NX8qkd/sn`: four new measurement_stats_v2 and
+release_measurement_input_v2 implementation/test files, with the same separately
+reviewed inherited-fixture correction. Terminal runtime remains Astra shutdown
+after its harness repair; root owns configuration, startup and collector wiring.
+No ordinary journal may derive its authority from its own claimed context;
+the sealer's complete durable head must match the Stats-owned applied prefix.
+Recovery must retain a genuine later suffix and later-generation pending state.
+Terminal closure must durably journal, persist all participants, and publish a
+coherent all-operator state before removing recovery evidence. These are
+required implementation contracts, not implemented/qualified completion claims.
+
+Section10.1's concrete evidence-storage choice was presented again, with the
+recommendation of on-chain immutable hashes plus complete API/MinIO proof bytes.
+No answer is recorded; a preselected UI option is not consent. Independent
+durability/census/activation work continues. No new role registry is authorized.
+Both complete gates, final freeze, doctor, matching plans, live release candidate,
+three final windows and independent on-chain FINAL.md review remain mandatory.
+The scheduled10:00:48--14:36:00 chain interval begins after engineering, not now.
+
+### Previous qualification and continuation record (2026-09-06 14:59 UTC)
 
 Primary checkpoint `71a69052dacb06a26d7304827c0ee5a4d52bc670` was committed,
 pulled and pushed with exact remote equality. The current subsequent integration
@@ -1954,7 +2203,7 @@ annotation suggestions, not ignored test failures or historical state checks.
 Next execution/source owners (Terra max executes; Astra max diagnoses/repairs):
 
 1. Both activation component suites are qualified. Preserve exact byte/domain
-   compatibility while adding actual historical authority and registry wiring;
+   compatibility while adding actual historical authority and activation/commitment wiring;
    stateless dual-key consent is not sufficient runtime activation authority.
 2. Run reviewed shutdown neutral53 from
    `sn-release-shutdown-adjacent-red-0r4C0B/sn`: validator50 expects10 causal

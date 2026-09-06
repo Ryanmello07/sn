@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 14:59 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 16:18 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,7 +14,42 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current working integration (2026-09-06 14:59 UTC):
+Current working integration (2026-09-06 16:18 UTC):
+
+- Checkpoint `f9a45d9` is committed, pulled and pushed. Go activation54 passes
+  normally/race and Solidity28 passes; their exact qualified files are now in
+  primary. Neither complete release gate nor source freeze is thereby passed.
+- The repaired harness passes55 controls, and a fresh shutdown pre-fix run now
+  reproduces all10 causal failures with40 passing validator controls, three
+  declared nested PASS cases and16 root-local literals. Simulator3 also passes.
+  Root reviewed full raw results and verified the distinct post-owner final
+  index. Repair63 ordinary/race is next; the baseline does not prove the fix.
+  The original failed capture is unchanged, with a separately labeled later
+  custody audit that does not reconstruct its missing original final seal.
+- The complete private v2 wire source is reviewed and FORMAT23 preparation is
+  complete, before an initial87 validator/16 simulator normal/race selection. Its corrected
+  real-stream fixtures, fork/lineage checks and canonical parser composition
+  have not run. Wider affected suites and both full gates remain mandatory.
+- Adjacent retry13 is source-reviewed: seven genuine/synthetic causal roots
+  and six controls are distinguished explicitly. Causal execution, repair13
+  normal/race and the widened76 union are pending. JWT/rejection persistence
+  and secondary Close-error handling remain separate open repairs.
+- Ordinary v2 durable input/restart code is being frozen for review; terminal
+  journal-first atomic promotion/recovery is in implementation. A separate v2
+  signing envelope and16 real-stream tests plus a simulator guard are authored,
+  not yet executed. Runtime call sites and public-history/commitment integration
+  remain implementation work, not just tests. The on-chain storage choice in
+  section10.1 of the handoff remains unanswered. Final live validation has
+  not started; its scheduled10:00:48--14:36:00 chain interval starts only after
+  engineering and launch gates, not from now. No completion ETA is claimed.
+
+The16:26 source review also requires consistent pre-replay envelope control/
+wire-size admission and a journal leaf-replacement/open custody repair, with
+deterministic boundary tests. The private runtime composition retains all24
+ordinary roots and explicitly adds the14-root Stats runtime prefix to the
+producer gate. These are unqualified implementation changes, not live passes.
+
+Previous working integration (2026-09-06 14:59 UTC; superseded above):
 
 - Checkpoint `71a6905` is committed, pulled and pushed. It contains the
   qualified Stats admission, joint replay and Go activation changes. Primary
