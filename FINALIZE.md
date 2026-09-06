@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 09:08 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 10:00 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -25,8 +25,13 @@ Remaining local repair status:
   The corrected third runner's18 deterministic actual-launcher controls pass,
   but its actual24 capture stopped before compilation: handlers metadata needs
   a server go.mod update for the new real validator import. The frozen result
-  is preserved; no product root ran. A source-pinned dependency diagnostic is
-  approved on a fresh copy, without primary writes or dependency upgrades.
+  is preserved; no product root ran. The fresh offline runtime-dependency
+  diagnostic now passes both mutable and readonly metadata checks. It adds
+  nine already-pinned indirect dependencies and29 go.mod checksum rows, without
+  upgrades, removals or nonmodule edits. Its missing outer-status record remains
+  an explicit provenance gap, not a fabricated success. The exact two-file
+  successor and26 deterministic admission controls are reviewed; fresh24
+  normal/race qualification is being prepared.
   The two earlier unlaunched proposals remain preserved. A
   partial gate-check snapshot omitted the changed selector and referenced Stats
   sources; review rejected it for gate qualification before execution. Gate6
@@ -59,12 +64,14 @@ Remaining local repair status:
   but inherited128-record/16-trail test bounds. A fresh explicit fixture-only
   provisioning correction is authorized; production limits, full census and
   aggregate128-operation/64-KiB batch limits must remain unchanged. The fresh
-  five-test-file correction and two adjacent controls are now source-reviewed
-  for exact54 normal/race qualification; it has not run yet.
+  five-test-file correction and two adjacent controls now pass all54 roots
+  normally and under race. Root verified the terminal owner's final index and
+  both complete raw logs. The full workload and production bounds are unchanged.
   Wrong-domain writable Open
   is a separate unresolved admission defect. Its fresh nine-root physical-
   mutation neutral set is now source-reviewed for ordinary causal qualification,
-  expecting four exact failures and five controls. Neither repair is qualified.
+  expecting four exact failures and five controls. That admission defect is
+  still unresolved; the qualified batch repair is not yet integrated into main.
 - Cleanup lifetime5 reproduces both post-Run wrong-client failures with three
   controls passing. DNS fixture4 and pure process-configuration9 pass both
   modes; sealed process/configuration16 now also passes both modes. Actual child-process tests,
@@ -72,8 +79,10 @@ Remaining local repair status:
   reaping remain unqualified. Actual lazy-process1 failed before child readiness,
   not at its intended resolver witness: the existing executable security check
   correctly rejected the reused group-writable binary. Preserve that noncausal
-  capture. A fresh diagnostic successor with five pure controls is source-reviewed;
-  its next binary must be private before first attestation. Router4 reproduces
+  capture. The fresh diagnostic successor's five pure controls now pass normally
+  and under race, with mode0700 binaries from first attestation. A fresh actual
+  lazy-process capture is being prepared; those pure passes do not prove process
+  containment or resolver isolation. Router4 reproduces
   both exact abort failures with both controls passing; its10-root repair now
   passes normal/race and its exact three paths are integrated in primary server.
   A separate zero-byte committed-write regression is held for an exact4 causal
@@ -81,6 +90,10 @@ Remaining local repair status:
   failures with seven controls passing; root verified its post-owner seal and
   exact assertions. The fresh reader repair and25 adjacent tests are now
   source-reviewed; an affected66 normal/race capture is being prepared.
+  A separate Redis ACL isolation concern remains source-level, not a demonstrated
+  shared-service failure: database selection does not isolate a newly
+  authenticated DB0 connection or cross-database Pub/Sub. A neutral real-service
+  witness is being prepared in a private checkout; no shared Redis is modified.
   Service tests remain paused; local router success does not prove
   the whole typed API or service/process lifecycle.
 - Typed public evidence/replication, authenticated activation, global terminal

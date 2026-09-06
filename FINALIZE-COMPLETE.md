@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 09:08 UTC before the final source freeze. Refresh every item marked
+2026-09-06 10:00 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -27,7 +27,16 @@ binary exits and immediate source/runtime fences independently of final report
 packaging. A supplemental audit must carry its real later timestamp and cannot
 be represented as a missing original fence or successful original wrapper.
 
-Current launch status (2026-09-06 09:08 UTC; exact evidence in section 12):
+The tool invocation must retain the foreground launcher and its actual terminal
+status. Do not background a qualification launcher and return a shell `$!`,
+discard pre-admission stderr, or count the parent shell's success as the test
+owner's success. Retain the returned execution handle, poll that same handle,
+and record both its actual status and the launcher's own stage statuses. A PID
+printed before the tool returns is not proof that a test stage began. An index
+written inside a still-live outer is intermediate; preserve it and create a
+distinct, timestamped final index only after the actual owner has been joined.
+
+Current launch status (2026-09-06 10:00 UTC; exact evidence in section 12):
 
 - Final live validation is not running. No new chain transaction, activation,
   source freeze or final acceptance is claimed by these local changes.
@@ -56,7 +65,9 @@ Current launch status (2026-09-06 09:08 UTC; exact evidence in section 12):
   and its three exact paths are integrated in primary server. Actual lazy1 failed
   before readiness because executable admission refused a group-writable binary;
   it did not reproduce the resolver defect. A fresh five-control diagnostic
-  successor is source-reviewed, with private binary preparation still required.
+  successor's five pure controls now pass normally and under race; its binaries
+  are mode0700 from first attestation. The actual lazy-process successor is still
+  preparation-only and needs a reviewed fresh transient-unit launcher.
   No cgroup, real service teardown, PG/Redis mutation or restart is authorized
   merely by a pure test pass.
 - Root implemented the real server typed immutable store, public API route and
@@ -67,14 +78,18 @@ Current launch status (2026-09-06 09:08 UTC; exact evidence in section 12):
   Two unlaunched runner proposals were rejected for missing or inconsistent
   input fencing. The third actual launcher passes18 deterministic harness
   controls, but the actual24 capture stopped before compilation on missing
-  server module declarations needed by the new real validator import.
+  server module declarations needed by the new real validator import. The fresh
+  offline metadata diagnostic now passes both commands; its missing outer-status
+  record remains a provenance gap. The exact module-only successor and26
+  admission controls are reviewed for fresh24 normal/race preparation.
 - The aggregate bounded-sync repair plus19 adjacent tests is source-reviewed;
   all original33 roots remain in its exact52 qualification. Owner38586 is
   terminal1:44 ordinary PASS and8 fixture-capacity FAIL, race unstarted.
   Root verified the final seal and raw outcomes. A fresh explicit fixture-only
   provisioning correction is authorized, preserving the full workload and
   production limits. The fresh five-test-file correction and two additional
-  controls are now source-reviewed for exact54; execution remains pending.
+  controls now pass exact54 normally and under race. Root verified the final
+  post-owner seal and both complete raw logs. Integration remains pending.
   A separate fresh
   wrong-domain Open witness checks actual physical mutation before refusal;
   its exact9 source is reviewed for a4FAIL/5PASS ordinary causal run.
@@ -1656,7 +1671,128 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and repair record (2026-09-06 09:08 UTC)
+### Current qualification and repair record (2026-09-06 10:00 UTC)
+
+The09:39 commit/pull/push request completed without new source changes: primary
+SN is clean at `9341b71d774b38c11dac17bd9ad7aa6b1cba137e`, primary server is clean
+at `6e438476982b724d42024c1b81a1f301d1b0b1c6`, and live origin/main matched both.
+Unfinished private candidates were not committed or merged. These working
+document updates follow that checkpoint. No final campaign, source freeze,
+shared-service mutation or new chain transaction is claimed.
+
+Earlier synchronization fast-forwarded server from the local checkpoint
+`ad483c2078887e740c3817e806e080e841c1dbf4` to `6e438476`:49 existing paths changed
+and five were added. The old3941-path server manifest cannot qualify current
+primary. The new3946-path content manifest is
+`ad0731ea448fb27b181d962c9a485959300c3ffaa13dc227bbd3f70607e6a8c0`, with exact
+NUL-delimited inventory SHA256
+`085830ac8c20e1b3815b95e401e833284399aec62e221e6ce05a4b83557a45f2`.
+Historical binaries must retain their actual historical dependencies; they must
+not be relabeled as built against this newer server.
+
+New terminal evidence, all beneath `/home/by/urnetwork/temp`:
+
+| Scope | Capture | Final index SHA256 |
+| --- | --- | --- |
+| Aggregate54:all54 normal/race PASS | `sn-stats-aggregate54-outer-repair-VE7f2u` | `6163ca901d1aa6ee65d1feb5a6437c68ca38b3f4fbad3b45e13388e7b6ea9355` |
+| Process diagnostic5:all5 normal/race PASS | `sn-test-process-lazy-pure5-green-fLIIrl` | `7d93e6d2da76b3bf0efc8b9921b9373aeaccd4dba80623f8a680999eef30fe94` |
+| Namespace metadata6:all6 Python controls PASS; no Go | `sn-namespace33-metadata-selftest-22mG1Q` | `f4acc2ac93efbcc3b571b75fe8389a01201847d0952e3a9c33c0a5939f36b87b` |
+
+Root strictly verified these indexes and their actual raw outcomes. Aggregate54
+owner3045435 is terminal0; its post-owner seal is09:35:22 UTC. Normal/race
+build, list and execute stages, exact54 census and source/runtime/external
+fences all pass. Source is the held A1uZSU full628 manifest
+`6186093f7d431f828e6289bc8e041cd1b21d24dbcc5f08c61402d54b44b7bea0`.
+The earlier44PASS/8fixtureFAIL capture remains unchanged. The corrected large
+fixture explicitly provisions256 records/32 trails for the same162-record/
+21-trail workload; its small128/16 control still refuses overflow. Production
+aggregate128-operation/64-KiB batch bounds are unchanged. Wrong-domain Open9,
+production routing/integration, capacity and complete gates are still required.
+
+The process diagnostic uses held I20dLG full3955 source
+`341e02a9fe772f586dd1f4fb2ab931e03defefdf2d10bb5035e80af548f23bf5` and private
+SN608 source `fadd20e8a9a121414cd0486ca64e4420bf075c4ebcd01b4fe5a8ba2a4b789823`.
+Its new actual Run-readiness EOF/scanner/line-cap tests exercise cancellation
+and joining, not simulated returns. Fresh binaries are mode0700 before first
+attestation. They allow a new source-matched lazy1 probe to be prepared; the old
+group-writable-binary refusal is still NONCAUSAL. No actual resolver repair or
+whole-process/service ownership is established by the five pure passes.
+
+Server24 dependency diagnostic `sn-server24-modlist-v3-eyskLS` completed both
+actual offline `go list -mod=mod -deps -test` and subsequent `-mod=readonly`
+commands successfully for the original three packages. Only go.mod/go.sum
+changed: nine indirect requirements and29 go.mod checksums, all already pinned
+by the private SN dependency; no upgrades, removals or nonmodule edits.
+The outer tool completion was not persisted as an actual exit record. Preserve
+and disclose that gap; neither infer an exit code nor rerun merely to repair
+packaging. The exact resulting source successor is
+`sn-server24-module-repair-nQdwJ3/server`: full3943 SHA256
+`34770c79f4655ab8e17df503a6c9faa8c18e16224e39f86459109fb92dcedbe4`, metadata40
+`e77a13a4bf289785dd5f9d820c8076754c0eefa742c5d1c7aa366ae7cf10bdbf`, handoff
+`daf6dfc730184f618d1da77f2339b1a01097e69e1d421d7a94dee1991487971d`.
+Root reviewed the exact two-file diff, all26 deterministic admission controls
+and strict full/nonmodule manifests. Fresh24 normal/race preparation is
+authorized using the qualified HGNh6E launcher, unchanged11 store +12 handler
++1 API roots and original limits; no Server24 product pass is claimed yet.
+
+Namespace33 is reviewed for one ordinary causal run in
+`sn-namespace33-capture-U6CoMv`, frozen50-input pin
+`a3495d1c0bf2e4cb49a455365ca2f50f51756085becfe3c81ac827fbe6cb32b4`.
+The complete private Eu1239 source is604 paths, manifest
+`482201536eb7d8cae9a55b77974533d837a93c5e7ddc7df3a5f1de62e16be8cf`, alongside
+the original112-path observation-only delta. Root reviewed the actual staged
+launcher and strict source/server/metadata manifests. Expected result remains
+two own-root duplicate-decode failures and31 passing controls, with identical
+logged namespace identity, byte length and hash at both reached stages. The
+real binary exit is captured independently from the pinned test2json converter.
+The six new metadata tests do not prove product behavior. No decoder reuse
+repair, race run, unchanged retry or deadline/census waiver is authorized.
+
+The first U6CoMv invocation subsequently failed before any outer marker or
+product stage was observed: it backgrounded the launcher, redirected its
+stdout/stderr to `/dev/null`, printed PID3076984 and returned without a retained
+execution handle. That PID is now absent. The historical child exit/cause is
+unrecoverable; the parent shell's completion cannot supply it. Frozen inputs
+remain unchanged and the failed invocation is preserved. A fresh run needs
+the corrected foreground ownership contract, not a fabricated result or a
+silent reuse of that capture. Astra is qualifying deterministic launch/exit/
+admission controls and the adjacent post-owner sealing behavior.
+
+The separate historical profile in `sn-profile-historical-v4-run-kLILFm`
+completed with actual outer exit0 at09:53:39 UTC, after starting at09:50:27 UTC.
+Terra retained session78335 and joined outer3092295; runner3092304 is also gone.
+It uses the reviewed38gAjT private historical source/server closure and unchanged
+old G2 ordinary binary, not current primary server. Its single selected root,
+`TestFinalSemanticFixtureSnapshotsAreDetached`, passes; list, profile validation,
+all four profile reports and source/runtime/layout/external fences report0.
+The measured test invocation took22.11 seconds wall time, with maximum resident
+memory926812 KiB. This is a diagnostic result, not a race or complete release gate.
+CPU profile SHA256 is
+`01135b95dfd80be4ef392e2287d0995b4701dbee0c5212190cce934f4034fe41`;
+allocation profile SHA256 is
+`c55fdd7e51b9657f88a5289987d1d90f80a1cf6223446728267bc15f32161b6b`.
+The existing in-process index
+`94245e402ca3955dce53c10aa2fa5552066aa2055aa73b3a000b280342376d5f` remains
+intermediate; the distinct post-owner seal has not been executed. Preserve both
+the successful diagnostic and that outstanding evidence-packaging step.
+
+Next: qualify Server24, Namespace33 and fresh actual lazy1; finish the historical
+profile's distinct post-owner seal and analysis; qualify Legacy66, Open9 and
+Gate6; then integrate reviewed product repairs without overwriting newer primary
+changes. CoreRedis isolation remains a source-level concern: selected logical
+databases do not by themselves isolate fresh AUTH/DB0, RESET/reauth or Pub/Sub.
+A neutral actual-Redis witness is being prepared under `sn-core-redis-acl-red-l6N0sQ`,
+not against shared services. Its exact private provisioning and cleanup ownership
+must be reviewed before execution. No shared Redis failure is claimed.
+
+All remaining release requirements below still apply, including producer v2,
+authenticated activation/history, bounded state and capacity, the unanswered
+on-chain storage choice, both complete gates, source lock, Ready doctor, matching
+plans, both live phases, FINAL.md and independent chain review. The scheduled
+10:00:48--14:36:00 chain interval starts after engineering; it is not a from-now
+ETA or a substitute for completing these requirements.
+
+### Previous qualification and repair record (2026-09-06 09:08 UTC)
 
 The preceding ETA turn was a read-only status check, not implementation progress.
 This continuation completed Server24 v3 runner review and authorized its actual
