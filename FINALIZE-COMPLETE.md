@@ -1,7 +1,7 @@
 # Release 1.0 testnet completion handoff
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 10:22 UTC before the final source freeze. Refresh every item marked
+2026-09-06 10:41 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -36,28 +36,33 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 10:22 UTC; exact evidence in section 12):
+Current launch status (2026-09-06 10:41 UTC; exact evidence in section 12):
 
 - This is a work-in-progress checkpoint, not a source freeze or release. Final
   live validation has not started, and this update makes no testnet transaction.
 - Server24 now passes all 11 store, 12 handler and 1 API roots normally and under
-  race. Root verified its terminal index and all six raw execution logs. Its
-  exact eight-file implementation remains in the private successor, not primary
-  server; production integration and complete service gates remain required.
+  race. Its exact eight-file delta is integrated into primary server at
+  `5fcb1d56`, preserving newer server changes. Root verified byte equality with
+  the isolated qualified slice; the new primary composition and complete
+  service gates still require qualification.
 - Namespace33 now reproduces both intended duplicate-decode failures with 31
   controls passing. Lazy1 now reproduces the intended transient-configuration
   failure inside its owned, joined transient unit. Both captures are terminal
   and sealed; neither is a passing product qualification. Astra owns their
   repairs and deterministic adjacent coverage.
-- The normal historical profile now has a verified true post-owner seal. Its
-  one selected root passes; this does not close the combined91 race timeout.
-  The exact historical race-profile adapter is held for review, not executed.
+- Open9 now reproduces all four rejected/canceled-open physical-mutation
+  failures, with five controls passing. A bounded admission repair is still
+  required; refusing after writable recovery is not side-effect-free admission.
+- The historical race profile is now terminal and sealed: its one selected
+  fixture root timed out at the unchanged three-minute bound. The actual CPU
+  and allocation samples are preserved for diagnosis. The earlier ordinary
+  profile passes; the combined91 race timeout remains unresolved.
 - Primary SN contains a new replicated cut-sealing draft and 13 authored tests.
   No Go build or test has run for these files. Independent review found a
   callback `runtime.Goexit` path that can falsely report a second replica as
   published. This is a blocking source-derived finding, not an executed causal
   test. The draft must not be activated before repair and qualification.
-- Open9, Legacy66, Gate6, real process/service ownership, producer v2 routing,
+- Open9 repair, Legacy66, Gate6, real process/service ownership, producer v2 routing,
   signed activation/history, storage choice and seven-day capacity remain open.
   Both complete gates, source freeze, doctor, matching plans, both live phases,
   FINAL.md and independent on-chain review are still mandatory. The scheduled
@@ -1698,7 +1703,84 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and repair record (2026-09-06 10:22 UTC)
+### Current qualification and repair record (2026-09-06 10:41 UTC)
+
+This documentation checkpoint descends from primary SN
+`b9d40bc5fc929079eb98812f0fdc67a009095aa9`. Primary server now contains
+`5fcb1d5624fcacbcba5d28b2eb915f6c2bc05341` (typed attempt artifact storage/API
+and tests). Only the qualified Server24 eight-file delta was applied atop
+`6e438476982b724d42024c1b81a1f301d1b0b1c6`; all eight files compare byte-for-byte
+with `sn-server24-module-repair-nQdwJ3/server`. No newer server files were
+replaced. The resulting 3951-path source fingerprint is
+`0e34b07dd33d3f15a7a67330bed8e47cc92d43810f87304ba8c20a7b3b2c96a6`.
+The isolated Server24 pass below remains valid for its captured inputs, not for
+the untested new primary composition. Refresh dependency/layout pins explicitly
+before testing consumers against the new server; do not relabel old captures.
+
+New terminal evidence under `/home/by/urnetwork/temp`, with strict final-index
+verification and actual outcomes checked by root:
+
+| Scope | Capture | Final index SHA256 |
+| --- | --- | --- |
+| Open9: 4 causal FAIL, 5 PASS | `sn-stats-aggregate-open9-run-t7f3Tu` | `64118d2755d18870a3b54d8f8013a3f2a6f31a60d94eae53cc7972e717ecfa0d` |
+| Historical race profile: single-root timeout; true post-owner index | `sn-race91-profile-run-zhKUtO` | `2fa362fe0cc4a6d802e7aeb4e8bb2b6d5f5f561014bca95a4bbc8b2177bc290d` |
+
+Open9's retained session 73329/owner 3182928 returned 0 at 10:30:57 UTC. The
+actual Go execution returned 1; expected-outcome validation returned 0. The
+wrong-domain, wrong-owner, wrong-legacy-config and canceled-open roots reached
+their intended physical-mutation assertions. All sixteen variant observations
+include completed I/O and changed physical state before refusal: CURRENT,
+MANIFEST/log/SST files or directory metadata. Five admission/control roots pass.
+This proves the defect, not its repair. Keep bounded read-only admission ahead
+of writable recovery and filesystem creation; account for the pinned LevelDB
+read-only WAL recovery behavior rather than assuming ReadOnly implies bounded
+memory. The private aggregate foundation is not ready for activation.
+
+The race diagnostic retained session 31027/owner 3198422 through terminal exit 1
+at 10:38:03 UTC. The attested historical binary returned 2 on the actual
+three-minute test alarm; all pre/post source/runtime/layout/external fences and
+all four profile-report commands returned 0. The distinct post-owner final seal
+was written at 10:38:48 UTC; the in-live-outer intermediate index is preserved.
+The only selected root was `TestFinalSemanticFixtureSnapshotsAreDetached`.
+Measured execution took 181.08 seconds wall, 305.04 user and 8.47 system, with
+1060556 KiB peak RSS. Therefore the other ninety roots/shared fixture waiters are
+not necessary to reproduce this timeout. The alarm's runnable application
+stack is `actionIntentHash` through persisted-plan validation and historical
+receipt replay during fixture construction. CPU samples include 55.24 seconds
+of explicitly named race machinery and 160.62 seconds of unresolved native
+`runtime._ExternalCode`; do not attribute all native samples to a specific
+application helper or claim a GOMAXPROCS defect. Astra is diagnosing the actual
+profile; no cold/wide retry, crypto/census reduction or deadline extension is
+authorized by this diagnostic.
+
+Private successors are preserved, not merged or qualified by this checkpoint:
+
+- Namespace41: `sn-namespace-reuse-6uUivZ/sn`, full 605-path source SHA256
+  `95bf7f1a9ea6177e2cfbf2374164d88b9a44b5e3a7f7855fae0244df585b362e`.
+  Source review accepts invocation-local exact-byte/context reuse with owned
+  outputs and eight adjacent roots. No product execution yet; prepare ordinary
+  qualification against an explicitly pinned dependency snapshot. Race remains
+  held pending the actual timeout diagnosis.
+- Replica16 neutral witness: `sn-replica-goexit-red-8NSdzB/sn`, full 636-path
+  source SHA256 `ec35d6dd5e7650c541b71cb54ede3ee680f26b9ea113f12faba3ad653b94e0fc`.
+  Three new real-M8/empty/joined-worker causal roots preserve the original
+  thirteen test bodies. Source-reviewed but not executed; capture-local adapter
+  review precedes execution. The completion-latch repair and adjacent tests
+  belong to a separate green successor, not this neutral source.
+- Lazy resolver repair: `sn-lazy-resolver-repair-mOOCuk/server`, unfinished and
+  unqualified. Preserve the actual Lazy1 causal capture; require immutable
+  resource bytes, actual resolver routing and complete owned-process joining.
+
+No product process holds primary source during this checkpoint. Only private
+preparation/read-only diagnosis continues; no new product launch is authorized
+during the commit/pull/push. Next qualify and integrate these narrow repairs,
+complete Legacy66/Gate6 and actual process/service ownership, then resume the
+production v2, activation/history, storage-choice and capacity work. Both full
+gates, final source freeze, doctor, matching plans, both live phases, FINAL.md
+and independent on-chain review remain mandatory. No live validation or new
+testnet transaction occurred in this checkpoint.
+
+### Previous qualification and repair record (2026-09-06 10:22 UTC)
 
 The preceding commit/pull/push checkpoint is primary SN
 `159d7e18cf4d418aca70e50252e005a0c807bb51`; primary server remains

@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 10:22 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-06 10:41 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,22 +14,23 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current local checkpoint (2026-09-06 10:22 UTC):
+Current local checkpoint (2026-09-06 10:41 UTC):
 
 - Server24 now passes all 24 roots normally and under race; its exact eight-file
-  source remains private pending integration. Namespace33 reproduces both
-  duplicate-decode failures with 31 controls passing. The owned Lazy1 process
-  now reproduces the transient-configuration defect. All three owners are
-  terminal and sealed; the two causal captures are not passing qualifications.
-- The historical normal profile now has its verified true post-owner seal.
-  The combined 91-root race timeout is still unresolved; its historical race-profile
-  adapter is held for review, not executed.
+  delta is integrated into primary server at `5fcb1d56`, preserving newer server
+  changes. This isolated pass is not a qualification of the new composition.
+  Namespace33 and Lazy1 remain reproduced, unrepaired product failures.
+- Open9 now reproduces all four rejected/canceled-open physical-mutation
+  failures, with five controls passing. The actual historical race profile
+  also timed out at the unchanged three-minute bound with only its one selected
+  fixture root. Both captures are terminal and independently verified; neither
+  is a passing qualification. The profile preserves CPU/allocation evidence.
 - Primary SN adds the replicated cut-sealing draft and 13 authored tests. They
   have not been built or run. Read-only review found a blocking callback
   `runtime.Goexit` fail-open path and adjacent coverage gaps; the draft is not
   activated and must be repaired and qualified before use. The exact findings,
   source hashes and continuation tasks are in section 12 of the handoff.
-- Open9, Legacy66, Gate6, full process/service ownership, production v2 routing,
+- Open9 repair, Legacy66, Gate6, full process/service ownership, production v2 routing,
   activation/history, storage choice, capacity and all final release/live gates
   remain open. This commit is a work-in-progress checkpoint, not source freeze.
 
