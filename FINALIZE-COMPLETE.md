@@ -4,6 +4,106 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
+Checkpoint reconciliation (2026-09-07 16:49 UTC), superseding the pending
+qualification and promotion statements below: historical native schedule2
+(`crv4/validator_schedule.go` and its test file) is now in primary SN. Root
+verified the complete primary/candidate crv4 trees and protocol trees matched;
+Terra then independently built and ran exact9 tests normal/race from primary,
+all matched, with source fences before/after0. Formatted production SHA256 is
+`698eb1b52ab34e4d4c76cfd8216ab56e8d462018c79dc74f5e249e7f03b925fe`;
+test SHA256 is
+`d6f520b38d2adde6112c6d58879c5f2a6f9e5767a448ed839135fbb22a6b1581`.
+Evidence: `temp/sn-primary-schedule-confirm-v1/manifests/summary.txt`.
+
+Candidate closed-census17, retained replica27 and native schedule9 all pass
+exact normal/race execution (135/219/75 events respectively), all source,
+binary, list and result checks matched. Full203-path source manifest is
+`14a42c81d65e2c10a6c8f1897b1e34877ccd9e964427ec5d88b6d941f7e2532e`.
+Evidence: `temp/sn-integration-xOgvEe/capture-census-schedule-v1/manifests/summary.txt`.
+Publisher2 remains in the candidate pending independent review and real
+upload/relay/submission wiring; those passing helper tests are not live evidence.
+Simulator normalizer causal1 also completes N/R with the exact expected
+`release layout lost a declared type: got 13 want 14` failure against the
+original-production-only overlay. Repaired layout4 already passes N/R.
+Evidence: `capture-storage-layout-causal-sim-v2/manifests/summary.txt` under the
+same integration directory. All admitted candidate readers have now released.
+
+Unqualified drafts stay separate from this primary checkpoint. Carry13 v1 is
+released at `temp/sn-evidence-install-v1-TUBN0C6f/carry-next/CARRY-HANDOFF-v1.md`;
+root review confirmed a blocking FIFO open-before-type-admission issue and
+Astra is preparing its deterministic repair/causal controls. Its adjacent
+audit found the same acquisition pattern in existing
+`sim-testnet/evidence.go:readCampaignEvidenceRegularFile`; repair and qualify
+that path separately after the atomic carry successor, preserving both causal
+regressions. The suspected
+optional-independent head issue is not a defect: v4 public mode explicitly
+clones operational heads into Independent* fields even without an independent
+client, so zero heads must still be rejected. Startup custody6 is released at
+`temp/sn-startup-history-v2-NC2FVF55/STARTUP-CUSTODY-HANDOFF-v1.md`, with
+inventory10/exact-image9 and causal4 inputs; not composed or qualified yet.
+Semantic native/EVM/public history replay, independent current cursors and
+authenticated recovery orchestration remain separate unfinished work.
+
+Root also found launch-critical selector omissions: the producer gate does
+not explicitly select newer ReleaseEvidenceV2, ReleaseBootstrapV2,
+ReleaseActivationHistoryV2, ReleaseInitialBoundaryV2,
+ValidatorEvidenceCensusV2 and ChainEvidence groups; relevant installer/protocol/
+stabi evidence groups need explicit gate coverage as well. Astra's startup
+lane owns the bounded selector/omission-control repair after its next cohesive
+startup release. Preserve existing selections, deadlines and full-gate
+obligations; normal `go test ./...` coverage does not qualify the narrower
+producer gate. No full release gate, source freeze or new live campaign is
+claimed by this checkpoint. This user request is commit only, not pull/push.
+
+Current reconciliation (2026-09-07 16:32 UTC), superseding the older states
+below: primary SN is checkpoint6b43941; subsequent source work remains in the
+single temporary integration candidate. History/installer fixture repairs are
+composed. Installer25 passes N/R (103 events each). History57 passes normal;
+race first reached13 PASS then hit the unchanged3m aggregate package alarm,
+with no assertion failure and a runnable real-fixture construction stack.
+The first13 roots consumed168.76s. Astra's source-unchanged partition preserves
+the exact57 roots as heavy3+3+3 and light48; all four concurrent race groups
+now pass with exact lists/checkers and final source/binary fences. This is a
+selected union, not either complete release gate. Retain every earlier failure
+and the original full57 race timeout. Evidence: candidate
+`capture-history-installer-fixture-v1/{manifests/summary.txt,shards-v2/manifests/summary.txt}`.
+
+Disk startup owner2 is composed and passes exact17 N/R (71 events each).
+The original implementation validated borrowed inputs but later used mutable
+member labels/keys/config during acquisition and cleanup. A callback could
+collapse the cleanup-map census and leak an acquired disk ledger. The repaired
+operation owns every acquisition field before callbacks. All six deterministic
+key/member/cleanup/bounds/path/scoring regressions reproduce their exact failures
+with original production155ae6ac in an isolated one-file overlay, N/R (35 events
+each); all original11 tests remain. Root read the complete fix/tests and matched
+summary. Final199 source manifest e5826f96, source fences/diffcheck0; evidence:
+`capture-disk-state-v2/manifests/summary.txt`. This still returns dormant ledgers
+and detached candidate snapshots, not activated Stats or submission authority.
+
+The next4 files are now composed for parallel qualification: root's closed
+census publication2/17 and Astra's historical native schedule2/9. Publisher
+handoff: `temp/sn-evidence-census-v2-9JxTsS6T/CENSUS-PUBLICATION-HANDOFF-v1.md`,
+including exact new17 and retained replica27 inputs. It joins real public replay
+at both origins, hashes a complete unsigned census of the earlier signed
+terminal payloads without a header/signature cycle, requires metadata/consent
+publication and public readback, and returns real dual-signed contract calldata.
+It does not send a transaction, prove historical authority, provision actual
+validator upload credentials or complete the release path. Independent Astra
+review and Terra qualification remain open. Native handoff:
+`temp/sn-startup-history-v2-NC2FVF55/NATIVE-SCHEDULE-HANDOFF-v1.md`; it resolves
+the actual hotkey UID and SubnetEpochIndex at one authenticated finalized native
+hash using historical metadata and the real calculated-stake reader. Current
+candidate203 source identity must be captured after exactly those4 are formatted.
+
+Both implementation lanes continue independently: original Astra completes
+authenticated companion carry, including the repeated-upgrade migration/nonce
+fast-path edge; startup Astra reconstructs complete ordinary/terminal history,
+including crash-before-intent journals, before any snapshot-selected cursor or
+recovery write. Sole Terra runs concurrent isolated package/mode jobs. RunRelease
+remains guarded until the real path is wired. Both full gates, freeze, live RC,
+three final epochs, all adversarial/proof/payout tests and independent FINAL.md
+remain required. No new testnet transaction or live campaign is claimed here.
+
 Execution allocation update (2026-09-07 15:53 UTC): the user approved two Astra
 max implementation/fix agents, one Terra max agent driving concurrent isolated
 test processes, and root integration. Existing live process handles and exact

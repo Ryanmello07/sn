@@ -1,12 +1,13 @@
 # Release 1.0 active work index
 
-Updated 2026-09-07 15:57 UTC. Read this short index first; use
+Updated 2026-09-07 16:49 UTC. Read this short index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
-Previous checkpoint: SN `50e431e`, server `9b582d91` (not pushed).
-The current SN checkpoint records subsequent promoted work and this index;
-use `git log -1` for its identity. Temporary candidate/draft work remains separate.
+Previous primary checkpoint: SN `6b43941`, server `9b582d91` (not pushed).
+This SN checkpoint adds the qualified historical native schedule reader and
+its nine tests; use `git log -1` for the new identity. Other integration changes
+below remain in the temporary candidate unless explicitly marked promoted.
 The user subsequently approved **on-chain hashes + API/MinIO proof bytes** on
 2026-09-07 UTC. Section10.1 of the complete handoff now records that decision.
 Implement independent immutable validator/operator evidence slots, including
@@ -21,10 +22,11 @@ adversarial actors. Final acceptance still requires both full gates, the
 approved live RC and three final epochs, investigation of every anomaly, and
 independently replayable on-chain evidence in `FINAL.md`.
 
-- Primary SN base checkpoint is `50e431e`. Qualified Head/EMA53, Stats28,
+- Primary SN checkpoint before this change is `6b43941`. Qualified Head/EMA53, Stats28,
   Gate10, Terminal33 and ordinary retained-authority3 are now promoted; those
   last stages and subsequent primary evidence work are included in this checkpoint. Newer native/runtime29
-  and shutdown fixes remain.
+  and shutdown fixes remain. Historical native schedule2 is now promoted, with
+  exact9 normal/race tests independently confirmed from the primary tree.
 - Server checkpoint is `9b582d91`, with qualified private-service/profiler changes. The
   disposable two-pair PostgreSQL/Redis Docker smoke passed; shared services
   were not changed. No new live campaign or transaction is claimed here.
@@ -45,10 +47,11 @@ completed its handoff and is idle, with no abandoned live job or source reader.
 | Go qualification runner | Astra max review/repair; Terra max execution | Module-alias repair and parent-owned fixture correction pass exact54 N/R (219 events each). Root read both summaries; causal1 matches its expected failure. Configured roots remain physical and aliases resolve only to declared sources. Shared simulator compilation now passes N/R within normal300/race360, using retained caches. Service-backed matrices and real whole-matrix smoke remain unqualified |
 | Terminal V2 | Root promotion complete; Terra max evidence | Exact123 passes normal/race in groups26/37/30/30, plus Stats/ordinary99, affected+Head51, focused transport1, simulator4/2. Root verified137-source fence, exact preimages and event summaries; promoted33 formatted files. Original causal/full-package obligations remain separate |
 | Explicit production V2 config + ordinary binding | Terra max qualification complete; root composition | Ordinary5/widened50/SIM2 pass N/R; old-production causal5 is1PASS/4FAIL both modes; root promoted3. Config47 is now fully matched N/R: simulator6+20 in repair-v4, validator14+7 in repair-v5. Private fixtures are inert; nine retained cases use a plain loop without dropping assertions. Root independently read all four v5 checker summaries and source fence0. Temporary RunRelease guard remains unfinished startup |
-| Actual startup-to-submission | Root implementation; Astra review; Terra qualification | Bootstrap88 previously passed N/R. Historical/current UID repair now passes35 N/R plus causal1. New history/boundary22 is composed; combined57 is56PASS/1FAIL normal, with the same assertion plus a3m timeout under race. Reviewed fixture1 preserves per-operator positive/absent EMA and removes11 redundant real-fixture constructions; not yet composed/rerun. History production causal2 matches both expected failures N/R. New bounded disk-owner2/11 is drafted outside source, not qualified or active runtime. Complete recovery/settlement, ordinary input/EMA, V2 submission, public replicas, legacy boundary/generation authority and capacity remain open; RunRelease guard remains |
-| On-chain evidence hashes | Terra max Solidity execution; Astra max failures | Full Solidity17 suites/199 tests PASS, zero failures/skips, exact census and source/artifact fences. Gencontracts24 N/R pass after normalizer5 repairs the14-type graph. Current private-graph v4 generation/check/wrapper0; exact generated output62e173ac is composed with only artifact/layout hashes changed, no ABI or bytecode change. Generator causal1 reproduces13-versus14 lost types; simulator layout/causal controls remain. Strict build retains coordinator24492/84 spare and append-only layout |
+| Actual startup-to-submission | Astra startup implementation/fixes; root integration; Terra qualification | Bootstrap88, historical UID35 and causal1 pass N/R. History57 passes normal and the exact selected race union3+3+3+48; retain the original aggregate3m timeout. Disk-owner2/17 passes N/R, and all6 alias regressions reproduce expected failures against the original production file N/R. Historical native schedule2/9 passes candidate and primary N/R and is promoted. New startup inventory/exact-image custody6 is released outside source, not qualified; semantic history/current-cursor recovery, ordinary input/EMA, V2 submission, public replicas and capacity remain open. RunRelease guard remains |
+| On-chain evidence hashes | Terra max Solidity execution; Astra max failures | Full Solidity17 suites/199 tests PASS, zero failures/skips, exact census and source/artifact fences. Gencontracts24 N/R pass after normalizer5 repairs the14-type graph. Current private-graph v4 generation/check/wrapper0; exact generated output62e173ac is composed with only artifact/layout hashes changed, no ABI or bytecode change. Generator causal1 and simulator causal1 reproduce13-versus14 lost types N/R; repaired simulator layout4 passes N/R. Strict build retains coordinator24492/84 spare and append-only layout |
 | Evidence Go bindings/readback | Root composition; Terra max concurrent execution | Evidence22 stabi20/reader12 N/R pass. Primary RPC4 new19/union54 N/R pass with causal1PASS/5 expectedFAIL. Combined validator76 N/R now passes exact root/event/source checks after assertion-preserving plain-loop repairs. First75 normal body passed but checker refused positive subtests; malformed selector/outcome attempts remain recorded. Miner/simulator HTTP siblings remain open |
-| Simulator companion installation | Reviewed Astra source; root composition; Terra execution | Shared binaries compile N/R in96s/143s, hashes67973ebb/0fa7df, actual modes0775. Focus3 passes N/R. Full25 is24PASS/1FAIL in both: v11 fixture mutates borrowed dependency-slice storage while filtering the evidence action. Reviewed detach-before-filter correction is outside source. Normalizer4-v2 now passes exact4 N/R (19 events each), root-read summaries and stable fences. Preserve v1 CWD failures and v2 pre-Go direct-exec126 failures; qualified bodies used explicit Bash/package CWD. All candidate readers released. Authenticated existing-journal carry is still temp-only/incomplete |
+| Simulator companion installation | Astra carry implementation; root composition; Terra execution | Installer25 passes N/R after the reviewed v11 fixture ownership fix (103 events each). Normalizer4-v2 passes N/R. Preserve earlier v11 assertion, CWD and pre-Go exit126 failures. Carry13 v1 is released outside source, not qualified; review confirmed a blocking FIFO admission edge, with a deterministic successor in progress. Public-mode Independent* head clones are required by the existing v4 contract and must not be weakened |
+| Closed-census publication | Root implementation; Astra review; Terra execution | New2/17 and retained replica27 pass exact N/R with source fences. It owns the complete signed closure and keys, replays both actual public origins concurrently, publishes content-addressed payload/census/consent metadata with readback, then returns dual-signed ABI calldata. Independent review, production upload provisioning, durable relay/submission and finalized readback are not yet complete; no live publication is claimed |
 
 The candidate is held only while its admitted readers run. Prepare later deltas
 outside it. New Go runner source has separate ownership and does not hold the
@@ -62,14 +65,18 @@ equivalently tested Go replacement. Preserve actual pre-Go launcher failures;
 they are not product test failures or passes. Reuse the frozen explicit-root
 adapter's literal path, not a path guessed from a new capture directory.
 
-Next production work is still substantive: qualify and compose the evidence
-installer, implement authenticated existing-journal carry, and lock the final
+Next production work is still substantive: promote the qualified evidence
+installer, complete and qualify authenticated existing-journal carry, and lock the final
 bytecode. The real generated simulator payload is composed into the candidate,
 not yet primary. Its earlier current-graph check FAILED on the evidence artifact
 hash; the repaired generator now passes the actual v4 regeneration/check and the
-exact output is composed. Simulator layout/causal qualification still precedes
-promotion. The current197-path source manifest is14bc7227; old manifests are
-preserved, not silently reused after this output changed.
+exact output is composed; simulator layout/causal qualification is now complete.
+The current203-path candidate manifest is14a42c81, with census17/replica27/
+native schedule9 N/R and simulator causal1 N/R matched. Old source/binary
+identities remain preserved, not silently reused. The producer-gate selector
+also needs explicit coverage of the newer evidence/bootstrap/history/boundary/
+census/chain-evidence groups, plus installer/protocol/stabi coverage and omission
+controls; aggregate normal package coverage is not a substitute for that gate.
 Provision/authenticate
 real activations and both public
 proof replicas, wire V2 startup through native submission, and prove all-pair
@@ -101,7 +108,13 @@ No new live campaign or testnet transaction was performed in this work phase.
 - Historical UID35: `temp/sn-integration-xOgvEe/capture-historical-uid-v1`; history57/causal2: `capture-activation-history-v1`. Keep the first assertion failure and race timeout.
 - Runner54: `temp/sn-integration-xOgvEe/capture-qualification-runner-module-v3/body-reuse-v1`; causal corrected analysis: `capture-qualification-runner-module-causal1-v3/corrected-analysis-v1`. Reuse the qualified checker, not new ad-hoc census variants.
 - Shared simulator binaries/normalizer failure: `temp/sn-integration-xOgvEe/capture-shared-sim-binary-v3`; installer3/25: `capture-installer-shared-v3`.
-- Pending history fixture1: `temp/sn-release-history-v2-pa0WmUH2/fixture-next/HISTORY-FIXTURE-HANDOFF-v1.md`; new disk-owner2/11: `temp/sn-release-state-v2-tGo6X9hX/validator/` (draft).
+- History/installer fixture successors: `temp/sn-integration-xOgvEe/capture-history-installer-fixture-v1`; normal57 and installer25 N/R matched. Exact race57 union: `shards-v2/manifests/summary.txt`; all4 groups passed, original full57 race timeout remains recorded.
+- Disk2/17 + original-production causal6 N/R: `temp/sn-integration-xOgvEe/capture-disk-state-v2/manifests/summary.txt`; handoff `temp/sn-release-state-v2-tGo6X9hX/DISK-STATE-HANDOFF-v2.md`.
+- Closed publication2/17 and retained replica27: `temp/sn-integration-xOgvEe/capture-census-schedule-v1/manifests/summary.txt` (N/R matched; independent review pending).
+- Native schedule2/9: the same candidate summary and `temp/sn-primary-schedule-confirm-v1/manifests/summary.txt` (primary N/R matched, promoted).
+- Simulator layout causal1: `temp/sn-integration-xOgvEe/capture-storage-layout-causal-sim-v2/manifests/summary.txt` (exact expected failure N/R, original-production overlay only).
+- Startup custody6: `temp/sn-startup-history-v2-NC2FVF55/STARTUP-CUSTODY-HANDOFF-v1.md` (draft released, not qualified); the same Astra lane owns semantic history/current-cursor recovery and the selector-coverage repair.
+- Carry13: `temp/sn-evidence-install-v1-TUBN0C6f/carry-next/CARRY-HANDOFF-v1.md` (superseding FIFO fix required before composition/qualification).
 
 Use compact machine-verified stage summaries for ordinary updates. Retain full
 logs, failed captures and immutable command/source identities on disk; open
