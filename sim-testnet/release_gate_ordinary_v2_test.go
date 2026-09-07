@@ -7,6 +7,7 @@ import "testing"
 func TestProducerGateStateSelectionCoversOrdinaryRuntimeV2(t *testing.T) {
 	assertProducerStateRegressionCoverage(t, "producer_tests", "./validator", "compact-ordinary-runtime", []string{
 		"../validator/measurement_stats_v2_test.go",
+		"../validator/measurement_stats_v2_activation_test.go",
 		"../validator/release_measurement_input_v2_test.go",
 		"../validator/release_measurement_input_v2_read_test.go",
 		"../validator/release_measurement_input_v2_custody_commit_test.go",

@@ -35,13 +35,14 @@ contract ValidatorEvidenceHarness {
         return ValidatorEvidence.validAt(header, expected, window);
     }
 
+    /// @dev The pure caller is a compile-time guard for the stateless verifier.
     function verify(
         ValidatorEvidence.Header memory header,
         ValidatorEvidence.Domain memory expected,
         ValidatorEvidence.Window memory window,
         bytes memory vpkSignature,
         bytes memory hotkeySignature
-    ) external view returns (bool) {
+    ) external pure returns (bool) {
         return ValidatorEvidence.verify(header, expected, window, vpkSignature, hotkeySignature);
     }
 }
@@ -57,10 +58,14 @@ contract ValidatorEvidenceUnexpectedPrecompile {
 contract ValidatorEvidenceTest is Test {
     bytes32 internal constant HOTKEY = hex"94ad8d1ead1a2bff9bbbac89aa89b13df2fe9ec929a09c90bc5ddb1dff723b47";
     bytes32 internal constant VPK = hex"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8";
-    bytes32 internal constant CLOSED_DIGEST = hex"8472096e8efd7f696041e2deb755bf3f70d3e63ddd5e306de85f7bd2b9bc9880";
-    bytes32 internal constant AUDIT_DIGEST = hex"1128a34f2893fa3e90d41f382f29e7fa57f7437a42ef4ef2a515ba01335341db";
-    bytes32 internal constant CLOSED_SLOT = hex"1995af5d4e8460aff2899ddfc1997babc826ffc99c34b1c25804446a6d55b7e9";
-    bytes32 internal constant AUDIT_SLOT = hex"68971bb15dfffe5292158b14b4a61bea59aef39f4af8d840612b76f7af405597";
+    bytes32 internal constant CLOSED_DIGEST =
+        hex"8472096e8efd7f696041e2deb755bf3f70d3e63ddd5e306de85f7bd2b9bc9880";
+    bytes32 internal constant AUDIT_DIGEST =
+        hex"1128a34f2893fa3e90d41f382f29e7fa57f7437a42ef4ef2a515ba01335341db";
+    bytes32 internal constant CLOSED_SLOT =
+        hex"1995af5d4e8460aff2899ddfc1997babc826ffc99c34b1c25804446a6d55b7e9";
+    bytes32 internal constant AUDIT_SLOT =
+        hex"68971bb15dfffe5292158b14b4a61bea59aef39f4af8d840612b76f7af405597";
 
     ValidatorEvidenceHarness internal harness;
 
@@ -79,10 +84,14 @@ contract ValidatorEvidenceTest is Test {
             netuid: 17,
             coordinator: 0x1111111111111111111111111111111111111111,
             settlementVault: 0x1212121212121212121212121212121212121212,
-            deploymentIdHash: bytes32(uint256(0x1414141414141414141414141414141414141414141414141414141414141414)),
+            deploymentIdHash: bytes32(
+                uint256(0x1414141414141414141414141414141414141414141414141414141414141414)
+            ),
             policyHash: bytes32(uint256(0x1515151515151515151515151515151515151515151515151515151515151515)),
             activationEpoch: 42,
-            activationHash: bytes32(uint256(0x1616161616161616161616161616161616161616161616161616161616161616))
+            activationHash: bytes32(
+                uint256(0x1616161616161616161616161616161616161616161616161616161616161616)
+            )
         });
         header.hotkey = HOTKEY;
         header.noId = 7;
@@ -90,9 +99,12 @@ contract ValidatorEvidenceTest is Test {
         header.kind = 1;
         header.vpk = VPK;
         header.boundaryBlock = 1059;
-        header.boundaryHash = bytes32(uint256(0x1717171717171717171717171717171717171717171717171717171717171717));
-        header.censusHash = bytes32(uint256(0x1818181818181818181818181818181818181818181818181818181818181818));
-        header.payloadHash = bytes32(uint256(0x1919191919191919191919191919191919191919191919191919191919191919));
+        header.boundaryHash =
+            bytes32(uint256(0x1717171717171717171717171717171717171717171717171717171717171717));
+        header.censusHash =
+            bytes32(uint256(0x1818181818181818181818181818181818181818181818181818181818181818));
+        header.payloadHash =
+            bytes32(uint256(0x1919191919191919191919191919191919191919191919191919191919191919));
         header.payloadBytes = 4096;
     }
 
@@ -106,7 +118,11 @@ contract ValidatorEvidenceTest is Test {
     }
 
     /// @dev End is the first block of the next epoch, not its predecessor.
-    function _window(ValidatorEvidence.Header memory header) internal pure returns (ValidatorEvidence.Window memory) {
+    function _window(ValidatorEvidence.Header memory header)
+        internal
+        pure
+        returns (ValidatorEvidence.Window memory)
+    {
         return ValidatorEvidence.Window({
             epoch: 44,
             startBlock: 1000,
@@ -220,7 +236,8 @@ contract ValidatorEvidenceTest is Test {
         assertEq(harness.digest(header), AUDIT_DIGEST);
         assertEq(harness.slotKey(header), AUDIT_SLOT);
         assertEq(
-            ValidatorEvidence.subjectHash(header), hex"2d6287f7a66230a2fc77d0bff7a27de82c5b2f42c72cd8ef820e9561b2a198c5"
+            ValidatorEvidence.subjectHash(header),
+            hex"2d6287f7a66230a2fc77d0bff7a27de82c5b2f42c72cd8ef820e9561b2a198c5"
         );
         assertTrue(harness.validAt(header, header.domain, _window(header)));
     }
@@ -232,8 +249,11 @@ contract ValidatorEvidenceTest is Test {
             assertTrue(harness.valid(changed), "mutation must retain valid shape");
             assertNotEq(harness.digest(changed), harness.digest(original), "field not signed");
             bool sameSlot = field == 6 || field == 7 || field == 8 || field >= 15;
-            if (sameSlot) assertEq(harness.slotKey(changed), harness.slotKey(original), "mutable second slot");
-            else assertNotEq(harness.slotKey(changed), harness.slotKey(original), "different owner/cycle");
+            if (sameSlot) {
+                assertEq(harness.slotKey(changed), harness.slotKey(original), "mutable second slot");
+            } else {
+                assertNotEq(harness.slotKey(changed), harness.slotKey(original), "different owner/cycle");
+            }
         }
         ValidatorEvidence.Header memory terminal = _closed();
         terminal.boundaryBlock++;
@@ -247,7 +267,9 @@ contract ValidatorEvidenceTest is Test {
             ValidatorEvidence.Header memory original = _closed();
             assertFalse(harness.validAt(changed, original.domain, _window(original)));
             assertFalse(
-                harness.verify(changed, original.domain, _window(original), _vpkSignature(), _hotkeySignature())
+                harness.verify(
+                    changed, original.domain, _window(original), _vpkSignature(), _hotkeySignature()
+                )
             );
         }
     }
@@ -343,7 +365,9 @@ contract ValidatorEvidenceTest is Test {
             else if (field == 19) header.subject.nativeEpoch = 1;
             assertFalse(harness.valid(header), "incomplete shape");
             assertFalse(
-                harness.verify(header, _closed().domain, _window(_closed()), _vpkSignature(), _hotkeySignature())
+                harness.verify(
+                    header, _closed().domain, _window(_closed()), _vpkSignature(), _hotkeySignature()
+                )
             );
         }
     }
@@ -352,8 +376,12 @@ contract ValidatorEvidenceTest is Test {
         ValidatorEvidence.Header memory header = _closed();
         for (uint256 length; length <= 65; length++) {
             if (length == 64) continue;
-            assertFalse(harness.verify(header, header.domain, _window(header), new bytes(length), _hotkeySignature()));
-            assertFalse(harness.verify(header, header.domain, _window(header), _vpkSignature(), new bytes(length)));
+            assertFalse(
+                harness.verify(header, header.domain, _window(header), new bytes(length), _hotkeySignature())
+            );
+            assertFalse(
+                harness.verify(header, header.domain, _window(header), _vpkSignature(), new bytes(length))
+            );
         }
     }
 
@@ -361,19 +389,25 @@ contract ValidatorEvidenceTest is Test {
         _mockChecks(CLOSED_DIGEST, _vpkSignature(), _hotkeySignature(), true, true);
         ValidatorEvidence.Header memory header = _closed();
         vm.prank(address(0xBAD));
-        assertTrue(harness.verify(header, header.domain, _window(header), _vpkSignature(), _hotkeySignature()));
+        assertTrue(
+            harness.verify(header, header.domain, _window(header), _vpkSignature(), _hotkeySignature())
+        );
     }
 
     function testVPKFailureStillChecksHotkey() public {
         _mockChecks(CLOSED_DIGEST, _vpkSignature(), _hotkeySignature(), false, true);
         ValidatorEvidence.Header memory header = _closed();
-        assertFalse(harness.verify(header, header.domain, _window(header), _vpkSignature(), _hotkeySignature()));
+        assertFalse(
+            harness.verify(header, header.domain, _window(header), _vpkSignature(), _hotkeySignature())
+        );
     }
 
     function testHotkeyFailureRejects() public {
         _mockChecks(CLOSED_DIGEST, _vpkSignature(), _hotkeySignature(), true, false);
         ValidatorEvidence.Header memory header = _closed();
-        assertFalse(harness.verify(header, header.domain, _window(header), _vpkSignature(), _hotkeySignature()));
+        assertFalse(
+            harness.verify(header, header.domain, _window(header), _vpkSignature(), _hotkeySignature())
+        );
     }
 
     function testAuditUsesExactDigestChecks() public {

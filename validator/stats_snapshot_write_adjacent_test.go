@@ -114,15 +114,24 @@ func TestStatsSnapshotWriteLegacyAliasRetargetRefused(t *testing.T) {
 	}
 }
 
-// This is an actual codec/version transport control, not v6 activation or
-// runtime migration. The same encoded header selects physical admission.
+// Actual activation supplies the v6 snapshot; transport cannot synthesize its
+// authority by changing a legacy version header. Physical admission remains
+// independent of whether the encoded bytes are otherwise valid.
 func TestStatsSnapshotWriteEncodedVersionPinsPhysicalAuthority(t *testing.T) {
-	stats, dir, before, _ := newStatsSnapshotWriteTest(t)
+	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
+	participant := fixture.participants[0]
+	stats, dir := participant.Stats, participant.StateDir
+	before := statsSnapshotWriteTestRead(t, filepath.Join(dir, "stats.json"))
 	snapshot := stats.snapshotStats()
-	snapshot.Version = 6
+	if snapshot.Version != 6 || snapshot.AttemptV2 == nil || snapshot.AttemptV2.Activation != fixture.fixtures[0].expected.Activation {
+		t.Fatal("real activation did not establish the exact v6 snapshot authority")
+	}
 	encoded, err := encodeStatsSnapshot(snapshot)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !bytes.Equal(encoded, before) {
+		t.Fatal("real activated snapshot differs from its durable physical bytes")
 	}
 	alias := dir + "-alias"
 	if err := os.Symlink(dir, alias); err != nil {

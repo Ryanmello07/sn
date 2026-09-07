@@ -82,6 +82,14 @@ type sourceProof struct {
 
 // JSON duplicate keys must not silently replace routing or ownership inputs.
 func uniqueJSON(decoder *json.Decoder) error {
+	return uniqueJSONDepth(decoder, 0)
+}
+
+// Plan/event nesting is finite independently of the enclosing byte ceiling.
+func uniqueJSONDepth(decoder *json.Decoder, depth int) error {
+	if depth > 64 {
+		return errors.New("JSON nesting exceeds bound")
+	}
 	token, err := decoder.Token()
 	if err != nil {
 		return err
@@ -106,7 +114,7 @@ func uniqueJSON(decoder *json.Decoder) error {
 			}
 			seen[name] = true
 		}
-		if err := uniqueJSON(decoder); err != nil {
+		if err := uniqueJSONDepth(decoder, depth+1); err != nil {
 			return err
 		}
 	}
@@ -499,6 +507,9 @@ func sourceFenceContext(ctx context.Context, sources []sourceSpec) ([]sourceProo
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		if err := physicalPath(source.Root, true); err != nil {
+			return nil, err
+		}
 		data, err := readBounded(source.Manifest, sourceManifestLimit)
 		if err != nil {
 			return nil, err
@@ -585,16 +596,24 @@ func sourceFenceContext(ctx context.Context, sources []sourceSpec) ([]sourceProo
 
 // Bound command metadata without retaining an unbounded Output allocation.
 type boundedOutput struct {
-	bytes.Buffer
+	buffer  bytes.Buffer
 	Maximum int
+	err     error
 }
 
 func (self *boundedOutput) Write(data []byte) (int, error) {
-	if len(data) > self.Maximum-self.Len() {
-		return 0, errors.New("command metadata exceeds byte bound")
+	if self.err != nil {
+		return 0, self.err
 	}
-	return self.Buffer.Write(data)
+	if len(data) > self.Maximum-self.buffer.Len() {
+		self.err = errors.New("command metadata exceeds byte bound")
+		return 0, self.err
+	}
+	return self.buffer.Write(data)
 }
+
+// Do not embed bytes.Buffer: its promoted ReadFrom bypasses a capped Write.
+func (self *boundedOutput) Bytes() []byte { return self.buffer.Bytes() }
 
 func writeJSON(path string, value any) error {
 	data, err := json.Marshal(value)
@@ -628,4 +647,247 @@ func sortedKeys[T any](values map[string]T) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+// Go reports a replacement's lexical directory even when that directory is a
+// workspace symlink. Only this observed route may resolve; configured roots
+// and package directories retain their strict physical-path contract.
+type moduleSourceProof struct {
+	Module            string    `json:"module"`
+	Root              string    `json:"root"`
+	Directory         string    `json:"directory"`
+	PhysicalDirectory string    `json:"physical_directory"`
+	GoMod             string    `json:"go_mod"`
+	GoModFile         fileProof `json:"go_mod_file"`
+}
+
+// A local module route must terminate inside one explicitly declared physical
+// source owner. A go.mod symlink cannot redirect that authority elsewhere.
+func captureModuleSource(module, directory, goMod string, replacement bool, sources []sourceSpec) (moduleSourceProof, error) {
+	zero := moduleSourceProof{}
+	if directory == "" || !filepath.IsAbs(directory) || filepath.Clean(directory) != directory || strings.ContainsAny(directory, "\x00\r\n") {
+		return zero, errors.New("reported module directory is not absolute and canonical")
+	}
+	resolved, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		return zero, err
+	}
+	if !replacement && resolved != directory {
+		return zero, errors.New("main module directory is not physical")
+	}
+	if err := physicalPath(resolved, true); err != nil {
+		return zero, err
+	}
+	root := ""
+	for _, source := range sources {
+		if err := physicalPath(source.Root, true); err != nil {
+			return zero, err
+		}
+		if inside(resolved, source.Root) && len(source.Root) > len(root) {
+			root = source.Root
+		}
+	}
+	if root == "" {
+		return zero, fmt.Errorf("local module outside declared source roots: %s", module)
+	}
+	if goMod != filepath.Join(directory, "go.mod") {
+		return zero, errors.New("local module metadata path differs")
+	}
+	resolvedMod, err := filepath.EvalSymlinks(goMod)
+	if err != nil {
+		return zero, err
+	}
+	if resolvedMod != filepath.Join(resolved, "go.mod") {
+		return zero, errors.New("local module metadata redirects outside its resolved directory")
+	}
+	if err := physicalPath(resolvedMod, false); err != nil {
+		return zero, err
+	}
+	proof, err := regularProof(resolvedMod)
+	if err != nil {
+		return zero, err
+	}
+	return moduleSourceProof{Module: module, Root: root, Directory: directory, PhysicalDirectory: resolved, GoMod: goMod, GoModFile: proof}, nil
+}
+
+// Recheck the admitted route and metadata before and after compilation/test
+// execution. Another declared root is still a different admitted module.
+func checkModuleSourceProofs(proofs []moduleSourceProof) error {
+	for _, proof := range proofs {
+		actual, err := captureModuleSource(proof.Module, proof.Directory, proof.GoMod, true, []sourceSpec{{Root: proof.Root}})
+		if err != nil {
+			return fmt.Errorf("local module route changed for %s: %w", proof.Module, err)
+		}
+		if actual != proof {
+			return fmt.Errorf("local module route or metadata changed for %s", proof.Module)
+		}
+	}
+	return nil
+}
+
+// Capture every local source from the actual bounded Go module graph.
+func captureModuleSources(data []byte, sources []sourceSpec) ([]moduleSourceProof, error) {
+	proofs := []moduleSourceProof{}
+	err := inspectModuleSources(data, sources, func(proof moduleSourceProof) { proofs = append(proofs, proof) })
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(proofs, func(first, second int) bool { return proofs[first].Module < proofs[second].Module })
+	if err := checkModuleSourceProofs(proofs); err != nil {
+		return nil, err
+	}
+	return proofs, nil
+}
+
+// Retain the existing read-only verifier interface for preflight callers.
+func verifyModuleSources(data []byte, sources []sourceSpec) error {
+	_, err := captureModuleSources(data, sources)
+	return err
+}
+
+// The module graph may contain harmless additional Go-version fields, but
+// every local replacement used by this build must name declared source.
+func inspectModuleSources(data []byte, sources []sourceSpec, accept func(moduleSourceProof)) error {
+	if len(data) == 0 || len(data) > sourceManifestLimit {
+		return errors.New("module graph exceeds byte bound or is empty")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	paths := map[string]bool{}
+	mainCount := 0
+	for count := 0; ; count++ {
+		var raw json.RawMessage
+		if err := decoder.Decode(&raw); err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+		if count >= 16384 {
+			return errors.New("module graph exceeds item bound")
+		}
+		var fields map[string]json.RawMessage
+		if err := decodeJSON(raw, &fields); err != nil {
+			return err
+		}
+		if fields == nil {
+			return errors.New("null module object")
+		}
+		read := func(fields map[string]json.RawMessage, name string) (string, error) {
+			raw, ok := fields[name]
+			if !ok {
+				return "", nil
+			}
+			var value *string
+			if err := json.Unmarshal(raw, &value); err != nil {
+				return "", err
+			}
+			if value == nil {
+				return "", errors.New("null module identity")
+			}
+			return *value, nil
+		}
+		path, err := read(fields, "Path")
+		if err != nil || path == "" || paths[path] {
+			return errors.New("missing, duplicate or invalid module identity")
+		}
+		paths[path] = true
+		local, mainModule, localReplacement := false, false, false
+		if main, ok := fields["Main"]; ok {
+			var value *bool
+			if err := json.Unmarshal(main, &value); err != nil || value == nil {
+				return errors.New("invalid main module flag")
+			}
+			local = *value
+			mainModule = *value
+			if local {
+				mainCount++
+			}
+		}
+		if replacement, ok := fields["Replace"]; ok {
+			if mainModule {
+				return errors.New("main source module unexpectedly has a replacement")
+			}
+			var replaced map[string]json.RawMessage
+			if err := decodeJSON(replacement, &replaced); err != nil || replaced == nil {
+				return errors.New("invalid module replacement")
+			}
+			version, err := read(replaced, "Version")
+			if err != nil {
+				return err
+			}
+			if version == "" {
+				replacementPath, pathErr := read(replaced, "Path")
+				if pathErr != nil || replacementPath == "" || strings.ContainsAny(replacementPath, "\x00\r\n") {
+					return errors.New("local replacement path is absent or invalid")
+				}
+				for _, name := range []string{"Dir", "GoMod"} {
+					outer, outerErr := read(fields, name)
+					inner, innerErr := read(replaced, name)
+					if outerErr != nil || innerErr != nil || outer != "" && outer != inner {
+						return errors.New("local replacement competes with outer module metadata")
+					}
+				}
+				local = true
+				localReplacement = true
+				fields = replaced
+			}
+		}
+		if !local {
+			version, err := read(fields, "Version")
+			if err != nil || version == "" {
+				return errors.New("non-main module lacks a version or explicit local replacement")
+			}
+			directory, err := read(fields, "Dir")
+			if err != nil {
+				return err
+			}
+			if directory != "" {
+				resolved, resolveErr := filepath.EvalSymlinks(directory)
+				if resolveErr == nil {
+					for _, source := range sources {
+						if inside(resolved, source.Root) {
+							return errors.New("declared source module lacks an explicit local replacement")
+						}
+					}
+				}
+			}
+			continue
+		}
+		directory, err := read(fields, "Dir")
+		if err != nil {
+			return err
+		}
+		goMod, err := read(fields, "GoMod")
+		if err != nil {
+			return err
+		}
+		proof, err := captureModuleSource(path, directory, goMod, localReplacement, sources)
+		if err != nil {
+			return fmt.Errorf("local module %s: %w", path, err)
+		}
+		accept(proof)
+	}
+	if len(paths) == 0 || mainCount != 1 {
+		return errors.New("module graph requires exactly one main source module")
+	}
+	return nil
+}
+
+// Resolve an executable once, then fence that physical path and its bytes.
+func executablePath(name string) (string, error) {
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return "", err
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	path, err = filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	if err := physicalPath(path, false); err != nil {
+		return "", err
+	}
+	return path, nil
 }

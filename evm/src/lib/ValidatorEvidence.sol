@@ -86,10 +86,11 @@ library ValidatorEvidence {
     /// @dev No ordinary native cut may be mislabeled as closed terminal evidence.
     function valid(Header memory header) internal pure returns (bool) {
         if (
-            !validDomain(header.domain) || header.hotkey == bytes32(0) || header.vpk == bytes32(0) || header.noId == 0
-                || header.epoch < header.domain.activationEpoch || header.boundaryBlock == 0
-                || header.boundaryHash == bytes32(0) || header.censusHash == bytes32(0)
-                || header.payloadHash == bytes32(0) || header.payloadBytes == 0
+            !validDomain(header.domain) || header.hotkey == bytes32(0) || header.vpk == bytes32(0)
+                || header.noId == 0 || header.epoch < header.domain.activationEpoch
+                || header.boundaryBlock == 0 || header.boundaryHash == bytes32(0)
+                || header.censusHash == bytes32(0) || header.payloadHash == bytes32(0)
+                || header.payloadBytes == 0
         ) return false;
         if (header.kind == CLOSED_CENSUS) {
             return header.subject.observationEpoch == 0 && header.subject.nativeEpoch == 0;
@@ -99,11 +100,16 @@ library ValidatorEvidence {
     }
 
     /// @dev Compares the complete trusted domain before accepting signed input.
-    function validAt(Header memory header, Domain memory expected, Window memory window) internal pure returns (bool) {
+    function validAt(Header memory header, Domain memory expected, Window memory window)
+        internal
+        pure
+        returns (bool)
+    {
         if (!validDomain(expected) || !valid(header)) return false;
         if (
             header.domain.chainId != expected.chainId || header.domain.genesisHash != expected.genesisHash
-                || header.domain.netuid != expected.netuid || header.domain.coordinator != expected.coordinator
+                || header.domain.netuid != expected.netuid
+                || header.domain.coordinator != expected.coordinator
                 || header.domain.settlementVault != expected.settlementVault
                 || header.domain.deploymentIdHash != expected.deploymentIdHash
                 || header.domain.policyHash != expected.policyHash
@@ -126,7 +132,10 @@ library ValidatorEvidence {
         if (header.kind == CLOSED_CENSUS) return bytes32(0);
         return sha256(
             abi.encodePacked(
-                bytes(AUDIT_SUBJECT_DOMAIN), bytes1(0), header.subject.observationEpoch, header.subject.nativeEpoch
+                bytes(AUDIT_SUBJECT_DOMAIN),
+                bytes1(0),
+                header.subject.observationEpoch,
+                header.subject.nativeEpoch
             )
         );
     }
@@ -197,7 +206,7 @@ library ValidatorEvidence {
         Window memory window,
         bytes memory vpkSignature,
         bytes memory hotkeySignature
-    ) internal view returns (bool) {
+    ) internal pure returns (bool) {
         if (!validAt(header, expected, window) || vpkSignature.length != 64 || hotkeySignature.length != 64) {
             return false;
         }
@@ -205,7 +214,8 @@ library ValidatorEvidence {
         (bytes32 vpkR, bytes32 vpkS) = signatureWords(vpkSignature);
         (bytes32 hotkeyR, bytes32 hotkeyS) = signatureWords(hotkeySignature);
         bool vpkValid = IEd25519Verify(IED25519VERIFY_ADDRESS).verify(message, header.vpk, vpkR, vpkS);
-        bool hotkeyValid = ISR25519Verify(ISR25519VERIFY_ADDRESS).verify(message, header.hotkey, hotkeyR, hotkeyS);
+        bool hotkeyValid =
+            ISR25519Verify(ISR25519VERIFY_ADDRESS).verify(message, header.hotkey, hotkeyR, hotkeyS);
         return vpkValid && hotkeyValid;
     }
 }

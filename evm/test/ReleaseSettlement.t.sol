@@ -10,7 +10,8 @@ import {INeuron_ADDRESS} from "../src/interfaces/neuron.sol";
 import {ISR25519VERIFY_ADDRESS} from "../src/interfaces/sr25519Verify.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-contract MaliciousCoordinatorV2 is STCoordinator {
+/// @dev Reuses the stateless hostile UUPS implementation for the real vault attack.
+contract MaliciousCoordinatorV2 is STCoordinatorAdversary {
     function attackRewrite(
         STSettlementVault target,
         uint256 epoch,

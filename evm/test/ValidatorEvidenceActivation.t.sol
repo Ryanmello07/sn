@@ -40,12 +40,13 @@ contract ValidatorEvidenceActivationHarness {
         return ValidatorEvidenceActivation.evidenceDomain(record);
     }
 
+    /// @dev The pure caller is a compile-time guard for the stateless verifier.
     function verify(
         ValidatorEvidenceActivation.Record memory record,
         ValidatorEvidenceActivation.Record memory expected,
         bytes memory vpkSignature,
         bytes memory hotkeySignature
-    ) external view returns (bool) {
+    ) external pure returns (bool) {
         return ValidatorEvidenceActivation.verify(record, expected, vpkSignature, hotkeySignature);
     }
 }

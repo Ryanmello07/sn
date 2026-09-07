@@ -59,6 +59,35 @@ def exit_status(wait_status):
     return result if result >= 0 else 128 - result
 
 
+def wait_for_acknowledgement(job, parent, result, stop, *, clock=time.monotonic, wait=select.select):
+    """Retain the reaped owner until ack, but bound only its canceled wait."""
+    acknowledgement = os.open(job / "ack", os.O_RDWR | os.O_NONBLOCK)
+    try:
+        received = b""
+        cancel_deadline = None
+        while b"\n" not in received:
+            if os.getppid() != parent:
+                return result or 143
+            timeout = 1
+            if stop[0]:
+                now = clock()
+                if cancel_deadline is None:
+                    cancel_deadline = now + 10
+                remaining = cancel_deadline - now
+                if remaining <= 0:
+                    print("release gate: canceled owner acknowledgement deadline expired", file=sys.stderr, flush=True)
+                    return 125
+                timeout = min(timeout, remaining)
+            readable, _, _ = wait([acknowledgement], [], [], timeout)
+            if readable:
+                received += os.read(acknowledgement, 64)
+                if len(received) > 64:
+                    return 125
+        return (stop[0] or result) if received == b"joined\n" else 125
+    finally:
+        os.close(acknowledgement)
+
+
 def own_phase(root, index, function):
     if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
         raise RuntimeError("release phases require Linux pidfd support")
@@ -153,20 +182,7 @@ def own_phase(root, index, function):
         os.close(completion)
     # Retain the leader identity until the foreground owner acknowledges it.
     # A malformed acknowledgement has a real failing exit, not a passing record.
-    acknowledgement = os.open(job / "ack", os.O_RDWR | os.O_NONBLOCK)
-    try:
-        received = b""
-        while b"\n" not in received:
-            if os.getppid() != parent:
-                return result or 143
-            readable, _, _ = select.select([acknowledgement], [], [], 1)
-            if readable:
-                received += os.read(acknowledgement, 64)
-                if len(received) > 64:
-                    return 125
-        return (stop[0] or result) if received == b"joined\n" else 125
-    finally:
-        os.close(acknowledgement)
+    return wait_for_acknowledgement(job, parent, result, stop)
 
 
 if __name__ == "__main__":

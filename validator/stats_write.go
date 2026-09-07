@@ -49,6 +49,7 @@ type statsReplayBasis struct {
 	known, cutPending, settlementPending         bool
 	settlementCutEpoch, active                   uint64
 	transition                                   *AttemptSettlementTransition
+	v2State                                      *attemptStatsV2State
 }
 
 // Once-published engine order and gate remain immutable for the engine's whole
@@ -225,6 +226,7 @@ func (self *StatsEngine) cloneStatsWithLock() *StatsEngine {
 		activeAttemptCount: self.activeAttemptCount, attemptCutPending: self.attemptCutPending,
 		attemptSettlementCutPending: self.attemptSettlementCutPending, attemptSettlementCutEpoch: self.attemptSettlementCutEpoch,
 		settlementTransition: self.settlementTransition,
+		attemptV2:            self.attemptV2,
 	}
 	for clientID, hashes := range self.egress {
 		candidate.egress[clientID] = maps.Clone(hashes)
@@ -242,6 +244,7 @@ func (self *StatsEngine) publishStatsWithLock(candidate *StatsEngine) {
 	self.activeAttemptCount, self.attemptCutPending = candidate.activeAttemptCount, candidate.attemptCutPending
 	self.attemptSettlementCutPending, self.attemptSettlementCutEpoch = candidate.attemptSettlementCutPending, candidate.attemptSettlementCutEpoch
 	self.settlementTransition = candidate.settlementTransition
+	self.attemptV2 = candidate.attemptV2
 }
 
 // Creates a detached candidate while a caller retains the exclusive token.
@@ -301,6 +304,7 @@ func (self *StatsEngine) replayBasisWithLock() statsReplayBasis {
 		active: self.activeAttemptCount, cutPending: self.attemptCutPending,
 		settlementPending: self.attemptSettlementCutPending, settlementCutEpoch: self.attemptSettlementCutEpoch,
 		transition: self.settlementTransition,
+		v2State:    self.attemptV2,
 	}
 }
 

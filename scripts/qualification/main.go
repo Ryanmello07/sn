@@ -66,20 +66,24 @@ type commandResult struct {
 	Error     string  `json:"error,omitempty"`
 }
 type stageResult struct {
-	Status       string         `json:"status"`
-	Error        string         `json:"error,omitempty"`
-	Command      *commandResult `json:"command,omitempty"`
-	BinarySHA256 string         `json:"binary_sha256,omitempty"`
-	Seconds      float64        `json:"seconds,omitempty"`
-	Verification *eventSummary  `json:"verification,omitempty"`
-	Events       string         `json:"events,omitempty"`
+	Status        string              `json:"status"`
+	Error         string              `json:"error,omitempty"`
+	Command       *commandResult      `json:"command,omitempty"`
+	BinarySHA256  string              `json:"binary_sha256,omitempty"`
+	BinaryMode    uint32              `json:"binary_mode,omitempty"`
+	Seconds       float64             `json:"seconds,omitempty"`
+	Verification  *eventSummary       `json:"verification,omitempty"`
+	Events        string              `json:"events,omitempty"`
+	ModuleSources []moduleSourceProof `json:"module_sources,omitempty"`
 }
 type stage struct {
-	Dependencies []string
-	Build        *suiteSpec
-	Suite        *suiteSpec
-	Binary       string
-	BinarySHA256 string
+	Dependencies  []string
+	Build         *suiteSpec
+	Suite         *suiteSpec
+	Binary        string
+	BinarySHA256  string
+	BinaryMode    uint32
+	ModuleSources []moduleSourceProof
 }
 type matrixStatus struct {
 	State           string   `json:"state"`
@@ -167,6 +171,8 @@ func runDAG(ctx context.Context, nodes map[string]stage, jobs int, execute func(
 				delete(pending, name)
 				if node.Binary != "" {
 					node.BinarySHA256 = results[node.Binary].BinarySHA256
+					node.BinaryMode = results[node.Binary].BinaryMode
+					node.ModuleSources = append([]moduleSourceProof(nil), results[node.Binary].ModuleSources...)
 				}
 				go func() {
 					finished := completion{Name: name}
@@ -176,7 +182,7 @@ func runDAG(ctx context.Context, nodes map[string]stage, jobs int, execute func(
 						if !returned {
 							finished.Err = errors.New("stage exited without returning")
 							if recovered != nil {
-								finished.Err = errors.New("stage panicked")
+								finished.Err = fmt.Errorf("stage %s panicked: %v", name, recovered)
 							}
 							finished.Result = stageResult{Status: "failed", Error: finished.Err.Error()}
 						}
@@ -227,6 +233,7 @@ func runDAG(ctx context.Context, nodes map[string]stage, jobs int, execute func(
 func publishSnapshot(publish func(map[string]stageResult, []string, int) error, results map[string]stageResult, running []string, pending int) error {
 	snapshot := map[string]stageResult{}
 	for name, result := range results {
+		result.ModuleSources = append([]moduleSourceProof(nil), result.ModuleSources...)
 		if result.Command != nil {
 			command := *result.Command
 			if command.Exit != nil {
@@ -250,7 +257,7 @@ func publishSnapshot(publish func(map[string]stageResult, []string, int) error, 
 			if !returned {
 				err = errors.New("publisher exited without returning")
 				if recovered != nil {
-					err = errors.New("publisher panicked")
+					err = fmt.Errorf("publisher panicked: %v", recovered)
 				}
 			}
 			finished <- err
@@ -306,16 +313,7 @@ func runWorker(path string) int {
 	argv := append([]string{"--signal=TERM", "--kill-after=10s", strconv.Itoa(request.Seconds)}, request.Argv...)
 	command := exec.Command("timeout", argv...)
 	command.Dir = request.Directory
-	environment := map[string]string{}
-	for _, pair := range os.Environ() {
-		key, value, ok := strings.Cut(pair, "=")
-		if ok {
-			environment[key] = value
-		}
-	}
-	for key, value := range request.Environment {
-		environment[key] = value
-	}
+	environment := executionEnvironment(os.Environ(), request.Environment)
 	for _, key := range sortedKeys(environment) {
 		command.Env = append(command.Env, key+"="+environment[key])
 	}
@@ -414,6 +412,7 @@ type stageOwner struct {
 	Go          string
 	Bash        string
 	Inputs      map[string]fileProof
+	Tools       map[string]string
 	Unproven    atomic.Bool
 }
 
@@ -421,8 +420,17 @@ func (self *stageOwner) command(ctx context.Context, name string, argv []string,
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
+	if self.Unproven.Load() {
+		return result, errors.New("an earlier owner did not prove cleanup")
+	}
 	if err := checkProofs(self.Inputs); err != nil {
 		return result, err
+	}
+	for name, expected := range self.Tools {
+		actual, err := executablePath(name)
+		if err != nil || actual != expected {
+			return result, fmt.Errorf("tool lookup changed: %s", name)
+		}
 	}
 	base := filepath.Join(self.Capture, name)
 	request := commandRequest{Argv: argv, Directory: directory, Seconds: seconds, Environment: self.Environment,
@@ -446,9 +454,9 @@ func (self *stageOwner) command(ctx context.Context, name string, argv []string,
 		bash = "bash"
 	}
 	command := exec.Command(bash, "-c", ownerScript, "qualification-owner", self.Source, filepath.Dir(self.Source), filepath.Join(self.Capture, "runner"), path, filepath.Join(self.Capture, "release-gate-jobs.sh"), base+".joined")
-	command.Env = os.Environ()
-	for _, key := range sortedKeys(self.Environment) {
-		command.Env = append(command.Env, key+"="+self.Environment[key])
+	environment := executionEnvironment(os.Environ(), self.Environment)
+	for _, key := range sortedKeys(environment) {
+		command.Env = append(command.Env, key+"="+environment[key])
 	}
 	command.Env = append(command.Env, "RELEASE_GATE_JOBS=1")
 	command.Stdout, command.Stderr = log, log
@@ -498,6 +506,30 @@ func commandMatches(result commandResult, expected int) bool {
 	return result.Joined && result.Error == "" && result.Exit != nil && *result.Exit == expected && result.OwnerExit == expected
 }
 
+// Do not execute inherited shell/Python startup or loader injection before the
+// qualified child owner exists. Explicit Go controls override its CPU defaults.
+func executionEnvironment(inherited []string, overrides map[string]string) map[string]string {
+	result := map[string]string{}
+	for _, pair := range inherited {
+		key, value, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(key, "BASH_FUNC_") || strings.HasPrefix(key, "PYTHON") {
+			continue
+		}
+		switch key {
+		case "BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "LD_PRELOAD", "LD_LIBRARY_PATH":
+			continue
+		}
+		result[key] = value
+	}
+	for key, value := range overrides {
+		result[key] = value
+	}
+	return result
+}
+
 func copyFile(source, destination string, mode os.FileMode) error {
 	input, info, err := openRegular(source)
 	if err != nil {
@@ -528,31 +560,49 @@ func checkProofs(expected map[string]fileProof) error {
 	return nil
 }
 
-func executeStage(ctx context.Context, name string, node stage, owner *stageOwner, plan planSpec, packages map[string]packageSpec) stageResult {
+func executeStage(ctx context.Context, name string, node stage, owner *stageOwner, plan planSpec, packages map[string]packageSpec) (stageOutcome stageResult) {
+	moduleSources := append([]moduleSourceProof(nil), node.ModuleSources...)
+	defer func() {
+		stageOutcome.ModuleSources = append([]moduleSourceProof(nil), moduleSources...)
+		if len(moduleSources) != 0 && !owner.Unproven.Load() {
+			if err := checkModuleSourceProofs(moduleSources); err != nil {
+				stageOutcome.Status = "failed"
+				stageOutcome.Error = shortError(errors.Join(errors.New(stageOutcome.Error), err))
+			}
+		}
+	}()
 	failed := func(err error, result *commandResult) stageResult {
 		text := "command outcome differs"
 		if err != nil {
-			text = err.Error()
+			text = shortError(err)
 		}
 		return stageResult{Status: "failed", Error: text, Command: result}
 	}
 	if node.Build != nil {
 		item := node.Build
 		pkg := packages[item.Package]
-		identity, err := owner.command(ctx, name+"-identity", []string{"go", "list", "-f", "{{.ImportPath}}", "."}, pkg.Directory, plan.Limits.BuildSeconds, "")
+		identity, err := owner.command(ctx, name+"-identity", []string{owner.Go, "list", "-f", "{{.ImportPath}}\n{{.Dir}}", "."}, pkg.Directory, plan.Limits.BuildSeconds, "")
 		if err != nil || !commandMatches(identity, 0) {
 			return failed(err, &identity)
 		}
 		actual, err := readBounded(identity.Stdout, metadataLimit)
-		if err != nil || strings.TrimSpace(string(actual)) != pkg.ImportPath {
-			return failed(errors.New("actual Go import path differs"), &identity)
+		if err != nil || string(actual) != pkg.ImportPath+"\n"+pkg.Directory+"\n" {
+			return failed(errors.New("actual Go import path or directory differs"), &identity)
 		}
-		graph, err := owner.command(ctx, name+"-modules", []string{"go", "list", "-m", "-json", "all"}, pkg.Directory, plan.Limits.BuildSeconds, "")
+		graph, err := owner.command(ctx, name+"-modules", []string{owner.Go, "list", "-m", "-json", "all"}, pkg.Directory, plan.Limits.BuildSeconds, "")
 		if err != nil || !commandMatches(graph, 0) {
 			return failed(err, &graph)
 		}
+		graphBytes, err := readBounded(graph.Stdout, sourceManifestLimit)
+		if err != nil {
+			return failed(err, &graph)
+		}
+		moduleSources, err = captureModuleSources(graphBytes, plan.Sources)
+		if err != nil {
+			return failed(err, &graph)
+		}
 		binary := filepath.Join(owner.Capture, name+".testbin")
-		argv := []string{"go", "test", "-c", "-p=" + strconv.Itoa(plan.Limits.Parallel)}
+		argv := []string{owner.Go, "test", "-c", "-p=" + strconv.Itoa(plan.Limits.Parallel)}
 		if item.Mode == "race" {
 			argv = append(argv, "-race")
 		}
@@ -561,17 +611,23 @@ func executeStage(ctx context.Context, name string, node stage, owner *stageOwne
 		if err != nil || !commandMatches(result, 0) {
 			return failed(err, &result)
 		}
-		hash, err := fileHash(binary)
+		proof, err := regularProof(binary)
 		if err != nil {
 			return failed(err, &result)
 		}
-		if err := writeJSON(binary+".json", fileProof{SHA256: hash}); err != nil {
+		if err := writeJSON(binary+".json", proof); err != nil {
 			return failed(err, &result)
 		}
-		return stageResult{Status: "passed", BinarySHA256: hash, Seconds: result.Seconds, Command: &result}
+		return stageResult{Status: "passed", BinarySHA256: proof.SHA256, BinaryMode: proof.Mode, Seconds: result.Seconds, Command: &result}
 	}
 	item := node.Suite
 	pkg := packages[item.Package]
+	if len(moduleSources) == 0 {
+		return failed(errors.New("test binary has no parent-owned module source proof"), nil)
+	}
+	if err := checkModuleSourceProofs(moduleSources); err != nil {
+		return failed(err, nil)
+	}
 	expected, err := expectedInputs(item.Outcomes, item.FailureLiterals)
 	if err != nil {
 		return failed(err, nil)
@@ -582,8 +638,11 @@ func executeStage(ctx context.Context, name string, node stage, owner *stageOwne
 	if err := readJSON(binary+".json", &proof); err != nil {
 		return failed(err, nil)
 	}
+	if node.BinarySHA256 == "" || proof.SHA256 != node.BinarySHA256 || proof.Mode != node.BinaryMode {
+		return failed(errors.New("binary proof differs from the parent-owned build result"), nil)
+	}
 	hash, err := fileHash(binary)
-	if err != nil || hash != proof.SHA256 {
+	if err != nil || hash != proof.SHA256 || checkProofs(map[string]fileProof{binary: proof}) != nil {
 		return failed(errors.New("test binary changed before execution"), nil)
 	}
 	listed, err := owner.command(ctx, name+"-list", []string{binary, "-test.list=" + selector}, pkg.Directory, plan.Limits.BuildSeconds, "")
@@ -595,6 +654,9 @@ func executeStage(ctx context.Context, name string, node stage, owner *stageOwne
 	if err != nil || !reflect.DeepEqual(actual, expected.Roots) {
 		return failed(errors.New("compiled root census differs"), &listed)
 	}
+	if err := checkProofs(map[string]fileProof{binary: proof}); err != nil {
+		return failed(err, &listed)
+	}
 	result, err := owner.command(ctx, name, []string{binary, "-test.run=" + selector, "-test.v=test2json", "-test.count=1", "-test.parallel=" + strconv.Itoa(plan.Limits.Parallel), "-test.timeout=" + strconv.Itoa(plan.Limits.TestSeconds) + "s"}, pkg.Directory, plan.Limits.OuterSeconds, "")
 	wanted := 0
 	if len(expected.Markers) != 0 {
@@ -603,27 +665,31 @@ func executeStage(ctx context.Context, name string, node stage, owner *stageOwne
 	if err != nil || !commandMatches(result, wanted) {
 		return failed(err, &result)
 	}
-	converted, err := owner.command(ctx, name+"-events", []string{"go", "tool", "test2json", "-t", "-p", pkg.ImportPath}, pkg.Directory, plan.Limits.BuildSeconds, result.Stdout)
+	converted, err := owner.command(ctx, name+"-events", []string{owner.Go, "tool", "test2json", "-t", "-p", pkg.ImportPath}, pkg.Directory, plan.Limits.BuildSeconds, result.Stdout)
 	if err != nil || !commandMatches(converted, 0) {
 		return failed(err, &converted)
 	}
-	events, err := os.Open(converted.Stdout)
+	events, eventInfo, err := openRegular(converted.Stdout)
 	if err != nil {
 		return failed(err, &result)
 	}
 	checked, checkErr := verifyEvents(events, expected, pkg.ImportPath, *result.Exit)
-	closeErr := events.Close()
+	closeErr := errors.Join(sameRegular(converted.Stdout, events, eventInfo), events.Close())
 	if err := errors.Join(checkErr, closeErr); err != nil {
 		return failed(err, &result)
 	}
 	hash, err = fileHash(binary)
-	if err != nil || hash != proof.SHA256 {
+	if err != nil || hash != proof.SHA256 || checkProofs(map[string]fileProof{binary: proof}) != nil {
 		return failed(errors.New("test binary changed during execution"), &result)
 	}
-	return stageResult{Status: "passed", Seconds: result.Seconds, BinarySHA256: hash, Verification: &checked, Events: converted.Stdout, Command: &result}
+	return stageResult{Status: "passed", Seconds: result.Seconds, BinarySHA256: hash, BinaryMode: proof.Mode, Verification: &checked, Events: converted.Stdout, Command: &result}
 }
 
-func runMatrix(ctx context.Context, planPath, capture string) (matrixStatus, error) {
+func runMatrix(ctx context.Context, planPath, capture string) (returnedStatus matrixStatus, returnedErr error) {
+	planProof, err := regularProof(planPath)
+	if err != nil {
+		return matrixStatus{}, err
+	}
 	var plan planSpec
 	if err := readJSON(planPath, &plan); err != nil {
 		return matrixStatus{}, err
@@ -631,11 +697,31 @@ func runMatrix(ctx context.Context, planPath, capture string) (matrixStatus, err
 	if err := validatePlan(plan); err != nil {
 		return matrixStatus{}, err
 	}
-	before, err := sourceFence(plan.Sources)
+	originalInputs := map[string]fileProof{planPath: planProof}
+	for _, source := range plan.Sources {
+		proof, err := regularProof(source.Manifest)
+		if err != nil {
+			return matrixStatus{}, err
+		}
+		originalInputs[source.Manifest] = proof
+	}
+	for _, suite := range plan.Suites {
+		for _, path := range []string{suite.Outcomes, suite.FailureLiterals} {
+			proof, err := regularProof(path)
+			if err != nil {
+				return matrixStatus{}, err
+			}
+			originalInputs[path] = proof
+		}
+	}
+	if err := checkProofs(originalInputs); err != nil {
+		return matrixStatus{}, err
+	}
+	before, err := sourceFenceContext(ctx, plan.Sources)
 	if err != nil {
 		return matrixStatus{}, err
 	}
-	if !filepath.IsAbs(capture) || filepath.Clean(capture) != capture {
+	if !filepath.IsAbs(capture) || filepath.Clean(capture) != capture || strings.ContainsAny(capture, "\x00\r\n") {
 		return matrixStatus{}, errors.New("capture path must be absolute and canonical")
 	}
 	if err := physicalPath(filepath.Dir(capture), true); err != nil {
@@ -654,8 +740,35 @@ func runMatrix(ctx context.Context, planPath, capture string) (matrixStatus, err
 		}
 		helperPaths = append(helperPaths, path)
 	}
+	// jobs_init sources this sibling helper even when no service is started.
+	// It is an actual dependency, not an implicit trusted workspace fallback.
+	serviceHelper := filepath.Join(filepath.Dir(plan.SourceRoot), "server", "local", "release-gate-services.sh")
+	for _, path := range append(append([]string(nil), helperPaths...), serviceHelper) {
+		owned := false
+		for _, source := range before {
+			if !inside(path, source.Root) {
+				continue
+			}
+			relative, err := filepath.Rel(source.Root, path)
+			if err == nil && source.Files[relative].SHA256 != "" {
+				owned = true
+				originalInputs[path] = source.Files[relative]
+			}
+		}
+		if !owned {
+			return matrixStatus{}, fmt.Errorf("ownership adapter is absent from source manifest: %s", path)
+		}
+	}
 	if err := os.Mkdir(capture, 0700); err != nil {
 		return matrixStatus{}, err
+	}
+	status := matrixStatus{State: "running", Report: filepath.Join(capture, "report.json")}
+	results := map[string]stageResult{}
+	// Every later return, including setup and fence failures, leaves a compact
+	// terminal result. Incomplete evidence is retained, never converted to pass.
+	defer func() { returnedStatus, returnedErr = finishCapture(capture, status, results, returnedErr) }()
+	if err := writeJSON(filepath.Join(capture, "status.json"), status); err != nil {
+		return status, err
 	}
 	executable, err := os.Executable()
 	if err != nil {
@@ -685,23 +798,112 @@ func runMatrix(ctx context.Context, planPath, capture string) (matrixStatus, err
 	if err := writeJSON(filepath.Join(capture, "plan.json"), plan); err != nil {
 		return matrixStatus{}, err
 	}
-	inputs := map[string]string{}
+	if err := validatePlan(plan); err != nil {
+		return status, err
+	}
+	if err := checkProofs(originalInputs); err != nil {
+		return status, err
+	}
+	inputs := map[string]fileProof{}
 	entries, err := os.ReadDir(capture)
 	if err != nil {
 		return matrixStatus{}, err
 	}
 	for _, entry := range entries {
+		if entry.Name() == "status.json" {
+			continue
+		}
 		path := filepath.Join(capture, entry.Name())
-		hash, err := fileHash(path)
+		proof, err := regularProof(path)
 		if err != nil {
 			return matrixStatus{}, err
 		}
-		inputs[entry.Name()] = hash
+		inputs[path] = proof
 	}
 	if err := writeJSON(filepath.Join(capture, "inputs.json"), inputs); err != nil {
 		return matrixStatus{}, err
 	}
-	owner := &stageOwner{Source: plan.SourceRoot, Capture: capture, Environment: map[string]string{"GOMAXPROCS": strconv.Itoa(plan.Limits.GOMAXPROCS), "GOFLAGS": "-mod=readonly", "GOPROXY": "off", "GOSUMDB": "off", "GOWORK": "off"}}
+	inputManifest := filepath.Join(capture, "inputs.json")
+	inputManifestProof, err := regularProof(inputManifest)
+	if err != nil {
+		return status, err
+	}
+	inputs[inputManifest] = inputManifestProof
+	for path, proof := range originalInputs {
+		inputs[path] = proof
+	}
+	tools := map[string]string{}
+	for _, name := range []string{"go", "bash", "git", "timeout", "python3", "setsid", "nproc", "stat", "mkfifo", "mktemp", "awk", "ln", "mkdir", "sleep"} {
+		path, err := executablePath(name)
+		if err != nil {
+			return status, err
+		}
+		proof, err := regularProof(path)
+		if err != nil {
+			return status, err
+		}
+		tools[name], inputs[path] = path, proof
+	}
+	owner := &stageOwner{Source: plan.SourceRoot, Capture: capture, Inputs: inputs, Tools: tools, Go: tools["go"], Bash: tools["bash"], Environment: map[string]string{"PATH": os.Getenv("PATH"), "GOMAXPROCS": strconv.Itoa(plan.Limits.GOMAXPROCS), "GOFLAGS": "-mod=readonly", "GOPROXY": "off", "GOSUMDB": "off", "GONOPROXY": "none", "GONOSUMDB": "none", "GOPRIVATE": "", "GOVCS": "*:off", "GOWORK": "off", "GOENV": "off", "GOTOOLCHAIN": "local", "WARP_TEST_ENV_FAIL_FAST": "1"}}
+	toolchain, err := owner.command(ctx, "toolchain", []string{owner.Go, "env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH", "CGO_ENABLED", "CC", "CXX", "GOPATH", "GOCACHE", "GOMODCACHE"}, plan.SourceRoot, plan.Limits.BuildSeconds, "")
+	if err != nil || !commandMatches(toolchain, 0) {
+		return status, errors.Join(err, errors.New("actual Go toolchain discovery failed"))
+	}
+	var toolchainValues map[string]string
+	if err := readJSON(toolchain.Stdout, &toolchainValues); err != nil {
+		return status, err
+	}
+	if toolchainValues["GOVERSION"] == "" {
+		return status, errors.New("missing actual Go version")
+	}
+	toolDirectory := toolchainValues["GOTOOLDIR"]
+	if err := physicalPath(toolDirectory, true); err != nil {
+		return status, err
+	}
+	for _, name := range []string{"asm", "compile", "link", "cgo", "pack", "test2json"} {
+		path := filepath.Join(toolDirectory, name)
+		proof, err := regularProof(path)
+		if err != nil {
+			return status, err
+		}
+		inputs[path] = proof
+	}
+	for _, key := range []string{"GOROOT", "GOOS", "GOARCH", "CGO_ENABLED", "CC", "CXX", "GOPATH", "GOCACHE", "GOMODCACHE"} {
+		value, ok := toolchainValues[key]
+		if !ok || value == "" {
+			return status, fmt.Errorf("missing actual toolchain setting: %s", key)
+		}
+		owner.Environment[key] = value
+	}
+	if owner.Environment["CGO_ENABLED"] == "1" {
+		for _, key := range []string{"CC", "CXX"} {
+			path, err := executablePath(owner.Environment[key])
+			if err != nil {
+				return status, err
+			}
+			proof, err := regularProof(path)
+			if err != nil {
+				return status, err
+			}
+			inputs[path] = proof
+			owner.Environment[key] = path
+		}
+	} else if owner.Environment["CGO_ENABLED"] != "0" {
+		return status, errors.New("invalid actual cgo setting")
+	}
+	toolchainPath := filepath.Join(capture, "toolchain.json")
+	if err := writeJSON(toolchainPath, struct {
+		Values map[string]string    `json:"values"`
+		Tools  map[string]string    `json:"tools"`
+		Files  map[string]fileProof `json:"files"`
+	}{Values: toolchainValues, Tools: tools, Files: inputs}); err != nil {
+		return status, err
+	}
+	toolchainProof, err := regularProof(toolchainPath)
+	if err != nil {
+		return status, err
+	}
+	inputs[toolchainPath] = toolchainProof
 	packages := map[string]packageSpec{}
 	for _, pkg := range plan.Packages {
 		packages[pkg.Id] = pkg
@@ -713,7 +915,7 @@ func runMatrix(ctx context.Context, planPath, capture string) (matrixStatus, err
 		nodes[build] = stage{Build: suite}
 		nodes["suite-"+suite.Id] = stage{Dependencies: []string{build}, Suite: suite, Binary: build}
 	}
-	status := matrixStatus{State: "running", Total: len(nodes), Report: filepath.Join(capture, "report.json")}
+	status.Total = len(nodes)
 	publish := func(results map[string]stageResult, running []string, pending int) error {
 		status.Finished, status.Running, status.Pending = len(results), running, pending
 		status.Failed = nil
@@ -727,13 +929,22 @@ func runMatrix(ctx context.Context, planPath, capture string) (matrixStatus, err
 	results, runErr := runDAG(ctx, nodes, plan.Limits.Jobs, func(ctx context.Context, name string, node stage) stageResult {
 		return executeStage(ctx, name, node, owner, plan, packages)
 	}, publish)
-	after, fenceErr := sourceFence(plan.Sources)
-	afterErr := writeJSON(filepath.Join(capture, "source.after.json"), after)
-	unchanged := fenceErr == nil && reflect.DeepEqual(before, after)
-	for name, expected := range inputs {
-		hash, err := fileHash(filepath.Join(capture, name))
-		unchanged = unchanged && err == nil && hash == expected
+	var after []sourceProof
+	var fenceErr, afterErr error
+	if owner.Unproven.Load() {
+		fenceErr = errors.New("source fence forbidden: at least one child owner did not prove cleanup")
+	} else {
+		after, fenceErr = sourceFenceContext(ctx, plan.Sources)
+		afterErr = writeJSON(filepath.Join(capture, "source.after.json"), after)
+		if fenceErr == nil && !reflect.DeepEqual(before, after) {
+			fenceErr = errors.New("source identity changed during qualification")
+		}
+		for _, result := range results {
+			fenceErr = errors.Join(fenceErr, checkModuleSourceProofs(result.ModuleSources))
+		}
+		fenceErr = errors.Join(fenceErr, checkProofs(inputs), checkProofs(originalInputs))
 	}
+	unchanged := fenceErr == nil
 	status.State, status.SourceUnchanged, status.Finished, status.Running, status.Pending = "failed", unchanged, len(results), nil, 0
 	status.Failed = nil
 	for _, name := range sortedKeys(results) {
@@ -742,21 +953,93 @@ func runMatrix(ctx context.Context, planPath, capture string) (matrixStatus, err
 		}
 	}
 	finalErr := errors.Join(runErr, fenceErr, afterErr, ctx.Err())
-	if finalErr != nil {
-		status.Error = finalErr.Error()
+	if len(results) != len(nodes) {
+		finalErr = errors.Join(finalErr, errors.New("incomplete terminal stage census"))
 	}
 	if finalErr == nil && unchanged && len(status.Failed) == 0 {
 		status.State = "passed"
 	}
-	report := matrixReport{Status: status, Results: results}
-	reportErr := writeJSON(status.Report, report)
-	failureStages := map[string]stageResult{}
-	for _, name := range status.Failed {
-		failureStages[name] = results[name]
+	return status, finalErr
+}
+
+// The final status is authoritative only after report publication succeeds.
+// A failed status publication retains the old status and a separate failure
+// artifact; neither the returned value nor process exit may announce success.
+func finishCapture(capture string, status matrixStatus, results map[string]stageResult, cause error) (matrixStatus, error) {
+	status.Report, status.Finished, status.Running, status.Pending = filepath.Join(capture, "report.json"), len(results), nil, 0
+	status.Failed = nil
+	failures := map[string]stageResult{}
+	for _, name := range sortedKeys(results) {
+		if results[name].Status != "passed" {
+			status.Failed = append(status.Failed, name)
+			failures[name] = results[name]
+		}
 	}
-	failureErr := writeJSON(filepath.Join(capture, "failures.json"), matrixReport{Status: status, Results: failureStages})
-	statusErr := writeJSON(filepath.Join(capture, "status.json"), status)
-	return status, errors.Join(finalErr, reportErr, failureErr, statusErr)
+	if status.State != "passed" || !status.SourceUnchanged || len(status.Failed) != 0 || status.Finished != status.Total {
+		cause = errors.Join(cause, errors.New("qualification did not complete with exact passing evidence"))
+	}
+	record := func(err error) {
+		cause = errors.Join(cause, err)
+		if cause != nil {
+			status.State = "failed"
+			status.Error = shortError(cause)
+		}
+	}
+	record(nil)
+	record(writeJSON(filepath.Join(capture, "failures.json"), matrixReport{Status: status, Results: failures}))
+	record(writeJSON(status.Report, matrixReport{Status: status, Results: results}))
+	if err := writeJSON(filepath.Join(capture, "status.json"), status); err != nil {
+		record(err)
+		record(writeJSON(filepath.Join(capture, "status.failure.json"), status))
+	}
+	return status, cause
+}
+
+// Full command evidence remains in raw captures; compact status stays bounded.
+func shortError(err error) string {
+	message := err.Error()
+	if len(message) > 16*1024 {
+		return message[:16*1024] + " [error text truncated; inspect capture]"
+	}
+	return message
+}
+
+// A failed final status publication outranks a retained earlier progress row.
+// Neither a malformed failure marker nor an incomplete passed row is ignored.
+func readCaptureStatus(capture string) (matrixStatus, error) {
+	if err := physicalPath(capture, true); err != nil {
+		return matrixStatus{}, err
+	}
+	var status matrixStatus
+	err := readJSON(filepath.Join(capture, "status.failure.json"), &status)
+	if err == nil {
+		if status.State != "failed" || status.Error == "" {
+			return matrixStatus{}, errors.New("invalid terminal publication failure marker")
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		if err := readJSON(filepath.Join(capture, "status.json"), &status); err != nil {
+			return matrixStatus{}, err
+		}
+	} else {
+		return matrixStatus{}, err
+	}
+	if status.Report != filepath.Join(capture, "report.json") || status.Total < 0 || status.Total > 2048 || status.Finished < 0 || status.Finished > status.Total || status.Pending < 0 || status.Pending > status.Total {
+		return matrixStatus{}, errors.New("invalid capture status identity or census")
+	}
+	switch status.State {
+	case "running":
+	case "failed":
+		if status.Error == "" {
+			return matrixStatus{}, errors.New("failed status has no cause")
+		}
+	case "passed":
+		if !status.SourceUnchanged || status.Finished != status.Total || status.Total == 0 || status.Pending != 0 || len(status.Running) != 0 || len(status.Failed) != 0 || status.Error != "" {
+			return matrixStatus{}, errors.New("incomplete passing status")
+		}
+	default:
+		return matrixStatus{}, errors.New("unknown capture status")
+	}
+	return status, nil
 }
 
 func main() {
@@ -769,8 +1052,19 @@ func main() {
 	var err error
 	if len(os.Args) == 3 && os.Args[1] == "status" {
 		var status matrixStatus
-		err = readJSON(filepath.Join(os.Args[2], "status.json"), &status)
+		status, err = readCaptureStatus(os.Args[2])
 		result = status
+	} else if len(os.Args) == 4 && os.Args[1] == "fence" {
+		var proofs []sourceProof
+		proofs, err = sourceFenceContext(ctx, []sourceSpec{{Root: os.Args[2], Manifest: os.Args[3]}})
+		if err == nil {
+			result = struct {
+				Status         string `json:"status"`
+				Root           string `json:"root"`
+				Files          int    `json:"files"`
+				ManifestSHA256 string `json:"manifest_sha256"`
+			}{Status: "matched", Root: proofs[0].Root, Files: len(proofs[0].Files), ManifestSHA256: proofs[0].ManifestSHA256}
+		}
 	} else if len(os.Args) == 4 && os.Args[1] == "run" {
 		var status matrixStatus
 		status, err = runMatrix(ctx, os.Args[2], os.Args[3])
@@ -779,7 +1073,7 @@ func main() {
 			err = errors.New("qualification did not pass")
 		}
 	} else {
-		err = errors.New("usage: qualification run PLAN.json NEW_CAPTURE | status CAPTURE")
+		err = errors.New("usage: qualification run PLAN.json NEW_CAPTURE | status CAPTURE | fence SOURCE_ROOT MANIFEST")
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

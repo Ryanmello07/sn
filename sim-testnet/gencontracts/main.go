@@ -73,7 +73,8 @@ type artifactDefinition struct {
 var artifactDefinitions = []artifactDefinition{
 	{"ReserveSink", "STReserveSink.sol/STReserveSink.json", true, "", []string{"netuid", "reserveHotkey", "selfColdkey", "bootstrap"}, []string{"src/STReserveSink.sol"}, false, nil},
 	{"SettlementVault", "STSettlementVault.sol/STSettlementVault.json", true, "", []string{"netuid", "escrowHotkey", "selfColdkey", "minimumClaimTTLBlocks", "minimumTransferTaoRao", "bootstrap"}, []string{"src/STSettlementVault.sol"}, false, nil},
-	{"Coordinator", "STCoordinator.sol/STCoordinator.json", true, "", []string{"__self"}, []string{"lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol"}, false, map[string]string{"netuid": "0", "settlementVault": "2", "reserveSink": "3"}},
+	{"Coordinator", "STCoordinator.sol/STCoordinator.json", true, "", []string{"__self"}, []string{"lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol"}, false, map[string]string{"netuid": "0", "settlementVault": "2", "reserveSink": "3", "validatorEvidence": "23"}},
+	{"ValidatorEvidence", "STValidatorEvidence.sol/STValidatorEvidence.json", true, "", []string{"coordinator", "settlementVault", "chainId", "netuid", "genesisHash", "deploymentIdHash"}, []string{"src/STValidatorEvidence.sol"}, false, nil},
 	{"ERC1967Proxy", "ERC1967Proxy.sol/ERC1967Proxy.json", true, "", nil, nil, false, nil},
 	{"CoordinatorAdversary", "STCoordinatorAdversary.sol/STCoordinatorAdversary.json", false, "TestnetGovernanceDrillArtifact", []string{"__self"}, []string{"lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol"}, true, nil},
 	{"SubnetProbe", "STSubnetProbe.sol/STSubnetProbe.json", false, "TestnetPrecompileProbeArtifact", []string{"owner", "netuid"}, []string{"src/probe/STSubnetProbe.sol"}, false, nil},

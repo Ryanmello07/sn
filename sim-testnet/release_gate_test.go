@@ -567,6 +567,8 @@ func TestProducerGatePinsSemanticIntegrityRegressions(t *testing.T) {
 		"TestProducerGatePinsSyntheticEVMIdentityRegressions",
 		"TestProducerGatePinsSemanticIntegrityRegressions",
 		"TestProducerGatePinsExactBlockRuntimeClientRegressions",
+		"TestProducerGatePinsExactBlockRuntimeClientRegressionsNativeStakeCoverage",
+		"TestProducerGatePinsExactBlockRuntimeClientRegressionsNativeStakeStartup",
 		"TestReleaseSemanticCensusPinsCompleteRegressionSourceGroups",
 	} {
 		selected, selectErr := releaseSelectedTestDeclarations(selector, []string{"func " + required + "(t *testing.T) {}\n"})
@@ -1027,6 +1029,7 @@ func TestReleaseSemanticCensusPinsCompleteRegressionSourceGroups(t *testing.T) {
 		{pattern: "final_semantic_settlement_fixture_test.go", required: "^Test"},
 		{pattern: "campaign_artifact_references_test.go", required: "^Test"},
 		{pattern: "campaign_replica_verification_test.go", required: "^Test"},
+		{pattern: "release_gate_validator_stake_test.go", required: "^Test"},
 	} {
 		paths, err := filepath.Glob(group.pattern)
 		if err != nil || len(paths) == 0 {
@@ -1047,13 +1050,20 @@ func TestReleaseSemanticCensusPinsCompleteRegressionSourceGroups(t *testing.T) {
 // A syntactically valid selector and exact recorded subset are insufficient
 // when an adjacent declaration has escaped its independently reviewed group.
 func TestReleaseSemanticCensusRejectsSourceSelectorOmissions(t *testing.T) {
-	source := "func TestFinalNativeAlpha(t *testing.T) {}\nfunc TestRenamedAdjacent(t *testing.T) {}\n"
-	if err := verifyReleaseSourceTestCoverage("^Test", "^Test", []string{source}); err != nil {
-		t.Fatal(err)
-	}
-	for _, selector := range []string{"^TestFinalNative", "^TestMissing$"} {
-		if err := verifyReleaseSourceTestCoverage(selector, "^Test", []string{source}); err == nil {
-			t.Errorf("source selector %q accepted an omitted regression", selector)
+	for _, control := range []struct {
+		source   string
+		omission string
+	}{
+		{source: "func TestFinalNativeAlpha(t *testing.T) {}\nfunc TestRenamedAdjacent(t *testing.T) {}\n", omission: "^TestFinalNative"},
+		{source: "func TestProducerGatePinsExactBlockRuntimeClientRegressionsNativeStakeCoverage(t *testing.T) {}\nfunc TestProducerGatePinsExactBlockRuntimeClientRegressionsNativeStakeStartup(t *testing.T) {}\n", omission: "^TestProducerGatePinsExactBlockRuntimeClientRegressionsNativeStakeCoverage$"},
+	} {
+		if err := verifyReleaseSourceTestCoverage("^Test", "^Test", []string{control.source}); err != nil {
+			t.Fatal(err)
+		}
+		for _, selector := range []string{control.omission, "^TestMissing$"} {
+			if err := verifyReleaseSourceTestCoverage(selector, "^Test", []string{control.source}); err == nil {
+				t.Errorf("source selector %q accepted an omitted regression", selector)
+			}
 		}
 	}
 }
@@ -1172,6 +1182,9 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 	}
 	script := string(scriptBytes)
 	assertReleaseConnectPolicySelector(t, script, "security_table_tests")
+	if err := verifyReleaseGatePrivateServiceProfile(script); err != nil {
+		t.Fatal(err)
+	}
 	const repositories = "release_repos=(sn server operator-proxy connect sdk glog goidenticons proxy userwireguard vault xops config)"
 	if !strings.Contains(script, repositories) || !strings.Contains(script, `for repo in "${release_repos[@]}"`) {
 		t.Fatal("local release gate does not check every release repository")
@@ -1272,8 +1285,6 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 		"go test -race ./connect/sim-latency",
 		"export WARP_ENV=local",
 		"export WARP_SERVICE=test",
-		"export BRINGYOUR_POSTGRES_HOSTNAME=local-pg.bringyour.com",
-		"export BRINGYOUR_REDIS_HOSTNAME=local-redis.bringyour.com",
 		"go test -race ./controller -run \"$controller_db_tests\"",
 		"go test -race ./model -run \"$model_db_tests\"",
 		"go test -timeout 20m ./proxy -count=1",
@@ -1305,6 +1316,50 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 	if patchIndex < 0 || lockIndex <= patchIndex || passedIndex <= lockIndex {
 		t.Fatalf("final release-lock ordering patch=%d lock=%d passed=%d", patchIndex, lockIndex, passedIndex)
 	}
+}
+
+// The gate admits stateful tests only through its owned service environment;
+// inherited or literal authorities cannot replace the private preflight.
+func verifyReleaseGatePrivateServiceProfile(script string) error {
+	for _, forbidden := range []string{
+		"local-pg.bringyour.com", "local-redis.bringyour.com",
+		"BRINGYOUR_POSTGRES_HOSTNAME=", "BRINGYOUR_REDIS_HOSTNAME=",
+	} {
+		if strings.Contains(script, forbidden) {
+			return fmt.Errorf("release gate overrides private service authority with %q", forbidden)
+		}
+	}
+	previous, phase, manifest := -1, -1, -1
+	for _, command := range []string{
+		`release_gate_services_start "$release_gate_root" "$workspace" "$sn_repo/deploy/testnet/release.lock.yml"`,
+		`export RELEASE_GATE_SERVICE_ENV="$release_gate_service_root/environment.sh"`,
+		`release_phase_server_db() {`,
+		`export WARP_ENV=local`,
+		`export WARP_SERVICE=test`,
+		`source "$RELEASE_GATE_SERVICE_ENV"`,
+		`source "$workspace/server/test-env.sh"`,
+		`test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"`,
+		`release_gate_start server-db release_phase_server_db`,
+	} {
+		pattern := regexp.MustCompile(`(?m)^[\t ]*` + regexp.QuoteMeta(command) + `[\t ]*$`)
+		matches := pattern.FindAllStringIndex(script, -1)
+		if len(matches) != 1 || matches[0][0] <= previous {
+			return fmt.Errorf("release gate must retain one ordered private-service step %q", command)
+		}
+		previous = matches[0][0]
+		if command == `release_phase_server_db() {` {
+			phase = previous
+		}
+		if strings.HasPrefix(command, "test_env_validate_suite_resource_manifest ") {
+			manifest = previous
+		}
+	}
+	firstTest := strings.Index(script[phase:], "go test ")
+	phaseEnd := regexp.MustCompile(`(?m)^[\t ]*\}[\t ]*$`).FindStringIndex(script[phase:])
+	if firstTest < 0 || phaseEnd == nil || phase+firstTest <= manifest || phase+phaseEnd[0] <= phase+firstTest || phase+phaseEnd[0] >= previous {
+		return fmt.Errorf("release gate stateful tests do not follow private preflight and manifest inside their admitted phase")
+	}
+	return nil
 }
 
 // The exact binding generator must fail before runtime attestation and long
@@ -2090,13 +2145,30 @@ func TestProducerGateSeparatesCaptureFromProductionAnalysis(t *testing.T) {
 	}
 	script := string(scriptBytes)
 	assertReleaseConnectPolicySelector(t, script, "policy_tests")
+	if err := verifyReleaseGatePrivateServiceProfile(script); err != nil {
+		t.Fatal(err)
+	}
+	files, err := filepath.Glob("../validator/*_test.go")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("enumerate producer validator roots: files=%d err=%v", len(files), err)
+	}
+	sources := make([]string, 0, len(files))
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sources = append(sources, string(data))
+	}
+	if err := verifyReleaseProducerSelection(script, sources); err != nil {
+		t.Fatal(err)
+	}
 	for _, required := range []string{
 		"go test ./validator ./sim-testnet -run '^$'",
 		"authenticated release driver",
 		"ExecutableAttestation|StopExecutableAttestation|ReleaseExecutable|AuthenticateCommandExecutable|RunMain|ParseReleaseExecutableBuildInfo|PushedSNRevision|ParseCurrentSNRevision|ReleaseGitNetworkEnvironment",
 		"go test ./sim-testnet -run \"$executable_attestation_tests\"",
 		"go test -race ./sim-testnet -run \"$executable_attestation_tests\"",
-		"Attempt|Deposited|ReleaseMeasurement|IntentStore|SteeringIntent|MeasurementStats|ExactPoolQuality|ReleaseSteeringLoop",
 		"FinalCollected(Bundle|File|Chain)|FinalSemantic(PublicCapture|LaunchFoundation)",
 		"ScenarioProcessLogGate|ReleaseAndProductionScenariosRequireProcessLogGate|ScenarioCompletion",
 		"CampaignEvidence|DirectScenarioCompletion|EvidenceFileHashes",
@@ -2139,6 +2211,132 @@ func TestProducerGateSeparatesCaptureFromProductionAnalysis(t *testing.T) {
 	passedIndex := strings.LastIndex(script, "launch-critical gate passed")
 	if lockIndex < 0 || passedIndex <= lockIndex {
 		t.Fatalf("producer gate is not release-lock fenced: lock=%d pass=%d", lockIndex, passedIndex)
+	}
+}
+
+// Alternative order is immaterial, but each reviewed group and every actual
+// selected validator root must survive additions to the producer selector.
+func verifyReleaseProducerSelection(script string, sources []string) error {
+	const required = "Attempt|DiskAttempt|HTTPAttemptStreamV2|SealAttemptCutV2|TrailPolicyDepth|StatsWrite|StatsMultiBatch|StatsSettlement|Deposited|ReleaseMeasurement|IntentStore|SteeringIntent|MeasurementStats|ExactPoolQuality|HeadEMA|ReleaseSteeringLoop|ReleaseSettlementRefresh"
+	selector, err := releaseConnectPolicySelectorAssignment(script, "producer_tests")
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(selector, "^Test(") || !strings.HasSuffix(selector, ")") {
+		return fmt.Errorf("producer selector must retain its prefix-selection boundary")
+	}
+	alternatives := map[string]bool{}
+	for _, alternative := range strings.Split(strings.TrimSuffix(strings.TrimPrefix(selector, "^Test("), ")"), "|") {
+		alternatives[alternative] = true
+	}
+	for _, alternative := range strings.Split(required, "|") {
+		if !alternatives[alternative] {
+			return fmt.Errorf("producer selector omits required alternative %s", alternative)
+		}
+	}
+	if err := verifyReleaseSourceTestCoverage(selector, "^Test("+required+")", sources); err != nil {
+		return err
+	}
+	for _, command := range []string{
+		`go test ./validator -run "$producer_tests" -count=1`,
+		`go test -race ./validator -run "$producer_tests" -count=1`,
+	} {
+		if strings.Count(script, command) != 1 {
+			return fmt.Errorf("producer gate must execute exactly one %s", command)
+		}
+	}
+	return nil
+}
+
+// Expanding or reordering alternatives must not recreate the old contiguous-
+// substring requirement when the actual producer root set is retained.
+func TestReleaseProducerSelectionAcceptsIndependentAlternativeOrder(t *testing.T) {
+	data, err := os.ReadFile("../scripts/test-release-1.0-producer-gate.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	selector, err := releaseConnectPolicySelectorAssignment(script, "producer_tests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	alternatives := strings.Split(strings.TrimSuffix(strings.TrimPrefix(selector, "^Test("), ")"), "|")
+	for left, right := 0, len(alternatives)-1; left < right; left, right = left+1, right-1 {
+		alternatives[left], alternatives[right] = alternatives[right], alternatives[left]
+	}
+	reordered := "^Test(" + strings.Join(alternatives, "|") + "|FutureProducerBoundary)"
+	script = strings.Replace(script, "producer_tests='"+selector+"'", "producer_tests='"+reordered+"'", 1)
+	sources := []string{"func TestAttemptOwnedBoundary(t *testing.T) {}\nfunc TestStatsWriteAdjacentBoundary(t *testing.T) {}\n"}
+	if err := verifyReleaseProducerSelection(script, sources); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Required old and newly added groups, prefix semantics, and both execution
+// modes remain independently checked after the selector guard is repaired.
+func TestReleaseProducerSelectionRejectsRequiredRootOmission(t *testing.T) {
+	data, err := os.ReadFile("../scripts/test-release-1.0-producer-gate.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	selector, err := releaseConnectPolicySelectorAssignment(script, "producer_tests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sources := []string{"func TestAttemptOwnedBoundary(t *testing.T) {}\nfunc TestStatsWriteAdjacentBoundary(t *testing.T) {}\n"}
+	for _, omitted := range []string{"|Deposited", "|StatsWrite", "|ReleaseSettlementRefresh"} {
+		changed := strings.Replace(script, "producer_tests='"+selector+"'", "producer_tests='"+strings.Replace(selector, omitted, "", 1)+"'", 1)
+		if err := verifyReleaseProducerSelection(changed, sources); err == nil {
+			t.Errorf("producer guard admitted omitted %s", omitted)
+		}
+	}
+	for _, changed := range []string{
+		strings.Replace(script, "producer_tests='"+selector+"'", "producer_tests='"+selector+"$'", 1),
+		strings.Replace(script, `go test -race ./validator -run "$producer_tests" -count=1`, ":", 1),
+	} {
+		if err := verifyReleaseProducerSelection(changed, sources); err == nil {
+			t.Error("producer guard admitted narrowed roots or missing race execution")
+		}
+	}
+}
+
+// Both actual gate profiles must reject missing, redirected, or reordered
+// admission steps without starting any service or test subprocess.
+func TestReleaseGatePrivateProfileRejectsSharedRedirectsAndReordering(t *testing.T) {
+	for _, path := range []string{"../scripts/test-release-1.0-producer-gate.sh", "../scripts/test-release-1.0-local.sh"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		script := string(data)
+		if err := verifyReleaseGatePrivateServiceProfile(script); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		for _, command := range []string{
+			`release_gate_services_start "$release_gate_root" "$workspace" "$sn_repo/deploy/testnet/release.lock.yml"`,
+			`source "$RELEASE_GATE_SERVICE_ENV"`,
+			`source "$workspace/server/test-env.sh"`,
+			`test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"`,
+		} {
+			if err := verifyReleaseGatePrivateServiceProfile(strings.Replace(script, command, ":", 1)); err == nil {
+				t.Errorf("%s admitted missing %s", path, command)
+			}
+		}
+		reordered := strings.Replace(script, `source "$RELEASE_GATE_SERVICE_ENV"`, "private_profile_source_placeholder", 1)
+		reordered = strings.Replace(reordered, `source "$workspace/server/test-env.sh"`, `source "$RELEASE_GATE_SERVICE_ENV"`, 1)
+		reordered = strings.Replace(reordered, "private_profile_source_placeholder", `source "$workspace/server/test-env.sh"`, 1)
+		for _, changed := range []string{
+			reordered,
+			script + "\nexport BRINGYOUR_POSTGRES_HOSTNAME=local-pg.bringyour.com\n",
+			script + "\nexport BRINGYOUR_REDIS_HOSTNAME=127.0.0.1\n",
+			strings.Replace(script, `source "$RELEASE_GATE_SERVICE_ENV"`, `source "$workspace/server/test-env.sh"`, 1),
+			strings.Replace(script, `source "$RELEASE_GATE_SERVICE_ENV"`, "go test ./controller\n"+`source "$RELEASE_GATE_SERVICE_ENV"`, 1),
+		} {
+			if err := verifyReleaseGatePrivateServiceProfile(changed); err == nil {
+				t.Errorf("%s admitted shared, duplicate, or premature database admission", path)
+			}
+		}
 	}
 }
 

@@ -1,5 +1,13 @@
 # UR Subnet release 1.0 finalization plan
 
+Current short index: [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md).
+Decision confirmed 2026-09-07 UTC: on-chain validator evidence hashes with full
+signed proof bytes served by the API and content-addressed MinIO. Implement the
+independent write-once pool-namespace commitments specified in section10.1 of
+the complete handoff, including no-payout windows and later audits. Historical
+entries below that call this choice unanswered are superseded; implementation
+and on-chain acceptance are not yet complete.
+
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
 2026-09-07 06:59 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification

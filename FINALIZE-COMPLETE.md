@@ -4,14 +4,177 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
-Checkpoint update (2026-09-07 07:32 UTC): the qualified Head53 and Stats28
-compositions are now in primary. Gate9 is being qualified separately on the
-held integration candidate and is not yet promoted. Primary also includes the
-unfinished Go qualification runner and its initial21 tests; final provenance,
-bounded-output handling and review regressions remain WIP. The requested Git
-checkpoint is not a source freeze, full-gate certificate or live acceptance.
-Use the active index for current ownership; older timestamped records below
-remain historical evidence, not claims about the checkpoint's release status.
+Execution allocation update (2026-09-07 15:53 UTC): the user approved two Astra
+max implementation/fix agents, one Terra max agent driving concurrent isolated
+test processes, and root integration. Existing live process handles and exact
+capture/source/binary obligations transfer before the old isolation lane idles.
+This supersedes older two-Terra/one-Astra ownership notes below; it does not
+change any test membership, time limit, source gate or live approval boundary.
+
+Checkpoint reconciliation (2026-09-07 15:57 UTC): new startup/failure agent is
+`astra_startup_and_fixes_v2`; `astra_canonical_resume_v2` retains authenticated
+carry, and `terra_qualification_resume_v2` owns concurrent test execution. The
+old isolation lane completed handoff and is idle with no live process/reader.
+Normalizer4-v2 now passes4 N/R,19 events each, with source/binary/list/body/checker
+fences and root-read summaries. Preserve the original CWD failures and the
+separate pre-Go exit126 direct-exec attempts against the mode0664 wrapper;
+qualifying invocations explicitly used Bash. Both reviewed fixture successors
+(history1 and v11 installer1), plus disk-owner2 draft, remain outside candidate
+pending composition/review. Primary checkpoint does not include those drafts
+or claim live validation. Server remains clean at9b582d91; no pull/push requested.
+
+Latest test reconciliation (2026-09-07 15:51 UTC): historical/current validator UID
+separation is composed and passes exact35 N/R plus causal1 in
+`capture-historical-uid-v1`. The Go runner module-alias repair and fixture
+correction pass54 N/R (219 events each), with root-read checker summaries and
+causal1 expected failure. Original launcher, selector and fixture failures are
+preserved; no failed capture was rewritten into success.
+
+New history/boundary4/22 is composed on the197-path manifest14bc7227. Combined
+history57 normal is56PASS/1FAIL; race hits the same assertion and the unchanged
+3m timeout. One operator legitimately has no prior EMA at a_min8; the test
+incorrectly demanded a nonempty prior for both. Astra's reviewed fixture1 pins
+each operator to its exact authenticated previous PostFold, requires both
+positive and absent prior controls, and removes11 redundant genuine-fixture
+constructions from two mutation loops. Source and test bounds are unchanged;
+the successor is not yet composed or qualified. Both production causal2 bodies
+match0PASS/2 expectedFAIL N/R, with candidate/overlay fences0. Original captures:
+`capture-activation-history-v1`; correction:
+`temp/sn-release-history-v2-pa0WmUH2/fixture-next/HISTORY-FIXTURE-HANDOFF-v1.md`.
+
+Shared sim compilation now passes at the original normal300/race360 bounds,
+GOMAXPROCS2, retained caches and private outputs:96s/143s, hashes67973ebb/0fa7df,
+actual modes0775. Focused installer3 passes N/R; full25 is24PASS/1FAIL both
+modes. The v11 test fixture's in-place dependency filtering changes another
+action through shared slice storage; Astra is preparing the ownership fix.
+Normalizer4 is1PASS/3FAIL N/R because its capture's source fence changed the
+working directory before execution; all three expected fixture files exist.
+Only a reviewed wrapper correction and separate recapture may follow. See
+`capture-installer-shared-v3` and `capture-shared-sim-binary-v3`. Both execution
+lanes have joined readers and released the candidate; do not hold it for reports.
+
+Root's new disk-owner2/11 draft at `temp/sn-release-state-v2-tGo6X9hX/validator/`
+opens the complete configured bounded disk census, rechecks key/history byte
+authority, reads snapshots/journal with retained native directory custody and
+joins every partial-acquisition failure. It returns detached candidates, not
+activated Stats or authorization to submit. It is not yet composed/qualified.
+Authenticated contract carry remains Astra-owned and temp-only. Actual complete
+startup/settlement/recovery/submission, public replicas, legacy boundary/native
+generation authority, capacity, full gates, freeze, live RC/three epochs and
+`FINAL.md` all remain mandatory. No new testnet write occurred in this phase.
+
+Earlier reconciliation (2026-09-07 13:26 UTC): bootstrap new12 + retained76
+pass exact88 normal/race (391 events each), all compile/list/body/checker exits0,
+with193-path source fences0 in `capture-bootstrap-v2/successor`. Root independently
+read both checker outputs. This does not qualify the newly identified historical
+versus current UID distinction; Astra owns that mandatory repair separately.
+
+The repaired generator's actual current-private-graph v4 generate/check/wrapper
+all exit0. Root composed its exact `contracts_gen.go` output62e173ac (mode0644),
+with only ValidatorEvidence artifact/layout constants changed, after both Terra
+lanes released source. The successor193-path manifest is9563de78. Prior source
+manifests and failed v3/check2 captures remain immutable. Generator causal1 now
+deterministically fails on old code with13 instead of14 types; simulator layout
+and causal qualification remain. Shared simulator compilation is currently held
+by the Go runner's rejection of Go-reported local-module symlink aliases. Astra's
+narrow repair must preserve strict configured physical roots and repeated source
+identity checks; its new six regressions are not yet qualified.
+
+Earlier reconciliation (2026-09-07 13:11 UTC): combined validator76 now passes
+normal/race with exact root/event/source fences in
+`temp/sn-integration-xOgvEe/capture-installer-rpc-activation-v2/successor`.
+Full Solidity17 suites/199 tests pass with no failures/skips in
+`capture-evidence-contract-v1/recapture-mutability-v2/recapture-expectation-order-v1/full-suite-v2`.
+The v1 Solidity capture's indentation-only census-parser failure is preserved.
+
+The evidence artifact mismatch has a confirmed production cause: stripping AST
+IDs collapsed two distinct Domain declarations into one map key, dropping a
+storage type and making hashes nondeterministic. Reviewed normalizer5 is composed
+in the candidate, preserving all14 real types and nested references. Gencontracts24
+normal/race pass in `capture-storage-layout-normalizer-v2`; v1's wrong-package-CWD
+19PASS/5FAIL capture remains failed. Simulator layout tests, causal1+1 controls
+and current-graph regeneration/check still precede promotion of generated bytes.
+
+Reviewed fixture2 and adjacent loop1 are also composed: retain all six actual
+persisted-envelope faults, both provider-cancellation cases and all three timeout
+cases. The original unprotected-chain fixture panic and positive-subtest checker
+refusal remain recorded. Shared simulator binaries must use original normal300 /
+race360 compile bounds, GOMAXPROCS2, recorded retained Go caches and private
+temporary/output paths. The original race360 cold-cache timeout remains a failure.
+An unintended900-second successor launch was stopped/joined and does not qualify;
+its signal trap's zero exit is not proof of compilation completion. The reviewed
+Go qualification runner owns explicit package CWD, argv/environment/timeouts and
+joined process results; reuse it for these non-service matrices.
+
+Root authored and Astra reviewed bootstrap2/12 at
+`temp/sn-release-activation-v2-rqGDGa/startup-next/validator/`. Both exact files
+are now composed after all dependent readers released; Terra admits new12 plus
+retained76 as exact88 N/R, not yet qualified. It reads the exact five configured inputs for every operator,
+matches the independent canonical context and real keys before RPC, and joins
+bounded parallel historical activation/native observations. Production uses the
+reviewed runtime pins. Its history bytes are only checksum-checked inputs;
+initial-cut canonical boundary/epoch/generation, complete prefix/EMA/history
+replay and public replicas remain mandatory before runtime ownership. This
+does not remove the RunRelease startup refusal or complete production submission.
+
+Earlier integration update (2026-09-07 09:52 UTC): checkpoint SN50e431e/server9b582d91
+is committed, not pushed. Since that checkpoint, qualified Gate10 and
+Terminal33 were promoted to primary; the exact Terminal123 and adjacent
+Stats/Head normal/race results are in capture-terminal-v1. Reviewed Go runner48
+also passes both modes. The candidate now qualifies Config11 + ordinary3;
+its temporary startup guard must not be mistaken for finished production wiring.
+Ordinary repair5/widened50/simulator2 now pass normal/race, with causal1PASS/4FAIL
+in both modes; root promoted all3 exact files. Config47 now has matched normal
+and race results: simulator6+20 in repair-v4, validator14+7 in repair-v5 after
+private-directory/inert config/vault fixtures and preserving all nine retained
+cases in a plain CODESTYLE loop. Root read the four v5 checker summaries and
+source fence0; no test was dropped or checker relaxed.
+
+Current execution boundary: Evidence22 stabi20/reader12 N/R are qualified on
+the combined candidate. Gencontracts18 N/R Go bodies0 were rejected by the
+strict event checker for retained positive subtests; all four mutation cases
+and18 roots are preserved in Astra's one-file plain-loop correction. Root then
+composed reviewed installer13, qualified primary RPC4, that generator repair1,
+and new activation3 (21 paths, all donor comparisons/modes/diffcheck0). Terra
+has six real normal/race builds in capture-installer-rpc-activation-v1 for
+installer25, validator75 (activation12+native9+RPC54), and generator18.
+The activation method uses actual chain readers and real dual-key signatures,
+with parallel, canceled/joined native/EVM observations. It remains a prerequisite,
+not a config/history/migration loader or completed startup; RunRelease's staged
+refusal remains. See INSTALLER-RPC-ACTIVATION-INTEGRATION-v1.md outside source.
+
+The approved on-chain-hashes/API-MinIO design has a real companion and
+coordinator anchor, compiler-derived Go bindings, typed signed calldata and
+canonical-hash readback. Strict full Solidity build now passes (coordinator24492,
+84-byte headroom; append-only slot23, malicious helper2819). Storage15 exposed a
+test expectation-order defect (14PASS/1FAIL); the repaired suite now15PASS and
+adjacent evidence library13 also passes. The strict warm build passed in101s,
+with production artifacts unchanged. Stabi20 now passes both modes. Reader12 passes
+normal/race and its causal control is9PASS/3FAIL with exact owned literals.
+RPC4 pre-JSON body-admission/cancellation repair passes19/54 normal/race, plus
+causal6 with1PASS/5 expectedFAIL and all individual owned assertions. It is now
+in both primary and candidate. Miner/simulator siblings remain open.
+
+The reviewed installer is at temp/sn-evidence-install-v1-TUBN0C6f with a
+plan12/CREATE/owner link/canonical readback/public-manifest/release-lock path and
+25 declared tests, including real Executor/signed-RLP/journal/HTTP recovery.
+Astra repaired fixture, atomic nonce, probe alias and persisted-anchor-envelope
+gaps before root composition. Authenticated
+carry of an installed immutable journal across later coordinator upgrades is
+still required, not replaced by first-install-only acceptance. The actual
+generated simulator payload15d804 and21 related evidence paths are now composed
+into the same candidate, with exact donor byte/mode checks and diffcheck0.
+Selected integration qualification is starting; primary still has the older
+generated payload. The other Terra lane must recheck the current private
+Solidity graph after the expectation-order fixture change. That current-graph
+check has now exposed a real artifact identity mismatch: fresh generation0,
+check2, ValidatorEvidenceFoundryArtifactHash changed while bytecode constants
+did not. Astra is investigating before any hash update; retain both failed
+preflight captures and the actual body failure. Authenticated carry-next work
+is paused at a clean boundary for this blocker. Use FINALIZE-ACTIVE.md for exact captures
+and ownership. These uncommitted additions do not constitute deployment/startup
+integration, complete gates, source freeze, or live acceptance. Historical
+timestamped records below remain evidence, not current completion claims.
 
 Status: live working document, first written 2026-09-03 UTC and last reconciled
 2026-09-07 06:59 UTC before the final source freeze. Refresh every item marked
@@ -1808,12 +1971,14 @@ does not create an on-chain commitment in the opposite direction.
 
 ### 10.1 Validator-proof commitment requirement and design choices
 
-This is a read-only implementation proposal reconciled on 2026-09-05 UTC.
-The user has requested on-chain validator evidence; the open question is
-whether to store its immutable hash with retrievable API/MinIO proof bytes
-or store the full proof bytes on-chain. No answer is recorded. Neither route
-is implemented, and the existing off-chain-only design is not a substitute.
-An automatic continuation is not an answer to this concrete storage choice.
+Decision confirmed by the user on 2026-09-07 UTC: **on-chain hashes plus
+API/MinIO proof bytes**. Implement the separate immutable per-operator evidence
+commitment below, not full bulk-proof storage and not the payout-artifact-only
+alternative. The existing off-chain-only implementation is not sufficient.
+Earlier timestamped references to an unanswered storage choice are historical;
+this explicit user decision supersedes them. Contract publication/storage,
+public availability/replay and real transaction evidence remain unimplemented
+or unqualified until their separate acceptance evidence is recorded.
 
 Root authorized one implementation slice common to either choice: a new
 intent-independent, fixed-width per-operator evidence header and matching Go/
@@ -1861,7 +2026,7 @@ still produce a nonzero root; no-leaf/missed-root windows have no such anchor.
 A deposit audit also consumes an already committed earlier payout artifact,
 so putting that later audit in the same artifact would create a hash cycle.
 
-If hash storage is selected, the complete design is a separate write-once
+The approved hash-storage design is a separate write-once
 domain-bound evidence commitment in the coordinator/pool namespace, with an
 authorized submission/relay path independent of dishonest operator approval.
 It must bind each required closed validator/operator/epoch census, including

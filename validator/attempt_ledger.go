@@ -1099,6 +1099,9 @@ func (self *StatsEngine) AttachAttemptLedgerContext(ctx context.Context, ledger 
 	}
 	defer owner.release()
 	candidate := owner.clone()
+	if candidate.attemptV2 != nil {
+		return errors.New("compact attempt statistics require independently authenticated v2 recovery")
+	}
 	basis := func() statsReplayBasis {
 		candidate.mu.Lock()
 		defer candidate.mu.Unlock()

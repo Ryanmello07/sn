@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -141,18 +142,26 @@ func dialChainWithEndpointContext(ctx context.Context, rpcUrls []string, contrac
 		if endpointCtx == nil || cancel == nil {
 			return nil, errors.New("EVM endpoint context is unavailable")
 		}
-		client, err := ethclient.DialContext(endpointCtx, url)
+		rpcClient, err := rpc.DialOptions(endpointCtx, url, rpc.WithHTTPClient(&http.Client{
+			Transport: &chainHTTPTransport{base: http.DefaultTransport, maxResponseBytes: chainHTTPResponseLimit},
+		}))
 		if err != nil {
 			cancel()
 			errs = append(errs, fmt.Errorf("%s: %w", url, err))
 			continue
 		}
+		client := ethclient.NewClient(rpcClient)
 		chainId, err := client.ChainID(endpointCtx)
+		err = errors.Join(err, endpointCtx.Err())
 		cancel()
 		if err != nil {
 			client.Close()
 			errs = append(errs, fmt.Errorf("%s: %w", url, err))
 			continue
+		}
+		if err := ctx.Err(); err != nil {
+			client.Close()
+			return nil, err
 		}
 		c := &ChainClient{
 			client:       client,
@@ -195,6 +204,9 @@ func (self *ChainClient) FinalizedBlockContext(ctx context.Context) (uint64, [32
 	}
 	if err := self.rememberBlockIdentity(block, hash); err != nil {
 		return 0, [32]byte{}, fmt.Errorf("finalized EVM head identity: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, [32]byte{}, err
 	}
 	return block, hash, nil
 }
@@ -249,6 +261,9 @@ func (self *ChainClient) validateBlockIdentityContext(ctx context.Context, block
 	if ctx == nil || self == nil || self.client == nil {
 		return errors.New("EVM block identity validator is unavailable")
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if _, err := chainBlockHashSelector(block, blockHash); err != nil {
 		return err
 	}
@@ -261,6 +276,7 @@ func (self *ChainClient) validateBlockIdentityContext(ctx context.Context, block
 	callCtx, cancel := context.WithTimeout(ctx, chainCallTimeout)
 	var header *chainRPCBlock
 	err := self.client.Client().CallContext(callCtx, &header, "eth_getBlockByHash", common.Hash(blockHash), false)
+	err = errors.Join(err, callCtx.Err())
 	cancel()
 	if err != nil {
 		return fmt.Errorf("EVM block %d hash 0x%x header: %w", block, blockHash, err)
@@ -281,13 +297,17 @@ func (self *ChainClient) validateBlockIdentityContext(ctx context.Context, block
 // Reads one contract value through the legacy height-only compatibility path.
 // Release decisions use chainViewAtHashContext.
 func chainViewAtContext[T any](ctx context.Context, c *ChainClient, block uint64, calldata []byte, unpack func([]byte) (T, error)) (T, error) {
+	var zero T
 	if ctx == nil {
-		var out T
-		return out, errors.New("chain view context is nil")
+		return zero, errors.New("chain view context is nil")
 	}
 	ctx, cancel := context.WithTimeout(ctx, chainCallTimeout)
 	defer cancel()
-	return bind.Call(c.contract, &bind.CallOpts{Context: ctx, BlockNumber: new(big.Int).SetUint64(block)}, calldata, unpack)
+	value, err := bind.Call(c.contract, &bind.CallOpts{Context: ctx, BlockNumber: new(big.Int).SetUint64(block)}, calldata, unpack)
+	if err := errors.Join(err, ctx.Err()); err != nil {
+		return zero, err
+	}
+	return value, nil
 }
 
 // Retains the background-context helper for existing narrow read methods.
@@ -325,6 +345,7 @@ func (self *ChainClient) ethCallAtHashContext(ctx context.Context, to common.Add
 		"to":    to,
 		"input": hexutil.Bytes(calldata),
 	}, selector)
+	err = errors.Join(err, callCtx.Err())
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("eth_call at canonical block %d (0x%x): %w", block, blockHash, err)
@@ -349,6 +370,9 @@ func chainViewAtHashContext[T any](ctx context.Context, c *ChainClient, block ui
 	value, err := unpack(output)
 	if err != nil {
 		return zero, fmt.Errorf("decode canonical block %d (0x%x) view: %w", block, blockHash, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
 	}
 	return value, nil
 }
@@ -394,6 +418,7 @@ func (self *ChainClient) batchCallsAtHashContext(ctx context.Context, block uint
 		}
 		callCtx, cancel := context.WithTimeout(ctx, chainCallTimeout)
 		err := self.client.Client().BatchCallContext(callCtx, batch)
+		err = errors.Join(err, callCtx.Err())
 		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("eth_call batch at canonical block %d (0x%x): %w", block, blockHash, err)
@@ -408,6 +433,9 @@ func (self *ChainClient) batchCallsAtHashContext(ctx context.Context, block uint
 			}
 			outputs[absolute] = append([]byte(nil), raw[index]...)
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return outputs, nil
 }
@@ -449,6 +477,9 @@ func (self *ChainClient) ReleaseSnapshotContext(ctx context.Context) (*ReleaseSn
 	policy, err := chainViewAtHashContext(ctx, self, block, hash, self.coordinator.PackPolicyAt(epoch), self.coordinator.UnpackPolicyAt)
 	if err != nil {
 		return nil, fmt.Errorf("policyAt(%s) at finalized block %d: %w", epoch, block, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return &ReleaseSnapshot{BlockNumber: block, BlockHash: hash, Epoch: epoch, Policy: policy}, nil
 }
@@ -752,6 +783,9 @@ func (self *ChainClient) ReleaseBindingsAtHashContext(ctx context.Context, block
 		}
 		bindings[index] = binding
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return bindings, nil
 }
 
@@ -772,6 +806,9 @@ func (self *ChainClient) ReleaseBindingsAtContext(ctx context.Context, block uin
 		}
 		bindings[index] = binding
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return bindings, nil
 }
 
@@ -791,13 +828,22 @@ func (self *ChainClient) RpcUrl() string {
 func chainView[T any](c *ChainClient, calldata []byte, unpack func([]byte) (T, error)) (T, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), chainCallTimeout)
 	defer cancel()
-	return bind.Call(c.contract, &bind.CallOpts{Context: ctx}, calldata, unpack)
+	value, err := bind.Call(c.contract, &bind.CallOpts{Context: ctx}, calldata, unpack)
+	if err := errors.Join(err, ctx.Err()); err != nil {
+		var zero T
+		return zero, err
+	}
+	return value, nil
 }
 
 func (self *ChainClient) BlockNumber() (uint64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), chainCallTimeout)
 	defer cancel()
-	return self.client.BlockNumber(ctx)
+	number, err := self.client.BlockNumber(ctx)
+	if err := errors.Join(err, ctx.Err()); err != nil {
+		return 0, err
+	}
+	return number, nil
 }
 
 // BlockHash returns the hash of a block by number.
@@ -828,6 +874,9 @@ func (self *ChainClient) BlockHashContext(ctx context.Context, number uint64) ([
 		return [32]byte{}, fmt.Errorf("block %d header is empty or identifies another height", number)
 	}
 	if err := self.rememberBlockIdentity(number, blockHash); err != nil {
+		return [32]byte{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return [32]byte{}, err
 	}
 	return blockHash, nil
@@ -976,6 +1025,7 @@ func (self *ChainClient) depositedSumsAtFinalizedContext(ctx context.Context, fr
 			Addresses: []common.Address{self.contractAddr},
 			Topics:    topics,
 		})
+		err = errors.Join(err, callCtx.Err())
 		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("eth_getLogs Deposited [%d,%d]: %w", from, to, err)
@@ -1031,6 +1081,9 @@ func (self *ChainClient) depositedSumsAtFinalizedContext(ctx context.Context, fr
 	canonicalHash, err = self.BlockHashContext(ctx, finalizedBlock)
 	if err != nil || canonicalHash != finalizedHash {
 		return nil, fmt.Errorf("Deposited finalized checkpoint changed during scan: %v", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return sums, nil
 }
@@ -1168,7 +1221,11 @@ func (self *ChainClient) ethCallAtContext(ctx context.Context, to common.Address
 	}
 	ctx, cancel := context.WithTimeout(ctx, chainCallTimeout)
 	defer cancel()
-	return self.client.CallContract(ctx, ethereum.CallMsg{To: &to, Data: calldata}, blockNumber)
+	output, err := self.client.CallContract(ctx, ethereum.CallMsg{To: &to, Data: calldata}, blockNumber)
+	if err := errors.Join(err, ctx.Err()); err != nil {
+		return nil, err
+	}
+	return output, nil
 }
 
 // MetagraphUidCount calls IMetagraph.getUidCount(netuid) on 0x802.
@@ -1323,6 +1380,9 @@ func (self *ChainClient) MetagraphHotkeysAtContext(ctx context.Context, block ui
 		}
 		hotkeys[hotkey] = uid
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return hotkeys, nil
 }
 
@@ -1374,6 +1434,9 @@ func (self *ChainClient) MetagraphHotkeysAtHashContext(ctx context.Context, bloc
 			return nil, fmt.Errorf("metagraph hotkey is duplicated at uid %d", uid)
 		}
 		hotkeys[hotkey] = uid
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return hotkeys, nil
 }

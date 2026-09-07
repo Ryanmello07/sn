@@ -1211,6 +1211,7 @@ therefore mandatory release gates.
 |---|---|---|
 | finalized `Deposit` / `ConvictionAdded` / `ReservePrincipalAdded` events and cap counters | coordinator + reserve sink | demand and conviction audit inputs; validators reproduce them from finalized history |
 | immutable `entitlement[e][noId]` and conservation counters | settlement vault | captured/carry total, root, artifact hash, claimed amount, expiry and exact custody accounting |
+| validator activation anchors and write-once validator/operator evidence hashes | coordinator's pool namespace | domain-bound consent and immutable closed-epoch census/audit commitments, independent of payout-root publication |
 | payout artifact and completed-trail/statistics artifacts | **server API + content-addressed `server/blob` MinIO** | canonical bulk inputs; publicly retrievable by SHA-256 and independently reproducible |
 | fleet manifest hash | **commitments pallet + finalized coordinator mirror** | hotkey-authorized native anchor used by every binding member |
 
@@ -1218,6 +1219,19 @@ This directly answers `seed/INCENTIVES.md`'s open question: **yes**, each NO com
 payout table (fractional shares) so every provider verifies *its own* payout with an `O(log N)` proof,
 with no bulk data on chain. The contract holds each NO's payout root and the on‑chain pool total, and
 derives the α at claim time (§8.3) — there is **no global, off‑chain‑computed claim root**.
+
+Validator evidence uses immutable on-chain hashes, not bulk proof bytes on-chain.
+Its full signed artifacts and referenced proof streams must be publicly available
+through the server API and content-addressed MinIO. The separate evidence slot
+binds the validator, operator, closed epoch, evidence kind, deterministic audit
+subject, activation and chain context. Either the validator or a relayer may
+submit both required key consents; a dishonest operator cannot veto publication.
+No-payout and missed-root windows still require their complete evidence census,
+and later demand-deposit audits use separate slots to avoid circular commitments.
+An anchor proves a byte commitment, not proof truth, historical eligibility or
+availability: independent readers must retrieve and verify the complete signed
+history. These commitments do not alter pool entitlements, payout deadlines,
+shares, carry, or the parked validator-bounty design.
 
 ### 11.2 Claiming
 

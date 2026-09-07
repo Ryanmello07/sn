@@ -155,11 +155,20 @@ isolated suites that pass. Independent source fixes and causal controls may
 retain their own exact preimages, but do not create another source checkout
 for a corrected selector, output filename, or report.
 
-Keep one Astra max root-cause owner and two Terra max execution lanes: one for
-the integrated production candidate and one for independent isolation/gate
-qualification. The primary agent owns integration and reviews changes during
-execution. Freeze the candidate during each admitted run; prepare the next
-delta outside that source and apply it only after every reader is joined.
+Keep two Astra max implementation/fix agents and one Terra max execution
+agent. One Astra owns the current production/recovery implementation; the
+other handles independent implementation, incoming failures and adjacent-path
+regressions. Routine test-fixture or launcher repairs must not repeatedly
+preempt both production lanes. The primary agent owns integration and reviews
+changes during execution.
+
+The Terra agent drives multiple independent isolated build/test/gate jobs
+concurrently; one agent is not a one-process or one-core execution limit.
+Transfer every live handle, command, source/binary fence, capture and remaining
+obligation when changing owners. Join or explicitly transfer already-running
+processes before retiring a lane; do not restart work because its agent changed.
+Freeze the candidate during each admitted run; prepare the next delta outside
+that source and apply it only after every reader is joined.
 Reuse unchanged dependency checkouts and Go build/module caches, recording
 their exact identities, while keeping runtime state and generated outputs
 private. Source changes invalidate affected results; packaging a completed

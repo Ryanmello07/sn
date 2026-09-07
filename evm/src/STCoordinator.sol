@@ -129,6 +129,10 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     uint256 private _entered;
 
+    /// @notice Fixed companion for validator evidence commitments. Proof bytes
+    /// remain public artifacts; this address never grants a custody capability.
+    address public validatorEvidence;
+
     event PolicyScheduled(
         uint256 indexed index,
         bytes32 indexed policyHash,
@@ -190,6 +194,7 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     event GuardianSet(address indexed guardian);
     event GuardianScheduled(address indexed guardian, uint64 indexed effectiveEpoch);
     event PausedSet(bool paused, address indexed caller);
+    event ValidatorEvidenceFixed(address indexed evidence);
 
     error Unauthorized();
     error InvalidConfiguration();
@@ -908,5 +913,13 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
-    uint256[40] private __gap;
+    /// @notice One-time deployment binding, independent of operator root signers.
+    /// The deployment verifier authenticates the companion's immutable domain.
+    function fixValidatorEvidence(address evidence) external onlyOwner {
+        if (validatorEvidence != address(0) || evidence.code.length == 0) revert InvalidConfiguration();
+        validatorEvidence = evidence;
+        emit ValidatorEvidenceFixed(evidence);
+    }
+
+    uint256[39] private __gap;
 }

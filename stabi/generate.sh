@@ -14,9 +14,26 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 mode="${1:---write}"
+if [[ $# -gt 0 ]]; then shift; fi
 if [[ "$mode" != "--write" && "$mode" != "--check" && "$mode" != "--preflight" ]]; then
-    echo "usage: $0 [--write|--check|--preflight]" >&2
+    echo "usage: $0 [--write|--check|--preflight] [--artifacts /absolute/forge/out]" >&2
     exit 2
+fi
+
+# A gate checks only its own completed full compilation graph. An explicit
+# missing input cannot fall back to another invocation's canonical out tree.
+artifact_root="../evm/out"
+if [[ $# -ne 0 ]]; then
+    if [[ $# -ne 2 || "$1" != "--artifacts" || "$mode" != "--check" ]]; then
+        echo "--artifacts requires --check and one absolute directory" >&2
+        exit 2
+    fi
+    artifact_root="$2"
+    if [[ "$artifact_root" != /* || ! -d "$artifact_root" || -L "$artifact_root" ]] ||
+        [[ "$(cd -- "$artifact_root" && pwd -P)" != "$artifact_root" ]]; then
+        echo "explicit artifact directory is not an absolute physical directory: $artifact_root" >&2
+        exit 1
+    fi
 fi
 
 expected_go_ethereum_version="v1.17.0"
@@ -78,10 +95,11 @@ fi
 temporary_dir="$(mktemp -d)"
 trap 'rm -rf -- "$temporary_dir"' EXIT
 
-jq -c .abi ../evm/out/STSubnet.sol/STSubnet.json > "$temporary_dir/STSubnet.abi.json"
-jq -c .abi ../evm/out/STCoordinator.sol/STCoordinator.json > "$temporary_dir/STCoordinator.abi.json"
-jq -c .abi ../evm/out/STSettlementVault.sol/STSettlementVault.json > "$temporary_dir/STSettlementVault.abi.json"
-jq -c .abi ../evm/out/STReserveSink.sol/STReserveSink.json > "$temporary_dir/STReserveSink.abi.json"
+jq -c .abi "$artifact_root/STSubnet.sol/STSubnet.json" > "$temporary_dir/STSubnet.abi.json"
+jq -c .abi "$artifact_root/STCoordinator.sol/STCoordinator.json" > "$temporary_dir/STCoordinator.abi.json"
+jq -c .abi "$artifact_root/STSettlementVault.sol/STSettlementVault.json" > "$temporary_dir/STSettlementVault.abi.json"
+jq -c .abi "$artifact_root/STReserveSink.sol/STReserveSink.json" > "$temporary_dir/STReserveSink.abi.json"
+jq -c .abi "$artifact_root/STValidatorEvidence.sol/STValidatorEvidence.json" > "$temporary_dir/STValidatorEvidence.abi.json"
 
 "$abigen" --v2 \
     --abi "$temporary_dir/STSubnet.abi.json" \
@@ -107,15 +125,23 @@ jq -c .abi ../evm/out/STReserveSink.sol/STReserveSink.json > "$temporary_dir/STR
     --type STReserveSink \
     --out "$temporary_dir/streservesink.go"
 
+"$abigen" --v2 \
+    --abi "$temporary_dir/STValidatorEvidence.abi.json" \
+    --pkg stabi \
+    --type STValidatorEvidence \
+    --out "$temporary_dir/stvalidatorevidence.go"
+
 generated=(
     "STSubnet.abi.json:../evm/abi/STSubnet.abi.json"
     "STCoordinator.abi.json:../evm/abi/STCoordinator.abi.json"
     "STSettlementVault.abi.json:../evm/abi/STSettlementVault.abi.json"
     "STReserveSink.abi.json:../evm/abi/STReserveSink.abi.json"
+    "STValidatorEvidence.abi.json:../evm/abi/STValidatorEvidence.abi.json"
     "stsubnet.go:stsubnet.go"
     "stcoordinator.go:stcoordinator.go"
     "stsettlementvault.go:stsettlementvault.go"
     "streservesink.go:streservesink.go"
+    "stvalidatorevidence.go:stvalidatorevidence.go"
     "STSubnet.abi.json:../stctl/st_abi.json"
 )
 
@@ -137,5 +163,5 @@ for entry in "${generated[@]}"; do
 done
 
 # stctl is a quarantined pre-1.0 monolith diagnostic. Keep its packaged ABI
-# coherent with the legacy STSubnet binding; release clients use the three
+# coherent with the legacy STSubnet binding; release clients use the four
 # generated bindings above and sim-testnet embeds the reviewed bytecode.

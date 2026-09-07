@@ -135,7 +135,7 @@ library ValidatorEvidenceActivation {
         Record memory expected,
         bytes memory vpkSignature,
         bytes memory hotkeySignature
-    ) internal view returns (bool) {
+    ) internal pure returns (bool) {
         if (!validAt(record, expected) || vpkSignature.length != 64 || hotkeySignature.length != 64) return false;
         bytes32 message = digest(record);
         (bytes32 vpkR, bytes32 vpkS) = signatureWords(vpkSignature);

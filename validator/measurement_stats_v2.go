@@ -137,15 +137,22 @@ func (self *StatsEngine) releaseStatsV2OwnedHead(dir string) (AttemptLedgerHead,
 	return head, nil
 }
 
-// Generation and both cursors come from the retained Stats candidate. The
-// externally authenticated activation remains an independent namespace pin.
+// Generation and both cursors come from the retained Stats candidate. Retained
+// activation must match independent authority; its settlement root must match
+// the actual ledger row, never be silently replaced by the reconstructed root.
 func (self *StatsEngine) releaseStatsV2Context(ctx context.Context, boundary AttemptBoundary, options releaseStatsV2Options) (AttemptCutV2Context, error) {
 	if boundary.SettlementEpoch != self.settlementEpoch {
 		return AttemptCutV2Context{}, errors.New("compact native boundary differs from active settlement")
 	}
+	if self.attemptV2 != nil && self.attemptV2.Activation != options.Activation {
+		return AttemptCutV2Context{}, errors.New("compact native retained activation differs from independent authority")
+	}
 	prior, err := releaseStatsV2PrefixRoot(ctx, self.attemptLedger, self.attemptSettlementFirstSequence-1)
 	if err != nil {
 		return AttemptCutV2Context{}, err
+	}
+	if self.attemptV2 != nil && self.attemptV2.SettlementPriorRoot != prior {
+		return AttemptCutV2Context{}, errors.New("compact native retained settlement root differs from actual ledger prefix")
 	}
 	expected := AttemptCutV2Context{
 		Identity: self.attemptLedger.identity, Activation: options.Activation, Boundary: boundary,

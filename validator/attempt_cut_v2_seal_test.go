@@ -62,6 +62,13 @@ func newAttemptCutV2SealTestFixture(t *testing.T, depth, completed, failed int) 
 // signatures while choosing their identity before the first ledger append.
 func newAttemptCutV2SealTestFixtureForOperator(t *testing.T, depth, completed, failed int, noID uint64) *attemptCutV2SealTestFixture {
 	t.Helper()
+	return newAttemptCutV2SealTestFixtureForOperatorWithEpochOrder(t, depth, completed, failed, noID, false)
+}
+
+// Compact activation attaches the genuine empty ledger before the first
+// durable epoch; ordinary seal fixtures retain their existing generation zero.
+func newAttemptCutV2SealTestFixtureForOperatorWithEpochOrder(t *testing.T, depth, completed, failed int, noID uint64, ledgerBeforeEpoch bool) *attemptCutV2SealTestFixture {
+	t.Helper()
 	policy := exactPolicy(t)
 	if policy.Verify.TrailDepth != 8 {
 		t.Fatalf("release policy depth = %d, want the existing M8 policy", policy.Verify.TrailDepth)
@@ -74,8 +81,10 @@ func newAttemptCutV2SealTestFixtureForOperator(t *testing.T, depth, completed, f
 	server, key, clientID := newMockVerifyServer(t, 16)
 	state := newAttemptLedgerDiskTestStateDir(t)
 	stats := NewStatsEngine(StatsConfig{AMin: policy.Verify.ReliabilityAMin})
-	if err := stats.AdvanceSettlementEpoch(42, state); err != nil {
-		t.Fatal(err)
+	if !ledgerBeforeEpoch {
+		if err := stats.AdvanceSettlementEpoch(42, state); err != nil {
+			t.Fatal(err)
+		}
 	}
 	ledger, err := NewDiskAttemptLedger(context.Background(), state, AttemptLedgerIdentity{DeploymentID: "attempt-cut-v2-sealer-test", ChainID: 945, GenesisHash: attemptHex32([32]byte{4}), Netuid: 521, ValidatorID: 1, ValidatorUID: 7, NoID: noID}, attemptLedgerDiskTestCoordinator, key, attemptLedgerDiskTestLimits())
 	if err != nil {
@@ -84,6 +93,11 @@ func newAttemptCutV2SealTestFixtureForOperator(t *testing.T, depth, completed, f
 	t.Cleanup(func() { _ = ledger.Close() })
 	if err := stats.AttachAttemptLedger(ledger, state); err != nil {
 		t.Fatal(err)
+	}
+	if ledgerBeforeEpoch {
+		if err := stats.AdvanceSettlementEpoch(42, state); err != nil {
+			t.Fatal(err)
+		}
 	}
 	store, err := NewProofStore(state)
 	if err != nil {
@@ -304,6 +318,9 @@ func TestAttemptCutV2SealMixedCompleteAndFailedTerminals(t *testing.T) {
 // Only an authenticated checked empty prefix may sign without object I/O.
 func TestAttemptCutV2SealCheckedEmptyPrefix(t *testing.T) {
 	fixture := newAttemptCutV2SealTestFixture(t, 8, 0, 0)
+	if snapshot := fixture.engine.stats.snapshotStats(); snapshot.EgressGeneration != 0 || snapshot.Version != 5 || snapshot.AttemptV2 != nil {
+		t.Fatal("standalone seal fixture changed its original generation-zero startup")
+	}
 	options, objects := newAttemptCutV2SealTestOptions(t, fixture)
 	cut, verified, err := SealAttemptCutV2(context.Background(), fixture.ledger, fixture.expected, fixture.policy, fixture.key, fixture.bounds, options)
 	if err != nil {
