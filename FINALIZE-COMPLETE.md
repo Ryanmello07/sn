@@ -4,6 +4,77 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
+Checkpoint reconciliation (2026-09-07 21:08 UTC), superseding older pending
+statements below: the user requested a commit, not pull/push. Primary SN was
+clean at `3e7c73a` and server clean at `9b582d91`; this checkpoint updates only
+the two finalization documents. Isolated source remains uncommitted and is not
+promoted while qualification owns it. No live campaign, public upload or
+testnet transaction occurred in this continuation.
+
+Carry106 accounting is now explicit: normal96 PASS/1 unterminated/9 unrun;
+race95 PASS/2 unterminated/9 unrun. There are no additional terminal assertion
+failures, but the timeouts are failures, not acceptance. The exact ledger is
+`temp/sn-integration-xOgvEe/capture-carry-metadata-close-v1/manifests/carry106.current-release-accounting.tsv`,
+SHA256 `3d0fa7223256e32a22cd9979345a98cef299e02c734f301f675063b24d647bbd`.
+Heavy10 campaign-start-marker times out120s N/R;08a ignored-runtime-map also
+times out under race. All owners joined and source/dependency/binary fences
+passed before a separate diagnostic hold. The normal08a CPU diagnostic passed
+one root/11 events under its original120s body bound, at65.75s wall/71.41s CPU.
+Its capture is `capture-carry-diagnostic-v1/normal-08a-cpuprofile`; fixture
+construction consumes41.15 CPU-seconds and artifact verification17.55, with
+substantial signing/proof replay. This is not a race retry/pass or full gate.
+Astra's successor `temp/sn-carry-fixture-work-v5-RaVAPAAG` separates fixture
+layers, joins independent validator chains and moves cheap authenticated
+admission before expensive replay, without reducing populations/checks.
+It is still an unreviewed/unqualified draft; every old failed capture remains.
+
+Root independently reviewed and composed upload15 plus session transport4
+after all old readers joined, checked all19 raw hashes and preserved existing
+preimages. Terra formatted only those19 files. Current complete dirty/new
+manifests under `temp/sn-integration-xOgvEe/capture-upload-transport-v1/manifests/`:
+
+- SN247: `sn.complete-dirty-new.after.sha256`, SHA256
+  `ee46b81bf17335ba5a60165f5c70fdc9b366fc2f6d7baff9ac11dc021892fcd8`.
+- Server21: `server.complete-dirty-new.after.sha256`, SHA256
+  `985805e914262636f3c740c97f588c61ec6c388819724e44b673f39fadfe3f0d`.
+
+The server candidate's go.mod now resolves SN to the actual integration module,
+not its old sibling; this absolute path is qualification-only and must never
+be promoted. Its exact original go.mod is retained under
+`temp/sn-integration-xOgvEe/upload-composition-v1/preimage/server/go.mod`.
+Root read actual upload-new9 and transport-new10 checker outputs in both modes
+under `capture-upload-transport-v1/validator/body/`:9 PASS/75 events and10
+PASS/83 events per mode, all matched with binary exit0. This is19 unique roots,
+38 mode-specific passes, not the whole selected243. Incorrect-root donor
+preflight and missing-GOTMPDIR pre-compiler attempts remain captured separately;
+corrected private directories did not change source, deadlines or root sets.
+SN/SDK tests continue. Server tests have not started: the private pg/Redis
+fixture lacks jwt.yml/signing-key resources needed by real authentication.
+Supply explicit private test credentials; never fall back to host vault/config
+or reuse the existing deployment containers. This is a test-fixture admission
+gap, not a newly proven shared-service failure.
+
+Root froze the complete outer upload config successor at
+`temp/sn-upload-config-outer-v2-KzsxkMbv/UPLOAD-CONFIG-HANDOFF-v2.md`, SHA256
+`52f5695d7e7ca01036760e2306f8e67fbdcd91ee617f5e8d728e5dd39bfa4706`.
+Its8-source manifest SHA256 is
+`fd262e371a2ac48797d4281b520b972a7346d629ab95301d036112df78ba8023`;
+exact selected48 census SHA256 is
+`1f72ad8669e8d129b758da84d4d45f25cf4d8e94e3d6bb64761b50de700b4dab`.
+It retains all v1 quota/render/manifest protections and adds mandatory finite
+budget admission before apply journal ownership, launch migrations and payload
+recovery, plus four deterministic outer-boundary controls and retained cases.
+No Go/gofmt or independent review has run on this draft; do not compose into
+the currently held upload candidate. The old six-path draft remains intact.
+
+Both Astra lanes recovered from transport interruptions. Canonical owns the
+Carry work-boundary fix; startup owns the isolated nine-path pinned-chain
+draft in `temp/sn-decision-chain-v2-yufeLAGZ`, still unreleased/unqualified.
+Neither draft invents historical client-key or negative HTTP receipt authority.
+Authenticated multi-account staging denial, historical authority, actual V2
+startup-to-submit joining, relay/finalized readback, measured live provisioning,
+full release gates, freeze, live RC/final epochs and FINAL.md remain mandatory.
+
 Checkpoint reconciliation (2026-09-07 20:14 UTC), superseding earlier pending
 statements: the user requested another commit, without pull/push. This checkpoint
 contains only the two primary SN finalization documents; isolated candidate and

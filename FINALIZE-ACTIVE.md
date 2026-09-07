@@ -1,11 +1,11 @@
 # Release 1.0 active work index
 
-Updated 2026-09-07 20:14 UTC. Read this short index first; use
+Updated 2026-09-07 21:08 UTC. Read this short index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
 Primary source checkpoint: SN `de06691`, server `9b582d91` (not pushed).
-Previous documentation checkpoint is `f3fdd62`; use `git log -1` for the identity
+Previous documentation checkpoint is `3e7c73a`; use `git log -1` for the identity
 of the checkpoint containing this update. Isolated source drafts remain uncommitted.
 The SN source checkpoint includes the independently reviewed
 closed-census evidence publisher and its17 tests. Subsequent integration changes
@@ -38,30 +38,40 @@ independently replayable on-chain evidence in `FINAL.md`.
   `INTEGRATION.md` identifies exact stages, artifacts and ownership.
 
 Latest progress: root reviewed/composed Carry fixture6, metadata admission5 and
-immutable disk-close2 after all Gate2 readers joined. Current242-path candidate
-source SHA256 is `0be0580eff68db35dee938d1193ce8b3628cea6949881b98153daec718a374d7`.
+immutable disk-close2 after all Gate2 readers joined. That242-path candidate
+source SHA256 was `0be0580eff68db35dee938d1193ce8b3628cea6949881b98153daec718a374d7`.
 Metadata validator17, runtime6 and the full original semantic startup23 now pass
 normal/race. Original-config causal2 matches both modes. The earlier startup
 12P/11F result is retained, not erased. Disk-close original-production causal7
 and Carry original-fixture causal5 also match both modes. Repaired disk24 and
 retained42 pass both modes, completing this selected validator106 union.
-Carry's first six light shards pass44 roots per mode, but the full Carry106
-union is not qualified: `TestFinalSemanticOriginalClosureRequiresExactCampaignStartMarker`
-times out at120s in normal AND race, even with only two heavy bodies at
-GOMAXPROCS2 and no overlapping causal compiles. Both binary exits are2 and
-both checkers refuse; the timeout is not attributed to the old oversubscription
-or waived. Remaining independent light shards continue without retrying it.
-Earlier Carry97 failures/timeouts/unrun roots remain retained.
+Carry106 stopped with96 normal passes and95 race passes, nine unrun roots in
+each mode, one normal timeout and two race timeouts. The campaign-start-marker
+root times out at120s in both modes; ignored-runtime-map admission also times
+out under race. Corrected two-heavy-body/GOMAXPROCS2 admission does not resolve
+them. A separate normal ignored-runtime-map CPU diagnostic passed in65.75s;
+it shows substantial fixture construction and repeated proof verification,
+not a race pass or deadline waiver. All old failures/captures remain. Astra's
+isolated fixture-work successor is drafted, not reviewed or qualified.
 
 Gate selector/source-census2 now passes exact13 normal/race AND original-script
 causal2 in both modes, using a physical30-input mirror with the original script
 as the sole changed runtime input. These are not complete release gates.
-Typed authenticated upload15/39 and actual API-session binding4/10 have been
-source-reviewed and released, but not executed or composed. Root's upload
-configuration6/8 draft is in independent review; the outer launcher and executor
-can start mutation before its inner quota guard, so an owned successor is
-required. Authenticated multi-account exhaustion of validator staging is a
-confirmed, unresolved live-release issue. The production RunRelease guard remains.
+After every Carry reader joined, root composed reviewed typed upload15 and
+session binding4. Terra formatted only those19 paths; the current SN247-path
+manifest is `ee46b81bf17335ba5a60165f5c70fdc9b366fc2f6d7baff9ac11dc021892fcd8`
+and server21-path manifest is
+`985805e914262636f3c740c97f588c61ec6c388819724e44b673f39fadfe3f0d`.
+Upload9 and session-binding10 now pass normal/race (19 roots per mode); root
+read all four actual checker summaries. The full selected243 remains pending.
+Server bodies await an explicitly private JWT signing fixture; no host vault
+or config fallback is allowed. SN/SDK qualification continues independently.
+The server candidate's absolute SN go.mod replacement is qualification-only
+and must not be promoted. Root's outer upload config8/12 draft, selected48,
+now guards apply, launch and payload recovery before mutation; independent
+review/composition/tests remain. Multi-account staging exhaustion is unresolved,
+and the production RunRelease guard remains. This checkpoint commits documents
+only; active candidate source, index and HEAD are unchanged.
 
 ## Active owners and next actions
 
@@ -80,7 +90,7 @@ completed its handoff and is idle, with no abandoned live job or source reader.
 | Actual startup-to-submission | Astra startup implementation/fixes; root integration; Terra qualification | Metadata repair validator17/runtime6 and semantic startup23 now pass N/R; original config causal2 matches. Immutable-close2 is composed, original production causal7 matches, repaired24/retained42 pass N/R. Astra is implementing shared hash-pinned chain decision observations used by live head and historical admission. Old client-key observations and negative API audit history still lack independently recoverable authority; copying artifact claims is forbidden. Production activation/submission, upload capacity/liveness and RunRelease guard removal remain open |
 | On-chain evidence hashes | Terra max Solidity execution; Astra max failures | Full Solidity17 suites/199 tests PASS, zero failures/skips, exact census and source/artifact fences. Gencontracts24 N/R pass after normalizer5 repairs the14-type graph. Current private-graph v4 generation/check/wrapper0; exact generated output62e173ac is composed with only artifact/layout hashes changed, no ABI or bytecode change. Generator causal1 and simulator causal1 reproduce13-versus14 lost types N/R; repaired simulator layout4 passes N/R. Strict build retains coordinator24492/84 spare and append-only layout |
 | Evidence Go bindings/readback | Root composition; Terra max concurrent execution | Evidence22 stabi20/reader12 N/R pass. Primary RPC4 new19/union54 N/R pass with causal1PASS/5 expectedFAIL. Combined validator76 N/R now passes exact root/event/source checks after assertion-preserving plain-loop repairs. First75 normal body passed but checker refused positive subtests; malformed selector/outcome attempts remain recorded. Miner/simulator HTTP siblings remain open |
-| Simulator companion installation | Astra canonical fixes; root composition; Terra execution | Carry fixture v4 six-file repair is composed; first six light shards pass44 roots N/R and original-fixture causal5 matches both. Heavy10 exact campaign-start-marker root still times out120s N/R under corrected two-body/GOMAXPROCS2 admission. Remaining Carry106 union is incomplete; v3 selected97 failures and all failed captures remain. No promotion or full-gate claim |
+| Simulator companion installation | Astra canonical fixes; root composition; Terra execution | Carry106 has96 normal/95 race passes, nine unrun roots per mode, heavy10 timeouts N/R and08a timeout under race. Separate normal08a CPU diagnostic passed; fixture-work successor is isolated and unqualified. Original-fixture causal5 matches both modes; old failures remain. No promotion or full-gate claim |
 | Closed-census publication | Root promotion complete; Astra independent review; Terra primary confirmation | New2/17 and retained replica27 pass exact N/R in candidate and primary, with source/dependency/binary fences. Independent review found no blocking issue. It owns the complete signed closure and keys, replays both actual public origins concurrently, publishes content-addressed payload/census/consent metadata with readback, then returns dual-signed ABI calldata. Production authenticated upload provisioning, durable relay/submission and finalized readback remain incomplete; no live publication is claimed |
 
 The candidate is held only while its admitted readers run. Prepare later deltas
@@ -93,11 +103,11 @@ verified24 online/allowed CPUs, not hundreds. Earlier Carry28 body processes
 plus4 compiles and startup8-body groups omitted explicit body GOMAXPROCS;
 preserve those captures and do not infer a product deadlock from their timeouts.
 New admitted bodies must record an explicit CPU allowance and share one
-cross-mode resource budget: at most4 concurrent bodies at GOMAXPROCS4 plus
-at most2 simulator compiles at GOMAXPROCS2, leaving4 host/service lanes. Heavy
-repaired fixtures may require a stricter measured profile. The existing
-validator compile24/p4 owns the whole host allowance; do not overlap it with
-body groups. This is admission control, not larger test deadlines or a waiver
+cross-mode resource budget. Current upload admission permits at most4 light
+bodies at GOMAXPROCS2 plus2 compilers at GOMAXPROCS4/-p2:16 CPU lanes total.
+Heavy Carry bodies retain the stricter two-total/GOMAXPROCS2/parallel1 profile
+without causal compiler overlap. No body waits for an unrelated compile.
+This is admission control, not larger test deadlines or a waiver
 of any root, failure, complete unsharded release gate or final live requirement.
 
 The checkpoint is not a release-ready certificate. The Go runner's reviewed
@@ -113,7 +123,8 @@ bytecode. The real generated simulator payload is composed into the candidate,
 not yet primary. Its earlier current-graph check FAILED on the evidence artifact
 hash; the repaired generator now passes the actual v4 regeneration/check and the
 exact output is composed; simulator layout/causal qualification is now complete.
-The current242-path candidate manifest is0be0580e (combined Carry/metadata/close);
+The current247-path candidate manifest isee46b81b (including upload/session);
+the preceding242-path manifest was0be0580e (combined Carry/metadata/close).
 Gate2 completed on237/07824659, and the original failed semantic startup was
 tested on236/feed53e3. Startup custody10+9 N/R
 and journal causal4 N/R matched on the earlier207-path manifestbb7e9537.
@@ -132,8 +143,9 @@ explicit upload capacity limits. Do not lend operator artifact keys or MinIO
 credentials to validators, or treat mutable API credentials as historical
 validator authority. Use a separately funded permissionless relay for the
 dual-signed evidence calldata and finalized inclusion checks. Typed transport
-and real API-session binding are now separate unqualified drafts; explicit
-upload budgets/rendering, full startup/submission joining and relay remain open.
+and real API-session binding are composed with their19 validator roots passing
+N/R, but the full243 selection remains pending. Explicit upload budgets/rendering,
+private JWT test provisioning, full startup/submission joining and relay remain open.
 Wire V2 startup through native submission, and prove all-pair
 capacity. Then both full gates, source freeze, live RC/final epochs and FINAL.md.
 No new live campaign or testnet transaction was performed in this work phase.
