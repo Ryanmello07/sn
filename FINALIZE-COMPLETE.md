@@ -4,6 +4,140 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
+Checkpoint reconciliation (2026-09-07 19:04 UTC): the user requested a commit,
+without pull/push. Only the two primary SN finalization documents are changed;
+server is clean at `9b582d91`. Primary source remains `de06691`; isolated
+implementation drafts and the integration candidate are not being promoted or
+committed by this documentation checkpoint.
+
+Gate evidence2 now passes all13 guard tests in each normal/race mode. Root read
+both `normal/events/gate-evidence13.checker.corrected-v3.stdout.json` and the
+matching `race/events/` result under
+`temp/sn-integration-xOgvEe/capture-gate-evidence-v1/`: each reports matched,
+13 roots,13 passes,95 events and binary exit0. Complete237-path source manifest
+SHA256 is `0782465918b8509181bb5674c2894a424b56435f439c9ddb24e2ed72c20e06db`.
+The initial zero-name selector and checker metadata refusals remain captured;
+corrections reused the original binaries and did not rerun product bodies.
+Original-script causal2 has not run: its runtime file read needs a physical,
+otherwise-identical source mirror. No full release gate or live result follows
+from these guard passes. There is no active Gate2 test process at checkpoint.
+
+Released successors, still unreviewed/unqualified: Carry fixture v4 test-only6
+at `temp/sn-carry-fixture-repair-v4-2msY5D8K/CARRY-FIXTURE-HANDOFF-v4.md`
+(SHA256 `81fb137286b8e31b8dda364035bae428b50c05339965f7f510a7590fbdbede5f`)
+and startup metadata5 at
+`temp/sn-startup-metadata-v2-C5F3KvL5/STARTUP-METADATA-HANDOFF-v1.md`
+(SHA256 `4282014ba85366603b042bae513eff7438f242b7d1512b533e42b507557eb36d`).
+Carry retains the original97 roots and adds retained/new controls for106 total;
+metadata adds early admission and coherent fixture limits. Immutable-close2/7
+is separately drafted, with its exact handoff still being finalized. None of
+these drafts resolves a failure until independently reviewed and qualified.
+
+Progress reconciliation (2026-09-07 18:53 UTC): semantic startup23 completed
+normal/race with12 PASS/11 FAIL per mode, not acceptance. Its generic fixture
+advertised a65,536-byte header with only4,096 bytes of public metadata capacity;
+the real replica sealer correctly refused. Astra is adding early production
+config admission plus a coherent private-fixture correction and real bounded
+M8 header controls. All42 retained proof/custody roots and initial-worker causal1
+matched N/R. Root read
+`temp/sn-integration-xOgvEe/capture-startup-semantic-v1/manifests/failed-startup-event-recovery.summary.tsv`
+(SHA256 `a1f6babdb5257d199192b916228ab6c60de8445ba75f75bfeab60b9ad0090a8d`).
+Complete236 source SHA256:
+`feed53e344021a26b46717a4f59d6fed238319e9e184b8894aad94d33f8680c2`.
+The full declared validator65 result is54 PASS/11 FAIL each mode. Final fences
+and diffcheck passed; all readers joined before root's next source edit.
+
+Root reviewed/composed the two-path launch-source gate repair from
+`temp/sn-gate-evidence-v2-7AnJoej8/GATE-EVIDENCE-HANDOFF-v1.md`. Terra now owns
+exact13 normal/race and causal2 qualification. The script retains all old
+commands/selectors/deadlines and adds omitted validator activation/history/
+startup/census families plus actual normal/race protocol, stabi, generator and
+simulator evidence tests. Its causal script is read at runtime with os.ReadFile:
+a compiler Go overlay alone is not a valid control. The neutral execution must
+physically read the original script, with all other sources/fences preserved.
+No full release script, Forge run or live operation is authorized by these
+source-only guard results.
+
+Execution-resource correction: root live-checked nproc/getconf=24 and allowed
+CPUs0-23. Carry28 body processes plus4 compiles, and startup8-body groups, had
+no body GOMAXPROCS assignment; compiler settings did not constrain the bodies.
+Oversubscription is a concrete launcher contributor, not proof that every
+timeout is harmless. Preserve failures and verify successors within the same
+budgets using explicit process CPU admission. Provisional shared allowance:
+four body processes at GOMAXPROCS4, at most two simulator compilers at
+GOMAXPROCS2, and four host/service lanes reserved. An existing validator24/p4
+compiler owns the complete available allowance. Heavy fixture successors may
+need stricter measured scheduling. Do not restart a live process, raise a
+deadline or omit a root to impose this policy; apply it at new admission.
+
+The actual checked-in testnet release lock is also incomplete for current
+generated contract identities, not merely a fixture CWD issue: companion pins
+are absent and existing runtime pins are stale. Astra's next Carry successor
+binds complete fixture locks to actual generated artifacts without granting
+approval to the real lock. Real release-lock regeneration, reviewed source
+identity and subsequent complete gates remain mandatory before launch.
+An adjacent cleanup defect is also open: disk close re-enumerates mutable
+states/ledger pointers after a rejected destination-census mutation. Astra
+will capture an immutable acquired-ledger close census with real fault,
+foreign-ownership and concurrent-close regressions; no existing fix is claimed.
+
+Progress reconciliation (2026-09-07 18:31 UTC), superseding older pending
+statements below. Primary remains SN `de06691`, server `9b582d91`; neither was
+pulled/pushed. No new live campaign, upload or transaction is claimed.
+
+Root's proof-store join2/9 is independently reviewed and passes exact new9 plus
+retained14 normal/race. Campaign reader2 is composed; focused5 and original-body
+causal3 match normal/race, while retained campaign fixtures fail. Root read
+`temp/sn-integration-xOgvEe/capture-proof-campaign-v1/manifests/final.machine-summary-v1.tsv`
+(SHA256 `c5525f785116f8dc48383d0d88ee7cf43ffff074ca8162421bc256a016b221cc`).
+The same capture preserves the unsorted-checker-input refusals and their
+reviewed metadata-only correction; no test body was rerun for that correction.
+
+Carry recovery v3 fixes nine archived-plan call sites to use the existing
+bounded, exact-original-wire historical verifier, retaining fresh-plan current
+artifact admission. Root reviewed/composed14 from
+`temp/sn-carry-recovery-repair-v3-1hMICsnh/CARRY-RECOVERY-HANDOFF-v3.md`.
+Actual selected97 qualification is NOT green: normal84 PASS/11 FAIL/2 started
+without terminal outcomes; race76 PASS/3 FAIL/11 started without terminal
+outcomes/7 never RUN. All original-source causal5+1 expected failures match N/R.
+Missing fixture release-lock image/artifact/layout identity, historical-source
+assertions and unchanged120s body timeouts are under Astra investigation.
+Root read the durable failed-shard accounting at
+`temp/sn-integration-xOgvEe/capture-carry-recovery-v3/manifests/failed-shards-event-recovery.summary.tsv`
+(SHA256 `760d060ce628801dde731b208de569d5acec03d5b7f82a427a9be89c70aa40e1`).
+Complete227-path source SHA256:
+`844b32f880596d211d9321740bd6bfb28da93e4c8ccd7a24ccf2623cd494f753`.
+All Carry readers joined with final source/binary checks0 before the next edit.
+
+Root then read all semantic startup10 source/test paths and composed them after
+checking donor hashes, nine new-path absences and the exact existing preimage.
+Handoff: `temp/sn-startup-history-v2-NC2FVF55/STARTUP-SEMANTIC-HANDOFF-v1.md`
+(SHA256 `845bad5ac8ac314019eacfea1700f732b5f1240ff67109062e21f9b088052462`).
+Terra owns exact23 normal/race (light21/legacy1/terminal1), retained proof and
+custody groups, and the real HTTP initial-worker-Goexit original-source causal1.
+This entry joins actual native/EVM/dual-public replay, private complete Stats
+Initialize/Recover, ordinary journal reconciliation and proof-store projection.
+It deliberately does not authorize pending historical head/weight decisions
+from signed references alone. RunRelease remains guarded. Pending legacy
+transaction/gen0/same-native-epoch migration, capacity and full production
+submission wiring remain explicit dependencies in that handoff.
+
+Authenticated upload draft `temp/sn-attempt-upload-v2-fc9kAOv3/` is review-held,
+now13 files/36 tests. Astra found an actual net/http request-body cancellation
+ownership defect and added native deadline handling plus real HTTP1/HTTP2,
+auth and independent byte/count quota controls. Review was paused for Carry
+failures; this draft is not released, formatted, compiled, tested or promoted.
+Root's separate4-file/9-test
+`temp/sn-release-transport-v2-zdkQvRbH/RELEASE-TRANSPORT-HANDOFF-v1.md` wires the
+actual operator startup to api.GetByJwt with logout/failed-persistence/shutdown
+cancellation and defines the complete-runtime-census two-origin replica join.
+It is also unreviewed/unqualified and depends on the upload draft. It does not
+remove the V2 guard, fill deployment upload budgets, call the final replica
+factory from RunRelease, submit evidence calldata or claim live availability.
+Explicit measured budgets/rendering, independent historical decision recovery,
+funded relay/finality, all-pair capacity, selectors, both full gates, freeze,
+live RC/three final epochs and independently verifiable FINAL.md remain.
+
 Checkpoint reconciliation (2026-09-07 17:27 UTC), superseding older pending
 statements below: primary SN was `eb6f148` before this commit. The independently
 reviewed closed-census publisher2 is now promoted. Terra confirmed exact17 new
