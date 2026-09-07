@@ -22,7 +22,8 @@ import (
 func headEMAStoreV2TestControlAllowance(path string, file headEMAFile) uint64 {
 	allowance := uint64(len(path)+len(file.Schema)+len(file.UpdatedAt)) +
 		uint64(reflect.TypeFor[headEMAFile]().Size()) +
-		uint64(reflect.TypeFor[HeadEMAStore]().Size())
+		uint64(reflect.TypeFor[HeadEMAStore]().Size()) +
+		uint64(reflect.TypeFor[headEMAStoreV2Owner]().Size())
 	if file.LastSubnetEpoch != nil {
 		allowance += uint64(reflect.TypeFor[uint64]().Size())
 	}
@@ -59,8 +60,8 @@ func assertHeadEMAStoreV2ExactControl(t *testing.T, stateDir string, encoded []b
 	for _, limit := range []uint64{allowance - 1, allowance} {
 		parsed := 0
 		store, err := newHeadEMAStoreV2(context.Background(), stateDir, HeadEMAStoreV2Limits{
-			MaxFileBytes: uint64(len(encoded)),
-			MaxEntries: uint64(max(1, len(file.Entries), len(file.LastFold))),
+			MaxFileBytes:    uint64(len(encoded)),
+			MaxEntries:      uint64(max(1, len(file.Entries), len(file.LastFold))),
 			MaxControlBytes: limit,
 		}, headEMAStoreV2LoadHooks{beforeRational: func() error { parsed++; return nil }})
 		if limit < allowance {

@@ -71,9 +71,9 @@ func TestReleaseShutdownReturnsPhysicalFinalSnapshotFailure(t *testing.T) {
 	}
 	var actualWriteErr error
 	writes, resourceCloses := 0, 0
-	runtime.stats.writeHooks.writeSnapshot = func(path string, payload []byte) error {
+	runtime.stats.writeHooks.writeSnapshot = func(directory *statsSnapshotDirectory, write statsSnapshotWrite) error {
 		writes++
-		actualWriteErr = atomicStateWrite(path, payload, 0o600)
+		actualWriteErr = writeStatsSnapshotOwned(directory, write)
 		return actualWriteErr
 	}
 	runtime.close = newReleaseOperatorClose(runtime.stats, stateDir, func() error { resourceCloses++; return nil })
@@ -236,12 +236,12 @@ func TestReleaseShutdownJoinsWorkersBeforeFinalDurableSnapshot(t *testing.T) {
 		return releaseShutdownSteererFunc(func(ctx context.Context) error { <-ctx.Done(); joined.Add(1); return nil }), nil
 	}
 	writes, closes := 0, 0
-	runtime.stats.writeHooks.writeSnapshot = func(path string, payload []byte) error {
+	runtime.stats.writeHooks.writeSnapshot = func(directory *statsSnapshotDirectory, write statsSnapshotWrite) error {
 		writes++
 		if joined.Load() != 3 {
 			return errors.New("final snapshot preceded all worker joins")
 		}
-		return atomicStateWrite(path, payload, 0o600)
+		return writeStatsSnapshotOwned(directory, write)
 	}
 	runtime.close = newReleaseOperatorClose(runtime.stats, cfg.Operators[0].StateDir, func() error { closes++; return nil })
 	ctx, cancel := context.WithCancel(context.Background())

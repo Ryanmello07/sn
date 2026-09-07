@@ -376,6 +376,15 @@ func selectReadOnlyRPCConfig(cfg *ResolvedConfig, active bool) (*ResolvedConfig,
 // live but incomplete topology fails closed instead of silently bypassing its
 // provider quota; a stopped or never-launched topology uses canonical RPCs.
 func supervisedCampaignEgressActive(ctx context.Context, stateDir string) (bool, error) {
+	return supervisedCampaignEgressActiveWithDial(ctx, stateDir, (&net.Dialer{}).DialContext)
+}
+
+// Keeps the canonical route and generation checks while letting independent
+// tests own their transport boundary without binding the live campaign port.
+func supervisedCampaignEgressActiveWithDial(ctx context.Context, stateDir string, dialContext func(context.Context, string, string) (net.Conn, error)) (bool, error) {
+	if dialContext == nil {
+		return false, errors.New("campaign egress dial boundary is missing")
+	}
 	var state SupervisorState
 	statePath := filepath.Join(stateDir, "supervisor.state.json")
 	if err := readJSONFile(statePath, &state); err != nil {
@@ -406,7 +415,7 @@ func supervisedCampaignEgressActive(ctx context.Context, stateDir string) (bool,
 	if !found {
 		return false, errors.New("live supervisor is missing the campaign EVM egress")
 	}
-	connection, err := (&net.Dialer{}).DialContext(ctx, "tcp", campaignEVMAuthority())
+	connection, err := dialContext(ctx, "tcp", campaignEVMAuthority())
 	if err != nil {
 		return false, fmt.Errorf("connect supervised campaign EVM egress: %w", err)
 	}

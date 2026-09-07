@@ -1,7 +1,20 @@
 # Release 1.0 testnet completion handoff
 
+Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
+work/ownership index. The detailed records below retain historical evidence;
+do not reload the whole history for routine test status.
+
+Checkpoint update (2026-09-07 07:32 UTC): the qualified Head53 and Stats28
+compositions are now in primary. Gate9 is being qualified separately on the
+held integration candidate and is not yet promoted. Primary also includes the
+unfinished Go qualification runner and its initial21 tests; final provenance,
+bounded-output handling and review regressions remain WIP. The requested Git
+checkpoint is not a source freeze, full-gate certificate or live acceptance.
+Use the active index for current ownership; older timestamped records below
+remain historical evidence, not claims about the checkpoint's release status.
+
 Status: live working document, first written 2026-09-03 UTC and last reconciled
-2026-09-06 21:51 UTC before the final source freeze. Refresh every item marked
+2026-09-07 06:59 UTC before the final source freeze. Refresh every item marked
 FREEZE-UPDATE after the final commits and gates. This document is the
 operational continuation point if another agent has to finish the testnet
 campaign. Historical green gates in FINALIZE.md are not approval for the
@@ -20,6 +33,16 @@ similar/adjacent paths, implement the fix, and add its deterministic regression.
 Return the resulting tree to Terra for focused and widened reruns. This
 model assignment never weakens a gate or expands testnet write authority.
 
+Scheduling policy: apply the harness's
+[dependency-driven concurrency rules](sim-testnet/README.md#host-concurrency)
+to every job, not only live block waits. Each wait must name a real data/source
+dependency, exclusive shared resource, or measured capacity constraint. Start
+ready independent work immediately and record the actual handle; do not wait
+for unrelated test completion, report packaging, or a queue-wide source hold.
+Source review and qualification may overlap on frozen inputs; integration
+requires both to finish successfully. Terra remains the test owner and Astra
+the failure-repair owner.
+
 Capture launchers are also immutable execution inputs. Snapshot/hash the actual
 script into its capture directory and execute that frozen copy; never edit an
 active launcher or let it reread a mutable shared template. Preserve actual
@@ -36,15 +59,117 @@ printed before the tool returns is not proof that a test stage began. An index
 written inside a still-live outer is intermediate; preserve it and create a
 distinct, timestamped final index only after the actual owner has been joined.
 
-Current launch status (2026-09-06 21:51 UTC; exact evidence in section 12):
+Current launch status (2026-09-07 06:59 UTC; exact evidence in section 12):
 
-- Checkpoint `300c3b0` is committed, pulled and pushed. It includes the qualified
+- The user approved integration-first efficiency changes. Root assembled one
+  current candidate at `temp/sn-integration-xOgvEe/sn`: exact `9197468` plus
+  all 25 then-current primary dirty/new paths and the 53 qualified head/EMA
+  paths from `sn-head-ema-private-fixture-qualification-v3-itSQOb/repair/sn`.
+  Donor SHA-256 checks, all 53 component comparisons, all 25 preserved-primary
+  comparisons and `git diff --check` exited zero. The candidate reuses the
+  qualified `sn-gate-services-qualification-v1-rMqjb0/server` dependency and
+  seven existing sibling repositories; it does not copy an older whole module
+  over primary. That combined Head stage now passes native35/startup9/child12/
+  profiler1/focused14 normally and under race, widened129 normally, and the
+  exact validator1+117/simulator11 race union. After release and independent
+  source verification, root promoted all53 exact Head/EMA files into primary.
+  The next Stats28 delta is applied to the same candidate for qualification;
+  newer shutdown fixes and selector alternatives are preserved. This is not
+  a source freeze or full-gate pass. The next milestone is actual production
+  startup-to-submission wiring on this combined candidate.
+- Execution ownership is stable: root integrates, Astra diagnoses and repairs,
+  one Terra lane qualifies the current candidate, and the other qualifies
+  independent isolation/generator/guard changes. Metadata-only corrections use
+  new captures on unchanged sources rather than more source clones. Require
+  exact nonempty compiled root membership, explicit package-main build output,
+  valid manifest paths/modes and the actual replacement graph before expensive
+  execution. Preserve the observed wrong selector, empty selection and build
+  output-collision failures; none is a passing product result. Reuse unchanged
+  dependency/cache inputs and keep mutable services/outputs private. Existing
+  final gates, test coverage, limits and live acceptance remain mandatory.
+
+- Primary remains pushed checkpoint `9197468` plus the listed working changes;
+  server remains `f478db80` plus qualified profiler/private-service changes.
+  Neither full release gate, source freeze, nor the
+  final live campaign is complete.
+- The finality-replay comparison repair has actual causal evidence (one
+  intended failure and five controls). Repaired focused6, identity27, full CRV4
+  (117 PASS / 7 opt-in SKIP), and the simulator guard pass normally and under
+  race. Six independent follow-on checks started together at04:56:39 UTC;
+  their last owner finished04:58:21. Revised opt-in live replay and final
+  capture sealing remain distinct work, not inferred from offline success.
+- Native stake calculation and the real startup check are now in primary.
+  The live `StakeThreshold` failure is reproduced through the actual
+  SDK transport: causal8 has exactly5 FAIL / 3 PASS normally and under race.
+  The narrow JSON-null repair passes transport8, stake35 and startup9 in both
+  modes; the real public-testnet stake/replay probes also pass in both modes
+  at block7,951,347. Full CRV4 passes152 roots with8 opt-in skips per mode;
+  simulator2 and the revised live identity probe also pass normally/race.
+  Primary matched all14 qualified source hashes at promotion. The separately
+  qualified runtime-attestation companion subsequently updated the shared
+  guard to29 pinned upstream files (original24 plus5 native-eligibility
+  sources); its two guards pass normally/race. Preserve the original live
+  failures and invalid dependency-layout captures; no shared-service outage
+  or new transaction is inferred.
+- Artifact-limit widened39 now passes normally and under race. Head/EMA
+  qualification exposed non-private test directories: its four-test-file
+  fixture-only repair preserves the production permission checks and14/129
+  selections. Repaired14 passes both modes and widened129 passes normally,
+  but widened validator race times out after3m with117 PASS and one root still
+  active. Its last root received only58s, versus its successful isolated
+  race102.66s. The exact118-name union now passes in independent1/117 race
+  shards (100.457s/153.706s), with matching source fences and3m budgets; the
+  separate final unsharded gate remains required. Its source-defined neutral
+  control also has the expected validator8 FAIL/4 PASS and simulator1 FAIL/1
+  PASS per mode. Stats'
+  invalid selectors/arguments/dependency layouts are preserved as preflight
+  failures, not product outcomes; its corrected-layout runs also have actual
+  failures under Astra diagnosis. Stats' private-server fixture successor
+  passes focused29+sim2 normally/race. Corrected causal12 normally/race has
+  exactly8 FAIL / 4 PASS; preserve the initial normal's incomplete11-root
+  capture. Broader99+sim4 now passes normally/race with exact verbose censuses
+  and unchanged source fences. Terminal's v4 new24 passes both modes; causal24
+  has the exact14 owning failures/10 controls. Full123 remains failed: the
+  borrowed-representation fixture appends to an already full122-record/16-trail
+  operator, correctly hitting the17th-trail limit, and the full runs also time
+  out. The reviewed one-file v5 repair preserves that positive history and
+  tests the refusal, while placing the same current workload on the independent
+  operator with available capacity. Bounds and all existing roots are retained;
+  qualification and the separate timeout diagnosis remain required.
+- Every job now receives a dependency/concurrency check. Isolation is the
+  preferred implementation, not shared-resource locks: a separate Astra lane
+  is preparing per-gate disposable PG/Redis and Foundry output ownership so
+  full gates can overlap safely. The fixed-port egress repair is integrated
+  after focused4/widened8 normal/race passes. Server's implicit wildcard6060
+  profiler is removed and its guard passes both modes. The refined Linux
+  subreaper/pidfd child owner and12 deterministic normal/race tests are also
+  integrated. Private service setup passes20 new,28 retained and1 profiler
+  root normally/race and is integrated in server. An actual two-owner Docker
+  smoke passed: both PG/Redis pairs worked, the second survived the first's
+  cleanup, and all four exact container IDs were absent afterward. Full phase
+  wiring is still private and unqualified; existing scripts must not be
+  blindly backgrounded against shared resources.
+- All live-wiring, historical activation, evidence-storage, capacity,
+  full-gate, freeze, live RC/three final windows and independent `FINAL.md`
+  obligations remain. No new transaction or final-soak pass is claimed.
+
+Previous launch status (2026-09-06 22:42 UTC; superseded above):
+
+- Checkpoint `9197468` is committed, pulled and pushed. It includes the qualified
   shutdown64 repair and bounded EMA loader32. Server is now `f478db80` after
   the monitoring-documentation checkpoint and clean upstream rebase/push.
   Primary has four new exact EMA read-budget tests awaiting formatting and
-  execution. The new historical validator-identity reader is also unformatted,
-  untested and unwired. Its gate currently references a not-yet-authored test
-  file; that gate cannot pass until the implementation/test slice is finished.
+  execution. The historical validator-identity reader now has21 regression
+  roots in primary; all21 pass normally and under race in `sn-validator-identity21-capture-v1-h1Zi73`.
+  Root read both complete raw logs and checked the formatted source pins.
+  The wider CRV4 package also passes111 roots in both modes, with6 explicit
+  opt-in live skips. The simulator retention guard also passes normally/race;
+  all six foreground sessions are terminal0 and the final capture index verifies.
+  A separate opt-in public-testnet identity/replay probe now passes normally
+  and under race. Review found an assertion gap for conflicting finality hashes
+  at equal heights; its deterministic repair is pending, with original results
+  preserved. Activation/history integration remains open; neither probe is a
+  full eligibility or activation-inclusion verdict.
   This is a WIP checkpoint, not a complete-primary qualification or source freeze.
 - Canonical neutral27 is complete: actual validator26 has13 expected causal
   FAIL and13 PASS, simulator1 PASS, foreground terminal0 and a distinct verified
@@ -54,7 +179,10 @@ Current launch status (2026-09-06 21:51 UTC; exact evidence in section 12):
   validator race timed out at3m. Its distinct final index is preserved and
   root-verified. The typed-clone successor is frozen and source-reviewed with16
   new roots, unchanged positive202/top200 and real cryptographic work. FORMAT4
-  is accepted; causal16 and repaired/widened131 execution are pending.
+  is accepted; causal16 and repaired/widened131 execution are pending. A
+  source-found final-fence label split would silently skip the simulator's
+  real baseline. Its one-character repair and28 non-product controls are
+  reviewed and authorized for Terra; no control result is claimed yet.
 - The new read-only bounded EMA startup loader has25 authored validator tests,
   retains five legacy EMA tests, and adds two simulator guards. Its full673
   source is frozen separately; fresh FORMAT10 passed and its seven exact byte
@@ -69,6 +197,9 @@ Current launch status (2026-09-06 21:51 UTC; exact evidence in section 12):
   The failed owner is terminal and its final index verified. A fresh full686
   candidate aliases the existing64 MiB envelope ceiling, preserves the original
   accounting causal/repair distinction, and adds8 unexecuted dependency controls.
+  Root reviewed all8 controls and authorized their actual execution, retaining
+  original causal13/repair13 and separately declared widened39. FORMAT3 in
+  `sn-artifact-bound-format-v1-nLWz9z` is complete; it is not a product pass.
   Neither the head product tests nor the wider release are qualified by this fix.
 - Terminal recovery's full694 successor has99 authored, unexecuted roots:
   retained60 plus18 byte-bound,11 final-witness,7 pre-copy and3 UTF-8 controls.
@@ -78,6 +209,14 @@ Current launch status (2026-09-06 21:51 UTC; exact evidence in section 12):
   is frozen with29 new validator/two simulator roots;12 validator roots target
   the minimally adapted old implementation,17 are explicitly repair-only
   controls. No helper test is being counted as live runtime activation.
+  Root reviewed the snapshot repair, exact causal adapters and all31 new
+  roots, and found the same missing artifact-limit alias in its inherited
+  wire source. Prepare a fresh dependency-only successor; do not knowingly
+  repeat the unchanged compiler failure or modify the frozen694 sources.
+- A separate temporary head/EMA composition is being prepared while isolated
+  qualifications continue. It must retain explicit combined budgets, the new
+  durable owner and all current-primary protections. No source freeze or
+  runtime promotion follows from this source-only parallel work.
 - Server `monitor/SIGNALS.md` now defines48 prospective correctness alert
   classes; three documentation tests plus registry consistency pass normally
   and under race both before and after the clean rebase of unrelated native
@@ -1149,7 +1288,12 @@ deadline silently.
 
 ## 4. Source-freeze procedure
 
-Perform these steps in order.
+These are dependency stages, not a single serial work queue. Formatting and
+source admission precede tests that consume those bytes; independent focused
+ordinary/race suites, source review, and read-only preflight run concurrently.
+Commit/freeze requires all affected repairs and qualifications. Both release
+gates require the frozen candidate, and live writes require producer success.
+Apply section 8's resource isolation before overlapping shared-state phases.
 
 ### 4.1 Finish focused correctness
 
@@ -1254,14 +1398,18 @@ Required results:
 - every release repository passes staged and unstaged diff checks;
 - the final release-lock checkout test passes after every other long gate.
 
-The complete gate is mandatory exactly once against this locked source for the
-final acceptance record. Under the user-approved accelerated schedule, start it
-as soon as the producer gate passes; it may run concurrently with the live
-acceptance windows because the checkout is immutable and the campaign uses
-separate managed runtime state. Do not run its PostgreSQL/Redis section
-concurrently with another suite against the same test databases. Any aggregate
-failure invalidates the live candidate, stops new mutations, and invokes the
-failure protocol even if chain progress has already begun.
+The complete gate is mandatory against this locked source for the final
+acceptance record. Producer success is a prerequisite for live writes, not a
+logical prerequisite for independent aggregate tests. Start aggregate work
+alongside producer work when its mutable resources are isolated;
+it may continue alongside live acceptance because the campaign uses separate
+managed runtime state. The current scripts share the local PostgreSQL/Redis
+profile and Foundry output/cache paths, so do not launch both unchanged scripts
+concurrently against those resources. Give each gate its own resources,
+keeping the final fences after every required owned job
+joins. Partial shards never replace either complete gate certificate. Any
+aggregate failure invalidates the live candidate, stops new mutations, and
+invokes the failure protocol even if chain progress has already begun.
 
 Do not call testnet validated until both gate scripts pass from the same
 unchanged, pushed filesystem tree. If upstream moves after either gate, the
@@ -1527,7 +1675,33 @@ Monitor without bypassing the shared public-provider egress gate:
 
 Do not run uncoordinated high-rate RPC polling while the campaign is active.
 
-## 8. Parallel work allowed during live protocol waits
+## 8. Dependency-driven parallel work, before and during live waits
+
+For every ready or held job, explicitly ask whether it can run concurrently.
+The default is yes; a hold records the exact dependency/resource, current owner,
+and release condition. Reconsider it at every scheduling boundary. Keep local
+qualification, source review, independent fixes, infrastructure reads and
+completed-capture analysis moving without waiting for an unrelated lane.
+
+Separate immutable inputs from mutable resources. Tests can share pinned
+read-only source and module caches. Default to separate disposable PG/Redis
+instances, private ports, fixture state, generation outputs and cleanup owners;
+different proxies, prefixes or checkout names do not isolate shared databases.
+Keep nonces and causally ordered chain transitions serialized. Each job must
+join and clean up its own identified resources without touching another owner
+or surviving a host restart. Shared locks are a justified fallback only.
+Verify sibling module replacements before compilation in every temporary
+layout. All temporary repositories remain under `temp/sn-*/`. Preserve each
+job's own source fences, actual exit and logs even when another job fails.
+Archive packaging may follow immediately recorded execution results; it is
+not an admission dependency for the next independent suite.
+
+The host observed on 2026-09-07 exposes 24 cores and about 120 GiB available
+memory. These are observations, not portable hardcoded capacities. Increase
+concurrent ready jobs using actual effective CPU/memory/I/O pressure; keep
+existing per-test cardinalities, worker bounds and timeouts. A low-CPU chain
+wait, source-review task or serial compiler is a reason to dispatch independent
+work, not to weaken a test or multiply redundant runs.
 
 After a phase reaches capture_closed, its graph is immutable. Run these tasks
 in parallel with the next live acceptance window:
@@ -2019,7 +2193,432 @@ supplies the exact signed campaign run ID explicitly.
 
 ## 12. Freeze and execution record
 
-### Current qualification and continuation record (2026-09-06 21:51 UTC)
+### Current qualification and concurrency record (2026-09-07 06:59 UTC)
+
+This is pre-freeze work on primary `9197468` plus working changes, with server
+`f478db80` plus qualified profiler/private-service changes. No final live
+campaign is running. The user's current instruction
+is to evaluate concurrency for every job and use isolation, not shared-state
+serialization, as the preferred implementation. The operational rules are in
+the harness README and section 8 above.
+
+Actual parallel replay qualification is retained in
+`/home/by/urnetwork/temp/sn-validator-identity-replay-qualification-v2-oskpCU`.
+Identity27 ordinary/race, full CRV4 ordinary/race, and the simulator guard
+ordinary/race all started04:56:39 UTC and ended by04:58:21. Their actual exits
+are0; CRV4 has117 PASS / 7 opt-in SKIP per mode. The repaired focused6 race
+also passed; the earlier focused6 ordinary success remains in
+`sn-validator-identity-replay-exec-v1-fmIV1N`. Preserve the intended causal
+one-failure/five-control result in `sn-validator-identity-replay-causal-exec-v2-qMWbHx`
+and the separately invalid zero-selection capture. Root counted the latest
+top-level log outcomes. Final seals and revised opt-in live replay remain
+separate checks; do not infer them from package success.
+
+The original native source is staged at `sn-validator-stake-v1-lwKyPw`, with the complete
+`VALIDATOR-STAKE-HANDOFF-v1.md`. It reads runtime454's actual selective-metagraph
+weighted total, threshold, registered owner UID and permit at one authenticated
+finalized block. It does not substitute raw alpha for weighted eligibility.
+Its real startup call precedes settlement recovery/workers. The saved public
+response fixture for block7,949,341 is bound by SHA256
+`a66ed3aafad363f08968fb7e99d08bce2e164627cd12bed5c697baee810e6218`.
+The qualified successor is now integrated as described below. This prerequisite is neither historical activation inclusion nor a
+complete live release integration.
+
+Capture `sn-validator-stake-qualification-capture-v1-8Zrd1g` records eight
+checks starting05:00:01--02 UTC. Reader27 and startup9 pass normally/race.
+The live normal/race probes actually fail at `StakeThreshold`, after5.66/8.25s:
+`validator identity storage is missing, malformed or exceeds its byte bound`.
+Astra traced the real SDK's JSON-null handling and checked actual storage
+replies. Present JSON null leaves the supplied raw destination untouched;
+an omitted result instead returns the SDK's `ErrNoResult`. The source-only
+repair initializes a fresh null destination at the two storage boundaries;
+it does not relax required values, malformed replies, cancellation or bounds.
+Its frozen handoff is `sn-validator-stake-null-repair-v1-bJAQx6`.
+
+The fresh complete qualification is
+`sn-validator-stake-null-qualification-v1-DV0tfT/{repair,causal}/sn`, with explicit
+sibling bindings and raw records in `capture/`. Root read the actual live
+logs and terminal exit files: causal transport8 has5 FAIL / 3 PASS normally
+and under race; repaired transport8, stake35 and startup9 each exit0 in both
+modes. The repaired live probes exit0, respectively8.86s and11.50s, and replay
+the same authenticated block7,951,347
+(`0xb77d7be852490f931499ec2370ffb0f407b47e9aa2856b292cd75b206de988d4`).
+Runtime454, UID0 and netuid521 agree; weighted total107,164,277,004,235rao
+is distinct from raw alpha14,400,824,715,458rao. The threshold is the exact
+runtime default0 and the owner is actually registered as UID0. These are
+read-only public observations, not validator activation or emissions receipts.
+The complete corrected qualification subsequently closed: simulator2 and
+revised live identity1 each pass normally/race; full CRV4 lists160, with152
+PASS / 8 explicit opt-in SKIP per mode, actual exits0. An extra targeted
+identity command had an outdated expected21 census against actual27 and is
+preserved as invalid before execution; full-package results cover all27.
+After source owners released, root integrated the eight new files and two
+production changes into primary using `apply_patch`, preserving existing
+identity/replay/guard files. Root strictly checked all14 paths against
+`capture/native-null-qualified-overlay.sha256`, whose SHA256 is
+`d7b4856a9adb6a70b72590e39c7bc7fb71a94e356ddd29058940d99ed8f149bd`.
+The actual `RunRelease` call now checks the signing hotkey's exact finalized
+native weighted stake/permit before settlement recovery or worker startup.
+This source promotion does not substitute for the final composed gates.
+
+The runtime-attestation companion is also integrated from
+`sn-validator-stake-attestation-qualification-v1-56qPKv/repair/sn`:
+two normal/race guards and the clean29-file upstream source check pass.
+The original24 source pins and12 metadata inputs remain unchanged. The five
+new pins cover the selective runtime API, metagraph, weights, stake utility
+and fixed-point math at the same reviewed runtime454 commit. This subsequent
+shared-guard change is separately qualified, not relabelled as the earlier
+14-path native overlay. The audit document records weighted eligibility and
+the actual SDK null/default distinction.
+
+The first simulator pair did not reach tests: placing a checkout directly in
+`temp/` silently redirected relative `../server` to another tree. Preserve both
+actual compilation failures as invalid environment evidence. The corrected,
+reused candidate is
+`/home/by/urnetwork/temp/sn-validator-stake-qualified-v3-5WTxGR/sn`, capture
+`sn-validator-stake-qualification-capture-v3-Mol9tK`, with all eight sibling
+replacements explicitly resolved to the intended repositories. Corrected
+normal2 and race2 both exit0, but do not combine those with older-graph reader
+tests into a same-candidate certificate. The complete repaired candidate above
+supersedes that split qualification. An unused, unrun checkout accidentally created outside
+`temp/` was removed by its creator; source and captures were preserved.
+
+The combined candidate's Head stage is sealed in
+`temp/sn-integration-xOgvEe/capture/`. Its complete78-path source manifest has
+SHA256 `269d234543007aae67f4e11b677ba8fa096ac9140f8e55ecc0aeb6db4ba70f0d`.
+Native35/startup9/child12/profiler1/focused14 pass normally/race; widened129
+passes normally and the exact validator1+117/simulator11 race union passes.
+The original remaining117 race command timed out124 with117 RUN/114 PASS;
+retain it as failed/incomplete execution. The new separately compiled binary
+run has117 RUN/117 PASS, exit0,06:43:54.514--06:46:04.352 UTC (129.838s), with
+the same3m test/4m outer execution limits. Its race binary SHA256 is
+`6d352ec3d5fffdbbe616984c60293cfd65915cae9088a5fed607399d45601660`.
+This does not prove compilation was the sole cause of the earlier timeout:
+that old capture did not separate compile/execution timestamps. Raw before/
+after manifests differ only in absolute versus relative pathname rendering;
+root independently stripped only the exact candidate prefix, proved unique
+78/78 path/hash equality across all four original/final/binary-run maps, and
+checked every original hash against current source. The original differently
+formatted manifests remain preserved. Mode/status fences and diff-check pass.
+After Terra released readers, root promoted the exact53 qualified Head/EMA
+files into primary, with all53 byte comparisons and diff-check0. Primary's
+newer docs, native/runtime29 and shutdown changes were not overwritten.
+
+Stats is now the next stage on that same candidate. The28-path artifact
+`temp/sn-integration-xOgvEe/stats-next-stage.apply-patch`, SHA256
+`a06995bb9eb98f3385991645cc272afd08f1443808d82bef2b63d55a9ebb14c3`, is applied.
+It takes qualified snapshot and ordinary-input dependencies from `hbpECH`,
+preserves newer `release_settlement.go` cancellation/error joining and current
+Head/EMA producer alternatives, and adapts only the four existing shutdown
+snapshot callbacks to the owned writer. Terra owns a fresh `capture-stats-v1`
+matrix; original Head captures remain immutable. Exact-union selections may
+avoid duplicate roots across Stats31, retained103, ordinary49/guards, affected
+shutdown/settlement and Head compatibility; preserve their per-obligation map
+and all independent causal obligations. No complete V2 startup or live claim.
+
+Ready-work audit and ownership (readiness is not an executed result):
+
+| Job | Owner and allowed overlap | Actual hold/release condition |
+| --- | --- | --- |
+| Native transport/null repair `bJAQx6` | Qualified on `DV0tfT`, integrated in primary | Source/dependency fences and live/offline scopes recorded above; final composed gates still required |
+| Native source attestation `TxurX0` | Qualified on `56qPKv`, integrated in primary | Two guards normal/race, original24+new5 source hashes, unchanged12 metadata sources |
+| Artifact alias/vet successor `Hy4S9s` | Terra; parallel with native, Stats and head | Widened39 ordinary/race passed; finish exact causal/repair records and final fences |
+| Current integration candidate `xOgvEe/sn` | Root integration; original Terra execution lane | Combined Head stage qualified as recorded above,53 exact files promoted; Stats28 applied for a fresh matrix; no full-gate pass |
+| Stats snapshot fixture `bWk1en` | Qualified on private-server successor `hbpECH`; applied to current candidate | Fixed31 and retained99+sim4 pass normal/race on donor; causal validator12 has8 FAIL/4 PASS and sim2 has1 FAIL/1 PASS; composed qualification remains required |
+| Head/EMA private fixture `Utn41G`, handoff v3 | Qualified on `itSQOb`, integrated-qualified on `xOgvEe`, promoted to primary | New14 and widened129 normal pass; exact1+117 validator race union and sim11 pass; donor neutral14 has expected9 FAIL/5 PASS per mode; final full-validator gate remains unsharded |
+| Terminal retained witness `FJWuGO`, fixture4 `uJCUS2`, borrowed v5 `NuRQ7N7d` | Astra fixes; Terra tests independently of integration | v5 repair borrowed7 and adjacent4 pass normal/race; original full123 still times out before completion; duration-balanced exact-union development shards are being prepared; original99 causal remains required |
+| Egress and child/profiler isolation | Qualified and integrated in primary SN/server | Egress4/8 and child12/profiler1 normal/race; full gate composition remains separate |
+| Full-gate resource isolation | Second Terra max lane `/root/terra_isolation_qualification` | Queue12, generator11 with causal join failure, guards5/23 and survivor13 with sole causal failure pass required normal/race outcomes; ACK repair4/neutral3+3/combined29 qualification active; full composition separate |
+| Production V2 configuration and renderer | Astra max, narrow independent source overlay | Uses actual bounds owners and explicit pinned references; root composes actual startup next; no guessed capacities, unauthenticated activation or legacy fallback |
+| Typed-clone, wire, retry, parser/process/timeout and other adjacent suites | Terra; schedule admitted fixed inputs independently | Preserve each previously recorded source/census/budget dependency, not a queue-wide wait |
+| Final full gates and live writes | Terra on the eventual same frozen candidate | Both gates need source freeze and isolated resources; only writes require producer success |
+
+Root verified head v2's strict index17
+`0c4f30048a96fdc9739957ab4fdb2cdfc3c168db5291b2f1ee67132a974cbcdf`
+and read its six-path final delta. Root also read terminal v3's two-production
+repair and all24 new controls, and verified its strict review index
+`55dc8acfe1e62fe9b05e6553664e0a5b628fab24a7c5efed22724d57f0f65b3d`.
+Terminal's new causal expected14 FAIL/109 PASS starts from the old repaired99;
+it cannot replace the original99 causal expected31 FAIL/68 PASS. Actual v3
+repair new24 has19 PASS / 5 FAIL and full123 has47 PASS / 76 FAIL per mode.
+The full normal failures partition into69 genuine-activation fixture
+prerequisites, six legacy/native accounting comparisons and one missing
+eight-assignment EMA prerequisite. The frozen five-test-file repair is
+`sn-terminal-fixture-repair-v4-uJCUS2/TERMINAL-FIXTURE-HANDOFF-v4.md`
+(SHA256 `f516ef48a307dd833b887529e2f6f6d42aa5c968503b8f1ba6086533f40eae89`).
+Root reviewed its real attach-before-epoch transition, exact durable image,
+wrong-generation refusal, full native accounting and seven/eight-assignment
+controls. No production check, bound or root census changes. New-causal counts
+alone are insufficient: v3's five runtime controls failed too early, so every
+failure must now reach its own retained-witness marker.
+
+The gate-isolation implementation must provide distinct disposable PG/Redis
+data instances and daemon-assigned private ports, owner-labelled immutable
+container-ID cleanup, restart disabled, and distinct full-build/Slither
+output/cache directories. Binding and generated-contract checks must consume
+that gate's exact full-build outputs. Keep each outer owner in the foreground,
+join all owned child jobs, retain every failure, and run final source fences
+after those joins. No shared upstream proxy counts as database isolation.
+Existing full scripts remain unsafe to run concurrently unchanged until this
+is qualified. No new writes to shared services or netuid521 are authorized by
+that local isolation work.
+
+The user explicitly requested fixing both hidden port collisions and escaped
+process groups. The campaign-egress repair is integrated from
+`sn-campaign-egress-qualification-v1-CpgcF5/repair/sn`: focused4 and widened8
+pass normally/race; causal4 has exactly2 FAIL / 2 PASS in both modes. It
+preserves canonical production `127.0.0.10:19948`, with per-call injected
+transports and separate kernel-assigned test listeners. Server's implicit
+wildcard6060 profiler is removed with no replacement automatic listener.
+
+Refined child ownership is integrated from
+`sn-gate-child-profile-isolation-qualification-v2-A4R6Lh/{sn,server}`:
+child12 and profiler1 normal/race actual exits0; source fences equal in all
+four captures. Primary Python SHA256 is
+`09c0064f9829b11027e4910e6f1993aff6c7aff2684796bd3b4fdc06bfb0aee7`,
+and its formatted test SHA256 is
+`f902824ec54482171e71ba48d5f0eca71143556c413f05368223392b7be9c474`.
+It uses Linux subreaping, exact pidfd signals and kernel ECHILD before
+completion. Tests cover new PGIDs/SIDs, already-exited orphans with an actual
+stopped-owner barrier, non-UTF8 names, cancellation, concurrent-owner isolation
+and real exit/acknowledgement status. V1 captures remain separately preserved.
+This component is not yet connected to primary full-gate scripts; no service
+cleanup or gate success may precede the complete descendant join.
+
+The isolated-generator11 slice passes normally/race in
+`sn-gate-artifacts-isolation-modes-qualification-v2-J11aAH/capture`. Preserve
+the original failure: temporary source construction changed generated-file
+modes from0644 to0664 while retaining identical bytes. Its metadata-only
+successor restores the original nine0644 destinations and executable0755
+generator, without running generator write or changing primary modes. Record
+modes as well as hashes. Separate generator cancellation/join controls and
+the full gate/service implementation remain unfinished.
+
+The active isolation candidate is
+`/home/by/urnetwork/temp/sn-release-gate-isolation-v1-lXiKXg/{sn,server}`.
+Root's phase scripts are frozen in the queue-v2 handoff below; the active
+draft remains in that path. Existing selections/deadlines are retained;
+full ordinary/core-race/simulator-race and the three unsharded Connect
+orderings are independent jobs. Final fences run after joined failures too.
+Astra's queue-v2 is frozen at
+`sn-gate-jobs-isolation-v2-JjNP50/GATE-JOBS-HANDOFF-v2.md`:12 new roots,
+helper SHA256 `3f0fd38fe0c6723a63f0f4edfd3fa11857a9d4dd69b7e876b002448ef099e751`,
+producer `1d4dbf1b47479f9a8ff43815f2bf61c51334d217bcc3f667616706412ef263e6`,
+local `09843a017cc84a754bb456309d433d1c881371bb0342a75b7fb51f1ff9c2b5a3`.
+Root reviewed all12 plus the v2 actual lost-worker PID/reap assertion. EXIT
+now preserves a canceled worker's failure even when the parent exits zero.
+One separately identified adjacent issue remains: a disappeared owner makes
+EXIT skip explicit joins of other surviving owners. Astra must add a
+two-owner regression/fix while retaining unproven state, failure and services;
+do not mislabel queue12 as proof of that missing case.
+
+Curie's generator cancellation/join successor is frozen at
+`sn-gate-generator-join-v1-B3IHco/GENERATOR-JOIN-HANDOFF-v1.md` (SHA256
+`8b04a446d9209c3d3e4260222abb19c6bb057d644b7f2419b3756c0ac94d0f08`).
+Only the test owner changes; generator source and11 root names remain.
+It releases every blocked fake tool, joins every real generator, then wakes
+and joins/closes FIFO readers. Success, early peer failure and acknowledged
+cancellation have deterministic controls; the release-omission neutral must
+produce exactly1 FAIL / 10 PASS without leaking a child.
+
+Private service setup is integrated from
+`sn-gate-services-qualification-v1-rMqjb0/server`. All seven primary paths
+match the qualified bytes exactly; source fences/diff-checks pass. New20,
+retained28 and profiler1 each pass normally/race. Preserve the initial
+incorrect retained selector (four selected instead of28) as an incomplete
+preflight, not a passing retained suite. Real Docker smoke
+`sn-gate-services-real-smoke-v1-y4VSiD/capture` has both actual exits0, real
+psql1/PONG before cleanup, and the second pair still healthy after the first
+pair's cleanup. All four exact IDs were subsequently absent. Containers used
+private daemon-assigned ports, tmpfs data, restart=no and0700 owner roots;
+shared services and on-chain state were untouched.
+
+Two retained gate guards still required obsolete source text: a contiguous
+pre-expansion producer selector, and the removed shared database aliases.
+The frozen one-test-file successor is
+`sn-gate-isolation-guards-v1-FSQ2RM/GATE-ISOLATION-GUARDS-HANDOFF-v1.md`:
+capture original2 failures, then repaired5 and adjacent23 normally/race.
+It verifies actual selected roots, independent alternatives and ordered
+private-profile admission, with three source-mutation controls. Preserve
+primary's separately qualified29-source attestation during its later merge.
+The second Terra lane owns these three isolation qualifications; the original
+Terra lane owns Stats, Terminal, Head and the older backlog. Source review
+overlaps every admitted qualification, and no report-packaging wait is allowed.
+Independent review also checks hidden shared resources.
+`config/local/settings.yml` can replace service hostnames during Go startup,
+so a private profile must override settings and both application and maintenance
+PostgreSQL resources, then verify resolved authorities before service access.
+This is a configuration hazard in the proposed isolation path, not an observed
+main-service outage. Source review and qualification should overlap on frozen
+subsets; no need to wait for the whole gate helper before testing its independent
+generator or service components.
+
+All eight concrete live-wiring obligations below remain open, including actual
+startup/persistence/head routing, authenticated activation/history and selected
+on-chain evidence storage. Section10.1's storage choice is unanswered. Both
+full gates, freeze, doctor/plans, capacity, real RC/three final epochs and
+independent `FINAL.md` replay remain mandatory; no from-now ETA is inferred.
+
+### Previous qualification and continuation record (2026-09-06 22:42 UTC)
+
+Primary remains based on pushed `91974686bb7882a9aab10cb4f39147e4feec8806`;
+the new identity tests and reader formatting are working changes, not another
+commit or source freeze. Server remains `f478db80`.
+
+The formerly missing `crv4/validator_identity_test.go` is now written with21
+top-level roots, all selected by the existing `TestRuntimeArtifactMetadata`
+producer prefix. It uses actual SDK metadata encoding/decoding and exact-block
+scripted RPCs. It verifies the complete registration/ownership/stake/permit
+tuple, unchanged dial-time metadata, bad caller authority before RPC, wrong
+genesis/canonical/finalized/runtime observations, no historical-schema fallback,
+reused UIDs, exact u64 stake/default-zero semantics, complete canonical permit
+vectors through every u16 compact boundary, strict bounded JSON hex, every
+RPC failure position, and barrier-driven cancellation with joined readers.
+False permits and zero stake remain observations, not eligibility approval.
+
+Terra formatted the exact three held reader/test/gate paths and executed21
+focused roots normally (0.018s) and under race (1.096s); both actual exits are0.
+Terra retained foreground session28745 (normal) and44480 (race); both are terminal0.
+Capture: `/home/by/urnetwork/temp/sn-validator-identity21-capture-v1-h1Zi73`.
+Root read both complete raw logs and strictly checked the current formatted
+source manifest at22:18:18 UTC:
+
+- reader: `aa25f4de5cd6bcf5a72076dbd8b9828f354a15e2087029c9c193f838ee965787`;
+- tests: `de8559c6f82e796ba6ed1f3607ff1bdbdcd0570c07d9c72acbeca7e83b2fc78e`;
+- retention guard: `1f982fc6f8d9b4d08b2a3a3b9e6b9acf968e360504a6b2c3e7f38b6c99ec541f`.
+
+The full CRV4 package now also has111 top-level PASS and6 opt-in live SKIP in
+each mode, actual exits0, normal0.689s and race2.468s. Root read all690 raw log
+lines and counted the top-level outcomes separately from inherited subtests.
+The skipped live dial, finalized-event and four SP2 conformance probes are not
+passes or live evidence. The simulator retention guard now passes normally
+(0.068s) and under race (1.418s), with actual exits0. Full-package foreground
+sessions42566/65327 and guard sessions23211/79177 are terminal0. Root read both
+guard logs, commands and owner reconciliation and strictly verified the final
+31-entry `artifact-index.sha256`, SHA256
+`dde7305db47d0d743412f91f4cf4a04ccb69dc166c50528de3b9e11fd88f9a52`.
+The post-run source manifest equals the formatted reader/test/guard pins;
+the only concurrent tracked status delta was root's two plan documents.
+Neither21 focused passes nor a historical identity observation proves live
+activation inclusion.
+Astra independently reviewed all288 reader and784 test lines against actual
+runtime454 source at `14cde641`: storage hashers/key order/defaults, noncompact
+u64 alpha, u16 netuid and complete permit-vector decoding match. No actionable
+defect was found. The reader still has no production caller; activation must
+compare independently expected identities and eligibility before using it.
+The four separately authored exact EMA read-budget controls also need actual
+qualification and later composition with the new write-owner charge.
+
+Root additionally authored `crv4/validator_identity_live_test.go`, an explicit
+read-only public WebSocket probe of netuid521/UID0 at one finalized block and
+an exact-block replay. It pins testnet genesis and the full reviewed454 artifact
+independently of RPC responses, checks that historical reads leave dial-time
+metadata untouched, and records both public observations. It loads no wallet
+and submits nothing. Its opt-in is `CRV4_LIVE_VALIDATOR_IDENTITY=1`.
+Terra ran it against the real public endpoint: normal6.834s and race10.224s,
+foreground sessions97528/34389 terminal0. Capture
+`/home/by/urnetwork/temp/sn-validator-identity-live-v1-WTWJOR` retains source
+`125e221446e09f9f6a96a8e2965f7067488530d733fff7d25c058f7874e3bc22`.
+Root read both complete live logs and verified final index
+`13e6e1d2aca90d075c3cfd86fea91a087d33462d029de5de62ac4bf72fa1d6b1`.
+The actual selected blocks were7,949,341
+(`0x7416115b9fdeebbe8522e8f76ae7fd562dfd2e9f731614cbe5ed26469dc6c1ce`)
+and7,949,343
+(`0x3ef488ed02495e6dd5bdb94525063029215b4b9e30edb69c48944f768a9f843f`).
+Each exact-block identity replay matched while finality advanced by one block;
+the census was256, UID0 had permit=true and alpha stake13,841,375,496,780rao.
+This is public observation, not proof that UID0 is an independently provisioned
+campaign validator. Subsequent no-opt-in full CRV4 runs pass111 with7 live skips
+in both modes, sessions64544/91580 terminal0; these are distinct from the older
+six-skip capture.
+
+Astra review found a test-comparison gap: a repeated equal-height finalized
+watermark with a different hash would be normalized away before comparison.
+No such inconsistency occurred in either live run. Astra is repairing the
+actual probe comparison with deterministic causal/adjacent controls and gate
+retention, then Terra must rerun that successor; preserve the narrower original
+successes without treating them as coverage of the previously unchecked case.
+
+Observed alpha and permit alone are not the complete runtime eligibility rule.
+Pinned454 uses stake weights/StakeThreshold and an owner-UID bypass. The owner
+identity comes from SubnetOwnerHotkey plus reverse Uids, not Owner(hotkey).
+The non-owner computation also consumes ordered ChildKeys/ParentKeys, root
+and subnet alpha totals for the candidate and its immediate parents, TaoWeight
+and exact fixed-point saturation/rounding. Activation must not replace those
+inputs with a raw-alpha threshold or infer general permission from the native
+self-weight exception. Full historical authority remains unimplemented.
+
+Root read terminal99's complete932-line production delta,224-line causal API
+adapters, all three new production files and all39 new controls (18 persistence,
+11 final witness,7 pre-copy and3 UTF-8). Its strict16 review index verifies.
+A specific adjacent question is under Astra review: an ordinary second
+metadata read currently overwrites its earlier retained leaf witness. Check
+whether a nil-returning callback can replace an already observed same-byte
+snapshot before that reread and silently establish a new inode as authority.
+This is a source-found hypothesis, not an observed test failure or completed
+repair. Frozen terminal99 remains unmodified and unqualified.
+
+The Stats snapshot dependency-only successor is now frozen and root-reviewed
+at `sn-stats-snapshot-bound-v2-RjEUHQ/{sn,red/sn}`. Only the exact four-line
+artifact-limit alias differs from the corresponding Ky6eqV role; all other693
+files, tests and original causal distinctions remain unchanged. Root checked
+the actual alias diff and strict18 index
+`77e96fe412314064715c35401729ca6bf42ab3616ef552ef6897f602c0b9e856`.
+Repair694 manifest: `3bca290ae1c414596e598430848d9bc4595df0e2a709c13823bb0b4e1c655df4`;
+causal694: `14224155a698fb6f2d2fb92dadcd8e40fe9dacf870feb7286567471ca0445a1d`.
+Terra may format the declared20 paths and execute original causal12+2,
+repair31 and retained103 normally/race. No result is claimed yet. Both frozen
+ordinary/terminal roles have the same missing alias; their originals remain
+unchanged rather than knowingly repeating that compiler error.
+
+Root completed review of the following pending work without claiming passes:
+
+- Artifact-bound Xddeuf: all465 lines of the new5 validator/3 simulator
+  controls, exact selector/census and the product alias to the existing64 MiB
+  ceiling. Terra is authorized to execute those8 controls, original accounting
+  causal13 (expected9 FAIL/4 PASS), repair13, retained31 and separately widened39.
+  Fresh FORMAT3 `sn-artifact-bound-format-v1-nLWz9z` retains both full686 roles;
+  only formatting in the new simulator guard changed. Repair manifest
+  `c0cca15e070255101058f1f365179866c61af260491d2c37c784e85e387878a8`;
+  causal manifest `ee8fc784c58bef38a542364c7f582e2fe4e5e7339c45e450ce731505f1b93b8e`.
+- Clone runner mapping: `sn-clone-identity-map-repair-v1-snKQMo` preserves the
+  old runner and changes only `${identity%-*}` to `${identity%%-*}`. The old
+  `repair-sim-testnet` label becomes `repair-sim / sim-testnet`, causing the
+  final loop to test a nonexistent doubled-label baseline and silently skip
+  the actual simulator fence. The corrected pair is `repair / sim-testnet`.
+  Root read the complete156-line adapter and28 independent source/Bash/tail
+  controls, and strict7 index `8bc51abac409732fdaf066ae541accd5119bde28364e9a24b887ff8b118dc523`
+  checks0. Actual controls and a fresh full clone run remain Terra-owned; the
+  old proposal/static admission0 is preserved, not called a product failure.
+- Stats snapshot Ky6eqV: root read the complete358-line production repair,
+  732-line causal compile/API adapter, native/shared/unsupported writers, all29
+  new validator/two simulator controls and exact12 causal/17 repair-only roles.
+  Strict26 index `3344c268ace7dd8538435fca557d7431ce34fef30b9659c749d0d08ec66aebc8`
+  checks0. The inherited wire still references the already diagnosed undefined
+  artifact ceiling. Astra is preparing a fresh same-alias-only successor for
+  both roles and checking ordinary/terminal siblings. Do not copy head-specific
+  controls into this different source graph or change its existing census.
+
+In parallel, Astra is preparing a source-only head/EMA method composition from
+current primary and the reviewed isolated proposals. It must combine owned
+preview/durable publication with the same finite budgets, preserve current
+shutdown/activation protections and every existing regression, and then receive
+its own integrated qualification. Fresh candidate:
+`/home/by/urnetwork/temp/sn-head-ema-integration-v1-jW1Rhe/sn`, detached at exact
+`9197468`. Production `gatherHeadV2` must require the real bounded EMA owner;
+migrate the genuine head fixtures and retain the complete existing head census
+on that same path. Do not route V2 behavioral tests through a legacy helper
+solely to keep them passing. This does not activate production routing.
+
+The storage choice in section10.1 remains unanswered; a concise question was
+re-presented to the user during this turn. The recommended hash-plus-public-proof
+route matches WHITEPAPER.md section11.1; no answer or contract-write authority
+for a materially different full-byte storage design is inferred. Shared testing
+and integration continue. All eight live-wiring obligations below, complete
+release gates, source freeze, capacity, both real testnet phases and independent
+FINAL.md replay remain open. No new transaction or final-soak result is claimed.
+
+### Previous qualification and continuation record (2026-09-06 21:51 UTC)
 
 Implementation checkpoint `300c3b072d2a0ba1c23099e45172c8d00ddae3f1` is
 committed, pulled, pushed and remote-verified. It is a user-requested WIP

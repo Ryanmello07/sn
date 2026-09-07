@@ -49,7 +49,7 @@ Primary sources:
 
 ## Source and artifact gates
 
-The source manifest pins 24 changed or retained security-critical Rust files
+The source manifest pins 29 changed or retained security-critical Rust files
 and 12 metadata-generation files. The exact clean checkout passes:
 
 ```bash
@@ -140,6 +140,26 @@ These models are bounded adversarial oracles, not substitutes for the pinned
 FRAME tests or deployed-Wasm conformance checks.
 
 ## Release compatibility conclusion
+
+The finalized native validator startup reader also depends on five retained
+files at the same reviewed commit: the selective-metagraph runtime API, its
+field layout and weighted-stake calculation, non-self weight admission,
+registered-owner lookup, and fixed-point-to-integer stake conversion. Their
+exact digests are now included alongside the original24 source hashes;
+the12 metadata-generation hashes, deployed runtime identity and Wasm are
+unchanged. Raw alpha is not the weighted eligibility total. The metagraph's
+selective `validators` filter is not the admission rule: its strict comparison
+differs from the actual non-owner greater-than-or-equal threshold check.
+Owner bypass requires a present owner hotkey and an actual reverse UID lookup;
+an absent owner must not acquire UID0 authority.
+
+An unset `StakeThreshold` uses the exact runtime default0. The pinned SDK leaves
+a caller's raw destination untouched for a present JSON-null result, whereas
+an omitted result returns `ErrNoResult`. The reader initializes a fresh null
+destination and keeps required-field, malformed-response and cancellation
+refusals intact. Real SDK transport regressions and public-testnet exact-block
+replay passed normally and under race; this startup prerequisite does not
+prove historical activation inclusion or successful weight submission.
 
 The runtime keeps transaction and state versions at 1 and does not change the
 commitment registration wire shape, CRv4 weight call, metagraph/neuron/staking

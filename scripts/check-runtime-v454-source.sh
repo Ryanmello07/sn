@@ -8,7 +8,7 @@ repository="https://github.com/RaoFoundation/subtensor"
 raw_repository="https://raw.githubusercontent.com/RaoFoundation/subtensor"
 tag="v454"
 commit="14cde6410fe8ec81a940e290c56f94a632a0988d"
-expected_files=24
+expected_files=29
 expected_metadata_files=12
 
 [[ -f "$manifest" ]] || {

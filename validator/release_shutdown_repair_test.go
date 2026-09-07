@@ -26,12 +26,12 @@ func TestReleaseShutdownFinalCloseOwnsSaveAndResourcesOnce(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
 	var writes, closes atomic.Int32
 	var saveErr error
-	runtime.stats.writeHooks.writeSnapshot = func(path string, payload []byte) error {
+	runtime.stats.writeHooks.writeSnapshot = func(directory *statsSnapshotDirectory, write statsSnapshotWrite) error {
 		if writes.Add(1) == 1 {
 			close(entered)
 			<-release
 		}
-		err := atomicStateWrite(path, payload, 0o600)
+		err := writeStatsSnapshotOwned(directory, write)
 		if saveErr == nil {
 			saveErr = err
 		}
@@ -319,12 +319,12 @@ func TestReleaseShutdownPreparedLedgerOutlivesFinalSaveAndResourceClose(t *testi
 	fixture := newReleaseClientSeedContinuityFixture(t)
 	state := fixture.state
 	saves, closes := 0, 0
-	state.stats.writeHooks.writeSnapshot = func(path string, payload []byte) error {
+	state.stats.writeHooks.writeSnapshot = func(directory *statsSnapshotDirectory, write statsSnapshotWrite) error {
 		saves++
 		if _, err := state.ledger.Head(); err != nil {
 			return fmt.Errorf("final snapshot lost its prepared ledger: %w", err)
 		}
-		return atomicStateWrite(path, payload, 0o600)
+		return writeStatsSnapshotOwned(directory, write)
 	}
 	runtime := &releaseOperatorRuntime{
 		stats:  state.stats,

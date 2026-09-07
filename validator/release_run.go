@@ -471,6 +471,9 @@ func RunRelease(ctx context.Context, configPath string) (returnErr error) {
 	if err != nil || !found {
 		return fmt.Errorf("release validator hotkey has no UID at finalized EVM block %d: %w", snapshot.BlockNumber, err)
 	}
+	if _, err := authenticateReleaseValidatorStakeContext(ctx, native, cfg, hotkey.PublicKey(), validatorUID); err != nil {
+		return err
+	}
 	settlementParticipants := make([]AttemptSettlementParticipant, len(cfg.Operators))
 	for index, operator := range cfg.Operators {
 		settlementParticipants[index] = AttemptSettlementParticipant{NoID: operator.NoID, StateDir: operator.StateDir}

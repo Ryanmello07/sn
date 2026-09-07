@@ -3,12 +3,15 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 const importedModuleStdioProbeEnv = "URNETWORK_SIM_TESTNET_STDIO_PROBE"
@@ -109,14 +112,15 @@ func TestSupervisedCampaignEgressFailsClosedForIncompleteLiveState(t *testing.T)
 	}
 }
 
-// A healthy state and the exact supervised listener jointly activate the
-// shared route; neither a state-file assertion nor an arbitrary port suffices.
-func TestSupervisedCampaignEgressRequiresExactHealthyListener(t *testing.T) {
-	listener, err := net.Listen("tcp", publicEVMEgressAddress)
+// Owns a real loopback listener and state directory for one probe, without
+// taking the canonical port from a live campaign or another test process.
+func newCampaignEgressListenerFixture(t *testing.T) (string, net.Listener) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	t.Cleanup(func() { _ = listener.Close() })
 	ticks, err := processStartTimeTicks(os.Getpid())
 	if err != nil {
 		t.Fatal(err)
@@ -129,9 +133,129 @@ func TestSupervisedCampaignEgressRequiresExactHealthyListener(t *testing.T) {
 	if err := writePublicJSON(filepath.Join(stateDir, "supervisor.state.json"), state); err != nil {
 		t.Fatal(err)
 	}
-	active, err := supervisedCampaignEgressActive(context.Background(), stateDir)
-	if err != nil || !active {
-		t.Fatalf("healthy supervised egress active=%t err=%v", active, err)
+	return stateDir, listener
+}
+
+// A healthy state must probe the exact canonical route through this fixture's
+// private listener; another healthy endpoint cannot satisfy the dial witness.
+func TestSupervisedCampaignEgressRequiresExactHealthyListener(t *testing.T) {
+	stateDir, listener := newCampaignEgressListenerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	dialCalls := 0
+	dialContext := func(ctx context.Context, network, address string) (net.Conn, error) {
+		dialCalls++
+		if network != "tcp" || address != publicEVMEgressAddress {
+			return nil, fmt.Errorf("unexpected campaign dial %s %s", network, address)
+		}
+		return (&net.Dialer{}).DialContext(ctx, network, listener.Addr().String())
+	}
+	active, err := supervisedCampaignEgressActiveWithDial(ctx, stateDir, dialContext)
+	if err != nil || !active || dialCalls != 1 {
+		t.Fatalf("healthy supervised egress active=%t dials=%d err=%v", active, dialCalls, err)
+	}
+}
+
+// Two probes reach an explicit barrier together, then use their own real
+// listeners. No process-wide endpoint override or fixed port is shared.
+func TestSupervisedCampaignEgressIndependentConcurrentOwners(t *testing.T) {
+	type probe struct {
+		stateDir string
+		listener net.Listener
+	}
+	probes := make([]probe, 2)
+	for i := range probes {
+		stateDir, listener := newCampaignEgressListenerFixture(t)
+		probes[i] = probe{stateDir: stateDir, listener: listener}
+	}
+	if probes[0].listener.Addr().String() == probes[1].listener.Addr().String() {
+		t.Fatal("independent listener owners have the same endpoint")
+	}
+	type result struct {
+		owner     int
+		active    bool
+		dialCalls int
+		err       error
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	entered := make(chan int, len(probes))
+	release := make(chan struct{})
+	results := make(chan result, len(probes))
+	var workers sync.WaitGroup
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
+	for i, fixture := range probes {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			dialCalls := 0
+			dialContext := func(ctx context.Context, network, address string) (net.Conn, error) {
+				dialCalls++
+				if network != "tcp" || address != publicEVMEgressAddress {
+					return nil, fmt.Errorf("owner %d received unexpected campaign dial %s %s", i, network, address)
+				}
+				entered <- i
+				select {
+				case <-release:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+				return (&net.Dialer{}).DialContext(ctx, network, fixture.listener.Addr().String())
+			}
+			active, err := supervisedCampaignEgressActiveWithDial(ctx, fixture.stateDir, dialContext)
+			results <- result{owner: i, active: active, dialCalls: dialCalls, err: err}
+		}()
+	}
+	seen := make(map[int]bool, len(probes))
+	for range probes {
+		select {
+		case owner := <-entered:
+			if seen[owner] {
+				t.Fatalf("owner %d reached the dial barrier twice", owner)
+			}
+			seen[owner] = true
+		case result := <-results:
+			t.Fatalf("owner %d completed without its concurrent dial witness: %+v", result.owner, result)
+		case <-ctx.Done():
+			t.Fatal("independent probes did not jointly reach the dial barrier")
+		}
+	}
+	close(release)
+	for range probes {
+		select {
+		case result := <-results:
+			if result.err != nil || !result.active || result.dialCalls != 1 {
+				t.Fatalf("independent campaign egress result: %+v", result)
+			}
+		case <-ctx.Done():
+			t.Fatal("independent probes did not finish after releasing their dial barrier")
+		}
+	}
+}
+
+// A genuinely live listener and healthy record cannot activate a stale
+// supervisor generation, even when its reusable pid is still running.
+func TestSupervisedCampaignEgressRejectsHealthyWrongGeneration(t *testing.T) {
+	stateDir, listener := newCampaignEgressListenerFixture(t)
+	statePath := filepath.Join(stateDir, "supervisor.state.json")
+	var state SupervisorState
+	if err := readJSONFile(statePath, &state); err != nil {
+		t.Fatal(err)
+	}
+	state.SupervisorStartTimeTicks++
+	if err := writePublicJSON(statePath, state); err != nil {
+		t.Fatal(err)
+	}
+	dialCalls := 0
+	dialContext := func(ctx context.Context, network, address string) (net.Conn, error) {
+		dialCalls++
+		return (&net.Dialer{}).DialContext(ctx, network, listener.Addr().String())
+	}
+	active, err := supervisedCampaignEgressActiveWithDial(context.Background(), stateDir, dialContext)
+	if err != nil || active || dialCalls != 0 {
+		t.Fatalf("wrong supervisor generation active=%t dials=%d err=%v", active, dialCalls, err)
 	}
 }
 

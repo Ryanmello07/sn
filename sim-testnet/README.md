@@ -18,6 +18,11 @@ and the exact `--plan-hash` are supplied.
 
 ## Agent execution policy
 
+New qualification tooling, status/report processing and its tests are written
+in Go. Keep legacy process-ownership adapters only until their Go replacement
+passes the same deterministic cancellation, escaped-child, lost-completion and
+ACK/join controls; language migration must not weaken lifecycle guarantees.
+
 Release qualification assigns test and gate execution to `gpt-5.6-terra` with
 reasoning effort `max`. If a test or gate fails, retain its exact output and
 assign root-cause diagnosis, adjacent-path review, implementation, and the
@@ -53,6 +58,72 @@ before launch; do not drop tests or replace a failed product run with a formatti
 retry. Current source locations and qualified scopes are recorded in
 [`FINALIZE-COMPLETE.md`](../FINALIZE-COMPLETE.md#12-freeze-and-execution-record).
 
+Check the compiled list before admitting either test mode: its exact root names
+must equal the declared selection, and a required selection must not be empty.
+Preserve the selector literally; adding a trailing `$` to a prefix selector
+changes its meaning. For a package-main build, supply `go build -o` with an
+explicit private output file, never the package directory. Check all manifest
+paths and portable modes before starting the expensive matrix. A preflight
+failure stops that capture before test execution; an exit-zero empty selection
+is not a pass. Also check signed fixture lifetime record/trail capacity before
+adding work to a migrated history; migration does not reset those limits.
+
+For repeated offline selections on the same frozen source, compile one test
+binary per package and mode (`go test -c`, with `-race` for the race binary),
+using an explicit private output and the existing separate compilation budget.
+Record the command, dependency/source identity, binary hash and actual exit.
+Run that exact binary from its package directory with the unchanged
+`-test.run`, `-test.timeout`, `-test.parallel`, `-test.count` and verbose settings.
+Record compilation and test execution separately; repeated concurrent builds
+must not consume a selection's execution allowance. A source/dependency change
+requires a new binary. This development workflow does not replace or change
+either checked-in complete release-gate invocation.
+
+### Compact Go qualification workflow
+
+The reusable implementation is `scripts/qualification` (still under initial
+qualification). Build it once to a private output outside the source tree:
+
+```sh
+go build -o /absolute/capture-tools/qualification ./scripts/qualification
+/absolute/capture-tools/qualification run /absolute/matrix.json /absolute/new-capture
+/absolute/capture-tools/qualification status /absolute/new-capture
+```
+
+The version1 JSON plan declares `source_root`, `sources` (physical `root` and
+SHA256 `manifest` per source/dependency), `limits`, `packages` and `suites`.
+Every package specifies `id`, physical `directory` and exact `import_path`.
+Every suite specifies `id`, `package`, `mode` (`normal` or `race`), `outcomes`
+and `failure_literals`. These last two fields are absolute paths to canonical,
+sorted TSV files: `TestName<TAB>PASS|FAIL`, and one root-owned literal per
+expected failure. There are no implicit selectors, skipped roots or default
+budgets. Limits explicitly name `jobs`, `build_seconds`, `test_seconds`,
+`outer_seconds`, `parallel` and `gomaxprocs`; use the admitted existing values.
+An empty matrix, duplicate roots within a package/mode, malformed metadata or
+unlisted dirty/new source fails preflight. Represent overlapping obligations
+with one exact root union and a retained obligation map, not duplicate runs.
+
+Each package/mode is compiled once. Suites become ready after their own build,
+not after unrelated builds. The compiled list must match the exact declared
+roots before execution. The Go event verifier requires complete package/root
+transitions and attributes each expected failure literal to that root only.
+Actual command and owner exits, binary hashes, source hashes/modes/Git state,
+module graph, full stdout/stderr and immutable requests remain in the capture.
+The current implementation uses the qualified gate ownership adapters to join
+descendants; composing those adapters is a prerequisite, not an optional
+fallback to unowned subprocesses. It does not run either full release gate or
+launch a live campaign by itself.
+
+Use `status.json` for routine progress. Read `report.json` for verified outcomes
+and `failures.json` plus the referenced requests/logs for debugging. Passing
+updates should contain only the phase, exact counts, elapsed time, actual exits,
+integrity verdict and capture path. Do not repeatedly send passing raw logs,
+long hash inventories or the full historical handoff to an agent. Retain all
+raw evidence on disk and expand any failed or suspicious result for Astra max;
+compact reporting never means ignoring an anomaly or capping its investigation.
+Do not retry failed tests automatically or declare a timeout an expected
+assertion failure. Keep a short active-work index linking to detailed history.
+
 Validate the exact filenames and invocation consumed by the frozen body, not
 only a staging convention: a package-prefixed `sim-testnet.expected.txt` does
 not satisfy a runner that opens `expected.txt`. Any adapter must explicitly
@@ -74,6 +145,90 @@ state-machine meta-tests retain their deliberately selected retry policy. Keep
 the complete first-failure log even when a later independent run passes.
 
 ## Host concurrency
+
+Maintain one current integration candidate under `temp/sn-*/sn`, with a single
+integration owner. Move qualified method changes into that candidate while
+preserving newer primary fixes; a passing older snapshot is not a complete
+replacement for current source. The next release milestone is the real
+startup-to-submission path on this combined candidate, not the number of
+isolated suites that pass. Independent source fixes and causal controls may
+retain their own exact preimages, but do not create another source checkout
+for a corrected selector, output filename, or report.
+
+Keep one Astra max root-cause owner and two Terra max execution lanes: one for
+the integrated production candidate and one for independent isolation/gate
+qualification. The primary agent owns integration and reviews changes during
+execution. Freeze the candidate during each admitted run; prepare the next
+delta outside that source and apply it only after every reader is joined.
+Reuse unchanged dependency checkouts and Go build/module caches, recording
+their exact identities, while keeping runtime state and generated outputs
+private. Source changes invalidate affected results; packaging a completed
+result does not hold the next ready command.
+
+For development qualification, measured heavy independent roots may run in
+separate exact-membership shards. Prove the disjoint union equals the original
+selection, preserve every assertion and per-process limit, and label the
+result as a selected union. This never replaces either complete final release
+gate. Prepare evidence locators and the final-report checklist concurrently;
+independent analysis of closed captures may overlap later live windows, but
+only the completed verification can support `FINAL.md` success claims.
+
+For every job, ask **can this run concurrently with the work already running?**
+Concurrency is the default, including preparation, source review, formatting,
+compilation, ordinary/race qualification, independent repairs, read-only RPC
+checks, and evidence analysis. A queue position or an unfinished unrelated
+report is not a dependency. Record each held job's exact prerequisite or
+exclusive resource, its owner, and the condition that releases it; reassess
+that hold whenever a job starts, finishes, fails, or releases source.
+
+- Start independent ordinary/race, causal/repaired, and package suites on
+  immutable inputs together. Review may overlap testing; promotion requires
+  both. Only a job's own build/list/admission must precede its execution.
+  A reproduced failure holds affected promotion, not unrelated offline work.
+- Freeze source and launchers per job, not across the entire work queue.
+  Use private state, ports, logs, and artifact paths. Keep temporary checkouts
+  under `temp/sn-*/`; verify every relative Go module replacement and its
+  actual dependency identity before building. Moving a checkout can change
+  its dependency graph even when every tracked source byte is unchanged.
+- Capture each job's real command, execution handle, raw output, immediate
+  input fences, and terminal exit independently. Launch the next ready job
+  before packaging unrelated completed reports. Join every owned process;
+  no detached jobs, lost failures, or final success before all required joins.
+- Isolate mutable resources by default: separate disposable PostgreSQL/Redis
+  instances (not proxies to the same data), daemon-assigned private ports,
+  source/generation targets, Foundry output/cache directories, runtime state,
+  and artifact paths. Each owner cleans up only its own identified resources
+  and uses no restart policy that survives a host reboot. A lock or shared
+  service queue is a fallback requiring a specific reason, not the default.
+  Signer nonces and causally dependent chain transitions still require order.
+  An entire gate must not wait merely because one later phase needs isolation.
+- Use the host's effective cores and memory across ready jobs. Measure
+  aggregate process-tree CPU, resident memory, I/O and memory pressure rather
+  than one process's CPU. Keep the established per-test worker and timeout
+  bounds; increase independent job concurrency while capacity is available.
+  Reserve headroom for live services and timing-sensitive tests. Record
+  measured pressure if it actually requires throttling; do not assume scarcity
+  or create redundant work just to keep CPU busy.
+
+The two current full gate scripts still share the local database profile and
+`evm/out`/`evm/cache`. Do not simply background both against those same mutable
+resources. Per-gate isolation is required before overlapping those phases;
+their independent work need not wait for that implementation. Source freeze precedes both,
+and producer-gate success still precedes any live campaign write. Partial
+parallel prequalification is not a full gate certificate.
+
+The qualified isolation components include the Linux child owner (Python3
+with `pidfd_open`/`pidfd_send_signal`, kernel subreaping and `/proc`) and
+`server/local/release-gate-services.sh`. The service helper creates separately
+labelled PostgreSQL/Redis containers with daemon-assigned loopback ports,
+tmpfs data and `restart=no`; cleanup checks immutable IDs and owner labels.
+It accepts ordinary Docker access or passwordless `sudo -n docker`. It does
+not use the shared local service aliases. Each private portable profile
+requires both explicit escape flags and rechecks exact application,
+maintenance and Redis authorities before service access. These components
+and the real two-owner Docker smoke pass; full queued-gate composition remains
+pending. The server test environment no longer starts an implicit shared6060
+profiler; use explicit Go CPU/memory profiles when profiling is needed.
 
 The release binary uses Go's effective `GOMAXPROCS` for CPU-bound evidence
 verification and starts one bounded worker per independent signed validator

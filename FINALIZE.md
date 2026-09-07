@@ -1,7 +1,7 @@
 # UR Subnet release 1.0 finalization plan
 
 Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
-2026-09-06 21:51 UTC. The final live campaign has not started. Existing attempt-4
+2026-09-07 06:59 UTC. The final live campaign has not started. Existing attempt-4
 testnet deployments and custody are preserved; no partial local qualification
 authorizes activation or proves final acceptance.
 
@@ -14,15 +14,100 @@ fences pass. All owners are terminal and primary source, including docs, is
 released. The subsequent HTTP transport and gate edits require a fresh composed
 qualification. This is not the final source freeze or complete semantic gate.
 
-Current working integration (2026-09-06 21:51 UTC):
+Current scheduling and integration (2026-09-07 06:59 UTC):
 
-- Checkpoint `300c3b0` is committed, pulled and pushed with qualified shutdown64
+- Integration now has priority on one current candidate,
+  `temp/sn-integration-xOgvEe/sn`: current primary's 25 dirty/new paths plus
+  the qualified head/EMA 53-path slice, all compared byte-for-byte. It reuses
+  unchanged sibling dependencies and the qualified private-service server.
+  Complete 78-path dirty/new source admission, formatting inspection, exact
+  compiled test censuses and the explicit private simulator build pass.
+  Native stake35, startup9, child12, profiler1 and Head focus14 pass both modes.
+  Widened129 passes normally; race passes as validator1+117 and simulator11.
+  The build-once remaining117 race execution passes in129.838s with unchanged
+  limits; its earlier outer-timeout124 remains recorded. Root independently
+  verified all78 source hashes and canonical path mappings, then promoted the
+  exact53 Head/EMA files into primary after source release. Stats'28-path next
+  delta is now applied to the same candidate for qualification, preserving
+  newer shutdown cancellation/error propagation and Head/EMA selections.
+  This is selected integration evidence, not either complete release gate.
+- Keep stable owners: root integration, Astra max root-cause fixes, one Terra
+  max integration-test lane and one independent Terra max isolation/gate lane.
+  Reuse frozen sources for selector/output-name corrections with separate
+  captures. Check exact nonempty compiled root membership, package-main `-o`,
+  manifest paths/modes and actual replacement graphs before expensive runs.
+  Reuse unchanged dependency/cache inputs; isolate mutable state and artifacts.
+  Measured exact-membership development shards retain all roots and existing
+  deadlines; both complete final gates remain mandatory. Prepare evidence
+  locators/reporting alongside implementation and analyze closed captures
+  independently of subsequent live windows.
+- All jobs default to concurrent execution once their own inputs are admitted.
+  Source review, normal/race tests, independent fixes and read-only RPC checks
+  do not wait for unrelated lanes or report packaging. Per-job actual exits,
+  logs and source/dependency fences remain mandatory.
+- Isolation is preferred over shared-resource serialization. Per-gate PG/Redis
+  instances, private ports and Foundry output/cache ownership are being
+  implemented separately; the current two full scripts still share resources
+  and are not yet safe to launch concurrently unchanged. Producer success
+  gates live writes, not independent aggregate prequalification.
+- Six replay follow-on checks ran concurrently and passed: identity27, full
+  CRV4 (117 PASS / 7 live SKIP) and the simulator guard, each normal/race.
+  The native live storage/null failure now has deterministic transport-level
+  causal evidence (5 FAIL / 3 PASS) and repaired transport8/stake35/startup9
+  normal/race passes. Both real public-testnet stake/replay probes also pass,
+  at authenticated block7,951,347. The original failures are preserved; final
+  full-package qualification passes152 roots/8 opt-in skips per mode; simulator2
+  and revised live identity also pass both modes. The14-path qualified native
+  overlay was integrated exactly, including the real startup call. A separate
+  qualified companion now expands source attestation from24 to29 files at
+  the same runtime454 pin; its two guards pass normally and under race.
+- Artifact widened39 passes normally and under race. Head/EMA private-fixture
+  repair14 passes both modes and widened129 normally; its exact1+117 race union
+  and sim11 now pass, preserving the original aggregate timeout and the final
+  unsharded obligation. The neutral14 control has its exact expected9 failures
+  and5 controls per mode. Stats31 and retained99+sim4 pass both modes with
+  exact censuses; its corrected causal12+sim2 retain their expected failures.
+  Terminal v4 new24 passes, with exact causal14 FAIL/10 PASS, but full123 exposes
+  an overfilled positive-history fixture and separate package timeouts. The
+  reviewed one-file v5 correction keeps128-record/16-trail limits and all
+  current workload, explicitly checks the17th-trail refusal, and uses the
+  independent operator's available capacity. Qualification is in progress.
+- The hidden fixed-port egress repair is integrated after focused4/widened8
+  normal/race passes. Server's implicit wildcard6060 profiler is removed and
+  regression-tested in both modes. The refined kernel child owner and12
+  deterministic tests are integrated after normal/race passes. Private
+  PG/Redis setup is also integrated after49 new/retained tests in both modes
+  and a real concurrent two-pair Docker smoke, including cross-owner survival
+  and exact-ID cleanup. Full phase wiring still needs composed qualification;
+  generator11 passes both modes after repairing snapshot file-mode custody,
+  with cancellation/join controls being completed separately.
+  Runtime integration, all adjacent qualifications,
+  both full gates, freeze and live validation remain open. No final-soak or
+  new transaction claim follows from this parallel local work.
+
+The Head race timeout gave its final root58s although that root's standalone
+race takes102.66s. The exact118-name selected union passed in independent1/117
+shards at100.457s/153.706s with unchanged3m budgets; the final full-validator
+race remains unsharded. This is a scheduling correction, not a product deadlock
+fix or a complete release certificate.
+
+Previous working integration (2026-09-06 22:42 UTC; superseded above):
+
+- Checkpoint `9197468` is committed, pulled and pushed with qualified shutdown64
   and bounded EMA loader32; server is `f478db80`. Four new exact read-budget
   tests are authored but unexecuted in primary. This is not a complete-primary
-  gate or source freeze. The historical validator-identity reader is a separate
-  unformatted/untested/unwired draft; its referenced regression file does not
-  yet exist, so the corresponding producer-gate check cannot pass. Preserve
-  that explicit WIP state rather than treating this checkpoint as a release.
+  gate or source freeze. The historical validator-identity reader now has21
+  regression roots passing normally and under race. Root reviewed both full
+  logs and the exact formatted source pins. Wider CRV4 also passes111 roots
+  normally and under race, with6 explicit opt-in live skips. The simulator
+  retention guard also passes both modes; all six foreground sessions are
+  terminal0 and root verified the final capture index. A new separate opt-in
+  public-testnet identity/replay test passes normally/race at actual finalized
+  blocks7,949,341 and7,949,343; it sends no transaction. Its equal-height
+  conflicting-finality comparison needs the source-found assertion repair and
+  deterministic controls now in progress. No chain inconsistency was observed.
+  Activation/history wiring remains open; neither scripted tests nor the live
+  identity observation establish final testnet acceptance.
 - Canonical neutral27 completed with exactly13 expected failures/14 passing
   controls, real terminal0 and a separately verified final index. Root reviewed
   full output. Repaired-source qualification failed: normal repair27/widened115
@@ -30,7 +115,9 @@ Current working integration (2026-09-06 21:51 UTC):
   timeout. Actual outer1 and distinct final seal are preserved. Repeated JSON
   record cloning is the observed active work. The typed-copy repair and16
   deterministic regressions are frozen/source-reviewed; FORMAT4 is accepted,
-  but causal16 and repaired/widened131 have not run. No timeout increase.
+  but causal16 and repaired/widened131 have not run. The source-found runner
+  split that silently skipped the simulator's final fence has a reviewed
+  one-character fix and28 unexecuted non-product controls. No timeout increase.
 - A new read-only bounded EMA startup loader adds25 tests, preserves five
   legacy tests and adds two simulator guards. Its exact full673 source is
   frozen; fresh FORMAT10 passed and its exact seven formatting deltas are in
@@ -44,7 +131,8 @@ Current working integration (2026-09-06 21:51 UTC):
   artifact-size constant. Its actual failure and distinct final seal are retained.
   A fresh full686 candidate aliases the existing64 MiB ceiling and adds8
   unexecuted dependency controls without repairing away the original head13
-  causal distinction. Product tests and the retained wider31 remain pending.
+  causal distinction. Root reviewed the8 controls and authorized execution;
+  fresh FORMAT3 is complete, while actual product results remain pending.
 - Terminal99 is now a frozen full694 source; all99 roots remain unexecuted.
   The bounded EMA write-owner proposal is frozen with40 new/widened72 roots,
   not tested or wired into the live collector. Ordinary49+2 remains unexecuted;
@@ -52,6 +140,11 @@ Current working integration (2026-09-06 21:51 UTC):
   with original-callback causal controls distinguished from repair-only native
   syscall controls. Neither helper coverage nor a recovery Git branch proves
   complete startup/persistence integration.
+- Root reviewed the complete snapshot-custody repair and new31 controls, then
+  found the same missing artifact-limit alias in its inherited wire source.
+  Fresh dependency-only successor RjEUHQ is reviewed and authorized for actual
+  qualification, without changing the old source or causal census. Head/EMA method composition is proceeding
+  separately in parallel with isolated qualification, not on the live runtime.
 - The server monitoring catalog defines48 subnet correctness alert classes;
   its three new documentation checks plus registry consistency pass normally
   and under race before and after the clean rebase of unrelated native-storage

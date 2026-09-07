@@ -31,19 +31,19 @@ type ValidatorIdentityQuery struct {
 // never an eligible-validator verdict. Finality is the queried RPC's assertion;
 // independent-provider agreement and activation signatures are separate checks.
 type ValidatorIdentityObservation struct {
-	GenesisHash         types.Hash
-	BlockHash           types.Hash
-	BlockNumber         uint64
-	FinalizedHash       types.Hash
-	FinalizedNumber     uint64
-	Netuid              uint16
-	UID                 uint16
-	SubnetUIDs          uint16
-	Hotkey              [32]byte
-	Coldkey             [32]byte
-	StakeAlphaRao       uint64
-	ValidatorPermit     bool
-	Runtime             RuntimeArtifactIdentity
+	GenesisHash     types.Hash
+	BlockHash       types.Hash
+	BlockNumber     uint64
+	FinalizedHash   types.Hash
+	FinalizedNumber uint64
+	Netuid          uint16
+	UID             uint16
+	SubnetUIDs      uint16
+	Hotkey          [32]byte
+	Coldkey         [32]byte
+	StakeAlphaRao   uint64
+	ValidatorPermit bool
+	Runtime         RuntimeArtifactIdentity
 }
 
 // Reads only from authenticated metadata for the requested historical block;
@@ -128,7 +128,11 @@ func ReadValidatorIdentityAtContext(ctx context.Context, chain *Chain, query Val
 		if err != nil {
 			return nil, fmt.Errorf("validator identity %s key: %w", name, err)
 		}
-		var raw json.RawMessage
+		// The pinned GSRPC transport leaves this destination untouched for
+		// JSON null, but returns ErrNoResult for an omitted result member.
+		// Start each read with null; the existing optional/required decoder
+		// still rejects missing caller payloads, wrong types and invalid hex.
+		raw := json.RawMessage("null")
 		if err := chain.API.Client.CallContext(ctx, &raw, "state_getStorage", key.Hex(), query.BlockHash.Hex()); err != nil {
 			return nil, fmt.Errorf("validator identity %s read: %w", name, err)
 		}

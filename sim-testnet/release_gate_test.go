@@ -320,14 +320,58 @@ func TestProducerGatePinsExactBlockRuntimeClientRegressions(t *testing.T) {
 			t.Errorf("producer gate has %d copies of %q, want exactly 1", strings.Count(script, command), command)
 		}
 	}
-	for _, path := range []string{"../crv4/validator_identity_test.go"} {
+	identitySources := []string{}
+	for _, path := range []string{"../crv4/validator_identity_test.go", "../crv4/validator_identity_replay_test.go"} {
 		source, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
+		identitySources = append(identitySources, string(source))
 		if err := verifyReleaseSourceTestCoverage(selector, "^Test", []string{string(source)}); err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
+	}
+	// Only this exact opt-in live root is outside the automatic selector;
+	// its actual replay comparison must call the covered deterministic helper.
+	livePath := "../crv4/validator_identity_live_test.go"
+	liveSource, err := os.ReadFile(livePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identitySources = append(identitySources, string(liveSource))
+	if err := verifyReleaseSourceTestCoverage(selector, "^TestRuntimeArtifactMetadataValidatorIdentityReplay", identitySources); err != nil {
+		t.Fatal(err)
+	}
+	liveRoots, err := releaseSelectedTestDeclarations("^Test", []string{string(liveSource)})
+	if err != nil || len(liveRoots) != 1 || liveRoots[0] != "TestLiveValidatorIdentityRuntime454Testnet521" {
+		t.Fatalf("live identity source has an unreviewed exclusion: roots=%v error=%v", liveRoots, err)
+	}
+	parsed, err := parser.ParseFile(token.NewFileSet(), livePath, liveSource, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayCalls := 0
+	for _, declaration := range parsed.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != liveRoots[0] {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok || len(call.Args) != 2 {
+				return true
+			}
+			callee, ok := call.Fun.(*ast.Ident)
+			first, firstOK := call.Args[0].(*ast.Ident)
+			replay, replayOK := call.Args[1].(*ast.Ident)
+			if ok && callee.Name == "validateValidatorIdentityReplay" && firstOK && first.Name == "observed" && replayOK && replay.Name == "replayed" {
+				replayCalls++
+			}
+			return true
+		})
+	}
+	if replayCalls != 1 {
+		t.Fatalf("live identity probe has %d exact covered replay comparisons, want 1", replayCalls)
 	}
 }
 
@@ -1769,29 +1813,34 @@ func TestReleaseGatesAttestPinnedRuntime454RustSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := strings.Split(strings.TrimSpace(string(manifestBytes)), "\n")
-	if len(rows) != 24 {
-		t.Fatalf("runtime 454 source manifest has %d rows, want 24", len(rows))
+	if len(rows) != 29 {
+		t.Fatalf("runtime 454 source manifest has %d rows, want 29", len(rows))
 	}
 	requiredPaths := map[string]bool{
 		"pallets/drand/src/tests.rs":                                          false,
 		"pallets/drand/src/verifier.rs":                                       false,
 		"pallets/proxy/src/lib.rs":                                            false,
 		"pallets/proxy/src/tests.rs":                                          false,
+		"pallets/subtensor/runtime-api/src/lib.rs":                            false,
 		"pallets/subtensor/src/benchmarks/benchmarks.rs":                      false,
+		"pallets/subtensor/src/epoch/math.rs":                                 false,
 		"pallets/subtensor/src/lib.rs":                                        false,
 		"pallets/subtensor/src/macros/dispatches.rs":                          false,
 		"pallets/subtensor/src/macros/errors.rs":                              false,
 		"pallets/subtensor/src/macros/hooks.rs":                               false,
 		"pallets/subtensor/src/migrations/migrate_cleanup_staking_hotkeys.rs": false,
 		"pallets/subtensor/src/migrations/migrate_storage_bloat_v2.rs":        false,
+		"pallets/subtensor/src/rpc_info/metagraph.rs":                         false,
 		"pallets/subtensor/src/staking/claim_root.rs":                         false,
 		"pallets/subtensor/src/staking/stake_utils.rs":                        false,
 		"pallets/subtensor/src/subnets/subnet.rs":                             false,
+		"pallets/subtensor/src/subnets/weights.rs":                            false,
 		"pallets/subtensor/src/tests/claim_root.rs":                           false,
 		"pallets/subtensor/src/tests/migration.rs":                            false,
 		"pallets/subtensor/src/tests/move_stake.rs":                           false,
 		"pallets/subtensor/src/tests/networks.rs":                             false,
 		"pallets/subtensor/src/tests/swap_hotkey_with_subnet.rs":              false,
+		"pallets/subtensor/src/utils/misc.rs":                                 false,
 		"precompiles/src/balance_transfer.rs":                                 false,
 		"primitives/share-pool/src/lib.rs":                                    false,
 		"runtime/src/lib.rs":                                                  false,
