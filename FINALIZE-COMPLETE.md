@@ -4,6 +4,79 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
+Checkpoint reconciliation (2026-09-07 17:27 UTC), superseding older pending
+statements below: primary SN was `eb6f148` before this commit. The independently
+reviewed closed-census publisher2 is now promoted. Terra confirmed exact17 new
+and27 retained replica tests normal/race from primary (135/219 events per mode),
+with source, binary, list, result and dependency-graph checks matched. Evidence:
+`temp/sn-primary-census-publication-v1/manifests/summary.txt`; owned2-path manifest
+`e2f65e3f2a6a78e102a5419f5604290f3e13b01f5dc8146fb04c810f485a9c23`.
+Production SHA256:
+`37d1cfa1360a5a704d6846e179293c5292527643139b7b412d9f11538708f8ea`;
+test SHA256:
+`b0f6cadda695be1a95103a2c6aad2c46808369a6a6734cd19d0dca5c8556d08b`.
+This implements signed complete-census publication/readback and returns ABI
+calldata; it does not establish historical authority, provision upload sessions,
+broadcast transactions or prove finalized inclusion. No live publication is claimed.
+
+Startup custody6 is composed and qualified in the temporary candidate, not
+promoted: exact inventory10 and startup-image9 pass normal/race, and all4
+original-journal causal failures match both modes. Root read the complete
+source/handoff and machine summaries. Evidence:
+`temp/sn-integration-xOgvEe/capture-startup-custody-v1/manifests/summary.txt`;
+complete207-path manifest
+`bb7e95374d240fac40086210ab07c2e000ace4f9f094127aa27c5a1f2de85d63`.
+The semantic startup entry still needs complete native/EVM/public replay,
+bounded intent/artifact-lineage authentication, independent current cursors,
+private actual Initialize/Recover and final batch publication. Root's separate
+proof-store startup join2/9 at `temp/sn-release-proof-state-v2-6Wn19mJS/validator/`
+is an unqualified draft, not a replacement for that historical authority.
+
+Carry13 and the reviewed FIFO/alias successor are composed as14 paths, but
+current qualification FAILED. All six compiles exited0. Repaired70 normal
+ran70 roots with57 PASS/7 FAIL before the unchanged2m timeout; race ran13 roots
+with12 PASS/0 assertion FAIL before its2m timeout. Both bodies exited2 and are
+retained; neither is a passing gate. Original-upgrade causal1 and original-opener
+causal2 reproduce their exact expected failures normal/race. Evidence:
+`temp/sn-integration-xOgvEe/capture-carry-custody-v2/manifests/summary.corrected.txt`
+(SHA256 `ae595b679a477f46199924a72f8fb0fe872f29c60138938afad4ca8505be9fe9`);
+complete214-path candidate manifest
+`5db18d1467564d6da0acb97dfeb919818a8fbf8df3506dc5387a35bf9498eb06`.
+All readers released with source fences/diffcheck0. Astra carry owns investigation
+and deterministic root/adjacent repairs, including retained fixture failures and
+timeouts; startup Astra remains on semantic startup. Do not weaken test membership
+or budgets to turn these results into passes.
+
+Four initial causal launches failed before Go because the adapter looked for
+compiler hash proofs in section-local directories instead of the compiler's
+shared manifest directory. Corrected runs used the same immutable binaries and
+original shared absolute proofs; Astra independently reviewed the complete
+argv/cwd/budget records and hashes. Preserve the four invalid captures and later
+metadata-only recording error. For compatible new non-service matrices, reuse
+the qualified Go runner's parent-owned build proofs. It does not yet support
+overlay/precompiled-binary adoption: retain the existing qualified adapter for
+these causal runs, with one frozen compiler-issued absolute identity mapping.
+
+Adjacent campaign evidence reader2 is released, not composed or qualified:
+`temp/sn-campaign-evidence-custody-v1-eDT2Hz8j/CAMPAIGN-CUSTODY-HANDOFF-v1.md`,
+focused5/retained16/causal3. Separately audit the captured-runtime MinIO config
+reader's ancestry/Lstat-to-ReadFile custody gap before any new live-authority use.
+Do not reuse it as a shortcut for validator uploads.
+
+The source-reviewed remaining transport direction uses the existing release-owned
+client-authenticated API sessions for a typed content-addressed upload endpoint,
+with exact kind/hash/size, bounded bytes, explicit slots/quotas and server-owned
+immutable storage/readback. MinIO credentials and operator artifact keys stay
+server-side. API client credentials authorize staging only, never historical
+VPK/hotkey eligibility; both origins must host and independently replay the full
+census. The existing contract accepts a separately funded permissionless relay
+with dual-signed consent: implement bounded durable transaction ownership,
+independent companion/anchor/window verification and finalized readback. This
+transport/relay is not implemented yet. Startup wiring, selector omissions,
+capacity, both full release gates, freeze, live RC/three final epochs and FINAL.md
+remain open. This checkpoint is commit-only, not pull/push; server remains clean
+at `9b582d91`. Unqualified temporary drafts are not included in the primary commit.
+
 Checkpoint reconciliation (2026-09-07 16:49 UTC), superseding the pending
 qualification and promotion statements below: historical native schedule2
 (`crv4/validator_schedule.go` and its test file) is now in primary SN. Root
