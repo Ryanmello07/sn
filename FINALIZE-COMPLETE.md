@@ -4,6 +4,109 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
+Checkpoint reconciliation (2026-09-07 20:14 UTC), superseding earlier pending
+statements: the user requested another commit, without pull/push. This checkpoint
+contains only the two primary SN finalization documents; isolated candidate and
+repair source stays uncommitted. Previous documentation checkpoint is `f3fdd62`;
+use `git log -1` for this checkpoint's identity. Primary source remains `de06691`
+and server remains clean at `9b582d91`. No live campaign, public upload or
+testnet transaction occurred in this continuation.
+
+Gate2 completes exact13 PASS and original-script causal2 expected FAIL normal
+and race. Root created a physical source-only30-input mirror at
+`temp/sn-gate-runtime-causal-v1-H6Xk3Jyn/sn`; all29 runtime Go source files equal
+the frozen candidate and the script alone equals its reviewed old preimage.
+No mount, sudo, symlinked CWD or compiler-overlay fiction was used. Manifest
+SHA256 `88d61c244f0fdf01f1c41588f027be85992952ce79f484d18bf6a2c17916a778`.
+Root read both actual causal checker results under
+`temp/sn-integration-xOgvEe/capture-gate-evidence-v1/causal/{normal,race}/body.checker.stdout.json`:
+each21 events,2 roots,0 passes,2 expected failures and binary exit1, matched.
+Both result files SHA256 `cb17b3157836f1823b2efd2cb138c3751043b741a8dff45cb01d6e8b6eeeb0aa`.
+All owners joined before the next composition. This is not a full release gate.
+
+Root independently reviewed every Carry fixture6 delta/new control, metadata5
+production/fixture delta and three controls, and immutable-close2 production
+and real-disk controls. The thirteen disjoint paths were composed after checking
+the old237 fence, nine existing preimages, four absent paths and all raw donor
+hashes. Terra formatted only those13; the complete dirty/new set is242 paths,
+SHA256 `0be0580eff68db35dee938d1193ce8b3628cea6949881b98153daec718a374d7`.
+Capture: `temp/sn-integration-xOgvEe/capture-carry-metadata-close-v1/`.
+Four fresh package/mode compiles passed. Root read exact normal/race checker
+results for metadata-validator17 (83 events, recovery outputs), metadata-runtime6
+(27 events), startup-light21 (171 events), legacy1 (11 events), terminal1
+(11 events), and original-config causal2 (21 events,0P/2F). All original23
+semantic startup roots now pass both modes, without dropping the original
+failure or raising its metadata allowance. The direct checker permission126
+failures remain captured; recovery read the same streams without rerunning bodies.
+Root additionally read original disk-close causal7 (66 events,0P/7F) and Carry
+fixture causal5 (28 events,0P/5F), matched N/R. Repaired disk24 (127 events) and
+retained42 (283 events) both pass N/R, completing the selected validator106
+union. Carry light shards01/02/03/04/05/06 pass44 roots per mode; remaining
+independent light shards continue. Full selected Carry106 is not qualified.
+
+The new heavy10 root `TestFinalSemanticOriginalClosureRequiresExactCampaignStartMarker`
+times out after120s in BOTH normal and race despite the corrected two-heavy-body,
+GOMAXPROCS2, parallel1 admission with no causal compile overlap. Root read both
+actual command records, binary exits2, checker refusals and timeout stacks at
+`capture-carry-metadata-close-v1/carry/{normal,race}/10-campaign-heavy1/`.
+Normal is runnable in JSON closure decoding; race is runnable in Ed25519/measurement
+verification while constructing the full semantic fixture. These stacks do not
+alone establish the root cause. Preserve both captures and diagnose the full-scale
+work before rerunning; do not raise deadlines, reduce population/cryptographic
+checks or attribute this result to the earlier28-process oversubscription.
+Canonical repair agent's transport interruption leaves that diagnosis and the
+outer-config successor pending; its isolated drafts must be recovered intact.
+These partial successes do not waive old Carry97 failures/timeouts/unrun roots,
+all-pair capacity or either complete release gate.
+
+Admission now allows two light validator bodies at GOMAXPROCS4 while at most
+two causal compilers run at GOMAXPROCS4 (validator) or2 (simulator). Validator
+light bodies retain their original parallel4/180s inner/240s outer profile;
+the first parallel4 departure from root's requested1 was explicitly recorded
+and accepted for those independent controls without a body restart. Heavy
+Carry bodies are limited to two total at GOMAXPROCS2, parallel1/120s inner/240s
+outer, and do not overlap causal compiles. No package waits for an unrelated
+package's compile; no extra stage approval is needed within the frozen admission.
+
+Astra released typed upload15/new39 and session binding4/new10 after source
+review. Handoffs: `temp/sn-attempt-upload-v2-fc9kAOv3/ATTEMPT-UPLOAD-HANDOFF-v2.md`
+(SHA256 `cb28056e83bbd1d4767a1242489132e3a1011689333f26ff97b008cc27792d03`),
+and `temp/sn-release-transport-v2-zdkQvRbH/RELEASE-TRANSPORT-HANDOFF-v2.md`
+(SHA256 `6abb84d46cc4e786d7e2bd54fd89014618ff99e90d957f67f8e540fb0bea5e2e`).
+Joint declared union243 spans new49 and retained194 across SN/server/SDK.
+Actual HTTP1/HTTP2 cancellation, scalar-loss decoding, auth/routing, independent
+Redis limits and wrong concrete writer ownership now have source regressions;
+they are NOT yet executed or composed. Server runs must use private pg/Redis
+and WARP_TEST_ENV_FAIL_FAST=1, without shared-service/vault fallback or retries.
+
+Root also authored runtime upload config6/new8, exact selected33, at
+`temp/sn-upload-config-v2-c2biFmD2/UPLOAD-CONFIG-HANDOFF-v1.md`
+(SHA256 `7425ffbb89ac04bae8112ed48849200ebed7979f07bfc18b6ca44e648ce4987d`).
+It adds explicit optional planning quota fields, mandatory copied render
+admission, testnet-only operator values, independent actual-value manifest
+identity and same-descriptor bounded settings verification. Rehashed quota
+substitutions, aliases/FIFOs, scalar loss and profile drift have real controls.
+Independent review found a further ownership gap: LaunchDeployment starts
+migrations/APIs/accounts before RenderRuntimeConfigs, and Executor config.render
+can recover payloads before the inner guard. Astra now owns the source successor
+adding admission at both actual outer boundaries and deterministic adjacent
+controls. The six-path v1 is not accepted or promoted. No live hourly capacity
+values were invented; complete measured provisioning remains mandatory.
+
+Two substantive authority/resilience gaps remain explicit. First, current
+client-key API observations are not historical proof: server Redis SET/DEL and
+disconnect cleanup overwrite/delete them. Negative HTTP audit outcomes also
+lack replayable historical receipt bytes. Astra's active
+`temp/sn-decision-chain-v2-yufeLAGZ/` draft shares real hash-pinned bindings and
+complete EVM/native observations with live head/historical consumers, without
+copying those missing assertions out of artifacts or enabling pending submits.
+Second, genuine unrelated API accounts can exhaust shared staging budgets and
+slots, denying a legitimate validator. Upload's actual JWT/Redis/HTTP control
+demonstrates this failure; it is a live-release blocker, not a successful
+resilience test. The proposed finite finalized-activation/VPK reserved lane in
+UPLOAD-AVAILABILITY-NEXT.md is not implemented. Both issues must be resolved
+alongside runtime/relay/finality/capacity, full gates, freeze, live epochs and FINAL.md.
+
 Checkpoint reconciliation (2026-09-07 19:04 UTC): the user requested a commit,
 without pull/push. Only the two primary SN finalization documents are changed;
 server is clean at `9b582d91`. Primary source remains `de06691`; isolated

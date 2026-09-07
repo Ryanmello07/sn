@@ -1,12 +1,13 @@
 # Release 1.0 active work index
 
-Updated 2026-09-07 19:04 UTC. Read this short index first; use
+Updated 2026-09-07 20:14 UTC. Read this short index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
 Primary source checkpoint: SN `de06691`, server `9b582d91` (not pushed).
-This documentation-only checkpoint records subsequent progress; use `git log -1`
-for its identity. The SN source checkpoint includes the independently reviewed
+Previous documentation checkpoint is `f3fdd62`; use `git log -1` for the identity
+of the checkpoint containing this update. Isolated source drafts remain uncommitted.
+The SN source checkpoint includes the independently reviewed
 closed-census evidence publisher and its17 tests. Subsequent integration changes
 below remain in the temporary candidate unless explicitly marked promoted.
 The user subsequently approved **on-chain hashes + API/MinIO proof bytes** on
@@ -36,23 +37,31 @@ independently replayable on-chain evidence in `FINAL.md`.
 - One integration candidate: `temp/sn-integration-xOgvEe/sn`. Its outside-source
   `INTEGRATION.md` identifies exact stages, artifacts and ownership.
 
-Latest progress: proof-store startup join2/9 and retained14 pass exact normal/race.
-Carry recovery v3 is composed but fails its selected97 qualification: normal
-84 PASS/11 FAIL/2 unterminated; race76 PASS/3 FAIL/11 unterminated/7 unrun.
-Both original-source causal controls (5+1) match normal/race. Astra has released
-a test-only six-file successor for independent review and106-root qualification;
-the original fixture-identity, historical-source and timeout failures are not waived.
-After every Carry reader joined, root reviewed and composed semantic startup10.
-Its23 tests produced12 PASS/11 FAIL in both modes: the actual sealer correctly
-refused a64KiB advertised header with only4KiB metadata capacity. All42 retained
-proof/custody tests and original-initial-worker causal1 matched N/R. An early
-config-admission and fixture repair is released but not reviewed or qualified.
-Gate selector/source-census2 passes exact13 normal/race guard tests; the two
-original-script causal controls await a physical source mirror and have not run.
-These are not complete release gates. The production guard still refuses launch.
-Typed authenticated upload13/36 is review-held,
-including a real HTTP request-body cancellation repair. Root's separate actual
-API-session/replica binding4/9 is drafted and unqualified. Neither is promoted.
+Latest progress: root reviewed/composed Carry fixture6, metadata admission5 and
+immutable disk-close2 after all Gate2 readers joined. Current242-path candidate
+source SHA256 is `0be0580eff68db35dee938d1193ce8b3628cea6949881b98153daec718a374d7`.
+Metadata validator17, runtime6 and the full original semantic startup23 now pass
+normal/race. Original-config causal2 matches both modes. The earlier startup
+12P/11F result is retained, not erased. Disk-close original-production causal7
+and Carry original-fixture causal5 also match both modes. Repaired disk24 and
+retained42 pass both modes, completing this selected validator106 union.
+Carry's first six light shards pass44 roots per mode, but the full Carry106
+union is not qualified: `TestFinalSemanticOriginalClosureRequiresExactCampaignStartMarker`
+times out at120s in normal AND race, even with only two heavy bodies at
+GOMAXPROCS2 and no overlapping causal compiles. Both binary exits are2 and
+both checkers refuse; the timeout is not attributed to the old oversubscription
+or waived. Remaining independent light shards continue without retrying it.
+Earlier Carry97 failures/timeouts/unrun roots remain retained.
+
+Gate selector/source-census2 now passes exact13 normal/race AND original-script
+causal2 in both modes, using a physical30-input mirror with the original script
+as the sole changed runtime input. These are not complete release gates.
+Typed authenticated upload15/39 and actual API-session binding4/10 have been
+source-reviewed and released, but not executed or composed. Root's upload
+configuration6/8 draft is in independent review; the outer launcher and executor
+can start mutation before its inner quota guard, so an owned successor is
+required. Authenticated multi-account exhaustion of validator staging is a
+confirmed, unresolved live-release issue. The production RunRelease guard remains.
 
 ## Active owners and next actions
 
@@ -68,10 +77,10 @@ completed its handoff and is idle, with no abandoned live job or source reader.
 | Go qualification runner | Astra max review/repair; Terra max execution | Module-alias repair and parent-owned fixture correction pass exact54 N/R (219 events each). Root read both summaries; causal1 matches its expected failure. Configured roots remain physical and aliases resolve only to declared sources. Shared simulator compilation now passes N/R within normal300/race360, using retained caches. Service-backed matrices and real whole-matrix smoke remain unqualified |
 | Terminal V2 | Root promotion complete; Terra max evidence | Exact123 passes normal/race in groups26/37/30/30, plus Stats/ordinary99, affected+Head51, focused transport1, simulator4/2. Root verified137-source fence, exact preimages and event summaries; promoted33 formatted files. Original causal/full-package obligations remain separate |
 | Explicit production V2 config + ordinary binding | Terra max qualification complete; root composition | Ordinary5/widened50/SIM2 pass N/R; old-production causal5 is1PASS/4FAIL both modes; root promoted3. Config47 is now fully matched N/R: simulator6+20 in repair-v4, validator14+7 in repair-v5. Private fixtures are inert; nine retained cases use a plain loop without dropping assertions. Root independently read all four v5 checker summaries and source fence0. Temporary RunRelease guard remains unfinished startup |
-| Actual startup-to-submission | Astra startup implementation/fixes; root integration; Terra qualification | Bootstrap88, historical UID35 and causal1 pass N/R; history57 passes normal and exact selected race union3+3+3+48, preserving the original timeout. Disk2/17, native schedule2/9, custody10+9 and original-journal causal4 pass N/R. Proof join2/9 plus retained14 now pass N/R. Semantic startup23 has12 PASS/11 FAIL per mode; all42 retained proof/custody roots pass N/R. Metadata admission repair is released, not qualified. Historical head/deposit/weight authority, production activation/submission, authenticated public upload, capacity and RunRelease guard removal remain open |
+| Actual startup-to-submission | Astra startup implementation/fixes; root integration; Terra qualification | Metadata repair validator17/runtime6 and semantic startup23 now pass N/R; original config causal2 matches. Immutable-close2 is composed, original production causal7 matches, repaired24/retained42 pass N/R. Astra is implementing shared hash-pinned chain decision observations used by live head and historical admission. Old client-key observations and negative API audit history still lack independently recoverable authority; copying artifact claims is forbidden. Production activation/submission, upload capacity/liveness and RunRelease guard removal remain open |
 | On-chain evidence hashes | Terra max Solidity execution; Astra max failures | Full Solidity17 suites/199 tests PASS, zero failures/skips, exact census and source/artifact fences. Gencontracts24 N/R pass after normalizer5 repairs the14-type graph. Current private-graph v4 generation/check/wrapper0; exact generated output62e173ac is composed with only artifact/layout hashes changed, no ABI or bytecode change. Generator causal1 and simulator causal1 reproduce13-versus14 lost types N/R; repaired simulator layout4 passes N/R. Strict build retains coordinator24492/84 spare and append-only layout |
 | Evidence Go bindings/readback | Root composition; Terra max concurrent execution | Evidence22 stabi20/reader12 N/R pass. Primary RPC4 new19/union54 N/R pass with causal1PASS/5 expectedFAIL. Combined validator76 N/R now passes exact root/event/source checks after assertion-preserving plain-loop repairs. First75 normal body passed but checker refused positive subtests; malformed selector/outcome attempts remain recorded. Miner/simulator HTTP siblings remain open |
-| Simulator companion installation | Astra canonical fixes; root composition; Terra execution | Installer25 previously passed N/R. Carry recovery v3 changes14 with historical-reader and fixture repairs; selected97 fails: normal84P/11F/2unterminated, race76P/3F/11unterminated/7unrun. Original-production causal5 and original-fixture causal1 match N/R. Missing fixture image/artifact/layout identity, historical-source assertions and120s timeouts are under investigation. All failed captures remain; no promotion or full-gate claim |
+| Simulator companion installation | Astra canonical fixes; root composition; Terra execution | Carry fixture v4 six-file repair is composed; first six light shards pass44 roots N/R and original-fixture causal5 matches both. Heavy10 exact campaign-start-marker root still times out120s N/R under corrected two-body/GOMAXPROCS2 admission. Remaining Carry106 union is incomplete; v3 selected97 failures and all failed captures remain. No promotion or full-gate claim |
 | Closed-census publication | Root promotion complete; Astra independent review; Terra primary confirmation | New2/17 and retained replica27 pass exact N/R in candidate and primary, with source/dependency/binary fences. Independent review found no blocking issue. It owns the complete signed closure and keys, replays both actual public origins concurrently, publishes content-addressed payload/census/consent metadata with readback, then returns dual-signed ABI calldata. Production authenticated upload provisioning, durable relay/submission and finalized readback remain incomplete; no live publication is claimed |
 
 The candidate is held only while its admitted readers run. Prepare later deltas
@@ -104,8 +113,9 @@ bytecode. The real generated simulator payload is composed into the candidate,
 not yet primary. Its earlier current-graph check FAILED on the evidence artifact
 hash; the repaired generator now passes the actual v4 regeneration/check and the
 exact output is composed; simulator layout/causal qualification is now complete.
-The current237-path candidate manifest is07824659 (gate guard qualification);
-semantic startup was tested on236 paths/feed53e3. Startup custody10+9 N/R
+The current242-path candidate manifest is0be0580e (combined Carry/metadata/close);
+Gate2 completed on237/07824659, and the original failed semantic startup was
+tested on236/feed53e3. Startup custody10+9 N/R
 and journal causal4 N/R matched on the earlier207-path manifestbb7e9537.
 Current carry97 has assertion failures and timeouts and must not be promoted
 as qualified. Its readers released before semantic startup composition; source changes still require an owned
@@ -113,7 +123,7 @@ repair handoff. Old source/binary
 identities remain preserved, not silently reused. The producer-gate selector
 repair now covers the newer evidence/bootstrap/history/boundary/census/chain-
 evidence families plus companion Go evidence tests, with13 guard tests passing
-N/R. Original-script causal qualification and complete gates remain outstanding;
+N/R. Original-script causal2 also matches N/R; complete gates remain outstanding;
 aggregate normal package coverage is not a substitute for either.
 Provision/authenticate real activations and both public proof replicas.
 The source-reviewed transport direction is typed client-authenticated uploads
@@ -163,9 +173,11 @@ No new live campaign or testnet transaction was performed in this work phase.
 - Adjacent campaign reader2: `temp/sn-campaign-evidence-custody-v1-eDT2Hz8j/CAMPAIGN-CUSTODY-HANDOFF-v1.md` (composed; focused5 and original-source causal3 pass N/R, retained campaign failures remain). Proof/campaign capture: `temp/sn-integration-xOgvEe/capture-proof-campaign-v1/manifests/final.machine-summary-v1.tsv`.
 - Root proof-store join2/9: `temp/sn-release-proof-state-v2-6Wn19mJS/PROOF-STATE-HANDOFF-v1.md` (independently reviewed; new9+retained14 pass N/R in the same proof/campaign capture).
 - Carry recovery14: `temp/sn-carry-recovery-repair-v3-1hMICsnh/CARRY-RECOVERY-HANDOFF-v3.md`; `temp/sn-integration-xOgvEe/capture-carry-recovery-v3/` (selected97 failed; causal5+1 matched N/R; every timeout and unrun root retained).
-- Semantic startup10: `temp/sn-startup-history-v2-NC2FVF55/STARTUP-SEMANTIC-HANDOFF-v1.md` (root reviewed all source/tests; composed;23 tests produce12 PASS/11 FAIL per mode). This authenticates Stats/cursor/reference recovery, not historical head/deposit/weight decisions.
-- Gate evidence2: `temp/sn-integration-xOgvEe/capture-gate-evidence-v1/` (exact13 guard tests pass N/R; original-script causal2 and full gates remain outstanding).
-- Authenticated upload: `temp/sn-attempt-upload-v2-fc9kAOv3/` (review-held13/36, no qualification or promotion). Actual API-session binding: `temp/sn-release-transport-v2-zdkQvRbH/RELEASE-TRANSPORT-HANDOFF-v1.md` (root draft4/9, independent review and qualification pending).
+- Combined repair13: `temp/sn-integration-xOgvEe/capture-carry-metadata-close-v1/` (242-path source0be0580e). Metadata17/runtime6/startup23/disk24/retained42 and causal config2/disk7/fixture5 match N/R. Carry light44 passes N/R; `carry/{normal,race}/10-campaign-heavy1/` retains both120s timeouts. Full Carry106 qualification remains incomplete.
+- Semantic startup10: `temp/sn-startup-history-v2-NC2FVF55/STARTUP-SEMANTIC-HANDOFF-v1.md` (original23 now pass N/R after metadata5). This authenticates Stats/cursor/reference recovery, not historical head/deposit/weight decisions.
+- Gate evidence2: `temp/sn-integration-xOgvEe/capture-gate-evidence-v1/` (exact13 guards and physical-original-script causal2 match N/R; full gates remain outstanding). Runtime mirror: `temp/sn-gate-runtime-causal-v1-H6Xk3Jyn/RUNTIME-CAUSAL-HANDOFF.md`.
+- Authenticated upload15/39: `temp/sn-attempt-upload-v2-fc9kAOv3/ATTEMPT-UPLOAD-HANDOFF-v2.md`; session binding4/10: `temp/sn-release-transport-v2-zdkQvRbH/RELEASE-TRANSPORT-HANDOFF-v2.md` (source-reviewed, unexecuted, joint selected243).
+- Runtime upload config6/8: `temp/sn-upload-config-v2-c2biFmD2/UPLOAD-CONFIG-HANDOFF-v1.md` (unqualified; Astra owns outer-lifecycle successor). Pinned chain decision draft: `temp/sn-decision-chain-v2-yufeLAGZ/` (not released).
 
 Use compact machine-verified stage summaries for ordinary updates. Retain full
 logs, failed captures and immutable command/source identities on disk; open
