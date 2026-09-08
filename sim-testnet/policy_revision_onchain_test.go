@@ -65,7 +65,7 @@ func TestLiveBootstrapPolicyMigrationState(t *testing.T) {
 	}
 	executor := &Executor{
 		cfg: cfg, stateDir: stateDir, plan: plan, journal: &Journal{entries: entries},
-		owner: &EVMTxManager{client: client}, payloads: &DeploymentPayloads{Manifest: plan.Deployment},
+		owner: &EvmTxManager{client: client}, payloads: &DeploymentPayloads{Manifest: plan.Deployment},
 	}
 	if err := executor.verifyBootstrapPolicyMigrationState(ctx, head.Number); err != nil {
 		t.Fatal(err)

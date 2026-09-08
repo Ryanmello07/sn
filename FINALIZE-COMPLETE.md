@@ -4,6 +4,746 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
+Current checkpoint (2026-09-08 20:05 UTC) supersedes older lane/status text:
+
+- Primary checkpoint scope is the Go fixture tool, EvmTxManager naming changes,
+  connect acronym style, server monitoring policy and handoff documentation.
+  The base heads are SN c6d93e9, server 0f5e7f5e and connect 58157ab. Isolated
+  implementation/test sources below are not promoted, committed or remotely
+  backed up by recording these paths. Preserve their physical directories.
+- V8 has no live test/compiler reader and Terra released its source lease.
+  Qualified N/R groups: budget5, capacity20, runtime455-21, capture21, dispatch2,
+  reserved-predecessor1, rendered-setup1, identity3 and gate10. Exact receipt
+  checks and source/mode/binary fences all pass. Complete remaining
+  decision/history/audit, capacity/final-capture and renderer adjacencies on
+  the next joined candidate; unrun families are not implicitly qualified.
+- The unchanged full-template root passes under existing 15m normal / 25m
+  race bounds: 206.30s / 106,628 KiB RSS and 429.54s / 269,060 KiB RSS.
+  Receipts, profiles and timing: temp/sn-launch-integrated-v1-yLRCb2DC/
+  capture-terra-v1/v8-template-profile/{normal,race}/. Both after.tsv files
+  have converter/checker/source/mode/binary checks zero. This resolves the
+  insufficient focused 120s observation, not either genuine full gate.
+- Authority16 retains one genuine failure in each mode: scoped Rpc cancellation
+  invalidates retained startup file custody. The frozen two-file successor
+  puts the owner marker on its enclosing context, while retaining private Rpc
+  cancellation, closed checks, reader joins and parent cancellation. Do not
+  suppress the failure or change the original regression test's ordering.
+- Next joined source consists of the following immutable donors. Paths are
+  relative to /home/by/urnetwork/temp; hashes identify the named handoff:
+
+  - sn-client-key-batch-v2-5QXY8TNi/CLIENT-KEY-BATCH-HANDOFF-v2.md:
+    52e5f8d9286915a1deed529f50d69abc77990493607e647607a362d337f7229c.
+  - sn-observation-quota-v1-wxWfSp3n/OBSERVATION-QUOTA-HANDOFF-v1.md:
+    437cee7b2b7838ab8d360615bd338520d6427cc0ba047ca26d4e3b0e4d545ab0.
+  - sn-capture-population-stress-v1-brFFOt3n/POPULATION-STRESS-HANDOFF-v1.md:
+    21cf5678a48d4e41edd0b648bdae5993c9592b2fea1251ae5f37fbefd4312594.
+  - sn-client-key-custody-lifetime-v1-ED2VmEsW/CUSTODY-LIFETIME-HANDOFF-v1.md:
+    da88c6dc11d30d55a0556c8eb3e01d6b9453c0a5303f4a3c6e07312165643291.
+  - sn-client-key-registration-cohort-v2-BnZXKV4Y/REGISTRATION-COHORT-HANDOFF-v1.md:
+    9a4e0f25712e54a98ed23ff5e1c96f876bfb97f7f15c8971dbd221e97886eded.
+  - sn-batch-quota-stress-gate-v1-F3Oui64N/BATCH-QUOTA-STRESS-GATE-HANDOFF-v1.md:
+    facfab7a2d178954fe8aaef3619a4466f8c2abc152a447faa7340d1e72424f1d.
+- Composition has not begun. Preserve exact existing preimages and independent
+  shared hunks; custody2 must not overwrite batch26's complete authority file.
+  Add the real StClientKeyRegistrationCohort execution prefix and both new
+  server cohort test files to mandatory guards. Terra owns all formatting,
+  builds, tests and race runs; Astra owns failure diagnosis/repairs.
+- Population stress uses 900 real payloads: four 4 MiB and 896 x 320 KiB,
+  totaling 296 MiB, through actual streaming publication and both original
+  content/history replicas. The separate 339,968-slot metadata test does not
+  prove a materialized 66.25 GiB corpus. Counts and RSS still need execution.
+- Cohort6 is authored only: bounded sealed membership, two Core/operator
+  owners x 500 real authenticated requests, original Sql and 2,000 public
+  objects. Its eight authority Http / forty logical methods plus cold identity
+  reads are assertions awaiting measurement. Durable registration readiness
+  and transient failure recovery remain an explicit separate investigation.
+- Both genuine full gates, clean/pushed source freeze, real accelerated RC,
+  final soak and independently verifiable FINAL.md remain. No new testnet
+  transaction or campaign is claimed. Capture-first analysis may run alongside
+  live capture after actual launch gates; private-node sync is not required.
+
+Historical continuation (2026-09-08 18:18 UTC):
+
+- V8 is composed and handed to Terra's exclusive execution lease. Exact handoff:
+  temp/sn-composition-v8-OcE8OCEt/V8-HANDOFF.md,
+  SHA7b9e105204a9217cb0b2696aeb38404e32436bcdc5524cce24cb5df9bd3c9a5b.
+  RAW-SOURCE9bffd22ed7d97bf604dabf115d9d728deacc2afa29be952d1cb0d616deef8353;
+  MODES85f9a548a6697a8c540d3936d8622e9a05c0269cb641b9c35b2400690630c338;
+  NEW-ROOTS4aec2526bb6aa28c29ef9df65538e9df20872039ce9db2ca5e5a816d08a25230.
+  35 unique files/34Go,25 existing/10new; all26,445 lines copied to EOF and
+  checked.25 exact formatted V7 preimages are retained. Four fully inspected
+  raw/format bridges and two deliberate shared-file merges are documented.
+  Terra owns all formatting/build/test/race/probes; root/Astra do not run Go.
+- Composition includes frozen authority7, capacity22, identity2, null1,
+  dispatch1, case2 and gate2, with every exact donor path/hash in the handoff.
+ 47 new top-level roots are independently derived from actual pre/post source.
+  Class budgets remain separate; original proof bytes and both replicas remain
+  mandatory. Default small-archive limits are unchanged; full-V2 aggregate
+  bounds derive from actual disk/history/relay owners (66.25GiB/339,968 slots).
+  Admission is not allocation. Producer selector now includes the actual
+  ReleaseClientKeyAuthority family and mandatory new capacity source files.
+- V7's runtime455 simulator bodies passed21 roots plus24 existing children,
+  but neither receipt qualified: the checker accepts top-level declarations
+  only. Do not repair its Python grammar. V8 converts five homogeneous tables
+  to CODESTYLE plain loops with every24 case input/assertion retained; rerun
+  the exact21-root normal/race groups. All earlier raw/refused attempts remain.
+- V7 renderer race timeout was cumulative: first three roots consumed114.63s
+  of120s; fourth had run only5s. Two independent singleton pairs subsequently
+  passed normal/race with complete receipts. Reconcile the full unchanged
+  census using independent bounded runs. Full-template root separately timed
+  out120s in both modes. Astra found >=7,000 durable atomic writes/14,000 syncs
+  and bounded repeated source authentication, no proved deadlock or dominant
+  CPU cause. Terra is authorized to profile this exact root at unchanged
+  genuine15m normal/25m race bounds. Original timeouts are not erased.
+- Cross-client batch remains isolated at temp/sn-client-key-batch-v2-5QXY8TNi;
+  quota13 remains frozen and depends on its actual attempts=2 and logical
+  adversary-member accounting. Do not make V8 tests wait for this active lane.
+  Batch population tests cover404 clients/operator x2operators x2validators,
+  shared and404-distinct registration boundaries, and original private-capture
+  restart. Their asserted Rpc counts are not yet measured passing results.
+- Important correction to17:41 notes:30s is an observation request limit,
+  NOT the whole validator decision. The decision has its service context and
+  original native-epoch submission guard. At40 Http admissions/min,4x8 Rpc
+  batches require46.5s for their last admission; finite180s plural-only operation
+  bounds are being implemented with client/controller/writer propagation.
+  Ordinary30s calls and25s body-read remain.144s admission plus36s local/transport
+  allowance is a planning envelope for12 contending owners, not a latency
+  guarantee under arbitrary external traffic. Preserve bounded overload refusal
+  and parent cancellation; no release-gate deadlines are extended.
+- Astra publication is independently adding two test-only roots at
+  temp/sn-capture-population-stress-v1-brFFOt3n:900 actual record/proof objects
+  (four4MiB +896x64KiB =72MiB raw), real streaming publication and both immutable
+  content/history replicas, actual public Http readback, causal ownership
+  barriers/high-water counters. Separate339,968-slot metadata census is not a
+  multi-GiB materialized payload test. Existing capacity25 roots check bounds
+  and small-body controls; do not misreport those as full-corpus RSS evidence.
+  Root must add evidence_population_v2_test.go to the later mandatory guard.
+- Read-only private Rpc at17:57 UTC: reachable,14peers,isSyncing=true,
+  current7,448,525/highest7,962,334. No infrastructure failure is established;
+  it is progressing but not ready as a current-head public-Rpc replacement.
+- V8 is not yet qualified/promoted. Both genuine full gates, clean/pushed
+  freeze, live RC/final epochs and final independently verifiable evidence
+  remain. No new transaction, campaign, commit, pull or push in this update.
+  Capture-first stays approved; independently qualified offline V2 analysis
+  can overlap live capture but cannot be skipped before FINAL.md acceptance.
+
+Historical continuation (2026-09-08 17:41 UTC):
+
+- The latest user explicitly requested parallel Rpc deduplication/batching,
+  full-population quota sizing and bounded streaming storage. Root owns quotas
+  and integration defects; Astra key-history owns real server/validator batch
+  paths and logical adversary gating; Astra publication owns archive limits,
+  linear traversal and original two-replica prior-carrier custody. Terra max
+  owns all Go/gofmt/build/test/race/probe execution on the held V7 candidate.
+- V7 has all8 compiles passed. Fully qualified N/R groups: runtime5, head4,
+  streaming12, provision8. Runtime455 crv4 18 and validator4 N/R bodies,
+  converters and checkers passed, with final fences closing. Simulator21 N/R
+  bodies passed but their first checkers correctly refused24 undeclared
+  existing child events. Root independently read the fixed doctor_test.go and
+  config_test.go case lists and approved a separate source-derived24-child
+  event receipt, with unchanged21 top-level roots and no body rerun.
+- Retained genuine failures: capture20 one test-only null-facade mismatch;
+  audit compliant1 fixture Stringer/double-hex dispatch mismatch; finalcapture8
+  one persisted-plan mismatch; renderer predecessor-carry old runtime lock;
+  renderer race120-second Go timeout, despite outer240-second watchdog.
+  No failure is a pass. The first two have frozen, unqualified test-only fixes:
+  temp/sn-native-null-facade-v1-lquEC4CP/NATIVE-NULL-FACADE-HANDOFF-v1.md
+  SHA9c247e56cc5ffa14cabbd5fcb13fe2dfee00185bd1c70019d66bbe8159ddb128;
+  temp/sn-decision-dispatch-v1-tXGuxfr0/DECISION-DISPATCH-HANDOFF-v1.md
+  SHA02376b047b8921cf3926d699f2ca57d5b1af658ecffeb76f0303411ae0fe92f2.
+- Quota13 frozen handoff:
+  temp/sn-observation-quota-v1-wxWfSp3n/OBSERVATION-QUOTA-HANDOFF-v1.md,
+  SHA437cee7b2b7838ab8d360615bd338520d6427cc0ba047ca26d4e3b0e4d545ab0.
+  SOURCE f8c6a3ad60a04b86611212e553717307324ade05bdb441888ec1f280757c69b3;
+  PREIMAGES cd040349aac977e870a8dacc4d273546e170fb5c06b1f35fa6d98cac6ba51eeb;
+  ROOTS8 4631958cec91e5894b51c0a8ba96f599ac933d0049d645b3f9c4f37fc84d4035.
+  All13 source digests and11 held preimages matched. Two new files contain
+  checked workload arithmetic and six startup tests; the existing real Redis
+  quota file gains original16-response reproduction and concurrent full1000
+  population coverage. Runtime allowances retain finite individual objects,
+  active readers and protected-owner quotas. Counters are not allocations.
+  Required dependency: active batch donor must implement/enforce protocol
+  MaxClientKeyObservationReservationAttempts=2 and adversarial WaitSlots by
+  logical members, including both requests of synchronized pairs. Do not
+  fabricate that constant or test quota13 without the actual behavior.
+- Source-per-operation authority7 is frozen separately at
+  temp/sn-client-key-authority-owner-v2-ilY4aWxg/
+  KEY-AUTHORITY-OWNERSHIP-HANDOFF-v1.md,
+  SHAd6e89a9602a31a04855334b32e47e3d08acf790c61f6c71c935c0cce62fec483;
+  it still needs full root review/composition. The active batch successor is
+  temp/sn-client-key-batch-v2-5QXY8TNi. Archive capacity successor is
+  temp/sn-capture-limits-v2-CMY8xxFD. Never promote an active directory; wait
+  for its exact frozen source/preimage manifests. release_capture_v2.go has
+  separate ownership/capacity hunks requiring reviewed merging, not overwrite.
+- Rpc feasibility is not proved by one shared registration boundary. The
+  actual shared40/min gate counts Http requests. The current finite fallback
+  projection for404 distinct historical boundaries/operator is roughly1,470
+  Http requests across both operators/validators, about36.75 minutes at an
+  idle gate, excluding other work. This is a source projection, not a measured
+  run. The real30-second request/decision owner therefore remains a blocker
+  for that distribution. Inspect supported bounded registration cohorts or
+  safe read reductions; never drop per-client signatures/history or claim
+  ordinary parallelism defeats a shared rate limit. Earlier private-node
+  check: reachable chain945, syncing, head7,442,001 versus public7,961,956.
+- No full release gate, clean freeze, live campaign, new transaction,
+  promotion, commit, pull or push was completed for these new donors.
+  Capture-first remains approved: offline V2 semantic analysis may overlap
+  live capture after genuine launch gates, but is mandatory before FINAL.md
+  acceptance. It is not an extra prelaunch dependency.
+
+Historical continuation (2026-09-08 16:25 UTC):
+
+1. User explicitly requested parallel resolution of timeouts, remaining
+   integration tests and both full gates. Root, two Astra max repair lanes and
+   Terra max qualification are operating concurrently on isolated sources.
+   No full gate is running yet: source is not clean/pushed/frozen, remaining
+   connected capture/read-ownership fixes must qualify. Never waive actual
+   repository/service/census preflight just to name a component run a gate.
+2. V6 pending12 N/R genuinely passes with converter/checker0,12/12 roots,
+   51 events/11120 bytes each. Head4 race passes4/4,36 events/8052 bytes;
+   normal has one genuine empty-to-empty negative-control failure. Capture15
+   N/R genuinely exposes upstream Json null capture failure; renderer/reserved7
+   N/R genuinely rejects fixture state directories0755/0775 before target work
+   (actual observed mode0775). Their converters preserve the failures and
+   expected-PASS checkers correctly refuse them.
+3. IMPORTANT evidence correction: later v6 runtime5/finalcapture8/audit9/audit2/
+   relay11/publication10/transaction11 direct invocations omitted
+   -test.v=test2json. Their raw outputs are retained diagnosis only; raw PASS
+   is not a qualified root receipt. No correctedv6 rerun was authorized.
+   Reuse accepted body.command adapters, preflight their exact event flag and
+   root census, then qualify on v7. This does not invalidate the earlier
+   exact-converter/checker qualifications above or the original cold-race passes.
+4. Diagnoses/fixes: source counter test expected1/2 while original signed
+   activation owners are2/3; shared provisioning fixture raised64KiB headers
+   above its4KiB public metadata reader; nullable Json result decoder needed
+   to distinguish null from omitted fields; head negative must mutate an active
+   authenticated nonempty hash; Journal fixture must explicitly own0700 roots.
+   Full original censuses/signatures/production capacity checks remain.
+   Audit9 has8 raw failures at missing independently defined Evm view2415;
+   bounded selector/target diagnostics are joined, but root cause is not yet
+   fixed. Never fabricate a response for an unidentified getter.
+5. Rejected head-control-v3 was accidentally copied without its last118 lines.
+   Root full diff caught it before composition/compilation. Correctedv4 has
+   full768→781 lines, all14 original roots and only the intended13-line hunk.
+   Keep the rejected donor; never use it or count it as a tested candidate.
+6. After every reader joined, final v6 source6033 SHA/mode and four binary
+   fences were0. Root composed53 unique complete source files /55 transitions
+   from10 donors:42 checked actual preimages plus11 new absences. One raw
+   reserved-CREATE3 predecessor differed only in one struct-field alignment;
+   initial preflight refusal plus exact full-file replacement comparison are
+   preserved in RAW-COMPOSED-v7-FORMATTING-BRIDGE.md. All53 final hashes and
+   modes match the donor outputs. Root executed no Go/formatting/tests.
+   RAW-COMPOSED-v7-SOURCE.sha256:
+   2acf1269ac49b9c7bc8a753d794a12ed5088f2515d68c57bc0e74556aad61a95.
+   RAW-COMPOSED-v7-HANDOFF.md:
+   70c9c8148474c60eb552760aa092127232a16b3c4f4653a69fa685fe542d4bd5.
+   Both live at temp/sn-launch-integrated-v1-yLRCb2DC; Terra owns the lease
+   for43 Go-file formatting/refencing and parallel crv4/validator/simulator
+   N/R plus affected actual server controller builds. Root/Astra must not edit
+   held source until Terra explicitly joins readers and releases it again.
+
+Exact v7 donor handoffs (all under /home/by/urnetwork/temp; SOURCE manifests,
+not whole directories, define production overlays):
+
+- sn-runtime-455-compat-v1-unFVtJCw/RUNTIME455-COMPATIBILITY-HANDOFF-v1.md,
+  SHA de368d4dc4db7bb92d18eeee639eae87f1d6966701c50cde07ae1d2909592c30.
+- sn-runtime-455-source-v1-HGMVcyqZ/RUNTIME455-SOURCE-HANDOFF-v1.md,
+  SHA c871cf8e07a9b0b8d314b8601c3c21b4fdd33305e09266c45706fd6bb870c4d6.
+- sn-native-capture-null-v1-a8PVfABF/NATIVE-CAPTURE-NULL-HANDOFF-v1.md,
+  SHA 9cb573d84188124dabeb0f0a39074de836ac99039b561a3b5e1ac1bfcd124c3b.
+- sn-head-binding-control-v4-tcpWpLeO/HEAD-BINDING-CONTROL-HANDOFF-v4.md,
+  SHA 52ec3dd66bccace674c23685acf1a63435e52b6489fc176731f4de3c85ef4f11.
+- sn-reserved-fixture-mode-v3-VPIZkMCv/RESERVED-FIXTURE-MODE-HANDOFF-v3.md,
+  SHA ef9cc075e0cdd0ef361c887a572b9fb5627c2cbb94e8cf9bddba09f6a7733a52.
+- sn-launch-config-v2-rjmKcdsP/LAUNCH-CONFIG-HANDOFF-v2.md,
+  SHA 21cfb1310306f915b627535dfaf65c13b98f09b9823ae04d6fcad35b87f5bdd6.
+- sn-capture-capacity-v1-HBIzcD1m/STREAMING-CAPTURE-HANDOFF-v1.md,
+  SHA aa25084fede22513f8b9ea8f2ce5cfb39c5b083b0d1ad5914d51fa9150ca8820.
+- sn-integration-fixture-census-v1-nlZgF5YT/INTEGRATION-FIXTURE-CENSUS-HANDOFF-v1.md,
+  SHA 12141fe11122ac9b8fd5fe4028eb6fdfb24acbf55d2c5707128b7df7a06bfc55.
+- sn-audit-view-diagnostic-v1-lFK1P8Bt/AUDIT-VIEW-DIAGNOSTIC-HANDOFF-v1.md,
+  SHA d9610536e8f42435cf15cfd1c141dfa2f645a1344980c197cf539372e2572d1f.
+- sn-streaming-gate-v1-TbjN1bDy/STREAMING-GATE-HANDOFF-v1.md,
+  SHA e26b4cb2fb40416c2865fa6956b5a6514a8d2df3186323c64d779c5509fb8994.
+
+Remaining parallel continuation: Astra runtime in sn-capture-limits-v2-CMY8xxFD
+owns cfg-derived bounded writer/decoder/secretless-observe/original-closure
+admission and full prior signed-carrier census. Streaming10 alone intentionally
+retains256MiB/4096 defaults and is not capacity-complete. Original prior carriers
+cannot simply be excluded; authenticate exact original manifest, signatures,
+census and both replicas, retain typed public references without double base64
+bundling. Keep original source hashes/provenance even where bytes are deduplicated.
+
+Astra key-history owns an operation-local, bounded, successful-only immutable
+authority reader keyed by complete deployment/domain and exact historical
+boundary. Preserve every client/request/root/generation/observed-head signature,
+cancelled-flight join, final canonical witness and provider limits. Source
+estimate808 clients×2 validators×24 getters=38,784 calls before other reads;
+40/minute public budget cannot be ignored. Unique-boundary cost remains even
+after dedup and must be measured in actual tests. Separate64KiB activation
+context discovery allowance is not client-key history size; the latter retains
+8MiB response,64MiB shared control,1GiB history and16,384-file intersections.
+
+Config CAPACITY-v2.md explicitly derives full1000/202/top200,40 seeds/minute,
+M8 and5×300+3×360 geometry: canonical valid-M8 data2.038GiB release and3.506GiB
+cumulative production before control material. These are workload arithmetic,
+not measured samples or hostile-input bounds. Actual disk/stream/history caps
+remain independently enforced. Host had508GiB free at16:25, not a reservation.
+Live balance/plan/funding checks and full gates still precede any campaign;
+offline final V2 interpretation can overlap genuine raw live capture after
+launch qualification, but pending never satisfies final acceptance. No source
+freeze, commit/pull/push, new testnet transaction, live soak or FINAL.md success
+is claimed by this continuation.
+
+Earlier continuation (2026-09-08 15:46 UTC), retained as history:
+
+- The three original cold race timeouts and detached-cache control remain
+  qualified N/R under unchanged semantic-gate bounds. Integrated keyhistory6
+  now passes N/R; native11 and winner3 race also pass with exact checkers.
+- V4 simulator compile failures were actual uint64/signature-field mistakes;
+  root's two-file correction led to clean v5 N/R compiles. Original renderer
+  and two head fixture roots genuinely failed N/R before their fixes. Capture13
+  N/R passed12 but failed its native-stake fixture's typed result setter. Every
+  original raw failure and separate converter/preflight failure is retained.
+- After readers joined, root composed pending8 + renderer2 + reserved-CREATE3
+  + head-binding2 + native-capture-fixture1:15 unique files,10 checked existing
+  preimages,5 new absences. Every donor transition and final SHA readback is0.
+  RAW-COMPOSED-v6-SOURCE.sha256 digest is
+  0c3eb509428adcd2039eab3956f298aefddf0f57c9d6f9cf1c372fea7d0acf65.
+  Terra formatted those files/refenced the source; validator and simulator
+  normal/race compiles all pass. Head4/capture15/renderer-reserved7/pending12
+  bodies are the next parallel matrix, not yet claimed passed. Pending12 adds
+  the existing adjacent count/status root to the11 authored roots.
+- New frozen handoffs: pending8 in sn-pending-analysis-v2-nKMUTSb5
+  (8c4fcbe47960d0897a9e217d0433a74eb9ba8787c5422e25bc3fc52ba396c68a);
+  renderer2 in sn-render-reserved-fixture-v2-LmsDMNoh
+  (14769d75629c469cfa05b5ed6a4b5215d342f47b5a99e02809130aa810a72bbb);
+  reserved3 in sn-reserved-create-admission-v1-GaTfFt8L
+  (b426ed291566a3d646b29f6012cbddafddf8e023cb749d11bf5ce18b0ab80084);
+  head-binding2 in sn-head-observed-binding-fixture-v1-nbawhRW1
+  (c33f0d9220043ac2258e6829a9b477237e09f28a5ae8595da627494d43820462);
+  native-capture1 in sn-native-capture-fixture-v1-GcVobjpl
+  (fa5d2e2efbbb37a0802e3c8cfc3f55acf0737199082b6acab5fddcb37a6e8a1c).
+  All locations are under /home/by/urnetwork/temp. Use actual manifests, not
+  broad whole-donor overlays. The native capture fix changes only its fixture;
+  actual Http header/null regressions preserve raw bytes and production checks.
+- Public testnet now runs455, not454. At finalized7961421 hash
+  0x93a1140a57ad2996e6a7bf52f64b7e25025b11a929d7bc08d734598e7eaa64e3,
+  exact code equals official CI runtime455 artifact10034099580, source
+  67dcf7f791dc495064c293f080a0702cb433e51e. Terra's corrected exact-Wasm
+  probe exits0 with exact metadata/version/code bytes; initial ENOENT attempt
+  is retained separately. Root read stdout, zero stderr and unchanged binary
+  before/after hashes. Full audit/provenance is in
+  temp/sn-runtime-455-audit-v1-OlFoph89/AUDIT.md. Never invent a v455 tag or
+  mainnet proposal/timepoint; upstream testnet CI succeeded but mainnet was
+  waiting at observation. Current455 uses exact commit-reference fields.
+- Runtime455 Go compatibility15 is frozen at
+  temp/sn-runtime-455-compat-v1-unFVtJCw/RUNTIME455-COMPATIBILITY-HANDOFF-v1.md,
+  SHA de368d4dc4db7bb92d18eeee639eae87f1d6966701c50cde07ae1d2909592c30.
+  Root's source/artifact/public-profile/live-probe/producer-coverage successor
+  is being finalized in temp/sn-runtime-455-source-v1-HGMVcyqZ. Join them
+  together after the current finite reader boundary; qualify43 focused Go
+  roots plus actual source/metadata guards and read-only live identity/stake.
+- Config Astra owns explicit capacity-only fresh protected-upload templates,
+  resolved only from the approved plan and verified original CREATE before
+  full runtime admission. Streaming-capture Astra owns actual V2 byte/object
+  capacity propagation and bounded per-object archive/capture memory. Keep
+  legacy caps strict; no arbitrary global96GiB allocation. These are genuine
+  launch dependencies identified by the complete working profile.
+- Approved timing is5×300 +3×360 chain blocks before boundaries/settlement,
+  not72 minutes total.72 minutes is one final360-block epoch at12s/block.
+- Both full release gates remain required and can overlap only on truly clean,
+  pushed, frozen real repositories with private service/port/cache isolation.
+  No full gate, live RC/soak or new testnet transaction is claimed. Independent
+  semantic analysis remains allowed to overlap raw live capture; pending never
+  becomes final acceptance. Do not remove RunRelease's wiring guard before
+  connected runtime/capture qualification. No commit/pull/push this turn.
+
+Earlier continuation (2026-09-08 14:52 UTC), retained as historical evidence:
+the three cold-race timeout cases and detached-cache control now have actual
+normal/race passes under unchanged semantic-gate admission. Publication10
+and transaction11 normal also pass (root inspected exact checker/summary
+receipts under the integrated candidate's capture-terra-v1/validator-bodies-v2).
+The earlier runtime CWD failure was followed by a genuine startup failure:
+all three runtime roots overwrote reviewed configuration with fixture artifact
+hashes. Runtime fix2 preserves production pins, uses the existing private
+explicit-artifact startup boundary, and adds two adjacent roots. Keyhistory4
+passed three and failed actual live-head recovery because its old 1 MiB test
+budget omitted the newly retained signed response bytes. Budget4 changes only
+fixtures and adds real HTTP one-byte boundaries plus immutable refusal/retry.
+Neither repair is qualified yet; both original failures remain retained.
+
+After explicit reader join, root composed seven frozen donors,46 unique files,
+with23 exact existing preimages and23 new-file absences. Final raw readback
+matches every donor. An initially misplaced appended test hunk was detected
+by that hash fence and restored to exact donor ordering before any reader or
+compiler started. A preliminary manifest check also used the wrong base for
+one donor's relative preimage manifest; checking its actual PREIMAGES owner
+and the held target independently resolved that tooling mistake. Neither
+case is a Go pass or a hidden test retry. The preserved raw46 manifest is
+temp/sn-launch-integrated-v1-yLRCb2DC/RAW-COMPOSED-v3-SOURCE.sha256,
+SHA2563e57a8b8cca21cf184c9eeea8910a39fb69f8b47207dd6a2a3e80b26bec0ae7e.
+Terra formatted selected Go files, then joins budget4 before refreshing the
+full source/module/mode fences and admitting parallel normal/race compiles.
+
+In addition to audit11, admission6 and gate6 listed below, exact joined donors:
+
+- Chronology7: temp/sn-relay-chronology-v2-mNIbQlHn/RELAY-CHRONOLOGY-HANDOFF-v1.md,
+  SHA256ab20f27d68b427830c6a5e5943f3aaca97a25f7f65c0549b025f9e34179c4b3b.
+- Capture10: temp/sn-final-capture-v2-hXfIyzGy/CAPTURE-V2-HANDOFF-v1.md,
+  SHA256b24b1a2b0551037c414eb0cfef145d7182421854a4f7ec2778fbe101150afd60.
+- Origin4: temp/sn-runtime-origin-join-v1-Xtv0Pvci/ORIGIN-JOIN-HANDOFF-v1.md,
+  SHA256b3b6fde6d61e189f8564d0e0c70916ecbf49c5cd3403b69c858417628ddb9039.
+- Runtime fixture2: temp/sn-runtime-artifact-fixture-v2-OQCkiTap/RUNTIME-ARTIFACT-FIX-HANDOFF-v1.md,
+  SHA2562c5a4a10027e2e310c8ce303ab746d0cde5c0d899c473fd23ed9613ab6f7382e.
+
+Frozen test-only budget4 successor:
+temp/sn-client-key-history-budget-v2-gPQyb32J/KEY-HISTORY-BUDGET-HANDOFF-v1.md,
+SHA2563b4af6e7f1a8350296db0ce54b6da3b46761bd62e234e1d49c9510cb49e3e8f2.
+Use each donor's actual SOURCE/PREIMAGES/ROOTS manifests; no guessed selectors.
+
+Detached control receipts are in sn-fixture-closure-qualification-v1-1RoFwd/
+capture/semantic-gate-detached1-v1. Race is fully matched with all fences0.
+Normal body/fences pass; its original converter/checker launch failure is
+retained alongside corrected conversion/checker0 over the identical raw body.
+Three later validator-race/renderer launch attempts failed shell parsing
+before any Go child was admitted; they do not count as running/passing bodies.
+The reviewed Go qualification runner requires real Git custody and cannot
+fence this no-.git candidate directly. This does not block focused tests
+under their already accepted SHA/mode/module fences. Use minimal literal
+commands, explicit physical package cwd/login:false and actual joined exits.
+
+Next parallel owners: Terra runs integrated tests; native/key-history Astra
+repairs the actual renderer's missing protected-upload/approved-plan/CREATE
+fixture; runtime/publication Astra implements the narrow typed pending-analysis
+orchestration join in temp/sn-pending-analysis-v2-nKMUTSb5. User-approved
+capture-first does not mean final acceptance: intentional interpreter absence
+must not cancel otherwise valid capture, but real source/signature/readback
+failures remain fatal. Preserve an explicitly pending analysis ledger and
+bounded joined lifecycle, not a false semantic_verified marker. V2 raw capture
+must close its complete native/companion/live-chain/payout inventory while
+offline analysis proceeds. Legacy semantic checks remain strict. RunRelease's
+staged unwired guard stays until actual connected-runtime qualification.
+Root still owns complete working launch config and exact source promotion.
+Both full release gates can overlap after clean, pushed source freeze in real
+Git repos, with private service/port/cache isolation. Neither full gate nor
+the live RC/soak has started. No new testnet transaction is claimed.
+
+Earlier continuation (2026-09-08 14:10 UTC), retained as historical evidence:
+the user requested race timeouts, remaining integration tests and both full
+release gates in parallel. Terra max executes ready independent compilers and
+bodies; Astra max owns capture wiring and gate/source review. Root owns the
+shared pure dynamic-relay admission/capture fix and working launch config.
+
+The three previously timed-out heavy roots now have actual normal AND race
+PASS receipts under the producer semantic gate's existing15m/25m bounds,
+GOMAXPROCS2 and parallel4. Root inspected both summary.tsv, checker.stdout and
+events.json under temp/sn-fixture-closure-qualification-v1-1RoFwd/capture/
+semantic-gate-exact3-v1/{normal,race}: all three roots passed, all fences0.
+Race durations were321.31/342.74/365.02 seconds. All original singleton120s
+timeouts remain retained; the separate338.09s diagnostic remains diagnostic.
+The actual cause was full1,000/202/200 fixture construction in isolated cold
+processes under an ad hoc timeout, not a demonstrated deadlock. No population
+or assertion was removed, and no checked-in full-gate deadline increased.
+Run the detached-cache regression separately on the exact repaired binaries;
+it was not accidentally included in the live exact3 selection.
+
+The combined candidate's crv4/validator/protocol normal builds pass; native
+source4, validator native11 and winner3 normal bodies also pass. Runtime3 had
+an actual launcher-CWD failure: the policy file exists, but the launcher left
+the body in the candidate root. Preserve that attempt and use a literal
+validator workdir with login:false for the corrected body. The two server
+compilers exposed an unused fmt import. All readers joined before the sole
+import removal; fresh api/controller normal compiles pass with every source,
+module, mode and package-map fence0. Current FORMATTED-v2 manifest SHA256 is
+40ede8bd448c1ab14c973e70f87720d7a1f5409e76a7e5d61010c9242c0929bf.
+
+Follow-ons remain outside the frozen reader hold: audit11 is frozen at
+temp/sn-deposit-audit-publication-v2-zA6KycUR/AUDIT-PUBLICATION-HANDOFF-v1.md
+(SHA256477c2c5693abfed2b63af80939bf40a3483a01ad54e46af8041cdd1e2fc1ab47);
+gate6 is under review at temp/sn-launch-gate-coverage-v2-QjA630DI;
+lossless V2 capture is at temp/sn-final-capture-v2-hXfIyzGy;
+root's six-file shared relay/census donor and five deterministic roots are at
+temp/sn-relay-capture-admission-v1-0iXbrlGO. It is now frozen at
+RELAY-CAPTURE-ADMISSION-HANDOFF-v1.md, SHA256
+e6ad5bfd745843a2e06157aebacdf531fe16025d15bfe909f58ae780ca349c0a;
+SOURCE.sha256 is1990a9ab57042a067cb825c932de70608be85c4eee095e199d4c75f42f9353a7.
+Gate6 is also frozen at GATE-COVERAGE-HANDOFF-v1.md, SHA256
+fef56410b939f9870324294ef8e935fc58e7cd6ca2edabb2044fed95b5068a75.
+The relay donor shares exact original
+signed-request/action validation with admission and generic live capture;
+unknown prefixes, changed caps, foreign plans, missing/failed admissions and
+path escapes fail closed. Adjacent offline chronology consumers still need
+the same authenticated request join; native/key-history Astra implements it.
+The review confirmed native and EVM managers write to the same captured
+journal. Historical coordinator selectors currently compare heights and
+reject non-EVM kinds too early. The adjacent fix must authenticate the exact
+action, then classify chain kind before EVM-height checks. Original relay
+requests must be carried through the existing launch-foundation bundle and
+fleet-generation raw artifact, not admitted by a prefix-only skip.
+
+Origin check: actual vault public API origins are read-only verified as
+http://127.0.0.1:18081 and http://127.0.0.1:18082. They match the currently
+hard-coded validator operatorDirectory renderer, so this profile is not
+blocked by the newly found general non-loopback origin mismatch. Root owns
+the narrow configured-origin renderer join/regression; keep capture's exact
+approved-origin check rather than permitting an alternate origin at replay.
+
+Both complete gates can overlap with independent private services only after
+clean/pushed source freeze. Their preflight requires real Git repositories;
+the current physical candidate has no .git and lacks two census repositories.
+Do not bypass those checks or label focused jobs full-gate qualification.
+Independent V2 semantic reconstruction, launch configuration, actual full
+gates and the live campaign remain. No new testnet transaction or campaign.
+
+Earlier continuation (2026-09-08 13:30 UTC), retained as historical evidence:
+the physical combined candidate is temp/sn-launch-integrated-v1-yLRCb2DC;
+INTEGRATED-LAUNCH-HANDOFF-v1.md SHA256
+7b60260eb69b5d2700d62584ff7c889bfe3105f22c4b19dc40b59c5353089bd9.
+It includes122 donor applications and reviewed shared joins across126 changed
+Go files. Terra's raw gofmt refusals ran no compiler and remain retained. After
+those readers joined, root authorized exact126-file formatting in that same
+candidate; the new FORMATTED-v1 source/all-module hashes and modes are held.
+Actual normal crv4/validator/protocol compiles exited0; test bodies and both
+full gates are separate unfinished obligations.
+
+Root's composed relay17 donor is
+temp/sn-evidence-relay-runtime-v1-tkvK9l95/RELAY-SOURCE-HANDOFF-v1.md,
+SHA256ca4e5c67e2fdcdb63da7616c11a960708e90c49d74bee60f4ec8a9a03124ea43.
+It uses existing keeper signing, exact original broadcast recovery, canonical
+third-party winner readback and actual lost-race gas; no new account store.
+Finite slot/gas reservation, immutable request/result bytes, complete public
+census validation and joined campaign ownership are authored and composed.
+Audit-relay2 is a separate frozen follow-on at that donor's
+AUDIT-RELAY-HANDOFF-v1.md, SHA256
+1b9fad55288510855bafe5166688fd0c1baec82fe187c6f578e2096816431990.
+Its fresh-pass drain must join the genuine later deposit-audit producer;
+an empty discovery directory is not independent final audit-census proof.
+
+Astra native/key-history owns the separate actual deposit-audit producer and
+its original-signature restart tests. Astra runtime/publication owns lossless
+V2 terminal wait/capture, including original signed source observations and
+native source-commitment inputs before historical RPC state can disappear.
+Native14 intentionally retains SteeringIntent/store schema v6: do not change
+that wire schema or down-convert V2 measurements/cuts into V1. Independent V2
+final semantic reconstruction stays fail-closed until implemented and tested;
+raw capture alone is not acceptance. Root owns working launch configuration
+and profile-backed timeout repair. No new live campaign or transaction.
+
+Fixture race update: the warmed-cache build succeeded. Light3 race bodies
+passed, but marker/runtime-map/deployment-admission each actually timed out at
+their original120-second bound. Preserve all three failures. Diagnostic-only
+marker execution with600/660-second bounds completed in338.09 seconds; it is
+NOT a qualifying pass or a deadline change. Its exact-source CPU profile and
+corrected source-path listings are under
+temp/sn-fixture-closure-qualification-v1-1RoFwd/capture/race-diagnostic-marker-v1.
+Default-source line listings resolved older source bytes and are superseded;
+symbol totals remain valid. Root is investigating fixture construction and
+repeated signature/replay work, without reducing population or assertions.
+
+Earlier continuation (2026-09-08 12:45 UTC), retained as historical evidence:
+Astra runtime/publication is composing one physical launch successor from the
+frozen donors; Astra native/key-history is qualifying the authored funded
+transaction path by adding real transport/recovery regressions (Terra executes).
+Root owns finite relay action admission and the joined campaign caller. Terra
+owns remaining fixture/router tests and integrated package/full gates. The
+primary acronym rename is built and its focused4 passes normal/race. Actual
+handler16 and original-handler causal1 have valid normal/race evidence; raw
+launcher/conversion failures remain preserved. Repaired heavy fixture3 is
+normal-only PASS: see temp/sn-fixture-closure-qualification-v1-1RoFwd/capture/
+HEAVY-NORMAL-QUALIFICATION-v1.md, SHA256
+e030cfc9e5f78057665261f185e39d48bba8e1c1092fa5da4ecd42dd5ed08b25.
+Its race compile timed out124 and produced no binary. A separate warmed-cache
+compiler attempt is authorized; test deadlines/populations are unchanged.
+
+Frozen launch23 handoff: temp/sn-release-launch-v2-8oE5ya83/
+RELEASE-LAUNCH-HANDOFF-v1.md, SHA256
+1053ac5022b5d1332bb30cdf7abdbac2b397bc6816602ef5fe5a54cc023672c5.
+Apply its two-file protocol-bound successor from
+sn-release-publication-bounds-v2-D3yP9ONj afterward. Native14 handoff:
+temp/sn-submit-native-source-v2-8e0jlFki/NATIVE-SOURCE-HANDOFF-v1.md,
+SHA256 b469579d6ff7002e971abb0b7c21b96756bdcc76c5165ed750c5b769d9b63431.
+Launch23 fixes the missing real activation producer, creating four genuine
+signed sources through existing keeper actions, immutable finalized inputs,
+and actual startup/publication joins. None of these handoffs is a test pass.
+The runtime guard, complete working configuration, funded relay integration,
+both full gates and live campaign remain. No new chain transaction occurred.
+
+Launch-critical reprioritization (2026-09-08 06:34 UTC): the user requires the
+fastest path to start the valid soak after a week of delay. Stop expanding
+standalone frameworks. The concise launch dependency/owner table is now in
+FINALIZE-ACTIVE.md. Protected Astra owns actual RunRelease V2 settlement and
+per-source census publication plus rendering; key-history Astra owns the
+SubmitOnce/IntentStore V2 native measurement/prepared/persisted recovery route.
+They coordinate shared hunks rather than independently rewriting them.
+Root reuses the existing sim EVMTxManager/Action/Journal for a permissionless
+evidence relay, consuming genuine public signed artifacts and exact on-chain
+readback. The new standalone relay-state draft is explicitly parked and must
+not become another launch prerequisite. A permissionless third party may
+publish the valid header first; preserve that winner and any own reverted gas
+instead of generating fresh slot/nonce retries. No operator private key/DB
+or blob credential is shared with validators.
+
+Protected source25 is frozen in
+temp/sn-attempt-reserved-v2-r32pLEu2/RESERVED-UPLOAD-HANDOFF-v1.md,
+SHA2568916a57d42d61fdfbfff7a70a0d211435a9f9fc82bd6d568c1183de14cff53bd,
+with10 exact preimages and28 new top-level roots, unexecuted. Runtime successor
+is temp/sn-release-launch-v2-8oE5ya83. The immutable closed-publication locator
+there is discovery only; a relay must independently fetch both origins,
+compare the complete configured census and verify the actual public consents.
+Terra is explicitly assigned the two formerly timing-out heavy Carry roots
+using the existing shared binaries, normal/race, with original bounds before
+further launcher work. All failed launcher attempts remain recorded; a handle
+or a compiled binary does not count as a running or passing body.
+No new live campaign, full-gate pass or source freeze is claimed. Remaining
+report analysis/nonblocking refactors may overlap the live campaign, but this
+does not waive known defects, their regressions, either full gate or any
+whitepaper acceptance requirement. Do not invent a from-now ETA.
+
+Parallel continuation (2026-09-08 05:32 UTC), superseding older pending status:
+no new live campaign, public upload or testnet transaction occurred. Current
+owners are Astra max astra_receipt_review_v3 (protected upload/runtime after
+independent receipt review), Astra max astra_key_history_resume_v3 (signed
+key-history capture/native joining), Terra max terra_qualification_resume_v3
+(all Go/build/tests/gates), and root (durable evidence relay/integration).
+Do not wait for all packages or compilers before starting an independent body.
+Preserve the explicit shared CPU budget and private directory/service ownership.
+
+Root read actual checker summaries for49 selected server PASS normal/race:
+root14, API12 and controller23, in capture-carry-config-chain-v1/server. Root
+also verified three new light simulator roots in both modes under sim-v2/bodies.
+The simulator shared normal/race binaries are compiled against an explicit
+5885-file,9-module physical replacement closure. The earlier852-file admission
+failure ran no Go and remains retained. These results do not complete server115,
+simulator187, chain92, retained causal obligations or either full release gate.
+
+The real handler deadline path failed500 versus408 because the error status
+parser did not accept a joined context-cancellation line. Reviewed repair2 is
+isolated at temp/sn-http-status-qualification-v1-tiH2tS/server; its23-file
+source manifest is07e5ab286a92472641331283d4a1e79abd5e975ab25ac0b6bceab604fb544a8f,
+5886-file replacement closure f6b9db4b5958e739f87af85602dd341f49b46aeb3f63f217410590eba084f6ae.
+Root read actual causal9 checker summaries:2PASS/7 expectedFAIL in each mode,
+88 events each. Repaired router23 first bodies failed retained TestRouterBasic
+because WARP_ENV was unset; this is a retained environment failure, not a pass
+or proof of a shared-service fault. A successor-bound private fixture and
+isolated PG/Redis are being admitted. Repaired handler binaries exist in both
+modes, but router23/handlers16/actual-handler-causal1 still need complete valid
+environment qualification. Keep original CWD/selector/pre-Go failures as well.
+
+Receipt/readback source8 is independently reviewed and frozen at
+temp/sn-evidence-receipt-manager-v2-833Ox9dt/RECEIPT-READBACK-HANDOFF-v2.md,
+SHA25622e8ad71019905f54c4db72c892f9efa56263970bfaaacd67dcd0192d9441133.
+Its source8.tsv SHA256 is07a492adba735a8c5d9b7213f6a6a44f877e15aae5fe0cb34a9de09df2659b22.
+The exact selection is52 roots (27 new): validator23, simulator10, server19;
+normal/race and genuine original/intermediate-source causal controls remain
+unrun. Preserve the handoff's original/intermediate preimages. The real
+simulator journal already rejected mismatched transaction hashes; do not claim
+its Send path falsely finalized a different transaction. Demonstrated adjacent
+manager defects are malformed same-hash height narrowing/panic and returning
+the invalid receipt on error. Server scans now continue past malformed and
+orphaned receipts while retaining another candidate's uncertainty. A valid
+attempt can remain Mined while aggregate intent becomes Uncertain. Root/Astra
+review repaired actual fixture prerequisites without dropping assertions.
+This source adds exact signed-RLP/receipt/event/hash-pinned evidence readback,
+not durable funded broadcast, runtime activation or native eligibility proof.
+
+A read-only public EVM RPC check at about05:10 UTC returned chain945, syncing
+false and finalized block0x796fe0. EVM block0 returned null. The signed-key-history
+draft must not equate EVM block0 with the configured native genesis, or require
+an unavailable EVM genesis block. Astra owns a deterministic fix retaining
+independent native network identity and pinned contract/EVM domain checks.
+No infrastructure outage or on-chain transaction follows from this diagnostic.
+
+Integration continuation (2026-09-07 23:33 UTC), superseding older pending
+statements: primary documentation checkpoint is `c6d93e9`; no pull/push followed.
+No new live campaign, public upload or testnet transaction is claimed. Root
+promoted the qualified private Go authentication fixture to
+`scripts/server-fixture/{main.go,main_test.go}` with its README, without the
+standalone module or generated credentials. Source hashes are respectively
+`2b047d2844f4bd9aec8059eead4d46b8339f6b2b0faae8c96fa6ea57a7a8be4f`
+and `05bf4a1ebbac17db41c7ad317475528ec49ddf16af2b6486d4b35ecde22f8077`.
+These exactly match the qualified formatted source. Primary-tree confirmation
+remains separate and pending; these edits are not committed.
+
+The fixture's `temp/sn-private-jwt-fixture-v2-B7bffcho/capture-terra-v1`
+contains exact12 PASS normal/race (51 events each), original earliest-source
+causal2 exactly0P/2 expectedF per mode (13 events), and the real private tool run.
+Root read all four actual checker summaries. The real output workspace is
+`capture-terra-v1/private-parent-v1/server-fixture-38048962` beneath that root.
+It has0700 directories,0600 JWT key/config/password-pepper/report, with tool
+and source/server fences0. This resolves private JWT/account setup, not every
+possible server suite resource. Never substitute the integration parent or
+ambient host vault/config. The first fixture version's real5P/5F bodies in
+each mode are retained: its test helper assumed testing.TempDir guarantees0700.
+The wrapper's later unbound-checker failure did not erase those product results.
+The source-containment and missing-password-pepper causal failures also remain.
+
+Upload/session qualification completed the SN-side128 unique roots in both
+modes: validator120 (new9+new10+retained40+retained61), clientauth3 and SDK5.
+Root independently read the new and retained checker summaries; writer-misbinding
+original-production causal1 matched each mode. Server115/causal4 were unrun
+when that source was released. The approved SDK dependency-cache warmup did not
+change its source or module files; earlier alias/CWD/cache failures remain.
+
+Root then composed reviewed Carry4, outer upload config8 and chain10 after all
+candidate readers joined. All22 raw donor hashes and actual existing preimages
+matched; new-path absence and diff-check passed. Raw composition took247 to255
+and then262 dirty/new paths. Terra formatted only22. The frozen full SN262
+manifest is `capture-carry-config-chain-v1/manifests/source.complete-dirty-new.after-gofmt.sha256`,
+SHA256 `d5a18d2c5301f75b7e9d7aa4aab156003bc5c61977b0ddf3acd29bd7af157992`.
+Server21 remains `985805e914262636f3c740c97f588c61ec6c388819724e44b673f39fadfe3f0d`.
+Both source fences and diff checks are0. Three original simulator files retain
+0644 although donors use0664; no chmod occurred. The earlier lexical0664/664
+preflight comparator failure is preserved separately from actual mode metadata.
+The qualification-only server go.mod replacement must never reach primary.
+
+The authoritative composition handoff is
+`temp/sn-integration-xOgvEe/COMPOSITION-CARRY-CONFIG-CHAIN-v1.md`, with exact22
+donors and262-path inventory in `composition-carry-config-chain-v1/`.
+Carry139 and outer48 have no overlap: exact simulator union187. Keep the
+original two timeout roots, all original139 obligations, full1000-miner crypto,
+inner120/outer240/list30/parallel1 and all causal controls. Chain92 includes
+the original25+head41+startup24, plus two exact-boundary participant eligibility
+roots. Root review found that a general two-healthy-operator observer cannot
+replace the old every-participant Active predicate; the historical intent
+consumer now retains that predicate even for empty-provider participants.
+Original live-M8 causal3 and Active-regression causal2 remain required.
+
+Fresh server test services are now available under the new capture, using
+the qualified private fixture. Setup and fail-fast environment preflight0:
+PostgreSQL ID `053aacad0fcffc0e44e7b63ac7a474f780c2c8e18070c75b2912e3a5ba81bd33`
+at127.0.0.1:32772; Redis ID
+`969cbae5d0a03e977a8bf6c1b3278a55965f9bbadf248c199d3d4d5cc861d0eb`
+at127.0.0.1:32773. They are independently owned/tmpfs/restart=no, not deployment
+containers. Terra reported root normal compile0 and body session22215, race
+compiler67065 and api normal compiler40036. These are point-in-time handles,
+not a completed115-root result. Re-poll actual ownership before cleanup/restart.
+Each package starts when its own inputs are ready, under one global CPU budget.
+
+Current production ownership: canonical Astra implements finite authenticated
+VPK staging reservations and real upload/runtime joining in
+`temp/sn-attempt-reserved-v2-r32pLEu2`; startup Astra implements actual signed
+key-history capture and the source-hash/native-submission connection. The latter
+confirmed that CRv4 currently commits encrypted weights, not the measurement
+artifact: local VectorHash includes MeasurementArtifactHash, but is not itself
+on-chain. Do not label the one-way artifact-to-prepared-extrinsic reference as
+an on-chain source commitment. Registration must not wait on a terminal census
+that itself needs registered keys. Any new native source-hash join must qualify
+actual runtime permissions, atomicity, role separation, exact persisted bytes
+and recovery/readback; no additional native write is approved as already tested.
+Root's EVM relay/finalized receipt work is isolated in
+`temp/sn-evidence-relay-v2-DiaqewsI`. No relay completion is claimed.
+
+Stable quota ownership means actual native hotkey plus original/destination
+operator and deployment. VPK/JWT/UID rotation cannot multiply that owner's
+reservation. A different eligible native hotkey is another member of the finite
+authenticated owner census, not provable continuity inferred from mutable UID.
+Historical eligibility also needs bounded freshness/current eligibility policy.
+Negative historical HTTP availability still lacks independent evidence and is
+not synthesized. Full startup/recovery/submit, evidence relay and later audits,
+measured live provisioning, both full gates, source freeze, live RC plus three
+final epochs and independently verifiable FINAL.md remain mandatory.
+
 Checkpoint reconciliation (2026-09-07 21:08 UTC), superseding older pending
 statements below: the user requested a commit, not pull/push. Primary SN was
 clean at `3e7c73a` and server clean at `9b582d91`; this checkpoint updates only

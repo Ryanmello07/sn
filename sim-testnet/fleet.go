@@ -97,7 +97,7 @@ func selectFutureEpochTransactionWindow(headBlock, currentEpoch, epochStartBlock
 
 // Read all epoch coordinates at one latest block so finalized-state lag cannot
 // produce an already-active transaction payload.
-func readFutureEpochTransactionWindow(ctx context.Context, manager *EVMTxManager, addr common.Address, coordinator *stabi.STCoordinator) (futureEpochTransactionWindow, bool, error) {
+func readFutureEpochTransactionWindow(ctx context.Context, manager *EvmTxManager, addr common.Address, coordinator *stabi.STCoordinator) (futureEpochTransactionWindow, bool, error) {
 	if manager == nil || manager.client == nil || coordinator == nil {
 		return futureEpochTransactionWindow{}, false, errors.New("future-epoch transaction reader is unavailable")
 	}
@@ -122,7 +122,7 @@ func readFutureEpochTransactionWindow(ctx context.Context, manager *EVMTxManager
 
 // Wait only across the unsafe tail of an epoch; cancellation remains owned by
 // the enclosing simulator action.
-func waitFutureEpochTransactionWindow(ctx context.Context, manager *EVMTxManager, addr common.Address, coordinator *stabi.STCoordinator) (futureEpochTransactionWindow, error) {
+func waitFutureEpochTransactionWindow(ctx context.Context, manager *EvmTxManager, addr common.Address, coordinator *stabi.STCoordinator) (futureEpochTransactionWindow, error) {
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -450,7 +450,7 @@ func (e *Executor) mirrorFleetCommitment(ctx context.Context, a Action, fleetInd
 	return nil
 }
 
-func rawCoordinatorCall[T any](ctx context.Context, manager *EVMTxManager, addr common.Address, data []byte, unpack func([]byte) (T, error)) (T, error) {
+func rawCoordinatorCall[T any](ctx context.Context, manager *EvmTxManager, addr common.Address, data []byte, unpack func([]byte) (T, error)) (T, error) {
 	var zero T
 	head, err := finalizedEVMHead(ctx, manager.client)
 	if err != nil {
@@ -463,7 +463,7 @@ func rawCoordinatorCall[T any](ctx context.Context, manager *EVMTxManager, addr 
 	return unpack(out)
 }
 
-func rawCoordinatorCallAt[T any](ctx context.Context, manager *EVMTxManager, addr common.Address, data []byte, unpack func([]byte) (T, error), block uint64) (T, error) {
+func rawCoordinatorCallAt[T any](ctx context.Context, manager *EvmTxManager, addr common.Address, data []byte, unpack func([]byte) (T, error), block uint64) (T, error) {
 	var zero T
 	out, err := manager.client.CallContract(ctx, ethereum.CallMsg{To: &addr, Data: data}, new(big.Int).SetUint64(block))
 	if err != nil {
@@ -521,7 +521,7 @@ func rawCoordinatorBatchCallsAt(ctx context.Context, client *ethclient.Client, c
 
 // Preserve the common single-snapshot call shape used by install and refresh
 // verification while sharing the historical multi-snapshot transport.
-func rawCoordinatorBatchCallAt(ctx context.Context, manager *EVMTxManager, addr common.Address, calls [][]byte, block uint64) ([][]byte, error) {
+func rawCoordinatorBatchCallAt(ctx context.Context, manager *EvmTxManager, addr common.Address, calls [][]byte, block uint64) ([][]byte, error) {
 	if manager == nil || manager.client == nil || len(calls) == 0 || block == 0 {
 		return nil, errors.New("coordinator batch call is unavailable")
 	}

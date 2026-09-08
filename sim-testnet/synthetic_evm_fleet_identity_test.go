@@ -158,7 +158,7 @@ func syntheticFleetCleanupFixture(t *testing.T, failure string) (*Executor, Acti
 		t.Fatal(err)
 	}
 	t.Cleanup(client.Close)
-	return &Executor{cfg: cfg, stateDir: root, roles: roles, plan: plan, keeper: &EVMTxManager{client: client, journal: journal}}, action, evidence
+	return &Executor{cfg: cfg, stateDir: root, roles: roles, plan: plan, keeper: &EvmTxManager{client: client, journal: journal}}, action, evidence
 }
 
 // The complete cleanup verifier accepts a canonical synthetic parent hash.

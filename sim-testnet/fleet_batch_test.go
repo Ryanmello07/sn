@@ -71,7 +71,7 @@ func TestCoordinatorBatchCallsRespectThePublicEndpointLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rpcClient.Close()
-	manager := &EVMTxManager{client: ethclient.NewClient(rpcClient)}
+	manager := &EvmTxManager{client: ethclient.NewClient(rpcClient)}
 	calls := make([][]byte, maximumEVMRPCBatchCalls+1)
 	for index := range calls {
 		calls[index] = []byte{byte(index)}

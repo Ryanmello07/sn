@@ -170,7 +170,7 @@ func fleetRefreshActionRange(cfg *ResolvedConfig, action Action, batch int) (int
 
 // Reads all values at one block so an epoch transition cannot mix active and
 // pending oracle generations in a single decision.
-func readFleetRefreshOracleStateAt(ctx context.Context, manager *EVMTxManager, coordinatorAddress common.Address, coordinator *stabi.STCoordinator, block uint64) (fleetRefreshOracleState, error) {
+func readFleetRefreshOracleStateAt(ctx context.Context, manager *EvmTxManager, coordinatorAddress common.Address, coordinator *stabi.STCoordinator, block uint64) (fleetRefreshOracleState, error) {
 	var state fleetRefreshOracleState
 	if coordinator == nil {
 		return state, errors.New("fleet refresh oracle reader is unavailable")
@@ -634,7 +634,7 @@ type fleetRefreshVerificationFleet struct {
 
 // Loads version counts and records from one pinned snapshot in bounded
 // JSON-RPC batches instead of two HTTP requests per member.
-func readFleetBindingVersionsAt(ctx context.Context, manager *EVMTxManager, coordinatorAddress common.Address, coordinator *stabi.STCoordinator, clientIDs [][16]byte, index uint64, block uint64) ([]fleetBindingVersionRead, error) {
+func readFleetBindingVersionsAt(ctx context.Context, manager *EvmTxManager, coordinatorAddress common.Address, coordinator *stabi.STCoordinator, clientIDs [][16]byte, index uint64, block uint64) ([]fleetBindingVersionRead, error) {
 	if coordinator == nil || len(clientIDs) == 0 {
 		return nil, errors.New("fleet binding version batch is unavailable")
 	}
@@ -666,7 +666,7 @@ func readFleetBindingVersionsAt(ctx context.Context, manager *EVMTxManager, coor
 
 // Preserves one bounded request for the targeted single-member verifier while
 // bulk preparation passes every member to the slice API above.
-func readFleetBindingVersionAt(ctx context.Context, manager *EVMTxManager, coordinatorAddress common.Address, coordinator *stabi.STCoordinator, clientID [16]byte, index uint64, block uint64) (*big.Int, stabi.STCoordinatorBindingRecord, error) {
+func readFleetBindingVersionAt(ctx context.Context, manager *EvmTxManager, coordinatorAddress common.Address, coordinator *stabi.STCoordinator, clientID [16]byte, index uint64, block uint64) (*big.Int, stabi.STCoordinatorBindingRecord, error) {
 	reads, err := readFleetBindingVersionsAt(ctx, manager, coordinatorAddress, coordinator, [][16]byte{clientID}, index, block)
 	if err != nil {
 		return nil, stabi.STCoordinatorBindingRecord{}, err
@@ -677,7 +677,7 @@ func readFleetBindingVersionAt(ctx context.Context, manager *EVMTxManager, coord
 // Reads every mirror, predecessor, successor and fleet cardinality through
 // bounded batches. One production refresh is 140 calls and three HTTP requests
 // instead of one hundred independently rate-gated requests.
-func verifyFleetRefreshStateAt(ctx context.Context, manager *EVMTxManager, coordinatorAddress common.Address, coordinator *stabi.STCoordinator, fleets []fleetRefreshVerificationFleet, block uint64) (int, error) {
+func verifyFleetRefreshStateAt(ctx context.Context, manager *EvmTxManager, coordinatorAddress common.Address, coordinator *stabi.STCoordinator, fleets []fleetRefreshVerificationFleet, block uint64) (int, error) {
 	if coordinator == nil || len(fleets) == 0 || block == 0 {
 		return 0, errors.New("fleet refresh state batch is unavailable")
 	}

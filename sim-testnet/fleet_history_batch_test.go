@@ -340,7 +340,7 @@ func TestCarriedFleetHistoryBatchCachesOnlyExactVerifiedAction(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rpcClient.Close()
-	manager := &EVMTxManager{client: ethclient.NewClient(rpcClient)}
+	manager := &EvmTxManager{client: ethclient.NewClient(rpcClient)}
 	currentPlanHash := "0x" + strings.Repeat("88", 32)
 	plan := &SetupPlan{
 		PlanHash: currentPlanHash, PriorPlanHashes: []string{supersession.sourceEntry.PlanHash},

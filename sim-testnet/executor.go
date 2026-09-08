@@ -43,10 +43,10 @@ type Executor struct {
 	substrate               *SubstrateManager
 	independentSubstrate    *SubstrateManager
 	independentEVM          *ethclient.Client
-	deployer, owner         *EVMTxManager
-	guardian                *EVMTxManager
-	oracle, keeper          *EVMTxManager
-	deposits                map[int]*EVMTxManager
+	deployer, owner         *EvmTxManager
+	guardian                *EvmTxManager
+	oracle, keeper          *EvmTxManager
+	deposits                map[int]*EvmTxManager
 	payloads                *DeploymentPayloads
 	releaseGate             *ReleaseCampaignGate
 	carriedVerificationKeys map[string]bool
@@ -86,25 +86,25 @@ func newExecutorWithTransport(ctx context.Context, authorizedCfg, runtimeCfg *Re
 	if err != nil {
 		return nil, err
 	}
-	d, err := DialEVMTxManager(ctx, runtimeCfg, stateDir, j, roles, "deployer")
+	d, err := DialEvmTxManager(ctx, runtimeCfg, stateDir, j, roles, "deployer")
 	if err != nil {
 		s.Close()
 		return nil, err
 	}
-	o, err := DialEVMTxManager(ctx, runtimeCfg, stateDir, j, roles, "testnet-owner")
+	o, err := DialEvmTxManager(ctx, runtimeCfg, stateDir, j, roles, "testnet-owner")
 	if err != nil {
 		s.Close()
 		d.Close()
 		return nil, err
 	}
-	guardian, err := DialEVMTxManager(ctx, runtimeCfg, stateDir, j, roles, "guardian")
+	guardian, err := DialEvmTxManager(ctx, runtimeCfg, stateDir, j, roles, "guardian")
 	if err != nil {
 		s.Close()
 		d.Close()
 		o.Close()
 		return nil, err
 	}
-	oracle, err := DialEVMTxManager(ctx, runtimeCfg, stateDir, j, roles, "commitment-oracle")
+	oracle, err := DialEvmTxManager(ctx, runtimeCfg, stateDir, j, roles, "commitment-oracle")
 	if err != nil {
 		s.Close()
 		d.Close()
@@ -112,7 +112,7 @@ func newExecutorWithTransport(ctx context.Context, authorizedCfg, runtimeCfg *Re
 		guardian.Close()
 		return nil, err
 	}
-	keeper, err := DialEVMTxManager(ctx, runtimeCfg, stateDir, j, roles, "keeper")
+	keeper, err := DialEvmTxManager(ctx, runtimeCfg, stateDir, j, roles, "keeper")
 	if err != nil {
 		s.Close()
 		d.Close()
@@ -121,9 +121,9 @@ func newExecutorWithTransport(ctx context.Context, authorizedCfg, runtimeCfg *Re
 		oracle.Close()
 		return nil, err
 	}
-	deposits := map[int]*EVMTxManager{}
+	deposits := map[int]*EvmTxManager{}
 	for i := 1; i <= runtimeCfg.Config.Topology.Operators; i++ {
-		manager, dialErr := DialEVMTxManager(ctx, runtimeCfg, stateDir, j, roles, fmt.Sprintf("operator-%d-deposit", i))
+		manager, dialErr := DialEvmTxManager(ctx, runtimeCfg, stateDir, j, roles, fmt.Sprintf("operator-%d-deposit", i))
 		if dialErr != nil {
 			for _, opened := range deposits {
 				opened.Close()

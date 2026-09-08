@@ -131,7 +131,7 @@ func TestGovernanceSnapshotPinsEveryReadToOneCanonicalHead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manager := &EVMTxManager{client: ethclient.NewClient(rpcClient)}
+	manager := &EvmTxManager{client: ethclient.NewClient(rpcClient)}
 	defer manager.Close()
 	executor := &Executor{owner: manager, payloads: &DeploymentPayloads{Manifest: ContractDeployment{
 		CoordinatorProxy: proxy, SettlementVault: vaultAddress, ReserveSink: reserveAddress,

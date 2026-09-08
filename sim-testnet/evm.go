@@ -1068,7 +1068,7 @@ func max64(a, b uint64) uint64 {
 	return b
 }
 
-type EVMTxManager struct {
+type EvmTxManager struct {
 	client       *ethclient.Client
 	chainID      *big.Int
 	deploymentID string
@@ -1077,7 +1077,7 @@ type EVMTxManager struct {
 	key          *ecdsa.PrivateKey
 }
 
-func DialEVMTxManager(ctx context.Context, cfg *ResolvedConfig, stateDir string, j *Journal, roles *RoleSecrets, roleLabel string) (*EVMTxManager, error) {
+func DialEvmTxManager(ctx context.Context, cfg *ResolvedConfig, stateDir string, j *Journal, roles *RoleSecrets, roleLabel string) (*EvmTxManager, error) {
 	client, err := dialConfiguredEVMClient(ctx, cfg, cfg.OperationalEVM)
 	if err != nil {
 		return nil, err
@@ -1101,10 +1101,10 @@ func DialEVMTxManager(ctx context.Context, cfg *ResolvedConfig, stateDir string,
 		client.Close()
 		return nil, err
 	}
-	return &EVMTxManager{client: client, chainID: id, deploymentID: cfg.Config.Deployment.DeploymentID, stateDir: stateDir, journal: j, key: key}, nil
+	return &EvmTxManager{client: client, chainID: id, deploymentID: cfg.Config.Deployment.DeploymentID, stateDir: stateDir, journal: j, key: key}, nil
 }
-func (m *EVMTxManager) Close() { m.client.Close() }
-func (m *EVMTxManager) PendingNonce(ctx context.Context) (uint64, error) {
+func (m *EvmTxManager) Close() { m.client.Close() }
+func (m *EvmTxManager) PendingNonce(ctx context.Context) (uint64, error) {
 	return m.client.PendingNonceAt(ctx, crypto.PubkeyToAddress(m.key.PublicKey))
 }
 
@@ -1204,7 +1204,7 @@ func validateApprovedEVMTransactionFields(action Action, signer common.Address, 
 	return nil
 }
 
-func (m *EVMTxManager) Send(ctx context.Context, planHash string, a Action, to *common.Address, value *big.Int, data []byte) (*types.Receipt, error) {
+func (m *EvmTxManager) Send(ctx context.Context, planHash string, a Action, to *common.Address, value *big.Int, data []byte) (*types.Receipt, error) {
 	if prior, ok := m.journal.LatestTransaction(planHash, a.ID, a.IntentHash); ok {
 		rawPath := filepath.Join(m.stateDir, "transactions", stringsTrim0x(prior.TransactionHash)+".rlp")
 		raw, err := os.ReadFile(rawPath)
@@ -1299,7 +1299,7 @@ func knownEVMTxError(err error) bool {
 		strings.Contains(message, "nonce too low") || strings.Contains(message, "replacement transaction underpriced")
 }
 
-func (m *EVMTxManager) waitExactTransaction(ctx context.Context, planHash string, a Action, signed *types.Transaction) (*types.Receipt, error) {
+func (m *EvmTxManager) waitExactTransaction(ctx context.Context, planHash string, a Action, signed *types.Transaction) (*types.Receipt, error) {
 	if signed == nil {
 		return nil, errors.New("nil persisted EVM transaction")
 	}
@@ -1339,7 +1339,7 @@ func (m *EVMTxManager) waitExactTransaction(ctx context.Context, planHash string
 	}
 }
 
-func (m *EVMTxManager) finalizeReceipt(ctx context.Context, planHash string, a Action, r *types.Receipt) (*types.Receipt, error) {
+func (m *EvmTxManager) finalizeReceipt(ctx context.Context, planHash string, a Action, r *types.Receipt) (*types.Receipt, error) {
 	if err := m.journal.Append(JournalEntry{DeploymentID: m.deploymentID, PlanHash: planHash, ActionID: a.ID, IntentHash: a.IntentHash, Stage: StageIncluded, TransactionHash: r.TxHash.Hex(), BlockNumber: r.BlockNumber.Uint64(), BlockHash: r.BlockHash.Hex()}); err != nil {
 		return r, err
 	}

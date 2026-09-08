@@ -190,7 +190,7 @@ func deploymentBoundaryTestEvidence() (ContractDeployment, *SetupPlan, []Journal
 func undeployedBoundaryTestExecutor(t *testing.T, cfg *ResolvedConfig, stateDir string, plan *SetupPlan, roles *RoleSecrets) *Executor {
 	t.Helper()
 	reader := &deploymentBoundaryFixture{finalized: testEVMHead(200, 0x20), blockHeads: map[uint64]ChainHead{}, receipts: map[common.Hash]*types.Receipt{}, codes: map[common.Address][]byte{}}
-	return &Executor{cfg: cfg, stateDir: stateDir, plan: plan, roles: roles, journal: &Journal{}, deployer: &EVMTxManager{client: reader.client(t)}}
+	return &Executor{cfg: cfg, stateDir: stateDir, plan: plan, roles: roles, journal: &Journal{}, deployer: &EvmTxManager{client: reader.client(t)}}
 }
 
 // The first coordinator event never moves when later CREATEs complete the
@@ -477,7 +477,7 @@ func deploymentBoundaryTestExecution(t *testing.T) (*Executor, *deploymentBounda
 	if err := journal.Append(entries[0]); err != nil {
 		t.Fatal(err)
 	}
-	executor := &Executor{cfg: cfg, stateDir: stateDir, plan: plan, roles: roles, journal: journal, deployer: &EVMTxManager{client: reader.client(t)}}
+	executor := &Executor{cfg: cfg, stateDir: stateDir, plan: plan, roles: roles, journal: journal, deployer: &EvmTxManager{client: reader.client(t)}}
 	return executor, reader
 }
 

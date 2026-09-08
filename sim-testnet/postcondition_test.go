@@ -364,7 +364,7 @@ func TestConsumedEVMFundingHistoryReplaysConvergedBalanceAfterGasSpend(t *testin
 	defer journal.Close()
 	executor := &Executor{
 		cfg: cfg, stateDir: stateDir, plan: plan, journal: journal,
-		deployer: &EVMTxManager{client: client}, independentEVM: client,
+		deployer: &EvmTxManager{client: client}, independentEVM: client,
 	}
 	observed := fundingPostconditionObservation(action, usableRao, existentialDepositRao, fixture.historicalWei)
 	independentObserved, err := cloneObservedPostState(observed)
@@ -458,7 +458,7 @@ func TestConsumedEVMFundingHistoryRejectsEveryAdjacentEvidenceGap(t *testing.T) 
 				t.Fatal(err)
 			}
 			defer client.Close()
-			executor := &Executor{cfg: cfg, plan: plan, deployer: &EVMTxManager{client: client}, independentEVM: client}
+			executor := &Executor{cfg: cfg, plan: plan, deployer: &EvmTxManager{client: client}, independentEVM: client}
 			if err := executor.verifyConsumedEVMFundingPostcondition(context.Background(), action, cloned); err == nil {
 				t.Fatal("invalid historical EVM funding evidence was accepted")
 			}
@@ -834,11 +834,11 @@ func TestIndependentReadExecutorRoutesEveryChainReader(t *testing.T) {
 	independentClient := new(ethclient.Client)
 	privateSubstrate := new(SubstrateManager)
 	independentSubstrate := new(SubstrateManager)
-	manager := func() *EVMTxManager { return &EVMTxManager{client: privateClient} }
+	manager := func() *EvmTxManager { return &EvmTxManager{client: privateClient} }
 	e := &Executor{
 		substrate: privateSubstrate, independentSubstrate: independentSubstrate,
 		independentEVM: independentClient, deployer: manager(), owner: manager(), guardian: manager(),
-		oracle: manager(), keeper: manager(), deposits: map[int]*EVMTxManager{1: manager(), 2: manager()},
+		oracle: manager(), keeper: manager(), deposits: map[int]*EvmTxManager{1: manager(), 2: manager()},
 	}
 	observed := e.independentReadExecutor()
 	if observed == e || observed.substrate != independentSubstrate || observed.deployer.client != independentClient || observed.owner.client != independentClient || observed.guardian.client != independentClient || observed.oracle.client != independentClient || observed.keeper.client != independentClient {

@@ -567,7 +567,7 @@ func TestFleetGenerationOneHistoricalPostStateUsesRecordedEVMBlock(t *testing.T)
 		t.Fatal(err)
 	}
 	defer rpcClient.Close()
-	manager := &EVMTxManager{client: ethclient.NewClient(rpcClient)}
+	manager := &EvmTxManager{client: ethclient.NewClient(rpcClient)}
 	executor := &Executor{
 		cfg: cfg, stateDir: stateDir, roles: roles,
 		payloads: &DeploymentPayloads{Manifest: ContractDeployment{CoordinatorProxy: coordinatorAddress}},

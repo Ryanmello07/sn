@@ -95,7 +95,7 @@ func (e *Executor) writeGovernanceEvidence(value *GovernanceDrillEvidence) error
 	return writePublicJSON(e.governanceEvidencePath(), value)
 }
 
-func governanceRawCallAt(ctx context.Context, manager *EVMTxManager, from, address common.Address, data []byte, head ChainHead) ([]byte, error) {
+func governanceRawCallAt(ctx context.Context, manager *EvmTxManager, from, address common.Address, data []byte, head ChainHead) ([]byte, error) {
 	if manager == nil || manager.client == nil {
 		return nil, errors.New("governance EVM client is unavailable")
 	}
@@ -111,7 +111,7 @@ func governanceRawCallAt(ctx context.Context, manager *EVMTxManager, from, addre
 	return raw, err
 }
 
-func governanceCallAt[T any](ctx context.Context, manager *EVMTxManager, address common.Address, data []byte, unpack func([]byte) (T, error), head ChainHead) (T, error) {
+func governanceCallAt[T any](ctx context.Context, manager *EvmTxManager, address common.Address, data []byte, unpack func([]byte) (T, error), head ChainHead) (T, error) {
 	var zero T
 	raw, err := governanceRawCallAt(ctx, manager, common.Address{}, address, data, head)
 	if err != nil {
@@ -120,7 +120,7 @@ func governanceCallAt[T any](ctx context.Context, manager *EVMTxManager, address
 	return unpack(raw)
 }
 
-func implementationAt(ctx context.Context, manager *EVMTxManager, proxy common.Address, head ChainHead) (common.Address, error) {
+func implementationAt(ctx context.Context, manager *EvmTxManager, proxy common.Address, head ChainHead) (common.Address, error) {
 	if manager == nil || manager.client == nil {
 		return common.Address{}, errors.New("governance EVM client is unavailable")
 	}
@@ -138,7 +138,7 @@ func implementationAt(ctx context.Context, manager *EVMTxManager, proxy common.A
 	return common.BytesToAddress(raw[12:]), nil
 }
 
-func codeAtCanonicalHead(ctx context.Context, manager *EVMTxManager, address common.Address, head ChainHead) ([]byte, error) {
+func codeAtCanonicalHead(ctx context.Context, manager *EvmTxManager, address common.Address, head ChainHead) ([]byte, error) {
 	if manager == nil || manager.client == nil {
 		return nil, errors.New("governance EVM client is unavailable")
 	}

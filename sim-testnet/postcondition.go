@@ -262,7 +262,7 @@ func verifyFinalizedEVMReceipt(ctx context.Context, client *ethclient.Client, fi
 	return receipt, nil
 }
 
-func cloneReadManager(manager *EVMTxManager, client *ethclient.Client) *EVMTxManager {
+func cloneReadManager(manager *EvmTxManager, client *ethclient.Client) *EvmTxManager {
 	if manager == nil {
 		return nil
 	}
@@ -279,7 +279,7 @@ func (e *Executor) independentReadExecutor() *Executor {
 	cloned.guardian = cloneReadManager(e.guardian, e.independentEVM)
 	cloned.oracle = cloneReadManager(e.oracle, e.independentEVM)
 	cloned.keeper = cloneReadManager(e.keeper, e.independentEVM)
-	cloned.deposits = make(map[int]*EVMTxManager, len(e.deposits))
+	cloned.deposits = make(map[int]*EvmTxManager, len(e.deposits))
 	for id, manager := range e.deposits {
 		cloned.deposits[id] = cloneReadManager(manager, e.independentEVM)
 	}

@@ -141,14 +141,14 @@ func newFleetRefreshRPCServer(t *testing.T, outputs map[string]string) (*httptes
 
 // Dials one fixture server with the same client stack used by production
 // coordinator reads.
-func fleetRefreshTestManager(t *testing.T, server *httptest.Server) *EVMTxManager {
+func fleetRefreshTestManager(t *testing.T, server *httptest.Server) *EvmTxManager {
 	t.Helper()
 	rpcClient, err := rpc.DialHTTP(server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(rpcClient.Close)
-	return &EVMTxManager{client: ethclient.NewClient(rpcClient)}
+	return &EvmTxManager{client: ethclient.NewClient(rpcClient)}
 }
 
 // Builds ten four-member fleets, matching one production refresh action, and
