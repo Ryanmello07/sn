@@ -991,6 +991,9 @@ components:
           maxLength: 1024
         retriable:
           type: boolean
+        readiness:
+          description: Authenticated per-dependency detail for operator readiness failures.
+          $ref: "#/components/schemas/CompetitionReadinessResult"
 
     Sha256:
       type: string
