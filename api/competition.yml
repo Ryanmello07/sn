@@ -176,6 +176,31 @@ paths:
         "503":
           $ref: "#/components/responses/CompetitionUnavailable"
 
+  /competition/close-staging-round:
+    post:
+      operationId: CompetitionCloseStagingRound
+      tags: [Competition operator]
+      summary: Close current staging admission and preserve its FIFO
+      description: |
+        Atomically stops accepting submissions for the current open staging
+        epoch without canceling accepted jobs. The evaluator continues in FIFO
+        order until every accepted job is terminal, then finalizes and reveals
+        the staging epoch. Repeating the operation while grading or after
+        finalization is idempotent.
+      responses:
+        "200":
+          description: Staging admission is closed or was already closed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompetitionRoundResult"
+        "401":
+          $ref: "#/components/responses/CompetitionUnauthorized"
+        "409":
+          $ref: "#/components/responses/CompetitionConflict"
+        "503":
+          $ref: "#/components/responses/CompetitionUnavailable"
+
   /competition/round/{roundId}/providers.yml:
     get:
       operationId: CompetitionGetRoundWorkload
@@ -675,6 +700,12 @@ components:
         created_at:
           type: string
           format: date-time
+        admission_closed_at:
+          description: Present when an operator ended staging admission early without changing the committed schedule. Accepted FIFO work continues through grading.
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
         finalized_at:
           oneOf:
             - type: string
