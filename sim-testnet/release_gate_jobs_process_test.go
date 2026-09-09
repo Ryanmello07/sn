@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -64,8 +65,83 @@ func TestReleaseGateJobsProcessPreservesLiveIdentity(t *testing.T) {
 [[ "$RELEASE_GATE_PROCESS_GROUP" =~ ^[1-9][0-9]*$ ]]
 [[ "$RELEASE_GATE_PROCESS_SESSION" =~ ^[1-9][0-9]*$ ]]
 [[ "$RELEASE_GATE_PROCESS_START" =~ ^[1-9][0-9]*$ ]]
+fixture_identity="$RELEASE_GATE_PROCESS_GROUP:$RELEASE_GATE_PROCESS_SESSION:$RELEASE_GATE_PROCESS_START"
+for fixture_separator in "" ":" ","; do
+  IFS="$fixture_separator" release_gate_process "$BASHPID"
+  [[ "$RELEASE_GATE_PROCESS_GROUP:$RELEASE_GATE_PROCESS_SESSION:$RELEASE_GATE_PROCESS_START" == "$fixture_identity" ]]
+done
 printf 'live\n'`)
 	if status != 0 || stdout != "live\n" || stderr != "" {
 		t.Fatalf("live identity: status=%d stdout=%q stderr=%q", status, stdout, stderr)
+	}
+}
+
+// Deliver a real signal synchronously inside the actual timed-read invocation.
+// Its temporary empty separator is still active when the trap probes identity.
+func TestReleaseGateJobsProcessSignalTrapPreservesIdentity(t *testing.T) {
+	t.Parallel()
+	stdout, stderr, status := releaseGateJobsProcessProbe(t, `
+release_gate_process "$BASHPID"
+fixture_identity="$RELEASE_GATE_PROCESS_GROUP:$RELEASE_GATE_PROCESS_SESSION:$RELEASE_GATE_PROCESS_START"
+trap '
+  [[ -z "$IFS" ]] || exit 92
+  release_gate_process "$BASHPID"
+  [[ "$RELEASE_GATE_PROCESS_GROUP:$RELEASE_GATE_PROCESS_SESSION:$RELEASE_GATE_PROCESS_START" == "$fixture_identity" ]] || exit 93
+  printf "trap identity\n"
+  exit 143
+' TERM
+read() {
+  local fixture_argument
+  for fixture_argument in "$@"; do
+    if [[ "$fixture_argument" == -t ]]; then
+      [[ -z "$IFS" ]] || exit 94
+      kill -TERM "$BASHPID"
+      exit 95
+    fi
+  done
+  builtin read "$@"
+}
+release_gate_completion_fd=0
+release_gate_wait_one
+exit 96
+`)
+	if status != 143 || stdout != "trap identity\n" || stderr != "" {
+		t.Fatalf("signal identity: status=%d stdout=%q stderr=%q", status, stdout, stderr)
+	}
+}
+
+// Replace only bytes returned after the real proc read. Short or malformed
+// records must refuse without a nounset abort or partially published identity.
+func TestReleaseGateJobsProcessRejectsMalformedIdentityRecords(t *testing.T) {
+	t.Parallel()
+	for _, record := range []string{
+		"",
+		"123 (fixture) S 1",
+		"123 (fixture) invalid 1 2 3 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 20",
+		"123 (fixture) S 1 group 3 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 20",
+		"123 (fixture) S 1 2 session 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 20",
+		"123 (fixture) S 1 2 3 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 start",
+	} {
+		stdout, stderr, status := releaseGateJobsProcessProbe(t, `
+fixture_record=`+strconv.Quote(record)+`
+read() {
+  if [[ "$#" == 2 && "$1" == -r && "$2" == line ]]; then
+    builtin read "$@" || return
+    printf -v line '%s' "$fixture_record"
+    return 0
+  fi
+  builtin read "$@"
+}
+RELEASE_GATE_PROCESS_STATE=unchanged
+RELEASE_GATE_PROCESS_GROUP=unchanged
+RELEASE_GATE_PROCESS_SESSION=unchanged
+RELEASE_GATE_PROCESS_START=unchanged
+if release_gate_process "$BASHPID"; then exit 92; fi
+[[ "$RELEASE_GATE_PROCESS_STATE:$RELEASE_GATE_PROCESS_GROUP:$RELEASE_GATE_PROCESS_SESSION:$RELEASE_GATE_PROCESS_START" == unchanged:unchanged:unchanged:unchanged ]]
+printf 'refused\n'
+`)
+		if status != 0 || stdout != "refused\n" || stderr != "" {
+			t.Fatalf("malformed identity %q: status=%d stdout=%q stderr=%q", record, status, stdout, stderr)
+		}
 	}
 }

@@ -1704,7 +1704,7 @@ func coordinatorMigrationActionProgress(prior *SetupPlan, entries []JournalEntry
 // boundaries of the one-off probe replacement. The immutable six-contract
 // deployment remains the retained identity while the additive probe, upgrade,
 // and batcher occupy an exact contiguous nonce suffix.
-func observePersistedPrecompileProbeReplacement(ctx context.Context, cfg *ResolvedConfig, prior *SetupPlan, current *SetupFacts, entries []JournalEntry, roles *RoleSecrets, existing ContractDeployment, built *DeploymentPayloads) (*coordinatorUpgradeMigration, error) {
+func observePersistedPrecompileProbeReplacement(ctx context.Context, cfg *ResolvedConfig, stateDir string, prior *SetupPlan, current *SetupFacts, entries []JournalEntry, roles *RoleSecrets, existing ContractDeployment, built *DeploymentPayloads) (*coordinatorUpgradeMigration, error) {
 	if cfg == nil || prior == nil || current == nil || roles == nil || built == nil || prior.CoordinatorUpgradeBaseline.Schema != "urnetwork-coordinator-upgrade-baseline-v4" {
 		return nil, errors.New("persisted replacement precompile probe context is unavailable")
 	}
@@ -1712,8 +1712,41 @@ func observePersistedPrecompileProbeReplacement(ctx context.Context, cfg *Resolv
 	if !contractDeploymentAddressesEqual(existing, prior.Deployment) || !contractDeploymentRuntimeHashesCompatible(existing, prior.Deployment) {
 		return nil, errors.New("persisted replacement changed the immutable deployment identity")
 	}
-	if err := validateCoordinatorUpgradeBaselineRelease(baseline, prior.Deployment, built.Manifest, built.CoordinatorUpgrade); err != nil {
-		return nil, err
+	refreshApproval := false
+	if releaseErr := validateCoordinatorUpgradeBaselineRelease(baseline, prior.Deployment, built.Manifest, built.CoordinatorUpgrade); releaseErr != nil {
+		if current.DeployerNonce != baseline.ReplacementPrecompileProbeNonce {
+			return nil, releaseErr
+		}
+		// An untouched replacement may acquire a new release approval, but its
+		// recorded predecessor must authenticate before any proof is refreshed.
+		stored, err := readValidatorEvidenceHistoricalPlan(stateDir, prior.PlanHash)
+		if err != nil {
+			return nil, fmt.Errorf("refresh unused replacement release deployment approval: %w", err)
+		}
+		storedHash, storedErr := canonicalHashHex(stored)
+		priorHash, priorErr := canonicalHashHex(prior)
+		if storedErr != nil || priorErr != nil || storedHash != priorHash {
+			return nil, errors.New("unused replacement release deployment differs from its authenticated prior approval")
+		}
+		if err := validateCoordinatorUpgradeBaseline(baseline, prior.Deployment, prior.CoordinatorUpgrade); err != nil {
+			return nil, err
+		}
+		if err := validateUnusedPrecompileProbeGeneration(stateDir, prior, entries); err != nil {
+			return nil, err
+		}
+		baseline.ReleaseDeploymentHash, err = contractDeploymentIdentityHash(built.Manifest)
+		if err != nil {
+			return nil, err
+		}
+		baseline.PrecompileProbeExecutableHash, err = normalizedSolidityExecutableHash(built.ExpectedRuntime[built.PrecompileProbeAddress], TestnetPrecompileProbeArtifact)
+		if err != nil {
+			return nil, err
+		}
+		baseline.ReplacementPrecompileProbeHash = crypto.Keccak256Hash(built.ExpectedRuntime[built.PrecompileProbeAddress]).Hex()
+		if err := validateCoordinatorUpgradeBaselineRelease(baseline, prior.Deployment, built.Manifest, built.CoordinatorUpgrade); err != nil {
+			return nil, err
+		}
+		refreshApproval = true
 	}
 	if err := validateCoordinatorUpgradePayloadBaseline(baseline, prior.Deployment, built); err != nil {
 		return nil, err
@@ -1825,7 +1858,15 @@ func observePersistedPrecompileProbeReplacement(ctx context.Context, cfg *Resolv
 	if err != nil || activeImplementation != wantImplementation || len(activeCode) == 0 || !strings.EqualFold(activeHash, wantRuntimeHash) {
 		return nil, stateMismatchError(err, "persisted replacement active coordinator=%s/%s want=%s/%s", activeImplementation, activeHash, wantImplementation, wantRuntimeHash)
 	}
-	return &coordinatorUpgradeMigration{Deployment: prior.Deployment, Baseline: baseline, Upgrade: prior.CoordinatorUpgrade}, nil
+	upgrade := prior.CoordinatorUpgrade
+	if refreshApproval {
+		// Every CREATE and activation above is still unconsumed at this head.
+		// Only the newly rendered plan can authorize the current release bytes.
+		baseline.FinalizedBlock = head.Number
+		baseline.FinalizedBlockHash = head.Hash
+		upgrade = built.CoordinatorUpgrade
+	}
+	return &coordinatorUpgradeMigration{Deployment: prior.Deployment, Baseline: baseline, Upgrade: upgrade}, nil
 }
 
 func observeRepeatedCoordinatorUpgrade(ctx context.Context, cfg *ResolvedConfig, stateDir string, prior *SetupPlan, current *SetupFacts, entries []JournalEntry, roles *RoleSecrets, built *DeploymentPayloads) (*coordinatorUpgradeMigration, error) {
@@ -2104,7 +2145,7 @@ func observeCoordinatorUpgradeMigration(ctx context.Context, cfg *ResolvedConfig
 		if err := configurePrecompileProbeNonce(built, prior.CoordinatorUpgradeBaseline.ReplacementPrecompileProbeNonce); err != nil {
 			return nil, fmt.Errorf("bind prior replacement probe: %w", err)
 		}
-		return observePersistedPrecompileProbeReplacement(ctx, cfg, prior, current, entries, roles, *existing, built)
+		return observePersistedPrecompileProbeReplacement(ctx, cfg, stateDir, prior, current, entries, roles, *existing, built)
 	}
 	if prior.validatorEvidenceObserved != nil {
 		// Compare the current executable at the already approved address. The

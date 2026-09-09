@@ -10,7 +10,12 @@ release_gate_process() {
   # A normally reaped child has no stat file. Keep absence false and quiet;
   # callers distinguish a joined exit from an owner lost before completion.
   [[ "$1" =~ ^[1-9][0-9]*$ ]] && IFS= read -r line 2>/dev/null < "/proc/$1/stat" || return 1
-  read -r -a fields <<< "${line##*) }"
+  # Signal cleanup can inherit the empty IFS of a timed completion read.
+  # Split proc fields explicitly and refuse incomplete identity before indexing.
+  IFS=' ' read -r -a fields <<< "${line##*) }" || return 1
+  [[ -v fields[19] ]] || return 1
+  [[ "${fields[0]}" =~ ^[A-Za-z]$ && "${fields[2]}" =~ ^[0-9]+$ &&
+     "${fields[3]}" =~ ^[0-9]+$ && "${fields[19]}" =~ ^[0-9]+$ ]] || return 1
   RELEASE_GATE_PROCESS_STATE="${fields[0]}"
   RELEASE_GATE_PROCESS_GROUP="${fields[2]}"
   RELEASE_GATE_PROCESS_SESSION="${fields[3]}"
