@@ -4,7 +4,51 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
-Current test frontier (2026-09-09 14:04 UTC):
+Current test frontier (2026-09-09 14:23 UTC):
+
+The lock/document checkpoint d97216ff is pushed, but both strict source-freeze
+owners refused BEFORE gate bodies/private services because server module
+metadata was untidy. The independent audit covered all fifteen live modules:
+only server and SN need changes; the other thirteen are tidy. Retain both
+original preflight failures and the router audit-wrapper refusals separately.
+They are not on-chain failures or permission to skip the preflight.
+
+StrictTidy3 is reviewed and integrated in both primary/candidate trees, changing
+only server/go.mod, server/go.sum and sn/go.sum: direct classification of the
+existing RPC dependency, its already-selected npipe requirement and missing
+checksums. No version, replace, Go source or test deadline changes. Frozen donor:
+temp/sn-server-strict-tidy-v1-astra/HANDOFF.md. Services' isolated before/after
+qualification is at temp/sn-server-tidy-identity-v1-gAh1RC: both corrected tidy
+commands pass and module files remain unchanged. The completed comparison proves
+all587 semantic module rows,892 compiled SN test-package rows,1273 selected local
+compiled/embed source hashes and compiler/platform settings are identical after
+workspace-prefix normalization. Root accepts carrying the immutable existing
+qualification forward with this explicit narrow compiled-closure evidence, not
+relabeling it or claiming the new freeze manifest is identical. Fresh final
+gates remain mandatory. The existing strict immutable tidy command supplies
+the version-independent old-refusal/new-zero-diff regression check.
+
+Fresh read-only doctor on the rejected preflight candidate d97216ff reports
+ready=true,62 passes out of64 checks, with two nonblocking shared-public-RPC/
+same-physical-peer advisories. Generated2026-09-09T14:14:56Z; capture:
+temp/sn-final-cli-doctor-v1-nElTwv/stdout. Root independently verified these
+counts, correcting an earlier64-pass message. All command/source/binary fences
+pass. This is independent infrastructure readiness, not final source admission.
+
+Next: checkpoint/push the reviewed module delta; build a clean new CLI, review
+and apply its new lock, checkpoint/push that lock and rebuild for its final
+revision. Launch both strict gates under fresh isolated owners immediately,
+overlapping unchanged-source full-census confirmations. Services' R1 remains
+live on its immutable45m snapshot and must not be restarted for bookkeeping
+alone. Main owns producer12CPU, Services aggregate8CPU plus metadata2CPU; charge
+measured31.24GiB per concurrent full census and preserve service headroom.
+No packaging wait. Root owns explicit stop-new-writes supervision. Live RC
+requires producer PASS, EVERY repair/causal obligation closed and fresh doctor/
+matching plans; aggregate may continue alongside RC but must pass before final
+acceptance. No live RC/soak/new campaign transaction has started. Exact current
+capture paths and original failures are in FINALIZE-ACTIVE.md.
+
+Predecessor test frontier (2026-09-09 14:04 UTC):
 
 All four implementation checkpoints are now committed, pulled and pushed:
 SN91572df, server27e5ceb7, Connect289bdbd, SDK6970c5a. The fresh clean-source

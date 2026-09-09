@@ -1,6 +1,6 @@
 # Release 1.0 active work index
 
-Updated 2026-09-09 14:04 UTC. Read this index first; use
+Updated 2026-09-09 14:23 UTC. Read this index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
@@ -25,7 +25,57 @@ independently replayable on-chain evidence in `FINAL.md`.
 
 ## Current pre-soak frontier
 
-Latest verified delta at 2026-09-09 14:04 UTC (supersedes corresponding statuses below):
+Latest verified delta at 2026-09-09 14:23 UTC (supersedes corresponding statuses below):
+
+- The lock/document checkpoint d97216ff is committed, pulled and pushed. Its
+  fresh clean-source executable SHA256 is
+  526f78c9dec66fc91e373215003e657b2f45e2c2352fba16856ab597f4d80889,
+  at temp/sn-final-revision-cli-v1-lvkf6S/sim-testnet. That revision is now a
+  rejected preflight candidate, not the final qualified release.
+- Both actual strict source-freeze owners refused before tests or private
+  services: server module metadata was not tidy. Producer source-freeze exit1
+  is retained at temp/sn-final-strict-producer-v1-ekOxhI/source-freeze;
+  aggregate exit1 is retained at temp/sn-strict-aggregate-gate-v1-uybQ4L/tmp/
+  urnetwork-release-gate.vjLxIwsY/preflights/source-freeze. No producer gate body
+  was launched. The independent fifteen-module audit found only server and SN
+  need corrections; all other thirteen live modules are tidy. Captures:
+  temp/sn-final-module-tidy-audit-v1-0ZDUvA and its router-only successor
+  temp/sn-final-module-tidy-router-v3-jZHTJb. Router legitimately has no go.sum;
+  earlier audit-wrapper refusals ran no router product body and remain retained.
+- StrictTidy3 is reviewed and integrated in primary and candidate: only
+  server/go.mod, server/go.sum and sn/go.sum. It records the already-selected
+  RPC client as direct, its exact existing transitive npipe requirement, and
+  missing checksums. No dependency version, replacement, Go source, population
+  or deadline changes. Frozen donor: temp/sn-server-strict-tidy-v1-astra/HANDOFF.md.
+  Both isolated after-copy modules now pass GOWORK=off go mod tidy -diff with
+  unchanged before/after module bytes. Native comparison is now complete at
+  temp/sn-server-tidy-identity-v1-gAh1RC: all587 semantic module rows,892 SN
+  compiled test-package rows,1273 selected local compiled/embed source hashes
+  and platform/compiler settings compare identically. Root accepts this narrow
+  unchanged compiled-closure evidence; retain the existing immutable R1/streaks
+  under their original identities. Raw module output changes only newly
+  resolvable checksum metadata. This does not make the new freeze manifest
+  identical or waive fresh strict gates. Original failures remain; the existing
+  immutable tidy preflight is the regression oracle.
+- The fresh read-only doctor from d97216ff passes: ready=true,62 passing checks
+  out of64 total, with two nonblocking advisories for the intentionally shared
+  public RPC provider and actual same physical peer. This corrects an earlier
+  message saying64 passes. MinIO, Docker, wallet/config and runtime455 readiness
+  checks pass. Capture: temp/sn-final-cli-doctor-v1-nElTwv/stdout, generated
+  2026-09-09T14:14:56Z, command exit0 and all source/binary fences0. It makes no
+  chain writes and does not waive the new lock, release gates or repair streak.
+- FullCensus corrected R1 continues unchanged on its sealed snapshot; retain
+  closed unrelated qualifications. Root checkpoints the three-file module
+  correction while Main prepares the fresh clean CLI/lock and Services finishes
+  the identity comparison and R1/R2/R3. Then overlap strict producer3 and
+  aggregate2 jobs with metadata2CPU as already specified below. No report or
+  unrelated completed test rerun may delay a ready critical-path owner.
+- No live RC or soak has started and no new campaign transaction is claimed.
+  The urgent30-minute target does not waive producer PASS, all repaired-root
+  obligations, fresh doctor and matching plans. Final aggregate PASS, real RC,
+  three final epochs and independently replayable FINAL.md remain mandatory.
+
+Predecessor verified delta at 2026-09-09 14:04 UTC:
 
 - All implementation source is checkpointed and pushed. The fresh external
   executable at temp/sn-release-lock-cli-v1-H4zA2B/sim-testnet was built from
