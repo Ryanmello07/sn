@@ -1,13 +1,13 @@
 # Release 1.0 active work index
 
-Updated 2026-09-09 13:42 UTC. Read this index first; use
+Updated 2026-09-09 14:04 UTC. Read this index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
-Server `27e5ceb7`, Connect `289bdbd`, and SDK `6970c5a` are now checkpointed,
-pulled without upstream changes and pushed. SN remains at `5536559` with its
-reviewed successor in the working tree, awaiting the SN source checkpoint.
-These source checkpoints are not a completed release lock or qualification.
+Implementation checkpoints SN `91572df`, server `27e5ceb7`, Connect `289bdbd`,
+and SDK `6970c5a` are committed, pulled without upstream changes and pushed.
+The subsequent lock/document checkpoint is described below. Source identity
+and pending qualification must not be reported as testnet acceptance.
 The temporary candidate remains an independent qualification workspace.
 The user subsequently approved **on-chain hashes + API/MinIO proof bytes** on
 2026-09-07 UTC. Section10.1 of the complete handoff now records that decision.
@@ -25,7 +25,67 @@ independently replayable on-chain evidence in `FINAL.md`.
 
 ## Current pre-soak frontier
 
-Latest verified delta at 2026-09-09 13:42 UTC (supersedes corresponding statuses below):
+Latest verified delta at 2026-09-09 14:04 UTC (supersedes corresponding statuses below):
+
+- All implementation source is checkpointed and pushed. The fresh external
+  executable at temp/sn-release-lock-cli-v1-H4zA2B/sim-testnet was built from
+  clean SN91572dfa0db5e514664cb1c5c8c6fc4aac6aed13, with clean before/after
+  fences, matching upstream and vcs.modified=false. Its SHA256 is
+  a133a0995fcf8d884ae22ff991aa8e1442441451b9439a3d885878225dd35c55.
+- Root reviewed the entire read-only runtime455 lock proposal and each changed
+  digest family. The same executable then applied ONLY the tracked release
+  lock, with all identity/status/byte checks0. Applied SHA256 exactly equals
+  the reviewed proposal: eb9536398a4e943c0ed6a86dbf430b4c31c634728345fa7c39426ccc9f0bfebf.
+  Captures are observation/ and apply/ beneath that external executable root.
+  Commit/push this lock and these handoff records, then build a fresh executable
+  for the final commit and perform the strict twelve-repository freeze. No
+  additional production source edit is currently planned.
+- Focus41 is CLOSED:41/41 normal/race pass on V27. Its sole retained timed-out
+  root, TestFinalCaptureCapacityPriorCarrierDecodeV2KeepsTypedLimitsAndIntentSchema,
+  has three fresh sequential repaired race passes on the identical V27 binary
+  and original profile:202.35s (inside41),192.52s and181.72s. All fences pass.
+  The last two captures are v27-sim-focus41-priorcarrierdecode-race-streak{2,3}
+  under temp/sn-gate-rerun-v11-aHOWKRHL/capture-terra-v1. Do not rerun this streak.
+- FullCensusRaceBudget3's four guards pass N/R, all fences0, at
+  temp/sn-fullcensus-racebudget-qualification-Toy4tH/guards-successor1.
+  The original launcher BINARY/binary typo refused before any body; preserve it.
+  Its script-only old-command causal also matches both expected body1/literal
+  outcomes with checker0 and all source/binary/census fences0 at
+  temp/sn-fullcensus-racebudget-causal-PYeCkT/run/{normal,race}. The outer causal
+  coordinator's final missing-bracket error returned2 AFTER those joined body
+  receipts. Receipt-only adjudication is now0 at run/adjudication.exit, with
+  retained input hashes and run/adjudication.tsv; both recorded body PIDs are
+  absent and product_body_reexecuted=false. Original coordinator exit2 remains.
+- FullCensus repaired R1 is now LIVE, unprofiled, on the new immutable snapshot:
+  temp/sn-fullcensus-racebudget-qualification-Toy4tH/fullcensus-race/pass1.
+  Actual test PID1294490, GOMAXPROCS2, parallel4, inner45m, outer3000s; R binary
+  SHA25606187d93643bff7e289220736bc8824a279bc43781e99f0b9ded3376fd23d3d1.
+  Services owns its three sequential fresh confirmations. Earlier diagnostic
+  and original10m failure remain distinct and do not count toward this streak.
+- Final strict gates are prepared to overlap those repeats: Main owns producer
+  JOBS3 (12CPU), Services aggregate JOBS2 (8CPU) plus metadata2CPU, total22.
+  Both use CONCURRENT_GATES=2, RUN_SERVER_DB_TESTS=1 and private existing
+  resources. Charge the measured31.24GiB per simultaneous full census and
+  preserve memory headroom; there is no preparation CPU reservation. A passing
+  immutable source freeze is NOT YET QUALIFIED. No live write precedes producer
+  PASS, every repair repeat obligation closed, and fresh doctor/matching
+  plans. Aggregate may continue during live RC, but any failure invalidates the
+  candidate; Root owns the explicit stop-new-writes monitoring procedure.
+- A bounded ownership audit found two orphaned September7 gate containers from
+  temp/sn-integration-xOgvEe/capture-carry-config-chain-v1. All eleven recorded
+  test invocations ended, no live consumer remained, and no current cleanup
+  defect was demonstrated. Root removed ONLY those two exact-ID disposable
+  containers/data through the existing custody-checking helper (exit0), verified
+  their absence and preserved all source/captures. Deployment4 and shared/local2
+  containers remain untouched. Receipt: that capture's
+  PREDECESSOR-SERVICE-CLEANUP-20260909.md. Recreate synthetic data by rerunning
+  tests; removed temporary data is not recoverable from Docker.
+- Neither final strict gate nor live RC/soak has completed. No new campaign
+  transaction or on-chain acceptance is claimed. The remaining critical path
+  is final lock checkpoint/freeze, overlapping strict gates and metadata R3,
+  then admitted real RC and three final epochs with independently replayable FINAL.md.
+
+Predecessor verified delta at 2026-09-09 13:42 UTC:
 
 - The renewed30-minute acceleration checkpoint at12:44UTC was reached without
   a soak start; it did not waive admission. Limit work to the actual critical

@@ -4,7 +4,54 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
-Current test frontier (2026-09-09 13:42 UTC):
+Current test frontier (2026-09-09 14:04 UTC):
+
+All four implementation checkpoints are now committed, pulled and pushed:
+SN91572df, server27e5ceb7, Connect289bdbd, SDK6970c5a. The fresh clean-source
+release executable a133a0995fcf8d884ae22ff991aa8e1442441451b9439a3d885878225dd35c55
+produced the Root-reviewed lock proposal and then applied only the tracked lock.
+The applied/proposed lock SHA256 is exactly
+eb9536398a4e943c0ed6a86dbf430b4c31c634728345fa7c39426ccc9f0bfebf, with all
+source/head/binary/status checks0. Captures:
+temp/sn-release-lock-cli-v1-H4zA2B/{observation,apply}. Commit/push the lock and
+handoff record next, rebuild for that final revision and perform strict freeze.
+
+Focus41 passes normal/race and its one actual timeout root has three fresh
+sequential repaired V27 race passes:202.35s,192.52s,181.72s, all fences0.
+This streak, RegistrationPublication6, PublicFileDecode5, MetadataRows5 normal/
+causal and the earlier closed guard/Legacy/checker streaks must not be restarted
+for unrelated documentation or lock changes.
+
+FullCensusRaceBudget3's four affected guards pass N/R on the new snapshot.
+The quick old-command causal has both expected body1/literal results, checker0
+and all source/binary/census fences0. A final missing-bracket error in its outer
+coordinator returned2 after the body receipts were joined; receipt-only
+adjudication is now0, with immutable input hashes, both body PIDs absent and
+product_body_reexecuted=false. Original coordinator exit2 remains intact;
+no product body was rerun to repair it. The initial BINARY/binary
+prebody refusal is also retained distinctly. Exact captures are in the active
+index; neither is another product failure.
+
+The first corrected unprofiled full-census race confirmation is LIVE under its
+45m ceiling at temp/sn-fullcensus-racebudget-qualification-Toy4tH/fullcensus-race/pass1.
+Services owns all three sequential confirmations on identical source/binary/
+profile. After the final lock checkpoint/freeze, Main's strict producer3 jobs
+and Services' strict aggregate2 jobs may overlap those confirmations:12+8+2 CPU,
+with measured31.24GiB/full-census memory accounting and private service/cache
+ownership. Section4 distinguishes immutable source identity from qualification.
+No live write precedes producer PASS, closure of ALL repair/causal obligations,
+and fresh doctor/matching plans. Aggregate completion is mandatory for final
+acceptance but is not another pre-RC wait. Root owns explicit failure monitoring.
+
+Two old disposable gate containers from the completed September7 carry/config/
+chain capture were removed after exact-ID/label/root/consumer checks; helper
+exit0 and independent absence checks pass. Source and evidence remain, the four
+deployment and two shared/local containers were untouched, and no current code
+bug was inferred. Receipt: temp/sn-integration-xOgvEe/capture-carry-config-chain-v1/
+PREDECESSOR-SERVICE-CLEANUP-20260909.md. No source freeze, final gate PASS, new
+campaign transaction or begun soak is claimed by these prequalification results.
+
+Predecessor test frontier (2026-09-09 13:42 UTC):
 
 The renewed30-minute checkpoint at12:44UTC was reached without starting soak;
 it did not waive admission. Current exact captures, owners and acceptance obligations
