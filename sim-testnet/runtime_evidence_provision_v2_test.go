@@ -135,6 +135,7 @@ func newRuntimeEvidenceProvisionV2ConfiguredTestFixture(t *testing.T, configure 
 }
 
 func TestRuntimeEvidenceProvisionV2FixedPlanBoundsAllFourKeeperActions(t *testing.T) {
+	t.Parallel()
 	fixture := newRuntimeEvidenceProvisionV2TestFixture(t)
 	actions := map[string]Action{}
 	for _, action := range fixture.plan.Actions {
@@ -169,6 +170,7 @@ func TestRuntimeEvidenceProvisionV2FixedPlanBoundsAllFourKeeperActions(t *testin
 // The actual fixture's allowed signed header must fit the same typed public
 // metadata reader; one extra byte is refused by unchanged production admission.
 func TestRuntimeEvidenceProvisionV2HeaderCapacityMatchesPublicReader(t *testing.T) {
+	t.Parallel()
 	fixture := newRuntimeEvidenceProvisionV2TestFixture(t)
 	for _, configured := range fixture.cfg.Config.ValidatorEvidenceV2 {
 		bounds := configured.Evidence.Bounds
@@ -187,6 +189,7 @@ func TestRuntimeEvidenceProvisionV2HeaderCapacityMatchesPublicReader(t *testing.
 }
 
 func TestRuntimeEvidenceProvisionV2RetainsActualFilesAndResolvesSameTemplate(t *testing.T) {
+	t.Parallel()
 	fixture := newRuntimeEvidenceProvisionV2TestFixture(t)
 	executor := &Executor{cfg: fixture.cfg, plan: fixture.plan, roles: fixture.roles, stateDir: fixture.stateDir}
 	if err := executor.retainRuntimeEvidenceInputsV2(t.Context(), fixture.prepared, fixture.preparedBytes, fixture.completed); err != nil {
@@ -230,6 +233,7 @@ func TestRuntimeEvidenceProvisionV2RetainsActualFilesAndResolvesSameTemplate(t *
 }
 
 func TestRuntimeEvidenceProvisionV2InterruptedLastSourceResumesExactConsents(t *testing.T) {
+	t.Parallel()
 	fixture := newRuntimeEvidenceProvisionV2TestFixture(t)
 	last, _, _ := runtimeEvidenceV2Paths(fixture.stateDir, 2, 2)
 	if err := os.MkdirAll(filepath.Dir(last[4]), 0o700); err != nil {
@@ -266,6 +270,7 @@ func TestRuntimeEvidenceProvisionV2InterruptedLastSourceResumesExactConsents(t *
 }
 
 func TestRuntimeEvidenceProvisionV2ChangedInputCannotBeRehashedIntoAuthority(t *testing.T) {
+	t.Parallel()
 	fixture := newRuntimeEvidenceProvisionV2TestFixture(t)
 	executor := &Executor{cfg: fixture.cfg, plan: fixture.plan, roles: fixture.roles, stateDir: fixture.stateDir}
 	if err := executor.retainRuntimeEvidenceInputsV2(t.Context(), fixture.prepared, fixture.preparedBytes, fixture.completed); err != nil {
@@ -281,6 +286,7 @@ func TestRuntimeEvidenceProvisionV2ChangedInputCannotBeRehashedIntoAuthority(t *
 }
 
 func TestRuntimeEvidenceProvisionV2SignedForeignSourceIsRefusedBeforeFiles(t *testing.T) {
+	t.Parallel()
 	fixture := newRuntimeEvidenceProvisionV2TestFixture(t)
 	changed := *fixture.prepared
 	changed.Members = slices.Clone(changed.Members)
@@ -294,6 +300,7 @@ func TestRuntimeEvidenceProvisionV2SignedForeignSourceIsRefusedBeforeFiles(t *te
 }
 
 func TestRuntimeEvidenceProvisionV2NoImplicitBudgetOrFabricatedReferences(t *testing.T) {
+	t.Parallel()
 	fixture := newRuntimeEvidenceProvisionV2TestFixture(t)
 	fixture.cfg.Config.ValidatorEvidenceActivationGasUnits = 0
 	if err := validateRuntimeEvidenceProvisionTemplateV2(fixture.cfg.Config); err == nil {
@@ -307,6 +314,7 @@ func TestRuntimeEvidenceProvisionV2NoImplicitBudgetOrFabricatedReferences(t *tes
 }
 
 func TestRuntimeEvidenceProvisionV2FreshSetupPreservesExistingDiskHistory(t *testing.T) {
+	t.Parallel()
 	fixture := newRuntimeEvidenceProvisionV2TestFixture(t)
 	path := filepath.Join(fixture.stateDir, "runtime", "validator-2", "state", "operators", "no-2", "attempt-ledger.records")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {

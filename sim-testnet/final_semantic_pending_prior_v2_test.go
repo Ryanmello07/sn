@@ -200,6 +200,7 @@ func newFinalPendingPriorV2TestFixture(t *testing.T) *finalPendingPriorV2TestFix
 // The exact producer formerly blocked on absent semantic output. It now closes
 // original authority and nothing in this test can satisfy the semantic builder.
 func TestFinalCaptureV2PendingPriorClosesOriginalAuthority(t *testing.T) {
+	t.Parallel()
 	fixture := newFinalPendingPriorV2TestFixture(t)
 	if fixture.prior.SemanticStatus != finalSemanticCapturePendingStatus || fixture.prior.SemanticSupplement != (FinalArtifactLocator{}) || len(fixture.prior.SemanticFileEnvelopes) != 0 {
 		t.Fatal("capture invented a predecessor semantic verdict")
@@ -216,6 +217,7 @@ func TestFinalCaptureV2PendingPriorClosesOriginalAuthority(t *testing.T) {
 
 // Rehashing copied bytes cannot replace any member of the owner-signed graph.
 func TestFinalCaptureV2PendingPriorRejectsRehashedSourceAndMissingCensus(t *testing.T) {
+	t.Parallel()
 	fixture := newFinalPendingPriorV2TestFixture(t)
 	for _, kind := range []string{"result", "capture", "live-chain"} {
 		prior := *fixture.prior
@@ -249,6 +251,7 @@ func TestFinalCaptureV2PendingPriorRejectsRehashedSourceAndMissingCensus(t *test
 
 // A valid but different completion is not the current phase's signed gate.
 func TestFinalCaptureV2PendingPriorRejectsWrongHandoffAndSemanticRelabel(t *testing.T) {
+	t.Parallel()
 	fixture := newFinalPendingPriorV2TestFixture(t)
 	result := *fixture.result
 	gate := *result.PriorRelease
@@ -283,6 +286,7 @@ func TestFinalCaptureV2PendingPriorRejectsWrongHandoffAndSemanticRelabel(t *test
 // The existing staging owner retains a finite immutable job, never FINAL or
 // semantic_verified. A changed source job cannot overwrite the first capture.
 func TestFinalCaptureV2PendingJobIsImmutableAndNeverAccepted(t *testing.T) {
+	t.Parallel()
 	fixture := newFinalPendingPriorV2TestFixture(t)
 	if err := os.MkdirAll(finalSemanticSupplementStageRoot(fixture.stateRoot, fixture.priorResult.RunID), 0o700); err != nil {
 		t.Fatal(err)
@@ -336,6 +340,7 @@ func TestFinalCaptureV2PendingJobCancellationCreatesNoMarker(t *testing.T) {
 // Source admission authenticates the exact prior gate before creating any
 // destination artifact, independently of semantic interpreter availability.
 func TestFinalCaptureV2PendingPriorRejectsWrongGateBeforeWrites(t *testing.T) {
+	t.Parallel()
 	fixture := newFinalPendingPriorV2TestFixture(t)
 	result := *fixture.result
 	gate := *result.PriorRelease
@@ -355,6 +360,7 @@ func TestFinalCaptureV2PendingPriorRejectsWrongGateBeforeWrites(t *testing.T) {
 // The actual generic artifact walker sees every original locator, and no
 // fabricated empty semantic locator is required to publish the pending graph.
 func TestFinalCaptureV2PendingPriorArtifactCensusHasNoSemanticOutputs(t *testing.T) {
+	t.Parallel()
 	fixture := newFinalPendingPriorV2TestFixture(t)
 	raw, err := json.Marshal(fixture.prior)
 	if err != nil {

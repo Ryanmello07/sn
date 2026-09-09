@@ -3425,6 +3425,11 @@ func VerifyFinalSemanticArtifacts(ctx context.Context, evidence *FinalSemanticEv
 	if err := verifyFinalDeploymentArtifact(evidence, plan, lock, cache[evidence.Deployment.Artifact.URI]); err != nil {
 		return err
 	}
+	// The sealed head projection depends only on these authenticated bytes,
+	// so reject a foreign binding before replaying unrelated signed attempts.
+	if err := verifyFinalHeadFleetBindingArtifacts(evidence, cache, cache[evidence.Topology.BindingManifest.URI]); err != nil {
+		return err
+	}
 	lineageFiles, err := decodeFinalFleetLifecycleLineageFiles(evidence, cache[evidence.FleetLifecycle.LineageArtifact.URI])
 	if err != nil {
 		return err
@@ -3482,9 +3487,6 @@ func VerifyFinalSemanticArtifacts(ctx context.Context, evidence *FinalSemanticEv
 		return err
 	}
 	if err := verifyFinalTopologyArtifacts(evidence, cache[evidence.Topology.MinerManifest.URI], cache[evidence.Topology.BindingManifest.URI]); err != nil {
-		return err
-	}
-	if err := verifyFinalHeadFleetBindingArtifacts(evidence, cache, cache[evidence.Topology.BindingManifest.URI]); err != nil {
 		return err
 	}
 	if evidence.FleetLifecycle != nil {

@@ -2,13 +2,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,11 +42,27 @@ func adversaryClientKeyBatchTestOwner(t testing.TB, count int) (*adversaryHTTP, 
 	return &adversaryHTTP{gate: gate, timeout: 30 * time.Second}, body, at
 }
 
+// Successful upload fixtures consume the whole body before acknowledging it.
+// The real actor closes each connection, so unread bytes can abort its writer.
+type adversaryClientKeyBatchTestHandler struct {
+	requests *atomic.Uint64
+}
+
+// Count only complete uploads; an interrupted body cannot become success.
+func (self adversaryClientKeyBatchTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if _, err := io.Copy(io.Discard, r.Body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	self.requests.Add(1)
+	w.WriteHeader(http.StatusOK)
+}
+
 // One transport containing404 clients spends404 admitted logical actor slots.
 func TestClientKeyHistoryAdversaryBatchChargesEveryActualLogicalMember(t *testing.T) {
 	owner, body, at := adversaryClientKeyBatchTestOwner(t, 404)
 	var requests atomic.Uint64
-	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests.Add(1); w.WriteHeader(http.StatusOK) }))
+	endpoint := httptest.NewServer(adversaryClientKeyBatchTestHandler{requests: &requests})
 	defer endpoint.Close()
 	status, _, err := owner.do(t.Context(), http.MethodPost, endpoint.URL+"/sn/client-key/observations", "", body, 1024)
 	if err != nil || status != http.StatusOK || requests.Load() != 1 || !owner.gate.next.Equal(at.Add(404*time.Nanosecond)) {
@@ -55,7 +74,7 @@ func TestClientKeyHistoryAdversaryBatchChargesEveryActualLogicalMember(t *testin
 func TestClientKeyHistoryAdversaryBatchPairChargesBothCensuses(t *testing.T) {
 	owner, body, at := adversaryClientKeyBatchTestOwner(t, 16)
 	var requests atomic.Uint64
-	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests.Add(1); w.WriteHeader(http.StatusOK) }))
+	endpoint := httptest.NewServer(adversaryClientKeyBatchTestHandler{requests: &requests})
 	defer endpoint.Close()
 	responses, err := owner.doConcurrentPair(t.Context(), http.MethodPost, endpoint.URL+"/sn/client-key/observations", "", body, 1024)
 	if err != nil || requests.Load() != 2 || !owner.gate.next.Equal(at.Add(32*time.Nanosecond)) {
@@ -72,7 +91,7 @@ func TestClientKeyHistoryAdversaryBatchPairChargesBothCensuses(t *testing.T) {
 func TestClientKeyHistoryAdversaryBatchRefusesInvalidAndCancelledIo(t *testing.T) {
 	owner, body, at := adversaryClientKeyBatchTestOwner(t, 16)
 	var requests atomic.Uint64
-	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests.Add(1); w.WriteHeader(http.StatusOK) }))
+	endpoint := httptest.NewServer(adversaryClientKeyBatchTestHandler{requests: &requests})
 	defer endpoint.Close()
 	if _, _, err := owner.do(t.Context(), http.MethodPost, endpoint.URL+"/sn/client-key/observations", "", append(body, '\n'), 1024); err == nil || requests.Load() != 0 || !owner.gate.next.IsZero() {
 		t.Fatal("noncanonical batch escaped local admission")
@@ -81,6 +100,57 @@ func TestClientKeyHistoryAdversaryBatchRefusesInvalidAndCancelledIo(t *testing.T
 	cancel()
 	if _, _, err := owner.do(ctx, http.MethodPost, endpoint.URL+"/sn/client-key/observations", "", body, 1024); err == nil || requests.Load() != 0 || !owner.gate.next.Equal(at.Add(16*time.Nanosecond)) {
 		t.Fatal("cancelled batch escaped or refunded its logical admission")
+	}
+}
+
+// Observe the upload cursor at the response boundary without TCP scheduling.
+type adversaryClientKeyBatchTestResponseWriter struct {
+	*httptest.ResponseRecorder
+	beforeHeader func(int)
+}
+
+// Record request consumption before any status reaches the client.
+func (self *adversaryClientKeyBatchTestResponseWriter) WriteHeader(status int) {
+	self.beforeHeader(status)
+	self.ResponseRecorder.WriteHeader(status)
+}
+
+// Both small and full logical batches must finish uploading before the
+// endpoint replies; the full 404-member transport regression remains above.
+func TestClientKeyHistoryAdversaryBatchFixtureDrainsBeforeResponse(t *testing.T) {
+	for _, count := range []int{404, 16, protocol.MaxClientKeyObservationBatchClients} {
+		_, body, _ := adversaryClientKeyBatchTestOwner(t, count)
+		unread := bytes.NewReader(body)
+		request := httptest.NewRequest(http.MethodPost, "http://operator.example/sn/client-key/observations", unread)
+		request.Close = true
+		var requests atomic.Uint64
+		response := &adversaryClientKeyBatchTestResponseWriter{
+			ResponseRecorder: httptest.NewRecorder(),
+			beforeHeader: func(status int) {
+				if status != http.StatusOK || unread.Len() != 0 || requests.Load() != 1 {
+					t.Errorf("%d-member batch replied before complete upload: status=%d unread=%d requests=%d", count, status, unread.Len(), requests.Load())
+				}
+			},
+		}
+		adversaryClientKeyBatchTestHandler{requests: &requests}.ServeHTTP(response, request)
+		if response.Code != http.StatusOK || unread.Len() != 0 || requests.Load() != 1 {
+			t.Fatalf("%d-member batch did not complete its upload: status=%d unread=%d requests=%d", count, response.Code, unread.Len(), requests.Load())
+		}
+	}
+}
+
+// An explicit terminal read error must neither acknowledge nor count the
+// incomplete upload, including a complete 404-member body followed by failure.
+func TestClientKeyHistoryAdversaryBatchFixtureRejectsIncompleteUpload(t *testing.T) {
+	_, body, _ := adversaryClientKeyBatchTestOwner(t, 404)
+	request := httptest.NewRequest(http.MethodPost, "http://operator.example/sn/client-key/observations", nil)
+	request.Close = true
+	request.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), iotest.ErrReader(io.ErrUnexpectedEOF)))
+	var requests atomic.Uint64
+	response := httptest.NewRecorder()
+	adversaryClientKeyBatchTestHandler{requests: &requests}.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || requests.Load() != 0 {
+		t.Fatalf("incomplete batch upload was acknowledged: status=%d requests=%d", response.Code, requests.Load())
 	}
 }
 

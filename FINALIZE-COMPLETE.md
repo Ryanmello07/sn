@@ -4,7 +4,186 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
-Current test frontier (2026-09-09 14:31 UTC):
+## Current frontier — 2026-09-09 18:36 UTC
+
+The renewed sixty-minute preparation target is19:30 UTC. The immediate
+deliverable is a real accelerated release-candidate launch, not a claim that
+the final soak or WHITEPAPER1.0 acceptance is complete. No new campaign has
+launched. Limit new work to actual launch blockers and their deterministic
+root/adjacent regressions; keep the complete final requirements below.
+
+Pushed source checkpoints: SNc096632168870daf3db679d5f182247509335127,
+Connecta91c38958a82e8966512c6d50458e3641f8ce632 and
+server08766e46c45cf87e47a2cd1feea2d64ff7a4d959. The HTTP fixture and corrected
+two-file runtime scheduling donor are integrated in primary SN for the next
+checkpoint. The runtime donor adds only eight first-statement parallel calls
+and extends scheduling-only guards; the capture selector remains seven roots.
+Both files exactly match the reviewed donor and have clean formatting.
+Donor: `temp/sn-runtime-provision-parallel8-fixed-astra-SS4WgtbH/HANDOFF.md`.
+
+Latest native captures:
+
+- `temp/sn-native-owner-rerun-v1-TiG0GN`: capture ordinary/private/prior and
+  semantic ordinary285 pass normal/race; public scenario and fleet projection
+  pass normal. Remaining race work is live under corrected candidate CWD.
+  The two failed stress jobs labelled normal actually used the race executable
+  with a five-minute deadline. Commands and build metadata prove the wrong
+  profile. Retain those failures without inventing a production defect;
+  correctly bound normal reruns are live. Other labelled normal commands use
+  the normal binary. Prior correct-profile stress race streaks stay closed.
+- `temp/sn-http-fixture-native-v1-TiG0GN`: affected normal/race pass and the
+  original failed HTTP root has three fresh corrected race passes. The fixture
+  now consumes its request before acknowledging success and deterministically
+  rejects incomplete uploads; no production HTTP behavior changed.
+- `temp/qual-connect-terra-services-1825`: old degraded-predecessor causal
+  actually fails at the declared acquisition-barrier literal, not a compile
+  failure or timeout. Corrected Connect and isolated server/monitor native
+  qualification are independently owned by Terra services.
+
+Critical execution order: checkpoint/pull/push source while focused native
+checks run; build a clean pushed CLI; review and atomically apply the observed
+lock; checkpoint the lock; start both strict gates and final CLI build
+concurrently. Fresh doctor and two matching plans are read-only and can be
+prepared while native gates run, but serialize those three public-RPC readers
+with joined exits and two-second quiet gaps. Do not write to the chain before
+producer PASS and launch-relevant repair obligations close. Aggregate may
+overlap real RC; any actual new failure stops new campaign writes. Preserve
+the authorized journal-aware attempt4 resume and all final reporting duties.
+
+## Historical frontier — 2026-09-09 17:28 UTC
+
+No new live release-candidate or final-soak campaign has launched. Both actual
+c507 strict gates remain failed; component passes are not release approval.
+The original scope above and all final evidence requirements remain unchanged.
+
+### Source and retained qualification
+
+Twenty reviewed fix paths are now present in primary SN/server and match the
+isolated candidate byte-for-byte. They cover exact evidence-job scheduling,
+fresh aggregate Go execution and complete validator ownership, nested-body
+guards, bounded completion fragments and process diagnostics, earlier
+authenticated head-projection admission, detached private fixtures,
+deployment-anchor fixture identity and joined monitor child processes.
+Primary integration receipt:
+`temp/sn-primary-reviewed-fixes-v1-2WasLFPY/{PATHS,PATCH.diff}`.
+These edits are a checkpoint, not a completed source freeze; their outstanding
+qualification below still applies. Connect/server model follow-up fixes are
+separate and not included in these twenty paths.
+
+The isolated candidate is
+`temp/sn-gate-rerun-v11-aHOWKRHL`. A cross-workspace audit found stale sibling
+source despite matching Go module manifests. Before new native compilation,
+126 Go paths and 14 associated assets/docs were aligned with clean primary,
+preserving the twenty reviewed changes. The 6,215-path tracked audit found no
+other differences among the 6,198 non-fix paths. Recoverable preimages and exact
+hashes: `temp/sn-candidate-baseline-reconcile-v1-OAzpn6dV`.
+The prior candidate source fence is superseded. Use the current 7,855-row
+source/mode/gitlink fence at
+`temp/sn-final-composed-sim-build-v1-REw1wA/fence-current`.
+Never infer current dependency identity from the candidate's older Git HEAD.
+
+Closed scoped results: full metadata census three race confirmations;
+deployment-anchor four roots normal/race, original failure three normal
+confirmations and old-code causal normal/race; thirty-two focused gate guards
+normal/race; monitor full normal/race and oversized-line root three
+normal/three race confirmations with real owner exit zero. Monitor results
+precede the sibling baseline reconciliation: current-baseline full monitor
+normal/race is still required. The old pipeline reproduction retained Go PASS
+but actual owner125 with two adopted children141; it is not waived.
+Receipts: `temp/sn-fullcensus-racebudget-qualification-Toy4tH`,
+`temp/sn-anchorfixture1-qualification-v1-BebqJp`,
+`temp/sn-captureprivate6-qualification-v1-hqp08l/tiny-{normal,race}`,
+and `temp/sn-monitorstream2-qualification-v1-6CZ3wp`.
+
+### Open critical work
+
+1. Qualify the complete corrected capture owners: ordinary398, private7,
+   reopened-prior1, population1 and metadata1 together preserve all408 roots.
+   Ordinary/private/prior keep normal5m/race10m. Population and metadata retain
+   their separately recorded exact modes/deadlines; do not repeat already
+   closed stress roots merely for a source-guard-only change.
+2. Qualify all287 semantic roots in three exact owners: ordinary285, public
+   scenario1 and fleet projection1, each normal15m/race25m, parallel4. Include
+   both new head-admission roots, their old-order causal proof and original
+   failed-mode confirmation obligations. No smaller population or missing
+   descendant can substitute.
+3. Finish producer scheduling guards66, completion/queue guards20, remaining
+   nested-body failed-root confirmations and narrow old-cache/old-closure
+   causal checks. Complete the four originally timed-out validator roots'
+   required fresh race confirmations and compiled355/full-owner coverage.
+   Do not rerun a known failed whole long package merely to reproduce its
+   already retained timeout.
+4. Correct and deterministically qualify three newly exposed failure classes:
+   the batch HTTP fixture responds before consuming its request body; shuffled
+   Connect cancellation observes a request that real backend degradation may
+   suppress; three server ForceClose fixtures omit required active clients.
+   Root-cause and adjacent-case review are active; these diagnoses are not
+   passing-test claims. Do not weaken actual outage gating, client admission,
+   force-close behavior or transport errors to make fixtures pass.
+5. Resolve the actual complete simulator race timeout. It ran5400.559s and
+   reached several parallel roots only near its90m limit. The retained active
+   roots are CampaignFinalSemanticEvidenceRequiresExactlyOneClosedObject,
+   FinalExitReceiptsUseAdversarialCampaignBoundary,
+   FinalSemanticDishonestDepositDecisionsAndPublicReplay and
+   FinalSemanticOutputsRemainOutsideClosedCampaignFileSet (each prefixed Test).
+   Exact stacks and the separate earlier HTTP/anchor failures remain in the
+   original log. Preserve the whole test population and successful-path
+   verification; late admission is not proof of a production deadlock.
+6. After relevant qualification closes, checkpoint/pull/push the complete
+   source, refresh the observed release lock and fresh CLI, then run both
+   strict gates on the same clean pushed revisions. Producer PASS is required
+   before live writes; aggregate may overlap RC but must PASS before final
+   acceptance. Any new failure stops new campaign writes and receives a
+   deterministic root/adjacent repair and required confirmation streak.
+7. Fresh doctor, then two matching read-only plans, then the authorized journal-
+   aware apply/resume and real RC/final campaign. Serialize public-RPC doctor
+   and plans under the shared40/min budget (join, two-second quiet gap, next
+   reader); no extra approval is needed within the user's testnet spending
+   authorization. Keep the full real-module topology, adversaries, payouts,
+   artifact replicas and independent contract evidence slots.
+8. Complete the approved RC and three final epochs, analyze every anomaly,
+   and produce independently replayable on-chain evidence in FINAL.md.
+   Contract receipts/hashes, API/MinIO bytes and source/config identities must
+   cover every whitepaper element, including no-payout/adversarial outcomes.
+   No final validation ETA is justified while strict gates remain failed.
+
+### Actual gate and owner records
+
+Aggregate capture:
+`temp/sn-strict-aggregate-gate-v2-mZQGcy`, private root
+`tmp/urnetwork-release-gate.Xlj3wdJI`. Full validator race, Connect normal/race,
+Solidity tests/static checks, SDK/build, operator-proxy, server-connect,
+shared-boundary history and xops jobs have joined with zero exits.
+Connect shuffle seed4535211000 failed its contract-wait cancellation root;
+server-db failed three ForceClose setup roots; full simulator race failed as
+above. Inspect raw phase logs for scope, not merely the job labels.
+
+The old producer also failed capture/semantic and lost final ownership proof.
+Its outer command file was modified after launch, independently invalidating
+custody. The exact cause of the earlier inner cancellation remains unproven;
+the newly fixed partial FIFO read is an adjacent code defect, not established
+attribution. Never edit a running command file or reinterpret missing final
+receipts as success.
+
+At17:22 UTC the previous agent/session handles and recorded native PIDs were
+absent; the host itself still had fourteen days of uptime. The aggregate has
+no final gate.exit/source-after receipt, and the previous race compiler lacks
+a terminal compiler.exit despite a materialized binary. Retain those gaps.
+New owners must verify/reseal current source/binaries and resume only the
+uncompleted work, not claim old execution success. Existing private gate
+containers are retained pending exact-owner cleanup; do not touch shared or
+unrelated local services. No main-service configuration fault is established.
+
+Last pushed SN source is c5070d6720e1144a448e85f8b7f5988c587415cb and server
+ace1b08dd213c82f928adf2be677247fa4d1652c, before these checkpoint edits.
+The old c507 CLI SHA256 is
+f63766d3d2cb3c936bdb710dcb64b1da498b34dd47b71e1285d8a587937e1a2b;
+old lock SHA256
+c359e1ccadb74057e21f377168e50d4c77ecef9b575c456672bc29c981c881c9.
+Neither is approval for the new source. Runtime455/chain945/netuid521 and the
+approved public-RPC profile remain unchanged.
+
+## Historical frontier — 2026-09-09 14:31 UTC
 
 StrictTidy3 source checkpoints SN1e0dcc3 and serverace1b08d are committed,
 pulled without upstream changes and pushed. The fresh clean-source executable

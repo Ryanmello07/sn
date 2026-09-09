@@ -1,15 +1,24 @@
-// Heavy original metadata and ordinary capture own explicit scoped budgets.
-// Excluding the exact metadata root is valid only with its admitted successor.
+// Full metadata, publication, private fixtures, prior replay and ordinary
+// capture own scoped budgets. Exact exclusions require admitted successors.
 package main
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 )
+
+const releaseGateCapturePopulationRoot = "TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners"
+
+const releaseGateCapturePrivatePattern = "TestFinalCaptureV2(ReadsActualRenderedSetupAndRejectsChangedSource|PendingPriorClosesOriginalAuthority|PendingPriorRejectsRehashedSourceAndMissingCensus|PendingPriorRejectsWrongHandoffAndSemanticRelabel|PendingJobIsImmutableAndNeverAccepted|PendingPriorRejectsWrongGateBeforeWrites|PendingPriorArtifactCensusHasNoSemanticOutputs)"
+const releaseGateCapturePriorRoot = "TestVerifyFinalCollectedPriorPhaseBytesRejectsReopenedHandoffSubstitution"
+const releaseGateCaptureOwnerSkip = " -skip '^(TestCampaignEvidence(CapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|PopulationV2StreamsPhaseCensusWithBoundedOwners)|" + releaseGateCapturePrivatePattern + "|" + releaseGateCapturePriorRoot + ")$'"
 
 // Inspect the gates' bounded line-oriented registry grammar, after removing
 // declarations. Exact calls inside an extra branch are not admitted jobs.
@@ -63,17 +72,20 @@ func releaseGateRegistrationConditions(script string, registration string) ([]st
 // The ordinary selector remains protected by the complete source-family guards.
 func verifyReleaseGateCaptureMetadataIsolation(script string) error {
 	const fullRoot = "TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier"
-	const fullSelector = "^" + fullRoot + "$"
 	definitions := regexp.MustCompile(`(?ms)^[\t ]*release_phase_[a-z0-9_]+\(\) \{\n.*?^[\t ]*\}[\t ]*$`)
 	registry := definitions.ReplaceAllString(script, "")
 	for _, group := range []struct {
 		phase       string
 		job         string
 		variable    string
+		selector    string
 		skip        string
 		raceTimeout string
 	}{
-		{phase: "capture", job: "capture", variable: "capture_tests", skip: " -skip '" + fullSelector + "'", raceTimeout: "10m"},
+		{phase: "capture", job: "capture", variable: "capture_tests", skip: releaseGateCaptureOwnerSkip, raceTimeout: "10m"},
+		{phase: "capture_private", job: "capture-private", variable: "capture_private_tests", selector: "^" + releaseGateCapturePrivatePattern + "$", raceTimeout: "10m"},
+		{phase: "capture_prior", job: "capture-prior", variable: "capture_prior_tests", selector: "^" + releaseGateCapturePriorRoot + "$", raceTimeout: "10m"},
+		{phase: "capture_population", job: "capture-population", variable: "capture_population_tests", raceTimeout: "10m"},
 		{phase: "capture_metadata", job: "capture-metadata", variable: "capture_metadata_tests", raceTimeout: "45m"},
 	} {
 		function := "release_phase_" + group.phase
@@ -86,9 +98,21 @@ func verifyReleaseGateCaptureMetadataIsolation(script string) error {
 		if err != nil {
 			return err
 		}
-		selected, err := regexp.MatchString(selector, fullRoot)
-		if err != nil || !selected || group.phase == "capture_metadata" && selector != fullSelector {
-			return fmt.Errorf("capture metadata changed its exact partition: %v", err)
+		if group.selector != "" && selector != group.selector {
+			return fmt.Errorf("capture changed its exact %s partition", group.phase)
+		}
+		for _, stress := range []struct {
+			root  string
+			phase string
+		}{
+			{root: fullRoot, phase: "capture_metadata"},
+			{root: releaseGateCapturePopulationRoot, phase: "capture_population"},
+		} {
+			selected, err := regexp.MatchString(selector, stress.root)
+			wantSelected := group.phase == "capture" || group.phase == stress.phase
+			if err != nil || selected != wantSelected || group.phase == stress.phase && selector != "^"+stress.root+"$" {
+				return fmt.Errorf("capture metadata changed its exact %s partition: %v", stress.phase, err)
+			}
 		}
 		var commands []string
 		for _, line := range strings.Split(phases[0][1], "\n") {
@@ -155,7 +179,7 @@ func TestProducerGateCaptureSelectionRejectsMetadataPartitionDrift(t *testing.T)
 	if err := verifyReleaseGateCaptureMetadataIsolation(script); err != nil {
 		t.Fatal(err)
 	}
-	const skip = " -skip '^TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier$'"
+	const skip = releaseGateCaptureOwnerSkip
 	if err := verifyReleaseGateCaptureMetadataIsolation(strings.ReplaceAll(script, skip, "")); err == nil {
 		t.Fatal("capture accepted the old combined serial stress owner")
 	}
@@ -181,7 +205,7 @@ func TestProducerGateCaptureSelectionRejectsMetadataPartitionDrift(t *testing.T)
 			t.Fatal("capture accepted altered metadata partition", pair.changed)
 		}
 	}
-	for _, variable := range []string{"capture_tests", "capture_metadata_tests"} {
+	for _, variable := range []string{"capture_tests", "capture_private_tests", "capture_prior_tests", "capture_population_tests", "capture_metadata_tests"} {
 		for _, race := range []bool{false, true} {
 			command := "go test"
 			timeout := "5m"
@@ -251,8 +275,8 @@ func TestProducerGateCaptureSelectionRejectsMetadataRaceBudgetLeak(t *testing.T)
 	}
 	const metadataRace = `go test -race ./sim-testnet -run "$capture_metadata_tests" -count=1 -timeout 45m`
 	const metadataNormal = `go test ./sim-testnet -run "$capture_metadata_tests" -count=1 -timeout 5m`
-	const captureNormal = `go test ./sim-testnet -run "$capture_tests" -count=1 -skip '^TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier$' -timeout 5m`
-	const captureRace = `go test -race ./sim-testnet -run "$capture_tests" -count=1 -skip '^TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier$' -timeout 10m`
+	const captureNormal = `go test ./sim-testnet -run "$capture_tests" -count=1` + releaseGateCaptureOwnerSkip + ` -timeout 5m`
+	const captureRace = `go test -race ./sim-testnet -run "$capture_tests" -count=1` + releaseGateCaptureOwnerSkip + ` -timeout 10m`
 	for _, change := range []struct {
 		name        string
 		original    string
@@ -283,7 +307,7 @@ func TestProducerGateCaptureSelectionRejectsMetadataRaceBudgetLeak(t *testing.T)
 	if err := verifyReleaseGateFullValidatorRace(localScript); err != nil {
 		t.Fatalf("metadata budget changed an independent full-package owner: %v", err)
 	}
-	const fullRace = "go test -race -parallel=4 -timeout 90m ./sim-testnet"
+	const fullRace = "go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1"
 	if strings.Count(localScript, fullRace) != 1 {
 		t.Fatal("full simulator race command is not uniquely executable")
 	}
@@ -291,4 +315,399 @@ func TestProducerGateCaptureSelectionRejectsMetadataRaceBudgetLeak(t *testing.T)
 	if err := verifyReleaseGateFullValidatorRace(changedFull); err == nil {
 		t.Fatal("metadata race budget replaced the independent full-simulator allowance")
 	}
+}
+
+// Every source root has exactly one execution owner in each mode. Only the
+// finite reviewed fixtures and stress roots leave ordinary capture.
+func TestProducerGateCaptureSelectionRequiresIndependentPopulation(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("../scripts/test-release-1.0-producer-gate.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(raw)
+	if err := verifyReleaseGateCaptureMetadataIsolation(script); err != nil {
+		t.Fatalf("capture population lacks its independently admitted five/ten-minute owner: %v", err)
+	}
+	selector, err := releaseConnectPolicySelectorAssignment(script, "capture_tests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sources := releaseEvidenceV2GateSources(t, []string{"*_test.go"})
+	selected, err := releaseSelectedTestDeclarations(selector, sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selectors := map[string]*regexp.Regexp{}
+	for _, variable := range []string{"capture_population_tests", "capture_metadata_tests", "capture_private_tests", "capture_prior_tests"} {
+		value, err := releaseConnectPolicySelectorAssignment(script, variable)
+		if err != nil {
+			t.Fatal(err)
+		}
+		selectors[variable] = regexp.MustCompile(value)
+	}
+	skip := regexp.MustCompile(strings.TrimSuffix(strings.TrimPrefix(releaseGateCaptureOwnerSkip, " -skip '"), "'"))
+	ordinaryOwners := map[string]bool{}
+	counts := map[string]int{}
+	for _, name := range selected {
+		owners := 0
+		if !skip.MatchString(name) {
+			ordinaryOwners[name] = true
+			owners++
+		}
+		for variable, selector := range selectors {
+			if selector.MatchString(name) {
+				counts[variable]++
+				owners++
+			}
+		}
+		if owners != 1 {
+			t.Fatalf("capture source %s has %d execution owners, want exactly one", name, owners)
+		}
+	}
+	if counts["capture_population_tests"] != 1 || counts["capture_metadata_tests"] != 1 || counts["capture_private_tests"] != len(releaseCapturePrivateFixtureRoots) || counts["capture_prior_tests"] != 1 || len(ordinaryOwners)+len(releaseCapturePrivateFixtureRoots)+3 != len(selected) {
+		t.Fatalf("capture partition changed its complete source census: ordinary=%d separate=%v selected=%d", len(ordinaryOwners), counts, len(selected))
+	}
+	for _, root := range releaseCapturePrivateFixtureRoots {
+		if !slices.Contains(selected, root.name) || !selectors["capture_private_tests"].MatchString(root.name) {
+			t.Fatalf("capture private source %s lost its separate owner", root.name)
+		}
+	}
+	if !slices.Contains(selected, releaseGateCapturePriorRoot) {
+		t.Fatal("capture prior source lost its separate owner")
+	}
+	for _, name := range []string{
+		"TestCampaignEvidencePopulationV2AdmitsFullConfiguredMetadataCensus",
+		"TestCampaignEvidenceCapacityV2MetadataCompletionWriteBindsExactSignedObject",
+		"TestFinalCaptureV2PrivateFixtureInputsAreDetached",
+	} {
+		if !ordinaryOwners[name] {
+			t.Fatalf("exact stress partition removed adjacent ordinary source %s", name)
+		}
+	}
+}
+
+// Restoring the combined owner, hiding its successor, or broadening the skip
+// must be rejected without rerunning the known failed five-minute package.
+func TestProducerGateCaptureSelectionRejectsPopulationPartitionDrift(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("../scripts/test-release-1.0-producer-gate.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(raw)
+	if err := verifyReleaseGateCaptureMetadataIsolation(script); err != nil {
+		t.Fatal(err)
+	}
+	const start = "release_gate_start capture-population release_phase_capture_population"
+	const assignment = "capture_population_tests='^" + releaseGateCapturePopulationRoot + "$'"
+	const normal = `go test ./sim-testnet -run "$capture_population_tests" -count=1 -timeout 5m`
+	const race = `go test -race ./sim-testnet -run "$capture_population_tests" -count=1 -timeout 10m`
+	for _, change := range []struct {
+		name        string
+		original    string
+		replacement string
+	}{
+		{name: "old combined population", original: releaseGateCaptureOwnerSkip, replacement: " -skip '^TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier$'"},
+		{name: "old combined private fixtures", original: releaseGateCaptureOwnerSkip, replacement: " -skip '^TestCampaignEvidence(CapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|PopulationV2StreamsPhaseCensusWithBoundedOwners)$'"},
+		{name: "broader ordinary omission", original: releaseGateCaptureOwnerSkip, replacement: " -skip '^TestCampaignEvidence'"},
+		{name: "missing population registration", original: start, replacement: "# " + start},
+		{name: "wrong population function", original: start, replacement: "release_gate_start capture-population release_phase_capture"},
+		{name: "duplicate population registration", original: start, replacement: start + "\n" + start},
+		{name: "hidden population function", original: start, replacement: "release_phase_unused() {\n" + start + "\n}"},
+		{name: "conditional population registration", original: start, replacement: "if false; then\n" + start + "\nfi"},
+		{name: "looped population registration", original: start, replacement: "for omitted in; do\n" + start + "\ndone"},
+		{name: "subshell population registration", original: start, replacement: "(\n" + start + "\n)"},
+		{name: "broader population selector", original: assignment, replacement: "capture_population_tests='^TestCampaignEvidencePopulationV2'"},
+		{name: "foreign population selector", original: assignment, replacement: "capture_population_tests='^TestCampaignEvidencePopulationV2AdmitsFullConfiguredMetadataCensus$'"},
+		{name: "duplicate metadata execution", original: assignment, replacement: "capture_population_tests='^TestCampaignEvidence(CapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|PopulationV2StreamsPhaseCensusWithBoundedOwners)$'"},
+		{name: "hidden normal failure", original: normal, replacement: normal + " || true"},
+		{name: "missing race execution", original: race, replacement: "# " + race},
+		{name: "normal deadline expansion", original: normal, replacement: strings.Replace(normal, "5m", "10m", 1)},
+		{name: "race deadline expansion", original: race, replacement: strings.Replace(race, "10m", "45m", 1)},
+	} {
+		if !strings.Contains(script, change.original) {
+			t.Fatalf("%s lost its original source prerequisite", change.name)
+		}
+		mutated := strings.Replace(script, change.original, change.replacement, 1)
+		if err := verifyReleaseGateCaptureMetadataIsolation(mutated); err == nil {
+			t.Fatalf("%s escaped exact population ownership", change.name)
+		}
+	}
+	for _, owner := range []struct {
+		phase    string
+		job      string
+		variable string
+		selector string
+	}{
+		{phase: "capture_private", job: "capture-private", variable: "capture_private_tests", selector: "^" + releaseGateCapturePrivatePattern + "$"},
+		{phase: "capture_prior", job: "capture-prior", variable: "capture_prior_tests", selector: "^" + releaseGateCapturePriorRoot + "$"},
+	} {
+		start := "release_gate_start " + owner.job + " release_phase_" + owner.phase
+		assignment := owner.variable + "='" + owner.selector + "'"
+		for _, change := range []struct {
+			original    string
+			replacement string
+		}{
+			{original: start, replacement: "# " + start},
+			{original: start, replacement: start + "\n" + start},
+			{original: start, replacement: "if false; then\n" + start + "\nfi"},
+			{original: start, replacement: "release_phase_unused() {\n" + start + "\n}"},
+			{original: assignment, replacement: owner.variable + "='^TestFinalCaptureV2'"},
+			{original: assignment, replacement: owner.variable + "='^" + releaseGateCapturePopulationRoot + "$'"},
+		} {
+			if strings.Count(script, change.original) != 1 {
+				t.Fatal("private capture mutation lost its unique source", change.original)
+			}
+			if err := verifyReleaseGateCaptureMetadataIsolation(strings.Replace(script, change.original, change.replacement, 1)); err == nil {
+				t.Fatal("capture accepted altered private fixture ownership", change.replacement)
+			}
+		}
+	}
+}
+
+// These seven private filesystem/authority fixtures share their exact job's
+// parallel admission. Allocation measurements and both stress owners stay serial.
+var releaseCapturePrivateFixtureRoots = []struct {
+	path    string
+	name    string
+	fixture string
+}{
+	{path: "final_semantic_capture_v2_test.go", name: "TestFinalCaptureV2ReadsActualRenderedSetupAndRejectsChangedSource", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "final_semantic_pending_prior_v2_test.go", name: "TestFinalCaptureV2PendingPriorClosesOriginalAuthority", fixture: "newFinalPendingPriorV2TestFixture"},
+	{path: "final_semantic_pending_prior_v2_test.go", name: "TestFinalCaptureV2PendingPriorRejectsRehashedSourceAndMissingCensus", fixture: "newFinalPendingPriorV2TestFixture"},
+	{path: "final_semantic_pending_prior_v2_test.go", name: "TestFinalCaptureV2PendingPriorRejectsWrongHandoffAndSemanticRelabel", fixture: "newFinalPendingPriorV2TestFixture"},
+	{path: "final_semantic_pending_prior_v2_test.go", name: "TestFinalCaptureV2PendingJobIsImmutableAndNeverAccepted", fixture: "newFinalPendingPriorV2TestFixture"},
+	{path: "final_semantic_pending_prior_v2_test.go", name: "TestFinalCaptureV2PendingPriorRejectsWrongGateBeforeWrites", fixture: "newFinalPendingPriorV2TestFixture"},
+	{path: "final_semantic_pending_prior_v2_test.go", name: "TestFinalCaptureV2PendingPriorArtifactCensusHasNoSemanticOutputs", fixture: "newFinalPendingPriorV2TestFixture"},
+}
+
+// Provisioning roots share the scheduling guard without entering the seven-root
+// capture selector. Clone the selector before adding these independent owners.
+var releaseCapturePrivateSchedulingRoots = append(slices.Clone(releaseCapturePrivateFixtureRoots), []struct {
+	path    string
+	name    string
+	fixture string
+}{
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2FixedPlanBoundsAllFourKeeperActions", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2HeaderCapacityMatchesPublicReader", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2RetainsActualFilesAndResolvesSameTemplate", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2InterruptedLastSourceResumesExactConsents", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2ChangedInputCannotBeRehashedIntoAuthority", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2SignedForeignSourceIsRefusedBeforeFiles", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2NoImplicitBudgetOrFabricatedReferences", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2FreshSetupPreservesExistingDiskHistory", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+}...)
+
+var releaseCaptureSerialOwnerRoots = []struct {
+	path string
+	name string
+}{
+	{path: "final_semantic_prior_carrier_decode_v2_test.go", name: "TestFinalCaptureCapacityPriorCarrierDecodeV2KeepsBoundedVerificationAllocation"},
+	{path: "evidence_canonical_stream_test.go", name: "TestCampaignEvidenceCanonicalStreamVerificationKeepsAllocationBelowPayload"},
+	{path: "evidence_canonical_stream_test.go", name: "TestCampaignEvidenceCanonicalStreamWireComparisonKeepsAllocationBelowPayload"},
+	{path: "evidence_encoding_test.go", name: "TestCampaignEvidenceEncodingSigningKeepsAllocationBelowPayload"},
+	{path: "evidence_public_file_v2_test.go", name: "TestCampaignEvidenceReadbackV2CanonicalFilesBoundDefaultDecodeAllocation"},
+	{path: "evidence_metadata_row_size_v2_test.go", name: "TestCampaignEvidenceCapacityV2MetadataAdmissionKeepsAllocationBelowRows"},
+	{path: "evidence_metadata_census_v2_test.go", name: "TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier"},
+	{path: "evidence_population_v2_test.go", name: "TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners"},
+}
+
+// Read the exact reviewed roots and the real runtime fixture's directory owner.
+func releaseCaptureSchedulingSources(t *testing.T) map[string]string {
+	t.Helper()
+	paths := map[string]bool{"runtime_evidence_provision_v2_test.go": true}
+	for _, root := range releaseCapturePrivateSchedulingRoots {
+		paths[root.path] = true
+	}
+	for _, root := range releaseCaptureSerialOwnerRoots {
+		paths[root.path] = true
+	}
+	sources := map[string]string{}
+	for path := range paths {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sources[path] = string(raw)
+	}
+	return sources
+}
+
+// Inspect actual root statements and private directory assignments. Moving
+// only comments, helpers or an unreachable call cannot repair serial admission.
+func verifyReleaseCapturePrivateScheduling(sources map[string]string) error {
+	functions := map[string]*ast.FuncDecl{}
+	for path, source := range sources {
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, source, 0)
+		if err != nil {
+			return err
+		}
+		for _, declaration := range parsed.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if ok && function.Recv == nil && function.Body != nil {
+				key := path + "/" + function.Name.Name
+				if functions[key] != nil {
+					return fmt.Errorf("capture fixture function is duplicated: %s", key)
+				}
+				functions[key] = function
+			}
+		}
+	}
+	isTestCall := func(expression ast.Expr, method string) bool {
+		call, ok := expression.(*ast.CallExpr)
+		if !ok || len(call.Args) != 0 {
+			return false
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel.Name != method {
+			return false
+		}
+		receiver, ok := selector.X.(*ast.Ident)
+		return ok && receiver.Name == "t"
+	}
+	for _, root := range releaseCapturePrivateSchedulingRoots {
+		function := functions[root.path+"/"+root.name]
+		if function == nil || len(function.Body.List) < 2 {
+			return fmt.Errorf("capture private root is missing: %s", root.name)
+		}
+		first, ok := function.Body.List[0].(*ast.ExprStmt)
+		if !ok || !isTestCall(first.X, "Parallel") {
+			return fmt.Errorf("capture private fixture remains serial: %s", root.name)
+		}
+		fixture, ok := function.Body.List[1].(*ast.AssignStmt)
+		if !ok || len(fixture.Rhs) != 1 {
+			return fmt.Errorf("capture root lost its original private fixture: %s", root.name)
+		}
+		call, ok := fixture.Rhs[0].(*ast.CallExpr)
+		if !ok {
+			return fmt.Errorf("capture root bypassed its real fixture: %s", root.name)
+		}
+		factory, ok := call.Fun.(*ast.Ident)
+		if !ok || factory.Name != root.fixture {
+			return fmt.Errorf("capture root substituted its original fixture: %s", root.name)
+		}
+	}
+	for _, root := range releaseCaptureSerialOwnerRoots {
+		function := functions[root.path+"/"+root.name]
+		if function == nil {
+			return fmt.Errorf("capture serial owner is missing: %s", root.name)
+		}
+		parallel := false
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			if call, ok := node.(*ast.CallExpr); ok && isTestCall(call, "Parallel") {
+				parallel = true
+			}
+			return true
+		})
+		if parallel {
+			return fmt.Errorf("capture process-wide or stress owner became parallel: %s", root.name)
+		}
+	}
+	for _, owner := range []struct {
+		path, name, variable string
+		joined               bool
+	}{
+		{path: "final_semantic_pending_prior_v2_test.go", name: "newFinalPendingPriorV2TestFixture", variable: "stateRoot"},
+		{path: "runtime_evidence_provision_v2_test.go", name: "newRuntimeEvidenceProvisionV2ConfiguredTestFixture", variable: "stateDir", joined: true},
+	} {
+		function := functions[owner.path+"/"+owner.name]
+		if function == nil {
+			return fmt.Errorf("capture private factory disappeared: %s", owner.name)
+		}
+		assignments, private := 0, true
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			assignment, ok := node.(*ast.AssignStmt)
+			if !ok {
+				return true
+			}
+			for index, expression := range assignment.Lhs {
+				identifier, ok := expression.(*ast.Ident)
+				if !ok || identifier.Name != owner.variable {
+					continue
+				}
+				assignments++
+				if len(assignment.Rhs) != len(assignment.Lhs) {
+					private = false
+					continue
+				}
+				value := assignment.Rhs[index]
+				if owner.joined {
+					joined, ok := value.(*ast.CallExpr)
+					if !ok || len(joined.Args) != 2 {
+						private = false
+						continue
+					}
+					selector, ok := joined.Fun.(*ast.SelectorExpr)
+					if !ok || selector.Sel.Name != "Join" {
+						private = false
+						continue
+					}
+					receiver, ok := selector.X.(*ast.Ident)
+					if !ok || receiver.Name != "filepath" {
+						private = false
+						continue
+					}
+					leaf, ok := joined.Args[1].(*ast.BasicLit)
+					if !ok || leaf.Kind != token.STRING || leaf.Value != "\"state\"" {
+						private = false
+						continue
+					}
+					value = joined.Args[0]
+				}
+				private = private && isTestCall(value, "TempDir")
+			}
+			return true
+		})
+		if assignments != 1 || !private {
+			return fmt.Errorf("capture fixture lost its private directory owner: %s", owner.name)
+		}
+	}
+	return nil
+}
+
+// Every heavy fixture begins with parallel admission; process-wide allocation
+// controls remain serial and the actual directory factories stay private.
+func TestProducerGateCaptureSelectionRequiresPrivateFixtureScheduling(t *testing.T) {
+	t.Parallel()
+	if err := verifyReleaseCapturePrivateScheduling(releaseCaptureSchedulingSources(t)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The old first-statement omission, hidden calls, lost fixtures and shared
+// directories fail deterministically without a timing-based assertion.
+func TestProducerGateCaptureSelectionRejectsPrivateFixtureSchedulingDrift(t *testing.T) {
+	t.Parallel()
+	sources := releaseCaptureSchedulingSources(t)
+	if err := verifyReleaseCapturePrivateScheduling(sources); err != nil {
+		t.Fatal(err)
+	}
+	check := func(path, old, replacement string) {
+		t.Helper()
+		original := sources[path]
+		if strings.Count(original, old) != 1 {
+			t.Fatal("scheduling mutation lacks one original source", path, old)
+		}
+		sources[path] = strings.Replace(original, old, replacement, 1)
+		err := verifyReleaseCapturePrivateScheduling(sources)
+		sources[path] = original
+		if err == nil {
+			t.Fatal("capture scheduling accepted altered ownership", path, replacement)
+		}
+	}
+	for _, root := range releaseCapturePrivateSchedulingRoots {
+		declaration := "func " + root.name + "(t *testing.T) {\n"
+		original := declaration + "\tt.Parallel()\n"
+		check(root.path, original, declaration)
+		check(root.path, original, declaration+"\tif false { t.Parallel() }\n")
+		check(root.path, original, declaration+"\tt.Helper()\n\tt.Parallel()\n")
+		check(root.path, original+"\tfixture := "+root.fixture+"(t)", original+"\tfixture := missingPrivateFixture(t)")
+	}
+	for _, root := range releaseCaptureSerialOwnerRoots {
+		declaration := "func " + root.name + "(t *testing.T) {\n"
+		check(root.path, declaration, declaration+"\tt.Parallel()\n")
+	}
+	check("final_semantic_pending_prior_v2_test.go", "stateRoot := t.TempDir()", "stateRoot := \"shared-capture-root\"")
+	check("runtime_evidence_provision_v2_test.go", "stateDir := filepath.Join(t.TempDir(), \"state\")", "stateDir := filepath.Join(\"shared-capture-root\", \"state\")")
 }

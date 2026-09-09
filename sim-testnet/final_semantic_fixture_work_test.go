@@ -230,3 +230,133 @@ func TestFinalSemanticArtifactDeploymentAdmissionPrecedesSignedReplay(t *testing
 		}
 	}
 }
+
+// Builds the real release graph, authenticates its original head bindings and
+// signed closure, then damages only the closure's retained bytes and locators.
+func finalHeadProjectionAdmissionFixture(t *testing.T) (*FinalSemanticEvidence, map[string][]byte, FinalArtifactLoader) {
+	t.Helper()
+	source, artifacts := finalSemanticFixture(t)
+	if source.ExpectedMiners != 1000 || source.Topology.HeadCandidateFleets != 202 || source.Topology.HeadSlots != 200 || len(source.Validators) != 2 || len(source.Pools) != 2 {
+		t.Fatal("head admission fixture lost its complete release population")
+	}
+	evidence, err := BuildFinalSemanticEvidence(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evidence.HeadFleets) != 202 || len(evidence.PathProofs) == 0 || len(evidence.PathProofs[0].SettlementClosures) == 0 {
+		t.Fatal("head admission fixture has no full fleet or signed closure census")
+	}
+	if err := verifyFinalHeadFleetBindingArtifacts(evidence, artifacts, artifacts[evidence.Topology.BindingManifest.URI]); err != nil {
+		t.Fatalf("authentic head projection prerequisite: %v", err)
+	}
+	serverKeys := map[uint64]map[byte]ed25519.PublicKey{}
+	for _, pool := range evidence.Pools {
+		keys := map[byte]ed25519.PublicKey{}
+		for _, historical := range pool.ServerKeyHistory {
+			key, err := finalEd25519PublicKey("head admission closure server key", historical.PublicKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			keys[historical.KeyID] = key
+		}
+		serverKeys[pool.NoID] = keys
+	}
+	closureLocator := evidence.PathProofs[0].SettlementClosures[0]
+	closure, err := validatorpkg.DecodeAttemptSettlementClosureWithServerKeys(artifacts[closureLocator.Artifact.URI], serverKeys)
+	if err != nil || closure.Epoch != closureLocator.Epoch || len(closure.Transitions) != 2 {
+		t.Fatalf("head admission signed terminal prerequisite: %v", err)
+	}
+	badClosure := []byte("!")
+	artifacts[closureLocator.Artifact.URI] = badClosure
+	for proofIndex := range evidence.PathProofs {
+		for closureIndex := range evidence.PathProofs[proofIndex].SettlementClosures {
+			locator := &evidence.PathProofs[proofIndex].SettlementClosures[closureIndex].Artifact
+			if locator.URI == closureLocator.Artifact.URI {
+				locator.ContentHash, locator.SizeBytes = bytesSHA256(badClosure), uint64(len(badClosure))
+			}
+		}
+	}
+	evidence.EvidenceHash, err = finalSemanticEvidenceHash(evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	load := func(_ context.Context, locator FinalArtifactLocator) ([]byte, error) {
+		data, found := artifacts[locator.URI]
+		if !found {
+			return nil, fmt.Errorf("missing full-scale head admission artifact %s", locator.URI)
+		}
+		return append([]byte(nil), data...), nil
+	}
+	return evidence, artifacts, load
+}
+
+// The original signed decoder is an observable work boundary: a bad head
+// projection must refuse first, and restoring only that projection reaches it.
+func TestFinalSemanticFixtureHeadProjectionAdmissionPrecedesSignedReplay(t *testing.T) {
+	t.Parallel()
+	evidence, _, load := finalHeadProjectionAdmissionFixture(t)
+	originalFleetKey := evidence.HeadFleets[0].FleetKey
+	evidence.HeadFleets[0].FleetKey = finalTestHex(0xef)
+	if evidence.HeadFleets[0].FleetKey == originalFleetKey {
+		t.Fatal("head projection mutation did not change its owned fixture")
+	}
+	verify := func() error {
+		var err error
+		evidence.EvidenceHash, err = finalSemanticEvidenceHash(evidence)
+		if err != nil {
+			return err
+		}
+		return VerifyFinalSemanticArtifacts(t.Context(), evidence, load)
+	}
+	if err := verify(); err == nil || !strings.Contains(err.Error(), "sealed replay projection differs") {
+		t.Fatalf("head projection admission reached signed proof replay: %v", err)
+	}
+	evidence.HeadFleets[0].FleetKey = originalFleetKey
+	if err := verify(); err == nil || !strings.Contains(err.Error(), "invalid character '!'") {
+		t.Fatalf("admitted head projection omitted the actual signed closure decoder: %v", err)
+	}
+}
+
+// Earlier identity admission still requires fresh whole-object authentication.
+// Rehashing a foreign checkpoint cannot hide it behind an unrelated bad proof.
+func TestFinalSemanticFixtureHeadManifestAdmissionRequiresAuthenticatedIdentity(t *testing.T) {
+	t.Parallel()
+	evidence, artifacts, load := finalHeadProjectionAdmissionFixture(t)
+	locator := &evidence.HeadFleets[0].BindingArtifact
+	originalLocator := *locator
+	originalBytes := append([]byte(nil), artifacts[locator.URI]...)
+	var binding struct {
+		Manifest json.RawMessage `json:"manifest"`
+		Uid      uint16          `json:"uid"`
+		Snapshot ChainHead       `json:"snapshot"`
+	}
+	if err := decodeStrictJSONBytes(originalBytes, &binding); err != nil {
+		t.Fatal(err)
+	}
+	binding.Uid ^= 1
+	foreignBytes, err := json.Marshal(binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts[locator.URI] = foreignBytes
+	verify := func() error {
+		var err error
+		evidence.EvidenceHash, err = finalSemanticEvidenceHash(evidence)
+		if err != nil {
+			return err
+		}
+		return VerifyFinalSemanticArtifacts(t.Context(), evidence, load)
+	}
+	if err := verify(); err == nil || !strings.Contains(err.Error(), "size or content hash mismatch") {
+		t.Fatalf("unauthenticated head bytes reached structural admission: %v", err)
+	}
+	locator.ContentHash, locator.SizeBytes = bytesSHA256(foreignBytes), uint64(len(foreignBytes))
+	if err := verify(); err == nil || !strings.Contains(err.Error(), "binding artifact differs from its signed identity/checkpoint") {
+		t.Fatalf("head manifest identity admission reached signed proof replay: %v", err)
+	}
+	*locator = originalLocator
+	artifacts[locator.URI] = originalBytes
+	if err := verify(); err == nil || !strings.Contains(err.Error(), "invalid character '!'") {
+		t.Fatalf("admitted head identity omitted the actual signed closure decoder: %v", err)
+	}
+}

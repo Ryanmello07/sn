@@ -60,6 +60,7 @@ func newFinalCaptureV2ShapeTestFixture(t *testing.T) (*ResolvedConfig, *FinalSem
 // The exact immutable setup and real renderer produce the source references;
 // replacing a rendered public origin cannot redefine the approved census.
 func TestFinalCaptureV2ReadsActualRenderedSetupAndRejectsChangedSource(t *testing.T) {
+	t.Parallel()
 	fixture := newRuntimeEvidenceProvisionV2TestFixture(t)
 	// The source origins were selected before the fixture signed its plan.
 	// Replacing resolved inputs afterward would test plan drift, not capture.
@@ -249,6 +250,73 @@ func TestFinalCaptureV2CompanionChunkClassPreservesSourceIdentity(t *testing.T) 
 	for _, name := range []string{"validator-evidence-companion", "validator-evidence-companion-001-of-002", "validator-evidence-companion-002-of-002"} {
 		if got := finalSemanticBundleClass(name); got != "validator-evidence-companion" {
 			t.Errorf("companion chunk %s changed source identity to %s", name, got)
+		}
+	}
+}
+
+// The small structural fixtures use the same real config/lock/key factories
+// as the parallel roots. Mutating one owner cannot change another's inputs.
+func TestFinalCaptureV2PrivateFixtureInputsAreDetached(t *testing.T) {
+	t.Parallel()
+	left, leftInputs, leftRoot := newFinalCaptureV2ShapeTestFixture(t)
+	right, rightInputs, rightRoot := newFinalCaptureV2ShapeTestFixture(t)
+	if leftRoot == rightRoot || left == right || left.Config == right.Config || left.Public == right.Public || left.Policy == right.Policy || left.Release == right.Release || left.Hyperparameters == right.Hyperparameters {
+		t.Fatal("capture fixtures share a writable owner")
+	}
+	leftRoles, err := BuildRoleSecrets(left)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rightRoles, err := BuildRoleSecrets(right)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := rightRoles.Clients["miner-1"]
+	artifact := rightRoles.EVM["testnet-owner"]
+	hotkey := rightRoles.Substrate[validatorHotkeyLabel(1)]
+	delete(leftRoles.Clients, "miner-1")
+	delete(leftRoles.EVM, "testnet-owner")
+	delete(leftRoles.Substrate, validatorHotkeyLabel(1))
+	freshRoles, err := BuildRoleSecrets(right)
+	if err != nil || rightRoles.Clients["miner-1"] != client || freshRoles.Clients["miner-1"] != client || rightRoles.EVM["testnet-owner"] != artifact || freshRoles.EVM["testnet-owner"] != artifact || rightRoles.Substrate[validatorHotkeyLabel(1)] != hotkey || freshRoles.Substrate[validatorHotkeyLabel(1)] != hotkey {
+		t.Fatalf("private fixture mutation reached a sibling or cached signer: %v", err)
+	}
+	miners, epochBlocks := right.Config.Topology.Miners, right.Policy.Settlement.EpochBlocks
+	origin := right.OperatorAPIOrigins[0]
+	buildHash := right.Release.EVMBuild["abi_hash"]
+	tempo := right.Hyperparameters.OwnerControlled["tempo"]
+	noId := right.Config.ValidatorEvidenceV2[0].Evidence.Operators[0].NoID
+	left.Config.Topology.Miners = 0
+	left.Policy.Settlement.EpochBlocks++
+	left.OperatorAPIOrigins[0] = "https://changed-owned.example"
+	left.Release.EVMBuild["abi_hash"] = "changed-owned-build"
+	left.Hyperparameters.OwnerControlled["tempo"] = -1
+	left.Config.ValidatorEvidenceV2[0].Evidence.Operators[0].NoID = 0
+	if right.Config.Topology.Miners != miners || right.Policy.Settlement.EpochBlocks != epochBlocks || right.OperatorAPIOrigins[0] != origin || right.Release.EVMBuild["abi_hash"] != buildHash || right.Hyperparameters.OwnerControlled["tempo"] != tempo || right.Config.ValidatorEvidenceV2[0].Evidence.Operators[0].NoID != noId {
+		t.Fatal("private fixture mutation reached a sibling configuration")
+	}
+	for _, paths := range [][2]string{
+		{filepath.Join(leftRoot, filepath.FromSlash(leftInputs.Validators[0].IntentStore.URI)), filepath.Join(rightRoot, filepath.FromSlash(rightInputs.Validators[0].IntentStore.URI))},
+		{left.Config.ValidatorEvidenceV2[0].Evidence.Operators[0].Activation.Path, right.Config.ValidatorEvidenceV2[0].Evidence.Operators[0].Activation.Path},
+	} {
+		leftInfo, err := os.Stat(paths[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		rightInfo, err := os.Stat(paths[1])
+		if err != nil || os.SameFile(leftInfo, rightInfo) {
+			t.Fatalf("capture fixtures alias a retained input: %v", err)
+		}
+		before, err := os.ReadFile(paths[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(paths[0], []byte("changed-private-owner\n"), leftInfo.Mode().Perm()); err != nil {
+			t.Fatal(err)
+		}
+		after, err := os.ReadFile(paths[1])
+		if err != nil || !bytes.Equal(before, after) {
+			t.Fatalf("private capture mutation changed sibling retained bytes: %v", err)
 		}
 	}
 }

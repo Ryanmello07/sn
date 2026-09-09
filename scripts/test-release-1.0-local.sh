@@ -90,11 +90,9 @@ release_phase_sn_go() {
   # isolated 90-minute race deadline below; do not let Go's implicit 10-minute
   # package deadline terminate the faster ordinary pass while its independent
   # durability tests are still running.
-  # The full ordinary suite and each complete race package group run as
-  # independent jobs below. Focused family selections and deadlines stay intact.
-  settlement_closure_tests='^Test(Attempt(Settlement|Cut|Assignment)|ReleaseSettlementRefresh|ReleaseSteeringLoop)'
-  go test ./validator -run "$settlement_closure_tests" -count=1
-  go test -race ./validator -run "$settlement_closure_tests" -count=1
+  # The complete uncached ordinary and validator race jobs below own every
+  # settlement-closure root. Do not repeat that census under an implicit 10m
+  # package deadline before admitting unrelated focused checks.
   validator_lifecycle_tests='^Test(TunnelAttemptCloseJoinsPumpBeforeGenerator|TunnelAttemptCloseReleasesPartialConstruction)$'
   go test ./validator -run "$validator_lifecycle_tests" -count=1
   go test -race ./validator -run "$validator_lifecycle_tests" -count=1
@@ -109,22 +107,22 @@ release_gate_start sn-go release_phase_sn_go
 
 release_phase_sn_all_normal() {
   cd "$sn_repo"
-  go test -parallel=4 -timeout 90m ./...
+  go test -parallel=4 -timeout 90m ./... -count=1
 }
 release_phase_sn_core_race() {
   cd "$sn_repo"
-  go test -race ./crv4 ./miner/... ./protocol
+  go test -race ./crv4 ./miner/... ./protocol -count=1
 }
 # Measured serial validator work exceeded the inherited ten-minute package
 # allowance. Keep focused deadlines unchanged and
 # give only this full package the same explicit budget as the other full jobs.
 release_phase_sn_validator_race() {
   cd "$sn_repo"
-  go test -race -parallel=4 -timeout 90m ./validator
+  go test -race -parallel=4 -timeout 90m ./validator -count=1
 }
 release_phase_sn_simulator_race() {
   cd "$sn_repo"
-  go test -race -parallel=4 -timeout 90m ./sim-testnet
+  go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1
 }
 release_gate_start sn-all-normal release_phase_sn_all_normal
 release_gate_start sn-core-race release_phase_sn_core_race
@@ -163,9 +161,9 @@ release_phase_server_unit() {
   test_env_fail_fast_tests='^Test(DefaultTestEnvReleaseFailFast|RunRetriesUntilPass|RunFailsAfterExhaustion|RunReportsPanicOriginAfterExhaustion)'
   go test . -run "$test_env_fail_fast_tests" -count=1
   go test -race . -run "$test_env_fail_fast_tests" -count=1
-  go test . -run '^Test(PgResourcesRedirectMaintenancePoolAndRestore|DatabaseTimeMatchesPostgresPrecision)$'
-  go test ./st ./startifact
-  go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit|StEstimate|StReplacement|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)'
+  go test . -run '^Test(PgResourcesRedirectMaintenancePoolAndRestore|DatabaseTimeMatchesPostgresPrecision)$' -count=1
+  go test ./st ./startifact -count=1
+  go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit|StEstimate|StReplacement|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1
   provider_input_tests='^Test(StCanonicalProviderUsages|StBuildReleaseProviderInputs)'
   go test ./controller -run "$provider_input_tests" -count=1
   go test -race ./controller -run "$provider_input_tests" -count=1
@@ -181,12 +179,12 @@ release_phase_server_unit() {
   filter_pure_tests='^TestVerifySimulationAssignmentFilter(IsValidatorLocalAndFailClosed|RejectsAmbiguousFiles|V[12].*|Rejects(Leaf|Parent)Symlink|AtomicReplacementPinsOpenedDescriptor)$'
   go test ./controller -run "$filter_pure_tests" -count=1
   go test -race ./controller -run "$filter_pure_tests" -count=1
-  go test ./session -run 'Test.*(UrForwardedAddress|LegacyForwardedHeaders|RemoteAddress)'
-  go test ./router -run 'TestTrie'
-  go test ./model -run '^Test(VerifyEgressExactIndexAndPrefixScoreAreIndependent|StTransactionAdvisoryLockKeyUsesEthereumNonceScope|StHeadBoundCkeysFromEvents|ParseHeadEventCkey)$'
-  go test ./taskworker/work -run '^TestStSettlementTasksRejectStaleCoordinatorPayloads$'
-  go test ./monitor
-  go test -race ./monitor
+  go test ./session -run 'Test.*(UrForwardedAddress|LegacyForwardedHeaders|RemoteAddress)' -count=1
+  go test ./router -run 'TestTrie' -count=1
+  go test ./model -run '^Test(VerifyEgressExactIndexAndPrefixScoreAreIndependent|StTransactionAdvisoryLockKeyUsesEthereumNonceScope|StHeadBoundCkeysFromEvents|ParseHeadEventCkey)$' -count=1
+  go test ./taskworker/work -run '^TestStSettlementTasksRejectStaleCoordinatorPayloads$' -count=1
+  go test ./monitor -count=1
+  go test -race ./monitor -count=1
   # The immutable sim-latency baseline contains manifest-locked reference test
   # inputs that compile only after their archived patches are applied. Verify
   # that dataset with its own checker and compile every executable package.
@@ -206,7 +204,7 @@ release_phase_connect() {
   go test . -run "$client_key_registration_tests" -count=1
   go test -race . -run "$client_key_registration_tests" -count=1
   go test ./... -run '^$'
-  go test . -run '^Test(Verify|Sn)'
+  go test . -run '^Test(Verify|Sn)' -count=1
 
   transport_identity_tests='^Test(PlatformTransportAuthSnapshotsAreAtomicAndOwned|PlatformTransportH[13]ReconnectUsesUpdatedAuthSnapshot|TunTcpInboundFlowUsesStableBoundedShards|TunTcpInboundShardHandoffCadenceIsBounded|TunWriteCompletesFiniteTcpInboundHandoffBeforeReturn|TunWriteRetainsTcpInboundYieldCadence|TunWriteBatchFinishesEveryTcpInboundHandoff)$'
   go test . -run "$transport_identity_tests" -count=1
@@ -271,7 +269,7 @@ release_phase_sdk() {
   go test . -run "$provider_registration_tests" -count=1
   go test -race . -run "$provider_registration_tests" -count=1
   go test ./... -run '^$'
-  go test . -run '^Test(ApiSubnet|ProviderLocalUserNatSettings)'
+  go test . -run '^Test(ApiSubnet|ProviderLocalUserNatSettings)' -count=1
   token_transport_tests='^Test(ApiTokenManager|DeviceRemoteRpcPublicationWakesOnlyOutstandingRefresh|ApiCloseAndWaitJoinsRefreshWorker|DeviceLocalAppliesApiRefreshAndLogout|DeviceRemoteAppliesStandaloneApiRefreshAndLogout)'
   go test . -run "$token_transport_tests" -count=1
   go test -race . -run "$token_transport_tests" -count=1
@@ -367,8 +365,8 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test -race . -run "$evidence_source_tests" -count=1
     controller_db_tests='^Test(CreateContractRejectsInactiveClient|VerifyController(FullTrailFlow|PoisonAndFailurePaths|ConcurrentExtendReloadsAfterLock|ReplayCannotReadANewerCachedResponse)|VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)|AuthNetworkClientFeedsConfiguredProxyEgressNamespace|PaymentReconcile(SkipsStripeWithSKUOnlyVault|MalformedCredentialResourcesSkipAllStores)|StAccountReconcile|StSyncChainEventsBatchesCanonicalEventBlocks|StSyncChainEventsRejectsIncompleteCanonicalBatchBeforeMutation)'
     model_db_tests='Test(FindActiveClientNetwork|StreamHopListenerPrunesInactiveAdjacentClients|ActiveStreamHopsBoundsConcurrentStaleReAdd|ForceCloseRequiresPositiveParallelism|ForceCloseDisputedContract|ForceCloseDirectSettlementRemovesStream|ForceCloseMalformedContractRemovesStreamAndReturnsError|SweepOrphanClearsProxyConfigRedis|SweepOrphanReapsProxyClients|VerifyEgressIndexStoresNoRawIp|VerifyTrailLockMutualExclusion|VerifyTrailLockStaleReleasePreservesSuccessor|SweepExpiredVerifyTrails|VerifyTrailMutationLockTtlCoversLoadedTrail|StDeploymentStateIsIsolatedAcrossCoordinatorReplacements|StTransactionIntentReservationUsesChainAccountNonceScope|StTransactionRevertRetryCreatesOneImmutableSuccessor|StTransactionAttemptCandidatesConvergeOnOneWinner|StTransactionCancellationCannotRegress|StTransactionFinalizedAttemptCannotRegress)'
-    go test ./controller -run "$controller_db_tests"
-    go test ./model -run "$model_db_tests"
+    go test ./controller -run "$controller_db_tests" -count=1
+    go test ./model -run "$model_db_tests" -count=1
     provider_attribution_tests='^Test(ContractPayout|CompanionContractPayout|ContractParticipant|StEpochProviderUsage|StatsProviderPayouts|StatsProviders|StatsQueryPlans|SearchProviderStatsRollup|RemoveOldSearchProviderStats|RemoveOldVerifyProviderStats)'
     go test ./model -run "$provider_attribution_tests" -count=1
     go test -race ./model -run "$provider_attribution_tests" -count=1
@@ -380,8 +378,8 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     # validator-local assignment filter all mutate shared database state. Keep
     # their focused race coverage in the repeatable release gate as well as the
     # deterministic ordinary suite.
-    go test -race ./controller -run "$controller_db_tests"
-    go test -race ./model -run "$model_db_tests"
+    go test -race ./controller -run "$controller_db_tests" -count=1
+    go test -race ./model -run "$model_db_tests" -count=1
     go test -race ./taskworker -count=1
     go test ./connect -run '^TestConnectionVerifyEgressUsesControllerHashNamespace$' -count=1
     go test -race ./connect -run '^TestConnectionVerifyEgressUsesControllerHashNamespace$' -count=1
