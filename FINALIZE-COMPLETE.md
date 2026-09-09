@@ -4,7 +4,64 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
-## Current frontier — 2026-09-09 18:59 UTC
+## Current frontier — 2026-09-09 19:27 UTC
+
+No new release-candidate or final-soak campaign has launched. The19:30 target
+is not a passing-gate claim. Source checkpoint SN a99bd1505c86b6058cc6f85a0c64459b6651b1b5
+is pushed; server17fba101 and Connecta91c389 remain clean and synchronized.
+
+Both actual new production defects are integrated and qualified. The v4
+baseline repair authenticates the archived plan and unchanged custody at the
+unused replacement nonce before issuing fresh approval; consumed nonces,
+durable progress, immutable code drift and conformance history remain refused.
+New2 and adjacent4 roots pass normal/race; the old source fails with the exact
+baseline literal. A serialized read-only live observation found finalized
+block7969857, hash0x59ba45b8d6a33c254741310cfdd234e2d70977216adf0f49361897b39decc295,
+deployer nonce29. This is evidence of an unstarted upgrade, not a transaction.
+The process identity parser now handles empty inherited IFS during signal
+cleanup and refuses incomplete records. Affected9 normal/race and both
+physical old-script causal roots normal/race are closed.
+
+Additional closed obligations: HTTP old-handler causal normal/race; the four
+original validator timeout roots' three fresh race confirmations; server's
+missing-client old-fixture causal with owned private-service cleanup. Retain
+the earlier complete scoped results. The separate Connect fixed-seed shuffle
+owner disappeared with an empty log and no final receipt: this is a custody
+gap, not PASS or an established product timeout. The fresh aggregate must
+supply that qualification. Reconcile remaining producer66/completion20/nested
+guard receipts and execute only genuinely absent exact-root obligations.
+
+The clean pushed source CLI at
+`temp/sn-launch-refreshed-1915-v1-bTWU5lri/clean-cli/sim-testnet` has SHA256
+d9f5f5ad13962904151d0950f029255a7c1963828137d3a5ca0e38ad4a59815c.
+Its lock observation and same-binary apply both joined with exit0 and stable
+source/binary fences. The complete diff changes only SN/server Go hashes;
+reviewed proposal and applied lock SHA256 are both
+ac06e1d59813feb368889455e6d4b6a3aabd9835bd8434eea2d6c72958fce280.
+
+Immediate handoff: commit/push this lock and documentation, then start both
+strict gates and the final CLI build concurrently using the immutable command
+files in that external directory. Producer uses2 gate reservations/3 jobs
+(12CPU); aggregate2/2 (8CPU); final CLI2 and remaining focused2 total24.
+Do not modify command files or primary source while these owners run. Terra
+services owns both full gates and final CLI; Terra SN owns remaining small
+regression proofs; Root owns lock integration and serialized public readers.
+Each full gate's own strict source-freeze preflight supplies its manifest;
+do not introduce a duplicate standalone gate or restart closed suites.
+
+With the final clean executable, run doctor, plan A and plan B serially, joining
+each real exit and allowing a two-second quiet gap. Inspect both complete plan
+projections, actions and cumulative spends; do not reuse the rejected1817537
+plan or old binary. Producer PASS and launch-relevant repair proofs precede
+any writes; aggregate can overlap real RC but must PASS final acceptance.
+Use the existing attempt4 journal-aware resume and composite release-candidate
+scenario; no reset, reduced population, altered adversaries or new deployment.
+The pending optional diagnostic-before-gates question has no recorded user
+approval, so it does not change this admission order. All original live
+campaign, anomaly investigation and independently replayable FINAL.md duties
+below remain required. Record progress externally during the source freeze.
+
+## Historical frontier — 2026-09-09 18:59 UTC
 
 No new RC/soak or campaign transaction has launched. Continue focusing on the
 actual launch blockers, with broader qualification and evidence analysis in

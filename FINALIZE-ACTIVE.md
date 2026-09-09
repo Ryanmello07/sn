@@ -1,6 +1,6 @@
 # Release 1.0 active work index
 
-Updated 2026-09-09 18:59 UTC. Read this index first; use
+Updated 2026-09-09 19:27 UTC. Read this index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
@@ -25,7 +25,36 @@ independently replayable on-chain evidence in `FINAL.md`.
 
 ## Current pre-soak frontier
 
-Latest verified delta at 2026-09-09 18:59 UTC:
+Latest verified delta at 2026-09-09 19:27 UTC:
+
+- SN source a99bd150, server17fba101 and Connecta91c389 are clean/pushed;
+  the latest pull introduced no additional changes. The fresh clean CLI
+  SHA256 d9f5f5ad13962904151d0950f029255a7c1963828137d3a5ca0e38ad4a59815c
+  observed and applied the next lock. Its complete diff changes only the
+  expected SN/server Go source hashes. Reviewed/applied lock SHA256 is
+  ac06e1d59813feb368889455e6d4b6a3aabd9835bd8434eea2d6c72958fce280.
+- The unstarted v4 upgrade approval now authenticates archived history and
+  unchanged custody before generating fresh approval; it cannot rewrite old
+  plans or bypass consumed nonces/progress. Two new and four adjacent roots
+  pass normal/race; the old source reproduces the exact baseline refusal.
+  The live read-only nonce observation remained29 at finalized block7969857.
+- The cancellation parser now handles the timed reader's empty IFS and
+  validates process identity fields. Nine affected roots pass normal/race;
+  both old-script causal roots reproduce the exact failure in both modes.
+  HTTP old-handler causal normal/race, all three validator-root race
+  confirmations and the old server client-fixture causal are also closed.
+- No new campaign has launched. Checkpoint this lock, then start producer12CPU,
+  aggregate8CPU and final CLI2CPU together, leaving2CPU for genuinely missing
+  guard proofs. The full gates retain every mode, deadline and test population.
+  Root serializes fresh doctor, plan A and plan B with joined exits and quiet
+  public-RPC gaps while both gates run. Producer PASS and launch-relevant
+  repair obligations still precede chain writes; aggregate may overlap RC.
+- Retain the older failed/terminated producer and missing Connect shuffle
+  receipt as non-passing attempts. No component result supplies a full-gate
+  certificate. All real RC/final epochs and FINAL.md evidence remain required.
+  New immutable owner records: temp/sn-launch-refreshed-1915-v1-bTWU5lri.
+
+Predecessor verified delta at 2026-09-09 18:59 UTC:
 
 - No RC or final soak has launched. The19:30 launch target remains an urgent
   objective, not an achieved or guaranteed outcome. After launch, continue
