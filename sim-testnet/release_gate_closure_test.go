@@ -4,10 +4,12 @@ package main
 // of the selected census, so regenerating a weakened list is not sufficient.
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -72,10 +74,8 @@ func TestReleaseSemanticCensusPinsSettlementClosureRegressions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, command := range []string{"settlement_closure_tests='^Test(Attempt(Settlement|Cut|Assignment)|ReleaseSettlementRefresh|ReleaseSteeringLoop)'", "go test ./validator -run \"$settlement_closure_tests\" -count=1", "go test -race ./validator -run \"$settlement_closure_tests\" -count=1"} {
-		if !strings.Contains(string(aggregateBytes), command) {
-			t.Fatalf("aggregate gate omits %s", command)
-		}
+	if err := verifyReleaseGateSettlementClosureOwners(string(aggregateBytes)); err != nil {
+		t.Fatalf("aggregate settlement closure ownership: %v", err)
 	}
 	for _, check := range []struct{ path, function, callee string }{
 		{path: "../validator/attempt_settlement.go", function: "advanceAttemptSettlementEpochWithIOMode", callee: "advanceAttemptSettlementEpochWithIOModeContext"},
@@ -131,5 +131,107 @@ func TestReleaseSemanticCensusPinsSettlementClosureRegressions(t *testing.T) {
 	collect := strings.Index(scenario, "collect(ctx, cfg, stateDir, runDir, result, current, observationHistory)")
 	if wait < 0 || collect <= wait || !strings.Contains(scenario, "waitClosures = waitFinalValidatorSettlementClosures") {
 		t.Fatal("live capture lost its required existing-deadline terminal closure handoff")
+	}
+}
+
+// The original focused family is still part of both complete package owners;
+// its own duplicate implicit-deadline pair is not a separate certificate.
+const releaseSettlementClosureOwnerSelector = "^Test(Attempt(Settlement|Cut|Assignment)|ReleaseSettlementRefresh|ReleaseSteeringLoop)"
+
+// Require complete uncached normal/race owners before delegating any focused
+// root, and reject reinstating the redundant shorter aggregate pair.
+func verifyReleaseGateSettlementClosureOwners(script string) error {
+	if err := verifyReleaseGateFullValidatorRace(script); err != nil {
+		return err
+	}
+	if strings.Contains(script, "settlement_closure_tests=") || strings.Contains(script, "$settlement_closure_tests") {
+		return fmt.Errorf("settlement closure duplicated its complete normal/race owners under a focused package deadline")
+	}
+	return nil
+}
+
+// Independently derive the original family from every current validator test
+// source, then prove the producer and complete aggregate owners retain it.
+func TestReleaseSemanticCensusRequiresCompleteSettlementClosureOwners(t *testing.T) {
+	t.Parallel()
+	aggregateRaw, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyReleaseGateSettlementClosureOwners(string(aggregateRaw)); err != nil {
+		t.Fatal(err)
+	}
+	producerRaw, err := os.ReadFile("../scripts/test-release-1.0-producer-gate.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	producerSelector, err := releaseConnectPolicySelectorAssignment(string(producerRaw), "producer_tests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths, err := filepath.Glob("../validator/*_test.go")
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("validator source census: %v", err)
+	}
+	var sources []string
+	for _, path := range paths {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sources = append(sources, string(raw))
+	}
+	for _, owner := range []string{"^Test", producerSelector} {
+		if err := verifyReleaseSourceTestCoverage(owner, releaseSettlementClosureOwnerSelector, sources); err != nil {
+			t.Fatalf("settlement closure lost complete source coverage: %v", err)
+		}
+	}
+}
+
+// A full command must really execute in each mode; an old focused duplicate,
+// hidden registry, omitted body, cache hit or selected subset cannot replace it.
+func TestReleaseSemanticCensusRejectsIncompleteSettlementClosureOwners(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(raw)
+	if err := verifyReleaseGateSettlementClosureOwners(script); err != nil {
+		t.Fatal(err)
+	}
+	const oldPair = "settlement_closure_tests='" + releaseSettlementClosureOwnerSelector + "'\ngo test ./validator -run \"$settlement_closure_tests\" -count=1\ngo test -race ./validator -run \"$settlement_closure_tests\" -count=1\n"
+	if err := verifyReleaseGateSettlementClosureOwners(script + "\n" + oldPair); err == nil {
+		t.Fatal("aggregate accepted the original redundant implicit-deadline closure pair")
+	}
+	for _, command := range []string{
+		"go test -parallel=4 -timeout 90m ./... -count=1",
+		"go test -race -parallel=4 -timeout 90m ./validator -count=1",
+	} {
+		if strings.Count(script, command) != 1 {
+			t.Fatal("full closure owner is not unique", command)
+		}
+		for _, replacement := range []string{
+			"# " + command,
+			command + " -run '^TestAttemptSettlement$'",
+			command + " -skip '^TestAttempt'",
+			command + " -run '^$'",
+			strings.Replace(command, " -count=1", "", 1),
+			"if false; then\n" + command + "\nfi",
+		} {
+			if err := verifyReleaseGateSettlementClosureOwners(strings.Replace(script, command, replacement, 1)); err == nil {
+				t.Fatal("aggregate accepted incomplete closure owner", replacement)
+			}
+		}
+	}
+	const start = "release_gate_start sn-validator-race release_phase_sn_validator_race"
+	for _, replacement := range []string{
+		"# " + start,
+		"if false; then\n" + start + "\nfi",
+		"release_unused_owner() {\n" + start + "\n}",
+	} {
+		if err := verifyReleaseGateSettlementClosureOwners(strings.Replace(script, start, replacement, 1)); err == nil {
+			t.Fatal("aggregate accepted disconnected closure owner", replacement)
+		}
 	}
 }

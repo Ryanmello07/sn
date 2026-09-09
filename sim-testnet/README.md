@@ -315,12 +315,26 @@ any failed attestation and cannot grant release approval. Producer-gate success
 still precedes a live campaign write. Partial parallel prequalification is not
 a full gate certificate.
 
-The producer's ordinary capture and complete metadata census use independent
-admitted jobs. Ordinary capture skips only
-`TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier`;
-the `capture-metadata` job executes that exact root normally and with race
-detection. Ordinary capture keeps its five-minute normal and ten-minute race
-limits; full metadata keeps its five-minute normal limit and has a separately
+The producer's ordinary capture, private fixtures, reopened prior replay,
+complete publication population and metadata census use independent admitted
+jobs. Exact source guards require every selected root to have one execution
+owner in each mode.
+The `capture-population` job runs the unchanged 900-object, 296 MiB publisher and
+public readback with its five-minute normal and ten-minute race limits. This
+finite owner is separate from the ordinary roots' package timeout and keeps
+their process-global allocation controls serial. The `capture-private` job runs
+the real rendered-setup root and six private pending-prior/job roots together.
+Their five-minute normal and ten-minute race budgets start without the ordinary
+package's serial prefix. They retain independent configuration, state, signer
+copies and disk stores; all durable writes and assertions are unchanged.
+`capture-prior` runs the exact reopened-handoff substitution root, including
+its complete semantic fixture, sealing and prior closure verification, at the
+same five/ten-minute limits. Ordinary capture excludes only these eight roots
+and the two original stress roots. The six process-wide allocation controls
+and both original stress roots remain serial. The
+`capture-metadata` job executes the exact full metadata root in both modes.
+Ordinary capture keeps its five-minute normal and ten-minute race limits;
+full metadata keeps its five-minute normal limit and has a separately
 scoped 45-minute race limit. The unchanged complete race census took 1,839.622
 seconds with a sampled peak of 32,756,132 KiB in the retained diagnostic; this
 budget provides about 47% wall-time headroom. The complete aggregate simulator
@@ -387,6 +401,12 @@ is signed only after every file worker joins. Shared identity derivation uses
 the exact-key cache's detached copies. The authoritative semantic census is
 [`semantic-integrity-tests.txt`](semantic-integrity-tests.txt); source/invocation
 guards must prove every listed root is actually selected by both release gates.
+The producer admits the exact replicated owner-completion replay and exact
+fleet-audit projection replay as separate jobs. The remaining semantic job
+retains the complete census check and excludes only those two roots. All three
+owners retain the original 15-minute normal and 25-minute race limits, with
+four parallel roots; source guards reject missing, duplicate or broadened
+owners. The complete aggregate simulator keeps its existing 90-minute bound.
 Deterministic worker-bound/join and callback-nonreturn regressions remain
 selected. A callback that exits without returning must produce an explicit
 failure and cannot exhaust the worker pool or hide a later case. All 18 public

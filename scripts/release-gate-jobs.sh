@@ -7,7 +7,9 @@
 release_gate_process() {
   local line
   local -a fields
-  [[ "$1" =~ ^[1-9][0-9]*$ ]] && IFS= read -r line < "/proc/$1/stat" || return 1
+  # A normally reaped child has no stat file. Keep absence false and quiet;
+  # callers distinguish a joined exit from an owner lost before completion.
+  [[ "$1" =~ ^[1-9][0-9]*$ ]] && IFS= read -r line 2>/dev/null < "/proc/$1/stat" || return 1
   read -r -a fields <<< "${line##*) }"
   RELEASE_GATE_PROCESS_STATE="${fields[0]}"
   RELEASE_GATE_PROCESS_GROUP="${fields[2]}"
@@ -265,19 +267,47 @@ release_gate_reap_job() {
 }
 
 release_gate_wait_one() {
-  local index status extra deadline="${1:-0}"
+  local index status extra deadline="${1:-0}" completion="" fragment read_status
+  local LC_ALL=C
   while :; do
     if (( deadline > 0 && SECONDS >= deadline )); then
       echo "release gate: canceled completion deadline expired; refusing an unproven cleanup" >&2
       return 1
     fi
-    if IFS=' ' read -r -t 1 index status extra <&"$release_gate_completion_fd"; then
-      [[ "$index" =~ ^(0|[1-9][0-9]*)$ && "$status" =~ ^(0|[1-9][0-9]{0,2})$ && -z "$extra" ]] || return 1
-      (( ${#index} < 9 && index < ${#release_gate_pids[@]} )) || return 1
-      [[ "${release_gate_pending[index]:-0}" == 1 ]] && (( status <= 255 )) || return 1
-      release_gate_owned_job "$index" || return 1
-      printf 'joined\n' >&"${release_gate_ack_fds[index]}" || return 1
-      release_gate_reap_job "$index" "$deadline" || return 1
+    # A timed-out read retains partial bytes. Keep them until the newline;
+    # the existing eight-digit index and three-digit exit allow 12 data bytes.
+    fragment="" read_status=0
+    IFS= read -r -n 13 -t 1 fragment <&"$release_gate_completion_fd" || read_status=$?
+    completion+="$fragment"
+    if (( ${#completion} > 12 )); then
+      echo "release gate: completion record exceeds 12 data bytes" >&2
+      return 1
+    fi
+    if (( read_status == 0 )); then
+      IFS=' ' read -r index status extra <<< "$completion" || {
+        echo "release gate: completion field decoding failed" >&2; return 1;
+      }
+      [[ "$index" =~ ^(0|[1-9][0-9]*)$ && "$status" =~ ^(0|[1-9][0-9]{0,2})$ && -z "$extra" ]] || {
+        echo "release gate: completion has malformed index/status fields" >&2; return 1;
+      }
+      (( ${#index} < 9 && index < ${#release_gate_pids[@]} )) || {
+        echo "release gate: completion index is outside the admitted census" >&2; return 1;
+      }
+      [[ "${release_gate_pending[index]:-0}" == 1 ]] || {
+        echo "release gate: completion names an inactive or already joined owner" >&2; return 1;
+      }
+      (( status <= 255 )) || {
+        echo "release gate: completion status is outside the process exit range" >&2; return 1;
+      }
+      release_gate_owned_job "$index" || {
+        echo "release gate: completion owner identity is unavailable or changed" >&2; return 1;
+      }
+      printf 'joined\n' >&"${release_gate_ack_fds[index]}" || {
+        echo "release gate: completion acknowledgement could not be written" >&2; return 1;
+      }
+      release_gate_reap_job "$index" "$deadline" || {
+        echo "release gate: acknowledged completion owner did not reap" >&2; return 1;
+      }
       if (( RELEASE_GATE_JOB_EXIT != status )); then
         printf 'release gate: worker/owner exit mismatch: %s/%s\n' "$status" "$RELEASE_GATE_JOB_EXIT" >&2
         status="$RELEASE_GATE_JOB_EXIT"
@@ -287,6 +317,10 @@ release_gate_wait_one() {
       if (( status != 0 && release_gate_result == 0 )); then release_gate_result="$status"; fi
       if [[ "${release_gate_labels[index]}" != diagnostic-preflights ]] && (( status != 0 && release_gate_body_result == 0 )); then release_gate_body_result="$status"; fi
       return 0
+    fi
+    if (( read_status <= 128 )); then
+      echo "release gate: completion read ended without a complete record" >&2
+      return 1
     fi
     for index in "${!release_gate_pids[@]}"; do
       if [[ "${release_gate_pending[index]}" == 1 ]] && ! release_gate_owned_job "$index"; then

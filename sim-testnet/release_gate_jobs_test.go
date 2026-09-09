@@ -696,10 +696,10 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 		job     string
 		command string
 	}{
-		{phase: "sn_all_normal", job: "sn-all-normal", command: "go test -parallel=4 -timeout 90m ./..."},
-		{phase: "sn_core_race", job: "sn-core-race", command: "go test -race ./crv4 ./miner/... ./protocol"},
-		{phase: "sn_validator_race", job: "sn-validator-race", command: "go test -race -parallel=4 -timeout 90m ./validator"},
-		{phase: "sn_simulator_race", job: "sn-simulator-race", command: "go test -race -parallel=4 -timeout 90m ./sim-testnet"},
+		{phase: "sn_all_normal", job: "sn-all-normal", command: "go test -parallel=4 -timeout 90m ./... -count=1"},
+		{phase: "sn_core_race", job: "sn-core-race", command: "go test -race ./crv4 ./miner/... ./protocol -count=1"},
+		{phase: "sn_validator_race", job: "sn-validator-race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
+		{phase: "sn_simulator_race", job: "sn-simulator-race", command: "go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1"},
 	}
 	for _, group := range groups {
 		function := "release_phase_" + group.phase
@@ -759,8 +759,8 @@ func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T)
 	if err := verifyReleaseGateFullValidatorRace(script); err != nil {
 		t.Fatal(err)
 	}
-	const command = "go test -race -parallel=4 -timeout 90m ./validator"
-	const core = "go test -race ./crv4 ./miner/... ./protocol"
+	const command = "go test -race -parallel=4 -timeout 90m ./validator -count=1"
+	const core = "go test -race ./crv4 ./miner/... ./protocol -count=1"
 	const start = "release_gate_start sn-validator-race release_phase_sn_validator_race"
 	const definition = "release_phase_sn_validator_race() {\n  cd \"$sn_repo\"\n  " + command + "\n}"
 	cases := []struct {
@@ -768,19 +768,21 @@ func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T)
 		old         string
 		replacement string
 	}{
-		{name: "implicit deadline", old: command, replacement: "go test -race -parallel=4 ./validator"},
-		{name: "inherited short deadline", old: command, replacement: "go test -race -parallel=4 -timeout 10m ./validator"},
-		{name: "race omitted", old: command, replacement: "go test -parallel=4 -timeout 90m ./validator"},
-		{name: "reduced workers", old: command, replacement: "go test -race -parallel=2 -timeout 90m ./validator"},
+		{name: "implicit deadline", old: command, replacement: "go test -race -parallel=4 ./validator -count=1"},
+		{name: "inherited short deadline", old: command, replacement: "go test -race -parallel=4 -timeout 10m ./validator -count=1"},
+		{name: "race omitted", old: command, replacement: "go test -parallel=4 -timeout 90m ./validator -count=1"},
+		{name: "reduced workers", old: command, replacement: "go test -race -parallel=2 -timeout 90m ./validator -count=1"},
+		{name: "cached execution", old: command, replacement: strings.Replace(command, " -count=1", "", 1)},
+		{name: "no test bodies", old: command, replacement: strings.Replace(command, "-count=1", "-count=0", 1)},
 		{name: "compile only", old: command, replacement: command + " -run '^$'"},
 		{name: "narrowed population", old: command, replacement: command + " -run '^TestIntent'"},
 		{name: "commented command", old: command, replacement: "# " + command},
 		{name: "hidden failure", old: command, replacement: command + " || true"},
 		{name: "unreachable command", old: command, replacement: "if false; then\n  " + command + "\n  fi"},
 		{name: "different source", old: definition, replacement: strings.Replace(definition, `cd "$sn_repo"`, `cd "$workspace/server"`, 1)},
-		{name: "lost core runtime", old: core, replacement: "go test -race ./miner/... ./protocol"},
-		{name: "lost core miner", old: core, replacement: "go test -race ./crv4 ./protocol"},
-		{name: "lost core protocol", old: core, replacement: "go test -race ./crv4 ./miner/..."},
+		{name: "lost core runtime", old: core, replacement: "go test -race ./miner/... ./protocol -count=1"},
+		{name: "lost core miner", old: core, replacement: "go test -race ./crv4 ./protocol -count=1"},
+		{name: "lost core protocol", old: core, replacement: "go test -race ./crv4 ./miner/... -count=1"},
 		{name: "core budget leak", old: core, replacement: core + " -timeout 90m"},
 		{name: "combined core owner", old: core, replacement: core + " ./validator"},
 		{name: "commented admission", old: start, replacement: "# " + start},
@@ -804,5 +806,156 @@ func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T)
 	early = strings.Replace(early, definition, start+"\n"+definition, 1)
 	if err := verifyReleaseGateFullValidatorRace(early); err == nil {
 		t.Fatal("full validator gate admitted an undefined phase")
+	}
+}
+
+// These previously cacheable bodies are pinned to their actual phase and
+// selector. Compile-only package checks are separate and never count as bodies.
+var releaseGateUncachedCommands = []struct {
+	phase   string
+	command string
+}{
+	{phase: "sn_all_normal", command: "go test -parallel=4 -timeout 90m ./... -count=1"},
+	{phase: "sn_core_race", command: "go test -race ./crv4 ./miner/... ./protocol -count=1"},
+	{phase: "sn_validator_race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
+	{phase: "sn_simulator_race", command: "go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1"},
+	{phase: "server_unit", command: "go test . -run '^Test(PgResourcesRedirectMaintenancePoolAndRestore|DatabaseTimeMatchesPostgresPrecision)$' -count=1"},
+	{phase: "server_unit", command: "go test ./st ./startifact -count=1"},
+	{phase: "server_unit", command: "go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit|StEstimate|StReplacement|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1"},
+	{phase: "server_unit", command: "go test ./session -run 'Test.*(UrForwardedAddress|LegacyForwardedHeaders|RemoteAddress)' -count=1"},
+	{phase: "server_unit", command: "go test ./router -run 'TestTrie' -count=1"},
+	{phase: "server_unit", command: "go test ./model -run '^Test(VerifyEgressExactIndexAndPrefixScoreAreIndependent|StTransactionAdvisoryLockKeyUsesEthereumNonceScope|StHeadBoundCkeysFromEvents|ParseHeadEventCkey)$' -count=1"},
+	{phase: "server_unit", command: "go test ./taskworker/work -run '^TestStSettlementTasksRejectStaleCoordinatorPayloads$' -count=1"},
+	{phase: "server_unit", command: "go test ./monitor -count=1"},
+	{phase: "server_unit", command: "go test -race ./monitor -count=1"},
+	{phase: "connect", command: "go test . -run '^Test(Verify|Sn)' -count=1"},
+	{phase: "sdk", command: "go test . -run '^Test(ApiSubnet|ProviderLocalUserNatSettings)' -count=1"},
+	{phase: "server_db", command: "go test ./controller -run \"$controller_db_tests\" -count=1"},
+	{phase: "server_db", command: "go test ./model -run \"$model_db_tests\" -count=1"},
+	{phase: "server_db", command: "go test -race ./controller -run \"$controller_db_tests\" -count=1"},
+	{phase: "server_db", command: "go test -race ./model -run \"$model_db_tests\" -count=1"},
+}
+
+// Check the existing line-oriented command contract, not a second shell runner.
+// Fixed body commands cannot be hidden, replaced by a list, or made compile-only.
+func verifyReleaseGateUncachedBodies(script string) error {
+	for _, required := range releaseGateUncachedCommands {
+		pattern := regexp.MustCompile("(?ms)^[\\t ]*release_phase_" + regexp.QuoteMeta(required.phase) + "\\(\\) \\{\\n(.*?)^[\\t ]*\\}[\\t ]*$")
+		definitions := pattern.FindAllStringSubmatch(script, -1)
+		if len(definitions) != 1 {
+			return fmt.Errorf("uncached gate requires one %s phase", required.phase)
+		}
+		body := definitions[0][1]
+		// The bounded phase extractor ends at the first closing brace. Refuse
+		// nested declarations before an incomplete one can look executable.
+		nested := regexp.MustCompile(`(?m)^[\t ]*(function[\t ]+|[A-Za-z_][A-Za-z0-9_]*[\t ]*\([\t ]*\))`)
+		if nested.MatchString(body) {
+			return fmt.Errorf("uncached gate phase contains a nested function: %s", required.phase)
+		}
+		for _, line := range strings.Split(body, "\n") {
+			line = strings.TrimSpace(line)
+			if line == required.command {
+				break
+			}
+			if !strings.HasPrefix(line, "#") && strings.Contains(line, "<<") {
+				return fmt.Errorf("uncached gate body has an unsupported document wrapper: %s", required.phase)
+			}
+		}
+		conditions, err := releaseGateRegistrationConditions(body, required.command)
+		if err != nil || len(conditions) != 0 {
+			return fmt.Errorf("uncached gate body %s is missing, conditional or altered: %v %v", required.command, conditions, err)
+		}
+	}
+	compileCounts := map[string]int{
+		`go test "${server_packages[@]}" -run '^$'`: 0,
+		"go test ./... -run '^$'":                   0,
+	}
+	for _, line := range strings.Split(script, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "go test ") {
+			continue
+		}
+		if count, ok := compileCounts[line]; ok {
+			compileCounts[line] = count + 1
+			continue
+		}
+		count := 0
+		for _, field := range strings.Fields(line) {
+			if field == "-count" || strings.HasPrefix(field, "-count=") {
+				if field != "-count=1" {
+					return fmt.Errorf("gate body changes its uncached execution count: %s", line)
+				}
+				count++
+			}
+		}
+		if count != 1 {
+			return fmt.Errorf("gate body lacks exactly one uncached execution count: %s", line)
+		}
+	}
+	if compileCounts[`go test "${server_packages[@]}" -run '^$'`] != 1 || compileCounts["go test ./... -run '^$'"] != 2 {
+		return fmt.Errorf("compile-only checks changed their independent non-body census")
+	}
+	return nil
+}
+
+// Every original aggregate body executes fresh; compile-only checks stay
+// explicit without being promoted into execution evidence.
+func TestReleaseGateJobsRequireUncachedAggregateBodies(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyReleaseGateUncachedBodies(string(raw)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Restoring each original omission independently must fail admission, as must
+// substituted, unreachable, overridden, duplicated and new cacheable bodies.
+func TestReleaseGateJobsRejectCachedOrHiddenAggregateBodies(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(raw)
+	if err := verifyReleaseGateUncachedBodies(script); err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range releaseGateUncachedCommands {
+		if strings.Count(script, required.command) != 1 {
+			t.Fatalf("mutation lacks one actual %s body", required.phase)
+		}
+		for _, replacement := range []string{
+			strings.Replace(required.command, " -count=1", "", 1),
+			strings.Replace(required.command, "-count=1", "-count=0", 1),
+			required.command + " -count=2",
+			required.command + " -count=1",
+			required.command + " -run '^$'",
+			required.command + " -list '^Test'",
+			required.command + " || true",
+			"# " + required.command,
+			"if false; then\n" + required.command + "\nfi",
+			"release_unused_body() {\n" + required.command + "\n}",
+			"release_unused_body () {\n" + required.command + "\n}",
+			"function release_unused_body {\n" + required.command + "\n}",
+			"release_unused_body()\n{\n" + required.command + "\n}",
+			"(\n" + required.command + "\n)",
+			"{\n" + required.command + "\n}",
+			"cat <<'capture_body'\n" + required.command + "\ncapture_body",
+			required.command + "\n" + required.command,
+		} {
+			changed := strings.Replace(script, required.command, replacement, 1)
+			if err := verifyReleaseGateUncachedBodies(changed); err == nil {
+				t.Fatalf("uncached body admitted %s: %s", required.phase, replacement)
+			}
+		}
+	}
+	if err := verifyReleaseGateUncachedBodies(script + "\ngo test ./new-synthetic-package\n"); err == nil {
+		t.Fatal("new aggregate body omitted its fresh execution count")
+	}
+	if err := verifyReleaseGateUncachedBodies(script + "\ngo test ./... -run '^$'\n"); err == nil {
+		t.Fatal("an extra compile-only check changed the non-body census")
 	}
 }

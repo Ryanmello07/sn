@@ -182,10 +182,28 @@ release_phase_semantic() {
     exit 1
   fi
   diff -u "$semantic_integrity_census" <(printf '%s\n' "$semantic_integrity_actual")
-  go test ./sim-testnet -run "$semantic_integrity_tests" -count=1 -parallel=4 -timeout 15m
-  go test -race ./sim-testnet -run "$semantic_integrity_tests" -count=1 -parallel=4 -timeout 25m
+  go test ./sim-testnet -run "$semantic_integrity_tests" -count=1 -skip '^(TestPublicScenarioBundleRequiresReplicatedOwnerCompletionCommit|TestFinalSemanticFleetAuditProjectionBindsTheExistingArtifact)$' -parallel=4 -timeout 15m
+  go test -race ./sim-testnet -run "$semantic_integrity_tests" -count=1 -skip '^(TestPublicScenarioBundleRequiresReplicatedOwnerCompletionCommit|TestFinalSemanticFleetAuditProjectionBindsTheExistingArtifact)$' -parallel=4 -timeout 25m
 }
 release_gate_start semantic release_phase_semantic
+
+# These measured full replays each retain both original mode budgets. Separate
+# processes keep their work from consuming the remaining semantic roots' clock.
+release_phase_semantic_public_scenario() {
+  cd "$sn_repo"
+  semantic_public_scenario_tests='^TestPublicScenarioBundleRequiresReplicatedOwnerCompletionCommit$'
+  go test ./sim-testnet -run "$semantic_public_scenario_tests" -count=1 -parallel=4 -timeout 15m
+  go test -race ./sim-testnet -run "$semantic_public_scenario_tests" -count=1 -parallel=4 -timeout 25m
+}
+release_gate_start semantic-public-scenario release_phase_semantic_public_scenario
+
+release_phase_semantic_fleet_projection() {
+  cd "$sn_repo"
+  semantic_fleet_projection_tests='^TestFinalSemanticFleetAuditProjectionBindsTheExistingArtifact$'
+  go test ./sim-testnet -run "$semantic_fleet_projection_tests" -count=1 -parallel=4 -timeout 15m
+  go test -race ./sim-testnet -run "$semantic_fleet_projection_tests" -count=1 -parallel=4 -timeout 25m
+}
+release_gate_start semantic-fleet-projection release_phase_semantic_fleet_projection
 
 echo "[release-1.0 producer] lossless capture, completion, and publication"
 release_phase_capture() {
@@ -193,10 +211,41 @@ release_phase_capture() {
   capture_tests='^Test(FinalArchive|FinalCompositeArchive|ArchivePreflight|FinalClaimQueueCapture|FinalCollected(Bundle|File|Chain)|FinalSemantic(PublicCapture|LaunchFoundation)|FinalContractCleanupCapture|VerifyFinalCollected|FleetLifecycle|CanonicalRPCReceiptLogs|ScenarioProcessLogGate|ReleaseAndProductionScenariosRequireProcessLogGate|ScenarioCompletion|ScenarioRunner(WritesCompleteEvidenceOnlyOnPass|FailureHasNoCompleteMarker)|PublishedScenarioCandidateKeepsFrozenHashWhenClockAdvances|PublishedCompletionCommits|CampaignEvidence|DirectScenarioCompletion|EvidenceFileHashes|ArchiveCurrentDeploymentPublication|VerifyPublishedEvidenceOrigin|ReleaseCandidateCampaign|ProductionCampaignCompletion|ReleaseCampaignGate|ExactReleaseCampaignGate|ScenarioCampaignAttempt|ProductionHandoff|InitialScenarioFailure|ProductionPolicyEvidence|PrepareSignedAttemptStateNamespace|ClassifyValidatorAttemptState|ValidatorStateNamespace|QualificationLauncher|SimulatorAttemptCutV2|ProducerGateStateSelection|ProducerGateCustodySelection|ProducerGateCaptureSelection|FinalCaptureV2|FinalCaptureCapacity)'
   # This is deliberately capture-only: typed semantic reconstruction, public
   # replay, supplement publication and FINAL.md rendering run post-capture.
-  go test ./sim-testnet -run "$capture_tests" -count=1 -skip '^TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier$' -timeout 5m
-  go test -race ./sim-testnet -run "$capture_tests" -count=1 -skip '^TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier$' -timeout 10m
+  go test ./sim-testnet -run "$capture_tests" -count=1 -skip '^(TestCampaignEvidence(CapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|PopulationV2StreamsPhaseCensusWithBoundedOwners)|TestFinalCaptureV2(ReadsActualRenderedSetupAndRejectsChangedSource|PendingPriorClosesOriginalAuthority|PendingPriorRejectsRehashedSourceAndMissingCensus|PendingPriorRejectsWrongHandoffAndSemanticRelabel|PendingJobIsImmutableAndNeverAccepted|PendingPriorRejectsWrongGateBeforeWrites|PendingPriorArtifactCensusHasNoSemanticOutputs)|TestVerifyFinalCollectedPriorPhaseBytesRejectsReopenedHandoffSubstitution)$' -timeout 5m
+  go test -race ./sim-testnet -run "$capture_tests" -count=1 -skip '^(TestCampaignEvidence(CapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|PopulationV2StreamsPhaseCensusWithBoundedOwners)|TestFinalCaptureV2(ReadsActualRenderedSetupAndRejectsChangedSource|PendingPriorClosesOriginalAuthority|PendingPriorRejectsRehashedSourceAndMissingCensus|PendingPriorRejectsWrongHandoffAndSemanticRelabel|PendingJobIsImmutableAndNeverAccepted|PendingPriorRejectsWrongGateBeforeWrites|PendingPriorArtifactCensusHasNoSemanticOutputs)|TestVerifyFinalCollectedPriorPhaseBytesRejectsReopenedHandoffSubstitution)$' -timeout 10m
 }
 release_gate_start capture release_phase_capture
+
+# Go releases parallel roots only after the package's serial tests finish.
+# Admit all seven private durable fixtures together before that shared delay.
+release_phase_capture_private() {
+  cd "$sn_repo"
+  capture_private_tests='^TestFinalCaptureV2(ReadsActualRenderedSetupAndRejectsChangedSource|PendingPriorClosesOriginalAuthority|PendingPriorRejectsRehashedSourceAndMissingCensus|PendingPriorRejectsWrongHandoffAndSemanticRelabel|PendingJobIsImmutableAndNeverAccepted|PendingPriorRejectsWrongGateBeforeWrites|PendingPriorArtifactCensusHasNoSemanticOutputs)$'
+  go test ./sim-testnet -run "$capture_private_tests" -count=1 -timeout 5m
+  go test -race ./sim-testnet -run "$capture_private_tests" -count=1 -timeout 10m
+}
+release_gate_start capture-private release_phase_capture_private
+
+# Reopened prior verification constructs and seals the complete semantic graph.
+# Keep its original fixture and rejection checks in one independently timed job.
+release_phase_capture_prior() {
+  cd "$sn_repo"
+  capture_prior_tests='^TestVerifyFinalCollectedPriorPhaseBytesRejectsReopenedHandoffSubstitution$'
+  go test ./sim-testnet -run "$capture_prior_tests" -count=1 -timeout 5m
+  go test -race ./sim-testnet -run "$capture_prior_tests" -count=1 -timeout 10m
+}
+release_gate_start capture-prior release_phase_capture_prior
+
+# Keep the complete 900-object, 296 MiB publisher/readback in its own process.
+# It must not consume the ordinary capture roots' package-wide timeout or run
+# alongside their process-global allocation measurements.
+release_phase_capture_population() {
+  cd "$sn_repo"
+  capture_population_tests='^TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners$'
+  go test ./sim-testnet -run "$capture_population_tests" -count=1 -timeout 5m
+  go test -race ./sim-testnet -run "$capture_population_tests" -count=1 -timeout 10m
+}
+release_gate_start capture-population release_phase_capture_population
 
 # The unchanged full metadata race census measured 1,839.622 seconds. Give only
 # that exact root 45 minutes; normal metadata and ordinary capture keep their

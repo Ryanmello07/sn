@@ -1,6 +1,6 @@
 # Release 1.0 active work index
 
-Updated 2026-09-09 14:31 UTC. Read this index first; use
+Updated 2026-09-09 17:28 UTC. Read this index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
@@ -25,7 +25,39 @@ independently replayable on-chain evidence in `FINAL.md`.
 
 ## Current pre-soak frontier
 
-Latest verified delta at 2026-09-09 14:31 UTC (supersedes corresponding statuses below):
+Latest verified delta at 2026-09-09 17:28 UTC:
+
+- No live RC or final soak has launched. Both c507 strict gates failed; a
+  component pass is not release approval. Full current-state instructions are
+  at the top of FINALIZE-COMPLETE.md.
+- Twenty reviewed scheduling, evidence-admission, queue-framing and fixture
+  fix paths now appear in primary SN/server and match the candidate. These
+  are checkpoint edits with qualification pending, not a source freeze.
+- Candidate sibling baseline drift was corrected before new compilation:
+  126 Go paths plus14 associated assets, all module manifests already equal;
+  6,198 non-fix tracked paths now compare exactly with primary. Use the fresh
+  candidate fence, not its older Git HEAD or the superseded fence.
+- Closed scoped results include metadata3R, anchor4 normal/race plus original
+  3N/old-code causal, gate32 normal/race and monitor3N/3R with clean ownership.
+  Current-baseline full monitor normal/race remains after dependency sync.
+- Open work: corrected capture408/semantic287 complete owners, head-admission
+  causal/confirmations, gate66/queue20/remaining closure guards, four validator
+  failed-root race confirmations, then both clean strict gates.
+- New actual failures are being repaired in parallel: unread HTTP request
+  body fixture, shuffled Connect cancellation's wrong acquisition barrier,
+  missing active clients in three server ForceClose fixtures, and the full
+  simulator90m timeout with late parallel admission. No test population,
+  production outage protection or client admission check may be weakened.
+- Native/session handles from the prior owners were absent at17:22; no host
+  reboot is established. Missing aggregate final receipts and the old race
+  compiler's missing exit are retained, not converted to passes. New native
+  owners resume incomplete work with exact current source/binary checks.
+- After repairs: checkpoint/pull/push, refresh lock/CLI, strict producer PASS,
+  fresh doctor and two matching serialized public-RPC plans, real RC and
+  three final epochs. Aggregate PASS, all anomaly closure and on-chain/API/
+  MinIO evidence in FINAL.md remain mandatory. No credible final ETA yet.
+
+Predecessor verified delta at 2026-09-09 14:31 UTC:
 
 - StrictTidy3 source checkpoints SN1e0dcc3d3f33c508d0a7ddcf56399e8c1e27f2a0
   and serverace1b08dd213c82f928adf2be677247fa4d1652c are committed, pulled

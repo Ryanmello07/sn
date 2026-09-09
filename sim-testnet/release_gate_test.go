@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -422,6 +423,92 @@ func TestProducerGatePinsSyntheticEVMIdentityRegressions(t *testing.T) {
 // The producer gate must prove exact native payout causality, every ordinary
 // fleet generation, and historical EVM state/receipt identity before it can
 // issue the first shared-testnet mutation.
+const releaseGateSemanticPublicScenarioRoot = "TestPublicScenarioBundleRequiresReplicatedOwnerCompletionCommit"
+const releaseGateSemanticFleetProjectionRoot = "TestFinalSemanticFleetAuditProjectionBindsTheExistingArtifact"
+const releaseGateSemanticOwnerSkip = " -skip '^(" + releaseGateSemanticPublicScenarioRoot + "|" + releaseGateSemanticFleetProjectionRoot + ")$'"
+
+// Bind the existing source census to three finite jobs with the original mode
+// budgets. The two full replays cannot consume the ordinary package's clock.
+func verifyReleaseSemanticExecutionOwners(script string, selected []string) error {
+	ownerCounts := map[string]int{}
+	skip := regexp.MustCompile(strings.TrimSuffix(strings.TrimPrefix(releaseGateSemanticOwnerSkip, " -skip '"), "'"))
+	for _, group := range []struct {
+		phase    string
+		job      string
+		variable string
+		selector string
+		skip     string
+	}{
+		{phase: "semantic", job: "semantic", variable: "semantic_integrity_tests", selector: releaseSemanticIntegritySelector, skip: releaseGateSemanticOwnerSkip},
+		{phase: "semantic_public_scenario", job: "semantic-public-scenario", variable: "semantic_public_scenario_tests", selector: "^" + releaseGateSemanticPublicScenarioRoot + "$"},
+		{phase: "semantic_fleet_projection", job: "semantic-fleet-projection", variable: "semantic_fleet_projection_tests", selector: "^" + releaseGateSemanticFleetProjectionRoot + "$"},
+	} {
+		function := "release_phase_" + group.phase
+		pattern := regexp.MustCompile("(?ms)^[\\t ]*" + function + "\\(\\) \\{\\n(.*?)^[\\t ]*\\}[\\t ]*$")
+		phases := pattern.FindAllStringSubmatch(script, -1)
+		if len(phases) != 1 {
+			return fmt.Errorf("semantic execution needs exactly one %s phase", group.phase)
+		}
+		selector, err := releaseConnectPolicySelectorAssignment(phases[0][1], group.variable)
+		if err != nil || selector != group.selector {
+			return fmt.Errorf("semantic execution changed its exact %s selector: %v", group.phase, err)
+		}
+		var commands []string
+		for _, line := range strings.Split(phases[0][1], "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				commands = append(commands, line)
+			}
+		}
+		expected := []string{`cd "$sn_repo"`, group.variable + "='" + group.selector + "'"}
+		if group.phase == "semantic" {
+			expected = append(expected,
+				`semantic_integrity_census="$sn_repo/sim-testnet/semantic-integrity-tests.txt"`,
+				`semantic_integrity_actual="$(go test ./sim-testnet -list "$semantic_integrity_tests" | sed -n '/^Test/p' | LC_ALL=C sort)"`,
+				`if [[ -z "$semantic_integrity_actual" ]]; then`,
+				`echo "semantic-integrity selector matched no tests" >&2`,
+				"exit 1",
+				"fi",
+				`diff -u "$semantic_integrity_census" <(printf '%s\n' "$semantic_integrity_actual")`,
+			)
+		}
+		expected = append(expected,
+			`go test ./sim-testnet -run "$`+group.variable+`" -count=1`+group.skip+" -parallel=4 -timeout 15m",
+			`go test -race ./sim-testnet -run "$`+group.variable+`" -count=1`+group.skip+" -parallel=4 -timeout 25m",
+		)
+		if !slices.Equal(commands, expected) {
+			return fmt.Errorf("semantic execution changed %s commands or scoped budgets", group.phase)
+		}
+		start := "release_gate_start " + group.job + " " + function
+		conditions, err := releaseGateRegistrationConditions(script, start)
+		invocation := regexp.MustCompile("(?m)^" + regexp.QuoteMeta(start) + "[\\t ]*$")
+		calls := invocation.FindAllStringIndex(script, -1)
+		definition := pattern.FindStringIndex(script)
+		if err != nil || len(conditions) != 0 || len(calls) != 1 || calls[0][0] < definition[1] {
+			return fmt.Errorf("semantic execution lacks independent %s admission: %v", group.phase, err)
+		}
+		selectedPattern := regexp.MustCompile(selector)
+		count := 0
+		for _, name := range selected {
+			if selectedPattern.MatchString(name) && (group.phase != "semantic" || !skip.MatchString(name)) {
+				ownerCounts[name]++
+				count++
+			}
+		}
+		if group.phase != "semantic" && count != 1 || group.phase == "semantic" && count != len(selected)-2 {
+			return fmt.Errorf("semantic %s execution differs from its complete source census", group.phase)
+		}
+	}
+	for _, name := range selected {
+		if ownerCounts[name] != 1 {
+			return fmt.Errorf("semantic source %s has %d execution owners, want exactly one", name, ownerCounts[name])
+		}
+	}
+	return nil
+}
+
+// The full source census and both original executable modes remain mandatory,
+// including the two exact full replay owners and adjacent new regressions.
 func TestProducerGatePinsSemanticIntegrityRegressions(t *testing.T) {
 	scriptBytes, err := os.ReadFile("../scripts/test-release-1.0-producer-gate.sh")
 	if err != nil {
@@ -589,12 +676,53 @@ func TestProducerGatePinsSemanticIntegrityRegressions(t *testing.T) {
 			t.Errorf("producer gate has %d copies of %q, want exactly 1", strings.Count(script, censusCommand), censusCommand)
 		}
 	}
-	for _, command := range []string{
-		`go test ./sim-testnet -run "$semantic_integrity_tests" -count=1 -parallel=4 -timeout 15m`,
-		`go test -race ./sim-testnet -run "$semantic_integrity_tests" -count=1 -parallel=4 -timeout 25m`,
+	if err := verifyReleaseSemanticExecutionOwners(script, selectedDeclarations); err != nil {
+		t.Fatalf("semantic replay lacks exact independently admitted owners: %v", err)
+	}
+	for _, replacement := range []string{"", " -skip '^TestPublicScenarioBundle'", " -skip '^Test'"} {
+		changed := strings.Replace(script, releaseGateSemanticOwnerSkip, replacement, 1)
+		if err := verifyReleaseSemanticExecutionOwners(changed, selectedDeclarations); err == nil {
+			t.Fatal("semantic execution accepted combined or omitted replay owners", replacement)
+		}
+	}
+	for _, owner := range []struct {
+		phase    string
+		job      string
+		variable string
+	}{
+		{phase: "semantic", job: "semantic", variable: "semantic_integrity_tests"},
+		{phase: "semantic_public_scenario", job: "semantic-public-scenario", variable: "semantic_public_scenario_tests"},
+		{phase: "semantic_fleet_projection", job: "semantic-fleet-projection", variable: "semantic_fleet_projection_tests"},
 	} {
-		if strings.Count(script, command) != 1 {
-			t.Errorf("producer gate has %d copies of %q, want exactly 1", strings.Count(script, command), command)
+		start := "release_gate_start " + owner.job + " release_phase_" + owner.phase
+		for _, replacement := range []string{"# " + start, start + "\n" + start, "if false; then\n" + start + "\nfi", "release_phase_unused() {\n" + start + "\n}"} {
+			if err := verifyReleaseSemanticExecutionOwners(strings.Replace(script, start, replacement, 1), selectedDeclarations); err == nil {
+				t.Fatal("semantic execution accepted altered job admission", replacement)
+			}
+		}
+		for _, race := range []bool{false, true} {
+			command, timeout := "go test", "15m"
+			if race {
+				command, timeout = "go test -race", "25m"
+			}
+			command += ` ./sim-testnet -run "$` + owner.variable + `" -count=1`
+			if owner.phase == "semantic" {
+				command += releaseGateSemanticOwnerSkip
+			}
+			command += " -parallel=4 -timeout " + timeout
+			for _, replacement := range []string{
+				"# " + command, command + "\n" + command, command + " || true", command + " -skip '^Test'",
+				strings.Replace(command, "-timeout "+timeout, "-timeout 90m", 1),
+				strings.Replace(command, "-count=1", "-count=0", 1),
+				strings.Replace(command, "-parallel=4", "-parallel=8", 1),
+			} {
+				if strings.Count(script, command) != 1 {
+					t.Fatal("semantic execution mutation lost its unique command", command)
+				}
+				if err := verifyReleaseSemanticExecutionOwners(strings.Replace(script, command, replacement, 1), selectedDeclarations); err == nil {
+					t.Fatal("semantic execution accepted altered mode ownership", replacement)
+				}
+			}
 		}
 	}
 	// Trace helpers too: a new indirect full-fixture user must not restore a
@@ -1427,7 +1555,7 @@ func TestLocalReleaseGateAllowsCompleteSimulatorRaceSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(scriptBytes), "go test -race -parallel=4 -timeout 90m ./sim-testnet") {
+	if !strings.Contains(string(scriptBytes), "go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1") {
 		t.Fatal("local release gate lacks the reviewed 90-minute full simulator race deadline")
 	}
 }
@@ -2317,7 +2445,7 @@ func TestProducerGateSeparatesCaptureFromProductionAnalysis(t *testing.T) {
 	for _, deferred := range []string{
 		"go test ./...",
 		"ProduceFinalSemanticOutputs",
-		"go test -race -parallel=4 -timeout 90m ./sim-testnet",
+		"go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1",
 		"test-solidity-static.sh",
 	} {
 		if strings.Contains(script, deferred) {

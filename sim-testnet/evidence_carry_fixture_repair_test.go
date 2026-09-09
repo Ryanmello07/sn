@@ -72,6 +72,19 @@ func TestValidatorEvidenceFixtureReleaseLockMatchesGeneratedBodies(t *testing.T)
 // release-scale graph so incomplete fixture inputs have a direct regression.
 func TestValidatorEvidenceFixtureDeploymentAnchorsBindCompleteSource(t *testing.T) {
 	cfg, _, payloads := validatorEvidenceInstallTest(t)
+	// This case starts from an explicitly stale, owned dependency approval;
+	// the current lock is already complete and rebinding it is idempotent.
+	staleLock := *cfg.Release
+	staleLock.Dependencies = maps.Clone(cfg.Release.Dependencies)
+	staleImage := "synthetic-redis.example/fixture@sha256:" + strings.Repeat("81", 32)
+	if staleLock.Dependencies["redis"] == staleImage {
+		t.Fatal("stale approval fixture unexpectedly equals the current lock")
+	}
+	staleLock.Dependencies["redis"] = staleImage
+	if err := validateReleaseLockStatic(&staleLock); err != nil {
+		t.Fatalf("stale private approval is not well-shaped: %v", err)
+	}
+	cfg.Release = &staleLock
 	roles, err := derivePublicRoles(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -81,6 +94,9 @@ func TestValidatorEvidenceFixtureDeploymentAnchorsBindCompleteSource(t *testing.
 	plan, err := buildPlan(cfg, &facts, roles, time.Unix(1, 0))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if plan.ValidatorEvidenceSource.ReleaseLock.Dependencies["redis"] != staleImage {
+		t.Fatal("original plan did not bind the explicit stale private approval")
 	}
 	beforeHash := plan.PlanHash
 	var source FinalSemanticEvidence
@@ -133,6 +149,69 @@ func TestValidatorEvidenceFixtureDeploymentAnchorsBindCompleteSource(t *testing.
 		if err := validateValidatorEvidenceSource(&changed, true); err == nil {
 			t.Fatalf("%s archive substitution was accepted", key)
 		}
+	}
+}
+
+// Rebinding a current approval is byte-idempotent, while each source archive,
+// input lock and emitted lock artifact retains its independent ownership.
+func TestValidatorEvidenceFixtureDeploymentAnchorsKeepCurrentApprovalAndOwnSources(t *testing.T) {
+	path := filepath.Join("..", "deploy", "testnet", "release.lock.yml")
+	publicBefore, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, payloads := validatorEvidenceInstallTest(t)
+	originalLock := cfg.Release
+	roles, err := derivePublicRoles(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := *testSetupFacts()
+	facts.DeployerNonce = payloads.Manifest.InitialNonce
+	plan, err := buildPlan(cfg, &facts, roles, time.Unix(1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalSource := plan.ValidatorEvidenceSource
+	before, err := json.Marshal(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeHash := plan.PlanHash
+	var source FinalSemanticEvidence
+	artifacts := map[string][]byte{}
+	configureFinalSemanticFixtureDeploymentAnchors(t, cfg, &source, artifacts, plan)
+	after, err := json.Marshal(plan)
+	if err != nil || plan.PlanHash != beforeHash || !bytes.Equal(before, after) {
+		t.Fatalf("current approval rebind changed the original plan: %v", err)
+	}
+	if cfg.Release == originalLock || plan.ValidatorEvidenceSource == originalSource || plan.ValidatorEvidenceSource.ReleaseLock == cfg.Release {
+		t.Fatal("anchor constructor borrowed mutable lock or source ownership")
+	}
+	lockLocator := source.ReleaseLockArtifact
+	lockRaw := append([]byte(nil), artifacts[lockLocator.URI]...)
+	if len(lockRaw) == 0 || lockLocator.ContentHash != bytesSHA256(lockRaw) || lockLocator.SizeBytes != uint64(len(lockRaw)) {
+		t.Fatal("current anchor did not emit the exact lock artifact")
+	}
+	originalLock.Dependencies["redis"] = "changed original owned lock"
+	originalSource.ReleaseLock.Dependencies["redis"] = "changed original owned source"
+	currentRaw, err := canonicalReleaseLockBytes(cfg.Release)
+	if err != nil || !bytes.Equal(currentRaw, lockRaw) {
+		t.Fatalf("former owners changed the rebound approval: %v", err)
+	}
+	cfg.Release.Dependencies["redis"] = "changed rebound input lock"
+	detached, err := json.Marshal(plan)
+	if err != nil || !bytes.Equal(detached, before) || !bytes.Equal(artifacts[lockLocator.URI], lockRaw) {
+		t.Fatalf("input lock mutation changed the archived plan or emitted bytes: %v", err)
+	}
+	configureFinalSemanticFixtureDeploymentAnchors(t, cfg, &source, artifacts, plan)
+	repeated, err := json.Marshal(plan)
+	if err != nil || plan.PlanHash != beforeHash || !bytes.Equal(repeated, before) || source.ReleaseLockArtifact != lockLocator || !bytes.Equal(artifacts[lockLocator.URI], lockRaw) {
+		t.Fatalf("fresh current approval inherited prior private mutations: %v", err)
+	}
+	publicAfter, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(publicBefore, publicAfter) {
+		t.Fatalf("anchor fixture rewrote the public release lock: %v", err)
 	}
 }
 

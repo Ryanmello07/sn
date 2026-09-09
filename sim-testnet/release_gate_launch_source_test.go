@@ -157,8 +157,8 @@ func TestProducerGateStateSelectionKeepsColdFixturesInSemanticJob(t *testing.T) 
 		phase: "semantic", variable: "semantic_integrity_tests", requiredSelector: requiredSelector,
 		packages: []string{"./sim-testnet"}, sources: map[string][]string{"./sim-testnet": sources},
 		commands: []string{
-			`go test ./sim-testnet -run "$semantic_integrity_tests" -count=1 -parallel=4 -timeout 15m`,
-			`go test -race ./sim-testnet -run "$semantic_integrity_tests" -count=1 -parallel=4 -timeout 25m`,
+			`go test ./sim-testnet -run "$semantic_integrity_tests" -count=1` + releaseGateSemanticOwnerSkip + ` -parallel=4 -timeout 15m`,
+			`go test -race ./sim-testnet -run "$semantic_integrity_tests" -count=1` + releaseGateSemanticOwnerSkip + ` -parallel=4 -timeout 25m`,
 		},
 	}
 	if err := verifyReleaseEvidenceV2GateGroup(script, group); err != nil {
