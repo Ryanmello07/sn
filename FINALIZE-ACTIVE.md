@@ -1,6 +1,6 @@
 # Release 1.0 active work index
 
-Updated 2026-09-09 18:36 UTC. Read this index first; use
+Updated 2026-09-09 18:59 UTC. Read this index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
@@ -25,7 +25,38 @@ independently replayable on-chain evidence in `FINAL.md`.
 
 ## Current pre-soak frontier
 
-Latest verified delta at 2026-09-09 18:36 UTC:
+Latest verified delta at 2026-09-09 18:59 UTC:
+
+- No RC or final soak has launched. The19:30 launch target remains an urgent
+  objective, not an achieved or guaranteed outcome. After launch, continue
+  the broader tests, evidence analysis and cleanup in parallel as requested.
+- Source/lock checkpoints78c0a65 and1817537 were pushed. The latest requested
+  pull imported SN777eeb5 (competition API documentation) and server17fba101
+  (staging/evaluator/API/migration changes). Connecta91c389 is synchronized.
+  Those incoming server changes require a new release observation; the old
+  final executable/lock are not approval for the updated source.
+- Fresh1817537 doctor passed readiness (62/64, two expected nonblocking
+  public-provider independence advisories). Plan A then refused the coordinator
+  upgrade baseline. Astra is investigating the authenticated, approved-but-
+  unstarted v4 replacement; no migration authority may be fabricated.
+- All five strict producer preflights passed. Isolation then failed two new
+  completion tests because their expected outer zero contradicted the correctly
+  retained child exits23/7. The reviewed test-only correction is now integrated;
+  its native qualification is in progress. Production failure propagation and
+  all FIFO/ownership/cleanup assertions remain unchanged.
+- The already-failed producer was stopped before pulling source. Outer exit143
+  is retained and recorded native/phase owners are absent. Shutdown exposed a
+  separate process-stat parser error (`fields[2]` unbound); Astra is repairing
+  its inherited-IFS/cancellation boundary with deterministic adjacent tests.
+  Do not mistake termination or completed component jobs for producer PASS.
+- Newly closed checks include Runtime13 normal/race and old-source causal;
+  PublicScenario race; server18 normal/race, original failures3N and lifecycle
+  controls; current monitor normal/race with joined owners; Connect focus and
+  cancellation confirmations. Two focused validator-root race confirmations
+  pass. Continue only remaining exact-root/causal obligations, not whole
+  completed suites. Detailed live receipts: temp/sn-launch-critical-1930-v1-1yduOMHP.
+
+Predecessor verified delta at 2026-09-09 18:36 UTC:
 
 - The user's renewed launch target is19:30 UTC. Concentrate on a real
   accelerated RC launch; it is not final-soak acceptance. No new campaign

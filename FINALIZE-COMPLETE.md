@@ -4,7 +4,47 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
-## Current frontier — 2026-09-09 18:36 UTC
+## Current frontier — 2026-09-09 18:59 UTC
+
+No new RC/soak or campaign transaction has launched. Continue focusing on the
+actual launch blockers, with broader qualification and evidence analysis in
+parallel after launch. Source/lock1817537 was committed/pulled/pushed, its final
+CLI built cleanly, all five strict producer preflights passed, and its doctor
+reported ready=true (62/64 plus two expected public-provider advisories).
+Raw records are in `temp/sn-launch-critical-1930-v1-1yduOMHP`.
+
+Two real blockers then appeared: the new completion fixtures wrongly expected
+outer exit0 despite correctly retained failed-child23/7 statuses, and plan A
+refused `coordinator upgrade baseline does not authenticate the release
+deployment`. The one-file test-expectation donor is integrated for this
+checkpoint; production scripts and all fragment/ownership/cleanup assertions
+are unchanged. Donor and native selector:
+`temp/sn-completion-exit-expectation-astra-rxC6HutE/HANDOFF.md`.
+Astra separately investigates the authenticated v4 approval's unstarted
+replacement boundary; never reset history or weaken post-progress custody.
+
+Latest user requested another pull/push. Upstream had advanced: SN777eeb5 adds
+competition API documentation, server17fba101 adds24 staging/evaluator/API/
+migration paths. Before pulling, Root gracefully stopped the already-failed
+producer through its verified native gate PID2070083. Outer2070056 recorded143;
+all recorded gate/phase owners are absent. Shutdown printed a new process-stat
+parser `fields[2]` unbound error; the inherited-IFS/cancellation boundary needs
+its own narrow deterministic repair. Original failure and cancellation logs
+stay intact. The updated primary sources need a new clean observation/CLI and
+strict gate; no old lock, final executable or passing component is borrowed as
+updated-source release approval.
+
+Closed scoped progress: Runtime13 normal/race and physical old-source causal;
+PublicScenario race959.51s; server18 normal/race and original failures3N plus
+lifecycle controls; current full monitor normal/race under joined owners;
+Connect focus normal/race and three cancellation confirmations plus degraded
+old-code causal in both modes. The four original validator timeout roots have
+two fresh race passes25.923s/27.469s on1817537. A third matching-source focused
+pass is still needed because the stopped producer cannot supply it. Server's
+old-fixture causal remains prepared but not run. Retain completed coverage
+under its exact identity; new sibling updates do not authorize relabelling it.
+
+## Historical frontier — 2026-09-09 18:36 UTC
 
 The renewed sixty-minute preparation target is19:30 UTC. The immediate
 deliverable is a real accelerated release-candidate launch, not a claim that

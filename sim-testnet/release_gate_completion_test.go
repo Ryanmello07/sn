@@ -71,7 +71,8 @@ release_gate_complete || completion_result=$?
 printf '%s %s %s\n' "$release_gate_active" "$release_gate_services_cleaned" "$completion_result" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/fragment-cleanup"
 exit 0
 `)
-		self.join(t, 0)
+		// Explicit exit zero must not mask the retained worker status.
+		self.join(t, item.status)
 		state, err := os.ReadFile(filepath.Join(self.root, "fragment-state"))
 		expected := fmt.Sprintf("0 0 0 %d %d\n", item.status, item.parts)
 		if err != nil || string(state) != expected {
@@ -111,7 +112,8 @@ release_gate_complete || completion_result=$?
 printf '%s %s %s %s\n' "$completion_result" "$release_gate_active" "$release_gate_services_cleaned" "${release_gate_pending[1]}" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/second-fragment-state"
 exit 0
 `)
-	self.join(t, 0)
+	// The exit trap preserves the independently released owner's failure.
+	self.join(t, 7)
 	first, err := os.ReadFile(filepath.Join(self.root, "first-fragment-state"))
 	if err != nil || string(first) != "0 1 0 1\n" {
 		t.Fatalf("fragmented completion lost its exact independent owner: %q error=%v", first, err)
