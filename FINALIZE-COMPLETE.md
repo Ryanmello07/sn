@@ -4,7 +4,53 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
-## Current frontier — 2026-09-09 17:28 UTC
+## Current frontier — 2026-09-09 18:36 UTC
+
+The renewed sixty-minute preparation target is19:30 UTC. The immediate
+deliverable is a real accelerated release-candidate launch, not a claim that
+the final soak or WHITEPAPER1.0 acceptance is complete. No new campaign has
+launched. Limit new work to actual launch blockers and their deterministic
+root/adjacent regressions; keep the complete final requirements below.
+
+Pushed source checkpoints: SNc096632168870daf3db679d5f182247509335127,
+Connecta91c38958a82e8966512c6d50458e3641f8ce632 and
+server08766e46c45cf87e47a2cd1feea2d64ff7a4d959. The HTTP fixture and corrected
+two-file runtime scheduling donor are integrated in primary SN for the next
+checkpoint. The runtime donor adds only eight first-statement parallel calls
+and extends scheduling-only guards; the capture selector remains seven roots.
+Both files exactly match the reviewed donor and have clean formatting.
+Donor: `temp/sn-runtime-provision-parallel8-fixed-astra-SS4WgtbH/HANDOFF.md`.
+
+Latest native captures:
+
+- `temp/sn-native-owner-rerun-v1-TiG0GN`: capture ordinary/private/prior and
+  semantic ordinary285 pass normal/race; public scenario and fleet projection
+  pass normal. Remaining race work is live under corrected candidate CWD.
+  The two failed stress jobs labelled normal actually used the race executable
+  with a five-minute deadline. Commands and build metadata prove the wrong
+  profile. Retain those failures without inventing a production defect;
+  correctly bound normal reruns are live. Other labelled normal commands use
+  the normal binary. Prior correct-profile stress race streaks stay closed.
+- `temp/sn-http-fixture-native-v1-TiG0GN`: affected normal/race pass and the
+  original failed HTTP root has three fresh corrected race passes. The fixture
+  now consumes its request before acknowledging success and deterministically
+  rejects incomplete uploads; no production HTTP behavior changed.
+- `temp/qual-connect-terra-services-1825`: old degraded-predecessor causal
+  actually fails at the declared acquisition-barrier literal, not a compile
+  failure or timeout. Corrected Connect and isolated server/monitor native
+  qualification are independently owned by Terra services.
+
+Critical execution order: checkpoint/pull/push source while focused native
+checks run; build a clean pushed CLI; review and atomically apply the observed
+lock; checkpoint the lock; start both strict gates and final CLI build
+concurrently. Fresh doctor and two matching plans are read-only and can be
+prepared while native gates run, but serialize those three public-RPC readers
+with joined exits and two-second quiet gaps. Do not write to the chain before
+producer PASS and launch-relevant repair obligations close. Aggregate may
+overlap real RC; any actual new failure stops new campaign writes. Preserve
+the authorized journal-aware attempt4 resume and all final reporting duties.
+
+## Historical frontier — 2026-09-09 17:28 UTC
 
 No new live release-candidate or final-soak campaign has launched. Both actual
 c507 strict gates remain failed; component passes are not release approval.

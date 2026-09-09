@@ -1,6 +1,6 @@
 # Release 1.0 active work index
 
-Updated 2026-09-09 17:28 UTC. Read this index first; use
+Updated 2026-09-09 18:36 UTC. Read this index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
@@ -25,7 +25,38 @@ independently replayable on-chain evidence in `FINAL.md`.
 
 ## Current pre-soak frontier
 
-Latest verified delta at 2026-09-09 17:28 UTC:
+Latest verified delta at 2026-09-09 18:36 UTC:
+
+- The user's renewed launch target is19:30 UTC. Concentrate on a real
+  accelerated RC launch; it is not final-soak acceptance. No new campaign
+  has launched. Do not add speculative production changes, tooling rewrites,
+  or repeat completed unrelated qualification on this critical path.
+- SNc096632, Connecta91c389 and server08766e46 are pushed checkpoints.
+  The reviewed HTTP upload fixture repair and eight independently owned
+  runtime-test scheduling changes are now integrated in primary SN for the
+  next checkpoint. Runtime scheduling guards preserve the original seven-root
+  capture partition. No production population or test deadline is reduced.
+- Corrected capture ordinary/private/prior owners and semantic ordinary285
+  pass normal/race. Public-scenario and fleet-projection normal pass; their
+  remaining race executions run independently. HTTP affected normal/race and
+  the originally failed root's three race confirmations pass.
+- Both allegedly normal population/metadata stress failures invoked the
+  race binary with a five-minute normal deadline. The retained commands and
+  build metadata prove that harness mistake; they do not establish a product
+  regression. Correctly bound normal jobs are now running concurrently. Keep
+  the original failed attempts and the previously closed race confirmations.
+- Terra owns native checks: remaining SN roots and guards in one lane;
+  Connect, private server fixtures and current monitor ownership in another.
+  Astra handles only actual blocking diagnoses and exact launch instructions.
+  Root checkpoints source, refreshes the observed lock and prepares launch
+  concurrently. Current captures are listed at the top of the complete handoff.
+- After the clean lock checkpoint, start both strict gates and build the final
+  CLI concurrently. Producer PASS, launch-relevant repaired-root checks and
+  fresh doctor/matching plans precede writes. Aggregate may overlap the real
+  RC but must pass before final acceptance. Preserve all final evidence and
+  three-epoch obligations; no honest final completion ETA exists yet.
+
+Predecessor verified delta at 2026-09-09 17:28 UTC:
 
 - No live RC or final soak has launched. Both c507 strict gates failed; a
   component pass is not release approval. Full current-state instructions are

@@ -482,6 +482,23 @@ var releaseCapturePrivateFixtureRoots = []struct {
 	{path: "final_semantic_pending_prior_v2_test.go", name: "TestFinalCaptureV2PendingPriorArtifactCensusHasNoSemanticOutputs", fixture: "newFinalPendingPriorV2TestFixture"},
 }
 
+// Provisioning roots share the scheduling guard without entering the seven-root
+// capture selector. Clone the selector before adding these independent owners.
+var releaseCapturePrivateSchedulingRoots = append(slices.Clone(releaseCapturePrivateFixtureRoots), []struct {
+	path    string
+	name    string
+	fixture string
+}{
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2FixedPlanBoundsAllFourKeeperActions", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2HeaderCapacityMatchesPublicReader", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2RetainsActualFilesAndResolvesSameTemplate", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2InterruptedLastSourceResumesExactConsents", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2ChangedInputCannotBeRehashedIntoAuthority", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2SignedForeignSourceIsRefusedBeforeFiles", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2NoImplicitBudgetOrFabricatedReferences", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+	{path: "runtime_evidence_provision_v2_test.go", name: "TestRuntimeEvidenceProvisionV2FreshSetupPreservesExistingDiskHistory", fixture: "newRuntimeEvidenceProvisionV2TestFixture"},
+}...)
+
 var releaseCaptureSerialOwnerRoots = []struct {
 	path string
 	name string
@@ -500,7 +517,7 @@ var releaseCaptureSerialOwnerRoots = []struct {
 func releaseCaptureSchedulingSources(t *testing.T) map[string]string {
 	t.Helper()
 	paths := map[string]bool{"runtime_evidence_provision_v2_test.go": true}
-	for _, root := range releaseCapturePrivateFixtureRoots {
+	for _, root := range releaseCapturePrivateSchedulingRoots {
 		paths[root.path] = true
 	}
 	for _, root := range releaseCaptureSerialOwnerRoots {
@@ -549,7 +566,7 @@ func verifyReleaseCapturePrivateScheduling(sources map[string]string) error {
 		receiver, ok := selector.X.(*ast.Ident)
 		return ok && receiver.Name == "t"
 	}
-	for _, root := range releaseCapturePrivateFixtureRoots {
+	for _, root := range releaseCapturePrivateSchedulingRoots {
 		function := functions[root.path+"/"+root.name]
 		if function == nil || len(function.Body.List) < 2 {
 			return fmt.Errorf("capture private root is missing: %s", root.name)
@@ -679,7 +696,7 @@ func TestProducerGateCaptureSelectionRejectsPrivateFixtureSchedulingDrift(t *tes
 			t.Fatal("capture scheduling accepted altered ownership", path, replacement)
 		}
 	}
-	for _, root := range releaseCapturePrivateFixtureRoots {
+	for _, root := range releaseCapturePrivateSchedulingRoots {
 		declaration := "func " + root.name + "(t *testing.T) {\n"
 		original := declaration + "\tt.Parallel()\n"
 		check(root.path, original, declaration)
