@@ -4,7 +4,20 @@ Start with [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md) for the concise current
 work/ownership index. The detailed records below retain historical evidence;
 do not reload the whole history for routine test status.
 
-Current test frontier (2026-09-09 14:23 UTC):
+Current test frontier (2026-09-09 14:31 UTC):
+
+StrictTidy3 source checkpoints SN1e0dcc3 and serverace1b08d are committed,
+pulled without upstream changes and pushed. The fresh clean-source executable
+07bca1654f24123d0180339b0b45bc8f49ae515649b195d11a92d15b7dfa0a51
+produced a reviewed lock diff changing ONLY the expected server/SN source
+hashes. Same-binary apply exits0, with only the tracked lock modified and exact
+proposal/applied SHA256 c359e1ccadb74057e21f377168e50d4c77ecef9b575c456672bc29c981c881c9.
+Captures: temp/sn-next-finalization-owners-v1-pswk2f/{clean-cli,lock-observation,lock-apply}.
+Checkpoint/push this lock and handoff, then immediately start both strict gates.
+Their own source-freeze preflights provide the required exact manifests. Neither
+gate consumes the externally rebuilt final CLI, so rebuild it concurrently at
+2CPU instead of putting both gates behind that unrelated wait. Total reservation
+is producer12+aggregate8+metadata2+CLI2=24CPU; memory limits remain as below.
 
 The lock/document checkpoint d97216ff is pushed, but both strict source-freeze
 owners refused BEFORE gate bodies/private services because server module
@@ -35,12 +48,14 @@ temp/sn-final-cli-doctor-v1-nElTwv/stdout. Root independently verified these
 counts, correcting an earlier64-pass message. All command/source/binary fences
 pass. This is independent infrastructure readiness, not final source admission.
 
-Next: checkpoint/push the reviewed module delta; build a clean new CLI, review
-and apply its new lock, checkpoint/push that lock and rebuild for its final
-revision. Launch both strict gates under fresh isolated owners immediately,
-overlapping unchanged-source full-census confirmations. Services' R1 remains
-live on its immutable45m snapshot and must not be restarted for bookkeeping
-alone. Main owns producer12CPU, Services aggregate8CPU plus metadata2CPU; charge
+The first corrected full-census race confirmation is now fully PASS:1878.34s,
+peak31589152KiB and all body/checker/converter/source/mode/snapshot/binary/census
+fences0. R2 is LIVE in the same capture's fullcensus-race/pass2 on identical
+source/binary/profile; Services starts R3 after joined passing R2 receipts.
+Launch both strict gates under fresh isolated owners immediately after the lock
+checkpoint, overlapping these unchanged-source confirmations. Do not restart
+closed qualifications for bookkeeping alone. Main owns producer12CPU, Services
+aggregate8CPU plus metadata2CPU; charge
 measured31.24GiB per concurrent full census and preserve service headroom.
 No packaging wait. Root owns explicit stop-new-writes supervision. Live RC
 requires producer PASS, EVERY repair/causal obligation closed and fresh doctor/
@@ -3517,8 +3532,13 @@ That candidate remains NOT YET QUALIFIED until every required check passes:
    interface, infrastructure, and config digest; never bless an unexplained
    mismatch.
 5. Commit and push the release lock plus the reconciled handoff documents.
-6. Fetch again and run `scripts/check-release-source-freeze.sh "$WORKSPACE"`.
-   Record its exact twelve-repository output.
+6. Start both strict gates after the locked checkpoint is pushed. Each calls
+   `scripts/check-release-source-freeze.sh "$WORKSPACE"` before admitting test
+   bodies; record each exact twelve-repository output. An extra standalone
+   invocation is not a prerequisite. The final-revision CLI rebuild is also
+   independent of gate startup and may run in an isolated output directory
+   within the remaining resource budget. It must finish and pass its identity
+   checks before the live doctor/plan/apply commands use it.
 
 Do not serialize both strict gates behind unchanged-source stress repeat2/3
 when they can use independent owners and measured resources. Preserve the
@@ -3629,7 +3649,7 @@ the attempt-4 state directory or an untracked repository-root build product.
 Doctor must be ready. The public operational/comparison backend distinction may
 be reported as the documented non-hard public-testnet limitation; every other
 check must pass. Specifically verify wallet identity, netuid ownership, runtime
-454 spec/transaction/state versions plus exact Wasm and metadata hashes at one
+455 spec/transaction/state versions plus exact Wasm and metadata hashes at one
 finalized checkpoint, chain/genesis identity, activation flags,
 hyperparameters, budget and balance, MinIO, local Docker, systemd, port
 availability, source lock, and authoritative carried history.
@@ -3644,19 +3664,42 @@ against schema 630 or reinterpret ambiguous legacy multi-provider rows as one
 provider's usage. Preserve historical rows; this migration does not backfill or
 rewrite them.
 
-Build the plan twice without any intervening write:
+Build the two independent read-only plans concurrently after the ready doctor.
+Keep the exact binary, source, configuration and state unchanged; perform no
+intervening mutation. Each invocation owns separate stdout/stderr, and both
+must be joined with zero exit before comparing the unchanged approval projection:
+
+Respect the shared public-provider request budget across both owners. If their
+combined admitted traffic cannot fit that budget, serialize the plan reads for
+that concrete resource constraint, not merely because one plan was listed first.
 
     "$SIM_TESTNET_BINARY" plan \
       --config sim-testnet/testnet.yml \
       --state-dir sim-testnet/runs/ur-subnet-testnet-v1-attempt-4 \
       --format json \
-      > /tmp/ur-subnet-testnet-plan-a.json
+      > /tmp/ur-subnet-testnet-plan-a.json \
+      2> /tmp/ur-subnet-testnet-plan-a.stderr &
+    SIM_TESTNET_PLAN_A_PID=$!
 
     "$SIM_TESTNET_BINARY" plan \
       --config sim-testnet/testnet.yml \
       --state-dir sim-testnet/runs/ur-subnet-testnet-v1-attempt-4 \
       --format json \
-      > /tmp/ur-subnet-testnet-plan-b.json
+      > /tmp/ur-subnet-testnet-plan-b.json \
+      2> /tmp/ur-subnet-testnet-plan-b.stderr &
+    SIM_TESTNET_PLAN_B_PID=$!
+
+    SIM_TESTNET_PLAN_A_EXIT=0
+    SIM_TESTNET_PLAN_B_EXIT=0
+    wait "$SIM_TESTNET_PLAN_A_PID" || SIM_TESTNET_PLAN_A_EXIT=$?
+    wait "$SIM_TESTNET_PLAN_B_PID" || SIM_TESTNET_PLAN_B_EXIT=$?
+    printf '%s\n' "$SIM_TESTNET_PLAN_A_EXIT" > /tmp/ur-subnet-testnet-plan-a.exit
+    printf '%s\n' "$SIM_TESTNET_PLAN_B_EXIT" > /tmp/ur-subnet-testnet-plan-b.exit
+    if [ "$SIM_TESTNET_PLAN_A_EXIT" -ne 0 ] || [ "$SIM_TESTNET_PLAN_B_EXIT" -ne 0 ]; then
+      printf 'read-only plan failure: A=%s B=%s\n' \
+        "$SIM_TESTNET_PLAN_A_EXIT" "$SIM_TESTNET_PLAN_B_EXIT" >&2
+      exit 1
+    fi
 
     jq -S 'del(
       .generated_at,
@@ -3684,8 +3727,9 @@ Build the plan twice without any intervening write:
         /tmp/ur-subnet-testnet-plan-b.approval.json
 
 This projection exactly mirrors the observation-only fields normalized by
-`SetupPlan.hash`. Keep both raw files as evidence: their moving checkpoints
-prove independent live reads. `TestPlanHashExcludesGenerationTimeButIncludesLiveFacts`
+`SetupPlan.hash`. Keep both raw files and separately owned execution receipts
+as evidence of each invocation's live observations; concurrent reads may record
+the same finalized checkpoint. `TestPlanHashExcludesGenerationTimeButIncludesLiveFacts`
 deterministically proves that observation-only drift preserves approval while
 an approval-bearing economic or topology change does not. Never replace this
 allowlist with a broad or recursive field deletion.
@@ -3834,7 +3878,7 @@ preparation:
 
 The release phase must not be marked complete merely because five settlement
 epochs elapsed. Its first three causal native milestones and terminal binding
-must also satisfy the runtime-454 schedule. Production must obtain the later
+must also satisfy the runtime-455 schedule. Production must obtain the later
 terminal-active native decision by its fixed acceptance terminal. The inclusive
 EVM evidence deadline is the later of the acceptance terminal and native
 application deadline; the two domains are checked independently. Under the

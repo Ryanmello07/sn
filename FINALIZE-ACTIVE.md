@@ -1,6 +1,6 @@
 # Release 1.0 active work index
 
-Updated 2026-09-09 14:23 UTC. Read this index first; use
+Updated 2026-09-09 14:31 UTC. Read this index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
@@ -25,7 +25,22 @@ independently replayable on-chain evidence in `FINAL.md`.
 
 ## Current pre-soak frontier
 
-Latest verified delta at 2026-09-09 14:23 UTC (supersedes corresponding statuses below):
+Latest verified delta at 2026-09-09 14:31 UTC (supersedes corresponding statuses below):
+
+- StrictTidy3 source checkpoints SN1e0dcc3d3f33c508d0a7ddcf56399e8c1e27f2a0
+  and serverace1b08dd213c82f928adf2be677247fa4d1652c are committed, pulled
+  without upstream changes and pushed. The fresh clean/pushed CLI SHA256
+  07bca1654f24123d0180339b0b45bc8f49ae515649b195d11a92d15b7dfa0a51
+  produced the next read-only lock proposal. Root reviewed its entire diff:
+  ONLY the expected server/SN source hashes change. Same-binary apply exits0
+  and changes only the tracked lock, exactly matching reviewed proposal SHA256
+  c359e1ccadb74057e21f377168e50d4c77ecef9b575c456672bc29c981c881c9.
+  Captures: temp/sn-next-finalization-owners-v1-pswk2f/{clean-cli,lock-observation,lock-apply}.
+  Checkpoint/push this lock and handoff, then start BOTH strict gates immediately.
+  Their own strict source-freeze preflights supply the exact manifests; do not
+  add a duplicate standalone preflight or wait for the final CLI. Rebuild that
+  final executable alongside them at2CPU: producer12+aggregate8+metadata2+CLI2
+  equals24. The final executable remains required for live doctor/plan/apply.
 
 - The lock/document checkpoint d97216ff is committed, pulled and pushed. Its
   fresh clean-source executable SHA256 is
@@ -64,12 +79,14 @@ Latest verified delta at 2026-09-09 14:23 UTC (supersedes corresponding statuses
   checks pass. Capture: temp/sn-final-cli-doctor-v1-nElTwv/stdout, generated
   2026-09-09T14:14:56Z, command exit0 and all source/binary fences0. It makes no
   chain writes and does not waive the new lock, release gates or repair streak.
-- FullCensus corrected R1 continues unchanged on its sealed snapshot; retain
-  closed unrelated qualifications. Root checkpoints the three-file module
-  correction while Main prepares the fresh clean CLI/lock and Services finishes
-  the identity comparison and R1/R2/R3. Then overlap strict producer3 and
-  aggregate2 jobs with metadata2CPU as already specified below. No report or
-  unrelated completed test rerun may delay a ready critical-path owner.
+- FullCensus corrected R1 is fully PASS:1878.34s test elapsed, body/checker/
+  converter and every source/mode/snapshot/binary/census fence0. Peak sampled
+  Rss31589152KiB. R2 is LIVE on the identical sealed snapshot/binary/profile at
+  temp/sn-fullcensus-racebudget-qualification-Toy4tH/fullcensus-race/pass2:
+  timeout owner1433290, actual test child1433292, GOMAX2, parallel4, inner45m,
+  outer3000s. Services starts R3 only after joined passing R2 receipts. Retain
+  all closed unrelated qualifications. Strict gates overlap these repeats;
+  no report or completed test rerun may delay a ready critical-path owner.
 - No live RC or soak has started and no new campaign transaction is claimed.
   The urgent30-minute target does not waive producer PASS, all repaired-root
   obligations, fresh doctor and matching plans. Final aggregate PASS, real RC,
