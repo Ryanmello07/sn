@@ -86,6 +86,14 @@ func TestProofStoreRejectsPublicFileBeforeAppend(t *testing.T) {
 	if err := os.WriteFile(store.path, want, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// Creation permissions are filtered by the host umask. Establish and
+	// observe the adversarial mode explicitly before testing the real reader.
+	if err := os.Chmod(store.path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(store.path); err != nil || info.Mode().Perm() != 0o644 {
+		t.Fatalf("public proof fixture mode was not established: %v %v", info, err)
+	}
 	record := &ProofRecord{Version: 1, TrailId: connect.NewId(), Coverage: 1, CompleteTimeMs: 1}
 	if err := store.Append(record); err == nil {
 		t.Fatal("proof store appended to a public file")

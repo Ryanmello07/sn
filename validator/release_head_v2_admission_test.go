@@ -48,8 +48,7 @@ func releaseHeadV2AccountingInputBudget(t *testing.T, store *HeadEMAStore, raw m
 }
 
 // Reconstruct the unfinished draft/census, copied replay options and native
-// owner reservation, leaving no allowance for retained/current/generated EMA.
-// Frozen isolated causal fixtures retain their original pre-composition formula.
+// owner reservation, leaving no allowance for signed response bodies or EMA.
 func releaseHeadV2AccountingCollectionBudget(t *testing.T, fixture *releaseHeadV2TestFixture, options ReleaseMeasurementV2Options) uint64 {
 	t.Helper()
 	draft := cloneReleaseMeasurementArtifact(t, fixture.measurement.artifact)
@@ -61,7 +60,7 @@ func releaseHeadV2AccountingCollectionBudget(t *testing.T, fixture *releaseHeadV
 	}
 	used := uint64(1024*1024) - remaining + uint64(len(fixture.hotkeys))*(32+2) + uint64(len(draft.Inputs))*(8+uint64(reflect.TypeFor[ClientKeyFunc]().Size()))
 	for _, input := range draft.Inputs {
-		used += uint64(len(input.Stats.Providers)) * (uint64(reflect.TypeFor[ReleaseBindingMeasurement]().Size()) + 36 + 5*66 + 16 + 1)
+		used += uint64(len(input.Stats.Providers)) * (uint64(reflect.TypeFor[ReleaseBindingMeasurement]().Size()) + 36 + 6*66 + 16 + 1)
 	}
 	budget, err := reserveReleaseHeadV2CollectionDerived(t.Context(), draft, releaseHeadV2Budget{limit: 1024 * 1024, used: used})
 	if err != nil {
@@ -156,7 +155,7 @@ func TestReleaseHeadV2AccountingKeepsOneGenuineCollectionBudget(t *testing.T) {
 	options = fixture.options(t)
 	reads = observeReleaseMeasurementV2SettlementTest(&options)
 	result, err = fixture.gather(t.Context(), options)
-	if err != nil || *reads == 0 || !reflect.DeepEqual(result.Weights, fixture.measurement.want.SelectedHead) || !reflect.DeepEqual(result.Bindings, fixture.measurement.artifact.Bindings) {
+	if err != nil || *reads == 0 || !reflect.DeepEqual(result.Weights, fixture.measurement.want.SelectedHead) || !reflect.DeepEqual(releaseClientKeyTestChainBindings(result.Bindings), fixture.measurement.artifact.Bindings) {
 		t.Fatalf("bounded repair bypassed genuine complete replay or exact math: reads=%d error=%v", *reads, err)
 	}
 	fixture.assertNoEMACommit(t)
@@ -243,7 +242,7 @@ func TestReleaseHeadV2AccountingAdmitsRealUnionBeforeProofReplay(t *testing.T) {
 	options.MaxHeadEntries = 1
 	reads := observeReleaseMeasurementV2SettlementTest(&options)
 	result, err := fixture.gather(t.Context(), options)
-	requests, batches := fixture.rpc.counts()
+	requests, batches := fixture.rpc.bindingCounts()
 	if err == nil || requests == 0 || batches != 2 || *reads != 0 || !strings.Contains(err.Error(), "current/history union exceeds") || !reflect.DeepEqual(result, releaseHeadResult{}) {
 		t.Fatalf("real current/history union was delayed until proof replay: requests=%d batches=%d reads=%d error=%v", requests, batches, *reads, err)
 	}

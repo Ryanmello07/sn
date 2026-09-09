@@ -333,7 +333,7 @@ func TestRuntimeArtifactMetadataValidatorIdentityRejectsInvalidAuthorityBeforeRP
 		{name: "missing", change: func(f *validatorIdentityTestFixture) { f.allowed = nil }},
 		{name: "duplicate", change: func(f *validatorIdentityTestFixture) { f.allowed = append(f.allowed, f.allowed[0]) }},
 		{name: "too many", change: func(f *validatorIdentityTestFixture) {
-			for i := 0; i < 4; i++ {
+			for i := 0; i < maximumRuntimeMetadataArtifactsPerChain; i++ {
 				value := f.allowed[0]
 				value.Version.SpecVersion += uint32(i + 1)
 				f.allowed = append(f.allowed, value)
@@ -348,6 +348,38 @@ func TestRuntimeArtifactMetadataValidatorIdentityRejectsInvalidAuthorityBeforeRP
 		observed, err := ReadValidatorIdentityAtContext(fixture.ctx, fixture.chain, fixture.query, fixture.allowed...)
 		if err == nil || observed != (ValidatorIdentityObservation{}) || len(fixture.calls) != 0 {
 			t.Errorf("%s: result=%+v calls=%v error=%v", example.name, observed, fixture.calls, err)
+		}
+	}
+}
+
+// The exact configured authority bound remains usable with the selected
+// historical artifact last. One additional distinct tuple fails before reads.
+func TestRuntimeArtifactMetadataValidatorIdentityExactAuthorityBound(t *testing.T) {
+	t.Parallel()
+	for _, extra := range []bool{false, true} {
+		fixture := newValidatorIdentityTestFixture(t)
+		selected := fixture.allowed[0]
+		fixture.allowed = nil
+		count := maximumRuntimeMetadataArtifactsPerChain
+		if extra {
+			count++
+		}
+		for index := 1; index < count; index++ {
+			identity := selected
+			identity.Version.SpecVersion += uint32(index)
+			fixture.allowed = append(fixture.allowed, identity)
+		}
+		fixture.allowed = append(fixture.allowed, selected)
+		if len(fixture.allowed) != count {
+			t.Fatal("authority boundary fixture has a different cardinality")
+		}
+		observed, err := ReadValidatorIdentityAtContext(fixture.ctx, fixture.chain, fixture.query, fixture.allowed...)
+		if extra {
+			if err == nil || observed != (ValidatorIdentityObservation{}) || len(fixture.calls) != 0 {
+				t.Fatalf("one-over authority reached a provider: result=%+v calls=%v error=%v", observed, fixture.calls, err)
+			}
+		} else if err != nil || observed.Runtime != selected || observed.Hotkey != fixture.hotkey || observed.Coldkey != fixture.coldkey || observed.StakeAlphaRao != fixture.stake || !observed.ValidatorPermit || len(fixture.calls) != 16 || len(fixture.storageCalls) != 6 {
+			t.Fatalf("exact authority bound did not authenticate its selected historical source: result=%+v calls=%v error=%v", observed, fixture.calls, err)
 		}
 	}
 }

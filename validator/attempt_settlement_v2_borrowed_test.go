@@ -129,6 +129,7 @@ func TestAttemptSettlementRuntimeV2BorrowedUnionBeforeClone(t *testing.T) {
 // A real signed nonempty historical image is counted before copying its maps
 // or the current wrapper. The immutable transition pointer is never cloned.
 func TestAttemptSettlementRuntimeV2BorrowedSnapshotBytesBeforeClone(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2LegacyHistoryFixture(t, true)
 	images := runtimeAttemptSettlementV2TestImages(t, fixture.participants)
 	limit := uint64(len(images[0]))
@@ -204,6 +205,7 @@ func TestAttemptSettlementRuntimeV2BorrowedAllTokensBeforeCopy(t *testing.T) {
 // Exact comparisons use the unchanged actual codec for empty, legacy-signed,
 // v6-carried and real current M8 statistics, including nil versus empty maps.
 func TestAttemptSettlementRuntimeV2BorrowedExactRepresentation(t *testing.T) {
+	t.Parallel()
 	compare := func(stats *StatsEngine) {
 		owner := stats.lockStatsWrite("borrowed-size-test")
 		defer owner.release()

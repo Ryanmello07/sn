@@ -4,7 +4,9 @@ package validator
 // EMA folding, a_min gating, latency buckets, persistence.
 
 import (
+	"bytes"
 	"crypto/ed25519"
+	"encoding/json"
 	"errors"
 	"math"
 	"math/big"
@@ -329,17 +331,75 @@ func TestReleaseStatsCutReconcilesCrashWithoutDuplicateOrLoss(t *testing.T) {
 	if err := stats.Save(dir); err != nil {
 		t.Fatal(err)
 	}
-	blocker := filepath.Join(t.TempDir(), "regular-file")
-	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+	path := filepath.Join(dir, "stats.json")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path, path+"-preserved"); err != nil {
+		t.Fatal(err)
+	}
+	// A valid parent with the exact leaf obstruction reaches the real rename
+	// after persistence. An invalid parent would fail before the callback.
+	if err := os.Mkdir(path, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	cutGeneration := uint64(99)
-	_, err := stats.detachReleaseStatsMeasurement(blocker, func(_ ReleaseStatsMeasurement, generation uint64) error {
+	persistCalls := 0
+	journalPath := filepath.Join(dir, "native-cut.json")
+	_, err = stats.detachReleaseStatsMeasurement(dir, func(measurement ReleaseStatsMeasurement, generation uint64) error {
+		persistCalls++
 		cutGeneration = generation
-		return nil
+		encoded, err := json.Marshal(struct {
+			Generation  uint64                  `json:"generation"`
+			Measurement ReleaseStatsMeasurement `json:"measurement"`
+		}{Generation: generation, Measurement: measurement})
+		if err != nil {
+			return err
+		}
+		file, err := os.OpenFile(journalPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return err
+		}
+		n, writeErr := file.Write(encoded)
+		if n != len(encoded) && writeErr == nil {
+			writeErr = errors.New("short fixture native cut")
+		}
+		writeErr = errors.Join(writeErr, file.Sync(), file.Close())
+		directory, err := os.Open(dir)
+		if err != nil {
+			return errors.Join(writeErr, err)
+		}
+		return errors.Join(writeErr, directory.Sync(), directory.Close())
 	})
-	if err == nil || cutGeneration != 0 {
-		t.Fatalf("simulated post-journal crash generation=%d err=%v", cutGeneration, err)
+	var renameError *os.LinkError
+	if !errors.As(err, &renameError) || renameError.Op != "rename" || renameError.New != path || cutGeneration != 0 || persistCalls != 1 || stats.egressGeneration != 0 || !stats.EgressIpHashes()[clientID][hash] {
+		t.Fatalf("actual post-journal rename failure generation=%d callbacks=%d err=%v", cutGeneration, persistCalls, err)
+	}
+	encoded, err := os.ReadFile(journalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retained struct {
+		Generation  uint64                  `json:"generation"`
+		Measurement ReleaseStatsMeasurement `json:"measurement"`
+	}
+	if err := json.Unmarshal(encoded, &retained); err != nil || retained.Generation != cutGeneration {
+		t.Fatal("original write-ahead generation was not retained", err)
+	}
+	verified, err := VerifyReleaseStatsMeasurement(retained.Measurement)
+	if err != nil || !verified.Providers[clientID].EgressIPHashes[hash] {
+		t.Fatal("actual persisted cut lost its original prefix", err)
+	}
+	preserved, err := os.ReadFile(path + "-preserved")
+	if err != nil || !bytes.Equal(before, preserved) {
+		t.Fatal("failed save changed the original snapshot", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path+"-preserved", path); err != nil {
+		t.Fatal(err)
 	}
 	restarted := NewStatsEngine(StatsConfig{AMin: 1})
 	if err := restarted.Load(dir); err != nil {
@@ -360,6 +420,38 @@ func TestReleaseStatsCutReconcilesCrashWithoutDuplicateOrLoss(t *testing.T) {
 	}
 	if !restarted.EgressIpHashes()[clientID][hash] {
 		t.Fatal("old journal erased a repeated prefix from the next generation")
+	}
+}
+
+// Keep the incident's earlier directory refusal distinct from a journal-first
+// failure: no persistence callback or rotation may occur before admission.
+func TestReleaseStatsCutInvalidParentRefusesBeforeJournal(t *testing.T) {
+	dir := t.TempDir()
+	stats := NewStatsEngine(StatsConfig{AMin: 1})
+	clientId, hash := connect.NewId(), iphash(11)
+	stats.RecordEgressHash(clientId, hash)
+	if err := stats.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(dir, "stats.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocker := filepath.Join(dir, "regular-file")
+	if err := os.WriteFile(blocker, []byte("fixture obstruction"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	persistCalls := 0
+	_, err = stats.detachReleaseStatsMeasurement(blocker, func(ReleaseStatsMeasurement, uint64) error { persistCalls++; return nil })
+	if err == nil || persistCalls != 0 || stats.egressGeneration != 0 || !stats.EgressIpHashes()[clientId][hash] {
+		t.Fatal("invalid parent reached the journal or rotated evidence", err)
+	}
+	after, err := os.ReadFile(filepath.Join(dir, "stats.json"))
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("early refusal changed the original disk state", err)
+	}
+	if _, err := stats.detachReleaseStatsMeasurement(dir, func(ReleaseStatsMeasurement, uint64) error { return nil }); err != nil || stats.egressGeneration != 1 {
+		t.Fatal("unreserved early refusal stranded the valid writer", err)
 	}
 }
 

@@ -180,6 +180,9 @@ func buildFinalSemanticSourceFromArchive(ctx context.Context, cfg *ResolvedConfi
 	if ctx == nil || cfg == nil || archive == nil || archive.collected == nil || result == nil || terminal == nil || len(history) == 0 {
 		return nil, errors.New("final semantic closed archive inputs are incomplete")
 	}
+	if err := requireFinalSemanticReplayV2(archive.collected); err != nil {
+		return nil, err
+	}
 	if err := archive.bindCallInputs(result, terminal, history); err != nil {
 		return nil, err
 	}
@@ -322,7 +325,7 @@ func openFinalSemanticArchive(ctx context.Context, cfg *ResolvedConfig, stateDir
 	if err := rejectFinalArtifactSymlinkComponents(runRoot, manifestPath); err != nil {
 		return nil, err
 	}
-	manifestBytes, err := os.ReadFile(manifestPath)
+	manifestBytes, err := readCampaignEvidenceFileForConfigV2(cfg, runRoot, campaignCollectedIndexPathV2, false)
 	if err != nil {
 		return nil, fmt.Errorf("read final semantic input manifest: %w", err)
 	}
@@ -333,7 +336,7 @@ func openFinalSemanticArchive(ctx context.Context, cfg *ResolvedConfig, stateDir
 	if err := verifyFinalSemanticCollectedInputs(cfg, &collected); err != nil {
 		return nil, fmt.Errorf("verify final semantic input manifest: %w", err)
 	}
-	load, err := NewFinalSemanticCampaignArtifactLoader(stateRoot, runRoot)
+	load, err := newFinalSemanticCampaignArtifactLoaderForConfigV2(cfg, stateRoot, runRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -359,9 +362,7 @@ func openFinalSemanticArchive(ctx context.Context, cfg *ResolvedConfig, stateDir
 		}
 	}
 	if collected.PriorPhase != nil {
-		priorLocators := []FinalArtifactLocator{collected.PriorPhase.ScenarioResult, collected.PriorPhase.OwnerCompletion, collected.PriorPhase.EvidenceManifest, collected.PriorPhase.LifecycleHandoff, collected.PriorPhase.CaptureStatus, collected.PriorPhase.CollectedInputsManifest, collected.PriorPhase.SemanticSupplement}
-		priorLocators = append(priorLocators, collected.PriorPhase.LiveChainBundles...)
-		priorLocators = append(priorLocators, collected.PriorPhase.SemanticFileEnvelopes...)
+		priorLocators := finalCollectedPriorLocators(collected.PriorPhase)
 		for _, locator := range priorLocators {
 			if err := addDirect(locator); err != nil {
 				return nil, err
@@ -379,6 +380,13 @@ func openFinalSemanticArchive(ctx context.Context, cfg *ResolvedConfig, stateDir
 		}
 	}
 	for _, validator := range collected.Validators {
+		if validator.EvidenceV2 != nil {
+			for _, source := range validator.EvidenceV2.Sources {
+				if err := addDirect(source.Artifact); err != nil {
+					return nil, err
+				}
+			}
+		}
 		if err := addDirect(validator.IntentStore); err != nil {
 			return nil, err
 		}
@@ -441,7 +449,7 @@ func openFinalSemanticArchive(ctx context.Context, cfg *ResolvedConfig, stateDir
 }
 
 func finalSemanticBundleClass(name string) string {
-	for _, prefix := range []string{"public", "receipts", "launch-foundation", "plan-history", "miner-topology", "claim-runtime", "accepted-contract-cleanup", "live-chain"} {
+	for _, prefix := range []string{"public", "receipts", "launch-foundation", "plan-history", "miner-topology", "claim-runtime", "accepted-contract-cleanup", "live-chain", "validator-evidence-companion"} {
 		if name == prefix || strings.HasPrefix(name, prefix+"-") {
 			return prefix
 		}
@@ -494,7 +502,7 @@ func (self *finalSemanticArchive) derived(kind, name string, value any) (FinalAr
 	if self.artifactDeriver != nil {
 		return self.artifactDeriver(kind, filepath.ToSlash(filepath.Join("final-derived", name)), data)
 	}
-	return persistFinalCollectedArtifact(self.runRoot, kind, filepath.ToSlash(filepath.Join("final-derived", name)), data)
+	return persistFinalCollectedArtifactForConfigV2(self.cfg, self.runRoot, kind, filepath.ToSlash(filepath.Join("final-derived", name)), data)
 }
 
 func (self *finalSemanticArchive) derivedBytes(kind, name string, data []byte) (FinalArtifactLocator, error) {
@@ -507,7 +515,7 @@ func (self *finalSemanticArchive) derivedBytes(kind, name string, data []byte) (
 	if self.artifactDeriver != nil {
 		return self.artifactDeriver(kind, filepath.ToSlash(filepath.Join("final-derived", name)), data)
 	}
-	return persistFinalCollectedArtifact(self.runRoot, kind, filepath.ToSlash(filepath.Join("final-derived", name)), data)
+	return persistFinalCollectedArtifactForConfigV2(self.cfg, self.runRoot, kind, filepath.ToSlash(filepath.Join("final-derived", name)), data)
 }
 
 func (a *finalSemanticArchive) bindCallInputs(result *ScenarioResult, terminal *ScenarioObservation, history []*ScenarioObservation) error {

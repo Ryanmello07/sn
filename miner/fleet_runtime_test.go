@@ -128,6 +128,9 @@ func TestFleetRuntimeArtifactMatchesReleaseManifests(t *testing.T) {
 	var lock struct {
 		Runtime struct {
 			SourceTag          string `yaml:"source_tag"`
+			SourceRefKind      string `yaml:"source_ref_kind"`
+			SourceRefName      string `yaml:"source_ref_name"`
+			SourceCommit       string `yaml:"source_commit"`
 			SpecVersion        uint32 `yaml:"spec_version"`
 			TransactionVersion uint32 `yaml:"transaction_version"`
 			StateVersion       uint8  `yaml:"state_version"`
@@ -160,7 +163,9 @@ func TestFleetRuntimeArtifactMatchesReleaseManifests(t *testing.T) {
 	}
 
 	artifact := fleetReleaseRuntimeArtifact()
-	if lock.Runtime.SourceTag != "v454" || artifact.Version.SpecName != fleetReleaseRuntimeSpecName ||
+	if lock.Runtime.SourceTag != "" || lock.Runtime.SourceRefKind != "commit" ||
+		lock.Runtime.SourceRefName != "67dcf7f791dc495064c293f080a0702cb433e51e" ||
+		lock.Runtime.SourceCommit != lock.Runtime.SourceRefName || artifact.Version.SpecName != fleetReleaseRuntimeSpecName ||
 		artifact.Version.SpecVersion != lock.Runtime.SpecVersion ||
 		artifact.Version.TransactionVersion != lock.Runtime.TransactionVersion ||
 		artifact.Version.StateVersion != lock.Runtime.StateVersion ||
@@ -196,8 +201,9 @@ func TestFleetRuntimeAuthenticationRejectsAdjacentArtifactDrift(t *testing.T) {
 	}{
 		{name: "former 447 spec", version: crv4.RuntimeVersionIdentity{SpecName: fleetReleaseRuntimeSpecName, SpecVersion: 447, TransactionVersion: 1, StateVersion: 1}, codeHash: expected.CodeHash, metadata: metadata},
 		{name: "preceding 453 spec", version: crv4.RuntimeVersionIdentity{SpecName: fleetReleaseRuntimeSpecName, SpecVersion: 453, TransactionVersion: 1, StateVersion: 1}, codeHash: expected.CodeHash, metadata: metadata},
-		{name: "transaction version drift", version: crv4.RuntimeVersionIdentity{SpecName: fleetReleaseRuntimeSpecName, SpecVersion: 454, TransactionVersion: 2, StateVersion: 1}, codeHash: expected.CodeHash, metadata: metadata},
-		{name: "state version drift", version: crv4.RuntimeVersionIdentity{SpecName: fleetReleaseRuntimeSpecName, SpecVersion: 454, TransactionVersion: 1, StateVersion: 2}, codeHash: expected.CodeHash, metadata: metadata},
+		{name: "preceding 454 spec", version: crv4.RuntimeVersionIdentity{SpecName: fleetReleaseRuntimeSpecName, SpecVersion: 454, TransactionVersion: 1, StateVersion: 1}, codeHash: expected.CodeHash, metadata: metadata},
+		{name: "transaction version drift", version: crv4.RuntimeVersionIdentity{SpecName: expected.Version.SpecName, SpecVersion: expected.Version.SpecVersion, TransactionVersion: expected.Version.TransactionVersion + 1, StateVersion: expected.Version.StateVersion}, codeHash: expected.CodeHash, metadata: metadata},
+		{name: "state version drift", version: crv4.RuntimeVersionIdentity{SpecName: expected.Version.SpecName, SpecVersion: expected.Version.SpecVersion, TransactionVersion: expected.Version.TransactionVersion, StateVersion: expected.Version.StateVersion + 1}, codeHash: expected.CodeHash, metadata: metadata},
 		{name: "code hash drift", version: expected.Version, codeHash: "0x825e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef", metadata: metadata, wantCodeCalls: 1},
 		{name: "metadata hash drift", version: expected.Version, codeHash: expected.CodeHash, metadata: metadata, wantCodeCalls: 1, wantMetadataCalls: 1},
 	}
@@ -274,7 +280,7 @@ func TestFleetFinalizedRuntimeGateRejectsFormerSpecOnlyPin(t *testing.T) {
 
 // Keeps a successful authenticated artifact's metadata and signing versions
 // together without trusting a caller-supplied partial RuntimeVersion.
-func TestBindFleetRuntimeUsesAuthenticated454Artifact(t *testing.T) {
+func TestBindFleetRuntimeUsesAuthenticatedCurrentArtifact(t *testing.T) {
 	metadata := types.NewMetadataV14()
 	artifact := crv4.AuthenticatedRuntimeArtifact{
 		BlockHash:    types.Hash{1},

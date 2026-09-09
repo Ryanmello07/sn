@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/urnetwork/connect"
@@ -484,8 +486,18 @@ func TestAttemptLedgerCutBarrierDoesNotSplitTrail(t *testing.T) {
 	}
 }
 
-func TestAttemptLedgerReconciliationReopensTrailsAfterSaveFailure(t *testing.T) {
-	stateDir := t.TempDir()
+// A real private parent distinguishes early directory admission from the
+// later snapshot rename. Source files stay retained throughout recovery.
+func newAttemptLedgerReconciliationTest(t *testing.T) (*StatsEngine, *AttemptLedger, string) {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateDir := filepath.Join(root, "state")
+	if err := os.Mkdir(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	_, validatorKey, _ := newMockVerifyServer(t, 4)
 	stats := NewStatsEngine(StatsConfig{AMin: 1})
 	if err := stats.AdvanceSettlementEpoch(42, stateDir); err != nil {
@@ -501,24 +513,163 @@ func TestAttemptLedgerReconciliationReopensTrailsAfterSaveFailure(t *testing.T) 
 	if err := stats.AttachAttemptLedger(ledger, stateDir); err != nil {
 		t.Fatal(err)
 	}
-	notDirectory := stateDir + "/not-a-directory"
-	if err := os.WriteFile(notDirectory, []byte("x"), 0o600); err != nil {
+	return stats, ledger, stateDir
+}
+
+// An existing directory at the snapshot leaf reaches the genuine rename
+// syscall after write-ahead persistence. A file used as the parent would
+// correctly fail before either callback or pending-cut publication.
+func TestAttemptLedgerReconciliationReopensTrailsAfterSaveFailure(t *testing.T) {
+	stats, ledger, stateDir := newAttemptLedgerReconciliationTest(t)
+	path := filepath.Join(stateDir, "stats.json")
+	original, err := os.ReadFile(path)
+	if err != nil {
 		t.Fatal(err)
 	}
-	var persisted ReleaseStatsMeasurement
-	var generation uint64
-	_, err = stats.detachReleaseStatsMeasurementWithAttemptCut(notDirectory, attemptLedgerTestBoundary(), func(measurement ReleaseStatsMeasurement, value uint64) error {
-		persisted, generation = measurement, value
+	if err := os.Rename(path, path+"-preserved"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	initialGeneration, initialFirst := stats.egressGeneration, stats.attemptEgressFirstSequence
+	stages := map[string]int{}
+	stats.writeHooks.snapshotIO.after = func(stage string, file *os.File) error {
+		stages[stage]++
+		if strings.HasSuffix(stage, "-closed") {
+			if _, err := file.Stat(); !errors.Is(err, os.ErrClosed) {
+				return errors.New("snapshot observer preceded actual descriptor Close")
+			}
+		}
 		return nil
-	})
-	if err == nil || persisted.AttemptCut == nil || !stats.attemptCutPending {
-		t.Fatalf("cut save failure = err %v cut %v pending %t", err, persisted.AttemptCut, stats.attemptCutPending)
 	}
-	if err := stats.reconcileReleaseStatsCut(stateDir, generation, persisted.AttemptCut); err != nil {
+	var retained struct {
+		Measurement ReleaseStatsMeasurement `json:"measurement"`
+		Generation  uint64                  `json:"generation"`
+	}
+	journalPath := filepath.Join(stateDir, "reconciliation-cut.json")
+	persistCalls := 0
+	_, err = stats.detachReleaseStatsMeasurementWithAttemptCut(stateDir, attemptLedgerTestBoundary(), func(measurement ReleaseStatsMeasurement, value uint64) error {
+		persistCalls++
+		retained.Measurement, retained.Generation = measurement, value
+		encoded, err := json.Marshal(retained)
+		if err != nil {
+			return err
+		}
+		file, err := os.OpenFile(journalPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return err
+		}
+		written, writeErr := file.Write(encoded)
+		if written != len(encoded) && writeErr == nil {
+			writeErr = errors.New("short test write-ahead record")
+		}
+		writeErr = errors.Join(writeErr, file.Sync(), file.Close())
+		directory, err := os.Open(stateDir)
+		if err != nil {
+			return errors.Join(writeErr, err)
+		}
+		return errors.Join(writeErr, directory.Sync(), directory.Close())
+	})
+	var renameError *os.LinkError
+	if !errors.As(err, &renameError) || renameError.Op != "rename" || renameError.New != path || persistCalls != 1 || !stats.attemptCutPending || stats.egressGeneration != initialGeneration || stats.attemptEgressFirstSequence != initialFirst || stages["before-rename"] != 1 || stages["temporary-closed"] != 1 || stages["snapshot-renamed"] != 0 {
+		t.Fatalf("actual post-persistence rename failure was not reached: err=%v callbacks=%d pending=%t stages=%v", err, persistCalls, stats.attemptCutPending, stages)
+	}
+	encoded, err := os.ReadFile(journalPath)
+	if err != nil {
 		t.Fatal(err)
+	}
+	retained.Measurement = ReleaseStatsMeasurement{}
+	if err := json.Unmarshal(encoded, &retained); err != nil || retained.Measurement.AttemptCut == nil || retained.Generation != initialGeneration {
+		t.Fatal("real write-ahead cut was not recoverable after failed snapshot save", err)
+	}
+	if _, err := VerifyReleaseStatsMeasurement(retained.Measurement); err != nil {
+		t.Fatal("persisted cut lost its original signature", err)
+	}
+	if err := stats.beginAttempt(42, ledger); !errors.Is(err, errAttemptCutPending) {
+		t.Fatal("failed snapshot reopened trails before reconciliation", err)
+	}
+	invalidCut := cloneAttemptLedgerCut(t, retained.Measurement.AttemptCut)
+	invalidCut.Signature[0] ^= 1
+	if err := stats.reconcileReleaseStatsCut(stateDir, retained.Generation, invalidCut); err == nil || !stats.attemptCutPending {
+		t.Fatal("changed signed cut released pending trails", err)
+	}
+	if err := stats.reconcileReleaseStatsCut(stateDir, retained.Generation+1, retained.Measurement.AttemptCut); err == nil || !stats.attemptCutPending {
+		t.Fatal("future journal generation released pending trails", err)
+	}
+	renameError = nil
+	err = stats.reconcileReleaseStatsCut(stateDir, retained.Generation, retained.Measurement.AttemptCut)
+	if !errors.As(err, &renameError) || renameError.Op != "rename" || renameError.New != path || !stats.attemptCutPending || stats.egressGeneration != initialGeneration || stats.attemptEgressFirstSequence != initialFirst || stages["before-rename"] != 2 || stages["temporary-closed"] != 2 || stages["snapshot-renamed"] != 0 {
+		t.Fatal("second real save failure advanced or released the pending cut", err, stages)
+	}
+	preserved, err := os.ReadFile(path + "-preserved")
+	if err != nil || !bytes.Equal(preserved, original) {
+		t.Fatal("failed save altered the retained original snapshot", err)
+	}
+	// Remove only this test-created empty leaf obstruction and restore its
+	// retained original; no parent replacement or permission repair is used.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path+"-preserved", path); err != nil {
+		t.Fatal(err)
+	}
+	if err := stats.reconcileReleaseStatsCut(stateDir, retained.Generation, retained.Measurement.AttemptCut); err != nil {
+		t.Fatal(err)
+	}
+	if stats.egressGeneration != initialGeneration+1 || stats.attemptEgressFirstSequence != retained.Measurement.AttemptCut.LastSequence+1 || stats.attemptCutPending || stages["before-rename"] != 3 || stages["temporary-closed"] != 3 || stages["snapshot-renamed"] != 1 {
+		t.Fatal("verified recovery did not publish exactly one durable rotation", stages)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || bytes.Equal(after, original) {
+		t.Fatal("successful recovery did not change the real snapshot", err)
+	}
+	if err := stats.reconcileReleaseStatsCut(stateDir, retained.Generation, retained.Measurement.AttemptCut); err != nil {
+		t.Fatal("exact reconciliation retry failed", err)
+	}
+	repeated, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(after, repeated) || stages["snapshot-renamed"] != 1 || persistCalls != 1 {
+		t.Fatal("exact retry duplicated persistence or rotation", err)
 	}
 	if err := stats.beginAttempt(42, ledger); err != nil {
 		t.Fatalf("verified reconciliation left trails blocked: %v", err)
+	}
+	stats.abortAttempt()
+	entries, err := os.ReadDir(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".stats-") {
+			t.Fatal("failed or successful writer left an owned temporary behind", entry.Name())
+		}
+	}
+}
+
+// Retain the old incident shape as an explicit early-admission control.
+// Refusal cannot invoke persistence or create a cut reservation to reconcile.
+func TestAttemptLedgerReconciliationInvalidParentRefusesBeforePersistence(t *testing.T) {
+	stats, ledger, stateDir := newAttemptLedgerReconciliationTest(t)
+	path := filepath.Join(stateDir, "stats.json")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notDirectory := filepath.Join(stateDir, "not-a-directory")
+	if err := os.WriteFile(notDirectory, []byte("fixture obstruction"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	persistCalls := 0
+	measurement, err := stats.detachReleaseStatsMeasurementWithAttemptCut(notDirectory, attemptLedgerTestBoundary(), func(ReleaseStatsMeasurement, uint64) error { persistCalls++; return nil })
+	if err == nil || persistCalls != 0 || measurement.AttemptCut != nil || stats.attemptCutPending {
+		t.Fatal("invalid parent crossed write-ahead admission", err, persistCalls)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("early directory refusal changed the durable snapshot", err)
+	}
+	if err := stats.beginAttempt(42, ledger); err != nil {
+		t.Fatal("unreserved early refusal stranded valid trails", err)
 	}
 	stats.abortAttempt()
 }

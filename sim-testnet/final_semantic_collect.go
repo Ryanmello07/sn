@@ -64,6 +64,7 @@ type FinalCollectedPayoutArtifact struct {
 }
 
 type FinalCollectedValidatorInputs struct {
+	EvidenceV2             *FinalCollectedValidatorEvidenceV2 `json:"evidence_v2,omitempty"`
 	ValidatorID            uint64                             `json:"validator_id"`
 	PathVPK                string                             `json:"path_vpk"`
 	OperatorPaths          []FinalOperatorPathIdentity        `json:"operator_paths"`
@@ -126,19 +127,22 @@ type FinalCollectedValidatorPathProof struct {
 }
 
 type FinalCollectedPriorPhaseInputs struct {
-	Phase                   string                   `json:"phase"`
-	RunID                   string                   `json:"run_id"`
-	ResultHash              string                   `json:"result_hash"`
-	Window                  ScenarioAcceptanceWindow `json:"acceptance_window"`
-	ScenarioResult          FinalArtifactLocator     `json:"scenario_result"`
-	OwnerCompletion         FinalArtifactLocator     `json:"owner_completion"`
-	EvidenceManifest        FinalArtifactLocator     `json:"evidence_manifest"`
-	LifecycleHandoff        FinalArtifactLocator     `json:"lifecycle_handoff"`
-	CaptureStatus           FinalArtifactLocator     `json:"capture_status"`
-	CollectedInputsManifest FinalArtifactLocator     `json:"collected_inputs_manifest"`
-	LiveChainBundles        []FinalArtifactLocator   `json:"live_chain_bundles"`
-	SemanticSupplement      FinalArtifactLocator     `json:"semantic_verified_supplement"`
-	SemanticFileEnvelopes   []FinalArtifactLocator   `json:"semantic_file_envelopes"`
+	SemanticStatus          string                         `json:"semantic_status,omitempty"`
+	CarrierOrigins          []string                       `json:"carrier_origins,omitempty"`
+	PublicCarriers          []FinalCollectedPriorCarrierV2 `json:"public_carriers,omitempty"`
+	Phase                   string                         `json:"phase"`
+	RunID                   string                         `json:"run_id"`
+	ResultHash              string                         `json:"result_hash"`
+	Window                  ScenarioAcceptanceWindow       `json:"acceptance_window"`
+	ScenarioResult          FinalArtifactLocator           `json:"scenario_result"`
+	OwnerCompletion         FinalArtifactLocator           `json:"owner_completion"`
+	EvidenceManifest        FinalArtifactLocator           `json:"evidence_manifest"`
+	LifecycleHandoff        FinalArtifactLocator           `json:"lifecycle_handoff"`
+	CaptureStatus           FinalArtifactLocator           `json:"capture_status"`
+	CollectedInputsManifest FinalArtifactLocator           `json:"collected_inputs_manifest"`
+	LiveChainBundles        []FinalArtifactLocator         `json:"live_chain_bundles"`
+	SemanticSupplement      FinalArtifactLocator           `json:"semantic_verified_supplement"`
+	SemanticFileEnvelopes   []FinalArtifactLocator         `json:"semantic_file_envelopes"`
 }
 
 type FinalSemanticCollectedInputs struct {
@@ -166,6 +170,7 @@ type FinalSemanticCollectedInputs struct {
 // in its closed archive. Semantic reconstruction remains pending and cannot be
 // mistaken for final acceptance.
 type FinalSemanticCaptureStatus struct {
+	CompactSourceCount      uint64               `json:"compact_source_count,omitempty"`
 	Schema                  string               `json:"schema"`
 	Status                  string               `json:"status"`
 	SemanticStatus          string               `json:"semantic_status"`
@@ -215,11 +220,13 @@ func CollectFinalSemanticInputs(ctx context.Context, cfg *ResolvedConfig, stateD
 	if err != nil || !pathWithinRoot(stateRoot, runRoot) {
 		return nil, errors.New("final semantic collection run directory is outside state")
 	}
-	// Production live execution intentionally overlaps offline release analysis.
-	// Once the live phase is complete, wait here—before creating final-inputs or
-	// any other capture output—until the predecessor's owner-authenticated
-	// semantic_verified marker is atomically visible.
-	if err := awaitFinalPriorSemanticReady(ctx, cfg, stateRoot, result); err != nil {
+	// Legacy capture includes its prior semantic output. Compact capture binds
+	// the exact signed prior closure now; later analysis remains separate.
+	if !finalUsesEvidenceV2(cfg) {
+		if err := awaitFinalPriorSemanticReady(ctx, cfg, stateRoot, result); err != nil {
+			return nil, err
+		}
+	} else if _, err := authenticateFinalPriorCaptureV2Context(ctx, cfg, stateRoot, result); err != nil {
 		return nil, err
 	}
 	pathAuthority, err := loadFinalOperatorPathAuthority(cfg, stateRoot, finalConfiguredValidatorIDs(cfg))
@@ -228,6 +235,25 @@ func CollectFinalSemanticInputs(ctx context.Context, cfg *ResolvedConfig, stateD
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	// Compact source observations must be retained before historical live-chain
+	// capture can fail or consume the remaining public-RPC lifetime.
+	var compactValidators []FinalCollectedValidatorInputs
+	var compactCompanion []FinalArtifactLocator
+	if finalUsesEvidenceV2(cfg) {
+		startedAt, startErr := time.Parse(time.RFC3339Nano, result.StartedAt)
+		completedAt, completionErr := time.Parse(time.RFC3339Nano, result.CompletedAt)
+		if startErr != nil || completionErr != nil || result.StartedAt != startedAt.UTC().Format(time.RFC3339Nano) || result.CompletedAt != completedAt.UTC().Format(time.RFC3339Nano) || completedAt.Before(startedAt) {
+			return nil, errors.New("compact campaign capture time window is invalid")
+		}
+		compactValidators, err = collectFinalValidatorInputsV2(ctx, cfg, stateRoot, runRoot, terminal, result.Name, result.AcceptanceWindow, startedAt, completedAt, pathAuthority)
+		if err != nil {
+			return nil, err
+		}
+		compactCompanion, err = captureFinalCompanionInputsV2(ctx, cfg, stateRoot, runRoot, terminal)
+		if err != nil {
+			return nil, err
+		}
 	}
 	policyBytes, err := cfg.Policy.CanonicalBytes()
 	if err != nil {
@@ -240,7 +266,11 @@ func CollectFinalSemanticInputs(ctx context.Context, cfg *ResolvedConfig, stateD
 	if err != nil {
 		return nil, err
 	}
-	collected.ClosedInputBundles, collected.ScenarioResult, collected.TerminalObservation, collected.ObservationHistory, err = captureFinalSemanticClosedInputs(stateRoot, runRoot, result, terminal, history, cfg.Config.Topology.Miners, cfg.Config.Topology.MinerSwarmProcesses, cfg.Config.Topology.Operators)
+	collected.PriorPhase, err = collectFinalPriorPhaseInputsContext(ctx, cfg, stateRoot, runRoot, result)
+	if err != nil {
+		return nil, err
+	}
+	collected.ClosedInputBundles, collected.ScenarioResult, collected.TerminalObservation, collected.ObservationHistory, err = captureFinalSemanticClosedInputsWithPriorConfigV2(ctx, cfg, stateRoot, runRoot, result, terminal, history, cfg.Config.Topology.Miners, cfg.Config.Topology.MinerSwarmProcesses, cfg.Config.Topology.Operators, collected.PriorPhase)
 	if err != nil {
 		return nil, err
 	}
@@ -258,13 +288,10 @@ func CollectFinalSemanticInputs(ctx context.Context, cfg *ResolvedConfig, stateD
 		return nil, err
 	}
 	collected.ClosedInputBundles = append(collected.ClosedInputBundles, liveChainBundles...)
+	collected.ClosedInputBundles = append(collected.ClosedInputBundles, compactCompanion...)
 	sort.Slice(collected.ClosedInputBundles, func(i, j int) bool {
 		return collected.ClosedInputBundles[i].URI < collected.ClosedInputBundles[j].URI
 	})
-	collected.PriorPhase, err = collectFinalPriorPhaseInputs(cfg, stateRoot, runRoot, result)
-	if err != nil {
-		return nil, err
-	}
 	collected.Payouts, collected.LifecyclePayouts, err = collectFinalPayoutArtifacts(ctx, cfg, runRoot, terminal, result.AcceptanceWindow)
 	if err != nil {
 		return nil, err
@@ -277,8 +304,15 @@ func CollectFinalSemanticInputs(ctx context.Context, cfg *ResolvedConfig, stateD
 	if err != nil || result.CompletedAt != completedAt.UTC().Format(time.RFC3339Nano) || completedAt.Before(startedAt) {
 		return nil, errors.New("final semantic campaign completion time is not canonical UTC")
 	}
-	collected.Validators, err = collectFinalValidatorInputsWithPathAuthority(cfg, stateRoot, runRoot, terminal, result.Name, result.AcceptanceWindow, startedAt, completedAt, pathAuthority, nil)
+	if compactValidators != nil {
+		collected.Validators = compactValidators
+	} else {
+		collected.Validators, err = collectFinalValidatorInputsWithPathAuthority(cfg, stateRoot, runRoot, terminal, result.Name, result.AcceptanceWindow, startedAt, completedAt, pathAuthority, nil)
+	}
 	if err != nil {
+		return nil, err
+	}
+	if err := validateCollectedMetadataForConfigV2(cfg, collected); err != nil {
 		return nil, err
 	}
 	collected.EvidenceHash, err = finalSemanticCollectedInputsHash(collected)
@@ -293,7 +327,14 @@ func CollectFinalSemanticInputs(ctx context.Context, cfg *ResolvedConfig, stateD
 		return nil, err
 	}
 	wire = append(wire, '\n')
-	manifestLocator, err := persistFinalCollectedArtifact(runRoot, "final-semantic-input-manifest", "final-inputs/manifest.json", wire)
+	metadataLimits, err := campaignEvidenceLimitsForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCampaignMetadataRawV2(metadataLimits, campaignCollectedIndexPathV2, wire); err != nil {
+		return nil, err
+	}
+	manifestLocator, err := persistFinalCollectedArtifactForConfigV2(cfg, runRoot, "final-semantic-input-manifest", campaignCollectedIndexPathV2, wire)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +396,7 @@ func awaitFinalPriorSemanticReadyObserved(ctx context.Context, cfg *ResolvedConf
 	if err != nil {
 		return fmt.Errorf("resolve prior phase evidence owner: %w", err)
 	}
-	prior, _, err := loadCompletedScenarioCampaign(cfg, stateRoot, roles, "release-1.0")
+	prior, _, err := loadCompletedScenarioCampaignContext(ctx, cfg, stateRoot, roles, "release-1.0")
 	if err != nil {
 		return fmt.Errorf("authenticate prior release phase before semantic wait: %w", err)
 	}
@@ -427,6 +468,9 @@ func finalSemanticCaptureStatus(result *ScenarioResult, collected *FinalSemantic
 		PayoutArtifactCount: uint64(len(collected.Payouts)),
 	}
 	for _, validator := range collected.Validators {
+		if validator.EvidenceV2 != nil {
+			status.CompactSourceCount += uint64(len(validator.EvidenceV2.Sources))
+		}
 		status.ValidatorIntentCount += uint64(len(validator.Intents))
 		if validator.DishonestDepositIntent != nil {
 			status.ValidatorIntentCount++
@@ -457,7 +501,12 @@ func verifyFinalSemanticCaptureStatus(status *FinalSemanticCaptureStatus, collec
 		return err
 	}
 	wantIntents, wantAttempts, wantProofs := uint64(0), uint64(0), uint64(0)
+	wantCompact, compactValidators := uint64(0), 0
 	for _, validator := range collected.Validators {
+		if validator.EvidenceV2 != nil {
+			wantCompact += uint64(len(validator.EvidenceV2.Sources))
+			compactValidators++
+		}
 		wantIntents += uint64(len(validator.Intents))
 		if validator.DishonestDepositIntent != nil {
 			wantIntents++
@@ -469,7 +518,7 @@ func verifyFinalSemanticCaptureStatus(status *FinalSemanticCaptureStatus, collec
 			wantProofs += proofs.ProofCount
 		}
 	}
-	if status.ValidatorIntentCount != wantIntents || status.AttemptRecordCount != wantAttempts || status.PathProofCount != wantProofs || wantIntents == 0 || wantAttempts == 0 || wantProofs == 0 {
+	if status.ValidatorIntentCount != wantIntents || status.AttemptRecordCount != wantAttempts || status.PathProofCount != wantProofs || status.CompactSourceCount != wantCompact || wantIntents == 0 || compactValidators == 0 && (wantAttempts == 0 || wantProofs == 0) || compactValidators != 0 && (compactValidators != len(collected.Validators) || wantCompact == 0 || wantAttempts != 0 || wantProofs != 0) {
 		return errors.New("final semantic capture status signed-input counts differ from the closed graph")
 	}
 	wantHash, err := finalSemanticCaptureStatusHash(status)
@@ -493,15 +542,14 @@ func validateFinalSemanticCaptureClosure(cfg *ResolvedConfig, runDir string, res
 		return errors.New("final semantic capture closure context is incomplete")
 	}
 	var collected FinalSemanticCollectedInputs
-	manifestPath := filepath.Join(runDir, "final-inputs", "manifest.json")
-	if err := decodeStrictJSONFile(manifestPath, &collected); err != nil {
+	manifestBytes, err := readCampaignEvidenceFileForConfigV2(cfg, runDir, campaignCollectedIndexPathV2, false)
+	if err != nil {
+		return err
+	}
+	if err := decodeStrictJSONBytes(manifestBytes, &collected); err != nil {
 		return fmt.Errorf("decode final semantic collected-input manifest: %w", err)
 	}
 	if err := verifyFinalSemanticCollectedInputs(cfg, &collected); err != nil {
-		return err
-	}
-	manifestBytes, err := os.ReadFile(manifestPath)
-	if err != nil {
 		return err
 	}
 	var status FinalSemanticCaptureStatus
@@ -518,6 +566,23 @@ func validateFinalSemanticCaptureClosure(cfg *ResolvedConfig, runDir string, res
 }
 
 func collectFinalPriorPhaseInputs(cfg *ResolvedConfig, stateRoot, runRoot string, result *ScenarioResult) (*FinalCollectedPriorPhaseInputs, error) {
+	return collectFinalPriorPhaseInputsContext(context.Background(), cfg, stateRoot, runRoot, result)
+}
+
+// Live custody owns cancellation across prior original-byte and replica reads.
+func collectFinalPriorPhaseInputsContext(ctx context.Context, cfg *ResolvedConfig, stateRoot, runRoot string, result *ScenarioResult) (*FinalCollectedPriorPhaseInputs, error) {
+	return collectFinalPriorPhaseInputsWithStoresContext(ctx, cfg, stateRoot, runRoot, result, nil)
+}
+
+// The existing store factory changes transport only; rendered namespace,
+// complete-census and original owner/signature authority remain mandatory.
+func collectFinalPriorPhaseInputsWithStoresContext(ctx context.Context, cfg *ResolvedConfig, stateRoot, runRoot string, result *ScenarioResult, stores scenarioCompletionStoreFactory) (*FinalCollectedPriorPhaseInputs, error) {
+	if ctx == nil {
+		return nil, errors.New("prior capture context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if result == nil || result.Name == "release-1.0" {
 		return nil, nil
 	}
@@ -528,7 +593,12 @@ func collectFinalPriorPhaseInputs(cfg *ResolvedConfig, stateRoot, runRoot string
 	if err != nil {
 		return nil, fmt.Errorf("resolve prior phase evidence owner: %w", err)
 	}
-	prior, _, err := loadCompletedScenarioCampaign(cfg, stateRoot, roles, "release-1.0")
+	var prior *ScenarioResult
+	if finalUsesEvidenceV2(cfg) {
+		prior, err = authenticateFinalPriorCaptureV2Context(ctx, cfg, stateRoot, result)
+	} else {
+		prior, _, err = loadCompletedScenarioCampaignContext(ctx, cfg, stateRoot, roles, "release-1.0")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("authenticate prior release phase: %w", err)
 	}
@@ -536,11 +606,21 @@ func collectFinalPriorPhaseInputs(cfg *ResolvedConfig, stateRoot, runRoot string
 		return nil, err
 	}
 	copyExact := func(kind, sourceName, destinationName string) (FinalArtifactLocator, error) {
-		entry, err := finalCollectedFileEntry(stateRoot, filepath.ToSlash(filepath.Join("runs", prior.RunID, filepath.FromSlash(sourceName))))
+		if err := ctx.Err(); err != nil {
+			return FinalArtifactLocator{}, err
+		}
+		var raw []byte
+		var err error
+		if finalUsesEvidenceV2(cfg) {
+			raw, err = readCampaignEvidenceFileForConfigV2(cfg, filepath.Join(stateRoot, "runs", prior.RunID), sourceName, true)
+		} else {
+			entry, legacyErr := finalCollectedFileEntry(stateRoot, filepath.ToSlash(filepath.Join("runs", prior.RunID, filepath.FromSlash(sourceName))))
+			raw, err = entry.Data, legacyErr
+		}
 		if err != nil {
 			return FinalArtifactLocator{}, err
 		}
-		return persistFinalCollectedArtifact(runRoot, kind, filepath.ToSlash(filepath.Join("final-inputs", "prior-release", destinationName)), entry.Data)
+		return persistFinalCollectedArtifactForConfigV2(cfg, runRoot, kind, filepath.ToSlash(filepath.Join("final-inputs", "prior-release", destinationName)), raw)
 	}
 	// Keep raw authenticated JSON in opaque files. This preserves byte identity
 	// without making the current archive walker follow the prior manifest's
@@ -581,11 +661,14 @@ func collectFinalPriorPhaseInputs(cfg *ResolvedConfig, stateRoot, runRoot string
 		return nil, fmt.Errorf("decode prior semantic evidence owner: %w", err)
 	}
 	readPrior := func(relative string) ([]byte, error) {
-		entry, err := finalCollectedFileEntry(stateRoot, filepath.ToSlash(filepath.Join("runs", prior.RunID, filepath.FromSlash(relative))))
-		if err != nil {
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		return entry.Data, nil
+		if !finalUsesEvidenceV2(cfg) {
+			entry, err := finalCollectedFileEntry(stateRoot, filepath.ToSlash(filepath.Join("runs", prior.RunID, filepath.FromSlash(relative))))
+			return entry.Data, err
+		}
+		return readCampaignEvidenceFileForConfigV2(cfg, filepath.Join(stateRoot, "runs", prior.RunID), relative, true)
 	}
 	completionData, err := readPrior("complete.json")
 	if err != nil {
@@ -662,6 +745,34 @@ func collectFinalPriorPhaseInputs(cfg *ResolvedConfig, stateRoot, runRoot string
 		return nil, errors.New("prior collected-input graph lacks a live-chain bundle")
 	}
 	sort.Slice(liveChainBundles, func(i, j int) bool { return liveChainBundles[i].URI < liveChainBundles[j].URI })
+	if finalUsesEvidenceV2(cfg) {
+		if err := verifyFinalSemanticOwnerEnvelope(cfg, &manifestEnvelope, &ownerKey.PublicKey, campaignEvidenceManifestKind, prior.RunID); err != nil {
+			return nil, err
+		}
+		limits, err := campaignEvidenceLimitsForConfig(cfg)
+		if err != nil {
+			return nil, err
+		}
+		manifest, err := decodeCampaignEvidenceManifestWithLimits(&manifestEnvelope, limits)
+		if err != nil {
+			return nil, err
+		}
+		if manifestEnvelope.ContentHash != completionPayload.EvidenceManifestHash || manifest.ResultHash != prior.EvidenceHash {
+			return nil, errors.New("prior carrier manifest differs from the authenticated completion")
+		}
+		origins, carriers, err := captureFinalPriorCarriersV2(ctx, cfg, stateRoot, prior.RunID, manifest, crypto.PubkeyToAddress(ownerKey.PublicKey), stores)
+		if err != nil {
+			return nil, err
+		}
+		return &FinalCollectedPriorPhaseInputs{
+			SemanticStatus: finalSemanticCapturePendingStatus,
+			CarrierOrigins: origins[:], PublicCarriers: carriers,
+			Phase: "release-1.0", RunID: prior.RunID, ResultHash: prior.EvidenceHash, Window: *prior.AcceptanceWindow,
+			ScenarioResult: resultLocator, OwnerCompletion: completionLocator, EvidenceManifest: manifestLocator,
+			LifecycleHandoff: handoffLocator, CaptureStatus: captureLocator, CollectedInputsManifest: inputsLocator,
+			LiveChainBundles: liveChainBundles,
+		}, nil
+	}
 	supplementData, err := readPrior(finalSemanticSupplementFilename)
 	if err != nil {
 		return nil, fmt.Errorf("read prior semantic_verified supplement: %w", err)
@@ -772,14 +883,33 @@ func verifyFinalCollectedPriorPhase(prior *FinalCollectedPriorPhaseInputs, curre
 		"lifecycle handoff":        {locator: prior.LifecycleHandoff, kind: "prior-lifecycle-handoff"},
 		"capture status":           {locator: prior.CaptureStatus, kind: "prior-capture-status"},
 		"collected input manifest": {locator: prior.CollectedInputsManifest, kind: "prior-collected-input-manifest"},
-		"semantic supplement":      {locator: prior.SemanticSupplement, kind: "prior-semantic-supplement-envelope"},
 	} {
 		if err := verifyFinalArtifact("collected prior "+label, item.locator, item.kind); err != nil {
 			return err
 		}
 	}
-	if len(prior.SemanticFileEnvelopes) < 2 {
-		return errors.New("collected prior semantic_verified file census is incomplete")
+	if prior.SemanticStatus == finalSemanticCapturePendingStatus {
+		if current.Phase != "production-soak" || len(current.Validators) == 0 || prior.SemanticSupplement != (FinalArtifactLocator{}) || len(prior.SemanticFileEnvelopes) != 0 || len(prior.PublicCarriers) == 0 || len(prior.CarrierOrigins) != 2 || prior.CarrierOrigins[0] == "" || prior.CarrierOrigins[0] == prior.CarrierOrigins[1] {
+			return errors.New("pending prior capture contains a semantic verdict or incomplete current identity")
+		}
+		for _, validator := range current.Validators {
+			if validator.EvidenceV2 == nil {
+				return errors.New("legacy capture cannot omit prior semantic acceptance")
+			}
+		}
+	} else {
+		if len(prior.PublicCarriers) != 0 || len(prior.CarrierOrigins) != 0 {
+			return errors.New("legacy prior capture cannot declare compact carrier custody")
+		}
+		if prior.SemanticStatus != "" {
+			return errors.New("prior semantic capture status is unknown")
+		}
+		if err := verifyFinalArtifact("collected prior semantic supplement", prior.SemanticSupplement, "prior-semantic-supplement-envelope"); err != nil {
+			return err
+		}
+		if len(prior.SemanticFileEnvelopes) < 2 {
+			return errors.New("collected prior semantic_verified file census is incomplete")
+		}
 	}
 	if len(prior.LiveChainBundles) == 0 {
 		return errors.New("collected prior live-chain bundle census is incomplete")
@@ -993,7 +1123,7 @@ func collectFinalPayoutArtifacts(ctx context.Context, cfg *ResolvedConfig, runRo
 			if err != nil {
 				return nil, nil, fmt.Errorf("operator %d payout %s: %w", noID, contentHash, err)
 			}
-			data, readErr := readBoundedResponse(response, 32*1024*1024)
+			data, readErr := readBoundedResponse(ctx, response, 32*1024*1024)
 			if readErr != nil {
 				return nil, nil, fmt.Errorf("operator %d payout %s: %w", noID, contentHash, readErr)
 			}
@@ -1162,6 +1292,9 @@ func collectFinalValidatorInputsWithSeedObserver(cfg *ResolvedConfig, stateRoot,
 
 // Consumes the complete invocation-owned authority admitted before any output.
 func collectFinalValidatorInputsWithPathAuthority(cfg *ResolvedConfig, stateRoot, runRoot string, terminal *ScenarioObservation, phase string, window *ScenarioAcceptanceWindow, startedAt, completedAt time.Time, authority *finalOperatorPathAuthority, observeSeed func(int, [ed25519.PublicKeySize]byte) error) ([]FinalCollectedValidatorInputs, error) {
+	if finalUsesEvidenceV2(cfg) {
+		return nil, errors.New("compact validator capture requires the context-owned V2 collector")
+	}
 	if authority == nil || cfg == nil || cfg.Config == nil || terminal == nil || window == nil {
 		return nil, errors.New("validator path collection authority is incomplete")
 	}
@@ -1634,23 +1767,20 @@ func collectFinalValidatorMeasurementEnvelope(stateRoot, validatorRoot, runRoot 
 	return persistFinalCollectedArtifact(runRoot, "validator-release-measurement-envelope", name, data)
 }
 
-func readBoundedResponse(response *http.Response, maximum int64) ([]byte, error) {
+// Payout response ownership includes its request and close, not only its bytes.
+func readBoundedResponse(ctx context.Context, response *http.Response, maximum int64) ([]byte, error) {
 	if response == nil || response.Body == nil {
 		return nil, errors.New("HTTP response is empty")
 	}
-	defer response.Body.Close()
 	if response.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("HTTP %d", response.StatusCode)
+		closeErr := response.Body.Close()
+		var contextErr error
+		if ctx != nil {
+			contextErr = ctx.Err()
+		}
+		return nil, errors.Join(fmt.Errorf("HTTP %d", response.StatusCode), closeErr, contextErr)
 	}
-	var buffer bytes.Buffer
-	limited := io.LimitReader(response.Body, maximum+1)
-	if _, err := buffer.ReadFrom(limited); err != nil {
-		return nil, err
-	}
-	if int64(buffer.Len()) > maximum {
-		return nil, fmt.Errorf("HTTP response exceeds %d bytes", maximum)
-	}
-	return buffer.Bytes(), nil
+	return readEvidenceHttpBody(ctx, response.Body, maximum)
 }
 
 func persistFinalCollectedArtifact(runRoot, kind, relative string, data []byte) (FinalArtifactLocator, error) {
@@ -1719,6 +1849,9 @@ func captureFinalSemanticAdversaries(runRoot string, result *ScenarioResult, mat
 func verifyFinalSemanticCollectedInputs(cfg *ResolvedConfig, value *FinalSemanticCollectedInputs) error {
 	if cfg == nil || cfg.Config == nil || value == nil {
 		return errors.New("collected final semantic inputs are incomplete")
+	}
+	if err := validateCollectedMetadataForConfigV2(cfg, value); err != nil {
+		return err
 	}
 	if value.Schema != finalSemanticCollectedInputsSchema {
 		return fmt.Errorf("unsupported final semantic collected-inputs schema %q", value.Schema)
@@ -1798,6 +1931,18 @@ func verifyFinalSemanticCollectedInputs(cfg *ResolvedConfig, value *FinalSemanti
 		}
 	}
 	for i, validator := range value.Validators {
+		if validator.EvidenceV2 != nil {
+			if validator.ValidatorID != uint64(i+1) {
+				return errors.New("compact validator census is not canonical")
+			}
+			if err := verifyFinalCollectedValidatorEvidenceV2(cfg, value, validator); err != nil {
+				return err
+			}
+			continue
+		}
+		if finalUsesEvidenceV2(cfg) {
+			return errors.New("compact configured capture contains legacy validator evidence")
+		}
 		if validator.ValidatorID != uint64(i+1) || len(validator.Intents) < int(value.Window.EpochCount) || len(validator.Attempts) != cfg.Config.Topology.Operators || len(validator.PathProofs) != cfg.Config.Topology.Operators {
 			return errors.New("collected validator input coverage is incomplete")
 		}
@@ -1863,15 +2008,13 @@ func verifyFinalSemanticCollectedInputs(cfg *ResolvedConfig, value *FinalSemanti
 }
 
 func verifyFinalCollectedClosedGraph(ctx context.Context, cfg *ResolvedConfig, stateRoot, runRoot string, value *FinalSemanticCollectedInputs) error {
-	load, err := NewFinalSemanticCampaignArtifactLoader(stateRoot, runRoot)
+	load, err := newFinalSemanticCampaignArtifactLoaderForConfigV2(cfg, stateRoot, runRoot)
 	if err != nil {
 		return err
 	}
 	locators := []FinalArtifactLocator{value.Policy, value.ScenarioResult, value.AdversarialMatrix, value.Adversaries, value.TerminalObservation, value.ObservationHistory}
 	if value.PriorPhase != nil {
-		locators = append(locators, value.PriorPhase.ScenarioResult, value.PriorPhase.OwnerCompletion, value.PriorPhase.EvidenceManifest, value.PriorPhase.LifecycleHandoff, value.PriorPhase.CaptureStatus, value.PriorPhase.CollectedInputsManifest, value.PriorPhase.SemanticSupplement)
-		locators = append(locators, value.PriorPhase.LiveChainBundles...)
-		locators = append(locators, value.PriorPhase.SemanticFileEnvelopes...)
+		locators = append(locators, finalCollectedPriorLocators(value.PriorPhase)...)
 	}
 	locators = append(locators, value.ClosedInputBundles...)
 	for _, payout := range value.Payouts {
@@ -1881,6 +2024,11 @@ func verifyFinalCollectedClosedGraph(ctx context.Context, cfg *ResolvedConfig, s
 		locators = append(locators, payout.Artifact)
 	}
 	for _, validator := range value.Validators {
+		if validator.EvidenceV2 != nil {
+			for _, source := range validator.EvidenceV2.Sources {
+				locators = append(locators, source.Artifact)
+			}
+		}
 		locators = append(locators, validator.IntentStore)
 		if validator.DishonestDepositIntent != nil {
 			locators = append(locators, validator.DishonestDepositIntent.Artifact, validator.DishonestDepositIntent.Measurement, validator.DishonestDepositIntent.Envelope)
@@ -1918,6 +2066,11 @@ func verifyFinalCollectedClosedGraph(ctx context.Context, cfg *ResolvedConfig, s
 		if uint64(len(data)) != locator.SizeBytes || bytesSHA256(data) != locator.ContentHash {
 			return fmt.Errorf("read back collected semantic input %s differs", locator.URI)
 		}
+		if finalUsesEvidenceV2(cfg) && locator.Kind == "validator-evidence-v2-source" {
+			// Exact sources remain in the immutable archive. The source-reader
+			// verification below reopens one object at a time, not the whole tape.
+			continue
+		}
 		loaded[locator.Kind] = data
 		loaded[locator.URI] = data
 		if locator.Kind == "closed-input-bundle" {
@@ -1953,8 +2106,33 @@ func verifyFinalCollectedClosedGraph(ctx context.Context, cfg *ResolvedConfig, s
 		}
 	}
 	if value.PriorPhase != nil {
+		if err := verifyFinalCollectedPendingPriorBinding(cfg, value, loaded); err != nil {
+			return err
+		}
 		if err := verifyFinalCollectedPriorPhaseBytes(cfg, value.PriorPhase, loaded); err != nil {
 			return err
+		}
+		if finalUsesEvidenceV2(cfg) {
+			prior := value.PriorPhase
+			var manifestEnvelope ReleaseEvidenceEnvelope
+			if err := decodeStrictJSONBytes(loaded["prior-evidence-manifest-envelope"], &manifestEnvelope); err != nil {
+				return err
+			}
+			limits, err := campaignEvidenceLimitsForConfig(cfg)
+			if err != nil {
+				return err
+			}
+			manifest, err := decodeCampaignEvidenceManifestWithLimits(&manifestEnvelope, limits)
+			if err != nil {
+				return err
+			}
+			read, err := finalPriorCarrierStoreReaderV2(cfg, stateRoot, prior.RunID, nil)
+			if err != nil {
+				return err
+			}
+			if err := verifyFinalPriorCarriersV2(ctx, cfg, prior.RunID, manifest, prior.CarrierOrigins, prior.PublicCarriers, manifestEnvelope.Signer, read); err != nil {
+				return err
+			}
 		}
 	}
 	if err := verifyFinalCollectedAdversaries(value, loaded); err != nil {
@@ -1964,7 +2142,7 @@ func verifyFinalCollectedClosedGraph(ctx context.Context, cfg *ResolvedConfig, s
 	if err := decodeStrictJSONBytes(loaded[value.TerminalObservation.URI], &terminal); err != nil {
 		return fmt.Errorf("decode collected terminal observation for lifecycle payout replay: %w", err)
 	}
-	if err := verifyFinalCollectedSettlementAuthority(cfg, value, &terminal, loaded); err != nil {
+	if err := verifyFinalCollectedSettlementAuthorityWithReader(ctx, cfg, value, &terminal, loaded, load); err != nil {
 		return err
 	}
 	if err := verifyFinalCollectedLifecyclePayouts(value, &terminal, loaded); err != nil {
@@ -1973,9 +2151,8 @@ func verifyFinalCollectedClosedGraph(ctx context.Context, cfg *ResolvedConfig, s
 	if err := verifyFinalCollectedLifecycleIntents(value, &terminal, loaded); err != nil {
 		return err
 	}
-	manifestPath := filepath.Join(runRoot, "final-inputs", "manifest.json")
 	var manifest FinalSemanticCollectedInputs
-	if err := decodeStrictJSONFile(manifestPath, &manifest); err != nil {
+	if err := decodeCampaignControlForConfigV2(cfg, runRoot, campaignCollectedIndexPathV2, &manifest); err != nil {
 		return fmt.Errorf("read back collected semantic manifest: %w", err)
 	}
 	if manifest.EvidenceHash != value.EvidenceHash {
@@ -2128,11 +2305,15 @@ func verifyFinalCollectedPriorPhaseBytes(cfg *ResolvedConfig, prior *FinalCollec
 	if err := verifyFinalCollectedPriorManifestEnvelope(&manifestEnvelope, &ownerKey.PublicKey, prior.RunID, completePayload.EvidenceManifestHash); err != nil {
 		return stateMismatchError(err, "collected prior evidence manifest envelope is invalid")
 	}
-	manifest, err := decodeCampaignEvidenceManifest(&manifestEnvelope)
+	limits, err := campaignEvidenceLimitsForConfig(cfg)
+	if err != nil {
+		return err
+	}
+	manifest, err := decodeCampaignEvidenceManifestWithLimits(&manifestEnvelope, limits)
 	if err != nil || manifest.ResultHash != prior.ResultHash || !strings.EqualFold(manifest.BundlePayloadHash, completePayload.BundlePayloadHash) {
 		return stateMismatchError(err, "collected prior evidence manifest payload is invalid")
 	}
-	files, err := campaignEvidenceManifestFiles(manifest.Files)
+	files, err := campaignEvidenceManifestFilesWithLimits(manifest.Files, limits)
 	if err != nil || !stringMapsEqual(files, completePayload.Files) {
 		return stateMismatchError(err, "collected prior evidence manifest files differ from completion")
 	}
@@ -2167,6 +2348,15 @@ func verifyFinalCollectedPriorPhaseBytes(cfg *ResolvedConfig, prior *FinalCollec
 	}
 	if !seenChainSnapshot {
 		return errors.New("collected prior live-chain graph lacks its terminal snapshot")
+	}
+	if prior.SemanticStatus == finalSemanticCapturePendingStatus {
+		if err := verifyFinalPriorCarrierCensusV2(cfg, prior.RunID, manifest, prior.CarrierOrigins, prior.PublicCarriers); err != nil {
+			return err
+		}
+		return verifyFinalCollectedPendingPriorBytes(cfg, prior, &result, &complete, &completePayload, &manifestEnvelope, manifest, &status, &collected, loaded)
+	}
+	if prior.SemanticStatus != "" {
+		return errors.New("collected prior semantic status is unknown")
 	}
 	var supplement ReleaseEvidenceEnvelope
 	if err := decodeStrictJSONBytes(loaded[prior.SemanticSupplement.URI], &supplement); err != nil || verifyFinalSemanticOwnerEnvelope(cfg, &supplement, &ownerKey.PublicKey, finalSemanticSupplementKind, prior.RunID) != nil {

@@ -384,7 +384,7 @@ func TestFleetCommitmentRecoveryPlanValidationRejectsAdjacentExceptions(t *testi
 func TestV10FleetCommitmentRecoveryRetainsExactLineageAndBudget(t *testing.T) {
 	fixture := newFleetCommitmentRecoveryFixture(t, 31, 1)
 	plan := fixture.reviseAt(t, fixture.evidence.FinalizedBlock+fixture.maximumAge+1)
-	plan.Schema = setupPlanSchemaV10
+	plan = validatorEvidenceLegacyPlanSchemaTest(t, plan, setupPlanSchemaV10)
 	recovery := actionByID(t, plan, fixture.action.ID)
 	if err := validateFleetCommitmentRecoveryPlanAction(plan, recovery); err != nil {
 		t.Fatalf("valid v10 recovery lineage was rejected: %v", err)

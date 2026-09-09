@@ -100,11 +100,13 @@ func TestAuthenticatePinnedNativeRuntimeRejectsAdjacentArtifactDrift(t *testing.
 		wantCodeCalls     int
 		wantMetadataCalls int
 	}{
-		{name: "preceding runtime spec", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 453, TransactionVersion: 1, StateVersion: 1}, codeHash: cfg.RuntimeCodeHash, metadata: metadata},
-		{name: "transaction version drift", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 454, TransactionVersion: 2, StateVersion: 1}, codeHash: cfg.RuntimeCodeHash, metadata: metadata},
-		{name: "state version drift", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 454, TransactionVersion: 1, StateVersion: 2}, codeHash: cfg.RuntimeCodeHash, metadata: metadata},
-		{name: "code hash drift", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 454, TransactionVersion: 1, StateVersion: 1}, codeHash: "0x825e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef", metadata: metadata, wantCodeCalls: 1},
-		{name: "metadata hash drift", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 454, TransactionVersion: 1, StateVersion: 1}, codeHash: cfg.RuntimeCodeHash, metadata: metadata, wantCodeCalls: 1, wantMetadataCalls: 1},
+		{name: "preceding runtime spec", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 454, TransactionVersion: 1, StateVersion: 1}, codeHash: cfg.RuntimeCodeHash, metadata: metadata},
+		{name: "future runtime spec", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 456, TransactionVersion: 1, StateVersion: 1}, codeHash: cfg.RuntimeCodeHash, metadata: metadata},
+		{name: "historical code under current spec", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: releaseRuntimeSpecVersion, TransactionVersion: 1, StateVersion: 1}, codeHash: "0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef", metadata: metadata, wantCodeCalls: 1},
+		{name: "transaction version drift", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: releaseRuntimeSpecVersion, TransactionVersion: 2, StateVersion: 1}, codeHash: cfg.RuntimeCodeHash, metadata: metadata},
+		{name: "state version drift", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: releaseRuntimeSpecVersion, TransactionVersion: 1, StateVersion: 2}, codeHash: cfg.RuntimeCodeHash, metadata: metadata},
+		{name: "code hash drift", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: releaseRuntimeSpecVersion, TransactionVersion: 1, StateVersion: 1}, codeHash: "0x825e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef", metadata: metadata, wantCodeCalls: 1},
+		{name: "metadata hash drift", version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: releaseRuntimeSpecVersion, TransactionVersion: 1, StateVersion: 1}, codeHash: cfg.RuntimeCodeHash, metadata: metadata, wantCodeCalls: 1, wantMetadataCalls: 1},
 	}
 	for index, testCase := range cases {
 		codeCalls, metadataCalls := 0, 0

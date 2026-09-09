@@ -130,6 +130,9 @@ func repeatedCoordinatorUpgradeBoundary(prior *SetupPlan, entries []JournalEntry
 	}
 	next := prior.CoordinatorUpgrade.DeployerNonce + 1
 	if !exactVerifiedPlanAction(prior, entries, "fleet.refresh.deploy-batcher") {
+		if prior.validatorEvidenceObserved != nil && prior.ValidatorEvidence != nil && prior.ValidatorEvidence.DeployerNonce >= next {
+			return 0, nil, errors.New("validator evidence CREATE has no verified predecessor batcher")
+		}
 		return next, nil, nil
 	}
 	var batcher *Action
@@ -155,7 +158,8 @@ func repeatedCoordinatorUpgradeBoundary(prior *SetupPlan, entries []JournalEntry
 	if _, err := decodeHex32("verified fleet batcher runtime hash", batcher.Parameters["runtime_code_hash"]); err != nil {
 		return 0, nil, err
 	}
-	return next + 1, batcher, nil
+	boundary, err := validatorEvidenceConsumedNonceBoundary(prior, next+1)
+	return boundary, batcher, err
 }
 
 // Accept only nonce positions authenticated by the migration itself. A fully
@@ -1718,6 +1722,10 @@ func observePersistedPrecompileProbeReplacement(ctx context.Context, cfg *Resolv
 		return nil, errors.New("persisted replacement nonce range overflows")
 	}
 	firstNonce, terminalNonce := baseline.ReplacementPrecompileProbeNonce, built.FleetBatcherNonce+1
+	terminalNonce, err := validatorEvidenceConsumedNonceBoundary(prior, terminalNonce)
+	if err != nil {
+		return nil, err
+	}
 	if current.DeployerNonce < firstNonce || current.DeployerNonce > terminalNonce {
 		return nil, fmt.Errorf("persisted replacement deployer nonce=%d, want one of %d..%d", current.DeployerNonce, firstNonce, terminalNonce)
 	}
@@ -2084,6 +2092,11 @@ func observeCoordinatorUpgradeMigration(ctx context.Context, cfg *ResolvedConfig
 	if err != nil {
 		return nil, err
 	}
+	if prior.validatorEvidenceObserved != nil {
+		if err := bindValidatorEvidenceCarryPayloads(built, prior.validatorEvidenceObserved); err != nil {
+			return nil, err
+		}
+	}
 	if prior.CoordinatorUpgradeBaseline.Schema == "urnetwork-coordinator-upgrade-baseline-v4" {
 		if err := configureCoordinatorUpgradeNonce(built, prior.CoordinatorUpgrade.DeployerNonce); err != nil {
 			return nil, fmt.Errorf("bind prior replacement coordinator: %w", err)
@@ -2092,6 +2105,19 @@ func observeCoordinatorUpgradeMigration(ctx context.Context, cfg *ResolvedConfig
 			return nil, fmt.Errorf("bind prior replacement probe: %w", err)
 		}
 		return observePersistedPrecompileProbeReplacement(ctx, cfg, prior, current, entries, roles, *existing, built)
+	}
+	if prior.validatorEvidenceObserved != nil {
+		// Compare the current executable at the already approved address. The
+		// original six-contract map says nothing about a later upgrade nonce.
+		if err := configureCoordinatorUpgradeNonce(built, prior.CoordinatorUpgrade.DeployerNonce); err != nil {
+			return nil, fmt.Errorf("bind retained companion's current coordinator: %w", err)
+		}
+		if prior.CoordinatorUpgrade.Schema == "urnetwork-coordinator-upgrade-v2" || built.CoordinatorUpgrade != prior.CoordinatorUpgrade {
+			if !contractDeploymentAddressesEqual(*existing, prior.Deployment) || !contractDeploymentRuntimeHashesCompatible(*existing, prior.Deployment) {
+				return nil, errors.New("retained companion coordinator custody differs from its approved deployment")
+			}
+			return observeRepeatedCoordinatorUpgrade(ctx, cfg, stateDir, prior, current, entries, roles, built)
+		}
 	}
 	if contractDeploymentAddressesEqual(*existing, built.Manifest) && contractDeploymentRuntimeHashesCompatible(*existing, built.Manifest) {
 		return nil, nil
@@ -2459,6 +2485,9 @@ func rebindPlanCoordinatorUpgrade(plan *SetupPlan, payloads *DeploymentPayloads)
 			return err
 		}
 	}
+	if err := rebindValidatorEvidencePlan(plan); err != nil {
+		return err
+	}
 	if probeCount != 1 || implementationCount != 1 || activationCount != 1 || batcherCount != 1 || installBatchCount == 0 || installBatchCount != refreshBatchCount {
 		return fmt.Errorf("revised plan has %d precompile probe, %d coordinator implementation, %d activation, %d fleet batcher deployment, %d install batches, and %d refresh batches", probeCount, implementationCount, activationCount, batcherCount, installBatchCount, refreshBatchCount)
 	}
@@ -2584,7 +2613,7 @@ func preserveVerifiedFleetBatchActions(cfg *ResolvedConfig, stateDir string, rev
 		if _, err := decodeHex32("fleet batch source plan hash", planHash); err != nil {
 			return nil, err
 		}
-		plan, err := readPersistedPlanFile(filepath.Join(stateDir, "plans", stringsTrim0x(planHash)+".json"))
+		plan, err := readValidatorEvidenceHistoricalPlan(stateDir, planHash)
 		if err != nil {
 			return nil, fmt.Errorf("read fleet batch source plan %s: %w", planHash, err)
 		}
@@ -2691,7 +2720,7 @@ func preserveVerifiedEVMGasReallocations(stateDir string, revised, prior *SetupP
 		if _, err := decodeHex32("ancestor plan hash", planHash); err != nil {
 			return nil, err
 		}
-		plan, err := readPersistedPlanFile(filepath.Join(stateDir, "plans", stringsTrim0x(planHash)+".json"))
+		plan, err := readValidatorEvidenceHistoricalPlan(stateDir, planHash)
 		if err != nil {
 			return nil, fmt.Errorf("read ancestor plan %s: %w", planHash, err)
 		}
@@ -3618,6 +3647,9 @@ func buildPlanRevisionFromFactsWithMigrationAndRecoveries(cfg *ResolvedConfig, s
 // Build a deterministic revision with every transaction recovery class already
 // authenticated against live finalized state.
 func buildPlanRevisionFromFactsWithAllRecoveries(cfg *ResolvedConfig, stateDir string, prior *SetupPlan, current *SetupFacts, entries []JournalEntry, generatedAt time.Time, migration *coordinatorUpgradeMigration, recoveries planRevisionRecoveries) (*SetupPlan, error) {
+	if validatorEvidenceHistoryRequired(prior, entries) && prior.validatorEvidenceObserved == nil {
+		return nil, errors.New("validator evidence revision lacks authenticated original source history")
+	}
 	roles, err := derivePublicRoles(cfg)
 	if err != nil {
 		return nil, err
@@ -3673,6 +3705,11 @@ func buildPlanRevisionFromFactsWithAllRecoveries(cfg *ResolvedConfig, stateDir s
 		if payloadErr != nil {
 			return nil, payloadErr
 		}
+		if prior.validatorEvidenceObserved != nil {
+			if err := bindValidatorEvidenceCarryPayloads(currentPayloads, prior.validatorEvidenceObserved); err != nil {
+				return nil, err
+			}
+		}
 		if migration != nil && migration.Upgrade.Schema != "" {
 			if err := configureCoordinatorUpgradeNonce(currentPayloads, migration.Upgrade.DeployerNonce); err != nil || currentPayloads.CoordinatorUpgrade != migration.Upgrade {
 				return nil, stateMismatchError(err, "coordinator upgrade migration payload differs from its approved identity")
@@ -3683,9 +3720,12 @@ func buildPlanRevisionFromFactsWithAllRecoveries(cfg *ResolvedConfig, stateDir s
 				return nil, fmt.Errorf("bind revised precompile probe: %w", err)
 			}
 		}
-		if contractDeploymentAddressesEqual(*existingDeployment, currentPayloads.Manifest) && contractDeploymentRuntimeHashesCompatible(*existingDeployment, currentPayloads.Manifest) {
+		if err := validateValidatorEvidenceRevision(prior, &currentPayloads.ValidatorEvidence.Manifest); err != nil {
+			return nil, err
+		}
+		if migration == nil && contractDeploymentAddressesEqual(*existingDeployment, currentPayloads.Manifest) && contractDeploymentRuntimeHashesCompatible(*existingDeployment, currentPayloads.Manifest) {
 			normalized.DeployerNonce = existingDeployment.InitialNonce
-		} else if promotionErr := validateRegistrationRoleGenerationPromotion(cfg, prior, *existingDeployment, currentPayloads.Manifest, current.DeployerNonce, entries); promotionErr == nil {
+		} else if promotionErr := validateRegistrationRoleGenerationPromotion(cfg, prior, *existingDeployment, currentPayloads.Manifest, current.DeployerNonce, entries); migration == nil && promotionErr == nil {
 			normalized.DeployerNonce = existingDeployment.InitialNonce
 			deploymentGenerationPromoted = true
 		} else if migration != nil {
@@ -3801,6 +3841,21 @@ func buildPlanRevisionFromFactsWithAllRecoveries(cfg *ResolvedConfig, stateDir s
 		return nil, err
 	}
 	revised.SupersededDeployments = supersededDeployments
+	seen := map[string]bool{}
+	for _, hash := range append(append([]string(nil), prior.PriorPlanHashes...), prior.PlanHash) {
+		if !seen[hash] {
+			revised.PriorPlanHashes = append(revised.PriorPlanHashes, hash)
+			seen[hash] = true
+		}
+	}
+	if prior.validatorEvidenceObserved != nil {
+		if deploymentSuperseded || deploymentGenerationPromoted {
+			return nil, errors.New("validator evidence carry cannot replace immutable custody")
+		}
+		if err := carryValidatorEvidencePlan(revised, prior, prior.validatorEvidenceObserved); err != nil {
+			return nil, err
+		}
+	}
 	if deploymentGenerationPromoted {
 		if err := carryVerifiedGenerationIndependentReserve(revised, prior, entries); err != nil {
 			return nil, fmt.Errorf("carry generation-independent reserve: %w", err)
@@ -3823,12 +3878,8 @@ func buildPlanRevisionFromFactsWithAllRecoveries(cfg *ResolvedConfig, stateDir s
 			return nil, fmt.Errorf("preserve verified deployment baseline: %w", err)
 		}
 	}
-	seen := map[string]bool{}
-	for _, hash := range append(append([]string(nil), prior.PriorPlanHashes...), prior.PlanHash) {
-		if !seen[hash] {
-			revised.PriorPlanHashes = append(revised.PriorPlanHashes, hash)
-			seen[hash] = true
-		}
+	if err := validateValidatorEvidenceRevision(prior, revised.ValidatorEvidence); err != nil {
+		return nil, err
 	}
 	if err := preserveConsumedRegistrationFunding(revised, prior, entries); err != nil {
 		return nil, fmt.Errorf("preserve consumed registration funding: %w", err)
@@ -3901,6 +3952,15 @@ func buildPlanRevisionFromFactsWithAllRecoveries(cfg *ResolvedConfig, stateDir s
 
 // Recheck live safety, transaction outcomes, and topology before revising.
 func BuildPlanRevision(ctx context.Context, cfg *ResolvedConfig, stateDir string, prior *SetupPlan, entries []JournalEntry) (*SetupPlan, error) {
+	observed, err := observeValidatorEvidenceCarry(ctx, cfg, stateDir, prior, entries)
+	if err != nil {
+		return nil, fmt.Errorf("validator evidence original source authority: %w", err)
+	}
+	if observed != nil {
+		owned := *prior
+		owned.validatorEvidenceObserved = observed
+		prior = &owned
+	}
 	remaining, err := remainingPlanSpend(prior, entries)
 	if err != nil {
 		return nil, err
@@ -3992,7 +4052,14 @@ func BuildPlanForState(ctx context.Context, cfg *ResolvedConfig, stateDir string
 	}
 	prior, err := readPersistedPlan(stateDir)
 	if err != nil {
-		return nil, err
+		raw, readErr := readValidatorEvidenceHistoricalFile(stateDir, "plan.json", maximumCampaignEvidenceRawFileBytes)
+		if readErr != nil {
+			return nil, readErr
+		}
+		prior, err = decodePersistedPlanBytesForHistory(raw, true)
+		if err != nil {
+			return nil, err
+		}
 	}
 	entries, err := readJournalEntries(stateDir)
 	if err != nil {

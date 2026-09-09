@@ -55,11 +55,12 @@ cd "$evm_repo"
 # STSubnet.sol is the retained pre-1.0 monolith and is not installed by
 # sim-testnet. The coordinator root traverses immutable custody, proxy libraries,
 # and runtime-precompile interfaces. The fleet batcher, disposable precompile
-# probe, and hostile governance-drill implementation are separately deployed
-# testnet roots, so the release gate analyzes each of them too.
+# probe, hostile governance-drill implementation, and immutable validator
+# evidence journal are separate deployment roots analyzed independently.
 contracts=(
   src/STCoordinator.sol
   src/STFleetBatcher.sol
+  src/STValidatorEvidence.sol
   src/probe/STSubnetProbe.sol
   src/testnet/STCoordinatorAdversary.sol
 )

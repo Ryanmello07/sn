@@ -6,6 +6,7 @@ package main
 // vault or reserve contract that is no longer part of the active graph.
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -32,6 +33,17 @@ type finalReleaseContractCaptureCensus struct {
 // Directory enumeration is deliberately forbidden: an unrelated local plan
 // file must never broaden the trusted historical contract graph.
 func finalCaptureReleaseContractCensusFromState(stateRoot string, current *SetupPlan, deployment *ContractDeployment, batcher common.Address) (finalReleaseContractCaptureCensus, error) {
+	return finalCaptureReleaseContractCensusFromStateContext(context.Background(), stateRoot, current, deployment, batcher)
+}
+
+// The live collector owns cancellation for bounded original relay reads.
+func finalCaptureReleaseContractCensusFromStateContext(ctx context.Context, stateRoot string, current *SetupPlan, deployment *ContractDeployment, batcher common.Address) (finalReleaseContractCaptureCensus, error) {
+	if ctx == nil {
+		return finalReleaseContractCaptureCensus{}, errors.New("historical release capture context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return finalReleaseContractCaptureCensus{}, err
+	}
 	if stateRoot == "" || current == nil || deployment == nil {
 		return finalReleaseContractCaptureCensus{}, errors.New("historical release capture state is incomplete")
 	}
@@ -47,8 +59,7 @@ func finalCaptureReleaseContractCensusFromState(stateRoot string, current *Setup
 		if _, found := plans[key]; found {
 			return finalReleaseContractCaptureCensus{}, fmt.Errorf("approved predecessor plan %s is duplicated", hash)
 		}
-		path := filepath.Join(stateRoot, "plans", stringsTrim0x(key)+".json")
-		plan, err := readPersistedPlanFile(path)
+		plan, err := readValidatorEvidenceHistoricalPlan(stateRoot, key)
 		if err != nil || !strings.EqualFold(plan.PlanHash, key) || plan.DeploymentID != current.DeploymentID || plan.ChainID != current.ChainID || plan.Netuid != current.Netuid {
 			return finalReleaseContractCaptureCensus{}, stateMismatchError(err, "load approved predecessor plan %s", hash)
 		}
@@ -62,13 +73,23 @@ func finalCaptureReleaseContractCensusFromState(stateRoot string, current *Setup
 	if err != nil {
 		return finalReleaseContractCaptureCensus{}, err
 	}
-	return finalCaptureReleaseContractCensusForLineage(current, deployment, batcher, plans, entries)
+	requests, err := evidenceRelayRequestsFromState(ctx, stateRoot, plans, entries)
+	if err != nil {
+		return finalReleaseContractCaptureCensus{}, err
+	}
+	return finalCaptureReleaseContractCensusWithRelayRequests(current, deployment, batcher, plans, entries, requests)
 }
 
 // Computes a stable emitter/address range from an already authenticated plan
 // lineage. Keeping this pure makes every omission, foreign address, and range
 // boundary testable without a filesystem or a live chain dependency.
 func finalCaptureReleaseContractCensusForLineage(current *SetupPlan, deployment *ContractDeployment, batcher common.Address, plans map[string]*SetupPlan, entries []JournalEntry) (finalReleaseContractCaptureCensus, error) {
+	return finalCaptureReleaseContractCensusWithRelayRequests(current, deployment, batcher, plans, entries, nil)
+}
+
+// Original relay requests extend action admission, never the emitter graph.
+// The companion has its own independently captured contract/log census.
+func finalCaptureReleaseContractCensusWithRelayRequests(current *SetupPlan, deployment *ContractDeployment, batcher common.Address, plans map[string]*SetupPlan, entries []JournalEntry, requests map[evidenceRelayRequestKey][]byte) (finalReleaseContractCaptureCensus, error) {
 	if current == nil || deployment == nil || batcher == (common.Address{}) || len(plans) == 0 {
 		return finalReleaseContractCaptureCensus{}, errors.New("historical release capture lineage is incomplete")
 	}
@@ -130,6 +151,10 @@ func finalCaptureReleaseContractCensusForLineage(current *SetupPlan, deployment 
 			releaseSet[strings.ToLower(historicalBatcher.Hex())] = historicalBatcher
 		}
 	}
+	relayActions, err := evidenceRelayRequestActions(plans, entries, requests)
+	if err != nil {
+		return finalReleaseContractCaptureCensus{}, err
+	}
 	for _, entry := range entries {
 		if entry.Stage != StageFinalized || entry.BlockNumber == 0 || entry.DeploymentID != current.DeploymentID {
 			continue
@@ -139,7 +164,7 @@ func finalCaptureReleaseContractCensusForLineage(current *SetupPlan, deployment 
 		if !allowed[planHash] || plan == nil {
 			continue
 		}
-		action, err := exactPlanActionByID(plan, entry.ActionID)
+		action, err := finalJournalActionWithRelay(plan, entry, relayActions)
 		if err != nil || !actionAcceptsIntent(action, entry.IntentHash) {
 			return finalReleaseContractCaptureCensus{}, stateMismatchError(err, "historical release journal action %s is not approved", entry.ActionID)
 		}

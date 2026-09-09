@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/urnetwork/server/model"
 )
 
 // Supplies a real approved plan and a test-owned migration executable. The
@@ -19,6 +21,8 @@ import (
 func validatorNamespaceLaunchBoundaryFixture(t *testing.T) (*ResolvedConfig, string, *SetupPlan, *RoleSecrets, map[string]string, string) {
 	t.Helper()
 	cfg := testResolvedConfig(t)
+	budget := model.StAttemptUploadBudget{RequestsPerHour: 4096, BytesPerHour: 64 * 1024 * 1024, AccountRequestsPerHour: 1024, AccountBytesPerHour: 16 * 1024 * 1024}
+	cfg.Config.Artifacts.AttemptUpload = &budget
 	roles, err := BuildRoleSecrets(cfg)
 	if err != nil {
 		t.Fatal(err)

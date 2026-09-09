@@ -2,14 +2,16 @@ schema_version: 1
 release: "1.0"
 runtime:
     source_repository: https://github.com/RaoFoundation/subtensor
-    source_tag: v454
-    source_commit: 14cde6410fe8ec81a940e290c56f94a632a0988d
-    code_hash: 0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef
-    metadata_hash: 0x4d17516b694ef8d18f8a565dcb2df0117e7a0018a3ffa40812c91a1621225702
-    compressed_wasm_sha256: 0xa55e76b4f4620bcdb4c787e499c87a35abb9913ba4cde001b08a00d1945ac4db
-    upstream_release_call_hash: 0x5a1c30f0387796da59522d4b84a71395533a4ee676e06c52eedb14262ae9c3c6
-    upstream_release_timepoint: "8996567:7"
-    spec_version: 454
+    source_tag: ""
+    source_ref_kind: commit
+    source_ref_name: 67dcf7f791dc495064c293f080a0702cb433e51e
+    source_commit: 67dcf7f791dc495064c293f080a0702cb433e51e
+    code_hash: 0xbca85925668cabb2880164610d64eda2e4d9bf2777994f9cdfdb9d36253ce74a
+    metadata_hash: 0x16da562c347a354c55eb1ad5cd5094343afe7acdc12e5b526bf6c8cb12e866bc
+    compressed_wasm_sha256: 0x232bfc0d65ec2dbe4280b152e23f13879df9692d2286dd08c6ba14483deee00f
+    upstream_release_call_hash: ""
+    upstream_release_timepoint: ""
+    spec_version: 455
     transaction_version: 1
     state_version: 1
     image: ghcr.io/raofoundation/subtensor@sha256:3e37b8d9a4f3c60ba66652cae79fe54d81d868558fb0159842ff952eee5115de
@@ -44,6 +46,9 @@ evm_build:
     settlement_vault_runtime_hash: 0xc347210d251f8644cda0aa5eb38f67ad52cded8812c5665f8e2f47aeccad2e88
     solidity: 0.8.24
     source_hash: sha256:642fdb618f58a6f1e46d40cbe09795eceeb9e8a804381d097c80b1ecaa14cf53
+    validator_evidence_artifact_hash: 0xa18512f49457ddc61e6ab7bb1d099047a0e7a60b80b31f74afb48e16a3ce9a37
+    validator_evidence_runtime_hash: 0x9a0a8bd024d86b7586986061dec5c644f5c26a9e685385c5044dbf79df799b74
+    validator_evidence_storage_layout_hash: sha256:c7b1d4c69d489d880dad1eb8f79de12f6af04f9abfb0bdf7f7f4b60ad045204e
 repositories:
     connect_go_source_hash: sha256:c403125f2dc8bdc72c5c465c3f488e1a78487b429323acfe0274da3b7a0e67a5
     glog_go_source_hash: sha256:3fb2eadda7c6918f8497d451998c33ba39370c7b985482a51b4320056da6617e

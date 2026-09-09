@@ -1043,6 +1043,9 @@ func readCaptureStatus(capture string) (matrixStatus, error) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "replay" {
+		os.Exit(runReplay(os.Args[2:], os.Stdout, os.Stderr))
+	}
 	if len(os.Args) == 3 && os.Args[1] == "worker" {
 		os.Exit(runWorker(os.Args[2]))
 	}
@@ -1073,7 +1076,7 @@ func main() {
 			err = errors.New("qualification did not pass")
 		}
 	} else {
-		err = errors.New("usage: qualification run PLAN.json NEW_CAPTURE | status CAPTURE | fence SOURCE_ROOT MANIFEST")
+		err = errors.New("usage: qualification run PLAN.json NEW_CAPTURE | status CAPTURE | fence SOURCE_ROOT MANIFEST | replay EVENTS OUTCOMES LITERALS PACKAGE BODY_EXIT")
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

@@ -62,6 +62,7 @@ func runtimeAttemptSettlementV2MoveEmptyOperator(t *testing.T, fixture *attemptS
 // Each actual public runtime role is exercised with an occupied invalid-byte
 // coordinator. The bad bytes are neither cleaned away nor replaced with U+FFFD.
 func TestAttemptSettlementRuntimeV2PathEncodingCoordinatorBeforeIO(t *testing.T) {
+	t.Parallel()
 	for _, role := range []string{"initialize", "advance", "recover", "closure"} {
 		fixture := newAttemptSettlementRuntimeV2TestFixture(t, role != "initialize")
 		if role == "advance" || role == "closure" {
@@ -112,6 +113,7 @@ func TestAttemptSettlementRuntimeV2PathEncodingCoordinatorBeforeIO(t *testing.T)
 
 // An occupied operator namespace must not be lossy in its durable StatsPath.
 func TestAttemptSettlementRuntimeV2PathEncodingOperatorBeforeIO(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 	path := filepath.Join(newAttemptSettlementRuntimeV2TestStateDir(t), "operator-\xfe")
 	if utf8.ValidString(path) {
@@ -137,6 +139,7 @@ func TestAttemptSettlementRuntimeV2PathEncodingOperatorBeforeIO(t *testing.T) {
 // Full real activation, M8 terminal, immutable read and fresh recovery prove
 // exact non-ASCII paths remain supported without any candidate normalization.
 func TestAttemptSettlementRuntimeV2PathEncodingRealUnicodeRestart(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 	path := filepath.Join(newAttemptSettlementRuntimeV2TestStateDir(t), "协调者-é<&>")
 	if err := os.Rename(fixture.coordinator, path); err != nil {

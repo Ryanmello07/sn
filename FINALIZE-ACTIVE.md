@@ -1,18 +1,14 @@
 # Release 1.0 active work index
 
-Updated 2026-09-08 20:05 UTC. Read this index first; use
+Updated 2026-09-09 13:42 UTC. Read this index first; use
 [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md) for detailed history and evidence.
 This is not a source freeze, full-gate certificate or live acceptance report.
 
-Base commits before this checkpoint: SN `c6d93e9`, server `0f5e7f5e`,
-connect `58157ab`. The current checkpoint includes the primary naming changes,
-the private Go server-fixture tool, monitoring policy and these handoffs.
-The fixture source matches its qualified donor bytes; primary-tree execution
-confirmation remains pending. Isolated production successors are not promoted
-or included in the primary commits merely because their handoffs are recorded.
-The SN source checkpoint includes the independently reviewed
-closed-census evidence publisher and its17 tests. Subsequent integration changes
-below remain in the temporary candidate unless explicitly marked promoted.
+Server `27e5ceb7`, Connect `289bdbd`, and SDK `6970c5a` are now checkpointed,
+pulled without upstream changes and pushed. SN remains at `5536559` with its
+reviewed successor in the working tree, awaiting the SN source checkpoint.
+These source checkpoints are not a completed release lock or qualification.
+The temporary candidate remains an independent qualification workspace.
 The user subsequently approved **on-chain hashes + API/MinIO proof bytes** on
 2026-09-07 UTC. Section10.1 of the complete handoff now records that decision.
 Implement independent immutable validator/operator evidence slots, including
@@ -29,8 +25,516 @@ independently replayable on-chain evidence in `FINAL.md`.
 
 ## Current pre-soak frontier
 
-This section supersedes older pending statuses below.
+Latest verified delta at 2026-09-09 13:42 UTC (supersedes corresponding statuses below):
 
+- The renewed30-minute acceleration checkpoint at12:44UTC was reached without
+  a soak start; it did not waive admission. Limit work to the actual critical
+  path and adjacent deterministic regressions; preparation owns no native CPU
+  reservation. Root integrates; Terra main and Terra services execute independently;
+  Astra investigates actual failures and audits only launch-critical dependencies.
+- PublicFileDecode5 now qualifies on V26: its six new controls and 27 readback
+  controls pass normal/race; prior-carrier14 and metadata9 now pass both modes
+  with every integrity fence0. Metadata9 race completed218.363s. The unchanged population900
+  root passes normal in136.415s and has THREE fresh sequential repaired race passes
+  on the same sealed binary:432.521s,430.259s,431.411s. All source, mode, snapshot,
+  binary, census, conversion and checker fences pass. Retain, do not restart,
+  this completed streak. Race captures are under temp/sn-v26-pop900-race10-
+  aua9GN, temp/sn-v26-pop900-race10-pass2-STLuV4 and
+  temp/sn-v26-pop900-race10-pass3-EjdJh8, each in race/.
+- RegistrationPublication6 is now reviewed, integrated and formatted in BOTH
+  primary/candidate trees. Exact six-file donor:
+  temp/sn-registration-publication-v1-astra/HANDOFF.md. It connects the actual
+  post-Sql StRegisterClientKey path to finite, ready-only local publication
+  windows, preserving each member's30s operation, signatures, both readbacks,
+  accounting and final Close. Thirteen deterministic roots cover real64+1
+  windows, wire ownership, member/owner cancellation, blocked token, real
+  pre-commit cancellation, final census errors, panic cleanup and the actual
+  authenticated controller. Root caught and repaired the adjacent owner-
+  cancellation gap before integration. Original1000-client/two-operator
+  workload and deadlines are unchanged. Server52 now passes BOTH normal/race;
+  controller24 passes normal; the original1000-client root has THREE fresh
+  sequential repaired race passes on identical source/binary/profile. All
+  body, census, checker, converter, private-service/cleanup and integrity fences
+  pass. The disjoint remaining23 controller race roots now also pass, with
+  exact24-root union proof in controller24-race-union:24 expected,23 remainder,
+  1 singleton,24 union,0 overlap,0 difference. Both old-path causal controls
+  qualify normal/race: actual body1 at the declared failure and literal,
+  checker0 and all source/service/cleanup/binary fences0. Inputs are frozen
+  at temp/sn-registration-publication6-causal-inputs-v1-astra/HANDOFF.md.
+  Capture: temp/sn-registration-publication6-qualification-ESYA9E, including
+  server52-normal3, server52-race, controller24-normal and
+  cohort1000-race-pass{1,2,3}. Retain prebody metadata-header/quoting refusals
+  separately; none ran a product test. Causal captures are
+  causal-old-registration/{normal,race} and causal-old-context/{normal,race}.
+  RegistrationPublication6 qualification is CLOSED; do not rerun this streak.
+- V26 guard60 really failed three roots in each mode. The private-service
+  checker incorrectly counted function-local WARP_ENV declarations globally;
+  both evidence selectors also omitted StClientKeyPublication tests.
+  ServiceProfileSelector4 repairs those actual omissions and scopes the checker
+  to the server phase. RegistryNesting3 independently adds deterministic checks
+  against job registrations hidden in dead branches/empty loops. Both are
+  integrated/formatted in both trees. Guard60 passes normal/race twice; the
+  exact3 previously failed roots then pass a third fresh sequential run in
+  each mode on identical V27 binaries/source. Those repaired streaks are CLOSED.
+  Captures: v27-sim-captureguard60-{streak1c,streak2}-{normal,race} and
+  v27-sim-captureguard3-repair-streak3-{normal,race}. Private-profile negative
+  also passes N/R, all fences0 (0.293s/3.424s). Jobs2's changed roots outside60
+  now also pass N/R, all fences0 (0.867s/8.299s). Root checked the
+  actual60-root census: all4 changed metadata/history registration roots are
+  included, so no broader Registry rerun or new source snapshot is needed.
+  V27 normal/race builds are complete and independently verified by Root:
+  ac6adeb6c6617de1c2fafaf0a1945dbafc4e6a56909efcf39192c35f0e50e424 /
+  17fc0bfee15c458e99c3637769fece6126ac164521b4dbce1d7d62f4f1035e72.
+  An earlier message accidentally repeated V26's hash; actual V27 compiler
+  inputs/cwd/source/output and binary hashes are correct. Guard admission
+  rejected a copied selector that omitted `Covers` from one declared root;
+  retain that prebody-only refusal and correct the command from the exact
+  source-derived60-root census, without recompiling or reducing coverage.
+  These checks run independently of services and the large metadata diagnostic.
+- FullCensus has three repaired normal passes, but its unchanged race10m body
+  genuinely failed at603.658s; all source/ownership fences passed. Peak sampled
+  Rss22369864KiB, about21.33GiB. Capture:
+  temp/sn-v24-fullcensus-race10-fcbsmd/race; authoritative stack is raw/body.stderr.
+  At timeout the standard Json decoder was framing the1473236140-byte index;
+  a single stack does not attribute all600s to that stage. Astra's source audit
+  found no remaining repeated-subtree parsing and no safe drop-in removal of
+  strict full-document/duplicate/number semantics. The unchanged-binary race90m
+  diagnostic now completes PASS:1839.622s owner wall,1833.96s test body and
+  peak32756132KiB (about31.24GiB), all integrity/census/checker fences0.
+  Capture: temp/sn-v26-fullcensus-race90m-diagnostic-F1mZOn/race, including the
+  original CPU profile and saved top/cumulative/line reports. Root/Astra read
+  those reports: race/external instrumentation dominates sampled CPU; the Json
+  decoder accounts for5.84% cumulative and canonical wire marshal0.14%.
+  This supports a narrowly scoped dedicated race-test budget correction, not
+  a parser/hash rewrite. FullCensusRaceBudget3 is reviewed, integrated and
+  formatted in both trees: the45m metadata-only race budget and deterministic
+  scope guards (4 affected roots,2 new). Normal5m, ordinary capture5/10m, aggregate90m,
+  every byte/object limit and full population remain unchanged. The original
+  race10m failure remains a failure and the profiled diagnostic is NONQUALIFYING.
+  Three fresh sequential corrected-profile race confirmations remain required.
+- MetadataRows5's old-allocation causal is now qualified: fresh external
+  causal-normal2 fails at the exact expected allocation assertion
+  (6158827 bytes versus270284), checker0 and every source/binary/census fence0.
+  Capture: temp/sn-v26-metadatarows5-causal-v1-zuoNtw/capture/causal-normal2.
+  The earlier inherited-relative-snapshot prebody refusal is retained; no
+  body ran there. PublicFileDecode5's old-default causal is now CLOSED in both
+  modes: exact body1/allocation assertion, checker0 and every integrity fence0.
+  Capture: temp/sn-publicfiledecode5-causal-ZF5NsJ/run/{normal,race}. It proves
+  the old decode path exceeds its declared allocation bound for1048576 raw
+  bytes; it is not a new product failure or a rerun of the old population stress.
+- Bounded metadata caller review found no demonstrated live5m/10m finalization
+  timeout: publication graph discovery runs after the acceptance watchdog,
+  under command/campaign cancellation; public replay's30s limit is per response,
+  before graph decoding. Cancellation cannot interrupt the current finite Json
+  decode/tree walk; publication rechecks it before external writes. Retain this
+  cancellation-granularity limitation and observe actual live behavior. The
+  full-census local timing does not separately qualify the largest carrier's
+  complete two-origin HTTP transfer. Do not claim it does, or infer a production
+  deadline breach from the synthetic full-root timing alone.
+- Current native allocation is main12/services12, bounded24 total. Unused main
+  capacity was transferred to services so its prepared race compiler can run
+  beside its normal compiler, not wait for the normal owner to finish.
+  FullCensus diagnostic, V27 and registration compilers are now complete, and
+  their qualified work is retained. Terra main owns the remaining exact41-root
+  simulator qualification: normal41/41 now passes with all fences0; race is
+  independently live on V27 under its original10m profile. Services owns the
+  fresh FullCensusRaceBudget3 snapshot/build, four guards, quick old-command
+  causal and three corrected45m race confirmations. Source checkpoint/runtime-
+  lock preparation proceeds independently; no report-packaging wait is required.
+  V27 has7777 files/13 Git roots and every copy fence0. Source copies,
+  builds, independent guard bodies, service bodies and diagnostics need no
+  cross-lane result wait; only exact source ownership and shared resource limits
+  can require a local wait. Existing live bodies keep their original owners.
+  Completed Legacy/checker/population streaks are not rerun for unrelated edits.
+- Twelve primary release repositories were fetched concurrently at12:32UTC;
+  all HEADs still equal their fresh upstreams. Four working trees contain the
+  intended uncommitted successor (SN379 paths, server80, Connect8, SDK2); eight
+  are clean. Source-freeze covers15 live Go modules and one separately verified
+  archive. These read-only checks remove no source or qualification obligation.
+- Still mandatory: close actual remaining stress/affected/causal qualifications;
+  clean committed/pushed source and freshly generated runtime455 lock. Section4
+  now explicitly distinguishes immutable source freeze from qualification:
+  reviewed source plus the small guard checks may be locked while unchanged-
+  source repeat confirmations continue. BOTH strict gates can run concurrently
+  with those repeats using measured resources, without admitting live writes.
+  Charge the31.24GiB peak for each overlapping full census. Per
+  the approved detailed plan sections1.2/4.4, producer PASS plus fresh doctor
+  and two matching approved plans, AND every failed-root repeat obligation
+  closed, can admit live RC while the aggregate gate
+  continues; do NOT add aggregate completion as another pre-RC wait. An
+  aggregate failure invalidates the candidate and requires stopping new writes;
+  do not assume the independent scripts automatically supervise the campaign.
+  Aggregate PASS, live RC, all3 final epochs and independently replayable FINAL.md
+  remain mandatory for final acceptance. No new campaign transaction, source
+  freeze, completed strict gate or started soak is claimed.
+
+Predecessor verified delta at 2026-09-09 11:47 UTC:
+
+- The reviewed implementation is in the primary working trees: 354 SN paths,
+  73 server paths and 10 Connect/SDK paths, followed by FixtureMode2,
+  CanonicalFast4, Checker6, LocalBatch12, MetadataRows5, LegacyBarrier3,
+  HttpBodyClose6, Schedule2, CaptureMetadataIsolation3, CheckerName3 and
+  HistoryIsolation5, PublicFileDecode5 and RegistryNesting3. Reviewed upstream
+  overlaps and primary-only documents are preserved. This remains uncommitted
+  working source, not a clean/pushed source freeze.
+- Confirmed earlier component qualifications remain: validator1469 normal/race;
+  local-settlement374 normal/race at its original10m; server publication43
+  normal/race plus3 repaired allocation race passes; real1000-client/two-operator
+  DB root3 normal passes. Checker6 qualified66 normal/race roots and replayed
+  the retained DB20 roots/5 declared subtests without another body run.
+  V23 qualified focused34/canonical5/fixture-mode1 in both modes, focused41/
+  fixture15/guard23 normally, and RelayGenerated35 normal/race under077/022.
+  These are component results, not certificates for later changed source.
+- V24 FullCensus now has3 consecutive repaired normal passes on identical
+  source and binary, within the unchanged5m limit. Actual body results:
+  N1 276.96s; N2 258.61s; N3 251.39s (owner timings include final process exit).
+  Every source/mode/snapshot/binary/census/conversion/checker fence passed.
+  All1191936 slots,1473236140-byte flat index,1964315711-byte original carrier,
+  graph, hashes, signatures and real local publication remain. N2 peak process
+  RSS12728120KiB; N3 peak12110728KiB. Captures under capture-terra-v1:
+  v24-sim-metadata-fullcensus-normal{1,2,3}/normal.
+  Original V23 normal5m timeout301.489s remains retained; race10m still needs
+  qualification. MetadataRows5's7 new controls also pass normal/race with
+  exact7-root census and all integrity checks0; causal control remains.
+- V24 population900 normal passes:165.41s, full1000-miner/200-head geometry,
+  4 source owners,900 data objects,310378496 raw bytes, both replicas and
+  all immutable content/history/public reads. Its race successor genuinely
+  timed out at600.438s under the actual10m limit; retained runnable stack is
+  strict Json decoding in readPublicCampaignSourceV2. PublicFileDecode5 is now
+  integrated and formatted in both trees: canonical file readback avoids repeated
+  payload-sized Json decoding while retaining fresh signature/hash checks,
+  both public replicas, owned Close/cancellation and strict legacy fallback.
+  Six new actual-default-path controls and the unchanged population await V26
+  execution; no repaired race pass is claimed. Captures:
+  v24-sim-population900-normal2/normal and v24-sim-population900-race1/race.
+  Do not classify the actual race failure as a passing normal result.
+- LocalBatch12 storage qualification passes all46 roots normal/race, including
+  all12 new root-store controls. Qualified Go replay accepted original normal
+  events after the old checker refused malformed admission metadata; neither
+  body nor converter was rerun. Capture:
+  temp/sn-local-blob-batch-qualification-uQB4Rg/server46-{normal,race}-checker-reanalysis1.
+  Real controller20 DB normal passes20/20 with service/body/cleanup and all
+  integrity checks0. Race passed17 roots, then hit the original10m aggregate
+  deadline while an18th root had run only4s in setup. The first2 full-history
+  roots passed251.93s and276.13s; their528.06s serial total left insufficient
+  time for the remaining cases. This is not evidence of a Pg deadlock.
+  HistoryIsolation5 gives these2 exact roots separate registered processes in
+  BOTH gates, preserving10m modes and every source. Each TestEnv has a unique
+  Pg database and exclusive renewable Redis lease inside the gate-owned private
+  containers; teardown waits for all phases. New2 deterministic source and
+  execution/admission controls await V26. Old-scan causal N/R are qualified
+  at causal-old-scan4/{normal,race}: exact intended failure/literal, all fences0.
+  The earlier accidentally edited causal copy failed compilation and is retained
+  separately; frozen donor diff/file were consistent. Original DB repaired-root
+  streaks and final partitioned integration execution remain.
+  A separate actual failure is now reproduced twice: Controller18 remainder
+  race passes17/18, while its1000-client/two-operator root fails39.53s with
+  `create immutable artifact key: context deadline exceeded`; the same root
+  alone on independent private services fails39.98s with the identical assertion.
+  Every source/binary/service/cleanup fence passed. Captures:
+  temp/sn-local-blob-batch-qualification-uQB4Rg/controller18-remainder-race
+  and cohort1000-race-1. This is not explained by aggregate history scheduling.
+  Astra owns the30s per-registration publication deadline root cause;
+  Terra services owns one retained profile diagnostic, not blind qualification
+  retries. All1000 clients, signed evidence and original operation bound remain.
+- LegacyBarrier3's complete202-root normal AND race bodies pass, including all
+  7 formerly failing recovery roots and4 new deterministic graph/ownership
+  controls. The original checkers refused65 legitimate source-declared children;
+  this was not a product-body failure. Frozen source-derived267-identity census:
+  temp/sn-legacy202-descendants-v1-astra. CheckerName3 fixes descendant-only
+  printable literal-name admission without changing root grammar, exact
+  membership, bounds, ancestry, lifecycle or failure attribution. Its3-file/
+  6-test donor is frozen and reviewed at temp/sn-checker-descendant-names-v1-astra;
+  integrated/formatted with exact donor hashes. Its72 normal/race roots pass;
+  the one-newline optional-literal input refusal was repaired with a separate
+  zero-byte input and original-event replay only, without rerunning bodies or
+  converters. Old-grammar causal normal/race controls are qualified, as are3
+  fresh repaired checker-root passes in each mode. Current CheckerName3 replay
+  accepts the original Legacy202 roots plus65 declared children in both modes,
+  without body/converter reruns:
+  temp/sn-local-blob-batch-qualification-uQB4Rg/checker-name3/legacy202-replay.
+  All7 formerly failing LegacyBarrier3 roots now have3 consecutive repaired
+  passes in EACH mode on identical V24 source/binaries: first full202 run,
+  then exact7-root streak2b and streak3. All integrity checks pass.
+  Captures: v24-sim-legacybarrier202/{normal,race} and
+  v24-sim-legacybarrier7-{streak2b,streak3}/{normal,race}.
+  The earlier streak2 path-owner refusal remains prebody-only evidence.
+- V23 focused41 race10m really timed out: three completed serial heavy roots
+  consumed420.99s before another active root. Schedule2 parallelizes exactly
+  4 independently owned heavy roots; allocation measurements remain serial.
+  Fresh FullCensus276.96s plus population165.41s also prove their combined
+  serial work cannot fit ordinary capture5m. CaptureMetadataIsolation3 now
+  excludes ONLY the exact full-census root from ordinary capture and gives it
+  its own registered concurrent phase, still normal5m/race10m. Two new guards
+  cover actual source selection, exact execution/admission and old combined/
+  missing/broadened/hidden-failure mutations. No coverage or deadline reduction.
+- HttpBodyClose6 is integrated/reviewed: bounded body ownership at7 real read
+  sites joins read/Close/cancellation errors and rejects truncated receipt
+  prefixes;7 new tests include both signed replicas and payout cancellation.
+  V25's7771-file/13-root snapshot passed all copy/fence checks, but both actual
+  compilers failed on scenario.go's unused io import left by HttpBodyClose6.
+  The import is now removed in both trees; adjacent Http imports remain used.
+  No V25 body pass is claimed. Fresh V26 includes this repair and HistoryIsolation5;
+  its expanded source/phase guard census is60 roots. PublicFileDecode5 is also
+  integrated from temp/sn-public-file-decoding-v1-astra. V26's7774-file/13-root
+  copy and every copy fence passed; its normal/race compiler owners were admitted,
+  but their terminal compiler/body results must still be checked.
+  After that immutable copy released the candidate, RegistryNesting3 updated
+  only3 test files: exact job registrations cannot hide inside an extra branch
+  or empty loop. Existing metadata/history/full-validator controls cover the
+  reviewed blind spot and adjacent scopes; the executable gates were already
+  correct. Qualify these with the next required source successor, without
+  restarting the sealed V26 work.
+- Public runtime was read-only verified at09:52:27UTC: finalized7967086,
+  hash0xdd6da96dc940ff024287e94551703cb31aa43fa4632ec7270bfae637133efd8b,
+  node-subtensor455/tx1/state1, Evm945. Exact code/metadata and probe receipts:
+  temp/sn-public-runtime-lock-prep-v1-rzIFib/RESULT.md. Runtime455 lock seed is
+  integrated; stock repository/source hashes still require final regeneration.
+  Installed Rust1.89 and pinned offline runtime-probe compilation are available:
+  temp/sn-rust-toolchain-prep-v1-eomUEH. No final runtime-lock certificate yet.
+- Both old V16 diagnostic gates are terminal failed, not strict certificates.
+  Terra main owns simulator execution; Terra services owns storage/DB/checker
+  qualification; Astra owns the cohort publication repair; Root owns review/integration
+  and handoff. Total native allowance24 logical CPUs; preparation reserves0.
+  Scope leases to actual consumers, and never restart a live child merely
+  because its observation session yields or expires.
+- Remaining admission: repair the cohort publication deadline and qualify
+  the integrated public-file decoder; finish original
+  stress, affected integration, causal/repaired-root qualification; regenerate
+  the actual runtime455 lock; commit/pull/push clean final source; pass both
+  complete strict release gates. Then run live RC and all3 final epochs and
+  write independently replayable on-chain evidence in FINAL.md. No new
+  campaign transaction or started soak is claimed.
+
+Predecessor verified delta at 07:09 UTC:
+
+- V17 shared-root quota ownership is integrated and formatted; all28 declared
+  storage roots pass normal and race, including all9 new quota controls, real
+  cross-process contention, prior usage/list/reaper/immutable-write adjacencies.
+  Checked captures: capture-terra-v1/v17-blob-quota-adjacency/{normal,race}.
+  The causal-old compiler's first isolated copy omitted a replacement go.mod;
+  retain that pre-body refusal. Its fresh successor must include module graph
+  metadata. The original1000-client/two-operator DB regression still needs its
+  rebuilt real DB run and required three consecutive repaired passes.
+- V16 population900 normal passes with every admission/body/census/source/mode/
+  binary check; race was last observed live at07:07UTC. Captures:
+  v16-sim-population900-packagingfix1/{normal,race}. Do not mix predecessor and
+  changed-source streaks. Counts, bytes, both replicas and deadlines are intact.
+- V16 full metadata census normal still genuinely times out at302.385s, with
+  peak sampled RSS15,090,632KiB (about14.4GiB). The stack is json.Marshal of
+  envelope.Payload in fresh prior-carrier verification. Its capture is
+  v16-sim-metadata-fullcensus-packagingfix1/normal. Root's streaming successor
+  is NOT integrated: temp/sn-evidence-streaming-fix-v1-WKKhJWNk. It retains fresh
+  json.Valid/hash/signature checks and exact prior wire comparison, replacing
+  only payload-sized canonical buffers with bounded64KiB streaming. Astra owns
+  independent lexical/signature/allocation regression authoring and review.
+- Typed attempt-record cloning plus5 deterministic ownership/codec/allocation/
+  real-ledger regressions, and4 reviewed independent test-scheduling additions,
+  are integrated and formatted. V18 validator race compilation passes on its
+  1105-file actual Go/test closure; binary SHA256 is
+  9b765a6564de26da5e1add3a1187c059de9aac48d38f98a9a5508e41c16058aa.
+  Full1469-root race runtime-input fencing is in progress, not a body pass.
+- A proved harness-budget defect is corrected in the candidate: V15's880
+  passing serial race roots took831.18s before parallel work could start,
+  exceeding the combined core race's implicit600s. The complete validator race
+  now has its own registered phase with explicit parallel4/timeout90m, matching
+  the other full-package budgets; other core packages and all focused deadlines
+  stay unchanged. The2 new source/phase regressions and actual old-script causal
+  control require qualification. Donor: temp/sn-validator-race-budget-v1-astra.
+- Both V16 diagnostic gate workloads continue in
+  temp/sn-v16-diagnostic-gates-QKEPuZ/{local,producer}/workspace. Their missing
+  empty dependency directory entries were restored with explicit action and
+  before/after receipts:9 empty directories, no source/Git file-byte changes.
+  Fresh stress successors pass all7 generic gitlink checks. The ongoing gates
+  are diagnostic-with-directory-packaging-correction, not whole-run immutable
+  strict certificates. Missing vault/xops snapshot refusals remain recorded.
+- Read-only promotion inventory is refreshed to416 candidate changes across
+  SN338/server68/connect8/SDK2, with only2 upstream-overlapping paths requiring
+  merges (connect/transfer.go and the server monitor documentation test).
+  Primary-only whitepaper/plan/README updates must be preserved. Latest fresh
+  origin fetches for these4 primary repos show HEAD==upstream; no new
+  production promotion, own commit or push is claimed. Current candidate work
+  remains under temp/sn-gate-rerun-v11-aHOWKRHL.
+- The host-wide native-job cap is now24 on the measured24-core/125GiB host:
+  gates16 + population2 + storage2 + validator4, with unchanged per-job limits.
+  Preparation queues reserve no CPU. README records the observed pressure and
+  resource rule. No live soak/new testnet transaction, strict gate approval,
+  clean source freeze, real455 lock regeneration, RC or FINAL.md acceptance is
+  claimed. Those release requirements remain unchanged.
+
+Predecessor verified delta at 06:00 UTC:
+
+- The renewed 04:26 UTC acceleration target was missed. No new live campaign
+  or soak has started, and neither complete strict gate is approved.
+- V15 full validator normal passed all 1,464 roots, with checked body,
+  converter, census, source, mode and binary receipts. Fixture11 reached
+  three fresh consecutive passes in both modes, including the four repaired
+  original fixture failures. Captures: `v15-validator-full-actual/normal`
+  and `v15-validator-fixture11-streak{1,2,3}/{normal,race}`.
+- The full validator race capture omitted explicit `-test.timeout`; a direct
+  test binary does not inherit `go test`'s default. It therefore ran until its
+  outer 1,200-second timeout: 1,464 roots started, 1,032 passed, no per-root
+  failure was emitted, and 432 remained incomplete. This is an aggregate
+  timeout, not a passing gate or an observed 10-minute Go timeout. Future
+  qualification must supply the actual timeout explicitly.
+- V15 artifact storage passed all 28 roots normal/race; auth/service isolation
+  passed all 25 normal/race; the subnet-monitor documentation root passed
+  three fresh normal runs. Corrected static capture `v15-solidity-workload-rerun2`
+  passed Forge's 199 tests, gencontracts and stabi output checks, and all five
+  Slither targets. Earlier capture-layout/selector refusals are retained and
+  are not product failures.
+- Genuine open failures: population900 race hit 10 minutes; full metadata
+  census normal hit five minutes (peak sampled process-tree RSS about
+  9.51 GiB); the real thousand-client/two-operator database test hit ENOENT
+  while a capacity scan inspected another writer's removed private partial.
+  Original populations, bytes, replicas and deadlines remain unchanged.
+- The reviewed two-file DB fix is integrated in the candidate: classify a
+  private partial before metadata lookup. Five deterministic real-writer
+  controls and causal-old comparison are going through Terra qualification.
+  Frozen donor: `temp/sn-blob-usage-walk-v1-astra/BLOB-USAGE-HANDOFF.md`.
+  Independent shared-root quota ownership is a confirmed adjacent defect;
+  Astra is preparing a separate fix, not claiming it resolved by traversal.
+- Root's simulator successor removes repeated encoding/hashing of its own
+  freshly marshaled payload. Incoming mutable proofs still receive fresh
+  syntax, hash and signature checks. Four paths include two new encoding
+  files and six deterministic parity/operation-count/mutation controls;
+  formatting, peer review, normal/race qualification and stress reruns remain.
+  Existing sealed V15 binaries are being profiled as diagnostics, independently
+  of source edits; those profiles cannot qualify the changed source.
+- Test lanes use consumed-source scopes and sealed-binary provenance so DB
+  qualification and simulator fixes can overlap. Never rewrite an active
+  declared input set. Primary promotion, real runtime-455 lock generation,
+  clean pushed source freeze, both complete gates, RC and live final epochs
+  still remain; the temporary candidate is not the primary release.
+
+Predecessor verified delta at 04:08 UTC:
+
+- The user renewed the30-minute acceleration exercise; target04:26 UTC.
+  Acceptance requirements remain intact. No final soak or new campaign
+  transaction has started.
+- V15 population900 normal passes within the original5m limit:237.26s versus
+  V14's340.44s. Exact900 objects/310,378,496 original bytes, both stores and
+  direct/public readbacks remain. All admission/body/converter/checker/input
+  checks pass. This is normal1/3 only; race is still live at04:08 UTC.
+  Capture: `capture-terra-v1/v15-sim-population900/normal`.
+- V15 full server/startifact normal suite passes28/28, including5 new
+  PreparedEvidence controls, with checked terminal outcomes and inputs.
+  Capture: `capture-terra-v1/v15-server-startifact-suite/normal`.
+- Fresh V15 simulator and validator normal/race binaries compile successfully.
+  Further fixture streaks, full-validator, metadata-census/RSS and release
+  qualification remain. Schedule4 is reviewed/frozen but not integrated.
+- DB pre-Go failure was the one-off capture putting its fixture inside source;
+  the isolation guard correctly refused it. The fresh real DB owner is outside
+  source at `temp/sn-v15-server-db-producer-rerun1-d5fsi4` (session62661).
+  Static's nested-index owner was corrected; session10043 is the fresh run.
+  Neither refused prior attempt is an executed product/database failure.
+- Earlier unit processes inherited primary WARP_HOME and logged empty-settings
+  fallback. Preserve those raw observations; do not claim complete candidate-
+  local runtime custody from cwd alone. Future unit captures explicitly pin
+  candidate WARP_HOME and unset ambient config/site/vault home overrides;
+  real DB captures keep their explicit generated private fixture environment.
+
+The following03:52 UTC frontier retains details and unchanged obligations.
+
+- The acceleration target was soak admission by03:53 UTC, not a waiver of
+  gates, failures or evidence. It has not been met: repaired-source execution,
+  complete strict gates, truthful lock/freeze and the accelerated RC remain.
+  Continue the fastest safe path; no live campaign or soak is claimed.
+- Candidate `temp/sn-gate-rerun-v11-aHOWKRHL` now contains V11 through V14,
+  reviewed Metadata17, Wire7, three validator-fixture repairs and three
+  parallel-scheduling changes. All donor preimages/raw postimages were checked
+  before integration. Terra formatted exactly27 unique Go files successfully.
+  Fresh7731-file/hash/mode and seven-Gitlink checks are at
+  `capture-terra-v1/v15-fence/FORMATTED-v15-ALL-SOURCE.*`.
+  Terra owns this source lease and fresh simulator/validator binaries.
+- Qualified V14 results: Audit16 reached3/3 normal/race, Audit39 adjacent,
+  Lock8, Startup8, Source-capacity20 and fixture-generator19 pass normal/race.
+  Earlier component passes remain tied to their recorded inputs. They are
+  not a complete release gate or automatic V15 affected-source streak.
+- Capacity24 had a real performance failure: the900-object/296MiB population
+  root took340.44s normal (over the producer family's5m normal budget) and
+  race timed out at10m in repeated evidence verification/Json serialization.
+  Wire7 now prepares one private immutable verified canonical carrier per
+  object; both replicas, all eight direct reads and independent public reads
+  remain. Eight new deterministic controls cover mutation, reauthentication,
+  signature/receipt/canonical bytes, read/Close failures and duplicate source
+  marshaling. The original population root now calls the actual producer helper.
+  Applied donor `temp/sn-evidence-wire-owner-v1-astra`, handoff SHA256:
+  `d224651a08a19293a774f1491d9c3e2ced2f053c3114db9133ab5e098e04ca42`.
+  New speed/qualification and three-pass failure streaks are still pending.
+- Metadata17 is also integrated and source-reviewed:143 selected roots,
+  including11 new controls. It keeps finite typed current/prior/derived
+  metadata owners separate from ordinary32MiB files and256MiB aggregates.
+  The full1,191,936-slot metadata census still needs normal/race execution,
+  process-tree memory measurements and unchanged budget compliance.
+  Donor: `temp/sn-evidence-metadata-fit-v1-fV5xbN9J`.
+- Full V14 validator1461-root normal/race captures both timed out after10m.
+  Four additional failing tests were diagnosed: intent fixtures omitted the
+  explicit control-byte owner; a public-file fixture became private under
+  umask077; library-stream assertions ran after Go's intentional test2json
+  stream alias. Repairs retain production refusals, establish real adversarial
+  file mode, and observe all library initialization in TestMain before m.Run.
+  Three new controls bring the full validator census to1464.
+  Donor `temp/sn-validator-full-fixture-fix-v1-HLupGmyh/HANDOFF.md`,
+  SHA256 `9a1b83cc976fcfa96a86b0845140d06c8d883e39e4b2478ac097bbeb4294df8a`.
+- The timeout trace exposed a serial barrier: normal spent466.60s before
+  releasing parallel tests; race never released them. The three largest
+  isolated serial roots now call t.Parallel, retaining all fixtures/assertions.
+  Their old normal durations total134.27s, not a measured new speedup.
+  Ad-hoc full captures used10m/parallel2; actual local normal uses90m/parallel4
+  and core race retains10m. Keep these different profiles explicit.
+- Second Terra completed generator19, then found two pre-body capture errors:
+  wrong anchored auth selector and an ancestor-resolving nested Gitlink check.
+  Those are being corrected without product-pass claims. Real private Pg/Redis
+  setup/cleanup succeeded, but the database payload exited before Go output;
+  a fresh traced real setup is required to identify the exact failure.
+  Edited static/Forge/generated-contract workload has not yet run.
+- Execution owners: `terra_v14_resume` (simulator/validator) and
+  `terra_parallel_services_v14` (services/contracts), sharing actual CPU and
+  compiler reservations. Astra reviews further safe scheduling/root causes
+  outside the active source; Root owns review/integration and primary merges.
+  Start ready independent bodies before packaging completed receipts.
+- All12 primary origins were fetched and seven clean repositories were
+  fast-forwarded without touching the held candidate: server c4faf3f9,
+  Connect95a0566, SDKd450797, config082d105, vault152941c, xops6ba95f5,
+  glog892ade4. No service was restarted. Preserve this newer upstream work
+  when promoting; the old390-path inventory must be refreshed.
+- Before admission: resolve every remaining integration and all original
+  failed-root streaks (V10 census has25 causal roots, plus later failures);
+  promote safely, regenerate the real runtime455 lock on clean/pushed source,
+  pass both complete strict gates, and perform funded setup/accelerated RC.
+  The prepared lock bootstrap is only a seed; actual lock remains454.
+  Three final epochs and independently on-chain-verifiable `FINAL.md` remain.
+
+## Historical frontier (2026-09-08 22:04 UTC)
+
+The following record is retained as history, not current pending work.
+
+- The user explicitly requested both complete gates run concurrently with
+  fixes, then three consecutive passes for each failed test. Terra actually
+  invoked both scripts in parallel; both exited1 at source-freeze before any
+  gate body because the held candidate is not a Git checkout. Original logs
+  remain under held/capture-terra-v1/v9-full-gates-preflight/{local,producer}.
+  These are release-preflight refusals, not product-test failures or passes.
+  Astra is adding an explicit diagnostic mode that runs the unchanged full
+  workloads while retaining attestation failures and never certifying a release.
+  Independent admitted body jobs continue. Final strict full gates remain required.
+- The harness README now requires three uncached, sequential confirmations
+  per failed root and failed mode on one unchanged source/binary. Any renewed
+  failure or changed input resets that streak. Original evidence, deterministic
+  root-cause controls and adjacent integration coverage remain mandatory.
+- V9 Connect readiness30, SDK readiness3 and Stabi6 pass in normal/race modes;
+  event checks and final source/mode/binary fences are complete. Batch23 N/R
+  both timed out at the unchanged10m package limit in
+  TestReleaseClientKeyHistoryBatchCancellationJoinsNoAuthority. The client had
+  returned context.Canceled; the test's Http handler never consumed its large
+  request body and could not observe disconnect. Astra is repairing the
+  deterministic fixture and adjacent cancellation controls, not extending time.
+  Paused roots are not passes. Original streams/stacks and the three-pass
+  failure ledger remain under held/capture-terra-v1. All V9 readers are joined
+  and Terra released the source lease; root installed18 V10 raw postimages
+  after exact preimage checks. Diagnostic-mode and batch-fixture deltas remain
+  pending; no V10 build or full diagnostic workload has started yet.
 - V8 is fully joined and its held-source lease is released. Qualified normal
   and race groups are budget5, capacity20, runtime455-21, capture21, dispatch2,
   reserved-predecessor1, rendered-setup1, identity3 and gate10. Their exact
@@ -42,20 +546,49 @@ This section supersedes older pending statuses below.
   120-second focused timeout does not establish a production hang; no gate
   deadline or population was relaxed. Repeated plan/config authentication
   dominates the measured CPU paths, with no observed lock bottleneck.
-- One genuine V8 failure remains: finishing a short-lived Rpc owner also
+- One genuine V8 failure awaits its V9 regression run: finishing a short-lived Rpc owner also
   canceled longer-lived retained startup files. The frozen custody2 fix
   separates those lifetimes while preserving parent cancellation, closed-owner
   refusal and joining active reads. Its four regression tests are unqualified.
-- Batch26, quota13, population stress1, custody2, registration cohort6 and the
-  later source guards are frozen for the next composition. No V9 source has
-  yet been installed. The storage stress materializes **296 MiB**, not the
-  earlier 72 MiB proposal; its separate 339,968-slot test is metadata coverage,
-  not a claim to have materialized the full 66.25 GiB allowance.
-- Registration cohorts preserve per-client Sql/signature/publication and use
-  two real operator owners for the 1,000-client test. Durable registration
-  readiness/retry is still being investigated: a transport acknowledgment is
-  not proof of a stored and publicly readable registration.
-- Remaining before final soak: compose and qualify these successors and the
+- V9 is composed and handed to Terra's exclusive qualification lease:
+  65 owned paths plus 61 disjoint upstream paths, 62 owned Go files, 67 new
+  top-level regression roots and no removed roots. All source hashes, modes
+  and 83 saved preimages were verified. Batch26, quota13, stress1, custody2,
+  cohort6, readiness12, upstream merge3 and both actual gate selections are
+  joined. Validator, server/controller and Connect normal/race compiles pass;
+  SDK normal compiles. Simulator normal/race compilation both fail Go vet on
+  a new duplicate-constant inequality assertion. The frozen one-file repair
+  preserves both restart-limit checks; no vet option or production limit changes.
+- V9 custody6 executes in both modes: five roots pass, including the original
+  retained-recovery failure; the new parent-cancellation root fails because it
+  incorrectly expects physical close to return the context error. Cancellation
+  admission correctly refuses. The one-file correction is frozen; outer
+  cancellation joins were reviewed and actual descriptor-close, idempotence
+  and late-error preservation assertions were added. Qualification is pending.
+  Source/mode/binary fences pass. Earlier two shell parser refusals occurred
+  before any body and remain distinct retained launcher failures, not passes.
+- Durable registration readiness now follows the actual processed server
+  response, current key generation and one provider snapshot. The real swarm
+  opts in, and its existing startup barrier waits for readiness. Retry,
+  cancellation, rotation and real publication-failure tests are included.
+  A transport acknowledgment alone no longer qualifies readiness in this path.
+- Pulled upstream migration history is preserved through index634; new key
+  history appends at635/version636. Qualification requires fresh private
+  databases; an old draft catalog cannot be relabeled into the new history.
+- Three definite launch issues have isolated frozen fixes awaiting qualification:
+  an unconditional staged validator refusal; relay plan authentication using
+  a derived proxy config instead of the canonical approved config; and relay
+  slot budgeting that omitted the operator dimension. None is waived. The
+  latter correction uses128 slots without increasing existing absolute spending
+  caps. Review found that its15-closed/13-audit envelope assumes a nominal14h
+  lifetime that the actual scenario does not enforce. Astra is deriving a
+  bounded admission/horizon check from actual configured phase work, retained
+  pending slots and journal debits;128 is not certified sufficient for the run.
+- Storage stress materializes **296 MiB** and measures both replicas. Its
+  separate metadata census is not a materialized 66.25 GiB corpus. The current
+  V9 census is339,968; the pending relay-slot correction will change that
+  derived count and requires requalification of the exact affected roots.
+- Remaining before final soak: qualify V9, join the three launch fixes and the
   unresolved adjacent families; prepare a clean, pinned, pushed candidate;
   pass both genuine full gates; then complete real setup and the approved
   accelerated live release-candidate phase. Independent offline analysis may
@@ -65,6 +598,9 @@ This section supersedes older pending statuses below.
 Frozen donor locations and exact hashes are in the newest section of
 FINALIZE-COMPLETE.md. Temporary candidates and test receipts remain under
 `/home/by/urnetwork/temp/sn-*`; they are not backed up by this primary checkpoint.
+Current handoff: `temp/sn-composition-v9-nDs6pEae/V9-HANDOFF.md`,
+SHA `786fcd7672ebc53323e579c792dea17f3cd413250158c5b8d88e35cd67e8a5a0`.
+Do not edit the held candidate while Terra formats, builds or tests it.
 
 ## Launch-critical priority
 

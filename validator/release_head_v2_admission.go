@@ -70,7 +70,7 @@ func reserveReleaseHeadV2CollectionDerived(ctx context.Context, draft *ReleaseMe
 	keyBytes := uint64(reflect.TypeFor[FleetScoreKey]().Size())
 	stringBytes := uint64(reflect.TypeFor[string]().Size())
 	mapBytes := uint64(reflect.TypeFor[map[connect.Id]bool]().Size())
-	if err := budget.charge(1, uint64(reflect.TypeFor[releaseHeadResult]().Size())); err != nil {
+	if err := budget.charge(1, uint64(reflect.TypeFor[releaseHeadResult]().Size())+2*uint64(reflect.TypeFor[ChainClient]().Size())); err != nil {
 		return budget, err
 	}
 	if err := budget.charge(uint64(len(draft.Inputs)), 3*(8+mapBytes)); err != nil {
@@ -86,7 +86,7 @@ func reserveReleaseHeadV2CollectionDerived(ctx context.Context, draft *ReleaseMe
 		// Sorted ids, native binding, provider-owner/seen/current lookups,
 		// fleet map, bound membership, UID member rows, stale rows and replay
 		// current-binding map. Strings are counted even where owners share.
-		width := 2*16 + uint64(reflect.TypeFor[stabi.BindingAtOutput]().Size()) +
+		width := 3*16 + uint64(reflect.TypeFor[stabi.BindingAtOutput]().Size()) +
 			3*(57+stringBytes) + 36 + 8 + 1 + keyBytes +
 			keyBytes + mapBytes + 16 + 1 + 2 + uint64(reflect.TypeFor[[]releaseHeadMember]().Size()) + uint64(reflect.TypeFor[releaseHeadMember]().Size()) +
 			uint64(reflect.TypeFor[StaleHeadBinding]().Size()) + 36 + 16 + keyBytes

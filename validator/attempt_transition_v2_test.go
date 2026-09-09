@@ -176,6 +176,7 @@ func resignAttemptSettlementV2Test(t *testing.T, closure *AttemptSettlementClosu
 // Positive quality is guaranteed at the unchanged AMin8 by106 assignments
 // across at most15 providers. The second operator has its own actual key/ledger.
 func TestAttemptSettlementV2RealM8CompleteBatchAndDistinctActivations(t *testing.T) {
+	t.Parallel()
 	first := newAttemptSettlementV2TestOperator(t, 9, 15, 1)
 	second := newAttemptSettlementV2TestOperator(t, 10, 1, 0)
 	if first.cut.Context.Activation.Domain.ActivationHash == second.cut.Context.Activation.Domain.ActivationHash || first.cut.Context.Identity.ValidatorVPK == second.cut.Context.Identity.ValidatorVPK {

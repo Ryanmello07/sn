@@ -641,7 +641,32 @@ func TestReplacementPrecompileProbePayloadResumesWithImmutableDeployment(t *test
 	if err := validateCoordinatorUpgradePayloadBaseline(baseline, payloads.Manifest, payloads); err == nil || !strings.Contains(err.Error(), "retired precompile probe") {
 		t.Fatalf("release manifest was accepted as the retained historical deployment: %v", err)
 	}
-	plan := &SetupPlan{Schema: currentSetupPlanSchema, Deployment: legacy, CoordinatorUpgrade: payloads.CoordinatorUpgrade, CoordinatorUpgradeBaseline: baseline}
+	publicRoles, err := derivePublicRoles(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := *testSetupFacts()
+	facts.DeployerNonce = legacy.InitialNonce
+	plan, err := buildPlan(cfg, &facts, publicRoles, time.Unix(1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rebindPlanDeployment(plan, legacy); err != nil {
+		t.Fatal(err)
+	}
+	prior := validatorEvidenceLegacyPlanTest(t, plan)
+	plan.PriorPlanHashes = []string{prior.PlanHash}
+	plan.CoordinatorUpgradeBaseline = baseline
+	if err := rebindPlanCoordinatorUpgrade(plan, payloads); err != nil {
+		t.Fatal(err)
+	}
+	plan.PlanHash, err = plan.hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validatePlanBudget(plan); err != nil {
+		t.Fatalf("complete replacement approval prerequisite: %v", err)
+	}
 	stateDir := t.TempDir()
 	if err := saveContractDeployment(stateDir, legacy); err != nil {
 		t.Fatal(err)
@@ -663,11 +688,12 @@ func TestReplacementPrecompileProbePayloadResumesWithImmutableDeployment(t *test
 			t.Fatalf("resume %d changed persisted core deployment: hash=%s manifest=%+v error=%v", attempt, storedHash, stored, err)
 		}
 	}
-	base := SetupPlan{Schema: currentSetupPlanSchema, Deployment: legacy, CoordinatorUpgrade: payloads.CoordinatorUpgrade, CoordinatorUpgradeBaseline: baseline}
+	base := *plan
 	for _, mutation := range []struct {
 		name   string
 		change func(*SetupPlan)
 	}{
+		{name: "missing companion", change: func(plan *SetupPlan) { plan.ValidatorEvidence = nil }},
 		{name: "prior deployment", change: func(plan *SetupPlan) {
 			plan.CoordinatorUpgradeBaseline.PriorDeploymentHash = "0x" + strings.Repeat("91", 32)
 		}},
@@ -746,10 +772,38 @@ func TestEnsurePayloadsAuthenticatesRepeatedBaselineWhenCoreDeploymentIsEqual(t 
 		PrecompileProbeExecutableHash: probeExecutable, CoordinatorProxyExecutableHash: proxyExecutable,
 		FinalizedBlock: 123, FinalizedBlockHash: "0x" + strings.Repeat("99", 32),
 	}
-	base := SetupPlan{
-		Schema: currentSetupPlanSchema, Deployment: payloads.Manifest,
-		CoordinatorUpgrade: payloads.CoordinatorUpgrade, CoordinatorUpgradeBaseline: baseline,
+	// This v3 baseline retains the original probe while only the coordinator
+	// generation advances. Its approval must include that exact companion.
+	if err := configureCoordinatorUpgradeNonce(initial, payloads.CoordinatorUpgrade.DeployerNonce); err != nil {
+		t.Fatal(err)
 	}
+	publicRoles, err := derivePublicRoles(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := *testSetupFacts()
+	facts.DeployerNonce = payloads.Manifest.InitialNonce
+	approved, err := buildPlan(cfg, &facts, publicRoles, time.Unix(1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rebindPlanDeployment(approved, payloads.Manifest); err != nil {
+		t.Fatal(err)
+	}
+	prior := validatorEvidenceLegacyPlanTest(t, approved)
+	approved.PriorPlanHashes = []string{prior.PlanHash}
+	approved.CoordinatorUpgradeBaseline = baseline
+	if err := rebindPlanCoordinatorUpgrade(approved, initial); err != nil {
+		t.Fatal(err)
+	}
+	approved.PlanHash, err = approved.hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validatePlanBudget(approved); err != nil {
+		t.Fatalf("complete equal-core repeated baseline approval: %v", err)
+	}
+	base := *approved
 	validDir := t.TempDir()
 	if err := saveContractDeployment(validDir, payloads.Manifest); err != nil {
 		t.Fatal(err)

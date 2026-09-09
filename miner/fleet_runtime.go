@@ -1,7 +1,7 @@
 package miner
 
 // fleet_runtime.go binds every release fleet publish and status read to the
-// exact node-subtensor v454 artifact. The fleet CLI has no release-lock input,
+// exact node-subtensor v455 artifact. The fleet CLI has no release-lock input,
 // so this immutable tuple is deliberately local and covered against that lock
 // by fleet_runtime_test.go.
 
@@ -19,11 +19,11 @@ import (
 
 const (
 	fleetReleaseRuntimeSpecName           = "node-subtensor"
-	fleetReleaseRuntimeSpecVersion        = uint32(454)
+	fleetReleaseRuntimeSpecVersion        = uint32(455)
 	fleetReleaseRuntimeTransactionVersion = uint32(1)
 	fleetReleaseRuntimeStateVersion       = uint8(1)
-	fleetReleaseRuntimeCodeHash           = "0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef"
-	fleetReleaseRuntimeMetadataHash       = "0x4d17516b694ef8d18f8a565dcb2df0117e7a0018a3ffa40812c91a1621225702"
+	fleetReleaseRuntimeCodeHash           = "0xbca85925668cabb2880164610d64eda2e4d9bf2777994f9cdfdb9d36253ce74a"
+	fleetReleaseRuntimeMetadataHash       = "0x16da562c347a354c55eb1ad5cd5094343afe7acdc12e5b526bf6c8cb12e866bc"
 	fleetReleaseExpectedBlockSeconds      = 12
 	fleetNativeAuthenticationBlockBudget  = 10
 	fleetNativeEndpointTimeout            = time.Duration(fleetReleaseExpectedBlockSeconds*fleetNativeAuthenticationBlockBudget) * time.Second
@@ -53,7 +53,7 @@ func authenticateFleetRuntimeAtContext(ctx context.Context, chain *crv4.Chain, f
 	}
 	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, chain, finalized, fleetReleaseRuntimeArtifact())
 	if err != nil {
-		return crv4.AuthenticatedRuntimeArtifact{}, fmt.Errorf("fleet runtime at %s is not the reviewed node-subtensor/454/1/1 artifact: %w", finalized.Hex(), err)
+		return crv4.AuthenticatedRuntimeArtifact{}, fmt.Errorf("fleet runtime at %s is not the reviewed %s/%d/%d/%d artifact: %w", finalized.Hex(), fleetReleaseRuntimeSpecName, fleetReleaseRuntimeSpecVersion, fleetReleaseRuntimeTransactionVersion, fleetReleaseRuntimeStateVersion, err)
 	}
 	return artifact, nil
 }

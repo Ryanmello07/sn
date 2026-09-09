@@ -27,9 +27,23 @@ Release qualification assigns test and gate execution to `gpt-5.6-terra` with
 reasoning effort `max`. If a test or gate fails, retain its exact output and
 assign root-cause diagnosis, adjacent-path review, implementation, and the
 deterministic regression to `gpt-6-astra` with reasoning effort `max`. Terra
-then reruns the affected test matrix. This division does not relax any gate or
-authorize a simulator write; the normal plan-hash and `--apply` boundaries
-still control all testnet mutations.
+then reruns the affected test matrix. Run the two complete gate workloads
+concurrently with independent fixes, using immutable source and private mutable
+resources for each admitted job. A failed release preflight is retained as a
+refusal, not counted as executed tests or a release-qualified pass.
+
+After diagnosis and correction, each failed test must pass three consecutive
+uncached executions on the same source/dependency snapshot in every mode that
+failed. Use a fresh process for each execution and retain its exact root, mode,
+binary/source identity, raw output, actual exit and cleanup result. A failure,
+timeout, skip, missing result or changed input resets the affected streak;
+results from different binaries or revisions cannot be combined. Independent
+roots may run concurrently, but each root's three confirmations are sequential.
+Retain the original failure, add deterministic root-cause and adjacent controls,
+and rerun affected integration coverage. Three later passes do not retroactively
+pass a failed full gate: final acceptance still requires both complete gates
+on the final candidate. This division does not authorize a simulator write;
+the normal plan-hash and `--apply` boundaries still control testnet mutations.
 
 If an assigned agent loses execution capacity, inspect any already-started
 host process through its PID and output before deciding it stopped. A missing
@@ -68,6 +82,32 @@ failure stops that capture before test execution; an exit-zero empty selection
 is not a pass. Also check signed fixture lifetime record/trail capacity before
 adding work to a migrated history; migration does not reset those limits.
 
+Preflight the exact outer invocation as well as the frozen command it calls.
+Prefer the reusable Go qualification runner or an already qualified compiler
+owner. A direct bounded `go test -c` in a verified private snapshot is also
+valid when command/exit and before/after source, mode and binary receipts are
+captured separately. Do not introduce bespoke shell functions or pipelines
+as a prerequisite to starting each compiler. For a retained shell owner, use
+a stable literal `bash /absolute/compiler.command` with an explicit package
+working directory and `login:false`. Preserve the
+tool's actual output and terminal exit; label a combined stdout/stderr stream
+as combined. If separate on-disk streams are required, their redirections
+belong to a frozen, syntax-checked capture owner, not a newly retyped inline
+wrapper. An unmatched outer quote is a pre-body launcher refusal even when
+the nested compiler command passed syntax checks. Correct only the refused
+launch; never restart an already-live peer compilation or test body.
+
+An isolated Go copy needs module metadata for every configured local repository
+and recursively selected local replacement/nested module, including replacements
+not selected by the current package graph. Include existing `go.mod`, `go.sum`,
+`go.work` and `go.work.sum` files together. Classify absolute generated test-link
+files reported by `go list` separately; do not prefix a build-cache pathname
+with a repository directory. Before a body starts, validate the whole copied
+module graph once rather than discovering missing replacements one at a time.
+Scope a source lease to its actual consumers: server-only compilation does not
+depend on an unrelated simulator test/formatting file. Preserve the earlier
+refusal and correct its exact prerequisite without restarting live peers.
+
 For repeated offline selections on the same frozen source, compile one test
 binary per package and mode (`go test -c`, with `-race` for the race binary),
 using an explicit private output and the existing separate compilation budget.
@@ -79,10 +119,15 @@ must not consume a selection's execution allowance. A source/dependency change
 requires a new binary. This development workflow does not replace or change
 either checked-in complete release-gate invocation.
 
+Measure native body duration at its actual start and finish. Offline
+`go tool test2json -t` timestamps and its package-level elapsed value measure
+conversion, not the earlier test execution. Individual test elapsed records
+can describe that test; the final test's duration is not the suite duration.
+
 ### Compact Go qualification workflow
 
-The reusable implementation is `scripts/qualification` (still under initial
-qualification). Build it once to a private output outside the source tree:
+The reusable Go implementation is `scripts/qualification`. Build it once to a
+private output outside the source tree:
 
 ```sh
 go build -o /absolute/capture-tools/qualification ./scripts/qualification
@@ -92,10 +137,15 @@ go build -o /absolute/capture-tools/qualification ./scripts/qualification
 
 The version1 JSON plan declares `source_root`, `sources` (physical `root` and
 SHA256 `manifest` per source/dependency), `limits`, `packages` and `suites`.
+Set `source_root` to the actual SN Git worktree, not the enclosing multi-repo
+workspace: this is also the owner of `scripts/release-gate-jobs.sh`. Declare
+each required sibling worktree separately in `sources`, with manifest paths
+relative to that worktree. A workspace-wide manifest cannot be reinterpreted
+as an SN-relative manifest; preserve and verify any per-repo projection.
 Every package specifies `id`, physical `directory` and exact `import_path`.
 Every suite specifies `id`, `package`, `mode` (`normal` or `race`), `outcomes`
 and `failure_literals`. These last two fields are absolute paths to canonical,
-sorted TSV files: `TestName<TAB>PASS|FAIL`, and one root-owned literal per
+sorted TSV files: `TestName<TAB>PASS|FAIL`, and one identity-owned literal per
 expected failure. There are no implicit selectors, skipped roots or default
 budgets. Limits explicitly name `jobs`, `build_seconds`, `test_seconds`,
 `outer_seconds`, `parallel` and `gomaxprocs`; use the admitted existing values.
@@ -106,13 +156,27 @@ with one exact root union and a retained obligation map, not duplicate runs.
 Each package/mode is compiled once. Suites become ready after their own build,
 not after unrelated builds. The compiled list must match the exact declared
 roots before execution. The Go event verifier requires complete package/root
-transitions and attributes each expected failure literal to that root only.
+transitions and attributes each expected failure literal to that identity only.
+Existing subtests must be explicitly declared with their complete slash identity
+and every ancestor; they are counted separately from top-level roots. Missing,
+foreign or unfinished descendants are refused, not filtered from the evidence.
 Actual command and owner exits, binary hashes, source hashes/modes/Git state,
 module graph, full stdout/stderr and immutable requests remain in the capture.
 The current implementation uses the qualified gate ownership adapters to join
 descendants; composing those adapters is a prerequisite, not an optional
 fallback to unowned subprocesses. It does not run either full release gate or
 launch a live campaign by itself.
+
+To repair a checker-only refusal, the same Go tool can replay the immutable
+original inputs without another test or converter run:
+
+```sh
+/absolute/capture-tools/qualification replay EVENTS OUTCOMES LITERALS PACKAGE BODY_EXIT
+```
+
+Retain the original refusal and capture the replay's source, binary and input
+hashes separately. An accepted replay verifies that old body; it does not turn
+the old source into a new qualification run or clear unrelated body failures.
 
 Use `status.json` for routine progress. Read `report.json` for verified outcomes
 and `failures.json` plus the referenced requests/logs for debugging. Passing
@@ -121,8 +185,10 @@ integrity verdict and capture path. Do not repeatedly send passing raw logs,
 long hash inventories or the full historical handoff to an agent. Retain all
 raw evidence on disk and expand any failed or suspicious result for Astra max;
 compact reporting never means ignoring an anomaly or capping its investigation.
-Do not retry failed tests automatically or declare a timeout an expected
-assertion failure. Keep a short active-work index linking to detailed history.
+Do not retry a failure blindly or declare a timeout an expected assertion
+failure. After its root cause is resolved, perform the required three-pass
+confirmation above; any recurrence returns to diagnosis and resets that
+root's streak. Keep a short active-work index linking to detailed history.
 
 Validate the exact filenames and invocation consumed by the frozen body, not
 only a staging convention: a package-prefixed `sim-testnet.expected.txt` does
@@ -155,12 +221,15 @@ isolated suites that pass. Independent source fixes and causal controls may
 retain their own exact preimages, but do not create another source checkout
 for a corrected selector, output filename, or report.
 
-Keep two Astra max implementation/fix agents and one Terra max execution
-agent. One Astra owns the current production/recovery implementation; the
-other handles independent implementation, incoming failures and adjacent-path
-regressions. Routine test-fixture or launcher repairs must not repeatedly
-preempt both production lanes. The primary agent owns integration and reviews
-changes during execution.
+During implementation, keep two Astra max implementation/fix agents and one
+Terra max execution agent. Once independent integration suites are ready,
+use two Terra max execution agents and one Astra max production/fix agent;
+the primary agent takes the second review role. The user explicitly requested
+this integration dispatch on2026-09-09. Split validator/simulator qualification
+from fixture/database/Solidity qualification. An execution agent's command
+preparation queue is not a dependency for another lane. Routine test-fixture
+or launcher repairs must not preempt the production lane. The primary agent
+owns integration, source boundaries and review while execution continues.
 
 The Terra agent drives multiple independent isolated build/test/gate jobs
 concurrently; one agent is not a one-process or one-core execution limit.
@@ -173,6 +242,24 @@ Reuse unchanged dependency checkouts and Go build/module caches, recording
 their exact identities, while keeping runtime state and generated outputs
 private. Source changes invalidate affected results; packaging a completed
 result does not hold the next ready command.
+
+The integration dispatch supersedes the earlier four-small-body development
+reservation. On the measured24-logical-CPU/12-physical-core/125GiB host, admit up to eight small bodies
+and two compilers across both workers, while the total reserved processor
+allowance remains at most24 across both gates and component jobs together,
+and measured memory keeps headroom for services. At2026-09-09 06:49UTC the
+host had a one-minute load of10.72 and about113GiB of available memory; the
+earlier20-CPU cap was holding a ready validator job behind unused capacity.
+The admitted overlap is gates16 + population2 + storage2 + validator4. A
+preparation queue owns no processor reservation. Reassess pressure before
+admitting successors; do not exceed the measured logical-processor allowance.
+Charge each job's actual worker allowance, including database/static jobs;
+do not change a running job or its original per-test worker/deadline limits.
+The first unmeasured full-census metadata stress runs in one heavy slot until
+its peak memory is known; independent small jobs continue. Both complete gates
+retain their existing per-job resource admission and count toward that total.
+Each worker records its active reservations and transfers unused capacity;
+one worker must not reserve the whole host while preparing a later command.
 
 For development qualification, measured heavy independent roots may run in
 separate exact-membership shards. Prove the disjoint union equals the original
@@ -219,12 +306,42 @@ that hold whenever a job starts, finishes, fails, or releases source.
   measured pressure if it actually requires throttling; do not assume scarcity
   or create redundant work just to keep CPU busy.
 
-The two current full gate scripts still share the local database profile and
-`evm/out`/`evm/cache`. Do not simply background both against those same mutable
-resources. Per-gate isolation is required before overlapping those phases;
-their independent work need not wait for that implementation. Source freeze precedes both,
-and producer-gate success still precedes any live campaign write. Partial
-parallel prequalification is not a full gate certificate.
+Both gate scripts now compose per-gate job ownership, private PostgreSQL/Redis
+profiles and separate full-build/static-analysis Foundry outputs and caches.
+Keep that isolation when running them concurrently, and enable the complete
+database profile with `RUN_SERVER_DB_TESTS=1`. Strict release qualification
+requires the clean, pinned source checks; a diagnostic workload run must retain
+any failed attestation and cannot grant release approval. Producer-gate success
+still precedes a live campaign write. Partial parallel prequalification is not
+a full gate certificate.
+
+The producer's ordinary capture and complete metadata census use independent
+admitted jobs. Ordinary capture skips only
+`TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier`;
+the `capture-metadata` job executes that exact root normally and with race
+detection. Ordinary capture keeps its five-minute normal and ten-minute race
+limits; full metadata keeps its five-minute normal limit and has a separately
+scoped 45-minute race limit. The unchanged complete race census took 1,839.622
+seconds with a sampled peak of 32,756,132 KiB in the retained diagnostic; this
+budget provides about 47% wall-time headroom. The complete aggregate simulator
+race budget remains 90 minutes. No census, byte bound, hash/signature check or
+production deadline changes.
+
+The original full-metadata ten-minute race timeout remains a failure. Its
+profiled 90-minute diagnostic completion is not qualification. Require three
+fresh sequential unprofiled confirmations on the same source/binary under the
+corrected 45-minute limit, plus affected normal/race coverage and both strict
+gates; the diagnostic does not count toward that streak. The partition omits
+neither stress root and does not replace a complete gate certificate.
+
+Both gates also run the shared-boundary and distinct-boundary full client-key
+history populations as separate jobs. Their combined measured race runtime
+left insufficient time for the ordinary controller cases. Each exact population
+keeps its ten-minute normal/race limits. These processes share only their gate's
+private service containers: TestEnv assigns each a unique PostgreSQL database
+and exclusive renewable Redis database lease. The parent retains the containers
+until all admitted jobs have joined; no in-process parallelism is added around
+the server's global test environment.
 
 The qualified isolation components include the Linux child owner (Python3
 with `pidfd_open`/`pidfd_send_signal`, kernel subreaping and `/proc`) and

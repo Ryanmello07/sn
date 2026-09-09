@@ -213,14 +213,24 @@ func finalHistoricalCoordinatorPlanHistoryNames(files map[string][]byte) ([]stri
 // a guessed whitelist of action IDs; an unsupported new proxy method fails
 // later during exact ABI replay instead of being silently omitted.
 func finalHistoricalCoordinatorJournalActions(evidence *FinalSemanticEvidence, current *SetupPlan, plans map[string]*SetupPlan, entries []JournalEntry) (map[string]finalHistoricalCoordinatorJournalAction, error) {
+	return finalHistoricalCoordinatorJournalActionsWithRelayRequests(evidence, current, plans, entries, nil)
+}
+
+// Source admission precedes chain-kind and height classification. An approved
+// native row is not an Evm height, and a dynamic row needs its original request.
+func finalHistoricalCoordinatorJournalActionsWithRelayRequests(evidence *FinalSemanticEvidence, current *SetupPlan, plans map[string]*SetupPlan, entries []JournalEntry, requests map[evidenceRelayRequestKey][]byte) (map[string]finalHistoricalCoordinatorJournalAction, error) {
 	if evidence == nil || current == nil || len(plans) == 0 || evidence.EVMCampaignStartHead.Number < 2 {
 		return nil, errors.New("historical coordinator journal action inputs are incomplete")
+	}
+	relayActions, err := evidenceRelayRequestActions(plans, entries, requests)
+	if err != nil {
+		return nil, err
 	}
 	allowed := current.allowedPlanHashes()
 	result := make(map[string]finalHistoricalCoordinatorJournalAction)
 	for index := range entries {
 		entry := entries[index]
-		if entry.Stage != StageFinalized || entry.BlockNumber == 0 || entry.BlockNumber >= evidence.EVMCampaignStartHead.Number {
+		if entry.Stage != StageFinalized {
 			continue
 		}
 		planHash := strings.ToLower(entry.PlanHash)
@@ -231,9 +241,15 @@ func finalHistoricalCoordinatorJournalActions(evidence *FinalSemanticEvidence, c
 		if plan == nil || plan.PlanHash != entry.PlanHash {
 			return nil, fmt.Errorf("historical coordinator finalized plan %s is absent or noncanonical", entry.PlanHash)
 		}
-		action, err := exactPlanActionByID(plan, entry.ActionID)
-		if err != nil || action.Kind != "evm-transaction" || !actionAcceptsIntent(action, entry.IntentHash) {
+		action, err := finalJournalActionWithRelay(plan, entry, relayActions)
+		if err != nil {
 			return nil, stateMismatchError(err, "historical coordinator finalized action %s is not approved", entry.ActionID)
+		}
+		if action.Kind != "evm-transaction" {
+			continue
+		}
+		if entry.BlockNumber == 0 || entry.BlockNumber >= evidence.EVMCampaignStartHead.Number {
+			continue
 		}
 		if !common.IsHexAddress(action.Target) || common.HexToAddress(action.Target) != plan.Deployment.CoordinatorProxy {
 			continue
@@ -254,6 +270,19 @@ func finalHistoricalCoordinatorJournalActions(evidence *FinalSemanticEvidence, c
 	return result, nil
 }
 
+// Each caller consumes original archived bytes through the shared admission
+// validator; an absent archive remains valid only for a request-free journal.
+func (self *finalHistoricalCoordinatorSource) relayRequests() (map[evidenceRelayRequestKey][]byte, error) {
+	if self == nil {
+		return nil, errors.New("historical coordinator relay source is absent")
+	}
+	var files map[string][]byte
+	if self.archive != nil {
+		files = self.archive.files
+	}
+	return finalRelayRequestsFromFiles(self.plans, self.entries, files)
+}
+
 // Recomputes the live EVM query boundary from the authenticated active plan,
 // every explicitly retained predecessor, and the sealed journal. The captured
 // address set cannot contain an injected foreign emitter, omit a retired
@@ -266,7 +295,11 @@ func (self *finalHistoricalCoordinatorSource) verifyReleaseCaptureCensus() error
 	if err != nil || batcher != self.chain.FleetBatcher {
 		return stateMismatchError(err, "historical coordinator fleet batcher is not canonical")
 	}
-	census, err := finalCaptureReleaseContractCensusForLineage(self.current, self.deployment, common.HexToAddress(batcher), self.plans, self.entries)
+	requests, err := self.relayRequests()
+	if err != nil {
+		return err
+	}
+	census, err := finalCaptureReleaseContractCensusWithRelayRequests(self.current, self.deployment, common.HexToAddress(batcher), self.plans, self.entries, requests)
 	if err != nil {
 		return err
 	}
@@ -289,7 +322,11 @@ func (self *finalHistoricalCoordinatorSource) historicalReceipts() (map[string]F
 	if err != nil {
 		return nil, err
 	}
-	targets, err := finalHistoricalCoordinatorJournalActions(self.evidence, self.current, self.plans, self.entries)
+	requests, err := self.relayRequests()
+	if err != nil {
+		return nil, err
+	}
+	targets, err := finalHistoricalCoordinatorJournalActionsWithRelayRequests(self.evidence, self.current, self.plans, self.entries, requests)
 	if err != nil {
 		return nil, err
 	}
@@ -608,7 +645,11 @@ func (self *finalHistoricalCoordinatorSource) fleetRefreshOracleWindow(rows []Fi
 	if err != nil {
 		return finalHistoricalCoordinatorOracleWindowArtifact{}, err
 	}
-	targets, err := finalHistoricalCoordinatorJournalActions(self.evidence, self.current, self.plans, self.entries)
+	requests, err := self.relayRequests()
+	if err != nil {
+		return finalHistoricalCoordinatorOracleWindowArtifact{}, err
+	}
+	targets, err := finalHistoricalCoordinatorJournalActionsWithRelayRequests(self.evidence, self.current, self.plans, self.entries, requests)
 	if err != nil {
 		return finalHistoricalCoordinatorOracleWindowArtifact{}, err
 	}
@@ -730,7 +771,11 @@ func (self *finalSemanticArchive) buildHistoricalCoordinatorReceipts(evidence *F
 	if err != nil {
 		return err
 	}
-	timeline, err := finalHistoricalCoordinatorBuildTimeline(evidence, context.current, context.plans, context.entries, context.events.byTx, context.chain.CoordinatorBaselines)
+	requests, err := context.relayRequests()
+	if err != nil {
+		return err
+	}
+	timeline, err := finalHistoricalCoordinatorBuildTimelineWithRelayRequests(evidence, context.current, context.plans, context.entries, context.events.byTx, context.chain.CoordinatorBaselines, requests)
 	if err != nil {
 		return err
 	}

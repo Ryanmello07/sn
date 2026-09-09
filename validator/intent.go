@@ -92,6 +92,7 @@ type steeringIntentFile struct {
 }
 
 type IntentStore struct {
+	v2       *releaseIntentV2Owner
 	mu       sync.Mutex
 	path     string
 	stateDir string
@@ -188,6 +189,9 @@ func (self *IntentStore) verifyMeasurementEnvelopeWithHexWorkLocked(intent *Stee
 // referenced by an intent. Release startup uses it to finish an idempotent EMA
 // commit if the process stopped after the intent write but before submission.
 func (s *IntentStore) MeasurementArtifact(intent *SteeringIntent) (*ReleaseMeasurementArtifact, *VerifiedReleaseMeasurement, error) {
+	if s.v2 != nil {
+		return s.measurementArtifactV2(s.v2.ctx, intent)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.readMeasurementArtifactLocked(intent)
@@ -413,6 +417,9 @@ func (s *IntentStore) writeLocked(f *steeringIntentFile) error {
 }
 
 func (s *IntentStore) Begin(intent SteeringIntent) (*SteeringIntent, error) {
+	if s.v2 != nil {
+		return s.beginV2(s.v2.ctx, intent)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	f, err := s.readLocked()
@@ -512,6 +519,9 @@ func (s *IntentStore) Begin(intent SteeringIntent) (*SteeringIntent, error) {
 }
 
 func (s *IntentStore) update(vectorHash, status string, mutate func(*SteeringIntent) error) error {
+	if s.v2 != nil {
+		return s.updateV2(s.v2.ctx, vectorHash, status, mutate)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	f, err := s.readLocked()
@@ -578,6 +588,9 @@ func (s *IntentStore) MarkFailed(vectorHash string, failure error) error {
 }
 
 func (s *IntentStore) Current() (*SteeringIntent, error) {
+	if s.v2 != nil {
+		return s.currentV2(s.v2.ctx)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	f, err := s.readLocked()
@@ -593,6 +606,9 @@ func (s *IntentStore) Current() (*SteeringIntent, error) {
 // status transition, and vector hash. Evidence readers must use this instead
 // of decoding steering-intents.json independently.
 func (s *IntentStore) AuthenticatedIntents() ([]SteeringIntent, error) {
+	if s.v2 != nil {
+		return s.authenticatedIntentsV2(s.v2.ctx)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	f, err := s.readLocked()

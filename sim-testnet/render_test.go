@@ -4,13 +4,15 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	minerpkg "github.com/urfoundation/sn/miner"
 	validatorpkg "github.com/urfoundation/sn/validator"
+	"github.com/urnetwork/server/controller"
+	"github.com/urnetwork/server/model"
 	"gopkg.in/yaml.v3"
 )
 
@@ -121,10 +123,38 @@ func TestWorkloadPollSecondsFitOperationalRPCMode(t *testing.T) {
 
 func TestFinalSemanticDeploymentBoundaryRuntimeConfigsAreAcceptedByReleaseLoaders(t *testing.T) {
 	cfg := testResolvedConfig(t)
+	// Explicit owned test capacity, never a fallback for the live profile.
+	budget, err := requiredRuntimeClientKeyUploadBudget(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Config.Artifacts.AttemptUpload = &budget
+	// Exercise real rendering without reading the developer's platform assets,
+	// wallet or vault. These inert sources belong only to this test owner.
+	cfg.Repos.PlatformConfig = testOperatorConfigSources(t)
+	cfg.Repos.Vault = filepath.Join(t.TempDir(), "vault")
+	sourceFiles := []struct{ name, contents string }{
+		// st/pg are overwritten by the renderer, but their source inventory
+		// entries are required by the exact runtime-file manifest.
+		{name: "local/st.yml", contents: "profile: fixture-overwritten\n"},
+		{name: "local/pg.yml", contents: "authority: fixture-overwritten.invalid\n"},
+		{name: "local/provider_egress.yml", contents: "ingest_secret: fixture-must-not-survive\n"},
+		{name: "main/minio.yml", contents: "authority: fixture.invalid:23900\ntls: true\nbucket: blob\naccess_key: fixture-access\nsecret_key: fixture-secret\n"},
+	}
+	for _, source := range sourceFiles {
+		path := filepath.Join(cfg.Repos.Vault, filepath.FromSlash(source.name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(source.contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	cfg.Authority = "http://127.0.0.1:9944"
 	cfg.OperationalRPCMode = rpcModePublicOverride
 	cfg.Public.Chain.EVMPublicReadEndpoint = "https://test.chain.opentensor.ai"
 	stateDir := t.TempDir()
+	configureRuntimeEvidenceV2Test(t, cfg, stateDir)
 	roles, err := BuildRoleSecrets(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -150,28 +180,43 @@ func TestFinalSemanticDeploymentBoundaryRuntimeConfigsAreAcceptedByReleaseLoader
 			}
 		}
 	}
-	deployment := ContractDeployment{
-		Schema: "urnetwork-contract-deployment-v1", DeploymentID: cfg.Config.Deployment.DeploymentID,
-		ReserveSink:               common.HexToAddress("0x1000000000000000000000000000000000000001"),
-		SettlementVault:           common.HexToAddress("0x2000000000000000000000000000000000000002"),
-		CoordinatorImplementation: common.HexToAddress("0x3000000000000000000000000000000000000003"),
-		CoordinatorProxy:          common.HexToAddress("0x4000000000000000000000000000000000000004"),
-		DeployBlock:               123, DeployBlockHash: "0x" + strings.Repeat("ab", 32), RuntimeHashes: map[string]string{},
-		CoordinatorEventStartBlock: 100, CoordinatorEventStartBlockHash: "0x" + strings.Repeat("cd", 32),
-	}
-	if err := saveContractDeployment(stateDir, deployment); err != nil {
-		t.Fatal(err)
-	}
+	reserved := prepareRuntimeReservedRenderTest(t, cfg, stateDir, roles)
+	deployment := reserved.deployment
 	if err := RenderRuntimeConfigs(cfg, stateDir, roles); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := verifyRuntimeConfigManifest(cfg, stateDir); err != nil {
 		t.Fatalf("rendered runtime manifest: %v", err)
 	}
+	if err := validateOperatorConfigOverlays(cfg, stateDir); err != nil {
+		t.Fatalf("runtime config escaped its private source owner: %v", err)
+	}
+	for _, source := range sourceFiles {
+		path := filepath.Join(cfg.Repos.Vault, filepath.FromSlash(source.name))
+		data, err := os.ReadFile(path)
+		if err != nil || string(data) != source.contents {
+			t.Fatalf("rendering changed private source %s: %v", source.name, err)
+		}
+		if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+			t.Fatalf("private source %s lost its regular 0600 owner: %v", source.name, err)
+		}
+	}
 	for operator := 1; operator <= cfg.Config.Topology.Operators; operator++ {
 		root := filepath.Join(stateDir, "runtime", "operator-"+strconv.Itoa(operator))
+		var blob renderedOperatorBlobConfig
+		if err := strictYAML(filepath.Join(root, "vault", "minio.yml"), &blob); err != nil {
+			t.Fatal(err)
+		}
+		prefix, err := operatorArtifactPrefix(cfg.Config, operator)
+		if err != nil || blob.Authority != "fixture.invalid:23900" || !blob.TLS || blob.Bucket != "blob" || blob.AccessKey != "fixture-access" || blob.SecretKey != "fixture-secret" || blob.Prefix != prefix {
+			t.Fatalf("operator %d did not retain its inert scoped object-store input: %+v %v", operator, blob, err)
+		}
 		var coordinatorSettings struct {
-			DeployBlock uint64 `yaml:"testnet-deploy-block"`
+			DeployBlock                  uint64                                    `yaml:"testnet-deploy-block"`
+			AttemptUpload                *model.StAttemptUploadBudget              `yaml:"testnet-attempt-upload"`
+			MainnetAttemptUpload         *model.StAttemptUploadBudget              `yaml:"attempt_upload"`
+			ReservedAttemptUpload        *controller.StReservedAttemptUploadConfig `yaml:"testnet-reserved-attempt-upload"`
+			MainnetReservedAttemptUpload *controller.StReservedAttemptUploadConfig `yaml:"reserved_attempt_upload"`
 		}
 		encoded, err := os.ReadFile(filepath.Join(root, "vault", "st.yml"))
 		if err != nil {
@@ -182,6 +227,16 @@ func TestFinalSemanticDeploymentBoundaryRuntimeConfigsAreAcceptedByReleaseLoader
 		}
 		if coordinatorSettings.DeployBlock != deployment.CoordinatorEventStartBlock {
 			t.Fatalf("operator %d event start=%d, want %d", operator, coordinatorSettings.DeployBlock, deployment.CoordinatorEventStartBlock)
+		}
+		if coordinatorSettings.AttemptUpload == nil || *coordinatorSettings.AttemptUpload != *cfg.Config.Artifacts.AttemptUpload || coordinatorSettings.MainnetAttemptUpload != nil {
+			t.Fatalf("operator %d did not render its exact testnet-only attempt upload budget", operator)
+		}
+		expectedReserved := cfg.Config.Artifacts.ReservedAttemptUploads[operator-1]
+		if coordinatorSettings.ReservedAttemptUpload == nil || !reflect.DeepEqual(*coordinatorSettings.ReservedAttemptUpload, expectedReserved) || coordinatorSettings.MainnetReservedAttemptUpload != nil {
+			t.Fatalf("operator %d did not render its exact approved protected staging capacity and authority", operator)
+		}
+		if len(expectedReserved.Admission.ActivationContexts) != 0 || expectedReserved.Admission.Deployment.DeploymentBlock > reserved.creation.BlockNumber {
+			t.Fatal("renderer used future validator allowlisting or omitted the retained creation boundary")
 		}
 		path := filepath.Join(root, "config", "provider_egress_probe.yml")
 		var settings struct {
@@ -208,6 +263,9 @@ func TestFinalSemanticDeploymentBoundaryRuntimeConfigsAreAcceptedByReleaseLoader
 		if err != nil {
 			t.Fatalf("validator %d rendered config: %v", i, err)
 		}
+		if !reflect.DeepEqual(loaded.EvidenceV2, cfg.Config.ValidatorEvidenceV2[i-1].Evidence) {
+			t.Fatal("rendered validator changed explicit V2 bounds or references")
+		}
 		if len(loaded.Operators) != cfg.Config.Topology.Operators || loaded.PolicyHash != cfg.PolicyHash || loaded.Policy.ProductionCadence.EpochBlocks != 360 || loaded.Policy.Settlement.CloseGraceBlocks != 5 || loaded.PollSeconds != validatorPollSeconds(cfg) {
 			t.Fatalf("validator %d config incomplete: %+v", i, loaded)
 		}
@@ -222,6 +280,9 @@ func TestFinalSemanticDeploymentBoundaryRuntimeConfigsAreAcceptedByReleaseLoader
 			t.Fatalf("validator %d controlled NOs = %v, want %v", i, loaded.ControlledNOIDs, wantControlled)
 		}
 		for _, operator := range loaded.Operators {
+			if operator.APIURL != cfg.OperatorAPIOrigins[int(operator.NoID)-1] {
+				t.Fatalf("validator %d operator %d changed its approved API origin", i, operator.NoID)
+			}
 			wantConnectURL := "ws://" + operatorConnectHostIP(int(operator.NoID)) + ":" + strconv.Itoa(19080+int(operator.NoID))
 			if operator.ConnectURL != wantConnectURL {
 				t.Fatalf("validator %d operator %d connect URL = %q, want %q", i, operator.NoID, operator.ConnectURL, wantConnectURL)
@@ -240,6 +301,9 @@ func TestFinalSemanticDeploymentBoundaryRuntimeConfigsAreAcceptedByReleaseLoader
 				t.Fatalf("provider swarm %d member id = %q", swarm, member.ID)
 			}
 			operator := operatorForMiner(cfg, miner)
+			if member.APIURL != cfg.OperatorAPIOrigins[operator-1] {
+				t.Fatalf("provider %s changed its approved API origin", member.ID)
+			}
 			wantConnectURL := "ws://" + operatorConnectHostIP(operator) + ":" + strconv.Itoa(19080+operator)
 			if member.ConnectURL != wantConnectURL {
 				t.Fatalf("provider %s connect URL = %q, want %q", member.ID, member.ConnectURL, wantConnectURL)
@@ -259,6 +323,9 @@ func TestFinalSemanticDeploymentBoundaryRuntimeConfigsAreAcceptedByReleaseLoader
 			t.Fatalf("miner %d claim config incomplete: %+v", i, loaded)
 		}
 		operator := operatorForMiner(cfg, i)
+		if loaded.APIURL != cfg.OperatorAPIOrigins[operator-1] {
+			t.Fatalf("miner %d claim daemon changed its approved API origin", i)
+		}
 		wantKey := filepath.Join(stateDir, "secrets", "operator-"+strconv.Itoa(operator)+"-claim-relayer.key")
 		if loaded.KeyFile != wantKey {
 			t.Fatalf("miner %d claim key = %q, want %q", i, loaded.KeyFile, wantKey)
@@ -317,6 +384,10 @@ func TestFinalSemanticDeploymentBoundaryRuntimeConfigsAreAcceptedByReleaseLoader
 	}
 	if !strings.Contains(string(minio), "blob/sim-testnet/"+cfg.Config.Deployment.DeploymentID+"/operator-1") {
 		t.Fatalf("operator MinIO prefix is not deployment-isolated: %s", minio)
+	}
+	plan, err := loadPersistedPlan(cfg, stateDir)
+	if err != nil || plan.PlanHash != reserved.plan.PlanHash {
+		t.Fatalf("rendering changed its actual approved setup plan: %v", err)
 	}
 }
 

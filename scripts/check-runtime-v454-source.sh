@@ -4,12 +4,15 @@ set -euo pipefail
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 manifest="$sn_repo/docs/spec/runtime-v454-source.sha256"
 metadata_manifest="$sn_repo/docs/spec/runtime-metadata-static-source.sha256"
+current_manifest="$sn_repo/docs/spec/runtime-v455-source.sha256"
 repository="https://github.com/RaoFoundation/subtensor"
 raw_repository="https://raw.githubusercontent.com/RaoFoundation/subtensor"
 tag="v454"
 commit="14cde6410fe8ec81a940e290c56f94a632a0988d"
 expected_files=29
-expected_metadata_files=12
+expected_metadata_files=15
+current_commit="67dcf7f791dc495064c293f080a0702cb433e51e"
+expected_current_files=31
 
 [[ -f "$manifest" ]] || {
   echo "runtime 454 source manifest is missing: $manifest" >&2
@@ -17,6 +20,10 @@ expected_metadata_files=12
 }
 [[ -f "$metadata_manifest" ]] || {
   echo "runtime metadata source manifest is missing: $metadata_manifest" >&2
+  exit 1
+}
+[[ -f "$current_manifest" ]] || {
+  echo "runtime 455 source manifest is missing: $current_manifest" >&2
   exit 1
 }
 
@@ -85,7 +92,55 @@ if [[ "$count" -ne "$expected_files" ]]; then
   exit 1
 fi
 
-# Pin corroborating source and upstream integration tests for the four
+# Keep the historical 454 attestation above and independently attest the exact
+# deployed 455 commit. Upstream testnet CI has no published 455 tag/mainnet
+# timepoint yet; a mutable branch or an invented tag is not its source identity.
+current_source_checkout="${SUBTENSOR_RUNTIME455_SOURCE:-}"
+if [[ -n "$current_source_checkout" ]]; then
+  current_head="$(git -C "$current_source_checkout" rev-parse HEAD)"
+  [[ "$current_head" == "$current_commit" ]] || {
+    echo "runtime 455 source HEAD is $current_head, want $current_commit" >&2
+    exit 1
+  }
+  current_status="$(git -C "$current_source_checkout" status --porcelain=v1 --untracked-files=all)"
+  [[ -z "$current_status" ]] || {
+    echo "runtime 455 source checkout has uncommitted or untracked files" >&2
+    exit 1
+  }
+fi
+declare -A current_seen_paths=()
+current_count=0
+while read -r current_expected current_path current_extra; do
+  [[ "$current_expected" =~ ^[0-9a-f]{64}$ && -n "$current_path" && -z "${current_extra:-}" ]] || {
+    echo "invalid runtime 455 source manifest row" >&2
+    exit 1
+  }
+  [[ "$current_path" =~ ^[A-Za-z0-9_./-]+$ && "$current_path" != /* && "$current_path" != ".." && "$current_path" != ../* && "$current_path" != */../* && "$current_path" != */.. ]] || {
+    echo "unsafe runtime 455 source path: $current_path" >&2
+    exit 1
+  }
+  [[ -z "${current_seen_paths[$current_path]:-}" ]] || {
+    echo "duplicate runtime 455 source path: $current_path" >&2
+    exit 1
+  }
+  current_seen_paths[$current_path]=1
+  if [[ -n "$current_source_checkout" ]]; then
+    current_observed="$(git -C "$current_source_checkout" show "$current_commit:$current_path" | sha256sum | awk '{print $1}')"
+  else
+    current_observed="$(curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time 180 "$raw_repository/$current_commit/$current_path" | sha256sum | awk '{print $1}')"
+  fi
+  [[ "$current_observed" == "$current_expected" ]] || {
+    echo "runtime 455 source digest mismatch for $current_path: $current_observed, want $current_expected" >&2
+    exit 1
+  }
+  current_count=$((current_count + 1))
+done < "$current_manifest"
+[[ "$current_count" -eq "$expected_current_files" ]] || {
+  echo "runtime 455 source manifest has $current_count files, want $expected_current_files" >&2
+  exit 1
+}
+
+# Pin corroborating source and upstream integration tests for all five
 # reviewed artifacts. The separate exact-Wasm checker is the authoritative
 # state-independence and byte-identity gate for metadata reuse.
 declare -A resolved_metadata_refs=()
@@ -98,7 +153,7 @@ while read -r metadata_ref_kind metadata_ref_name metadata_commit expected path 
   }
   metadata_ref="$metadata_ref_kind:$metadata_ref_name"
   case "$metadata_ref:$metadata_commit" in
-    head:release-v451:d78d9cc6a6ee4d805f74a35414baaef8be025a5f|tag:v452:da06f033663896ef2fdbbfc3ecc68ca908fba0f5|tag:v453:823bdcbc58a29f60b243be4737a7c72b34ac7d93|tag:v454:14cde6410fe8ec81a940e290c56f94a632a0988d) ;;
+    head:release-v451:d78d9cc6a6ee4d805f74a35414baaef8be025a5f|tag:v452:da06f033663896ef2fdbbfc3ecc68ca908fba0f5|tag:v453:823bdcbc58a29f60b243be4737a7c72b34ac7d93|tag:v454:14cde6410fe8ec81a940e290c56f94a632a0988d|commit:67dcf7f791dc495064c293f080a0702cb433e51e:67dcf7f791dc495064c293f080a0702cb433e51e) ;;
     *)
       echo "unreviewed runtime metadata source identity: $metadata_ref_kind $metadata_ref_name $metadata_commit" >&2
       exit 1
@@ -119,7 +174,11 @@ while read -r metadata_ref_kind metadata_ref_name metadata_commit expected path 
   }
   seen_metadata_paths[$metadata_key]=1
   if [[ -z "${resolved_metadata_refs[$metadata_ref]:-}" ]]; then
-    if [[ "$metadata_ref_kind" == "head" ]]; then
+    if [[ "$metadata_ref_kind" == "commit" ]]; then
+      # The allowlist above binds this exact immutable commit, whose source
+      # bytes are checked below. Do not resolve a moving testnet branch.
+      metadata_resolved="$metadata_ref_name"
+    elif [[ "$metadata_ref_kind" == "head" ]]; then
       metadata_refs="$(git ls-remote --heads "$repository" "refs/heads/$metadata_ref_name")"
       metadata_resolved="$(printf '%s\n' "$metadata_refs" | awk -v ref="refs/heads/$metadata_ref_name" '$2 == ref { print $1; exit }')"
     else
@@ -156,3 +215,4 @@ if [[ "$metadata_count" -ne "$expected_metadata_files" ]]; then
 fi
 
 echo "runtime source verified tag=$tag commit=$commit files=$count metadata_files=$metadata_count"
+echo "runtime source verified ref_kind=commit commit=$current_commit files=$current_count"

@@ -20,6 +20,7 @@ import (
 // The initializer derives the physical empty prefix and leaves no transaction
 // or fictitious closed settlement behind after every snapshot is durable.
 func TestAttemptSettlementRuntimeV2InitializesExactEmptyPrefix(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	for index, participant := range fixture.participants {
 		snapshot := participant.Stats.snapshotStats()
@@ -43,6 +44,7 @@ func TestAttemptSettlementRuntimeV2InitializesExactEmptyPrefix(t *testing.T) {
 // A real completed trail is existing nonempty current state, not an implicit
 // activation migration. Refusal preserves all durable and live raw counters.
 func TestAttemptSettlementRuntimeV2ActivationRefusesNonemptySignedWindow(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 	fixture.trails(t, 0, 1, 0)
 	before := runtimeAttemptSettlementV2TestImages(t, fixture.participants)
@@ -59,6 +61,7 @@ func TestAttemptSettlementRuntimeV2ActivationRefusesNonemptySignedWindow(t *test
 
 // Independent expected activation cannot be replaced by the candidate prefix.
 func TestAttemptSettlementRuntimeV2ActivationRejectsMismatchedPin(t *testing.T) {
+	t.Parallel()
 	for _, pin := range []string{"prefix", "generation"} {
 		fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 		before := runtimeAttemptSettlementV2TestImages(t, fixture.participants)
@@ -89,6 +92,7 @@ func TestAttemptSettlementRuntimeV2ActivationRejectsMismatchedPin(t *testing.T) 
 // Fifteen real complete trails plus one failed extension guarantee positive
 // quality under a_min8 while retaining the original 122-record/16-trail cap.
 func TestAttemptSettlementRuntimeV2PersistsCompleteRealM8Batch(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 15, 1)
 	fixture.trails(t, 1, 1, 0)
@@ -123,6 +127,7 @@ func TestAttemptSettlementRuntimeV2PersistsCompleteRealM8Batch(t *testing.T) {
 
 // A mutable public result must not alias the immutable Stats-owned history.
 func TestAttemptSettlementRuntimeV2OwnsRetainedTerminalSeparately(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 1, 0)
 	closure, err := AdvanceAttemptSettlementEpochV2(t.Context(), fixture.coordinator, fixture.participants, 43, fixture.fixtures[0].expected.Boundary, fixture.options(t))
@@ -141,6 +146,7 @@ func TestAttemptSettlementRuntimeV2OwnsRetainedTerminalSeparately(t *testing.T) 
 // Actual Save after partial physical advancement differs from the older disk
 // checkpoint. Recovery must accept that exact live preimage, not arbitrary data.
 func TestAttemptSettlementRuntimeV2PartialWriteSaveThenActualRestart(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 2, 1)
 	fixture.trails(t, 1, 1, 0)
@@ -167,6 +173,7 @@ func TestAttemptSettlementRuntimeV2PartialWriteSaveThenActualRestart(t *testing.
 // A live retry has fresh verification scratch but cannot call any typed
 // writer or private signer again; it publishes byte-identical journal output.
 func TestAttemptSettlementRuntimeV2RetryFinishesWithoutResealing(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 2, 1)
 	transaction := fixture.partialWrite(t)
@@ -187,6 +194,7 @@ func TestAttemptSettlementRuntimeV2RetryFinishesWithoutResealing(t *testing.T) {
 // Removal observes a coherently advanced whole batch with admission still
 // closed. A retained removal error cannot publish half the operator generation.
 func TestAttemptSettlementRuntimeV2PublishesAllBeforeJournalRemoval(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 1, 0)
 	physical := attemptSettlementV2PhysicalIO()
@@ -214,6 +222,7 @@ func TestAttemptSettlementRuntimeV2PublishesAllBeforeJournalRemoval(t *testing.T
 // The first real removal may complete while its final acknowledgement fails.
 // A current retry replays/resyncs immutable bytes and does not refold counters.
 func TestAttemptSettlementRuntimeV2RetriesAfterRemovedJournalFailure(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 1, 0)
 	physical := attemptSettlementV2PhysicalIO()
@@ -240,6 +249,7 @@ func TestAttemptSettlementRuntimeV2RetriesAfterRemovedJournalFailure(t *testing.
 // An admitted actual snapshot may complete before cancellation. Preserve the
 // journal and all gates, then finish the same bytes with a fresh owner context.
 func TestAttemptSettlementRuntimeV2CancellationAfterFirstSnapshotRetainsJournal(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 1, 0)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -265,6 +275,7 @@ func TestAttemptSettlementRuntimeV2CancellationAfterFirstSnapshotRetainsJournal(
 
 // Mixed cancellation and a real atomic-write failure retain both causes.
 func TestAttemptSettlementRuntimeV2RetainsCanceledPhysicalWriteCause(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 1, 0)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -295,6 +306,7 @@ func TestAttemptSettlementRuntimeV2RetainsCanceledPhysicalWriteCause(t *testing.
 // All reservations are visible even if the first active operator cannot yet
 // drain. The active count is a real admitted Stats attempt, not a timing guess.
 func TestAttemptSettlementRuntimeV2ReservesEveryOperatorBeforeDrain(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	first := fixture.participants[0]
 	if err := first.Stats.beginAttempt(42, first.Ledger); err != nil {
@@ -315,6 +327,7 @@ func TestAttemptSettlementRuntimeV2ReservesEveryOperatorBeforeDrain(t *testing.T
 
 // Ordinary/native ownership is not a settlement reservation to clear.
 func TestAttemptSettlementRuntimeV2RefusesNativeReservationWithoutMutation(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	stats := fixture.participants[1].Stats
 	owner := stats.lockStatsWrite("native-test-reservation")
@@ -333,6 +346,7 @@ func TestAttemptSettlementRuntimeV2RefusesNativeReservationWithoutMutation(t *te
 
 // An unchanged refresh is genuinely inert even when the native owner is held.
 func TestAttemptSettlementRuntimeV2UnchangedRefreshPreservesNativeReservation(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	stats := fixture.participants[0].Stats
 	owner := stats.lockStatsWrite("native-test-reservation")
@@ -349,6 +363,7 @@ func TestAttemptSettlementRuntimeV2UnchangedRefreshPreservesNativeReservation(t 
 
 // Fresh startup is an explicit ownership boundary, including repeated calls.
 func TestAttemptSettlementRuntimeV2RecoveryRejectsLiveAndRepeatedAttachment(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	before := runtimeAttemptSettlementV2TestImages(t, fixture.participants)
 	if err := RecoverAttemptSettlementEpochV2(t.Context(), fixture.coordinator, fixture.participants, fixture.options(t).Authority, runtimeAttemptSettlementV2TestPersistence()); err == nil {
@@ -368,6 +383,7 @@ func TestAttemptSettlementRuntimeV2RecoveryRejectsLiveAndRepeatedAttachment(t *t
 
 // Byte-exact known images are stronger than merely accepting the same epoch.
 func TestAttemptSettlementRuntimeV2RecoveryRejectsUnknownSameEpochImage(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 1, 0)
 	transaction := fixture.partialWrite(t)
@@ -403,6 +419,7 @@ func TestAttemptSettlementRuntimeV2RecoveryRejectsUnknownSameEpochImage(t *testi
 // A late proof-reader close is still part of complete authority verification;
 // no recovery snapshot may be written from the otherwise valid partial result.
 func TestAttemptSettlementRuntimeV2RecoveryReplaysBeforeAnySnapshotWrite(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 1, 0)
 	fixture.trails(t, 1, 1, 0)

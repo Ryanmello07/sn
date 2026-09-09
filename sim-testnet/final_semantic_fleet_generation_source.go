@@ -138,6 +138,20 @@ func newFinalFleetGenerationSource(archive *finalSemanticArchive, evidence *Fina
 			return nil, recordErr
 		}
 	}
+	requests, err := finalRelayRequestsFromFiles(result.plans, result.entries, archive.files)
+	if err != nil {
+		return nil, err
+	}
+	for key, original := range requests {
+		name, err := finalRelayRequestFoundationPath(key)
+		if err != nil {
+			return nil, err
+		}
+		retained, err := result.record(name)
+		if err != nil || !bytes.Equal(retained, original) {
+			return nil, stateMismatchError(err, "ordinary fleet lineage changed an original relay request")
+		}
+	}
 	return result, nil
 }
 

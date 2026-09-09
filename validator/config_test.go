@@ -22,7 +22,7 @@ func validReleaseConfig(t *testing.T) ReleaseConfig {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	return ReleaseConfig{
+	cfg := ReleaseConfig{
 		SchemaVersion:       1,
 		Production:          true,
 		Release:             "1.0",
@@ -53,6 +53,8 @@ func validReleaseConfig(t *testing.T) ReleaseConfig {
 			{NoID: 2, APIURL: "https://two.example", ConnectURL: "wss://two.example/connect", ArtifactSigner: "0x2222222222222222222222222222222222222222", StateDir: filepath.Join(root, "no-2"), Concurrency: 2},
 		},
 	}
+	cfg.EvidenceV2 = releaseEvidenceV2TestConfig(root, cfg.Operators)
+	return cfg
 }
 
 func writeReleaseConfig(t *testing.T, cfg ReleaseConfig) string {
@@ -160,13 +162,11 @@ func TestReleaseConfigRequiresExactNativeRuntimeIdentity(t *testing.T) {
 		{name: "metadata hash drift", mutate: func(cfg *ReleaseConfig) { cfg.RuntimeMetadataHash = "0x" + strings.Repeat("44", 32) }},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			cfg := validReleaseConfig(t)
-			test.mutate(&cfg)
-			if _, err := LoadReleaseConfig(writeReleaseConfig(t, cfg)); err == nil {
-				t.Fatal("incomplete or drifting native runtime identity was accepted")
-			}
-		})
+		cfg := validReleaseConfig(t)
+		test.mutate(&cfg)
+		if _, err := LoadReleaseConfig(writeReleaseConfig(t, cfg)); err == nil {
+			t.Errorf("%s: incomplete or drifting native runtime identity was accepted", test.name)
+		}
 	}
 }
 

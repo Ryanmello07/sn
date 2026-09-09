@@ -63,6 +63,11 @@ func runtimeConfigManifestFixtureForOperators(t *testing.T, operators int) (*Res
 		if err := os.WriteFile(path, []byte(relative+"\n"), mode); err != nil {
 			t.Fatal(err)
 		}
+		// Creation applies the process umask; the real renderer restores
+		// each declared mode explicitly before sealing its inventory.
+		if err := os.Chmod(path, mode); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := writeRuntimeConfigManifest(cfg, stateDir); err != nil {
 		t.Fatal(err)

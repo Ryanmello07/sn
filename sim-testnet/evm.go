@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -97,6 +99,8 @@ type DeploymentPayloads struct {
 	Manifest                                                                                                                                        ContractDeployment
 	CoordinatorUpgrade                                                                                                                              CoordinatorUpgrade
 	Reserve, Vault, Implementation, RegisterEscrow, Proxy, GovernanceDrill, FixVault, FixSink, PrecompileProbe, UpgradeImplementation, FleetBatcher []byte
+	ValidatorEvidence                                                                                                                               *validatorEvidenceDeploymentPayloads
+	validatorEvidenceCarry                                                                                                                          *validatorEvidenceCarryObservation
 	FleetBatcherRuntime                                                                                                                             []byte
 	ExpectedRuntime                                                                                                                                 map[common.Address][]byte
 }
@@ -798,7 +802,7 @@ func configurePrecompileProbeNonce(payloads *DeploymentPayloads, nonce uint64) e
 			return errors.New("replacement precompile probe collides with an immutable deployment address")
 		}
 	}
-	if address == payloads.CoordinatorUpgrade.Implementation || address == payloads.FleetBatcherAddress {
+	if address == payloads.CoordinatorUpgrade.Implementation || address == payloads.FleetBatcherAddress || payloads.ValidatorEvidence != nil && address == payloads.ValidatorEvidence.Manifest.Address {
 		return errors.New("replacement precompile probe collides with an active release CREATE address")
 	}
 	delete(payloads.ExpectedRuntime, oldAddress)
@@ -809,7 +813,7 @@ func configurePrecompileProbeNonce(payloads *DeploymentPayloads, nonce uint64) e
 }
 
 func configureCoordinatorUpgradeNonce(payloads *DeploymentPayloads, nonce uint64) error {
-	if payloads == nil || payloads.Deployer == (common.Address{}) || payloads.CommitmentOracle == (common.Address{}) || payloads.Manifest.InitialNonce > ^uint64(0)-10 || nonce == ^uint64(0) {
+	if payloads == nil || payloads.Deployer == (common.Address{}) || payloads.CommitmentOracle == (common.Address{}) || payloads.ExpectedRuntime == nil || payloads.Manifest.InitialNonce > ^uint64(0)-10 || nonce == ^uint64(0) {
 		return errors.New("coordinator upgrade payload context is invalid")
 	}
 	minimumNonce := payloads.Manifest.InitialNonce + 9
@@ -822,9 +826,6 @@ func configureCoordinatorUpgradeNonce(payloads *DeploymentPayloads, nonce uint64
 	if nonce < minimumNonce {
 		return fmt.Errorf("coordinator upgrade nonce %d is below initial upgrade nonce %d", nonce, minimumNonce)
 	}
-	if payloads.CoordinatorUpgrade.Implementation != (common.Address{}) {
-		delete(payloads.ExpectedRuntime, payloads.CoordinatorUpgrade.Implementation)
-	}
 	implementation := crypto.CreateAddress(payloads.Deployer, nonce)
 	runtime, err := runtimeWithImmutables(artifactByName("Coordinator"), map[string][]byte{"__self": abiWordAddress(implementation)})
 	if err != nil {
@@ -834,9 +835,18 @@ func configureCoordinatorUpgradeNonce(payloads *DeploymentPayloads, nonce uint64
 	if nonce > payloads.Manifest.InitialNonce+9 {
 		schema = "urnetwork-coordinator-upgrade-v2"
 	}
-	payloads.ExpectedRuntime[implementation] = runtime
-	payloads.CoordinatorUpgrade = CoordinatorUpgrade{Schema: schema, DeploymentID: payloads.Manifest.DeploymentID, Implementation: implementation, DeployerNonce: nonce, RuntimeCodeHash: crypto.Keccak256Hash(runtime).Hex()}
-	return configureFleetBatcherNonce(payloads, nonce+1)
+	// The batcher and evidence constructors can refuse after this runtime is
+	// built. Keep the old map and all three CREATE identities intact on error.
+	next := *payloads
+	next.ExpectedRuntime = maps.Clone(payloads.ExpectedRuntime)
+	delete(next.ExpectedRuntime, payloads.CoordinatorUpgrade.Implementation)
+	next.ExpectedRuntime[implementation] = runtime
+	next.CoordinatorUpgrade = CoordinatorUpgrade{Schema: schema, DeploymentID: payloads.Manifest.DeploymentID, Implementation: implementation, DeployerNonce: nonce, RuntimeCodeHash: crypto.Keccak256Hash(runtime).Hex()}
+	if err := configureFleetBatcherNonce(&next, nonce+1); err != nil {
+		return err
+	}
+	*payloads = next
+	return nil
 }
 
 // Bind the additive testnet migration helper to the exact nonce immediately
@@ -861,15 +871,28 @@ func configureFleetBatcherNonce(payloads *DeploymentPayloads, nonce uint64) erro
 	if err != nil {
 		return err
 	}
-	payloads.FleetBatcherNonce = nonce
-	payloads.FleetBatcherAddress = address
-	payloads.FleetBatcher = append(hexBytes(FleetBatcherCreationBytecode), arguments...)
-	payloads.FleetBatcherRuntime = runtime
+	next := *payloads
+	next.FleetBatcherNonce = nonce
+	next.FleetBatcherAddress = address
+	next.FleetBatcher = append(hexBytes(FleetBatcherCreationBytecode), arguments...)
+	next.FleetBatcherRuntime = runtime
+	if payloads.validatorEvidenceCarry != nil {
+		if err := bindValidatorEvidenceCarryPayloads(&next, payloads.validatorEvidenceCarry); err != nil {
+			return err
+		}
+	} else if payloads.ValidatorEvidence != nil {
+		domain := payloads.ValidatorEvidence.Manifest
+		next.ValidatorEvidence, err = buildValidatorEvidenceDeployment(&next, domain.ChainID, domain.GenesisHash, domain.Netuid)
+		if err != nil {
+			return err
+		}
+	}
+	*payloads = next
 	return nil
 }
 
 func buildDeploymentPayloadsWithRegistrationGeneration(cfg *ResolvedConfig, roles *RoleSecrets, initialNonce, generation uint64) (*DeploymentPayloads, error) {
-	if initialNonce > ^uint64(0)-9 {
+	if initialNonce > ^uint64(0)-11 {
 		return nil, errors.New("deployment nonce range overflows uint64")
 	}
 	if err := validateContractRegistrationGeneration(cfg.Config.Topology, generation); err != nil {
@@ -1002,6 +1025,17 @@ func buildDeploymentPayloadsWithRegistrationGeneration(cfg *ResolvedConfig, role
 		}
 		p.Manifest.RuntimeHashes[addr.Hex()] = crypto.Keccak256Hash(code).Hex()
 	}
+	if cfg.Public == nil {
+		return nil, errors.New("validator evidence deployment requires an approved chain identity")
+	}
+	genesis, err := decodeHex32("validator evidence genesis", cfg.Public.Chain.GenesisHash)
+	if err != nil {
+		return nil, err
+	}
+	p.ValidatorEvidence, err = buildValidatorEvidenceDeployment(p, cfg.Public.Chain.ChainID, genesis, cfg.Netuid)
+	if err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
@@ -1068,7 +1102,12 @@ func max64(a, b uint64) uint64 {
 	return b
 }
 
+// Sends sharing this manager serialize their account nonce through finality.
+// Independent role managers remain concurrent. Close is an owner-only action
+// after all callers have joined; the manager must not be copied after use.
 type EvmTxManager struct {
+	stateLock    sync.Mutex
+	nonceTurn    chan struct{}
 	client       *ethclient.Client
 	chainID      *big.Int
 	deploymentID string
@@ -1160,6 +1199,11 @@ func validateEVMTransactionEnvelope(action Action, estimatedGas uint64, feeCap, 
 // Verify optional exact transaction fields which are hash-bound into critical
 // deployment actions. Either the complete field set is present or none is.
 func validateApprovedEVMTransactionFields(action Action, signer common.Address, nonce uint64, to *common.Address, value *big.Int, data []byte) error {
+	if action.ID == validatorEvidenceAnchorActionID {
+		if err := validateValidatorEvidenceAnchorTransactionFields(action, signer, to, value, data); err != nil {
+			return err
+		}
+	}
 	keys := []string{"expected_signer", "expected_nonce", "expected_transaction_to", "expected_value_wei", "expected_data_keccak256"}
 	present := 0
 	for _, key := range keys {
@@ -1205,6 +1249,17 @@ func validateApprovedEVMTransactionFields(action Action, signer common.Address, 
 }
 
 func (m *EvmTxManager) Send(ctx context.Context, planHash string, a Action, to *common.Address, value *big.Int, data []byte) (*types.Receipt, error) {
+	release, err := m.acquireNonceTurn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return m.sendOwnedNonce(ctx, planHash, a, to, value, data)
+}
+
+// Called only by the account-turn owner, including the evidence relay which
+// binds its exact action nonce before entering this same durable sender.
+func (m *EvmTxManager) sendOwnedNonce(ctx context.Context, planHash string, a Action, to *common.Address, value *big.Int, data []byte) (*types.Receipt, error) {
 	if prior, ok := m.journal.LatestTransaction(planHash, a.ID, a.IntentHash); ok {
 		rawPath := filepath.Join(m.stateDir, "transactions", stringsTrim0x(prior.TransactionHash)+".rlp")
 		raw, err := os.ReadFile(rawPath)
@@ -1217,6 +1272,9 @@ func (m *EvmTxManager) Send(ctx context.Context, planHash string, a Action, to *
 		}
 		if !strings.EqualFold(tx.Hash().Hex(), prior.TransactionHash) {
 			return nil, fmt.Errorf("persisted EVM transaction hash mismatch: got %s want %s", tx.Hash(), prior.TransactionHash)
+		}
+		if a.ID == validatorEvidenceAnchorActionID && (!tx.Protected() || m.chainID == nil || tx.ChainId().Cmp(m.chainID) != 0) {
+			return nil, errors.New("persisted validator evidence anchor transaction has another or unprotected chain")
 		}
 		signer, err := types.Sender(types.LatestSignerForChainID(m.chainID), &tx)
 		if err != nil {
@@ -1312,7 +1370,7 @@ func (m *EvmTxManager) waitExactTransaction(ctx context.Context, planHash string
 	for {
 		receipt, err := m.client.TransactionReceipt(ctx, signed.Hash())
 		if err == nil {
-			return m.finalizeReceipt(ctx, planHash, a, receipt)
+			return m.finalizeReceipt(ctx, planHash, a, signed.Hash(), receipt)
 		}
 		if err != ethereum.NotFound {
 			return nil, err
@@ -1339,18 +1397,23 @@ func (m *EvmTxManager) waitExactTransaction(ctx context.Context, planHash string
 	}
 }
 
-func (m *EvmTxManager) finalizeReceipt(ctx context.Context, planHash string, a Action, r *types.Receipt) (*types.Receipt, error) {
-	if err := m.journal.Append(JournalEntry{DeploymentID: m.deploymentID, PlanHash: planHash, ActionID: a.ID, IntentHash: a.IntentHash, Stage: StageIncluded, TransactionHash: r.TxHash.Hex(), BlockNumber: r.BlockNumber.Uint64(), BlockHash: r.BlockHash.Hex()}); err != nil {
+// The signed intent, not an endpoint's receipt, selects the transaction lane.
+// Refuse malformed inclusion before the first durable journal observation.
+func (m *EvmTxManager) finalizeReceipt(ctx context.Context, planHash string, a Action, expectedHash common.Hash, r *types.Receipt) (*types.Receipt, error) {
+	if err := validateEVMReceiptIdentity(r, expectedHash); err != nil {
+		return nil, err
+	}
+	if err := m.journal.Append(JournalEntry{DeploymentID: m.deploymentID, PlanHash: planHash, ActionID: a.ID, IntentHash: a.IntentHash, Stage: StageIncluded, TransactionHash: expectedHash.Hex(), BlockNumber: r.BlockNumber.Uint64(), BlockHash: r.BlockHash.Hex()}); err != nil {
 		return r, err
 	}
-	finalized, err := waitEVMReceiptFinality(ctx, m.client, r.TxHash)
+	finalized, err := waitEVMReceiptFinality(ctx, m.client, expectedHash)
 	if err != nil {
 		return r, err
 	}
 	if finalized.Status != types.ReceiptStatusSuccessful {
 		return finalized, fmt.Errorf("EVM transaction %s reverted in its canonical inclusion", finalized.TxHash)
 	}
-	if err := m.journal.Append(JournalEntry{DeploymentID: m.deploymentID, PlanHash: planHash, ActionID: a.ID, IntentHash: a.IntentHash, Stage: StageFinalized, TransactionHash: finalized.TxHash.Hex(), BlockNumber: finalized.BlockNumber.Uint64(), BlockHash: finalized.BlockHash.Hex()}); err != nil {
+	if err := m.journal.Append(JournalEntry{DeploymentID: m.deploymentID, PlanHash: planHash, ActionID: a.ID, IntentHash: a.IntentHash, Stage: StageFinalized, TransactionHash: expectedHash.Hex(), BlockNumber: finalized.BlockNumber.Uint64(), BlockHash: finalized.BlockHash.Hex()}); err != nil {
 		return finalized, err
 	}
 	return finalized, nil
@@ -1383,6 +1446,15 @@ func (self ethEVMReceiptFinalityReader) CodeAt(ctx context.Context, address comm
 	return self.client.CodeAt(ctx, address, block)
 }
 
+// Every receipt consumer keeps its independently expected transaction hash.
+// Inclusion fields are checked before narrowing or recording an observation.
+func validateEVMReceiptIdentity(receipt *types.Receipt, expectedHash common.Hash) error {
+	if expectedHash == (common.Hash{}) || receipt == nil || receipt.TxHash != expectedHash || receipt.BlockHash == (common.Hash{}) || receipt.BlockNumber == nil || !receipt.BlockNumber.IsUint64() || receipt.BlockNumber.Sign() <= 0 {
+		return errors.New("EVM receipt differs from the requested transaction or has no valid inclusion block")
+	}
+	return nil
+}
+
 // Read one receipt, the EVM finalized head, and the canonical EVM RPC
 // header at the inclusion height. A canonical mismatch can be a transient
 // reorg, so the caller retries it; malformed RPC data fails immediately.
@@ -1401,8 +1473,8 @@ func observeEVMReceiptFinality(ctx context.Context, reader evmReceiptFinalityRea
 	if err != nil {
 		return nil, false, err
 	}
-	if receipt == nil || receipt.BlockNumber == nil || !receipt.BlockNumber.IsUint64() || receipt.BlockNumber.Sign() <= 0 {
-		return nil, false, errors.New("EVM receipt has no valid inclusion block")
+	if err := validateEVMReceiptIdentity(receipt, txHash); err != nil {
+		return nil, false, err
 	}
 	if finalized.Number < receipt.BlockNumber.Uint64() {
 		return receipt, false, nil

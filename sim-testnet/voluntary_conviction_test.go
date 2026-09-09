@@ -192,8 +192,8 @@ func TestPlanRevisionReconcilesExactDuplicateVoluntaryConvictionOnce(t *testing.
 		t.Fatal("the verified original voluntary-conviction intent was not carried")
 	}
 	if repair.Spend.AlphaRao != recovery.AmountRao+reserveRoundingAllowancePerCallRao+alphaTransferDestinationRoundingAllowance ||
-		repair.Parameters[alphaRepairMinimumDestinationParameter] != "100000000020" || !strings.Contains(strings.Join(actionByID(t, revised, "fleet.refresh.deploy-batcher").DependsOn, ","), repair.ID) {
-		t.Fatalf("duplicate recovery repair/barrier is invalid: repair=%+v batcher=%+v", repair, actionByID(t, revised, "fleet.refresh.deploy-batcher"))
+		repair.Parameters[alphaRepairMinimumDestinationParameter] != "100000000020" || !slices.Contains(actionByID(t, revised, "fleet.refresh.oracle-activate").DependsOn, repair.ID) {
+		t.Fatalf("duplicate recovery repair/barrier is invalid: repair=%+v activation=%+v", repair, actionByID(t, revised, "fleet.refresh.oracle-activate"))
 	}
 	wantSuperseded, err := addDecimalUint(recovery.SupersededGasBefore, recovery.DuplicateAction.Spend.EVMGasWei)
 	if err != nil || revised.SupersededSpend.EVMGasWei != wantSuperseded {
@@ -248,7 +248,7 @@ func TestPlanRevisionReconcilesExactDuplicateVoluntaryConvictionOnce(t *testing.
 			reconciliationIndex = index
 		case repair.ID:
 			repairIndex = index
-		case "fleet.refresh.deploy-batcher":
+		case "fleet.refresh.oracle-activate":
 			barrierIndex = index
 		}
 	}
@@ -273,7 +273,7 @@ func TestV10VoluntaryConvictionRecoveryRetainsOriginalIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan.Schema = setupPlanSchemaV10
+	plan = validatorEvidenceLegacyPlanSchemaTest(t, plan, setupPlanSchemaV10)
 	reconciliation := actionByID(t, plan, voluntaryConvictionReconciliationActionID)
 	priorHashes := map[string]bool{}
 	for _, hash := range plan.PriorPlanHashes {
@@ -679,7 +679,7 @@ func TestCurrentPlanRejectsRebuiltVoluntaryConvictionBeforeReconciliation(t *tes
 	if err := validatePlanBudget(plan); err == nil || !strings.Contains(err.Error(), "does not retain the authenticated original intent") {
 		t.Fatalf("v10 accepted rebuilt recovered voluntary conviction: %v", err)
 	}
-	plan.Schema = setupPlanSchemaV9
+	plan = validatorEvidenceLegacyPlanSchemaTest(t, plan, setupPlanSchemaV9)
 	if err := validatePlanBudget(plan); err != nil {
 		t.Fatalf("historical v9 recovery plan became unreadable: %v", err)
 	}

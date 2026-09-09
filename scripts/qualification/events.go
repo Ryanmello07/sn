@@ -1,4 +1,4 @@
-// Verify bounded test2json events against exact root-owned expected outcomes.
+// Verify bounded test2json events against exact root and descendant outcomes.
 package main
 
 import (
@@ -11,16 +11,36 @@ import (
 )
 
 type eventSummary struct {
-	Roots            int `json:"roots"`
-	Passed           int `json:"passed"`
-	ExpectedFailures int `json:"expected_failures"`
-	BinaryExit       int `json:"binary_exit"`
-	Events           int `json:"events"`
-	Bytes            int `json:"bytes"`
+	Roots                   int `json:"roots"`
+	Passed                  int `json:"passed"`
+	ExpectedFailures        int `json:"expected_failures"`
+	Subtests                int `json:"subtests"`
+	SubtestsPassed          int `json:"subtests_passed"`
+	ExpectedSubtestFailures int `json:"expected_subtest_failures"`
+	BinaryExit              int `json:"binary_exit"`
+	Events                  int `json:"events"`
+	Bytes                   int `json:"bytes"`
 }
 
 func verifyEvents(source io.Reader, expected expectedSuite, packagePath string, actualExit int) (eventSummary, error) {
-	result := eventSummary{Roots: len(expected.Roots), ExpectedFailures: len(expected.Markers), BinaryExit: actualExit}
+	result := eventSummary{Roots: len(expected.Roots), Subtests: len(expected.Outcomes) - len(expected.Roots), BinaryExit: actualExit}
+	parents, err := expectedParents(expected)
+	if err != nil {
+		return result, err
+	}
+	remainingChildren := map[string]int{}
+	for _, parent := range parents {
+		remainingChildren[parent]++
+	}
+	for name, outcome := range expected.Outcomes {
+		if outcome == "fail" {
+			if parents[name] == "" {
+				result.ExpectedFailures++
+			} else {
+				result.ExpectedSubtestFailures++
+			}
+		}
+	}
 	wantedExit, terminal := 0, "pass"
 	if len(expected.Markers) > 0 {
 		wantedExit, terminal = 1, "fail"
@@ -87,6 +107,11 @@ func verifyEvents(source io.Reader, expected expectedSuite, packagePath string, 
 		if root != "" && expected.Outcomes[root] == "" {
 			return result, fmt.Errorf("unexpected root or subtest %s", root)
 		}
+		for parent := parents[root]; parent != ""; parent = parents[parent] {
+			if states[parent] != "running" && states[parent] != "paused" {
+				return result, fmt.Errorf("descendant %s has inactive ancestor %s", root, parent)
+			}
+		}
 		if action == "output" {
 			output, err := text("Output")
 			if err != nil || event["Output"] == nil {
@@ -108,7 +133,7 @@ func verifyEvents(source io.Reader, expected expectedSuite, packagePath string, 
 			continue
 		}
 		if root == "" {
-			if action != terminal || outcomes != len(expected.Roots) {
+			if action != terminal || outcomes != len(expected.Outcomes) {
 				return result, errors.New("incomplete or unexpected package outcome")
 			}
 			for name := range expected.Markers {
@@ -139,9 +164,17 @@ func verifyEvents(source io.Reader, expected expectedSuite, packagePath string, 
 			if states[root] != "running" || expected.Outcomes[root] != action {
 				return result, errors.New("root terminal state differs")
 			}
+			if remainingChildren[root] != 0 {
+				return result, errors.New("parent completed before every declared child")
+			}
 			states[root] = "done"
 			outcomes++
-			if action == "pass" {
+			if parent := parents[root]; parent != "" {
+				remainingChildren[parent]--
+				if action == "pass" {
+					result.SubtestsPassed++
+				}
+			} else if action == "pass" {
 				result.Passed++
 			}
 		default:

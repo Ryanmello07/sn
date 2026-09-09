@@ -353,7 +353,7 @@ func TestReleaseExactBlockReadersCancelProvider(t *testing.T) {
 			},
 		},
 	} {
-		t.Run(test.name, func(t *testing.T) {
+		func() {
 			started := make(chan struct{})
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 				defer request.Body.Close()
@@ -380,10 +380,11 @@ func TestReleaseExactBlockReadersCancelProvider(t *testing.T) {
 			defer server.Close()
 			chain, err := DialReleaseChainContext(context.Background(), []string{server.URL}, common.Address{1})
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("%s: %v", test.name, err)
 			}
 			defer chain.Close()
 			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			done := make(chan error, 1)
 			go func() { done <- test.call(ctx, chain) }()
 			<-started
@@ -391,7 +392,7 @@ func TestReleaseExactBlockReadersCancelProvider(t *testing.T) {
 			if err := <-done; !errors.Is(err, context.Canceled) {
 				t.Fatalf("canceled %s error=%v", test.name, err)
 			}
-		})
+		}()
 	}
 }
 

@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,6 +43,44 @@ type FinalCollectedFileBundle struct {
 }
 
 func captureFinalSemanticClosedInputs(stateRoot, runRoot string, result *ScenarioResult, terminal *ScenarioObservation, history []*ScenarioObservation, topologyMiners, topologySwarms, topologyOperators int) ([]FinalArtifactLocator, FinalArtifactLocator, FinalArtifactLocator, FinalArtifactLocator, error) {
+	return captureFinalSemanticClosedInputsContext(context.Background(), stateRoot, runRoot, result, terminal, history, topologyMiners, topologySwarms, topologyOperators)
+}
+
+// The live collector owns cancellation while retaining journal-selected relay
+// originals alongside the unchanged closed foundation and public bundles.
+func captureFinalSemanticClosedInputsContext(ctx context.Context, stateRoot, runRoot string, result *ScenarioResult, terminal *ScenarioObservation, history []*ScenarioObservation, topologyMiners, topologySwarms, topologyOperators int) ([]FinalArtifactLocator, FinalArtifactLocator, FinalArtifactLocator, FinalArtifactLocator, error) {
+	return captureFinalSemanticClosedInputsWithPriorContext(ctx, stateRoot, runRoot, result, terminal, history, topologyMiners, topologySwarms, topologyOperators, nil)
+}
+
+// The actual collector supplies only the prior census already authenticated
+// against its signed completion, full manifest and both retained replicas.
+func captureFinalSemanticClosedInputsWithPriorContext(ctx context.Context, stateRoot, runRoot string, result *ScenarioResult, terminal *ScenarioObservation, history []*ScenarioObservation, topologyMiners, topologySwarms, topologyOperators int, prior *FinalCollectedPriorPhaseInputs) ([]FinalArtifactLocator, FinalArtifactLocator, FinalArtifactLocator, FinalArtifactLocator, error) {
+	return captureFinalSemanticClosedInputsWithPriorLimitsV2(ctx, stateRoot, runRoot, result, terminal, history, topologyMiners, topologySwarms, topologyOperators, prior, defaultCampaignEvidenceLimits())
+}
+
+// Only the actual configured collector passes larger metadata-carrier bounds.
+// Legacy callers retain their original exact-path and byte admission.
+func captureFinalSemanticClosedInputsWithPriorLimitsV2(ctx context.Context, stateRoot, runRoot string, result *ScenarioResult, terminal *ScenarioObservation, history []*ScenarioObservation, topologyMiners, topologySwarms, topologyOperators int, prior *FinalCollectedPriorPhaseInputs, limits campaignEvidenceLimits) ([]FinalArtifactLocator, FinalArtifactLocator, FinalArtifactLocator, FinalArtifactLocator, error) {
+	if ctx == nil {
+		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, errors.New("closed semantic capture context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
+	}
+	excluded, err := finalPriorCarrierExcludedPathsV2(prior)
+	if err != nil {
+		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
+	}
+	// Recheck the exact local originals before substitution. Unknown siblings
+	// cannot inherit custody merely from their directory or filename prefix.
+	for path, carrier := range excluded {
+		if err := ctx.Err(); err != nil {
+			return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
+		}
+		if err := verifyFinalPriorCarrierLocalFileWithLimitsV2(ctx, stateRoot, path, carrier, limits); err != nil {
+			return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
+		}
+	}
 	resultData, err := json.Marshal(result)
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
@@ -77,13 +116,16 @@ func captureFinalSemanticClosedInputs(stateRoot, runRoot string, result *Scenari
 	} {
 		include := func(relative string) bool { return strings.HasSuffix(relative, ".json") }
 		if directory.name == "public" {
-			include = finalSemanticPublicCapturePath
+			include = func(relative string) bool {
+				_, retained := excluded[relative]
+				return finalSemanticPublicCapturePath(relative) && !retained
+			}
 		}
 		entries, err := finalCollectedDirectoryEntries(directory.path, include)
 		if err != nil {
 			return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, fmt.Errorf("capture %s: %w", directory.name, err)
 		}
-		locators, err := persistFinalCollectedBundleChunks(runRoot, directory.name, entries)
+		locators, err := persistFinalCollectedBundleChunksContext(ctx, runRoot, directory.name, entries)
 		if err != nil {
 			return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
 		}
@@ -98,7 +140,13 @@ func captureFinalSemanticClosedInputs(stateRoot, runRoot string, result *Scenari
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
 	}
-	locators, err := persistFinalCollectedBundleChunks(runRoot, "launch-foundation", foundation)
+	relayFoundation, err := captureFinalRelayFoundationEntries(ctx, stateRoot, foundation)
+	if err != nil {
+		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
+	}
+	foundation = append(foundation, relayFoundation...)
+	sort.Slice(foundation, func(i, j int) bool { return foundation[i].Path < foundation[j].Path })
+	locators, err := persistFinalCollectedBundleChunksContext(ctx, runRoot, "launch-foundation", foundation)
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
 	}
@@ -108,7 +156,7 @@ func captureFinalSemanticClosedInputs(stateRoot, runRoot string, result *Scenari
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, fmt.Errorf("capture plan history: %w", err)
 	}
-	locators, err = persistFinalCollectedBundleChunks(runRoot, "plan-history", plans)
+	locators, err = persistFinalCollectedBundleChunksContext(ctx, runRoot, "plan-history", plans)
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
 	}
@@ -129,7 +177,7 @@ func captureFinalSemanticClosedInputs(stateRoot, runRoot string, result *Scenari
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, fmt.Errorf("capture miner topology: %w", err)
 	}
-	locators, err = persistFinalCollectedBundleChunks(runRoot, "miner-topology", topology)
+	locators, err = persistFinalCollectedBundleChunksContext(ctx, runRoot, "miner-topology", topology)
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
 	}
@@ -139,7 +187,7 @@ func captureFinalSemanticClosedInputs(stateRoot, runRoot string, result *Scenari
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, fmt.Errorf("capture claim queues: %w", err)
 	}
-	locators, err = persistFinalCollectedBundleChunks(runRoot, "claim-runtime", claimQueues)
+	locators, err = persistFinalCollectedBundleChunksContext(ctx, runRoot, "claim-runtime", claimQueues)
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
 	}
@@ -149,7 +197,7 @@ func captureFinalSemanticClosedInputs(stateRoot, runRoot string, result *Scenari
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, fmt.Errorf("capture accepted contract cleanup: %w", err)
 	}
-	locators, err = persistFinalCollectedBundleChunks(runRoot, "accepted-contract-cleanup", cleanup)
+	locators, err = persistFinalCollectedBundleChunksContext(ctx, runRoot, "accepted-contract-cleanup", cleanup)
 	if err != nil {
 		return nil, FinalArtifactLocator{}, FinalArtifactLocator{}, FinalArtifactLocator{}, err
 	}
@@ -353,39 +401,36 @@ func sameFinalCollectedFileState(before, after os.FileInfo) bool {
 	return !beforeOK || beforeStat.Dev == afterStat.Dev && beforeStat.Ino == afterStat.Ino && beforeStat.Nlink == afterStat.Nlink && beforeStat.Ctim == afterStat.Ctim && beforeStat.Mtim == afterStat.Mtim
 }
 
+// Legacy readers keep their existing adapter; live capture supplies its owner.
 func persistFinalCollectedBundleChunks(runRoot, name string, entries []FinalCollectedFileBundleEntry) ([]FinalArtifactLocator, error) {
-	if name == "" || len(entries) == 0 {
-		return nil, errors.New("collected bundle is empty")
+	return persistFinalCollectedBundleChunksContext(context.Background(), runRoot, name, entries)
+}
+
+// Packing is based on exact escaped metadata and base64 lengths. Only the
+// current encoded chunk is owned; every original entry remains in the census.
+func persistFinalCollectedBundleChunksContext(ctx context.Context, runRoot, name string, entries []FinalCollectedFileBundleEntry) ([]FinalArtifactLocator, error) {
+	ranges, err := finalCollectedBundleChunkRanges(ctx, name, entries, maximumCampaignEvidenceRawFileBytes)
+	if err != nil {
+		return nil, err
 	}
-	chunks := make([][]FinalCollectedFileBundleEntry, 0, 1)
-	current := make([]FinalCollectedFileBundleEntry, 0)
-	currentBytes := 0
-	for _, entry := range entries {
-		entryBytes := len(entry.Data) + len(entry.Path) + len(entry.ContentHash) + 128
-		if entryBytes > finalCollectedBundleMaximumRawBytes {
-			return nil, fmt.Errorf("captured file %s exceeds bundle limit", entry.Path)
+	locators := make([]FinalArtifactLocator, 0, len(ranges))
+	for index, span := range ranges {
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
-		if len(current) > 0 && currentBytes+entryBytes > finalCollectedBundleMaximumRawBytes {
-			chunks = append(chunks, current)
-			current = nil
-			currentBytes = 0
-		}
-		current = append(current, entry)
-		currentBytes += entryBytes
-	}
-	chunks = append(chunks, current)
-	locators := make([]FinalArtifactLocator, 0, len(chunks))
-	for index, chunk := range chunks {
 		bundleName := name
-		if len(chunks) > 1 {
-			bundleName = fmt.Sprintf("%s-%03d-of-%03d", name, index+1, len(chunks))
+		if len(ranges) > 1 {
+			bundleName = fmt.Sprintf("%s-%03d-of-%03d", name, index+1, len(ranges))
 		}
-		bundle := FinalCollectedFileBundle{Schema: finalCollectedFileBundleSchema, Name: bundleName, Files: chunk}
+		bundle := FinalCollectedFileBundle{Schema: finalCollectedFileBundleSchema, Name: bundleName, Files: entries[span.first:span.end]}
 		if err := verifyFinalCollectedFileBundle(&bundle); err != nil {
 			return nil, err
 		}
 		encoded, err := json.Marshal(&bundle)
 		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		locator, err := persistFinalCollectedArtifact(runRoot, "closed-input-bundle", "final-inputs/bundles/"+bundleName+".json", encoded)
@@ -394,9 +439,8 @@ func persistFinalCollectedBundleChunks(runRoot, name string, entries []FinalColl
 		}
 		locators = append(locators, locator)
 	}
-	return locators, nil
+	return locators, ctx.Err()
 }
-
 func verifyFinalCollectedFileBundle(bundle *FinalCollectedFileBundle) error {
 	if bundle == nil || bundle.Schema != finalCollectedFileBundleSchema || bundle.Name == "" || strings.ContainsAny(bundle.Name, "/\\\r\n\x00") || len(bundle.Files) == 0 {
 		return errors.New("collected file bundle identity is incomplete")
@@ -410,12 +454,25 @@ func verifyFinalCollectedFileBundle(bundle *FinalCollectedFileBundle) error {
 			return fmt.Errorf("collected file %s size or hash differs", entry.Path)
 		}
 	}
-	encoded, err := json.Marshal(bundle)
+	encodedBytes, err := finalCollectedBundleOverhead(bundle.Name)
 	if err != nil {
 		return err
 	}
-	if len(encoded) > finalCollectedBundleMaximumBytes {
-		return errors.New("collected file bundle exceeds encoded size limit")
+	for index, entry := range bundle.Files {
+		entryBytes, err := finalCollectedEntryEncodedBytes(entry)
+		if err != nil {
+			return err
+		}
+		if index > 0 {
+			if encodedBytes == ^uint64(0) {
+				return errors.New("closed bundle encoded size overflows")
+			}
+			encodedBytes++
+		}
+		if encodedBytes > maximumCampaignEvidenceRawFileBytes || entryBytes > maximumCampaignEvidenceRawFileBytes-encodedBytes {
+			return errors.New("collected file bundle exceeds public raw-file size limit")
+		}
+		encodedBytes += entryBytes
 	}
 	return nil
 }

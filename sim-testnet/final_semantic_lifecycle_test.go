@@ -283,6 +283,11 @@ func finalSemanticFixtureSetupPlan(cfg *ResolvedConfig, source *FinalSemanticEvi
 		return nil, fmt.Errorf("production fixture plan differs from semantic identity")
 	}
 	plan.GenesisHash = source.GenesisHash
+	// This fixture intentionally supplies another genesis. Rebuild the real
+	// companion and both action intents before authenticating the whole plan.
+	if err := rebindValidatorEvidencePlan(plan); err != nil {
+		return nil, fmt.Errorf("bind semantic fixture evidence genesis: %w", err)
+	}
 	plan.PriorPlanHashes = []string{source.PlanHash}
 	mirrorActionIDs := make(map[string]bool, len(finalFleetLifecycleVariantNames()))
 	for _, name := range finalFleetLifecycleVariantNames() {
@@ -373,6 +378,7 @@ func TestFinalSemanticFixtureSetupPlanCarriesCanonicalBudgetIdentity(t *testing.
 		{name: "minimum source remainder", mutate: func(candidate *SetupPlan) { candidate.MinimumSourceRemainingRao = 0 }},
 		{name: "bootstrap burn half life", mutate: func(candidate *SetupPlan) { candidate.BootstrapBurnHalfLifeBlocks = 0 }},
 		{name: "production burn half life", mutate: func(candidate *SetupPlan) { candidate.ProductionBurnHalfLifeBlocks = 0 }},
+		{name: "companion genesis", mutate: func(candidate *SetupPlan) { candidate.ValidatorEvidence.GenesisHash[0] ^= 1 }},
 	} {
 		var candidate SetupPlan
 		if err := json.Unmarshal(planBytes, &candidate); err != nil {

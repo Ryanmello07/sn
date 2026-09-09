@@ -358,7 +358,7 @@ func verifiedFleetCommitmentEvidenceAction(stateDir string, cfg *ResolvedConfig,
 		source := prior
 		if !strings.EqualFold(finalized.PlanHash, prior.PlanHash) {
 			var err error
-			source, err = readPersistedPlanFile(filepath.Join(stateDir, "plans", stringsTrim0x(finalized.PlanHash)+".json"))
+			source, err = readValidatorEvidenceHistoricalPlan(stateDir, finalized.PlanHash)
 			if err != nil {
 				return Action{}, fmt.Errorf("read fleet commitment source plan %s: %w", finalized.PlanHash, err)
 			}

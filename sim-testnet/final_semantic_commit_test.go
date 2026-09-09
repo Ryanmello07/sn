@@ -308,7 +308,12 @@ func TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper(t *testing
 
 func TestFinalSemanticOriginalClosureRequiresExactCampaignStartMarker(t *testing.T) {
 	t.Parallel()
-	fixture := newFinalSemanticSupplementTestFixture(t)
+	fixture, _ := newFinalSemanticOriginalClosureTestFixture(t)
+	for _, name := range []string{finalSemanticEvidenceFilename, finalSemanticMarkdownFilename} {
+		if _, err := os.Lstat(filepath.Join(fixture.runDir, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("original closure fixture performed post-capture output work: %s: %v", name, err)
+		}
+	}
 	originalMarker, err := os.ReadFile(filepath.Join(fixture.runDir, scenarioCampaignStartFilename))
 	if err != nil {
 		t.Fatal(err)
@@ -438,44 +443,42 @@ func TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage(t 
 
 func TestFinalSemanticSupplementPartialOutputRecoveryPreservesEitherHalf(t *testing.T) {
 	for _, name := range []string{finalSemanticEvidenceFilename, finalSemanticMarkdownFilename} {
-		t.Run(name, func(t *testing.T) {
-			stateDir := t.TempDir()
-			runID := "partial-recovery-run"
-			runDir := filepath.Join(stateDir, "runs", runID)
-			if err := os.MkdirAll(runDir, 0o700); err != nil {
-				t.Fatal(err)
+		stateDir := t.TempDir()
+		runID := "partial-recovery-run"
+		runDir := filepath.Join(stateDir, "runs", runID)
+		if err := os.MkdirAll(runDir, 0o700); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		content := []byte("crash-left " + name + "\n")
+		partialPath := filepath.Join(runDir, name)
+		if err := os.WriteFile(partialPath, content, 0o644); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		regenerated := 0
+		regenerate := func() error {
+			regenerated++
+			if err := os.WriteFile(filepath.Join(runDir, finalSemanticEvidenceFilename), []byte("regenerated evidence\n"), 0o644); err != nil {
+				return err
 			}
-			content := []byte("crash-left " + name + "\n")
-			partialPath := filepath.Join(runDir, name)
-			if err := os.WriteFile(partialPath, content, 0o644); err != nil {
-				t.Fatal(err)
+			return os.WriteFile(filepath.Join(runDir, finalSemanticMarkdownFilename), []byte("regenerated markdown\n"), 0o644)
+		}
+		if err := recoverOrGenerateFinalSemanticOutputPair(context.Background(), stateDir, runDir, runID, regenerate); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if regenerated != 1 {
+			t.Fatalf("%s: partial output regeneration calls = %d, want 1", name, regenerated)
+		}
+		for _, output := range []string{finalSemanticEvidenceFilename, finalSemanticMarkdownFilename} {
+			if exists, err := finalSemanticRegularFileExists(filepath.Join(runDir, output)); err != nil || !exists {
+				t.Fatalf("%s: regeneration did not restore %s: exists=%t err=%v", name, output, exists, err)
 			}
-			regenerated := 0
-			regenerate := func() error {
-				regenerated++
-				if err := os.WriteFile(filepath.Join(runDir, finalSemanticEvidenceFilename), []byte("regenerated evidence\n"), 0o644); err != nil {
-					return err
-				}
-				return os.WriteFile(filepath.Join(runDir, finalSemanticMarkdownFilename), []byte("regenerated markdown\n"), 0o644)
-			}
-			if err := recoverOrGenerateFinalSemanticOutputPair(context.Background(), stateDir, runDir, runID, regenerate); err != nil {
-				t.Fatal(err)
-			}
-			if regenerated != 1 {
-				t.Fatalf("partial output regeneration calls = %d, want 1", regenerated)
-			}
-			for _, output := range []string{finalSemanticEvidenceFilename, finalSemanticMarkdownFilename} {
-				if exists, err := finalSemanticRegularFileExists(filepath.Join(runDir, output)); err != nil || !exists {
-					t.Fatalf("regeneration did not restore %s: exists=%t err=%v", output, exists, err)
-				}
-			}
-			digest := strings.TrimPrefix(bytesSHA256(content), "sha256:")
-			preserved := filepath.Join(finalSemanticSupplementStageRoot(stateDir, runID), "recovery", name+"."+digest+".partial")
-			got, err := os.ReadFile(preserved)
-			if err != nil || string(got) != string(content) {
-				t.Fatalf("partial output was not preserved exactly: %q %v", got, err)
-			}
-		})
+		}
+		digest := strings.TrimPrefix(bytesSHA256(content), "sha256:")
+		preserved := filepath.Join(finalSemanticSupplementStageRoot(stateDir, runID), "recovery", name+"."+digest+".partial")
+		got, err := os.ReadFile(preserved)
+		if err != nil || string(got) != string(content) {
+			t.Fatalf("%s: partial output was not preserved exactly: %q %v", name, got, err)
+		}
 	}
 }
 
@@ -943,7 +946,23 @@ func finalSemanticCapturedPublicFixture(t *testing.T, cfg *ResolvedConfig, roles
 	return files
 }
 
+// Publication fixtures add real final outputs to the independently signed
+// original capture. Closure-only tests stop at that actual earlier boundary.
 func newFinalSemanticSupplementTestFixture(t *testing.T) *finalSemanticSupplementTestFixture {
+	t.Helper()
+	fixture, source := newFinalSemanticOriginalClosureTestFixture(t)
+	reader := func(_ context.Context, draft *FinalSemanticEvidence) (FinalSemanticChainReader, error) {
+		return &finalTestChainReader{evidence: draft}, nil
+	}
+	if _, err := ProduceFinalSemanticOutputs(context.Background(), fixture.runDir, source, fixture.load, reader, func(string, []byte) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	return fixture
+}
+
+// Builds the complete release-scale graph and its actual signed raw closure.
+// Final outputs are later derived artifacts, never authority for this capture.
+func newFinalSemanticOriginalClosureTestFixture(t *testing.T) (*finalSemanticSupplementTestFixture, FinalSemanticEvidence) {
 	t.Helper()
 	source, artifacts := finalSemanticFixture(t)
 	cfg := testResolvedConfig(t)
@@ -1059,12 +1078,6 @@ func newFinalSemanticSupplementTestFixture(t *testing.T) *finalSemanticSupplemen
 		}
 		return append([]byte(nil), data...), nil
 	}
-	reader := func(_ context.Context, draft *FinalSemanticEvidence) (FinalSemanticChainReader, error) {
-		return &finalTestChainReader{evidence: draft}, nil
-	}
-	if _, err := ProduceFinalSemanticOutputs(context.Background(), runDir, source, load, reader, func(string, []byte) error { return nil }); err != nil {
-		t.Fatal(err)
-	}
 	storeRoot := filepath.Join(stateDir, "object-store")
 	stores := make(map[int]server.BlobStore, cfg.Config.Topology.Operators)
 	for operator := 1; operator <= cfg.Config.Topology.Operators; operator++ {
@@ -1074,7 +1087,7 @@ func newFinalSemanticSupplementTestFixture(t *testing.T) *finalSemanticSupplemen
 		}
 		stores[operator] = server.NewLocalBlobStore(storeRoot, prefix)
 	}
-	return &finalSemanticSupplementTestFixture{cfg: cfg, roles: roles, stateDir: stateDir, runDir: runDir, result: result, load: load, stores: stores, storeRoot: storeRoot, derivedFileCount: derivedFileCount}
+	return &finalSemanticSupplementTestFixture{cfg: cfg, roles: roles, stateDir: stateDir, runDir: runDir, result: result, load: load, stores: stores, storeRoot: storeRoot, derivedFileCount: derivedFileCount}, source
 }
 
 // Materialize only the exact derived locators carried by the sealed fixture.

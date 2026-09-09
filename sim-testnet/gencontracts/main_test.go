@@ -188,11 +188,9 @@ func TestNormalizeSolidityMetadataDigestRejectsAdjacentTrailerDrift(t *testing.T
 		"invalid hex":      valid[:len(valid)-1] + "z",
 	}
 	for name, encoded := range cases {
-		t.Run(name, func(t *testing.T) {
-			if _, err := normalizeSolidityMetadataDigest(encoded); err == nil {
-				t.Fatal("non-digest metadata drift was accepted")
-			}
-		})
+		if _, err := normalizeSolidityMetadataDigest(encoded); err == nil {
+			t.Errorf("%s: non-digest metadata drift was accepted", name)
+		}
 	}
 }
 

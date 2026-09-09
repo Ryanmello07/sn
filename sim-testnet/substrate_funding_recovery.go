@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -99,7 +98,7 @@ func loadSubstrateFundingLineagePlan(stateDir string, prior *SetupPlan, planHash
 	if strings.EqualFold(prior.PlanHash, planHash) {
 		return prior, nil
 	}
-	plan, err := readPersistedPlanFile(filepath.Join(stateDir, "plans", stringsTrim0x(planHash)+".json"))
+	plan, err := readValidatorEvidenceHistoricalPlan(stateDir, planHash)
 	if err != nil {
 		return nil, fmt.Errorf("read substrate-funding ancestor plan %s: %w", planHash, err)
 	}

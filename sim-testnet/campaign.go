@@ -800,10 +800,15 @@ func (attempt *scenarioCampaignAttempt) invalidateAcceptance(reason string, inva
 }
 
 func (attempt *scenarioCampaignAttempt) authenticateProductionHandoff() ([]byte, error) {
+	return attempt.authenticateProductionHandoffContext(context.Background())
+}
+
+// The actual phase owner cancels bounded original-file replay on shutdown.
+func (attempt *scenarioCampaignAttempt) authenticateProductionHandoffContext(ctx context.Context) ([]byte, error) {
 	if attempt == nil || attempt.payload.Phase != "production-soak" || attempt.payload.PriorRelease == nil {
 		return nil, errors.New("production campaign attempt has no release handoff")
 	}
-	_, immutable, err := validateExactReleaseCampaignGate(attempt.cfg, attempt.stateDir, attempt.roles, attempt.payload.PriorRelease)
+	_, immutable, err := validateExactReleaseCampaignGateContext(ctx, attempt.cfg, attempt.stateDir, attempt.roles, attempt.payload.PriorRelease)
 	if err != nil {
 		return nil, err
 	}
@@ -1145,6 +1150,17 @@ func validateReleaseCampaignResult(cfg *ResolvedConfig, result *ScenarioResult) 
 // validateScenarioCampaignComplete authenticates the result plus the signed
 // complete marker and every immutable evidence file named by that marker.
 func validateScenarioCampaignComplete(cfg *ResolvedConfig, roles *RoleSecrets, runDir string, result *ScenarioResult, name string) (*ReleaseEvidenceEnvelope, error) {
+	return validateScenarioCampaignCompleteContext(context.Background(), cfg, roles, runDir, result, name)
+}
+
+// Live callers retain the complete authority checks under their existing owner.
+func validateScenarioCampaignCompleteContext(ctx context.Context, cfg *ResolvedConfig, roles *RoleSecrets, runDir string, result *ScenarioResult, name string) (*ReleaseEvidenceEnvelope, error) {
+	if ctx == nil {
+		return nil, errors.New("campaign completion context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := validateScenarioCampaignResult(cfg, result, name); err != nil {
 		return nil, err
 	}
@@ -1165,7 +1181,7 @@ func validateScenarioCampaignComplete(cfg *ResolvedConfig, roles *RoleSecrets, r
 		return nil, err
 	}
 	var complete ReleaseEvidenceEnvelope
-	if err := decodeStrictJSONFile(filepath.Join(runDir, "complete.json"), &complete); err != nil {
+	if err := decodeCampaignControlForConfigV2(cfg, runDir, "complete.json", &complete); err != nil {
 		return nil, fmt.Errorf("release complete marker: %w", err)
 	}
 	if err := verifyEvidence(&complete, &ownerKey.PublicKey); err != nil {
@@ -1185,15 +1201,19 @@ func validateScenarioCampaignComplete(cfg *ResolvedConfig, roles *RoleSecrets, r
 		return nil, errors.New("release complete marker does not bind its published scenario bundle and evidence manifest")
 	}
 	if len(result.PublishedEvidence) != 0 {
+		limits, err := campaignEvidenceLimitsForConfig(cfg)
+		if err != nil {
+			return nil, err
+		}
 		var manifestEnvelope ReleaseEvidenceEnvelope
-		if err := decodeStrictJSONFile(filepath.Join(runDir, campaignEvidenceManifestFilename), &manifestEnvelope); err != nil {
+		if err := decodeCampaignControlForConfigV2(cfg, runDir, campaignEvidenceManifestFilename, &manifestEnvelope); err != nil {
 			return nil, fmt.Errorf("release campaign evidence manifest: %w", err)
 		}
-		manifest, err := decodeCampaignEvidenceManifest(&manifestEnvelope)
+		manifest, err := decodeCampaignEvidenceManifestWithLimits(&manifestEnvelope, limits)
 		if err != nil || verifyEvidence(&manifestEnvelope, &ownerKey.PublicKey) != nil || !strings.EqualFold(manifestEnvelope.ContentHash, payload.EvidenceManifestHash) || !strings.EqualFold(manifest.ResultHash, result.EvidenceHash) || !strings.EqualFold(manifest.BundlePayloadHash, payload.BundlePayloadHash) {
 			return nil, stateMismatchError(err, "release campaign evidence manifest is invalid")
 		}
-		manifestFiles, err := campaignEvidenceManifestFiles(manifest.Files)
+		manifestFiles, err := campaignEvidenceManifestFilesWithLimits(manifest.Files, limits)
 		if err != nil || !stringMapsEqual(manifestFiles, payload.Files) {
 			return nil, stateMismatchError(err, "release campaign evidence manifest files do not match its completion")
 		}
@@ -1219,7 +1239,7 @@ func validateScenarioCampaignComplete(cfg *ResolvedConfig, roles *RoleSecrets, r
 			}
 			path := filepath.Join(runDir, fmt.Sprintf("scenario-complete-commit.operator-%d.evidence.json", operator))
 			var commit ReleaseEvidenceEnvelope
-			if err := decodeStrictJSONFile(path, &commit); err != nil {
+			if err := decodeCampaignControlForConfigV2(cfg, runDir, filepath.Base(path), &commit); err != nil {
 				return nil, fmt.Errorf("release completion commit operator %d: %w", operator, err)
 			}
 			var nestedComplete ReleaseEvidenceEnvelope
@@ -1228,7 +1248,7 @@ func validateScenarioCampaignComplete(cfg *ResolvedConfig, roles *RoleSecrets, r
 			}
 		}
 	}
-	hashes, err := evidenceFileHashes(runDir, cfg.Config.Topology.Operators)
+	hashes, err := evidenceFileHashesForConfigV2(ctx, cfg, runDir, cfg.Config.Topology.Operators)
 	if err != nil {
 		return nil, err
 	}
@@ -1247,7 +1267,7 @@ func validateScenarioCampaignComplete(cfg *ResolvedConfig, roles *RoleSecrets, r
 			return nil, errors.New("production complete marker does not bind the exact release predecessor")
 		}
 		stateDir := filepath.Dir(filepath.Dir(runDir))
-		if _, _, err := validateExactReleaseCampaignGate(cfg, stateDir, roles, result.PriorRelease); err != nil {
+		if _, _, err := validateExactReleaseCampaignGateContext(ctx, cfg, stateDir, roles, result.PriorRelease); err != nil {
 			return nil, fmt.Errorf("production complete marker release predecessor: %w", err)
 		}
 	} else if payload.LifecycleHandoff != nil || payload.PriorRelease != nil {
@@ -1282,7 +1302,12 @@ func validCanonicalHashHex(value string) bool {
 // validateReleaseCampaignComplete converts one fully authenticated release
 // result into the narrow gate consumed by production policy scheduling.
 func validateReleaseCampaignComplete(cfg *ResolvedConfig, roles *RoleSecrets, runDir string, result *ScenarioResult) (*ReleaseCampaignGate, error) {
-	complete, err := validateScenarioCampaignComplete(cfg, roles, runDir, result, "release-1.0")
+	return validateReleaseCampaignCompleteContext(context.Background(), cfg, roles, runDir, result)
+}
+
+// Exact completed release bytes remain the production-policy gate.
+func validateReleaseCampaignCompleteContext(ctx context.Context, cfg *ResolvedConfig, roles *RoleSecrets, runDir string, result *ScenarioResult) (*ReleaseCampaignGate, error) {
+	complete, err := validateScenarioCampaignCompleteContext(ctx, cfg, roles, runDir, result, "release-1.0")
 	if err != nil {
 		return nil, err
 	}
@@ -1304,6 +1329,17 @@ func validateReleaseCampaignComplete(cfg *ResolvedConfig, roles *RoleSecrets, ru
 // never scans for a newer release, and returns the authenticated handoff bytes
 // used by the first production transition.
 func validateExactReleaseCampaignGate(cfg *ResolvedConfig, stateDir string, roles *RoleSecrets, gate *ReleaseCampaignGate) (*ScenarioResult, []byte, error) {
+	return validateExactReleaseCampaignGateContext(context.Background(), cfg, stateDir, roles, gate)
+}
+
+// No detached background scan continues after the current phase is cancelled.
+func validateExactReleaseCampaignGateContext(ctx context.Context, cfg *ResolvedConfig, stateDir string, roles *RoleSecrets, gate *ReleaseCampaignGate) (*ScenarioResult, []byte, error) {
+	if ctx == nil {
+		return nil, nil, errors.New("release gate context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	if err := validateReleaseCampaignGateShape(cfg, gate); err != nil {
 		return nil, nil, err
 	}
@@ -1312,7 +1348,7 @@ func validateExactReleaseCampaignGate(cfg *ResolvedConfig, stateDir string, role
 	if err := decodeStrictJSONFile(filepath.Join(runDir, "result.json"), &result); err != nil {
 		return nil, nil, fmt.Errorf("read exact release campaign result: %w", err)
 	}
-	derived, err := validateReleaseCampaignComplete(cfg, roles, runDir, &result)
+	derived, err := validateReleaseCampaignCompleteContext(ctx, cfg, roles, runDir, &result)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1333,6 +1369,17 @@ var errNoCompletedScenarioCampaign = errors.New("no signed anomaly-clean scenari
 // remain available for root-cause analysis; a malformed completed candidate
 // fails closed instead of being skipped.
 func loadCompletedScenarioCampaign(cfg *ResolvedConfig, stateDir string, roles *RoleSecrets, name string) (*ScenarioResult, *ReleaseEvidenceEnvelope, error) {
+	return loadCompletedScenarioCampaignContext(context.Background(), cfg, stateDir, roles, name)
+}
+
+// Keep the ordinary complete-candidate selection, with one cancellable owner.
+func loadCompletedScenarioCampaignContext(ctx context.Context, cfg *ResolvedConfig, stateDir string, roles *RoleSecrets, name string) (*ScenarioResult, *ReleaseEvidenceEnvelope, error) {
+	if ctx == nil {
+		return nil, nil, errors.New("completed campaign context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	if strings.TrimSpace(name) == "" {
 		return nil, nil, errors.New("completed scenario name is empty")
 	}
@@ -1348,6 +1395,9 @@ func loadCompletedScenarioCampaign(cfg *ResolvedConfig, stateDir string, roles *
 	var selected *ScenarioResult
 	var selectedComplete *ReleaseEvidenceEnvelope
 	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
 		if !entry.IsDir() {
 			continue
 		}
@@ -1364,7 +1414,7 @@ func loadCompletedScenarioCampaign(cfg *ResolvedConfig, stateDir string, roles *
 		if result.Name != name {
 			continue
 		}
-		complete, err := validateScenarioCampaignComplete(cfg, roles, runDir, &result, name)
+		complete, err := validateScenarioCampaignCompleteContext(ctx, cfg, roles, runDir, &result, name)
 		if err != nil {
 			return nil, nil, fmt.Errorf("validate completed %s campaign %s: %w", name, entry.Name(), err)
 		}
@@ -1382,25 +1432,36 @@ func loadCompletedScenarioCampaign(cfg *ResolvedConfig, stateDir string, roles *
 }
 
 func loadCompletedScenarioCampaignByRunID(cfg *ResolvedConfig, stateDir string, roles *RoleSecrets, name, runID string) (*ScenarioResult, *ReleaseEvidenceEnvelope, error) {
-	if strings.TrimSpace(name) == "" || strings.TrimSpace(runID) == "" || filepath.Base(runID) != runID {
+	return loadCompletedScenarioCampaignByRunIdContext(context.Background(), cfg, stateDir, roles, name, runID)
+}
+
+// The approved run identity routes a bounded, cancellable original closure.
+func loadCompletedScenarioCampaignByRunIdContext(ctx context.Context, cfg *ResolvedConfig, stateDir string, roles *RoleSecrets, name, runId string) (*ScenarioResult, *ReleaseEvidenceEnvelope, error) {
+	if ctx == nil {
+		return nil, nil, errors.New("exact completed campaign context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	if strings.TrimSpace(name) == "" || strings.TrimSpace(runId) == "" || filepath.Base(runId) != runId {
 		return nil, nil, errors.New("completed scenario exact identity is invalid")
 	}
-	runDir := filepath.Join(stateDir, "runs", runID)
+	runDir := filepath.Join(stateDir, "runs", runId)
 	if _, err := os.Stat(filepath.Join(runDir, "complete.json")); errors.Is(err, os.ErrNotExist) {
-		return nil, nil, fmt.Errorf("%w: %s/%s", errNoCompletedScenarioCampaign, name, runID)
+		return nil, nil, fmt.Errorf("%w: %s/%s", errNoCompletedScenarioCampaign, name, runId)
 	} else if err != nil {
 		return nil, nil, err
 	}
 	var result ScenarioResult
 	if err := decodeStrictJSONFile(filepath.Join(runDir, "result.json"), &result); err != nil {
-		return nil, nil, fmt.Errorf("decode exact completed scenario %s: %w", runID, err)
+		return nil, nil, fmt.Errorf("decode exact completed scenario %s: %w", runId, err)
 	}
-	if result.RunID != runID || result.Name != name {
+	if result.RunID != runId || result.Name != name {
 		return nil, nil, errors.New("exact completed scenario directory does not match its result identity")
 	}
-	complete, err := validateScenarioCampaignComplete(cfg, roles, runDir, &result, name)
+	complete, err := validateScenarioCampaignCompleteContext(ctx, cfg, roles, runDir, &result, name)
 	if err != nil {
-		return nil, nil, fmt.Errorf("validate exact completed %s campaign %s: %w", name, runID, err)
+		return nil, nil, fmt.Errorf("validate exact completed %s campaign %s: %w", name, runId, err)
 	}
 	return &result, complete, nil
 }
@@ -1408,11 +1469,16 @@ func loadCompletedScenarioCampaignByRunID(cfg *ResolvedConfig, stateDir string, 
 // Load the newest fully signed passing release result and convert it into the
 // production-policy authorization gate.
 func loadReleaseCampaignGate(cfg *ResolvedConfig, stateDir string, roles *RoleSecrets) (*ReleaseCampaignGate, error) {
-	result, _, err := loadCompletedScenarioCampaign(cfg, stateDir, roles, "release-1.0")
+	return loadReleaseCampaignGateContext(context.Background(), cfg, stateDir, roles)
+}
+
+// Resumption uses the same context owner as live phase execution.
+func loadReleaseCampaignGateContext(ctx context.Context, cfg *ResolvedConfig, stateDir string, roles *RoleSecrets) (*ReleaseCampaignGate, error) {
+	result, _, err := loadCompletedScenarioCampaignContext(ctx, cfg, stateDir, roles, "release-1.0")
 	if err != nil {
 		return nil, err
 	}
-	return validateReleaseCampaignComplete(cfg, roles, filepath.Join(stateDir, "runs", result.RunID), result)
+	return validateReleaseCampaignCompleteContext(ctx, cfg, roles, filepath.Join(stateDir, "runs", result.RunID), result)
 }
 
 // scenarioCampaignRunner executes one named scenario with its owner-signed

@@ -40,33 +40,34 @@ type OperatorConfig struct {
 }
 
 type ReleaseConfig struct {
-	SchemaVersion       int              `yaml:"schema_version" json:"schema_version"`
-	Production          bool             `yaml:"production" json:"production"`
-	Release             string           `yaml:"release" json:"release"`
-	DeploymentID        string           `yaml:"deployment_id" json:"deployment_id"`
-	ValidatorID         uint64           `yaml:"validator_id" json:"validator_id"`
-	ChainID             uint64           `yaml:"chain_id" json:"chain_id"`
-	GenesisHash         string           `yaml:"genesis_hash" json:"genesis_hash"`
-	RuntimeSpec         uint32           `yaml:"runtime_spec" json:"runtime_spec"`
-	TransactionVersion  uint32           `yaml:"transaction_version" json:"transaction_version"`
-	StateVersion        uint8            `yaml:"state_version" json:"state_version"`
-	RuntimeCodeHash     string           `yaml:"runtime_code_hash" json:"runtime_code_hash"`
-	RuntimeMetadataHash string           `yaml:"runtime_metadata_hash" json:"runtime_metadata_hash"`
-	Netuid              uint16           `yaml:"netuid" json:"netuid"`
-	Coordinator         string           `yaml:"coordinator" json:"coordinator"`
-	SettlementVault     string           `yaml:"settlement_vault" json:"settlement_vault"`
-	DeployBlock         uint64           `yaml:"deploy_block" json:"deploy_block"`
-	PolicyHash          string           `yaml:"policy_hash" json:"policy_hash"`
-	RPC                 []string         `yaml:"rpc" json:"rpc"`
-	Substrate           []string         `yaml:"substrate" json:"substrate"`
-	StateDir            string           `yaml:"state_dir" json:"state_dir"`
-	HotkeySeedFile      string           `yaml:"hotkey_seed_file" json:"hotkey_seed_file"`
-	ControlledNOIDs     []uint64         `yaml:"controlled_no_ids" json:"controlled_no_ids"`
-	TrailDepth          int              `yaml:"trail_depth" json:"trail_depth"`
-	PollSeconds         int              `yaml:"poll_seconds" json:"poll_seconds"`
-	VersionKey          uint64           `yaml:"version_key" json:"version_key"`
-	Policy              protocol.Policy  `yaml:"policy" json:"policy"`
-	Operators           []OperatorConfig `yaml:"operators" json:"operators"`
+	SchemaVersion       int                     `yaml:"schema_version" json:"schema_version"`
+	Production          bool                    `yaml:"production" json:"production"`
+	Release             string                  `yaml:"release" json:"release"`
+	DeploymentID        string                  `yaml:"deployment_id" json:"deployment_id"`
+	ValidatorID         uint64                  `yaml:"validator_id" json:"validator_id"`
+	ChainID             uint64                  `yaml:"chain_id" json:"chain_id"`
+	GenesisHash         string                  `yaml:"genesis_hash" json:"genesis_hash"`
+	RuntimeSpec         uint32                  `yaml:"runtime_spec" json:"runtime_spec"`
+	TransactionVersion  uint32                  `yaml:"transaction_version" json:"transaction_version"`
+	StateVersion        uint8                   `yaml:"state_version" json:"state_version"`
+	RuntimeCodeHash     string                  `yaml:"runtime_code_hash" json:"runtime_code_hash"`
+	RuntimeMetadataHash string                  `yaml:"runtime_metadata_hash" json:"runtime_metadata_hash"`
+	Netuid              uint16                  `yaml:"netuid" json:"netuid"`
+	Coordinator         string                  `yaml:"coordinator" json:"coordinator"`
+	SettlementVault     string                  `yaml:"settlement_vault" json:"settlement_vault"`
+	DeployBlock         uint64                  `yaml:"deploy_block" json:"deploy_block"`
+	PolicyHash          string                  `yaml:"policy_hash" json:"policy_hash"`
+	RPC                 []string                `yaml:"rpc" json:"rpc"`
+	Substrate           []string                `yaml:"substrate" json:"substrate"`
+	StateDir            string                  `yaml:"state_dir" json:"state_dir"`
+	HotkeySeedFile      string                  `yaml:"hotkey_seed_file" json:"hotkey_seed_file"`
+	ControlledNOIDs     []uint64                `yaml:"controlled_no_ids" json:"controlled_no_ids"`
+	TrailDepth          int                     `yaml:"trail_depth" json:"trail_depth"`
+	PollSeconds         int                     `yaml:"poll_seconds" json:"poll_seconds"`
+	VersionKey          uint64                  `yaml:"version_key" json:"version_key"`
+	Policy              protocol.Policy         `yaml:"policy" json:"policy"`
+	Operators           []OperatorConfig        `yaml:"operators" json:"operators"`
+	EvidenceV2          ReleaseEvidenceV2Config `yaml:"evidence_v2" json:"evidence_v2"`
 }
 
 func LoadReleaseConfig(path string) (*ReleaseConfig, error) {
@@ -94,6 +95,9 @@ func LoadReleaseConfig(path string) (*ReleaseConfig, error) {
 		}
 		return nil, fmt.Errorf("decode validator config %s: multiple YAML documents", abs)
 	}
+	if err := ValidateReleaseEvidenceV2ConfigYAML(b); err != nil {
+		return nil, fmt.Errorf("decode validator config %s: %w", abs, err)
+	}
 	if err := cfg.normalize(filepath.Dir(abs)); err != nil {
 		return nil, err
 	}
@@ -118,6 +122,26 @@ func configPath(base, value string) (string, error) {
 }
 
 func (c *ReleaseConfig) normalize(base string) error {
+	// New evidence authority cannot acquire legitimacy through legacy cleaning.
+	if c.EvidenceV2.Schema != "" {
+		for _, path := range []string{c.StateDir, c.HotkeySeedFile} {
+			if err := ValidateReleaseEvidenceV2Path(path); err != nil {
+				return err
+			}
+		}
+		for _, operator := range c.Operators {
+			if err := ValidateReleaseEvidenceV2Path(operator.StateDir); err != nil {
+				return err
+			}
+			for _, path := range []string{operator.NetworkJWTFile, operator.ClientJWTFile, operator.ClientKeySeedFile} {
+				if path != "" {
+					if err := ValidateReleaseEvidenceV2Path(path); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
 	var err error
 	if c.StateDir, err = configPath(base, c.StateDir); err != nil {
 		return fmt.Errorf("state_dir: %w", err)
@@ -324,5 +348,5 @@ func (c ReleaseConfig) Validate() error {
 			return fmt.Errorf("controlled no_id %d is not in the operator directory", id)
 		}
 	}
-	return nil
+	return c.EvidenceV2.Validate(c.Operators, c.StateDir, c.HotkeySeedFile)
 }

@@ -176,10 +176,9 @@ func TestReplacementProbeRevisionCarriesAllBatchesAndChargesRetiredGasOnceAcross
 	if err := rebindPlanDeployment(prior, retained); err != nil {
 		t.Fatal(err)
 	}
-	prior.PlanHash, err = prior.hash()
-	if err != nil {
-		t.Fatal(err)
-	}
+	// This retained test predates the companion and has no installed journal.
+	// Use an actual evidence-free v11 approval before the first v12 revision.
+	prior = validatorEvidenceLegacyPlanTest(t, prior)
 	stateDir := t.TempDir()
 	if err := saveContractDeployment(stateDir, retained); err != nil {
 		t.Fatal(err)
@@ -443,6 +442,9 @@ func TestAttemptFourRegistrationCapRevisionAddsOnlyLifecycleHeadroom(t *testing.
 
 func TestReplacementBatcherCarriesEveryVerifiedFleetBatchWithoutExecution(t *testing.T) {
 	cfg, payloads, retained, baseline, _ := replacementPrecompileProbeFixture(t)
+	// These ancestors are reopened as historical authority, so approve their
+	// complete source lock rather than the generic plan-only partial fixture.
+	cfg.Release = testReleaseLockFixture(t)
 	roles, err := derivePublicRoles(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -470,7 +472,7 @@ func TestReplacementBatcherCarriesEveryVerifiedFleetBatchWithoutExecution(t *tes
 		if cloneErr := json.Unmarshal(encoded, &clone); cloneErr != nil {
 			t.Fatal(cloneErr)
 		}
-		clone.ReleaseLockHash = "0x" + strings.Repeat(releaseLockByte, 32)
+		distinctValidatorEvidenceReleaseLockTest(t, &clone, releaseLockByte)
 		clone.PriorPlanHashes = nil
 		clone.PlanHash, cloneErr = clone.hash()
 		if cloneErr != nil || validatePlanBudget(&clone) != nil {
@@ -638,6 +640,7 @@ func TestFleetBatchGenerationCarryRejectsTargetRangeAndDeploymentDrift(t *testin
 // exact authenticated v8 action semantics used by the live testnet ancestor.
 func downgradeReserveEnvelopeToV8(t *testing.T, plan *SetupPlan) {
 	t.Helper()
+	*plan = *validatorEvidenceLegacyPlanTest(t, plan)
 	plan.Schema = setupPlanSchemaV8
 	for index := range plan.Actions {
 		action := &plan.Actions[index]
@@ -1470,6 +1473,7 @@ func TestV9RevisionCarriesVerifiedLegacyExactCreditFromV8WithoutDuplicateValidat
 	roles, _ := derivePublicRoles(cfg)
 	prior, _ := buildPlan(cfg, testSetupFacts(), roles, time.Unix(1, 0))
 	revised, _ := buildPlan(cfg, testSetupFacts(), roles, time.Unix(2, 0))
+	prior = validatorEvidenceLegacyPlanTest(t, prior)
 	prior.Schema = setupPlanSchemaV8
 	prior.PriorPlanHashes = []string{"0x" + strings.Repeat("88", 32)}
 	for index := range prior.Actions {
@@ -1590,6 +1594,7 @@ func TestPlanRevisionCarriesVerifiedV4OperatorAlphaButReplacesValidatorStake(t *
 	if err != nil {
 		t.Fatal(err)
 	}
+	prior = validatorEvidenceLegacyPlanTest(t, prior)
 	prior.Schema = "urnetwork-sim-plan-v4"
 	prior.AlphaTransferMarginBPS = 0
 	prior.MinimumSourceRemainingRao = 0
@@ -2073,6 +2078,7 @@ func TestPlanRevisionCarriesOnlyExactVerifiedUnchangedV6ValidatorAlphaIntoV7(t *
 	if err != nil {
 		t.Fatal(err)
 	}
+	prior = validatorEvidenceLegacyPlanTest(t, prior)
 	prior.Schema = "urnetwork-sim-plan-v6"
 	legacyMinimum, err := minimumAlphaTransferRao(prior.LiveFacts.InitialMinStakeRao, prior.LiveFacts.AlphaPriceQ9, prior.AlphaTransferMarginBPS)
 	if err != nil {
@@ -2316,14 +2322,11 @@ func TestPlanRevisionIdentityDoesNotReencodeAuthenticatedLegacyWireFormat(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	prior, err := buildPlan(cfg, testSetupFacts(), roles, time.Unix(1, 0))
+	current, err := buildPlan(cfg, testSetupFacts(), roles, time.Unix(1, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// The caller has already authenticated a persisted v5 plan from its exact
-	// JSON bytes. Its digest cannot be reproduced by the current struct because that
-	// struct emits coordinator_upgrade, a field the historical bytes lack.
+	prior := validatorEvidenceLegacyPlanTest(t, current)
 	prior.Schema = "urnetwork-sim-plan-v5"
 	prior.LiveFacts.InitialMinStakeRao = prior.LiveFacts.DefaultMinTransferRao
 	for index := range prior.Actions {
@@ -2332,13 +2335,51 @@ func TestPlanRevisionIdentityDoesNotReencodeAuthenticatedLegacyWireFormat(t *tes
 		}
 		prior.Actions[index].Parameters["runtime_initial_min_stake_tao_rao"] = strconv.FormatUint(prior.LiveFacts.InitialMinStakeRao, 10)
 		delete(prior.Actions[index].Parameters, "runtime_default_min_transfer_tao_rao")
-		prior.Actions[index].IntentHash, _ = actionIntentHash(prior.Actions[index])
+		prior.Actions[index].IntentHash, err = actionIntentHash(prior.Actions[index])
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
-	prior.PlanHash = "0x" + strings.Repeat("ab", 32)
+	// Authenticate actual v5 wire bytes which omit the later non-omitempty
+	// upgrade field, rather than merely claiming that an arbitrary hash passed.
+	prior.PlanHash = ""
+	raw, err := json.Marshal(prior)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatal(err)
+	}
+	delete(wire, "coordinator_upgrade")
+	delete(wire, "coordinator_upgrade_baseline")
+	raw, err = json.Marshal(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, err := persistedSetupPlanHash(raw, prior.Schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire["plan_hash"], err = json.Marshal(hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err = json.Marshal(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prior, err = decodePersistedPlanBytes(raw)
+	if err != nil {
+		t.Fatalf("actual v5 approval prerequisite: %v", err)
+	}
+	reencoded, err := prior.hash()
+	if err != nil || reencoded == prior.PlanHash {
+		t.Fatalf("v5 fixture did not distinguish original and current wire identity: %v", err)
+	}
 	if err := validatePlanRevisionIdentity(cfg, prior, roles); err != nil {
 		t.Fatalf("authenticated legacy plan was re-encoded through v6: %v", err)
 	}
-
 	prior.Schema = currentSetupPlanSchema
 	if err := validatePlanRevisionIdentity(cfg, prior, roles); err == nil || !strings.Contains(err.Error(), "does not authenticate") {
 		t.Fatalf("corrupt native current plan was accepted: %v", err)
@@ -2732,6 +2773,9 @@ func TestPlanRevisionReplacesOnlyVerifiedPreRegistrationCREATEPrefixAndChargesIt
 	if err != nil {
 		t.Fatal(err)
 	}
+	// This obsolete pre-registration deployment predates the companion.
+	// Current approvals still require authenticated carry before relocation.
+	prior = validatorEvidenceLegacyPlanTest(t, prior)
 	obsolete := prior.Deployment
 	obsolete.RuntimeHashes = maps.Clone(prior.Deployment.RuntimeHashes)
 	obsolete.DeployBlock = 120

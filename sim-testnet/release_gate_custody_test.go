@@ -67,9 +67,10 @@ func TestProducerGateCustodySelectionCoversOperatorPathCallEdges(t *testing.T) {
 		{path: "final_semantic_collect.go", function: "collectFinalAttemptCuts", callee: "mergeFinalAttemptCutsAtomically"},
 		{path: "final_semantic_collect.go", function: "verifyFinalCollectedClosedGraph", callee: "validateFinalArtifactLocatorReuse"},
 		{path: "final_semantic_settlement_closure.go", function: "collectFinalSettlementClosure", callee: "mergeFinalAttemptCutsAtomically"},
-		{path: "final_semantic_settlement_closure.go", function: "verifyFinalCollectedSettlementAuthority", callee: "finalCollectedPublicIdentityBytes"},
-		{path: "final_semantic_settlement_closure.go", function: "verifyFinalCollectedSettlementAuthority", callee: "decodeFinalOperatorPathAuthority"},
-		{path: "final_semantic_settlement_closure.go", function: "verifyFinalCollectedSettlementAuthority", callee: "verify"},
+		{path: "final_semantic_settlement_closure.go", function: "verifyFinalCollectedSettlementAuthority", callee: "verifyFinalCollectedSettlementAuthorityWithReader"},
+		{path: "final_semantic_settlement_closure.go", function: "verifyFinalCollectedSettlementAuthorityWithReader", callee: "finalCollectedPublicIdentityBytes"},
+		{path: "final_semantic_settlement_closure.go", function: "verifyFinalCollectedSettlementAuthorityWithReader", callee: "decodeFinalOperatorPathAuthority"},
+		{path: "final_semantic_settlement_closure.go", function: "verifyFinalCollectedSettlementAuthorityWithReader", callee: "verify"},
 		{path: "final_semantic_settlement_closure.go", function: "verifyFinalSettlementClosureArtifacts", callee: "decodeFinalFleetLifecycleLineageFiles"},
 		{path: "final_semantic_settlement_closure.go", function: "verifyFinalSettlementClosureArtifactsWithLineage", callee: "decodeFinalOperatorPathAuthority"},
 		{path: "final_semantic_settlement_closure.go", function: "verifyFinalSettlementClosureArtifactsWithAuthority", callee: "verify"},
@@ -189,7 +190,11 @@ func TestProducerGateCustodySelectionCoversSimulatorReaders(t *testing.T) {
 func TestProducerGateCustodySelectionCoversSimulatorCallEdges(t *testing.T) {
 	for _, check := range []struct{ path, function, callee string }{
 		{path: "scenario.go", function: "RunScenario", callee: "runScenarioCampaignAttempt"},
-		{path: "scenario.go", function: "runScenarioCampaignAttempt", callee: "runScenarioWithProbe"},
+		{path: "scenario.go", function: "runScenarioCampaignAttempt", callee: "runScenarioWithEvidenceRelay"},
+		{path: "evidence_relay_campaign.go", function: "runScenarioWithEvidenceRelay", callee: "runScenarioWithProbe"},
+		{path: "evidence_relay_campaign.go", function: "runScenarioWithEvidenceRelay", callee: "waitClosures"},
+		{path: "evidence_relay_campaign.go", function: "runScenarioWithEvidenceRelay", callee: "WaitThrough"},
+		{path: "evidence_relay_campaign.go", function: "runScenarioWithEvidenceRelay", callee: "WaitAuditPass"},
 		{path: "scenario.go", function: "Snapshot", callee: "inspectValidatorPathProofs"},
 		{path: "scenario.go", function: "inspectValidatorPathProofs", callee: "loadFinalOperatorPathAuthority"},
 		{path: "scenario.go", function: "inspectValidatorPathProofs", callee: "VerifyProofRecord"},
@@ -305,11 +310,14 @@ func TestProducerGateCustodySelectionCoversAggregate(t *testing.T) {
 	}
 }
 
-// Pin actual release call edges through the same tested reader and admission,
-// not merely names in comments or a helper unused by RunRelease.
+// Pin actual V2 disk startup through the same tested seed reader and operator
+// admission, retaining the adjacent legacy loader checks as compatibility.
 func TestProducerGateCustodySelectionCoversReleaseStartup(t *testing.T) {
 	for _, check := range []struct{ path, function, callee string }{
-		{path: "../validator/release_run.go", function: "RunRelease", callee: "loadReleaseAttemptState"},
+		{path: "../validator/release_run.go", function: "RunRelease", callee: "openReleaseEvidenceV2DiskState"},
+		{path: "../validator/release_state_v2.go", function: "openReleaseEvidenceV2DiskState", callee: "openReleaseEvidenceV2DiskStateWithObserver"},
+		{path: "../validator/release_state_v2.go", function: "openReleaseEvidenceV2DiskStateWithObserver", callee: "loadClientSeed"},
+		{path: "../validator/release_state_v2.go", function: "openReleaseEvidenceV2DiskStateWithObserver", callee: "NewDiskAttemptLedger"},
 		{path: "../validator/release_run.go", function: "RunRelease", callee: "startReleaseOperator"},
 		{path: "../validator/release_run.go", function: "loadReleaseAttemptState", callee: "loadReleaseAttemptStateWithObserver"},
 		{path: "../validator/release_run.go", function: "loadReleaseAttemptStateWithObserver", callee: "loadClientSeed"},

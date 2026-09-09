@@ -29,6 +29,7 @@ func attemptSettlementRuntimeV2TestAncestorAlias(t *testing.T, physical string) 
 // The legacy wire/output bytes and completed journal removal stay unchanged
 // when both coordinator and operator paths use stable historical aliases.
 func TestAttemptSettlementRuntimeV2LegacyRecoveryPreservesStableAncestorAliases(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 	fixture.trails(t, 0, 1, 0)
 	fixture.coordinator, _ = attemptSettlementRuntimeV2TestAncestorAlias(t, fixture.coordinator)
@@ -54,6 +55,7 @@ func TestAttemptSettlementRuntimeV2LegacyRecoveryPreservesStableAncestorAliases(
 
 // Resolving an old alias for read-only admission cannot hide a real v6 target.
 func TestAttemptSettlementRuntimeV2LegacyAliasToV6TargetIsRejected(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 	fixture.trails(t, 0, 1, 0)
 	participants := append([]AttemptSettlementRuntimeV2Participant(nil), fixture.participants...)
@@ -78,6 +80,7 @@ func TestAttemptSettlementRuntimeV2LegacyAliasToV6TargetIsRejected(t *testing.T)
 // Operator and coordinator retargeting are separately forced at the actual
 // all-target admission/first-write boundary. Neither namespace is written.
 func TestAttemptSettlementRuntimeV2LegacyAliasRetargetRefusesBeforeFirstWrite(t *testing.T) {
+	t.Parallel()
 	for _, variant := range []string{"operator", "coordinator"} {
 		fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 		fixture.trails(t, 0, 1, 0)
@@ -146,6 +149,7 @@ func TestAttemptSettlementRuntimeV2LegacyAliasRetargetRefusesBeforeFirstWrite(t 
 // New v2 does not inherit the legacy alias fallback. Physical success and
 // ancestor-alias refusal use the same real initialized engine state.
 func TestAttemptSettlementRuntimeV2PhysicalPathRequiredBeforePersistence(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	before := runtimeAttemptSettlementV2TestImages(t, fixture.participants)
 	if err := InitializeAttemptSettlementEpochV2(t.Context(), fixture.coordinator, fixture.participants, 42, fixture.options(t).Authority, runtimeAttemptSettlementV2TestPersistence()); err != nil {

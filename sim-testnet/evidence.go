@@ -123,38 +123,79 @@ func evidenceUnsignedBytes(e *ReleaseEvidenceEnvelope) ([]byte, error) {
 }
 
 func signEvidence(cfg *ResolvedConfig, kind, runID string, payload any, role EVMRoleSecret) (*ReleaseEvidenceEnvelope, error) {
-	encoded, err := json.Marshal(payload)
+	owned, err := marshalEvidencePayload(cfg, kind, payload)
 	if err != nil {
 		return nil, err
+	}
+	return signEvidenceOwnedPayload(cfg, kind, runID, owned, role)
+}
+
+// Only a payload returned by the bounded Json encoder enters this signing
+// path. Hash its exact canonical bytes once; signature recovery still checks
+// the result without re-encoding and re-hashing the same owned object.
+func signEvidenceOwnedPayload(cfg *ResolvedConfig, kind, runID string, owned *evidencePayloadOwner, role EVMRoleSecret) (*ReleaseEvidenceEnvelope, error) {
+	return signEvidenceOwnedPayloadWithDigest(cfg, kind, runID, owned, role, evidenceDigestFromCanonicalPayload)
+}
+
+// The per-call digest observer lets regressions count actual hashing work,
+// without replacing signature recovery or sharing process-global test state.
+func signEvidenceOwnedPayloadWithDigest(cfg *ResolvedConfig, kind, runID string, owned *evidencePayloadOwner, role EVMRoleSecret, digest func(*ReleaseEvidenceEnvelope, []byte) ([sha256.Size]byte, error)) (*ReleaseEvidenceEnvelope, error) {
+	if cfg == nil || cfg.Config == nil || cfg.Public == nil || owned == nil || len(owned.encoded) == 0 {
+		return nil, errors.New("release evidence signing owner is incomplete")
 	}
 	key, err := crypto.HexToECDSA(strings.TrimPrefix(role.PrivateKeyHex, "0x"))
 	if err != nil {
 		return nil, err
 	}
-	e := &ReleaseEvidenceEnvelope{Schema: releaseEvidenceSchema, DeploymentID: cfg.Config.Deployment.DeploymentID, ChainID: cfg.ChainID, GenesisHash: strings.ToLower(cfg.Public.Chain.GenesisHash), Netuid: cfg.Netuid, Kind: kind, RunID: runID, CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Payload: encoded, Signer: crypto.PubkeyToAddress(key.PublicKey)}
-	unsigned, err := evidenceUnsignedBytes(e)
+	e := &ReleaseEvidenceEnvelope{Schema: releaseEvidenceSchema, DeploymentID: cfg.Config.Deployment.DeploymentID, ChainID: cfg.ChainID, GenesisHash: strings.ToLower(cfg.Public.Chain.GenesisHash), Netuid: cfg.Netuid, Kind: kind, RunID: runID, CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Payload: owned.encoded, Signer: crypto.PubkeyToAddress(key.PublicKey)}
+	if err := validateReleaseEvidenceIdentity(e); err != nil {
+		return nil, err
+	}
+	h, err := digest(e, owned.encoded)
 	if err != nil {
 		return nil, err
 	}
-	h := sha256.Sum256(unsigned)
 	sig, err := crypto.Sign(h[:], key)
 	if err != nil {
 		return nil, err
 	}
 	e.ContentHash = "sha256:" + hex.EncodeToString(h[:])
 	e.Signature = "0x" + hex.EncodeToString(sig)
-	return e, verifyEvidence(e, &key.PublicKey)
+	return e, verifyEvidenceSignature(e, h, &key.PublicKey)
+}
+
+// Payload syntax is checked by the canonical encoder at the untrusted read
+// boundary; the local signing owner already obtained it from that encoder.
+func validateReleaseEvidenceIdentity(e *ReleaseEvidenceEnvelope) error {
+	if e == nil || e.Schema != releaseEvidenceSchema || e.DeploymentID == "" || e.ChainID == 0 || e.Netuid == 0 || e.Kind == "" || len(e.Payload) == 0 || e.Signer == (common.Address{}) {
+		return errors.New("invalid release evidence identity")
+	}
+	return nil
 }
 
 func verifyEvidence(e *ReleaseEvidenceEnvelope, expected *ecdsa.PublicKey) error {
-	if e == nil || e.Schema != releaseEvidenceSchema || e.DeploymentID == "" || e.ChainID == 0 || e.Netuid == 0 || e.Kind == "" || !json.Valid(e.Payload) || e.Signer == (common.Address{}) {
-		return errors.New("invalid release evidence identity")
+	return verifyEvidenceWithDigest(e, expected, evidenceDigestFromValidatedPayload)
+}
+
+// Separate external reads always compute their own digest. The injected
+// per-call observer performs the real hash and cannot bypass identity checks.
+func verifyEvidenceWithDigest(e *ReleaseEvidenceEnvelope, expected *ecdsa.PublicKey, digest func(*ReleaseEvidenceEnvelope, []byte) ([sha256.Size]byte, error)) error {
+	if err := validateReleaseEvidenceIdentity(e); err != nil {
+		return err
 	}
-	unsigned, err := evidenceUnsignedBytes(e)
+	if !json.Valid(e.Payload) {
+		return errors.New("invalid release evidence payload Json")
+	}
+	h, err := digest(e, e.Payload)
 	if err != nil {
 		return err
 	}
-	h := sha256.Sum256(unsigned)
+	return verifyEvidenceSignature(e, h, expected)
+}
+
+// The caller supplies the hash of this invocation's exact canonical object,
+// never a cached digest borrowed from another mutable envelope.
+func verifyEvidenceSignature(e *ReleaseEvidenceEnvelope, h [sha256.Size]byte, expected *ecdsa.PublicKey) error {
 	if e.ContentHash != "sha256:"+hex.EncodeToString(h[:]) {
 		return errors.New("release evidence hash mismatch")
 	}
@@ -232,61 +273,68 @@ func renderedOperatorEvidenceStore(cfg *ResolvedConfig, stateDir string, operato
 	return store, nil
 }
 
+// The schemas are structurally identical; a field conversion avoids rescanning
+// the complete base64 carrier merely to move between the two Go packages.
 func startifactEvidenceEnvelope(envelope *ReleaseEvidenceEnvelope) (*startifact.EvidenceEnvelope, error) {
 	if envelope == nil {
 		return nil, errors.New("release evidence envelope is missing")
 	}
-	encoded, err := json.Marshal(envelope)
-	if err != nil {
-		return nil, err
-	}
-	var serverEnvelope startifact.EvidenceEnvelope
-	if err := json.Unmarshal(encoded, &serverEnvelope); err != nil {
-		return nil, err
-	}
+	serverEnvelope := startifact.EvidenceEnvelope(*envelope)
+	serverEnvelope.Payload = bytes.Clone(envelope.Payload)
 	if err := startifact.VerifyEvidence(&serverEnvelope); err != nil {
 		return nil, fmt.Errorf("server evidence envelope: %w", err)
 	}
 	return &serverEnvelope, nil
 }
 
-func verifyDirectEvidencePublication(ctx context.Context, store server.BlobStore, envelope *startifact.EvidenceEnvelope, published *startifact.Published) error {
-	if store == nil || envelope == nil || published == nil || !strings.EqualFold(published.ContentHash, envelope.ContentHash) || published.Bucket != store.Bucket() {
-		return errors.New("direct evidence receipt is invalid")
+// The server owner snapshots and authenticates one object, then retains only
+// its canonical wire and signed routing identity through all replica checks.
+func prepareDirectEvidencePublication(envelope *ReleaseEvidenceEnvelope) (*startifact.PreparedEvidence, error) {
+	if envelope == nil {
+		return nil, errors.New("release evidence envelope is missing")
 	}
-	wantContentKey, err := startifact.EvidenceContentKey(store, envelope.ContentHash)
-	if err != nil {
-		return err
-	}
-	hashHex := strings.TrimPrefix(strings.ToLower(envelope.ContentHash), "sha256:")
-	wantHistoryKey := filepath.ToSlash(filepath.Join(store.Prefix(), "st", "v1", "evidence", "history", envelope.DeploymentID, fmt.Sprint(envelope.Netuid), envelope.Kind, evidenceHistoryStorageRunID(envelope.RunID), hashHex+".json"))
-	if published.ContentKey != wantContentKey || published.HistoryKey != wantHistoryKey {
-		return errors.New("direct evidence receipt keys do not match the rendered store")
-	}
-	want, err := startifact.EvidenceBytes(envelope)
-	if err != nil {
-		return err
-	}
-	for _, key := range []string{published.ContentKey, published.HistoryKey} {
-		reader, err := store.Get(ctx, key)
-		if err != nil {
-			return fmt.Errorf("read direct evidence object %s: %w", key, err)
-		}
-		got, readErr := io.ReadAll(io.LimitReader(reader, int64(len(want)+1)))
-		closeErr := reader.Close()
-		if readErr != nil {
-			return fmt.Errorf("read direct evidence object %s: %w", key, readErr)
-		}
-		if closeErr != nil {
-			return fmt.Errorf("close direct evidence object %s: %w", key, closeErr)
-		}
-		if !bytes.Equal(got, want) {
-			return fmt.Errorf("direct evidence object %s differs from its signed envelope", key)
-		}
-	}
-	return nil
+	serverEnvelope := startifact.EvidenceEnvelope(*envelope)
+	return startifact.PrepareEvidence(&serverEnvelope)
 }
 
+// The legacy verifier still authenticates its supplied mutable envelope. Live
+// multi-replica publication instead reuses one sealed owner for this object.
+func verifyDirectEvidencePublication(ctx context.Context, store server.BlobStore, envelope *startifact.EvidenceEnvelope, published *startifact.Published) error {
+	prepared, err := startifact.PrepareEvidence(envelope)
+	if err != nil {
+		return err
+	}
+	return prepared.VerifyPublished(ctx, store, published)
+}
+
+// Every configured replica owns both original immutable winner checks and
+// both additional direct readbacks before the next source is admitted.
+func publishCampaignEvidenceReplicas(ctx context.Context, stores map[int]server.BlobStore, envelope *ReleaseEvidenceEnvelope) error {
+	if ctx == nil || len(stores) == 0 {
+		return errors.New("campaign evidence replica context is incomplete")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	prepared, err := prepareDirectEvidencePublication(envelope)
+	if err != nil {
+		return fmt.Errorf("campaign evidence envelope: %w", err)
+	}
+	for operator := 1; operator <= len(stores); operator++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		store := stores[operator]
+		published, err := prepared.Publish(ctx, store)
+		if err != nil {
+			return fmt.Errorf("operator %d direct campaign evidence publication: %w", operator, err)
+		}
+		if err := prepared.VerifyPublished(ctx, store, published); err != nil {
+			return fmt.Errorf("operator %d direct campaign evidence verification: %w", operator, err)
+		}
+	}
+	return ctx.Err()
+}
 func validateCampaignEvidencePath(name string) error {
 	if name == "" || name != strings.TrimSpace(name) || strings.ContainsAny(name, "\\\x00") || path.Clean(name) != name || strings.HasPrefix(name, "/") || !filepath.IsLocal(filepath.FromSlash(name)) {
 		return fmt.Errorf("campaign evidence path %q is not a canonical relative path", name)
@@ -297,44 +345,98 @@ func validateCampaignEvidencePath(name string) error {
 	return nil
 }
 
+// Only direct regular files enter the signed campaign graph. The shared
+// descriptor walk refuses root/parent aliases and opens leaves nonblocking,
+// before a FIFO could wait for a writer or any body bytes could be allocated.
 func readCampaignEvidenceRegularFile(root, name string) ([]byte, error) {
+	return readCampaignEvidenceRegularFileObserved(root, name, nil)
+}
+
+// A private observer exposes native acquisition and completed reads to custody
+// tests; it cannot replace the opener, byte ceiling, or owned final Close.
+func readCampaignEvidenceRegularFileObserved(root, name string, observe func(string, *os.File) error) (result []byte, resultErr error) {
 	if err := validateCampaignEvidencePath(name); err != nil {
 		return nil, err
 	}
-	rootHandle, err := os.OpenRoot(root)
+	return readCampaignEvidenceOwnedFile(root, name, observe)
+}
+
+// Only these two independently named original controls are outside the run
+// archive census. Their private descriptor and raw-byte bounds are unchanged.
+func readCampaignEvidenceControlFileV2(root, name string) ([]byte, error) {
+	if name == "complete.json" || name == campaignEvidenceManifestFilename {
+		return readCampaignEvidenceOwnedFile(root, name, nil)
+	}
+	return readCampaignEvidenceRegularFile(root, name)
+}
+
+// Both ordinary sources and the explicit original controls share one opener,
+// before any body allocation, and always discharge the owned descriptor.
+func readCampaignEvidenceOwnedFile(root, name string, observe func(string, *os.File) error) (result []byte, resultErr error) {
+	return readCampaignEvidenceOwnedFileWithLimitV2(root, name, maximumCampaignEvidenceRawFileBytes, observe)
+}
+
+// Select the finite typed owner before opening or allocating any body. The
+// original descriptor walk, observer boundary and final Close are unchanged.
+func readCampaignEvidenceOwnedFileWithLimitV2(root, name string, maximum uint64, observe func(string, *os.File) error) (result []byte, resultErr error) {
+	if maximum == 0 || maximum >= uint64(^uint64(0)>>1) || maximum > uint64(^uint(0)>>1) {
+		return nil, errors.New("campaign file has an invalid allocation bound")
+	}
+	file, err := openFinalCollectedFile(root, filepath.FromSlash(name))
 	if err != nil {
 		return nil, err
 	}
-	defer rootHandle.Close()
-	file, err := rootHandle.Open(filepath.FromSlash(name))
-	if err != nil {
-		return nil, err
+	defer func() {
+		resultErr = errors.Join(resultErr, file.Close())
+		if resultErr != nil {
+			result = nil
+		}
+	}()
+	if observe != nil {
+		if err := observe("opened", file); err != nil {
+			return nil, err
+		}
 	}
-	defer file.Close()
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > maximumCampaignEvidenceRawFileBytes {
-		return nil, stateMismatchError(err, "campaign evidence file %q is non-regular or exceeds %d bytes", name, maximumCampaignEvidenceRawFileBytes)
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 0 || uint64(info.Size()) > maximum {
+		return nil, stateMismatchError(err, "campaign evidence file %q is non-regular or exceeds %d bytes", name, maximum)
 	}
-	raw, err := io.ReadAll(io.LimitReader(file, maximumCampaignEvidenceRawFileBytes+1))
+	raw, err := io.ReadAll(io.LimitReader(file, int64(maximum)+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(raw) > maximumCampaignEvidenceRawFileBytes {
-		return nil, fmt.Errorf("campaign evidence file %q exceeds %d bytes", name, maximumCampaignEvidenceRawFileBytes)
+	if uint64(len(raw)) > maximum {
+		return nil, fmt.Errorf("campaign evidence file %q exceeds %d bytes", name, maximum)
+	}
+	if observe != nil {
+		if err := observe("read", file); err != nil {
+			return nil, err
+		}
 	}
 	return raw, nil
 }
 
 func campaignEvidenceManifestFiles(entries []campaignEvidenceFileEntry) (map[string]string, error) {
+	return campaignEvidenceManifestFilesWithLimits(entries, defaultCampaignEvidenceLimits())
+}
+
+func campaignEvidenceManifestFilesWithLimits(entries []campaignEvidenceFileEntry, limits campaignEvidenceLimits) (map[string]string, error) {
 	if len(entries) == 0 {
 		return nil, errors.New("campaign evidence manifest has no files")
 	}
-	return campaignEvidenceEntryFiles(entries)
+	return campaignEvidenceEntryFilesWithLimits(entries, limits)
 }
 
 func campaignEvidenceEntryFiles(entries []campaignEvidenceFileEntry) (map[string]string, error) {
-	if len(entries) > maximumCampaignEvidenceObjects {
-		return nil, fmt.Errorf("campaign evidence manifest has %d objects, maximum %d", len(entries), maximumCampaignEvidenceObjects)
+	return campaignEvidenceEntryFilesWithLimits(entries, defaultCampaignEvidenceLimits())
+}
+
+func campaignEvidenceEntryFilesWithLimits(entries []campaignEvidenceFileEntry, limits campaignEvidenceLimits) (map[string]string, error) {
+	if err := limits.validate(); err != nil {
+		return nil, err
+	}
+	if uint64(len(entries)) > limits.maximumObjects {
+		return nil, fmt.Errorf("campaign evidence manifest has %d objects, maximum %d", len(entries), limits.maximumObjects)
 	}
 	result := make(map[string]string, len(entries))
 	previous := ""
@@ -346,11 +448,11 @@ func campaignEvidenceEntryFiles(entries []campaignEvidenceFileEntry) (map[string
 		if index != 0 && entry.Path <= previous {
 			return nil, errors.New("campaign evidence manifest files are not strictly sorted and unique")
 		}
-		if !validSHA256ContentHash(entry.ContentHash) || !validSHA256ContentHash(entry.EnvelopeHash) || entry.Size > maximumCampaignEvidenceRawFileBytes {
+		if !validSHA256ContentHash(entry.ContentHash) || !validSHA256ContentHash(entry.EnvelopeHash) || entry.Size > limits.rawFileBytes(entry.Path) {
 			return nil, fmt.Errorf("campaign evidence manifest file %q has invalid content metadata", entry.Path)
 		}
-		if entry.Size > maximumCampaignEvidenceAggregateBytes-aggregate {
-			return nil, fmt.Errorf("campaign evidence manifest exceeds %d aggregate bytes", maximumCampaignEvidenceAggregateBytes)
+		if entry.Size > limits.maximumBytes-aggregate {
+			return nil, fmt.Errorf("campaign evidence manifest exceeds %d aggregate bytes", limits.maximumBytes)
 		}
 		aggregate += entry.Size
 		result[entry.Path] = strings.ToLower(entry.ContentHash)
@@ -360,8 +462,22 @@ func campaignEvidenceEntryFiles(entries []campaignEvidenceFileEntry) (map[string
 }
 
 func decodeCampaignEvidenceManifest(envelope *ReleaseEvidenceEnvelope) (*campaignEvidenceManifestPayload, error) {
+	return decodeCampaignEvidenceManifestWithLimits(envelope, defaultCampaignEvidenceLimits())
+}
+
+func decodeCampaignEvidenceManifestWithLimits(envelope *ReleaseEvidenceEnvelope, limits campaignEvidenceLimits) (*campaignEvidenceManifestPayload, error) {
+	if err := limits.validate(); err != nil {
+		return nil, err
+	}
 	if envelope == nil || envelope.Kind != campaignEvidenceManifestKind || envelope.RunID == "" {
 		return nil, errors.New("campaign evidence manifest envelope identity is invalid")
+	}
+	payloadLimit := uint64(maximumCampaignEvidenceEnvelopeBytes)
+	if limits.metadata != nil {
+		payloadLimit = limits.metadata.manifestBytes
+	}
+	if uint64(len(envelope.Payload)) > payloadLimit {
+		return nil, errors.New("campaign manifest exceeds its configured metadata owner")
 	}
 	var manifest campaignEvidenceManifestPayload
 	if err := decodeStrictJSONBytes(envelope.Payload, &manifest); err != nil {
@@ -373,25 +489,25 @@ func decodeCampaignEvidenceManifest(envelope *ReleaseEvidenceEnvelope) (*campaig
 	if manifest.DeploymentID != envelope.DeploymentID || manifest.ChainID != envelope.ChainID || manifest.Netuid != envelope.Netuid || manifest.RunID != envelope.RunID || !strings.EqualFold(manifest.GenesisHash, envelope.GenesisHash) {
 		return nil, errors.New("campaign evidence manifest payload does not bind its signed envelope")
 	}
-	if _, err := campaignEvidenceManifestFiles(manifest.Files); err != nil {
+	if _, err := campaignEvidenceManifestFilesWithLimits(manifest.Files, limits); err != nil {
 		return nil, err
 	}
-	references, err := campaignEvidenceEntryFiles(manifest.References)
+	references, err := campaignEvidenceEntryFilesWithLimits(manifest.References, limits)
 	if err != nil {
 		return nil, fmt.Errorf("campaign evidence manifest references: %w", err)
 	}
-	files, _ := campaignEvidenceManifestFiles(manifest.Files)
+	files, _ := campaignEvidenceManifestFilesWithLimits(manifest.Files, limits)
 	var aggregate uint64
 	for _, entries := range [][]campaignEvidenceFileEntry{manifest.Files, manifest.References} {
 		for _, entry := range entries {
-			if entry.Size > maximumCampaignEvidenceAggregateBytes-aggregate {
-				return nil, fmt.Errorf("campaign evidence manifest exceeds %d aggregate bytes", maximumCampaignEvidenceAggregateBytes)
+			if entry.Size > limits.maximumBytes-aggregate {
+				return nil, fmt.Errorf("campaign evidence manifest exceeds %d aggregate bytes", limits.maximumBytes)
 			}
 			aggregate += entry.Size
 		}
 	}
-	if len(manifest.Files)+len(manifest.References) > maximumCampaignEvidenceObjects {
-		return nil, fmt.Errorf("campaign evidence manifest exceeds %d objects", maximumCampaignEvidenceObjects)
+	if uint64(len(manifest.Files))+uint64(len(manifest.References)) > limits.maximumObjects {
+		return nil, fmt.Errorf("campaign evidence manifest exceeds %d objects", limits.maximumObjects)
 	}
 	for name := range references {
 		if _, duplicate := files[name]; duplicate {
@@ -451,6 +567,10 @@ func collectCampaignArtifactReferencesWithDecode(raw json.RawMessage, references
 // Walk the owned decoded tree without copying and reparsing each subtree.
 // Discovery keeps the original depth fence and last duplicate-key semantics.
 func collectCampaignArtifactReferenceValues(value any, references map[string]campaignArtifactReference, depth int) error {
+	return collectCampaignArtifactReferenceValuesWithLimits(value, references, depth, defaultCampaignEvidenceLimits())
+}
+
+func collectCampaignArtifactReferenceValuesWithLimits(value any, references map[string]campaignArtifactReference, depth int, limits campaignEvidenceLimits) error {
 	if depth > maximumCampaignEvidenceJSONDepth {
 		return fmt.Errorf("campaign artifact JSON exceeds maximum depth %d", maximumCampaignEvidenceJSONDepth)
 	}
@@ -466,7 +586,7 @@ func collectCampaignArtifactReferenceValues(value any, references map[string]cam
 			}
 		}
 		if reference.URI != "" || reference.ContentHash != "" || reference.Size != 0 {
-			if reference.Kind == "" || reference.URI == "" || !validSHA256ContentHash(reference.ContentHash) || reference.Size == 0 || reference.Size > maximumCampaignEvidenceRawFileBytes {
+			if reference.Kind == "" || reference.URI == "" || !validSHA256ContentHash(reference.ContentHash) || reference.Size == 0 || reference.Size > limits.rawFileBytes(reference.URI) {
 				return errors.New("campaign artifact locator is incomplete")
 			}
 			parsed, err := url.Parse(reference.URI)
@@ -495,19 +615,19 @@ func collectCampaignArtifactReferenceValues(value any, references map[string]cam
 			if prior, exists := references[reference.URI]; exists && prior != reference {
 				return fmt.Errorf("campaign artifact locator %q has conflicting identities", reference.URI)
 			}
-			if _, exists := references[reference.URI]; !exists && len(references) >= maximumCampaignEvidenceObjects {
-				return fmt.Errorf("campaign artifact graph exceeds %d objects", maximumCampaignEvidenceObjects)
+			if _, exists := references[reference.URI]; !exists && uint64(len(references)) >= limits.maximumObjects {
+				return fmt.Errorf("campaign artifact graph exceeds %d objects", limits.maximumObjects)
 			}
 			references[reference.URI] = reference
 		}
 		for _, child := range object {
-			if err := collectCampaignArtifactReferenceValues(child, references, depth+1); err != nil {
+			if err := collectCampaignArtifactReferenceValuesWithLimits(child, references, depth+1, limits); err != nil {
 				return err
 			}
 		}
 	case []any:
 		for _, child := range object {
-			if err := collectCampaignArtifactReferenceValues(child, references, depth+1); err != nil {
+			if err := collectCampaignArtifactReferenceValuesWithLimits(child, references, depth+1, limits); err != nil {
 				return err
 			}
 		}
@@ -534,16 +654,23 @@ func decodeCampaignArtifactReferenceJSON(raw []byte, value any) error {
 }
 
 func campaignArtifactReferences(files map[string][]byte) (map[string]campaignArtifactReference, error) {
+	return campaignArtifactReferencesWithLimits(files, defaultCampaignEvidenceLimits())
+}
+
+func campaignArtifactReferencesWithLimits(files map[string][]byte, limits campaignEvidenceLimits) (map[string]campaignArtifactReference, error) {
+	if err := limits.validate(); err != nil {
+		return nil, err
+	}
 	references := map[string]campaignArtifactReference{}
 	for name, raw := range files {
 		switch {
 		case strings.HasSuffix(name, ".json"):
-			if err := collectCampaignArtifactReferences(raw, references, 0); err != nil {
+			if err := collectCampaignArtifactReferencesWithLimits(raw, references, 0, limits); err != nil {
 				return nil, fmt.Errorf("campaign evidence file %q artifact locator: %w", name, err)
 			}
 		case strings.HasSuffix(name, ".jsonl"):
 			for index, line := range bytes.Split(bytes.TrimSpace(raw), []byte{'\n'}) {
-				if err := collectCampaignArtifactReferences(line, references, 0); err != nil {
+				if err := collectCampaignArtifactReferencesWithLimits(line, references, 0, limits); err != nil {
 					return nil, fmt.Errorf("campaign evidence file %q line %d artifact locator: %w", name, index+1, err)
 				}
 			}
@@ -553,12 +680,19 @@ func campaignArtifactReferences(files map[string][]byte) (map[string]campaignArt
 }
 
 func mergeCampaignArtifactReferences(target, additions map[string]campaignArtifactReference) error {
+	return mergeCampaignArtifactReferencesWithLimits(target, additions, defaultCampaignEvidenceLimits())
+}
+
+func mergeCampaignArtifactReferencesWithLimits(target, additions map[string]campaignArtifactReference, limits campaignEvidenceLimits) error {
+	if err := limits.validate(); err != nil {
+		return err
+	}
 	for name, reference := range additions {
 		if prior, exists := target[name]; exists && prior != reference {
 			return fmt.Errorf("campaign artifact locator %q has conflicting identities", name)
 		}
-		if _, exists := target[name]; !exists && len(target) >= maximumCampaignEvidenceObjects {
-			return fmt.Errorf("campaign artifact graph exceeds %d objects", maximumCampaignEvidenceObjects)
+		if _, exists := target[name]; !exists && uint64(len(target)) >= limits.maximumObjects {
+			return fmt.Errorf("campaign artifact graph exceeds %d objects", limits.maximumObjects)
 		}
 		target[name] = reference
 	}
@@ -573,8 +707,25 @@ func validateCampaignArtifactObjectCount(runFiles int, references map[string]cam
 }
 
 func mergeCampaignArtifactSource(references map[string]campaignArtifactReference, edges map[string]map[string]bool, source string, raw []byte) error {
-	nested, err := campaignArtifactReferences(map[string][]byte{source: raw})
+	return mergeCampaignArtifactSourceWithLimits(references, edges, source, raw, defaultCampaignEvidenceLimits())
+}
+
+func mergeCampaignArtifactSourceWithLimits(references map[string]campaignArtifactReference, edges map[string]map[string]bool, source string, raw []byte, limits campaignEvidenceLimits) error {
+	return mergeCampaignArtifactSourceWithBudgetV2(references, edges, source, raw, limits, nil)
+}
+
+// The compact live/public owners share one explicit bounded metadata debit.
+func mergeCampaignArtifactSourceWithBudgetV2(references map[string]campaignArtifactReference, edges map[string]map[string]bool, source string, raw []byte, limits campaignEvidenceLimits, budget *campaignEvidenceMetadataBudgetV2) error {
+	nested, err := campaignArtifactReferencesWithLimits(map[string][]byte{source: raw}, limits)
 	if err != nil {
+		return err
+	}
+	for name, reference := range nested {
+		if previous, found := references[name]; found && previous != reference {
+			return errors.New("campaign artifact locator has conflicting identities")
+		}
+	}
+	if err := budget.admit(references, edges, source, nested); err != nil {
 		return err
 	}
 	if len(nested) != 0 {
@@ -585,14 +736,19 @@ func mergeCampaignArtifactSource(references map[string]campaignArtifactReference
 			edges[source][target] = true
 		}
 	}
-	return mergeCampaignArtifactReferences(references, nested)
+	return mergeCampaignArtifactReferencesWithLimits(references, nested, limits)
 }
 
 func validateCampaignArtifactGraph(edges map[string]map[string]bool) error {
 	states := map[string]uint8{}
 	heights := map[string]int{}
-	var visit func(string) (int, error)
-	visit = func(node string) (int, error) {
+	var visit func(string, int) (int, error)
+	visit = func(node string, depth int) (int, error) {
+		// Refuse before descending: the explicit larger object census must not
+		// become an equally large recursive stack for a malformed long chain.
+		if depth > maximumCampaignEvidenceJSONDepth {
+			return 0, errors.New("campaign artifact reference graph exceeds maximum depth")
+		}
 		switch states[node] {
 		case 1:
 			return 0, fmt.Errorf("campaign artifact reference graph contains a cycle at %q", node)
@@ -607,7 +763,7 @@ func validateCampaignArtifactGraph(edges map[string]map[string]bool) error {
 		sort.Strings(targets)
 		height := 0
 		for _, target := range targets {
-			targetHeight, err := visit(target)
+			targetHeight, err := visit(target, depth+1)
 			if err != nil {
 				return 0, err
 			}
@@ -628,25 +784,54 @@ func validateCampaignArtifactGraph(edges map[string]map[string]bool) error {
 	}
 	sort.Strings(nodes)
 	for _, node := range nodes {
-		if _, err := visit(node); err != nil {
+		if _, err := visit(node, 0); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// Keeps the legacy small-archive adapter; live publication uses the per-object
+// owner below and never retains all signed payloads in memory.
 func prepareCampaignEvidenceArchive(cfg *ResolvedConfig, roles *RoleSecrets, stateDir, runID, resultHash, bundlePayloadHash string, hashes map[string]string) (*preparedCampaignEvidenceArchive, error) {
-	if cfg == nil || cfg.Config == nil || roles == nil || runID == "" || !validCanonicalHashHex(resultHash) || !validSHA256ContentHash(bundlePayloadHash) || len(hashes) == 0 {
+	archive := &preparedCampaignEvidenceArchive{}
+	manifest, err := streamCampaignEvidenceArchive(context.Background(), cfg, roles, stateDir, runID, resultHash, bundlePayloadHash, hashes, func(envelope *ReleaseEvidenceEnvelope) error {
+		archive.Files = append(archive.Files, envelope)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	archive.Manifest = manifest
+	return archive, nil
+}
+
+// One bounded raw object and its signed carrier are owned through acceptance.
+// The graph keeps only identities/edges; its final manifest is withheld until
+// every referenced source has been checked and accepted by the caller.
+func streamCampaignEvidenceArchive(ctx context.Context, cfg *ResolvedConfig, roles *RoleSecrets, stateDir, runId, resultHash, bundlePayloadHash string, hashes map[string]string, accept func(*ReleaseEvidenceEnvelope) error) (*ReleaseEvidenceEnvelope, error) {
+	if ctx == nil || accept == nil || cfg == nil || cfg.Config == nil || roles == nil || runId == "" || !validCanonicalHashHex(resultHash) || !validSHA256ContentHash(bundlePayloadHash) || len(hashes) == 0 {
 		return nil, errors.New("campaign evidence archive identity is incomplete")
 	}
-	if len(hashes) > maximumCampaignEvidenceObjects {
-		return nil, fmt.Errorf("campaign evidence archive has %d run files, maximum %d", len(hashes), maximumCampaignEvidenceObjects)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	limits, err := campaignEvidenceLimitsForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	metadata, err := campaignEvidenceMetadataForConfigV2(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if uint64(len(hashes)) > limits.maximumObjects {
+		return nil, fmt.Errorf("campaign evidence archive has %d run files, maximum %d", len(hashes), limits.maximumObjects)
 	}
 	owner, ok := roles.EVM["testnet-owner"]
 	if !ok {
 		return nil, errors.New("campaign evidence archive requires the testnet owner role")
 	}
-	runDir := filepath.Join(stateDir, "runs", runID)
+	runDir := filepath.Join(stateDir, "runs", runId)
 	names := make([]string, 0, len(hashes))
 	for name, hash := range hashes {
 		if err := validateCampaignEvidencePath(name); err != nil {
@@ -658,59 +843,72 @@ func prepareCampaignEvidenceArchive(cfg *ResolvedConfig, roles *RoleSecrets, sta
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	archive := &preparedCampaignEvidenceArchive{Files: make([]*ReleaseEvidenceEnvelope, 0, len(names))}
+	references := map[string]campaignArtifactReference{}
+	edges := map[string]map[string]bool{}
 	entries := make([]campaignEvidenceFileEntry, 0, len(names))
-	rawFiles := make(map[string][]byte, len(names))
+	runEntries := make(map[string]campaignEvidenceFileEntry, len(names))
+	queue, err := newCampaignArtifactQueueV2(hashes, limits)
+	if err != nil {
+		return nil, err
+	}
 	var aggregate uint64
 	for _, name := range names {
-		raw, err := readCampaignEvidenceRegularFile(runDir, name)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		raw, err := readCampaignEvidenceFileWithLimitsV2(runDir, name, limits, false)
 		if err != nil {
 			return nil, fmt.Errorf("read campaign evidence file %q: %w", name, err)
 		}
 		if got := bytesSHA256(raw); !strings.EqualFold(got, hashes[name]) {
 			return nil, fmt.Errorf("campaign evidence file %q hash %s does not match %s", name, got, hashes[name])
 		}
-		if uint64(len(raw)) > maximumCampaignEvidenceAggregateBytes-aggregate {
-			return nil, fmt.Errorf("campaign evidence archive exceeds %d aggregate bytes", maximumCampaignEvidenceAggregateBytes)
+		if uint64(len(raw)) > limits.maximumBytes-aggregate {
+			return nil, fmt.Errorf("campaign evidence archive exceeds %d aggregate bytes", limits.maximumBytes)
 		}
 		aggregate += uint64(len(raw))
-		rawFiles[name] = raw
+		if err := mergeCampaignArtifactSourceWithBudgetV2(references, edges, name, raw, limits, metadata); err != nil {
+			return nil, err
+		}
+		if err := queue.admit(edges[name]); err != nil {
+			return nil, err
+		}
 		payload := campaignEvidenceFilePayload{
-			Schema: campaignEvidenceFileSchema, RunID: runID, Scope: "run", Path: name,
+			Schema: campaignEvidenceFileSchema, RunID: runId, Scope: "run", Path: name,
 			ContentHash: strings.ToLower(hashes[name]), Size: uint64(len(raw)), Data: raw,
 		}
 		pathHash := sha256.Sum256([]byte("run\x00" + name))
-		localPath := filepath.Join(stateDir, "public", campaignEvidenceLocalArchiveDirectory, runID, "files", hex.EncodeToString(pathHash[:])+".evidence.json")
-		envelope, _, err := prepareLocalEvidence(cfg, stateDir, localPath, campaignEvidenceFileKind, runID, payload, owner, 0)
+		localPath := filepath.Join(stateDir, "public", campaignEvidenceLocalArchiveDirectory, runId, "files", hex.EncodeToString(pathHash[:])+".evidence.json")
+		envelope, _, err := prepareLocalEvidence(cfg, stateDir, localPath, campaignEvidenceFileKind, runId, payload, owner, 0)
 		if err != nil {
 			return nil, fmt.Errorf("prepare campaign evidence file %q: %w", name, err)
 		}
-		archive.Files = append(archive.Files, envelope)
-		entries = append(entries, campaignEvidenceFileEntry{Path: name, ContentHash: strings.ToLower(hashes[name]), Size: uint64(len(raw)), EnvelopeHash: envelope.ContentHash})
-	}
-	references := map[string]campaignArtifactReference{}
-	edges := map[string]map[string]bool{}
-	for _, name := range names {
-		if err := mergeCampaignArtifactSource(references, edges, name, rawFiles[name]); err != nil {
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		if err := accept(envelope); err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		entry := campaignEvidenceFileEntry{Path: name, ContentHash: strings.ToLower(hashes[name]), Size: uint64(len(raw)), EnvelopeHash: envelope.ContentHash}
+		entries = append(entries, entry)
+		runEntries[name] = entry
 	}
-	referenceFiles := map[string][]byte{}
-	processedReferences := map[string]bool{}
+	referenceEntries := make([]campaignEvidenceFileEntry, 0)
 	allowedOrigins, err := campaignArtifactAllowedOriginsForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("campaign evidence transport: %w", err)
 	}
-	for len(processedReferences) < len(references) {
-		referenceNames := make([]string, 0, len(references)-len(processedReferences))
-		for name := range references {
-			if !processedReferences[name] {
-				referenceNames = append(referenceNames, name)
-			}
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
-		sort.Strings(referenceNames)
-		name := referenceNames[0]
-		processedReferences[name] = true
+		name, found := queue.next()
+		if !found {
+			break
+		}
 		reference := references[name]
 		parsed, _ := url.Parse(name)
 		if parsed.Scheme != "" {
@@ -719,8 +917,8 @@ func prepareCampaignEvidenceArchive(cfg *ResolvedConfig, roles *RoleSecrets, sta
 			}
 			continue
 		}
-		if raw, exists := rawFiles[name]; exists {
-			if uint64(len(raw)) != reference.Size || !strings.EqualFold(bytesSHA256(raw), reference.ContentHash) {
+		if original, exists := runEntries[name]; exists {
+			if original.Size != reference.Size || !strings.EqualFold(original.ContentHash, reference.ContentHash) {
 				return nil, fmt.Errorf("campaign artifact locator %q does not match its run file", name)
 			}
 			continue
@@ -728,7 +926,7 @@ func prepareCampaignEvidenceArchive(cfg *ResolvedConfig, roles *RoleSecrets, sta
 		if strings.HasPrefix(name, "public/"+campaignEvidenceLocalArchiveDirectory+"/") || name != "public.json" && !strings.HasPrefix(name, "receipts/") && !strings.HasPrefix(name, "public/") {
 			return nil, fmt.Errorf("campaign artifact locator %q is neither a run file nor an approved state artifact", name)
 		}
-		raw, err := readCampaignEvidenceRegularFile(stateDir, name)
+		raw, err := readCampaignEvidenceFileWithLimitsV2(stateDir, name, limits, false)
 		if err != nil {
 			return nil, fmt.Errorf("read campaign referenced artifact %q: %w", name, err)
 		}
@@ -738,70 +936,66 @@ func prepareCampaignEvidenceArchive(cfg *ResolvedConfig, roles *RoleSecrets, sta
 		if got := bytesSHA256(raw); !strings.EqualFold(got, reference.ContentHash) {
 			return nil, fmt.Errorf("campaign referenced artifact %q hash %s does not match %s", name, got, reference.ContentHash)
 		}
-		if uint64(len(raw)) > maximumCampaignEvidenceAggregateBytes-aggregate {
-			return nil, fmt.Errorf("campaign evidence archive exceeds %d aggregate bytes", maximumCampaignEvidenceAggregateBytes)
+		if uint64(len(raw)) > limits.maximumBytes-aggregate {
+			return nil, fmt.Errorf("campaign evidence archive exceeds %d aggregate bytes", limits.maximumBytes)
 		}
 		aggregate += uint64(len(raw))
-		referenceFiles[name] = raw
-		if len(rawFiles)+len(referenceFiles) > maximumCampaignEvidenceObjects {
-			return nil, fmt.Errorf("campaign evidence archive exceeds %d objects", maximumCampaignEvidenceObjects)
+		if uint64(len(runEntries))+uint64(len(referenceEntries))+1 > limits.maximumObjects {
+			return nil, fmt.Errorf("campaign evidence archive exceeds %d objects", limits.maximumObjects)
 		}
-		if err := mergeCampaignArtifactSource(references, edges, name, raw); err != nil {
+		if err := mergeCampaignArtifactSourceWithBudgetV2(references, edges, name, raw, limits, metadata); err != nil {
 			return nil, err
 		}
+		if err := queue.admit(edges[name]); err != nil {
+			return nil, err
+		}
+		payload := campaignEvidenceFilePayload{
+			Schema: campaignEvidenceFileSchema, RunID: runId, Scope: "reference", Path: name,
+			ContentHash: reference.ContentHash, Size: uint64(len(raw)), Data: raw,
+		}
+		pathHash := sha256.Sum256([]byte("reference\x00" + name))
+		localPath := filepath.Join(stateDir, "public", campaignEvidenceLocalArchiveDirectory, runId, "references", hex.EncodeToString(pathHash[:])+".evidence.json")
+		envelope, _, err := prepareLocalEvidence(cfg, stateDir, localPath, campaignEvidenceFileKind, runId, payload, owner, 0)
+		if err != nil {
+			return nil, fmt.Errorf("prepare campaign referenced artifact %q: %w", name, err)
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if err := accept(envelope); err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		referenceEntries = append(referenceEntries, campaignEvidenceFileEntry{Path: name, ContentHash: reference.ContentHash, Size: uint64(len(raw)), EnvelopeHash: envelope.ContentHash})
 	}
 	if err := validateCampaignArtifactGraph(edges); err != nil {
 		return nil, err
 	}
-	if err := validateCampaignArtifactObjectCount(len(rawFiles), references); err != nil {
+	if err := validateCampaignArtifactObjectCountWithLimits(hashes, references, limits); err != nil {
 		return nil, err
 	}
-	referenceNames := make([]string, 0, len(referenceFiles))
-	for name := range referenceFiles {
-		referenceNames = append(referenceNames, name)
-	}
-	sort.Strings(referenceNames)
-	referenceEntries := make([]campaignEvidenceFileEntry, 0, len(referenceNames))
-	for _, name := range referenceNames {
-		reference := references[name]
-		raw := referenceFiles[name]
-		payload := campaignEvidenceFilePayload{
-			Schema: campaignEvidenceFileSchema, RunID: runID, Scope: "reference", Path: name,
-			ContentHash: reference.ContentHash, Size: uint64(len(raw)), Data: raw,
-		}
-		pathHash := sha256.Sum256([]byte("reference\x00" + name))
-		localPath := filepath.Join(stateDir, "public", campaignEvidenceLocalArchiveDirectory, runID, "references", hex.EncodeToString(pathHash[:])+".evidence.json")
-		envelope, _, err := prepareLocalEvidence(cfg, stateDir, localPath, campaignEvidenceFileKind, runID, payload, owner, 0)
-		if err != nil {
-			return nil, fmt.Errorf("prepare campaign referenced artifact %q: %w", name, err)
-		}
-		archive.Files = append(archive.Files, envelope)
-		referenceEntries = append(referenceEntries, campaignEvidenceFileEntry{Path: name, ContentHash: reference.ContentHash, Size: uint64(len(raw)), EnvelopeHash: envelope.ContentHash})
-	}
+	sort.Slice(referenceEntries, func(i, j int) bool { return referenceEntries[i].Path < referenceEntries[j].Path })
 	manifestPayload := campaignEvidenceManifestPayload{
 		Schema: campaignEvidenceManifestSchema, DeploymentID: cfg.Config.Deployment.DeploymentID,
 		ChainID: cfg.ChainID, GenesisHash: strings.ToLower(cfg.Public.Chain.GenesisHash), Netuid: cfg.Netuid,
-		RunID: runID, ResultHash: strings.ToLower(resultHash), BundlePayloadHash: strings.ToLower(bundlePayloadHash), Files: entries, References: referenceEntries,
+		RunID: runId, ResultHash: strings.ToLower(resultHash), BundlePayloadHash: strings.ToLower(bundlePayloadHash), Files: entries, References: referenceEntries,
 	}
 	manifestPath := filepath.Join(runDir, campaignEvidenceManifestFilename)
-	manifest, _, err := prepareLocalEvidence(cfg, stateDir, manifestPath, campaignEvidenceManifestKind, runID, manifestPayload, owner, 0)
+	manifest, _, err := prepareLocalEvidence(cfg, stateDir, manifestPath, campaignEvidenceManifestKind, runId, manifestPayload, owner, 0)
 	if err != nil {
 		return nil, fmt.Errorf("prepare campaign evidence manifest: %w", err)
 	}
-	if _, err := decodeCampaignEvidenceManifest(manifest); err != nil {
+	if _, err := decodeCampaignEvidenceManifestWithLimits(manifest, limits); err != nil {
 		return nil, err
 	}
-	archive.Manifest = manifest
-	return archive, nil
+	return manifest, ctx.Err()
 }
 
 func publishCampaignEvidenceArchive(ctx context.Context, cfg *ResolvedConfig, roles *RoleSecrets, stateDir, runID, resultHash, bundlePayloadHash string, hashes map[string]string, stores scenarioCompletionStoreFactory) (*ReleaseEvidenceEnvelope, error) {
 	if err := verifyRuntimeBlobConfigManifest(cfg, stateDir); err != nil {
 		return nil, fmt.Errorf("reauthenticate campaign evidence runtime config: %w", err)
-	}
-	archive, err := prepareCampaignEvidenceArchive(cfg, roles, stateDir, runID, resultHash, bundlePayloadHash, hashes)
-	if err != nil {
-		return nil, err
 	}
 	if stores == nil {
 		stores = func(operator int) (server.BlobStore, error) {
@@ -823,23 +1017,19 @@ func publishCampaignEvidenceArchive(ctx context.Context, cfg *ResolvedConfig, ro
 		}
 		operatorStores[operator] = store
 	}
-	for operator := 1; operator <= cfg.Config.Topology.Operators; operator++ {
-		store := operatorStores[operator]
-		for _, envelope := range append(append([]*ReleaseEvidenceEnvelope(nil), archive.Files...), archive.Manifest) {
-			serverEnvelope, err := startifactEvidenceEnvelope(envelope)
-			if err != nil {
-				return nil, fmt.Errorf("operator %d campaign evidence envelope: %w", operator, err)
-			}
-			published, err := startifact.PublishEvidence(ctx, store, serverEnvelope)
-			if err != nil {
-				return nil, fmt.Errorf("operator %d direct campaign evidence publication: %w", operator, err)
-			}
-			if err := verifyDirectEvidencePublication(ctx, store, serverEnvelope, published); err != nil {
-				return nil, fmt.Errorf("operator %d direct campaign evidence verification: %w", operator, err)
-			}
+	var manifest *ReleaseEvidenceEnvelope
+	err := withCampaignEvidencePublicationBatches(ctx, operatorStores, func(publish func(*ReleaseEvidenceEnvelope) error) error {
+		var err error
+		manifest, err = streamCampaignEvidenceArchive(ctx, cfg, roles, stateDir, runID, resultHash, bundlePayloadHash, hashes, publish)
+		if err != nil {
+			return err
 		}
+		return publish(manifest)
+	})
+	if err != nil {
+		return nil, err
 	}
-	return archive.Manifest, nil
+	return manifest, nil
 }
 
 func publishedFinalSemanticReaderFactory(ctx context.Context, cfg *ResolvedConfig, stateDir string) (FinalSemanticChainReaderFactory, error) {
@@ -964,7 +1154,7 @@ func publishScenarioCompletionCommits(ctx context.Context, cfg *ResolvedConfig, 
 		if err != nil {
 			return nil, fmt.Errorf("prepare operator %d scenario completion commit: %w", operator, err)
 		}
-		serverEnvelope, err := startifactEvidenceEnvelope(envelope)
+		prepared, err := prepareDirectEvidencePublication(envelope)
 		if err != nil {
 			return nil, fmt.Errorf("operator %d scenario completion commit: %w", operator, err)
 		}
@@ -979,11 +1169,11 @@ func publishScenarioCompletionCommits(ctx context.Context, cfg *ResolvedConfig, 
 		if store == nil || store.Prefix() != wantPrefix {
 			return nil, fmt.Errorf("operator %d scenario completion store prefix is invalid", operator)
 		}
-		published, err := startifact.PublishEvidence(ctx, store, serverEnvelope)
+		published, err := prepared.Publish(ctx, store)
 		if err != nil {
 			return nil, fmt.Errorf("operator %d direct scenario completion publication: %w", operator, err)
 		}
-		if err := verifyDirectEvidencePublication(ctx, store, serverEnvelope, published); err != nil {
+		if err := prepared.VerifyPublished(ctx, store, published); err != nil {
 			return nil, fmt.Errorf("operator %d direct scenario completion verification: %w", operator, err)
 		}
 		result = append(result, PublishedEvidence{
@@ -1000,6 +1190,19 @@ func publishScenarioCompletionCommits(ctx context.Context, cfg *ResolvedConfig, 
 // local complete.json becomes visible only after every direct public history
 // commit has been written and independently read back from its operator store.
 func commitPublishedScenarioCompletion(ctx context.Context, cfg *ResolvedConfig, roles *RoleSecrets, stateDir, runID string, complete *ReleaseEvidenceEnvelope, encodedComplete []byte, stores scenarioCompletionStoreFactory) (string, error) {
+	if finalUsesEvidenceV2(cfg) {
+		limits, err := campaignEvidenceLimitsForConfig(cfg)
+		if err != nil {
+			return "complete_evidence_encoding", err
+		}
+		if err := validateCampaignMetadataRawV2(limits, "complete.json", encodedComplete); err != nil {
+			return "complete_evidence_encoding", err
+		}
+		var decoded ReleaseEvidenceEnvelope
+		if err := decodeStrictJSONBytes(encodedComplete, &decoded); err != nil || complete == nil || !finalJSONEqual(decoded, *complete) {
+			return "complete_evidence_encoding", errors.Join(errors.New("local completion bytes differ from the signed publication"), err)
+		}
+	}
 	if _, err := publishScenarioCompletionCommits(ctx, cfg, roles, stateDir, runID, complete, stores); err != nil {
 		return "complete_evidence_publication", err
 	}
@@ -1039,8 +1242,7 @@ func publishEvidence(ctx context.Context, cfg *ResolvedConfig, roles *RoleSecret
 		if err != nil {
 			return nil, fmt.Errorf("operator %d evidence API: %w", operator, err)
 		}
-		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1*1024*1024))
-		resp.Body.Close()
+		body, readErr := readEvidenceHttpBody(ctx, resp.Body, 1*1024*1024)
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -1061,21 +1263,22 @@ func publishEvidence(ctx context.Context, cfg *ResolvedConfig, roles *RoleSecret
 // Every superseded signed envelope is retained byte-for-byte, so a retry is
 // idempotent and no previously published release claim can disappear locally.
 func prepareLocalEvidence(cfg *ResolvedConfig, stateDir, localPath, kind, runID string, payload any, role EVMRoleSecret, operator int) (*ReleaseEvidenceEnvelope, []byte, error) {
-	payloadBytes, err := json.Marshal(payload)
+	owned, err := marshalEvidencePayload(cfg, kind, payload)
 	if err != nil {
 		return nil, nil, err
 	}
+	payloadBytes := owned.encoded
 	key, err := crypto.HexToECDSA(strings.TrimPrefix(role.PrivateKeyHex, "0x"))
 	if err != nil {
 		return nil, nil, err
 	}
-	if existing, readErr := os.ReadFile(localPath); readErr == nil {
+	if existing, readErr := readCampaignLocalEnvelopeWithLimitV2(localPath, owned.maximumBytes); readErr == nil {
 		var prior ReleaseEvidenceEnvelope
 		if json.Unmarshal(existing, &prior) != nil || verifyEvidence(&prior, &key.PublicKey) != nil || prior.Kind != kind || prior.RunID != runID || prior.DeploymentID != cfg.Config.Deployment.DeploymentID || prior.ChainID != cfg.ChainID || prior.Netuid != cfg.Netuid || !strings.EqualFold(prior.GenesisHash, cfg.Public.Chain.GenesisHash) {
 			return nil, nil, fmt.Errorf("immutable local evidence %s does not match this publication", localPath)
 		}
 		if bytes.Equal(prior.Payload, payloadBytes) {
-			encoded, marshalErr := json.Marshal(&prior)
+			encoded, marshalErr := marshalEvidenceWithCanonicalPayload(&prior, payloadBytes)
 			return &prior, encoded, marshalErr
 		}
 		if kind != "deployment-manifest" || runID != "" {
@@ -1089,11 +1292,11 @@ func prepareLocalEvidence(cfg *ResolvedConfig, stateDir, localPath, kind, runID 
 	} else if !errors.Is(readErr, os.ErrNotExist) {
 		return nil, nil, readErr
 	}
-	envelope, err := signEvidence(cfg, kind, runID, payload, role)
+	envelope, err := signEvidenceOwnedPayload(cfg, kind, runID, owned, role)
 	if err != nil {
 		return nil, nil, err
 	}
-	encoded, err := json.Marshal(envelope)
+	encoded, err := marshalEvidenceWithCanonicalPayload(envelope, payloadBytes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1163,16 +1366,12 @@ func verifyPublishedEvidenceOriginWithKey(ctx context.Context, cfg *ResolvedConf
 	if err != nil {
 		return err
 	}
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, (64*1024*1024)+1))
-	resp.Body.Close()
+	body, readErr := readEvidenceHttpBody(ctx, resp.Body, 64*1024*1024)
 	if readErr != nil {
 		return readErr
 	}
 	if resp.StatusCode/100 != 2 {
 		return fmt.Errorf("content endpoint returned HTTP %d", resp.StatusCode)
-	}
-	if len(body) > 64*1024*1024 {
-		return errors.New("content endpoint exceeded 64 MiB")
 	}
 	var envelope ReleaseEvidenceEnvelope
 	if json.Unmarshal(body, &envelope) != nil || verifyEvidence(&envelope, expected) != nil {
@@ -1207,16 +1406,12 @@ func verifyPublishedEvidenceOriginWithKey(ctx context.Context, cfg *ResolvedConf
 	if err != nil {
 		return err
 	}
-	history, readErr := io.ReadAll(io.LimitReader(resp.Body, (16*1024*1024)+1))
-	resp.Body.Close()
+	history, readErr := readEvidenceHttpBody(ctx, resp.Body, 16*1024*1024)
 	if readErr != nil {
 		return readErr
 	}
 	if resp.StatusCode/100 != 2 {
 		return fmt.Errorf("history endpoint returned HTTP %d", resp.StatusCode)
-	}
-	if len(history) > 16*1024*1024 {
-		return errors.New("history endpoint exceeded 16 MiB")
 	}
 	var listing struct {
 		Schema    string            `json:"schema"`
@@ -1299,41 +1494,42 @@ func publishedEvidenceKeyHasSuffix(key, suffix string) bool {
 }
 
 type PublicDeploymentManifest struct {
-	Schema                     string                      `json:"schema"`
-	Release                    string                      `json:"release"`
-	DeploymentID               string                      `json:"deployment_id"`
-	Revision                   uint64                      `json:"revision,omitempty"`
-	PreviousManifestHash       string                      `json:"previous_manifest_hash,omitempty"`
-	GeneratedAt                string                      `json:"generated_at"`
-	ChainID                    uint64                      `json:"chain_id"`
-	GenesisHash                string                      `json:"genesis_hash"`
-	RuntimeSpec                uint32                      `json:"runtime_spec"`
-	TransactionVersion         uint32                      `json:"transaction_version"`
-	StateVersion               uint8                       `json:"state_version"`
-	RuntimeCodeHash            string                      `json:"runtime_code_hash"`
-	RuntimeMetadataHash        string                      `json:"runtime_metadata_hash"`
-	Netuid                     uint16                      `json:"netuid"`
-	EVMRPC                     string                      `json:"evm_rpc"`
-	SubstrateRPC               string                      `json:"substrate_rpc"`
-	OperationalEVMRPC          string                      `json:"operational_evm_rpc,omitempty"`
-	OperationalSubstrateRPC    string                      `json:"operational_substrate_rpc,omitempty"`
-	OperationalRPCMode         string                      `json:"operational_rpc_mode"`
-	IndependentRPC             bool                        `json:"independent_rpc"`
-	EvidenceTransportProfile   string                      `json:"evidence_transport_profile,omitempty"`
-	ConfigHash                 string                      `json:"config_hash"`
-	PolicyHash                 string                      `json:"policy_hash"`
-	PlanHash                   string                      `json:"plan_hash"`
-	ReleaseLockHash            string                      `json:"release_lock_hash"`
-	Contracts                  *ContractDeployment         `json:"contracts"`
-	CoordinatorUpgrade         CoordinatorUpgrade          `json:"coordinator_upgrade"`
-	CoordinatorUpgradeBaseline *CoordinatorUpgradeBaseline `json:"coordinator_upgrade_baseline,omitempty"`
-	Identities                 json.RawMessage             `json:"identities"`
-	SetupEvidence              map[string]json.RawMessage  `json:"setup_evidence"`
-	Operators                  []PublicOperator            `json:"operators"`
-	Topology                   TopologyConfig              `json:"topology"`
-	ArtifactStores             []string                    `json:"artifact_history_endpoints"`
-	EvidenceStores             []string                    `json:"release_evidence_history_endpoints"`
-	Commands                   map[string]string           `json:"commands"`
+	Schema                     string                       `json:"schema"`
+	Release                    string                       `json:"release"`
+	DeploymentID               string                       `json:"deployment_id"`
+	Revision                   uint64                       `json:"revision,omitempty"`
+	PreviousManifestHash       string                       `json:"previous_manifest_hash,omitempty"`
+	GeneratedAt                string                       `json:"generated_at"`
+	ChainID                    uint64                       `json:"chain_id"`
+	GenesisHash                string                       `json:"genesis_hash"`
+	RuntimeSpec                uint32                       `json:"runtime_spec"`
+	TransactionVersion         uint32                       `json:"transaction_version"`
+	StateVersion               uint8                        `json:"state_version"`
+	RuntimeCodeHash            string                       `json:"runtime_code_hash"`
+	RuntimeMetadataHash        string                       `json:"runtime_metadata_hash"`
+	Netuid                     uint16                       `json:"netuid"`
+	EVMRPC                     string                       `json:"evm_rpc"`
+	SubstrateRPC               string                       `json:"substrate_rpc"`
+	OperationalEVMRPC          string                       `json:"operational_evm_rpc,omitempty"`
+	OperationalSubstrateRPC    string                       `json:"operational_substrate_rpc,omitempty"`
+	OperationalRPCMode         string                       `json:"operational_rpc_mode"`
+	IndependentRPC             bool                         `json:"independent_rpc"`
+	EvidenceTransportProfile   string                       `json:"evidence_transport_profile,omitempty"`
+	ConfigHash                 string                       `json:"config_hash"`
+	PolicyHash                 string                       `json:"policy_hash"`
+	PlanHash                   string                       `json:"plan_hash"`
+	ReleaseLockHash            string                       `json:"release_lock_hash"`
+	Contracts                  *ContractDeployment          `json:"contracts"`
+	CoordinatorUpgrade         CoordinatorUpgrade           `json:"coordinator_upgrade"`
+	CoordinatorUpgradeBaseline *CoordinatorUpgradeBaseline  `json:"coordinator_upgrade_baseline,omitempty"`
+	ValidatorEvidence          *ValidatorEvidenceDeployment `json:"validator_evidence,omitempty"`
+	Identities                 json.RawMessage              `json:"identities"`
+	SetupEvidence              map[string]json.RawMessage   `json:"setup_evidence"`
+	Operators                  []PublicOperator             `json:"operators"`
+	Topology                   TopologyConfig               `json:"topology"`
+	ArtifactStores             []string                     `json:"artifact_history_endpoints"`
+	EvidenceStores             []string                     `json:"release_evidence_history_endpoints"`
+	Commands                   map[string]string            `json:"commands"`
 }
 
 type PublicOperator struct {
@@ -1524,6 +1720,13 @@ func writePublicDeploymentManifest(cfg *ResolvedConfig, stateDir string, plan *S
 	if plan != nil {
 		manifest.PlanHash = plan.PlanHash
 		manifest.CoordinatorUpgrade = plan.CoordinatorUpgrade
+		if planUsesValidatorEvidenceEnvelope(plan.Schema) {
+			if err := validateValidatorEvidencePlan(plan); err != nil {
+				return nil, err
+			}
+			companion := *plan.ValidatorEvidence
+			manifest.ValidatorEvidence = &companion
+		}
 		if plan.CoordinatorUpgradeBaseline.Schema == "urnetwork-coordinator-upgrade-baseline-v4" {
 			baseline := plan.CoordinatorUpgradeBaseline
 			manifest.CoordinatorUpgradeBaseline = &baseline

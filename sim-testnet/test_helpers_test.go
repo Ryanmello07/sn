@@ -80,21 +80,9 @@ func testResolvedConfig(t *testing.T) *ResolvedConfig {
 	public.Chain.ExpectedStateVersion = reviewedRuntimeStateVersion
 	public.Chain.ExpectedBlockSeconds = 12
 	public.Chain.ExpectedDefaultMinTransferRao = 100_000
-	release := &ReleaseLock{SchemaVersion: 1, Release: "1.0", Dependencies: map[string]string{
-		"postgres": "postgres:18@sha256:" + strings.Repeat("1", 64),
-		"redis":    "redis:8-alpine@sha256:" + strings.Repeat("2", 64),
-	}}
-	release.Runtime.SourceRepository = reviewedRuntimeSourceRepository
-	release.Runtime.SourceTag = reviewedRuntimeSourceTag
-	release.Runtime.SourceCommit = reviewedRuntimeSourceCommit
-	release.Runtime.CodeHash = reviewedRuntimeCodeHash
-	release.Runtime.MetadataHash = reviewedRuntimeMetadataHash
-	release.Runtime.CompressedWasmSHA256 = reviewedRuntimeCompressedWasmSHA256
-	release.Runtime.UpstreamReleaseCallHash = reviewedRuntimeUpstreamReleaseCallHash
-	release.Runtime.UpstreamReleaseTimepoint = reviewedRuntimeUpstreamReleaseTimepoint
-	release.Runtime.SpecVersion = reviewedRuntimeSpecVersion
-	release.Runtime.TransactionVersion = reviewedRuntimeTransactionVersion
-	release.Runtime.StateVersion = reviewedRuntimeStateVersion
+	// Reopened current approvals authenticate their original release source.
+	// Use the existing complete owned fixture, not a partial runtime stanza.
+	release := testReleaseLockFixture(t)
 	hyperparameters := &Hyperparameters{SchemaVersion: 1, Profile: releaseProfile, OwnerControlled: map[string]any{
 		"tempo": 360, "max_allowed_uids": 256, "commit_reveal_weights_enabled": true, "commit_reveal_period": 1, "burn_half_life": 1, "immunity_period": testnetBootstrapImmunityPeriodBlocks,
 	}, ProductionOwnerControlled: map[string]any{"burn_half_life": 360, "immunity_period": 360}}

@@ -437,6 +437,13 @@ func runMutation(ctx context.Context, cmd string, cfg *ResolvedConfig, stateDir 
 	if cmd == "retire" {
 		return runRetirement(ctx, cfg, stateDir, o)
 	}
+	// Planning and retirement need no upload allocation. Every actual setup
+	// or campaign apply must admit it before journals, services or spending.
+	if o.Apply {
+		if _, err := runtimeAttemptUploadBudget(cfg); err != nil {
+			return err
+		}
+	}
 	if cmd == "scenario" {
 		names := []string{o.Name}
 		if o.Name == releaseCandidateCampaignName {
@@ -588,7 +595,13 @@ func mayRefreshPersistedPlan(planErr error, entries []JournalEntry) bool {
 }
 
 func loadPersistedPlan(cfg *ResolvedConfig, stateDir string) (*SetupPlan, error) {
-	p, err := readPersistedPlan(stateDir)
+	raw, err := readValidatorEvidenceHistoricalFile(stateDir, "plan.json", maximumCampaignEvidenceRawFileBytes)
+	if err != nil {
+		return nil, err
+	}
+	// Compare active release identity before current-bytecode admission. A
+	// different locked release can enter only the explicit revision path.
+	p, err := decodePersistedPlanWire(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -617,6 +630,9 @@ func loadPersistedPlan(cfg *ResolvedConfig, stateDir string) (*SetupPlan, error)
 	} else if persistedRoleHash, _ := canonicalHashHex(p.Roles); roleHash != persistedRoleHash {
 		return nil, fmt.Errorf("persisted setup roles do not match deterministic role derivation")
 	}
+	if err := validatePlanBudget(p); err != nil {
+		return nil, fmt.Errorf("persisted active setup plan: %w", err)
+	}
 	return p, nil
 }
 
@@ -627,9 +643,9 @@ func readPersistedPlan(stateDir string) (*SetupPlan, error) {
 	return readPersistedPlanFile(filepath.Join(stateDir, "plan.json"))
 }
 
-// Authenticate one stored plan snapshot against the canonical hash encoded in
-// that file. Ancestor recovery uses the same decoder as the active plan so a
-// hand-edited history file cannot authorize a carried transaction.
+// Authenticate an active execution snapshot against its exact canonical hash
+// and current artifact. Archived ancestors use the separate historical reader;
+// both paths reject a hand-edited approval before interpreting its contents.
 func readPersistedPlanFile(path string) (*SetupPlan, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -641,6 +657,28 @@ func readPersistedPlanFile(path string) (*SetupPlan, error) {
 // Authenticate one already-read wire image so archival can preserve the exact
 // reviewed bytes without a read/decode/re-read race or a struct re-marshal.
 func decodePersistedPlanBytes(b []byte) (*SetupPlan, error) {
+	return decodePersistedPlanBytesForHistory(b, false)
+}
+
+// History decoding is separate from active-plan loading. The private flag
+// permits only authenticated original artifact validation, never execution.
+func decodePersistedPlanBytesForHistory(b []byte, historical bool) (*SetupPlan, error) {
+	p, err := decodePersistedPlanWire(b)
+	if err != nil {
+		return nil, err
+	}
+	p.validatorEvidenceHistorical = historical
+	if err := validatePlanBudget(p); err != nil {
+		return nil, fmt.Errorf("persisted setup plan: %w", err)
+	}
+	return p, nil
+}
+
+// Exact wire hashing precedes identity dispatch or interpretation of history.
+func decodePersistedPlanWire(b []byte) (*SetupPlan, error) {
+	if len(b) == 0 || len(b) > maximumCampaignEvidenceRawFileBytes {
+		return nil, errors.New("persisted setup plan exceeds its archival byte bound")
+	}
 	var p SetupPlan
 	if err := json.Unmarshal(b, &p); err != nil {
 		return nil, fmt.Errorf("persisted setup plan: %w", err)
@@ -665,9 +703,6 @@ func decodePersistedPlanBytes(b []byte) (*SetupPlan, error) {
 	if want == "" || got != want {
 		return nil, fmt.Errorf("persisted setup plan hash mismatch: got %s want %s", got, want)
 	}
-	if err := validatePlanBudget(&p); err != nil {
-		return nil, fmt.Errorf("persisted setup plan: %w", err)
-	}
 	return &p, nil
 }
 
@@ -677,10 +712,12 @@ func writeRunInputs(cfg *ResolvedConfig, stateDir string, p *SetupPlan, roles *R
 		return err
 	}
 	planBytes := append(b, '\n')
-	priorPath := filepath.Join(stateDir, "plan.json")
-	priorBytes, priorErr := os.ReadFile(priorPath)
+	priorBytes, priorErr := readValidatorEvidenceHistoricalFile(stateDir, "plan.json", maximumCampaignEvidenceRawFileBytes)
 	if priorErr == nil {
 		prior, decodeErr := decodePersistedPlanBytes(priorBytes)
+		if decodeErr != nil {
+			prior, decodeErr = decodePersistedPlanBytesForHistory(priorBytes, true)
+		}
 		if decodeErr != nil {
 			return decodeErr
 		}
@@ -1016,7 +1053,7 @@ func (e *Executor) carriedFleetBatchSourceExecutor(action Action, verified Journ
 	if verified.PlanHash == e.plan.PlanHash {
 		return e, action, nil
 	}
-	sourcePlan, err := readPersistedPlanFile(filepath.Join(e.stateDir, "plans", stringsTrim0x(verified.PlanHash)+".json"))
+	sourcePlan, err := readValidatorEvidenceHistoricalPlan(e.stateDir, verified.PlanHash)
 	if err != nil {
 		return nil, Action{}, fmt.Errorf("read carried fleet batch source plan: %w", err)
 	}
@@ -1407,6 +1444,10 @@ func (e *Executor) execute(ctx context.Context, a Action) error {
 		return nil
 	case a.ID == "production.schedule-policy":
 		return e.scheduleProductionPolicy(ctx, a)
+	case a.ID == validatorEvidenceAnchorActionID:
+		return e.anchorValidatorEvidence(ctx, a)
+	case a.ID == validatorEvidenceDeployActionID:
+		return e.executeDeployment(ctx, a)
 	case a.ID == "evm.coordinator-upgrade-activate":
 		return e.activateCoordinatorUpgrade(ctx, a)
 	case a.ID == "policy.schedule-bootstrap":
@@ -1512,8 +1553,15 @@ func (e *Executor) execute(ctx context.Context, a Action) error {
 		return e.executeDishonestDeposit(ctx, a)
 	case a.Kind == "budget-reserve":
 		return nil
+	case strings.HasPrefix(a.ID, "evidence.activate."):
+		return e.publishRuntimeEvidenceActivationV2(ctx, a)
+	case a.ID == runtimeEvidenceActivationBoundaryActionId:
+		return e.completeRuntimeEvidenceActivationV2(ctx)
 	case a.ID == "config.render":
 		if err := preflightSignedAttemptStateNamespaces(e.cfg, e.stateDir); err != nil {
+			return err
+		}
+		if _, err := runtimeAttemptUploadBudget(e.cfg); err != nil {
 			return err
 		}
 		if err := e.ensurePayloads(ctx); err != nil {
@@ -2510,6 +2558,15 @@ func (e *Executor) ensurePayloads(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		if e.plan.ValidatorEvidenceCarry != nil {
+			observed, err := e.authenticateValidatorEvidenceCarry(ctx)
+			if err != nil {
+				return err
+			}
+			if err := bindValidatorEvidenceCarryPayloads(p, observed); err != nil {
+				return err
+			}
+		}
 		if planUsesCoordinatorUpgradeEnvelope(e.plan.Schema) {
 			if err := configureCoordinatorUpgradeNonce(p, e.plan.CoordinatorUpgrade.DeployerNonce); err != nil {
 				return fmt.Errorf("build approved coordinator upgrade payload: %w", err)
@@ -2557,6 +2614,11 @@ func (e *Executor) ensurePayloads(ctx context.Context) error {
 		}
 		if e.plan.CoordinatorUpgrade != p.CoordinatorUpgrade {
 			return errors.New("approved coordinator upgrade does not match this release payload")
+		}
+		if planUsesValidatorEvidenceEnvelope(e.plan.Schema) {
+			if err := validateValidatorEvidenceDeployment(e.plan.ValidatorEvidence, p.ValidatorEvidence); err != nil {
+				return err
+			}
 		}
 		if existing, loadErr := loadContractDeployment(e.stateDir); loadErr == nil {
 			activeCompatible := contractDeploymentAddressesEqual(*existing, planned) && contractDeploymentRuntimeHashesCompatible(*existing, planned)
@@ -2658,6 +2720,9 @@ func (e *Executor) ensurePayloads(ctx context.Context) error {
 	return nil
 }
 func (e *Executor) executeDeployment(ctx context.Context, a Action) error {
+	if e != nil && e.plan != nil && e.plan.ValidatorEvidenceCarry != nil && a.ID == validatorEvidenceDeployActionID {
+		return e.verifyValidatorEvidenceCarryAction(ctx, a)
+	}
 	if err := e.ensurePayloads(ctx); err != nil {
 		return err
 	}
@@ -2667,6 +2732,14 @@ func (e *Executor) executeDeployment(ctx context.Context, a Action) error {
 	var data []byte
 	value := big.NewInt(0)
 	switch a.ID {
+	case validatorEvidenceDeployActionID:
+		if p.ValidatorEvidence == nil || e.plan == nil {
+			return errors.New("validator evidence deployment is not approved")
+		}
+		if err := validateValidatorEvidenceDeployment(e.plan.ValidatorEvidence, p.ValidatorEvidence); err != nil {
+			return err
+		}
+		addr, data = p.ValidatorEvidence.Manifest.Address, p.ValidatorEvidence.Creation
 	case "evm.reserve-sink":
 		addr = p.Manifest.ReserveSink
 		data = p.Reserve
@@ -2726,6 +2799,8 @@ func (e *Executor) executeDeployment(ctx context.Context, a Action) error {
 			expected := p.ExpectedRuntime[addr]
 			if a.ID == "fleet.refresh.deploy-batcher" {
 				expected = p.FleetBatcherRuntime
+			} else if a.ID == validatorEvidenceDeployActionID {
+				expected = p.ValidatorEvidence.Runtime
 			}
 			if len(expected) > 0 && string(code) != string(expected) {
 				return fmt.Errorf("unexpected existing code at %s", addr)
@@ -3861,6 +3936,11 @@ func (e *Executor) verifyCarriedActionHistory(ctx context.Context) error {
 	if e == nil || e.plan == nil || e.journal == nil {
 		return errors.New("plan/journal is unavailable")
 	}
+	if e.plan.ValidatorEvidenceCarry != nil {
+		if _, err := e.authenticateValidatorEvidenceCarry(ctx); err != nil {
+			return fmt.Errorf("validator evidence immutable source history: %w", err)
+		}
+	}
 	audits := make([]carriedActionAudit, 0)
 	for _, action := range e.plan.Actions {
 		entry, ok := e.verifiedActionEntry(action)
@@ -4195,6 +4275,11 @@ func (e *Executor) setReserveTakeZero(ctx context.Context, a Action) error {
 }
 
 func RenderRuntimeConfigs(cfg *ResolvedConfig, stateDir string, roles *RoleSecrets) error {
+	resolved, resolveErr := runtimeEvidenceV2ResolvedConfig(cfg, stateDir)
+	if resolveErr != nil {
+		return resolveErr
+	}
+	cfg = resolved
 	if cfg == nil || cfg.Public == nil {
 		return errors.New("runtime config public manifest is unavailable")
 	}
@@ -4211,6 +4296,20 @@ func RenderRuntimeConfigs(cfg *ResolvedConfig, stateDir string, roles *RoleSecre
 		return err
 	}
 	if err := preflightSignedAttemptStateNamespaces(cfg, stateDir); err != nil {
+		return err
+	}
+	if err := preflightRuntimeEvidenceV2(cfg, stateDir); err != nil {
+		return err
+	}
+	if err := validateRuntimeOperatorApiOrigins(cfg); err != nil {
+		return err
+	}
+	uploadBudget, err := runtimeAttemptUploadBudget(cfg)
+	if err != nil {
+		return err
+	}
+	reservedUploads, err := runtimeReservedAttemptUploads(cfg, stateDir, contracts)
+	if err != nil {
 		return err
 	}
 	if err := ensureOperatorConfigOverlays(cfg, stateDir); err != nil {
@@ -4238,6 +4337,8 @@ func RenderRuntimeConfigs(cfg *ResolvedConfig, stateDir string, roles *RoleSecre
 		st := map[string]any{
 			"profile":                                    "testnet",
 			"testnet-enabled":                            true,
+			"testnet-attempt-upload":                     uploadBudget,
+			"testnet-reserved-attempt-upload":            reservedUploads[i-1],
 			"testnet-wallet-allow-unsigned":              false,
 			"testnet-public-rpc-url":                     publicRPCURL,
 			"testnet-authority":                          workloadRPCAuthority(),
@@ -4443,6 +4544,17 @@ func copyTree(src, dst string, mode os.FileMode) error {
 }
 
 func renderValidatorMinerConfigs(cfg *ResolvedConfig, stateDir string, roles *RoleSecrets, c *ContractDeployment) error {
+	resolved, resolveErr := runtimeEvidenceV2ResolvedConfig(cfg, stateDir)
+	if resolveErr != nil {
+		return resolveErr
+	}
+	cfg = resolved
+	if err := preflightRuntimeEvidenceV2(cfg, stateDir); err != nil {
+		return err
+	}
+	if err := validateRuntimeOperatorApiOrigins(cfg); err != nil {
+		return err
+	}
 	if err := prepareSignedAttemptStateNamespaces(cfg, stateDir); err != nil {
 		return err
 	}
@@ -4462,7 +4574,11 @@ func renderValidatorMinerConfigs(cfg *ResolvedConfig, stateDir string, roles *Ro
 		v["version_key"] = hyperparameterUint64(cfg.Hyperparameters.OwnerControlled["weights_version_key"])
 		v["policy"] = cfg.Policy
 		v["operators"] = operatorDirectory(cfg, stateDir, roles, i)
-		b, _ := yaml.Marshal(v)
+		v["evidence_v2"] = cfg.Config.ValidatorEvidenceV2[i-1].Evidence
+		b, err := yaml.Marshal(v)
+		if err != nil {
+			return err
+		}
 		path := filepath.Join(stateDir, "runtime", fmt.Sprintf("validator-%d", i), "validator.yml")
 		if err := atomicWrite(path, b, 0o600); err != nil {
 			return err
@@ -4510,7 +4626,7 @@ func renderValidatorMinerConfigs(cfg *ResolvedConfig, stateDir string, roles *Ro
 		claim := map[string]any{
 			"schema_version":  1,
 			"release":         "1.0",
-			"api_url":         fmt.Sprintf("http://127.0.0.1:%d", 18080+v["operator_no_id"].(int)),
+			"api_url":         cfg.OperatorAPIOrigins[operator-1],
 			"rpc":             []string{evmHTTP(workloadRPCAuthority())},
 			"key_file":        claimKeyPath,
 			"jwt_file":        filepath.Join(stateDir, "runtime", fmt.Sprintf("miner-%d", i), "state", "jwt"),
@@ -4533,7 +4649,7 @@ func renderValidatorMinerConfigs(cfg *ResolvedConfig, stateDir string, roles *Ro
 		for miner := first; miner <= last; miner++ {
 			operator := operatorForMiner(cfg, miner)
 			config.Members = append(config.Members, minercomponent.ProviderSwarmMember{
-				ID: fmt.Sprintf("miner-%d", miner), APIURL: fmt.Sprintf("http://127.0.0.1:%d", 18080+operator),
+				ID: fmt.Sprintf("miner-%d", miner), APIURL: cfg.OperatorAPIOrigins[operator-1],
 				ConnectURL:  fmt.Sprintf("ws://%s:%d", operatorConnectHostIP(operator), 19080+operator),
 				DNSPumpHost: operatorConnectHostIP(operator),
 				StateDir:    filepath.Join(stateDir, "runtime", fmt.Sprintf("miner-%d", miner), "state"),
@@ -4588,7 +4704,7 @@ func operatorDirectory(cfg *ResolvedConfig, stateDir string, roles *RoleSecrets,
 		root := filepath.Join(stateDir, "runtime", fmt.Sprintf("validator-%d", validatorID), "state", "operators", fmt.Sprintf("no-%d", i))
 		out = append(out, map[string]any{
 			"no_id":                i,
-			"api_url":              fmt.Sprintf("http://127.0.0.1:%d", 18080+i),
+			"api_url":              cfg.OperatorAPIOrigins[i-1],
 			"connect_url":          fmt.Sprintf("ws://%s:%d", operatorConnectHostIP(i), 19080+i),
 			"artifact_signer":      roles.EVM[fmt.Sprintf("operator-%d-artifact", i)].Address,
 			"state_dir":            root,

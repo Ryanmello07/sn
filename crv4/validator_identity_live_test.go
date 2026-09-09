@@ -16,7 +16,7 @@ import (
 // The chain and runtime pins are independent of the RPC response. UID zero is
 // a registered subnet observation, not an assumption that its current owner
 // is our signing validator. No private wallet or configuration is loaded.
-func TestLiveValidatorIdentityRuntime454Testnet521(t *testing.T) {
+func TestLiveValidatorIdentityRuntime455Testnet521(t *testing.T) {
 	if os.Getenv("CRV4_LIVE_VALIDATOR_IDENTITY") != "1" {
 		t.Skip("set CRV4_LIVE_VALIDATOR_IDENTITY=1 for the read-only public testnet identity probe")
 	}
@@ -27,11 +27,11 @@ func TestLiveValidatorIdentityRuntime454Testnet521(t *testing.T) {
 	}
 	allowed := RuntimeArtifactIdentity{
 		Version: RuntimeVersionIdentity{
-			SpecName: "node-subtensor", SpecVersion: 454,
+			SpecName: "node-subtensor", SpecVersion: 455,
 			TransactionVersion: 1, StateVersion: 1,
 		},
-		CodeHash:     "0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef",
-		MetadataHash: "0x4d17516b694ef8d18f8a565dcb2df0117e7a0018a3ffa40812c91a1621225702",
+		CodeHash:     "0xbca85925668cabb2880164610d64eda2e4d9bf2777994f9cdfdb9d36253ce74a",
+		MetadataHash: "0x16da562c347a354c55eb1ad5cd5094343afe7acdc12e5b526bf6c8cb12e866bc",
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()

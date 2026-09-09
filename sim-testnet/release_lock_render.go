@@ -38,6 +38,9 @@ var releaseEVMObservedKeys = []string{
 	"fleet_batcher_artifact_hash",
 	"governance_drill_storage_layout_hash",
 	"fleet_batcher_storage_layout_hash",
+	"validator_evidence_runtime_hash",
+	"validator_evidence_artifact_hash",
+	"validator_evidence_storage_layout_hash",
 	"abi_hash",
 	"coordinator_storage_layout_hash",
 }

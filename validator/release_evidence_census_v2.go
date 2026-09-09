@@ -65,11 +65,15 @@ type ValidatorEvidenceSignedV2 struct {
 // Keep inputs stable during admission. Publisher callbacks receive owned bytes
 // and no signing key, and must honor the replica lifecycle contract.
 type ValidatorEvidenceCensusV2Options struct {
-	Settlement                      AttemptSettlementV2Options
-	Window                          protocol.ValidatorEvidenceWindow
-	PrivateKeys                     map[uint64]ed25519.PrivateKey
-	Hotkey                          *crv4.Keypair
-	Replicas                        [2]AttemptCutV2Replica
+	Settlement  AttemptSettlementV2Options
+	Window      protocol.ValidatorEvidenceWindow
+	PrivateKeys map[uint64]ed25519.PrivateKey
+	Hotkey      *crv4.Keypair
+	Replicas    [2]AttemptCutV2Replica
+	// Protected uploads preserve each original source activation independently
+	// of the two destination sessions. When supplied, this complete map replaces
+	// Replicas; every member must retain the same two public origins.
+	ReplicasByOperator              map[uint64][2]AttemptCutV2Replica
 	SecondReplicaScratchDirectories map[uint64]string
 }
 
@@ -97,6 +101,13 @@ type ValidatorEvidenceCensusV2Publication struct {
 // before any external I/O. Real HTTP readers replace candidate/local transports;
 // independently supplied policy, historical server keys and bounds remain.
 func PublishValidatorEvidenceClosedCensusV2(ctx context.Context, closure *AttemptSettlementClosureV2, options ValidatorEvidenceCensusV2Options) (publication *ValidatorEvidenceCensusV2Publication, resultErr error) {
+	return publishValidatorEvidenceClosedCensusV2(ctx, closure, options, nil, ValidatorEvidencePublicationV2ReadOptions{})
+}
+
+// A retained locator is discovery only. Rebuild the unsigned census and every
+// expected header from the independently admitted closure, replay both public
+// stream sets, then reuse the exact consent bytes without another signature.
+func publishValidatorEvidenceClosedCensusV2(ctx context.Context, closure *AttemptSettlementClosureV2, options ValidatorEvidenceCensusV2Options, retained *ValidatorEvidencePublicationV2Manifest, retainedOptions ValidatorEvidencePublicationV2ReadOptions) (publication *ValidatorEvidenceCensusV2Publication, resultErr error) {
 	if ctx == nil {
 		return nil, errors.New("validator evidence census context is missing")
 	}
@@ -109,6 +120,15 @@ func PublishValidatorEvidenceClosedCensusV2(ctx context.Context, closure *Attemp
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if retained != nil {
+		if err := retained.validate(options.Settlement.MaxClosureBytes, options.Settlement.MaxParticipants); err != nil {
+			return nil, err
+		}
+		owned := *retained
+		owned.Members = append([]ValidatorEvidencePublicationV2MemberReference(nil), retained.Members...)
+		retained = &owned
+		retainedOptions.Activations = append([]protocol.ValidatorEvidenceActivation(nil), retainedOptions.Activations...)
+	}
 	operation, err := admitAttemptSettlementV2(ctx, closure, options.Settlement, true)
 	if err != nil {
 		return nil, err
@@ -116,12 +136,22 @@ func PublishValidatorEvidenceClosedCensusV2(ctx context.Context, closure *Attemp
 	if options.Window.Subject != (protocol.ValidatorEvidenceSubject{}) || len(options.PrivateKeys) != len(operation.closure.Transitions) || len(options.SecondReplicaScratchDirectories) != len(operation.closure.Transitions) {
 		return nil, errors.New("validator evidence census signer, scratch or terminal window differs")
 	}
+	if options.ReplicasByOperator != nil {
+		if len(options.ReplicasByOperator) != len(operation.closure.Transitions) {
+			return nil, errors.New("validator evidence census replica owners are incomplete")
+		}
+		for _, replica := range options.Replicas {
+			if replica.Origin != "" || replica.WriteRecords != nil || replica.WriteProofs != nil || replica.WriteMetadata != nil {
+				return nil, errors.New("validator evidence census mixes shared and source-owned replicas")
+			}
+		}
+	}
 	hotkey, publicKey, err := ownReleaseMeasurementEnvelopeV2Hotkey(options.Hotkey)
 	if err != nil {
 		return nil, err
 	}
 	window := options.Window
-	result := &ValidatorEvidenceCensusV2Publication{Members: make([]ValidatorEvidenceMemberV2Publication, len(operation.closure.Transitions)), Origins: [2]string{options.Replicas[0].Origin, options.Replicas[1].Origin}}
+	result := &ValidatorEvidenceCensusV2Publication{Members: make([]ValidatorEvidenceMemberV2Publication, len(operation.closure.Transitions))}
 	census := ValidatorEvidenceCensusV2{Schema: ValidatorEvidenceCensusV2Schema, Hotkey: publicKey, Boundary: operation.closure.Transitions[0].FromBoundary, Members: make([]ValidatorEvidenceCensusV2Member, len(result.Members))}
 	keys := make([]ed25519.PrivateKey, len(result.Members))
 	publishers := make([]*attemptCutV2Replicas, len(result.Members))
@@ -148,9 +178,23 @@ func PublishValidatorEvidenceClosedCensusV2(ctx context.Context, closure *Attemp
 			return nil, err
 		}
 		keys[index] = bytes.Clone(options.PrivateKeys[noID])
-		publishers[index], err = newAttemptCutV2Replicas(operator.Bounds, options.Replicas)
+		replicas := options.Replicas
+		if options.ReplicasByOperator != nil {
+			var found bool
+			replicas, found = options.ReplicasByOperator[noID]
+			if !found {
+				return nil, errors.New("validator evidence census omits a source replica owner")
+			}
+		}
+		publishers[index], err = newAttemptCutV2Replicas(operator.Bounds, replicas)
 		if err != nil {
 			return nil, err
+		}
+		origins := [2]string{replicas[0].Origin, replicas[1].Origin}
+		if index == 0 {
+			result.Origins = origins
+		} else if result.Origins != origins {
+			return nil, errors.New("validator evidence census source replicas have different public origins")
 		}
 		metadataLimit = min(metadataLimit, publishers[index].readers[0].metadataBytes)
 		payload, err := marshalAttemptSettlementV2JSON(ctx, transition, min(operation.options.MaxTransitionBytes, publishers[index].readers[0].metadataBytes), false, true)
@@ -188,9 +232,15 @@ func PublishValidatorEvidenceClosedCensusV2(ctx context.Context, closure *Attemp
 		return nil, err
 	}
 	result.CensusHash = sha256.Sum256(result.Census)
+	if retained != nil && (retained.Epoch != operation.closure.Epoch || retained.Origins != result.Origins || retained.CensusHash != result.CensusHash || retained.CensusBytes != uint64(len(result.Census)) || len(retained.Members) != len(result.Members)) {
+		return nil, errors.New("retained evidence publication differs from independently reconstructed census")
+	}
 	for index := range result.Members {
 		member := &result.Members[index]
 		member.Evidence.Header.CensusHash = result.CensusHash
+		if retained != nil && retained.Members[index].NoId != member.Evidence.Header.NoID {
+			return nil, errors.New("retained evidence publication differs from independently reconstructed member")
+		}
 		// Reserve the exact fixed-length signature encoding before I/O. The
 		// placeholders cannot reach storage, calldata or a successful result.
 		sized := member.Evidence
@@ -225,6 +275,22 @@ func PublishValidatorEvidenceClosedCensusV2(ctx context.Context, closure *Attemp
 	joined.Wait()
 	if err := errors.Join(failures[0], failures[1], ctx.Err()); err != nil {
 		return nil, err
+	}
+	if retained != nil {
+		observed, err := ReadValidatorEvidencePublicationV2(ctx, retained, retainedOptions)
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(observed.Census, result.Census) || len(observed.Members) != len(result.Members) {
+			return nil, errors.New("retained public census differs from reconstructed terminal closure")
+		}
+		for index, member := range result.Members {
+			other := observed.Members[index]
+			if member.Evidence.Header != other.Evidence.Header || !bytes.Equal(member.Payload, other.Payload) {
+				return nil, errors.New("retained public consent differs from independently replayed terminal member")
+			}
+		}
+		return observed, nil
 	}
 	for index := range result.Members {
 		member := &result.Members[index]

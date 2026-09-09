@@ -258,8 +258,9 @@ type providerSwarmInstance struct {
 	connectedOverride func() bool
 }
 
-// Reports live provider-carrier readiness. Tests may supply connectedOverride
-// to force the state transition without constructing the full SDK graph.
+// Reports live carrier plus processed current-key readiness. The supervisor
+// waits this boundary before starting validator demand. Tests may replace the
+// complete readiness result without constructing the full SDK graph.
 func (self *providerSwarmInstance) connected() bool {
 	if self == nil {
 		return false
@@ -267,7 +268,7 @@ func (self *providerSwarmInstance) connected() bool {
 	if self.connectedOverride != nil {
 		return self.connectedOverride()
 	}
-	return self.device != nil && self.device.GetProviderConnected()
+	return self.device != nil && self.device.GetProviderReady()
 }
 
 func (self *providerSwarmInstance) close() {
@@ -326,6 +327,7 @@ func startSwarmMember(ctx context.Context, member ProviderSwarmMember, failed fu
 		failed(errors.New("provider authentication was rejected"))
 	}))
 	deviceSettings := sdk.DefaultDeviceLocalSettings()
+	deviceSettings.ClientSettings.ClientKeyRegistrationRequired = true
 	deviceSettings.KeyMaterial = sdk.NewDeviceLocalKeyMaterial(seed, certificatePEM, keyPEM)
 	deviceSettings.ProviderDialContextSettings = dialSettings
 	deviceSettings.DnsPumpHost = member.DNSPumpHost

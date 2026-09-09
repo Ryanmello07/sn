@@ -262,13 +262,20 @@ func verifyFinalizedEVMReceipt(ctx context.Context, client *ethclient.Client, fi
 	return receipt, nil
 }
 
+// Build a read-only view from immutable manager metadata. The original owner
+// retains its mutex and nonce turn; callers neither send nor close this view.
 func cloneReadManager(manager *EvmTxManager, client *ethclient.Client) *EvmTxManager {
 	if manager == nil {
 		return nil
 	}
-	cloned := *manager
-	cloned.client = client
-	return &cloned
+	return &EvmTxManager{
+		client:       client,
+		chainID:      manager.chainID,
+		deploymentID: manager.deploymentID,
+		stateDir:     manager.stateDir,
+		journal:      manager.journal,
+		key:          manager.key,
+	}
 }
 
 func (e *Executor) independentReadExecutor() *Executor {
@@ -873,6 +880,8 @@ func (e *Executor) actionPostState(ctx context.Context, a Action, evmHead ChainH
 		return e.verifyFleetRefreshBatchPostState(ctx, a, evmHead, state)
 	case strings.HasPrefix(a.ID, "fleet.install.batch."):
 		return e.verifyFleetInstallBatchPostState(ctx, a, evmHead, state)
+	case a.ID == validatorEvidenceDeployActionID || a.ID == validatorEvidenceAnchorActionID:
+		return e.verifyValidatorEvidenceDeploymentPostState(ctx, a, evmHead, state)
 	case a.ID == "evm.coordinator-upgrade-activate":
 		if err := e.ensurePayloads(ctx); err != nil {
 			return nil, err
@@ -965,6 +974,8 @@ func (e *Executor) actionPostState(ctx context.Context, a Action, evmHead ChainH
 		state["reserved"] = a.Spend
 		state["approved_limits"] = e.plan.Limits
 		return state, nil
+	case strings.HasPrefix(a.ID, "evidence.activate."), a.ID == runtimeEvidenceActivationBoundaryActionId:
+		return e.runtimeEvidenceActivationPostStateV2(ctx, a, evmHead, state)
 	case a.ID == "config.render":
 		state, err := e.verifyRenderedConfigs(state)
 		if err != nil {

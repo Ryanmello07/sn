@@ -10,25 +10,43 @@ release_repos=(sn server operator-proxy connect sdk glog goidenticons proxy user
 source "$sn_repo/scripts/release-gate-jobs.sh"
 release_gate_jobs_init
 
-echo "[release-1.0] source-freeze preflight"
-release_source_snapshot="$("$sn_repo/scripts/check-release-source-freeze.sh" "$workspace")"
-printf '%s\n' "$release_source_snapshot"
+# The ordinary entry stays strict. Diagnostics run every original preflight
+# under one joined owner while independent unchanged test phases can begin.
+release_gate_source_integrity_preflight() {
+  (
+    cd "$sn_repo"
+    go test ./sim-testnet/sourceguard -count=1
+    go run ./sim-testnet/sourceguard ./sim-testnet
+  )
+}
+release_gate_initial_preflights() {
+  if [[ "$release_gate_diagnostic" == 1 ]]; then
+    release_gate_record_preflight repository-inventory release_gate_diagnostic_inventory || release_gate_preflight_refusal "$?"
+  fi
+  echo "[release-1.0] source-freeze preflight"
+  release_source_snapshot="$(release_gate_record_preflight source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" "$workspace")" || release_gate_preflight_refusal "$?"
+  printf '%s\n' "$release_source_snapshot"
 
-echo "[release-1.0] simulator source-integrity preflight"
-(
-  cd "$sn_repo"
-  go test ./sim-testnet/sourceguard -count=1
-  go run ./sim-testnet/sourceguard ./sim-testnet
-)
+  echo "[release-1.0] simulator source-integrity preflight"
+  release_gate_record_preflight source-integrity bash -c 'set -euo pipefail; release_gate_source_integrity_preflight' || release_gate_preflight_refusal "$?"
 
-echo "[release-1.0] generated binding toolchain preflight"
-"$sn_repo/stabi/generate.sh" --preflight
+  echo "[release-1.0] generated binding toolchain preflight"
+  release_gate_record_preflight binding-toolchain "$sn_repo/stabi/generate.sh" --preflight || release_gate_preflight_refusal "$?"
 
-echo "[release-1.0] runtime 454 source attestation"
-"$sn_repo/scripts/check-runtime-v454-source.sh"
+  echo "[release-1.0] runtime 454 source attestation"
+  release_gate_record_preflight runtime-source "$sn_repo/scripts/check-runtime-v454-source.sh" || release_gate_preflight_refusal "$?"
 
-echo "[release-1.0] exact runtime metadata artifact attestation"
-"$sn_repo/scripts/check-runtime-metadata-artifacts.sh"
+  echo "[release-1.0] exact runtime metadata artifact attestation"
+  release_gate_record_preflight runtime-metadata "$sn_repo/scripts/check-runtime-metadata-artifacts.sh" || release_gate_preflight_refusal "$?"
+  release_gate_preflight_status
+}
+export -f release_gate_source_integrity_preflight release_gate_initial_preflights
+release_source_snapshot=''
+if [[ "$release_gate_diagnostic" == 1 ]]; then
+  release_gate_start diagnostic-preflights release_gate_initial_preflights
+else
+  release_gate_initial_preflights
+fi
 
 if ! command -v forge >/dev/null 2>&1 && [[ -x "$HOME/.foundry/bin/forge" ]]; then
   export PATH="$HOME/.foundry/bin:$PATH"
@@ -36,6 +54,8 @@ fi
 
 release_phase_isolation_regressions() {
   cd "$sn_repo"
+  go test ./scripts/server-fixture -count=1
+  go test -race ./scripts/server-fixture -count=1
   go test ./sim-testnet -run '^TestReleaseGate(Child|Jobs|Isolation)' -count=1 -parallel=4 -timeout 3m
   go test -race ./sim-testnet -run '^TestReleaseGate(Child|Jobs|Isolation)' -count=1 -parallel=4 -timeout 3m
   cd "$workspace/server"
@@ -70,8 +90,8 @@ release_phase_sn_go() {
   # isolated 90-minute race deadline below; do not let Go's implicit 10-minute
   # package deadline terminate the faster ordinary pass while its independent
   # durability tests are still running.
-  # The full ordinary/core-race/simulator-race processes are independent jobs
-  # below, each retaining its original selection and deadline.
+  # The full ordinary suite and each complete race package group run as
+  # independent jobs below. Focused family selections and deadlines stay intact.
   settlement_closure_tests='^Test(Attempt(Settlement|Cut|Assignment)|ReleaseSettlementRefresh|ReleaseSteeringLoop)'
   go test ./validator -run "$settlement_closure_tests" -count=1
   go test -race ./validator -run "$settlement_closure_tests" -count=1
@@ -93,7 +113,14 @@ release_phase_sn_all_normal() {
 }
 release_phase_sn_core_race() {
   cd "$sn_repo"
-  go test -race ./crv4 ./miner/... ./protocol ./validator
+  go test -race ./crv4 ./miner/... ./protocol
+}
+# Measured serial validator work exceeded the inherited ten-minute package
+# allowance. Keep focused deadlines unchanged and
+# give only this full package the same explicit budget as the other full jobs.
+release_phase_sn_validator_race() {
+  cd "$sn_repo"
+  go test -race -parallel=4 -timeout 90m ./validator
 }
 release_phase_sn_simulator_race() {
   cd "$sn_repo"
@@ -101,6 +128,7 @@ release_phase_sn_simulator_race() {
 }
 release_gate_start sn-all-normal release_phase_sn_all_normal
 release_gate_start sn-core-race release_phase_sn_core_race
+release_gate_start sn-validator-race release_phase_sn_validator_race
 release_gate_start sn-simulator-race release_phase_sn_simulator_race
 
 echo "[release-1.0] deployable Solidity static analysis"
@@ -174,6 +202,9 @@ release_gate_start server-unit release_phase_server_unit
 echo "[release-1.0] shared verify wire and public SDK suites"
 release_phase_connect() {
   cd "$workspace/connect"
+  client_key_registration_tests='^Test(ClientKeyRegistration|ApiOutOfBandControl|ControlSyncOob|ClientKeyManager|VerifyClientKeySignature|CanonicalCertChainBytes|ClientCloseAndWaitJoinsClientKeyPublisher)'
+  go test . -run "$client_key_registration_tests" -count=1
+  go test -race . -run "$client_key_registration_tests" -count=1
   go test ./... -run '^$'
   go test . -run '^Test(Verify|Sn)'
 
@@ -236,6 +267,9 @@ release_gate_start connect-all-race release_phase_connect_all_race
 release_gate_start connect-all-shuffle release_phase_connect_all_shuffle
 release_phase_sdk() {
   cd "$workspace/sdk"
+  provider_registration_tests='^Test(DeviceLocalProviderRegistration|DeviceLocalProviderConnected)'
+  go test . -run "$provider_registration_tests" -count=1
+  go test -race . -run "$provider_registration_tests" -count=1
   go test ./... -run '^$'
   go test . -run '^Test(ApiSubnet|ProviderLocalUserNatSettings)'
   token_transport_tests='^Test(ApiTokenManager|DeviceRemoteRpcPublicationWakesOnlyOutstandingRefresh|ApiCloseAndWaitJoinsRefreshWorker|DeviceLocalAppliesApiRefreshAndLogout|DeviceRemoteAppliesStandaloneApiRefreshAndLogout)'
@@ -291,8 +325,22 @@ release_gate_start server-connect release_phase_server_connect
 
 if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
   echo "[release-1.0] operator PostgreSQL/Redis integration suites"
-  release_gate_services_start "$release_gate_root" "$workspace" "$sn_repo/deploy/testnet/release.lock.yml"
-  export RELEASE_GATE_SERVICE_ENV="$release_gate_service_root/environment.sh"
+  release_gate_open_services() {
+    local status=0
+    {
+      release_gate_services_start "$release_gate_root" "$workspace" "$sn_repo/deploy/testnet/release.lock.yml"
+    } || status=$?
+    (( status == 0 )) || return "$status"
+    export RELEASE_GATE_SERVICE_ENV="$release_gate_service_root/environment.sh"
+  }
+  release_gate_services_ready=0
+  if release_gate_record_preflight private-services release_gate_open_services; then
+    release_gate_services_ready=1
+  else
+    release_gate_services_error=$?
+    export release_gate_services_error
+    release_gate_preflight_refusal "$release_gate_services_error"
+  fi
   release_phase_server_db() {
     cd "$workspace/server"
     # Tests create and drop only this gate's private disposable databases.
@@ -304,6 +352,19 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     source "$RELEASE_GATE_SERVICE_ENV"
     source "$workspace/server/test-env.sh"
     test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"
+    # Real JWT/body ownership, signed key history and reserved Redis quotas use
+    # this gate's private services; neither a compile nor Forge exercises them.
+    evidence_source_tests='^Test(StAttempt|StReserved|StClientKeyHistory|StClientKeyPublication|StClientKeyRegistrationCohort|StClientKeyRegistrationReadiness|SnAttempt|SnReserved|SnClientKey|MigrationCatalog|PublishedMigration|TransferContractOpenPlanRepairMigrationOrder|ApplyDbMigrations|ContractResultErrorSeparatesReliabilityFromAccountFailures)'
+    go test ./api -run "$evidence_source_tests" -count=1
+    go test -race ./api -run "$evidence_source_tests" -count=1
+    go test ./api/handlers -run "$evidence_source_tests" -count=1
+    go test -race ./api/handlers -run "$evidence_source_tests" -count=1
+    go test ./controller -run "$evidence_source_tests" -count=1 -skip '^TestStClientKeyHistoryBatchActualFullPopulation(SharedBoundary|DistinctBoundaries)$' -timeout 10m
+    go test -race ./controller -run "$evidence_source_tests" -count=1 -skip '^TestStClientKeyHistoryBatchActualFullPopulation(SharedBoundary|DistinctBoundaries)$' -timeout 10m
+    go test ./model -run "$evidence_source_tests" -count=1
+    go test -race ./model -run "$evidence_source_tests" -count=1
+    go test . -run "$evidence_source_tests" -count=1
+    go test -race . -run "$evidence_source_tests" -count=1
     controller_db_tests='^Test(CreateContractRejectsInactiveClient|VerifyController(FullTrailFlow|PoisonAndFailurePaths|ConcurrentExtendReloadsAfterLock|ReplayCannotReadANewerCachedResponse)|VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)|AuthNetworkClientFeedsConfiguredProxyEgressNamespace|PaymentReconcile(SkipsStripeWithSKUOnlyVault|MalformedCredentialResourcesSkipAllStores)|StAccountReconcile|StSyncChainEventsBatchesCanonicalEventBlocks|StSyncChainEventsRejectsIncompleteCanonicalBatchBeforeMutation)'
     model_db_tests='Test(FindActiveClientNetwork|StreamHopListenerPrunesInactiveAdjacentClients|ActiveStreamHopsBoundsConcurrentStaleReAdd|ForceCloseRequiresPositiveParallelism|ForceCloseDisputedContract|ForceCloseDirectSettlementRemovesStream|ForceCloseMalformedContractRemovesStreamAndReturnsError|SweepOrphanClearsProxyConfigRedis|SweepOrphanReapsProxyClients|VerifyEgressIndexStoresNoRawIp|VerifyTrailLockMutualExclusion|VerifyTrailLockStaleReleasePreservesSuccessor|SweepExpiredVerifyTrails|VerifyTrailMutationLockTtlCoversLoadedTrail|StDeploymentStateIsIsolatedAcrossCoordinatorReplacements|StTransactionIntentReservationUsesChainAccountNonceScope|StTransactionRevertRetryCreatesOneImmutableSuccessor|StTransactionAttemptCandidatesConvergeOnOneWinner|StTransactionCancellationCannotRegress|StTransactionFinalizedAttemptCannotRegress)'
     go test ./controller -run "$controller_db_tests"
@@ -333,7 +394,46 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     # before the following root is admitted.
     go test -timeout 20m ./proxy -count=1
   }
-  release_gate_start server-db release_phase_server_db
+  # Each full history population has its own process and ten-minute modes.
+  # TestEnv owns a unique Pg database and an exclusive renewable Redis lease;
+  # the gate retains the private containers until every phase has joined.
+  release_phase_server_history_shared() {
+    cd "$workspace/server"
+    export WARP_ENV=local
+    export WARP_SERVICE=test
+    export WARP_DOMAIN=bringyour.com
+    export WARP_BLOCK=test
+    export WARP_VERSION=0.0.0
+    source "$RELEASE_GATE_SERVICE_ENV"
+    source "$workspace/server/test-env.sh"
+    test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"
+    server_history_shared_tests='^TestStClientKeyHistoryBatchActualFullPopulationSharedBoundary$'
+    go test ./controller -run "$server_history_shared_tests" -count=1 -timeout 10m
+    go test -race ./controller -run "$server_history_shared_tests" -count=1 -timeout 10m
+  }
+  release_phase_server_history_distinct() {
+    cd "$workspace/server"
+    export WARP_ENV=local
+    export WARP_SERVICE=test
+    export WARP_DOMAIN=bringyour.com
+    export WARP_BLOCK=test
+    export WARP_VERSION=0.0.0
+    source "$RELEASE_GATE_SERVICE_ENV"
+    source "$workspace/server/test-env.sh"
+    test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"
+    server_history_distinct_tests='^TestStClientKeyHistoryBatchActualFullPopulationDistinctBoundaries$'
+    go test ./controller -run "$server_history_distinct_tests" -count=1 -timeout 10m
+    go test -race ./controller -run "$server_history_distinct_tests" -count=1 -timeout 10m
+  }
+  if [[ "$release_gate_services_ready" == 1 ]]; then
+    release_gate_start server-db release_phase_server_db
+    release_gate_start server-history-shared release_phase_server_history_shared
+    release_gate_start server-history-distinct release_phase_server_history_distinct
+  else
+    release_gate_start server-db release_gate_unavailable_services
+    release_gate_start server-history-shared release_gate_unavailable_services
+    release_gate_start server-history-distinct release_gate_unavailable_services
+  fi
 else
   echo "[release-1.0] DB suites deferred (set RUN_SERVER_DB_TESTS=1 to create private disposable PostgreSQL/Redis)"
 fi
@@ -356,6 +456,14 @@ if (( release_gate_active != 0 )); then
   exit 1
 fi
 release_gate_fence_status=0
+if [[ "$release_gate_diagnostic" == 1 ]]; then
+  if [[ -f "$release_gate_root/preflights/source-freeze/stdout" ]]; then
+    release_source_snapshot="$(< "$release_gate_root/preflights/source-freeze/stdout")"
+  else
+    echo 'diagnostic source preflight did not complete; original snapshot is unavailable' >&2
+    release_gate_fence_status=1
+  fi
+fi
 
 echo "[release-1.0] patch hygiene"
 for repo in "${release_repos[@]}"; do
@@ -372,7 +480,7 @@ echo "[release-1.0] final release-lock checkout"
 ) || release_gate_fence_status=1
 
 echo "[release-1.0] final source-freeze checkout"
-if ! final_release_source_snapshot="$("$sn_repo/scripts/check-release-source-freeze.sh" "$workspace")"; then
+if ! final_release_source_snapshot="$(release_gate_record_preflight final-source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" "$workspace")"; then
   release_gate_fence_status=1
 fi
 if [[ "$final_release_source_snapshot" != "$release_source_snapshot" ]]; then
@@ -381,6 +489,12 @@ if [[ "$final_release_source_snapshot" != "$release_source_snapshot" ]]; then
   release_gate_fence_status=1
 fi
 printf '%s\n' "$final_release_source_snapshot"
+
+if [[ "$release_gate_diagnostic" == 1 ]]; then
+  diagnostic_status=0
+  release_gate_diagnostic_finish "$release_gate_status" "$release_gate_fence_status" || diagnostic_status=$?
+  exit "$diagnostic_status"
+fi
 
 if (( release_gate_status != 0 || release_gate_fence_status != 0 )); then
   printf 'release gate failed: phases/cleanup=%s source-fences=%s\n' "$release_gate_status" "$release_gate_fence_status" >&2

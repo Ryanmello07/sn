@@ -24,12 +24,14 @@ type RuntimeConfigFile struct {
 
 // Bind every immutable process input to one deployment/config/policy identity.
 type RuntimeConfigManifest struct {
-	Schema       string              `json:"schema"`
-	DeploymentID string              `json:"deployment_id"`
-	ConfigHash   string              `json:"config_hash"`
-	PolicyHash   string              `json:"policy_hash"`
-	Files        []RuntimeConfigFile `json:"files"`
-	ManifestHash string              `json:"manifest_hash"`
+	Schema            string              `json:"schema"`
+	DeploymentID      string              `json:"deployment_id"`
+	ConfigHash        string              `json:"config_hash"`
+	PolicyHash        string              `json:"policy_hash"`
+	EvidenceV2Hash    string              `json:"evidence_v2_hash"`
+	AttemptUploadHash string              `json:"attempt_upload_hash,omitempty"`
+	Files             []RuntimeConfigFile `json:"files"`
+	ManifestHash      string              `json:"manifest_hash"`
 }
 
 // Return the evidence fields persisted in the config-render postcondition.
@@ -67,10 +69,40 @@ func addRuntimeConfigPath(paths map[string]os.FileMode, stateDir, path string, m
 // directory links into the separately release-locked platform-config checkout
 // and are validated below rather than represented as regular files.
 func expectedRuntimeConfigFiles(cfg *ResolvedConfig, stateDir string) (map[string]os.FileMode, error) {
+	resolved, resolveErr := runtimeEvidenceV2ResolvedConfig(cfg, stateDir)
+	if resolveErr != nil {
+		return nil, resolveErr
+	}
+	cfg = resolved
 	if cfg == nil || cfg.Config == nil || strings.TrimSpace(stateDir) == "" {
 		return nil, errors.New("runtime config manifest context is incomplete")
 	}
 	paths := map[string]os.FileMode{}
+	if cfg.Config.ProvisionValidatorEvidenceV2 {
+		for _, name := range []string{"prepared.json", "completed.json"} {
+			if err := addRuntimeConfigPath(paths, stateDir, filepath.Join(stateDir, "evidence-v2-setup", name), 0o600); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(cfg.Config.ValidatorEvidenceV2) != 0 {
+		if err := validateSimulatorEvidenceV2Census(cfg.Config); err != nil {
+			return nil, err
+		}
+		for index, validator := range cfg.Config.ValidatorEvidenceV2 {
+			for _, operator := range validator.Evidence.Operators {
+				wanted, _, _ := runtimeEvidenceV2Paths(stateDir, index+1, operator.NoID)
+				for index, reference := range operator.Files() {
+					if reference.Path != wanted[index] {
+						return nil, errors.New("runtime evidence reference path differs from its validator/operator role")
+					}
+					if err := addRuntimeConfigPath(paths, stateDir, reference.Path, 0o600); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+	}
 	vaultSource := filepath.Join(cfg.Repos.Vault, "local")
 	vaultFiles := make([]string, 0)
 	if err := filepath.WalkDir(vaultSource, func(path string, entry os.DirEntry, err error) error {
@@ -109,7 +141,9 @@ func expectedRuntimeConfigFiles(cfg *ResolvedConfig, stateDir string) (map[strin
 				return nil, err
 			}
 		}
-		for _, relative := range []string{"vault/pg_maintenance.yml", "vault/verify.yml", "vault/minio.yml", "site/settings.yml", "config/tls.yml", "config/provider_egress_probe.yml"} {
+		// These inputs are generated even when the source vault has no copy.
+		// Their exact private paths must not depend on incidental source files.
+		for _, relative := range []string{"vault/st.yml", "vault/pg.yml", "vault/pg_maintenance.yml", "vault/verify.yml", "vault/minio.yml", "site/settings.yml", "config/tls.yml", "config/provider_egress_probe.yml"} {
 			if err := addRuntimeConfigPath(paths, stateDir, filepath.Join(root, filepath.FromSlash(relative)), 0o600); err != nil {
 				return nil, err
 			}
@@ -229,11 +263,17 @@ func buildRuntimeConfigManifest(cfg *ResolvedConfig, stateDir string) (*RuntimeC
 		Schema: runtimeConfigManifestSchema, DeploymentID: cfg.Config.Deployment.DeploymentID,
 		ConfigHash: cfg.ConfigHash, PolicyHash: cfg.PolicyHash,
 	}
+	if manifest.EvidenceV2Hash, err = runtimeEvidenceV2Identity(cfg); err != nil {
+		return nil, err
+	}
+	if manifest.AttemptUploadHash, err = runtimeAttemptUploadIdentity(cfg); err != nil {
+		return nil, err
+	}
 	for _, relative := range paths {
 		if err := validateRuntimeConfigPathAncestry(stateDir, relative); err != nil {
 			return nil, err
 		}
-		digest, mode, err := runtimeConfigFileDigest(filepath.Join(stateDir, filepath.FromSlash(relative)))
+		digest, mode, err := runtimeManifestInputDigest(cfg, stateDir, relative)
 		if err != nil {
 			return nil, err
 		}
@@ -294,6 +334,12 @@ func approvedRuntimeConfigOverlay(cfg *ResolvedConfig, stateDir, path string) (b
 // while accepting the exact independently validated operator overlays.
 func validateRuntimeConfigStaticTrees(cfg *ResolvedConfig, stateDir string, expected map[string]os.FileMode) error {
 	roots := make([]string, 0, cfg.Config.Topology.Operators*3+cfg.Config.Topology.MinerSwarmProcesses+cfg.Config.Topology.Operators)
+	if cfg.Config.ProvisionValidatorEvidenceV2 {
+		roots = append(roots, filepath.Join(stateDir, "evidence-v2-setup"))
+	}
+	for _, validator := range cfg.Config.ValidatorEvidenceV2 {
+		roots = append(roots, filepath.Join(stateDir, "runtime", fmt.Sprintf("validator-%d", validator.ValidatorID), "evidence-v2"))
+	}
 	for operator := 1; operator <= cfg.Config.Topology.Operators; operator++ {
 		root := filepath.Join(stateDir, "runtime", fmt.Sprintf("operator-%d", operator))
 		roots = append(roots, filepath.Join(root, "vault"), filepath.Join(root, "config"), filepath.Join(root, "site"))
@@ -339,12 +385,20 @@ func authenticatedRuntimeConfigManifest(cfg *ResolvedConfig, stateDir string) (*
 	if err := decodeStrictJSONFile(path, &manifest); err != nil {
 		return nil, nil, fmt.Errorf("read runtime config manifest: %w", err)
 	}
+	evidenceHash, err := runtimeEvidenceV2Identity(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	uploadHash, err := runtimeAttemptUploadIdentity(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
 		return nil, nil, stateMismatchError(err, "runtime config manifest is absent or not private")
 	}
 	if manifest.Schema != runtimeConfigManifestSchema || manifest.DeploymentID != cfg.Config.Deployment.DeploymentID ||
-		!strings.EqualFold(manifest.ConfigHash, cfg.ConfigHash) || !strings.EqualFold(manifest.PolicyHash, cfg.PolicyHash) {
+		!strings.EqualFold(manifest.ConfigHash, cfg.ConfigHash) || !strings.EqualFold(manifest.PolicyHash, cfg.PolicyHash) || manifest.EvidenceV2Hash != evidenceHash || manifest.AttemptUploadHash != uploadHash {
 		return nil, nil, errors.New("runtime config manifest identity does not match the active deployment")
 	}
 	if _, err := decodeHex32("runtime config manifest config hash", manifest.ConfigHash); err != nil {
@@ -384,8 +438,8 @@ func authenticatedRuntimeConfigManifest(cfg *ResolvedConfig, stateDir string) (*
 	return &manifest, expected, nil
 }
 
-func verifyRuntimeConfigManifestFile(stateDir string, file RuntimeConfigFile, expectedMode os.FileMode) error {
-	digest, observedMode, err := runtimeConfigFileDigest(filepath.Join(stateDir, filepath.FromSlash(file.Path)))
+func verifyRuntimeConfigManifestFile(cfg *ResolvedConfig, stateDir string, file RuntimeConfigFile, expectedMode os.FileMode) error {
+	digest, observedMode, err := runtimeManifestInputDigest(cfg, stateDir, file.Path)
 	if err != nil {
 		return err
 	}
@@ -414,7 +468,7 @@ func verifyRuntimeBlobConfigManifest(cfg *ResolvedConfig, stateDir string) error
 		if !ok || !expectedOK {
 			return fmt.Errorf("runtime config manifest is missing %s", relative)
 		}
-		if err := verifyRuntimeConfigManifestFile(stateDir, file, mode); err != nil {
+		if err := verifyRuntimeConfigManifestFile(cfg, stateDir, file, mode); err != nil {
 			return err
 		}
 	}
@@ -430,7 +484,7 @@ func verifyRuntimeConfigManifest(cfg *ResolvedConfig, stateDir string) (runtimeC
 	}
 	for _, file := range manifest.Files {
 		mode := expected[file.Path]
-		if err := verifyRuntimeConfigManifestFile(stateDir, file, mode); err != nil {
+		if err := verifyRuntimeConfigManifestFile(cfg, stateDir, file, mode); err != nil {
 			return runtimeConfigVerification{}, err
 		}
 	}

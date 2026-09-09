@@ -132,6 +132,10 @@ func (self *ReleaseSteerer) gatherHeadV2(ctx context.Context, snapshot *ReleaseS
 		return result, err
 	}
 	clientKeys := make(map[uint64]ClientKeyFunc, len(draft.Inputs))
+	if err := budget.charge(uint64(len(draft.Inputs)), 8+uint64(reflect.TypeFor[*HTTPClientKeyHistoryReader]().Size())); err != nil {
+		return result, err
+	}
+	keyHistories := make(map[uint64]*HTTPClientKeyHistoryReader, len(draft.Inputs))
 	for _, operator := range self.cfg.Operators {
 		measurement := self.contexts[operator.NoID]
 		if operator.NoID == 0 || clientKeys[operator.NoID] != nil || measurement == nil || measurement.NoID != operator.NoID || measurement.ClientKey == nil {
@@ -142,9 +146,25 @@ func (self *ReleaseSteerer) gatherHeadV2(ctx context.Context, snapshot *ReleaseS
 			return result, errors.New("compact live head operator authority or current binding source differs")
 		}
 		clientKeys[operator.NoID] = measurement.ClientKey
+		keyHistories[operator.NoID] = measurement.ClientKeyHistory
 	}
 	hotkeyUIDs = maps.Clone(hotkeyUIDs)
-	chain := self.chain
+	// Keep deployment routing and the genuine transport fixed across every
+	// synchronous client-key callback. The original owner still joins Close.
+	chain := &ChainClient{client: self.chain.client, coordinator: self.chain.coordinator, chainId: new(big.Int).Set(self.chain.chainId), contractAddr: self.chain.contractAddr, release: true}
+	// The actual domain/configuration and file owner cannot change during
+	// a synchronous current-key/HTTP/RPC callback.
+	keyConfig := *self.cfg
+	keyCtx, keyReads, err := newReleaseClientKeyAuthorityV2Reads(ctx, chain, &keyConfig, draft, hotkey, &budget)
+	if err != nil {
+		return result, err
+	}
+	defer func() {
+		resultErr = keyReads.finish(resultErr)
+		if resultErr != nil {
+			result = releaseHeadResult{}
+		}
+	}()
 	providerKVs := make(map[uint64]map[connect.Id]bool, len(draft.Inputs))
 	for _, input := range draft.Inputs {
 		operator := options.Operators[input.NoID]
@@ -162,6 +182,9 @@ func (self *ReleaseSteerer) gatherHeadV2(ctx context.Context, snapshot *ReleaseS
 	if err := owner.witness(ctx); err != nil {
 		return result, err
 	}
+	keyRequestsKVs := make(map[uint64][]protocol.ClientKeyObservationRequest, len(draft.Inputs))
+	keyPositionsKVs := make(map[uint64][]int, len(draft.Inputs))
+	keyDomainsKVs := make(map[uint64]protocol.ClientKeyHistoryDomain, len(draft.Inputs))
 	for _, input := range draft.Inputs {
 		providerIDs := make([]connect.Id, 0, len(providerKVs[input.NoID]))
 		for clientID := range providerKVs[input.NoID] {
@@ -172,35 +195,58 @@ func (self *ReleaseSteerer) gatherHeadV2(ctx context.Context, snapshot *ReleaseS
 		for index, clientID := range providerIDs {
 			clientIDs[index] = [16]byte(clientID)
 		}
-		bindings, err := chain.ReleaseBindingsAtHashContext(ctx, draft.EVMSnapshotBlock, common.HexToHash(draft.EVMSnapshotHash), clientIDs, new(big.Int).SetUint64(draft.SettlementEpoch))
+		bindings, err := chain.readReleaseProviderBindingsV2Context(ctx, draft.EVMSnapshotBlock, common.HexToHash(draft.EVMSnapshotHash), clientIDs, draft.SettlementEpoch, options.Operators[input.NoID].Measurement.MaxProviders)
 		if err != nil {
 			return result, fmt.Errorf("compact live head binding census no_id %d: %w", input.NoID, err)
 		}
 		if len(bindings) != len(providerIDs) {
 			return result, errors.New("compact live head binding census length differs")
 		}
+		if err := budget.charge(uint64(len(providerIDs)), uint64(reflect.TypeFor[protocol.ClientKeyObservationRequest]().Size())+8+uint64(reflect.TypeFor[releaseClientKeyBatchV2Capture]().Size())); err != nil {
+			return result, err
+		}
 		for index, clientID := range providerIDs {
 			if err := ctx.Err(); err != nil {
 				return result, err
 			}
 			binding := bindings[index]
-			observation := ReleaseBindingMeasurement{
-				NoID: input.NoID, ClientID: clientID.String(), Active: binding.Active,
-				FleetID: releaseHex32(binding.Record.FleetId), Hotkey: releaseHex32(binding.Record.Hotkey),
-				ClientKey: releaseHex32(binding.Record.ClientKey), LocalClientKey: releaseHex32([32]byte{}),
-				CommitmentHash: releaseHex32(binding.Record.CommitmentHash), Generation: binding.Record.Generation,
-				ValidFromEpoch: binding.Record.ValidFromEpoch, ValidToEpoch: binding.Record.ValidToEpoch,
-				CleanedAtEpoch: binding.Record.CleanedAtEpoch, RecordUID: binding.Record.Uid, Cleaned: binding.Record.Cleaned,
-			}
+			observation := releaseDecisionBindingV2Observation(input.NoID, clientID, binding, hotkeyUIDs)
 			if binding.Active {
 				clientKey, found, err := clientKeys[input.NoID](clientID)
 				if err != nil || !found || clientKey != binding.Record.ClientKey {
 					return result, errors.Join(fmt.Errorf("compact live head active client key differs for no_id %d client %s", input.NoID, clientID), err)
 				}
 				observation.LocalClientKey = releaseHex32(clientKey)
-				observation.LiveUID, observation.LiveUIDFound = hotkeyUIDs[binding.Record.Hotkey]
+				domain, request, err := releaseClientKeyDecisionV2(&keyConfig, input.NoID, hotkey, draft, clientID)
+				if err != nil {
+					return result, err
+				}
+				keyDomainsKVs[input.NoID] = domain
+				keyRequestsKVs[input.NoID] = append(keyRequestsKVs[input.NoID], request)
+				keyPositionsKVs[input.NoID] = append(keyPositionsKVs[input.NoID], len(draft.Bindings))
 			}
 			draft.Bindings = append(draft.Bindings, observation)
+		}
+	}
+	// The entire independently pinned binding census exists before any live
+	// batch. Every returned client still joins its exact binding and key.
+	for _, input := range draft.Inputs {
+		requests := keyRequestsKVs[input.NoID]
+		for start := 0; start < len(requests); start += protocol.MaxClientKeyObservationBatchClients {
+			end := min(start+protocol.MaxClientKeyObservationBatchClients, len(requests))
+			maximum := min(uint64(protocol.MaxClientKeyHistoryResponseBytes), (budget.limit-budget.used)/8)
+			captures, err := captureReleaseClientKeysV2(keyCtx, chain, keyHistories[input.NoID], keyConfig.StateDir, keyDomainsKVs[input.NoID], requests[start:end], maximum, keyConfig.EvidenceV2.Bounds.MaxHistoryBytes)
+			if err != nil {
+				return result, errors.Join(errors.New("compact live head client census lacks its exact operator-signed current observations"), err)
+			}
+			for index, capture := range captures {
+				position := keyPositionsKVs[input.NoID][start+index]
+				binding := &draft.Bindings[position]
+				if !capture.registration.Present || releaseHex32(capture.registration.PublicKey) != binding.LocalClientKey {
+					return result, errors.New("compact live head signed current key differs from its independently read binding")
+				}
+				binding.ClientKeyObservationHash = capture.contentHash
+			}
 		}
 	}
 	fleets, bound, membersByUID, stale, current, err := releaseMeasurementBindingObservations(draft, providerKVs)
@@ -292,7 +338,7 @@ func admitReleaseHeadV2Controls(ctx context.Context, draft *ReleaseMeasurementAr
 		}
 		// Provider membership and the returned canonical binding observations
 		// are additional to the already-owned raw measurement's provider rows.
-		width := uint64(reflect.TypeFor[ReleaseBindingMeasurement]().Size()) + 36 + 5*66 + 16 + 1
+		width := uint64(reflect.TypeFor[ReleaseBindingMeasurement]().Size()) + 36 + 6*66 + 16 + 1
 		if err := charge(uint64(len(input.Stats.Providers)), width); err != nil {
 			return budget, err
 		}

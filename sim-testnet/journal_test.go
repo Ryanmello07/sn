@@ -268,6 +268,7 @@ func TestRemainingPlanSpendCarriesOnlyExactApprovedAncestorIntents(t *testing.T)
 // exact action and plan hashes used by a persisted ancestor.
 func downgradePlanForCompatibilityTest(t *testing.T, plan *SetupPlan, schema string) {
 	t.Helper()
+	*plan = *validatorEvidenceLegacyPlanTest(t, plan)
 	plan.Schema = schema
 	plan.MaximumEVMFeePerGasWei = 0
 	if schema == "urnetwork-sim-plan-v1" {

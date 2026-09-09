@@ -46,7 +46,8 @@ const (
 	setupPlanSchemaV8               = "urnetwork-sim-plan-v8"
 	setupPlanSchemaV9               = "urnetwork-sim-plan-v9"
 	setupPlanSchemaV10              = "urnetwork-sim-plan-v10"
-	currentSetupPlanSchema          = "urnetwork-sim-plan-v11"
+	setupPlanSchemaV11              = "urnetwork-sim-plan-v11"
+	currentSetupPlanSchema          = "urnetwork-sim-plan-v12"
 	evmMaximumGasUnitsParameter     = "maximum_gas_units"
 	evmMaximumFeePerGasParameter    = "maximum_fee_per_gas_wei"
 	deploymentManifestHashParameter = "deployment_manifest_hash"
@@ -63,37 +64,42 @@ const (
 )
 
 type SetupPlan struct {
-	Schema                       string                     `json:"schema"`
-	Release                      string                     `json:"release"`
-	ReleaseLockHash              string                     `json:"release_lock_hash"`
-	DeploymentID                 string                     `json:"deployment_id"`
-	ChainID                      uint64                     `json:"chain_id"`
-	GenesisHash                  string                     `json:"genesis_hash"`
-	Netuid                       uint16                     `json:"netuid"`
-	Owner                        string                     `json:"owner"`
-	LiveFacts                    SetupFacts                 `json:"live_facts"`
-	RegistrationBurnLimitRao     uint64                     `json:"registration_burn_limit_rao"`
-	NativeTransactionFeeLimitRao uint64                     `json:"native_transaction_fee_limit_rao,omitempty"`
-	MaximumEVMFeePerGasWei       uint64                     `json:"maximum_evm_fee_per_gas_wei,omitempty"`
-	AlphaTransferMarginBPS       uint16                     `json:"alpha_transfer_margin_bps,omitempty"`
-	MinimumSourceRemainingRao    uint64                     `json:"minimum_source_remaining_alpha_rao,omitempty"`
-	BootstrapBurnHalfLifeBlocks  uint16                     `json:"bootstrap_burn_half_life_blocks,omitempty"`
-	ProductionBurnHalfLifeBlocks uint16                     `json:"production_burn_half_life_blocks,omitempty"`
-	PriorPlanHashes              []string                   `json:"prior_plan_hashes,omitempty"`
-	ConfigHash                   string                     `json:"config_hash"`
-	ResolvedInputsHash           string                     `json:"resolved_inputs_hash"`
-	PolicyHash                   string                     `json:"policy_hash"`
-	Roles                        PublicRoles                `json:"roles"`
-	Deployment                   ContractDeployment         `json:"deployment"`
-	CoordinatorUpgrade           CoordinatorUpgrade         `json:"coordinator_upgrade"`
-	CoordinatorUpgradeBaseline   CoordinatorUpgradeBaseline `json:"coordinator_upgrade_baseline,omitempty"`
-	SupersededDeployments        []ContractDeployment       `json:"superseded_deployments,omitempty"`
-	Actions                      []Action                   `json:"actions"`
-	MaximumSpend                 Spend                      `json:"maximum_spend"`
-	SupersededSpend              Spend                      `json:"superseded_spend,omitempty"`
-	Limits                       Spend                      `json:"limits"`
-	PlanHash                     string                     `json:"plan_hash"`
-	GeneratedAt                  string                     `json:"generated_at,omitempty"`
+	Schema                       string                       `json:"schema"`
+	Release                      string                       `json:"release"`
+	ReleaseLockHash              string                       `json:"release_lock_hash"`
+	DeploymentID                 string                       `json:"deployment_id"`
+	ChainID                      uint64                       `json:"chain_id"`
+	GenesisHash                  string                       `json:"genesis_hash"`
+	Netuid                       uint16                       `json:"netuid"`
+	Owner                        string                       `json:"owner"`
+	LiveFacts                    SetupFacts                   `json:"live_facts"`
+	RegistrationBurnLimitRao     uint64                       `json:"registration_burn_limit_rao"`
+	NativeTransactionFeeLimitRao uint64                       `json:"native_transaction_fee_limit_rao,omitempty"`
+	MaximumEVMFeePerGasWei       uint64                       `json:"maximum_evm_fee_per_gas_wei,omitempty"`
+	AlphaTransferMarginBPS       uint16                       `json:"alpha_transfer_margin_bps,omitempty"`
+	MinimumSourceRemainingRao    uint64                       `json:"minimum_source_remaining_alpha_rao,omitempty"`
+	BootstrapBurnHalfLifeBlocks  uint16                       `json:"bootstrap_burn_half_life_blocks,omitempty"`
+	ProductionBurnHalfLifeBlocks uint16                       `json:"production_burn_half_life_blocks,omitempty"`
+	PriorPlanHashes              []string                     `json:"prior_plan_hashes,omitempty"`
+	ConfigHash                   string                       `json:"config_hash"`
+	ResolvedInputsHash           string                       `json:"resolved_inputs_hash"`
+	PolicyHash                   string                       `json:"policy_hash"`
+	Roles                        PublicRoles                  `json:"roles"`
+	Deployment                   ContractDeployment           `json:"deployment"`
+	CoordinatorUpgrade           CoordinatorUpgrade           `json:"coordinator_upgrade"`
+	CoordinatorUpgradeBaseline   CoordinatorUpgradeBaseline   `json:"coordinator_upgrade_baseline,omitempty"`
+	ValidatorEvidence            *ValidatorEvidenceDeployment `json:"validator_evidence,omitempty"`
+	ValidatorEvidenceSource      *ValidatorEvidenceSource     `json:"validator_evidence_source,omitempty"`
+	ValidatorEvidenceCarry       *ValidatorEvidenceCarry      `json:"validator_evidence_carry,omitempty"`
+	validatorEvidenceHistorical  bool
+	validatorEvidenceObserved    *validatorEvidenceCarryObservation
+	SupersededDeployments        []ContractDeployment `json:"superseded_deployments,omitempty"`
+	Actions                      []Action             `json:"actions"`
+	MaximumSpend                 Spend                `json:"maximum_spend"`
+	SupersededSpend              Spend                `json:"superseded_spend,omitempty"`
+	Limits                       Spend                `json:"limits"`
+	PlanHash                     string               `json:"plan_hash"`
+	GeneratedAt                  string               `json:"generated_at,omitempty"`
 }
 
 // orderedJSONField retains the field order emitted by encoding/json. Plan
@@ -425,36 +431,41 @@ func planUsesContractDeploymentEnvelope(schema string) bool {
 }
 
 func planUsesAlphaTransferEnvelope(schema string) bool {
-	return schema == "urnetwork-sim-plan-v5" || schema == "urnetwork-sim-plan-v6" || schema == "urnetwork-sim-plan-v7" || schema == setupPlanSchemaV8 || schema == setupPlanSchemaV9 || schema == setupPlanSchemaV10 || schema == currentSetupPlanSchema
+	return schema == "urnetwork-sim-plan-v5" || schema == "urnetwork-sim-plan-v6" || schema == "urnetwork-sim-plan-v7" || schema == setupPlanSchemaV8 || schema == setupPlanSchemaV9 || schema == setupPlanSchemaV10 || schema == setupPlanSchemaV11 || schema == currentSetupPlanSchema
 }
 
 func planUsesCoordinatorUpgradeEnvelope(schema string) bool {
-	return schema == "urnetwork-sim-plan-v6" || schema == "urnetwork-sim-plan-v7" || schema == setupPlanSchemaV8 || schema == setupPlanSchemaV9 || schema == setupPlanSchemaV10 || schema == currentSetupPlanSchema
+	return schema == "urnetwork-sim-plan-v6" || schema == "urnetwork-sim-plan-v7" || schema == setupPlanSchemaV8 || schema == setupPlanSchemaV9 || schema == setupPlanSchemaV10 || schema == setupPlanSchemaV11 || schema == currentSetupPlanSchema
 }
 
 func planUsesDefaultMinTransferEnvelope(schema string) bool {
-	return schema == "urnetwork-sim-plan-v7" || schema == setupPlanSchemaV8 || schema == setupPlanSchemaV9 || schema == setupPlanSchemaV10 || schema == currentSetupPlanSchema
+	return schema == "urnetwork-sim-plan-v7" || schema == setupPlanSchemaV8 || schema == setupPlanSchemaV9 || schema == setupPlanSchemaV10 || schema == setupPlanSchemaV11 || schema == currentSetupPlanSchema
 }
 
 // V8 introduced bounded destination-share floors. Later schemas retain that
 // wire contract; v9 additionally binds both runtime share transitions.
 func planUsesDestinationRoundingEnvelope(schema string) bool {
-	return schema == setupPlanSchemaV8 || schema == setupPlanSchemaV9 || schema == setupPlanSchemaV10 || schema == currentSetupPlanSchema
+	return schema == setupPlanSchemaV8 || schema == setupPlanSchemaV9 || schema == setupPlanSchemaV10 || schema == setupPlanSchemaV11 || schema == currentSetupPlanSchema
 }
 
 func planUsesTwoTransitionReserveEnvelope(schema string) bool {
-	return schema == setupPlanSchemaV9 || schema == setupPlanSchemaV10 || schema == currentSetupPlanSchema
+	return schema == setupPlanSchemaV9 || schema == setupPlanSchemaV10 || schema == setupPlanSchemaV11 || schema == currentSetupPlanSchema
 }
 
 // Schema v11 makes rendered runtime identity part of both local action intents.
 func planUsesRuntimeConfigIdentityEnvelope(schema string) bool {
+	return schema == setupPlanSchemaV11 || schema == currentSetupPlanSchema
+}
+
+// V12 requires the additive immutable validator/operator evidence journal.
+func planUsesValidatorEvidenceEnvelope(schema string) bool {
 	return schema == currentSetupPlanSchema
 }
 
 // V10 introduced exact recovery lineage for native commitment retries and
 // duplicate voluntary-conviction repair; v11 retains those checks.
 func planUsesRevisionRecoveryEnvelope(schema string) bool {
-	return schema == setupPlanSchemaV10 || schema == currentSetupPlanSchema
+	return schema == setupPlanSchemaV10 || schema == setupPlanSchemaV11 || schema == currentSetupPlanSchema
 }
 
 // Accept the current policy or the exact historical policy linked through the
@@ -546,6 +557,8 @@ func setupEVMGasUnitLimits(cfg *ResolvedConfig) map[string]uint64 {
 		"precompile.probe-deploy":                3_000_000,
 		"evm.coordinator-upgrade-implementation": 7_500_000,
 		"evm.coordinator-upgrade-activate":       500_000,
+		validatorEvidenceDeployActionID:          5_000_000,
+		validatorEvidenceAnchorActionID:          150_000,
 		"policy.schedule-bootstrap":              500_000,
 		"fleet.refresh.deploy-batcher":           1_500_000,
 		"fleet.refresh.oracle-activate":          300_000,
@@ -553,6 +566,13 @@ func setupEVMGasUnitLimits(cfg *ResolvedConfig) map[string]uint64 {
 	}
 	if cfg == nil || cfg.Config == nil {
 		return limits
+	}
+	if cfg.Config.ProvisionValidatorEvidenceV2 {
+		for validatorId := 1; validatorId <= cfg.Config.Topology.Validators; validatorId++ {
+			for noId := 1; noId <= cfg.Config.Topology.Operators; noId++ {
+				limits[runtimeEvidenceActivationActionId(validatorId, noId)] = cfg.Config.ValidatorEvidenceActivationGasUnits
+			}
+		}
 	}
 	for operator := 1; operator <= cfg.Config.Topology.Operators; operator++ {
 		limits[fmt.Sprintf("operator.deposit.register.%d", operator)] = 1_000_000
@@ -772,6 +792,12 @@ func buildPlan(cfg *ResolvedConfig, facts *SetupFacts, roles PublicRoles, genera
 }
 
 func buildPlanWithRegistrationGeneration(cfg *ResolvedConfig, facts *SetupFacts, roles PublicRoles, generatedAt time.Time, generation uint64) (*SetupPlan, error) {
+	if cfg == nil || cfg.Config == nil {
+		return nil, errors.New("setup plan configuration is absent")
+	}
+	if err := validateRuntimeEvidenceProvisionTemplateV2(cfg.Config); err != nil {
+		return nil, err
+	}
 	if facts == nil || facts.BurnRao == 0 || facts.AlphaSourceHotkey == "" || facts.ExistentialDepositRao == 0 || facts.ProbeTAORao == 0 {
 		return nil, fmt.Errorf("finalized burn, alpha source, existential-deposit, and probe-value facts are required")
 	}
@@ -804,6 +830,22 @@ func buildPlanWithRegistrationGeneration(cfg *ResolvedConfig, facts *SetupFacts,
 	if err != nil {
 		return nil, fmt.Errorf("build approved deployment payloads: %w", err)
 	}
+	if payloads.ValidatorEvidence == nil {
+		return nil, errors.New("validator evidence deployment payload is unavailable")
+	}
+	evidenceDeployParameters, err := payloads.ValidatorEvidence.actionParameters(validatorEvidenceDeployActionID, common.HexToAddress(roles.Owner))
+	if err != nil {
+		return nil, err
+	}
+	evidenceAnchorParameters, err := payloads.ValidatorEvidence.actionParameters(validatorEvidenceAnchorActionID, common.HexToAddress(roles.Owner))
+	if err != nil {
+		return nil, err
+	}
+	evidenceManifest := payloads.ValidatorEvidence.Manifest
+	evidenceSource, err := newValidatorEvidenceSource(cfg.Release, payloads.ValidatorEvidence.Artifact)
+	if err != nil {
+		return nil, err
+	}
 	deploymentHash, err := contractDeploymentIdentityHash(payloads.Manifest)
 	if err != nil {
 		return nil, fmt.Errorf("hash approved deployment manifest: %w", err)
@@ -814,7 +856,8 @@ func buildPlanWithRegistrationGeneration(cfg *ResolvedConfig, facts *SetupFacts,
 	}
 	bootstrapBurnHalfLife := uint16(hyperparameterUint64(cfg.Hyperparameters.OwnerControlled["burn_half_life"]))
 	productionBurnHalfLife := uint16(hyperparameterUint64(cfg.Hyperparameters.ProductionOwnerControlled["burn_half_life"]))
-	p := &SetupPlan{Schema: currentSetupPlanSchema, Release: "1.0", ReleaseLockHash: releaseLockHash, DeploymentID: cfg.Config.Deployment.DeploymentID, ChainID: testnetChainID, GenesisHash: testnetGenesis, Netuid: cfg.Netuid, Owner: cfg.WalletPublic, LiveFacts: *facts, RegistrationBurnLimitRao: registrationBurnLimit, NativeTransactionFeeLimitRao: nativeFeeLimit, MaximumEVMFeePerGasWei: cfg.Config.Budgets.MaximumEVMFeePerGasWei, AlphaTransferMarginBPS: cfg.Config.AlphaTransfers.MinimumTAOEquivalentMarginBPS, MinimumSourceRemainingRao: cfg.Config.ValidatorBootstrap.MinimumSourceRemainingAlphaRao, BootstrapBurnHalfLifeBlocks: bootstrapBurnHalfLife, ProductionBurnHalfLifeBlocks: productionBurnHalfLife, ConfigHash: cfg.ConfigHash, ResolvedInputsHash: resolvedHash, PolicyHash: cfg.PolicyHash, Roles: roles, Deployment: payloads.Manifest, CoordinatorUpgrade: payloads.CoordinatorUpgrade, GeneratedAt: generatedAt.Format(time.RFC3339)}
+	p := &SetupPlan{Schema: currentSetupPlanSchema, Release: "1.0", ReleaseLockHash: releaseLockHash, DeploymentID: cfg.Config.Deployment.DeploymentID, ChainID: testnetChainID, GenesisHash: testnetGenesis, Netuid: cfg.Netuid, Owner: cfg.WalletPublic, LiveFacts: *facts, RegistrationBurnLimitRao: registrationBurnLimit, NativeTransactionFeeLimitRao: nativeFeeLimit, MaximumEVMFeePerGasWei: cfg.Config.Budgets.MaximumEVMFeePerGasWei, AlphaTransferMarginBPS: cfg.Config.AlphaTransfers.MinimumTAOEquivalentMarginBPS, MinimumSourceRemainingRao: cfg.Config.ValidatorBootstrap.MinimumSourceRemainingAlphaRao, BootstrapBurnHalfLifeBlocks: bootstrapBurnHalfLife, ProductionBurnHalfLifeBlocks: productionBurnHalfLife, ConfigHash: cfg.ConfigHash, ResolvedInputsHash: resolvedHash, PolicyHash: cfg.PolicyHash, Roles: roles, Deployment: payloads.Manifest, CoordinatorUpgrade: payloads.CoordinatorUpgrade, ValidatorEvidence: &evidenceManifest, GeneratedAt: generatedAt.Format(time.RFC3339)}
+	p.ValidatorEvidenceSource = evidenceSource
 	add := func(a Action) {
 		if actionUsesContractDeployment(a) {
 			parameters := make(map[string]string, len(a.Parameters)+1)
@@ -1015,7 +1058,11 @@ func buildPlanWithRegistrationGeneration(cfg *ResolvedConfig, facts *SetupFacts,
 	if comparisonErr != nil || voluntaryGas.IsZero() || productionGas.IsZero() || retirementComparison < 0 || governanceGas.IsZero() || precompileGas.IsZero() || dishonestDepositGas.IsZero() {
 		return nil, fmt.Errorf("EVM runtime gas ceiling is too small for conviction, production transition, and retirement")
 	}
-	campaignGas, err := subtractDecimalUints(runtimeGas, voluntaryGas, productionGas, retirementGas, governanceGas, precompileGas, dishonestDepositGas)
+	relayGas, err := evidenceRelayMaximumGas(cfg)
+	if err != nil {
+		return nil, err
+	}
+	campaignGas, err := subtractDecimalUints(runtimeGas, voluntaryGas, productionGas, retirementGas, governanceGas, precompileGas, dishonestDepositGas, relayGas)
 	if err != nil || campaignGas.IsZero() {
 		return nil, stateMismatchError(err, "live campaign gas reserve is zero")
 	}
@@ -1057,10 +1104,13 @@ func buildPlanWithRegistrationGeneration(cfg *ResolvedConfig, facts *SetupFacts,
 		roleGas[label] = updated
 		return nil
 	}
+	if err := addRoleGas("keeper", relayGas); err != nil {
+		return nil, err
+	}
 	for _, id := range []string{
 		"evm.reserve-sink", "evm.settlement-vault", "evm.coordinator-implementation", "evm.vault-register-escrow",
 		"evm.coordinator-proxy", "evm.governance-drill-implementation", "evm.vault-fix-coordinator", "evm.sink-fix-recorder",
-		"precompile.probe-deploy", "evm.coordinator-upgrade-implementation", "fleet.refresh.deploy-batcher",
+		"precompile.probe-deploy", "evm.coordinator-upgrade-implementation", "fleet.refresh.deploy-batcher", validatorEvidenceDeployActionID,
 	} {
 		if err := addRoleGas("deployer", gasCaps[id]); err != nil {
 			return nil, err
@@ -1072,7 +1122,7 @@ func buildPlanWithRegistrationGeneration(cfg *ResolvedConfig, facts *SetupFacts,
 	if err := addRoleGas("owner", productionGas); err != nil {
 		return nil, err
 	}
-	for _, id := range []string{"evm.coordinator-upgrade-activate", "policy.schedule-bootstrap", "fleet.refresh.oracle-activate", "fleet.refresh.oracle-restore"} {
+	for _, id := range []string{"evm.coordinator-upgrade-activate", "policy.schedule-bootstrap", "fleet.refresh.oracle-activate", "fleet.refresh.oracle-restore", validatorEvidenceAnchorActionID} {
 		if err := addRoleGas("owner", gasCaps[id]); err != nil {
 			return nil, err
 		}
@@ -1144,6 +1194,15 @@ func buildPlanWithRegistrationGeneration(cfg *ResolvedConfig, facts *SetupFacts,
 		} {
 			if err := addRoleGas("keeper", gasCaps[id]); err != nil {
 				return nil, err
+			}
+		}
+	}
+	if cfg.Config.ProvisionValidatorEvidenceV2 {
+		for validatorId := 1; validatorId <= cfg.Config.Topology.Validators; validatorId++ {
+			for noId := 1; noId <= cfg.Config.Topology.Operators; noId++ {
+				if err := addRoleGas("keeper", gasCaps[runtimeEvidenceActivationActionId(validatorId, noId)]); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -1290,9 +1349,22 @@ func buildPlanWithRegistrationGeneration(cfg *ResolvedConfig, facts *SetupFacts,
 	add(Action{ID: "precompile.probe-deploy", Kind: "evm-transaction", Target: "disposable-precompile-probe", Description: "deploy the locked, owner-gated runtime-454 conformance probe at its precomputed nonce", Spend: Spend{EVMGasWei: gasCaps["precompile.probe-deploy"]}, DependsOn: []string{prev}})
 	add(Action{ID: "evm.coordinator-upgrade-implementation", Kind: "evm-transaction", Target: payloads.CoordinatorUpgrade.Implementation.Hex(), Description: "deploy the exact release-1.0 coordinator implementation at the approval-bound deployer nonce", Parameters: map[string]string{"runtime_code_hash": payloads.CoordinatorUpgrade.RuntimeCodeHash}, Spend: Spend{EVMGasWei: gasCaps["evm.coordinator-upgrade-implementation"]}, DependsOn: []string{"precompile.probe-deploy"}})
 	add(Action{ID: "evm.coordinator-upgrade-activate", Kind: "evm-transaction", Target: payloads.Manifest.CoordinatorProxy.Hex(), Description: "atomically activate the reviewed coordinator repair through its UUPS owner gate", Parameters: map[string]string{"implementation": payloads.CoordinatorUpgrade.Implementation.Hex(), "runtime_code_hash": payloads.CoordinatorUpgrade.RuntimeCodeHash}, Spend: Spend{EVMGasWei: gasCaps["evm.coordinator-upgrade-activate"]}, DependsOn: []string{"evm.coordinator-upgrade-implementation", "evm.fund-owner"}})
+	batcherRuntimeHash := crypto.Keccak256Hash(payloads.FleetBatcherRuntime).Hex()
+	add(Action{
+		ID: "fleet.refresh.deploy-batcher", Kind: "evm-transaction", Target: payloads.FleetBatcherAddress.Hex(),
+		Description: "deploy the bounded testnet-only fleet install and refresh helper at the approval-bound nonce",
+		Parameters: map[string]string{
+			"coordinator":       payloads.Manifest.CoordinatorProxy.Hex(),
+			"commitment_oracle": payloads.CommitmentOracle.Hex(),
+			"runtime_code_hash": batcherRuntimeHash,
+		},
+		Spend: Spend{EVMGasWei: gasCaps["fleet.refresh.deploy-batcher"]}, DependsOn: []string{"evm.coordinator-upgrade-implementation", "evm.fund-deployer"},
+	})
+	add(Action{ID: validatorEvidenceDeployActionID, Kind: "evm-transaction", Target: evidenceManifest.Address.Hex(), Description: "deploy the immutable validator/operator hash journal at its exact additive nonce", Parameters: evidenceDeployParameters, Spend: Spend{EVMGasWei: gasCaps[validatorEvidenceDeployActionID]}, DependsOn: []string{"fleet.refresh.deploy-batcher", "evm.coordinator-upgrade-activate"}})
+	add(Action{ID: validatorEvidenceAnchorActionID, Kind: "evm-transaction", Target: evidenceManifest.Coordinator.Hex(), Description: "fix the approved evidence journal on the coordinator exactly once", Parameters: evidenceAnchorParameters, Spend: Spend{EVMGasWei: gasCaps[validatorEvidenceAnchorActionID]}, DependsOn: []string{validatorEvidenceDeployActionID, "evm.fund-owner"}})
 	add(Action{ID: "policy.schedule-bootstrap", Kind: "evm-transaction", Target: payloads.Manifest.CoordinatorProxy.Hex(), Description: "schedule the locked accelerated test policy for the next epoch when the live proxy still carries an earlier release policy", Parameters: map[string]string{"policy_hash": cfg.PolicyHash, "epoch_cap_rao_per_operator": fmt.Sprint(cfg.Policy.Deposit.EpochCapRaoPerOperator), "campaign_cap_rao": fmt.Sprint(cfg.Policy.Deposit.TotalTestCampaignCapRao)}, Spend: Spend{EVMGasWei: gasCaps["policy.schedule-bootstrap"]}, DependsOn: []string{"evm.coordinator-upgrade-activate", "evm.fund-owner"}})
 	add(Action{ID: "policy.await-bootstrap", Kind: "evm-read", Target: payloads.Manifest.CoordinatorProxy.Hex(), Description: "wait until the locked accelerated policy is active before rendering or launching any workload", Parameters: map[string]string{"policy_hash": cfg.PolicyHash}, DependsOn: []string{"policy.schedule-bootstrap"}})
-	setupDeps := []string{prev, "policy.await-bootstrap"}
+	setupDeps := []string{prev, "policy.await-bootstrap", validatorEvidenceAnchorActionID}
 	for i := 0; i < operatorCount; i++ {
 		depositRegistration := fmt.Sprintf("operator.deposit.register.%d", i+1)
 		add(Action{ID: depositRegistration, Kind: "evm-transaction", Target: roles.OperatorDepositSigners[i], Description: "limit-register the operator-isolated deposit hotkey under its EVM mirror coldkey", Parameters: registrationParameters(), Spend: Spend{EVMGasWei: gasCaps[depositRegistration], Registrations: 1}, DependsOn: []string{fmt.Sprintf("evm.fund-operator-%d-deposit", i+1), lastChurn}})
@@ -1445,27 +1517,40 @@ func buildPlanWithRegistrationGeneration(cfg *ResolvedConfig, facts *SetupFacts,
 	}
 	add(Action{ID: "campaign.evm-gas-reserve", Kind: "budget-reserve", Target: cfg.Config.Deployment.DeploymentID, Description: "reserve gas for deposits, payout roots, keepers, and claims during the live campaign", Spend: Spend{EVMGasWei: campaignGas}, DependsOn: setupDeps})
 	setupDeps = append(setupDeps, "campaign.evm-gas-reserve")
+	relayReserve, err := buildEvidenceRelayReserve(cfg, &evidenceManifest, setupDeps)
+	if err != nil {
+		return nil, err
+	}
+	if relayReserve.ID != "" {
+		add(relayReserve)
+		setupDeps = append(setupDeps, relayReserve.ID)
+	}
+	if cfg.Config.ProvisionValidatorEvidenceV2 {
+		activationDeps := make([]string, 0, cfg.Config.Topology.Validators*cfg.Config.Topology.Operators)
+		for validatorId := 1; validatorId <= cfg.Config.Topology.Validators; validatorId++ {
+			for noId := 1; noId <= cfg.Config.Topology.Operators; noId++ {
+				id := runtimeEvidenceActivationActionId(validatorId, noId)
+				dependencies := append(slices.Clone(setupDeps), "evm.fund-keeper")
+				if len(activationDeps) != 0 {
+					dependencies = append(dependencies, activationDeps[len(activationDeps)-1])
+				}
+				add(Action{ID: id, Kind: "evm-transaction", Target: evidenceManifest.Address.Hex(), Description: "publish the exact retained dual-signed fresh activation for one original validator/operator source", Parameters: map[string]string{"validator_id": strconv.Itoa(validatorId), "no_id": strconv.Itoa(noId), "mode": "fresh-v2", "policy_hash": cfg.PolicyHash}, Spend: Spend{EVMGasWei: gasCaps[id]}, DependsOn: dependencies})
+				activationDeps = append(activationDeps, id)
+			}
+		}
+		add(Action{ID: runtimeEvidenceActivationBoundaryActionId, Kind: "evm-read", Target: evidenceManifest.Address.Hex(), Description: "retain the common finalized activation boundary and exact fixed source inputs before validator startup", Parameters: map[string]string{"mode": "fresh-v2", "policy_hash": cfg.PolicyHash}, DependsOn: activationDeps})
+		setupDeps = append(setupDeps, runtimeEvidenceActivationBoundaryActionId)
+	}
 	add(Action{ID: "config.render", Kind: "local", Target: cfg.Config.Deployment.DeploymentID, Description: "atomically render isolated operator, miner, validator, and supervisor configs", Parameters: map[string]string{
 		"config_hash": cfg.ConfigHash, "policy_hash": cfg.PolicyHash, "operator_config_overlay": operatorConfigOverlayVersion,
 	}, DependsOn: setupDeps})
 	add(Action{ID: "accounts.provision", Kind: "local", Target: cfg.Config.Deployment.DeploymentID, Description: "provision stable operator-scoped miner and validator identities", DependsOn: []string{"config.render"}})
 	add(Action{ID: "campaign.voluntary-conviction.1", Kind: "evm-transaction", Target: "no:1", Description: "lock the exact first-tier boundary as voluntary conviction without recording current-epoch demand", Parameters: map[string]string{"no_id": "1", "amount_rao": fmt.Sprint(cfg.Config.Scenarios.VoluntaryConvictionRao), "reserve_runtime_share_transitions": strconv.FormatUint(reserveRuntimeShareTransitionCount, 10), "reserve_rounding_allowance_rao": strconv.FormatUint(reserveRoundingAllowancePerCallRao, 10)}, Spend: Spend{EVMGasWei: voluntaryGas}, DependsOn: []string{"accounts.provision", "campaign.evm-gas-reserve", "alpha.transfer.operator-deposit.1"}})
-	batcherRuntimeHash := crypto.Keccak256Hash(payloads.FleetBatcherRuntime).Hex()
-	add(Action{
-		ID: "fleet.refresh.deploy-batcher", Kind: "evm-transaction", Target: payloads.FleetBatcherAddress.Hex(),
-		Description: "deploy the bounded testnet-only fleet install and refresh helper at the approval-bound nonce",
-		Parameters: map[string]string{
-			"coordinator":       payloads.Manifest.CoordinatorProxy.Hex(),
-			"commitment_oracle": payloads.CommitmentOracle.Hex(),
-			"runtime_code_hash": batcherRuntimeHash,
-		},
-		Spend: Spend{EVMGasWei: gasCaps["fleet.refresh.deploy-batcher"]}, DependsOn: []string{"campaign.voluntary-conviction.1", "evm.fund-deployer"},
-	})
 	add(Action{
 		ID: "fleet.refresh.oracle-activate", Kind: "evm-transaction", Target: payloads.Manifest.CoordinatorProxy.Hex(),
 		Description: "schedule the bounded fleet refresh helper as commitment oracle for the next safe epoch",
 		Parameters:  map[string]string{"oracle": payloads.FleetBatcherAddress.Hex()},
-		Spend:       Spend{EVMGasWei: gasCaps["fleet.refresh.oracle-activate"]}, DependsOn: []string{"fleet.refresh.deploy-batcher", "evm.fund-owner"},
+		Spend:       Spend{EVMGasWei: gasCaps["fleet.refresh.oracle-activate"]}, DependsOn: []string{"fleet.refresh.deploy-batcher", "campaign.voluntary-conviction.1", "evm.fund-owner"},
 	})
 	add(Action{ID: "fleet.refresh.oracle-await-active", Kind: "evm-read", Target: payloads.FleetBatcherAddress.Hex(), Description: "wait until the approved fleet refresh helper is the active commitment oracle", DependsOn: []string{"fleet.refresh.oracle-activate"}})
 	lastFleet := "fleet.refresh.oracle-await-active"
@@ -1906,6 +1991,9 @@ func (p SetupPlan) hash() (string, error) {
 func validatePlanBudget(p *SetupPlan) error {
 	if p == nil {
 		return errors.New("setup plan is unavailable")
+	}
+	if err := validateValidatorEvidencePlan(p); err != nil {
+		return err
 	}
 	if err := validateFleetCommitmentParallelGroups(p.Actions); err != nil {
 		return err

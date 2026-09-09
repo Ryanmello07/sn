@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -378,11 +379,13 @@ func expectedInputs(outcomes, markers string) (expectedSuite, error) {
 	previous := ""
 	for _, row := range rows {
 		fields := strings.Split(row, "\t")
-		if len(fields) != 2 || !rootPattern.MatchString(fields[0]) || fields[0] <= previous || (fields[1] != "PASS" && fields[1] != "FAIL") {
+		if len(fields) != 2 || !validTestIdentity(fields[0]) || fields[0] <= previous || (fields[1] != "PASS" && fields[1] != "FAIL") {
 			return result, errors.New("invalid, duplicate or unsorted expected root")
 		}
 		previous = fields[0]
-		result.Roots = append(result.Roots, fields[0])
+		if !strings.Contains(fields[0], "/") {
+			result.Roots = append(result.Roots, fields[0])
+		}
 		result.Outcomes[fields[0]] = strings.ToLower(fields[1])
 	}
 	rows, err = metadataRows(markers, true)
@@ -408,7 +411,82 @@ func expectedInputs(outcomes, markers string) (expectedSuite, error) {
 			return result, errors.New("expected failure has no owning literal")
 		}
 	}
+	if _, err := expectedParents(result); err != nil {
+		return result, err
+	}
 	return result, nil
+}
+
+// Keep the legacy root grammar. Go testing rewrites child whitespace and
+// nonprintable runes; emitted punctuation and Unicode remain literal identities.
+func validTestIdentity(name string) bool {
+	if !strings.Contains(name, "/") {
+		return rootPattern.MatchString(name)
+	}
+	if len(name) > 4096 || strings.Count(name, "/") > 64 || !utf8.ValidString(name) {
+		return false
+	}
+	components := strings.Split(name, "/")
+	if !rootPattern.MatchString(components[0]) {
+		return false
+	}
+	for _, component := range components[1:] {
+		if component == "" {
+			return false
+		}
+		for _, r := range component {
+			if r == ' ' || !strconv.IsPrint(r) {
+				return false
+			}
+		}
+	}
+	// No path cleaning, pattern matching or implicit descendant admission.
+	return true
+}
+
+// Derive a complete hierarchy from declarations, never from observed events.
+// A failing child must also declare each failing ancestor and its own literal.
+func expectedParents(expected expectedSuite) (map[string]string, error) {
+	if len(expected.Outcomes) == 0 || len(expected.Outcomes) > 256*1024 {
+		return nil, errors.New("expected test identity census is empty or exceeds bound")
+	}
+	parents := map[string]string{}
+	var roots []string
+	for name, outcome := range expected.Outcomes {
+		if !validTestIdentity(name) || outcome != "pass" && outcome != "fail" {
+			return nil, errors.New("invalid declared test identity or outcome")
+		}
+		if slash := strings.LastIndexByte(name, '/'); slash >= 0 {
+			parent := name[:slash]
+			if expected.Outcomes[parent] == "" {
+				return nil, errors.New("declared descendant has no declared parent")
+			}
+			if outcome == "fail" && expected.Outcomes[parent] != "fail" {
+				return nil, errors.New("failing descendant has a non-failing parent")
+			}
+			parents[name] = parent
+		} else {
+			roots = append(roots, name)
+		}
+		if outcome == "fail" && expected.Markers[name] == "" {
+			return nil, errors.New("expected failure has no owning literal")
+		}
+	}
+	sort.Strings(roots)
+	if len(roots) == 0 || !reflect.DeepEqual(roots, expected.Roots) {
+		return nil, errors.New("declared top-level root census differs")
+	}
+	for name, literal := range expected.Markers {
+		if expected.Outcomes[name] != "fail" || len(literal) == 0 || len(literal) > 4096 || !utf8.ValidString(literal) {
+			return nil, errors.New("invalid identity-owned failure literal")
+		}
+		for _, r := range literal {
+			if r < 32 {
+				return nil, errors.New("control character in failure literal")
+			}
+		}
+	}
+	return parents, nil
 }
 
 func validatePlan(plan planSpec) error {

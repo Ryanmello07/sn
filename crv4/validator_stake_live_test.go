@@ -14,7 +14,7 @@ import (
 
 // UID0 is a live registered observation, not a claim that we own that validator
 // or that an arbitrary weight transaction from it would be accepted.
-func TestLiveValidatorStakeRuntime454Testnet521(t *testing.T) {
+func TestLiveValidatorStakeRuntime455Testnet521(t *testing.T) {
 	if os.Getenv("CRV4_LIVE_VALIDATOR_STAKE") != "1" {
 		t.Skip("set CRV4_LIVE_VALIDATOR_STAKE=1 for the read-only public testnet stake probe")
 	}
@@ -24,9 +24,9 @@ func TestLiveValidatorStakeRuntime454Testnet521(t *testing.T) {
 		t.Fatal(err)
 	}
 	allowed := RuntimeArtifactIdentity{
-		Version:      RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 454, TransactionVersion: 1, StateVersion: 1},
-		CodeHash:     "0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef",
-		MetadataHash: "0x4d17516b694ef8d18f8a565dcb2df0117e7a0018a3ffa40812c91a1621225702",
+		Version:      RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 455, TransactionVersion: 1, StateVersion: 1},
+		CodeHash:     "0xbca85925668cabb2880164610d64eda2e4d9bf2777994f9cdfdb9d36253ce74a",
+		MetadataHash: "0x16da562c347a354c55eb1ad5cd5094343afe7acdc12e5b526bf6c8cb12e866bc",
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()

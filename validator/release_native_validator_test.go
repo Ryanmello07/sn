@@ -23,18 +23,20 @@ import (
 // Each fixture owns its transcript, metadata, chain and mutable chain-state
 // fields; cancellation tests join the read before examining the transcript.
 type releaseNativeValidatorTestFixture struct {
-	ctx        context.Context
-	chain      *crv4.Chain
-	expected   crv4.RuntimeArtifactIdentity
-	genesis    types.Hash
-	block      types.Hash
-	hotkey     [32]byte
-	threshold  uint64
-	total      uint64
-	permit     bool
-	owner      bool
-	calls      []string
-	beforeCall func(context.Context, string) error
+	ctx         context.Context
+	chain       *crv4.Chain
+	expected    crv4.RuntimeArtifactIdentity
+	genesis     types.Hash
+	block       types.Hash
+	blockNumber uint64
+	uid         uint16
+	hotkey      [32]byte
+	threshold   uint64
+	total       uint64
+	permit      bool
+	owner       bool
+	calls       []string
+	beforeCall  func(context.Context, string) error
 }
 
 // The independent SDK supplies exact SCALE compacts for the runtime response.
@@ -49,11 +51,28 @@ func releaseNativeValidatorTestCompact(t *testing.T, value uint64) []byte {
 
 // Uses the actual v454 storage hashers and API field indexes while authorizing
 // only this fixture's metadata content hash in the private real-reader path.
-func newReleaseNativeValidatorTestFixture(t *testing.T) *releaseNativeValidatorTestFixture {
+func newReleaseNativeValidatorTestFixture(t *testing.T, hotkeys ...[32]byte) *releaseNativeValidatorTestFixture {
 	t.Helper()
+	return newReleaseNativeValidatorUIDTestFixture(t, 1, hotkeys...)
+}
+
+// UID is a snapshot-specific mapping. This fixture serves its actual SCALE
+// keys, permit and metagraph at that position, not an eligibility verdict.
+func newReleaseNativeValidatorUIDTestFixture(t *testing.T, selectedUID uint16, hotkeys ...[32]byte) *releaseNativeValidatorTestFixture {
+	t.Helper()
+	if selectedUID >= 3 {
+		t.Fatal("native fixture UID exceeds its real three-entry census")
+	}
 	fixture := &releaseNativeValidatorTestFixture{
 		ctx: context.Background(), genesis: types.Hash{1}, block: types.Hash{2},
+		blockNumber: 100, uid: selectedUID,
 		hotkey: [32]byte{11}, threshold: 100, total: 150, permit: true,
+	}
+	if len(hotkeys) > 1 {
+		t.Fatal("native fixture permits at most one explicit signing hotkey")
+	}
+	if len(hotkeys) == 1 {
+		fixture.hotkey = hotkeys[0]
 	}
 	identityHasher := types.StorageHasherV10{IsIdentity: true}
 	accountHasher := types.StorageHasherV10{IsBlake2_128Concat: true}
@@ -94,7 +113,7 @@ func newReleaseNativeValidatorTestFixture(t *testing.T) *releaseNativeValidatorT
 		Version:  crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 454, TransactionVersion: 1, StateVersion: 1},
 		CodeHash: types.Hash{4}.Hex(), MetadataHash: metadataHash,
 	}
-	netuid, uid := binary.LittleEndian.AppendUint16(nil, 521), binary.LittleEndian.AppendUint16(nil, 1)
+	netuid, uid := binary.LittleEndian.AppendUint16(nil, 521), binary.LittleEndian.AppendUint16(nil, selectedUID)
 	keyNames := map[string]string{}
 	for _, field := range []struct {
 		name string
@@ -149,13 +168,13 @@ func newReleaseNativeValidatorTestFixture(t *testing.T) *releaseNativeValidatorT
 			if !ok {
 				return fmt.Errorf("unexpected header result %T", result)
 			}
-			*header = types.Header{Number: 100}
+			*header = types.Header{Number: types.BlockNumber(fixture.blockNumber)}
 			return nil
 		case "chain_getBlockHash":
 			if reflect.DeepEqual(args, []any{uint64(0)}) {
 				return setValidatorRuntimeIdentityTestResult(result, fixture.genesis.Hex())
 			}
-			if err := check(uint64(100)); err != nil {
+			if err := check(fixture.blockNumber); err != nil {
 				return err
 			}
 			return setValidatorRuntimeIdentityTestResult(result, fixture.block.Hex())
@@ -198,7 +217,7 @@ func newReleaseNativeValidatorTestFixture(t *testing.T) *releaseNativeValidatorT
 			case "ValidatorPermit":
 				value = []byte{12, 0, 0, 0}
 				if fixture.permit {
-					value[2] = 1
+					value[1+selectedUID] = 1
 				}
 			case "StakeThreshold":
 				value = binary.LittleEndian.AppendUint64(nil, fixture.threshold)
@@ -229,7 +248,9 @@ func newReleaseNativeValidatorTestFixture(t *testing.T) *releaseNativeValidatorT
 				data = append(data, 1, 12)
 				switch index {
 				case 52:
-					for _, hotkey := range [][32]byte{{31}, fixture.hotkey, {33}} {
+					hotkeys := [][32]byte{{31}, {32}, {33}}
+					hotkeys[selectedUID] = fixture.hotkey
+					for _, hotkey := range hotkeys {
 						data = append(data, hotkey[:]...)
 					}
 				case 57:
@@ -237,11 +258,17 @@ func newReleaseNativeValidatorTestFixture(t *testing.T) *releaseNativeValidatorT
 					if fixture.permit {
 						permit = 1
 					}
-					data = append(data, 0, permit, 0)
+					permits := []byte{0, 0, 0}
+					permits[selectedUID] = permit
+					data = append(data, permits...)
 				case 69:
-					data = append(data, 0)
-					data = append(data, releaseNativeValidatorTestCompact(t, fixture.total)...)
-					data = append(data, 0)
+					for uid := uint16(0); uid < 3; uid++ {
+						stake := uint64(0)
+						if uid == selectedUID {
+							stake = fixture.total
+						}
+						data = append(data, releaseNativeValidatorTestCompact(t, stake)...)
+					}
 				}
 			}
 			return setValidatorRuntimeIdentityTestResult(result, "0x"+hex.EncodeToString(data))
@@ -255,7 +282,7 @@ func newReleaseNativeValidatorTestFixture(t *testing.T) *releaseNativeValidatorT
 // The actual production helper receives independent expected inputs, not a
 // callback that can approve or replace the native reader's observation.
 func (self *releaseNativeValidatorTestFixture) read() (crv4.ValidatorStakeObservation, error) {
-	return readReleaseNativeValidatorAtContext(self.ctx, self.chain, self.genesis, 521, self.hotkey, 1, self.expected)
+	return readReleaseNativeValidatorAtContext(self.ctx, self.chain, self.genesis, 521, self.hotkey, self.uid, self.expected)
 }
 
 // A complete exact-block observation permits the real startup prerequisite.

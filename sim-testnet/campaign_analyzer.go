@@ -107,26 +107,30 @@ func runReleaseCandidateCampaignWithAnalyzer(ctx context.Context, cfg *ResolvedC
 	defer cancel()
 	results := make(chan scenarioCampaignAnalysisResult, 2)
 	pending := 0
+	var pendingAnalysis error
 	startAnalyzer := func(phase string, result *ScenarioResult) {
 		pending++
 		runDir := filepath.Join(stateDir, "runs", result.RunID)
 		go func() {
-			err := analyzer(campaignCtx, cfg, stateDir, runDir, roles, result)
+			err := errors.Join(analyzer(campaignCtx, cfg, stateDir, runDir, roles, result), campaignCtx.Err())
 			if err != nil {
-				cancel()
+				if !isFinalSemanticAnalysisPending(err) {
+					cancel()
+				}
 				err = fmt.Errorf("%s semantic analysis: %w", phase, err)
 			}
 			results <- scenarioCampaignAnalysisResult{phase: phase, err: err}
 		}()
 	}
 	waitAnalyzers := func() error {
-		var joined error
+		joined := pendingAnalysis
+		pendingAnalysis = nil
 		for pending > 0 {
 			result := <-results
 			pending--
 			joined = errors.Join(joined, result.err)
 		}
-		return joined
+		return errors.Join(joined, campaignCtx.Err())
 	}
 	completedAnalyzerFailure := func() error {
 		var joined error
@@ -134,7 +138,11 @@ func runReleaseCandidateCampaignWithAnalyzer(ctx context.Context, cfg *ResolvedC
 			select {
 			case result := <-results:
 				pending--
-				joined = errors.Join(joined, result.err)
+				if isFinalSemanticAnalysisPending(result.err) {
+					pendingAnalysis = errors.Join(pendingAnalysis, result.err)
+				} else {
+					joined = errors.Join(joined, result.err)
+				}
 			default:
 				return joined
 			}
@@ -145,7 +153,7 @@ func runReleaseCandidateCampaignWithAnalyzer(ctx context.Context, cfg *ResolvedC
 	if err != nil {
 		return fmt.Errorf("open durable release-1.0 attempt: %w", err)
 	}
-	release, _, err := loadCompletedScenarioCampaignByRunID(cfg, stateDir, roles, "release-1.0", releaseAttempt.payload.RunID)
+	release, _, err := loadCompletedScenarioCampaignByRunIdContext(ctx, cfg, stateDir, roles, "release-1.0", releaseAttempt.payload.RunID)
 	if err != nil {
 		if !errors.Is(err, errNoCompletedScenarioCampaign) {
 			return err
@@ -156,12 +164,12 @@ func runReleaseCandidateCampaignWithAnalyzer(ctx context.Context, cfg *ResolvedC
 		if err := runner(campaignCtx, cfg, stateDir, "release-1.0", journal, executor, releaseAttempt); err != nil {
 			return err
 		}
-		release, _, err = loadCompletedScenarioCampaignByRunID(cfg, stateDir, roles, "release-1.0", releaseAttempt.payload.RunID)
+		release, _, err = loadCompletedScenarioCampaignByRunIdContext(ctx, cfg, stateDir, roles, "release-1.0", releaseAttempt.payload.RunID)
 		if err != nil {
 			return fmt.Errorf("authenticate completed release-1.0 handoff: %w", err)
 		}
 	}
-	releaseGate, err := validateReleaseCampaignComplete(cfg, roles, filepath.Join(stateDir, "runs", release.RunID), release)
+	releaseGate, err := validateReleaseCampaignCompleteContext(ctx, cfg, roles, filepath.Join(stateDir, "runs", release.RunID), release)
 	if err != nil {
 		return fmt.Errorf("authenticate exact release-1.0 gate: %w", err)
 	}
@@ -172,7 +180,7 @@ func runReleaseCandidateCampaignWithAnalyzer(ctx context.Context, cfg *ResolvedC
 		cancel()
 		return errors.Join(fmt.Errorf("open durable production-soak attempt: %w", err), waitAnalyzers())
 	}
-	production, _, err := loadCompletedScenarioCampaignByRunID(cfg, stateDir, roles, "production-soak", productionAttempt.payload.RunID)
+	production, _, err := loadCompletedScenarioCampaignByRunIdContext(ctx, cfg, stateDir, roles, "production-soak", productionAttempt.payload.RunID)
 	if err != nil {
 		if !errors.Is(err, errNoCompletedScenarioCampaign) {
 			cancel()
@@ -193,7 +201,7 @@ func runReleaseCandidateCampaignWithAnalyzer(ctx context.Context, cfg *ResolvedC
 			cancel()
 			return errors.Join(analyzerErr, waitAnalyzers())
 		}
-		production, _, err = loadCompletedScenarioCampaignByRunID(cfg, stateDir, roles, "production-soak", productionAttempt.payload.RunID)
+		production, _, err = loadCompletedScenarioCampaignByRunIdContext(ctx, cfg, stateDir, roles, "production-soak", productionAttempt.payload.RunID)
 		if err != nil {
 			cancel()
 			return errors.Join(fmt.Errorf("authenticate completed production-soak handoff: %w", err), waitAnalyzers())

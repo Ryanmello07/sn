@@ -285,8 +285,15 @@ func TestCampaignEvidenceArchiveFailureCannotExposeLocalCompletion(t *testing.T)
 	if _, err := os.Stat(filepath.Join(runDir, "complete.json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("failed campaign archive exposed local completion: %v", err)
 	}
-	var staged ReleaseEvidenceEnvelope
-	if err := decodeStrictJSONFile(filepath.Join(runDir, campaignEvidenceManifestFilename), &staged); err != nil {
+	if _, err := os.Stat(filepath.Join(runDir, campaignEvidenceManifestFilename)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed streaming publication exposed a completed manifest: %v", err)
+	}
+	stagedPaths, err := filepath.Glob(filepath.Join(stateDir, "public", campaignEvidenceLocalArchiveDirectory, runID, "files", "*.evidence.json"))
+	if err != nil || len(stagedPaths) != 1 {
+		t.Fatalf("first immutable file stage missing: %v %v", stagedPaths, err)
+	}
+	staged, err := os.ReadFile(stagedPaths[0])
+	if err != nil {
 		t.Fatal(err)
 	}
 	stores[2] = goodSecond
@@ -296,8 +303,12 @@ func TestCampaignEvidenceArchiveFailureCannotExposeLocalCompletion(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if committed.ContentHash != staged.ContentHash || committed.Signature != staged.Signature {
-		t.Fatalf("campaign archive retry replaced immutable stage: staged=%s committed=%s", staged.ContentHash, committed.ContentHash)
+	if committed == nil {
+		t.Fatal("retry did not complete its manifest")
+	}
+	retained, err := os.ReadFile(stagedPaths[0])
+	if err != nil || !bytes.Equal(retained, staged) {
+		t.Fatalf("campaign retry replaced original signed file bytes: %v", err)
 	}
 }
 

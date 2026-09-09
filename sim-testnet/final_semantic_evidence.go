@@ -3412,6 +3412,19 @@ func VerifyFinalSemanticArtifacts(ctx context.Context, evidence *FinalSemanticEv
 	if finalSemanticArtifactVerificationCacheHit(cacheKey) {
 		return nil
 	}
+	// Reject a foreign executable graph before replaying unrelated signed
+	// attempts. Every successful path still authenticates the full graph below.
+	plan, err := verifyFinalSetupPlanArtifact(evidence, cache[evidence.PlanArtifact.URI])
+	if err != nil {
+		return err
+	}
+	lock, err := verifyFinalReleaseLockArtifact(evidence, plan, cache[evidence.ReleaseLockArtifact.URI])
+	if err != nil {
+		return err
+	}
+	if err := verifyFinalDeploymentArtifact(evidence, plan, lock, cache[evidence.Deployment.Artifact.URI]); err != nil {
+		return err
+	}
 	lineageFiles, err := decodeFinalFleetLifecycleLineageFiles(evidence, cache[evidence.FleetLifecycle.LineageArtifact.URI])
 	if err != nil {
 		return err
@@ -3456,14 +3469,6 @@ func VerifyFinalSemanticArtifacts(ctx context.Context, evidence *FinalSemanticEv
 				return fmt.Errorf("payout artifact %s: %w", item.locator.URI, err)
 			}
 		}
-	}
-	plan, err := verifyFinalSetupPlanArtifact(evidence, cache[evidence.PlanArtifact.URI])
-	if err != nil {
-		return err
-	}
-	lock, err := verifyFinalReleaseLockArtifact(evidence, plan, cache[evidence.ReleaseLockArtifact.URI])
-	if err != nil {
-		return err
 	}
 	if evidence.FleetGeneration != nil {
 		if err := verifyFinalFleetGenerationArtifacts(evidence, cache); err != nil {
@@ -3510,9 +3515,6 @@ func VerifyFinalSemanticArtifacts(ctx context.Context, evidence *FinalSemanticEv
 		}
 	}
 	if err := verifyFinalContractCleanupArtifacts(evidence, cache); err != nil {
-		return err
-	}
-	if err := verifyFinalDeploymentArtifact(evidence, plan, lock, cache[evidence.Deployment.Artifact.URI]); err != nil {
 		return err
 	}
 	if err := verifyFinalHistoricalCoordinatorReceiptArtifacts(evidence, plan, cache); err != nil {

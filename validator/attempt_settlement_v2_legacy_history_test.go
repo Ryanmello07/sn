@@ -144,6 +144,7 @@ func newAttemptSettlementRuntimeV2LegacyHistoryFixture(t *testing.T, positive bo
 // Real positive exact prior is authenticated in a complete legacy batch and
 // preserved byte-for-byte except for the explicit v6 activation wrapper.
 func TestAttemptSettlementRuntimeV2ActivationPreservesRealLegacyPositiveHistory(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2LegacyHistoryFixture(t, true)
 	before := runtimeAttemptSettlementV2TestImages(t, fixture.participants)
 	if len(fixture.participants[0].Stats.emaPPM) == 0 {
@@ -175,6 +176,7 @@ func TestAttemptSettlementRuntimeV2ActivationPreservesRealLegacyPositiveHistory(
 // A compact nonempty current window after genuine signed legacy history is
 // sealed normally; the old transition bytes remain nonrecursive carried data.
 func TestAttemptSettlementRuntimeV2TerminalPreservesLegacyHistoryWithRealNewRows(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2LegacyHistoryFixture(t, false)
 	if err := InitializeAttemptSettlementEpochV2(t.Context(), fixture.coordinator, fixture.participants, 43, fixture.options(t).Authority, runtimeAttemptSettlementV2TestPersistence()); err != nil {
 		t.Fatal(err)
@@ -211,6 +213,7 @@ func TestAttemptSettlementRuntimeV2TerminalPreservesLegacyHistoryWithRealNewRows
 // A mutated legacy signature cannot become authority merely by being stored
 // alongside a locally well-shaped v6 activation marker.
 func TestAttemptSettlementRuntimeV2ActivationRejectsMutatedLegacyHistory(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2LegacyHistoryFixture(t, false)
 	participant := fixture.participants[1]
 	owner := participant.Stats.lockStatsWrite("legacy-history-refusal-input")

@@ -873,12 +873,14 @@ func TestReleaseLockMatchesCheckout(t *testing.T) {
 }
 
 // The source tag alone cannot prove which runtime is deployed. Keep every
-// independent source, artifact, upstream-proposal, and live-code binding exact.
+// independent source/artifact binding exact and refuse fabricated proposals.
 func TestReviewedRuntimeIdentityRejectsEachAdjacentFieldDrift(t *testing.T) {
 	valid := func() *ReleaseLock {
 		lock := new(ReleaseLock)
 		lock.Runtime.SourceRepository = reviewedRuntimeSourceRepository
 		lock.Runtime.SourceTag = reviewedRuntimeSourceTag
+		lock.Runtime.SourceRefKind = reviewedRuntimeSourceRefKind
+		lock.Runtime.SourceRefName = reviewedRuntimeSourceRefName
 		lock.Runtime.SourceCommit = reviewedRuntimeSourceCommit
 		lock.Runtime.CodeHash = reviewedRuntimeCodeHash
 		lock.Runtime.MetadataHash = reviewedRuntimeMetadataHash
@@ -901,6 +903,10 @@ func TestReviewedRuntimeIdentityRejectsEachAdjacentFieldDrift(t *testing.T) {
 		mutate func(*ReleaseLock)
 	}{
 		{name: "source repository", mutate: func(lock *ReleaseLock) { lock.Runtime.SourceRepository += "/fork" }},
+		{name: "source ref kind", mutate: func(lock *ReleaseLock) { lock.Runtime.SourceRefKind = "branch" }},
+		{name: "source ref name", mutate: func(lock *ReleaseLock) { lock.Runtime.SourceRefName = "testnet" }},
+		{name: "source ref absent", mutate: func(lock *ReleaseLock) { lock.Runtime.SourceRefKind, lock.Runtime.SourceRefName = "", "" }},
+		{name: "invented current tag", mutate: func(lock *ReleaseLock) { lock.Runtime.SourceTag = "v455" }},
 		{name: "source tag", mutate: func(lock *ReleaseLock) { lock.Runtime.SourceTag = "v452" }},
 		{name: "source commit", mutate: func(lock *ReleaseLock) { lock.Runtime.SourceCommit = strings.Repeat("0", 40) }},
 		{name: "wasm hash", mutate: func(lock *ReleaseLock) { lock.Runtime.CodeHash = "0x" + strings.Repeat("0", 64) }},
@@ -926,6 +932,8 @@ func TestReleaseLockRejectsGeneratedRuntimeDrift(t *testing.T) {
 	cfg.Release = &ReleaseLock{SchemaVersion: 1, Release: "1.0"}
 	cfg.Release.Runtime.SourceRepository = reviewedRuntimeSourceRepository
 	cfg.Release.Runtime.SourceTag = reviewedRuntimeSourceTag
+	cfg.Release.Runtime.SourceRefKind = reviewedRuntimeSourceRefKind
+	cfg.Release.Runtime.SourceRefName = reviewedRuntimeSourceRefName
 	cfg.Release.Runtime.SourceCommit = reviewedRuntimeSourceCommit
 	cfg.Release.Runtime.CodeHash = reviewedRuntimeCodeHash
 	cfg.Release.Runtime.MetadataHash = reviewedRuntimeMetadataHash

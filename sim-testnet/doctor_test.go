@@ -235,7 +235,7 @@ func TestApprovedDoctorFactsAcceptExactPartialPrefixAndRejectAdjacentDrift(t *te
 }
 
 func TestRuntimeVersionIdentityAcceptsAuthoritativeNormalEncoding(t *testing.T) {
-	raw := json.RawMessage(`{"specName":"node-subtensor","implName":"node-subtensor","authoringVersion":1,"specVersion":454,"implVersion":0,"apis":[["0xdf6acb689907609b",4]],"transactionVersion":1,"stateVersion":1}`)
+	raw := json.RawMessage(`{"specName":"node-subtensor","implName":"node-subtensor","authoringVersion":1,"specVersion":455,"implVersion":0,"apis":[["0xdf6acb689907609b",4]],"transactionVersion":1,"stateVersion":1}`)
 	version, err := decodeRuntimeVersionIdentity(raw)
 	if err != nil {
 		t.Fatalf("authoritative runtime version was not decoded: %v", err)
@@ -257,13 +257,11 @@ func TestRuntimeVersionIdentityRejectsAdjacentDrift(t *testing.T) {
 		{name: "state version", mutate: func(version *runtimeVersionIdentity) { version.StateVersion++ }},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			drifted := valid
-			test.mutate(&drifted)
-			if err := validateRuntimeVersionIdentity(drifted, reviewedRuntimeSpecVersion, reviewedRuntimeTransactionVersion, reviewedRuntimeStateVersion); err == nil {
-				t.Fatal("runtime identity drift was accepted")
-			}
-		})
+		drifted := valid
+		test.mutate(&drifted)
+		if err := validateRuntimeVersionIdentity(drifted, reviewedRuntimeSpecVersion, reviewedRuntimeTransactionVersion, reviewedRuntimeStateVersion); err == nil {
+			t.Errorf("%s runtime identity drift was accepted", test.name)
+		}
 	}
 }
 
@@ -278,11 +276,9 @@ func TestRuntimeVersionIdentityRejectsMissingRequiredFields(t *testing.T) {
 		{missing: "stateVersion", raw: json.RawMessage(`{"specName":"node-subtensor","specVersion":453,"transactionVersion":1}`)},
 	}
 	for _, test := range tests {
-		t.Run(test.missing, func(t *testing.T) {
-			if _, err := decodeRuntimeVersionIdentity(test.raw); err == nil || !strings.Contains(err.Error(), "missing") {
-				t.Fatalf("missing %s was accepted: %v", test.missing, err)
-			}
-		})
+		if _, err := decodeRuntimeVersionIdentity(test.raw); err == nil || !strings.Contains(err.Error(), "missing") {
+			t.Errorf("missing %s was accepted: %v", test.missing, err)
+		}
 	}
 }
 
@@ -301,11 +297,9 @@ func TestRuntimeVersionIdentityRejectsAmbiguousEncoding(t *testing.T) {
 		{name: "trailing", raw: `{"specName":"node-subtensor","specVersion":453,"transactionVersion":1,"stateVersion":1}{}`},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if _, err := decodeRuntimeVersionIdentity(json.RawMessage(test.raw)); err == nil {
-				t.Fatal("ambiguous runtime-version encoding was accepted")
-			}
-		})
+		if _, err := decodeRuntimeVersionIdentity(json.RawMessage(test.raw)); err == nil {
+			t.Errorf("%s ambiguous runtime-version encoding was accepted", test.name)
+		}
 	}
 }
 
@@ -635,6 +629,7 @@ func TestReviewedHistoricalRuntimeArtifactsAreExactEvidenceOnly(t *testing.T) {
 		{451, "0xf3554a22dfcefa9b42b3a0a5e58c1e6c871795ecc9ea9da78bf0900e23e57c08", "0xeecd7e7c00377caec23c3dc754fd621963cc456fa5d02a4f66ff267b0494bd9d"},
 		{452, "0x40a8c3c99a47d6739b086236308535fab26d5fd4cc5c88eb83f6a3c8b928f7cc", "0x2e1d4f992a978fdd58652c8cf434c26bb8f89170e6a0fdbc9362b29e8fe8a835"},
 		{453, "0xabe169cc148e2a63068772788c191fa6566f02aa2ea9afb80cdeb28217bab4d4", "0xb00e7e0188d537136a973df4d5c5f2c86ef903ffff49c1cf8d129dabc98b07ce"},
+		{spec: 454, codeHash: "0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef", metadataHash: "0x4d17516b694ef8d18f8a565dcb2df0117e7a0018a3ffa40812c91a1621225702"},
 	} {
 		version := runtimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: test.spec, TransactionVersion: 1, StateVersion: 1}
 		artifact, ok := reviewedHistoricalRuntimeArtifact(version)
@@ -647,7 +642,7 @@ func TestReviewedHistoricalRuntimeArtifactsAreExactEvidenceOnly(t *testing.T) {
 		{SpecName: "other", SpecVersion: 451, TransactionVersion: 1, StateVersion: 1},
 		{SpecName: "node-subtensor", SpecVersion: 451, TransactionVersion: 2, StateVersion: 1},
 		{SpecName: "node-subtensor", SpecVersion: 452, TransactionVersion: 1, StateVersion: 2},
-		{SpecName: "node-subtensor", SpecVersion: 454, TransactionVersion: 1, StateVersion: 1},
+		{SpecName: "node-subtensor", SpecVersion: 455, TransactionVersion: 1, StateVersion: 1},
 	} {
 		if _, ok := reviewedHistoricalRuntimeArtifact(version); ok {
 			t.Errorf("unreviewed historical identity was accepted: %+v", version)
@@ -657,13 +652,13 @@ func TestReviewedHistoricalRuntimeArtifactsAreExactEvidenceOnly(t *testing.T) {
 
 // The release-history reader needs one bounded provider cache entry for the
 // active runtime and each exact predecessor carried by the attempt journal.
-func TestReleaseHistoryRuntimeArtifactsCoverExactFourVersionDomain(t *testing.T) {
+func TestReleaseHistoryRuntimeArtifactsCoverExactFiveVersionDomain(t *testing.T) {
 	cfg := testResolvedConfig(t)
 	artifacts, err := releaseHistoryRuntimeArtifacts(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSpecs := []uint32{454, 451, 452, 453}
+	wantSpecs := []uint32{455, 451, 452, 453, 454}
 	if len(artifacts) != len(wantSpecs) {
 		t.Fatalf("history artifacts=%d, want %d", len(artifacts), len(wantSpecs))
 	}
@@ -686,7 +681,7 @@ func TestReleaseHistoryRuntimeArtifactsCoverExactFourVersionDomain(t *testing.T)
 		}
 	}
 	if artifacts[0].CodeHash != reviewedRuntimeCodeHash || artifacts[0].MetadataHash != reviewedRuntimeMetadataHash {
-		t.Fatalf("active history artifact does not match reviewed v454: %+v", artifacts[0])
+		t.Fatalf("active history artifact does not match reviewed v455: %+v", artifacts[0])
 	}
 }
 
@@ -812,6 +807,7 @@ func TestApprovedSetupFactsRebindPreV5AlphaMinimumOnlyThroughRevision(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	plan = validatorEvidenceLegacyPlanTest(t, plan)
 	plan.Schema = "urnetwork-sim-plan-v4"
 	plan.AlphaTransferMarginBPS = 0
 	plan.MinimumSourceRemainingRao = 0

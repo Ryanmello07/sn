@@ -165,7 +165,11 @@ type adversaryHTTP struct {
 }
 
 func (self *adversaryHTTP) do(ctx context.Context, method, endpoint, sourceIP string, body []byte, limit int64) (int, []byte, error) {
-	if err := self.gate.Wait(ctx); err != nil {
+	slots, err := adversaryOperatorRequestSlots(method, endpoint, body)
+	if err != nil {
+		return 0, nil, err
+	}
+	if err := self.gate.WaitSlots(ctx, slots); err != nil {
 		return 0, nil, err
 	}
 	return self.doReserved(ctx, method, endpoint, sourceIP, body, limit)
@@ -218,7 +222,11 @@ type adversaryHTTPResponse struct {
 // load-test target.
 func (self *adversaryHTTP) doConcurrentPair(ctx context.Context, method, endpoint, sourceIP string, body []byte, limit int64) ([2]adversaryHTTPResponse, error) {
 	var responses [2]adversaryHTTPResponse
-	if err := self.gate.WaitSlots(ctx, len(responses)); err != nil {
+	slots, err := adversaryOperatorRequestSlots(method, endpoint, body)
+	if err != nil {
+		return responses, err
+	}
+	if err := self.gate.WaitSlots(ctx, slots*len(responses)); err != nil {
 		return responses, err
 	}
 	start := make(chan struct{})

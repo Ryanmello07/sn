@@ -41,6 +41,8 @@ type ArtifactReader interface {
 // HTTPArtifactReader reads public history and immutable content from one
 // operator API. It is safe for concurrent use.
 type HTTPArtifactReader struct {
+	// Operation-owned raw byte custody only; never an eligibility callback.
+	observedGet  func(context.Context, string, int64) ([]byte, error)
 	baseURL      *url.URL
 	deploymentID string
 	netuid       uint16
@@ -78,6 +80,9 @@ func (self *HTTPArtifactReader) endpoint(path string, query url.Values) string {
 }
 
 func (self *HTTPArtifactReader) get(ctx context.Context, endpoint string, maximumBytes int64) ([]byte, error) {
+	if self.observedGet != nil {
+		return self.observedGet(ctx, endpoint, maximumBytes)
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err

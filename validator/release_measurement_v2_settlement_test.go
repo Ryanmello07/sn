@@ -739,6 +739,15 @@ func TestReleaseMeasurementV2SettlementLineageRejectsCrossRoleScratchBeforeIO(t 
 				if carriedClosure {
 					previous = fixture.options(t)
 				}
+				// The previous source changed for a carried closure. Its exact
+				// bytes, not the candidate, independently select this prior link.
+				current.Expected.PreviousArtifactHash = ReleaseMeasurementContentHash(previousBytes)
+				if _, _, err := ownReleaseMeasurementV2(t.Context(), previousArtifact, previous); err != nil {
+					t.Fatalf("prior role is not independently admitted before aliasing: %v", err)
+				}
+				if _, _, err := ownReleaseMeasurementV2(t.Context(), currentArtifact, current); err != nil {
+					t.Fatalf("current role is not independently admitted before aliasing: %v", err)
+				}
 				var scratchTs []string
 				for _, options := range []ReleaseMeasurementV2Options{previous, current} {
 					for _, operator := range options.Operators {
@@ -777,6 +786,38 @@ func TestReleaseMeasurementV2SettlementLineageRejectsCrossRoleScratchBeforeIO(t 
 			}
 		}
 	}
+}
+
+// Correcting the fixture's prior source does not make a candidate's different
+// digest authoritative. Genuine unaliased replay remains the positive control.
+func TestReleaseMeasurementV2SettlementLineageKeepsIndependentPriorDigest(t *testing.T) {
+	t.Parallel()
+	fixture := newReleaseMeasurementV2SettlementTestFixture(t, 2, false, 1)
+	previous, err := canonicalReleaseMeasurementBytes(fixture.current.artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	priorHash := ReleaseMeasurementContentHash(previous)
+	current := cloneReleaseMeasurementArtifact(t, fixture.current.artifact)
+	current.PreviousArtifactHash = priorHash
+	options := fixture.options(t)
+	options.Expected.PreviousArtifactHash = priorHash
+	result, err := VerifyReleaseMeasurementLineageV2(t.Context(), previous, fixture.options(t), current, options)
+	if err != nil || len(result.ReplayByNO) != 2 || len(result.SettlementReplayByNO) != 2 {
+		t.Fatalf("independently linked real carried closure failed replay: %v", err)
+	}
+	current.PreviousArtifactHash = ReleaseMeasurementContentHash(append(bytes.Clone(previous), '\n'))
+	if current.PreviousArtifactHash == priorHash {
+		t.Fatal("changed original byte suffix did not change the prior digest")
+	}
+	priorOptions, currentOptions := fixture.options(t), fixture.options(t)
+	currentOptions.Expected.PreviousArtifactHash = priorHash
+	priorReads, currentReads := observeReleaseMeasurementV2SettlementTest(&priorOptions), observeReleaseMeasurementV2SettlementTest(&currentOptions)
+	result, err = VerifyReleaseMeasurementLineageV2(t.Context(), previous, priorOptions, current, currentOptions)
+	if err == nil || !strings.Contains(err.Error(), "independently authenticated observations") || *priorReads != 0 || *currentReads != 0 {
+		t.Fatalf("candidate prior digest replaced independent original custody: prior_reads=%d current_reads=%d error=%v", *priorReads, *currentReads, err)
+	}
+	assertReleaseMeasurementV2Empty(t, result)
 }
 
 // Nested legacy authority and duplicate/noncanonical terminal fields have no

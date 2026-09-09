@@ -70,22 +70,23 @@ type releaseMeasurementInputJournal struct {
 // ReleaseBindingMeasurement records the exact coordinator binding and native
 // UID observation made for every provider in an input cut.
 type ReleaseBindingMeasurement struct {
-	NoID           uint64 `json:"no_id"`
-	ClientID       string `json:"client_id"`
-	Active         bool   `json:"active"`
-	FleetID        string `json:"fleet_id"`
-	Hotkey         string `json:"hotkey"`
-	ClientKey      string `json:"client_key"`
-	LocalClientKey string `json:"local_client_key"`
-	CommitmentHash string `json:"commitment_hash"`
-	Generation     uint64 `json:"generation"`
-	ValidFromEpoch uint64 `json:"valid_from_epoch"`
-	ValidToEpoch   uint64 `json:"valid_to_epoch"`
-	CleanedAtEpoch uint64 `json:"cleaned_at_epoch"`
-	RecordUID      uint16 `json:"record_uid"`
-	Cleaned        bool   `json:"cleaned"`
-	LiveUIDFound   bool   `json:"live_uid_found"`
-	LiveUID        uint16 `json:"live_uid"`
+	NoID                     uint64 `json:"no_id"`
+	ClientID                 string `json:"client_id"`
+	Active                   bool   `json:"active"`
+	FleetID                  string `json:"fleet_id"`
+	Hotkey                   string `json:"hotkey"`
+	ClientKey                string `json:"client_key"`
+	LocalClientKey           string `json:"local_client_key"`
+	ClientKeyObservationHash string `json:"client_key_observation_hash,omitempty"`
+	CommitmentHash           string `json:"commitment_hash"`
+	Generation               uint64 `json:"generation"`
+	ValidFromEpoch           uint64 `json:"valid_from_epoch"`
+	ValidToEpoch             uint64 `json:"valid_to_epoch"`
+	CleanedAtEpoch           uint64 `json:"cleaned_at_epoch"`
+	RecordUID                uint16 `json:"record_uid"`
+	Cleaned                  bool   `json:"cleaned"`
+	LiveUIDFound             bool   `json:"live_uid_found"`
+	LiveUID                  uint16 `json:"live_uid"`
 }
 
 // ReleasePoolMeasurement records the native pool UID observed for each active
@@ -371,12 +372,17 @@ func releaseMeasurementBindingObservations(artifact *ReleaseMeasurementArtifact,
 		if err != nil {
 			return nil, nil, nil, nil, nil, err
 		}
+		if binding.ClientKeyObservationHash != "" {
+			if _, err := parseReleaseContentHash(binding.ClientKeyObservationHash); err != nil {
+				return nil, nil, nil, nil, nil, err
+			}
+		}
 		commitmentHash, err := parseReleaseHex32("commitment hash", binding.CommitmentHash, true)
 		if err != nil {
 			return nil, nil, nil, nil, nil, err
 		}
 		if !binding.Active {
-			if localClientKey != ([32]byte{}) || binding.LiveUIDFound || binding.LiveUID != 0 {
+			if localClientKey != ([32]byte{}) || binding.ClientKeyObservationHash != "" || binding.LiveUIDFound || binding.LiveUID != 0 {
 				return nil, nil, nil, nil, nil, fmt.Errorf("inactive binding %s contains live local observations", binding.ClientID)
 			}
 			priorKey = key

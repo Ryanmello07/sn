@@ -397,6 +397,7 @@ func releaseMeasurementTopFixture(t *testing.T, headCount int) *ReleaseMeasureme
 // TestReleaseMeasurementReconstructsTop200AndPoolClamp proves the complete
 // promotion boundary and the policy's 500k-to-750k pool-quality clamp.
 func TestReleaseMeasurementReconstructsTop200AndPoolClamp(t *testing.T) {
+	t.Parallel()
 	artifact := releaseMeasurementTopFixture(t, 202)
 	encoded, _, verified, err := SealReleaseMeasurementArtifact(artifact)
 	if err != nil {
@@ -440,6 +441,7 @@ func TestReleaseMeasurementReconstructsTop200AndPoolClamp(t *testing.T) {
 // TestReleaseMeasurementRejectsUnprovenPositiveHeadScore deterministically
 // removes one measured prefix while retaining the declared EMA raw score.
 func TestReleaseMeasurementRejectsUnprovenPositiveHeadScore(t *testing.T) {
+	t.Parallel()
 	artifact := cloneReleaseMeasurementArtifact(t, releaseMeasurementTopFixture(t, 202))
 	for inputIndex := range artifact.Inputs {
 		for providerIndex := range artifact.Inputs[inputIndex].Stats.Providers {

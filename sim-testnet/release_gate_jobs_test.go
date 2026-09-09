@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -680,5 +682,127 @@ func TestReleaseGateIsolationPinsPrivateResourcesAndFinalJoins(t *testing.T) {
 		if build < 0 || payload <= build || binding <= payload {
 			t.Errorf("%s breaks full build/payload/binding dependency", name)
 		}
+	}
+}
+
+// Reuse the gate source guards' exact phase/admission grammar. Full packages
+// have no selector variable: require their actual complete command and owned
+// working directory, with no extra shell branch that could skip execution.
+func verifyReleaseGateFullValidatorRace(script string) error {
+	phaseDefinitions := regexp.MustCompile(`(?ms)^[\t ]*release_phase_[a-z0-9_]+\(\) \{\n.*?^[\t ]*\}[\t ]*$`)
+	registry := phaseDefinitions.ReplaceAllString(script, "")
+	groups := []struct {
+		phase   string
+		job     string
+		command string
+	}{
+		{phase: "sn_all_normal", job: "sn-all-normal", command: "go test -parallel=4 -timeout 90m ./..."},
+		{phase: "sn_core_race", job: "sn-core-race", command: "go test -race ./crv4 ./miner/... ./protocol"},
+		{phase: "sn_validator_race", job: "sn-validator-race", command: "go test -race -parallel=4 -timeout 90m ./validator"},
+		{phase: "sn_simulator_race", job: "sn-simulator-race", command: "go test -race -parallel=4 -timeout 90m ./sim-testnet"},
+	}
+	for _, group := range groups {
+		function := "release_phase_" + group.phase
+		pattern := regexp.MustCompile("(?ms)^[\\t ]*" + regexp.QuoteMeta(function) + "\\(\\) \\{\\n(.*?)^[\\t ]*\\}[\\t ]*$")
+		definitions := pattern.FindAllStringSubmatch(script, -1)
+		if len(definitions) != 1 {
+			return fmt.Errorf("full gate requires exactly one %s definition", function)
+		}
+		var commands []string
+		for _, line := range strings.Split(definitions[0][1], "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				commands = append(commands, line)
+			}
+		}
+		if len(commands) != 2 || commands[0] != `cd "$sn_repo"` || commands[1] != group.command {
+			return fmt.Errorf("full gate phase %s changed its complete command or scoped budget", group.phase)
+		}
+		start := "release_gate_start " + group.job + " " + function
+		invocations := regexp.MustCompile("(?m)^" + regexp.QuoteMeta(start) + "[\\t ]*$")
+		calls := invocations.FindAllStringIndex(script, -1)
+		definition := pattern.FindStringIndex(script)
+		if len(calls) != 1 || len(invocations.FindAllString(registry, -1)) != 1 || calls[0][0] < definition[1] {
+			return fmt.Errorf("full gate does not independently admit %s", group.phase)
+		}
+		conditions, err := releaseGateRegistrationConditions(script, start)
+		if err != nil || len(conditions) != 0 {
+			return fmt.Errorf("full gate has conditional job admission: %v %v", conditions, err)
+		}
+	}
+	return nil
+}
+
+// The inherited combined core race command allowed less time than the measured
+// passing serial work alone. The dedicated full-validator allowance leaves
+// the other core packages on their original budgets.
+func TestReleaseGateJobsRequireIndependentCompleteValidatorRace(t *testing.T) {
+	t.Parallel()
+	encoded, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyReleaseGateFullValidatorRace(string(encoded)); err != nil {
+		t.Fatalf("full validator race phase is not independently budgeted: %v", err)
+	}
+}
+
+// Commented, narrowed, disconnected or duplicated text cannot certify the
+// actual phase; a validator allowance cannot silently fund other core packages.
+func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T) {
+	t.Parallel()
+	encoded, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(encoded)
+	if err := verifyReleaseGateFullValidatorRace(script); err != nil {
+		t.Fatal(err)
+	}
+	const command = "go test -race -parallel=4 -timeout 90m ./validator"
+	const core = "go test -race ./crv4 ./miner/... ./protocol"
+	const start = "release_gate_start sn-validator-race release_phase_sn_validator_race"
+	const definition = "release_phase_sn_validator_race() {\n  cd \"$sn_repo\"\n  " + command + "\n}"
+	cases := []struct {
+		name        string
+		old         string
+		replacement string
+	}{
+		{name: "implicit deadline", old: command, replacement: "go test -race -parallel=4 ./validator"},
+		{name: "inherited short deadline", old: command, replacement: "go test -race -parallel=4 -timeout 10m ./validator"},
+		{name: "race omitted", old: command, replacement: "go test -parallel=4 -timeout 90m ./validator"},
+		{name: "reduced workers", old: command, replacement: "go test -race -parallel=2 -timeout 90m ./validator"},
+		{name: "compile only", old: command, replacement: command + " -run '^$'"},
+		{name: "narrowed population", old: command, replacement: command + " -run '^TestIntent'"},
+		{name: "commented command", old: command, replacement: "# " + command},
+		{name: "hidden failure", old: command, replacement: command + " || true"},
+		{name: "unreachable command", old: command, replacement: "if false; then\n  " + command + "\n  fi"},
+		{name: "different source", old: definition, replacement: strings.Replace(definition, `cd "$sn_repo"`, `cd "$workspace/server"`, 1)},
+		{name: "lost core runtime", old: core, replacement: "go test -race ./miner/... ./protocol"},
+		{name: "lost core miner", old: core, replacement: "go test -race ./crv4 ./protocol"},
+		{name: "lost core protocol", old: core, replacement: "go test -race ./crv4 ./miner/..."},
+		{name: "core budget leak", old: core, replacement: core + " -timeout 90m"},
+		{name: "combined core owner", old: core, replacement: core + " ./validator"},
+		{name: "commented admission", old: start, replacement: "# " + start},
+		{name: "wrong admitted owner", old: start, replacement: "release_gate_start sn-validator-race release_phase_sn_core_race"},
+		{name: "nested admission", old: start, replacement: "release_phase_unused() {\n" + start + "\n}"},
+		{name: "unreachable admission", old: start, replacement: "if false; then\n" + start + "\nfi"},
+		{name: "empty loop admission", old: start, replacement: "for omitted in; do\n" + start + "\ndone"},
+		{name: "duplicate admission", old: start, replacement: start + "\n" + start},
+		{name: "duplicate definition", old: definition, replacement: definition + "\n" + definition},
+	}
+	for _, testCase := range cases {
+		if strings.Count(script, testCase.old) != 1 {
+			t.Fatalf("mutation %s does not identify one original boundary", testCase.name)
+		}
+		changed := strings.Replace(script, testCase.old, testCase.replacement, 1)
+		if err := verifyReleaseGateFullValidatorRace(changed); err == nil {
+			t.Fatalf("full validator gate accepted %s", testCase.name)
+		}
+	}
+	early := strings.Replace(script, start, "# admission moved before definition", 1)
+	early = strings.Replace(early, definition, start+"\n"+definition, 1)
+	if err := verifyReleaseGateFullValidatorRace(early); err == nil {
+		t.Fatal("full validator gate admitted an undefined phase")
 	}
 }

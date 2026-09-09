@@ -110,11 +110,11 @@ func TestReleaseGatesPinProviderAndTransportRegressions(t *testing.T) {
 
 const releaseAdversarialSelector = "^Test(Adversarial|Adversary|VerifyAdversary|RPCAdversary|ConsensusWeightComparison|Runtime454)"
 
-const releaseRuntimeClientSelector = "^Test(DialChainContext|FinalizedHeadContext|FinalizedBlock|BlockHashContext|BlockIdentityCache|ExactBlockIdentity|AccountNonceContext|ReleaseStateReaders|ReleaseExactBlock|ReleaseSnapshot|ReleaseSteeringSource|VerifyFinalizedExtrinsicContext|LocateFinalizedExtrinsic|FleetCommitmentAtContext|FleetCommitmentInfoRuntime|RuntimeArtifactMetadata|RuntimeMetadataAtContext|FleetRuntime|FleetFinalizedRuntime|BindFleetRuntime|DialFleetNativeContext|ReleaseEpochStartBlockAtContext|ReleaseConfigRequiresExactNativeRuntimeIdentity|InitialReleaseSnapshot|AuthenticatePinnedNativeRuntime|ReleaseNativeEndpointTimeout)"
+const releaseRuntimeClientSelector = "^Test(DialChainContext|FinalizedHeadContext|FinalizedBlock|BlockHashContext|BlockIdentityCache|ExactBlockIdentity|AccountNonceContext|ReleaseStateReaders|ReleaseExactBlock|ReleaseSnapshot|ReleaseSteeringSource|VerifyFinalizedExtrinsicContext|LocateFinalizedExtrinsic|FleetCommitmentAtContext|FleetCommitmentInfoRuntime|RuntimeArtifactMetadata|RuntimeMetadataAtContext|FleetRuntime|FleetFinalizedRuntime|BindFleetRuntime|DialFleetNativeContext|ReleaseEpochStartBlockAtContext|ReleaseConfigRequiresExactNativeRuntimeIdentity|InitialReleaseSnapshot|AuthenticatePinnedNativeRuntime|ReleaseNativeEndpointTimeout|ReleaseRuntime455)"
 
 const releaseSyntheticEVMIdentitySelector = "^Test(WaitFinalized|EVMBlockIdentity|ClaimReceiptIdentity|FinalizedClaimReceipt|UncertainClaimRetryable|SyntheticEVM|EthEVMBlockReader|EVMFinality|FinalizedEVMHead|BoundFinalizedEVMHead|ReceiptRequiresCanonicalHashAndFinalizedHeight|ProducerGatePinsSyntheticEVMIdentityRegressions)"
 
-const releaseSemanticIntegritySelector = "^Test(FinalNative|FinalPublicNative|FinalSemanticFleetAudit|FinalPublicFleetAudit|FinalSemanticVault|FinalSemanticCycleConviction|FinalSemanticCoordinatorRuntime|FinalSemanticCoordinatorUpgrade|FinalClaimPaymentLedger|FinalSemanticReceiptPayload|PublicFinalSemantic|FinalSemanticPoolOperatorVersion|FinalSemanticEpochDeposit|FinalPublicChainVerificationRejectsV2ReceiptOnlyTranscript|FinalSemanticDishonestDepositReceiptPayload|FinalSemanticEvidenceBuildRenderAndArtifacts|FinalSemanticArtifactVerificationCache|FinalSemantic(CampaignArtifactReferences|ReplicatedEnvelope)|FinalSemanticFixture|FinalAttemptFixtureLedgerMatchesDurableProductionWire|FinalFleetLifecycle|FinalSemanticFleetByUIDAt|FinalPayoutAssignmentsAt|FinalPayoutArtifact|FinalSemanticDeployment|FinalSemanticBuilder|FinalSemanticPoolRegistration|FinalSemantic(Pool|Head|Validator)UIDZero|FinalFleetGeneration|FinalSemanticHistorical|FinalSemanticEvidenceFailsClosed|FinalSemanticPathProofArtifact|FinalSemanticPoolAuditDistinguishesUnderpaymentFromRecovery|FinalSemanticDishonestDepositDecisionsAndPublicReplay|FinalSemanticSettlementAccountingBindsBothHeadsAndEventDeltas|FinalSemanticCarryModelFailsClosedOnAdjacentAccountingErrors|FinalPublicChainVerificationRequiresTwoCanonicalOperatorOrigins|PublicScenarioBundle|SemanticMismatchBranches|StateMismatchError|FinalEVMLogQueryRanges|FinalCollectedCoordinatorBaselines|FinalCollectorIncludesCompletedSettlementTail|FinalSettlementClosure|ReleaseHistoryRuntimeArtifacts|ProducerGatePinsCompleteAdversarialRegressions|ProducerGatePinsSyntheticEVMIdentityRegressions|ProducerGatePinsSemanticIntegrityRegressions|ProducerGatePinsExactBlockRuntimeClientRegressions|ReleaseSemanticCensus)"
+const releaseSemanticIntegritySelector = "^Test(FinalNative|FinalPublicNative|FinalSemanticFleetAudit|FinalPublicFleetAudit|FinalSemanticVault|FinalSemanticCycleConviction|FinalSemanticCoordinatorRuntime|FinalSemanticCoordinatorUpgrade|FinalClaimPaymentLedger|FinalSemanticReceiptPayload|PublicFinalSemantic|FinalSemanticPoolOperatorVersion|FinalSemanticEpochDeposit|FinalPublicChainVerificationRejectsV2ReceiptOnlyTranscript|FinalSemanticDishonestDepositReceiptPayload|FinalSemanticEvidenceBuildRenderAndArtifacts|FinalSemanticArtifactVerificationCache|FinalSemantic(CampaignArtifactReferences|ReplicatedEnvelope)|FinalSemanticFixture|FinalSemanticOriginalClosure|FinalSemanticArtifactDeploymentAdmission|FinalAttemptFixtureLedgerMatchesDurableProductionWire|FinalFleetLifecycle|FinalSemanticFleetByUIDAt|FinalPayoutAssignmentsAt|FinalPayoutArtifact|FinalSemanticDeployment|FinalSemanticBuilder|FinalSemanticPoolRegistration|FinalSemantic(Pool|Head|Validator)UIDZero|FinalFleetGeneration|FinalSemanticHistorical|FinalSemanticEvidenceFailsClosed|FinalSemanticPathProofArtifact|FinalSemanticPoolAuditDistinguishesUnderpaymentFromRecovery|FinalSemanticDishonestDepositDecisionsAndPublicReplay|FinalSemanticSettlementAccountingBindsBothHeadsAndEventDeltas|FinalSemanticCarryModelFailsClosedOnAdjacentAccountingErrors|FinalPublicChainVerificationRequiresTwoCanonicalOperatorOrigins|PublicScenarioBundle|SemanticMismatchBranches|StateMismatchError|FinalEVMLogQueryRanges|FinalCollectedCoordinatorBaselines|FinalCollectorIncludesCompletedSettlementTail|FinalSettlementClosure|ReleaseHistoryRuntimeArtifacts|ProducerGatePinsCompleteAdversarialRegressions|ProducerGatePinsSyntheticEVMIdentityRegressions|ProducerGatePinsSemanticIntegrityRegressions|ProducerGatePinsExactBlockRuntimeClientRegressions|ReleaseSemanticCensus)"
 
 // Extracts the exact sorted top-level test declarations selected from source.
 func releaseSelectedTestDeclarations(selector string, sources []string) ([]string, error) {
@@ -343,7 +343,7 @@ func TestProducerGatePinsExactBlockRuntimeClientRegressions(t *testing.T) {
 		t.Fatal(err)
 	}
 	liveRoots, err := releaseSelectedTestDeclarations("^Test", []string{string(liveSource)})
-	if err != nil || len(liveRoots) != 1 || liveRoots[0] != "TestLiveValidatorIdentityRuntime454Testnet521" {
+	if err != nil || len(liveRoots) != 1 || liveRoots[0] != "TestLiveValidatorIdentityRuntime455Testnet521" {
 		t.Fatalf("live identity source has an unreviewed exclusion: roots=%v error=%v", liveRoots, err)
 	}
 	parsed, err := parser.ParseFile(token.NewFileSet(), livePath, liveSource, 0)
@@ -562,7 +562,7 @@ func TestProducerGatePinsSemanticIntegrityRegressions(t *testing.T) {
 		"TestSemanticMismatchBranchesNeverWrapPotentiallyNilErrors",
 		"TestFinalEVMLogQueryRangesRespectOfficialInclusiveLimit",
 		"TestFinalCollectedCoordinatorBaselinesRequireInitializerLog",
-		"TestReleaseHistoryRuntimeArtifactsCoverExactFourVersionDomain",
+		"TestReleaseHistoryRuntimeArtifactsCoverExactFiveVersionDomain",
 		"TestProducerGatePinsCompleteAdversarialRegressions",
 		"TestProducerGatePinsSyntheticEVMIdentityRegressions",
 		"TestProducerGatePinsSemanticIntegrityRegressions",
@@ -1027,6 +1027,9 @@ func TestReleaseSemanticCensusPinsCompleteRegressionSourceGroups(t *testing.T) {
 		{pattern: "final_semantic_settlement_tail_test.go", required: "^Test"},
 		{pattern: "final_semantic_settlement_closure_test.go", required: "^Test"},
 		{pattern: "final_semantic_settlement_fixture_test.go", required: "^Test"},
+		{pattern: "final_semantic_fixture_work_test.go", required: "^Test"},
+		{pattern: "final_semantic_fixture_closure_reuse_test.go", required: "^Test"},
+		{pattern: "final_semantic_commit_test.go", required: "^TestFinalSemanticOriginalClosure"},
 		{pattern: "campaign_artifact_references_test.go", required: "^Test"},
 		{pattern: "campaign_replica_verification_test.go", required: "^Test"},
 		{pattern: "release_gate_validator_stake_test.go", required: "^Test"},
@@ -1341,12 +1344,22 @@ func verifyReleaseGatePrivateServiceProfile(script string) error {
 		`test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"`,
 		`release_gate_start server-db release_phase_server_db`,
 	} {
+		// Sibling history owners install the same private profile independently.
+		// Bind these steps to this phase; global matches can borrow another job.
+		search, offset := script, 0
+		if phase >= 0 && command != `release_gate_start server-db release_phase_server_db` {
+			end := regexp.MustCompile(`(?m)^[\t ]*\}[\t ]*$`).FindStringIndex(script[phase:])
+			if end == nil {
+				return fmt.Errorf("release gate private-service phase is incomplete")
+			}
+			search, offset = script[phase:phase+end[0]], phase
+		}
 		pattern := regexp.MustCompile(`(?m)^[\t ]*` + regexp.QuoteMeta(command) + `[\t ]*$`)
-		matches := pattern.FindAllStringIndex(script, -1)
-		if len(matches) != 1 || matches[0][0] <= previous {
+		matches := pattern.FindAllStringIndex(search, -1)
+		if len(matches) != 1 || matches[0][0]+offset <= previous {
 			return fmt.Errorf("release gate must retain one ordered private-service step %q", command)
 		}
-		previous = matches[0][0]
+		previous = matches[0][0] + offset
 		if command == `release_phase_server_db() {` {
 			phase = previous
 		}
@@ -1922,14 +1935,15 @@ func TestReleaseGatesAttestPinnedRuntime454RustSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	metadataRows := strings.Split(strings.TrimSpace(string(metadataManifestBytes)), "\n")
-	if len(metadataRows) != 12 {
-		t.Fatalf("runtime metadata source manifest has %d rows, want 12", len(metadataRows))
+	if len(metadataRows) != 15 {
+		t.Fatalf("runtime metadata source manifest has %d rows, want 15", len(metadataRows))
 	}
 	wantMetadataCommits := map[string]string{
 		"head:release-v451": "d78d9cc6a6ee4d805f74a35414baaef8be025a5f",
 		"tag:v452":          "da06f033663896ef2fdbbfc3ecc68ca908fba0f5",
 		"tag:v453":          "823bdcbc58a29f60b243be4737a7c72b34ac7d93",
 		"tag:v454":          "14cde6410fe8ec81a940e290c56f94a632a0988d",
+		"commit:67dcf7f791dc495064c293f080a0702cb433e51e": "67dcf7f791dc495064c293f080a0702cb433e51e",
 	}
 	seenMetadataPaths := map[string]bool{}
 	for _, row := range metadataRows {
@@ -1966,8 +1980,8 @@ func TestReleaseGatesAttestPinnedRuntime454RustSource(t *testing.T) {
 		artifactManifest.PolkadotSDKRevision != "cacb4310f20c7cac83eb3ccd8ed5a5ad4212608a" {
 		t.Fatalf("runtime metadata artifact manifest identity=%+v", artifactManifest)
 	}
-	if len(artifactManifest.Artifacts) != 4 {
-		t.Fatalf("runtime metadata artifact manifest has %d artifacts, want 4", len(artifactManifest.Artifacts))
+	if len(artifactManifest.Artifacts) != 5 {
+		t.Fatalf("runtime metadata artifact manifest has %d artifacts, want 5", len(artifactManifest.Artifacts))
 	}
 	wantArtifacts := map[uint32]releaseRuntimeMetadataArtifact{
 		451: {
@@ -2002,6 +2016,14 @@ func TestReleaseGatesAttestPinnedRuntime454RustSource(t *testing.T) {
 			MetadataSize:   334642, MetadataSHA256: "b592bafacd0f3cce1340a91f237f82a531968bd833cbd27339328c80ce92b1cf",
 			MetadataBlake2b256: "0x4d17516b694ef8d18f8a565dcb2df0117e7a0018a3ffa40812c91a1621225702",
 		},
+		455: {
+			SpecVersion: 455, SourceRefKind: "commit", SourceRefName: "67dcf7f791dc495064c293f080a0702cb433e51e", SourceCommit: "67dcf7f791dc495064c293f080a0702cb433e51e",
+			ObservationBlock: 7961421, ObservationBlockHash: "0x93a1140a57ad2996e6a7bf52f64b7e25025b11a929d7bc08d734598e7eaa64e3",
+			CodeSource: "substrate-storage", CodeSize: 2516332, CodeSHA256: "232bfc0d65ec2dbe4280b152e23f13879df9692d2286dd08c6ba14483deee00f",
+			CodeBlake2b256: "0xbca85925668cabb2880164610d64eda2e4d9bf2777994f9cdfdb9d36253ce74a",
+			MetadataSize:   334642, MetadataSHA256: "74c4067de4bf2eba95156e8a46c793b52fcd9862dfeb28502632e46416979ec7",
+			MetadataBlake2b256: "0x16da562c347a354c55eb1ad5cd5094343afe7acdc12e5b526bf6c8cb12e866bc",
+		},
 	}
 	for index, artifact := range artifactManifest.Artifacts {
 		want, ok := wantArtifacts[artifact.SpecVersion]
@@ -2014,7 +2036,7 @@ func TestReleaseGatesAttestPinnedRuntime454RustSource(t *testing.T) {
 			if artifact.CodeSource != "github-release" || *artifact.CodeURL != wantURL {
 				t.Fatalf("runtime metadata artifact %d URL/source=%s/%s", artifact.SpecVersion, *artifact.CodeURL, artifact.CodeSource)
 			}
-		} else if artifact.SpecVersion != 451 || artifact.CodeSource != "substrate-storage" {
+		} else if (artifact.SpecVersion != 451 && artifact.SpecVersion != 455) || artifact.CodeSource != "substrate-storage" {
 			t.Fatalf("runtime metadata artifact %d lacks its release URL", artifact.SpecVersion)
 		}
 		if artifact != want {
@@ -2034,6 +2056,10 @@ func TestReleaseGatesAttestPinnedRuntime454RustSource(t *testing.T) {
 		"14cde6410fe8ec81a940e290c56f94a632a0988d",
 		"runtime-v454-source.sha256",
 		"runtime-metadata-static-source.sha256",
+		"runtime-v455-source.sha256",
+		"67dcf7f791dc495064c293f080a0702cb433e51e",
+		"expected_current_files=31",
+		"expected_metadata_files=15",
 		"d78d9cc6a6ee4d805f74a35414baaef8be025a5f",
 		"da06f033663896ef2fdbbfc3ecc68ca908fba0f5",
 		"support/procedural-fork/src/construct_runtime/expand/metadata.rs",
@@ -2066,6 +2092,8 @@ func TestReleaseGatesAttestPinnedRuntime454RustSource(t *testing.T) {
 		"wait \"${probe_process_ids[$spec_version]}\"",
 		"sha256sum",
 		"runtime metadata artifacts verified",
+		"[451, 452, 453, 454, 455]",
+		"455:commit:67dcf7f791dc495064c293f080a0702cb433e51e:67dcf7f791dc495064c293f080a0702cb433e51e:substrate-storage:",
 	} {
 		if !strings.Contains(artifactChecker, required) {
 			t.Errorf("runtime metadata artifact checker omits %q", required)
@@ -2085,6 +2113,106 @@ func TestReleaseGatesAttestPinnedRuntime454RustSource(t *testing.T) {
 			attestation <= preflight || artifactAttestation <= attestation {
 			t.Errorf("%s does not attest runtime source and exact artifacts immediately after source-freeze preflight", scriptPath)
 		}
+	}
+}
+
+// The exact455 comparison changes only the runtime version and proxy filters.
+// Every previously consumed stake/weight/CRv4 source remains byte-identical.
+func TestReleaseGatesAttestRuntime455SourceCompatibility(t *testing.T) {
+	previousRaw, err := os.ReadFile("../docs/spec/runtime-v454-source.sha256")
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentRaw, err := os.ReadFile("../docs/spec/runtime-v455-source.sha256")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{}
+	for _, row := range strings.Split(strings.TrimSpace(string(previousRaw)), "\n") {
+		fields := strings.Fields(row)
+		if len(fields) != 2 || want[fields[1]] != "" {
+			t.Fatalf("malformed historical source row %q", row)
+		}
+		want[fields[1]] = fields[0]
+	}
+	if len(want) != 29 {
+		t.Fatalf("historical source census=%d want29", len(want))
+	}
+	want["runtime/src/lib.rs"] = "6f27f32d953abd9d575abbce59830f17d0d6e2e46be726967d446490d63c4ec3"
+	want["runtime/src/proxy_filters/call_groups.rs"] = "cee455a93bfa30753473f110d31caf659d3500b4464f9d45c58e1584e97545c6"
+	want["runtime/src/proxy_filters/mod.rs"] = "2f6d18d04f3c333815a254878c51fa018bb794f8f605316b9452f95f8d4ee640"
+	seen := map[string]bool{}
+	for _, row := range strings.Split(strings.TrimSpace(string(currentRaw)), "\n") {
+		fields := strings.Fields(row)
+		if len(fields) != 2 || seen[fields[1]] || want[fields[1]] == "" || want[fields[1]] != fields[0] {
+			t.Fatalf("current source is duplicated, omitted or differs from the reviewed comparison: %q", row)
+		}
+		seen[fields[1]] = true
+	}
+	if len(seen) != len(want) || len(seen) != 31 {
+		t.Fatalf("current source census=%d want31", len(seen))
+	}
+	checkerRaw, err := os.ReadFile("../scripts/check-runtime-v454-source.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checker := string(checkerRaw)
+	for _, fragment := range []string{
+		"current_commit=\"67dcf7f791dc495064c293f080a0702cb433e51e\"",
+		"expected_current_files=31", "expected_files=29", "expected_metadata_files=15",
+		"SUBTENSOR_RUNTIME455_SOURCE", "current_seen_paths", "current_observed", "current_expected",
+		"current_count", "runtime source verified ref_kind=commit",
+	} {
+		if !strings.Contains(checker, fragment) {
+			t.Errorf("current source attestation omits %q", fragment)
+		}
+	}
+}
+
+// Actual source declarations and joined producer commands must include455,
+// not merely compile the new tests without ever selecting their bodies.
+func TestProducerGatePinsRuntime455ArtifactAndEncodingRegressions(t *testing.T) {
+	raw, err := os.ReadFile("../scripts/test-release-1.0-producer-gate.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(raw)
+	group := releaseEvidenceV2GateGroup{
+		phase: "runtime", variable: "runtime455_tests", packages: []string{"./sim-testnet"},
+		sources:  map[string][]string{"./sim-testnet": releaseEvidenceV2GateSources(t, []string{"runtime_identity_455_test.go"})},
+		commands: []string{`go test ./sim-testnet -run "$runtime455_tests" -count=1`, `go test -race ./sim-testnet -run "$runtime455_tests" -count=1`},
+	}
+	if err := verifyReleaseEvidenceV2GateGroup(script, group); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range group.commands {
+		changed := strings.Replace(script, command, "# omitted: "+command, 1)
+		if err := verifyReleaseEvidenceV2GateGroup(changed, group); err == nil {
+			t.Fatalf("current artifact gate lost command %q", command)
+		}
+	}
+	selector, err := releaseConnectPolicySelectorAssignment(script, group.variable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changedSelector := strings.Replace(selector, "Runtime455|", "", 1)
+	changed := strings.Replace(script, group.variable+"='"+selector+"'", group.variable+"='"+changedSelector+"'", 1)
+	if changed == script || verifyReleaseEvidenceV2GateGroup(changed, group) == nil {
+		t.Fatal("current artifact family can disappear from its actual producer job")
+	}
+	runtimeSelector, err := releaseConnectPolicySelectorAssignment(script, "runtime_client_tests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyReleaseSourceTestCoverage(runtimeSelector, "^Test", releaseEvidenceV2GateSources(t, []string{"../validator/runtime_identity_455_test.go"})); err != nil {
+		t.Fatal(err)
+	}
+	nativeSelector, err := releaseConnectPolicySelectorAssignment(script, "native_evidence_tests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyReleaseSourceTestCoverage(nativeSelector, "^Test", releaseEvidenceV2GateSources(t, []string{"../crv4/source_commitment_runtime455_test.go"})); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -2119,19 +2247,8 @@ func TestSolidityStaticGateCoversEveryDeployedRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := string(scriptBytes)
-	for _, root := range []string{
-		"src/STCoordinator.sol",
-		"src/STFleetBatcher.sol",
-		"src/probe/STSubnetProbe.sol",
-		"src/testnet/STCoordinatorAdversary.sol",
-	} {
-		if strings.Count(script, root) != 1 {
-			t.Errorf("deployable Solidity root %s appears %d times in the static gate", root, strings.Count(script, root))
-		}
-	}
-	if !strings.Contains(script, "all ${#contracts[@]} deployable roots") {
-		t.Fatal("Solidity static gate does not report its complete deployed-root count")
+	if err := verifySolidityStaticRootCensus(string(scriptBytes)); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -2315,6 +2432,8 @@ func TestReleaseGatePrivateProfileRejectsSharedRedirectsAndReordering(t *testing
 		}
 		for _, command := range []string{
 			`release_gate_services_start "$release_gate_root" "$workspace" "$sn_repo/deploy/testnet/release.lock.yml"`,
+			`export WARP_ENV=local`,
+			`export WARP_SERVICE=test`,
 			`source "$RELEASE_GATE_SERVICE_ENV"`,
 			`source "$workspace/server/test-env.sh"`,
 			`test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"`,

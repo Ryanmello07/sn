@@ -36,12 +36,14 @@ import (
 // Boundaries and ABI values are immutable while ServeHTTP is running. Only
 // request observations use the fixture lock; no callback runs under that lock.
 type releaseHeadV2RPCFixture struct {
-	stateLock  sync.Mutex
-	artifact   *ReleaseMeasurementArtifact
-	bindingKVs map[connect.Id]ReleaseBindingMeasurement
-	failClient connect.Id
-	requests   int
-	batches    int
+	stateLock       sync.Mutex
+	artifact        *ReleaseMeasurementArtifact
+	bindingKVs      map[connect.Id]ReleaseBindingMeasurement
+	failClient      connect.Id
+	requests        int
+	batches         int
+	bindingRequests int
+	bindingBatches  int
 }
 
 // Every response keeps the exact requested hash/canonical flag. A batch is
@@ -53,11 +55,29 @@ func (self *releaseHeadV2RPCFixture) ServeHTTP(writer http.ResponseWriter, reque
 		http.Error(writer, err.Error(), 400)
 		return
 	}
+	// Count only fully decoded pinned bindingAt calls in this Http request.
+	// Authority batches share the transport but are not binding-read work.
+	bindingCalls := 0
+	recordBindings := func(batch bool) {
+		self.stateLock.Lock()
+		defer self.stateLock.Unlock()
+		self.bindingRequests += bindingCalls
+		if batch && bindingCalls != 0 {
+			self.bindingBatches++
+		}
+	}
 	reply := func(call chainBatchRPCRequest) map[string]any {
 		func() { self.stateLock.Lock(); defer self.stateLock.Unlock(); self.requests++ }()
 		response := map[string]any{"jsonrpc": "2.0", "id": call.ID}
 		refuse := func(message string) map[string]any {
 			response["error"] = map[string]any{"code": -32000, "message": message}
+			return response
+		}
+		if value, handled, err := releaseHeadV2ClientKeyRPC(self.artifact, call); handled {
+			if err != nil {
+				return refuse(err.Error())
+			}
+			response["result"] = value
 			return response
 		}
 		if call.Method == "eth_getBlockByHash" {
@@ -91,6 +111,7 @@ func (self *releaseHeadV2RPCFixture) ServeHTTP(writer http.ResponseWriter, reque
 		}
 		var clientID connect.Id
 		copy(clientID[:], calldata[4:20])
+		bindingCalls++
 		if clientID == self.failClient && self.failClient != (connect.Id{}) {
 			return refuse("test-owned exact binding failure")
 		}
@@ -126,6 +147,7 @@ func (self *releaseHeadV2RPCFixture) ServeHTTP(writer http.ResponseWriter, reque
 		for index, call := range calls {
 			results[len(calls)-1-index] = reply(call)
 		}
+		recordBindings(true)
 		_ = json.NewEncoder(writer).Encode(results)
 		return
 	}
@@ -134,7 +156,9 @@ func (self *releaseHeadV2RPCFixture) ServeHTTP(writer http.ResponseWriter, reque
 		http.Error(writer, err.Error(), 400)
 		return
 	}
-	_ = json.NewEncoder(writer).Encode(reply(call))
+	result := reply(call)
+	recordBindings(false)
+	_ = json.NewEncoder(writer).Encode(result)
 }
 
 // Locking is confined to the request counters, not a test's expected verdict.
@@ -142,6 +166,14 @@ func (self *releaseHeadV2RPCFixture) counts() (int, int) {
 	self.stateLock.Lock()
 	defer self.stateLock.Unlock()
 	return self.requests, self.batches
+}
+
+// The two operator binding batches remain an exact census even when genuine
+// client-key authority reads add independently validated transport batches.
+func (self *releaseHeadV2RPCFixture) bindingCounts() (int, int) {
+	self.stateLock.Lock()
+	defer self.stateLock.Unlock()
+	return self.bindingRequests, self.bindingBatches
 }
 
 // One fixture keeps ordinary and legacy oracles separate and obtains new
@@ -186,10 +218,18 @@ func newReleaseHeadV2TestFixture(t *testing.T, completed int) *releaseHeadV2Test
 	t.Cleanup(func() { client.Close(); server.Close() })
 	chain := &ChainClient{client: client, coordinator: stabi.NewSTCoordinator(), chainId: new(big.Int).SetUint64(artifact.ChainID), contractAddr: common.HexToAddress(artifact.Coordinator), release: true}
 	cfg := &ReleaseConfig{DeploymentID: artifact.DeploymentID, ChainID: artifact.ChainID, GenesisHash: artifact.GenesisHash, Coordinator: artifact.Coordinator, SettlementVault: artifact.SettlementVault, ValidatorID: artifact.ValidatorID, Netuid: artifact.Netuid, PolicyHash: artifact.PolicyHash, Policy: artifact.Policy, ControlledNOIDs: slices.Clone(artifact.ControlledNOIDs)}
+	// Head-only fixtures still supply a complete independently selected runtime
+	// identity to the scoped reader; they do not invent native stake authority.
+	cfg.DeployBlock = 1
+	cfg.RuntimeSpec, cfg.TransactionVersion, cfg.StateVersion = releaseRuntimeSpecVersion, releaseRuntimeTransactionVersion, releaseRuntimeStateVersion
+	cfg.RuntimeCodeHash, cfg.RuntimeMetadataHash = releaseRuntimeCodeHash, releaseRuntimeMetadataHash
 	contexts := map[uint64]*ReleaseMeasurementContext{}
+	cfg.StateDir = newReleaseHeadV2TestStateDir(t)
+	cfg.EvidenceV2.Bounds.MaxHistoryBytes = 32 * 1024 * 1024
 	for _, input := range artifact.Inputs {
 		cfg.Operators = append(cfg.Operators, OperatorConfig{NoID: input.NoID})
 		contexts[input.NoID] = &ReleaseMeasurementContext{NoID: input.NoID, Stats: measurement.operators[input.NoID].seal.engine.stats, ClientKey: func(connect.Id) ([32]byte, bool, error) { return [32]byte{0x31}, true, nil }}
+		contexts[input.NoID].ClientKeyHistory = newReleaseHeadV2ClientKeyReader(t, cfg, input.NoID)
 	}
 	store, err := newReleaseHeadV2EMAStore(t, newReleaseHeadV2TestStateDir(t))
 	if err != nil {
@@ -209,6 +249,15 @@ func newReleaseHeadV2TestFixture(t *testing.T, completed int) *releaseHeadV2Test
 func (self *releaseHeadV2TestFixture) options(t *testing.T) ReleaseMeasurementV2Options {
 	t.Helper()
 	options := self.measurement.options(t)
+	// Live collection additionally owns one bounded signed response per
+	// provider. The pure measurement fixture still has its original allowance.
+	for _, input := range self.measurement.artifact.Inputs {
+		count, width := uint64(len(input.Stats.Providers)), uint64(8*releaseClientKeyHistoryTestResponseBytes)
+		if count > (maxHeadEMAStoreV2Bytes-options.MaxControlBytes)/width {
+			t.Fatal("signed-response fixture exceeds the unchanged head owner ceiling")
+		}
+		options.MaxControlBytes += count * width
+	}
 	options.Bindings, options.Pools, options.DepositAudits = []ReleaseBindingMeasurement{}, []ReleasePoolMeasurement{}, []DepositAudit{}
 	for noID, operator := range options.Operators {
 		operator.Measurement.CurrentBindingKVs = nil
@@ -250,14 +299,41 @@ func TestReleaseHeadV2CollectsRealM8WithPinnedBindingBatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(result.Weights, want.SelectedHead) || !reflect.DeepEqual(result.Bound, want.BoundProviders) || !reflect.DeepEqual(result.Bindings, fixture.measurement.artifact.Bindings) || !reflect.DeepEqual(result.HeadEMA, fixture.measurement.artifact.HeadEMA) {
+	if !reflect.DeepEqual(result.Weights, want.SelectedHead) || !reflect.DeepEqual(result.Bound, want.BoundProviders) || !reflect.DeepEqual(releaseClientKeyTestChainBindings(result.Bindings), fixture.measurement.artifact.Bindings) || !reflect.DeepEqual(result.HeadEMA, fixture.measurement.artifact.HeadEMA) {
 		t.Fatal("live compact head differs from the independent exact legacy oracle")
 	}
-	requests, batches := fixture.rpc.counts()
-	if requests == 0 || batches != 2 || len(result.Inputs) != 2 {
+	requests, batches := fixture.rpc.bindingCounts()
+	if requests != len(result.Bindings) || batches != 2 || len(result.Inputs) != 2 {
 		t.Fatalf("real pinned binding census was not consumed: requests=%d batches=%d", requests, batches)
 	}
 	fixture.assertNoEMACommit(t)
+}
+
+// Both classes use the real Rpc client and generated contract calls. The
+// binding census cannot silently absorb authority batches or omit captures.
+func TestReleaseHeadV2BindingCensusExcludesAuthorityCalls(t *testing.T) {
+	t.Parallel()
+	fixture := newReleaseHeadV2TestFixture(t, 1)
+	result, err := fixture.gather(t.Context(), fixture.options(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests, batches := fixture.rpc.counts()
+	bindings, bindingBatches := fixture.rpc.bindingCounts()
+	if bindings != len(result.Bindings) || bindingBatches != len(result.Inputs) || bindingBatches != 2 || requests <= bindings || batches <= bindingBatches {
+		t.Fatalf("actual binding and authority census was conflated: requests=%d batches=%d bindings=%d binding_batches=%d", requests, batches, bindings, bindingBatches)
+	}
+	retained, err := fixture.retainedOptions(t)
+	if err != nil || !reflect.DeepEqual(result.Bindings, retained.Bindings) {
+		t.Fatalf("binding census omitted original authenticated client-key captures: %v", err)
+	}
+	for _, binding := range result.Bindings {
+		if binding.Active && binding.ClientKeyObservationHash == "" {
+			t.Fatal("active binding lacks its genuine retained observation hash")
+		}
+	}
+	fixture.assertNoEMACommit(t)
+	t.Logf("actual transport census: methods=%d batches=%d binding_methods=%d binding_batches=%d", requests, batches, bindings, bindingBatches)
 }
 
 // An independently observed new generation cannot inherit the old signed
@@ -399,7 +475,7 @@ func TestReleaseHeadV2OwnsInputsAcrossProofCallbacks(t *testing.T) {
 	}
 	options.Operators[9] = operator
 	result, err := fixture.gather(t.Context(), options)
-	if err != nil || !mutated || !reflect.DeepEqual(result.Inputs, wantInputs) || !reflect.DeepEqual(result.Bindings, wantBindings) {
+	if err != nil || !mutated || !reflect.DeepEqual(result.Inputs, wantInputs) || !reflect.DeepEqual(releaseClientKeyTestChainBindings(result.Bindings), wantBindings) {
 		t.Fatalf("callback changed owned head evidence: mutated=%v err=%v", mutated, err)
 	}
 	fixture.assertNoEMACommit(t)
@@ -436,8 +512,8 @@ func TestReleaseHeadV2OwnsInputsBeforeFirstClientKeyCallback(t *testing.T) {
 		return lookup(clientID)
 	}
 	result, err := fixture.gather(t.Context(), options)
-	_, batches := fixture.rpc.counts()
-	if err != nil || !mutated || batches != 2 || !reflect.DeepEqual(result.Inputs, wantInputs) || !reflect.DeepEqual(result.Bindings, wantBindings) {
+	_, batches := fixture.rpc.bindingCounts()
+	if err != nil || !mutated || batches != 2 || !reflect.DeepEqual(result.Inputs, wantInputs) || !reflect.DeepEqual(releaseClientKeyTestChainBindings(result.Bindings), wantBindings) {
 		t.Fatalf("first client-key callback retargeted owned head evidence: mutated=%v batches=%d err=%v", mutated, batches, err)
 	}
 	fixture.assertNoEMACommit(t)

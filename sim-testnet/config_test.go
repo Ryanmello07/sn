@@ -732,14 +732,12 @@ func TestResolvedConfigPinsReviewedRuntimeArtifactIdentity(t *testing.T) {
 		{name: "metadata hash", mutate: func(runtime *ReleaseRuntimeLock) { runtime.MetadataHash = "0x" + strings.Repeat("00", 32) }},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			cfg := testResolvedConfig(t)
-			cfg.Hyperparameters.ObservedCompatibilityGates = validCompatibilityGates()
-			test.mutate(&cfg.Release.Runtime)
-			if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "reviewed testnet runtime 454") {
-				t.Fatalf("runtime artifact drift was accepted: %v", err)
-			}
-		})
+		cfg := testResolvedConfig(t)
+		cfg.Hyperparameters.ObservedCompatibilityGates = validCompatibilityGates()
+		test.mutate(&cfg.Release.Runtime)
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "reviewed testnet runtime 455") {
+			t.Errorf("%s runtime artifact drift was accepted: %v", test.name, err)
+		}
 	}
 }
 
@@ -762,13 +760,11 @@ func TestPublishedManifestBindsCompleteRuntimeIdentity(t *testing.T) {
 		"code hash":     func(public *PublicDeploymentManifest) { public.RuntimeCodeHash = "0x" + strings.Repeat("00", 32) },
 		"metadata hash": func(public *PublicDeploymentManifest) { public.RuntimeMetadataHash = "0x" + strings.Repeat("00", 32) },
 	} {
-		t.Run(name, func(t *testing.T) {
-			drifted := *valid
-			mutate(&drifted)
-			if err := validatePublishedRuntimeIdentity(&drifted, cfg); err == nil {
-				t.Fatal("published runtime identity drift was accepted")
-			}
-		})
+		drifted := *valid
+		mutate(&drifted)
+		if err := validatePublishedRuntimeIdentity(&drifted, cfg); err == nil {
+			t.Errorf("%s published runtime identity drift was accepted", name)
+		}
 	}
 }
 

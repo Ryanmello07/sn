@@ -184,9 +184,13 @@ func TestReleaseHeadV2ArtifactBoundExactCeilingRetainsRealCollection(t *testing.
 	options.MaxArtifactBytes, options.MaxControlBytes = releaseMeasurementEnvelopeMaxArtifactSize, releaseMeasurementEnvelopeMaxArtifactSize
 	reads := observeReleaseMeasurementV2SettlementTest(&options)
 	result, err := fixture.gather(t.Context(), options)
-	requests, batches := fixture.rpc.counts()
-	if err != nil || *reads == 0 || requests == 0 || batches != 2 || !reflect.DeepEqual(result.Weights, fixture.measurement.want.SelectedHead) || !reflect.DeepEqual(result.HeadEMA, fixture.measurement.artifact.HeadEMA) || !reflect.DeepEqual(result.Bindings, fixture.measurement.artifact.Bindings) {
+	requests, batches := fixture.rpc.bindingCounts()
+	if err != nil || *reads == 0 || requests == 0 || batches != 2 || !reflect.DeepEqual(result.Weights, fixture.measurement.want.SelectedHead) || !reflect.DeepEqual(result.HeadEMA, fixture.measurement.artifact.HeadEMA) {
 		t.Fatalf("exact live ceiling changed real collection: reads=%d requests=%d batches=%d error=%v", *reads, requests, batches, err)
+	}
+	retained, err := fixture.retainedOptions(t)
+	if err != nil || !reflect.DeepEqual(result.Bindings, retained.Bindings) {
+		t.Fatalf("exact live ceiling differs from independently authenticated retained bindings: %v", err)
 	}
 	fixture.assertNoEMACommit(t)
 	t.Log("ARTIFACT-BOUND-v1 PASS TestReleaseHeadV2ArtifactBoundExactCeilingRetainsRealCollection")

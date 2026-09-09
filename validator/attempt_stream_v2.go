@@ -53,6 +53,15 @@ func (self AttemptStreamV2Bounds) Validate() error {
 	return nil
 }
 
+// Configuration admission uses the exact writer's bounded canonical page
+// geometry, not a nominal descriptor count that might exceed page bytes.
+func (self AttemptStreamV2Bounds) WriterPageCapacity(kind string, maxRowBytes uint64) (uint64, error) {
+	if !attemptStreamV2Kind(kind) {
+		return 0, errors.New("attempt stream page capacity has an invalid kind")
+	}
+	return attemptStreamV2WritePageCapacity(kind, AttemptStreamV2WriteOptions{Bounds: self, MaxRowBytes: maxRowBytes})
+}
+
 // Checks only bounded metadata; every count must later match actual traversal.
 func (self AttemptStreamV2Reference) Validate(bounds AttemptStreamV2Bounds) error {
 	if err := bounds.Validate(); err != nil {

@@ -11,6 +11,9 @@ import (
 	"testing"
 )
 
+// The public lock supplies non-build annotations and the separate node-image
+// pin. This owned fixture binds reviewed current runtime literals and the
+// actual generated build without editing or approving the checked-in lock.
 func testReleaseLockFixture(t *testing.T) *ReleaseLock {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "deploy", "testnet", "release.lock.yml"))
@@ -21,7 +24,89 @@ func testReleaseLockFixture(t *testing.T) *ReleaseLock {
 	if err != nil {
 		t.Fatal(err)
 	}
+	runtime := runtime455ReviewedTestLock().Runtime
+	runtime.Image = lock.Runtime.Image
+	lock.Runtime = runtime
+	for _, item := range []struct {
+		prefix   string
+		artifact ContractArtifact
+	}{
+		{prefix: "coordinator_implementation", artifact: artifactByName("Coordinator")},
+		{prefix: "coordinator_proxy", artifact: artifactByName("ERC1967Proxy")},
+		{prefix: "fleet_batcher", artifact: TestnetFleetBatcherArtifact},
+		{prefix: "governance_drill_implementation", artifact: TestnetGovernanceDrillArtifact},
+		{prefix: "precompile_probe", artifact: TestnetPrecompileProbeArtifact},
+		{prefix: "reserve_sink", artifact: artifactByName("ReserveSink")},
+		{prefix: "settlement_vault", artifact: artifactByName("SettlementVault")},
+		{prefix: "validator_evidence", artifact: artifactByName("ValidatorEvidence")},
+	} {
+		lock.EVMBuild[item.prefix+"_artifact_hash"] = item.artifact.FoundryArtifactHash
+		lock.EVMBuild[item.prefix+"_runtime_hash"] = item.artifact.RuntimeBytecodeHash
+	}
+	lock.EVMBuild["coordinator_storage_layout_hash"] = CoordinatorStorageLayoutHash
+	lock.EVMBuild["governance_drill_storage_layout_hash"] = CoordinatorAdversaryStorageLayoutHash
+	lock.EVMBuild["fleet_batcher_storage_layout_hash"] = FleetBatcherStorageLayoutHash
+	lock.EVMBuild["validator_evidence_storage_layout_hash"] = ValidatorEvidenceStorageLayoutHash
+	lock.EVMBuild["abi_hash"] = generatedABIHash()
+	if err := validateReleaseLockStatic(lock); err != nil {
+		t.Fatalf("complete generated release fixture: %v", err)
+	}
 	return lock
+}
+
+// The fixture's current identity is complete and independent of any old
+// checked-in runtime stanza. The real file and historical bytes stay intact.
+func TestReleaseLockFixtureUsesReviewedCurrentRuntimeWithoutRewritingLock(t *testing.T) {
+	path := filepath.Join("..", "deploy", "testnet", "release.lock.yml")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := decodeReleaseLockBytes(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := testReleaseLockFixture(t)
+	expected := runtime455ReviewedTestLock().Runtime
+	expected.Image = original.Runtime.Image
+	if fixture.Runtime != expected || fixture.Runtime.SourceTag != "" || fixture.Runtime.UpstreamReleaseCallHash != "" || fixture.Runtime.UpstreamReleaseTimepoint != "" {
+		t.Fatalf("owned fixture inherited stale or incomplete runtime provenance: %+v", fixture.Runtime)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("owned fixture rewrote the actual release lock")
+	}
+	second := testReleaseLockFixture(t)
+	fixture.Runtime.SpecVersion = 454
+	fixture.EVMBuild["coordinator_implementation_runtime_hash"] = "changed owned fixture"
+	if second.Runtime != expected || second.EVMBuild["coordinator_implementation_runtime_hash"] != artifactByName("Coordinator").RuntimeBytecodeHash {
+		t.Fatal("fixture instances share mutable runtime/build identity")
+	}
+}
+
+// Refreshing an owned fixture never widens production static admission:
+// historical, cross-artifact, invented-provenance and compiler drift still fail.
+func TestReleaseLockFixtureRetainsRuntimeAndBuildDriftRejection(t *testing.T) {
+	for _, mutate := range []func(*ReleaseLock){
+		func(lock *ReleaseLock) { lock.Runtime.SpecVersion = 454 },
+		func(lock *ReleaseLock) {
+			lock.Runtime.CodeHash = "0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef"
+		},
+		func(lock *ReleaseLock) {
+			lock.Runtime.MetadataHash = "0x4d17516b694ef8d18f8a565dcb2df0117e7a0018a3ffa40812c91a1621225702"
+		},
+		func(lock *ReleaseLock) { lock.Runtime.SourceRefKind, lock.Runtime.SourceRefName = "", "" },
+		func(lock *ReleaseLock) { lock.Runtime.SourceTag = "v455" },
+		func(lock *ReleaseLock) { lock.Runtime.UpstreamReleaseTimepoint = "8996567:7" },
+		func(lock *ReleaseLock) { lock.Runtime.Image = "unpinned-image:latest" },
+		func(lock *ReleaseLock) { lock.EVMBuild["solidity"] = "0.8.25" },
+	} {
+		lock := testReleaseLockFixture(t)
+		mutate(lock)
+		if err := validateReleaseLockStatic(lock); err == nil {
+			t.Fatalf("changed owned fixture bypassed static lock admission: %+v", lock.Runtime)
+		}
+	}
 }
 
 func testReleaseLockObservation(t *testing.T, lock *ReleaseLock) *releaseLockObservation {

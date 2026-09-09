@@ -85,6 +85,9 @@ func readAttemptSettlementV2Path(path string, limit uint64, physical attemptSett
 	if readErr != nil {
 		return nil, false, readErr
 	}
+	if err := physical.startupImages.match(path, data, exists); err != nil {
+		return nil, false, err
+	}
 	return data, exists, nil
 }
 

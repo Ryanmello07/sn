@@ -28,40 +28,122 @@ var (
 
 const (
 	reviewedRuntimeSourceRepository         = "https://github.com/RaoFoundation/subtensor"
-	reviewedRuntimeSourceTag                = "v454"
-	reviewedRuntimeSourceCommit             = "14cde6410fe8ec81a940e290c56f94a632a0988d"
-	reviewedRuntimeCodeHash                 = "0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef"
-	reviewedRuntimeMetadataHash             = "0x4d17516b694ef8d18f8a565dcb2df0117e7a0018a3ffa40812c91a1621225702"
-	reviewedRuntimeCompressedWasmSHA256     = "0xa55e76b4f4620bcdb4c787e499c87a35abb9913ba4cde001b08a00d1945ac4db"
-	reviewedRuntimeUpstreamReleaseCallHash  = "0x5a1c30f0387796da59522d4b84a71395533a4ee676e06c52eedb14262ae9c3c6"
-	reviewedRuntimeUpstreamReleaseTimepoint = "8996567:7"
-	reviewedRuntimeSpecVersion              = uint32(454)
+	reviewedRuntimeSourceTag                = ""
+	reviewedRuntimeSourceRefKind            = "commit"
+	reviewedRuntimeSourceRefName            = "67dcf7f791dc495064c293f080a0702cb433e51e"
+	reviewedRuntimeSourceCommit             = "67dcf7f791dc495064c293f080a0702cb433e51e"
+	reviewedRuntimeCodeHash                 = "0xbca85925668cabb2880164610d64eda2e4d9bf2777994f9cdfdb9d36253ce74a"
+	reviewedRuntimeMetadataHash             = "0x16da562c347a354c55eb1ad5cd5094343afe7acdc12e5b526bf6c8cb12e866bc"
+	reviewedRuntimeCompressedWasmSHA256     = "0x232bfc0d65ec2dbe4280b152e23f13879df9692d2286dd08c6ba14483deee00f"
+	reviewedRuntimeUpstreamReleaseCallHash  = ""
+	reviewedRuntimeUpstreamReleaseTimepoint = ""
+	reviewedRuntimeSpecVersion              = uint32(455)
 	reviewedRuntimeTransactionVersion       = uint32(1)
 	reviewedRuntimeStateVersion             = uint8(1)
 )
 
-func normalizeReleaseStorageLayout(value any) any {
-	switch typed := value.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(typed))
-		for key, child := range typed {
-			if key == "astId" || key == "contract" {
-				continue
-			}
-			out[releaseLayoutTypeASTID.ReplaceAllString(key, "$1")] = normalizeReleaseStorageLayout(child)
+// Remove compiler IDs without collapsing two declarations that share a short
+// name. Collision groups use their complete compiler type labels, and every
+// nested reference follows the same substitution. Unresolvable aliases fail.
+func normalizeReleaseStorageLayout(value any) (any, error) {
+	layout, _ := value.(map[string]any)
+	typeKVs, _ := layout["types"].(map[string]any)
+	typeGroups := map[string]map[string]string{}
+	for key, entry := range typeKVs {
+		match := releaseLayoutTypeASTID.FindStringSubmatchIndex(key)
+		if match == nil || match[0] != 0 {
+			continue
 		}
-		return out
-	case []any:
-		out := make([]any, len(typed))
-		for i := range typed {
-			out[i] = normalizeReleaseStorageLayout(typed[i])
+		raw, base := key[match[0]:match[1]], key[match[2]:match[3]]
+		fields, _ := entry.(map[string]any)
+		label, _ := fields["label"].(string)
+		if typeGroups[base] == nil {
+			typeGroups[base] = map[string]string{}
 		}
-		return out
-	case string:
-		return releaseLayoutTypeASTID.ReplaceAllString(typed, "$1")
-	default:
-		return value
+		if prior, exists := typeGroups[base][raw]; exists && prior != label {
+			return nil, fmt.Errorf("storage type %q has conflicting declaration labels", raw)
+		}
+		typeGroups[base][raw] = label
 	}
+	typeNames := map[string]string{}
+	canonicalOwners := map[string]string{}
+	for base, declarations := range typeGroups {
+		for raw, label := range declarations {
+			canonical := base
+			if len(declarations) > 1 {
+				open := strings.IndexByte(base, '(')
+				kind := strings.TrimPrefix(base[:open], "t_")
+				prefix := kind + " "
+				if kind == "userDefinedValueType" {
+					prefix = ""
+				}
+				qualified := strings.TrimPrefix(label, prefix)
+				if label == "" || prefix != "" && qualified == label || strings.TrimSpace(qualified) != qualified || qualified == "" || strings.ContainsAny(qualified, "()\x00") {
+					return nil, fmt.Errorf("ambiguous storage type %q has no complete declaration label", raw)
+				}
+				canonical = base[:open+1] + qualified + ")"
+			}
+			if prior, exists := canonicalOwners[canonical]; exists && prior != raw {
+				return nil, fmt.Errorf("ambiguous storage types %q and %q share one canonical identity", prior, raw)
+			}
+			canonicalOwners[canonical] = raw
+			typeNames[raw] = canonical
+		}
+	}
+	normalizeName := func(text string) (string, error) {
+		var nameErr error
+		normalized := releaseLayoutTypeASTID.ReplaceAllStringFunc(text, func(raw string) string {
+			if canonical, exists := typeNames[raw]; exists {
+				return canonical
+			}
+			nameErr = fmt.Errorf("storage type reference %q has no declaration", raw)
+			return raw
+		})
+		return normalized, nameErr
+	}
+	var visit func(any) (any, error)
+	visit = func(current any) (any, error) {
+		switch typed := current.(type) {
+		case map[string]any:
+			out := make(map[string]any, len(typed))
+			for key, child := range typed {
+				if key == "astId" || key == "contract" {
+					continue
+				}
+				normalizedKey, err := normalizeName(key)
+				if err != nil {
+					return nil, err
+				}
+				if _, exists := out[normalizedKey]; exists {
+					return nil, fmt.Errorf("storage layout keys collide at %q after normalization", normalizedKey)
+				}
+				out[normalizedKey], err = visit(child)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return out, nil
+		case []any:
+			out := make([]any, len(typed))
+			for index, child := range typed {
+				var err error
+				out[index], err = visit(child)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return out, nil
+		case string:
+			return normalizeName(typed)
+		default:
+			return current, nil
+		}
+	}
+	normalized, err := visit(value)
+	if err != nil {
+		return nil, err
+	}
+	return normalized, nil
 }
 
 type releaseLockObservation struct {
@@ -649,6 +731,7 @@ var generatedReleaseABIs = []releaseABI{
 	{"ReserveSink", ReserveSinkABI},
 	{"SettlementVault", SettlementVaultABI},
 	{"SubnetProbe", SubnetProbeABI},
+	{"ValidatorEvidence", ValidatorEvidenceABI},
 }
 
 // digestReleaseABIs hashes the ordered contract names and exact generated ABIs.
@@ -689,7 +772,11 @@ func foundryStorageLayoutHash(snRoot, artifact string) (string, error) {
 	if value.StorageLayout == nil {
 		return "", errors.New("Foundry artifact has no storageLayout")
 	}
-	canonical, err := json.Marshal(normalizeReleaseStorageLayout(value.StorageLayout))
+	layout, err := normalizeReleaseStorageLayout(value.StorageLayout)
+	if err != nil {
+		return "", fmt.Errorf("normalize Foundry storage layout: %w", err)
+	}
+	canonical, err := json.Marshal(layout)
 	if err != nil {
 		return "", fmt.Errorf("canonicalize Foundry storage layout: %w", err)
 	}
@@ -790,6 +877,9 @@ func observeReleaseLockUnchecked(cfg *ResolvedConfig) (*releaseLockObservation, 
 	observation.EVMBuild["fleet_batcher_artifact_hash"] = FleetBatcherFoundryArtifactHash
 	observation.EVMBuild["governance_drill_storage_layout_hash"] = CoordinatorAdversaryStorageLayoutHash
 	observation.EVMBuild["fleet_batcher_storage_layout_hash"] = FleetBatcherStorageLayoutHash
+	observation.EVMBuild["validator_evidence_runtime_hash"] = ValidatorEvidenceRuntimeBytecodeHash
+	observation.EVMBuild["validator_evidence_artifact_hash"] = ValidatorEvidenceFoundryArtifactHash
+	observation.EVMBuild["validator_evidence_storage_layout_hash"] = ValidatorEvidenceStorageLayoutHash
 	observation.EVMBuild["abi_hash"] = generatedABIHash()
 	observation.EVMBuild["coordinator_storage_layout_hash"] = CoordinatorStorageLayoutHash
 
@@ -915,11 +1005,13 @@ func validateReleaseRepositorySchema(repositories map[string]any) error {
 }
 
 // Bind the operational testnet profile to the source and finalized Wasm
-// independently reviewed for runtime 454. The node image is pinned separately:
+// independently reviewed for runtime 455. Exact-commit testnet provenance is
+// distinct from a tagged mainnet proposal; no such proposal is asserted here.
+// The node image is pinned separately:
 // an older compatible binary may execute this on-chain Wasm while it syncs.
 func validateReviewedRuntimeIdentity(lock *ReleaseLock) error {
-	if lock == nil || lock.Runtime.SourceRepository != reviewedRuntimeSourceRepository || lock.Runtime.SourceTag != reviewedRuntimeSourceTag || lock.Runtime.SourceCommit != reviewedRuntimeSourceCommit || lock.Runtime.SpecVersion != reviewedRuntimeSpecVersion || lock.Runtime.TransactionVersion != reviewedRuntimeTransactionVersion || lock.Runtime.StateVersion != reviewedRuntimeStateVersion || !strings.EqualFold(lock.Runtime.CodeHash, reviewedRuntimeCodeHash) || !strings.EqualFold(lock.Runtime.MetadataHash, reviewedRuntimeMetadataHash) || !strings.EqualFold(lock.Runtime.CompressedWasmSHA256, reviewedRuntimeCompressedWasmSHA256) || !strings.EqualFold(lock.Runtime.UpstreamReleaseCallHash, reviewedRuntimeUpstreamReleaseCallHash) || lock.Runtime.UpstreamReleaseTimepoint != reviewedRuntimeUpstreamReleaseTimepoint {
-		return errors.New("release lock runtime identity is not the reviewed testnet runtime 454 release")
+	if lock == nil || lock.Runtime.SourceRepository != reviewedRuntimeSourceRepository || lock.Runtime.SourceTag != reviewedRuntimeSourceTag || lock.Runtime.SourceRefKind != reviewedRuntimeSourceRefKind || lock.Runtime.SourceRefName != reviewedRuntimeSourceRefName || lock.Runtime.SourceCommit != reviewedRuntimeSourceCommit || lock.Runtime.SpecVersion != reviewedRuntimeSpecVersion || lock.Runtime.TransactionVersion != reviewedRuntimeTransactionVersion || lock.Runtime.StateVersion != reviewedRuntimeStateVersion || !strings.EqualFold(lock.Runtime.CodeHash, reviewedRuntimeCodeHash) || !strings.EqualFold(lock.Runtime.MetadataHash, reviewedRuntimeMetadataHash) || !strings.EqualFold(lock.Runtime.CompressedWasmSHA256, reviewedRuntimeCompressedWasmSHA256) || lock.Runtime.UpstreamReleaseCallHash != reviewedRuntimeUpstreamReleaseCallHash || lock.Runtime.UpstreamReleaseTimepoint != reviewedRuntimeUpstreamReleaseTimepoint {
+		return errors.New("release lock runtime identity is not the reviewed testnet runtime 455 release")
 	}
 	return nil
 }

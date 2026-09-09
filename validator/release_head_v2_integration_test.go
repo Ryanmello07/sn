@@ -183,7 +183,7 @@ func TestReleaseHeadV2IntegrationRetainsLoaderUnionCapBeforeProofs(t *testing.T)
 	}
 	reads := observeReleaseMeasurementV2SettlementTest(&options)
 	result, err := fixture.gather(t.Context(), options)
-	requests, batches := fixture.rpc.counts()
+	requests, batches := fixture.rpc.bindingCounts()
 	if err == nil || requests == 0 || batches != 2 || *reads != 0 || !reflect.DeepEqual(result, releaseHeadResult{}) {
 		t.Fatalf("retained union cap reached proof work: requests=%d batches=%d reads=%d error=%v", requests, batches, *reads, err)
 	}
@@ -352,6 +352,49 @@ func TestReleaseHeadV2IntegrationFinalProofCloseRechecksDurableOwner(t *testing.
 	}
 }
 
+// Independent fixture bindings and decision pins locate retained source
+// bytes, never a candidate-provided hash. Actual historical authority and
+// signed request verification precede the expected observation-byte digest.
+func (self *releaseHeadV2TestFixture) retainedOptions(t *testing.T) (options ReleaseMeasurementV2Options, resultErr error) {
+	t.Helper()
+	options = self.measurement.options(t)
+	custody := &releaseEvidenceV2StartupReferences{remaining: self.steerer.cfg.EvidenceV2.Bounds.MaxHistoryBytes}
+	defer func() {
+		resultErr = errors.Join(resultErr, custody.check(), custody.close(), t.Context().Err())
+		if resultErr != nil {
+			options = ReleaseMeasurementV2Options{}
+		}
+	}()
+	for index := range options.Bindings {
+		binding := &options.Bindings[index]
+		if !binding.Active {
+			continue
+		}
+		clientId, err := connect.ParseId(binding.ClientID)
+		if err != nil {
+			return options, err
+		}
+		domain, request, err := releaseClientKeyDecisionV2(self.steerer.cfg, binding.NoID, self.steerer.hotkey.PublicKey(), self.measurement.artifact, clientId)
+		if err != nil {
+			return options, err
+		}
+		path, err := releaseClientKeyCaptureV2Path(self.steerer.cfg.StateDir, domain, request)
+		if err != nil {
+			return options, err
+		}
+		encoded, err := custody.read(t.Context(), path, releaseClientKeyHistoryTestResponseBytes, false)
+		if err != nil {
+			return options, err
+		}
+		registration, err := verifyReleaseClientKeyCaptureV2(t.Context(), self.steerer.chain, encoded, releaseClientKeyHistoryTestResponseBytes, domain, request, true)
+		if err != nil || !registration.Present || releaseHex32(registration.PublicKey) != binding.LocalClientKey {
+			return options, errors.Join(errors.New("retained signed observation differs from independent fixture key and decision"), err)
+		}
+		binding.ClientKeyObservationHash = ReleaseMeasurementContentHash(encoded)
+	}
+	return options, nil
+}
+
 // A complete positive-quality M8 collection is sealed and decoded through
 // fresh full replay, then explicitly committed and collected again after load.
 // Preview never acquires intent/on-chain publication authority on its own.
@@ -367,11 +410,22 @@ func TestReleaseHeadV2IntegrationPersistsRealPreviewAndReplaysCleanRestart(t *te
 	fixture.assertNoEMACommit(t)
 	artifact := cloneReleaseMeasurementArtifact(t, fixture.measurement.artifact)
 	artifact.Inputs, artifact.Bindings, artifact.HeadEMA = result.Inputs, result.Bindings, result.HeadEMA
-	encoded, hash, err := SealReleaseMeasurementArtifactV2(t.Context(), artifact, fixture.measurement.options(t))
+	for _, owner := range fixture.steerer.contexts {
+		owner.ClientKeyHistory.byJwt = func() string { return "" }
+	}
+	sealOptions, err := fixture.retainedOptions(t)
+	if err != nil || !reflect.DeepEqual(sealOptions.Bindings, result.Bindings) {
+		t.Fatalf("independently retained signed head bindings differ: %v", err)
+	}
+	encoded, hash, err := SealReleaseMeasurementArtifactV2(t.Context(), artifact, sealOptions)
 	if err != nil || hash != ReleaseMeasurementContentHash(encoded) {
 		t.Fatalf("full real wire seal failed: %v", err)
 	}
-	decoded, verified, err := DecodeReleaseMeasurementArtifactV2(t.Context(), encoded, fixture.measurement.options(t))
+	decodeOptions, err := fixture.retainedOptions(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, verified, err := DecodeReleaseMeasurementArtifactV2(t.Context(), encoded, decodeOptions)
 	if err != nil || decoded == nil || verified.Decision == nil || !reflect.DeepEqual(verified.Decision.SelectedHead, result.Weights) || len(verified.ReplayByNO) != 2 {
 		t.Fatalf("fresh complete wire replay differs: %v", err)
 	}
@@ -402,6 +456,106 @@ func TestReleaseHeadV2IntegrationPersistsRealPreviewAndReplaysCleanRestart(t *te
 	if err != nil || !bytes.Equal(before, after) {
 		t.Fatalf("idempotent commit rewrote persisted fold: %v", err)
 	}
+}
+
+// The actual admission equality remains mandatory: neither omitting a live
+// source hash nor substituting a valid different digest can start M8 replay.
+func TestReleaseHeadV2IntegrationRejectsChangedObservedBindingHash(t *testing.T) {
+	t.Parallel()
+	fixture := newReleaseHeadV2TestFixture(t, 2)
+	result, err := fixture.gather(t.Context(), fixture.options(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, contentHash := range []string{"", ReleaseMeasurementContentHash([]byte("not the observed signed response"))} {
+		artifact := cloneReleaseMeasurementArtifact(t, fixture.measurement.artifact)
+		artifact.Inputs, artifact.Bindings, artifact.HeadEMA = result.Inputs, append([]ReleaseBindingMeasurement(nil), result.Bindings...), result.HeadEMA
+		options, err := fixture.retainedOptions(t)
+		if err != nil || len(artifact.Bindings) == 0 || !reflect.DeepEqual(options.Bindings, artifact.Bindings) {
+			t.Fatalf("retained signed negative-control prerequisite differs: %v", err)
+		}
+		bindingIndex := -1
+		for index, binding := range options.Bindings {
+			if binding.Active && binding.ClientKeyObservationHash != "" {
+				bindingIndex = index
+				break
+			}
+		}
+		if bindingIndex < 0 || artifact.Bindings[bindingIndex].ClientKeyObservationHash == contentHash {
+			t.Fatal("negative control has no actual authenticated observation to change")
+		}
+		artifact.Bindings[bindingIndex].ClientKeyObservationHash = contentHash
+		if reflect.DeepEqual(options.Bindings, artifact.Bindings) {
+			t.Fatal("negative control did not change its independently authenticated slot")
+		}
+		reads := observeReleaseMeasurementV2SettlementTest(&options)
+		encoded, hash, err := SealReleaseMeasurementArtifactV2(t.Context(), artifact, options)
+		if err == nil || !strings.Contains(err.Error(), "independently authenticated observations") || encoded != nil || hash != "" || *reads != 0 {
+			t.Fatalf("changed live observation hash acquired measurement authority: reads=%d error=%v", *reads, err)
+		}
+	}
+	fixture.assertNoEMACommit(t)
+}
+
+// Even another genuine operator-signed capture cannot fill the independent
+// client's slot. Restoring exact original bytes, not a new signature, recovers.
+func TestReleaseHeadV2IntegrationRetainedOracleRejectsOtherSignedClient(t *testing.T) {
+	t.Parallel()
+	fixture := newReleaseHeadV2TestFixture(t, 2)
+	result, err := fixture.gather(t.Context(), fixture.options(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, binding := range fixture.measurement.artifact.Bindings {
+		if !binding.Active {
+			continue
+		}
+		clientId, err := connect.ParseId(binding.ClientID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		domain, request, err := releaseClientKeyDecisionV2(fixture.steerer.cfg, binding.NoID, fixture.steerer.hotkey.PublicKey(), fixture.measurement.artifact, clientId)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path, err := releaseClientKeyCaptureV2Path(fixture.steerer.cfg.StateDir, domain, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, path)
+		if len(paths) == 2 {
+			break
+		}
+	}
+	if len(paths) != 2 || paths[0] == paths[1] {
+		t.Fatal("actual signed source substitution needs two independent client slots")
+	}
+	original, err := os.ReadFile(paths[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := os.ReadFile(paths[1])
+	if err != nil || bytes.Equal(original, other) {
+		t.Fatalf("actual distinct client response prerequisite differs: %v", err)
+	}
+	for _, owner := range fixture.steerer.contexts {
+		owner.ClientKeyHistory.byJwt = func() string { return "" }
+	}
+	if err := os.WriteFile(paths[0], other, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if options, err := fixture.retainedOptions(t); err == nil || !reflect.DeepEqual(options, ReleaseMeasurementV2Options{}) {
+		t.Fatalf("another valid signed client response became fixture observation authority: %v", err)
+	}
+	if err := os.WriteFile(paths[0], original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	options, err := fixture.retainedOptions(t)
+	if err != nil || !reflect.DeepEqual(options.Bindings, result.Bindings) {
+		t.Fatalf("restoring original signed bytes lost full binding equality: %v", err)
+	}
+	fixture.assertNoEMACommit(t)
 }
 
 // Every observed native phase sees the old in-memory epoch, including after

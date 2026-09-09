@@ -34,6 +34,7 @@ type attemptSettlementV2IO struct {
 	roots         map[string]*attemptPrivateDirectory
 	ctx           context.Context
 	witnesses     *attemptSettlementV2WitnessRegistry
+	startupImages *attemptSettlementV2StartupImages
 }
 
 // No bound or permission default is invented by physical persistence.

@@ -148,16 +148,19 @@ func verifyReleaseArtifactBoundSourceGraph(sources map[string]string) error {
 		return fmt.Errorf("original envelope ceiling changed: %s", number)
 	}
 	expected := map[string]int{
-		"release_measurement_v2.go:ownReleaseMeasurementV2":          2,
-		"release_measurement_v2.go:decodeReleaseMeasurementV2Bytes":  1,
-		"release_measurement_v2.go:VerifyReleaseMeasurementIntentV2": 2,
-		"release_head_v2.go:gatherHeadV2":                            1,
-		"release_head_v2.go:admitReleaseHeadV2Controls":              1,
-		"release_head_v2_owner.go:releaseHeadV2Limits":               1,
-		"release_head_v2_admission.go:admitReleaseHeadV2Known":       1,
-		"release_head_v2_admission.go:admitReleaseHeadV2Current":     1,
-		"release_head_v2_admission.go:previewForEpochV2WithBudget":   1,
-		"release_head_v2_admission.go:previewReleaseHeadV2Fleets":    1,
+		"config_evidence_v2.go:Validate":                                         2,
+		"release_client_key_authority_v2.go:newReleaseClientKeyAuthorityV2Reads": 1,
+		"release_decision_chain_v2.go:ownReleaseDecisionChainV2Query":            1,
+		"release_measurement_v2.go:ownReleaseMeasurementV2":                      2,
+		"release_measurement_v2.go:decodeReleaseMeasurementV2Bytes":              1,
+		"release_measurement_v2.go:VerifyReleaseMeasurementIntentV2":             2,
+		"release_head_v2.go:gatherHeadV2":                                        1,
+		"release_head_v2.go:admitReleaseHeadV2Controls":                          1,
+		"release_head_v2_owner.go:releaseHeadV2Limits":                           1,
+		"release_head_v2_admission.go:admitReleaseHeadV2Known":                   1,
+		"release_head_v2_admission.go:admitReleaseHeadV2Current":                 1,
+		"release_head_v2_admission.go:previewForEpochV2WithBudget":               1,
+		"release_head_v2_admission.go:previewReleaseHeadV2Fleets":                1,
 	}
 	if !previewDelegates {
 		expected["release_head_v2.go:previewForEpochV2"] = 1
@@ -221,6 +224,20 @@ func TestProducerGateStateSelectionArtifactBoundGraphRejectsMissingAuthority(t *
 		}
 		if err := verifyReleaseArtifactBoundSourceGraph(changed); err == nil {
 			t.Fatalf("source graph admitted %s", kind)
+		}
+	}
+	for _, guard := range []struct{ path, comparison string }{
+		{path: "config_evidence_v2.go", comparison: "self.MaxControlBytes > maxReleaseMeasurementArtifactBytes"},
+		{path: "release_client_key_authority_v2.go", comparison: "budget.limit > maxReleaseMeasurementArtifactBytes"},
+		{path: "release_decision_chain_v2.go", comparison: "query.maxControlBytes > maxReleaseMeasurementArtifactBytes"},
+	} {
+		changed := maps.Clone(sources)
+		if strings.Count(changed[guard.path], guard.comparison) != 1 {
+			t.Fatalf("%s lost its exact independent admission guard", guard.path)
+		}
+		changed[guard.path] = strings.Replace(changed[guard.path], guard.comparison, "false", 1)
+		if err := verifyReleaseArtifactBoundSourceGraph(changed); err == nil {
+			t.Fatalf("source graph admitted missing bound in %s", guard.path)
 		}
 	}
 	t.Log("ARTIFACT-BOUND-v1 PASS TestProducerGateStateSelectionArtifactBoundGraphRejectsMissingAuthority")

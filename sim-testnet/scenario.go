@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -1100,13 +1099,9 @@ func (p *liveScenarioProbe) get(ctx context.Context, url string, limit int64) ([
 	if err != nil {
 		return nil, 0, err
 	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	b, err := readEvidenceHttpBody(ctx, resp.Body, limit)
 	if err != nil {
 		return nil, resp.StatusCode, err
-	}
-	if int64(len(b)) > limit {
-		return nil, resp.StatusCode, errors.New("response exceeds evidence size limit")
 	}
 	if resp.StatusCode/100 != 2 {
 		return b, resp.StatusCode, fmt.Errorf("HTTP %d", resp.StatusCode)
@@ -3516,7 +3511,7 @@ func beginScenarioCampaignPreparation(ctx context.Context, phase, runID string, 
 	var immutableHandoff []byte
 	if options.Attempt != nil && phase == "production-soak" {
 		var err error
-		immutableHandoff, err = options.Attempt.authenticateProductionHandoff()
+		immutableHandoff, err = options.Attempt.authenticateProductionHandoffContext(ctx)
 		if err != nil {
 			return fmt.Errorf("authenticate exact release lifecycle handoff before production preparation: %w", err)
 		}
@@ -4189,7 +4184,7 @@ scenarioLoop:
 				return result, err
 			}
 		}
-		hashes, err := evidenceFileHashes(runDir, cfg.Config.Topology.Operators)
+		hashes, err := evidenceFileHashesForConfigV2(ctx, cfg, runDir, cfg.Config.Topology.Operators)
 		if err != nil {
 			return finalEvidenceFailure("evidence_file_hashes", err)
 		}
@@ -4234,6 +4229,15 @@ scenarioLoop:
 				return finalEvidenceFailure("complete_evidence_encoding", marshalErr)
 			}
 			b = append(b, '\n')
+			if finalUsesEvidenceV2(cfg) {
+				limits, limitErr := campaignEvidenceLimitsForConfig(cfg)
+				if limitErr != nil {
+					return finalEvidenceFailure("complete_evidence_encoding", limitErr)
+				}
+				if err := validateCampaignMetadataRawV2(limits, "complete.json", b); err != nil {
+					return finalEvidenceFailure("complete_evidence_encoding", err)
+				}
+			}
 			if options.Publish {
 				if !validSHA256ContentHash(publishedBundlePayloadHash) {
 					return finalEvidenceFailure("complete_evidence_publication", errors.New("published scenario bundle has no commit payload hash"))
@@ -4268,7 +4272,7 @@ func produceFinalSemanticCampaignOutputs(ctx context.Context, cfg *ResolvedConfi
 	}
 	load := options.FinalSemanticArtifacts
 	if load == nil {
-		load, err = NewFinalSemanticCampaignArtifactLoader(stateDir, runDir)
+		load, err = newFinalSemanticCampaignArtifactLoaderForConfigV2(cfg, stateDir, runDir)
 		if err != nil {
 			return fmt.Errorf("construct final semantic artifact loader: %w", err)
 		}
@@ -4476,13 +4480,9 @@ func fetchVerifyPublicKeys(ctx context.Context, endpoint string) (map[byte]strin
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, (1*1024*1024)+1))
+	b, err := readEvidenceHttpBody(ctx, resp.Body, 1*1024*1024)
 	if err != nil {
 		return nil, err
-	}
-	if len(b) > 1*1024*1024 {
-		return nil, errors.New("verify keys endpoint exceeded 1 MiB")
 	}
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("verify keys endpoint returned HTTP %d", resp.StatusCode)
@@ -4618,7 +4618,7 @@ func runScenarioCampaignAttempt(ctx context.Context, cfg *ResolvedConfig, stateD
 			} else {
 				var prior *ReleaseCampaignGate
 				if name == "production-soak" {
-					prior, loadErr = loadReleaseCampaignGate(cfg, stateDir, roles)
+					prior, loadErr = loadReleaseCampaignGateContext(ctx, cfg, stateDir, roles)
 					if loadErr != nil {
 						return fmt.Errorf("load production release predecessor: %w", loadErr)
 					}
@@ -4768,10 +4768,10 @@ func runScenarioCampaignAttempt(ctx context.Context, cfg *ResolvedConfig, stateD
 		faultDriver.planHash = scenarioExecutor.plan.PlanHash
 		faultDriver.coordinator = strings.ToLower(scenarioExecutor.payloads.Manifest.CoordinatorProxy.Hex())
 	}
-	_, err = runScenarioWithProbe(ctx, cfg, stateDir, definition, probe, scenarioRunOptions{
+	_, err = runScenarioWithEvidenceRelay(ctx, cfg, stateDir, definition, probe, scenarioRunOptions{
 		Roles: roles, Publish: true, FaultDriver: faultDriver,
 		Adversaries: campaign, Prepare: prepare, ProcessLogs: processLogs, FleetLifecycle: fleetLifecycle, Attempt: attempt,
-	})
+	}, scenarioExecutor)
 	return err
 }
 

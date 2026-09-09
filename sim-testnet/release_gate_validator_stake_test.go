@@ -53,6 +53,10 @@ func TestProducerGatePinsExactBlockRuntimeClientRegressionsNativeStakeStartup(t 
 			name = callee.Name
 		case *ast.SelectorExpr:
 			name = callee.Sel.Name
+			if owner, ok := callee.X.(*ast.Ident); ok {
+				qualified := owner.Name + "." + name
+				positions[qualified] = append(positions[qualified], call.Pos())
+			}
 		}
 		positions[name] = append(positions[name], call.Pos())
 		return true
@@ -61,7 +65,14 @@ func TestProducerGatePinsExactBlockRuntimeClientRegressionsNativeStakeStartup(t 
 	if len(registration) != 1 || len(stake) != 1 || registration[0] >= stake[0] {
 		t.Fatal("native startup stake admission is absent, duplicated or before EVM registration")
 	}
-	for _, operation := range []string{"RecoverAttemptSettlementEpoch", "loadReleaseAttemptState", "advanceSettlement", "startReleaseOperator", "runReleaseOperatorWorkers"} {
+	// Recovery now belongs to the authenticated V2 runtime constructor. Pin
+	// every real disk/semantic/worker edge after the same signing-key check.
+	for _, operation := range []string{
+		"loadReleaseEvidenceV2ActivationInputs", "newReleaseEvidenceV2StartupReaders",
+		"readReleaseServerKeysV2", "openReleaseEvidenceV2DiskState", "newReleaseRuntimeV2",
+		"startReleaseOperator", "runtimeV2.attach", "newReleaseSteererV2",
+		"runtimeV2.advance", "runReleaseOperatorWorkers",
+	} {
 		if len(positions[operation]) == 0 {
 			t.Fatalf("startup operation %s disappeared without updating the custody guard", operation)
 		}

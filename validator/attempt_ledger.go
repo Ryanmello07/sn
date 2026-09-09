@@ -295,18 +295,6 @@ func attemptRecordHash(record *AttemptRecord) ([32]byte, error) {
 	return value, nil
 }
 
-func cloneAttemptRecord(record AttemptRecord) (AttemptRecord, error) {
-	encoded, err := json.Marshal(&record)
-	if err != nil {
-		return AttemptRecord{}, err
-	}
-	var cloned AttemptRecord
-	if err := json.Unmarshal(encoded, &cloned); err != nil {
-		return AttemptRecord{}, err
-	}
-	return cloned, nil
-}
-
 func attemptRecordSignatureMessage(recordHash [32]byte) []byte {
 	message := make([]byte, 0, len(attemptLedgerSignDomain)+len(recordHash))
 	message = append(message, attemptLedgerSignDomain...)

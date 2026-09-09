@@ -70,7 +70,7 @@ func loadFleetMirrorLineagePlan(stateDir string, prior *SetupPlan, planHash stri
 	if strings.EqualFold(prior.PlanHash, planHash) {
 		return prior, nil
 	}
-	plan, err := readPersistedPlanFile(filepath.Join(stateDir, "plans", stringsTrim0x(planHash)+".json"))
+	plan, err := readValidatorEvidenceHistoricalPlan(stateDir, planHash)
 	if err != nil {
 		return nil, fmt.Errorf("read fleet-mirror ancestor plan %s: %w", planHash, err)
 	}

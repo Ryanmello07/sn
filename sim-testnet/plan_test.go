@@ -70,7 +70,9 @@ type historicalPlanWire struct {
 
 // Project a current plan into the exact v3 wire shape used by an interrupted
 // setup before the v4 recovery fields existed.
-func historicalPlanFromCurrent(plan *SetupPlan, schema string) historicalPlanWire {
+func historicalPlanFromCurrent(t *testing.T, plan *SetupPlan, schema string) historicalPlanWire {
+	t.Helper()
+	plan = validatorEvidenceLegacyPlanTest(t, plan)
 	facts := plan.LiveFacts
 	return historicalPlanWire{
 		Schema: schema, Release: plan.Release, ReleaseLockHash: plan.ReleaseLockHash,
@@ -778,7 +780,7 @@ func TestPersistedV3PlanHashSurvivesV4WireFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	historical := historicalPlanFromCurrent(current, "urnetwork-sim-plan-v3")
+	historical := historicalPlanFromCurrent(t, current, "urnetwork-sim-plan-v3")
 	historical.PlanHash, err = historicalPlanHash(historical)
 	if err != nil {
 		t.Fatal(err)
@@ -815,7 +817,7 @@ func TestPersistedHistoricalPlanHashNormalizesOnlySchemaObservations(t *testing.
 		t.Fatal(err)
 	}
 	for _, schema := range []string{"urnetwork-sim-plan-v1", "urnetwork-sim-plan-v2", "urnetwork-sim-plan-v3"} {
-		historical := historicalPlanFromCurrent(current, schema)
+		historical := historicalPlanFromCurrent(t, current, schema)
 		if schema == "urnetwork-sim-plan-v1" {
 			historical.NativeTransactionFeeLimitRao = 0
 			historical.MaximumEVMFeePerGasWei = 0

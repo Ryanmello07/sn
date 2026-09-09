@@ -24,6 +24,9 @@ import (
 
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/ss58"
+	validatorpkg "github.com/urfoundation/sn/validator"
+	"github.com/urnetwork/server/controller"
+	"github.com/urnetwork/server/model"
 )
 
 const (
@@ -42,23 +45,27 @@ const (
 var btwalletNACLSalt = [16]byte{0x13, 0x71, 0x83, 0xdf, 0xf1, 0x5a, 0x09, 0xbc, 0x9c, 0x90, 0xb5, 0x51, 0x87, 0x39, 0xe9, 0xb1}
 
 type HarnessConfig struct {
-	SchemaVersion      int                      `yaml:"schema_version" json:"schema_version"`
-	Profile            string                   `yaml:"profile" json:"profile"`
-	Repositories       RepositoryConfig         `yaml:"repositories" json:"repositories"`
-	Manifests          ManifestConfig           `yaml:"manifests" json:"manifests"`
-	Deployment         DeploymentConfig         `yaml:"deployment" json:"deployment"`
-	LaunchInputs       LaunchInputs             `yaml:"launch_inputs" json:"launch_inputs"`
-	Topology           TopologyConfig           `yaml:"topology" json:"topology"`
-	AlphaTransfers     AlphaTransferConfig      `yaml:"alpha_transfers" json:"alpha_transfers"`
-	ValidatorBootstrap ValidatorBootstrapConfig `yaml:"validator_bootstrap" json:"validator_bootstrap"`
-	Contracts          ContractConfig           `yaml:"contracts" json:"contracts"`
-	Dependencies       DependencyConfig         `yaml:"dependencies" json:"dependencies"`
-	Artifacts          ArtifactConfig           `yaml:"artifacts" json:"artifacts"`
-	Processes          ProcessConfig            `yaml:"processes" json:"processes"`
-	Scenarios          ScenarioConfig           `yaml:"scenarios" json:"scenarios"`
-	Budgets            BudgetConfig             `yaml:"budgets" json:"budgets"`
-	Secrets            SecretConfig             `yaml:"secrets" json:"secrets"`
-	Analysis           AnalysisConfig           `yaml:"analysis" json:"analysis"`
+	SchemaVersion                       int                                             `yaml:"schema_version" json:"schema_version"`
+	Profile                             string                                          `yaml:"profile" json:"profile"`
+	Repositories                        RepositoryConfig                                `yaml:"repositories" json:"repositories"`
+	Manifests                           ManifestConfig                                  `yaml:"manifests" json:"manifests"`
+	Deployment                          DeploymentConfig                                `yaml:"deployment" json:"deployment"`
+	LaunchInputs                        LaunchInputs                                    `yaml:"launch_inputs" json:"launch_inputs"`
+	Topology                            TopologyConfig                                  `yaml:"topology" json:"topology"`
+	AlphaTransfers                      AlphaTransferConfig                             `yaml:"alpha_transfers" json:"alpha_transfers"`
+	ValidatorBootstrap                  ValidatorBootstrapConfig                        `yaml:"validator_bootstrap" json:"validator_bootstrap"`
+	ValidatorEvidenceV2                 []validatorpkg.ReleaseValidatorEvidenceV2Config `yaml:"validator_evidence_v2" json:"validator_evidence_v2"`
+	ValidatorEvidenceRelay              evidenceRelayConfig                             `yaml:"validator_evidence_relay" json:"validator_evidence_relay"`
+	ProvisionValidatorEvidenceV2        bool                                            `yaml:"provision_validator_evidence_v2" json:"provision_validator_evidence_v2,omitempty"`
+	ValidatorEvidenceActivationGasUnits uint64                                          `yaml:"validator_evidence_activation_gas_units" json:"validator_evidence_activation_gas_units,omitempty"`
+	Contracts                           ContractConfig                                  `yaml:"contracts" json:"contracts"`
+	Dependencies                        DependencyConfig                                `yaml:"dependencies" json:"dependencies"`
+	Artifacts                           ArtifactConfig                                  `yaml:"artifacts" json:"artifacts"`
+	Processes                           ProcessConfig                                   `yaml:"processes" json:"processes"`
+	Scenarios                           ScenarioConfig                                  `yaml:"scenarios" json:"scenarios"`
+	Budgets                             BudgetConfig                                    `yaml:"budgets" json:"budgets"`
+	Secrets                             SecretConfig                                    `yaml:"secrets" json:"secrets"`
+	Analysis                            AnalysisConfig                                  `yaml:"analysis" json:"analysis"`
 }
 
 type RepositoryConfig struct {
@@ -165,10 +172,12 @@ type DependencyConfig struct {
 	ObjectStore           string `yaml:"object_store" json:"object_store"`
 }
 type ArtifactConfig struct {
-	Writer           string `yaml:"writer" json:"writer"`
-	HistoryAPI       string `yaml:"history_api" json:"history_api"`
-	ContentAddressed bool   `yaml:"content_addressed" json:"content_addressed"`
-	MinioPrefix      string `yaml:"minio_prefix" json:"minio_prefix"`
+	Writer                 string                                     `yaml:"writer" json:"writer"`
+	HistoryAPI             string                                     `yaml:"history_api" json:"history_api"`
+	ContentAddressed       bool                                       `yaml:"content_addressed" json:"content_addressed"`
+	MinioPrefix            string                                     `yaml:"minio_prefix" json:"minio_prefix"`
+	AttemptUpload          *model.StAttemptUploadBudget               `yaml:"attempt_upload,omitempty" json:"attempt_upload,omitempty"`
+	ReservedAttemptUploads []controller.StReservedAttemptUploadConfig `yaml:"reserved_attempt_uploads,omitempty" json:"reserved_attempt_uploads,omitempty"`
 }
 
 // Resolve the configured deployment-isolated object prefix for one operator.
@@ -308,6 +317,8 @@ type ReleaseLock struct {
 type ReleaseRuntimeLock struct {
 	SourceRepository         string `yaml:"source_repository" json:"source_repository"`
 	SourceTag                string `yaml:"source_tag" json:"source_tag"`
+	SourceRefKind            string `yaml:"source_ref_kind,omitempty" json:"source_ref_kind,omitempty"`
+	SourceRefName            string `yaml:"source_ref_name,omitempty" json:"source_ref_name,omitempty"`
 	SourceCommit             string `yaml:"source_commit" json:"source_commit"`
 	CodeHash                 string `yaml:"code_hash" json:"code_hash"`
 	MetadataHash             string `yaml:"metadata_hash" json:"metadata_hash"`
@@ -393,6 +404,14 @@ func strictYAML(path string, out any) error {
 		}
 		return fmt.Errorf("%s: multiple YAML documents", path)
 	}
+	if _, harness := out.(*HarnessConfig); harness {
+		if err := validatorpkg.ValidateReleaseValidatorEvidenceV2YAML(b); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		if err := validateRuntimeAttemptUploadDocument(b); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+	}
 	return nil
 }
 
@@ -438,6 +457,12 @@ func LoadResolved(opts LoadOptions) (*ResolvedConfig, error) {
 	if err := strictYAML(resolve(cfg.Manifests.Hyperparameters), hyper); err != nil {
 		return nil, err
 	}
+	if len(cfg.ValidatorEvidenceV2) != 0 {
+		capacity := &ResolvedConfig{Config: &cfg, Public: pub, Hyperparameters: hyper}
+		if _, err := runtimeAttemptUploadBudget(capacity); err != nil {
+			return nil, err
+		}
+	}
 	vaultPath := filepath.Join(repos.Vault, "main", "st.yml")
 	vault := map[string]any{}
 	raw, err := os.ReadFile(vaultPath)
@@ -479,6 +504,28 @@ func releaseConfigHash(config *HarnessConfig, public *PublicManifest, hyperparam
 func (c *HarnessConfig) Validate() error {
 	if c.SchemaVersion != 1 || c.Profile != releaseProfile {
 		return fmt.Errorf("config must be schema 1 profile %s", releaseProfile)
+	}
+	// Planning can precede provisioning, but a supplied capacity is never
+	// silently corrected. Actual rendering requires all four limits below.
+	if c.Artifacts.AttemptUpload != nil {
+		if err := c.Artifacts.AttemptUpload.Validate(); err != nil {
+			return fmt.Errorf("artifacts.attempt_upload: %w", err)
+		}
+	}
+	if len(c.Artifacts.ReservedAttemptUploads) != 0 {
+		if err := validateRuntimeReservedAttemptUploadCensus(c); err != nil {
+			return err
+		}
+	}
+	// Planning can precede independent activation. Rendering cannot: its
+	// mandatory preflight below rejects missing bounds or exact references.
+	if len(c.ValidatorEvidenceV2) != 0 {
+		if err := validateSimulatorEvidenceV2Census(c); err != nil {
+			return err
+		}
+	}
+	if err := validateRuntimeEvidenceProvisionTemplateV2(c); err != nil {
+		return err
 	}
 	if c.Deployment.Network != "bittensor-testnet" || c.Deployment.Subnet != "existing" || c.Budgets.MaximumSubnetCreations != 0 {
 		return errors.New("release harness only accepts the existing Bittensor testnet subnet and forbids subnet creation")
@@ -1145,6 +1192,13 @@ func (r *ResolvedConfig) Validate() error {
 	}
 	if r.Public.Chain.ExpectedBlockSeconds == 0 || r.Public.Chain.ExpectedDefaultMinTransferRao == 0 {
 		return errors.New("public manifest must declare a nonzero block cadence and runtime transfer minimum")
+	}
+	// Full-population key observations share the ordinary admission counters.
+	// Reject insufficient capacity while parsing, before setup can sign or write.
+	if len(r.Config.ValidatorEvidenceV2) != 0 {
+		if _, err := runtimeAttemptUploadBudget(r); err != nil {
+			return err
+		}
 	}
 	if r.OperationalRPCMode == rpcModePublicOverride && !r.Public.Chain.PublicFallbackAllowsEventIndexing {
 		return errors.New("public RPC override requires bounded event indexing in the public manifest")

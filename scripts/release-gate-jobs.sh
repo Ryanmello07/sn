@@ -51,6 +51,8 @@ release_gate_effective_resources() {
 
 release_gate_jobs_init() {
   local command cpu_slots memory_slots requested reservations
+  case "${RELEASE_GATE_DIAGNOSTIC:-0}" in 0 | 1) ;; *) echo 'RELEASE_GATE_DIAGNOSTIC must be 0 or 1' >&2; return 1 ;; esac
+  release_gate_diagnostic="${RELEASE_GATE_DIAGNOSTIC:-0}"
   for command in setsid python3 stat nproc mkfifo timeout; do command -v "$command" >/dev/null || return 1; done
   [[ -d /proc/self ]] || { echo 'release gate jobs require Linux process identities' >&2; return 1; }
   set +m
@@ -58,7 +60,7 @@ release_gate_jobs_init() {
   release_gate_root="$(mktemp -d "${TMPDIR:-/tmp}/urnetwork-release-gate.XXXXXXXX")" || return 1
   release_gate_root="$(cd -- "$release_gate_root" && pwd -P)" || return 1
   declare -ga release_gate_pids=() release_gate_starts=() release_gate_labels=() release_gate_pending=() release_gate_ack_fds=()
-  release_gate_active=0 release_gate_result=0 release_gate_services_cleaned=0
+  release_gate_active=0 release_gate_result=0 release_gate_body_result=0 release_gate_services_cleaned=0
   trap 'release_gate_jobs_exit "$?"' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
@@ -67,7 +69,7 @@ release_gate_jobs_init() {
     return 1
   fi
   mkdir -m 700 "$release_gate_root/logs" "$release_gate_root/full-out" "$release_gate_root/full-cache" \
-    "$release_gate_root/slither-out" "$release_gate_root/slither-cache" || return 1
+    "$release_gate_root/slither-out" "$release_gate_root/slither-cache" "$release_gate_root/preflights" || return 1
   # gencontracts validates immutable declaration order beside its artifact
   # input. This is a read-only reference to the same source-freeze checkout.
   ln -s -- "$sn_repo/evm/src" "$release_gate_root/src" || return 1
@@ -93,11 +95,135 @@ release_gate_jobs_init() {
   export RAYON_NUM_THREADS="$release_gate_job_cpus" CARGO_BUILD_JOBS="$release_gate_job_cpus"
   export FOUNDRY_OUT="$release_gate_root/full-out" FOUNDRY_CACHE_PATH="$release_gate_root/full-cache"
   export SLITHER_FOUNDRY_OUT="$release_gate_root/slither-out" SLITHER_FOUNDRY_CACHE_PATH="$release_gate_root/slither-cache"
-  export release_gate_root sn_repo workspace
+  export release_gate_root sn_repo workspace release_gate_diagnostic
+  export -f release_gate_record_preflight release_gate_preflight_refusal release_gate_preflight_status release_gate_diagnostic_inventory
   source "$workspace/server/local/release-gate-services.sh" || return 1
+  if [[ "$release_gate_diagnostic" == 1 ]]; then
+    [[ "${RUN_SERVER_DB_TESTS:-0}" == 1 ]] || { echo 'diagnostic full payload requires RUN_SERVER_DB_TESTS=1' >&2; return 1; }
+    local manifest
+    for manifest in "${RELEASE_GATE_DIAGNOSTIC_SOURCE_MANIFEST:-}" "${RELEASE_GATE_DIAGNOSTIC_MODE_MANIFEST:-}"; do
+      [[ "$manifest" == /* && -f "$manifest" && ! -L "$manifest" && -s "$manifest" ]] || { echo 'diagnostic mode requires the existing immutable source and mode manifests' >&2; return 1; }
+    done
+    cp -- "$RELEASE_GATE_DIAGNOSTIC_SOURCE_MANIFEST" "$release_gate_root/source.sha256" || return 1
+    cp -- "$RELEASE_GATE_DIAGNOSTIC_MODE_MANIFEST" "$release_gate_root/source.modes" || return 1
+    release_gate_diagnostic_fence initial || return 1
+    # Nested gate regression fixtures keep strict defaults; the admitted
+    # preflight child receives only this gate's separate private mode value.
+    unset RELEASE_GATE_DIAGNOSTIC RELEASE_GATE_DIAGNOSTIC_SOURCE_MANIFEST RELEASE_GATE_DIAGNOSTIC_MODE_MANIFEST
+    export RUNTIME_METADATA_PROBE_TARGET_DIR="$release_gate_root/runtime-metadata-probe-target"
+    printf '[release gate diagnostic] NOT RELEASE-QUALIFIED; immutable candidate test payload only\n' >&2
+  fi
   printf '[release gate] private state %s; ready jobs=%s; CPUs/job=%s\n' "$release_gate_root" "$release_gate_limit" "$release_gate_job_cpus"
 }
 
+# Each preflight keeps its real channels and exit separately from test phases.
+# The continuation decision below never rewrites this recorded result.
+release_gate_record_preflight() {
+  local label="$1" result=0 directory
+  shift
+  [[ "$label" =~ ^[a-z0-9-]+$ ]] && (( $# > 0 )) || return 1
+  directory="$release_gate_root/preflights/$label"
+  mkdir -m 700 "$directory" || return 1
+  "$@" > "$directory/stdout" 2> "$directory/stderr" || result=$?
+  printf '%s\n' "$result" > "$directory/exit.pending" || return 1
+  mv -- "$directory/exit.pending" "$directory/exit" || return 1
+  cat -- "$directory/stdout" || return 1
+  cat -- "$directory/stderr" >&2 || return 1
+  printf '[release gate preflight] %s exit=%s; retained %s\n' "$label" "$result" "$directory" >&2
+  return "$result"
+}
+
+# Strict mode stops on the original result. Only the explicit diagnostic
+# driver may continue to independent work; its final status is always nonzero.
+release_gate_preflight_refusal() {
+  local status="$1"
+  if [[ "$release_gate_diagnostic" == 1 ]]; then
+    printf '[release gate diagnostic] retained preflight failure %s; continuing without qualification\n' "$status" >&2
+    return 0
+  fi
+  return "$status"
+}
+
+release_gate_preflight_status() {
+  local record status result=0
+  for record in "$release_gate_root"/preflights/*/exit; do
+    [[ -f "$record" ]] || continue
+    read -r status < "$record" || return 125
+    [[ "$status" =~ ^(0|[1-9][0-9]{0,2})$ ]] && (( status <= 255 )) || return 125
+    if (( status != 0 && result == 0 )); then result="$status"; fi
+  done
+  return "$result"
+}
+
+# Missing checkout/resource directories remain explicit failures even when
+# the original strict source checker necessarily stops at the first one.
+release_gate_diagnostic_inventory() {
+  local repo result=0
+  for repo in sn server operator-proxy connect sdk glog goidenticons proxy userwireguard vault xops config; do
+    if [[ ! -d "$workspace/$repo" ]]; then
+      printf 'incomplete diagnostic repository directory: %s\n' "$repo" >&2
+      result=1
+    fi
+    if [[ ! -e "$workspace/$repo/.git" ]]; then
+      printf 'incomplete diagnostic Git checkout: %s\n' "$repo" >&2
+      result=1
+    fi
+  done
+  return "$result"
+}
+
+# A missing private service owner is a failed phase, never permission to use
+# inherited host resources. Other already admitted phases still join normally.
+release_gate_unavailable_services() {
+  printf 'server-db payload blocked by retained private-services preflight; no stateful test was admitted\n' >&2
+  return "${release_gate_services_error:-1}"
+}
+
+# Reuse the candidate's explicit all-module byte/mode closure. This does not
+# infer unlisted files: complete inventory and read-only custody remain with
+# the source lease. Tool outputs and this comparison live in the gate root.
+release_gate_diagnostic_fence() {
+  local stage="$1" mode size path ancestor result=0
+  [[ "$release_gate_diagnostic" == 1 ]] || return 0
+  [[ "$stage" == initial || "$stage" == final ]] || return 1
+  (
+    cd "$workspace" || exit 1
+    sha256sum --strict -c "$release_gate_root/source.sha256"
+  ) > "$release_gate_root/logs/$stage-source.stdout" 2> "$release_gate_root/logs/$stage-source.stderr" || result=1
+  (
+    cd "$workspace" || exit 1
+    while read -r mode size path; do
+      [[ "$mode" =~ ^[0-7]{3,4}$ && "$size" =~ ^(0|[1-9][0-9]*)$ && -n "$path" && "$path" != /* && "$path" != .. && "$path" != ../* && "$path" != */../* && "$path" != */.. ]] || exit 1
+      [[ -f "$path" && ! -L "$path" ]] || exit 1
+      ancestor="$path"
+      while [[ "$ancestor" == */* ]]; do
+        ancestor="${ancestor%/*}"
+        [[ ! -L "$ancestor" ]] || exit 1
+      done
+      stat -c '%a %s %n' -- "$path" || exit 1
+    done < "$release_gate_root/source.modes"
+  ) > "$release_gate_root/$stage-source.modes" 2> "$release_gate_root/logs/$stage-modes.stderr" || result=1
+  diff -u "$release_gate_root/source.modes" "$release_gate_root/$stage-source.modes" > "$release_gate_root/logs/$stage-modes.diff" || result=1
+  sed -E 's/^[0-9a-f]{64}  //' "$release_gate_root/source.sha256" > "$release_gate_root/$stage-hash.paths" || result=1
+  sed -E 's/^[0-7]{3,4} [0-9]+ //' "$release_gate_root/source.modes" > "$release_gate_root/$stage-mode.paths" || result=1
+  diff -u "$release_gate_root/$stage-hash.paths" "$release_gate_root/$stage-mode.paths" > "$release_gate_root/logs/$stage-inventory.diff" || result=1
+  printf '%s\n' "$result" > "$release_gate_root/$stage-source.exit" || return 1
+  printf '[release gate diagnostic] %s immutable source fence exit=%s\n' "$stage" "$result" >&2
+  return "$result"
+}
+
+# This is a test-payload result only. Even passing bodies and fences cannot
+# grant the release success marker or a zero exit used to admit live launch.
+release_gate_diagnostic_finish() {
+  local phase_status="$1" fence_status="$2" preflight_status=0 source_status=0
+  [[ "$release_gate_diagnostic" == 1 ]] || return 0
+  (( release_gate_active == 0 )) || return 1
+  release_gate_preflight_status || preflight_status=$?
+  release_gate_diagnostic_fence final || source_status=$?
+  printf '[release gate diagnostic] NOT RELEASE-QUALIFIED: preflights=%s bodies=%s phases-cleanup=%s release-fences=%s candidate-fence=%s\n' \
+    "$preflight_status" "$release_gate_body_result" "$phase_status" "$fence_status" "$source_status" >&2
+  return 2
+}
 
 release_gate_start() {
   local label="$1" function="$2" index pid deadline ack_fd
@@ -159,6 +285,7 @@ release_gate_wait_one() {
       fi
       printf '[release gate] joined %s (exit %s); log %s\n' "${release_gate_labels[index]}" "$status" "$release_gate_root/logs/${release_gate_labels[index]}.log"
       if (( status != 0 && release_gate_result == 0 )); then release_gate_result="$status"; fi
+      if [[ "${release_gate_labels[index]}" != diagnostic-preflights ]] && (( status != 0 && release_gate_body_result == 0 )); then release_gate_body_result="$status"; fi
       return 0
     fi
     for index in "${!release_gate_pids[@]}"; do
@@ -227,6 +354,10 @@ release_gate_jobs_exit() {
   else
     echo "release gate: not all child identities joined; private services retained for inspection" >&2
     (( status != 0 )) || status=1
+  fi
+  if [[ "${release_gate_diagnostic:-0}" == 1 ]] && (( status == 0 )); then
+    echo 'release gate diagnostic cannot grant a release-qualified zero exit' >&2
+    status=2
   fi
   printf '[release gate] retained private logs/state: %s\n' "$release_gate_root"
   exit "$status"

@@ -5,8 +5,6 @@ package main
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -18,23 +16,16 @@ func configureFinalSemanticFixtureDeploymentAnchors(t *testing.T, cfg *ResolvedC
 	if cfg == nil || cfg.Release == nil || source == nil || plan == nil {
 		t.Fatal("deployment anchor fixture context is incomplete")
 	}
-	lockData, err := os.ReadFile(filepath.Join("..", "deploy", "testnet", "release.lock.yml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	lock, err := decodeReleaseLockBytes(lockData)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := validateReleaseLockStatic(lock); err != nil {
-		t.Fatal(err)
-	}
+	lock := testReleaseLockFixture(t)
 	cfg.Release = lock
 	lockHash, err := canonicalHashHex(lock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan.ReleaseLockHash = lockHash
+	rebindValidatorEvidenceReleaseLockTest(t, plan, lock)
+	if plan.ReleaseLockHash != lockHash {
+		t.Fatal("complete source lock rebind differs from original fixture authority")
+	}
 	plan.PlanHash = ""
 	planHash, err := plan.hash()
 	if err != nil {

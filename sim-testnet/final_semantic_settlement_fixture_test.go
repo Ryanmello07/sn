@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"testing"
@@ -148,19 +149,42 @@ func finalSemanticFixtureClosedProofs(t *testing.T, validators []FinalValidatorI
 	t.Helper()
 	var proofs []FinalValidatorPathProofEvidence
 	for _, validator := range validators {
-		key := keys[validator.ValidatorID-1]
 		records := map[uint64]map[uint64]validatorpkg.AttemptRecord{}
 		var closures []FinalCollectedSettlementClosure
-		for _, cycle := range validator.Cycles {
-			var measurement validatorpkg.ReleaseMeasurementArtifact
-			if err := json.Unmarshal(artifacts[cycle.MeasurementArtifact.URI], &measurement); err != nil {
-				t.Fatal(err)
+		var next *validatorpkg.ReleaseMeasurementArtifact
+		for cycleIndex, cycle := range validator.Cycles {
+			measurement := next
+			if measurement == nil {
+				measurement = &validatorpkg.ReleaseMeasurementArtifact{}
+				if err := json.Unmarshal(artifacts[cycle.MeasurementArtifact.URI], measurement); err != nil {
+					t.Fatal(err)
+				}
+			}
+			next = nil
+			if cycleIndex+1 < len(validator.Cycles) {
+				next = &validatorpkg.ReleaseMeasurementArtifact{}
+				if err := json.Unmarshal(artifacts[validator.Cycles[cycleIndex+1].MeasurementArtifact.URI], next); err != nil {
+					t.Fatal(err)
+				}
 			}
 			epoch := measurement.SettlementEpoch
 			if epoch < 10 || epoch > 14 {
 				continue
 			}
-			closure := &validatorpkg.AttemptSettlementClosure{Schema: validatorpkg.AttemptSettlementClosureSchema, Epoch: epoch, Transitions: finalSemanticFixtureTerminalTransitions(t, &measurement, key)}
+			var transitions []*validatorpkg.AttemptSettlementTransition
+			if next != nil {
+				var err error
+				transitions, err = finalSemanticFixtureRetainedTransitions(measurement, next)
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if validator.ValidatorID == 0 || validator.ValidatorID > uint64(len(keys)) || len(keys[validator.ValidatorID-1]) != ed25519.PrivateKeySize {
+					t.Fatal("fixture terminal epoch without a successor requires its signing key")
+				}
+				transitions = finalSemanticFixtureTerminalTransitions(t, measurement, keys[validator.ValidatorID-1])
+			}
+			closure := &validatorpkg.AttemptSettlementClosure{Schema: validatorpkg.AttemptSettlementClosureSchema, Epoch: epoch, Transitions: transitions}
 			for _, transition := range closure.Transitions {
 				noID := transition.Identity.NoID
 				if records[noID] == nil {
@@ -189,4 +213,103 @@ func finalSemanticFixtureClosedProofs(t *testing.T, validators []FinalValidatorI
 		}
 	}
 	return proofs
+}
+
+// Reuses the exact transaction already sealed into the successor, rather than
+// signing and replaying every accepted epoch a second time during construction.
+// These are builder-owned decoded values, not a replacement for the production
+// closure verifier: every exported byte still goes through that verifier.
+func finalSemanticFixtureRetainedTransitions(measurement, successor *validatorpkg.ReleaseMeasurementArtifact) ([]*validatorpkg.AttemptSettlementTransition, error) {
+	if measurement == nil || successor == nil || measurement.SettlementEpoch < 9 || measurement.SettlementEpoch == ^uint64(0) || successor.SettlementEpoch != measurement.SettlementEpoch+1 || len(measurement.Inputs) == 0 || len(measurement.Inputs) != len(successor.Inputs) {
+		return nil, errors.New("fixture retained terminal epoch or participant census differs")
+	}
+	if measurement.DeploymentID != successor.DeploymentID || measurement.ChainID != successor.ChainID || measurement.GenesisHash != successor.GenesisHash || measurement.Netuid != successor.Netuid || measurement.ValidatorID != successor.ValidatorID || measurement.SelfUID != successor.SelfUID || measurement.Coordinator != successor.Coordinator || measurement.SettlementVault != successor.SettlementVault {
+		return nil, errors.New("fixture retained terminal validator domain differs")
+	}
+	epoch := measurement.SettlementEpoch
+	boundary := validatorpkg.AttemptBoundary{SettlementEpoch: epoch, EVMBlock: 100 + (epoch-9)*finalReleaseEpochBlocks - 1, EVMBlockHash: finalTestHex(byte(0xe0 + epoch))}
+	transitions := make([]*validatorpkg.AttemptSettlementTransition, len(measurement.Inputs))
+	for index, input := range measurement.Inputs {
+		next := successor.Inputs[index]
+		transition := next.Stats.SettlementTransition
+		if input.NoID == 0 || index > 0 && input.NoID <= measurement.Inputs[index-1].NoID || next.NoID != input.NoID || input.SettlementEpoch != epoch || next.SettlementEpoch != epoch+1 || input.Stats.AttemptCut == nil || next.Stats.AttemptCut == nil || transition == nil || transition.PreFold.AttemptCut == nil {
+			return nil, errors.New("fixture retained terminal operator or cut is missing or reordered")
+		}
+		if transition.Identity != input.Stats.AttemptCut.Identity || transition.Identity != next.Stats.AttemptCut.Identity || transition.FromBoundary != boundary || transition.ToEpoch != epoch+1 || transition.Identity.NoID != input.NoID || transition.Schema != finalAttemptSettlementSchema || len(transition.Signature) != ed25519.SignatureSize {
+			return nil, errors.New("fixture retained terminal transaction belongs to a different cut")
+		}
+		preFold := input.Stats
+		preFold.SettlementTransition = nil
+		cut := *input.Stats.AttemptCut
+		cut.Boundary = boundary
+		cut.Signature = transition.PreFold.AttemptCut.Signature
+		preFold.AttemptCut = &cut
+		if !finalJSONEqual(preFold, transition.PreFold) {
+			return nil, errors.New("fixture retained terminal transaction changed the measured statistics or signed records")
+		}
+		transitions[index] = transition
+	}
+	return transitions, nil
+}
+
+// A cached successor cannot substitute a different owner, epoch, operator,
+// measured statistic or signed record, and malformed retention never falls
+// back to generating replacement evidence.
+func TestFinalSemanticFixtureRetainedTransitionsRejectChangedSource(t *testing.T) {
+	first, successor, _ := finalSemanticFixtureClosureReusePair(t)
+	encoded, err := json.Marshal(successor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []string{"epoch", "validator", "genesis", "netuid", "uid", "deployment", "coordinator", "vault", "missing-operator", "reordered-operator", "missing-transition", "missing-cut", "transition-identity", "terminal-boundary", "next-epoch", "statistics", "record-root", "record-signature"} {
+		var changed validatorpkg.ReleaseMeasurementArtifact
+		if err := json.Unmarshal(encoded, &changed); err != nil {
+			t.Fatal(err)
+		}
+		switch invalid {
+		case "epoch":
+			changed.SettlementEpoch++
+		case "validator":
+			changed.ValidatorID++
+		case "genesis":
+			changed.GenesisHash = finalTestHex(99)
+		case "netuid":
+			changed.Netuid++
+		case "uid":
+			changed.SelfUID++
+		case "deployment":
+			changed.DeploymentID += "-foreign"
+		case "coordinator":
+			changed.Coordinator = finalTestHex(99)
+		case "vault":
+			changed.SettlementVault = finalTestHex(99)
+		case "missing-operator":
+			changed.Inputs = changed.Inputs[:1]
+		case "reordered-operator":
+			changed.Inputs[0], changed.Inputs[1] = changed.Inputs[1], changed.Inputs[0]
+		case "missing-transition":
+			changed.Inputs[0].Stats.SettlementTransition = nil
+		case "missing-cut":
+			changed.Inputs[0].Stats.SettlementTransition.PreFold.AttemptCut = nil
+		case "transition-identity":
+			changed.Inputs[0].Stats.SettlementTransition.Identity.NoID++
+		case "terminal-boundary":
+			changed.Inputs[0].Stats.SettlementTransition.FromBoundary.EVMBlock++
+		case "next-epoch":
+			changed.Inputs[0].Stats.SettlementTransition.ToEpoch++
+		case "statistics":
+			changed.Inputs[0].Stats.SettlementTransition.PreFold.Providers[0].Assignments++
+		case "record-root":
+			changed.Inputs[0].Stats.SettlementTransition.PreFold.AttemptCut.Root = finalTestHex(99)
+		case "record-signature":
+			changed.Inputs[0].Stats.SettlementTransition.PreFold.AttemptCut.Records[0].Signature[0] ^= 1
+		}
+		if _, err := finalSemanticFixtureRetainedTransitions(first, &changed); err == nil {
+			t.Fatalf("%s retained transaction was accepted", invalid)
+		}
+	}
+	transitions, err := finalSemanticFixtureRetainedTransitions(first, successor)
+	if err != nil || len(transitions) != 2 || transitions[0] != successor.Inputs[0].Stats.SettlementTransition || transitions[1] != successor.Inputs[1].Stats.SettlementTransition {
+		t.Fatalf("exact retained transaction was not reused: %v", err)
+	}
 }

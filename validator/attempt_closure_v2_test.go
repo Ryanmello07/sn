@@ -98,6 +98,7 @@ func TestAttemptSettlementV2DecodeRejectsCompetingAndNoncanonicalWire(t *testing
 // A late fold boundary exactly connects the previous complete record root and
 // quality census. Later native rotations do not become missing-settlement gaps.
 func TestAttemptSettlementV2ConsecutiveClosureLineageAndLaterNativeRotation(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementV2TestOperator(t, 9, 15, 1)
 	prior := sealAttemptSettlementV2Test(t, fixture)
 	nextFixture := attemptSettlementV2TestEmptySuccessor(t, fixture, prior.Transitions[0], 3)

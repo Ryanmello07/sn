@@ -55,10 +55,13 @@ type releaseSnapshotLoader func(context.Context) (*ReleaseSnapshot, error)
 type releaseSnapshotRetryWait func(context.Context, time.Duration) error
 
 type releaseOperatorRuntime struct {
-	measurement *ReleaseMeasurementContext
-	stats       *StatsEngine
-	engine      releaseTrailRunner
-	close       func() error
+	measurement   *ReleaseMeasurementContext
+	stats         *StatsEngine
+	engine        releaseTrailRunner
+	close         func() error
+	attemptUpload *releaseAttemptUploadV2
+	attemptSource *releaseAttemptUploadSourceV2
+	attemptLedger *AttemptLedger
 }
 
 type releaseTrailRunner interface {
@@ -72,9 +75,10 @@ func reportReleaseTrailEngineError(ctx context.Context, runner releaseTrailRunne
 }
 
 type releaseAttemptState struct {
-	stats  *StatsEngine
-	ledger *AttemptLedger
-	store  *ProofStore
+	stats        *StatsEngine
+	ledger       *AttemptLedger
+	store        *ProofStore
+	uploadSource *releaseAttemptUploadSourceV2
 }
 
 // Release clients consume provisioned keys only, with their original raw or
@@ -317,6 +321,12 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 		return nil, errors.Join(fmt.Errorf("no_id %d authentication: %w", op.NoID, err), releaseStageError("authentication API shutdown", closeErr))
 	}
 
+	upload, err := newReleaseAttemptUploadV2(ctx, op, cfg.EvidenceV2.Bounds.Cut, api.GetByJwt)
+	if err != nil {
+		closeErr := api.CloseAndWait(context.Background())
+		strategy.Close()
+		return nil, errors.Join(fmt.Errorf("no_id %d attempt upload: %w", op.NoID, err), releaseStageError("upload API shutdown", closeErr))
+	}
 	cancelled := atomic.Bool{}
 	clientSettings := connect.DefaultClientSettings()
 	clientSettings.ClientKeySeed = seed
@@ -330,11 +340,13 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 		if err := clientauth.WriteToken(op.ClientJWTFile, jwt); err != nil {
 			fmt.Printf("validator no_id %d JWT save failed: %v\n", op.NoID, err)
 			cancelled.Store(true)
+			upload.close()
 		}
 		clientOOB.SetByJwt(jwt)
 		platformTransport.SetAuth(&connect.ClientAuth{ByJwt: jwt, InstanceId: instanceID, AppVersion: RequireVersion()})
 	}))
 	logoutSub := api.AddAuthLogoutListener(clientauth.AuthLogoutListenerFunc(func() {
+		upload.close()
 		_ = clientauth.MarkRejected(op.ClientJWTFile, op.NetworkJWTFile)
 		cancelled.Store(true)
 	}))
@@ -343,6 +355,7 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 	var closeErr error
 	closeResources := func() error {
 		closeOnce.Do(func() {
+			upload.close()
 			refreshSub.Close()
 			logoutSub.Close()
 			closeErr = errors.Join(closeErr, releaseStageError("platform transport", platformTransport.CloseAndWait(context.Background())))
@@ -361,10 +374,20 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 		SeedAttemptInterval: seedAttemptInterval,
 		AttemptLedger:       ledger, AttemptBoundaryResolver: attemptResolver,
 	})
+	keyHistoryReader, err := NewHTTPClientKeyHistoryReader(op.APIURL, func() string {
+		if cancelled.Load() || ctx.Err() != nil {
+			return ""
+		}
+		return api.GetByJwt()
+	})
+	if err != nil {
+		return nil, errors.Join(err, closeResources())
+	}
 	measurement := &ReleaseMeasurementContext{
-		NoID:      op.NoID,
-		Stats:     stats,
-		Artifacts: artifactReader,
+		NoID:             op.NoID,
+		Stats:            stats,
+		Artifacts:        artifactReader,
+		ClientKeyHistory: keyHistoryReader,
 		ClientKey: func(id connect.Id) ([32]byte, bool, error) {
 			if cancelled.Load() {
 				return [32]byte{}, false, errors.New("operator authentication is no longer valid")
@@ -386,10 +409,13 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 		},
 	}
 	return &releaseOperatorRuntime{
-		measurement: measurement,
-		stats:       stats,
-		engine:      engine,
-		close:       newReleaseOperatorClose(stats, op.StateDir, closeResources),
+		measurement:   measurement,
+		attemptUpload: upload,
+		attemptSource: attemptState.uploadSource,
+		attemptLedger: ledger,
+		stats:         stats,
+		engine:        engine,
+		close:         newReleaseOperatorClose(stats, op.StateDir, closeResources),
 	}, nil
 }
 
@@ -435,6 +461,12 @@ func typesHash(value [32]byte) [32]byte { return value }
 // RunRelease starts the production validator modules under a caller-owned
 // lifecycle. CLIs and integration harnesses share this exact entry point.
 func RunRelease(ctx context.Context, configPath string) (returnErr error) {
+	if ctx == nil {
+		return errors.New("release production lifecycle context is unavailable")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	cfg, err := LoadReleaseConfig(configPath)
 	if err != nil {
 		return err
@@ -474,63 +506,77 @@ func RunRelease(ctx context.Context, configPath string) (returnErr error) {
 	if _, err := authenticateReleaseValidatorStakeContext(ctx, native, cfg, hotkey.PublicKey(), validatorUID); err != nil {
 		return err
 	}
-	settlementParticipants := make([]AttemptSettlementParticipant, len(cfg.Operators))
-	for index, operator := range cfg.Operators {
-		settlementParticipants[index] = AttemptSettlementParticipant{NoID: operator.NoID, StateDir: operator.StateDir}
+	activationInputs, err := loadReleaseEvidenceV2ActivationInputs(ctx, cfg, chain, native, hotkey.PublicKey())
+	if err != nil {
+		return fmt.Errorf("reserved upload activation startup: %w", err)
 	}
-	if err := RecoverAttemptSettlementEpoch(cfg.StateDir, settlementParticipants); err != nil {
-		return fmt.Errorf("recover validator settlement transaction: %w", err)
+	if len(cfg.Operators) < 2 {
+		return errors.New("release V2 requires two configured public operator origins")
 	}
-	attemptStates := make(map[uint64]*releaseAttemptState, len(cfg.Operators))
+	origins := [2]string{cfg.Operators[0].APIURL, cfg.Operators[1].APIURL}
+	if _, err := newReleaseEvidenceV2StartupReaders(origins, cfg.EvidenceV2.Bounds.Cut); err != nil {
+		return err
+	}
+	serverKeys, err := readReleaseServerKeysV2(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("release V2 server-key startup: %w", err)
+	}
+	disk, err := openReleaseEvidenceV2DiskState(ctx, cfg, activationInputs, serverKeys)
+	if err != nil {
+		return fmt.Errorf("release V2 disk startup: %w", err)
+	}
 	defer func() {
 		cancel()
-		returnErr = errors.Join(returnErr, closeReleaseAttemptStates(attemptStates))
+		returnErr = errors.Join(returnErr, disk.close())
 	}()
-	for index, operator := range cfg.Operators {
-		state, err := loadReleaseAttemptState(cfg, operator, validatorUID)
-		if err != nil {
-			return err
-		}
-		attemptStates[operator.NoID] = state
-		settlementParticipants[index].Stats = state.stats
-	}
-	advanceSettlement := func(ctx context.Context, snapshot *ReleaseSnapshot) error {
-		return advanceReleaseSettlementSnapshot(ctx, cfg.StateDir, snapshot, settlementParticipants, func(ctx context.Context, snapshot *ReleaseSnapshot) (AttemptBoundary, error) {
-			return releasePriorSettlementBoundary(ctx, chain, snapshot)
-		})
-	}
-	if err := advanceSettlement(ctx, snapshot); err != nil {
-		return fmt.Errorf("advance validator settlement transaction: %w", err)
+	runtimeV2, err := newReleaseRuntimeV2(ctx, cfg, chain, native, hotkey, activationInputs, serverKeys, origins, disk)
+	if err != nil {
+		return fmt.Errorf("release V2 semantic startup: %w", err)
 	}
 	attemptBoundaryResolver := newReleaseAttemptBoundaryResolver(chain, cfg)
+	runtimeV2.publishEpoch = func(epoch uint64) {
+		attemptBoundaryResolver.invalidateLatest()
+		settlementEpoch.Store(epoch)
+	}
 
 	var runtimes []*releaseOperatorRuntime
-	for _, op := range cfg.Operators {
-		runtime, err := startReleaseOperator(ctx, cfg, op, settlementEpoch.Load, attemptBoundaryResolver.Resolve, attemptStates[op.NoID])
-		if err != nil {
+	workersOwnResources := false
+	defer func() {
+		if !workersOwnResources {
 			cancel()
-			for _, started := range runtimes {
-				err = errors.Join(err, started.close())
+			for _, runtime := range runtimes {
+				returnErr = errors.Join(returnErr, runtime.close())
 			}
+		}
+	}()
+	for _, op := range cfg.Operators {
+		runtime, err := startReleaseOperator(ctx, cfg, op, settlementEpoch.Load, attemptBoundaryResolver.Resolve, disk.states[op.NoID])
+		if err != nil {
 			return err
 		}
 		runtimes = append(runtimes, runtime)
 	}
+	if err := runtimeV2.attach(runtimes); err != nil {
+		return err
+	}
+	measurements := make([]*ReleaseMeasurementContext, len(runtimes))
+	for index, runtime := range runtimes {
+		measurements[index] = runtime.measurement
+	}
+	steerer, err := newReleaseSteererV2(cfg, chain, native, hotkey, measurements, runtimeV2)
+	if err != nil {
+		return fmt.Errorf("release V2 native startup: %w", err)
+	}
+	if err := runtimeV2.advance(ctx, snapshot); err != nil {
+		return fmt.Errorf("release V2 initial terminal publication: %w", err)
+	}
+	workersOwnResources = true
 	return runReleaseOperatorWorkers(ctx, cancel, cfg, runtimes, releaseRuntimeOperations{
 		refresh: func(ctx context.Context) error {
-			return runReleaseSettlementRefresh(ctx, time.Duration(cfg.PollSeconds)*time.Second, chain.ReleaseSnapshotContext, func(ctx context.Context, snapshot *ReleaseSnapshot) error {
-				return advanceReleaseSettlementSnapshotWithMode(ctx, cfg.StateDir, snapshot, settlementParticipants, func(ctx context.Context, snapshot *ReleaseSnapshot) (AttemptBoundary, error) {
-					return releasePriorSettlementBoundary(ctx, chain, snapshot)
-				}, false)
-			}, func(snapshot *ReleaseSnapshot) {
-				if settlementEpoch.Load() < snapshot.Epoch.Uint64() {
-					attemptBoundaryResolver.invalidateLatest()
-					settlementEpoch.Store(snapshot.Epoch.Uint64())
-				}
-			}, waitReleaseSnapshotRetry)
+			return runReleaseSettlementRefresh(ctx, time.Duration(cfg.PollSeconds)*time.Second, chain.ReleaseSnapshotContext, runtimeV2.advance, func(*ReleaseSnapshot) {}, waitReleaseSnapshotRetry)
 		},
-		newSteerer: func(measurements []*ReleaseMeasurementContext) (releaseSteererRunner, error) {
-			return NewReleaseSteerer(cfg, chain, native, hotkey, measurements)
+		newSteerer: func([]*ReleaseMeasurementContext) (releaseSteererRunner, error) {
+			return steerer, nil
 		},
 		running: func() {
 			fmt.Printf("validator release 1.0 running: validator=%d netuid=%d hotkey=%s operators=%d\n", cfg.ValidatorID, cfg.Netuid, hotkey.Address(), len(runtimes))

@@ -30,6 +30,10 @@ const (
 // unsigned envelope already includes the empty JSON string delimiters.
 const releaseMeasurementEnvelopeV2SigningFieldBytes = uint64(len("sha256:") + 64 + len("0x") + 128)
 
+// Compact envelopes retain the existing legacy intent-reader wire ceiling.
+// The larger replay control owner is not permission for a giant flat envelope.
+const ReleaseMeasurementEnvelopeV2MaximumBytes = uint64(1024 * 1024)
+
 var (
 	errReleaseMeasurementEnvelopeV2ControlBound = errors.New("compact measurement envelope exceeds its control bound")
 	errReleaseMeasurementEnvelopeV2WireBound    = errors.New("compact measurement envelope exceeds its wire bound")
@@ -155,7 +159,7 @@ func admitReleaseMeasurementEnvelopeV2Storage(ctx context.Context, envelope *Rel
 	if reserved > remaining {
 		return errReleaseMeasurementEnvelopeV2ControlBound
 	}
-	if _, err := releaseMeasurementEnvelopeV2WireSize(ctx, envelope, maxControlBytes, reserved); err != nil {
+	if _, err := releaseMeasurementEnvelopeV2WireSize(ctx, envelope, min(maxControlBytes, ReleaseMeasurementEnvelopeV2MaximumBytes), reserved); err != nil {
 		return err
 	}
 	return ctx.Err()
@@ -310,7 +314,7 @@ func SealReleaseMeasurementEnvelopeV2(ctx context.Context, measurement []byte, v
 // verifier below binds the expected signer and fully replays referenced bytes;
 // historical eligibility remains an independently authenticated caller input.
 func DecodeReleaseMeasurementEnvelopeV2(ctx context.Context, encoded []byte, maxControlBytes uint64) (*ReleaseMeasurementEnvelope, error) {
-	if ctx == nil || maxControlBytes == 0 || maxControlBytes > releaseMeasurementEnvelopeMaxArtifactSize || len(encoded) == 0 || uint64(len(encoded)) > maxControlBytes {
+	if ctx == nil || maxControlBytes == 0 || maxControlBytes > releaseMeasurementEnvelopeMaxArtifactSize || len(encoded) == 0 || uint64(len(encoded)) > min(maxControlBytes, ReleaseMeasurementEnvelopeV2MaximumBytes) {
 		return nil, errors.New("compact measurement envelope exceeds its wire bound")
 	}
 	if err := ctx.Err(); err != nil {

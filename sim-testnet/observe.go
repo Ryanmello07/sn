@@ -432,7 +432,35 @@ func (self *liveScenarioProbe) fetchReplicatedCampaignEnvelope(ctx context.Conte
 // Keep verification accounting local to the request; the verifier always
 // authenticates signed content and never grants trust to declared hashes.
 func (self *liveScenarioProbe) fetchReplicatedCampaignEnvelopeWithVerify(ctx context.Context, public *PublicDeploymentManifest, hash, kind, runID, ownerSigner string, maximumBytes int64, verify func(*ReleaseEvidenceEnvelope) error) (*ReleaseEvidenceEnvelope, error) {
-	if public == nil || !validSHA256ContentHash(hash) || kind == "" || runID == "" || !common.IsHexAddress(ownerSigner) || maximumBytes <= 0 || maximumBytes > maximumCampaignEvidenceEnvelopeBytes {
+	return self.fetchReplicatedCampaignEnvelopeWithLimitsV2(ctx, public, hash, kind, runID, ownerSigner, maximumBytes, defaultCampaignEvidenceLimits(), verify)
+}
+
+// Only callers with independently configured typed metadata authority can
+// exceed the legacy envelope bound; exact per-entry sizes still govern reads.
+func (self *liveScenarioProbe) fetchReplicatedCampaignEnvelopeWithLimitsV2(ctx context.Context, public *PublicDeploymentManifest, hash, kind, runID, ownerSigner string, maximumBytes int64, limits campaignEvidenceLimits, verify func(*ReleaseEvidenceEnvelope) error) (*ReleaseEvidenceEnvelope, error) {
+	if verify == nil {
+		return nil, errors.New("campaign evidence fetch identity is invalid")
+	}
+	return self.fetchReplicatedCampaignEnvelopeWithDecodeV2(ctx, public, hash, kind, runID, ownerSigner, maximumBytes, limits, func(encoded []byte) (*ReleaseEvidenceEnvelope, error) {
+		var envelope ReleaseEvidenceEnvelope
+		if err := decodeStrictJSONBytes(encoded, &envelope); err != nil {
+			return nil, err
+		}
+		if err := verify(&envelope); err != nil {
+			return nil, err
+		}
+		return &envelope, nil
+	})
+}
+
+// Every decoder authenticates this invocation's owned first wire. The same
+// independent origin reads, exact byte equality, identity and Close owner
+// serve both the legacy decoder and the typed canonical file admission.
+func (self *liveScenarioProbe) fetchReplicatedCampaignEnvelopeWithDecodeV2(ctx context.Context, public *PublicDeploymentManifest, hash, kind, runID, ownerSigner string, maximumBytes int64, limits campaignEvidenceLimits, decode func([]byte) (*ReleaseEvidenceEnvelope, error)) (*ReleaseEvidenceEnvelope, error) {
+	if err := limits.validate(); err != nil {
+		return nil, err
+	}
+	if public == nil || !validSHA256ContentHash(hash) || kind == "" || runID == "" || !common.IsHexAddress(ownerSigner) || decode == nil || maximumBytes <= 0 || uint64(maximumBytes) > limits.maximumEnvelopeBytes() {
 		return nil, errors.New("campaign evidence fetch identity is invalid")
 	}
 	matchesIdentity := func(envelope *ReleaseEvidenceEnvelope) bool {
@@ -457,12 +485,12 @@ func (self *liveScenarioProbe) fetchReplicatedCampaignEnvelopeWithVerify(ctx con
 			}
 			continue
 		}
-		var envelope ReleaseEvidenceEnvelope
-		if decodeStrictJSONBytes(encoded, &envelope) != nil || verify(&envelope) != nil || !matchesIdentity(&envelope) {
+		envelope, err := decode(encoded)
+		if err != nil || envelope == nil || !matchesIdentity(envelope) {
 			return nil, fmt.Errorf("operator %d returned invalid campaign evidence %s", operator.NoID, hash)
 		}
 		if first == nil {
-			copyEnvelope := envelope
+			copyEnvelope := *envelope
 			first = &copyEnvelope
 			firstBytes = append([]byte(nil), encoded...)
 			continue
@@ -692,6 +720,10 @@ func (self *liveScenarioProbe) fetchReplicatedFinalSemanticSupplement(ctx contex
 // its deterministic file census, every all-operator file replica, and the
 // publication ordering which makes the marker the final visible commit.
 func (self *liveScenarioProbe) authenticateReplicatedFinalSemanticSupplement(ctx context.Context, public *PublicDeploymentManifest, ownerSigner, hash string, complete, manifest *ReleaseEvidenceEnvelope, result *ScenarioResult, captureHash, collectedHash string, remainingBytes uint64) (*ReleaseEvidenceEnvelope, map[string][]byte, error) {
+	limits, err := campaignEvidenceLimitsForConfig(self.cfg)
+	if err != nil {
+		return nil, nil, err
+	}
 	envelope, err := self.fetchReplicatedCampaignEnvelope(ctx, public, hash, finalSemanticSupplementKind, result.RunID, ownerSigner, maximumCampaignEvidenceEnvelopeBytes)
 	if err != nil {
 		return nil, nil, err
@@ -700,7 +732,7 @@ func (self *liveScenarioProbe) authenticateReplicatedFinalSemanticSupplement(ctx
 	if err := decodeStrictJSONBytes(envelope.Payload, &payload); err != nil {
 		return nil, nil, fmt.Errorf("decode semantic supplement: %w", err)
 	}
-	if err := validateFinalSemanticSupplementPayload(&payload, result, complete.ContentHash, manifest.ContentHash, captureHash, collectedHash); err != nil {
+	if err := validateFinalSemanticSupplementPayloadWithLimitsV2(&payload, result, complete.ContentHash, manifest.ContentHash, captureHash, collectedHash, limits); err != nil {
 		return nil, nil, err
 	}
 	var declaredBytes uint64
@@ -713,11 +745,11 @@ func (self *liveScenarioProbe) authenticateReplicatedFinalSemanticSupplement(ctx
 	carried := make(map[string][]byte, len(payload.Files))
 	fileEnvelopes := make([]*ReleaseEvidenceEnvelope, 0, len(payload.Files))
 	for _, entry := range payload.Files {
-		limit, err := maximumCampaignFileEnvelopeBytes(entry.Size)
+		limit, err := limits.fileEnvelopeBytes(entry.Path, entry.Size)
 		if err != nil {
 			return nil, nil, err
 		}
-		fileEnvelope, err := self.fetchReplicatedCampaignEnvelope(ctx, public, entry.EnvelopeHash, finalSemanticSupplementFileKind, result.RunID, ownerSigner, limit)
+		fileEnvelope, err := self.fetchReplicatedCampaignEnvelopeWithLimitsV2(ctx, public, entry.EnvelopeHash, finalSemanticSupplementFileKind, result.RunID, ownerSigner, limit, limits, func(envelope *ReleaseEvidenceEnvelope) error { return verifyEvidence(envelope, nil) })
 		if err != nil {
 			return nil, nil, fmt.Errorf("semantic supplement file %q: %w", entry.Path, err)
 		}
@@ -839,6 +871,12 @@ func validateCampaignEvidenceSemantics(cfg *ResolvedConfig, ownerSigner string, 
 	if err := validateCampaignEvidenceJSONSchemas(files); err != nil {
 		return err
 	}
+	return validateCampaignEvidenceControlSemantics(cfg, ownerSigner, files, completion, bundle)
+}
+
+// Raw schema/census checks are separate so compact public readback can discard
+// each tape before checking this bounded set of original campaign controls.
+func validateCampaignEvidenceControlSemantics(cfg *ResolvedConfig, ownerSigner string, files map[string][]byte, completion scenarioCompletePayload, bundle *ScenarioEvidenceBundle) error {
 	if bundle == nil || bundle.Result == nil || bundle.Observation == nil || bundle.Analysis == nil {
 		return errors.New("campaign evidence bundle is incomplete")
 	}
@@ -925,6 +963,10 @@ type authenticatedCampaignSemantic struct {
 }
 
 func authenticatePriorPhaseArtifacts(public *PublicDeploymentManifest, semantic *FinalSemanticEvidence, allFiles map[string][]byte) (*ReleaseEvidenceEnvelope, *scenarioCompletePayload, *ReleaseEvidenceEnvelope, error) {
+	return authenticatePriorPhaseArtifactsWithLimits(public, semantic, allFiles, defaultCampaignEvidenceLimits())
+}
+
+func authenticatePriorPhaseArtifactsWithLimits(public *PublicDeploymentManifest, semantic *FinalSemanticEvidence, allFiles map[string][]byte, limits campaignEvidenceLimits) (*ReleaseEvidenceEnvelope, *scenarioCompletePayload, *ReleaseEvidenceEnvelope, error) {
 	if semantic == nil || semantic.PriorPhase == nil {
 		return nil, nil, nil, nil
 	}
@@ -946,11 +988,11 @@ func authenticatePriorPhaseArtifacts(public *PublicDeploymentManifest, semantic 
 	if err := decodeStrictJSONBytes(manifestBytes, &manifestEnvelope); err != nil || verifyEvidence(&manifestEnvelope, nil) != nil || manifestEnvelope.Kind != campaignEvidenceManifestKind || manifestEnvelope.RunID != prior.RunID || !strings.EqualFold(manifestEnvelope.ContentHash, prior.EvidenceManifestEnvelopeHash) || manifestEnvelope.DeploymentID != public.DeploymentID || manifestEnvelope.ChainID != public.ChainID || manifestEnvelope.Netuid != public.Netuid || !strings.EqualFold(manifestEnvelope.GenesisHash, public.GenesisHash) || manifestEnvelope.Signer != completion.Signer || !strings.EqualFold(manifestEnvelope.ContentHash, payload.EvidenceManifestHash) {
 		return nil, nil, nil, stateMismatchError(err, "prior release evidence manifest envelope is invalid")
 	}
-	manifest, err := decodeCampaignEvidenceManifest(&manifestEnvelope)
+	manifest, err := decodeCampaignEvidenceManifestWithLimits(&manifestEnvelope, limits)
 	if err != nil || !strings.EqualFold(manifest.ResultHash, prior.ResultHash) || !strings.EqualFold(manifest.BundlePayloadHash, payload.BundlePayloadHash) {
 		return nil, nil, nil, stateMismatchError(err, "prior release evidence manifest does not bind its completion")
 	}
-	files, err := campaignEvidenceManifestFiles(manifest.Files)
+	files, err := campaignEvidenceManifestFilesWithLimits(manifest.Files, limits)
 	if err != nil || !stringMapsEqual(files, payload.Files) {
 		return nil, nil, nil, stateMismatchError(err, "prior release evidence manifest files do not match its completion")
 	}
@@ -1076,7 +1118,11 @@ func (self *liveScenarioProbe) verifyCampaignFinalSemanticEvidence(ctx context.C
 	if !bytes.Equal(semanticFiles[finalSemanticMarkdownFilename], markdown) {
 		return nil, errors.New("authenticated FINAL.md does not match the sealed final semantic evidence")
 	}
-	priorCompletion, priorPayload, priorManifest, err := authenticatePriorPhaseArtifacts(public, &semantic, allFiles)
+	limits, err := campaignEvidenceLimitsForConfig(self.cfg)
+	if err != nil {
+		return nil, err
+	}
+	priorCompletion, priorPayload, priorManifest, err := authenticatePriorPhaseArtifactsWithLimits(public, &semantic, allFiles, limits)
 	if err != nil {
 		return nil, err
 	}
@@ -1144,17 +1190,24 @@ func (self *liveScenarioProbe) verifyPublicCampaignEvidence(ctx context.Context,
 	if complete == nil || bundle == nil || bundle.Result == nil || !validSHA256ContentHash(completion.EvidenceManifestHash) {
 		return nil, errors.New("scenario completion has no campaign evidence manifest")
 	}
-	manifestEnvelope, err := self.fetchReplicatedCampaignEnvelope(ctx, public, completion.EvidenceManifestHash, campaignEvidenceManifestKind, complete.RunID, ownerSigner, maximumCampaignEvidenceEnvelopeBytes)
+	limits, err := campaignEvidenceLimitsForConfig(self.cfg)
 	if err != nil {
 		return nil, err
 	}
-	manifest, err := decodeCampaignEvidenceManifest(manifestEnvelope)
+	manifestEnvelope, err := self.fetchReplicatedCampaignEnvelopeWithLimitsV2(ctx, public, completion.EvidenceManifestHash, campaignEvidenceManifestKind, complete.RunID, ownerSigner, int64(limits.controlEnvelopeBytes(campaignEvidenceManifestKind)), limits, func(envelope *ReleaseEvidenceEnvelope) error { return verifyEvidence(envelope, nil) })
+	if err != nil {
+		return nil, err
+	}
+	manifest, err := decodeCampaignEvidenceManifestWithLimits(manifestEnvelope, limits)
 	if err != nil || !strings.EqualFold(manifest.ResultHash, completion.ResultHash) || !strings.EqualFold(manifest.BundlePayloadHash, completion.BundlePayloadHash) {
 		return nil, stateMismatchError(err, "campaign evidence manifest does not bind the signed completion")
 	}
-	manifestFiles, err := campaignEvidenceManifestFiles(manifest.Files)
+	manifestFiles, err := campaignEvidenceManifestFilesWithLimits(manifest.Files, limits)
 	if err != nil || !stringMapsEqual(manifestFiles, completion.Files) {
 		return nil, stateMismatchError(err, "campaign evidence manifest files do not match the signed completion")
+	}
+	if finalUsesEvidenceV2(self.cfg) {
+		return nil, self.verifyPublicCampaignCaptureV2(ctx, public, ownerSigner, complete, completion, bundle, manifest)
 	}
 	files := make(map[string][]byte, len(manifest.Files))
 	referencedFiles := make(map[string][]byte, len(manifest.References))
@@ -1193,15 +1246,15 @@ func (self *liveScenarioProbe) verifyPublicCampaignEvidence(ctx context.Context,
 	for _, raw := range referencedFiles {
 		aggregate += uint64(len(raw))
 	}
-	if aggregate > maximumCampaignEvidenceAggregateBytes {
-		return nil, fmt.Errorf("campaign evidence graph exceeds %d aggregate bytes", maximumCampaignEvidenceAggregateBytes)
+	if aggregate > limits.maximumBytes {
+		return nil, fmt.Errorf("campaign evidence graph exceeds %d aggregate bytes", limits.maximumBytes)
 	}
 	sort.Strings(fileNames)
 	for _, name := range fileNames {
-		if err := mergeCampaignArtifactSource(references, edges, name, files[name]); err != nil {
+		if err := mergeCampaignArtifactSourceWithLimits(references, edges, name, files[name], limits); err != nil {
 			return nil, err
 		}
-		if err := validateCampaignArtifactObjectCount(len(files), references); err != nil {
+		if err := validateCampaignArtifactObjectCountWithLimits(manifestFiles, references, limits); err != nil {
 			return nil, err
 		}
 	}
@@ -1243,8 +1296,8 @@ func (self *liveScenarioProbe) verifyPublicCampaignEvidence(ctx context.Context,
 			if err := validateCampaignArtifactOrigin(name, allowedOrigins); err != nil {
 				return nil, err
 			}
-			if reference.Size > maximumCampaignEvidenceAggregateBytes-aggregate {
-				return nil, fmt.Errorf("campaign evidence graph exceeds %d aggregate bytes", maximumCampaignEvidenceAggregateBytes)
+			if reference.Size > limits.maximumBytes-aggregate {
+				return nil, fmt.Errorf("campaign evidence graph exceeds %d aggregate bytes", limits.maximumBytes)
 			}
 			var err error
 			raw, _, err = self.get(ctx, name, int64(reference.Size))
@@ -1254,30 +1307,30 @@ func (self *liveScenarioProbe) verifyPublicCampaignEvidence(ctx context.Context,
 			httpsFiles[name] = raw
 			aggregate += uint64(len(raw))
 		}
-		if err := mergeCampaignArtifactSource(references, edges, name, raw); err != nil {
+		if err := mergeCampaignArtifactSourceWithLimits(references, edges, name, raw, limits); err != nil {
 			return nil, err
 		}
-		if err := validateCampaignArtifactObjectCount(len(files), references); err != nil {
+		if err := validateCampaignArtifactObjectCountWithLimits(manifestFiles, references, limits); err != nil {
 			return nil, err
 		}
 	}
 	if err := validateCampaignArtifactGraph(edges); err != nil {
 		return nil, err
 	}
-	manifestReferences, err := campaignEvidenceEntryFiles(manifest.References)
+	manifestReferences, err := campaignEvidenceEntryFilesWithLimits(manifest.References, limits)
 	if err != nil || !stringMapsEqual(manifestReferences, expectedReferences) {
 		return nil, stateMismatchError(err, "campaign evidence manifest external references do not match its raw locators")
 	}
-	_, semanticFiles, err := self.fetchReplicatedFinalSemanticSupplement(ctx, public, ownerSigner, complete, manifestEnvelope, bundle, files, maximumCampaignEvidenceAggregateBytes-aggregate)
+	_, semanticFiles, err := self.fetchReplicatedFinalSemanticSupplement(ctx, public, ownerSigner, complete, manifestEnvelope, bundle, files, limits.maximumBytes-aggregate)
 	if err != nil {
 		return nil, err
 	}
-	if len(files)+len(references)+len(semanticFiles) > maximumCampaignEvidenceObjects {
-		return nil, fmt.Errorf("campaign evidence graph exceeds %d objects", maximumCampaignEvidenceObjects)
+	if uint64(len(files))+uint64(len(references))+uint64(len(semanticFiles)) > limits.maximumObjects {
+		return nil, fmt.Errorf("campaign evidence graph exceeds %d objects", limits.maximumObjects)
 	}
 	for _, raw := range semanticFiles {
-		if uint64(len(raw)) > maximumCampaignEvidenceAggregateBytes-aggregate {
-			return nil, fmt.Errorf("campaign evidence graph exceeds %d aggregate bytes", maximumCampaignEvidenceAggregateBytes)
+		if uint64(len(raw)) > limits.maximumBytes-aggregate {
+			return nil, fmt.Errorf("campaign evidence graph exceeds %d aggregate bytes", limits.maximumBytes)
 		}
 		aggregate += uint64(len(raw))
 	}
@@ -1477,6 +1530,14 @@ func (self *liveScenarioProbe) fetchAuthenticatedScenarioCampaign(ctx context.Co
 	if requestedPhase != "" && requestedPhase != "release-1.0" && requestedPhase != "production-soak" {
 		return nil, fmt.Errorf("requested public campaign phase %q is invalid", requestedPhase)
 	}
+	metadataLimits, err := campaignEvidenceLimitsForConfig(self.cfg)
+	if err != nil {
+		return nil, err
+	}
+	completionPayloadLimit := uint64(maximumCampaignEvidenceEnvelopeBytes)
+	if metadataLimits.metadata != nil {
+		completionPayloadLimit = metadataLimits.metadata.completionBytes
+	}
 	_, expected := inspectPublicIdentityBytes(self.cfg, public.Identities)
 	if len(expected) != len(public.Operators) {
 		return nil, errors.New("public scenario evidence signer directory is invalid")
@@ -1550,7 +1611,7 @@ func (self *liveScenarioProbe) fetchAuthenticatedScenarioCampaign(ctx context.Co
 		}
 		for _, hash := range completionHashes {
 			evidenceURL := strings.TrimSuffix(operator.APIURL, "/") + "/sn/evidence?hash=" + hash
-			encoded, _, fetchErr := self.get(ctx, evidenceURL, 64*1024*1024)
+			encoded, _, fetchErr := self.get(ctx, evidenceURL, int64(metadataLimits.controlEnvelopeBytes("scenario-complete-commit")))
 			if fetchErr != nil {
 				continue
 			}
@@ -1563,7 +1624,7 @@ func (self *liveScenarioProbe) fetchAuthenticatedScenarioCampaign(ctx context.Co
 				continue
 			}
 			var payload scenarioCompletePayload
-			if decodeStrictJSONBytes(envelope.Payload, &payload) != nil || !validCanonicalHashHex(payload.ResultHash) || !validSHA256ContentHash(payload.BundlePayloadHash) || !validSHA256ContentHash(payload.EvidenceManifestHash) || len(payload.Files) == 0 {
+			if uint64(len(envelope.Payload)) > completionPayloadLimit || decodeStrictJSONBytes(envelope.Payload, &payload) != nil || !validCanonicalHashHex(payload.ResultHash) || !validSHA256ContentHash(payload.BundlePayloadHash) || !validSHA256ContentHash(payload.EvidenceManifestHash) || len(payload.Files) == 0 || uint64(len(payload.Files)) > metadataLimits.maximumObjects {
 				continue
 			}
 			completionKey := bytesSHA256(operatorEnvelope.Payload)
@@ -2144,18 +2205,10 @@ func readDeploymentReferenceWithTransport(ctx context.Context, source, profile s
 		if err != nil {
 			return nil, err
 		}
-		defer resp.Body.Close()
 		if resp.StatusCode/100 != 2 {
-			return nil, fmt.Errorf("manifest HTTP %d", resp.StatusCode)
+			return nil, errors.Join(fmt.Errorf("manifest HTTP %d", resp.StatusCode), resp.Body.Close(), ctx.Err())
 		}
-		b, err := io.ReadAll(io.LimitReader(resp.Body, (16*1024*1024)+1))
-		if err != nil {
-			return nil, err
-		}
-		if len(b) > 16*1024*1024 {
-			return nil, errors.New("manifest exceeds 16 MiB")
-		}
-		return b, nil
+		return readEvidenceHttpBody(ctx, resp.Body, 16*1024*1024)
 	}
 	return os.ReadFile(source)
 }

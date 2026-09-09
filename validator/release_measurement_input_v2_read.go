@@ -69,6 +69,37 @@ func releaseMeasurementInputV2OnlyMissing(err error) bool {
 	return err == os.ErrNotExist || err == unix.ENOENT
 }
 
+// Only the reader's completed initial-absence witness authorizes a new
+// publication. Outer cancellation or another joined failure revokes it.
+func releaseMeasurementInputV2InitialAbsence(err error) bool {
+	if !errors.Is(err, errReleaseMeasurementInputV2InitiallyMissing) || !errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	var onlyAbsence func(error) bool
+	onlyAbsence = func(cause error) bool {
+		if cause == errReleaseMeasurementInputV2InitiallyMissing {
+			return true
+		}
+		if joined, ok := cause.(interface{ Unwrap() []error }); ok {
+			children := joined.Unwrap()
+			if len(children) == 0 {
+				return false
+			}
+			for _, child := range children {
+				if !onlyAbsence(child) {
+					return false
+				}
+			}
+			return true
+		}
+		if wrapped, ok := cause.(interface{ Unwrap() error }); ok {
+			return onlyAbsence(wrapped.Unwrap())
+		}
+		return releaseMeasurementInputV2OnlyMissing(cause)
+	}
+	return onlyAbsence(err)
+}
+
 // One operation retains the selected parent through read, admission, Sync and
 // the real Stats callback. Its witness is updated only by owned publication.
 type releaseMeasurementInputV2Owner struct {

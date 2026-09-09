@@ -32,6 +32,10 @@ import (
 // SubmitOptions tune SubmitWeightsCRv4. The zero value is a working default
 // for a plain (single-mechanism) subnet on a 12s-block chain.
 type SubmitOptions struct {
+	// SourceHash selects the atomic validator source-commitment path. The
+	// hash commits to pre-Prepared measurement bytes, never an envelope that
+	// already contains this transaction's own hash. Zero preserves legacy CRv4.
+	SourceHash [32]byte
 	// Mecid selects commit_timelocked_mechanism_weights for a sub-mechanism.
 	// nil uses commit_timelocked_weights (MechId::MAIN == 0).
 	Mecid *uint8
@@ -82,32 +86,36 @@ const PreparedSubmissionSchema = "urnetwork-crv4-prepared-submission-v1"
 // callers must persist this object with mode 0600 and must not publish it
 // before the reveal round.
 type PreparedSubmission struct {
-	Schema              string   `json:"schema"`
-	Netuid              uint16   `json:"netuid"`
-	Mecid               *uint8   `json:"mecid,omitempty"`
-	HotkeyHex           string   `json:"hotkey_hex"`
-	VersionKey          uint64   `json:"version_key"`
-	CommitRevealVersion uint16   `json:"commit_reveal_version"`
-	AccountNonce        uint32   `json:"account_nonce"`
-	PreparedAtBlock     uint64   `json:"prepared_at_block"`
-	PreparedAtBlockHash string   `json:"prepared_at_block_hash"`
-	SubnetEpoch         uint64   `json:"subnet_epoch"`
-	RevealRound         uint64   `json:"reveal_round"`
-	RevealBlock         uint64   `json:"reveal_block"`
-	UIDs                []uint16 `json:"uids"`
-	Values              []uint16 `json:"values"`
-	PayloadHex          string   `json:"payload_hex"`
-	CiphertextHex       string   `json:"ciphertext_hex"`
-	CiphertextSHA256    string   `json:"ciphertext_sha256"`
-	ExtrinsicHex        string   `json:"extrinsic_hex"`
-	ExtrinsicHash       string   `json:"extrinsic_hash"`
+	Schema              string                    `json:"schema"`
+	Netuid              uint16                    `json:"netuid"`
+	Mecid               *uint8                    `json:"mecid,omitempty"`
+	HotkeyHex           string                    `json:"hotkey_hex"`
+	VersionKey          uint64                    `json:"version_key"`
+	CommitRevealVersion uint16                    `json:"commit_reveal_version"`
+	AccountNonce        uint32                    `json:"account_nonce"`
+	PreparedAtBlock     uint64                    `json:"prepared_at_block"`
+	PreparedAtBlockHash string                    `json:"prepared_at_block_hash"`
+	SubnetEpoch         uint64                    `json:"subnet_epoch"`
+	RevealRound         uint64                    `json:"reveal_round"`
+	RevealBlock         uint64                    `json:"reveal_block"`
+	UIDs                []uint16                  `json:"uids"`
+	Values              []uint16                  `json:"values"`
+	PayloadHex          string                    `json:"payload_hex"`
+	CiphertextHex       string                    `json:"ciphertext_hex"`
+	CiphertextSHA256    string                    `json:"ciphertext_sha256"`
+	ExtrinsicHex        string                    `json:"extrinsic_hex"`
+	ExtrinsicHash       string                    `json:"extrinsic_hash"`
+	SourceCommitment    *PreparedSourceCommitment `json:"source_commitment,omitempty"`
 }
 
 // Validate validates every durable field which can be independently
 // reconstructed and returns the exact signed SCALE bytes for broadcast.
 func (p *PreparedSubmission) Validate() ([]byte, error) {
-	if p == nil || p.Schema != PreparedSubmissionSchema {
+	if p == nil || p.Schema != PreparedSubmissionSchema && p.Schema != PreparedSourceSubmissionSchema {
 		return nil, fmt.Errorf("crv4: unsupported prepared submission schema")
+	}
+	if (p.Schema == PreparedSourceSubmissionSchema) != (p.SourceCommitment != nil) {
+		return nil, fmt.Errorf("crv4: source commitment schema and fields disagree")
 	}
 	if len(p.UIDs) == 0 || len(p.UIDs) != len(p.Values) {
 		return nil, fmt.Errorf("crv4: malformed prepared weights")
@@ -147,6 +155,11 @@ func (p *PreparedSubmission) Validate() ([]byte, error) {
 	digest := blake2b.Sum256(raw)
 	if p.ExtrinsicHash != types.Hash(digest).Hex() {
 		return nil, fmt.Errorf("crv4: prepared extrinsic hash mismatch")
+	}
+	if p.SourceCommitment != nil {
+		if err := validatePreparedSourceBytes(p, raw); err != nil {
+			return nil, err
+		}
 	}
 	return raw, nil
 }
@@ -383,6 +396,19 @@ func prepareWeightsU16(ctx context.Context, chain *Chain, kp *Keypair, netuid ui
 	if err != nil {
 		return nil, err
 	}
+	if opts.SourceHash != ([32]byte{}) {
+		if err := chain.CheckSourceCommitmentCapacityAtContext(ctx, netuid, kp.PublicKey(), preparedHash, state.SubnetEpochIndex); err != nil {
+			return nil, err
+		}
+		call, err := chain.newSourceCommitmentBatchCall(netuid, opts.Mecid, opts.SourceHash, ciphertext, round, version)
+		if err != nil {
+			return nil, err
+		}
+		ext, err = chain.NewSignedExtrinsic(kp, call, nonce)
+		if err != nil {
+			return nil, err
+		}
+	}
 	raw, err := codec.Encode(*ext)
 	if err != nil {
 		return nil, err
@@ -401,6 +427,13 @@ func prepareWeightsU16(ctx context.Context, chain *Chain, kp *Keypair, netuid ui
 		CiphertextSHA256: "0x" + hex.EncodeToString(cipherHash[:]),
 		ExtrinsicHex:     codec.HexEncodeToString(raw), ExtrinsicHash: types.Hash(txHash).Hex(),
 	}
+	if opts.SourceHash != ([32]byte{}) {
+		prepared.Schema = PreparedSourceSubmissionSchema
+		prepared.SourceCommitment = &PreparedSourceCommitment{Hash: codec.HexEncodeToString(opts.SourceHash[:]), GenesisHash: chain.GenesisHash.Hex(), RuntimeSpec: uint32(chain.Runtime.SpecVersion), TransactionVersion: uint32(chain.Runtime.TransactionVersion)}
+		if err := chain.ValidatePreparedSource(prepared); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := prepared.Validate(); err != nil {
 		return nil, err
 	}
@@ -415,9 +448,19 @@ func SubmitPrepared(ctx context.Context, chain *Chain, prepared *PreparedSubmiss
 	if err != nil {
 		return nil, err
 	}
+	if prepared.SourceCommitment != nil {
+		if err := chain.ValidatePreparedSource(prepared); err != nil {
+			return nil, err
+		}
+	}
 	receipt, err := chain.SubmitRawAndWatchFinalized(ctx, prepared.ExtrinsicHex)
 	if err != nil {
 		return nil, err
+	}
+	if prepared.SourceCommitment != nil {
+		if err := chain.VerifyFinalizedSourceContext(ctx, prepared, receipt); err != nil {
+			return nil, err
+		}
 	}
 	return &SubmitResult{
 		TxHash: receipt.ExtrinsicHash, RevealRound: prepared.RevealRound,

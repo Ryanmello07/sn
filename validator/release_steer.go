@@ -20,13 +20,15 @@ import (
 )
 
 type ReleaseMeasurementContext struct {
-	NoID      uint64
-	Stats     *StatsEngine
-	ClientKey ClientKeyFunc
-	Artifacts ArtifactReader
+	NoID             uint64
+	Stats            *StatsEngine
+	ClientKey        ClientKeyFunc
+	ClientKeyHistory *HTTPClientKeyHistoryReader
+	Artifacts        ArtifactReader
 }
 
 type ReleaseSteerer struct {
+	runtimeV2 *releaseRuntimeV2
 	cfg       *ReleaseConfig
 	chain     *ChainClient
 	native    *crv4.Chain
@@ -681,6 +683,11 @@ func (s *ReleaseSteerer) reconcilePending(ctx context.Context, current *Steering
 		if err := authenticatePinnedNativeRuntimeAtContext(ctx, s.native, s.cfg, receipt.BlockHash); err != nil {
 			return false, fmt.Errorf("authenticate recovered steering finality at %s: %w", receipt.BlockHash.Hex(), err)
 		}
+		if current.Prepared.SourceCommitment != nil {
+			if err := s.native.VerifyFinalizedSourceContext(ctx, current.Prepared, receipt); err != nil {
+				return false, err
+			}
+		}
 		if err := s.intents.MarkFinalized(current.VectorHash, receipt.ExtrinsicHash.Hex(), receipt.BlockNumber, receipt.BlockHash.Hex(), current.Prepared.RevealBlock, current.Prepared.Values); err != nil {
 			return false, err
 		}
@@ -731,6 +738,12 @@ func (s *ReleaseSteerer) reconcilePending(ctx context.Context, current *Steering
 }
 
 func (s *ReleaseSteerer) SubmitOnce(ctx context.Context) error {
+	if s.runtimeV2 != nil || s.intents != nil && s.intents.v2 != nil || s.cfg != nil && s.cfg.EvidenceV2.Schema != "" {
+		if err := requireReleaseEvidenceV2Runtime(s); err != nil {
+			return err
+		}
+		return s.submitOnceV2(ctx)
+	}
 	nativeHash, err := authenticatePinnedNativeRuntimeContext(ctx, s.native, s.cfg)
 	if err != nil {
 		return fmt.Errorf("authenticate native runtime before steering snapshot: %w", err)
@@ -934,7 +947,11 @@ func (s *ReleaseSteerer) SubmitOnce(ctx context.Context) error {
 	return s.intents.MarkFinalized(intent.VectorHash, result.TxHash.Hex(), result.FinalizedBlock, result.FinalizedBlockHash.Hex(), result.RevealBlock, result.Values)
 }
 
-const releaseSteeringFailureLimit = 10
+// Workload admission shares the actual failed-attempt ceiling used by the
+// native epoch loop; it does not grant permission for an extra retry.
+const ReleaseSteeringFailureLimit = 10
+
+const releaseSteeringFailureLimit = ReleaseSteeringFailureLimit
 
 // runReleaseSteeringLoop retries an incomplete native epoch until the exact
 // intent is finalized. Merely observing an epoch never suppresses a retry.

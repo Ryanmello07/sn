@@ -180,15 +180,34 @@ func run(args []string, stdout io.Writer) error {
 	flags.SetOutput(io.Discard)
 	parent := flags.String("parent", "", "existing physical 0700 parent for a fresh workspace")
 	server := flags.String("server", "", "physical frozen server source root")
+	suite := flags.Bool("suite", false, "create the complete private portable suite resource contract")
+	postgres := flags.String("postgres-authority", "", "explicit daemon-assigned loopback postgres authority")
+	redis := flags.String("redis-authority", "", "explicit daemon-assigned loopback redis authority")
+	pathOnly := flags.Bool("path-only", false, "print only the owned workspace path for the suite adapter")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 || *parent == "" || *server == "" || stdout == nil {
 		return errors.New("explicit --parent and --server, with no positional arguments, are required")
 	}
-	report, err := createFixture(*parent, *server)
+	if !*suite && (*postgres != "" || *redis != "" || *pathOnly) {
+		return errors.New("suite service and path-only options require explicit --suite")
+	}
+	var report fixtureReport
+	var err error
+	if *suite {
+		report, err = createSuiteFixture(*parent, *server, *postgres, *redis)
+	} else {
+		report, err = createFixture(*parent, *server)
+	}
 	if err != nil {
 		return err
+	}
+	if *pathOnly {
+		if _, err := fmt.Fprintln(stdout, report.Workspace); err != nil {
+			return fmt.Errorf("private fixture retained at %s; path output: %w", report.Workspace, err)
+		}
+		return nil
 	}
 	if err := json.NewEncoder(stdout).Encode(report); err != nil {
 		return fmt.Errorf("private fixture retained at %s; report output: %w", report.Workspace, err)

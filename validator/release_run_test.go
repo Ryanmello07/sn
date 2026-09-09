@@ -145,11 +145,9 @@ func TestReleaseNativeEndpointTimeoutReservesMetadataHeadroom(t *testing.T) {
 		{name: "default polling", cfg: &ReleaseConfig{PollSeconds: 3}, wantTimeout: blockBudget},
 		{name: "slow configured polling", cfg: &ReleaseConfig{PollSeconds: 60}, wantTimeout: 4 * time.Minute},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			if got := releaseNativeEndpointTimeout(test.cfg); got != test.wantTimeout {
-				t.Fatalf("native endpoint timeout=%s, want %s", got, test.wantTimeout)
-			}
-		})
+		if got := releaseNativeEndpointTimeout(test.cfg); got != test.wantTimeout {
+			t.Errorf("%s: native endpoint timeout=%s, want %s", test.name, got, test.wantTimeout)
+		}
 	}
 }
 

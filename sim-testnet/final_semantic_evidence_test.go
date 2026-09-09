@@ -2009,14 +2009,21 @@ func finalSemanticFixture(t *testing.T) (FinalSemanticEvidence, map[string][]byt
 func buildFinalSemanticFixture(t *testing.T) (FinalSemanticEvidence, map[string][]byte) {
 	t.Helper()
 	artifacts := map[string][]byte{}
+	var stateLock sync.Mutex
 	artifact := func(kind, name string, data []byte) FinalArtifactLocator {
 		// Production semantic reconstruction persists every derived proof under
 		// this post-capture namespace. Keeping the release-scale fixture in the
 		// same namespace preserves locator identity inside artifacts which embed
 		// other locators, such as reserve principal-addition receipts.
 		uri := "final-derived/" + name
-		artifacts[uri] = append([]byte(nil), data...)
-		return FinalArtifactLocator{Kind: kind, URI: uri, ContentHash: bytesSHA256(data), SizeBytes: uint64(len(data))}
+		owned := append([]byte(nil), data...)
+		locator := FinalArtifactLocator{Kind: kind, URI: uri, ContentHash: bytesSHA256(owned), SizeBytes: uint64(len(owned))}
+		func() {
+			stateLock.Lock()
+			defer stateLock.Unlock()
+			artifacts[uri] = owned
+		}()
+		return locator
 	}
 	cfg := testResolvedConfig(t)
 	cfg.Config.Deployment.DeploymentID = "ur-subnet-testnet-v1-attempt-4"
@@ -2169,9 +2176,11 @@ func buildFinalSemanticFixture(t *testing.T) (FinalSemanticEvidence, map[string]
 		}
 		return manifest
 	}
-	previousMeasurement := map[uint64][]byte{}
-	previousArtifact := map[uint64]*validatorpkg.ReleaseMeasurementArtifact{}
-	attemptLedgers := map[uint64]map[uint64]*finalAttemptFixtureLedger{}
+	// One fixed slot per validator owns its full ordered epoch chain. Neither
+	// a map header nor a ledger is written by two independent builders.
+	previousMeasurement := [3][]byte{}
+	previousArtifact := [3]*validatorpkg.ReleaseMeasurementArtifact{}
+	attemptLedgers := [3]map[uint64]*finalAttemptFixtureLedger{}
 	buildMeasurement := func(cycle FinalCRv4Cycle, validatorID uint64) ([]byte, string, *validatorpkg.VerifiedReleaseMeasurement) {
 		statsByNO := map[uint64][]validatorpkg.ReleaseProviderMeasurement{1: {}, 2: {}}
 		bindings := make([]validatorpkg.ReleaseBindingMeasurement, 0, 1000)
@@ -2765,16 +2774,14 @@ func buildFinalSemanticFixture(t *testing.T) (FinalSemanticEvidence, map[string]
 	applyCyclePayouts(&cycle212)
 	applyCyclePayouts(&cycle213)
 	applyCyclePayouts(&cycle214)
-	cycle = sealCycle(cycle, 1)
-	cycle11 = sealCycle(cycle11, 1)
-	cycle12 = sealCycle(cycle12, 1)
-	cycle13 = sealCycle(cycle13, 1)
-	cycle14 = sealCycle(cycle14, 1)
-	cycle2 = sealCycle(cycle2, 2)
-	cycle211 = sealCycle(cycle211, 2)
-	cycle212 = sealCycle(cycle212, 2)
-	cycle213 = sealCycle(cycle213, 2)
-	cycle214 = sealCycle(cycle214, 2)
+	for validatorIndex, err := range sealFinalSemanticFixtureValidatorChains([2][]*FinalCRv4Cycle{
+		{&cycle, &cycle11, &cycle12, &cycle13, &cycle14},
+		{&cycle2, &cycle211, &cycle212, &cycle213, &cycle214},
+	}, sealCycle) {
+		if err != nil {
+			t.Fatalf("fixture validator %d epoch chain: %v", validatorIndex+1, err)
+		}
+	}
 	headFleets := make([]FinalHeadFleetEvidence, 0, finalHeadCandidateCount)
 	for i := 0; i < finalHeadCandidateCount; i++ {
 		fleetID := uint64(i + 1)

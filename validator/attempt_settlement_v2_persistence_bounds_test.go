@@ -95,6 +95,7 @@ func runtimeAttemptSettlementV2ActivationJournal(t *testing.T, fixture *attemptS
 // Three actual runtime entry points reject zero/unsafe independent bounds
 // before opening roots, reserving owners or calling replay/persistence hooks.
 func TestAttemptSettlementRuntimeV2PersistenceLimitsBeforeIO(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 	before := runtimeAttemptSettlementV2TestImages(t, fixture.participants)
 	for _, persistence := range []AttemptSettlementRuntimeV2PersistenceBounds{
@@ -137,6 +138,7 @@ func TestAttemptSettlementRuntimeV2PersistenceLimitsBeforeIO(t *testing.T) {
 
 // The low-level v2 reader does not inherit legacy's explicit zero-limit mode.
 func TestAttemptSettlementRuntimeV2PersistenceReaderRejectsZeroBeforeOpen(t *testing.T) {
+	t.Parallel()
 	dir := newAttemptSettlementRuntimeV2TestStateDir(t)
 	if err := os.WriteFile(filepath.Join(dir, "stats.json"), []byte("real finite bytes\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -159,6 +161,7 @@ func TestAttemptSettlementRuntimeV2PersistenceReaderRejectsZeroBeforeOpen(t *tes
 // The same real journal succeeds at its exact allowance after one-short
 // refusal; the smaller attempt cannot write or release the retained gate.
 func TestAttemptSettlementRuntimeV2PersistenceInitJournalReadBound(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 	encoded := runtimeAttemptSettlementV2ActivationJournal(t, fixture)
 	persistence := runtimeAttemptSettlementV2TestPersistence()
@@ -182,6 +185,7 @@ func TestAttemptSettlementRuntimeV2PersistenceInitJournalReadBound(t *testing.T)
 
 // A real partial terminal retains its original immutable streams and journal.
 func TestAttemptSettlementRuntimeV2PersistenceAdvanceJournalReadBound(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 2, 1)
 	transaction := fixture.partialWrite(t)
@@ -212,6 +216,7 @@ func TestAttemptSettlementRuntimeV2PersistenceAdvanceJournalReadBound(t *testing
 
 // Fresh startup cannot attach even one operator after an oversized journal.
 func TestAttemptSettlementRuntimeV2PersistenceRecoverJournalReadBound(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 2, 1)
 	transaction := fixture.partialWrite(t)
@@ -247,6 +252,7 @@ func TestAttemptSettlementRuntimeV2PersistenceRecoverJournalReadBound(t *testing
 // Each read-site variant exceeds only the file allowance. Its real in-memory
 // checkpoint remains small, so live-output admission cannot mask this edge.
 func TestAttemptSettlementRuntimeV2PersistenceCurrentActivationSnapshotReadBound(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	persistence := runtimeAttemptSettlementV2TestPersistence()
 	runtimeAttemptSettlementV2OversizeSnapshot(t, fixture.participants[0], persistence.MaxSnapshotBytes)
@@ -261,6 +267,7 @@ func TestAttemptSettlementRuntimeV2PersistenceCurrentActivationSnapshotReadBound
 // Complete real replay of the existing immutable terminal still precedes the
 // current retry's bounded on-disk successor check.
 func TestAttemptSettlementRuntimeV2PersistenceCurrentTerminalSnapshotReadBound(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 2, 1)
 	if _, err := AdvanceAttemptSettlementEpochV2(t.Context(), fixture.coordinator, fixture.participants, 43, fixture.fixtures[0].expected.Boundary, fixture.options(t)); err != nil {
@@ -279,6 +286,7 @@ func TestAttemptSettlementRuntimeV2PersistenceCurrentTerminalSnapshotReadBound(t
 
 // This is the no-journal startup branch, not the transaction parser above.
 func TestAttemptSettlementRuntimeV2PersistenceRecoverySnapshotReadBound(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	persistence := runtimeAttemptSettlementV2TestPersistence()
 	runtimeAttemptSettlementV2OversizeSnapshot(t, fixture.participants[0], persistence.MaxSnapshotBytes)
@@ -299,6 +307,7 @@ func TestAttemptSettlementRuntimeV2PersistenceRecoverySnapshotReadBound(t *testi
 // Original-disk capture has the same independent bound as recovery, even
 // though its real complete terminal has just been sealed successfully.
 func TestAttemptSettlementRuntimeV2PersistenceOriginalSnapshotReadBound(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 2, 1)
 	options := fixture.options(t)
@@ -317,6 +326,7 @@ func TestAttemptSettlementRuntimeV2PersistenceOriginalSnapshotReadBound(t *testi
 // A callback grows a previously admitted disk file after journal durability;
 // the second exact-known-image pass must admit its size again before reading.
 func TestAttemptSettlementRuntimeV2PersistenceKnownImageSnapshotReadBound(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 2, 1)
 	options := fixture.options(t)
@@ -344,6 +354,7 @@ func TestAttemptSettlementRuntimeV2PersistenceKnownImageSnapshotReadBound(t *tes
 
 // Journal framing cannot grant each nested decoded snapshot a larger bound.
 func TestAttemptSettlementRuntimeV2PersistenceNestedSnapshotBound(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 2, 1)
 	transaction := fixture.partialWrite(t)
@@ -376,6 +387,7 @@ func TestAttemptSettlementRuntimeV2PersistenceNestedSnapshotBound(t *testing.T) 
 // Activation's larger postimage is counted before any JSON output or journal
 // write, even when the entire original live image fits exactly.
 func TestAttemptSettlementRuntimeV2PersistenceSnapshotOutputBeforeWrite(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 	before := runtimeAttemptSettlementV2TestImages(t, fixture.participants)
 	persistence := runtimeAttemptSettlementV2TestPersistence()
@@ -399,6 +411,7 @@ func TestAttemptSettlementRuntimeV2PersistenceSnapshotOutputBeforeWrite(t *testi
 // The independent journal allowance includes three nested images' base64
 // expansion; a snapshot allowance cannot act as an implicit journal default.
 func TestAttemptSettlementRuntimeV2PersistenceJournalOutputBeforeWrite(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, false)
 	persistence := runtimeAttemptSettlementV2TestPersistence()
 	persistence.MaxJournalBytes = 1
@@ -416,6 +429,7 @@ func TestAttemptSettlementRuntimeV2PersistenceJournalOutputBeforeWrite(t *testin
 // Full real signed legacy history and compact successors use the unchanged
 // indented codec; byte-exact and one-short limits are tested independently.
 func TestAttemptSettlementRuntimeV2PersistenceRealSnapshotCountsExact(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2LegacyHistoryFixture(t, true)
 	if err := InitializeAttemptSettlementEpochV2(t.Context(), fixture.coordinator, fixture.participants, 43, fixture.options(t).Authority, runtimeAttemptSettlementV2TestPersistence()); err != nil {
 		t.Fatal(err)
@@ -443,6 +457,7 @@ func TestAttemptSettlementRuntimeV2PersistenceRealSnapshotCountsExact(t *testing
 // Genuine M8 terminal bytes, original disk and raw live/post images all enter
 // the journal's exact compact base64 reservation before its marshal.
 func TestAttemptSettlementRuntimeV2PersistenceRealJournalCountsExact(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 15, 1)
 	fixture.trails(t, 1, 2, 1)
@@ -468,6 +483,7 @@ func TestAttemptSettlementRuntimeV2PersistenceRealJournalCountsExact(t *testing.
 // These values exercise invalid UTF-8, HTML escapes, line separators, finite
 // float formatting, zero values, nil/empty fields, UUIDs and base64 padding.
 func TestAttemptSettlementRuntimeV2PersistenceEncodingAdjacentExact(t *testing.T) {
+	t.Parallel()
 	type sample struct {
 		Text      string              `json:"text"`
 		Bytes     []byte              `json:"bytes"`
@@ -511,6 +527,7 @@ func TestAttemptSettlementRuntimeV2PersistenceEncodingAdjacentExact(t *testing.T
 
 // Unsupported dynamic or custom encoders are refused without calling them.
 func TestAttemptSettlementRuntimeV2PersistenceCustomEncodersRefused(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	for _, value := range []any{attemptSettlementV2CountCustom{calls: &calls}, &attemptSettlementV2CountCustom{calls: &calls}, (*attemptSettlementV2CountCustom)(nil), attemptSettlementV2CountText{calls: &calls}, []attemptSettlementV2CountByte{1}, json.RawMessage(`{"x":1}`), json.Number("1"), map[string]any{"dynamic": "value"}} {
 		if encoded, err := marshalAttemptSettlementV2JSON(t.Context(), value, 1024, false, true); err == nil || encoded != nil || calls != 0 {
@@ -522,6 +539,7 @@ func TestAttemptSettlementRuntimeV2PersistenceCustomEncodersRefused(t *testing.T
 // Size+1 overflow, cancellation, cycles and non-finite values are rejected by
 // admission before any encoder output is allocated.
 func TestAttemptSettlementRuntimeV2PersistenceCounterUnsafeInputsRefused(t *testing.T) {
+	t.Parallel()
 	for _, limit := range []uint64{0, uint64(^uint(0) >> 1), ^uint64(0)} {
 		if encoded, err := marshalAttemptSettlementV2JSON(t.Context(), "", limit, false, true); err == nil || encoded != nil {
 			t.Fatal("unsafe metadata arithmetic allowance accepted")

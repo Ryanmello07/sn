@@ -234,44 +234,50 @@ func finalHistoricalCoordinatorArtifactGenerationWrites(evidence *FinalSemanticE
 // and, for transaction actions, the separately sealed historical row. The
 // two artifact channels must agree before their shared chronology is used.
 func finalHistoricalCoordinatorArtifactOracleAction(evidence *FinalSemanticEvidence, current *SetupPlan, plans map[string]*SetupPlan, entries []JournalEntry, rows map[string]*FinalHistoricalCoordinatorReceiptEvidence, receiptLogs map[string][]finalCanonicalEVMLog, actionID string, value finalHistoricalCoordinatorOracleWindowAction) (Action, JournalEntry, error) {
-	plan, action, verified, err := finalHistoricalCoordinatorArtifactVerifiedAction(evidence, plans, entries, actionID)
+	return finalHistoricalCoordinatorArtifactOracleActionWithRelayRequests(evidence, current, plans, entries, rows, receiptLogs, actionID, value, nil)
+}
+
+// Exact relay sources keep unrelated dynamic calls out of coordinator replay
+// without permitting a missing action to be dismissed by its textual prefix.
+func finalHistoricalCoordinatorArtifactOracleActionWithRelayRequests(evidence *FinalSemanticEvidence, current *SetupPlan, plans map[string]*SetupPlan, entries []JournalEntry, rows map[string]*FinalHistoricalCoordinatorReceiptEvidence, receiptLogs map[string][]finalCanonicalEVMLog, actionId string, value finalHistoricalCoordinatorOracleWindowAction, requests map[evidenceRelayRequestKey][]byte) (Action, JournalEntry, error) {
+	plan, action, verified, err := finalHistoricalCoordinatorArtifactVerifiedAction(evidence, plans, entries, actionId)
 	if err != nil {
 		return Action{}, JournalEntry{}, err
 	}
 	if value.PlanHash != plan.PlanHash || value.ActionID != action.ID || value.IntentHash != action.IntentHash || !finalJSONEqual(value.Verified, verified) {
-		return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s verified identity differs", actionID)
+		return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s verified identity differs", actionId)
 	}
 	if err := finalHistoricalCoordinatorArtifactPostcondition(value.Postcondition, verified); err != nil {
 		return Action{}, JournalEntry{}, err
 	}
-	if actionID == "fleet.refresh.oracle-await-active" || actionID == "fleet.refresh.oracle-await-restored" {
+	if actionId == "fleet.refresh.oracle-await-active" || actionId == "fleet.refresh.oracle-await-restored" {
 		if value.Finalized != nil || value.TransactionIndex != 0 {
-			return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s incorrectly names a transaction", actionID)
+			return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s incorrectly names a transaction", actionId)
 		}
 		return action, verified, nil
 	}
-	targets, targetErr := finalHistoricalCoordinatorJournalActions(evidence, current, plans, entries)
+	targets, targetErr := finalHistoricalCoordinatorJournalActionsWithRelayRequests(evidence, current, plans, entries, requests)
 	if targetErr != nil {
 		return Action{}, JournalEntry{}, targetErr
 	}
 	if value.Finalized == nil {
-		return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s finalized transaction is absent", actionID)
+		return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s finalized transaction is absent", actionId)
 	}
 	target, found := targets[value.Finalized.TransactionHash]
-	if !found || target.action.ID != actionID || target.plan.PlanHash != plan.PlanHash || !finalJSONEqual(target.entry, *value.Finalized) {
-		return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s finalized transaction differs", actionID)
+	if !found || target.action.ID != actionId || target.plan.PlanHash != plan.PlanHash || !finalJSONEqual(target.entry, *value.Finalized) {
+		return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s finalized transaction differs", actionId)
 	}
 	row := rows[value.Finalized.TransactionHash]
-	if row == nil || row.ActionID != actionID || row.PlanHash != plan.PlanHash || row.IntentHash != action.IntentHash || row.Receipt.Block.Number != value.Finalized.BlockNumber || !strings.EqualFold(row.Receipt.Block.Hash, value.Finalized.BlockHash) {
-		return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s receipt row differs", actionID)
+	if row == nil || row.ActionID != actionId || row.PlanHash != plan.PlanHash || row.IntentHash != action.IntentHash || row.Receipt.Block.Number != value.Finalized.BlockNumber || !strings.EqualFold(row.Receipt.Block.Hash, value.Finalized.BlockHash) {
+		return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s receipt row differs", actionId)
 	}
 	logs := receiptLogs[value.Finalized.TransactionHash]
 	if len(logs) == 0 || logs[0].TransactionIndex != value.TransactionIndex {
-		return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s transaction index differs from raw receipt", actionID)
+		return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s transaction index differs from raw receipt", actionId)
 	}
 	for _, log := range logs {
 		if log.TransactionIndex != value.TransactionIndex {
-			return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s raw receipt has inconsistent transaction index", actionID)
+			return Action{}, JournalEntry{}, fmt.Errorf("historical coordinator oracle %s raw receipt has inconsistent transaction index", actionId)
 		}
 	}
 	return action, target.entry, nil
@@ -294,6 +300,12 @@ func finalHistoricalCoordinatorOracleWindowProxy(activation, restore Action, act
 // deliberately separate from source collection so a self-consistent mutation
 // of final evidence cannot bypass the pre-campaign handoff proof.
 func verifyFinalHistoricalCoordinatorOracleWindowArtifact(evidence *FinalSemanticEvidence, current *SetupPlan, plans map[string]*SetupPlan, entries []JournalEntry, rows map[string]*FinalHistoricalCoordinatorReceiptEvidence, receiptLogs map[string][]finalCanonicalEVMLog, cache map[string][]byte) error {
+	return verifyFinalHistoricalCoordinatorOracleWindowArtifactWithRelayRequests(evidence, current, plans, entries, rows, receiptLogs, cache, nil)
+}
+
+// Both oracle transaction boundaries retain the independently authenticated
+// mixed-chain action census from the same immutable lineage artifact.
+func verifyFinalHistoricalCoordinatorOracleWindowArtifactWithRelayRequests(evidence *FinalSemanticEvidence, current *SetupPlan, plans map[string]*SetupPlan, entries []JournalEntry, rows map[string]*FinalHistoricalCoordinatorReceiptEvidence, receiptLogs map[string][]finalCanonicalEVMLog, cache map[string][]byte, requests map[evidenceRelayRequestKey][]byte) error {
 	if err := verifyFinalFleetRefreshOracleWindowEvidence(evidence); err != nil {
 		return err
 	}
@@ -308,19 +320,19 @@ func verifyFinalHistoricalCoordinatorOracleWindowArtifact(evidence *FinalSemanti
 	if window.Schema != finalHistoricalCoordinatorOracleWindowSchema {
 		return errors.New("historical fleet refresh oracle window schema is unsupported")
 	}
-	activation, activationFinalized, err := finalHistoricalCoordinatorArtifactOracleAction(evidence, current, plans, entries, rows, receiptLogs, "fleet.refresh.oracle-activate", window.Activation)
+	activation, activationFinalized, err := finalHistoricalCoordinatorArtifactOracleActionWithRelayRequests(evidence, current, plans, entries, rows, receiptLogs, "fleet.refresh.oracle-activate", window.Activation, requests)
 	if err != nil {
 		return err
 	}
-	awaitActive, awaitActiveVerified, err := finalHistoricalCoordinatorArtifactOracleAction(evidence, current, plans, entries, rows, receiptLogs, "fleet.refresh.oracle-await-active", window.AwaitActive)
+	awaitActive, awaitActiveVerified, err := finalHistoricalCoordinatorArtifactOracleActionWithRelayRequests(evidence, current, plans, entries, rows, receiptLogs, "fleet.refresh.oracle-await-active", window.AwaitActive, requests)
 	if err != nil {
 		return err
 	}
-	restore, restoreFinalized, err := finalHistoricalCoordinatorArtifactOracleAction(evidence, current, plans, entries, rows, receiptLogs, "fleet.refresh.oracle-restore", window.Restore)
+	restore, restoreFinalized, err := finalHistoricalCoordinatorArtifactOracleActionWithRelayRequests(evidence, current, plans, entries, rows, receiptLogs, "fleet.refresh.oracle-restore", window.Restore, requests)
 	if err != nil {
 		return err
 	}
-	awaitRestored, awaitVerified, err := finalHistoricalCoordinatorArtifactOracleAction(evidence, current, plans, entries, rows, receiptLogs, "fleet.refresh.oracle-await-restored", window.AwaitRestored)
+	awaitRestored, awaitVerified, err := finalHistoricalCoordinatorArtifactOracleActionWithRelayRequests(evidence, current, plans, entries, rows, receiptLogs, "fleet.refresh.oracle-await-restored", window.AwaitRestored, requests)
 	if err != nil {
 		return err
 	}
@@ -405,11 +417,15 @@ func verifyFinalHistoricalCoordinatorReceiptArtifacts(evidence *FinalSemanticEvi
 	if err != nil {
 		return err
 	}
+	requests, err := finalRelayRequestsFromArtifact(evidence, plans, entries, cache)
+	if err != nil {
+		return err
+	}
 	ordinary, err := finalSemanticUniqueCarriedEVMReceipts(evidence)
 	if err != nil {
 		return err
 	}
-	targets, err := finalHistoricalCoordinatorJournalActions(evidence, current, plans, entries)
+	targets, err := finalHistoricalCoordinatorJournalActionsWithRelayRequests(evidence, current, plans, entries, requests)
 	if err != nil {
 		return err
 	}
@@ -464,11 +480,11 @@ func verifyFinalHistoricalCoordinatorReceiptArtifacts(evidence *FinalSemanticEvi
 		receiptLogs[transactionHash] = logs
 	}
 	if finalHistoricalCoordinatorTimelineRequired(evidence) {
-		if err := verifyFinalHistoricalCoordinatorTimelineArtifact(evidence, current, plans, entries, cache[evidence.HistoricalCoordinatorTimelineArtifact.URI]); err != nil {
+		if err := verifyFinalHistoricalCoordinatorTimelineArtifactWithRelayRequests(evidence, current, plans, entries, cache[evidence.HistoricalCoordinatorTimelineArtifact.URI], requests); err != nil {
 			return err
 		}
 	}
-	if err := verifyFinalHistoricalCoordinatorOracleWindowArtifact(evidence, current, plans, entries, rows, receiptLogs, cache); err != nil {
+	if err := verifyFinalHistoricalCoordinatorOracleWindowArtifactWithRelayRequests(evidence, current, plans, entries, rows, receiptLogs, cache, requests); err != nil {
 		return err
 	}
 	for index := range evidence.HistoricalCoordinatorReceipts {

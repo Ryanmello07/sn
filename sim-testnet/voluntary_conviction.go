@@ -387,7 +387,7 @@ func loadVoluntaryConvictionLineagePlan(stateDir string, prior *SetupPlan, planH
 	if strings.EqualFold(prior.PlanHash, planHash) {
 		return prior, nil
 	}
-	plan, err := readPersistedPlanFile(filepath.Join(stateDir, "plans", stringsTrim0x(planHash)+".json"))
+	plan, err := readValidatorEvidenceHistoricalPlan(stateDir, planHash)
 	if err != nil {
 		return nil, fmt.Errorf("read voluntary-conviction ancestor plan %s: %w", planHash, err)
 	}
@@ -1020,19 +1020,16 @@ func applyVoluntaryConvictionDuplicateRecovery(cfg *ResolvedConfig, stateDir str
 	}
 	revised.Actions[voluntaryIndex] = recovery.OriginalAction
 	revised.Actions = append(revised.Actions[:voluntaryIndex+1], append([]Action{reconciliation, repair}, revised.Actions[voluntaryIndex+1:]...)...)
-	barrierID := "fleet.mirror.1"
-	for _, action := range revised.Actions {
-		if action.ID == "fleet.refresh.deploy-batcher" {
-			barrierID = action.ID
-			break
-		}
-	}
+	// The current batcher deployment precedes evidence/config setup and is
+	// therefore an ancestor of conviction. Only a forward fleet transition
+	// may depend on this repair; retain the older forward batcher/mirror forms.
 	foundBarrier := false
-	for index := range revised.Actions {
+	for index := voluntaryIndex + 3; index < len(revised.Actions); index++ {
 		action := &revised.Actions[index]
-		if action.ID == barrierID {
+		switch action.ID {
+		case "fleet.refresh.deploy-batcher", "fleet.refresh.oracle-activate", "fleet.mirror.1":
 			if !slices.Contains(action.DependsOn, repair.ID) {
-				action.DependsOn = append(action.DependsOn, repair.ID)
+				action.DependsOn = append(slices.Clone(action.DependsOn), repair.ID)
 			}
 			action.IntentHash, err = actionIntentHash(*action)
 			if err != nil {
@@ -1040,9 +1037,12 @@ func applyVoluntaryConvictionDuplicateRecovery(cfg *ResolvedConfig, stateDir str
 			}
 			foundBarrier = true
 		}
+		if foundBarrier {
+			break
+		}
 	}
 	if !foundBarrier {
-		return errors.New("fresh plan has no fleet-setup recovery barrier")
+		return errors.New("fresh plan has no forward fleet-setup recovery barrier")
 	}
 	revised.MaximumSpend, err = maximumActionSpend(revised.Actions)
 	return err

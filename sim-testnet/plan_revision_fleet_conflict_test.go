@@ -63,11 +63,11 @@ func TestPreserveVerifiedFleetBatchActionsRejectsConflictingVerifiedSourceGenera
 	stateDir := t.TempDir()
 	compatible := cloneFleetBatchConflictPlan(t, prior)
 	compatible.PriorPlanHashes = nil
-	compatible.ReleaseLockHash = "0x" + strings.Repeat("a1", 32)
+	distinctValidatorEvidenceReleaseLockTest(t, compatible, "a1")
 	writeFleetBatchConflictSourcePlan(t, stateDir, compatible)
 	conflicting := cloneFleetBatchConflictPlan(t, prior)
 	conflicting.PriorPlanHashes = nil
-	conflicting.ReleaseLockHash = "0x" + strings.Repeat("b2", 32)
+	distinctValidatorEvidenceReleaseLockTest(t, conflicting, "b2")
 	conflictingAction := actionByID(t, conflicting, "fleet.refresh.batch.1")
 	for index := range conflicting.Actions {
 		if conflicting.Actions[index].ID != conflictingAction.ID {

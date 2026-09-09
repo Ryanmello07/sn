@@ -151,13 +151,13 @@ func publishOrResumeFinalSemanticSupplement(ctx context.Context, cfg *ResolvedCo
 		return nil, err
 	}
 
-	closure, err := authenticateFinalSemanticOriginalClosure(cfg, roles, stateRoot, runRoot, result)
+	closure, err := authenticateFinalSemanticOriginalClosureContext(ctx, cfg, roles, stateRoot, runRoot, result)
 	if err != nil {
 		return nil, fmt.Errorf("authenticate original semantic capture: %w", err)
 	}
 	load := dependencies.Load
 	if load == nil {
-		load, err = NewFinalSemanticCampaignArtifactLoader(stateRoot, runRoot)
+		load, err = newFinalSemanticCampaignArtifactLoaderForConfigV2(cfg, stateRoot, runRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -173,6 +173,9 @@ func publishOrResumeFinalSemanticSupplement(ctx context.Context, cfg *ResolvedCo
 		return validateFinalSemanticSupplementWithClosure(ctx, cfg, roles, stateRoot, runRoot, result, closure, load, stores)
 	}
 	if err := ensureFinalSemanticSupplementOutputs(ctx, cfg, roles, stateRoot, runRoot, result, closure, load, dependencies.NewReader); err != nil {
+		if isFinalSemanticAnalysisPending(err) {
+			err = errors.Join(err, retainFinalSemanticPendingJob(ctx, stateRoot, result, closure))
+		}
 		return nil, err
 	}
 	rawFiles, semantic, err := loadAndVerifyFinalSemanticRawFiles(ctx, cfg, roles, runRoot, result, load)
@@ -225,14 +228,14 @@ func publishOrResumeFinalSemanticSupplement(ctx context.Context, cfg *ResolvedCo
 	}
 	// Re-read the mutable source paths after remote publication. A concurrent
 	// replacement cannot be blessed by the final local commit.
-	again, err := enumerateFinalSemanticRawFiles(runRoot)
+	again, err := enumerateFinalSemanticRawFilesForConfigV2(cfg, runRoot, true)
 	if err != nil || !finalSemanticRawFilesEqual(rawFiles, again) {
 		return nil, stateMismatchError(err, "semantic output files changed during publication")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	closureAgain, err := authenticateFinalSemanticOriginalClosure(cfg, roles, stateRoot, runRoot, result)
+	closureAgain, err := authenticateFinalSemanticOriginalClosureContext(ctx, cfg, roles, stateRoot, runRoot, result)
 	if err != nil || !finalSemanticOriginalClosuresEqual(closure, closureAgain) {
 		return nil, stateMismatchError(err, "original semantic closure changed during publication")
 	}
@@ -255,7 +258,7 @@ func validateFinalSemanticSupplement(ctx context.Context, cfg *ResolvedConfig, r
 	if err != nil {
 		return nil, err
 	}
-	closure, err := authenticateFinalSemanticOriginalClosure(cfg, roles, stateRoot, runRoot, result)
+	closure, err := authenticateFinalSemanticOriginalClosureContext(ctx, cfg, roles, stateRoot, runRoot, result)
 	if err != nil {
 		return nil, fmt.Errorf("authenticate original semantic capture: %w", err)
 	}
@@ -286,7 +289,7 @@ func validateFinalSemanticSupplementWithClosure(ctx context.Context, cfg *Resolv
 	if err != nil {
 		return nil, err
 	}
-	loose, err := enumeratePresentFinalSemanticRawFiles(runRoot)
+	loose, err := enumerateFinalSemanticRawFilesForConfigV2(cfg, runRoot, false)
 	if err != nil {
 		return nil, fmt.Errorf("read loose semantic outputs: %w", err)
 	}
@@ -400,6 +403,17 @@ func finalSemanticSupplementRoots(ctx context.Context, cfg *ResolvedConfig, role
 }
 
 func authenticateFinalSemanticOriginalClosure(cfg *ResolvedConfig, roles *RoleSecrets, stateRoot, runRoot string, result *ScenarioResult) (*finalSemanticOriginalClosure, error) {
+	return authenticateFinalSemanticOriginalClosureContext(context.Background(), cfg, roles, stateRoot, runRoot, result)
+}
+
+// A large immutable prefix is read object-by-object under its analyzer owner.
+func authenticateFinalSemanticOriginalClosureContext(ctx context.Context, cfg *ResolvedConfig, roles *RoleSecrets, stateRoot, runRoot string, result *ScenarioResult) (*finalSemanticOriginalClosure, error) {
+	if ctx == nil {
+		return nil, errors.New("original closure context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if cfg == nil || cfg.Config == nil || roles == nil || result == nil || result.Result != "pass" || (result.Name != "release-1.0" && result.Name != "production-soak") || !validCanonicalHashHex(result.EvidenceHash) {
 		return nil, errors.New("completed semantic scenario identity is invalid")
 	}
@@ -408,7 +422,7 @@ func authenticateFinalSemanticOriginalClosure(cfg *ResolvedConfig, roles *RoleSe
 		return nil, stateMismatchError(err, "completed semantic scenario result hash differs")
 	}
 	if result.Name == "production-soak" {
-		if _, _, err := validateExactReleaseCampaignGate(cfg, stateRoot, roles, result.PriorRelease); err != nil {
+		if _, _, err := validateExactReleaseCampaignGateContext(ctx, cfg, stateRoot, roles, result.PriorRelease); err != nil {
 			return nil, fmt.Errorf("authenticate exact semantic predecessor: %w", err)
 		}
 	}
@@ -421,7 +435,7 @@ func authenticateFinalSemanticOriginalClosure(cfg *ResolvedConfig, roles *RoleSe
 		return nil, stateMismatchError(err, "semantic supplement owner identity is invalid")
 	}
 	var complete ReleaseEvidenceEnvelope
-	if err := decodeFinalSemanticRegularJSON(filepath.Join(runRoot, "complete.json"), &complete); err != nil {
+	if err := decodeCampaignControlForConfigV2(cfg, runRoot, "complete.json", &complete); err != nil {
 		return nil, fmt.Errorf("scenario complete: %w", err)
 	}
 	if err := verifyFinalSemanticOwnerEnvelope(cfg, &complete, &ownerKey.PublicKey, "scenario-complete", result.RunID); err != nil {
@@ -437,27 +451,41 @@ func authenticateFinalSemanticOriginalClosure(cfg *ResolvedConfig, roles *RoleSe
 		}
 	}
 	var manifest ReleaseEvidenceEnvelope
-	if err := decodeFinalSemanticRegularJSON(filepath.Join(runRoot, campaignEvidenceManifestFilename), &manifest); err != nil {
+	if err := decodeCampaignControlForConfigV2(cfg, runRoot, campaignEvidenceManifestFilename, &manifest); err != nil {
 		return nil, fmt.Errorf("scenario evidence manifest: %w", err)
 	}
 	if err := verifyFinalSemanticOwnerEnvelope(cfg, &manifest, &ownerKey.PublicKey, campaignEvidenceManifestKind, result.RunID); err != nil || !strings.EqualFold(manifest.ContentHash, completePayload.EvidenceManifestHash) {
 		return nil, stateMismatchError(err, "scenario evidence manifest envelope is invalid")
 	}
-	manifestPayload, err := decodeCampaignEvidenceManifest(&manifest)
+	limits, err := campaignEvidenceLimitsForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	manifestPayload, err := decodeCampaignEvidenceManifestWithLimits(&manifest, limits)
 	if err != nil || !strings.EqualFold(manifestPayload.ResultHash, result.EvidenceHash) || !strings.EqualFold(manifestPayload.BundlePayloadHash, completePayload.BundlePayloadHash) {
 		return nil, stateMismatchError(err, "scenario evidence manifest payload is invalid")
 	}
-	manifestFiles, err := campaignEvidenceManifestFiles(manifestPayload.Files)
+	manifestFiles, err := campaignEvidenceManifestFilesWithLimits(manifestPayload.Files, limits)
 	if err != nil || !stringMapsEqual(manifestFiles, completePayload.Files) {
 		return nil, stateMismatchError(err, "scenario evidence manifest files differ from completion")
 	}
-	authenticatedRaw := make(map[string][]byte, len(manifestPayload.Files))
+	authenticatedRaw := make(map[string][]byte)
 	for _, entry := range manifestPayload.Files {
-		raw, err := readCampaignEvidenceRegularFile(runRoot, entry.Path)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		raw, err := readCampaignEvidenceFileWithLimitsV2(runRoot, entry.Path, limits, false)
+		if err == nil {
+			err = ctx.Err()
+		}
 		if err != nil || uint64(len(raw)) != entry.Size || !strings.EqualFold(bytesSHA256(raw), entry.ContentHash) {
 			return nil, stateMismatchError(err, "original scenario file %q differs from its owner-signed manifest", entry.Path)
 		}
-		authenticatedRaw[entry.Path] = raw
+		// Large compact tapes are authenticated here but remain on disk. Only
+		// the original closure/lineage controls are needed by this live owner.
+		if !finalUsesEvidenceV2(cfg) || entry.Path == "result.json" || entry.Path == scenarioCampaignStartFilename || entry.Path == scenarioLifecycleHandoffFilename || entry.Path == "final-inputs/manifest.json" || entry.Path == finalSemanticCaptureStatusFilename {
+			authenticatedRaw[entry.Path] = raw
+		}
 	}
 	resultRaw, ok := authenticatedRaw["result.json"]
 	if !ok {
@@ -492,7 +520,7 @@ func authenticateFinalSemanticOriginalClosure(cfg *ResolvedConfig, roles *RoleSe
 		}
 		var commit ReleaseEvidenceEnvelope
 		commitPath := filepath.Join(runRoot, fmt.Sprintf("scenario-complete-commit.operator-%d.evidence.json", operator))
-		if err := decodeFinalSemanticRegularJSON(commitPath, &commit); err != nil {
+		if err := decodeCampaignControlForConfigV2(cfg, runRoot, filepath.Base(commitPath), &commit); err != nil {
 			return nil, fmt.Errorf("operator %d scenario completion commit: %w", operator, err)
 		}
 		if err := verifyFinalSemanticOwnerEnvelope(cfg, &commit, &key.PublicKey, "scenario-complete-commit", result.RunID); err != nil {
@@ -675,7 +703,7 @@ func openAuthenticatedFinalSemanticArchive(ctx context.Context, cfg *ResolvedCon
 	if !ok {
 		return nil, errors.New("owner-authenticated collected-input manifest is missing")
 	}
-	current, err := readCampaignEvidenceRegularFile(runRoot, "final-inputs/manifest.json")
+	current, err := readCampaignEvidenceFileForConfigV2(cfg, runRoot, campaignCollectedIndexPathV2, false)
 	if err != nil || !bytes.Equal(current, authenticatedManifest) {
 		return nil, stateMismatchError(err, "collected-input manifest differs from the owner-authenticated closure")
 	}
@@ -686,7 +714,7 @@ func openAuthenticatedFinalSemanticArchive(ctx context.Context, cfg *ResolvedCon
 	if archive.collected == nil || !finalJSONEqual(*archive.collected, *closure.collected) {
 		return nil, errors.New("opened semantic archive differs from the owner-authenticated collected inputs")
 	}
-	current, err = readCampaignEvidenceRegularFile(runRoot, "final-inputs/manifest.json")
+	current, err = readCampaignEvidenceFileForConfigV2(cfg, runRoot, campaignCollectedIndexPathV2, false)
 	if err != nil || !bytes.Equal(current, authenticatedManifest) {
 		return nil, stateMismatchError(err, "collected-input manifest changed while opening the authenticated archive")
 	}
@@ -903,7 +931,7 @@ func finalSemanticStoresFromCapturedRuntimeManifest(cfg *ResolvedConfig, stateRo
 }
 
 func loadAndVerifyFinalSemanticRawFiles(ctx context.Context, cfg *ResolvedConfig, roles *RoleSecrets, runRoot string, result *ScenarioResult, load FinalArtifactLoader) ([]finalSemanticRawFile, *FinalSemanticEvidence, error) {
-	files, err := enumerateFinalSemanticRawFiles(runRoot)
+	files, err := enumerateFinalSemanticRawFilesForConfigV2(cfg, runRoot, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -923,6 +951,15 @@ func enumeratePresentFinalSemanticRawFiles(runRoot string) ([]finalSemanticRawFi
 }
 
 func enumerateFinalSemanticRawFilesWithPair(runRoot string, requirePair bool) ([]finalSemanticRawFile, error) {
+	return enumerateFinalSemanticRawFilesWithLimitsV2(runRoot, requirePair, defaultCampaignEvidenceLimits())
+}
+
+// The exact two copied prior controls have their own configured supplement
+// aggregate. All other derived/raw outputs retain their original limits.
+func enumerateFinalSemanticRawFilesWithLimitsV2(runRoot string, requirePair bool, limits campaignEvidenceLimits) ([]finalSemanticRawFile, error) {
+	if err := limits.validate(); err != nil {
+		return nil, err
+	}
 	paths := make([]string, 0, 2)
 	for _, name := range []string{finalSemanticEvidenceFilename, finalSemanticMarkdownFilename} {
 		exists, err := finalSemanticRegularFileExists(filepath.Join(runRoot, name))
@@ -975,18 +1012,22 @@ func enumerateFinalSemanticRawFilesWithPair(runRoot string, requirePair bool) ([
 	}
 	result := make([]finalSemanticRawFile, 0, len(paths))
 	var aggregate uint64
+	var ordinaryBytes uint64
 	for _, name := range paths {
 		if err := validateFinalSemanticPostCapturePath(name); err != nil {
 			return nil, err
 		}
-		raw, err := readCampaignEvidenceRegularFile(runRoot, name)
+		raw, err := readCampaignEvidenceFileWithLimitsV2(runRoot, name, limits, false)
 		if err != nil {
 			return nil, fmt.Errorf("read semantic output %s: %w", name, err)
 		}
-		if len(raw) == 0 || uint64(len(raw)) > maximumCampaignEvidenceAggregateBytes-aggregate {
-			return nil, fmt.Errorf("semantic supplement files are empty or exceed %d aggregate bytes", maximumCampaignEvidenceAggregateBytes)
+		if len(raw) == 0 {
+			return nil, fmt.Errorf("semantic supplement files are empty or exceed %d aggregate bytes", limits.supplementFileBytes())
 		}
-		aggregate += uint64(len(raw))
+		aggregate, ordinaryBytes, err = admitCampaignMetadataRetentionV2(limits, name, uint64(len(raw)), true, aggregate, ordinaryBytes)
+		if err != nil {
+			return nil, err
+		}
 		result = append(result, finalSemanticRawFile{Path: name, ContentHash: bytesSHA256(raw), Data: raw})
 	}
 	return result, nil
@@ -1044,7 +1085,11 @@ func verifyFinalSemanticSupplementBinding(cfg *ResolvedConfig, result *ScenarioR
 	if err := decodeStrictJSONBytes(envelope.Payload, &payload); err != nil {
 		return nil, nil, err
 	}
-	if err := validateFinalSemanticSupplementPayload(&payload, result, closure.complete.ContentHash, closure.manifest.ContentHash, closure.capture.EvidenceHash, closure.collected.EvidenceHash); err != nil {
+	limits, err := campaignEvidenceLimitsForConfig(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := validateFinalSemanticSupplementPayloadWithLimitsV2(&payload, result, closure.complete.ContentHash, closure.manifest.ContentHash, closure.capture.EvidenceHash, closure.collected.EvidenceHash, limits); err != nil {
 		return nil, nil, err
 	}
 	fileEnvelopes, err := loadFinalSemanticSupplementFileEnvelopes(cfg, closure, &payload, stateRoot)
@@ -1224,15 +1269,30 @@ func validateFinalSemanticSupplementCausalOrder(result *ScenarioResult, manifest
 // validateFinalSemanticSupplementPayload binds a semantic_verified statement
 // to one exact closed scenario capture without depending on its storage form.
 func validateFinalSemanticSupplementPayload(payload *FinalSemanticSupplementPayload, result *ScenarioResult, completeHash, manifestHash, captureHash, collectedHash string) error {
+	return validateFinalSemanticSupplementPayloadWithLimitsV2(payload, result, completeHash, manifestHash, captureHash, collectedHash, defaultCampaignEvidenceLimits())
+}
+
+// Original semantic identity/signature joins are unchanged; only the exact
+// prior-derived controls receive their configured metadata sizing.
+func validateFinalSemanticSupplementPayloadWithLimitsV2(payload *FinalSemanticSupplementPayload, result *ScenarioResult, completeHash, manifestHash, captureHash, collectedHash string, limits campaignEvidenceLimits) error {
 	if payload == nil || result == nil || !validCanonicalHashHex(result.EvidenceHash) || !validSHA256ContentHash(completeHash) || !validSHA256ContentHash(manifestHash) || !validCanonicalHashHex(captureHash) || !validCanonicalHashHex(collectedHash) || payload.Schema != finalSemanticSupplementSchema || payload.Status != finalSemanticSupplementStatus || payload.Phase != result.Name || payload.RunID != result.RunID || !strings.EqualFold(payload.ResultHash, result.EvidenceHash) || !strings.EqualFold(payload.ScenarioCompleteHash, completeHash) || !strings.EqualFold(payload.ScenarioEvidenceManifestHash, manifestHash) || !strings.EqualFold(payload.CaptureStatusHash, captureHash) || !strings.EqualFold(payload.CollectedInputsHash, collectedHash) || !validCanonicalHashHex(payload.SemanticEvidenceHash) || !validCanonicalHashHex(payload.PublicTranscriptHash) {
 		return errors.New("semantic supplement payload does not bind the completed capture")
 	}
-	return validateFinalSemanticSupplementFileManifest(payload)
+	return validateFinalSemanticSupplementFileManifestWithLimitsV2(payload, limits)
 }
 
 // validateFinalSemanticSupplementFileManifest enforces the deterministic,
 // bounded census shared by local validation and secretless public replay.
 func validateFinalSemanticSupplementFileManifest(payload *FinalSemanticSupplementPayload) error {
+	return validateFinalSemanticSupplementFileManifestWithLimitsV2(payload, defaultCampaignEvidenceLimits())
+}
+
+// Ordinary derived sources keep the legacy byte ceiling inside the separate
+// two-control supplement owner; metadata authority is supplied by config.
+func validateFinalSemanticSupplementFileManifestWithLimitsV2(payload *FinalSemanticSupplementPayload, limits campaignEvidenceLimits) error {
+	if err := limits.validate(); err != nil {
+		return err
+	}
 	if payload == nil || len(payload.Files) < 2 || len(payload.Files) > maximumCampaignEvidenceObjects {
 		return errors.New("semantic supplement file manifest is incomplete")
 	}
@@ -1240,11 +1300,16 @@ func validateFinalSemanticSupplementFileManifest(payload *FinalSemanticSupplemen
 	seenEnvelopes := make(map[string]bool, len(payload.Files))
 	previous := ""
 	var aggregate uint64
+	var ordinaryBytes uint64
 	for index, entry := range payload.Files {
-		if err := validateFinalSemanticPostCapturePath(entry.Path); err != nil || index > 0 && entry.Path <= previous || entry.Size == 0 || entry.Size > maximumCampaignEvidenceRawFileBytes || !validSHA256ContentHash(entry.ContentHash) || !validSHA256ContentHash(entry.EnvelopeHash) || seenEnvelopes[strings.ToLower(entry.EnvelopeHash)] || entry.Size > maximumCampaignEvidenceAggregateBytes-aggregate {
+		if err := validateFinalSemanticPostCapturePath(entry.Path); err != nil || index > 0 && entry.Path <= previous || entry.Size == 0 || entry.Size > limits.rawFileBytes(entry.Path) || !validSHA256ContentHash(entry.ContentHash) || !validSHA256ContentHash(entry.EnvelopeHash) || seenEnvelopes[strings.ToLower(entry.EnvelopeHash)] || entry.Size > limits.supplementFileBytes()-aggregate {
 			return stateMismatchError(err, "semantic supplement file manifest is invalid at %q", entry.Path)
 		}
-		aggregate += entry.Size
+		var err error
+		aggregate, ordinaryBytes, err = admitCampaignMetadataRetentionV2(limits, entry.Path, entry.Size, true, aggregate, ordinaryBytes)
+		if err != nil {
+			return err
+		}
 		seenEvidence = seenEvidence || entry.Path == finalSemanticEvidenceFilename
 		seenMarkdown = seenMarkdown || entry.Path == finalSemanticMarkdownFilename
 		seenEnvelopes[strings.ToLower(entry.EnvelopeHash)] = true
@@ -1289,7 +1354,11 @@ func loadFinalSemanticSupplementFileEnvelopes(cfg *ResolvedConfig, closure *fina
 	if cfg == nil || closure == nil {
 		return nil, errors.New("semantic supplement file manifest is incomplete")
 	}
-	if err := validateFinalSemanticSupplementFileManifest(payload); err != nil {
+	limits, err := campaignEvidenceLimitsForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateFinalSemanticSupplementFileManifestWithLimitsV2(payload, limits); err != nil {
 		return nil, err
 	}
 	result := make([]*ReleaseEvidenceEnvelope, 0, len(payload.Files))
@@ -1297,7 +1366,15 @@ func loadFinalSemanticSupplementFileEnvelopes(cfg *ResolvedConfig, closure *fina
 		pathHash := sha256.Sum256([]byte(entry.Path))
 		path := filepath.Join(finalSemanticSupplementStageRoot(stateRoot, payload.RunID), "files", hex.EncodeToString(pathHash[:])+".evidence.json")
 		var envelope ReleaseEvidenceEnvelope
-		if err := decodeFinalSemanticRegularJSON(path, &envelope); err != nil {
+		maximum, err := limits.fileEnvelopeBytes(entry.Path, entry.Size)
+		if err != nil {
+			return nil, err
+		}
+		raw, err := readCampaignEvidenceOwnedFileWithLimitV2(filepath.Dir(path), filepath.Base(path), uint64(maximum)+1, nil)
+		if err == nil {
+			err = decodeStrictJSONBytes(raw, &envelope)
+		}
+		if err != nil {
 			return nil, fmt.Errorf("read staged semantic file %s: %w", entry.Path, err)
 		}
 		if err := verifyFinalSemanticOwnerEnvelope(cfg, &envelope, closure.ownerPublicKey, finalSemanticSupplementFileKind, payload.RunID); err != nil || !strings.EqualFold(envelope.ContentHash, entry.EnvelopeHash) {
@@ -1353,29 +1430,29 @@ func validateFinalSemanticSupplementStores(cfg *ResolvedConfig, stores map[int]s
 }
 
 func publishAndReadBackFinalSemanticEnvelope(ctx context.Context, store server.BlobStore, envelope *ReleaseEvidenceEnvelope) error {
-	serverEnvelope, err := startifactEvidenceEnvelope(envelope)
+	prepared, err := prepareDirectEvidencePublication(envelope)
 	if err != nil {
 		return err
 	}
-	published, err := startifact.PublishEvidence(ctx, store, serverEnvelope)
+	published, err := prepared.Publish(ctx, store)
 	if err != nil {
 		return err
 	}
-	return verifyDirectEvidencePublication(ctx, store, serverEnvelope, published)
+	return prepared.VerifyPublished(ctx, store, published)
 }
 
 func readBackFinalSemanticEnvelope(ctx context.Context, store server.BlobStore, envelope *ReleaseEvidenceEnvelope) error {
-	serverEnvelope, err := startifactEvidenceEnvelope(envelope)
+	prepared, err := prepareDirectEvidencePublication(envelope)
 	if err != nil {
 		return err
 	}
-	contentKey, err := startifact.EvidenceContentKey(store, serverEnvelope.ContentHash)
+	contentKey, err := startifact.EvidenceContentKey(store, envelope.ContentHash)
 	if err != nil {
 		return err
 	}
-	hashHex := strings.TrimPrefix(strings.ToLower(serverEnvelope.ContentHash), "sha256:")
-	historyKey := filepath.ToSlash(filepath.Join(store.Prefix(), "st", "v1", "evidence", "history", serverEnvelope.DeploymentID, fmt.Sprint(serverEnvelope.Netuid), serverEnvelope.Kind, serverEnvelope.RunID, hashHex+".json"))
-	return verifyDirectEvidencePublication(ctx, store, serverEnvelope, &startifact.Published{ContentHash: serverEnvelope.ContentHash, ContentKey: contentKey, HistoryKey: historyKey, Bucket: store.Bucket()})
+	hashHex := strings.TrimPrefix(strings.ToLower(envelope.ContentHash), "sha256:")
+	historyKey := filepath.ToSlash(filepath.Join(store.Prefix(), "st", "v1", "evidence", "history", envelope.DeploymentID, fmt.Sprint(envelope.Netuid), envelope.Kind, evidenceHistoryStorageRunID(envelope.RunID), hashHex+".json"))
+	return prepared.VerifyPublished(ctx, store, &startifact.Published{ContentHash: envelope.ContentHash, ContentKey: contentKey, HistoryKey: historyKey, Bucket: store.Bucket()})
 }
 
 func verifyFinalSemanticOwnerEnvelope(cfg *ResolvedConfig, envelope *ReleaseEvidenceEnvelope, signer *ecdsa.PublicKey, kind, runID string) error {
@@ -1414,7 +1491,16 @@ func prepareFinalSemanticLocalEvidence(cfg *ResolvedConfig, stateRoot, localPath
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := requireFinalSemanticRegularFile(localPath); err != nil {
+	maximum, err := campaignEvidencePayloadLimitV2(cfg, kind, payload)
+	if err != nil {
+		return nil, nil, err
+	}
+	if maximum == 0 {
+		maximum = maximumCampaignEvidenceEnvelopeBytes
+	} else {
+		maximum += maximumCampaignFileEnvelopeOverhead + 1
+	}
+	if err := requireFinalSemanticRegularFileWithLimitV2(localPath, maximum); err != nil {
 		return nil, nil, err
 	}
 	return envelope, encoded, nil
@@ -1439,11 +1525,17 @@ func decodeFinalSemanticRegularJSON(path string, value any) error {
 }
 
 func requireFinalSemanticRegularFile(path string) error {
+	return requireFinalSemanticRegularFileWithLimitV2(path, maximumCampaignEvidenceEnvelopeBytes)
+}
+
+// Staged metadata carriers use the exact cfg/path size already admitted by
+// their publisher; the unchanged legacy wrapper remains capped at 64 MiB.
+func requireFinalSemanticRegularFileWithLimitV2(path string, maximum uint64) error {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() < 0 || info.Size() > maximumCampaignEvidenceEnvelopeBytes {
+	if maximum == 0 || maximum >= uint64(^uint64(0)>>1) || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() < 0 || uint64(info.Size()) > maximum {
 		return fmt.Errorf("%s is not a bounded regular file", path)
 	}
 	return nil

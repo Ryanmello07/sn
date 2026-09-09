@@ -169,7 +169,7 @@ func captureFinalSemanticLiveChain(ctx context.Context, cfg *ResolvedConfig, sta
 	if err != nil {
 		return nil, fmt.Errorf("load final live-chain fleet batcher: %w", err)
 	}
-	census, err := finalCaptureReleaseContractCensusFromState(stateRoot, plan, deployment, batcher)
+	census, err := finalCaptureReleaseContractCensusFromStateContext(ctx, stateRoot, plan, deployment, batcher)
 	if err != nil {
 		return nil, fmt.Errorf("derive final historical release-contract census: %w", err)
 	}
@@ -505,8 +505,7 @@ func captureFinalHistoricalCoordinatorBaselines(ctx context.Context, cfg *Resolv
 	}
 	plans := map[string]*SetupPlan{current.PlanHash: current}
 	for _, hash := range current.PriorPlanHashes {
-		path := filepath.Join(stateRoot, "plans", stringsTrim0x(hash)+".json")
-		plan, err := readPersistedPlanFile(path)
+		plan, err := readValidatorEvidenceHistoricalPlan(stateRoot, hash)
 		if err != nil || plan == nil || !strings.EqualFold(plan.PlanHash, hash) || plan.DeploymentID != current.DeploymentID || plan.ChainID != current.ChainID || plan.Netuid != current.Netuid {
 			return nil, stateMismatchError(err, "load historical coordinator baseline plan %s", hash)
 		}

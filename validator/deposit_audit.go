@@ -30,6 +30,7 @@ const (
 // DepositAudit is the exact validator evidence for one operator's demand
 // signal. Decimal strings preserve uint256 conviction/deposit values.
 type DepositAudit struct {
+	HttpObservationHash    string `json:"http_observation_hash,omitempty"`
 	NoID                   uint64 `json:"no_id"`
 	Epoch                  uint64 `json:"epoch"`
 	SourceEpoch            uint64 `json:"source_epoch"`

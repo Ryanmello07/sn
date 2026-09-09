@@ -41,7 +41,7 @@ func finalHistoricalCoordinatorOracleArtifactTestFixture(t *testing.T) *finalHis
 	awaitActive := Action{ID: "fleet.refresh.oracle-await-active", Kind: "evm-read", Target: batcher, DependsOn: []string{activate.ID}, IntentHash: finalTestHex(0x12)}
 	restore := Action{ID: "fleet.refresh.oracle-restore", Kind: "evm-transaction", Target: coordinator, Parameters: map[string]string{"oracle": original}, IntentHash: finalTestHex(0x13)}
 	awaitRestored := Action{ID: "fleet.refresh.oracle-await-restored", Kind: "evm-read", Target: original, DependsOn: []string{restore.ID}, IntentHash: finalTestHex(0x14)}
-	current := &SetupPlan{PlanHash: planHash, Deployment: ContractDeployment{CoordinatorProxy: common.HexToAddress(coordinator)}, Actions: []Action{activate, awaitActive, restore, awaitRestored}}
+	current := &SetupPlan{PlanHash: planHash, DeploymentID: deploymentID, Deployment: ContractDeployment{CoordinatorProxy: common.HexToAddress(coordinator)}, Actions: []Action{activate, awaitActive, restore, awaitRestored}}
 	for batch := uint64(1); batch <= finalFleetGenerationBatchCount; batch++ {
 		current.Actions = append(current.Actions, Action{ID: "fleet.refresh.batch." + strconv.FormatUint(batch, 10), Kind: "evm-transaction", Target: batcher, IntentHash: finalTestHex(byte(0x60 + batch))})
 	}
@@ -216,6 +216,12 @@ func TestFinalSemanticHistoricalOracleWindowArtifactRejectsBoundMutations(t *tes
 		name   string
 		mutate func(*finalHistoricalCoordinatorOracleArtifactFixture)
 	}{
+		{name: "missing approved plan deployment", mutate: func(value *finalHistoricalCoordinatorOracleArtifactFixture) {
+			value.current.DeploymentID = ""
+		}},
+		{name: "different approved plan deployment", mutate: func(value *finalHistoricalCoordinatorOracleArtifactFixture) {
+			value.current.DeploymentID = "foreign-oracle-deployment"
+		}},
 		{name: "missing artifact", mutate: func(value *finalHistoricalCoordinatorOracleArtifactFixture) {
 			delete(value.cache, value.evidence.FleetRefreshOracleWindow.Artifact.URI)
 		}},

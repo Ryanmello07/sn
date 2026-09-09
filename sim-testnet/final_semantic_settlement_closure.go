@@ -309,6 +309,24 @@ func verifyFinalSettlementClosureArtifactsWithAuthority(evidence *FinalSemanticE
 // Replays the live collector's exact authority union from the closed graph.
 // Attempt summaries and proof file hashes alone are not evidence of completeness.
 func verifyFinalCollectedSettlementAuthority(cfg *ResolvedConfig, value *FinalSemanticCollectedInputs, terminal *ScenarioObservation, loaded map[string][]byte) error {
+	return verifyFinalCollectedSettlementAuthorityWithReader(context.Background(), cfg, value, terminal, loaded, func(_ context.Context, locator FinalArtifactLocator) ([]byte, error) {
+		raw, found := loaded[locator.URI]
+		if !found {
+			return nil, errors.New("collected source is absent")
+		}
+		return raw, nil
+	})
+}
+
+// Live capture supplies a bounded per-object source reader; legacy/offline
+// callers retain the original map adapter and exactly the same authority checks.
+func verifyFinalCollectedSettlementAuthorityWithReader(ctx context.Context, cfg *ResolvedConfig, value *FinalSemanticCollectedInputs, terminal *ScenarioObservation, loaded map[string][]byte, read FinalArtifactLoader) error {
+	if ctx == nil || read == nil {
+		return errors.New("collected settlement source owner is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	publicBytes, err := finalCollectedPublicIdentityBytes(value, loaded)
 	if err != nil {
 		return err
@@ -325,6 +343,20 @@ func verifyFinalCollectedSettlementAuthority(cfg *ResolvedConfig, value *FinalSe
 	authority, err := decodeFinalOperatorPathAuthority(publicBytes, cfg.Config.Deployment.DeploymentID, cfg.Config.Topology.Validators, cfg.Config.Topology.Operators)
 	if err != nil {
 		return err
+	}
+	if finalUsesEvidenceV2(cfg) {
+		for index, validator := range value.Validators {
+			if validator.ValidatorID != uint64(index+1) {
+				return errors.New("compact collected validator census is not canonical")
+			}
+			if err := authority.verify(validator.ValidatorID, validator.PathVPK, validator.OperatorPaths); err != nil {
+				return err
+			}
+			if err := verifyFinalCapturedValidatorBytesV2WithReader(ctx, cfg, value, validator, authority, loaded, read); err != nil {
+				return err
+			}
+		}
+		return ctx.Err()
 	}
 	serverKeys := map[uint64]map[byte]ed25519.PublicKey{}
 	for _, operator := range terminal.Operators {
@@ -439,6 +471,9 @@ func waitFinalValidatorSettlementClosuresWithWait(ctx context.Context, cfg *Reso
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if finalUsesEvidenceV2(cfg) {
+		return waitFinalValidatorPublicationsV2(ctx, cfg, stateRoot, terminal, window, deadline, poll, wait)
 	}
 	serverKeys := map[uint64]map[byte]ed25519.PublicKey{}
 	for _, operator := range terminal.Operators {

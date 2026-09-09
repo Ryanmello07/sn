@@ -81,32 +81,108 @@ var artifactDefinitions = []artifactDefinition{
 	{"FleetBatcher", "STFleetBatcher.sol/STFleetBatcher.json", false, "TestnetFleetBatcherArtifact", []string{"coordinator", "oracle"}, []string{"src/STFleetBatcher.sol"}, false, nil},
 }
 
-// Foundry includes compilation-unit AST ids in storage entries and Solidity
-// type identifiers. Those ids change when an unrelated source is added, even
-// though every slot/type is identical. Remove only that compiler bookkeeping;
-// retain labels, slots, offsets, lengths, encodings, and nested member shapes.
-func normalizeFoundryStorageLayout(value any) any {
-	switch typed := value.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(typed))
-		for key, child := range typed {
-			if key == "astId" || key == "contract" {
-				continue
-			}
-			out[foundryTypeASTID.ReplaceAllString(key, "$1")] = normalizeFoundryStorageLayout(child)
+// Remove compiler IDs without collapsing two declarations that share a short
+// name. Collision groups use their complete compiler type labels, and every
+// nested reference follows the same substitution. Unresolvable aliases fail.
+func normalizeFoundryStorageLayout(value any) (any, error) {
+	layout, _ := value.(map[string]any)
+	typeKVs, _ := layout["types"].(map[string]any)
+	typeGroups := map[string]map[string]string{}
+	for key, entry := range typeKVs {
+		match := foundryTypeASTID.FindStringSubmatchIndex(key)
+		if match == nil || match[0] != 0 {
+			continue
 		}
-		return out
-	case []any:
-		out := make([]any, len(typed))
-		for i := range typed {
-			out[i] = normalizeFoundryStorageLayout(typed[i])
+		raw, base := key[match[0]:match[1]], key[match[2]:match[3]]
+		fields, _ := entry.(map[string]any)
+		label, _ := fields["label"].(string)
+		if typeGroups[base] == nil {
+			typeGroups[base] = map[string]string{}
 		}
-		return out
-	case string:
-		return foundryTypeASTID.ReplaceAllString(typed, "$1")
-	default:
-		return value
+		if prior, exists := typeGroups[base][raw]; exists && prior != label {
+			return nil, fmt.Errorf("storage type %q has conflicting declaration labels", raw)
+		}
+		typeGroups[base][raw] = label
 	}
+	typeNames := map[string]string{}
+	canonicalOwners := map[string]string{}
+	for base, declarations := range typeGroups {
+		for raw, label := range declarations {
+			canonical := base
+			if len(declarations) > 1 {
+				open := strings.IndexByte(base, '(')
+				kind := strings.TrimPrefix(base[:open], "t_")
+				prefix := kind + " "
+				if kind == "userDefinedValueType" {
+					prefix = ""
+				}
+				qualified := strings.TrimPrefix(label, prefix)
+				if label == "" || prefix != "" && qualified == label || strings.TrimSpace(qualified) != qualified || qualified == "" || strings.ContainsAny(qualified, "()\x00") {
+					return nil, fmt.Errorf("ambiguous storage type %q has no complete declaration label", raw)
+				}
+				canonical = base[:open+1] + qualified + ")"
+			}
+			if prior, exists := canonicalOwners[canonical]; exists && prior != raw {
+				return nil, fmt.Errorf("ambiguous storage types %q and %q share one canonical identity", prior, raw)
+			}
+			canonicalOwners[canonical] = raw
+			typeNames[raw] = canonical
+		}
+	}
+	normalizeName := func(text string) (string, error) {
+		var nameErr error
+		normalized := foundryTypeASTID.ReplaceAllStringFunc(text, func(raw string) string {
+			if canonical, exists := typeNames[raw]; exists {
+				return canonical
+			}
+			nameErr = fmt.Errorf("storage type reference %q has no declaration", raw)
+			return raw
+		})
+		return normalized, nameErr
+	}
+	var visit func(any) (any, error)
+	visit = func(current any) (any, error) {
+		switch typed := current.(type) {
+		case map[string]any:
+			out := make(map[string]any, len(typed))
+			for key, child := range typed {
+				if key == "astId" || key == "contract" {
+					continue
+				}
+				normalizedKey, err := normalizeName(key)
+				if err != nil {
+					return nil, err
+				}
+				if _, exists := out[normalizedKey]; exists {
+					return nil, fmt.Errorf("storage layout keys collide at %q after normalization", normalizedKey)
+				}
+				out[normalizedKey], err = visit(child)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return out, nil
+		case []any:
+			out := make([]any, len(typed))
+			for index, child := range typed {
+				var err error
+				out[index], err = visit(child)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return out, nil
+		case string:
+			return normalizeName(typed)
+		default:
+			return current, nil
+		}
+	}
+	normalized, err := visit(value)
+	if err != nil {
+		return nil, err
+	}
+	return normalized, nil
 }
 
 func canonicalArtifactHash(a artifact, immutableReferences map[string][]int) string {
@@ -128,6 +204,8 @@ func canonicalArtifactHashForBytecode(a artifact, immutableReferences map[string
 		must(json.Unmarshal(raw, &value))
 		return value
 	}
+	layout, err := normalizeFoundryStorageLayout(decode(a.StorageLayout))
+	must(err)
 	projection := struct {
 		ABI                 any               `json:"abi"`
 		CreationBytecode    string            `json:"creationBytecode"`
@@ -138,7 +216,7 @@ func canonicalArtifactHashForBytecode(a artifact, immutableReferences map[string
 	}{
 		ABI: decode(a.ABI), CreationBytecode: creation, RuntimeBytecode: runtime,
 		ImmutableReferences: immutableReferences, MethodIdentifiers: a.MethodIdentifiers,
-		StorageLayout: normalizeFoundryStorageLayout(decode(a.StorageLayout)),
+		StorageLayout: layout,
 	}
 	canonical, err := json.Marshal(projection)
 	must(err)
@@ -205,7 +283,8 @@ func loadContractItems(root string) []item {
 			layout = nil
 		} else {
 			must(json.Unmarshal(a.StorageLayout, &layout))
-			layout = normalizeFoundryStorageLayout(layout)
+			layout, err = normalizeFoundryStorageLayout(layout)
+			must(err)
 		}
 		canonicalLayout, err := json.Marshal(layout)
 		must(err)

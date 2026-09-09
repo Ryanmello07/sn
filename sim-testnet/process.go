@@ -34,6 +34,9 @@ import (
 	"github.com/urfoundation/sn/clientauth"
 )
 
+// The quota forecast includes every permitted validator process restart.
+const validatorProcessRestartLimit = 5
+
 type ProcessSpec struct {
 	ID, Role, Identity, Command, WorkDir string
 	Args                                 []string
@@ -721,6 +724,11 @@ func waitReleaseTopologyReady(ctx context.Context, cfg *ResolvedConfig, stateDir
 func LaunchDeployment(ctx context.Context, cfg *ResolvedConfig, stateDir string, p *SetupPlan, roles *RoleSecrets, executor *Executor, bins map[string]string, detach bool) (returnErr error) {
 	if len(bins) == 0 {
 		return errors.New("launch requires preflighted release binaries")
+	}
+	// Direct launch callers share apply/render admission before acquiring
+	// supervisor state, migrating databases or provisioning API accounts.
+	if _, err := runtimeAttemptUploadBudget(cfg); err != nil {
+		return err
 	}
 	if err := ensureNoLiveSupervisorForLaunch(stateDir); err != nil {
 		return err
@@ -1547,7 +1555,7 @@ func buildClientSpecs(cfg *ResolvedConfig, stateDir string, bins map[string]stri
 		args := []string{"__validator", "--config=" + filepath.Join(stateDir, "runtime", id, "validator.yml")}
 		env := cloneStrings(connectClientEnv)
 		env["URNETWORK_STATE_DIR"] = filepath.Join(stateDir, "runtime", id, "state")
-		out = append(out, ProcessSpec{ID: id, Role: "validator", Identity: roles.Substrate[validatorHotkeyLabel(i)].SS58, Command: bins["sim-testnet"], Args: args, WorkDir: cfg.Repos.SN, Env: env, StdoutPath: filepath.Join(stateDir, "processes", id+".stdout.log"), StderrPath: filepath.Join(stateDir, "processes", id+".stderr.log"), RestartLimit: 5})
+		out = append(out, ProcessSpec{ID: id, Role: "validator", Identity: roles.Substrate[validatorHotkeyLabel(i)].SS58, Command: bins["sim-testnet"], Args: args, WorkDir: cfg.Repos.SN, Env: env, StdoutPath: filepath.Join(stateDir, "processes", id+".stdout.log"), StderrPath: filepath.Join(stateDir, "processes", id+".stderr.log"), RestartLimit: validatorProcessRestartLimit})
 	}
 	return out
 }

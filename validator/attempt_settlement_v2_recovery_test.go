@@ -18,6 +18,7 @@ import (
 // Positive prior quality survives a real disk reopen and complete authority
 // replay; reporting floats and exact policy quality remain independent.
 func TestAttemptSettlementRuntimeV2RecoveryPreservesRealPositivePrior(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 15, 1)
 	fixture.trails(t, 1, 1, 0)
@@ -38,6 +39,7 @@ func TestAttemptSettlementRuntimeV2RecoveryPreservesRealPositivePrior(t *testing
 // A genuinely empty next terminal carries, rather than refolds away, the
 // prior quality. The first signed stream still uses exactly122/16 capacity.
 func TestAttemptSettlementRuntimeV2EmptySuccessorPreservesRealPrior(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 15, 1)
 	first, err := AdvanceAttemptSettlementEpochV2(t.Context(), fixture.coordinator, fixture.participants, 43, fixture.fixtures[0].expected.Boundary, fixture.options(t))
@@ -59,6 +61,7 @@ func TestAttemptSettlementRuntimeV2EmptySuccessorPreservesRealPrior(t *testing.T
 // Before any terminal, startup recovers an actual completed M8 suffix that
 // was never checkpointed by Save. No synthetic counter projection is used.
 func TestAttemptSettlementRuntimeV2RecoveryAppliesRealUncheckpointedSuffix(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 2, 1)
 	fixture.trails(t, 1, 1, 0)
@@ -81,6 +84,7 @@ func TestAttemptSettlementRuntimeV2RecoveryAppliesRealUncheckpointedSuffix(t *te
 // The latest complete terminal and a genuinely nonempty next settlement
 // coexist on restart. Historical replay authority stays pinned to the terminal.
 func TestAttemptSettlementRuntimeV2RecoveryPreservesRealNonemptySuccessor(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 2, 1)
 	first, err := AdvanceAttemptSettlementEpochV2(t.Context(), fixture.coordinator, fixture.participants, 43, fixture.fixtures[0].expected.Boundary, fixture.options(t))
@@ -110,6 +114,7 @@ func TestAttemptSettlementRuntimeV2RecoveryPreservesRealNonemptySuccessor(t *tes
 // Same epoch and generation are insufficient: unknown counters are not one
 // of the exact original, live-preimage or postimage journal hashes.
 func TestAttemptSettlementRuntimeV2RecoveryRejectsUnknownSameGenerationCounters(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	fixture.trails(t, 0, 1, 0)
 	transaction := fixture.partialWrite(t)
@@ -141,6 +146,7 @@ func TestAttemptSettlementRuntimeV2RecoveryRejectsUnknownSameGenerationCounters(
 // V6 cannot be downgraded, stripped of its activation or given a mutated
 // local successor cursor. These are all codec refusals before publication.
 func TestAttemptSettlementRuntimeV2SnapshotRejectsDowngradeOmissionAndMutation(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	for _, variant := range []string{"downgrade", "omission", "activation", "root", "cursor", "unknown-version"} {
 		raw := runtimeAttemptSettlementV2TestImages(t, fixture.participants)[0]
@@ -176,6 +182,7 @@ func TestAttemptSettlementRuntimeV2SnapshotRejectsDowngradeOmissionAndMutation(t
 // Removing one whole activation field and claiming v5 still fails independent
 // startup authority, even though the historical v5 codec remains available.
 func TestAttemptSettlementRuntimeV2RecoveryRejectsStrippedV6Snapshot(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	snapshot := fixture.participants[1].Stats.snapshotStats()
 	snapshot.Version, snapshot.AttemptV2 = 5, nil
@@ -206,6 +213,7 @@ func TestAttemptSettlementRuntimeV2RecoveryRejectsStrippedV6Snapshot(t *testing.
 // Even the last physical owner close precedes startup publication. The
 // injected error is a contract control after an actual close, not device I/O.
 func TestAttemptSettlementRuntimeV2RecoveryLateCloseLeavesAllUnattached(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	restarted := fixture.reopen(t)
 	physical := attemptSettlementV2PhysicalIO()
@@ -225,6 +233,7 @@ func TestAttemptSettlementRuntimeV2RecoveryLateCloseLeavesAllUnattached(t *testi
 // Capturing an original hash is not permission to bless previously corrupted
 // same-generation counters; the older disk image must also replay its prefix.
 func TestAttemptSettlementRuntimeV2RejectsCorruptOriginalCheckpointBeforeJournal(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	participant := fixture.participants[0]
 	snapshot := participant.Stats.snapshotStats()
@@ -258,6 +267,7 @@ func TestAttemptSettlementRuntimeV2RejectsCorruptOriginalCheckpointBeforeJournal
 // Actual pending recovery writes a signed validator-error terminal only after
 // authenticating the complete configured operator set's uncheckpointed tails.
 func TestAttemptSettlementRuntimeV2RecoveryFinishesRealPendingM8Prefixes(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	restarted := fixture.pendingRestart(t)
 	if err := RecoverAttemptSettlementEpochV2(t.Context(), fixture.coordinator, restarted, fixture.options(t).Authority, runtimeAttemptSettlementV2TestPersistence()); err != nil {
@@ -282,6 +292,7 @@ func TestAttemptSettlementRuntimeV2RecoveryFinishesRealPendingM8Prefixes(t *test
 // A later operator's real receipt fails the independently supplied key set.
 // The first operator's valid pending row must not be recovered prematurely.
 func TestAttemptSettlementRuntimeV2PendingCensusAuthenticatesAllBeforeAnyWrite(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	restarted := fixture.pendingRestart(t)
 	authority := fixture.options(t).Authority
@@ -316,6 +327,7 @@ func TestAttemptSettlementRuntimeV2PendingCensusAuthenticatesAllBeforeAnyWrite(t
 // A no-journal activation retry cannot declare success over an older missing
 // v6 marker, even when its in-memory activated prefix still looks correct.
 func TestAttemptSettlementRuntimeV2CurrentActivationRejectsDifferentDiskImage(t *testing.T) {
+	t.Parallel()
 	fixture := newAttemptSettlementRuntimeV2TestFixture(t, true)
 	participant := fixture.participants[1]
 	snapshot := participant.Stats.snapshotStats()
@@ -340,4 +352,36 @@ func TestAttemptSettlementRuntimeV2CurrentActivationRejectsDifferentDiskImage(t 
 		t.Fatalf("current activation overwrote unknown disk state: %v", err)
 	}
 	fixture.assertReserved(t, 42)
+}
+
+// These four actual files share private signed-disk factories, not process
+// state. Removing even one first admission recreates the expensive serial
+// prefix; inspect that executable source rather than timing its scheduler.
+func TestAttemptSettlementRuntimeV2AdditionalPrivateFixturesEnterParallelBeforeWork(t *testing.T) {
+	t.Parallel()
+	for _, source := range []struct {
+		path  string
+		roots int
+	}{
+		{path: "attempt_settlement_v2_recovery_test.go", roots: 13},
+		{path: "attempt_settlement_v2_alias_test.go", roots: 4},
+		{path: "attempt_settlement_v2_persistence_bounds_test.go", roots: 18},
+		{path: "attempt_settlement_v2_path_encoding_test.go", roots: 3},
+	} {
+		encoded, err := os.ReadFile(source.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		count, err := verifySettlementFixtureParallelAdmission(source.path, encoded)
+		if err != nil || count != source.roots {
+			t.Fatalf("%s parallel admission or complete root census changed: roots=%d error=%v", source.path, count, err)
+		}
+		serial := bytes.Replace(encoded, []byte("\n\tt.Parallel()\n"), []byte("\n"), 1)
+		if bytes.Equal(encoded, serial) {
+			t.Fatal("actual source lost its removable first parallel admission", source.path)
+		}
+		if _, err := verifySettlementFixtureParallelAdmission(source.path, serial); err == nil {
+			t.Fatal("an actual first root could return to a serial prefix", source.path)
+		}
+	}
 }
