@@ -1,6 +1,6 @@
 openapi: "3.1.0"
 info:
-  version: 2026.9.4
+  version: 2026.9.9
   title: URnetwork Competition API
   description: |
     Control-plane API for reproducible, cached sim-latency competition rounds.
@@ -14,10 +14,13 @@ info:
     is finalized after ordered honesty review, then exposes the seed, immutable
     workload, and results.
     Identical canonical patch bytes in one round map to one durable job/result.
-    Before epoch one, an operator may create a single epoch-zero staging round
-    for API integration. Staging submissions are retained and pollable but are
-    never charged, evaluated, ranked, or published; committing epoch one
-    atomically cancels the staging round and all unfinished staging jobs.
+    Before production epoch one, an operator may run an independently numbered
+    staging era beginning at epoch zero. Staging submissions are fee-free but
+    traverse the same durable FIFO and evaluator as production. Each staging
+    epoch publishes its poll results after admission closes and all accepted
+    work drains; it never selects a winner or changes evaluated source.
+    Committing production epoch one atomically ends the staging era and cancels
+    queued staging work; it refuses to race a running staging evaluation.
   contact:
     name: URnetwork
     email: support@ur.xyz
@@ -139,14 +142,24 @@ paths:
     post:
       operationId: CompetitionGenerateStagingRound
       tags: [Competition operator]
-      summary: Generate the one pre-season API integration round
+      summary: Generate the next pre-production staging epoch
       description: |
-        Creates epoch zero with server-selected timing and workload identity.
-        Its submissions exercise authenticated patch validation, immutable
-        artifact retention, cache identity, and polling, but never enter the
-        evaluator FIFO or fee/score/leaderboard paths. Only one staging round
-        may ever exist for a competition, and no staging round may be created
+        Creates the next independently numbered staging epoch, beginning with
+        epoch zero. Staging submissions exercise authenticated patch
+        validation, immutable artifact retention, cache identity, the real
+        evaluator FIFO, embargo, and result publication without charging a fee
+        or selecting/promoting a winner. Every job retains an authenticated
+        same-round baseline, while the separately promoted production
+        rebaseline identity is not required. A prior staging epoch must be
+        finalized unless replace_current explicitly supersedes it; replacement
+        refuses while an evaluation is running. No staging epoch may be created
         after the first production epoch is committed.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompetitionGenerateStagingRoundArgs"
       responses:
         "201":
           description: Staging round created; use its round_id for test submissions.
@@ -211,10 +224,11 @@ paths:
         per epoch and enter the single FIFO immediately. The Apex adapter
         collects the published $20 USD submission fee exactly once before
         forwarding a production admission. A response with `staging: true`
-        is a fee-free API integration admission: it remains pollable in
-        `queued` state, never enters the evaluator, and becomes `canceled`
-        when epoch one is committed. The canceled response exposes only the
-        non-retriable `staging_discarded` reason, never a measured outcome. Any
+        is fee-free but otherwise enters the same FIFO evaluator. Its score or
+        failure remains embargoed until that staging epoch closes, drains, and
+        finalizes without a winner. An explicitly superseded staging epoch, or
+        one interrupted by production epoch one, exposes only a non-retriable
+        staging cleanup reason rather than a measured outcome. Any
         patch operation targeting
         `connect/sim-latency/**` is a terminal invalid submission; the
         simulator, runner, and scorer implementation is not an editable
@@ -404,7 +418,7 @@ components:
             - $ref: "#/components/schemas/CompetitionRoundResult"
             - type: "null"
         staging_round:
-          description: The pre-season API-test round, omitted after epoch one is committed.
+          description: The latest round in the staging era, omitted after production epoch one is committed.
           oneOf:
             - $ref: "#/components/schemas/CompetitionRoundResult"
             - type: "null"
@@ -585,6 +599,33 @@ components:
           type: string
           format: date-time
 
+    CompetitionGenerateStagingRoundArgs:
+      type: object
+      additionalProperties: false
+      description: |
+        Omitting every timestamp creates an immediately open 48-hour staging
+        epoch. If any timestamp is supplied, all three are required; the window
+        must be from one minute through seven days and reveal_at must equal
+        closes_at.
+      dependentRequired:
+        opens_at: [closes_at, reveal_at]
+        closes_at: [opens_at, reveal_at]
+        reveal_at: [opens_at, closes_at]
+      properties:
+        opens_at:
+          type: string
+          format: date-time
+        closes_at:
+          type: string
+          format: date-time
+        reveal_at:
+          type: string
+          format: date-time
+        replace_current:
+          type: boolean
+          default: false
+          description: Cancel a non-finalized staging round and its queued jobs before creating the next epoch; rejected while a job is running.
+
     CompetitionRoundResult:
       type: object
       additionalProperties: false
@@ -607,11 +648,10 @@ components:
         epoch:
           type: integer
           minimum: 0
-          maximum: 6
-          description: Zero only for the one pre-season staging round; production epochs are 1 through 6.
+          description: Staging epochs begin at zero and advance independently; production epochs are 1 through 6.
         staging:
           type: boolean
-          description: True only for epoch zero, which is excluded from evaluation, fees, ranking, and publication.
+          description: True for a fee-free pre-production epoch evaluated against frozen source epoch zero and excluded from winner promotion and the production leaderboard.
         status:
           type: string
           enum: [scheduled, open, grading, finalized, canceled]
@@ -791,7 +831,7 @@ components:
           format: uuid
         staging:
           type: boolean
-          description: True for an epoch-zero API-integration job; it remains queued until epoch one cancels it.
+          description: True for a fee-free staging-era job evaluated against source epoch zero and published through polling after staging finalization.
         patch_sha256:
           $ref: "#/components/schemas/Sha256"
         state:
