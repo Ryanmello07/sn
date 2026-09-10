@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {Blake2b} from "../src/lib/Blake2b.sol";
 import {STCoordinator} from "../src/STCoordinator.sol";
@@ -37,6 +38,7 @@ contract Deploy is Script {
         bytes32 reserveHotkey;
         bytes32 escrowHotkey;
         uint64 registrationBurnLimitRao;
+        uint64 minimumTransferTaoRao;
         STCoordinator.PolicySnapshot policy;
     }
 
@@ -64,7 +66,8 @@ contract Deploy is Script {
             cfg.netuid,
             cfg.escrowHotkey,
             Blake2b.mirror(deployed.settlementVault),
-            cfg.policy.epochBlocks * cfg.policy.claimTTLEpochs,
+            _minimumClaimTTLBlocks(cfg.policy.epochBlocks, cfg.policy.claimTTLEpochs),
+            cfg.minimumTransferTaoRao,
             cfg.deployer
         );
         STCoordinator implementation = new STCoordinator();
@@ -108,21 +111,19 @@ contract Deploy is Script {
     /// Required: ST_NETUID, ST_DEPLOYER, ST_OWNER, ST_GUARDIAN,
     /// ST_COMMITMENT_ORACLE, ST_RESERVE_HOTKEY, ST_ESCROW_HOTKEY,
     /// ST_POLICY_HASH, ST_REGISTRATION_BURN_LIMIT_RAO,
+    /// ST_MINIMUM_TRANSFER_TAO_RAO,
     /// ST_EPOCH_DEPOSIT_CAP_RAO and
     /// ST_CAMPAIGN_DEPOSIT_CAP_RAO. Window fields have profile defaults.
     function _loadConfig(bool mainnet) internal view returns (Config memory cfg) {
-        cfg.netuid = uint16(vm.envUint("ST_NETUID"));
+        cfg.netuid = SafeCast.toUint16(vm.envUint("ST_NETUID"));
         cfg.deployer = vm.envAddress("ST_DEPLOYER");
         cfg.owner = vm.envAddress("ST_OWNER");
         cfg.guardian = vm.envAddress("ST_GUARDIAN");
         cfg.commitmentOracle = vm.envAddress("ST_COMMITMENT_ORACLE");
         cfg.reserveHotkey = vm.envBytes32("ST_RESERVE_HOTKEY");
         cfg.escrowHotkey = vm.envBytes32("ST_ESCROW_HOTKEY");
-        uint256 registrationBurnLimitRao = vm.envUint("ST_REGISTRATION_BURN_LIMIT_RAO");
-        require(registrationBurnLimitRao <= type(uint64).max, "Deploy: registration burn limit overflow");
-        // Casting is safe because the explicit upper bound is enforced above.
-        // forge-lint: disable-next-line(unsafe-typecast)
-        cfg.registrationBurnLimitRao = uint64(registrationBurnLimitRao);
+        cfg.registrationBurnLimitRao = SafeCast.toUint64(vm.envUint("ST_REGISTRATION_BURN_LIMIT_RAO"));
+        cfg.minimumTransferTaoRao = SafeCast.toUint64(vm.envUint("ST_MINIMUM_TRANSFER_TAO_RAO"));
         bytes32 policyHash = vm.envBytes32("ST_POLICY_HASH");
 
         require(cfg.netuid != 0 && cfg.deployer != address(0) && cfg.owner != address(0), "Deploy: identity");
@@ -134,7 +135,9 @@ contract Deploy is Script {
             "Deploy: roles must be distinct"
         );
         require(cfg.reserveHotkey != bytes32(0) && cfg.escrowHotkey != bytes32(0), "Deploy: hotkeys");
-        require(cfg.registrationBurnLimitRao != 0, "Deploy: registration burn");
+        require(
+            cfg.registrationBurnLimitRao != 0 && cfg.minimumTransferTaoRao != 0, "Deploy: runtime minimums"
+        );
         require(cfg.reserveHotkey != cfg.escrowHotkey && policyHash != bytes32(0), "Deploy: policy");
         if (mainnet) {
             _requireMainnetSafe(cfg.owner);
@@ -142,28 +145,40 @@ contract Deploy is Script {
             require(cfg.owner.code.length == 0, "Deploy: testnet owner must be EOA");
         }
 
-        uint64 epochBlocks = uint64(vm.envOr("ST_EPOCH_BLOCKS", uint256(mainnet ? 50_400 : 300)));
+        uint64 epochBlocks = SafeCast.toUint64(vm.envOr("ST_EPOCH_BLOCKS", uint256(mainnet ? 50_400 : 300)));
         cfg.policy = STCoordinator.PolicySnapshot({
             policyHash: policyHash,
             effectiveEpoch: 0,
             effectiveBlock: 0,
             epochBlocks: epochBlocks,
-            rootCommitWindowBlocks: uint64(
+            rootCommitWindowBlocks: SafeCast.toUint64(
                 vm.envOr("ST_ROOT_COMMIT_WINDOW_BLOCKS", uint256(mainnet ? 1_200 : 50))
             ),
-            finalizeOffsetBlocks: uint64(
+            finalizeOffsetBlocks: SafeCast.toUint64(
                 vm.envOr("ST_FINALIZE_OFFSET_BLOCKS", uint256(mainnet ? 14_400 : 150))
             ),
-            closeGraceBlocks: uint64(vm.envOr("ST_CLOSE_GRACE_BLOCKS", uint256(mainnet ? 120 : 5))),
-            claimTTLEpochs: uint64(vm.envOr("ST_CLAIM_TTL_EPOCHS", uint256(8))),
-            claimGraceEpochs: uint64(vm.envOr("ST_CLAIM_GRACE_EPOCHS", uint256(1))),
-            maximumBindingValidityEpochs: uint64(vm.envOr("ST_MAX_BINDING_VALIDITY_EPOCHS", uint256(32))),
-            commitmentMaxAgeBlocks: uint64(
-                vm.envOr("ST_COMMITMENT_MAX_AGE_BLOCKS", uint256(epochBlocks * 2))
+            closeGraceBlocks: SafeCast.toUint64(
+                vm.envOr("ST_CLOSE_GRACE_BLOCKS", uint256(mainnet ? 120 : 5))
+            ),
+            claimTTLEpochs: SafeCast.toUint64(vm.envOr("ST_CLAIM_TTL_EPOCHS", uint256(8))),
+            claimGraceEpochs: SafeCast.toUint64(vm.envOr("ST_CLAIM_GRACE_EPOCHS", uint256(1))),
+            maximumBindingValidityEpochs: SafeCast.toUint64(
+                vm.envOr("ST_MAX_BINDING_VALIDITY_EPOCHS", uint256(32))
+            ),
+            commitmentMaxAgeBlocks: SafeCast.toUint64(
+                vm.envOr("ST_COMMITMENT_MAX_AGE_BLOCKS", uint256(epochBlocks) * 2)
             ),
             epochDepositCapRao: vm.envUint("ST_EPOCH_DEPOSIT_CAP_RAO"),
             campaignDepositCapRao: vm.envUint("ST_CAMPAIGN_DEPOSIT_CAP_RAO")
         });
+    }
+
+    function _minimumClaimTTLBlocks(uint64 epochBlocks, uint64 claimTTLEpochs)
+        internal
+        pure
+        returns (uint64)
+    {
+        return SafeCast.toUint64(uint256(epochBlocks) * uint256(claimTTLEpochs));
     }
 
     /// @dev A generic contract address is not a mainnet governance policy.

@@ -4,7 +4,14 @@ package validator
 // EMA folding, a_min gating, latency buckets, persistence.
 
 import (
+	"bytes"
+	"crypto/ed25519"
+	"encoding/json"
+	"errors"
 	"math"
+	"math/big"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/urnetwork/connect"
@@ -153,8 +160,8 @@ func TestQualityPreviewBlend(t *testing.T) {
 
 // TestEgressIpHashAccumulation: the engine accumulates a per-provider set of
 // distinct routable egress-IP-hashes (§11.1, D27), dedupes, ignores the zero
-// hash, returns a defensive copy, and resets the set at Fold (windowed like the
-// counters).
+// hash, returns a defensive copy, remains independent of the settlement Fold,
+// and rotates atomically at the native tempo.
 func TestEgressIpHashAccumulation(t *testing.T) {
 	stats := NewStatsEngine(StatsConfig{})
 	p := connect.NewId()
@@ -176,10 +183,323 @@ func TestEgressIpHashAccumulation(t *testing.T) {
 		t.Fatal("EgressIpHashes must return a defensive copy")
 	}
 
-	// Fold resets the egress window.
+	// Settlement-quality folding does not erase the independent head window.
 	stats.Fold()
-	if len(stats.EgressIpHashes()) != 0 {
-		t.Fatal("egress window not reset at Fold")
+	if len(stats.EgressIpHashes()[p]) != 2 {
+		t.Fatal("settlement fold erased the native-tempo egress window")
+	}
+
+	closed := stats.TakeEgressIpHashes()
+	if len(closed[p]) != 2 || len(stats.EgressIpHashes()) != 0 {
+		t.Fatalf("native-tempo rotation closed=%v current=%v", closed, stats.EgressIpHashes())
+	}
+	stats.RecordEgressHash(p, iphash(3))
+	if closed[p][iphash(3)] || !stats.EgressIpHashes()[p][iphash(3)] {
+		t.Fatal("post-rotation proof leaked into the detached tempo window")
+	}
+}
+
+// A failed submission may retry in the same native epoch. It must reuse the
+// exact detached evidence window instead of consuming a sparse retry window;
+// the following epoch then receives evidence recorded after the first cut.
+func TestReleaseHeadEvidenceRotatesOncePerNativeEpoch(t *testing.T) {
+	first, second := NewStatsEngine(StatsConfig{}), NewStatsEngine(StatsConfig{})
+	stateDir := t.TempDir()
+	firstState := filepath.Join(stateDir, "no-3")
+	secondState := filepath.Join(stateDir, "no-9")
+	cfg := &ReleaseConfig{
+		StateDir: stateDir, DeploymentID: "measurement-restart", ChainID: 945,
+		GenesisHash: releaseHex32([32]byte{1}), Coordinator: "0x0000000000000000000000000000000000000001",
+		ValidatorID: 1, Netuid: 521, PolicyHash: releaseHex32([32]byte{2}),
+		Operators: []OperatorConfig{{NoID: 3, StateDir: firstState}, {NoID: 9, StateDir: secondState}},
+	}
+	validatorKey := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
+	for _, setup := range []struct {
+		noID  uint64
+		stats *StatsEngine
+		dir   string
+	}{{noID: 3, stats: first, dir: firstState}, {noID: 9, stats: second, dir: secondState}} {
+		if err := setup.stats.AdvanceSettlementEpoch(4, setup.dir); err != nil {
+			t.Fatal(err)
+		}
+		ledger, err := NewAttemptLedger(setup.dir, AttemptLedgerIdentity{
+			DeploymentID: cfg.DeploymentID, ChainID: cfg.ChainID, GenesisHash: cfg.GenesisHash,
+			Netuid: cfg.Netuid, ValidatorID: cfg.ValidatorID, NoID: setup.noID,
+		}, validatorKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := setup.stats.AttachAttemptLedger(ledger, setup.dir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	contexts := map[uint64]*ReleaseMeasurementContext{
+		9: {NoID: 9, Stats: second},
+		3: {NoID: 3, Stats: first},
+	}
+	steerer := &ReleaseSteerer{cfg: cfg, contexts: contexts}
+	snapshot := &ReleaseSnapshot{BlockNumber: 98, BlockHash: [32]byte{7}, Epoch: big.NewInt(4)}
+
+	initial, err := steerer.takeHeadEvidence(41, 100, releaseHex32([32]byte{3}), snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstInitial, err := VerifyReleaseStatsMeasurement(initial[3].Stats)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondInitial, err := VerifyReleaseStatsMeasurement(initial[9].Stats)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(firstInitial.Providers) != 0 || len(secondInitial.Providers) != 0 || initial[3].EgressGeneration != 0 || initial[9].EgressGeneration != 0 {
+		t.Fatalf("initial native window evidence=%v", initial)
+	}
+	// Reconstructing the steerer forces the same-epoch retry through durable
+	// journals rather than relying on its in-memory cache.
+	steerer = &ReleaseSteerer{cfg: cfg, contexts: contexts}
+	retry, err := steerer.takeHeadEvidence(41, 101, releaseHex32([32]byte{4}), snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retryStats, err := VerifyReleaseStatsMeasurement(retry[3].Stats)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(retryStats.Providers) != 0 || retry[3].EgressGeneration != initial[3].EgressGeneration || retry[3].Stats.AttemptCut.Root != initial[3].Stats.AttemptCut.Root {
+		t.Fatalf("same-epoch retry changed detached evidence: %v", retry[3])
+	}
+	next, err := steerer.takeHeadEvidence(42, 102, releaseHex32([32]byte{5}), snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextStats, err := VerifyReleaseStatsMeasurement(next[3].Stats)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nextStats.Providers) != 0 || next[3].EgressGeneration != initial[3].EgressGeneration+1 {
+		t.Fatalf("next native epoch evidence=%v, want exactly one generation advance", next[3])
+	}
+	crossedSettlement := *snapshot
+	crossedSettlement.Epoch = big.NewInt(5)
+	if _, err := steerer.takeHeadEvidence(42, 103, releaseHex32([32]byte{6}), &crossedSettlement); err == nil {
+		t.Fatal("same native window crossed into a different settlement epoch")
+	}
+	if _, err := steerer.takeHeadEvidence(41, 103, releaseHex32([32]byte{6}), snapshot); err == nil {
+		t.Fatal("native epoch regression was accepted")
+	}
+}
+
+// A failed write-ahead journal must leave the native egress window intact;
+// only a successfully persisted atomic snapshot owns and rotates the evidence.
+func TestReleaseStatsDetachRotatesOnlyAfterPersistence(t *testing.T) {
+	dir := t.TempDir()
+	stats := NewStatsEngine(StatsConfig{AMin: 1})
+	clientID := connect.NewId()
+	hash := iphash(9)
+	stats.RecordAssignment(clientID)
+	stats.RecordConfirmation(clientID, 100)
+	stats.RecordEgressHash(clientID, hash)
+	expectedFailure := errors.New("journal unavailable")
+	if _, err := stats.detachReleaseStatsMeasurement(dir, func(ReleaseStatsMeasurement, uint64) error { return expectedFailure }); !errors.Is(err, expectedFailure) {
+		t.Fatalf("failed journal result = %v", err)
+	}
+	if !stats.EgressIpHashes()[clientID][hash] {
+		t.Fatal("failed journal write destroyed native egress evidence")
+	}
+	measurement, err := stats.detachReleaseStatsMeasurement(dir, func(ReleaseStatsMeasurement, uint64) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified, err := VerifyReleaseStatsMeasurement(measurement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !verified.Providers[clientID].EgressIPHashes[hash] || verified.Providers[clientID].Exposure != 1 || !verified.Providers[clientID].HasQuality || len(stats.EgressIpHashes()) != 0 {
+		t.Fatalf("persisted atomic measurement did not own the complete cut: %+v", verified.Providers[clientID])
+	}
+}
+
+// Journal-first recovery clears exactly the old durable generation and never
+// erases a repeated prefix recorded in the following native window.
+func TestReleaseStatsCutReconcilesCrashWithoutDuplicateOrLoss(t *testing.T) {
+	dir := t.TempDir()
+	stats := NewStatsEngine(StatsConfig{AMin: 1})
+	clientID := connect.NewId()
+	hash := iphash(7)
+	stats.RecordEgressHash(clientID, hash)
+	if err := stats.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "stats.json")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path, path+"-preserved"); err != nil {
+		t.Fatal(err)
+	}
+	// A valid parent with the exact leaf obstruction reaches the real rename
+	// after persistence. An invalid parent would fail before the callback.
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cutGeneration := uint64(99)
+	persistCalls := 0
+	journalPath := filepath.Join(dir, "native-cut.json")
+	_, err = stats.detachReleaseStatsMeasurement(dir, func(measurement ReleaseStatsMeasurement, generation uint64) error {
+		persistCalls++
+		cutGeneration = generation
+		encoded, err := json.Marshal(struct {
+			Generation  uint64                  `json:"generation"`
+			Measurement ReleaseStatsMeasurement `json:"measurement"`
+		}{Generation: generation, Measurement: measurement})
+		if err != nil {
+			return err
+		}
+		file, err := os.OpenFile(journalPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return err
+		}
+		n, writeErr := file.Write(encoded)
+		if n != len(encoded) && writeErr == nil {
+			writeErr = errors.New("short fixture native cut")
+		}
+		writeErr = errors.Join(writeErr, file.Sync(), file.Close())
+		directory, err := os.Open(dir)
+		if err != nil {
+			return errors.Join(writeErr, err)
+		}
+		return errors.Join(writeErr, directory.Sync(), directory.Close())
+	})
+	var renameError *os.LinkError
+	if !errors.As(err, &renameError) || renameError.Op != "rename" || renameError.New != path || cutGeneration != 0 || persistCalls != 1 || stats.egressGeneration != 0 || !stats.EgressIpHashes()[clientID][hash] {
+		t.Fatalf("actual post-journal rename failure generation=%d callbacks=%d err=%v", cutGeneration, persistCalls, err)
+	}
+	encoded, err := os.ReadFile(journalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retained struct {
+		Generation  uint64                  `json:"generation"`
+		Measurement ReleaseStatsMeasurement `json:"measurement"`
+	}
+	if err := json.Unmarshal(encoded, &retained); err != nil || retained.Generation != cutGeneration {
+		t.Fatal("original write-ahead generation was not retained", err)
+	}
+	verified, err := VerifyReleaseStatsMeasurement(retained.Measurement)
+	if err != nil || !verified.Providers[clientID].EgressIPHashes[hash] {
+		t.Fatal("actual persisted cut lost its original prefix", err)
+	}
+	preserved, err := os.ReadFile(path + "-preserved")
+	if err != nil || !bytes.Equal(before, preserved) {
+		t.Fatal("failed save changed the original snapshot", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path+"-preserved", path); err != nil {
+		t.Fatal(err)
+	}
+	restarted := NewStatsEngine(StatsConfig{AMin: 1})
+	if err := restarted.Load(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.reconcileReleaseStatsCut(dir, cutGeneration); err != nil {
+		t.Fatal(err)
+	}
+	if len(restarted.EgressIpHashes()) != 0 || restarted.egressGeneration != 1 {
+		t.Fatalf("recovered cut egress=%v generation=%d", restarted.EgressIpHashes(), restarted.egressGeneration)
+	}
+	restarted.RecordEgressHash(clientID, hash)
+	if err := restarted.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.reconcileReleaseStatsCut(dir, cutGeneration); err != nil {
+		t.Fatal(err)
+	}
+	if !restarted.EgressIpHashes()[clientID][hash] {
+		t.Fatal("old journal erased a repeated prefix from the next generation")
+	}
+}
+
+// Keep the incident's earlier directory refusal distinct from a journal-first
+// failure: no persistence callback or rotation may occur before admission.
+func TestReleaseStatsCutInvalidParentRefusesBeforeJournal(t *testing.T) {
+	dir := t.TempDir()
+	stats := NewStatsEngine(StatsConfig{AMin: 1})
+	clientId, hash := connect.NewId(), iphash(11)
+	stats.RecordEgressHash(clientId, hash)
+	if err := stats.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(dir, "stats.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocker := filepath.Join(dir, "regular-file")
+	if err := os.WriteFile(blocker, []byte("fixture obstruction"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	persistCalls := 0
+	_, err = stats.detachReleaseStatsMeasurement(blocker, func(ReleaseStatsMeasurement, uint64) error { persistCalls++; return nil })
+	if err == nil || persistCalls != 0 || stats.egressGeneration != 0 || !stats.EgressIpHashes()[clientId][hash] {
+		t.Fatal("invalid parent reached the journal or rotated evidence", err)
+	}
+	after, err := os.ReadFile(filepath.Join(dir, "stats.json"))
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("early refusal changed the original disk state", err)
+	}
+	if _, err := stats.detachReleaseStatsMeasurement(dir, func(ReleaseStatsMeasurement, uint64) error { return nil }); err != nil || stats.egressGeneration != 1 {
+		t.Fatal("unreserved early refusal stranded the valid writer", err)
+	}
+}
+
+// Settlement ownership is persisted with the quality state, so restarts and a
+// failed atomic write cannot skip or duplicate an epoch fold.
+func TestStatsSettlementAdvanceIsDurableAndTransactional(t *testing.T) {
+	dir := t.TempDir()
+	stats := NewStatsEngine(StatsConfig{AMin: 1, AlphaNumerator: 1, AlphaDenominator: 2})
+	if err := stats.AdvanceSettlementEpoch(4, dir); err != nil {
+		t.Fatal(err)
+	}
+	clientID := connect.NewId()
+	stats.RecordAssignment(clientID)
+	stats.RecordConfirmation(clientID, 100)
+	before := stats.QualityPPM()[clientID]
+
+	badStateRoot := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(badStateRoot, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := stats.AdvanceSettlementEpoch(5, badStateRoot); err == nil {
+		t.Fatal("settlement fold unexpectedly persisted beneath a regular file")
+	}
+	if assignments, confirmations := stats.WindowCounts(clientID); assignments != 1 || confirmations != 1 {
+		t.Fatalf("failed boundary write mutated the live window: %d/%d", assignments, confirmations)
+	}
+	if err := stats.AdvanceSettlementEpoch(5, dir); err != nil {
+		t.Fatal(err)
+	}
+	if assignments, _ := stats.WindowCounts(clientID); assignments != 0 {
+		t.Fatal("successful boundary did not clear the folded window")
+	}
+	if got := stats.QualityPPM()[clientID]; got != before {
+		t.Fatalf("first durable fold quality %d, want %d", got, before)
+	}
+
+	restarted := NewStatsEngine(StatsConfig{AMin: 1, AlphaNumerator: 1, AlphaDenominator: 2})
+	if err := restarted.Load(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.AdvanceSettlementEpoch(5, dir); err != nil {
+		t.Fatal(err)
+	}
+	if got := restarted.QualityPPM()[clientID]; got != before {
+		t.Fatalf("same-epoch restart applied the fold twice: %d, want %d", got, before)
+	}
+	if err := restarted.AdvanceSettlementEpoch(7, dir); err == nil {
+		t.Fatal("unobservable skipped settlement epoch was accepted")
 	}
 }
 

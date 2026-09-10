@@ -1,0 +1,470 @@
+{
+  "storage": [
+    {
+      "astId": 57316,
+      "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+      "label": "_activations",
+      "offset": 0,
+      "slot": "0",
+      "type": "t_mapping(t_bytes32,t_struct(Activation)57292_storage)"
+    },
+    {
+      "astId": 57321,
+      "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+      "label": "_commitments",
+      "offset": 0,
+      "slot": "1",
+      "type": "t_mapping(t_bytes32,t_struct(Commitment)57298_storage)"
+    }
+  ],
+  "types": {
+    "t_address": {
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    },
+    "t_bytes32": {
+      "encoding": "inplace",
+      "label": "bytes32",
+      "numberOfBytes": "32"
+    },
+    "t_mapping(t_bytes32,t_struct(Activation)57292_storage)": {
+      "encoding": "mapping",
+      "key": "t_bytes32",
+      "label": "mapping(bytes32 => struct STValidatorEvidence.Activation)",
+      "numberOfBytes": "32",
+      "value": "t_struct(Activation)57292_storage"
+    },
+    "t_mapping(t_bytes32,t_struct(Commitment)57298_storage)": {
+      "encoding": "mapping",
+      "key": "t_bytes32",
+      "label": "mapping(bytes32 => struct STValidatorEvidence.Commitment)",
+      "numberOfBytes": "32",
+      "value": "t_struct(Commitment)57298_storage"
+    },
+    "t_struct(Activation)57292_storage": {
+      "encoding": "inplace",
+      "label": "struct STValidatorEvidence.Activation",
+      "numberOfBytes": "544",
+      "members": [
+        {
+          "astId": 57289,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "record",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_struct(Record)59657_storage"
+        },
+        {
+          "astId": 57291,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "publishedBlock",
+          "offset": 0,
+          "slot": "16",
+          "type": "t_uint64"
+        }
+      ]
+    },
+    "t_struct(Commitment)57298_storage": {
+      "encoding": "inplace",
+      "label": "struct STValidatorEvidence.Commitment",
+      "numberOfBytes": "576",
+      "members": [
+        {
+          "astId": 57295,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "header",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_struct(Header)58931_storage"
+        },
+        {
+          "astId": 57297,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "publishedBlock",
+          "offset": 0,
+          "slot": "17",
+          "type": "t_uint64"
+        }
+      ]
+    },
+    "t_struct(Domain)58897_storage": {
+      "encoding": "inplace",
+      "label": "struct ValidatorEvidence.Domain",
+      "numberOfBytes": "256",
+      "members": [
+        {
+          "astId": 58880,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "chainId",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 58882,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "genesisHash",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 58884,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "netuid",
+          "offset": 0,
+          "slot": "2",
+          "type": "t_uint16"
+        },
+        {
+          "astId": 58886,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "coordinator",
+          "offset": 2,
+          "slot": "2",
+          "type": "t_address"
+        },
+        {
+          "astId": 58888,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "settlementVault",
+          "offset": 0,
+          "slot": "3",
+          "type": "t_address"
+        },
+        {
+          "astId": 58890,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "deploymentIdHash",
+          "offset": 0,
+          "slot": "4",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 58892,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "policyHash",
+          "offset": 0,
+          "slot": "5",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 58894,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "activationEpoch",
+          "offset": 0,
+          "slot": "6",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 58896,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "activationHash",
+          "offset": 0,
+          "slot": "7",
+          "type": "t_bytes32"
+        }
+      ]
+    },
+    "t_struct(Domain)59634_storage": {
+      "encoding": "inplace",
+      "label": "struct ValidatorEvidenceActivation.Domain",
+      "numberOfBytes": "224",
+      "members": [
+        {
+          "astId": 59619,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "chainId",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 59621,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "genesisHash",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 59623,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "netuid",
+          "offset": 0,
+          "slot": "2",
+          "type": "t_uint16"
+        },
+        {
+          "astId": 59625,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "coordinator",
+          "offset": 2,
+          "slot": "2",
+          "type": "t_address"
+        },
+        {
+          "astId": 59627,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "settlementVault",
+          "offset": 0,
+          "slot": "3",
+          "type": "t_address"
+        },
+        {
+          "astId": 59629,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "deploymentIdHash",
+          "offset": 0,
+          "slot": "4",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 59631,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "policyHash",
+          "offset": 0,
+          "slot": "5",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 59633,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "epoch",
+          "offset": 0,
+          "slot": "6",
+          "type": "t_uint64"
+        }
+      ]
+    },
+    "t_struct(Header)58931_storage": {
+      "encoding": "inplace",
+      "label": "struct ValidatorEvidence.Header",
+      "numberOfBytes": "544",
+      "members": [
+        {
+          "astId": 58907,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "domain",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_struct(Domain)58897_storage"
+        },
+        {
+          "astId": 58909,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "hotkey",
+          "offset": 0,
+          "slot": "8",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 58911,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "noId",
+          "offset": 0,
+          "slot": "9",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 58913,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "epoch",
+          "offset": 8,
+          "slot": "9",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 58915,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "kind",
+          "offset": 16,
+          "slot": "9",
+          "type": "t_uint8"
+        },
+        {
+          "astId": 58918,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "subject",
+          "offset": 0,
+          "slot": "10",
+          "type": "t_struct(Subject)58903_storage"
+        },
+        {
+          "astId": 58920,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "vpk",
+          "offset": 0,
+          "slot": "11",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 58922,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "boundaryBlock",
+          "offset": 0,
+          "slot": "12",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 58924,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "boundaryHash",
+          "offset": 0,
+          "slot": "13",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 58926,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "censusHash",
+          "offset": 0,
+          "slot": "14",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 58928,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "payloadHash",
+          "offset": 0,
+          "slot": "15",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 58930,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "payloadBytes",
+          "offset": 0,
+          "slot": "16",
+          "type": "t_uint64"
+        }
+      ]
+    },
+    "t_struct(Record)59657_storage": {
+      "encoding": "inplace",
+      "label": "struct ValidatorEvidenceActivation.Record",
+      "numberOfBytes": "512",
+      "members": [
+        {
+          "astId": 59638,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "domain",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_struct(Domain)59634_storage"
+        },
+        {
+          "astId": 59640,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "hotkey",
+          "offset": 0,
+          "slot": "7",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 59642,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "noId",
+          "offset": 0,
+          "slot": "8",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 59644,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "vpk",
+          "offset": 0,
+          "slot": "9",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 59646,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "firstSequence",
+          "offset": 0,
+          "slot": "10",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 59648,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "priorRoot",
+          "offset": 0,
+          "slot": "11",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 59650,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "nativeBlock",
+          "offset": 0,
+          "slot": "12",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 59652,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "nativeHash",
+          "offset": 0,
+          "slot": "13",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 59654,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "evmBlock",
+          "offset": 0,
+          "slot": "14",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 59656,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "evmHash",
+          "offset": 0,
+          "slot": "15",
+          "type": "t_bytes32"
+        }
+      ]
+    },
+    "t_struct(Subject)58903_storage": {
+      "encoding": "inplace",
+      "label": "struct ValidatorEvidence.Subject",
+      "numberOfBytes": "32",
+      "members": [
+        {
+          "astId": 58900,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "observationEpoch",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 58902,
+          "contract": "src/STValidatorEvidence.sol:STValidatorEvidence",
+          "label": "nativeEpoch",
+          "offset": 8,
+          "slot": "0",
+          "type": "t_uint64"
+        }
+      ]
+    },
+    "t_uint16": {
+      "encoding": "inplace",
+      "label": "uint16",
+      "numberOfBytes": "2"
+    },
+    "t_uint64": {
+      "encoding": "inplace",
+      "label": "uint64",
+      "numberOfBytes": "8"
+    },
+    "t_uint8": {
+      "encoding": "inplace",
+      "label": "uint8",
+      "numberOfBytes": "1"
+    }
+  }
+}

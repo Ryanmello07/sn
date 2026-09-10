@@ -118,6 +118,11 @@ func buildScenarioAnomalyLedger(runID string, generatedAt time.Time, start, curr
 	var previousContracts *ContractView
 	for _, observation := range observations {
 		collector.observationHash = observation.ObservationHash
+		for _, finding := range observation.ProcessLogFindings {
+			if finding.Blocking {
+				collector.add("process-log-"+finding.Class, "critical", "process:"+finding.ProcessID+":"+finding.Stream, finding.Summary, finding.FirstObservedAt)
+			}
+		}
 		expectedTargets := map[string]bool{}
 		for _, target := range observation.ExpectedFaultTargets {
 			expectedTargets[target] = true
@@ -152,10 +157,13 @@ func buildScenarioAnomalyLedger(runID string, generatedAt time.Time, start, curr
 				}
 				captured, capturedOK := new(big.Int).SetString(contracts.TotalCaptured, 10)
 				paid, paidOK := new(big.Int).SetString(contracts.TotalPaid, 10)
+				escrow, escrowOK := new(big.Int).SetString(contracts.EscrowAccounted, 10)
+				pending, pendingOK := new(big.Int).SetString(contracts.PendingFunding, 10)
 				outstanding, outstandingOK := new(big.Int).SetString(contracts.Outstanding, 10)
-				conservationOK := capturedOK && paidOK && outstandingOK && captured.Sign() >= 0 && paid.Sign() >= 0 && outstanding.Sign() >= 0 && captured.Cmp(new(big.Int).Add(paid, outstanding)) == 0
+				liveEscrow, liveEscrowOK := new(big.Int).SetString(contracts.LiveEscrowStake, 10)
+				conservationOK := capturedOK && paidOK && escrowOK && pendingOK && outstandingOK && liveEscrowOK && captured.Sign() >= 0 && paid.Sign() >= 0 && escrow.Sign() >= 0 && pending.Sign() >= 0 && outstanding.Sign() >= 0 && liveEscrow.Sign() >= 0 && captured.Cmp(new(big.Int).Add(paid, escrow)) == 0 && escrow.Cmp(new(big.Int).Add(pending, outstanding)) == 0 && liveEscrow.Cmp(escrow) >= 0
 				if !contracts.ConservationHolds || !conservationOK {
-					collector.add("value-conservation", "critical", "contracts:rao-conservation", fmt.Sprintf("flag=%t captured=%q paid=%q outstanding=%q", contracts.ConservationHolds, contracts.TotalCaptured, contracts.TotalPaid, contracts.Outstanding), observation.ObservedAt)
+					collector.add("value-conservation", "critical", "contracts:rao-conservation", fmt.Sprintf("flag=%t captured=%q paid=%q escrow=%q pending=%q outstanding=%q live=%q", contracts.ConservationHolds, contracts.TotalCaptured, contracts.TotalPaid, contracts.EscrowAccounted, contracts.PendingFunding, contracts.Outstanding, contracts.LiveEscrowStake), observation.ObservedAt)
 				}
 				if status.PolicyHash != "" && !strings.EqualFold(status.PolicyHash, contracts.PolicyHash) {
 					collector.add("contract-policy-drift", "critical", "contracts:policy", fmt.Sprintf("status=%s contract=%s", status.PolicyHash, contracts.PolicyHash), observation.ObservedAt)
@@ -197,7 +205,7 @@ func buildScenarioAnomalyLedger(runID string, generatedAt time.Time, start, curr
 		}
 		for _, claim := range observation.Claims {
 			source := fmt.Sprintf("claim:min%d:no%d", claim.MinerID, claim.NoID)
-			expected := expectedTargets[fmt.Sprintf("miner-%d", claim.MinerID)] || expectedTargets[fmt.Sprintf("miner-%d-claims", claim.MinerID)]
+			expected := expectedTargets[fmt.Sprintf("miner-%d", claim.MinerID)] || expectedTargets[fmt.Sprintf("claim-relayer-%d", claim.NoID)]
 			if !expected {
 				collector.add("claim-error", "critical", source, claim.Error, observation.ObservedAt)
 			}
@@ -209,6 +217,7 @@ func buildScenarioAnomalyLedger(runID string, generatedAt time.Time, start, curr
 		collector.add("voluntary-conviction-error", "critical", "voluntary-conviction", observation.VoluntaryConvictionError, observation.ObservedAt)
 		collector.add("governance-drill-error", "critical", "governance-drill", observation.GovernanceDrillError, observation.ObservedAt)
 		collector.add("precompile-conformance-error", "critical", "precompile-conformance", observation.PrecompileConformanceError, observation.ObservedAt)
+		collector.add("dishonest-deposit-error", "critical", "dishonest-deposit", observation.DishonestDepositError, observation.ObservedAt)
 	}
 	collector.observationHash = observationHash
 
@@ -224,6 +233,12 @@ func buildScenarioAnomalyLedger(runID string, generatedAt time.Time, start, curr
 		}
 	}
 	startProcesses, currentProcesses := processStates(start), processStates(current)
+	if start != nil && current != nil && start.Status != nil && current.Status != nil && start.Status.Supervisor != nil && current.Status.Supervisor != nil {
+		before, after := start.Status.Supervisor, current.Status.Supervisor
+		if before.SupervisorPID != after.SupervisorPID || before.SupervisorStartTimeTicks != after.SupervisorStartTimeTicks {
+			collector.add("supervisor-restart", "critical", "supervisor", fmt.Sprintf("generation changed from pid=%d start=%d to pid=%d start=%d", before.SupervisorPID, before.SupervisorStartTimeTicks, after.SupervisorPID, after.SupervisorStartTimeTicks), when)
+		}
+	}
 	if len(startProcesses) != 0 || len(currentProcesses) != 0 {
 		for id, before := range startProcesses {
 			after, present := currentProcesses[id]

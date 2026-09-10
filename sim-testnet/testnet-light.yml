@@ -1,0 +1,126 @@
+# Read-only-compatible lightnode transport profile for smoke-testing the full
+# release harness. It preserves the fixed release topology and checks, while
+# isolating local state/artifact namespaces and routing private chain RPC through
+# the warp-synced lightnode configured in vault/main/st.yml.
+schema_version: 1
+profile: release-1.0
+
+repositories:
+  discovery: auto
+  sn: auto
+  server: auto
+  operator_proxy: auto
+  vault: auto
+  platform_config: auto
+
+manifests:
+  public: ../deploy/testnet/public.yml
+  policy: ../deploy/testnet/policy-v1.yml
+  release_lock: ../deploy/testnet/release.lock.yml
+  hyperparameters: ../deploy/testnet/hyperparams.yml
+
+deployment:
+  deployment_id: ur-subnet-testnet-light-v1
+  network: bittensor-testnet
+  subnet: existing
+  netuid_from: vault://main/st.yml#testnet-netuid
+  persistent: true
+  detach_after_launch: true
+
+launch_inputs:
+  wallet: vault://main/st.yml#testnet-wallet
+  wallet_password: vault://main/st.yml#testnet-wallet-password
+  chain_id: vault://main/st.yml#testnet-chain-id
+  authority: vault://main/st.yml#testnet-lightnode-authority
+  public_evm_maximum_requests_per_minute: 40
+  object_store_hostname: vault://main/st.yml#testnet-minio-hostname
+  operator_api_origins: vault://main/st.yml#testnet-operator-api-origins
+
+topology:
+  operators: 2
+  miners: 1000
+  validators: 2
+  head_slots: 200
+  head_fleets: 200
+  challenger_fleets: 2
+  clients_per_head_fleet: 4
+  # Netuid 521 already has the owner UID and one external bootstrap UID. These
+  # 47 controlled floor identities make the initial 256-seat topology exact.
+  churn_floor_uids: 47
+  miner_swarm_processes: 20
+  operator_assignment: balanced
+
+alpha_transfers:
+  minimum_tao_equivalent_margin_bps: 1000
+
+validator_bootstrap:
+  reserve_target_share_bps: 6500
+  reserve_minimum_share_bps: 6000
+  independent_target_alpha_rao: 1000000000000
+  maximum_reserve_repair_alpha_rao: 3000000000000
+  minimum_source_remaining_alpha_rao: 2000000000000
+
+contracts:
+  install: true
+  artifact_source: ../evm/out
+  governance_profile: testnet-single-owner
+  verify_runtime_code_hash: true
+
+dependencies:
+  mode: managed_containers
+  postgres_image_from_lock: dependencies.postgres
+  redis_image_from_lock: dependencies.redis
+  object_store: server-blob
+
+artifacts:
+  writer: server-blob
+  history_api: server-api
+  content_addressed: true
+  minio_prefix: blob/sim-testnet-light/${deployment_id}
+
+processes:
+  build_from_release_lock: true
+  logs: runs/${deployment_id}/processes
+  restart_policy: on_failure_bounded
+
+scenarios:
+  launch: smoke
+  release: release-1.0
+  short_epochs: 5
+  production_epochs: 3
+  voluntary_conviction_rao: 1000000000
+  dishonest_deposit_rao: 5000000000
+  quality_fault_operator: 2
+  quality_fault_start_blocks: 5
+  quality_fault_duration_blocks: 20
+  adversaries:
+    enabled: true
+    matrix: docs/spec/adversarial-matrix-v1.json
+    seed: 52120260820
+    sample_interval_milliseconds: 5000
+    request_timeout_milliseconds: 10000
+    minimum_samples_per_actor: 100
+    maximum_actor_error_rate_ppm: 0
+    maximum_p99_latency_milliseconds: 15000
+    maximum_attack_control_p95_ratio_ppm: 20000000
+    maximum_operator_requests_per_second: 8
+    maximum_rpc_requests_per_second: 2
+
+budgets:
+  maximum_subnet_creations: 0
+  maximum_total_tao_rao_from: vault://main/st.yml#testnet-spending-limit-tao-rao
+  maximum_total_alpha_rao_from: vault://main/st.yml#testnet-spending-limit-alpha-rao
+  maximum_evm_gas_tao_wei_from: vault://main/st.yml#testnet-spending-limit-evm-gas-wei
+  maximum_registrations: 262
+  maximum_registration_burn_rao: 1000000
+  maximum_native_transaction_fee_rao: 3000000
+  maximum_evm_fee_per_gas_wei: 100000000000
+
+secrets:
+  generated_role_store: runtime-secret://testnet/sim-testnet-light/${deployment_id}
+
+analysis:
+  publish_public_manifest: true
+  write_json: true
+  write_html: true
+  serve_read_only_dashboard: true

@@ -1,4 +1,4 @@
-// Live opt-in probes bind the checked-in release harness to runtime 447 and
+// Live opt-in probes bind the checked-in release harness to runtime 453 and
 // provide an explicitly confirmed, bounded bootstrap for netuid 521.
 package main
 
@@ -7,15 +7,58 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/ss58"
 )
+
+func TestLiveNativeMirrorBalances(t *testing.T) {
+	raw := strings.TrimSpace(os.Getenv("SIM_TESTNET_NATIVE_MIRRORS"))
+	if raw == "" {
+		t.Skip("set SIM_TESTNET_NATIVE_MIRRORS to a comma-separated EVM address list")
+	}
+	cfg, err := LoadResolved(LoadOptions{ConfigPath: "testnet.yml", RequireSecrets: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, authenticated, err := dialReleaseSubstrateChain(cfg, cfg.OperationalSubstrate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.API.Client.Close()
+	finalized := authenticated.FinalizedHash
+	header, err := chain.API.RPC.Chain.GetHeader(finalized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range strings.Split(raw, ",") {
+		text = strings.TrimSpace(text)
+		if !common.IsHexAddress(text) {
+			t.Fatalf("invalid EVM address %q", text)
+		}
+		address := common.HexToAddress(text)
+		free, readErr := readFreeBalanceAtHash(chain, ss58.EvmMirrorPubkey(address), finalized)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		mirror, encodeErr := ss58.EvmMirrorAddress(address, ss58.BittensorPrefix)
+		if encodeErr != nil {
+			t.Fatal(encodeErr)
+		}
+		t.Logf("finalized_block=%d evm=%s mirror=%s free_rao=%d", header.Number, address.Hex(), mirror, free)
+	}
+}
 
 func TestLiveVaultWalletResolution(t *testing.T) {
 	if os.Getenv("SIM_TESTNET_LIVE_WALLET") != "1" {
@@ -37,6 +80,7 @@ func TestLiveStakeNetuid521Alpha(t *testing.T) {
 		limitPrice   = uint64(473_744)
 		targetAlpha  = uint64(6_000_000_000)
 		publicRPC    = "wss://test.finney.opentensor.ai:443"
+		publicEVMRPC = "https://test.chain.opentensor.ai"
 	)
 	if os.Getenv("SIM_TESTNET_STAKE_ALPHA") != confirmation {
 		t.Skip("explicit live-stake confirmation is absent")
@@ -48,7 +92,9 @@ func TestLiveStakeNetuid521Alpha(t *testing.T) {
 	if cfg.Netuid != 521 || stakeTAORao > cfg.MaximumTAORao || targetAlpha > cfg.MaximumAlphaRao {
 		t.Fatal("live stake request exceeds the configured netuid or spending limits")
 	}
-	cfg.Authority = publicRPC
+	cfg.OperationalSubstrate = publicRPC
+	cfg.OperationalEVM = publicEVMRPC
+	cfg.OperationalRPCMode = rpcModePublicOverride
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	before, beforeErr := ReadSetupFacts(ctx, cfg)
@@ -105,7 +151,7 @@ func TestLiveStakeNetuid521Alpha(t *testing.T) {
 		if hashErr != nil {
 			t.Fatal(hashErr)
 		}
-		if _, exists := journal.LatestTransaction(enableAction.ID, enableAction.IntentHash); !exists {
+		if _, exists := journal.LatestTransaction(enablePlanHash, enableAction.ID, enableAction.IntentHash); !exists {
 			if err := journal.Append(JournalEntry{DeploymentID: cfg.Config.Deployment.DeploymentID, PlanHash: enablePlanHash, ActionID: enableAction.ID, IntentHash: enableAction.IntentHash, Stage: StageIntent}); err != nil {
 				t.Fatal(err)
 			}
@@ -157,7 +203,7 @@ func TestLiveStakeNetuid521Alpha(t *testing.T) {
 		if hashErr != nil {
 			t.Fatal(hashErr)
 		}
-		if _, exists := journal.LatestTransaction(startAction.ID, startAction.IntentHash); !exists {
+		if _, exists := journal.LatestTransaction(startPlanHash, startAction.ID, startAction.IntentHash); !exists {
 			if err := journal.Append(JournalEntry{DeploymentID: cfg.Config.Deployment.DeploymentID, PlanHash: startPlanHash, ActionID: startAction.ID, IntentHash: startAction.IntentHash, Stage: StageIntent}); err != nil {
 				t.Fatal(err)
 			}
@@ -225,7 +271,7 @@ func TestLiveStakeNetuid521Alpha(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, exists := journal.LatestTransaction(action.ID, action.IntentHash); !exists {
+	if _, exists := journal.LatestTransaction(planHash, action.ID, action.IntentHash); !exists {
 		if err := journal.Append(JournalEntry{DeploymentID: cfg.Config.Deployment.DeploymentID, PlanHash: planHash, ActionID: action.ID, IntentHash: action.IntentHash, Stage: StageIntent}); err != nil {
 			t.Fatal(err)
 		}
@@ -256,11 +302,15 @@ func TestLiveBalanceProbe(t *testing.T) {
 	if os.Getenv("SIM_TESTNET_LIVE_READ") != "1" {
 		t.Skip("set SIM_TESTNET_LIVE_READ=1 to run public testnet read checks")
 	}
-	cfg, err := LoadResolved(LoadOptions{ConfigPath: "testnet.yml", RequireSecrets: false})
+	// The finalized fact set includes the deterministic deployer nonce and
+	// therefore needs the same role-secret derivation inputs as plan/doctor.
+	cfg, err := LoadResolved(LoadOptions{ConfigPath: "testnet.yml", RequireSecrets: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Authority = "wss://test.finney.opentensor.ai:443"
+	cfg.OperationalSubstrate = "wss://test.finney.opentensor.ai:443"
+	cfg.OperationalEVM = "https://test.chain.opentensor.ai"
+	cfg.OperationalRPCMode = rpcModePublicOverride
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	facts, setupErr := ReadSetupFacts(ctx, cfg)
@@ -272,7 +322,17 @@ func TestLiveBalanceProbe(t *testing.T) {
 	if setupErr != nil {
 		t.Logf("setup readiness: %v", setupErr)
 	}
-	chain, err := crv4.DialChain(cfg.Authority)
+	rewards, rewardsErr := inspectNativeRewards(cfg, cfg.OperationalSubstrate)
+	if rewardsErr != "" || rewards == nil || facts == nil || len(rewards.EmissionRao) != int(facts.ExistingUIDCount) || len(rewards.Incentive) != int(facts.ExistingUIDCount) || len(rewards.Dividends) != int(facts.ExistingUIDCount) || len(rewards.TotalHotkeyAlphaRao) != int(facts.ExistingUIDCount) {
+		t.Fatalf("native reward vectors=%+v error=%s existing_uids=%v", rewards, rewardsErr, func() any {
+			if facts == nil {
+				return nil
+			}
+			return facts.ExistingUIDCount
+		}())
+	}
+	t.Logf("native rewards at block %d: emission=%v incentive=%v dividends=%v total_hotkey_alpha=%v", rewards.FinalizedHead.Number, rewards.EmissionRao, rewards.Incentive, rewards.Dividends, rewards.TotalHotkeyAlphaRao)
+	chain, _, err := dialReleaseSubstrateChain(cfg, cfg.OperationalSubstrate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,4 +358,66 @@ func TestLiveBalanceProbe(t *testing.T) {
 		values[i] = binary.LittleEndian.Uint64(quote[i*8 : (i+1)*8])
 	}
 	t.Logf("21m rao quote words: %v", values)
+}
+
+func TestLiveEVMMirrorBalanceSemantics(t *testing.T) {
+	if os.Getenv("SIM_TESTNET_LIVE_EVM_BALANCE") != "1" {
+		t.Skip("set SIM_TESTNET_LIVE_EVM_BALANCE=1 to compare finalized Substrate and EVM balances")
+	}
+	cfg, err := LoadResolved(LoadOptions{ConfigPath: "testnet.yml", RequireSecrets: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roles, err := BuildRoleSecrets(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address, err := roles.EVMAddress("deployer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mirror := ss58Mirror(address)
+	chain, authenticated, err := dialReleaseSubstrateChain(cfg, cfg.OperationalSubstrate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.API.Client.Close()
+	key, err := types.CreateStorageKey(chain.Meta, "System", "Account", mirror[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalized := authenticated.FinalizedHash
+	var info subtensorAccountInfo
+	if ok, readErr := chain.API.RPC.State.GetStorage(key, &info, finalized); readErr != nil || !ok {
+		t.Fatalf("read finalized mirror account: present=%t error=%v", ok, readErr)
+	}
+	evm, err := ethclient.Dial(cfg.OperationalEVM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evm.Close()
+	header, err := chain.API.RPC.Chain.GetHeader(finalized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	balance, err := evm.BalanceAt(context.Background(), common.Address(address), new(big.Int).SetUint64(uint64(header.Number)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	constant, err := chain.Meta.FindConstantValue("Balances", "ExistentialDeposit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	depositRao, err := decodeRuntimeExistentialDepositRao(constant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uint64(info.Data.Reserved) != 0 || uint64(info.Data.Frozen) != 0 || uint64(info.Data.Free) <= depositRao {
+		t.Fatalf("deployer mirror has unexpected account constraints: free=%d reserved=%d frozen=%d deposit=%d", info.Data.Free, info.Data.Reserved, info.Data.Frozen, depositRao)
+	}
+	want := new(big.Int).Mul(new(big.Int).SetUint64(uint64(info.Data.Free)-depositRao), new(big.Int).SetUint64(evmWeiPerRao))
+	if balance.Cmp(want) != 0 {
+		t.Fatalf("EVM reducible balance = %s, want (free-deposit)*1e9 = %s", balance, want)
+	}
+	t.Logf("address=%s free_rao=%d reserved_rao=%d frozen_rao=%d flags=%v evm_wei=%s", address, info.Data.Free, info.Data.Reserved, info.Data.Frozen, info.Data.Flags, balance)
 }

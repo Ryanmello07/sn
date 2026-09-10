@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -21,42 +24,55 @@ import (
 
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/ss58"
+	validatorpkg "github.com/urfoundation/sn/validator"
+	"github.com/urnetwork/server/controller"
+	"github.com/urnetwork/server/model"
 )
 
 const (
-	releaseProfile         = "release-1.0"
-	testnetChainID         = uint64(945)
-	testnetGenesis         = "0x8f9cf856bf558a14440e75569c9e58594757048d7b3a84b5d25f6bd978263105"
-	btwalletNACLPrefix     = "$NACL"
-	btwalletArgonTime      = uint32(8)
-	btwalletArgonMemoryKiB = uint32(512 * 1024)
-	btwalletArgonThreads   = uint8(1)
+	releaseProfile                       = "release-1.0"
+	rpcModePrivateAuthority              = "private-authority"
+	rpcModePublicOverride                = "public-override"
+	testnetChainID                       = uint64(945)
+	testnetGenesis                       = "0x8f9cf856bf558a14440e75569c9e58594757048d7b3a84b5d25f6bd978263105"
+	testnetBootstrapImmunityPeriodBlocks = uint64(50_000)
+	btwalletNACLPrefix                   = "$NACL"
+	btwalletArgonTime                    = uint32(8)
+	btwalletArgonMemoryKiB               = uint32(512 * 1024)
+	btwalletArgonThreads                 = uint8(1)
 )
 
 var btwalletNACLSalt = [16]byte{0x13, 0x71, 0x83, 0xdf, 0xf1, 0x5a, 0x09, 0xbc, 0x9c, 0x90, 0xb5, 0x51, 0x87, 0x39, 0xe9, 0xb1}
 
 type HarnessConfig struct {
-	SchemaVersion int              `yaml:"schema_version" json:"schema_version"`
-	Profile       string           `yaml:"profile" json:"profile"`
-	Repositories  RepositoryConfig `yaml:"repositories" json:"repositories"`
-	Manifests     ManifestConfig   `yaml:"manifests" json:"manifests"`
-	Deployment    DeploymentConfig `yaml:"deployment" json:"deployment"`
-	LaunchInputs  LaunchInputs     `yaml:"launch_inputs" json:"launch_inputs"`
-	Topology      TopologyConfig   `yaml:"topology" json:"topology"`
-	Contracts     ContractConfig   `yaml:"contracts" json:"contracts"`
-	Dependencies  DependencyConfig `yaml:"dependencies" json:"dependencies"`
-	Artifacts     ArtifactConfig   `yaml:"artifacts" json:"artifacts"`
-	Processes     ProcessConfig    `yaml:"processes" json:"processes"`
-	Scenarios     ScenarioConfig   `yaml:"scenarios" json:"scenarios"`
-	Budgets       BudgetConfig     `yaml:"budgets" json:"budgets"`
-	Secrets       SecretConfig     `yaml:"secrets" json:"secrets"`
-	Analysis      AnalysisConfig   `yaml:"analysis" json:"analysis"`
+	SchemaVersion                       int                                             `yaml:"schema_version" json:"schema_version"`
+	Profile                             string                                          `yaml:"profile" json:"profile"`
+	Repositories                        RepositoryConfig                                `yaml:"repositories" json:"repositories"`
+	Manifests                           ManifestConfig                                  `yaml:"manifests" json:"manifests"`
+	Deployment                          DeploymentConfig                                `yaml:"deployment" json:"deployment"`
+	LaunchInputs                        LaunchInputs                                    `yaml:"launch_inputs" json:"launch_inputs"`
+	Topology                            TopologyConfig                                  `yaml:"topology" json:"topology"`
+	AlphaTransfers                      AlphaTransferConfig                             `yaml:"alpha_transfers" json:"alpha_transfers"`
+	ValidatorBootstrap                  ValidatorBootstrapConfig                        `yaml:"validator_bootstrap" json:"validator_bootstrap"`
+	ValidatorEvidenceV2                 []validatorpkg.ReleaseValidatorEvidenceV2Config `yaml:"validator_evidence_v2" json:"validator_evidence_v2"`
+	ValidatorEvidenceRelay              evidenceRelayConfig                             `yaml:"validator_evidence_relay" json:"validator_evidence_relay"`
+	ProvisionValidatorEvidenceV2        bool                                            `yaml:"provision_validator_evidence_v2" json:"provision_validator_evidence_v2,omitempty"`
+	ValidatorEvidenceActivationGasUnits uint64                                          `yaml:"validator_evidence_activation_gas_units" json:"validator_evidence_activation_gas_units,omitempty"`
+	Contracts                           ContractConfig                                  `yaml:"contracts" json:"contracts"`
+	Dependencies                        DependencyConfig                                `yaml:"dependencies" json:"dependencies"`
+	Artifacts                           ArtifactConfig                                  `yaml:"artifacts" json:"artifacts"`
+	Processes                           ProcessConfig                                   `yaml:"processes" json:"processes"`
+	Scenarios                           ScenarioConfig                                  `yaml:"scenarios" json:"scenarios"`
+	Budgets                             BudgetConfig                                    `yaml:"budgets" json:"budgets"`
+	Secrets                             SecretConfig                                    `yaml:"secrets" json:"secrets"`
+	Analysis                            AnalysisConfig                                  `yaml:"analysis" json:"analysis"`
 }
 
 type RepositoryConfig struct {
 	Discovery      string `yaml:"discovery" json:"discovery"`
 	SN             string `yaml:"sn" json:"sn"`
 	Server         string `yaml:"server" json:"server"`
+	OperatorProxy  string `yaml:"operator_proxy" json:"operator_proxy"`
 	Vault          string `yaml:"vault" json:"vault"`
 	PlatformConfig string `yaml:"platform_config" json:"platform_config"`
 }
@@ -67,13 +83,14 @@ func (r *RepositoryConfig) UnmarshalYAML(n *yaml.Node) error {
 		Discovery      string `yaml:"discovery"`
 		SN             string `yaml:"sn"`
 		Server         string `yaml:"server"`
+		OperatorProxy  string `yaml:"operator_proxy"`
 		Vault          string `yaml:"vault"`
 		PlatformConfig string `yaml:"platform_config"`
 	}
 	if err := n.Decode(&v); err != nil {
 		return err
 	}
-	*r = RepositoryConfig{Discovery: v.Discovery, SN: v.SN, Server: v.Server, Vault: v.Vault, PlatformConfig: v.PlatformConfig}
+	*r = RepositoryConfig{Discovery: v.Discovery, SN: v.SN, Server: v.Server, OperatorProxy: v.OperatorProxy, Vault: v.Vault, PlatformConfig: v.PlatformConfig}
 	return nil
 }
 
@@ -92,22 +109,56 @@ type DeploymentConfig struct {
 	DetachAfterLaunch bool   `yaml:"detach_after_launch" json:"detach_after_launch"`
 }
 type LaunchInputs struct {
-	Wallet              string `yaml:"wallet" json:"wallet"`
-	WalletPassword      string `yaml:"wallet_password" json:"wallet_password"`
-	ChainID             string `yaml:"chain_id" json:"chain_id"`
-	Authority           string `yaml:"authority" json:"authority"`
-	ObjectStoreHostname string `yaml:"object_store_hostname" json:"object_store_hostname"`
-	TrustedProxyCIDRs   string `yaml:"trusted_proxy_cidrs" json:"trusted_proxy_cidrs"`
-	OperatorAPIOrigins  string `yaml:"operator_api_origins" json:"operator_api_origins"`
+	Wallet                            string `yaml:"wallet" json:"wallet"`
+	WalletPassword                    string `yaml:"wallet_password" json:"wallet_password"`
+	ChainID                           string `yaml:"chain_id" json:"chain_id"`
+	Authority                         string `yaml:"authority" json:"authority"`
+	PublicSubstrateRPCOverride        string `yaml:"public_substrate_rpc_override" json:"public_substrate_rpc_override"`
+	PublicEVMRPCOverride              string `yaml:"public_evm_rpc_override" json:"public_evm_rpc_override"`
+	PublicEVMMaximumRequestsPerMinute int    `yaml:"public_evm_maximum_requests_per_minute" json:"public_evm_maximum_requests_per_minute"`
+	ObjectStoreHostname               string `yaml:"object_store_hostname" json:"object_store_hostname"`
+	OperatorAPIOrigins                string `yaml:"operator_api_origins" json:"operator_api_origins"`
 }
 type TopologyConfig struct {
 	Operators           int    `yaml:"operators" json:"operators"`
 	Miners              int    `yaml:"miners" json:"miners"`
 	Validators          int    `yaml:"validators" json:"validators"`
+	HeadSlots           int    `yaml:"head_slots" json:"head_slots"`
 	HeadFleets          int    `yaml:"head_fleets" json:"head_fleets"`
+	ChallengerFleets    int    `yaml:"challenger_fleets" json:"challenger_fleets"`
 	ClientsPerHeadFleet int    `yaml:"clients_per_head_fleet" json:"clients_per_head_fleet"`
+	ChurnFloorUIDs      int    `yaml:"churn_floor_uids" json:"churn_floor_uids"`
+	MinerSwarmProcesses int    `yaml:"miner_swarm_processes" json:"miner_swarm_processes"`
 	OperatorAssignment  string `yaml:"operator_assignment" json:"operator_assignment"`
 }
+
+// AlphaTransferConfig keeps the runtime's TAO-equivalent transfer floor
+// independent from demand-deposit sizing. The margin is enforced again at
+// broadcast time so a moving Dynamic TAO price fails before signing rather
+// than producing a known-invalid extrinsic.
+type AlphaTransferConfig struct {
+	MinimumTAOEquivalentMarginBPS uint16 `yaml:"minimum_tao_equivalent_margin_bps" json:"minimum_tao_equivalent_margin_bps"`
+}
+
+// ValidatorBootstrapConfig is test-harness deployment policy, not settlement
+// policy. Keeping it outside protocol.Policy prevents validator funding from
+// changing an already deployed coordinator's signed policy hash.
+type ValidatorBootstrapConfig struct {
+	ReserveTargetShareBPS          uint16 `yaml:"reserve_target_share_bps" json:"reserve_target_share_bps"`
+	ReserveMinimumShareBPS         uint16 `yaml:"reserve_minimum_share_bps" json:"reserve_minimum_share_bps"`
+	IndependentTargetAlphaRao      uint64 `yaml:"independent_target_alpha_rao" json:"independent_target_alpha_rao"`
+	MaximumReserveRepairAlphaRao   uint64 `yaml:"maximum_reserve_repair_alpha_rao" json:"maximum_reserve_repair_alpha_rao"`
+	MinimumSourceRemainingAlphaRao uint64 `yaml:"minimum_source_remaining_alpha_rao" json:"minimum_source_remaining_alpha_rao"`
+}
+
+func (self TopologyConfig) fleetCandidates() int {
+	return self.HeadFleets + self.ChallengerFleets
+}
+
+func (self TopologyConfig) fleetCandidateMiners() int {
+	return self.fleetCandidates() * self.ClientsPerHeadFleet
+}
+
 type ContractConfig struct {
 	Install               bool   `yaml:"install" json:"install"`
 	ArtifactSource        string `yaml:"artifact_source" json:"artifact_source"`
@@ -121,11 +172,43 @@ type DependencyConfig struct {
 	ObjectStore           string `yaml:"object_store" json:"object_store"`
 }
 type ArtifactConfig struct {
-	Writer           string `yaml:"writer" json:"writer"`
-	HistoryAPI       string `yaml:"history_api" json:"history_api"`
-	ContentAddressed bool   `yaml:"content_addressed" json:"content_addressed"`
-	MinioPrefix      string `yaml:"minio_prefix" json:"minio_prefix"`
+	Writer                 string                                     `yaml:"writer" json:"writer"`
+	HistoryAPI             string                                     `yaml:"history_api" json:"history_api"`
+	ContentAddressed       bool                                       `yaml:"content_addressed" json:"content_addressed"`
+	MinioPrefix            string                                     `yaml:"minio_prefix" json:"minio_prefix"`
+	AttemptUpload          *model.StAttemptUploadBudget               `yaml:"attempt_upload,omitempty" json:"attempt_upload,omitempty"`
+	ReservedAttemptUploads []controller.StReservedAttemptUploadConfig `yaml:"reserved_attempt_uploads,omitempty" json:"reserved_attempt_uploads,omitempty"`
 }
+
+// Resolve the configured deployment-isolated object prefix for one operator.
+// Object-store keys are slash-separated on every host, so reject any template
+// whose spelling would be changed by canonical path normalization.
+func operatorArtifactPrefix(config *HarnessConfig, operator int) (string, error) {
+	if config == nil || operator < 1 || operator > config.Topology.Operators {
+		return "", errors.New("invalid operator artifact prefix identity")
+	}
+	const deploymentVariable = "${deployment_id}"
+	template := config.Artifacts.MinioPrefix
+	if template == "" || template != strings.TrimSpace(template) || strings.Count(template, deploymentVariable) != 1 {
+		return "", errors.New("artifact MinIO prefix must contain exactly one deployment_id variable")
+	}
+	if strings.Contains(template, `\`) || strings.ContainsRune(template, 0) {
+		return "", errors.New("artifact MinIO prefix is not a canonical object path")
+	}
+	deploymentID := config.Deployment.DeploymentID
+	if deploymentID == "" || deploymentID != strings.TrimSpace(deploymentID) ||
+		deploymentID != path.Base(deploymentID) || deploymentID == "." || deploymentID == ".." ||
+		strings.Contains(deploymentID, `\`) || strings.ContainsRune(deploymentID, 0) {
+		return "", errors.New("artifact MinIO deployment identity is unsafe")
+	}
+	expanded := strings.Replace(template, deploymentVariable, deploymentID, 1)
+	clean := path.Clean(expanded)
+	if clean != expanded || clean == "." || path.IsAbs(clean) || strings.HasPrefix(clean, "../") || strings.Contains(clean, "${") {
+		return "", errors.New("artifact MinIO prefix is empty, unsafe, or noncanonical")
+	}
+	return path.Join(clean, fmt.Sprintf("operator-%d", operator)), nil
+}
+
 type ProcessConfig struct {
 	BuildFromReleaseLock bool   `yaml:"build_from_release_lock" json:"build_from_release_lock"`
 	Logs                 string `yaml:"logs" json:"logs"`
@@ -137,6 +220,7 @@ type ScenarioConfig struct {
 	ShortEpochs                int             `yaml:"short_epochs" json:"short_epochs"`
 	ProductionEpochs           int             `yaml:"production_epochs" json:"production_epochs"`
 	VoluntaryConvictionRao     uint64          `yaml:"voluntary_conviction_rao" json:"voluntary_conviction_rao"`
+	DishonestDepositRao        uint64          `yaml:"dishonest_deposit_rao" json:"dishonest_deposit_rao"`
 	QualityFaultOperator       int             `yaml:"quality_fault_operator" json:"quality_fault_operator"`
 	QualityFaultStartBlocks    uint64          `yaml:"quality_fault_start_blocks" json:"quality_fault_start_blocks"`
 	QualityFaultDurationBlocks uint64          `yaml:"quality_fault_duration_blocks" json:"quality_fault_duration_blocks"`
@@ -162,12 +246,14 @@ type AdversaryConfig struct {
 	MaximumRPCRequestsPerSec      int    `yaml:"maximum_rpc_requests_per_second" json:"maximum_rpc_requests_per_second"`
 }
 type BudgetConfig struct {
-	MaximumSubnetCreations     int    `yaml:"maximum_subnet_creations" json:"maximum_subnet_creations"`
-	MaximumTotalTAORaoFrom     string `yaml:"maximum_total_tao_rao_from" json:"maximum_total_tao_rao_from"`
-	MaximumTotalAlphaRaoFrom   string `yaml:"maximum_total_alpha_rao_from" json:"maximum_total_alpha_rao_from"`
-	MaximumEVMGasWeiFrom       string `yaml:"maximum_evm_gas_tao_wei_from" json:"maximum_evm_gas_tao_wei_from"`
-	MaximumRegistrations       int    `yaml:"maximum_registrations" json:"maximum_registrations"`
-	MaximumRegistrationBurnRao uint64 `yaml:"maximum_registration_burn_rao" json:"maximum_registration_burn_rao"`
+	MaximumSubnetCreations         int    `yaml:"maximum_subnet_creations" json:"maximum_subnet_creations"`
+	MaximumTotalTAORaoFrom         string `yaml:"maximum_total_tao_rao_from" json:"maximum_total_tao_rao_from"`
+	MaximumTotalAlphaRaoFrom       string `yaml:"maximum_total_alpha_rao_from" json:"maximum_total_alpha_rao_from"`
+	MaximumEVMGasWeiFrom           string `yaml:"maximum_evm_gas_tao_wei_from" json:"maximum_evm_gas_tao_wei_from"`
+	MaximumRegistrations           int    `yaml:"maximum_registrations" json:"maximum_registrations"`
+	MaximumRegistrationBurnRao     uint64 `yaml:"maximum_registration_burn_rao" json:"maximum_registration_burn_rao"`
+	MaximumNativeTransactionFeeRao uint64 `yaml:"maximum_native_transaction_fee_rao" json:"maximum_native_transaction_fee_rao"`
+	MaximumEVMFeePerGasWei         uint64 `yaml:"maximum_evm_fee_per_gas_wei" json:"maximum_evm_fee_per_gas_wei"`
 }
 type SecretConfig struct {
 	GeneratedRoleStore string `yaml:"generated_role_store" json:"generated_role_store"`
@@ -193,6 +279,7 @@ type PublicManifest struct {
 		ExpectedTransactionVersion        uint32 `yaml:"expected_transaction_version"`
 		ExpectedStateVersion              uint8  `yaml:"expected_state_version"`
 		ExpectedBlockSeconds              uint64 `yaml:"expected_block_seconds"`
+		ExpectedDefaultMinTransferRao     uint64 `yaml:"expected_default_min_transfer_rao"`
 		SubstratePublicReadEndpoint       string `yaml:"substrate_public_read_endpoint"`
 		EVMPublicReadEndpoint             string `yaml:"evm_public_read_endpoint"`
 		PrivateAuthorityFrom              string `yaml:"private_authority_from"`
@@ -215,56 +302,33 @@ type PublicManifest struct {
 }
 
 type ReleaseLock struct {
-	SchemaVersion int    `yaml:"schema_version" json:"schema_version"`
-	Release       string `yaml:"release" json:"release"`
-	Runtime       struct {
-		SourceRepository, SourceTag, SourceCommit string
-		SpecVersion, TransactionVersion           uint32
-		Image                                     string
-	} `yaml:"runtime" json:"runtime"`
-	EVMBuild       map[string]any    `yaml:"evm_build" json:"evm_build"`
-	Repositories   map[string]any    `yaml:"repositories" json:"repositories"`
-	Dependencies   map[string]string `yaml:"dependencies" json:"dependencies"`
-	Interfaces     map[string]any    `yaml:"interfaces" json:"interfaces"`
-	Infrastructure map[string]any    `yaml:"infrastructure" json:"infrastructure"`
+	SchemaVersion  int                `yaml:"schema_version" json:"schema_version"`
+	Release        string             `yaml:"release" json:"release"`
+	Runtime        ReleaseRuntimeLock `yaml:"runtime" json:"runtime"`
+	EVMBuild       map[string]any     `yaml:"evm_build" json:"evm_build"`
+	Repositories   map[string]any     `yaml:"repositories" json:"repositories"`
+	Dependencies   map[string]string  `yaml:"dependencies" json:"dependencies"`
+	Interfaces     map[string]any     `yaml:"interfaces" json:"interfaces"`
+	Infrastructure map[string]any     `yaml:"infrastructure" json:"infrastructure"`
 }
 
-func (r *ReleaseLock) UnmarshalYAML(n *yaml.Node) error {
-	type lockAlias ReleaseLock
-	var aux struct {
-		SchemaVersion int    `yaml:"schema_version"`
-		Release       string `yaml:"release"`
-		Runtime       struct {
-			SourceRepository   string `yaml:"source_repository"`
-			SourceTag          string `yaml:"source_tag"`
-			SourceCommit       string `yaml:"source_commit"`
-			SpecVersion        uint32 `yaml:"spec_version"`
-			TransactionVersion uint32 `yaml:"transaction_version"`
-			Image              string `yaml:"image"`
-		} `yaml:"runtime"`
-		EVMBuild       map[string]any    `yaml:"evm_build"`
-		Repositories   map[string]any    `yaml:"repositories"`
-		Dependencies   map[string]string `yaml:"dependencies"`
-		Interfaces     map[string]any    `yaml:"interfaces"`
-		Infrastructure map[string]any    `yaml:"infrastructure"`
-	}
-	if err := n.Decode(&aux); err != nil {
-		return err
-	}
-	r.SchemaVersion = aux.SchemaVersion
-	r.Release = aux.Release
-	r.Runtime.SourceRepository = aux.Runtime.SourceRepository
-	r.Runtime.SourceTag = aux.Runtime.SourceTag
-	r.Runtime.SourceCommit = aux.Runtime.SourceCommit
-	r.Runtime.SpecVersion = aux.Runtime.SpecVersion
-	r.Runtime.TransactionVersion = aux.Runtime.TransactionVersion
-	r.Runtime.Image = aux.Runtime.Image
-	r.EVMBuild = aux.EVMBuild
-	r.Repositories = aux.Repositories
-	r.Dependencies = aux.Dependencies
-	r.Interfaces = aux.Interfaces
-	r.Infrastructure = aux.Infrastructure
-	return nil
+// ReleaseRuntimeLock binds every reviewed runtime identity field to its
+// canonical snake-case manifest key.
+type ReleaseRuntimeLock struct {
+	SourceRepository         string `yaml:"source_repository" json:"source_repository"`
+	SourceTag                string `yaml:"source_tag" json:"source_tag"`
+	SourceRefKind            string `yaml:"source_ref_kind,omitempty" json:"source_ref_kind,omitempty"`
+	SourceRefName            string `yaml:"source_ref_name,omitempty" json:"source_ref_name,omitempty"`
+	SourceCommit             string `yaml:"source_commit" json:"source_commit"`
+	CodeHash                 string `yaml:"code_hash" json:"code_hash"`
+	MetadataHash             string `yaml:"metadata_hash" json:"metadata_hash"`
+	CompressedWasmSHA256     string `yaml:"compressed_wasm_sha256" json:"compressed_wasm_sha256"`
+	UpstreamReleaseCallHash  string `yaml:"upstream_release_call_hash" json:"upstream_release_call_hash"`
+	UpstreamReleaseTimepoint string `yaml:"upstream_release_timepoint" json:"upstream_release_timepoint"`
+	SpecVersion              uint32 `yaml:"spec_version" json:"spec_version"`
+	TransactionVersion       uint32 `yaml:"transaction_version" json:"transaction_version"`
+	StateVersion             uint8  `yaml:"state_version" json:"state_version"`
+	Image                    string `yaml:"image" json:"image"`
 }
 
 type Hyperparameters struct {
@@ -286,7 +350,7 @@ type CompatibilityGate struct {
 	Decision string   `yaml:"decision" json:"decision"`
 }
 
-type RepoPaths struct{ SN, Server, Vault, PlatformConfig string }
+type RepoPaths struct{ SN, Server, OperatorProxy, Vault, PlatformConfig string }
 type ResolvedConfig struct {
 	ConfigPath           string
 	Config               *HarnessConfig
@@ -300,8 +364,10 @@ type ResolvedConfig struct {
 	Netuid               uint16
 	ChainID              uint64
 	Authority            string
+	OperationalRPCMode   string
+	OperationalSubstrate string
+	OperationalEVM       string
 	ObjectStoreHost      string
-	TrustedProxyCIDRs    string
 	OperatorAPIOrigins   []string
 	WalletSecret         string
 	WalletMaterial       string
@@ -311,14 +377,14 @@ type ResolvedConfig struct {
 	WalletHotkeyPublic   string
 	MaximumTAORao        uint64
 	MaximumAlphaRao      uint64
-	MaximumEVMGasWei     uint64
+	MaximumEVMGasWei     DecimalUint
 	PolicyHash           string
 	ConfigHash           string
 }
 
 type LoadOptions struct {
-	ConfigPath, SNRepo, ServerRepo, VaultRepo, PlatformConfigRepo string
-	RequireSecrets                                                bool
+	ConfigPath, SNRepo, ServerRepo, OperatorProxyRepo, VaultRepo, PlatformConfigRepo string
+	RequireSecrets                                                                   bool
 }
 
 func strictYAML(path string, out any) error {
@@ -332,8 +398,19 @@ func strictYAML(path string, out any) error {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	var extra any
-	if err := dec.Decode(&extra); err == nil {
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return fmt.Errorf("%s: trailing YAML: %w", path, err)
+		}
 		return fmt.Errorf("%s: multiple YAML documents", path)
+	}
+	if _, harness := out.(*HarnessConfig); harness {
+		if err := validatorpkg.ValidateReleaseValidatorEvidenceV2YAML(b); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		if err := validateRuntimeAttemptUploadDocument(b); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
 	}
 	return nil
 }
@@ -380,6 +457,12 @@ func LoadResolved(opts LoadOptions) (*ResolvedConfig, error) {
 	if err := strictYAML(resolve(cfg.Manifests.Hyperparameters), hyper); err != nil {
 		return nil, err
 	}
+	if len(cfg.ValidatorEvidenceV2) != 0 {
+		capacity := &ResolvedConfig{Config: &cfg, Public: pub, Hyperparameters: hyper}
+		if _, err := runtimeAttemptUploadBudget(capacity); err != nil {
+			return nil, err
+		}
+	}
 	vaultPath := filepath.Join(repos.Vault, "main", "st.yml")
 	vault := map[string]any{}
 	raw, err := os.ReadFile(vaultPath)
@@ -422,23 +505,62 @@ func (c *HarnessConfig) Validate() error {
 	if c.SchemaVersion != 1 || c.Profile != releaseProfile {
 		return fmt.Errorf("config must be schema 1 profile %s", releaseProfile)
 	}
+	// Planning can precede provisioning, but a supplied capacity is never
+	// silently corrected. Actual rendering requires all four limits below.
+	if c.Artifacts.AttemptUpload != nil {
+		if err := c.Artifacts.AttemptUpload.Validate(); err != nil {
+			return fmt.Errorf("artifacts.attempt_upload: %w", err)
+		}
+	}
+	if len(c.Artifacts.ReservedAttemptUploads) != 0 {
+		if err := validateRuntimeReservedAttemptUploadCensus(c); err != nil {
+			return err
+		}
+	}
+	// Planning can precede independent activation. Rendering cannot: its
+	// mandatory preflight below rejects missing bounds or exact references.
+	if len(c.ValidatorEvidenceV2) != 0 {
+		if err := validateSimulatorEvidenceV2Census(c); err != nil {
+			return err
+		}
+	}
+	if err := validateRuntimeEvidenceProvisionTemplateV2(c); err != nil {
+		return err
+	}
 	if c.Deployment.Network != "bittensor-testnet" || c.Deployment.Subnet != "existing" || c.Budgets.MaximumSubnetCreations != 0 {
 		return errors.New("release harness only accepts the existing Bittensor testnet subnet and forbids subnet creation")
 	}
 	headMembers := c.Topology.HeadFleets * c.Topology.ClientsPerHeadFleet
-	if c.Topology.Operators != 2 || c.Topology.Miners != 8 || c.Topology.Validators != 2 || c.Topology.HeadFleets != 2 || c.Topology.ClientsPerHeadFleet != 3 || headMembers != 6 {
-		return errors.New("release-1.0 testnet topology is fixed at two operators, eight miners, two validators, and two independently keyed three-client head fleets")
+	allFleetMembers := c.Topology.fleetCandidateMiners()
+	if c.Topology.Operators != 2 || c.Topology.Miners != 1_000 || c.Topology.Validators != 2 || c.Topology.HeadSlots != 200 || c.Topology.HeadFleets != 200 || c.Topology.ChallengerFleets != 2 || c.Topology.ClientsPerHeadFleet != 4 || c.Topology.ChurnFloorUIDs != 47 || c.Topology.MinerSwarmProcesses != 20 || headMembers != 800 || allFleetMembers != 808 {
+		return errors.New("release-1.0 testnet topology is fixed at two operators, 1000 miners in 20 swarms, two validators, 200 four-client head fleets, two four-client challengers, and 47 churn-floor UIDs alongside the two finalized bootstrap UIDs")
+	}
+	if c.Topology.Miners%c.Topology.MinerSwarmProcesses != 0 || c.Topology.Miners <= allFleetMembers {
+		return errors.New("miner swarms must divide the topology exactly and leave an unbound pool tail")
+	}
+	if c.AlphaTransfers.MinimumTAOEquivalentMarginBPS == 0 || c.AlphaTransfers.MinimumTAOEquivalentMarginBPS > 5_000 {
+		return errors.New("alpha transfer TAO-equivalent margin must be in [1,5000] basis points")
+	}
+	validators := c.ValidatorBootstrap
+	if validators.ReserveMinimumShareBPS <= 5_000 || validators.ReserveTargetShareBPS <= validators.ReserveMinimumShareBPS || validators.ReserveTargetShareBPS > 9_000 {
+		return errors.New("validator bootstrap must target a bounded reserve supermajority above its greater-than-50-percent minimum")
+	}
+	if validators.IndependentTargetAlphaRao == 0 || validators.MaximumReserveRepairAlphaRao < validators.IndependentTargetAlphaRao || validators.MinimumSourceRemainingAlphaRao == 0 {
+		return errors.New("validator bootstrap requires independent stake, a bounded reserve-repair tranche at least that large, and a nonzero source remainder")
 	}
 	if c.Topology.OperatorAssignment != "balanced" || c.Dependencies.Mode != "managed_containers" || c.Processes.RestartPolicy != "on_failure_bounded" {
 		return errors.New("release topology requires balanced assignment, managed containers, and bounded restart supervision")
 	}
+	if err := validateFleetLifecycleTopology(c.Topology); err != nil {
+		return err
+	}
 	if c.Contracts.GovernanceProfile != "testnet-single-owner" || !c.Contracts.Install || !c.Contracts.VerifyRuntimeCodeHash {
 		return errors.New("invalid contract release settings")
 	}
-	if c.Scenarios.Launch != "smoke" || c.Scenarios.Release != "release-1.0" || c.Scenarios.ShortEpochs < 20 || c.Scenarios.ProductionEpochs < 2 {
-		return errors.New("release scenarios require smoke launch, release-1.0, at least 20 accelerated epochs, and two production epochs")
+	if c.Scenarios.Launch != "smoke" || c.Scenarios.Release != "release-1.0" || c.Scenarios.ShortEpochs < 5 || c.Scenarios.ProductionEpochs < 3 {
+		return errors.New("release scenarios require smoke launch, release-1.0, at least five accelerated epochs, and three testnet UR blocks")
 	}
-	if c.Scenarios.VoluntaryConvictionRao == 0 || c.Scenarios.QualityFaultOperator < 1 || c.Scenarios.QualityFaultOperator > c.Topology.Operators || c.Scenarios.QualityFaultStartBlocks == 0 || c.Scenarios.QualityFaultDurationBlocks == 0 {
+	if c.Scenarios.VoluntaryConvictionRao == 0 || c.Scenarios.DishonestDepositRao != dishonestDepositRao || c.Scenarios.QualityFaultOperator < 1 || c.Scenarios.QualityFaultOperator > c.Topology.Operators || c.Scenarios.QualityFaultStartBlocks == 0 || c.Scenarios.QualityFaultDurationBlocks == 0 {
 		return errors.New("release scenario requires voluntary conviction and a bounded quality-cohort fault")
 	}
 	adversaries := c.Scenarios.Adversaries
@@ -460,17 +582,36 @@ func (c *HarnessConfig) Validate() error {
 	if c.Dependencies.ObjectStore != "server-blob" || c.Artifacts.Writer != "server-blob" || c.Artifacts.HistoryAPI != "server-api" || !c.Artifacts.ContentAddressed {
 		return errors.New("artifacts must use content-addressed server/blob and server API history")
 	}
+	for operator := 1; operator <= c.Topology.Operators; operator++ {
+		if _, err := operatorArtifactPrefix(c, operator); err != nil {
+			return err
+		}
+	}
 	// Each NO consumes a deposit and pool UID; validators include the reserve
-	// validator; every fleet consumes one UID; and the immutable claims escrow
-	// needs its own valid hotkey for moveStake/transferStake.
-	requiredRegistrations := 2*c.Topology.Operators + c.Topology.Validators + c.Topology.HeadFleets + 1
-	if c.Budgets.MaximumRegistrations < requiredRegistrations {
-		return errors.New("registration budget is below topology requirement")
+	// validator; initial and challenger fleets consume one registration each;
+	// churn-floor UIDs fill capacity; claims escrow needs a live hotkey; and the
+	// M2 fallback/provider/terminal waves each consume one real registration.
+	// Retain room for one exact superseded contract-role generation as well: a
+	// repaired pre-campaign deployment has already consumed its escrow and pool
+	// registrations even though only the replacement generation remains live.
+	requiredRegistrations := 2*c.Topology.Operators + c.Topology.Validators + c.Topology.fleetCandidates() + c.Topology.ChurnFloorUIDs + 1 + 3 + contractRegistrationRoleCount(c.Topology)
+	if c.Budgets.MaximumRegistrations < requiredRegistrations || uint64(c.Budgets.MaximumRegistrations) > uint64(math.MaxUint32) {
+		return errors.New("registration budget is outside the topology requirement and uint32 approval range")
 	}
-	if c.Budgets.MaximumRegistrationBurnRao == 0 {
-		return errors.New("maximum registration burn must be nonzero")
+	setupRegistrations := 2*c.Topology.Operators + c.Topology.Validators + c.Topology.HeadFleets + c.Topology.ChurnFloorUIDs + 1
+	if setupRegistrations != 254 {
+		return fmt.Errorf("initial topology consumes %d registrations, want 254 alongside the two finalized bootstrap UIDs", setupRegistrations)
 	}
-	for name, ref := range map[string]string{"wallet": c.LaunchInputs.Wallet, "wallet password": c.LaunchInputs.WalletPassword, "chain_id": c.LaunchInputs.ChainID, "authority": c.LaunchInputs.Authority, "object store hostname": c.LaunchInputs.ObjectStoreHostname, "trusted proxy CIDRs": c.LaunchInputs.TrustedProxyCIDRs, "operator API origins": c.LaunchInputs.OperatorAPIOrigins, "netuid": c.Deployment.NetuidFrom, "tao budget": c.Budgets.MaximumTotalTAORaoFrom, "alpha budget": c.Budgets.MaximumTotalAlphaRaoFrom, "gas budget": c.Budgets.MaximumEVMGasWeiFrom} {
+	if c.Budgets.MaximumRegistrationBurnRao == 0 || c.Budgets.MaximumNativeTransactionFeeRao == 0 || c.Budgets.MaximumEVMFeePerGasWei == 0 {
+		return errors.New("maximum registration burn, native transaction fee, and EVM fee per gas must be nonzero")
+	}
+	if _, _, _, err := resolveOperationalRPCs("127.0.0.1:9944", c.LaunchInputs.PublicSubstrateRPCOverride, c.LaunchInputs.PublicEVMRPCOverride); err != nil {
+		return fmt.Errorf("public RPC override: %w", err)
+	}
+	if c.LaunchInputs.PublicEVMMaximumRequestsPerMinute < 1 || c.LaunchInputs.PublicEVMMaximumRequestsPerMinute > 60 {
+		return errors.New("public EVM request ceiling must be in [1,60] requests per minute")
+	}
+	for name, ref := range map[string]string{"wallet": c.LaunchInputs.Wallet, "wallet password": c.LaunchInputs.WalletPassword, "chain_id": c.LaunchInputs.ChainID, "authority": c.LaunchInputs.Authority, "object store hostname": c.LaunchInputs.ObjectStoreHostname, "operator API origins": c.LaunchInputs.OperatorAPIOrigins, "netuid": c.Deployment.NetuidFrom, "tao budget": c.Budgets.MaximumTotalTAORaoFrom, "alpha budget": c.Budgets.MaximumTotalAlphaRaoFrom, "gas budget": c.Budgets.MaximumEVMGasWeiFrom} {
 		if !strings.HasPrefix(ref, "vault://main/st.yml#testnet-") {
 			return fmt.Errorf("%s must reference a testnet-prefixed st.yml key", name)
 		}
@@ -499,6 +640,29 @@ func parseUnsignedVaultValue(reference string, value any) (uint64, error) {
 	}
 }
 
+// Convert a vault scalar into an unbounded canonical EVM wei amount.
+func parseDecimalVaultValue(reference string, value any) (DecimalUint, error) {
+	var encoded string
+	switch typed := value.(type) {
+	case int:
+		if typed < 0 {
+			return "", fmt.Errorf("vault value %q is negative", reference)
+		}
+		encoded = strconv.Itoa(typed)
+	case uint64:
+		encoded = strconv.FormatUint(typed, 10)
+	case string:
+		encoded = strings.TrimSpace(typed)
+	default:
+		return "", fmt.Errorf("vault value %q is not a decimal unsigned integer", reference)
+	}
+	parsed, err := parseDecimalUint(encoded)
+	if err != nil {
+		return "", fmt.Errorf("vault value %q: %w", reference, err)
+	}
+	return parsed, nil
+}
+
 func (r *ResolvedConfig) resolveVaultInputs(require bool) error {
 	get := func(ref string) (any, error) {
 		const p = "vault://main/st.yml#"
@@ -521,6 +685,13 @@ func (r *ResolvedConfig) resolveVaultInputs(require bool) error {
 			return 0, e
 		}
 		return parseUnsignedVaultValue(ref, v)
+	}
+	decimalv := func(ref string) (DecimalUint, error) {
+		v, e := get(ref)
+		if e != nil {
+			return "", e
+		}
+		return parseDecimalVaultValue(ref, v)
 	}
 	v, err := get(r.Config.LaunchInputs.Wallet)
 	if err != nil {
@@ -562,16 +733,15 @@ func (r *ResolvedConfig) resolveVaultInputs(require bool) error {
 	if r.Authority, err = resolveEnvTemplates(r.Authority, require); err != nil {
 		return fmt.Errorf("testnet authority: %w", err)
 	}
+	r.OperationalSubstrate, r.OperationalEVM, r.OperationalRPCMode, err = resolveOperationalRPCs(r.Authority, r.Config.LaunchInputs.PublicSubstrateRPCOverride, r.Config.LaunchInputs.PublicEVMRPCOverride)
+	if err != nil {
+		return fmt.Errorf("testnet operational RPCs: %w", err)
+	}
 	v, err = get(r.Config.LaunchInputs.ObjectStoreHostname)
 	if err != nil {
 		return err
 	}
 	r.ObjectStoreHost = strings.TrimSpace(fmt.Sprint(v))
-	v, err = get(r.Config.LaunchInputs.TrustedProxyCIDRs)
-	if err != nil {
-		return err
-	}
-	r.TrustedProxyCIDRs = strings.TrimSpace(fmt.Sprint(v))
 	v, err = get(r.Config.LaunchInputs.OperatorAPIOrigins)
 	if err != nil {
 		return err
@@ -586,7 +756,7 @@ func (r *ResolvedConfig) resolveVaultInputs(require bool) error {
 	if r.MaximumAlphaRao, err = uintv(r.Config.Budgets.MaximumTotalAlphaRaoFrom); err != nil {
 		return err
 	}
-	if r.MaximumEVMGasWei, err = uintv(r.Config.Budgets.MaximumEVMGasWeiFrom); err != nil {
+	if r.MaximumEVMGasWei, err = decimalv(r.Config.Budgets.MaximumEVMGasWeiFrom); err != nil {
 		return err
 	}
 	if r.WalletMaterial != "" {
@@ -603,20 +773,62 @@ func (r *ResolvedConfig) resolveVaultInputs(require bool) error {
 		if r.Netuid == 0 {
 			return errors.New("testnet-netuid is zero")
 		}
-		if r.MaximumTAORao == 0 || r.MaximumAlphaRao == 0 || r.MaximumEVMGasWei == 0 {
+		if r.MaximumTAORao == 0 || r.MaximumAlphaRao == 0 || r.MaximumEVMGasWei.IsZero() {
 			return errors.New("all three testnet spending limits must be nonzero")
 		}
 		if r.Authority == "" {
 			return errors.New("testnet-authority is empty")
 		}
-		if r.ObjectStoreHost == "" || r.TrustedProxyCIDRs == "" {
-			return errors.New("testnet object-store hostname and trusted-proxy CIDRs must be nonempty")
+		if r.ObjectStoreHost == "" {
+			return errors.New("testnet object-store hostname must be nonempty")
 		}
 		if len(r.OperatorAPIOrigins) != r.Config.Topology.Operators {
 			return fmt.Errorf("testnet-operator-api-origins must contain %d public origins", r.Config.Topology.Operators)
 		}
 	}
 	return nil
+}
+
+// Select a protocol-typed public pair only when both values are supplied.
+// Keeping the private authority resolved preserves a deterministic fallback
+// without deriving one protocol's URL from the other public gateway.
+func resolveOperationalRPCs(authority, substrateOverride, evmOverride string) (substrate, evm, mode string, err error) {
+	substrateOverride = strings.TrimSpace(substrateOverride)
+	evmOverride = strings.TrimSpace(evmOverride)
+	if (substrateOverride == "") != (evmOverride == "") {
+		return "", "", "", errors.New("Substrate and EVM overrides must be set together")
+	}
+	if substrateOverride == "" {
+		substrate, evm, err = authorityURLs(authority)
+		if err != nil {
+			return "", "", "", err
+		}
+		return substrate, evm, rpcModePrivateAuthority, nil
+	}
+	validate := func(label, raw string, schemes ...string) (string, error) {
+		u, parseErr := url.Parse(raw)
+		if parseErr != nil || u.Host == "" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+			return "", fmt.Errorf("%s override must be a credential-free bare RPC URL", label)
+		}
+		validScheme := false
+		for _, scheme := range schemes {
+			validScheme = validScheme || u.Scheme == scheme
+		}
+		if !validScheme {
+			return "", fmt.Errorf("%s override has unsupported scheme %q", label, u.Scheme)
+		}
+		u.Path = ""
+		return u.String(), nil
+	}
+	substrate, err = validate("Substrate", substrateOverride, "ws", "wss")
+	if err != nil {
+		return "", "", "", err
+	}
+	evm, err = validate("EVM", evmOverride, "http", "https")
+	if err != nil {
+		return "", "", "", err
+	}
+	return substrate, evm, rpcModePublicOverride, nil
 }
 
 // Minimal Bittensor wallet keyfile envelope. Public files must contain only
@@ -978,14 +1190,37 @@ func (r *ResolvedConfig) Validate() error {
 	if r.Public.SchemaVersion != 1 || r.Public.Profile != releaseProfile || r.Public.Chain.ChainID != testnetChainID || strings.ToLower(r.Public.Chain.GenesisHash) != testnetGenesis {
 		return errors.New("public manifest is not the pinned Bittensor testnet release profile")
 	}
-	if r.Public.Chain.ExpectedBlockSeconds == 0 {
-		return errors.New("public manifest must declare a nonzero block cadence")
+	if r.Public.Chain.ExpectedBlockSeconds == 0 || r.Public.Chain.ExpectedDefaultMinTransferRao == 0 {
+		return errors.New("public manifest must declare a nonzero block cadence and runtime transfer minimum")
+	}
+	// Full-population key observations share the ordinary admission counters.
+	// Reject insufficient capacity while parsing, before setup can sign or write.
+	if len(r.Config.ValidatorEvidenceV2) != 0 {
+		if _, err := runtimeAttemptUploadBudget(r); err != nil {
+			return err
+		}
+	}
+	if r.OperationalRPCMode == rpcModePublicOverride && !r.Public.Chain.PublicFallbackAllowsEventIndexing {
+		return errors.New("public RPC override requires bounded event indexing in the public manifest")
+	}
+	if err := validateSettlementVaultClaimWindows(r.Policy); err != nil {
+		return err
 	}
 	if r.ChainID != 0 && r.ChainID != testnetChainID {
 		return fmt.Errorf("vault testnet chain id %d, want %d", r.ChainID, testnetChainID)
 	}
-	if r.Release.Release != "1.0" || r.Release.Runtime.SpecVersion != r.Public.Chain.ExpectedRuntimeSpec {
+	if r.Release.Release != "1.0" ||
+		r.Release.Runtime.SpecVersion != r.Public.Chain.ExpectedRuntimeSpec ||
+		r.Release.Runtime.TransactionVersion != r.Public.Chain.ExpectedTransactionVersion ||
+		r.Release.Runtime.StateVersion != r.Public.Chain.ExpectedStateVersion {
 		return errors.New("release/runtime manifest mismatch")
+	}
+	// Every command, including plan and read-only replay, must start from the
+	// reviewed v454 source/artifact identity. The doctor independently observes
+	// the checkout and live chain, but it is not a prerequisite for parsing a
+	// release command.
+	if err := validateReviewedRuntimeIdentity(r.Release); err != nil {
+		return err
 	}
 	if r.Hyperparameters.SchemaVersion != 1 || r.Hyperparameters.Profile != releaseProfile {
 		return errors.New("invalid hyperparameter manifest")
@@ -993,11 +1228,33 @@ func (r *ResolvedConfig) Validate() error {
 	if r.Policy.ProductionCadence.AfterAcceleratedEpochs != uint64(r.Config.Scenarios.ShortEpochs) {
 		return fmt.Errorf("production cadence requires %d accelerated epochs, scenario config requests %d", r.Policy.ProductionCadence.AfterAcceleratedEpochs, r.Config.Scenarios.ShortEpochs)
 	}
-	if len(r.Hyperparameters.ProductionOwnerControlled) != 1 || hyperparameterUint64(r.Hyperparameters.ProductionOwnerControlled["immunity_period"]) != r.Policy.ProductionCadence.EpochBlocks {
-		return errors.New("production hyperparameters must set immunity_period to the production epoch length")
+	for name, value := range r.Hyperparameters.OwnerControlled {
+		shape, ok := hyperShapes[name]
+		if !ok {
+			return fmt.Errorf("owner hyperparameter %q is unsupported", name)
+		}
+		if _, err := normalizeYAMLValue(value, shape.Kind); err != nil {
+			return fmt.Errorf("owner hyperparameter %s: %w", name, err)
+		}
+	}
+	for name, value := range r.Hyperparameters.ProductionOwnerControlled {
+		shape, supported := hyperShapes[name]
+		_, bootstrapped := r.Hyperparameters.OwnerControlled[name]
+		if !supported || !bootstrapped {
+			return fmt.Errorf("production hyperparameter %q is unsupported or has no bootstrap value", name)
+		}
+		if _, err := normalizeYAMLValue(value, shape.Kind); err != nil {
+			return fmt.Errorf("production hyperparameter %s: %w", name, err)
+		}
+	}
+	if len(r.Hyperparameters.ProductionOwnerControlled) != 2 || hyperparameterUint64(r.Hyperparameters.ProductionOwnerControlled["immunity_period"]) != r.Policy.ProductionCadence.EpochBlocks || hyperparameterUint64(r.Hyperparameters.OwnerControlled["burn_half_life"]) != 1 || hyperparameterUint64(r.Hyperparameters.ProductionOwnerControlled["burn_half_life"]) != 360 {
+		return errors.New("production hyperparameters must restore burn_half_life to 360 and set immunity_period to the production epoch length after a one-block bootstrap burn half-life")
+	}
+	if hyperparameterUint64(r.Hyperparameters.OwnerControlled["immunity_period"]) != testnetBootstrapImmunityPeriodBlocks {
+		return fmt.Errorf("bootstrap immunity_period must be the reviewed %d-block testnet recovery window", testnetBootstrapImmunityPeriodBlocks)
 	}
 	if len(r.OperatorAPIOrigins) != 0 {
-		origins, err := validateOperatorAPIOrigins(r.OperatorAPIOrigins, r.Config.Topology.Operators)
+		origins, err := validateOperatorAPIOrigins(r.OperatorAPIOrigins, r.Config.Topology.Operators, r.ChainID, r.Public.Chain.GenesisHash, r.Config.Deployment.Network)
 		if err != nil {
 			return err
 		}
@@ -1009,40 +1266,91 @@ func (r *ResolvedConfig) Validate() error {
 	if len(r.Policy.Deposit.Tiers) < 2 || r.Policy.Deposit.Tiers[1].MinConvictionRao != r.Config.Scenarios.VoluntaryConvictionRao {
 		return errors.New("voluntary conviction must equal the first nonzero tier boundary")
 	}
-	perOperator, ok := checkedMul(r.Policy.Deposit.EpochCapRaoPerOperator, uint64(r.Config.Scenarios.ShortEpochs))
-	if !ok {
-		return errors.New("accelerated campaign deposit requirement overflows uint64")
+	if r.Config.Scenarios.DishonestDepositRao < r.Config.Scenarios.VoluntaryConvictionRao || r.Config.Scenarios.DishonestDepositRao >= r.Policy.Deposit.EpochCapRaoPerOperator {
+		return errors.New("dishonest deposit must be runtime-viable and strictly below the honest per-operator epoch cap")
 	}
-	required, ok := checkedMul(perOperator, uint64(r.Config.Topology.Operators))
-	if !ok {
-		return errors.New("accelerated campaign deposit requirement overflows uint64")
+	required, err := releaseCampaignDepositRequirement(r)
+	if err != nil {
+		return err
 	}
-	required, ok = checkedAdd(required, r.Config.Scenarios.VoluntaryConvictionRao)
-	if !ok || r.Policy.Deposit.TotalTestCampaignCapRao < required {
-		return fmt.Errorf("campaign cap %d cannot fund %d accelerated epochs plus voluntary conviction; require at least %d", r.Policy.Deposit.TotalTestCampaignCapRao, r.Config.Scenarios.ShortEpochs, required)
+	if r.Policy.Deposit.TotalTestCampaignCapRao < required {
+		return fmt.Errorf("campaign cap %d cannot fund accelerated epochs, the dishonest production deposit, recovery, and three fully observed UR blocks; require at least %d", r.Policy.Deposit.TotalTestCampaignCapRao, required)
 	}
 	return nil
 }
 
-func validateOperatorAPIOrigins(origins []string, operators int) ([]string, error) {
-	if len(origins) != operators {
-		return nil, fmt.Errorf("operator API origins has %d entries, want %d", len(origins), operators)
+// The immutable vault floor is fixed from the deployment policy. Every future
+// cadence must still leave that much claim time after its finalize offset;
+// otherwise the coordinator would accept a policy whose timely finalizations
+// always revert in the vault.
+func validateSettlementVaultClaimWindows(policy *protocol.Policy) error {
+	if policy == nil {
+		return errors.New("settlement policy is unavailable")
 	}
-	result := make([]string, len(origins))
-	seen := map[string]bool{}
-	for i, origin := range origins {
-		u, err := url.Parse(origin)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-			return nil, fmt.Errorf("operator API origin %d is not a bare http(s) origin", i+1)
-		}
-		canonical := strings.TrimSuffix(origin, "/")
-		if seen[canonical] {
-			return nil, fmt.Errorf("operator API origin %d duplicates %q", i+1, canonical)
-		}
-		seen[canonical] = true
-		result[i] = canonical
+	settlement := policy.Settlement
+	minimumTTL, ok := checkedMul(settlement.EpochBlocks, settlement.ClaimTTLEpochs)
+	if !ok || minimumTTL == 0 {
+		return errors.New("settlement vault minimum claim TTL overflows uint64")
 	}
-	return result, nil
+	claimEpochs, ok := checkedAdd(settlement.ClaimTTLEpochs, settlement.ClaimGraceEpochs)
+	if !ok {
+		return errors.New("settlement claim TTL plus grace overflows uint64")
+	}
+	validate := func(name string, epochBlocks, finalizeOffset uint64) error {
+		horizon, multiplyOK := checkedMul(claimEpochs, epochBlocks)
+		required, addOK := checkedAdd(minimumTTL, finalizeOffset)
+		if addOK {
+			required, addOK = checkedAdd(required, 1)
+		}
+		if !multiplyOK || !addOK {
+			return fmt.Errorf("%s settlement claim window overflows uint64", name)
+		}
+		if horizon < required {
+			return fmt.Errorf("%s settlement claim window %d is below immutable vault requirement %d", name, horizon, required)
+		}
+		return nil
+	}
+	if err := validate("accelerated", settlement.EpochBlocks, settlement.FinalizeOffsetBlocks); err != nil {
+		return err
+	}
+	production := policy.ProductionCadence
+	return validate("production", production.EpochBlocks, production.FinalizeOffsetBlocks)
+}
+
+// releaseCampaignDepositRequirement includes every epoch that can begin before
+// the production-soak terminal observation. The first production epoch uses a
+// configured underpayment by NO 2; all other positions reserve their full
+// per-epoch cap. One extra production epoch is conservatively discarded as
+// partial, and the terminal boundary may trigger the following epoch's deposit.
+func releaseCampaignDepositRequirement(r *ResolvedConfig) (uint64, error) {
+	if r == nil || r.Config == nil || r.Config.Topology.Operators < 2 || r.Config.Scenarios.ShortEpochs < 1 || r.Config.Scenarios.ProductionEpochs < 1 {
+		return 0, errors.New("release campaign topology is incomplete")
+	}
+	epochsPerOperator, ok := checkedAdd(uint64(r.Config.Scenarios.ShortEpochs), uint64(r.Config.Scenarios.ProductionEpochs)+2)
+	if !ok {
+		return 0, errors.New("release campaign epoch count overflows uint64")
+	}
+	allEpochs, ok := checkedMul(epochsPerOperator, uint64(r.Config.Topology.Operators))
+	if !ok {
+		return 0, errors.New("release campaign epoch count overflows uint64")
+	}
+	fullCap, ok := checkedMul(allEpochs, r.Policy.Deposit.EpochCapRaoPerOperator)
+	if !ok || fullCap < r.Policy.Deposit.EpochCapRaoPerOperator {
+		return 0, errors.New("release campaign deposit requirement overflows uint64")
+	}
+	// Replace NO 2's one full-cap production deposit with the configured,
+	// runtime-viable underpayment.
+	required := fullCap - r.Policy.Deposit.EpochCapRaoPerOperator + r.Config.Scenarios.DishonestDepositRao
+	required, ok = checkedAdd(required, r.Config.Scenarios.VoluntaryConvictionRao)
+	if !ok {
+		return 0, errors.New("release campaign deposit requirement overflows uint64")
+	}
+	return required, nil
+}
+
+func validateOperatorAPIOrigins(origins []string, operators int, chainID uint64, genesisHash, network string) ([]string, error) {
+	_, canonical, err := publicEvidenceTransportForOrigins(origins, operators, chainID, genesisHash, network)
+	return canonical, err
 }
 
 func validateCompatibilityGates(gates map[string]CompatibilityGate) error {
@@ -1091,6 +1399,10 @@ func discoverRepos(configPath string, opts LoadOptions) (RepoPaths, error) {
 	if server == "" {
 		server = findSiblingModule(parent, "github.com/urnetwork/server")
 	}
+	operatorProxy := opts.OperatorProxyRepo
+	if operatorProxy == "" {
+		operatorProxy = findSiblingModule(parent, "github.com/urnetwork/operator-proxy")
+	}
 	vault := opts.VaultRepo
 	if vault == "" {
 		candidate := filepath.Join(parent, "vault")
@@ -1108,13 +1420,16 @@ func discoverRepos(configPath string, opts LoadOptions) (RepoPaths, error) {
 	if server == "" {
 		return RepoPaths{}, errors.New("cannot discover server repository; use --server-repo")
 	}
+	if operatorProxy == "" {
+		return RepoPaths{}, errors.New("cannot discover operator-proxy repository; use --operator-proxy-repo")
+	}
 	if vault == "" {
 		return RepoPaths{}, errors.New("cannot discover vault repository; use --vault-repo")
 	}
 	if platformConfig == "" {
 		return RepoPaths{}, errors.New("cannot discover platform config repository; use --platform-config-repo")
 	}
-	return RepoPaths{SN: cleanAbs(sn), Server: cleanAbs(server), Vault: cleanAbs(vault), PlatformConfig: cleanAbs(platformConfig)}, nil
+	return RepoPaths{SN: cleanAbs(sn), Server: cleanAbs(server), OperatorProxy: cleanAbs(operatorProxy), Vault: cleanAbs(vault), PlatformConfig: cleanAbs(platformConfig)}, nil
 }
 func findModule(start, module string) string {
 	d := cleanAbs(start)
@@ -1131,18 +1446,31 @@ func findModule(start, module string) string {
 	}
 }
 func findSiblingModule(parent, module string) string {
+	// Prefer the conventional sibling name before scanning. Workspaces may
+	// contain hidden snapshots or performance baselines with the same module
+	// declaration; selecting one of those makes source locking nondeterministic.
+	name := module
+	if i := strings.LastIndexByte(name, '/'); i >= 0 {
+		name = name[i+1:]
+	}
+	if preferred := filepath.Join(parent, name); moduleMatches(preferred, module) {
+		return preferred
+	}
 	ents, _ := os.ReadDir(parent)
 	for _, e := range ents {
-		if !e.IsDir() {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
 		d := filepath.Join(parent, e.Name())
-		b, err := os.ReadFile(filepath.Join(d, "go.mod"))
-		if err == nil && strings.Contains(string(b), "module "+module) {
+		if moduleMatches(d, module) {
 			return d
 		}
 	}
 	return ""
+}
+func moduleMatches(dir, module string) bool {
+	b, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	return err == nil && strings.Contains(string(b), "module "+module)
 }
 func cleanAbs(p string) string { a, _ := filepath.Abs(p); return filepath.Clean(a) }
 func fileExists(p string) bool { _, e := os.Stat(p); return e == nil }
@@ -1150,16 +1478,18 @@ func fileExists(p string) bool { _, e := os.Stat(p); return e == nil }
 // MarshalJSON prevents an accidental serialization of loaded wallet material.
 func (r ResolvedConfig) MarshalJSON() ([]byte, error) {
 	type public struct {
-		ConfigPath        string         `json:"config_path"`
-		Config            *HarnessConfig `json:"config"`
-		Netuid            uint16         `json:"netuid"`
-		ChainID           uint64         `json:"chain_id"`
-		Authority         string         `json:"authority"`
-		ObjectStore       string         `json:"object_store_hostname"`
-		TrustedProxyCIDRs string         `json:"trusted_proxy_cidrs"`
-		WalletPublic      string         `json:"wallet_public"`
-		PolicyHash        string         `json:"policy_hash"`
-		ConfigHash        string         `json:"config_hash"`
+		ConfigPath           string         `json:"config_path"`
+		Config               *HarnessConfig `json:"config"`
+		Netuid               uint16         `json:"netuid"`
+		ChainID              uint64         `json:"chain_id"`
+		PrivateAuthority     string         `json:"private_authority"`
+		OperationalRPCMode   string         `json:"operational_rpc_mode"`
+		OperationalSubstrate string         `json:"operational_substrate_rpc"`
+		OperationalEVM       string         `json:"operational_evm_rpc"`
+		ObjectStore          string         `json:"object_store_hostname"`
+		WalletPublic         string         `json:"wallet_public"`
+		PolicyHash           string         `json:"policy_hash"`
+		ConfigHash           string         `json:"config_hash"`
 	}
 	authority, _, err := authorityURLs(r.Authority)
 	if err != nil {
@@ -1168,15 +1498,9 @@ func (r ResolvedConfig) MarshalJSON() ([]byte, error) {
 		authority = redactURL(authority)
 	}
 	return json.Marshal(public{
-		ConfigPath:        r.ConfigPath,
-		Config:            r.Config,
-		Netuid:            r.Netuid,
-		ChainID:           r.ChainID,
-		Authority:         authority,
-		ObjectStore:       r.ObjectStoreHost,
-		TrustedProxyCIDRs: r.TrustedProxyCIDRs,
-		WalletPublic:      r.WalletPublic,
-		PolicyHash:        r.PolicyHash,
-		ConfigHash:        r.ConfigHash,
+		ConfigPath: r.ConfigPath, Config: r.Config, Netuid: r.Netuid, ChainID: r.ChainID,
+		PrivateAuthority: authority, OperationalRPCMode: r.OperationalRPCMode,
+		OperationalSubstrate: redactURL(r.OperationalSubstrate), OperationalEVM: redactURL(r.OperationalEVM),
+		ObjectStore: r.ObjectStoreHost, WalletPublic: r.WalletPublic, PolicyHash: r.PolicyHash, ConfigHash: r.ConfigHash,
 	})
 }

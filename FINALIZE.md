@@ -1,31 +1,989 @@
 # UR Subnet release 1.0 finalization plan
 
-**Status:** release-1.0 implementation and continuous adversarial campaign complete locally; testnet inputs, alpha bootstrap and isolated dependency preflight complete; full `sim-testnet` launch is fail-closed while the private Subtensor archive catches up, 2026-08-21 UTC
+Current short index: [FINALIZE-ACTIVE.md](FINALIZE-ACTIVE.md).
+Decision confirmed 2026-09-07 UTC: on-chain validator evidence hashes with full
+signed proof bytes served by the API and content-addressed MinIO. Implement the
+independent write-once pool-namespace commitments specified in section10.1 of
+the complete handoff, including no-payout windows and later audits. Historical
+entries below that call this choice unanswered are superseded; implementation
+and on-chain acceptance are not yet complete.
+
+Current execution record: [FINALIZE-COMPLETE.md](FINALIZE-COMPLETE.md), reconciled
+2026-09-07 06:59 UTC. The final live campaign has not started. Existing attempt-4
+testnet deployments and custody are preserved; no partial local qualification
+authorizes activation or proves final acceptance.
+
+Last combined-main qualification: the captured checkout passes all476 selected
+roots normally and under race: 24 CRV4, 402 validator and 50 simulator. This
+includes Stats v4, both client-key repairs, the complete per-operator public-key
+repair and composed gate coverage. Root independently checked the exact raw
+root membership and final indexes; recorded build/list/execution and input
+fences pass. All owners are terminal and primary source, including docs, is
+released. The subsequent HTTP transport and gate edits require a fresh composed
+qualification. This is not the final source freeze or complete semantic gate.
+
+Current scheduling and integration (2026-09-07 06:59 UTC):
+
+- Integration now has priority on one current candidate,
+  `temp/sn-integration-xOgvEe/sn`: current primary's 25 dirty/new paths plus
+  the qualified head/EMA 53-path slice, all compared byte-for-byte. It reuses
+  unchanged sibling dependencies and the qualified private-service server.
+  Complete 78-path dirty/new source admission, formatting inspection, exact
+  compiled test censuses and the explicit private simulator build pass.
+  Native stake35, startup9, child12, profiler1 and Head focus14 pass both modes.
+  Widened129 passes normally; race passes as validator1+117 and simulator11.
+  The build-once remaining117 race execution passes in129.838s with unchanged
+  limits; its earlier outer-timeout124 remains recorded. Root independently
+  verified all78 source hashes and canonical path mappings, then promoted the
+  exact53 Head/EMA files into primary after source release. Stats'28-path next
+  delta is now applied to the same candidate for qualification, preserving
+  newer shutdown cancellation/error propagation and Head/EMA selections.
+  This is selected integration evidence, not either complete release gate.
+- Keep stable owners: root integration, Astra max root-cause fixes, one Terra
+  max integration-test lane and one independent Terra max isolation/gate lane.
+  Reuse frozen sources for selector/output-name corrections with separate
+  captures. Check exact nonempty compiled root membership, package-main `-o`,
+  manifest paths/modes and actual replacement graphs before expensive runs.
+  Reuse unchanged dependency/cache inputs; isolate mutable state and artifacts.
+  Measured exact-membership development shards retain all roots and existing
+  deadlines; both complete final gates remain mandatory. Prepare evidence
+  locators/reporting alongside implementation and analyze closed captures
+  independently of subsequent live windows.
+- All jobs default to concurrent execution once their own inputs are admitted.
+  Source review, normal/race tests, independent fixes and read-only RPC checks
+  do not wait for unrelated lanes or report packaging. Per-job actual exits,
+  logs and source/dependency fences remain mandatory.
+- Isolation is preferred over shared-resource serialization. Per-gate PG/Redis
+  instances, private ports and Foundry output/cache ownership are being
+  implemented separately; the current two full scripts still share resources
+  and are not yet safe to launch concurrently unchanged. Producer success
+  gates live writes, not independent aggregate prequalification.
+- Six replay follow-on checks ran concurrently and passed: identity27, full
+  CRV4 (117 PASS / 7 live SKIP) and the simulator guard, each normal/race.
+  The native live storage/null failure now has deterministic transport-level
+  causal evidence (5 FAIL / 3 PASS) and repaired transport8/stake35/startup9
+  normal/race passes. Both real public-testnet stake/replay probes also pass,
+  at authenticated block7,951,347. The original failures are preserved; final
+  full-package qualification passes152 roots/8 opt-in skips per mode; simulator2
+  and revised live identity also pass both modes. The14-path qualified native
+  overlay was integrated exactly, including the real startup call. A separate
+  qualified companion now expands source attestation from24 to29 files at
+  the same runtime454 pin; its two guards pass normally and under race.
+- Artifact widened39 passes normally and under race. Head/EMA private-fixture
+  repair14 passes both modes and widened129 normally; its exact1+117 race union
+  and sim11 now pass, preserving the original aggregate timeout and the final
+  unsharded obligation. The neutral14 control has its exact expected9 failures
+  and5 controls per mode. Stats31 and retained99+sim4 pass both modes with
+  exact censuses; its corrected causal12+sim2 retain their expected failures.
+  Terminal v4 new24 passes, with exact causal14 FAIL/10 PASS, but full123 exposes
+  an overfilled positive-history fixture and separate package timeouts. The
+  reviewed one-file v5 correction keeps128-record/16-trail limits and all
+  current workload, explicitly checks the17th-trail refusal, and uses the
+  independent operator's available capacity. Qualification is in progress.
+- The hidden fixed-port egress repair is integrated after focused4/widened8
+  normal/race passes. Server's implicit wildcard6060 profiler is removed and
+  regression-tested in both modes. The refined kernel child owner and12
+  deterministic tests are integrated after normal/race passes. Private
+  PG/Redis setup is also integrated after49 new/retained tests in both modes
+  and a real concurrent two-pair Docker smoke, including cross-owner survival
+  and exact-ID cleanup. Full phase wiring still needs composed qualification;
+  generator11 passes both modes after repairing snapshot file-mode custody,
+  with cancellation/join controls being completed separately.
+  Runtime integration, all adjacent qualifications,
+  both full gates, freeze and live validation remain open. No final-soak or
+  new transaction claim follows from this parallel local work.
+
+The Head race timeout gave its final root58s although that root's standalone
+race takes102.66s. The exact118-name selected union passed in independent1/117
+shards at100.457s/153.706s with unchanged3m budgets; the final full-validator
+race remains unsharded. This is a scheduling correction, not a product deadlock
+fix or a complete release certificate.
+
+Previous working integration (2026-09-06 22:42 UTC; superseded above):
+
+- Checkpoint `9197468` is committed, pulled and pushed with qualified shutdown64
+  and bounded EMA loader32; server is `f478db80`. Four new exact read-budget
+  tests are authored but unexecuted in primary. This is not a complete-primary
+  gate or source freeze. The historical validator-identity reader now has21
+  regression roots passing normally and under race. Root reviewed both full
+  logs and the exact formatted source pins. Wider CRV4 also passes111 roots
+  normally and under race, with6 explicit opt-in live skips. The simulator
+  retention guard also passes both modes; all six foreground sessions are
+  terminal0 and root verified the final capture index. A new separate opt-in
+  public-testnet identity/replay test passes normally/race at actual finalized
+  blocks7,949,341 and7,949,343; it sends no transaction. Its equal-height
+  conflicting-finality comparison needs the source-found assertion repair and
+  deterministic controls now in progress. No chain inconsistency was observed.
+  Activation/history wiring remains open; neither scripted tests nor the live
+  identity observation establish final testnet acceptance.
+- Canonical neutral27 completed with exactly13 expected failures/14 passing
+  controls, real terminal0 and a separately verified final index. Root reviewed
+  full output. Repaired-source qualification failed: normal repair27/widened115
+  and focused validator26 race pass, but wider validator race hit its fixed3m
+  timeout. Actual outer1 and distinct final seal are preserved. Repeated JSON
+  record cloning is the observed active work. The typed-copy repair and16
+  deterministic regressions are frozen/source-reviewed; FORMAT4 is accepted,
+  but causal16 and repaired/widened131 have not run. The source-found runner
+  split that silently skipped the simulator's final fence has a reviewed
+  one-character fix and28 unexecuted non-product controls. No timeout increase.
+- A new read-only bounded EMA startup loader adds25 tests, preserves five
+  legacy tests and adds two simulator guards. Its exact full673 source is
+  frozen; fresh FORMAT10 passed and its exact seven formatting deltas are in
+  primary. All32 roots pass normally and under race, with actual build/list/test
+  and census-validation exits0. Retained session36171 ended0 at20:24:09; the
+  distinct20:24:20 post-owner index strictly verifies and root reviewed all four
+  raw logs/censuses. Existing live startup and commit routes are not thereby
+  activated or made bounded.
+- Head accounting's launcher repair passed99 actual controls; the corrected
+  causal13 capture reached compilation and failed on an inherited undefined
+  artifact-size constant. Its actual failure and distinct final seal are retained.
+  A fresh full686 candidate aliases the existing64 MiB ceiling and adds8
+  unexecuted dependency controls without repairing away the original head13
+  causal distinction. Root reviewed the8 controls and authorized execution;
+  fresh FORMAT3 is complete, while actual product results remain pending.
+- Terminal99 is now a frozen full694 source; all99 roots remain unexecuted.
+  The bounded EMA write-owner proposal is frozen with40 new/widened72 roots,
+  not tested or wired into the live collector. Ordinary49+2 remains unexecuted;
+  its separate snapshot-custody successor adds29 validator/two simulator roots
+  with original-callback causal controls distinguished from repair-only native
+  syscall controls. Neither helper coverage nor a recovery Git branch proves
+  complete startup/persistence integration.
+- Root reviewed the complete snapshot-custody repair and new31 controls, then
+  found the same missing artifact-limit alias in its inherited wire source.
+  Fresh dependency-only successor RjEUHQ is reviewed and authorized for actual
+  qualification, without changing the old source or causal census. Head/EMA method composition is proceeding
+  separately in parallel with isolated qualification, not on the live runtime.
+- The server monitoring catalog defines48 subnet correctness alert classes;
+  its three new documentation checks plus registry consistency pass normally
+  and under race before and after the clean rebase of unrelated native-storage
+  documentation. Root reviewed the post-pull logs and pins. New probes are not
+  implemented or registered by that documentation checkpoint.
+- All full-scope runtime/history/evidence-storage and adjacent qualifications,
+  seven-day capacity, both full gates, freeze, doctor/plans, live RC/three final
+  windows and independently verifiable FINAL.md remain required. Section10.1's
+  storage choice remains unanswered. The final soak has not begun, and the
+  scheduled10:00:48--14:36:00 chain interval starts after engineering and gates.
+
+The reviewed unfinished head-accounting, ordinary-custody, known-incomplete
+terminal60 and typed-clone sources have pushed recovery-only checkpoint branches
+at `59646dc`, `57cb7a1`, `0416d50` and `4cd3512`, respectively. They are not merged
+or qualified. Newer artifact-bound, EMA-runtime, Stats snapshot and terminal99
+full-tree recovery checkpoints are also pushed at `c0501de0`, `ed6cb17d`,
+`eb50021d` and `7f4b6a36`; section12 of the handoff records exact branch ids,
+parents and source-preservation checks. The current handoff maps the remaining config,
+activation, startup, refresh, ordinary/terminal persistence, head/submission,
+replica and public-history call-site obligations; none is waived by helper tests.
+An agent usage-limit interruption occurred before EMA product launch; root
+confirmed no owner at20:11, then the same approved capture launched at20:12:52.
+All three prescribed agents resumed; no duplicate run or model substitution.
+
+Previous working integration (2026-09-06 17:17 UTC; superseded above):
+
+- Checkpoint `59eb71a` is committed, pulled and pushed; qualified activation
+  Go54 normal/race and Solidity28 remain integrated. No complete-primary gate
+  or source freeze is claimed.
+- Shutdown repair63 ran and failed because its physical-close fixture used a
+  legacy ledger without a retained directory. The failed output is preserved.
+  Astra corrected only the disk fixture and added a legacy-close regression;
+  fresh repair64 passes validator61/simulator3 normally and under race. Actual
+  foreground terminal0, distinct final seal, strict index verification and root
+  full raw-log/census review are complete. All13 qualified paths are integrated
+  exactly; this does not qualify the newer whole-primary composition.
+- Canonical neutral27 is now running after actual static admission0. Its
+  expected13 causal failures/14 controls are not yet observed. A separate
+  shutdown producer-gate selector/retention gap was found at integration and
+  remains an explicit repair; it does not erase isolated64 qualification.
+- Envelope admission repair is source-reviewed with24 compact roots, including
+  eight new fixed-storage/exact-wire/pre-replay/ownership controls. Its expected
+  causal5-failure/3-control outcome and repaired normal/race passes are not yet
+  observed. Legacy4 and simulator coverage remain required.
+- A frozen private compact head collector adds real pinned binding batches and
+  full signed M8 replay, with16 validator tests/two guards. Top200-of1000 scoring
+  and pool exclusion are explicitly a separate math control, not a live1000
+  miner pass. The37 affected Go files still await formatting/qualification.
+  Its full682 source is saved/pushed on recovery-only branch
+  `checkpoint/20260906-live-head-v2-wip` at `d0b5de9`, not merged into primary.
+- Ordinary and terminal recovery are correcting real FIFO/symlink custody gaps
+  using shared native descriptor operations and distinct existing leaf policies.
+  New deterministic tests and all-target legacy-v1/v6 recovery guards remain
+  source-only. Runtime routing/history/commitment work is still implementation,
+  not just waiting for test periods.
+- The final live campaign has not started. Both full gates, source freeze,
+  doctor/matching plans, live RC/three final windows, seven-day capacity and
+  independently verifiable FINAL.md remain mandatory. Section10.1's on-chain
+  storage choice remains unanswered. The scheduled10:00:48--14:36:00 chain
+  interval starts after engineering/launch gates; no from-now ETA is claimed.
+
+Previous working integration (2026-09-06 16:18 UTC; superseded above):
+
+- Checkpoint `f9a45d9` is committed, pulled and pushed. Go activation54 passes
+  normally/race and Solidity28 passes; their exact qualified files are now in
+  primary. Neither complete release gate nor source freeze is thereby passed.
+- The repaired harness passes55 controls, and a fresh shutdown pre-fix run now
+  reproduces all10 causal failures with40 passing validator controls, three
+  declared nested PASS cases and16 root-local literals. Simulator3 also passes.
+  Root reviewed full raw results and verified the distinct post-owner final
+  index. Repair63 ordinary/race is next; the baseline does not prove the fix.
+  The original failed capture is unchanged, with a separately labeled later
+  custody audit that does not reconstruct its missing original final seal.
+- The complete private v2 wire source is reviewed and FORMAT23 preparation is
+  complete, before an initial87 validator/16 simulator normal/race selection. Its corrected
+  real-stream fixtures, fork/lineage checks and canonical parser composition
+  have not run. Wider affected suites and both full gates remain mandatory.
+- Adjacent retry13 is source-reviewed: seven genuine/synthetic causal roots
+  and six controls are distinguished explicitly. Causal execution, repair13
+  normal/race and the widened76 union are pending. JWT/rejection persistence
+  and secondary Close-error handling remain separate open repairs.
+- Ordinary v2 durable input/restart code is being frozen for review; terminal
+  journal-first atomic promotion/recovery is in implementation. A separate v2
+  signing envelope and16 real-stream tests plus a simulator guard are authored,
+  not yet executed. Runtime call sites and public-history/commitment integration
+  remain implementation work, not just tests. The on-chain storage choice in
+  section10.1 of the handoff remains unanswered. Final live validation has
+  not started; its scheduled10:00:48--14:36:00 chain interval starts only after
+  engineering and launch gates, not from now. No completion ETA is claimed.
+
+The16:26 source review also requires consistent pre-replay envelope control/
+wire-size admission and a journal leaf-replacement/open custody repair, with
+deterministic boundary tests. The private runtime composition retains all24
+ordinary roots and explicitly adds the14-root Stats runtime prefix to the
+producer gate. These are unqualified implementation changes, not live passes.
+
+Previous working integration (2026-09-06 14:59 UTC; superseded above):
+
+- Checkpoint `71a6905` is committed, pulled and pushed. It contains the
+  qualified Stats admission, joint replay and Go activation changes. Primary
+  server remains `5fcb1d56`; neither complete release gate nor source freeze
+  is claimed for the newer primary composition.
+- Activation's complete54 Go protocol roots now pass normally and under race.
+  The actual foreground owner exited0; root reviewed both full raw logs,
+  exact54-root censuses and the distinct post-owner final index. Its four Go
+  files are integrated byte-identically from that qualified source. Matching
+  Solidity28 now also passes: exact28 PASS, no failures/skips, actual owner0,
+  complete local-only build/list/test fences and a verified post-owner index.
+  Its two files are now integrated exactly. Neither component qualification
+  installs or activates an on-chain registry or proves historical eligibility.
+- A stale physical source/npipe mapping was refused by activation's actual
+  static preflight before any Go execution. The narrow three-file metadata
+  repair preserves the original refusal, passes11 actual namespace controls,
+  and changes no protocol source, population, limit or deadline.
+- Shutdown's original53 causal tests and63-root repair are reviewed and
+  authorized for execution. The fixed-width parser's27-root causal/repair
+  candidates and separate payout-parser12 are also reviewed. No expected failure or proposed repair outcome
+  is counted as observed until Terra runs the exact frozen candidates.
+- The private ordinary/terminal v2 composition now implements cross-settlement
+  admission, complete terminal replay, successor quality joins and actual
+  prefix checkpoints. The reviewed canonical parser repair is method-composed
+  into that private source, preserving both wire versions and newer joint math.
+  Its real-stream tests and independent review are ongoing. It is not yet
+  formatted, qualified, integrated or runtime promotion.
+- Remaining launch blockers include runtime v2 atomic ownership/promotion,
+  authenticated history and evidence anchoring, adjacent persistence/parser
+  fixes, the held timeout/admission/process suites and seven-day capacity.
+  Both full gates, freeze, doctor, matching plans, live release candidate and
+  final soak, and independently reviewed on-chain FINAL.md remain required.
+  No new transaction or from-now completion ETA is claimed.
+
+Previous working integration (2026-09-06 13:46 UTC; superseded above):
+
+- Checkpoint `26ba4c8` and all three recovery branches below were committed,
+  pulled and pushed; primary server remains `5fcb1d56`. This subsequent work
+  is not a source freeze or qualification of the complete primary composition.
+- Root read all four raw logs and exact result censuses for Stats55 plus
+  simulator15, then integrated its three paths byte-identically from the
+  qualified donor. Joint65 plus simulator16 subsequently passed normally and
+  under race. Its actual owner terminated0 at13:38, and root verified the
+  distinct final index and all four raw logs/censuses before integrating the
+  five-path joint delta. The final five primary blobs match `8f50a978` exactly.
+- Activation's full651 source is formatted and pinned for54 protocol roots
+  normally/race and28 Solidity roots. Product execution remains pending;
+  adapting the existing capture engine is authorized, with the Go and Solidity
+  phases separable. Static input preparation is not a passing qualification.
+- Root reviewed the ordinary and terminal v2 source/tests. A missing closing
+  parenthesis in an ordinary test was corrected in a fresh successor before
+  any formatter/product execution. Their product qualifications remain held
+  for the shared fixed-width-before-normalization repair; no coverage is waived.
+- The runtime audit found lost final-save/worker errors, leaked prepared-ledger
+  ownership and inner cancellation paths that erase real failures. It also
+  found pending diagnostic writes that make intents unreadable on restart.
+  Private deterministic causal tests and scoped repairs are in preparation;
+  these findings are not yet executed failures or passing repairs.
+- Runtime v2 promotion/history and evidence anchoring remain incomplete, as
+  do timeout/admission, process/service ownership and seven-day capacity gates.
+  Both complete release gates, freeze, doctor, matching plans, both live phases
+  and independently reviewed FINAL.md remain mandatory. No new transaction,
+  final-soak pass or from-now completion ETA is claimed.
+
+Previous local checkpoint (2026-09-06 13:23 UTC; superseded above):
+
+- The preceding main checkpoint is `dc144be`. This successor integrates all
+  four comparison paths byte-identically from the isolated qualified donor.
+  Comparison14 plus closure1 passes normally and under race; neither complete
+  release gate nor the newer primary composition is thereby qualified.
+- Three new recovery-only branches save the six-file activation protocol/
+  Solidity draft and the twelve-file ordinary and terminal wire drafts.
+  FINALIZE-COMPLETE.md section12 records their exact commits and source
+  boundaries. Active worktrees and qualification inputs remain intact;
+  unqualified drafts are not merged into primary or activated.
+- Stats55 plus simulator15 now records actual normal/race PASS and terminal0.
+  Root verified the summary and distinct post-owner final index. Complete
+  raw-log review and primary integration remain pending. All earlier census,
+  status-alias and control-wrapper refusals are preserved in the handoff.
+- Joint65/16 is queued on the reviewed selector/actual-entry adapter. The
+  activation draft has17 Go/15 Solidity authored tests, including strict
+  packed decoding and genuine distinct per-operator activation hashes.
+  Its full54 protocol and targeted28 Solidity qualifications remain pending.
+- Real runtime v2 migration, atomic settlement durability, historical authority,
+  evidence anchoring, ownership and seven-day capacity remain incomplete.
+  Both full gates, freeze, doctor, matching plans, both live phases and the
+  independently reviewed FINAL.md are mandatory. No new transaction or
+  final-soak result is claimed by this checkpoint.
+
+Previous local checkpoint (2026-09-06 12:51 UTC; superseded above):
+
+- The preceding main checkpoint is `e216932`. Five additional exact source
+  snapshots preserve the comparison repair, Stats55 guard successor, earlier
+  activation record, ordinary v2 measurement draft and terminal v2 types.
+  Section 12 of FINALIZE-COMPLETE.md records their recovery branches and
+  commits. Active worktrees, HEADs, indexes and qualification inputs are
+  preserved. Unqualified drafts are not merged into primary or activated.
+- Repaired Comparison14 plus the simulator closure root passes all15 roots
+  normally and under race. The actual owner is terminal0; root independently
+  checked all four raw logs and the distinct post-owner final index. This is
+  an isolated source qualification, not a pass of either complete release gate.
+- Stats55's corrected source guard and exact55/15 selections are held. Its
+  fresh capture refused before Go because the new census helper over-escaped
+  its regular expressions. Preserve that failure; Astra must correct and test
+  the adapter before Terra reruns it. No Stats product result is claimed.
+- Ordinary and terminal compact-v2 wire integration is in progress in separate
+  private trees. The earlier activation record and11 tests are formatted but
+  unbuilt and unrun. Runtime migration, all-operator settlement durability,
+  historical authority and on-chain evidence anchoring remain incomplete.
+- All previously required timeout, admission, ownership, capacity, release
+  gate, source-freeze and live-acceptance obligations remain mandatory. The
+  final campaign has not started; this checkpoint makes no new transaction.
+
+Previous local checkpoint (2026-09-06 12:28 UTC; superseded above):
+
+- Primary SN remains on the implementation checkpoint `57dca2d`; this
+  successor updates the handoff. Four exact held source snapshots are now
+  committed on separate `checkpoint/20260906-*` branches in SN and server.
+  Section 12 of FINALIZE-COMPLETE.md records their commits, source pins and
+  qualification boundaries. The active private checkouts and test inputs are
+  unchanged. These branches are work-in-progress backups, not release merges.
+- Corrected Comparison14 now reproduces exactly the two intended failures,
+  with all twelve controls passing. Its actual launcher admission initially
+  failed before Go; the fixed ownership adapter passes sixteen launcher-only
+  controls, and the new causal capture is terminal and independently sealed.
+  Repaired Comparison14 plus its simulator closure root remains unqualified.
+- Current-source Stats55 qualification is being prepared. A separate held
+  joint statistics/head projection uses one complete authenticated replay and
+  adds ten deterministic real-stream tests. It has not been built or tested,
+  integrated into primary, or wired into production measurement.
+- The complete timeout successor now retains all original382 semantic roots,
+  including all ten public-transcript controls and the qualified PreFold
+  dependency. Its new composition still needs focused and complete gates;
+  the historical race timeout remains unresolved.
+- Open admission's reviewed native boundary is levels0 through11, not12.
+  The held fixture-complete successor preserves original Open9 and production
+  limits. Native file-number exhaustion is a newly identified, unresolved
+  adjacent risk. Neither source review nor parser bounds establish seven-day
+  capacity or a passing repair.
+- All runtime activation, ownership, evidence, capacity and live acceptance
+  obligations below remain mandatory. No final soak or new testnet transaction
+  is claimed by this checkpoint.
+
+Previous local checkpoint (2026-09-06 11:58 UTC; superseded above):
+
+- SN checkpoint `ac53273` is committed, pulled and pushed. This successor adds
+  the bounded compact-head projection, nine head tests, three above-minimum
+  statistics tests and source-coverage guards. These new files have not passed
+  a build or test run; this is a work-in-progress checkpoint, not source freeze.
+  The projection preserves signed fleet/hotkey/generation/UID attribution and
+  discards partial results on late stream failure. Production v2 routing and
+  independent current-state/history authentication remain separate obligations.
+- Lazy32 passes all32 ordinary and32 race roots in its isolated source/layout.
+  Both terminal ownership and the final seal are verified. The three actual
+  process tests, primary server integration and full process/service ownership
+  remain pending; pure configuration tests do not establish those guarantees.
+- Stats16 reproduces all three fixed-width admission failures with13 controls
+  passing, including all nine original real-stream statistics tests. This is
+  accepted causal evidence, not a passing repair. The reviewed private repair
+  still requires normal/race qualification and integration. The next composed
+  selection preserves these16 roots and adds the12 new tests, Replica27, the
+  six simulator bridge tests and every affected source-coverage guard.
+- Comparison14's unexpected failure was an incorrect invalid-UTF8 JSON-byte
+  oracle, not a comparator defect. The corrected test retains the original
+  vectors and adds adjacent wire-byte controls. Its fresh causal run and the
+  repaired comparison qualification remain pending. Namespace41's current-main
+  dependency composition is in progress; its historical race timeout is open.
+- Open9 admission repair remains private and unqualified. Its updated native
+  producer-boundary/memory-accounting note awaits review; unsupported histories
+  must be preserved without mutation. No storage or policy limit is waived.
+- Both full release gates, real producer v2 integration, signed activation and
+  history, evidence-storage choice, seven-day capacity, source freeze, doctor,
+  matching plans, both live phases and independently reviewed FINAL.md remain
+  mandatory. No new testnet transaction or final acceptance is claimed here.
+
+Previous local checkpoint (2026-09-06 11:30 UTC; superseded above):
+
+- Replica16 now reproduces the three actual callback-exit publication failures,
+  with thirteen controls passing. Its repair passes all27 roots normally and
+  under race; the exact five-file delta is integrated into primary SN. The
+  source-coverage guard now includes all three new regression files. This is
+  an isolated qualification, not a pass of the newer primary composition.
+- Namespace41 passes all41 ordinary roots, including both original duplicate-
+  decode witnesses and eight adjacent controls. Race and wider semantic gates
+  remain pending; the historical race timeout has not been declared resolved.
+- SN checkpoint `4188f62` adds the real typed per-operator storage bridge and
+  six tests. A new nine-test streaming statistics verifier now joins raw scores
+  to complete policy-aware v2 record/proof replay with bounded provider/hash
+  state. Both new integration slices are unqualified and do not activate v2.
+  Fixed-width input admission still needs a causal regression and repair before
+  the statistics draft can claim a complete byte bound.
+- Comparison14's actual run reports three failures and eleven passes: the two
+  intended causal failures plus an unexpected invalid-UTF8 oracle failure.
+  Its expected-outcome check correctly refuses the run; diagnosis and a fresh
+  qualified successor are required. The capture is preserved, with no retry.
+- A fresh read-only check of the configured public endpoints succeeds at
+  11:13 UTC: EVM chain945 and Subtensor runtime454. This is availability/runtime
+  evidence, not a ready doctor, finalized campaign result or transaction.
+- Open9's bounded read-only admission design is accepted for implementation.
+  Comparison and immutable lazy-resolver repairs still require qualification.
+  Legacy66, Gate6, complete process/service ownership, production v2 routing,
+  signed activation/history, storage choice, seven-day capacity, both complete
+  release gates, source freeze and the full live campaign remain mandatory.
+
+Previous local checkpoint (2026-09-06 10:41 UTC; superseded above):
+
+- Server24 now passes all 24 roots normally and under race; its exact eight-file
+  delta is integrated into primary server at `5fcb1d56`, preserving newer server
+  changes. This isolated pass is not a qualification of the new composition.
+  Namespace33 and Lazy1 remain reproduced, unrepaired product failures.
+- Open9 now reproduces all four rejected/canceled-open physical-mutation
+  failures, with five controls passing. The actual historical race profile
+  also timed out at the unchanged three-minute bound with only its one selected
+  fixture root. Both captures are terminal and independently verified; neither
+  is a passing qualification. The profile preserves CPU/allocation evidence.
+- Primary SN adds the replicated cut-sealing draft and 13 authored tests. They
+  have not been built or run. Read-only review found a blocking callback
+  `runtime.Goexit` fail-open path and adjacent coverage gaps; the draft is not
+  activated and must be repaired and qualified before use. The exact findings,
+  source hashes and continuation tasks are in section 12 of the handoff.
+- Open9 repair, Legacy66, Gate6, full process/service ownership, production v2 routing,
+  activation/history, storage choice, capacity and all final release/live gates
+  remain open. This commit is a work-in-progress checkpoint, not source freeze.
+
+Previous local repair snapshot (2026-09-06 10:00 UTC; superseded above for
+the scopes just updated):
+
+- HTTP51 passes normally and under race. Its three transport/replay files are
+  integrated into primary SN. The producer gate now selects the HTTP and sealing
+  families, and a new source-coverage guard pins all51 roots; that guard is not
+  yet qualified. The real server typed immutable store, API route, and24 local
+  storage/HTTP/integration tests are implemented in an isolated successor and
+  awaiting qualification. Its private HTTP-reader dependency is reviewed.
+  The corrected third runner's18 deterministic actual-launcher controls pass,
+  but its actual24 capture stopped before compilation: handlers metadata needs
+  a server go.mod update for the new real validator import. The frozen result
+  is preserved; no product root ran. The fresh offline runtime-dependency
+  diagnostic now passes both mutable and readonly metadata checks. It adds
+  nine already-pinned indirect dependencies and29 go.mod checksum rows, without
+  upgrades, removals or nonmodule edits. Its missing outer-status record remains
+  an explicit provenance gap, not a fabricated success. The exact two-file
+  successor and26 deterministic admission controls are reviewed; fresh24
+  normal/race qualification is being prepared.
+  The two earlier unlaunched proposals remain preserved. A
+  partial gate-check snapshot omitted the changed selector and referenced Stats
+  sources; review rejected it for gate qualification before execution. Gate6
+  now has a held complete631-path primary snapshot; its runner is being prepared.
+  Producer activation and replicas
+  remain unwired.
+- Measured83 passes81 roots ordinarily, including every new parallel-work check,
+  but fails two mandatory selector/census guards; race did not run. The fresh
+  combined91 successor includes the separately reviewed historical reuse and
+  complete357-root gate census. Its first run stopped before compilation because
+  five local module links were absent. The failed capture is sealed and preserved.
+  A source-identical layout repair now checks every actual replacement before Go
+  metadata, with28 passing deterministic synthetic checks. The fresh91 run
+  passes ordinary build/list/execution but race execution times out at the
+  unchanged3m bound, with91 starts and11 passes. Its post-owner capture is
+  verified and preserved; Astra is diagnosing the new exact failure. A normal
+  profiling attempt failed pre-Go on382 absent relative metadata referents;
+  its preserved capture contains no samples. The staging repair is under review,
+  and a namespace33 observation-only causal source is separately reviewed. No cold,
+  wide or unchanged retry is authorized. Corrected historical
+  RED8 reproduces exactly one decoder-work failure with seven controls passing.
+  Both the older noncausal historical capture and the generation67 race timeout
+  remain preserved. No cold or wider qualification has passed.
+- Aggregate durability13 now reproduces both intended failures with eleven
+  controls passing, including a real rotated row WAL that is not synced before
+  the aggregate header. The bounded synchronous-batch repair and19 adjacent
+  controls are source-reviewed in `temp/sn-stats-aggregate-batch-repair-k9ORUe`;
+  its exact52 ordinary qualification is terminal:44 PASS and8 fixture-capacity
+  FAIL, with race unstarted. The large fixture requires162 records/21 trails,
+  but inherited128-record/16-trail test bounds. A fresh explicit fixture-only
+  provisioning correction is authorized; production limits, full census and
+  aggregate128-operation/64-KiB batch limits must remain unchanged. The fresh
+  five-test-file correction and two adjacent controls now pass all54 roots
+  normally and under race. Root verified the terminal owner's final index and
+  both complete raw logs. The full workload and production bounds are unchanged.
+  Wrong-domain writable Open
+  is a separate unresolved admission defect. Its fresh nine-root physical-
+  mutation neutral set is now source-reviewed for ordinary causal qualification,
+  expecting four exact failures and five controls. That admission defect is
+  still unresolved; the qualified batch repair is not yet integrated into main.
+- Cleanup lifetime5 reproduces both post-Run wrong-client failures with three
+  controls passing. DNS fixture4 and pure process-configuration9 pass both
+  modes; sealed process/configuration16 now also passes both modes. Actual child-process tests,
+  whole-root service harness integration, lease-fenced cleanup and safe PG
+  reaping remain unqualified. Actual lazy-process1 failed before child readiness,
+  not at its intended resolver witness: the existing executable security check
+  correctly rejected the reused group-writable binary. Preserve that noncausal
+  capture. The fresh diagnostic successor's five pure controls now pass normally
+  and under race, with mode0700 binaries from first attestation. A fresh actual
+  lazy-process capture is being prepared; those pure passes do not prove process
+  containment or resolver isolation. Router4 reproduces
+  both exact abort failures with both controls passing; its10-root repair now
+  passes normal/race and its exact three paths are integrated in primary server.
+  A separate zero-byte committed-write regression is held for an exact4 causal
+  run. Legacy payout/evidence reader ownership now reproduces all five expected
+  failures with seven controls passing; root verified its post-owner seal and
+  exact assertions. The fresh reader repair and25 adjacent tests are now
+  source-reviewed; an affected66 normal/race capture is being prepared.
+  A separate Redis ACL isolation concern remains source-level, not a demonstrated
+  shared-service failure: database selection does not isolate a newly
+  authenticated DB0 connection or cross-database Pub/Sub. A neutral real-service
+  witness is being prepared in a private checkout; no shared Redis is modified.
+  Service tests remain paused; local router success does not prove
+  the whole typed API or service/process lifecycle.
+- Typed public evidence/replication, authenticated activation, global terminal
+  history, bounded aggregates and seven-day capacity are unfinished. On-chain
+  validator evidence publication is also unfinished; hash commitments versus
+  full on-chain bytes remains an unanswered user choice. Both complete gates,
+  source lock, doctor, matching plans, both live phases, FINAL.md and independent
+  public-chain review remain mandatory.
+
+The full scheduled live path still needs3,004--4,380 blocks after preparation
+(10:00:48--14:36:00 at12 seconds/block), before final reporting/review. It is not
+a from-now completion estimate. Section12 of the handoff records exact captures,
+preserved failures and next actions. No deadline, crypto or population waiver
+is authorized, and no new live transaction is claimed by this update.
+
+The implementation snapshot below was recorded at 20:10 UTC. Where its pending
+test status differs, the latest qualification above and the handoff take precedence.
+
+Landed in sn: metadata c9f066a, bounded writer8e9d0fc, full replay2d179bd,
+namespace protection5cddac6/64a6e32, qualification launcher1db13f5 and the
+disk-ledger/settlement-closure/policy-aware sealer integration c86effa.
+The latter's complete99-path reviewed source manifest matched that checkpoint; its
+validator341 suite passes normally and under race. Launcher4 also passes both
+modes. These are implementation checkpoints, not a final release qualification.
+Source checkpointc878a13 now also commits the exact qualified13-file seed-custody
+repair and producer-selection fixes described below; current pushed checkpoint
+is1cc8014. Its8 composed gate checks pass normal/race. Main now also contains
+the uncommitted Stats v4 repair and new Stats/server gate coverage; these newer
+composed changes are not yet qualified. Client-key and timeout candidates remain
+in isolated temp/sn-* trees.
+
+The composed disk/settlement candidate passes validator285 and simulator6
+normally/race. Cold durable-parity still fails its3m race deadline; broader
+semantic281 still fails its25m race deadline with280 roots passing. Both
+failures are preserved. Current-binary profiles now confirm repeated full
+semantic/settlement verification is a larger cost than plan decoding. The
+two smaller transcript/plan work-count defects have exact causal reproductions;
+the dominant same-call duplicate-lineage/cut checks now have two additional
+causal failures and twelve passing controls. Their pure-projection/batch-join
+repair passes validator8 normal/race and simulator21 normally. Simulator21's
+race run fails at3m in the cold fixture constructor; the cold durable comparison
+and full semantic rerun were not executed. The captured-binary profile identifies
+cycle sealing and fleet-generation work as the remaining critical paths. Bounded
+fixture parallelization is being prepared with private mutable ownership and
+unchanged full crypto/chronology. No coverage or deadline is waived.
+
+The engine policy-depth repair passes all51 normal/race roots after genuine
+signed M4/M16-under-M8 causal reproductions and is included in c86effa. Two
+adjacent wrong-clamp/invalid-encoding failures are also causally reproduced.
+The server-side signed-byte alias now has two causal failures and a nine-root
+normal/race GREEN repair. Its exact two files are integrated in primary server,
+and both main SN gates now select it explicitly. Composed gate and service-backed
+full-trail qualification remain. Key custody v3 passes all24
+CRV4/validator roots normally and under race after explicit private-parent
+fixture preparation; both earlier failed captures remain preserved. All18
+reviewed source paths match the integrated main checkout. Both packages also
+compile for Linux/Darwin on amd64/arm64 (eight builds); actual deployment-path
+compatibility and platform runtime evidence remain separate obligations. The
+actual release client.key reader has six newly reproduced custody, identity-drift
+and incomplete-state admission failures, with five compatibility controls passing.
+An additional genuine-ledger regression proves accepting that same key in a
+different configured operator domain. Its reviewed repair is authorized for
+exact52 normal/race tests; the raw-only simulator readers remain separately in scope.
+Stats has five deterministic callback lock-inversion reproductions. Review of
+its first repair also found caller-controlled cross-batch lock ordering and
+wrong-operator admission mutation; both now have causal failures. A separate
+Load regression proves partial state survives a rejected snapshot. Their
+unchanged positive controls pass; v2 focused27/structural1 is GREEN. Routing exact4
+then reproduces wrong-directory publication and mixed-domain admission mutation.
+V3's focused35/structural1 passes normal/race, but affected316 ordinary failed
+on the unchanged closure-before-removal root (315 passed; race did not run).
+The cause is delayed public-generation publication, not demonstrated early
+write-token release. V4's narrow repair and six deterministic adjacent tests
+are integrated in main; all15 Stats paths match the reviewed delta. Focused42/
+structural1 and conditional affected322 are authorized; composed qualification remains.
+
+Bounded aggregates, collector/public typed replication, authenticated activation,
+global cross-cut terminal history, aggregate capacity and on-chain validator
+evidence publication remain mandatory. Four producer-gate omissions were
+causally reproduced. The working gate now selects disk/depth, all namespace,
+launcher and its own guard tests, and explicitly runs both custody entry points
+normally and under race. All8 focused source/invocation guards now pass both
+modes; they do not stand in for execution of the complete selected suites.
+A subsequent exact3 capture also proves omitted Stats test families while the
+disk/depth controls pass. Main's new selector/guard now covers all37 added Stats
+roots, and both scripts explicitly include server signed-depth admission tests.
+These latest source/invocation changes still require their own qualification.
+Both release gates, final source lock,
+Ready doctor, matching plans, real live phases, FINAL.md and independent
+on-chain verification are still outstanding. Section12 of the handoff records
+the exact sources, failed captures, qualified scopes and current work locations.
+
+The chronology below preserves earlier qualifications and failures; it is not
+a claim that those historical candidate states remain current.
+
+The prior clean, pushed SN runtime checkpoint is
+`0def712d91ffd1429c2b677fcce775138b6c78ec`. Its full 247-root ordinary
+semantic qualification passed, including all eighteen public replay cases and
+all ten main-root chain cases. The matching race run failed at its unchanged
+25-minute deadline on 2026-09-05 at 10:58:19 UTC: 246/247 roots, sixteen of
+eighteen public cases, and all ten main-root chain cases completed. The
+previously timed-out BuildRender root now passes under race; the sole remaining
+root was `TestPublicScenarioBundleRequiresReplicatedOwnerCompletionCommit`.
+The complete failure capture is sealed and its exact source pre/post digests
+match. No deadline waiver or unchanged complete-suite retry is allowed.
+A targeted captured-binary profile is diagnostic work, not a qualifying pass.
+
+A separate producer/collector defect is now deterministically reproduced:
+completed accepted-epoch trails after the last ordinary measurement cut are
+present in signed settlement-closing cuts but omitted by FINAL collection.
+The exact pre-fix RED reaches the collector sequence-gap assertion after real
+ledger, signature, transition and measurement-lineage checks. Astra is repairing
+durable closure export, independent settlement advancement, collection and
+public replay in an isolated checkout; Terra runs its tests. A second Astra
+lane owns the public-replay timeout repair, with Terra executing profiles
+and regressions. Its thirteen focused ordinary and race roots and all eighteen
+public-root ordinary replay cases now pass. The measured public-root profile
+improved from 185.66s to 160.39s, without changing coverage or deadlines. The
+four-file repair is integrated as `a83e6baff174a0506ccdececd96ed60e6a1f0107`;
+the new complete-candidate qualification remains outstanding.
+The ordinary wrapper's original census-accounting error is preserved with a
+separately validated thirteen-root reconciliation. The settlement lane also
+reproduced a fatal epoch-admission race and is repairing pre-SEED ownership,
+cut-barrier ownership and closed-proof fixture consistency. Review also found
+that normal active-trail draining can exhaust the generic retry limit; its
+bounded repair must preserve real-error limits and existing deadlines. Its
+full test selection now has 268 mandatory semantic roots, retaining the prior
+247 and all public/chain cases.
+After rejecting a wrong-checkout invocation, the real validator ordinary run
+passed 65/67: directory-fixture setup and cancellation ordering need correction.
+The cancellation failure now has a deterministic pre-fix reproduction covering
+canceled entry, scheduler return and a ready poll; the unchanged real-error
+budget and missed-epoch checks remain mandatory in the repair.
+The corrected validator selection now passes all 67 roots normally and under
+race, plus copylocks. The semantic run then found seven closure tests blocked
+by a shared fixture's noncanonical inactive-binding hashes; only those two
+fixture fields changed in the new held v3 snapshot. The corrected 27-root
+selection now passes normally (52.372s) and under race (460.811s), and all four
+existing platform targets compile. The exact original-tail regression now
+passes. The wider run exposed missing sibling config/vault inputs in the
+isolated checkout; that failed run is preserved, the layout is corrected,
+and the exact runtime-rendering regression now passes. The corrected complete
+268-root ordinary run passes in 224.135s. Its matching race run times out at
+the unchanged 25-minute deadline with 267/268 roots passing and no reported
+data race. All eighteen public cases and ten main-root chain cases pass; the
+remaining root is TestFinalSemanticFleetAuditProjectionBindsTheExistingArtifact.
+The targeted ordinary profile completes in 99.80s. Repeated persisted-plan
+decoding/validation accounts for only 6.28% of sampled CPU; fleet construction
+and settlement/cut verification are larger costs. Two deterministic plan-reuse
+regressions reproduce redundant decoding, with four mutation/isolation controls
+passing. A small plan repair and dominant-path duplicate-verification review
+are in progress; neither is yet a qualified full-suite timeout fix. No timeout
+waiver or unchanged full rerun is allowed. Settlement integration remains pending.
+Adjacent review also demonstrated that the common v1 lifecycle checker accepts
+authentically signed mid-trail block/hash changes at append, restart and public
+replay. The minimal shared guard and deterministic regressions pass four focused
+and 48 affected-area roots normally and under race. They are integrated as
+90409b4d39452459effae66972345a59d12a0434; a private-store-only guard is not sufficient.
+The M8 wire-size diagnostic and its 63-file inventory are now reconciled:
+complete records use about 40.4 KiB per
+trail before repeated measurement/closure copies. At the configured complete-
+rate ceiling, the projected objects exceed the existing artifact limits.
+Bounded complete-census storage/replay is required; live throughput and full
+capacity remain unqualified. Section 10.3 of the handoff records the exact
+measurements, assumptions and mandatory repair, without a cap waiver.
+
+The private bounded record-store foundation is integrated as
+9d1b5189f7c1aefbdbce87447667529ff5bb123e, after all 26 store roots pass normally
+and under race and all four existing Linux/Darwin amd64/arm64 compile targets
+succeed. The signed maximum-wire tests are integrated as
+cd06ee32b9f001b5491c0d81468433723ea097bf; their five roots pass normally and
+under race. The real signed M4/M8/M16 complete-record bases are
+5,263/10,417/23,628 JSON bytes plus escaped deployment content; standalone
+proof JSONL widths are 1,643/2,567/4,417 bytes. The proposed M8 16 KiB record /
+4 KiB proof ceilings do not cover M16. A merged 47-root check on exact primary
+9d1b5189 passes normally and under race (35 validator plus 12 protocol roots).
+This qualifies the foundation and common fixes, not disk-ledger activation,
+compact cuts, complete-census public replay or capacity. Disk-ledger import,
+migration fencing and streaming integration remain in an isolated repair lane.
+These commits and their documentation checkpoint 09a0dfa are committed,
+pulled and pushed. The subsequent isolated repairs are not a release freeze.
+
+The common validator-evidence authentication layer passes twelve Go roots
+normally/under race, thirteen Solidity roots, and all eight saved-vector public
+testnet precompile calls at pinned block 7,939,251. Valid signatures return true
+and changed digests return false for both Ed25519 and sr25519; the block hash
+is unchanged on recheck. The six-file auth-only slice is integrated as
+c5003afc2b9c0c4518a83b6ab646deddbbcfcfac. No storage, publication, transaction or
+historical-validator-eligibility claim follows from these checks.
+The user's requested on-chain validator evidence is not implemented yet.
+Current WHITEPAPER.md section 11.1 proof bytes live in the server API/MinIO;
+neither payout-artifact hashes nor native weight payloads commit those proofs.
+The precise open choice is immutable on-chain evidence hashes with public
+proof bytes (recommended), or full proof bytes on-chain. The existing off-chain
+split must not silently substitute for the stronger request. Neither option
+implies a validator-effort bounty or altered payout economics. The handoff
+records why payout hashes alone cannot cover terminal/no-payout windows.
+
+The clean checkpoint's fresh non-applying doctor passed 61/64 checks, with
+only the expected source-stale lock hard failure and two shared-RPC independence
+soft failures. Its updated lock preview remains unapplied. Final lock/source
+freeze, both release gates, both live acceptance phases, FINAL.md and independent
+replay remain outstanding. After preparation, the unchanged live scheduler
+requires 3,004--4,380 chain blocks (about 10--15 hours at twelve seconds/block);
+reporting and final replay are additional. No reliable from-now ETA is claimed.
+Loopback operator origins do not establish off-host/public-miner reachability.
+
+**Historical status (2026-09-02 UTC; superseded as a release approval):** release-1.0 implementation and the continuous
+61-vector adversarial campaign are complete locally. Public-testnet M0A attempt 4
+on netuid 521 installed and verified all 200 production fleets plus both
+generation-2 challenger fleets, reverified 1,000/1,000 historical receipts and
+all 2,204 carried actions, and reached the complete topology of 33 managed child
+processes
+representing 1,000 miners without entering M0B/phase 2. Successive fail-closed
+replays exposed and repaired provider discovery, public-RPC fairness/snapshot,
+retry, proof-persistence, supervisor-generation, startup-order and Connect
+ingress defects. The then-source-current qualification additionally exposed a
+load-sensitive Connect/Pion lifetime race: canceled peer startup could mutate a
+closed PeerConnection and strand an ICE task loop. Commit `a177b57` serializes
+every bounded Pion mutation with teardown, keeps blocking application hooks out
+of that gate, normalizes the signaling lock order, makes every test-owned
+WebRTC manager join, and adds deterministic owner regressions. Exact-source
+Connect normal, vet, four exhaustive race shards and repeated focused stress
+are green. Server, SDK, xops and Connect are clean and their reviewed inputs
+are release-locked. The then-current aggregate gate passed again with
+PostgreSQL/Redis integration enabled after adding explicit canonical EVM-block
+identity/event-batch coverage and independent validator-local 202-to-200 head
+selection evidence. The read-only restart audit then found that verified and
+superseded alpha reservations had consumed the prior cumulative ceiling while
+live emission diluted the reserve validator below its target. The bounded
+testnet ceiling now retains two 3,000-alpha repair tranches; a deterministic
+regression reproduces the exhausted superseded-spend envelope, consumes one
+tranche and proves that one remains. The two-plan review and clean M0A replay
+remain pending. The
+adopted accelerated acceptance profile requires five consecutive 300-block
+epochs followed by a future-effective 360-block policy (60-block root window,
+180-block finalize offset, 6-block close grace), a conservatively discarded
+post-preparation partial epoch before each scenario's accepted interval, three
+consecutive fully observed production epochs, and terminal
+finalization. Every acceptance scenario additionally requires at least one
+fresh, independently reconstructed and signature-verified proof per required
+epoch for every validator/operator pair; durable malformed, incomplete or
+duplicate proof records fail closed. The continuous custody adversary must use
+a real signed artifact against the deployed testnet vault and observe the exact
+`InvalidProof` revert with unchanged pinned entitlement and conservation state
+for both operators. The clean M0A replay, M0B/M1/M2/M3, and MR remain. After
+clean M0A, the scheduler-controlled public-chain evidence window is exactly
+3,004--4,380 blocks (10:00:48--14:36:00 at 12 seconds per block).
+
+**Current pre-freeze status (2026-09-04 UTC):** source commit `2519581` closed
+the launch-critical gate's late `abigen` discovery/version failure. Candidate
+`7a4d97e` then passed the runtime/metadata attestations, validator and lossless
+capture normal/race suites, all 156 Foundry tests, operator APIs,
+operator-proxy ordinary/race suites, and isolated PostgreSQL/Redis paths in the
+17:00 UTC producer run. Its final fence correctly rejected Connect moving from
+`fb888dc` to `0dd6ee2`; no testnet write occurred. Review of that generated
+policy update found and repaired missing per-feed content provenance, weak
+empty/skip tests, an inaccurate packed-record description, stale-feed
+inclusion, deprecated-feed fetch tolerance, and missing IPv6/feed-family
+floors. It also widened both release gates to the exact same 24 generated-data
+consumer tests, including Telegram reflector/fallback collision paths.
+
+Connect `b22ab0704f6dc3ecf80e91b31b5c7fafca097223` (tree
+`000160e9679bb1636621d3b6d990f920866ca582`) is pushed. The isolated full
+Connect race had exposed a deterministic test-carrier mismatch: an early
+`WaitingForSdpOffer` reached the in-memory receiver before stream registration,
+where the helper panicked although production drops that arrival. An adjacent
+raw `net.Conn` smoke also assumed byte-stream ordering while production SCTP is
+reliable-unordered; one observed 1 MiB transfer contained four intact 64 KiB
+segments in a valid different order. The repair drops direct missing
+registrations, resolves delayed registrations at dispatch, bounds delayed
+ownership at 257 frames, joins racing senders on cancellation, drains every
+pooled frame, and confines ordered SCTP to the raw-stream smoke while the
+default-carrier test validates an exact message multiset. Deterministic
+registration, missing-drop, full-capacity, cancellation and pooled-witness
+regressions passed 20 times normally and under race; the three actual
+fast-path/WebRTC tests passed 20 times normally (24.041s) and under race
+(32.606s). Independent canonical 10-run ordinary/race replays, vet and patch
+checks pass, and a second read-only concurrency/ownership audit found no
+blocker. The aggregate gate now requires unsharded default-order ordinary/race
+Connect certificates plus fixed alternate race order `4535211000`; both gates
+also pin the complete affected P2P selector. These frozen certificates remain
+pending. The earlier package timeout is not attributed to
+`TestWeightedShuffle`, which passes alone; the corrected unsharded deadline is
+30 minutes.
+
+The final semantic candidate also captures the exact stopped
+`adversaries.json` as an authenticated closed-graph artifact and renders its
+hash, matrix hash, concurrency interval, exact 61-vector census and 33/12/10/6
+execution-mode breakdown directly in `FINAL.md`. Missing, truncated,
+mismatched or tampered raw campaign data now fails collection, source replay or
+artifact verification. Focused ordinary/race, closed-publication, full render,
+vet and patch checks pass. The twelve-root pre-lock freeze passed at 18:12 UTC.
+The prior clean source render produced release lock
+`sha256:998a86a4c3806e63f7c1c056401b0cb3cefb7601d6579b96f6bfddcbf2135cb5`;
+it is now a superseded pre-fix observation and must be refreshed after these
+source changes. The SN candidate commit/push, refreshed lock, frozen producer
+and aggregate gates, two-plan review
+and live campaign remain pending. The 2026-09-02 records below are historical
+diagnosis and provenance, not approval for the current candidate. The exact
+continuation record is maintained in `FINALIZE-COMPLETE.md`; `FINAL.md` must
+supersede it with independently replayable live evidence.
+
 **Normative product specification:** `WHITEPAPER.md` v1.0 and the non-parked parts of `VALIDATOR.md`
 **Target:** `sim-testnet` reproducibly validates and configures the supplied existing Bittensor testnet subnet, deploys the release contracts, and leaves a value-capped, fully working topology running—operator(s), miners, validators, traffic, settlement, and claims—followed by a multi-epoch validation campaign and an evidence-backed release 1.0 go/no-go decision
 
 This document is both the original audit plan and its completion record. The F0-F6
 engineering work is implemented in this checkout. M0A-M3 and MR remain execution proof
 gates, not missing code. The `testnet-` values are filled and netuid 521 is activated
-with sufficient alpha. M0A still requires the shared private Subtensor node to reach
-the runtime-447 finalized tip; M0B-M3 and MR require a green read-only `doctor` and an
-exact spend-bounded plan hash. The user has granted standing authorization in
-this testnet session to generate, verify, and apply that exact plan once the
-doctor is green; this does not authorize any mainnet write. The full local integration topology has not been
-launched; only the separately approved, bounded activation/alpha bootstrap was
-written to testnet.
+with sufficient alpha. The bounded testnet M0A/M0B acceptance path may use the official
+public RPC override while the private archive catches up. Runtime-451/452 chain setup,
+replacement contracts, two operators, both validator positions, reserve majority,
+alpha repair, all 200 initial production fleets, all 200 generation-2 refreshes, and
+both challenger fleets are finalized. Attempt 4 and its fail-closed replays crossed
+the previously repaired historical, batching, listener, churn and startup boundaries
+and started every real workload module. They exposed public-provider starvation,
+missing simulation location metadata, advertised service ports without local ingress,
+a process-counter reset across supervisor restart, dependency startup ordering and a
+direct-UDP/Proxy-Protocol mismatch. Those defects and adjacent cancellation, coherent
+snapshot, torn-proof, testnet-market, transport-identity and host-capacity cases now
+have deterministic regressions. A source-locked rebuild and clean semantic topology
+replay is the next M0A boundary.
+The user has granted standing authorization
+in this testnet session to apply the resulting bounded testnet plan; this does not
+authorize any mainnet write. An earlier integration topology reached account
+provisioning but stopped before its first conviction call when the two-share-floor
+defect was found. The latest topology started all real operator, miner and
+validator modules but failed the zero-restart/verified-trail acceptance boundary; after `stop`, no
+workload supervisor or child service is running. The testnet-only cumulative
+alpha ceiling is 28,250 alpha. The current revision may consume one fixed
+3,000-alpha emission-dilution repair tranche while retaining a second; every
+individual repair remains capped at 3,000 alpha and the finalized source must
+retain at least 2,000 alpha.
+
+**Latest M0A replay checkpoint (2026-09-02 UTC):** the two independent
+read-only plans matched exactly at
+`0xdcc0ae12f7964a60ae2db73ce1ec87afedcc8495a2584931fbe05b907511aefd`.
+The approved replay authenticated all 2,218 carried actions and finalized the
+single bounded 3,000-alpha reserve repair as testnet transaction
+`0x77844b9bfc943fdded79951daa621072ebaad9af471d8ef39c88c8468954a600`.
+All 33 managed child processes reached healthy state with zero supervisor
+restarts, but
+the semantic gate correctly stopped after neither validator could complete a
+fresh trail through either operator. Exact validator diagnostics proved that
+the API returned a synthetic seed identity for an otherwise live provider:
+Connect wrote the observed-egress Redis index with unkeyed model defaults while
+the API read it with `verify.yml`'s required HMAC key. The adjacent audit found
+the same split namespace in proxy-allocation/taskworker paths and found that the
+supposed per-minute SEED counter used one unsuffixed `INCR+EXPIRE` key, which
+would eventually lock out every continuously active honest validator.
+
+The correction makes API, Connect, proxy allocation and recurring work share
+the canonical deployment settings, branches before `verify.yml` access when the
+subnet is disabled, clears keyed proxy attribution from the authoritative
+reverse index, and uses epoch-qualified fixed-window rate keys. Validators now
+share one policy-derived SEED-attempt gate across all workers and retries; the
+locked 40/minute hard limit yields 30/minute (one attempt every two seconds),
+and unsafe concurrency/policy combinations fail configuration validation.
+Deterministic PostgreSQL/Redis and race tests cover the keyed writer/reader
+namespace, wrong-key fail-closed behavior, disabled-vault boundary, keyed proxy
+creation/release, exact rate-window rollover, shared scheduling and retry
+metering. The full 1,000-miner simulator run reached only its expected
+source-lock drift assertion; the three newly observed source digests are now
+locked and the lock self-test passes. A clean source-current M0A replay remains
+required before any phase-2 claim. The failed workload was stopped completely;
+on-chain setup and evidence were preserved.
+
+The promotion acceptance is explicit and independent per validator: each
+reconstructs scores for exactly 202 candidate fleet UIDs, admits exactly its
+own top 200, requires every admitted and unmasked UID to receive positive
+intended weight, and requires each rejected boundary UID (and any unrelated
+claimant) to receive zero. Unanimously selected candidates must subsequently
+show positive native emission, unanimously rejected candidates must show zero,
+and a validator-disputed boundary is left to native Yuma consensus rather than
+being falsely asserted. The append-only evidence gate reconstructs every
+applied decision created after the acceptance baseline, so an invalid
+intermediate 200/2 boundary or weight cannot be hidden by a later valid vector.
+The live release fault makes one operator withhold fleet 4 from validator 1
+only while validator 2 continues to measure it. At one common native epoch the
+first validator must reject that UID at zero and positively weight its
+replacement while the second validator records the exact opposite decision;
+both must later restore the original boundary. The first post-fault native
+decision atomically closes the pre-fault evidence window; the next exact EMA
+fold reaches the tested UID tie, where the registered low-UID challengers win.
+Both faults restore immediately after authenticated applied decisions prove
+their intended global or validator-local divergence, while a bounded deadline
+remains as a fail-safe. The terminal interval budgets a complete fresh trail
+and a strict-above-challenger recovery fold. A fresh global
+promotion/restoration transition must also occur inside the current campaign,
+and all 808 head-fleet provider identities are
+excluded from pool payout leaves. These deterministic gates are green; their
+source-current live-chain evidence is still pending the corrected M0A/M2 run.
+
+The public override is intentionally a lower assurance level. It selects a typed
+Substrate/EVM pair for all simulator managers and loopback workload proxies, pins
+runtime 454 by spec, transaction/state version and finalized Wasm code hash, and records
+`independent_rpc=false` in postconditions and public manifests. It is suitable for
+current-state acceptance, bounded event reads and testnet writes. It does not close
+the archive, sustained-load or physically independent observation gates; the complete
+production soak and final mainnet-promotion decision must be repeated after the private
+node is synced.
+
+Netuid 521 remains campaign-exclusive through M3. Its 256-seat census is filled
+exactly, and the acceptance assertions authenticate every known head candidate,
+selection, rejection and payout tier. An external native registration can evict a
+controlled churn identity; an external provider identity can change the signed payout
+root and claim population. Either is useful post-certification behavior but invalidates
+the deterministic release boundary while it is running. External miners therefore open
+only after the clean M0A, five accelerated epochs, three production epochs and terminal
+reconciliation pass. Earlier community testing must use a separate non-certification
+subnet/deployment rather than silently weakening the netuid-521 evidence.
 
 **Version terminology:** Whitepaper 1.0 is the normative specification and release 1.0 is the software/protocol release that implements it. “v1” inside the whitepaper is shorthand for this same 1.0 release. The former Whitepaper v0.5 design has been promoted to 1.0 without adding the explicitly parked validator-effort bounty.
 
 ## 1. Executive verdict
 
-The release-1.0 implementation runs its **read-only testnet preflight** against the
-reachable private RPC and fails closed until that archive is current. It is not yet
-a testnet-validated release: Docker is installed and both isolated operator PostgreSQL/Redis pairs pass
-authenticated live readiness checks, but the full M0A topology and live M0B-M3/MR campaign have not
-run. Wallet control, netuid 521, balances, runtime call shapes, subnet activation
-and sufficient campaign alpha have been independently verified. The remaining
-distinction is fail-closed in code; no default or unprefixed mainnet value can
+The release-1.0 implementation passed its original testnet preflight and bounded chain setup
+against the official public operational RPC pair at runtime 452. Its resume is now pinned
+to the subsequently deployed runtime 454. M0A is resumable but
+not complete. Attempt 4 launched the complete live topology and challenger tournament,
+then correctly rejected its validator restart and zero verified trails. The campaign
+has not begun. It is not yet a testnet-validated release:
+Docker is installed and both isolated operator PostgreSQL/Redis pairs pass
+authenticated live readiness checks, but the corrected M0A topology must be
+replayed and the live M0B-M3/MR campaign has not run. Wallet control, netuid
+521, balances, runtime
+call shapes, subnet activation
+and sufficient campaign alpha have been independently verified. Runtime drift and
+deployment revision are fail-closed in code; no default or unprefixed mainnet value can
 silently authorize a testnet write.
 
 All 17 blockers found by the initial audit are addressed:
@@ -34,7 +992,7 @@ All 17 blockers found by the initial audit are addressed:
 |---|---|
 | Global validator quality | Versioned operator registry, isolated per-NO samples/statistics and exact `implied_usage × Q` vectors. |
 | One-client head binding | Canonical multi-client fleet manifests, Ed25519 client signatures, sr25519 hotkey signatures, finalized native commitments and live UID checks. |
-| EVM-mirror binding authorization | Runtime-447 sr25519 verifier plus commitment-oracle mirroring; normal Substrate hotkeys authorize fleets without owning an H160 mirror. |
+| EVM-mirror binding authorization | Runtime-454 sr25519 verifier plus commitment-oracle mirroring; normal Substrate hotkeys authorize fleets without owning an H160 mirror. |
 | Cross-NO deposit theft | Atomic signer/nonce/policy-bound deposit and conviction calls; exact received-funds accounting and adversarial tests. |
 | Late-roll emission attribution | One boundary capture per pool/epoch with explicit defer/carry transitions and conservation invariants. |
 | Upgradeable custody | Non-upgradeable `STReserveSink` and `STSettlementVault`; only the coordination layer is UUPS. Finalized claims remain outside upgrade/pause/admin reach. |
@@ -43,11 +1001,11 @@ All 17 blockers found by the initial audit are addressed:
 | Single-operator validator | Multi-NO authenticated endpoints, per-NO trail stores, finality-bound inputs, independent intent journal and per-NO quality output. |
 | Unsafe event ingestion | Block-hash checkpoints, confirmation/finality gates, rewind/replay, explicit deployment origin and durable transaction intent/recovery. |
 | Unexercised CRv4 lifecycle | Exact rational normalization, policy/hash gates, commit/reveal/finality intent states, restart recovery and live-campaign assertions. Funded live proof remains M0B. |
-| Obsolete Subtensor image | `xops` pins runtime v447 by immutable digest, archive retention and the required safe RPC gateway methods, with Ansible regression tests. |
+| Obsolete Subtensor image | `xops` independently pins the reviewed node image while the public acceptance path pins on-chain runtime 454, with archive retention, required safe RPC gateway methods and Ansible regression tests. |
 | Zero/disabled testnet config | Strict `testnet-` launch schema and materializer. Wallet/password references, netuid, local origins and three spend ceilings are populated; generated deployment values are written to an isolated runtime profile. |
 | Missing verify key | Harness-derived, versioned per-operator verify keys with rotation/overlap and signed evidence; no secret enters the public manifest. |
 | Distinguishable poisoning | Full-depth routable shadow/padding paths with uniform response surface and constant-envelope failure handling, covered by operator tests. |
-| No reproducible environment | Portable Go harness manages pinned PostgreSQL/Redis, builds locked binaries and supervises two NOs, eight miners, two validators, claim daemons and two independently keyed three-client head fleets. Existing `server/blob` MinIO is reused. |
+| No reproducible environment | Portable Go harness manages pinned PostgreSQL/Redis, builds locked binaries and supervises two NOs, 1,000 miner identities in 20 production swarms, two validators, claim daemons, 202 independently keyed four-client head-candidate fleets competing for 200 slots, and 192 long-tail miners. Existing `server/blob` MinIO is reused. |
 | Empty `sim-testnet` | Complete `doctor`, `plan`, `setup`, `launch`, `resume`, `status`, `inspect`, `analyze`, `scenario`, `tail`, `stop` and future-effective `retire` commands with an append-only transaction journal. |
 
 ### 1.1 Completion by workstream
@@ -55,17 +1013,20 @@ All 17 blockers found by the initial audit are addressed:
 | Gate | State | Principal evidence |
 |---|---|---|
 | F0 specification | Implemented | Whitepaper v1.0, `docs/spec/`, canonical Go/Solidity encodings and golden-vector tests. |
-| F1 infrastructure | Implemented locally | v447 digest/archive/RPC Ansible configuration, capability doctor and regression tests. The live gateway is reachable; finalized catch-up/canonical-head proof remains M0B. |
+| F1 infrastructure | Implemented locally | Digest-pinned node binary, runtime-454 identity/archive/RPC configuration, public operational override, capability doctor and regression tests. Private finalized catch-up/canonical-head proof remains a mainnet-promotion gate. |
 | F2 contracts | Implemented and locally verified | Split reserve/vault/coordinator deployment, generated ABIs/bytecode, and a passing Foundry suite including fuzz and stateful invariants. |
 | F3 operator | Implemented and locally verified | Finality-safe index, exact artifacts, public history, multi-NO verification, key rotation, poisoning and proxy attribution/release cleanup. DB-backed launch proof is M1. |
 | F4 validator | Implemented and locally verified | Multi-NO sampling, failure attribution, exact CRv4, EMA head scoring, masks and durable finalized intent lifecycle. |
 | F5 miner | Implemented and locally verified | Fleet binding/commitment lifecycle, payout verification, finality-safe claims and persistent claim daemon. |
 | F6 harness/operations | Implemented and locally verified | Source/artifact lock, bounded plans, wallet proof, setup convergence, persistent supervision, evidence publication, fault scenarios, production soak and retirement. |
-| M0A-M3/MR | Fail-closed at private-node catch-up | Both locked per-operator PostgreSQL/Redis pairs pass authenticated settings/readiness probes. The overlay Subtensor peer is reachable, physically independent and actively syncing; the 2026-08-21 13:32 UTC read-only snapshot observed 20 peers, private sync-state block 2,895,368/runtime 196, and advertised public head 7,831,409/runtime 447. Initial archive sync can take days; no fixed completion time is assumed. The full campaign requires peers, `isSyncing=false`, at most three finalized blocks of lag, canonical checkpoint agreement, green `doctor`, and the exact regenerated plan hash; vault inputs, alpha, and standing testnet authorization are ready. |
+| M0A-M3/MR | Public-RPC M0A chain setup complete; clean semantic topology replay pending | The historical runtime-451/452 setup completed and carried receipts are restricted to exact v451/v452/v453 identities, but resume is authorized only after the runtime-454 doctor authenticates spec/transaction/state versions, Wasm and metadata at one finalized hash. Attempt 4 used plan `0x4ea536…15c5a`, proved 1,000/1,000 historical receipts and all 2,204 carried actions, started all 33 managed child processes, finalized both challenger fleets and published evidence through both APIs. It was rejected because validator 2 restarted after a public-RPC deadline and neither validator produced a trail; 8,927 unknown-location classifications identified the provider-discovery root cause. The fixes cover complete loopback metadata, fair/cancellation-safe RPC pacing, coherent and retryable snapshots, lower public-mode polling load, bounded claim reconciliation, semantic and cryptographically verified fresh proofs, supervisor kernel-generation continuity, and reachable production Connect ingress. Each operator now owns a distinct loopback IP, UDP/443 and public UDP/53 (forwarded to service 4053), while only an owner-private byte-identical Connect copy receives `cap_net_bind_service`. Deterministic IP-SAN certificates use key/serial-separated derivation, the no-SNI IP path has an explicit server fallback, and real clients strictly append the simulator CA without replacing public pins. The adjusted aggregate gate, focused normal/race tests and full 1,000-miner renderer pass; the v454 exact-Wasm gate passes and current evidence-integrity/lineage qualification is active. The unit remains static/disabled with no install target, preserving the no-restart-across-host-reboot requirement. Phase 2 remains unstarted. PostgreSQL, Redis and MinIO health checks pass; the public Substrate/EVM RPCs are live. M0B/M1/M2, three complete 360-block M3 epochs and the mainnet-readiness audit remain pending. Final mainnet promotion additionally requires the overlay archive at head, peers, `isSyncing=false`, at most three finalized blocks of lag and canonical checkpoint agreement with an independent observer. |
 
-The original audit and acceptance plan follows. Statements in its “initial/current
-state” columns record the pre-implementation baseline; the completion tables above
-and the final verification appendix are authoritative for this checkout.
+The original audit and acceptance plan follows. Statements in its
+“initial/current state” columns record the pre-implementation baseline. Dated
+completion entries and Appendix A preserve historical evidence. Until source
+freeze, `FINALIZE-COMPLETE.md` section 12 is the authoritative pre-freeze
+execution record; after source freeze, its frozen record, followed by
+`FINAL.md`, is authoritative for the current checkout.
 
 ## 2. Initial audit evidence (historical baseline)
 
@@ -154,15 +1115,43 @@ CommitRevealWeightsVersion=4
 signed dry-run extrinsic=416 bytes (not submitted)
 ```
 
-This proves current metadata decoding and construction, not funded submission or reveal. The public EVM service rejected `eth_getLogs` as a disallowed method; it cannot be the event-indexing fallback.
+That snapshot proved the then-current metadata decoding and construction, not funded submission or reveal. At that time the public EVM service rejected `eth_getLogs` as a disallowed method.
 
-The authoritative upstream references for the runtime/operations work are the [RaoFoundation Subtensor v447 source](https://github.com/RaoFoundation/subtensor/tree/v447), its [node operation guide](https://github.com/RaoFoundation/subtensor/blob/v447/docs/guides/running-a-node.mdx), and its [EVM guide](https://github.com/RaoFoundation/subtensor/blob/v447/docs/guides/evm/index.mdx). The node guide states that public endpoints are rate limited, lite nodes retain only recent state, and historical/indexer workloads need archive access.
+The initial 2026-08-29 refresh observed spec 451, transaction/state version 1/1,
+EVM chain ID 945 and finalized Wasm code hash
+`0xf3554a22dfcefa9b42b3a0a5e58c1e6c871795ecc9ea9da78bf0900e23e57c08`.
+Later that day the official finalized endpoint advanced to spec 452 at block
+7,889,045 with transaction version 1 and Wasm code hash
+`0x40a8c3c99a47d6739b086236308535fab26d5fd4cc5c88eb83f6a3c8b928f7cc`.
+Exact bounded finalized-block `eth_getLogs` is available, but this does not imply
+archive retention or capacity for unbounded indexing. The active review is pinned
+to the [runtime-454 source commit](https://github.com/RaoFoundation/subtensor/tree/14cde6410fe8ec81a940e290c56f94a632a0988d),
+finalized Wasm code hash `0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef`,
+and metadata hash `0x4d17516b694ef8d18f8a565dcb2df0117e7a0018a3ffa40812c91a1621225702`.
+The v454 source manifest, selected upstream Subtensor compatibility tests and live
+contract-filter conformance are mandatory. Those upstream checks happen to be
+implemented in Rust; no UR service or simulator component is written in Rust.
+Go decision models document release policy but do not execute FRAME dispatch
+or migration code. The exact v453 qualification is retained as historical
+compatibility evidence.
+The older v452 audit remains compatibility evidence for unchanged behavior, including
+the [call-frame change](https://github.com/RaoFoundation/subtensor/commit/4c5950391955dce7d6c905dfe4864da95cd93eed),
+the [v451 release merge](https://github.com/RaoFoundation/subtensor/pull/3126), and
+[root-basket cleanup](https://github.com/RaoFoundation/subtensor/pull/3127).
+The v451→v452 source diff changes only precompile dispatch-frame enforcement and
+the runtime spec bump: signed-dispatch precompiles reject `DELEGATECALL`/`CALLCODE`,
+while cryptographic and read-only precompiles may still execute in borrowed frames.
+Storage, call indices, registration economics, epoch/liquid-alpha, and effective
+max-weight-limit paths are unchanged. This exact behavior has a deterministic
+Solidity regression and a concurrent runtime-identity sentinel. Metadata, call
+shapes, storage gates and the complete precompile battery remain mandatory live
+checks before any further write.
 
 ### 2.4 Bittensor adversarial research and executable coverage
 
 The release threat catalogue is the checked-in, canonically hashed
 [`docs/spec/adversarial-matrix-v1.json`](docs/spec/adversarial-matrix-v1.json).
-It has 54 mandatory rows: 12 live-safe exercises, 27 bounded emulations, nine
+It has 61 mandatory rows: 12 live-safe exercises, 33 bounded emulations, ten
 local-runtime-only attacks with continuous live sentinels, and six
 observation-only risks. A matrix row is incomplete unless it names sources,
 preconditions, execution mode, concurrent actors, oracle, metrics, stop
@@ -201,7 +1190,7 @@ currently publishes eight advisories. All eight are explicit matrix inputs:
 | [GHSA-h98r-p37h-h4mv](https://github.com/RaoFoundation/subtensor/security/advisories/GHSA-h98r-p37h-h4mv) | Fee-free weight block fill; reproduce only on the pinned local runtime, monitor live inclusion/RPC latency. |
 | [GHSA-m759-m8mv-q3m5](https://github.com/RaoFoundation/subtensor/security/advisories/GHSA-m759-m8mv-q3m5), [GHSA-qh57-vpv2-3fvp](https://github.com/RaoFoundation/subtensor/security/advisories/GHSA-qh57-vpv2-3fvp), [GHSA-xm63-2wwx-pm6w](https://github.com/RaoFoundation/subtensor/security/advisories/GHSA-xm63-2wwx-pm6w) | Restricted-proxy coldkey/identity/owner alias bypasses; exact local-runtime authorization tests plus live identity/runtime sentinels. No testnet actor touches a third-party proxy. |
 | [GHSA-vpjj-mhgr-cphg](https://github.com/RaoFoundation/subtensor/security/advisories/GHSA-vpjj-mhgr-cphg), [GHSA-wc2g-rc74-vgw3](https://github.com/RaoFoundation/subtensor/security/advisories/GHSA-wc2g-rc74-vgw3) | Hotkey cooldown and ChildkeyTake migration; local-runtime reproduction plus continuous generation/binding checks. |
-| [GHSA-rhmm-mqf8-v6gv](https://github.com/RaoFoundation/subtensor/security/advisories/GHSA-rhmm-mqf8-v6gv) | Root coldkey-index bloat; v447 dense swap-remove/bijection model and runtime pin. |
+| [GHSA-rhmm-mqf8-v6gv](https://github.com/RaoFoundation/subtensor/security/advisories/GHSA-rhmm-mqf8-v6gv) | Root coldkey-index bloat; retained v452 source review plus bounded Go policy models and complete runtime-454 deployment identity pin. |
 | [GHSA-6c95-q3r3-rgwq](https://github.com/RaoFoundation/subtensor/security/advisories/GHSA-6c95-q3r3-rgwq) | RootClaimed hotkey-swap watermark inflation; all root-destination cleanliness fields and future owed amount are modeled. |
 
 The archived Python SDK/transport repository has separate, recent
@@ -215,10 +1204,12 @@ mistaken for Subtensor-runtime advisories:
 | [Plaintext unauthenticated Dendrite transport #3406](https://github.com/RaoFoundation/bittensor/issues/3406) | Release miners reject non-loopback `http://`/`ws://` operator origins, including one-shot flag overrides. Real loopback FINALs are signed and every canonical/signature mutation must fail. |
 | [Constant empty-field Synapse body hash #3407](https://github.com/RaoFoundation/bittensor/issues/3407) | Every field of a real valid FINAL is mutated independently; canonical validation plus validator/server signatures reject all mutations and the accepted constant-hash count remains zero. |
 
-Runtime v447 postdates the advisories' patched mainnet spec 419, but version
+Runtime v454 postdates the advisories' patched mainnet spec 419, but version
 ordering alone is not accepted as proof: source commit
-`1f090af85d1771c5d8ece1f0910576fbd129906e`, runtime spec, metadata, precompile
-behavior and local regression tests are release-locked together.
+`14cde6410fe8ec81a940e290c56f94a632a0988d`, finalized Wasm code hash
+`0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef`,
+runtime spec, transaction version, state version, exact metadata bytes, precompile behavior and
+selected upstream Subtensor compatibility regressions are release-locked together.
 
 Relevant open upstream issues were also reviewed, rather than silently treating
 an advisory-only search as exhaustive:
@@ -229,7 +1220,7 @@ an advisory-only search as exhaustive:
 | [Depressed-reserve flow #2737](https://github.com/RaoFoundation/subtensor/issues/2737) and [partial coinbase swap accounting #2740](https://github.com/RaoFoundation/subtensor/issues/2740) | Live reserve/price minima plus a signed-flow model run continuously. Mainnet is no-go until the pinned runtime fixes these paths or an exact-runtime proof establishes that the deployed mechanism cannot reach them. |
 | [Invisible root-basket entitlement after unstake #3008](https://github.com/RaoFoundation/subtensor/issues/3008) | A continuous exact proportional-claim/remainder model now covers partial and complete exits, including uint64 boundaries. The release does not root-stake, and MR must independently prove every release coldkey has zero hidden root-basket entitlement; any future root path must atomically inventory and claim it. |
 | [Subnet eviction/first refusal #3024](https://github.com/RaoFoundation/subtensor/issues/3024) | Continuous UID and moving/spot-price sentinel. Mainnet requires a nonzero moving price, immunity/pruning-rank review and an alert/runbook before value launch. |
-| [Metagraph commitment field type confusion #3064](https://github.com/RaoFoundation/subtensor/issues/3064) | Continuous full-registration parser mutations cover `ResetBondsFlag`, multi-field values ending in SHA-256, truncation, trailing bytes and zero hashes. The release accepts only the exact pinned runtime-447 one-field SHA-256 encoding and never relies on a generic metagraph shape. |
+| [Metagraph commitment field type confusion #3064](https://github.com/RaoFoundation/subtensor/issues/3064) | Continuous full-registration parser mutations cover `ResetBondsFlag`, multi-field values ending in SHA-256, truncation, trailing bytes and zero hashes. Runtime 454 retains the persisted v452 wire identifier and one-field SHA-256 SCALE shape; the release accepts only that exact compatibility encoding and never relies on a generic metagraph shape. |
 | [Proxy staking without MEV shield #3066](https://github.com/RaoFoundation/subtensor/issues/3066) | A constant-product same-direction front-run model continuously records victim loss and proves a minimum-output bound rejects the hostile ordering. Testnet and mainnet release flows refuse unshielded proxy staking; direct 2-of-3 governance does not waive execution-price limits on any value-bearing swap. |
 
 Closed issues are regression evidence, not erased from the threat model. The
@@ -430,14 +1421,19 @@ As observed on 2026-08-20, the official `:testnet` multi-architecture manifest r
 ghcr.io/raofoundation/subtensor@sha256:3e37b8d9a4f3c60ba66652cae79fe54d81d868558fb0159842ff952eee5115de
 ```
 
-Treat that digest as the initially filled value, but require the deployment preflight to prove it follows the live runtime `specVersion = 447`. If testnet upgrades before the deployment PR lands, update the digest, source commit, vendored interfaces, and live fixtures together.
+Treat the node-image digest and on-chain Wasm as separate identities. The deployment preflight must prove live `specVersion = 452`, transaction version 1 and the locked Wasm code hash. If testnet upgrades again, keep writers disabled while the source commit, code hash, interfaces and live fixtures are reviewed together; change the node image only when its own binary review requires it.
 
 History design is now chosen for testnet:
 
 - The server API is the public history surface for every release artifact and receipt. Immutable bytes are stored through the existing `server/blob` abstraction in the already deployed MinIO bucket; the API exposes content-addressed retrieval and indexes artifacts by deployment, run, netuid, epoch, operator, validator, and finalized transaction.
 - The server's ST indexer and the independent `sim-testnet` journal both begin before the first contract deployment/registration action. They persist finalized block number/hash, relevant events/logs, transaction/extrinsic receipts, post-state, and artifact hashes. PostgreSQL is the query index; MinIO is the append-only evidence store. A detected gap or block-hash mismatch halts writers until reconciliation succeeds.
-- The private Subtensor RPC remains the source for finality and current state, while a second endpoint verifies finalized heads and postconditions. The API/MinIO history does not replace live on-chain verification; it makes all evidence since the deployment boundary durable even when the node is pruned.
-- Public endpoints may be read-only fallbacks for head/runtime comparisons and receipt verification. They are not an event-indexing source: the public EVM endpoint denied `eth_getLogs` during this audit.
+- The selected operational Subtensor pair is the source for finality and current state, while a second endpoint verifies finalized heads and postconditions when an independent backend is available. Public override mode must record that it lacks this independence. The API/MinIO history does not replace live on-chain verification; it makes all evidence since the deployment boundary durable even when the node is pruned.
+- Public endpoints may be read-only fallbacks for head/runtime comparisons and
+  receipt verification. The official testnet EVM gateway also accepts the
+  harness's bounded explicit-block, address-scoped `eth_getLogs` shape, so
+  public-override acceptance may capture the campaign through its single
+  rate-limited egress. Broad or symbolic log filters remain denied, and this
+  capability is not archive-retention evidence.
 
 Add a deployment preflight and continuous probes for:
 
@@ -478,7 +1474,7 @@ The reserve should be owned by a non-upgradeable one-way sink contract/coldkey d
 
 #### F2.2 Atomic deposits and conviction
 
-Eliminate shared unattributed treasury deltas. Before choosing the exact interface, execute a runtime-447 dust spike covering all available staking/precompile call directions from an EVM contract. Then select one of these, in order:
+Eliminate shared unattributed treasury deltas. Before choosing the exact interface, execute a runtime-454 dust spike covering all available staking/precompile call directions from an EVM contract. Then select one of these, in order:
 
 1. a single transaction in which the coordinator authenticates `noId` and pulls/moves exactly `amount` from that operator's scoped source; or
 2. a per-operator escrow/coldkey/hotkey whose delta cannot be claimed by another `noId` and whose intent includes amount, epoch, nonce, deadline, and funder; or
@@ -539,7 +1535,7 @@ commitment_hash = 32 bytes
 Each client signs the payload with Ed25519; the registered hotkey signs it with sr25519. A relayer may submit it, so no EVM-mirror coldkey assumption is required. The coordinator verifies:
 
 - client signature via `0x402`;
-- hotkey signature via the runtime-447 sr25519 precompile (`0x403`);
+- hotkey signature via the runtime-454 sr25519 precompile (`0x403`);
 - live `(netuid, hotkey) -> UID` via Neuron `getUid` (`0x804`);
 - commitment hash equality with a commitment written by that hotkey through the Substrate commitments pallet; and
 - generation, effective epoch, expiry, and non-replay rules.
@@ -573,7 +1569,7 @@ Required local test layers:
 - gas snapshots at maximum supported operators/fleet members/proof depth;
 - storage-layout checks for the coordinator;
 - cross-language Merkle/signature fixtures; and
-- a runtime-447 local fork/localnet suite using real precompile code, not `vm.etch` mocks alone.
+- a runtime-454 local fork/localnet suite using real precompile code, not `vm.etch` mocks alone.
 
 Run Slither/static analysis, dependency/license checks, bytecode/source verification, and an independent security review before the value cap exceeds dust.
 
@@ -689,7 +1685,7 @@ Permissionless validators still need a legitimate UR network identity to perform
 
 #### F4.3 Chain-driven CRv4 lifecycle
 
-- Discover tempo, epoch schedule, reveal period, commit-reveal version, `WeightsVersionKey`, the effective native `MaxWeightsLimit`, permits, stake, validator trust, and live UID from finalized chain state. For v447, compatibility-gate the hard-coded native no-cap value and persist/audit the signed policy cap separately.
+- Discover tempo, epoch schedule, reveal period, commit-reveal version, `WeightsVersionKey`, the effective native `MaxWeightsLimit`, permits, stake, validator trust, and live UID from finalized chain state. For the reviewed v454 runtime, compatibility-gate the retained hard-coded native no-cap value and persist/audit the signed policy cap separately.
 - Schedule from native epoch/boundary state, not a process-start wall-clock ticker.
 - Before commit, store the complete input artifact, uids/weights, payload bytes, timelock ciphertext, drand round, runtime versions, account nonce, and expected reveal window.
 - Submit, then track transaction pool, inclusion block/hash, finality, `TimelockedWeightsCommitted`/equivalent event/state, reveal, application, and resulting metagraph weights. A returned `author_submitExtrinsic` hash is not success.
@@ -754,7 +1750,7 @@ Acceptance:
 
 Deliverables:
 
-- CI matrix for Go, Solidity format/build/test/fuzz/invariants, schemas/vectors, server integration, runtime-447 localnet, containers, Ansible lint/check mode, dependency review, secret scanning, and reproducible artifacts.
+- CI matrix for Go, Solidity format/build/test/fuzz/invariants, schemas/vectors, server integration, runtime-454 localnet, containers, Ansible lint/check mode, dependency review, secret scanning, and reproducible artifacts.
 - The complete `sim-testnet` Go program in section 8.1, including native subnet/contract setup, persistent process supervision, crash-resume journaling, release scenario, independent inspection, and analysis output.
 - Release manifest tying all repository commits, container digests, bytecode hashes, ABI/schema/policy hashes, runtime identity, and generated config.
 - Threat-model review covering owner/guardian/operator/validator/provider compromise, RPC equivocation, reorgs, MEV/front-running, nonce races, precompile/runtime upgrades, malicious artifacts, Sybil/shared IP, direct ingress spoof, poison distinguishability, and availability.
@@ -798,7 +1794,7 @@ Environment naming in `vault/main/st.yml` is explicit: keys beginning with `test
 
 ### 7.2 Chain/runtime fields that are already known
 
-The following is the filled public baseline. Values were queried live or resolved from the official release registry on 2026-08-20:
+The following is the filled public baseline. Values were queried live or resolved from the official release registry on 2026-09-03:
 
 ```yaml
 schema_version: 1
@@ -816,20 +1812,23 @@ chain:
 
 runtime:
   spec_name: node-subtensor
-  spec_version: 447
+  spec_version: 454
   transaction_version: 1
   state_version: 1
   commit_reveal_version: 4
-  source_tag: v447
-  source_commit: "1f090af85d1771c5d8ece1f0910576fbd129906e"
+  source_tag: v454
+  source_commit: "14cde6410fe8ec81a940e290c56f94a632a0988d"
+  code_hash: "0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef"
+  metadata_hash: "0x4d17516b694ef8d18f8a565dcb2df0117e7a0018a3ffa40812c91a1621225702"
   node_image: "ghcr.io/raofoundation/subtensor@sha256:3e37b8d9a4f3c60ba66652cae79fe54d81d868558fb0159842ff952eee5115de"
 
 rpc:
   private_substrate_ws: "ws://sim-testnet:9944"
   private_evm_http: "http://sim-testnet:9944"
-  public_substrate_read_fallback: "wss://test.finney.opentensor.ai:443"
-  public_evm_read_fallback: "https://test.chain.opentensor.ai"
-  public_fallback_allows_event_indexing: false
+  operational_mode: public-override
+  public_substrate_override: "wss://test.finney.opentensor.ai:443"
+  public_evm_override: "https://test.chain.opentensor.ai"
+  public_fallback_allows_event_indexing: true
   finality_method: chain_getFinalizedHead
 
 evm_build:
@@ -891,8 +1890,10 @@ policy:
 
   deposit:
     unit: rao_per_gib
-    epoch_cap_rao_per_operator: 100000000  # 0.1 alpha; lower if faucet liquidity requires
-    total_test_campaign_cap_rao: 2000000000
+    # Runtime 454 retains rejection of reserve movements near 0.1 alpha on the live subnet;
+    # ten alpha is the locked runtime-valid per-operator test envelope.
+    epoch_cap_rao_per_operator: 10000000000
+    total_test_campaign_cap_rao: 196000000000
     tier_snapshot: conviction_before_epoch
     tiers:
       - min_conviction_rao: 0
@@ -940,18 +1941,24 @@ policy:
     stop_on_index_gap: true
 ```
 
-The deposit rate values exist to exercise tiers and math at dust scale; publish them as such. Before the 7-day soak, replace them with an economically reviewed schedule and a sourcing commitment. The policy is hashed from canonical bytes and signed by governance; all components pin that hash.
+The deposit rate values exist to exercise tiers and math at dust scale; publish
+them as such. Before mainnet's seven-day cadence, replace them with an economically
+reviewed schedule and a sourcing commitment. The policy is hashed from canonical
+bytes and signed by governance; all components pin that hash.
 
-After M2, schedule—not mutate—the production-cadence snapshot:
+After M2, schedule—not mutate—the shortened testnet acceptance snapshot:
 
 ```yaml
 settlement:
-  epoch_blocks: 50400
-  root_commit_window_blocks: 1200    # +4 hours
-  finalize_offset_blocks: 14400      # +48 hours
+  epoch_blocks: 360                  # approximately 72 minutes
+  root_commit_window_blocks: 60
+  finalize_offset_blocks: 180        # approximately +36 minutes
+  close_grace_blocks: 6
 ```
 
-The effective epoch must leave the current short epoch untouched and be verified through both contract getters and events.
+The effective epoch must leave the current short epoch untouched and be verified
+through both contract getters and events. Mainnet uses a separate locked
+50,400-block/seven-day snapshot with reviewed +4h/+48h windows.
 
 ### 7.4 Subnet hyperparameter manifest
 
@@ -963,11 +1970,11 @@ Populate `hyperparams.yml` with intended values before changing the existing sub
 | `max_allowed_uids` | 256 | Verify hard/live maximum and registration capacity. |
 | `max_allowed_validators` | ≤56 desired capacity budget | Query whether owner/root controls it; never assume 128. |
 | `mechanism_count` | 1 | Hard gate. |
-| native `max_weight_limit` / signed policy cap | native 65535 on v447; signed 32768 for the two-NO bootstrap | v447's effective getter is hard-coded to no cap. Enforce the signed cap in every release validator and finalized-vector audit; lower it toward a low single-digit percentage only when positive-recipient breadth makes that cap feasible. |
+| native `max_weight_limit` / signed policy cap | native 65535 on v454; signed 32768 for the two-NO bootstrap | v454 retains the effective hard-coded no-cap getter. Enforce the signed cap in every release validator and finalized-vector audit; lower it toward a low single-digit percentage only when positive-recipient breadth makes that cap feasible. |
 | `commit_reveal_weights_enabled` | true | Hard gate. |
 | `commit_reveal_period` | query then explicitly set/record | Immunity must exceed the full reveal interval. |
 | `liquid_alpha_enabled` | true | Verify live. |
-| `immunity_period` | 7200 blocks for accelerated test; schedule 50400 before soak | Must exceed reveal interval and cover measurement ramp. |
+| `immunity_period` | 50,000-block bounded bootstrap/recovery window; schedule 360 for the shortened testnet soak | Keeps the simulator churn floor immune while netuid 521's older external bootstrap UID remains non-immune, so runtime 454's retained minimum-free rule selects only approved controlled churn. Must also cover the measurement ramp. Mainnet chooses its value with the separate 50,400-block cadence review. |
 | `min_allowed_weights` | 1 | Hard gate. |
 | `weights_version_key` | 1 for first release | Validator must read it from chain; bump on scoring changes. |
 | `serving_rate_limit` | 50 unless live semantics differ | Verify; axon remains optional. |
@@ -1110,10 +2117,14 @@ launch_inputs:
 
 topology:
   operators: 2
-  miners: 8
+  miners: 1000
   validators: 2
-  head_fleets: 2
-  clients_per_head_fleet: 3
+  head_slots: 200
+  head_fleets: 200
+  challenger_fleets: 2
+  clients_per_head_fleet: 4
+  churn_floor_uids: 47
+  miner_swarm_processes: 20
   operator_assignment: balanced
 
 contracts:
@@ -1142,16 +2153,18 @@ processes:
 scenarios:
   launch: smoke
   release: release-1.0
-  short_epochs: 20
-  production_epochs: 2
+  short_epochs: 5
+  production_epochs: 3
 
 budgets:
   maximum_subnet_creations: 0
   maximum_total_tao_rao_from: "vault://main/st.yml#testnet-spending-limit-tao-rao"
   maximum_total_alpha_rao_from: "vault://main/st.yml#testnet-spending-limit-alpha-rao"
   maximum_evm_gas_tao_wei_from: "vault://main/st.yml#testnet-spending-limit-evm-gas-wei"
-  maximum_registrations: 32
-  maximum_registration_burn_rao: 100000000
+  maximum_registrations: 262
+  maximum_registration_burn_rao: 1000000
+  maximum_native_transaction_fee_rao: 3000000
+  maximum_evm_fee_per_gas_wei: 100000000000
 
 secrets:
   generated_role_store: "runtime-secret://testnet/sim-testnet/${deployment_id}"
@@ -1166,6 +2179,11 @@ analysis:
 All references resolve relative to the config file or a discovered repository root, never the current working directory or `/home/by`. CLI repository overrides make the same profile runnable on any host with compatible checkouts. `doctor` verifies repository identity/commit, decrypted vault readability, tool/container/runtime capabilities, default state-disk capacity, private RPC access, and the server API/blob-store configuration and readiness before planning. The immediately pre-apply host gate rechecks the selected state filesystem and every simulator-owned process port before constructing a transaction-capable executor.
 
 The wallet literal is redacted before any diagnostic serialization. Zero/empty vault inputs, an owner mismatch for the supplied netuid, an unpinned dependency, or an unavailable server API/MinIO store is fatal. The receipt materializer copies only the verified public netuid/owner, budgets, and derived public keys into the redacted deployment manifest.
+
+The 262-registration ceiling covers the exact 259 active registration ceilings
+in the current topology and lifecycle sequence plus one authenticated,
+three-registration retired contract role generation. A 263rd cumulative
+registration remains fail-closed.
 
 ### 7.9 Automated materialization sequence
 
@@ -1199,8 +2217,13 @@ Its release profile runs against the **real Bittensor testnet** identified by ch
 This command is the target experience:
 
 ```bash
-go build -o build/sim-testnet ./sim-testnet
-./build/sim-testnet launch \
+release_head="$(git rev-parse HEAD)"
+build_utc="$(date -u +%Y%m%dT%H%M%SZ)"
+SIM_TESTNET_RELEASE_DIR="$(dirname "$(pwd -P)")/temp/sim-testnet-${release_head}-${build_utc}"
+SIM_TESTNET_BINARY="$SIM_TESTNET_RELEASE_DIR/sim-testnet"
+mkdir -p "$SIM_TESTNET_RELEASE_DIR"
+go build -trimpath -buildvcs=true -o "$SIM_TESTNET_BINARY" ./sim-testnet
+"$SIM_TESTNET_BINARY" launch \
   --config sim-testnet/testnet.yml \
   --apply \
   --plan-hash <approved-plan-hash> \
@@ -1331,7 +2354,7 @@ Use metadata-driven Substrate calls rather than shelling out to `btcli` for corr
 - fund the EVM deployer and scoped online signers within configured limits;
 - fund the EVM caller/contract mirror where registration and gas semantics require it;
 - limit-register contract-owned pool hotkeys and provider-owned head hotkeys with the exact approved
-  rao ceiling, passing zero value to the neuron precompile because runtime 447 burns from the funded
+  rao ceiling, passing zero value to the neuron precompile because runtime 454 burns from the funded
   caller mirror; contract calls supply the full ceiling and return the unburned surplus atomically;
 - publish commitments from the correct sr25519 hotkeys;
 - register operators, signer roles, fleet members, policy, and effective epochs in the coordinator; and
@@ -1357,12 +2380,30 @@ Required safety controls:
 
 #### 8.1.8 Operator, miner, and validator topology
 
-The release profile launches the real binaries built from the locked repository commits:
+The release profile builds one locked harness binary that imports and runs the real
+`sn/miner`, `sn/validator`, `server/api`, `server/connect` and `server/taskworker`
+modules. Simulation-only wrappers provide bounded swarms and configuration, but may
+not reimplement their protocol, transport, verification, settlement or claim logic:
 
 - **Dependencies:** one program-managed, digest-pinned PostgreSQL/Redis pair per operator, isolated by address, credentials, name and data volume, and configured to mirror `server/local`. Neither database may be replaced by a shared external service in the release profile. The full `server/local` compose contract and every mounted PostgreSQL init hook are content-locked. Artifacts use the existing server `BlobStore`/MinIO configuration; `sim-testnet` must not launch a second object store. MinIO and Subtensor are the only external shared services. Release evidence records dependency image digests and effective non-secret blob configuration hashes.
 - **Each operator:** the required server API/connect/taskworker and related processes under a simulation-specific `WARP_ENV`, site/vault directory, ports, DB namespace, rendered testnet `st.yml`, `verify.yml`, server keys, NO ID, scoped chain signers, and server/blob artifact namespace. Health requires `/verify`, event index, task workers, chain roles, MinIO writes/reads, artifact-history API, and finalized checkpoint—not merely an open TCP port.
-- **Miners/providers:** actual `cli/miner`/provider binaries, each with a distinct home, JWT, client identity/key, payout coldkey, NO selection, and logs. The release profile uses at least six, distributed across both NOs; scenario expansion may use twenty or more.
-- **Validators:** actual `cli/validator` binaries with distinct state directories, UR credentials, vpk, Substrate hotkey/coldkey, stake/permit, and both NO endpoints. At least two run concurrently and independently persist trail/stat/CRv4 state.
+- **Connect ingress fidelity:** each NO receives a distinct loopback IP and the real
+  client defaults must reach H3 on UDP/443 and encoded DNS on UDP/53, with 53 mapped
+  to the server's private service port 4053 and 8053 retained for compatibility.
+  Only an owner-private byte-identical Connect executable may receive
+  `cap_net_bind_service`; readback, executable equality and every exact listener are
+  preflight gates. A deterministic exact-IP leaf and explicit no-SNI fallback must
+  load through the real server, while miners and validators strictly append the
+  simulator CA to the ordinary public pin set. Disabling certificate verification,
+  using translated ports clients cannot discover, or granting the capability to the
+  supervisor/other workloads is forbidden.
+- **Miners/providers:** the real miner/provider module runs 1,000 independently
+  configured identities in bounded production swarms; every identity retains a
+  distinct home, JWT, client identity/key, payout coldkey, NO selection, egress
+  source and observable failure state.
+- **Validators:** the real validator module runs with distinct state directories, UR
+  credentials, vpk, Substrate hotkey/coldkey, stake/permit, and both NO endpoints.
+  At least two run concurrently and independently persist trail/stat/CRv4 state.
 - **Head fleet:** at least three distinct miner client identities controlled by one separately registered fleet hotkey, plus a second fleet/prefix case when testing split adjustment.
 
 The supervisor starts dependencies first, then operator processes, miners, and validators. It applies readiness gates between phases, captures stdout/stderr separately with role/identity/run metadata, restarts only according to a declared policy, and gracefully drains children on `stop`. A crash/restart cannot regenerate identities or lose the transaction journal.
@@ -1432,7 +2473,7 @@ does not satisfy the floor.
 
 The campaign result is part of the scenario result, signed bundle, independent
 analysis and go/no-go decision. It must prove actor start before and stop after
-the happy path, all 54 vectors present, every vector mapped to active actors and
+the happy path, all 61 vectors present, every vector mapped to active actors and
 checked-in tests, every vector backed by at least one named sampled metric, no
 leaked goroutine, and no unsafe shared-testnet action. Any
 actor error, unexpected status, common-height disagreement, missing artifact,
@@ -1459,7 +2500,7 @@ Tests must inject a crash after every state transition and every “intent/broad
 
 #### 8.1.12 On-chain and operational analysis
 
-Every live deployment gets a local public, redacted manifest at `sim-testnet/runs/<deployment-id>/public.json` and a content-addressed copy in the existing MinIO store through `server/blob`. The server API exposes that manifest and every run artifact as the canonical public history surface. `inspect` queries current finalized truth and displays at least:
+Every live deployment gets a local public, redacted manifest at `sim-testnet/runs/<deployment-id>/public.json` and a content-addressed copy in the existing MinIO store through `server/blob`. The server API exposes that manifest and every run artifact as the canonical public history surface. Exact evidence verification binds deployment, netuid, kind, run, content hash, canonical history key, a one-object response and closed pagination; it never accepts a hash substring from a broad or unrelated history page. New deployment-scoped evidence uses the reserved `_deployment` run ID, while the legacy `deployment` spelling is readable only by exact hash. Payout history is traversed in canonical pages of at most 256 objects and 2 MiB under a 4,096-object global cap, rejecting cursor/order/scope/hash drift and duplicates before fetching objects. The server fails closed when paged storage is unavailable, and exact-hash reads do not fan out over an accumulated run prefix. `inspect` queries current finalized truth and displays at least:
 
 - subnet hyperparameters, metagraph UIDs, hotkeys/coldkeys, stake, incentive, dividends, vtrust, permits, weights, and CR state;
 - contract versions/code hashes/roles, epoch windows, operators, bindings, deposits/conviction, pool accrual/funding/totals, roots, claims/carry/expiry, and reserve principal/live stake;
@@ -1468,7 +2509,7 @@ Every live deployment gets a local public, redacted manifest at `sim-testnet/run
 
 `analyze` produces canonical JSON plus a self-contained HTML report and optionally serves a read-only local dashboard. It must reconstruct rather than trust stored summaries. It includes tables/plots for `D_n`, tier/rate/implied usage, `Q_n`, head prefix scores, raw/final weights, realized theta, Yuma results, vtrust/dividends, pool payouts, head native rewards, reserve growth, claim status, deadline latency, and exact conservation.
 
-The persistent deployment must be analyzable even when the supervisor host is down: on-chain addresses plus the server API/MinIO artifact history, server key histories, receipts, and redacted manifest are sufficient for a separate `sim-testnet inspect --manifest <url-or-file>` process on any compatible checkout host to recover its public state.
+The persistent deployment must be analyzable even when the supervisor host is down: on-chain addresses plus the server API/MinIO artifact history, server key histories, receipts, and redacted manifest are sufficient for a separate `sim-testnet inspect --manifest <url-or-file>` process on any compatible checkout host to recover its public state. Final discovery and `FINAL.md` must name the latest authorized strict-format manifest revision. A signed pre-fix revision-zero manifest remains immutable lineage evidence only; forensic analysis must pair it with the exact signed `--run-id`, and current/legacy locator mixtures fail closed.
 
 #### 8.1.13 Evidence and exit behavior
 
@@ -1523,7 +2564,7 @@ Acceptance for the harness:
 1. **Protocol fixtures:** Go/Solidity/fixture generator agree on all encodings and deterministic math.
 2. **Go:** all `sn` packages; all relevant server packages under a hermetic `WARP_ENV`; race tests for chain/transaction/indexer paths; fuzz tests for decoders and proof inputs.
 3. **Solidity:** `forge fmt --check`, build warnings as errors where supported, 100% of existing tests adapted to the new architecture, fuzz/stateful invariants, gas snapshots, storage layout, and static analysis.
-4. **Runtime-447 localnet:** use the same source/image lock as testnet with fast blocks; real precompiles and Substrate metadata, not just mocks.
+4. **Runtime-454 localnet:** use the same source/Wasm/metadata identity lock as testnet with fast blocks; real precompiles and Substrate metadata, not just mocks.
 5. **System harness:** PostgreSQL, Redis, the server/blob MinIO backend/API (or its interface-compatible local CI fixture), two NO servers, two validators with distinct state/keys, long-tail providers, one multi-client head fleet, coordinator/vault, and a canonical indexer.
 6. **Fault injection:** RPC loss/equivocation, reorg/checkpoint mismatch, process kill at each transaction state, server restart, missed root, precompile failure, nonce replacement, runtime version change, malformed operator, and clock skew.
 
@@ -1568,9 +2609,100 @@ Every live test case emits a signed JSON evidence record containing:
 
 The evidence directory has an index and aggregate hash signed by the release owner. A dashboard is useful operationally, but it is not a substitute for immutable evidence.
 
-## 9. Staged live-testnet validation campaign (pending operator configuration)
+## 9. Staged live-testnet validation campaign (implementation complete; execution pending)
 
-### M0A — Runtime-447 local rehearsal
+### Evidence-preserving acceleration decision (2026-09-02)
+
+The release clock is separated into protocol time and tooling overhead. The
+canonical evidence minimum remains five complete 300-block accelerated epochs,
+then a future-effective 360/60/180/6 policy and three complete production
+epochs. At the pinned 12-second cadence, the five accelerated epochs alone are
+five hours and the three production epochs are 3.6 hours. Root/finalization
+windows, the future-effective transition, boundary alignment and the bounded
+release native handoff make the scheduler-controlled M0A-to-M3 interval exactly
+3,004--4,380 blocks (10:00:48--14:36:00 at 12 seconds per block). Shortening an
+epoch, reducing either epoch count, omitting terminal finalization, or counting
+a partially observed epoch produces a diagnostic run, not release-1.0 evidence,
+and would still require the canonical campaign afterwards.
+
+The adopted acceleration work removes overhead without changing the signed
+policy, epoch counts, or required evidence. The executable scenario definition
+and its hash are regenerated and release-locked before the clean run:
+
+- M1 is epoch 1 of M2; there is no separate M1 idle epoch. A passing M2 marker
+  is handed directly to `production-soak`, whose policy remains inactive until
+  the next safe epoch boundary.
+- Both canonical scenarios take a finalized snapshot only after all of their
+  preparation actions finish, record the containing epoch as a non-acceptance
+  baseline, and begin acceptance at its exact next contract boundary. M2 then
+  accepts exactly five full 300-block epochs and waits another 150 blocks; M3
+  accepts exactly three full 360-block epochs and waits another 180 blocks.
+  Every accepted operator/epoch entitlement must be in terminal status, every
+  scheduled and observed fault interval must remain inside those accepted
+  epochs, and the signed result carries the exact baseline hash, start, end and
+  terminal block. The campaign verifier independently reconstructs all of this
+  geometry rather than trusting epoch-number deltas from the runner.
+- Contract observation packs exact ABI calls into at-most-50-element,
+  block-pinned JSON-RPC batches. A deterministic 120-read regression requires
+  exactly three HTTP requests. Against the retained netuid-521 deployment, the
+  source-current read-only `status` contract view completed in 9.91 seconds on
+  2026-09-02, versus the prior approximately 132-second serialized observation.
+- Server event synchronization verifies all distinct log blocks plus the range
+  endpoint through bounded block-identity batches before one database mutation.
+  It uses the explicit Subtensor EVM-RPC hash, never a locally recomputed
+  Ethereum header hash. Database-backed normal and race regressions cover the
+  1,000-block release range.
+- The fault-schedule audit found that the former all-serial schedule ended at
+  M2 offset 3,135, silently turning a five-hour requirement into a 10.45-hour
+  fault path. The release geometry now places each four-client challenger on
+  three distinct `/29` prefixes, immediately below the four-prefix selected
+  fleets, while retaining the wide `4:1` EMA case in deterministic tests. The
+  live selected-fleet outage now atomically rotates the pre-fault native head
+  window, budgets the exact missing-observation fold needed to reach the tested
+  tie, and restores as soon as authenticated applied decisions prove the
+  boundary transition. Same-native-epoch retries reuse that detached window.
+  The terminal interval separately budgets a complete fresh trail plus the
+  strict-above-challenger recovery fold; deterministic arithmetic and live UID
+  preflight reject any policy/window/tie geometry that cannot prove both
+  directions.
+  A second lane runs every dependency and persistent-process restart
+  sequentially alongside that outage; only the owning miner swarm is deferred
+  until both the outage and the background restart lane have ended. The lanes
+  never mutate the same target, a
+  multi-active crash ledger preserves and independently restores every fault,
+  and the final fault ends at offset 955. A deterministic gate requires the
+  entire schedule to fit inside the exact 1,500-block/five-epoch M2 interval.
+- Fleet commitments remain ten-wide, fleet installs/refreshes remain atomic
+  ten-fleet transactions, and their historical reads retain the provider's
+  fifty-call ceiling. Resume reuses only authenticated finalized work.
+- During live block waits, the independent local/runtime suites, Solidity and
+  dependency scans, artifact reconstruction, backup/restore rehearsal, anomaly
+  triage, and mainnet read-only plan work run in parallel. They may finish early,
+  but their results cannot satisfy an unfinished on-chain epoch gate.
+
+The resumable `release-candidate` composite command is implemented. It runs
+`release-1.0` and, only after independently validating its signed clean result,
+complete marker and named file hashes, opens `production-soak` in the same
+process. Resume adopts an exact M2 marker, adopts M3 only when its separate
+transition-plus-three-epoch result is valid, and otherwise starts a fresh M3.
+This removes the manual/doctor/build handoff gap and reduces the chance of
+missing the next safe scheduling window; it cannot pre-schedule production
+before M2 passes. A block-aware lightweight monitor plus full snapshots at
+every fault, root, finalization and epoch boundary is also permissible only if
+deterministic tests prove that every warning and checkpoint rewind still reaches
+the anomaly ledger. Raising the public endpoint request ceiling, launching
+parallel writers on netuid 521, or caching unpinned chain facts is not an
+accepted acceleration mechanism.
+
+The supervised topology owns one non-faulted loopback EVM egress in front of
+the selected operational endpoint. Workloads, scenario writers, live probes,
+adversarial actors and concurrent `status`/`inspect`/`analyze` commands all
+share that gate, so the configured public-provider ceiling is aggregate rather
+than per client. The workload fault proxy remains a separate downstream hop.
+A live supervisor with a missing or unhealthy central gate fails closed; only
+a stopped or never-launched deployment reads the canonical endpoint directly.
+
+### M0A — Runtime-454 local rehearsal
 
 Run a fast-block local network built from the exact locked Subtensor source/image and exercise the complete production topology. Do not use Anvil as the only chain because it cannot establish Subtensor precompile, staking, registration, finality, commitment, or CRv4 semantics.
 
@@ -1580,12 +2712,15 @@ Minimum topology:
 - coordinator, immutable settlement vault, and reserve sink;
 - two NO servers with separate PostgreSQL/Redis namespaces and keys;
 - two separately keyed validator processes;
-- at least twenty provider identities split across both NOs;
-- one three-client top fleet, a second fleet sharing one test prefix, and long-tail providers;
+- 1,000 provider identities split evenly across both NOs and executed by the real
+  miner module in 20 production swarms;
+- 202 independently keyed four-client fleet candidates competing for exactly 200
+  top-level slots, including shared-prefix cohorts, deterministic challengers and
+  192 long-tail providers;
 - the existing server/blob MinIO backend plus public server artifact-history API; and
 - canonical event index/replay verifier.
 
-Complete at least ten accelerated epochs and every scenario in section 8.3. Kill/restart each service around boundaries and transaction phases. Prove:
+Complete all five accelerated acceptance epochs and every scenario in section 8.3. Kill/restart each service around boundaries and transaction phases. Prove:
 
 - real precompile custody, staking, registration, UID, signature, and transfer behavior;
 - deposits are one-way and exactly attributed;
@@ -1605,7 +2740,7 @@ Use the configured testnet wallet only after `doctor` loads its wallet and passw
 
 Run this stage through `sim-testnet doctor` and an approved `sim-testnet plan`; add the value-bearing probe as a named, journaled `precompile-conformance` scenario. Ad-hoc commands may diagnose a failure, but only the harness evidence satisfies the gate.
 
-The read-only subset is already partially green at spec 447, but rerun it from the actual server and validator hosts. Then deploy a disposable, value-capped probe and execute:
+The read-only subset is pinned at spec 452, but rerun it from the actual server and validator hosts. Then deploy a disposable, value-capped probe and execute:
 
 1. chain ID, genesis, runtime, finality, gas/fee, Solidity/Cancun, and code-hash checks;
 2. good/bad Ed25519 and sr25519 vectors;
@@ -1629,7 +2764,7 @@ Exit gate: every precompile/custody assumption in `WHITEPAPER.md` section 16.4 h
 M1 is driven by one resumable command, not a manual runbook:
 
 ```bash
-./build/sim-testnet launch \
+"$SIM_TESTNET_BINARY" launch \
   --config sim-testnet/testnet.yml \
   --apply \
   --plan-hash <approved-plan-hash> \
@@ -1637,7 +2772,7 @@ M1 is driven by one resumable command, not a manual runbook:
 ```
 
 M1 begins with an audited configuration/deployment window with a precomputed balance/burn/value cap and
-a stop condition after every finalized action. Runtime 447 raises the burn after successful
+a stop condition after every finalized action. Runtime 454 raises the burn after successful
 registrations, so approval binds one per-registration maximum and every native/EVM action uses the
 runtime-enforced limit call; it never assumes later burns equal the first observation. Internally,
 `sim-testnet` must:
@@ -1655,19 +2790,55 @@ runtime-enforced limit call; it never assumes later burns equal the first observ
 11. make distinct dust deposits for both NOs and prove atomic attribution/reserve movement;
 12. route controlled traffic and trails with intentionally different quality;
 13. close the epoch, publish two full payout artifacts, commit roots, fund/finalize the vault, and execute claims from providers on both NOs;
-14. register a provider-owned top-miner UID, publish a three-client dual-signed commitment/binding, and observe its native head weight/emission under theta; and
+14. register all 202 provider-owned fleet UIDs, publish their four-client
+    dual-signed commitments/bindings, prove exactly 200 selected and two rejected,
+    then force and observe a real promotion/demotion transition plus selected,
+    rejected, pool and validator native reward channels under theta; and
 15. reconcile every rao, leaf, input, weight, receipt, reserve delta, and role from public evidence.
 
 Exit gate: one clean end-to-end epoch with two NOs, two validators, tail claims, head native steering, no double pay, and exact conservation. `sim-testnet status` is green, `inspect` reproduces the live finalized state from a second machine, and the persistent operator/miner/validator stack remains running under the dust cap for analysis.
 
+M1 does not consume a separate idle epoch. As soon as launch readiness is green,
+`release-1.0` starts its continuous adversarial campaign; its first complete,
+reconciled accelerated epoch closes M1 and is also epoch 1 of the five-epoch M2
+interval. Setup already uses bounded concurrency and atomic fleet batches, and M2
+hands directly to `production-soak` after its authenticated completion marker. The
+current approved lineage retains the 300-block accelerated cadence: changing it
+mid-deployment merely to save wall time would create a new policy/hash boundary
+and is not an acceptable substitute for evidence-preserving phase overlap.
+
+The release implementation parallelizes each ten-hotkey commitment partition,
+chunks pinned historical EVM reads at the public endpoint's enforced 50-call
+JSON-RPC limit, and derives per-fleet/per-member read receipts from the exact
+authenticated install batch plus canonical signed artifacts. The source batch
+remains the live chain assertion and is revalidated before any resumed mutation.
+Interrupted provisioning records kernel start time, process group, executable
+hash and argv hash, so resume can remove exact orphan helpers without treating a
+reused PID as simulator-owned. These changes reduce setup transport overhead;
+they do not shorten any M1/M2/M3 protocol-time gate.
+
 ### M2 — Multi-epoch adversarial campaign
 
-Run at least **20 consecutive accelerated epochs** as named `sim-testnet scenario` runs against the same persistent deployment. Include, on a declared schedule:
+Run exactly the release minimum of **five consecutive 300-block accelerated epochs** as named `sim-testnet scenario` runs against the same persistent deployment. Include every scenario and fault below on a declared schedule; shortening the epoch count does not remove or weaken any vector:
 
 - equal-deposit/different-quality and equal-quality/different-deposit experiments;
 - a conviction tier transition and voluntary pre-conviction;
 - shared, ambiguous, non-routable, reassigned, and expired egress prefixes;
 - head promotion, client rotation/revoke, UID loss/re-registration, and demotion/fallback;
+- independently reconstruct each validator's score-ranked 200/2 boundary from
+  all 202 canonical rational fleet scores in its immutable intent, without
+  requiring independent validators' boundaries to agree; every unmasked
+  claimant on a validator's own selected list must have positive weight in that
+  validator's applied vector, every claimant it rejects must have zero weight
+  there, and no UID outside that selected set or the two live pool UIDs may
+  carry a positive submitted weight; apply this invariant to every new applied
+  intent in the append-only acceptance-window history, not only the terminal
+  vector; force one operator to present one boundary fleet to validator 2 while
+  withholding it from validator 1, require a common native epoch with opposing
+  selected-positive/rejected-zero decisions and then a common restored epoch;
+  require finalized native emission for
+  every unanimously selected fleet, zero emission for every unanimously
+  rejected fleet, and preserve the actual Yuma outcome for disputed boundaries;
 - an operator missing its root, under-allocating/invalid-root attempts, partial claims, claim TTL/grace, and carry;
 - late keepers over multiple boundaries, failed/retried precompile funding, and pool hotkey rotation;
 - one NO offline/malicious while the other remains healthy;
@@ -1679,7 +2850,7 @@ Run at least **20 consecutive accelerated epochs** as named `sim-testnet scenari
 - wallet/payout-key rotation at a future boundary; and
 - a simulated runtime-version change causing writes to stop and conformance-gated recovery.
 
-Every run starts the seven-actor, 54-vector campaign before its first happy-path
+Every run starts the seven-actor, 61-vector campaign before its first happy-path
 observation and keeps it active through fault recovery and final reconciliation.
 Each actor must contribute at least 100 non-skipped samples with interleaved
 control/attack phases. Measure absolute p50/p95/p99, attack/control p95 ratio,
@@ -1695,28 +2866,37 @@ transaction deadline margin, gas and independent-validator stake share.
 
 Exit gate:
 
-- 20/20 epochs reconcile exactly;
+- 5/5 epochs reconcile exactly;
 - zero missed hard deadline except the intentional missed-root drill;
 - every injected failure follows its documented recovery path;
-- all 54 researched vectors have passing concurrent coverage, at least one
+- all 61 researched vectors have passing concurrent coverage, at least one
   sampled vector-declared metric, and their exact local-runtime tests pass
   against the release-locked runtime where live
   execution would be unsafe;
 - all seven actors meet their sample, zero-error, absolute-latency,
   attack/control-ratio and QPS gates while overlapping every happy-path phase;
 - no manual on-chain/storage mutation;
-- at least two validators independently reconstruct their vectors from their own trails;
+- at least two validators independently reconstruct their vectors from their own trails, and every validator/operator proof store advances at least once per required scenario epoch with no durable malformed, incomplete, or duplicate record;
+- the custody adversary performs a finalized-block-pinned `eth_call` for each NO using a malformed proof derived from that operator's real signed payout artifact, observes exactly `InvalidProof`, submits no transaction, and proves the entitlement and conservation snapshots are byte-identical before and after;
 - every public artifact remains retrievable/reproducible;
 - no open critical/high security or custody issue and no unexplained warning,
   retry burst, latency shift, process exit, metric discontinuity or test flake;
-- `sim-testnet analyze` reconstructs all 20 epochs without trusted local DB state; and
+- `sim-testnet analyze` reconstructs all five epochs without trusted local DB state; and
 - the deployment returns to a healthy `LIVE` state after every intentional fault and remains available for investigation.
 
 ### M3 — Production-cadence testnet soak
 
-Schedule the 50,400-block epoch, +1,200-block root window, and +14,400-block finalize offset for a future boundary. Verify the preceding accelerated epoch is unchanged.
+Schedule the testnet-only 360-block epoch, +60-block root window,
++180-block finalize offset and +6-block close grace for a future boundary.
+Schedule the matching 360-block immunity period at that same release boundary.
+Verify the preceding accelerated epoch is unchanged. The mainnet plan remains a
+separate 50,400-block/seven-day cadence with its separately reviewed +4h/+48h
+windows; the shortened testnet cadence never becomes a mainnet default.
 
-Run at least **two complete 7-day epochs** using the `release-1.0` scenario, including their finalization windows and representative claims. During the soak:
+Run **three consecutive complete 360-block UR blocks** (approximately 72
+minutes each) using `production-soak`, including their finalization windows and
+representative claims. Conservatively discard the production epoch that contains
+the first observation, so all three accepted epochs are fully observed. During the soak:
 
 - keep at least two active NOs and two live validators;
 - keep the complete seven-actor adversarial campaign active under the same
@@ -1754,7 +2934,7 @@ Then perform the mainnet-delta rehearsal without broadcasting:
    endpoints, netuid, balances, roles, 2-of-3 Safe, ≥1-epoch timelock, contract
    addresses/nonces, value-at-risk and rollback boundaries are mainnet-specific;
 3. run that exact plan against the pinned local-runtime clone and a fork/replay
-   environment with the 54-vector campaign, including kappa/liquid-alpha,
+   environment with the 61-vector campaign, including kappa/liquid-alpha,
    registration/burn, reserve/pruning, failed-swap accounting and precompile
    drift cases;
 4. prove no release signer uses an unshielded staking proxy, no release coldkey
@@ -1827,7 +3007,7 @@ All of the following are required:
 - exact multi-epoch value conservation and one-way reserve hold;
 - finalized claims survive all pause/upgrade/operator drills;
 - every CRv4 cycle is tracked through finalized application;
-- all 54 adversarial vectors have matrix-bound passing evidence from seven
+- all 61 adversarial vectors have matrix-bound passing evidence from seven
   continuously overlapping actors, and every anomaly ledger entry is resolved;
 - finality-safe replay from deployment block reproduces all decisions;
 - public artifacts independently reconstruct every payout root and committed weight vector;
@@ -1888,11 +3068,11 @@ require real-chain evidence and cannot be promoted to “proven” by local mock
 
 | Decision/proof | Recommended disposition | Must close by |
 |---|---|---|
-| Can runtime 447 support a truly atomic contract-side deposit pull? | Run the F2 dust spike; otherwise use isolated per-NO escrow plus signed nonce intent. Never shared delta. | Before F2 interface freeze |
+| Can runtime 454 support a truly atomic contract-side deposit pull? | Run the F2 dust spike; otherwise use isolated per-NO escrow plus signed nonce intent. Never shared delta. | Before F2 interface freeze |
 | How is exact per-pool emission observed at boundaries? | Use finalized per-hotkey stake/emission snapshots and a boundary keeper SLO; validate dividend/take effects and late-call math live. | M0B |
 | Can the non-upgradeable vault own/register/rotate pool hotkeys safely? | Prove burned registration/coldkey semantics and rotation on localnet/dust; prefer a new future-epoch pool over mutable historical identity. | M0B |
 | Is testnet history durable without an archive node? | The server ST indexer plus independent harness journal starts before the first write; PostgreSQL indexes finalized evidence, existing MinIO stores immutable bytes, and the server API serves all artifacts/receipts. Any gap halts writes. | F1 |
-| What exact commitment payload/size API exists at spec 447? | Generate from live metadata and execute wallet-signed write/read/replace. | M0B |
+| What exact commitment payload/size API exists at spec 454? | Generate from live metadata authenticated at the same finalized runtime-454 block and execute wallet-signed write/read/replace. | M0B |
 | How is a permissionless validator admitted to UR routing APIs? | Public documented validator enrollment tied to live chain hotkey/permit and scoped credentials, with neutral rate policy. | F4/M0A |
 | Can poison traffic be made indistinguishable end-to-end? | Build real shadow routes and measure distinguishability; otherwise narrow the claim and threat model. | F3/M0A |
 | How are egress hashes both private and cross-NO comparable? | Versioned subnet keyed hash with protected key distribution and a public key ID/commitment; review enumeration/leakage. If rejected, constrain fleet comparison scope honestly. | F0 |
@@ -1905,33 +3085,1983 @@ require real-chain evidence and cannot be promoted to “proven” by local mock
 
 ## 13. Immediate next actions
 
-1. The testnet-prefixed values are filled. On each execution host, keep the
-   wallet password owner-only (`chmod 600 vault/subtensor/testnet_wallet.password`).
-   `sim-testnet:9944` now resolves to the deployed **private** overlay gateway at
-   `172.28.208.185`; the temporary public-endpoint proxy has been removed. Wait for
-   that node to finish full sync and expose finalized runtime 447/EVM APIs. The
-   initial archive catch-up may take days. The 2026-08-21 13:32 UTC read-only
-   snapshot observed 20 peers and private sync-state block 2,895,368/runtime 196
-   against advertised public head 7,831,409/runtime 447 with active syncing;
-   the readiness gate also requires peers, canonical checkpoint agreement and no
-   more than three finalized blocks of lag. Do not change
-   unprefixed mainnet custody values.
-2. Docker and Foundry are installed. The harness supports direct Docker group access
+1. **Completed runtime-452 revalidation 2026-08-29:** the testnet-prefixed
+   values are filled and the state-aware public-mode doctor returned `ready=true`
+   against spec 452, transaction version 1 and finalized Wasm hash
+   `0x40a8c3c99a47d6739b086236308535fab26d5fd4cc5c88eb83f6a3c8b928f7cc`.
+   It passed release lock, metadata/call-shape/precompile, subnet 521
+   ownership/activation/capacity, exact partial UID topology, remaining wallet
+   budgets, Docker, MinIO and local supervision. Public operational/postcondition
+   routes still share one provider and physical peer; no independence claim is made.
+2. Let `sim-testnet:9944` continue syncing at the private overlay gateway. Once it
+   is at head, remove both override fields (or use the private light/archive
+   profile), rerun doctor, and repeat the production-load campaign. That gate
+   requires peers, `isSyncing=false`, canonical checkpoint agreement, no more than
+   three finalized blocks of lag and a physically independent observer.
+3. **Completed:** Docker and Foundry are installed. The harness supports direct Docker group access
    or passwordless `sudo -n docker`. The two digest-pinned PostgreSQL 18 and Redis 8
    pairs have passed their live managed-dependency probe: PostgreSQL authenticated as
    the derived application role and returned `512:256MB:en_US.UTF-8`; Redis returned
    `PONG`. Containers and PostgreSQL volumes now carry matching complete spec hashes.
-3. Build `sim-testnet`, then run read-only `doctor`. Resolve every failure; archive
-   the redacted report. No partial preflight may be waived.
-4. Run read-only `plan` and its checker, verify the existing-netuid ownership
-   proof, identities, runtime/precompile facts, every action and the three
-   maximum-spend totals, and record the exact `plan_hash`. The user has already
-   authorized automatic application of this bounded **testnet** plan once doctor
-   and plan checks are green; no further pause is required and no mainnet write
-   is authorized.
-5. Run `launch --apply --plan-hash ... --detach` with that exact hash. The harness
-   installs/converges the release and runs smoke; no manual Forge, `btcli`, SQL or
-   contract call is part of the release path.
+4. **M0A setup in progress 2026-08-29:** approved revisions finalized three subnet
+   hyperparameters and all 47 controlled
+   churn-floor registrations on netuid 521, ending with transaction
+   `0x090e7db6ce71e2e5d1b23d2c4301af05fb8a87836630e21b47497bfe1cf4247c`
+   at block 7,888,105. An initial gas-allocation defect was corrected with
+   independent gas-unit/fee-price envelopes, arbitrary-precision aggregate wei,
+   exact per-signer funding and deterministic boundary tests. The next revision
+   finalized reserve sink, settlement vault and coordinator implementation
+   deployments, then stopped before broadcasting vault registration: Frontier's
+   EVM `BALANCE` reports reducible native balance minus the 500-rao existential
+   deposit, so subtracting the full supplied value panicked with arithmetic
+   underflow. The production fix saturates only that before-supplied-value
+   reconstruction and separately proves exact EVM/native before/after balances.
+   Plan schema v4 binds the replacement deployment manifest, archives and charges
+   the three superseded deployments, proves their exact CREATE nonce/payload/code
+   history and zero residual balances, and rejects duplicate or unrelated stale
+   intents. The runtime-452 replacement reserve, vault, coordinator implementation,
+   proxy and governance drill are finalized, linked and code-hash verified. Both
+   operators, both isolated deposit/pool registrations and both exact alpha
+   transfers are also finalized. Live execution additionally found and fixed a
+   stale 600,000-gas operator-registration ceiling (`515,196` raw / `643,235`
+   padded; corrected to 750,000), pre-serialization hashing of nested receipt
+   structs, and ancestor transaction-block lookup during carried postcondition
+   replay. The active plan then finalized all 200 fleet UIDs and the first
+   validator registration/take-zero action. Its 0.09-alpha validator transfer
+   was included but failed with runtime `AmountTooLow`; no alpha moved. The root
+   cause was reusing the 0.09-alpha per-operator demand cap as validator stake.
+   Plan schema v5 separates those budgets, reads the finalized runtime minimum
+   and alpha price, targets 65% reserve-validator share plus a 1,000-alpha
+   independent-validator position, and requires a 60% finalized reserve barrier.
+   It also checks the exact source position, coldkey-wide stake, stored conviction
+   lock, position/coldkey miner collateral, and a 2,000-alpha remainder before
+   signing. Batched storage reads removed a 156-second public-RPC timeout. The
+   live source now reports 25,416.177258599 alpha, zero lock/collateral, and the
+   full position transferable. Each failure has deterministic reproduction plus
+   adjacent-drift tests. The vault ceilings are now 200 testTAO, 22,000 alpha,
+   and 160 testTAO of EVM gas; the increase covers bounded setup batching and
+   soak while remaining an absolute campaign cap.
+   A subsequent v6 revision installed and scheduled the corrected release policy,
+   then was stopped cleanly before any further write when a clean Foundry run
+   exposed a different runtime-452 boundary: same-subnet `moveStake` and
+   `transferStake` compare TAO-equivalent value with `DefaultMinTransfer`
+   (100,000 TAO rao), not `InitialMinStake` (2,000,000 TAO rao). The deployed
+   vault had no safe sub-floor capture/claim behavior, so continuing it would
+   have stranded small pool emission or provider payouts. The replacement
+   non-upgradeable vault now immutably binds the finalized runtime floor, leaves
+   sub-floor capture on its pool to accumulate, aggregates non-expiring
+   coldkey claim credit, retries price/runtime failures without losing the
+   accepted entitlement, and admits capture/payment accounting only after exact
+   source/destination stake deltas. Plan schema v7 preserves v5/v6 historical
+   approval semantics while binding all replacement transfers and deployment
+   bytecode to `DefaultMinTransfer`. The server history separately mirrors
+   `Claimed`, `ClaimPaymentDeferred`, and `ClaimPaid`; simulator analysis now
+   checks both exact vault identities, including pending funding. All 127
+   Foundry tests pass, including 10 transfer-floor regressions and both 2,304-call
+   invariant campaigns. A superseding v7 testnet plan must replace the obsolete
+   vault before topology launch.
+   The replacement plan subsequently finalized both generation-1 operator pool
+   registrations. Operator 2's `transfer_stake_and_hotkey` transaction
+   `0x6af69386d1cc1aa962c42ee00e59ebf1dae4b7cc6d0af942ca7e90362fe4cb05`
+   succeeded at block 7,895,452, while `getStake` exposed 245,000,000,024 rao
+   from the requested 245,000,000,025. Pinned runtime-452
+   [`stake_utils.rs`](https://github.com/RaoFoundation/subtensor/blob/da06f033663896ef2fdbbfc3ecc68ca908fba0f5/pallets/subtensor/src/staking/stake_utils.rs)
+   shows that the exact amount is conserved in `TotalHotkeyAlpha`; the destination
+   coldkey is represented by the 21-digit [`SafeFloat` share pool](https://github.com/RaoFoundation/subtensor/blob/da06f033663896ef2fdbbfc3ecc68ca908fba0f5/primitives/share-pool/src/lib.rs),
+   whose integer view floors the entitlement. Plan schema v8 binds a maximum
+   one-rao destination shortfall,
+   adds one bootstrap rao to fresh operator and validator allocations, sizes
+   validator majority from minimum rather than nominal credit, and verifies the
+   parent/inclusion-block delta. Its revision path proves the old finalized
+   transaction and performs no duplicate allocation; only a separately approved
+   runtime-minimum repair can run. Exact/one-short/two-short/over-credit,
+   finalized-resume, verified-adjacent, non-alpha-adjacent, and reserve-boundary
+   regressions cover the root and neighboring failure modes.
+   Plan v8 was then applied in full. The executor re-audited all 749 carried and
+   live actions, finalized the operator-2 repair transaction
+   `0x7e608bd0c80227f2efb071c244f291ca8c3d0d5d0a9c2ba055d4f12a3d399d69`
+   at block 7,895,670, verified its parent/inclusion/post-state evidence, and
+   converged the complete setup. Both operators are active at UIDs 3 and 4,
+   runtime code hashes match the release lock, reserve majority and conservation
+   pass, and the rendered topology contains all 1,000 miners. The only doctor
+   caveat is explicit: the official operational and postcondition URLs currently
+   resolve to the same physical public peer, so independent/archive promotion
+   evidence waits for the private overlay node to reach head.
+
+   The first real topology launch rebuilt the locked simulator and server
+   binaries, re-audited the 749 actions, rendered both operator profiles, and
+   provisioned real workload accounts. It then failed closed during `eth_estimateGas`
+   for `campaign.voluntary-conviction.1`; the journal contains only intent and
+   failure records, with no signature, broadcast, receipt, or lingering
+   supervisor. Isolated live calls proved that both `moveStake` and
+   `transferStake` succeed separately. Their composition in `_reserve`, however,
+   crosses two runtime-452 `SafeFloat` destination share pools and each may floor
+   the observable entitlement by one rao. The old coordinator staged only one
+   rao for the entire composition, so a two-floor execution reverted atomically.
+
+   The corrected coordinator binds one rao of allowance per runtime share
+   transition and therefore stages at most two rao. It still requires exact
+   source debits at both legs, requires the intermediate credit to cover
+   `principal + 1`, and admits a final sink credit only in the bounded interval
+   `[principal, moved amount]`; neither user entitlement nor conservation can be
+   reduced. Solidity regressions reproduce the live two-floor failure, prove
+   zero/single/double-floor accounting, and reject excess floor or source residue
+   atomically. The Go planner binds `reserve_runtime_share_transitions=2` and the
+   two-rao allowance into every relevant action and spend calculation. Revision
+   logic carries already verified repairs into cumulative spending and creates
+   only a runtime-minimum top-up when a prior transfer is short of the stricter
+   two-leg requirement. Repeated repair identifiers, strict action allowlists,
+   recovery rewiring, and both operator histories have deterministic adjacent
+   tests. Plan schema v9 introduces these two-transition fields while preserving
+   the exact v8 decoder, hash, and validation rules; a persisted-v8-to-v9
+   regression covers the live revision boundary.
+
+   Building that live revision exposed three adjacent lineage defects, all before
+   signing or broadcast. First, transaction safety recognized only verification
+   recorded under the original ancestor intent; it now accepts a successful
+   ancestor transfer only when a descendant no-broadcast action binds the exact
+   plan, intent, transaction, inclusion block/hash and has its own durable
+   postcondition proof. Eight mismatched-linkage cases reject. Second, a fully
+   applied UUPS generation was misclassified as replaceable immutable custody
+   when compiler metadata changed. Repeated-upgrade schema v2 now binds the next
+   deployer nonce/address, exact active proxy implementation/runtime, all six
+   prior runtime hashes, an empty CREATE address, and normalized reserve, vault,
+   and probe executable hashes; any custody executable drift or self-referential
+   upgrade rejects. Third, the validator carry path keyed legacy semantics from
+   the containing plan schema rather than the authenticated action envelope. It
+   now carries exact verified pre-rounding validator intents even after an
+   intermediate v8 revision, so neither validator stake can be purchased twice.
+
+   Two read-only builds at later finalized heads produced the identical v9 plan
+   hash `0xc6ef32d8766c916ab20c6cafc4b7763756dec455d8375feb3a63fa074361967b`.
+   It retains immutable deployment hash
+   `0x472420717268bb3a3177ca3a79e0eb1b398ada1e5096f8bdf4599c40e68b1c1a`,
+   approves coordinator implementation `0xE4f0Fc39E38728bae9b58875c2777431B18295BA`
+   at deployer nonce 23, carries both validators and operator 2's reconciliation
+   plus repair, and adds exactly one operator-1 runtime-minimum top-up of
+   193,556,675 alpha rao. Its cumulative alpha ceiling is
+   19,130,501,203,534 of 20,000,000,000,000 rao. This bounded revision must
+   converge before launch is retried.
+   The user has authorized automatic application of the bounded **testnet**
+   revision; no mainnet write is authorized.
+
+   A setup-throughput revision is locally complete. Ten independent four-client
+   fleets now share an explicit plan group: ten native commitment extrinsics
+   may execute concurrently, followed by one testnet-only `STFleetBatcher`
+   transaction that atomically mirrors and installs all 40 dual-signed bindings.
+   A second atomic batch performs client-authorized generation-2 revocation and
+   replacement, and the original immutable commitment oracle is restored before
+   topology launch. The maximum 10-by-4 install and refresh paths use 9,535,582
+   and 9,080,115 gas against 18,000,000 and 24,000,000 action ceilings. Existing
+   exact per-member writes are retained as charged read-back proofs during the
+   formal revision. Partial, mixed-generation, duplicate-identity, stale-runtime,
+   dependency, nonce and lineage shapes all fail closed. Repeated releases also
+   authenticate the helper's extra CREATE nonce/runtime and charge every retired
+   verified EVM ceiling exactly once. The serialized ancestor executor remains
+   recoverable while this release is frozen; it had completed at least 25 of 200
+   fleet bindings before the replacement-plan cutover.
+   At the pinned 12-second cadence, bounded setup should take roughly 1--3 hours
+   rather than the serialized many-hour path. After discarding one
+   post-preparation partial accelerated epoch, the adopted profile retains five
+   complete 300-block accelerated epochs (approximately five hours), then uses
+   a future-effective 360-block policy, discards one post-preparation production
+   epoch, observes three full epochs, and waits through the final 180-block
+   settlement window. Boundary alignment and the release native handoff make
+   the combined scheduler-controlled path exactly 3,004--4,380 blocks
+   (10:00:48--14:36:00 at 12 seconds per block).
+   These are protocol-time acceptance gates, not setup inefficiencies, and must
+   not be bypassed with an off-chain clock.
+
+   The cutover completed fleet 25 member 4 at finalized EVM block 7,898,801.
+   `fleet.commitment.26` has only an intent and a cancellation failure: no
+   signed bytes, broadcast, transaction hash, or native state change exists.
+   The first accelerated read-only revision then exposed two independent
+   migration defects and failed before any write:
+
+   - The live and release coordinator-proxy runtimes were both 130 bytes, but
+     31 bytes differed wholly inside the 51-byte Solidity CBOR trailer (offsets
+     88--118); their executable bodies were identical. Compatibility baseline
+     v3 now binds the normalized proxy executable hash while retaining both
+     full runtime hashes, exact live-code verification, and release-lock
+     provenance. Its regression accepts metadata-only drift and rejects one
+     changed executable byte.
+   - `fleet.mirror.4` had an authenticated interrupted receipt followed by an
+     exact descendant `postcondition_verified` marker. The revised-plan gate
+     previously checked that recovered action before carrying its verified
+     legacy intent. Verified EVM carries now run first; the exact legacy gas
+     ceiling and intent are retained, while a finalized-only receipt still
+     fails the unchanged-action check.
+
+   Two read-only builds at later finalized heads 7,898,930 and 7,898,940 now
+   produce the identical accelerated plan hash
+   `0x9be00c4516aaf0e5067b9ca8a6405ee9ae1d3a330fbbd9efb8d72c70a4b4b453`.
+   The plan has 2,238 actions and approves active maxima of 165,655,232,000 TAO
+   rao, 19,131,501,203,537 alpha rao, 148,909,500,000,000,000,000 EVM gas wei,
+   and 256 registrations. Cumulative superseded spend is 5,500,000,000 alpha
+   rao, 11,090,500,000,000,000,000 EVM gas wei, and three registrations. The
+   active plus superseded EVM ceiling is exactly the configured
+   160,000,000,000,000,000,000 limit; total registrations are 259 of 260. It
+   binds coordinator implementation `0xe732c2e6dbced5dcc44d1a5524a8af1343c1e2ef`
+   at deployer nonce 27 and compatibility baseline v3. This is the sole testnet
+   hash authorized for the accelerated apply; any drift requires another
+   read-only two-build review.
+
+   The accelerated apply ran against the public RPC from 2026-08-30 23:24 UTC
+   until an intentional pause at 2026-08-31 01:10 UTC. Coordinator upgrade
+   implementation and activation finalized, all 666 carried actions passed
+   concurrent revalidation, and fleet hotkey funding 1--166 finalized with
+   exact postconditions. Fleet 167 was included once before cancellation and
+   has durable broadcast/inclusion evidence for exact resume. Review before the
+   next one-shot EVM action found that the v9 plan serialized
+   `campaign.voluntary-conviction.1` with intent
+   `0x5659ba0d21e2f14c897729b525b8c1af206aecf27712a39fba9f93eac4ed810e`
+   while its reconciliation authenticates original intent
+   `0xc83b742bb91e58b7c91135213af7c59619ee669a4e8a1e730e06d142613c51c3`.
+   The difference was only a refreshed gas-unit ceiling, but intent identity is
+   executable state: the action was not eligible to run again after cumulative
+   conviction reached two billion rao. No third deposit was signed or
+   broadcast, and the executor's independent cumulative-prestate guard would
+   have rejected it before construction.
+
+   Schema v10 fixes the root cause at three layers. Duplicate recovery now
+   places the authenticated original action into the revised plan directly;
+   operator-custody repair rewiring skips every exact verified action because
+   dependencies are part of its immutable intent; and plan validation rejects
+   a reconciliation whose active voluntary action differs from the original
+   intent it names. Historical v9 bytes remain hash-authenticatable only as
+   ancestry, allowing this paused plan to seed a safe v10 revision. The
+   deterministic regression constructs the exact gas-resized v9 shape, proves
+   v10 rejects it, round-trips the v9 ancestor, and covers a simultaneous
+   verified alpha-repair insertion. A new two-build v10 hash and cumulative
+   spend review are required before resume.
+
+   The first complete v10 release gate then exposed an adjacent build-artifact
+   reproducibility defect after every Go, race, Slither and Solidity test had
+   passed. A clean Foundry 1.7.1 full-graph build changed all seven generated
+   runtime hashes even though every executable byte was identical; each
+   difference was confined to the 32-byte IPFS digest inside Solidity 0.8.24's
+   canonical 53-byte CBOR trailer, and every storage-layout hash was unchanged.
+   The old freshness check compared the entire graph-sensitive generated file,
+   while Slither's Foundry frontend also ran `forge clean` in the canonical
+   artifact directory before the full build. The release now preserves the
+   exact deployment bytes and their release-lock hashes, runs both Slither roots
+   in isolated ignored `out/slither` and `cache/slither` graphs, and performs a
+   semantic generator check. That check may normalize only the structurally
+   validated IPFS digest; it independently authenticates each locked full
+   runtime hash and artifact projection and rejects executable, creation-code,
+   ABI, selector, immutable-reference, storage-layout, compiler-version or CBOR
+   framing drift. Deterministic tests reproduce metadata-only graph drift and
+   reject changed executable bytes plus adjacent hash-framing, compiler-version,
+   ABI and layout mutations. The complete release gate subsequently passed.
+
+   Final v10 review found and closed three additional interrupted-lineage edges
+   before resume. Fleet-mirror recovery now authenticates its native commitment
+   against the transaction's archived source plan rather than a later
+   dependency-rewired plan. Successful native funding recovery is restricted to
+   the four executor funding namespaces and binds the exact source action,
+   configured wallet signer, journal nonce, hash-authenticated SCALE artifact,
+   canonical ordered recovery/inclusion blocks, successful finalized dispatch,
+   and exact historical balance delta. sr25519 signatures are randomized, so the
+   verifier reconstructs and compares every canonical signed-v4 envelope byte
+   except the sole 64-byte signature field; finalized successful dispatch proves
+   that signature independently. A later exact descendant dual-RPC postcondition
+   may preserve recovery after ordinary fee consumption only when its journal
+   sequence, plan lineage, artifact hash, role, account and both recorded balances
+   match. Finally, voluntary-conviction dependency alignment authenticates the
+   repair and its base transfer from their approved ancestor, not a transient
+   fresh-plan representation that is restored by the subsequent verified-alpha
+   carry pass. Mutation regressions fail closed around every exception.
+
+   Two complete read-only builds at finalized Substrate heads 7,900,399 and
+   7,900,409 (with matching later EVM heads) produced the identical schema-v10
+   plan hash `0xaed68e3df572c4beb483e32ad7cadcbe8af2028494e88e3d3a226608de8893c7`.
+   Both have 2,238 actions, active maxima of 165,655,232,000 TAO rao,
+   19,131,501,203,537 alpha rao, 148,909,500,000,000,000,000 EVM gas wei and
+   256 registrations, plus superseded maxima of 5,500,000,000 alpha rao,
+   11,090,500,000,000,000,000 EVM gas wei and three registrations. These remain
+   within the reviewed 200,000,000,000 TAO, 20,000,000,000,000 alpha,
+   160,000,000,000,000,000,000 gas and 260-registration caps. The only differing
+   fields were the expected finalized-head observations and generation time.
+   The complete local release gate then passed again. This was the sole reviewed
+   hash for that bounded testnet resume and is now superseded by the throughput
+   revision below; no mainnet write is authorized.
+
+   The first read-only Go-only throughput revision then exposed two adjacent
+   revision-recovery defects before a plan was emitted or any write was enabled.
+   First, the finalized fleet-167 funding transfer had already been closed by an
+   exact descendant v4 postcondition, but the recovery verifier's synthetic test
+   shape expected only its three funding-specific fields. Every durable v4
+   receipt also includes the generic action `kind` and `target`; recovery now
+   requires that exact five-field operational and independent shape and rejects
+   wrong kind, target, role, account, balance, extra fields or receipt hash.
+   Second, the live coordinator observer correctly counted the verified
+   implementation and immediately following verified fleet-batcher CREATE as
+   two deployer nonces, while the pure revision builder allowed only the first.
+   The builder now accepts the `+2` boundary only when the exact implementation,
+   activation and canonical batcher envelope are all postcondition-verified.
+   Missing proof, a changed upgrade/batcher identity, malformed nonce/address or
+   any nonce beyond the authenticated boundary fails closed. Deterministic tests
+   reproduce both live journal shapes, and a subsequent full read-only build
+   crossed both gates against finalized public-testnet state without mutation.
+
+   After the complete local release gate passed, two clean read-only builds at
+   finalized Substrate/EVM heads 7,901,274/7,901,275 and
+   7,901,284/7,901,284 produced identical schema-v10 plan hash
+   `0x0cdcba41ff1efeb02746eb8e9639c864802c2d17aa70186bd1805cb2a1c8f0a1`
+   under release-lock hash
+   `0x7536d23c1355a75e41cba91d883809b2e7b3e5039c4047178532a643ce7b7ebd`.
+   Both have 2,238 actions, active maxima of 165,655,232,000 TAO rao,
+   19,131,501,203,537 alpha rao, 148,909,500,000,000,000,000 EVM gas wei and
+   256 registrations, plus superseded maxima of 5,500,000,000 alpha rao,
+   11,090,500,000,000,000,000 EVM gas wei and three registrations. Those totals
+   are unchanged from the prior approved envelope and remain within the
+   200,000,000,000 TAO, 20,000,000,000,000 alpha,
+   160,000,000,000,000,000,000 gas and 260-registration caps. Its authorized
+   resume stopped before its first new journal entry or chain write when carried
+   `fleet.install.batch.3` correctly rejected prepared calldata bound to the
+   archived source plan rather than the new revision. That hash is superseded by
+   the source-plan recovery revision below.
+
+   The recovery verifier now loads the hash-authenticated archived plan and exact
+   journaled action which created a carried install or refresh preparation. It
+   requires approved plan lineage, accepted intent, identical nonzero batcher
+   target, canonical batch range, chain/netuid and complete deployment address
+   identity. It then validates the immutable calldata against that source plan
+   while still re-reading every current commitment, mirror, binding, receipt,
+   canonical block and event at one current finalized checkpoint. Source/current
+   substitution, altered files, duplicate actions, target/range/deployment drift
+   and the adjacent refresh case have deterministic regressions. The full local
+   release gate passed: all Go tests, the 1,000-miner race suite, Slither 0.11.6
+   with zero high/medium findings, 145 Foundry tests, generated payload/ABI/layout
+   freshness, operator/shared-client suites, 25 Subtensor infrastructure tests
+   and patch hygiene.
+
+   Two subsequent clean read-only builds at finalized Substrate/EVM heads
+   7,901,472/7,901,473 and 7,901,482/7,901,482 produced identical schema-v10 plan
+   hash `0xf2f5dd2d5c78b12bc131bb57ddeb26c1960309721353eac032a32873b7b55ba3`
+   under release-lock hash
+   `0xbfefb0a5c78d55092040a34c701ac371cc3ac7ea64f3d80ecb3163871a4dbc6e`.
+   Both have 2,238 actions, active maxima of 165,655,232,000 TAO rao,
+   19,131,501,203,537 alpha rao, 148,909,500,000,000,000,000 EVM gas wei and
+   256 registrations, plus superseded maxima of 5,500,000,000 alpha rao,
+   11,090,500,000,000,000,000 EVM gas wei and three registrations. These remain
+   within the reviewed 200,000,000,000 TAO, 20,000,000,000,000 alpha,
+   160,000,000,000,000,000,000 gas and 260-registration caps. This exact hash is
+   the sole reviewed testnet resume; any drift requires another two-build review.
+
+   That resume authenticated all 947 carried-history actions before mutation,
+   then finalized and postcondition-verified fleet commitments 34--40. The next
+   action, `fleet.install.batch.4`, recorded intent but failed during gas
+   estimation, before signing or broadcast. Replaying its exact prepared calldata
+   returned selector `0x3d618e50`, `StaleCommitment()`. Fleets 31--33 were
+   finalized at blocks 7,900,909, 7,900,912 and 7,900,915; at the attempted EVM
+   head they exceeded the active policy's 600-block commitment lifetime. Fleets
+   34--40 were fresh, and every fleet 31--40 coordinator mirror remained absent,
+   so no partial install or conflicting state occurred. The root defect is in
+   revision lifecycle planning, not the coordinator: a native commitment can be
+   historically canonical and postcondition-verified yet no longer have enough
+   lifetime for its first EVM consumer. Recovery must create a newly approved
+   commitment intent, reissue only the expired unconsumed commitments, overwrite
+   their exact finalized evidence, and recheck remaining lifetime immediately
+   before install. The adjacent generation-2 refresh path requires the same
+   protection.
+
+   The corrected lifecycle is now implemented and locally gated. A same-release
+   plan automatically requests a formal revision when verified, unconsumed
+   evidence enters the unsafe window. The revision authenticates its exact
+   finalized transaction and verified plan lineage, emits a strictly later
+   commitment intent, adds exact per-hotkey funding and global fee reserve, and
+   supports repeated expiry without accepting an ancestor intent. Install,
+   refresh and challenger preparation each require 30 blocks of remaining
+   inclusion lifetime. Once the exact consumer verifies, resume proves the
+   commitment from its canonical historical block and replays a superseded
+   generation-1 install at its recorded EVM checkpoint. Review of the adjacent
+   M0B path found and fixed a separate ordering defect: the precompile drill now
+   replaces and restores fleet 1 generation 2, binds that generation in the plan
+   and public evidence, and requires the restored write to remain current.
+   Targeted boundary/lineage/budget tests, the complete simulator suite,
+   repository-wide Go tests and all 145 Foundry tests pass. M0A remains paused
+   for a new two-build plan review and checkpointed resume; M0B/phase 2 has not
+   started.
+
+   Two clean read-only builds then observed finalized Substrate/EVM heads
+   7,901,894/7,901,895 and 7,901,907/7,901,908 and produced identical schema-v10
+   plan hash `0x8092a5b32c06fbdadff9e795c497fe77bb9e800aa5bcb14bc6b7c6ea615188d0`
+   under release-lock hash
+   `0xe7decea7b74b013fe91e1e6b8908ba77bfb6d09e8c8f349aa57ab7b525690668`.
+   Its formal revision reissued only unconsumed commitments 31--33 and increased
+   the active TAO maximum by exactly 18,000,000 rao. Active maxima were
+   165,673,232,000 TAO rao, 19,131,501,203,537 alpha rao,
+   148,909,500,000,000,000,000 EVM gas wei and 256 registrations; superseded
+   maxima remained 5,500,000,000 alpha rao, 11,090,500,000,000,000,000 EVM gas
+   wei and three registrations. All remained within the reviewed caps.
+
+   The approved resume authenticated all 947 carried actions, finalized the
+   three exact recovery fundings and replacement commitments at blocks
+   7,901,994, 7,901,997 and 7,902,000, then installed fleets 31--40 atomically in
+   transaction `0x62ba890995d82cdb6800ba9af62e4c60e688f2785ac94fc2ff3d05030ae99e7c`
+   at finalized block 7,902,009. Every mirror and member binding passed its
+   postcondition, proving the stale-commitment repair against the real chain.
+   Install batches 5--9 subsequently finalized and verified fleets 41--90.
+   Fleets 91--100 reached finalized native commitment storage, but
+   `fleet.install.batch.10` stopped before signing or broadcast when the public
+   EVM endpoint returned the HTTP-success JSON-RPC error `Upstream overloaded`
+   while reading the epoch start. Journal sequence 7,154 contains only the
+   intent and failed preflight; no ambiguous EVM transaction exists.
+
+   That signal exposed an adjacent public-provider resilience defect. The
+   shared executor/workload HTTP transport paced every request and retried HTTP
+   429, but it did not classify provider-capacity errors encoded inside an HTTP
+   200 JSON-RPC envelope. The transport now recognizes only the exact observed
+   overload sentinel plus standard transient HTTP and transport read failures,
+   applies a shared bounded cooldown and exact retry ceiling, replays single and
+   batched idempotent reads with identical bodies, preserves the final provider
+   error after exhaustion, and honors cancellation. It never replays a transaction
+   submission, a mixed write batch, an arbitrary server error or a contract
+   revert. Deterministic tests reproduce the live failure at the transport
+   boundary and cover the reverse-proxy request shape, read batches, exhaustion,
+   cancellation, response limits and non-replay boundaries. The exact final tree
+   is locked by Go source hash
+   `sha256:426ce291df9faebb57b8c1d2029e850286ce2958fb79eee5dbdffa179efe4508`;
+   the complete ordinary and race Go suites, both zero-finding Slither roots,
+   all 145 Foundry tests, generated artifacts, operator/shared-client suites,
+   25 Subtensor infrastructure tests and patch hygiene pass. M0A is paused for
+   a pushed checkpoint and another two-build plan review; phase 2 remains
+   unstarted.
+
+   Two subsequent read-only builds produced the identical plan hash
+   `0xf44a2075a951ffa296b954d64d7adf1c7df029fbebeba09122b3559dc21dcc7f`
+   and identical immutable action/intent content. Its approved resume audited
+   all 1,320 carried actions and recovered `fleet.install.batch.10` without
+   replaying a write. Install batches 10--20 then finalized and verified all 200
+   generation-1 fleets. Refresh batches 1--20 finalized and verified all 200
+   generation-2 replacements, all predecessor revocations and every coordinator
+   mirror/member binding. The last batch transaction was
+   `0xe29777262f7d86f2f77d99317c8e481fc89393812ab71765e12b39d678ff2e87`
+   at finalized block 7,904,309. Oracle restoration transaction
+   `0x0e589390bf53e759a0d7f5aa3696b33e1266ca5797048df410ddb4128612a51c`
+   finalized at block 7,904,340, and both restoration checks passed. The plan
+   has zero failed journal entries and 883 newly verified actions.
+
+   Topology launch then exposed a host-lifecycle defect before starting any
+   workload process. The generated user unit encoded
+   `WorkingDirectory="/absolute/path"`; unlike `ExecStart`, that directive does
+   not accept quoted path syntax on the deployed systemd and treated the quote
+   as the first path character. `systemctl --user start` therefore rejected the
+   unit as `bad-setting`. The unit-level working directory was redundant because
+   the supervisor receives absolute config/state/manifest paths and every child
+   has an explicit working directory. It is removed. `ExecStart` arguments now
+   reject all control characters and double literal `%` and `$` before C-style
+   quoting, preventing specifier or environment expansion when a checkout path
+   contains those characters; the description uses the sanitized service token.
+   Deterministic tests reproduce the invalid directive and cover spaces,
+   expansion characters, control characters and the non-installable lifecycle.
+   The focused race run and `go test ./...` pass. On the execution host,
+   `systemd-analyze --user verify` accepts the corrected unit and systemd reports
+   `LoadState=loaded`, `ActiveState=inactive`, `UnitFileState=static`; no enablement
+   symlink exists. Thus the simulator still cannot linger across a host restart.
+   The corrected Go tree is locked by
+   `sha256:aeefe23b8671198b43aa4b791cd4e5a6080d7245126c8e529db88708244074e5`.
+   M0A remains stopped for two identical refreshed plans and exact resume;
+   phase 2 has not started.
+
+   The first post-fix read-only revision then found one older interrupted
+   transaction that the earlier M0A recovery had not needed to revisit.
+   `fleet.mirror.4` in plan
+   `0x4c8a563dafb14b2d436b63c0b4ec5f41e3900ea5df9937e66a8d0776f648434e`
+   broadcast transaction
+   `0x168694211cd1da240ddd85e51c8bd96b60b15c5ecadd1ac7f1e15351952a762d`
+   and lost its receipt observation to request cancellation. The transaction
+   succeeded at finalized block 7,897,368. A later approved plan durably
+   verified that exact generation-1 mirror intent through both observers, and
+   the subsequently completed generation-2 refresh correctly replaced its live
+   coordinator state. Recovery already used that descendant proof to permit the
+   corresponding native commitment to advance, but accidentally still required
+   current EVM storage to equal generation 1. Historical transaction-block state
+   remains mandatory; current state is now required only until an exact,
+   hash-authenticated descendant postcondition closes the old write. The
+   descendant must occur later in append-only journal sequence and both of its
+   finalized EVM checkpoints must be at or after the recovered receipt block, so
+   an earlier same-intent observation cannot authorize drift. Deterministic tests
+   cover exact/current state, superseded current state, historical drift, journal
+   ordering and checkpoint ordering. The real read-only lineage replay now
+   authenticates the signed transaction, event, historical coordinator value,
+   native evidence and descendant receipt and completes without relaxing generic
+   successful-transaction handling. The corrected Go tree is locked by
+   `sha256:5232baaac287887e581afa37c23eb8f7ccdef275eb2919460fc6df1634e63d0d`.
+   Two refreshed read-only builds returned the identical canonical plan
+   `0xe2437addbba0b600b1fb09ba4222c0a168119310b523b5d4bee3bbe896f66082`
+   with 2,238 actions and therefore identical hash-bound action intents and
+   spend envelopes. Maximum spend is 165,673,232,000 TAO rao,
+   19,131,501,203,537 alpha rao, 148,909,500,000,000,000,000 EVM gas
+   wei and 256 registrations; carried superseded spend remains 5,500,000,000
+   alpha rao, 11,090,500,000,000,000,000 EVM gas wei and three registrations.
+   Every dimension remains within its reviewed cap. The complete candidate-tree
+   release gate passes: ordinary Go, the focused recovery race test, the full
+   506-second simulator race suite, zero-finding Slither analysis of both
+   deployable roots, all 145 Foundry tests, generated payload/ABI/layout checks,
+   operator and shared-client suites, 25 Subtensor infrastructure tests and patch
+   hygiene. Phase 2 remains unstarted.
+
+   The first exact phase-2 launch under that checkpoint reauthenticated all
+   2,203 carried actions, then stopped before executing the 35-action remainder.
+   Its history preflight correctly found that
+   `fleet.refresh.oracle-activate` no longer matched current state, but did not
+   understand that the exact later `fleet.refresh.oracle-restore` and
+   `fleet.refresh.oracle-await-restored` actions had intentionally consumed that
+   temporary state. No new journal entry or testnet transaction was created and
+   the topology supervisor remained inactive. The carry verifier now permits
+   historical replay of `oracle-activate` and `oracle-await-active` only when the
+   exact restore pair is durably verified in the approved lineage, follows the
+   source in append-only journal order, advances both operational and comparison
+   finalized checkpoints, reverses the exact helper address, and records the
+   original oracle active after restoration. Missing/partial restore evidence,
+   adjacent IDs, reordered entries, stale checkpoints, wrong dependencies,
+   changed intents and altered observer values all fail closed. The complete Go
+   suite and focused race regressions pass. The corrected tree is release-locked
+   by `sha256:a8a7876ba35bd7e6573b605598006aae04eaf48695d98da86a73fa11e5f9ab1f`;
+   two read-only builds produced the identical 2,238-action plan
+   `0x5421dc5809e6a7a070c7ef49bea5aca0894f5e4b3bbb98ab71afa89b6490d79c`
+   with unchanged spend totals and caps. Its exact launch replay is the next
+   boundary; no M0B mutation has started.
+
+   That replay authenticated all 2,203 carried actions, including the exact
+   restored-oracle successor proof, and then stopped before the 35-action
+   remainder. The next action was the carried `validator.reserve-majority`
+   barrier: finalized state reported 20,823,318,857,034 reserve alpha out of
+   34,742,868,055,429 registered alpha, approximately 22.4B rao below 60%.
+   Its original postcondition at block 7,892,550 had proved
+   17,634,114,090,133 / 27,420,251,986,279, so no bootstrap transfer was missing
+   or ambiguous; ongoing emissions had diluted the ratio. No new journal entry,
+   signature, transaction or service start occurred.
+
+   The first repair revision preserved the verified bootstrap and added one
+   exact 1,759,545,378,996-rao top-up to return to 65%. With the testnet alpha
+   ceiling raised from 20,000 to 22,000 alpha, two read-only builds at later
+   finalized heads produced identical 2,239-action plan
+   `0x3c31cbeb83e311c07b1e587b0683d3180c3c17bc2b452b699eacdbc33a9938c7`
+   and cumulative maximum 20,891,046,582,533 alpha rao. Apply nevertheless
+   failed before opening the journal because an emission batch arrived after
+   review: registered alpha increased by about 169.0B rao and reserve alpha by
+   about 62.5B rao, changing the exact repair to 1,806,943,793,151 rao and the
+   reconstructed hash to
+   `0x1a39246be2b147bd9683e52211cbd1828abbd142f36d16ec79c8e34e1d38ef1a`.
+   Repeatedly approving the moving target would be flaky and is not an
+   acceptable release procedure.
+
+   The root fix makes emission repair an exact, fixed approval tranche rather
+   than a runtime-selected amount or a snapshot-sized amount. The committed
+   testnet profile caps each tranche at 3,000,000,000,000 rao and also applies
+   the 22,000,000,000,000-rao cumulative vault ceiling. A revision fails unless
+   the fixed tranche reaches the 65% target at planning time. Before signing it
+   re-reads the complete registered-alpha composition, runtime transfer floor,
+   price, source locks/collateral/transferability and retained source position,
+   and requires the same 65% target. Its postcondition verifies the exact
+   parent/inclusion delta and complete reserve share at the canonical finalized
+   transaction block, so later dilution cannot invalidate historical proof;
+   the separate live 60% barrier remains mandatory. Adjacent recovery now also
+   supports a destination repair that legitimately converged without its own
+   transaction while continuing to require exact delta proof whenever one was
+   broadcast. Deterministic and race tests reproduce the real emission drift
+   and cover recurrent repair chains, cumulative/tranche exhaustion, foreign or
+   mixed repair modes, parameter tampering, target-boundary rounding and
+   no-transaction convergence. Final full-suite/lock, two live plan builds and
+   exact apply remain before topology launch; M0B has not started.
+
+   The fixed-tranche implementation then passed the complete Go and focused race
+   gates. Two read-only builds at finalized blocks 7,905,285 and 7,905,298
+   produced the identical 2,239-action plan
+   `0x9f4bc09ce2666121470255cef772fb57117b917b33ac8cdb7e725eb76d6077ea`.
+   It reserved 165,673,232,000 TAO rao, 21,994,500,000,000 alpha rao,
+   148,909,500,000,000,000,000 EVM gas wei and 256 registrations; its exact
+   2,862,998,796,463-rao repair consumed the remaining cumulative alpha budget.
+   Exact apply accepted the reviewed hash and authenticated all 2,202 carried
+   actions without modifying the journal. It then failed closed at carried
+   `fleet.mirror.1`: the original generation-1 transaction receipt was being
+   revalidated against the intentionally installed generation-2 current mirror.
+   The reserve repair was never signed or broadcast and no topology process ran.
+
+   The root was adjacent to the already-supported batch transition. The batch
+   verifier knew that `fleet.refresh.batch.N` superseded
+   `fleet.install.batch.N`, but legacy per-fleet mirror/binding receipts retained
+   during the atomic-installer migration did not share that successor rule. In
+   addition, their historical post-state functions ignored the authenticated
+   checkpoint argument and queried a new finalized head. Historical replay now
+   applies only when the original generation-1 action, exact later
+   generation-1 install/convergence batch and exact same-range generation-2
+   refresh have hash-bound postconditions in strict journal and dual-observer
+   checkpoint order. Mirror and binding reads use the recorded EVM block;
+   current generation-2 state is an explicit negative control, and challenger
+   fleets remain outside the exception. Deterministic tests cover legacy writes,
+   atomic aliases, install sources, partial/adjacent ranges, target/deployment
+   drift, partition gaps, observer disagreement, ordering, checkpoint drift and
+   exact JSON-RPC block selectors. Full `go test ./...`, focused race tests and
+   `go vet ./sim-testnet` pass under source lock
+   `sha256:9f3db3ea04b5e674e664060b6bbee1635504f3e9ca0da5cd4acaa5d3f009acaf`.
+   Two new live plan builds and their exact replay are the next M0A boundary;
+   phase 2 remains unstarted.
+
+   Two subsequent read-only builds were identical at plan
+   `0x315cd7aeb5219ac2a92de3ff8aa369a37afaef71cfcd984bca07d6ffcdb303af`
+   with the same 2,239 actions and spend limits. Exact apply accepted that hash
+   and processed 2,202/2,202 carried audit jobs, then failed closed on
+   `fleet.bind.16.1` because its historical block request reached the end of the
+   worker's five-minute context while queued behind the public EVM endpoint's
+   process-wide 60-request/minute gate. The journal remained byte-for-byte
+   unchanged at 7,156,816 bytes; no repair was signed or broadcast and no
+   topology process started.
+
+   The root issue was request topology rather than invalid evidence: each of
+   1,000 superseded per-fleet proofs independently requested a finalized head,
+   canonical historical header and block-pinned contract state. Eight workers
+   serialized behind one honest source-wide gate, so total work took over an
+   hour and a late assigned worker could time out. The preflight now first
+   authenticates the exact successor chain locally, resolves each distinct
+   canonical block through at-most-50-element `eth_getBlockByNumber` batches,
+   and resolves mirror/binding state through at-most-50-element `eth_call`
+   batches carrying each action's own block selector. It compares every
+   recorded hash and observed-state receipt exactly and repeats the proof on the
+   independent backend when private mode requires one. Shared public mode still
+   requires byte-equivalent detached observations and identical checkpoints.
+   Exact receipt-keyed cache entries are installed only after the complete
+   batch succeeds and exist only for that one carried-audit invocation.
+   Deterministic tests prove that 120 distinct checkpoints use seven HTTP
+   requests rather than 360, retain all selectors, reject a tampered canonical
+   hash before state reads and never let an adjacent receipt hash inherit a
+   verified entry. The corrected source lock is
+   `sha256:aad824a4e3462a63ce3850d7ab0560bd3d3471084a894b569033678baf543c3e`.
+
+   Two read-only plans under that revision were identical at
+   `0x378ee0558075712b25f2ba2cb899ea758c173d2ca382ff164b318c91fda6a346`
+   with the same 2,239 actions, fixed 2,862,998,796,463-rao repair and bounded
+   spend. Exact launch accepted the hash and stopped locally at
+   `fleet.mirror.26` before the first RPC batch. Its authenticated receipt is
+   one of 25 migration-era atomic-install aliases which performed a separate
+   finalized generation-1 live read after the batch; the first supersession
+   rule recognized only the 850 newer aliases which clone and name the exact
+   batch receipt. Requiring an identical checkpoint for both formats therefore
+   rejected valid history. The journal again remained byte-identical and no
+   chain or topology mutation occurred.
+
+   Alias receipts are now classified from both authenticated observation maps.
+   A modern derived alias must contain the complete source action, source
+   postcondition hash and batch tuple and retain the exact batch checkpoint. A
+   migration live-read alias must contain none of those fields, follow its
+   exact install in journal and dual-checkpoint order, precede the exact refresh
+   and replay its mirror or binding through both configured observers at its
+   own recorded block. Partial metadata and mixed observer formats fail closed.
+   The exact current census is 1,000 carried receipts at 158 distinct
+   checkpoints: 850 derived aliases, 25 historical aliases and 125 legacy
+   transactions. Only the latter 150 need contract calls, so the public proof
+   uses one finalized-head request, four header batches and three state batches.
+   Full Go, focused race, vet, release-lock and patch gates pass under source
+   lock `sha256:b8612648ccdfdfc55ab6f7fd8868d87c0bc7fcc8fd09ffe4a2076dfff42524fe`;
+   two fresh plans and exact replay remain the next M0A boundary.
+
+   Two subsequent plan builds were identical at
+   `0xd072a8c5e6ebfdbfa820b8dc04e5956ecaa04c720a7263ea7d6683aa5093f6d1`.
+   Exact launch accepted that hash, completed the 1,000/1,000 batched
+   historical proof and all 2,202 carried jobs, then failed before the first
+   mutation at `fleet.refresh.batch.1`. Its generation-2 postcondition still
+   issued one mirror request per fleet, one two-element version request and one
+   successor request per member, and one member-count request per fleet—about
+   100 HTTP requests for each of 20 carried refresh actions. A late member read
+   exhausted its five-minute context behind the process-wide 60-request/minute
+   gate. The journal remained exactly 7,156,816 bytes with SHA-256
+   `0d38274f78329e750dcfb1756ebce36680924fe25de68ff248d535055aff6276`;
+   no approved spend was signed or broadcast.
+
+   The corrected verifier authenticates all local signed/native evidence
+   first, then submits 140 pinned `eth_call` elements as exact 50/50/40 batches.
+   Fresh refresh preparation similarly reads all 40 predecessor count/record
+   pairs as 50/30 batches before producing signatures, and the five independent
+   oracle routing fields share one pinned batch. Network or context errors are
+   returned as operational batch failures rather than being wrapped as a false
+   replacement-generation mismatch. The adjacent evidence audit also found
+   that a separately valid signed replacement needed an explicit equality
+   check against the deterministic manifest member; chain id, netuid,
+   coordinator, fleet, hotkey, client id/key, generation, epochs and commitment
+   are now all exact. Deterministic tests enforce request counts and boundaries,
+   exact block selectors, RPC-failure classification, every mirror/version/
+   predecessor/successor/cardinality mutation, incomplete pre-RPC identity and
+   foreign manifest fields. The revised source lock is
+   `sha256:543926a14a20cc00bb79d1a7a80df4f58a2e9f2badf33a75289aa51b1864914d`.
+   The complete checked-in local release gate passed under that lock on
+   2026-09-01 UTC. Its full race-instrumented `sim-testnet` suite completed in
+   551.036 seconds, both deployable Solidity roots had zero Slither findings,
+   all 145 Foundry tests passed, generated deployment/storage and ABI bindings
+   were current, operator/connect/SDK and all 25 Subtensor infrastructure
+   regressions passed, and cross-repository patch hygiene was clean. The
+   managed-launch PostgreSQL/Redis rerun remains an M1 execution check; this
+   default local gate correctly reported it as deferred rather than claiming
+   runtime-profile evidence it had not produced.
+
+   While that long gate was already beyond its initial Go/lock test, an
+   independent workspace update fast-forwarded `server` from `ba49dfed` to
+   `d3b8699a`, `connect` from `709f6c0` to `0f469a0`, `sdk` from `09312be` to
+   `9841665`, `proxy` from `d9175a7` to `32f51d9`, and `userwireguard` from
+   `4e3ead3` to `85fb1ca`. The gate finished against its earlier observation,
+   but the next read-only doctor rejected the new proxy hash before planning.
+   Its complete observation showed all five changed hashes; every unrelated
+   hard doctor check was green and the journal remained untouched.
+
+   The aggregate gate now lists all twelve release workspace repositories for
+   staged and unstaged patch hygiene and reruns
+   `TestReleaseLockMatchesCheckout` after every other check. A deterministic
+   test fixes both the repository census and final ordering. The server's
+   manifest-locked 562-MB sim-latency baseline includes archived reference
+   `_test.go` inputs which compile only after their preserved candidate patches
+   are applied; the gate now authenticates all 2,705 baseline manifest entries,
+   excludes only that evidence subtree from `go list`, and compile-checks every
+   executable server package. Proxy ordinary/race, userwireguard ordinary/race,
+   the full SDK suite, focused SDK race, all new connect transport tests and
+   their race run, server monitoring, and the new server API/MCP/router/task/
+   resident/model/proxy tests pass. A diagnostic unfiltered connect run reached
+   its package-wide ten-minute timeout in the legacy statistical shuffle after
+   exercising roughly 2,058 tests; the newly changed tests complete together
+   in under a tenth of a second, so release validation keeps the focused
+   deterministic set rather than claiming that the historical stress suite
+   fits a ten-minute aggregate deadline. Database-backed readiness, perfvar and
+   model tests still correctly require the rendered M1 `WARP_ENV` profile. The
+   strengthened aggregate gate then passed end to end: the full simulator race
+   suite completed in 544.220 seconds, Solidity and all shared/operator/SDK/
+   infrastructure checks remained green, all executable server packages
+   compiled, and the new final checkout-lock test passed after patch hygiene.
+   The previously content-locked but uncommitted runtime-452 Subtensor vars and
+   operator documentation were then rebased and pushed in `xops` commit
+   `2d8ef58`, making the identical infrastructure input portable.
+
+   Checkpoint `c5cb9e2` was pushed after that gate. A renewed doctor returned
+   `ready=true` with no hard failures; its only soft findings were the explicit
+   public-mode same-provider observations. Two independent plans then matched
+   exactly at `0xfdd4600b2969c9ddc4653f906730f16e74f9507f94c9a45d455fb11ab325106e`
+   with 2,239 actions and maximum spend of 165,673,232,000 TAO rao,
+   21,994,500,000,000 alpha rao, 148,909,500,000,000,000,000 gas wei and
+   256 registrations. Exact launch completed the 1,000/1,000 historical proof,
+   all 2,202 carried checks and the formerly failing batched refresh boundary.
+   It finalized `alpha.repair.validator.1.2` as transaction
+   `0xc9fffaa4b0255ebf13fa6631bdaab45d234480fb9dfe4bf1a97c0f38367ff0d1`
+   in block 7,906,926, verified the postcondition and then verified
+   `validator.reserve-majority`.
+
+   The real topology started at 2026-09-01 01:18 UTC. Both
+   `operator-*-connect` children deterministically panicked at
+   `server.RequireHostPorts` because the harness did not render `WARP_PORTS`;
+   after five retries each, the three-minute readiness gate failed. Every other
+   process was healthy: both RPC proxies, both APIs and task workers, 20 miner
+   swarms representing all 1,000 miners, both claim relayers and both
+   validators. The supervisor was stopped through the harness and no child
+   remains. This is a harness configuration defect, not a tolerated flaky
+   start or infrastructure outage.
+
+   The corrected process manifest allocates disjoint loopback host ports for
+   service ports 443, 4053, 8053, 5080, 5081 and each connect status listener.
+   Only connect inherits `WARP_HOST_IPV4`/`WARP_PORTS`; APIs, task workers and
+   migrations remain unaffected. Host preflight now binds the previously
+   hidden exchange TCP sockets and H3/DNS UDP sockets and rejects duplicate
+   address assignments before production reuse-port behavior could conceal a
+   collision. A deterministic regression reproduces the missing environment,
+   checks all six mappings for both operators and proves cross-operator
+   uniqueness. Separate tests force occupied TCP/UDP sockets and duplicate
+   allocations. Focused normal/race, adjacent process/supervisor and the full
+   simulator suite pass. A real rendered operator probe brought up HTTP, H3,
+   primary DNS, the exchange and clean drain; compatibility DNS is included in
+   the committed mapping. The new non-test Go lock is
+   `sha256:abcf2f22bc113b7e09f6f2e2217d6f71c06dc2a16360bd7e259014f2ea95fe55`.
+   Checkpoint `b60d3b6` is pushed. The complete aggregate gate passed from that
+   clean checkout: normal `sim-testnet` completed in 136.308 seconds, the full
+   race suite in 542.057 seconds, both Slither roots had zero findings, all 145
+   Foundry tests passed, all generated payload/layout/ABI checks were current,
+   server/connect/SDK checks passed, all 26 Subtensor infrastructure tests
+   passed, patch hygiene was clean and the final release-lock recheck passed.
+
+   Attempt 4 then rebuilt and applied exact plan
+   `0x4ea53609168c9774183fe281a66fe0cbfb483008a0bbf6fb2ae3b33f75a15c5a`.
+   It reverified 1,000/1,000 historical fleet receipts and all 2,204 carried
+   actions. `topology.launch` was recorded at journal sequences 9,924/9,925
+   between 02:11:14 and 02:11:15 UTC. All 32 real processes became healthy:
+   two RPC proxies, two complete operator API/connect/taskworker stacks, 20
+   50-miner swarms, two claim relayers and two validators. Challenger fleets
+   201 and 202 each completed registration, commitment, mirror and all four
+   native bindings. `churn.tournament-complete` was recorded at sequences
+   9,996/9,997 between 02:37:01 and 02:41:34 UTC with postcondition
+   `0x910c3512c771d6e6ed4ad68ea5900daaba3743b49a1687e4854fea68bd62e9fb`.
+   Both public operator APIs accepted the deployment evidence.
+
+   The zero-failure inspection rejected the attempt. Validator 2 exited once
+   after `currentEpoch` at finalized block 7,907,199 exhausted its context
+   behind the source-wide public RPC proxy; later steering reads on both
+   validators also timed out. More importantly, no one of the four
+   validator/operator proof stores was created. The validator logs contained
+   16,944 `no seed providers available` outcomes, the connect logs contained
+   8,927 `Unknown location type` classifications, and the taskworker repeatedly
+   reported 252 client locations with zero location and group scores. An adjacent
+   log audit also proved miners and validators repeatedly dialed the advertised
+   `127.0.0.1:443`, while operator 1 actually bound H3 to
+   `127.0.0.1:23081` (and operator 2 to its translated sibling), so provider
+   selection alone could not have produced a live trail. The workload was stopped
+   cleanly, its on-chain state and published evidence were retained, and no M0B
+   action was broadcast.
+
+   Root-cause and adjacent fixes are now implemented as one fail-closed boundary:
+
+   - rendered site settings give every `127.0.0.0/8` simulation source complete,
+     clean US metadata while preserving its original address for /29 diversity;
+   - each operator owns a distinct loopback ingress IP. An owner-private,
+     byte-identical Connect executable receives only `cap_net_bind_service` and
+     binds production H3 on UDP/443, service 4053 on public UDP/53, compatibility
+     DNS on UDP/8053, both exchange sockets, and status. API, taskworker,
+     validator, miner, claim and supervisor binaries remain unprivileged and all
+     listeners are loopback-bound instead of falling back to `0.0.0.0`;
+   - a deterministic private CA issues exact-IP Ed25519 leaves with independent
+     key and public-serial derivation domains. The real server gets the operator
+     IP as its TLS fallback because Go omits SNI for IP literals; miners and
+     validators strictly append that CA to, rather than replace, Connect's normal
+     public pin set. Leaf-only, mixed, malformed and trailing-data root bundles
+     fail closed;
+   - the process-wide public EVM gate is FIFO, cancellation-safe and shares
+     provider cooldown, so hot polling cannot starve settlement or claim work and
+     a canceled waiter cannot consume a scarce slot;
+   - public-mode validators and claim relayers poll every 60 seconds, while
+     private-mode cadence remains chain-aware; claim reconciliation and signing
+     are serialized per operator rather than producing concurrent nonce/RPC bursts;
+   - the operator reads current epoch, policy and epoch start at one finalized
+     block with four RPC calls; validators propagate cancellation, retry only
+     bounded transient startup failures and reject empty finalized headers;
+   - testnet omits the nonexistent GeckoTerminal alpha market instead of logging
+     a false production-price failure;
+   - proof persistence separates a crash-torn tail before its next append;
+     topology acceptance snapshots all four stores before launch and again
+     before the challenger tournament, requiring every store to append a fresh,
+     terminated, structurally valid verified trail across both intervals with
+     zero child restarts; and
+   - supervisor state carries Linux start-time ticks. Status, semantic readiness
+     and the anomaly ledger reject a changed kernel generation even if a service
+     restart reset every in-memory child counter.
+
+   Deterministic regressions cover each root, cancellation and queue adjacency,
+   coherent RPC block tags/call counts, nil/empty finalized reads, transient versus
+   permanent retry classes, all 1,000 simulated source addresses, torn JSONL tails,
+   stale pre-launch and pre-tournament proof counts, advertised-versus-bound
+   Connect endpoints, exact privileged probe arguments/capability readback,
+   no-SNI certificate selection, strict private roots, key/serial separation,
+   child restarts, supervisor PID reuse/generation changes, testnet market selection
+   and release-gate inclusion. Focused normal/race tests and the real 1,000-miner
+   renderer pass. Prior source checkpoints SN `680e9f3`, server `cb6de1ad` and
+   Connect `e78f815` are pushed. The adjusted source lock and aggregate gate pass;
+   implementation checkpoints SN `69259be` and Connect `d73d7f9` are pushed for
+   the exact replay.
+
+   The originally deployed acceptance policy would have required twenty
+   accelerated epochs and three 2,400-block production epochs. The adopted
+   adjusted profile instead fixes the release minimum at five 300-block
+   accelerated epochs followed by a future-effective 360/60/180/6 production
+   schedule and reduces the demand-deposit campaign cap from 496 to 196 alpha.
+   Because attempt 4 had already verified `topology.launch` and two voluntary
+   conviction calls, this is a state migration rather than an ordinary config
+   edit. Plan schema v11 permits it only after authenticating both rendered
+   copies of the old policy against the prior plan hash, the exact terminal
+   32-child supervisor state and dead supervisor generation, and the complete
+   exact two-operator ID set, conviction-backed reserve principal, per-operator
+   accounting, nonces and zero-liability settlement state. The journal must end
+   exactly at the current plan's verified `churn.tournament-complete` action;
+   even an unbroadcast later scenario intent rejects the migration. Only the
+   future cadence fields and aggregate campaign cap may decrease; every
+   active-policy field remains identical.
+   Historical v10 bytes and their source-policy semantics remain independently
+   authenticated.
+
+   The migration review found and closed two adjacent restart boundaries before
+   any write. First, the historical duplicate voluntary-conviction repair was
+   being reconstructed under the new policy instead of retaining its exact
+   original action, duplicate receipt, no-broadcast reconciliation and preceding
+   custody repair. Second, rendered process inputs were not independently bound
+   after a stopped topology. The revision now carries that complete historical
+   dependency chain exactly, binds both `config.render` and `topology.launch` to
+   the current config/policy hashes, and writes a private
+   `runtime-config-manifest.json` covering the exact sorted static-file inventory,
+   modes and SHA-256 digests for both operators, both validators, all 1,000 miners,
+   20 swarms and both relayers. Missing, extra, changed or symlinked inputs fail
+   closed. Deterministic mutations cover policy fields, rendered identities,
+   stopped-state/PID reuse, operator-set/reserve/liability accounting, historical
+   linkage and every runtime-manifest failure class, including final- or
+   parent-component symlink substitution.
+
+   Historical 2026-09-02 aggregate record: the complete launch-scale simulator
+   race suite reached that script's fixed ten-minute package deadline even
+   though its prior clean baseline was already 584.794 seconds and no individual
+   test was stalled. The then-current gate retained the same test selection with
+   a 15-minute package deadline. On that locked source the ordinary simulator
+   suite passed in 172.398 seconds and the complete race suite passed in 602.017
+   seconds; the subsequent Slither, Foundry, generated-artifact,
+   operator/shared-client, PostgreSQL/Redis, Subtensor-infrastructure,
+   patch-hygiene and final checkout-lock stages also passed. That historical
+   deadline is superseded by the current candidate's measured 90-minute bound in
+   `FINALIZE-COMPLETE.md` section 4.4.
+
+   Two pre-lock read-only builds produced the same schema-v11 candidate plan
+   `0xd50a9e2ae7eff5050a5796d64fdfc25221d161539528dfe65d36ee66b939ddc8`
+   with policy hash
+   `0x1526b242cf4908cc31f7e58006664bce6064003c69fd8452eab2d49122fef277`.
+   It contains 2,238 actions and 43 authenticated ancestor hashes. Active maxima
+   are 165,673,232,000 TAO rao, 21,694,306,443,318 alpha rao,
+   148,859,500,000,000,000,000 EVM gas wei and 256 registrations;
+   superseded maxima are 501,500,000,051 alpha rao,
+   11,140,500,000,000,000,000 EVM gas wei and three registrations. The
+   22,195,806,443,369-rao cumulative alpha requirement is below the adopted
+   22,250-alpha ceiling by exactly 54,193,556,631 rao; active plus superseded EVM
+   spend equals, but does not exceed, the unchanged 160-testTAO-wei ceiling.
+   That candidate is deliberately superseded by the audited vault/release-lock
+   checkpoint and is not authorized for apply.
+
+   Checkpoint `18a3299` is pushed. A fresh live doctor at finalized runtime v452
+   returned `ready=true`; every hard check passed, and only the explicitly
+   non-independent official-public-RPC observations remained soft. Two
+   independent read-only builds from that exact source/release/config lock then
+   produced the same final schema-v11 plan
+   `0x947d5967622d537d8ea3160373ae9c4b8cf897391202fdb587215523d49b17f5`,
+   config hash
+   `0xd8d48a541aa8dccf24e293ff2f4f1c8e6cb4d9902f17fdcb57fe83cacc6aeb85`,
+   policy hash
+   `0x1526b242cf4908cc31f7e58006664bce6064003c69fd8452eab2d49122fef277`
+   and release-lock hash
+   `0x7daeb770030966ff52104f8708931ff9024aed33556569677c13f2a465d8b519`.
+   Both contained 2,238 actions, 43 ancestors and coordinator implementation
+   `0xe732c2e6dbced5dcc44d1a5524a8af1343c1e2ef` at deployer nonce 27. Their
+   active and superseded spend values exactly matched the audited totals above.
+   That hash was submitted to `launch`, but its mandatory carried-history
+   preflight rejected `campaign.voluntary-conviction.1` after auditing all
+   1,000 fleet members and 2,212/2,212 carried actions. The journal remained
+   exactly at sequence 9,997, proving that no new intent or transaction had
+   started. Root cause was a missing source-plan switch in the generic carried
+   verifier: the immutable original conviction event was compared with the new
+   policy hash even though the recovery plan deliberately retained the exact
+   authenticated historical action. Fleet batch artifacts already used the
+   corresponding source-plan rule.
+
+   The common carried path now loads the hash-authenticated ancestor, resolves
+   the exact verified action intent, checks active-lineage membership plus
+   deployment, chain, netuid, coordinator proxy and deposit signer identity,
+   interprets the immutable evidence under that source policy, and still reads
+   the current on-chain conviction state. A deterministic regression reproduces
+   the live current-policy mismatch and proves the repaired source-policy path;
+   adjacent mutations cover stage, ancestry, intent, deployment, chain, netuid,
+   proxy and signer substitution. Focused normal/race tests and the complete
+   simulator suite pass. The post-fix aggregate gate then passed end to end:
+   the ordinary simulator suite completed in 173.038 seconds, the complete
+   race suite in 613.663 seconds, both Solidity roots had zero Slither findings,
+   all 145 Foundry tests and 4,608 invariant calls passed, PostgreSQL/Redis and
+   all 26 Subtensor infrastructure tests passed, and the final checkout-lock
+   recheck was green. Updating the Go source lock supersedes
+   `0x947d5967622d537d8ea3160373ae9c4b8cf897391202fdb587215523d49b17f5`;
+   it is no longer authorized. A fresh locked two-build review is required
+   before retry. The earlier stopped-topology
+   `precompile-conformance` result remains durable failed evidence and must be
+   rerun cleanly after relaunch; it is not counted as M0B evidence.
+
+   The first post-lock read-only replay then exposed two deeper instances of
+   the same revision-lineage class before any write. A finalized operator-2
+   alpha transfer had already been closed by an exact descendant
+   `substrate-reconciliation`, but the recovery scanner searched only the new
+   plan's active actions and therefore could no longer see that reconciliation.
+   After crossing that boundary, the voluntary-conviction recovery likewise
+   found the carried repair but compared it with the newly rebuilt operator-1
+   base transfer instead of the exact base/repair pair from the repair's source
+   plan. Both failures were fail-closed and the journal remained at sequence
+   9,997.
+
+   Recovery now searches the complete allowed ancestry, loads each candidate
+   plan by its authenticated hash, resolves the exact action intent and requires
+   ordered journal evidence. The alpha path additionally re-hashes the persisted
+   postcondition and independently validates both observers' exact 12-field
+   transfer result, runtime floor, block, amount, credited delta and bounded
+   one-rao rounding shortfall. The conviction path requires the exact earlier
+   base verification, later repair verification, dependency shape, spend shape
+   and both persisted receipts from the repair's source plan; ambiguous sources
+   fail closed. Deterministic regressions reproduce both live hidden-ancestor
+   shapes and mutate ancestry, plan/action identity, journal order, intent,
+   transfer arithmetic, runtime floor, block, dependency/spend shape and receipt
+   availability. Focused normal and race runs pass. The final aggregate gate
+   also passed end to end: the ordinary simulator suite completed in 172.401
+   seconds, the complete race suite in 620.473 seconds, both Solidity roots had
+   zero Slither findings, all 145 Foundry tests and 4,608 invariant calls passed,
+   the operator PostgreSQL/Redis and all 26 Subtensor infrastructure tests
+   passed, and patch hygiene plus the final checkout-lock recheck were green.
+
+   A fresh doctor on the attempt-4 state is again `ready=true`, with only the two
+   documented official-public-RPC independence findings soft. Two complete
+   read-only builds at finalized Substrate/EVM heads 7,909,755 and 7,909,769
+   produced the identical schema-v11 plan
+   `0x4ebc0e8e3dc4a6a9702b70599c63d19b5af085be4c27ec5e7f003f72f0174fb6`
+   under release-lock hash
+   `0xc7033d2d241db57bebc4853c2e191ff16490fc5b0fa4e540daa579fe344093b0`.
+   It contains 2,238 actions and 44 authenticated ancestors; policy/config hashes,
+   coordinator upgrade, active maxima, superseded maxima and cumulative headroom
+   remain exactly as reviewed above. This hash remains a candidate until the
+   source checkpoint is pushed; only the twice rebuilt hash from that clean
+   pushed checkout may be authorized for apply.
+
+   Checkpoint `2ea4148` was pushed and two further builds from that exact clean
+   checkout reproduced the candidate at finalized heads 7,909,875 and
+   7,909,887/7,909,888. The authorized launch then passed the 1,000/1,000
+   historical-fleet audit and all 2,212/2,212 carried-action checks, including
+   the repaired reconciliation and conviction paths. Before broadcasting any
+   transaction, `policy.schedule-bootstrap` failed closed: its executor still
+   required the pristine-deployment invariant `campaignReserved == 0`, while
+   the plan-time migration verifier had correctly authenticated the two
+   finalized one-alpha voluntary convictions, two-alpha reserve principal and
+   next operator nonce. The only durable changes were intent/failure journal
+   entries 9,998--9,999; no transaction was signed or broadcast.
+
+   Bootstrap scheduling and activation now select either exact zero accounting
+   for a genuinely pristine lineage or reconstruct the nonzero expectation from
+   the verified conviction/reconciliation lineage. Immediately before scheduling
+   and on every activation wait, the executor checks campaign reserve, total and
+   per-operator reserve principal, reserve live backing, cumulative conviction,
+   every operator ID and next nonce, plus `totalCaptured`, `totalPaid`,
+   `escrowAccounted`, `pendingFunding` and `outstandingLiability`. The presence of
+   a reconciliation or finalized conviction makes missing authentication fatal;
+   it cannot fall back to the pristine case. A deterministic regression
+   reproduces the exact two-alpha live boundary, proves pristine selection, and
+   rejects missing reconciliation verification plus adjacent mutations to every
+   accounting class. An opt-in read-only invocation of that exact executor gate
+   passed against the deployed contract at finalized block 7,910,041, observing
+   2,000,000,000 reserved rao and operator-1 next nonce 2 without sending a
+   transaction. The failed candidate is superseded; a new locked aggregate,
+   clean checkpoint and two-build review are required before retry.
+
+   The post-fix aggregate completed successfully: the ordinary simulator suite
+   passed in 173.650 seconds and the complete race suite in 611.929 seconds;
+   both Slither roots reported zero findings, all 145 Foundry tests and 4,608
+   invariant calls passed, operator PostgreSQL/Redis and all 26 Subtensor
+   infrastructure tests passed, and the final patch/checkout-lock gates were
+   green. The first read-only revision after durable failure entries 9,998--9,999
+   produced a 2,238-action, 45-ancestor candidate
+   `0xa4fcd9626f37b72cd64ad405e3b56121e99c323fe1012ae41f52792cdfc730da`
+   under release-lock hash
+   `0xdb14dc5be81d32c86f8fe89414a45fb55a8374bd66096acbd14f94793575782a`;
+   active/superseded spend remained unchanged. It is not authorized until the
+   corrected source is pushed and two clean builds reproduce it.
+
+   Checkpoint `3299679` was pushed and the candidate was reproduced twice from
+   the clean checkout at finalized heads 7,910,140 and 7,910,154. Its launch
+   again passed the 1,000/1,000 historical-fleet audit and all 2,212/2,212
+   carried-action checks. The policy transaction
+   `0xcaa7306593fde0635a4e17533c13c43189e48f324e5b12bd1c78be7039b001f5`
+   finalized in block 7,910,261. Epoch 50 then activated the exact adjusted
+   bootstrap policy at block 7,910,374: 300-block epochs, 50-block root
+   publication, 150-block finalization, five-block grace, 10-alpha epoch cap
+   and 196-alpha campaign cap. Both required operator deposits also finalized
+   and verified: operator 1 transaction
+   `0x8f70b3a557464cb5c2318652540b1b02bca74681bfefdc2907c4b22505c1e8c`
+   in block 7,910,380 and operator 2 transaction
+   `0x97c59e8a5dd6f6eb16aeddbff3ab30a66e64e4410a8f285d944ccabb6d800916`
+   in block 7,910,384. Campaign EVM reserve verification also passed.
+
+   `config.render` then failed closed at journal entries 10,019--10,020 before
+   it could launch a process or issue a transaction. The static runtime-file
+   audit treated the renderer's two mandatory operator config directory links
+   (`all` and the per-operator local environment) as unapproved extra files.
+   Those exact links are independently constrained to the release-locked
+   platform-config checkout, so the inventory now recognizes only their exact
+   paths and targets while continuing to reject wrong targets, regular-file
+   substitutions and every unapproved link. A deterministic regression covers
+   the live shape and all three adjacent mutations. The opt-in live verifier
+   passes the existing 2,083-file runtime tree with manifest hash
+   `0xf45f8ea5144b738fc3a9cb380a1c0cb3fcca29d5830502d6c7f389a5e1ff7876`.
+   The post-fix aggregate gate passed end to end: the ordinary simulator suite
+   completed in 173.737 seconds and the complete race suite in 626.085 seconds;
+   both Solidity roots had zero Slither findings, all 145 Foundry tests and
+   4,608 invariant calls passed, the operator PostgreSQL/Redis and all 26
+   Subtensor infrastructure tests passed, and patch hygiene plus the final
+   checkout-lock recheck were green. The failed candidate is superseded; a
+   clean pushed checkpoint and two identical read-only builds are still
+   required before the next launch.
+
+   Checkpoint `866f39a` was pushed after that aggregate, and two clean
+   reconstructions at finalized Substrate/EVM heads 7,910,527/7,910,528 and
+   7,910,540/7,910,541 produced the identical 2,238-action, 46-ancestor plan
+   `0xbf60437185fabd20b9a439c68da35f2a0afe7ec710faf532d3d019efb1b670ac`
+   under release-lock hash
+   `0x5acb34a277212ed7c5fe40579837dc5ba4b7a8afffa03c6b81526c6a6a8815e4`.
+   Its authorized launch passed the 1,000/1,000 historical-fleet audit and all
+   2,217/2,217 carried-action checks. `config.render` then failed closed at
+   journal entries 10,021--10,022 because it required `churn-4-hotkey` to be
+   live. It issued no transaction and launched no process.
+
+   The chain was in the exact completed-tournament state already authenticated
+   by the ancestry: challenger fleets 201 and 202 finalized in blocks 7,907,210
+   and 7,907,274 and the tournament barrier verified at journal sequence 9,997,
+   replacing generation-one churn identities 4 and 5. Plan revision already
+   accepted only exact bounded tournament prefixes, but the config-render
+   postcondition still selected the pre-tournament role set unconditionally.
+   It now derives a contiguous challenger prefix from the approved lineage and
+   exact finalized chain state, requires every current contract registration,
+   rejects an out-of-order challenger or premature tournament barrier, and then
+   verifies that complete selected role set against finalized chain state.
+   Adjacent recovery review found a second boundary: if a challenger transaction
+   finalized but the host stopped before its postcondition entry was durable, a
+   source-only replay audited the earlier `churn.register.N` and `config.render`
+   actions before it reached the challenger action that would recover the
+   receipt. The missing churn identity was therefore rejected even though the
+   same approved transaction had installed its exact replacement.
+
+   Recovery now treats only an accepted intent with a transaction identity in
+   the approved plan ancestry as authorization to consider an interrupted
+   replacement; authorization alone never establishes success. Finalized live
+   registration state must independently be either the exact retryable pre-state
+   or exact in-place replacement post-state, and challenger progress must remain
+   a contiguous prefix. The complete topology check then verifies every selected
+   hotkey's coldkey owner. A broadcast/dropped transaction with exact pre-state is
+   retryable, an exact finalized replacement is recoverable, and foreign plans,
+   wrong intents, missing transaction identities, unauthorized live challengers,
+   partial states, out-of-order progress and premature barriers fail closed.
+   Verified actions retain the stronger completed-state path.
+
+   Deterministic regressions cover the original completed-tournament failure, a
+   one-challenger prefix, both sides of the interrupted-transaction boundary,
+   every unsafe adjacent registration-state mutation, missing contract
+   registration, foreign plan/intent/transaction evidence, unauthorized and
+   out-of-order challengers, and a premature barrier; focused normal and race
+   runs pass. An opt-in test authenticated the live 10,022-entry journal and
+   selected the expected 254-role completed-tournament set without making an RPC
+   call. A second read-only live regression reran the complete failed
+   postcondition with the interrupted-transaction hardening and passed in 290.57
+   seconds, proving all 254 controlled roles, 256 unique live UIDs at the
+   approved maximum and runtime manifest
+   `0xf45f8ea5144b738fc3a9cb380a1c0cb3fcca29d5830502d6c7f389a5e1ff7876`.
+   The current-source aggregate then passed: the ordinary simulator suite
+   completed in 174.270 seconds and the complete race suite in 618.426 seconds;
+   both Solidity roots had zero Slither findings, all 145 Foundry tests and
+   4,608 invariant calls passed, the operator PostgreSQL/Redis and all 26
+   Subtensor infrastructure tests passed, and patch hygiene plus the final
+   source-lock recheck were green. The failed candidate is superseded; a clean
+   checkpoint and two-build approval cycle must still complete before relaunch.
+
+   Checkpoint `eaffbfc` was pushed, and two clean public-RPC reconstructions at
+   finalized heads 7,910,949 and 7,910,963/7,910,964 produced the identical
+   2,238-action, 47-ancestor plan
+   `0x55fe00a182ae81d75d1a42dbb603a68cb3d1d59f883edae52d8eb68cfb109917`
+   under release-lock hash
+   `0x38550638e9c75de05b64097ec9005287f98340ee98b2453b9dc81d582290693d`.
+   The authorized launch passed both the 1,000/1,000 historical-fleet audit and
+   all 2,217 carried-action checks. `config.render` then verified at journal
+   sequences 10,023--10,024. The persistent topology failed its zero-restart
+   postcondition because `miner-swarm-5` restarted once; the harness failed
+   closed and was explicitly stopped with its chain state and evidence intact.
+
+   The first swarm process had attempted to provision `miner-201` at the same
+   instant the two production APIs were spawned and failed `set wallet` with a
+   transport timeout before the request reached either API. Both API listeners
+   became ready approximately 150 milliseconds later and then each completed
+   exactly 500 wallet-provision requests with no PostgreSQL or Redis failure;
+   every other service remained healthy and no other process restarted. The
+   root cause was manifest-order startup with no listener-readiness boundary,
+   not API capacity, database load or miner identity data. Adding a wallet retry
+   would have hidden the causal transport fault, so the persistent supervisor
+   now starts both workload RPC proxies and every operator API/Connect listener,
+   requires all of their declared health endpoints within one explicit barrier,
+   and only then starts taskworkers, miner swarms, claim relayers and validators.
+   A failed barrier starts no dependent and an incomplete prerequisite is
+   rejected before any child is created. Deterministic regressions force the
+   original interleaved manifest, readiness failure and missing-health cases;
+   an adjacent test classifies every process produced by the real release
+   builders, and the shared readiness primitive independently refuses missing
+   health metadata instead of silently omitting the process. Focused ordinary
+   and race-detector runs pass. The final aggregate gate also passed end to end:
+   the ordinary simulator suite completed in 173.633 seconds, the complete race
+   suite in 633.969 seconds, both deployable
+   Solidity roots had zero Slither findings, all 145 Foundry tests and 4,608
+   invariant calls passed, operator PostgreSQL/Redis and all 26 Subtensor
+   infrastructure tests passed, and patch hygiene plus the final checkout-lock
+   recheck were green. A pushed checkpoint and twice-reproduced plan remain
+   required before relaunch.
+
+   The next approved replay used plan
+   `0xd750f7dab38a0d85d3421249f5f8197e9e38ac6e2c675bac8ff801987740ae46`.
+   It passed the carried-history and rendered-config boundaries and started the
+   complete prerequisite and workload topology. Unlike the earlier translated-
+   port generation, current miners opened 35 connections to `127.0.1.1:443` and
+   29 to `127.0.1.2:443`; neither used `127.0.0.1`. Both Connect children owned
+   their expected UDP/443 and UDP/53 sockets and their HTTP status endpoints were
+   green, but every client QUIC attempt ended in handshake-no-response and both
+   validators reported no seed providers. No required trail proof was produced.
+
+   A loopback packet capture then observed client QUIC Initial datagrams reaching
+   both exact UDP/443 destinations with no response. Kernel `UdpInErrors`,
+   `UdpRcvbufErrors` and checksum errors remained zero, socket queues drained and
+   the processes stayed alive, proving an application-layer discard rather than
+   routing, firewall, listener, TLS-identity or receive-starvation failure. Source
+   tracing found the first bad invariant: `DefaultExchangeSettings` enables Proxy
+   Protocol for production ingress, both H3 transports wrap their UDP sockets in
+   `PpPacketConn`, and that wrapper intentionally drops the first datagram from a
+   new source when it lacks a Proxy Protocol header. The simulator dials its
+   loopback Connect listeners directly and therefore supplies no load-balancer
+   header. HTTP health cannot observe that UDP-only wrapper. The harness was
+   explicitly stopped at 16:55 UTC; its static user unit is inactive, all 32
+   children are gone, and chain state, journals and evidence remain intact.
+
+   Connect now exposes an explicit direct-H3 loopback mode that disables the
+   Proxy Protocol wrapper only when both the configured TLS identity and actual
+   listener are IPv4 loopback addresses. External/ordinary production listeners
+   retain Proxy Protocol, and API/taskworker runners reject the transport flag.
+   Simulator readiness now requires a real TLS 1.3 QUIC handshake to each exact
+   operator IP using the deterministic simulator CA in addition to HTTP status;
+   an incomplete probe identity or failed transport handshake prevents every
+   dependent workload from starting. Deterministic regressions reproduce the
+   HTTP-green/UDP-dead boundary, prove the real generated CA/IP handshake, reject
+   partial and external identities, retain production Proxy Protocol and cover
+   the existing missing-header drop behavior under the race detector.
+
+   The same probe exposed an adjacent host-capacity warning: the execution host's
+   212,992-byte kernel UDP maxima limited quic-go to a 416-KiB socket although the
+   locked v0.61 transport requests 7 MiB in both directions. This did not cause
+   the zero-response incident—kernel counters and the Proxy Protocol reproduction
+   exclude it—but it would be unsafe under 1,000-miner load. `doctor` now hard-
+   gates both `net.core.rmem_max` and `net.core.wmem_max` at 7 MiB with malformed,
+   missing and one-direction-low regressions. The execution host is set to a
+   16-MiB margin and the warning is absent. Server checkpoint `03d89fc9` and SN
+   checkpoint `6987d60` are pushed. On that exact source lock, the ordinary
+   simulator suite passed in 172.692 seconds and the full race suite passed in
+   636.397 seconds. Both Solidity roots had zero Slither findings, all 145
+   Foundry tests and 4,608 invariant calls passed, all executable server and
+   shared-client packages compiled, the operator PostgreSQL/Redis suites and all
+   26 Subtensor infrastructure tests passed, and patch hygiene plus the final
+   checkout-lock recheck were green. Two independent public-RPC reconstructions
+   then produced the identical schema-v11 plan
+   `0xd5be966c7b2b1183a8e6e4a5a82b423342fe933214d561fd1835c7666be55c6c`
+   under release-lock hash
+   `0x85892b12d4b14ba6b5f7e1469aee24ffddfd3783c23e290104073c1bddd05b2d`.
+   Both contain 2,238 actions and 49 authenticated ancestors, with active maxima
+   of 165,673,232,000 TAO rao, 21,694,306,443,318 alpha rao,
+   148,859,500,000,000,000,000 EVM gas wei and 256 registrations. Their
+   superseded totals are 501,500,000,051 alpha rao,
+   11,140,500,000,000,000,000 EVM gas wei and three registrations; subnet
+   creations remain zero. Both bind coordinator implementation
+   `0xe732c2e6dbced5dcc44d1a5524a8af1343c1e2ef`, deployer nonce 27 and runtime
+   hash `0x4f97f8c8763faaaa5d1b94cad173d542c6572e83141a9ba7ee3c30917d40856b`.
+   The approved clean replay remains.
+
+   The production-binary handshake audit then found a second settings boundary
+   behind the direct-loopback flag. `Run` created an `Exchange` with the
+   simulator's no-Proxy-Protocol and IP-certificate settings, but
+   `NewConnectRouterWithDefaults` constructed a fresh handler-default snapshot.
+   That silently restored Proxy Protocol and discarded the no-SNI TLS fallback
+   before either UDP listener was built. The router now consumes the exchange's
+   exact immutable settings snapshot. A structural regression checks identity
+   and both security-sensitive fields, and a real UDP/QUIC regression sends a
+   headerless Initial through that exchange-to-router handoff and completes the
+   TLS 1.3 handshake. The ordinary external-listener path still requires Proxy
+   Protocol.
+
+   The same launch-scale audit found a distinct resource-ownership defect. Each
+   one-shot provisioning or matchmaking call created a `ClientStrategy`, but
+   cancellation did not synchronously unregister its network-change callback or
+   close its idle HTTP connection. A 1,000-identity provisioning pass could
+   therefore retain one keep-alive socket and callback per completed identity.
+   `ClientStrategy.Close` is now idempotent, cancels its child lifetime,
+   unregisters the callback and closes every idle pool. Every production owner
+   in Connect, the operator latency workload, miner provisioning/claim paths,
+   validator operator runtimes and simulator account provisioning was audited;
+   short-lived owners close directly and live swarm members own independently
+   cancelable child contexts. Real `ConnState` regressions require the exact
+   request connection to become idle and then closed, including the SDK's
+   preliminary `/hello` request.
+
+   Broad race qualification exposed the adjacent completion flaw:
+   `ClientStrategy.parallelEval` launched WebSocket/HTTP attempt goroutines but
+   returned when cancellation was delivered rather than when their dial stacks
+   returned. `PlatformTransport.CloseAndWait` could consequently publish
+   completion while an admitted dial still used strategy state. Parallel
+   workers and the serial strategy-context bridge are now synchronously
+   registered and joined; cancellation remains only the stop request. Exact
+   barriers cover the strategy boundary and the H1 transport boundary. The same
+   qualification closed three test-oracle defects rather than suppressing them:
+   the wallet fixture now models `/hello`, QUIC readiness no longer races a
+   synthetic server close against client authentication, and stream replacement
+   waits for alias activation rather than the earlier index-publication hook.
+   Focused lifecycle regressions pass 500 ordinary and 200 race-detector
+   repetitions; the final broad gate is rerunning before the next plan is
+   eligible.
+
+   The ownership audit then crossed the Connect/SDK boundary. `Api.Close`
+   deliberately remains callback-safe cancellation, but several external
+   owners treated it as completion and released their shared strategy while the
+   JWT refresh worker could still be inside an admitted request. `Api.CloseAndWait`
+   now supplies the external join boundary. Storage-backed `NetworkSpace`
+   generations synchronously join the API and local-state workers before their
+   strategy is released; replacement and removal occur outside the manager
+   lock, stale pointers cannot remove or reselect a newer generation, and a
+   racing update cannot install state after manager close. `SimProvider` joins
+   pending platform dials, client/OOB/NAT workers and its strategy on disconnect
+   or close; `SimClient` similarly joins its bridge, multi-client and generator.
+   The operator latency probe uses the same API join before releasing its
+   one-shot strategy. Exact cancellation/release barriers cover each ownership
+   edge and pass 100 ordinary plus 25 race-detector repetitions on the current
+   source.
+
+   The adjacent SDK audit then found three deeper generations behind that first
+   boundary. A provider policy migration could break a memory-incompatible H3
+   carrier before making its replacement but never join the retired carrier;
+   destination replacement canceled its multi-client without joining either
+   the packet path or generator; and verbose security-policy and device-RPC
+   workers had no owner-visible completion edge. Device and provider shutdown
+   now admit every migration, destination, persistence, monitor, listener,
+   accepted RPC session, reverse callback and HTTP worker before publishing
+   close. Both local and remote devices expose callback-safe cancellation plus
+   an external `CloseAndWait` boundary; late destination, policy and RPC
+   mutation is rejected after close. Exact barriers hold an admitted migration,
+   destination generation, RPC accept, reverse callback and remote dial, and
+   require the corresponding owner to remain live until release. Those
+   regressions pass 50 ordinary and 25 race-detector repetitions on the current
+   source.
+
+   The same ownership walk found one release-critical validator leak and one
+   operator-host leak. Every real validator trail constructed an API
+   multi-client generator, netstack TUN, remote multi-client and packet pump but
+   deferred only non-joining multi-client cancellation. One failed or completed
+   trail could therefore retain discovery clients and buffers for the rest of
+   the epoch. A per-trail owner now cancels, closes the TUN, joins the
+   multi-client and pump, and only then joins the generator; partial
+   construction follows the same path and cleanup errors remain visible. The
+   operator's proxy manager likewise used one lazily shared `NetworkSpace` but
+   neither owned its release nor fenced a device construction racing shutdown.
+   It now rejects late opens, joins every admitted constructor and device
+   worker, closes an internally created shared space after the last borrower,
+   and preserves an injected space as borrowed. Deterministic close-order,
+   partial-construction, admitted-open and borrowed/owned-space regressions run
+   in both ordinary and race gates.
+
+   The first broad proxy qualification then hit Go's ten-minute package
+   deadline. The active prewarm path was not the failure: isolated against the
+   same PostgreSQL/Redis and real SDK tunnel it completed in 19.5 seconds. The
+   timeout dump instead contained thousands of gVisor workers from acceptance
+   tests that had already returned. Their harness canceled a shared context and
+   launched manager joining on an unobserved goroutine, so sequential tests
+   accumulated retiring netstacks and competed with later cases. Harnesses now
+   join the primary, replacement and fallback managers while Connect remains
+   available for final contract cleanup, then close the Connect halves. Three
+   consecutive prewarm/deploy-overlap pairs passed in 132.6 seconds with that
+   exact teardown, and the pair passed under the race detector in 47.9 seconds.
+
+   The repaired full-package qualification then reached Go's implicit
+   600-second deadline after 62 passing roots. This second dump narrowed the
+   remaining residue to one completed WireGuard acceptance client: its close
+   function stopped the userspace WireGuard device and packet bridges but not
+   the gVisor stack, leaving the TCP dispatcher and its per-CPU workers live.
+   The client owner now closes idle HTTP endpoints, cancels and joins both
+   bridges, and calls the stack's `Close` plus `Wait`; the surrounding harness
+   also joins its provider transport, NAT, client, out-of-band control and
+   strategy before Connect shutdown. A live-TCP-endpoint dispatcher regression
+   passes 50 ordinary and 25 race-detector repetitions.
+
+   This run also made the timeout budget independently measurable: completed
+   root durations already summed to 591.4 seconds before 13 unchanged tests
+   remained, so the package cannot fit the implicit ten-minute deadline even
+   with zero residue. The managed gate now runs the complete, unchanged proxy
+   selection with an explicit 20-minute deadline. The exact full-package
+   qualification passed all 75 roots in 682.719 seconds, including both real
+   prewarm paths, restart/recreation coverage and the final window-identity
+   end-to-end case. The complete proxy suite is mandatory in the managed gate.
+
+   A full SDK run exposed why the older token tests could still hang despite
+   correct production cancellation: the fixture counted a logical API action as
+   one wire request, although the SDK first sends `/hello` and a refresh can
+   legitimately have parallel wire attempts. Extra handlers blocked forever on
+   a fixed-capacity observation channel while `httptest.Server.Close` waited.
+   The shared fixture now handles `/hello`, classifies refresh generations by
+   the Authorization token, gives all parallel attempts the same deterministic
+   response and owns complete API/strategy teardown. Twenty-repeat focused
+   runs and the subsequent 445.342-second discovery suite passed. After every
+   adjacent generation, monitor and RPC ownership fix, the exact-source suite
+   passed again in 444.088 seconds. The exact-source full race qualification
+   then passed in 463.189 seconds with no race or test failure.
+
+   The first complete SN rerun exposed the same wire-versus-logical-request
+   assumption in the adjacent client-auth bootstrap fixture: it treated the
+   SDK's legitimate `/hello` discovery as `/network/auth-client`, returned an
+   auth payload on the wrong route and failed its own path oracle. All three
+   bootstrap/refresh/rejection fixtures now model discovery explicitly and
+   fail closed on unknown routes. The complete package passes 100 ordinary and
+   25 race-detector repetitions. The subsequent exact-source full SN run passed
+   every package, including the 231.267-second launch-scale simulator suite,
+   with no additional failure.
+
+   The server model shards independently found an exact persistence-domain
+   mismatch: a just-created Go timestamp retained nanoseconds while PostgreSQL
+   returned the same value at microsecond precision. Equality checks in balance
+   and tier-transfer tests therefore depended on the final three host-clock
+   digits. `NowUtc` now canonicalizes UTC timestamps to PostgreSQL precision,
+   with a deterministic timezone/sub-microsecond boundary regression. The three
+   formerly failing DB tests pass. All four exact-source model shards
+   subsequently passed, covering all 527 root tests. The complete controller
+   suite then passed in 1,813.685 seconds with no failed root.
+
+   The final Server rebase also incorporated three backup/ingester monitor
+   changes from upstream. The complete source-current monitor package passed
+   in 3.441 seconds and its race-detector qualification passed in 49.358
+   seconds; the refreshed Server source digest is release-locked.
+
+   The source-current Connect qualification then found one Pion ICE task loop
+   after otherwise successful WebRTC roots. The first repair made all test and
+   benchmark manager constructors register a bounded `closeAndWait` cleanup at
+   construction; a Go-AST regression rejects any future raw test constructor.
+   Repetition isolated the remaining production race to
+   `TestWebRtcCanceledPeerReleasesAdmissionWhileSignalSendIsBackpressured`:
+   admission teardown intentionally did not wait for a synchronously blocked
+   signal sender, so `Run` could pass its cancellation check, physical teardown
+   could close the PeerConnection, and startup could subsequently call a lazy
+   Pion mutation that created an ownerless ICE task loop. Once this interleaving
+   won, the loop remained live for minutes and later repetitions accumulated
+   more loops.
+
+   Each bounded Pion mutation now takes one defer-safe lifecycle owner shared
+   with teardown. Blocking signal sends and setup hooks remain outside it, every
+   mutation rechecks cancellation under the owner, fast-path publication can
+   still be retired promptly, inbound signaling uses the same Pion-then-signal
+   lock order, and teardown closes the callback gate itself. The deterministic
+   startup/teardown barrier regression and the formerly flaky adjacent set
+   passed 50 race repetitions in 111.533 seconds. On the exact final source,
+   `go vet ./...` passed; all packages passed normally in 618.966 seconds; and
+   the exhaustive A--F, G--N, O--R and S--Z race shards passed in 419.245,
+   317.587, 272.519 and 541.829 seconds respectively. The S--Z shard includes
+   the package-final process residue assertion. Connect commit `a177b57` is
+   pushed and its refreshed production source digest is release-locked.
+
+   The source-current restart preflight on 2026-09-02 authenticated the
+   attempt-4 journal and all 256 live UIDs, with zero remaining registrations.
+   A fresh-state doctor invocation correctly rejected the now-full subnet; the
+   authoritative `--state-dir` doctor passed all 60 checks, with only the two
+   declared public-provider independence caveats. Its first plan revision then
+   failed before signing because active plus superseded alpha reservations
+   exactly consumed the 22,250-alpha ceiling while current emission required a
+   further 148.258523160 alpha to restore the 65% reserve-validator target.
+   Finalized source facts showed 8,825.368688789 alpha transferable and a
+   mandatory 2,000-alpha remainder. The testnet-only cumulative ceiling is now
+   28,250 alpha: the planner allocates one exact fixed 3,000-alpha repair,
+   retains a second 3,000-alpha tranche, and still leaves more than the required
+   source remainder. A deterministic superseded-spend regression reproduces
+   zero capacity, proves the first bounded repair and proves the second tranche
+   remains.
+
+   The same qualification found two adjacent aggregate-gate defects before
+   launch. The gate self-audit required the canonical event-batch regression by
+   exact name, while the script used only a broad prefix; after making both the
+   complete-batch and incomplete-batch names explicit, they were initially
+   classified in the environment-free suite and failed with `WARP_ENV not set`.
+   Both database-backed tests now run only after the isolated local
+   PostgreSQL/Redis exports, and an ordering regression prevents either from
+   moving back into the pure section. The environment-free controller selection
+   passes, both event-sync tests pass normally and under the race detector with
+   the managed database profile, and the complete aggregate gate passes.
+
+   The historical source-freeze qualification on 2026-09-02 then completed the full
+   aggregate again: the ordinary 1,000-miner simulator suite passed in 179.823
+   seconds, its race suite passed in 664.973 seconds, both deployable Solidity
+   roots had zero Slither findings, all 156 Foundry tests passed with 4,608
+   invariant calls, the managed controller/model/proxy suites passed in
+   139.371/140.573/529.355 seconds, and all 35 Subtensor infrastructure tests
+   passed. The last test-only filter/profile assertions also passed normally and
+   under the race detector. A subsequent `go vet` delta caught an unsafe copy of
+   the mutex-bearing standard-library resolver in the new ICE cancellation
+   boundary. The implementation now constructs a fresh resolver policy around
+   the original dial function; ten deterministic normal and race repetitions,
+   the teardown integration regression, and `go vet ./...` pass. Focused
+   controller and model database race reruns passed in 151.097 and 155.491
+   seconds respectively. These deltas are now permanent aggregate-gate inputs.
+
+   A prelaunch parallel timing audit then found that both release watchdogs
+   budgeted the accepted epochs and terminal finalization but not the wait from
+   the post-preparation observation to the next complete epoch boundary. A run
+   beginning more than ten blocks from that boundary could therefore time out
+   despite correct chain progress. The release watchdog now includes one full
+   300-block boundary allowance and the production watchdog one full 360-block
+   allowance; deterministic start, midpoint and final-block offset regressions
+   prove both worst cases. This changes no accepted block, fault, settlement or
+   adversarial requirement. Focused ordinary and race tests and `go vet` pass.
+   The repeatable gate also now selects the exact keyed-egress namespace,
+   fixed-window rate-limit and fail-closed optional payment-credential
+   regressions which explain the historical seed/429 and background Stripe log
+   signals. Those regressions pass normally and under the race detector in
+   their appropriate isolated database profile.
+
+   The resulting authorized launch reached the real topology on 2026-09-02. It
+   reverified all 1,000 historical miners and all 2,220 carried actions, reran
+   the isolated PostgreSQL migrations and account provisioning, started that
+   historical generation's 33 managed child processes, and required a fresh
+   completed path proof from each
+   validator through each operator. `topology.launch` was durably verified at
+   journal sequences 10,039/10,040. The next non-transactional step then failed
+   because the fixed `public.json` pointer treated changed config, policy, plan
+   and release-lock hashes as an unrelated deployment even though its old plan
+   is an explicit ancestor of the approved current plan. No additional chain
+   transaction or spend occurred. The harness was stopped explicitly; an audit
+   found no surviving workload, listener or temporary-process owner, while the
+   expected no-restart PostgreSQL/Redis containers remained available.
+
+   That failure now has a lineage-safe revision protocol. A changed public
+   manifest requires a different current plan whose `PriorPlanHashes` contains
+   the exact old plan; a same-plan mutation, unrelated lineage, chain/genesis/
+   netuid/deployment change, missing predecessor or tampered predecessor fails
+   before the current pointer changes. Revisions link the SHA-256 hash of the
+   prior canonical manifest, preserve its exact bytes, preserve superseded
+   operator-signed envelopes by content hash, and archive/remove old active
+   locators before advancing `public.json`. New locators bind the exact manifest
+   hash and revision and appear only after every operator publication and public
+   history readback succeeds. Legacy pre-fix manifests have an absent/zero raw
+   `revision` field (their effective lineage ordinal is one) and retain their
+   original canonical bytes. They are archive/lineage evidence only, never the
+   final discovery pointer; `FINAL.md` and clean-checkout locators must cite the
+   latest authorized strict-format revision. Deterministic tests cover legacy
+   migration, replay byte-idempotence, ordinary evidence
+   immutability, partial-retry history, same-plan/unrelated-plan rejection,
+   locator completeness, and predecessor tampering.
+
+   The same stopped-boundary audit found a process-inventory drift that would
+   have blocked the legitimate attempt-4 revision. The policy-migration
+   verifier retained a hand-written two-proxy count from before the dedicated
+   public EVM egress quota owner was added; the real supervisor manifest has 33
+   managed children, not 32. A count-only correction would still have accepted
+   a self-consistent manifest with a substituted process. The verifier now
+   projects the exact ID/role/identity set through the real server and client
+   process builders and requires an unordered, duplicate-free exact match
+   before authenticating stopped state or its receipt. Deterministic normal and
+   race regressions use the real 33-child manifest and reject a deleted
+   Substrate proxy, same-count replacement ID, and role or identity
+   substitution. An adjacent parity regression proves the rolling restart lane
+   is exactly those 33 children minus only the intentionally non-faulted public
+   EVM egress process; both workload RPC proxies remain faulted.
+
+   The adjacent detached-process ownership defect is also closed. Launch checks
+   both the kernel process generation and held supervisor lock before migrations
+   or temporary provisioning, refuses a pre-existing live generation with an
+   explicit stop-required error, and marks ownership only after proving none is
+   live. If any later detached step fails, a bounded background cleanup stops
+   only the supervisor started by that invocation and preserves chain state;
+   cleanup errors are joined to the causal error. Tests cover live generation,
+   PID reuse, lock-only startup, success, adopted/non-owned state, cleanup
+   failure, and failure before the first supervisor state write.
+
+   Finally, all 20 miner swarms reported quic-go's receive-buffer warning even
+   though host `rmem_max`/`wmem_max` are 16 MiB. The exact 640 KiB observation is
+   intentional: Connect caps each 20-MiB simulated device's H3 socket request to
+   320 KiB and Linux reports twice that value. Raising every one of 1,000 device
+   buffers to quic-go's 7 MiB request would defeat the bounded-memory topology.
+   Only miner and validator processes using that capped Connect transport now
+   set quic-go's supported warning-suppression environment flag; operator,
+   server, proxy and relayer processes retain the warning and the 16-MiB host
+   gate. A Connect regression pins the 7-MiB-to-320-KiB clamp and a complete
+   process-manifest regression proves the suppression cannot spread to an
+   uncapped role. TLS, packet, peer-budget, proof-readiness and restart signals
+   remain independently release-fatal; suppression changes no such outcome.
+
+   A subsequent forensic pass found that the prior release evidence never read
+   the supervised processes' stdout/stderr files. A healthy PID and API could
+   therefore coexist with an unreported panic, fatal line or repeated transport
+   error. Launch now fences every manifest-owned log by device, inode and byte
+   offset before temporary provisioning, binds that inventory to the exact
+   supervisor PID/start generation, and scans it during readiness, topology,
+   publication and every scenario observation. The persisted gate rejects a
+   missing, replaced, truncated, overlong or overrun log and commits every
+   scanned byte through a domain-separated 64-KiB SHA-256 chain with explicit
+   byte/line counts. Its final scan commits the partial digest chunk and rejects
+   an unterminated tail rather than classifying a split line. Unknown warning,
+   error and fatal severities fail closed. Only narrowly classified lifecycle or
+   resilient-fallback information is nonblocking, while expected injected-fault
+   errors require the exact active target/impact and fault ID; panic/fatal and
+   integrity findings can never be attributed away. The complete state and
+   aggregate findings are retained as `process-logs.json`, blocking findings
+   enter the anomaly ledger, and both release scenarios refuse a nil or stale
+   gate. Deterministic tests cover partition/reload equivalence, all integrity
+   failures, launch-boundary inclusion, generation changes, fault apply/restore
+   ordering with no post-restore grace, final-publication races and normal/race
+   execution.
+
+   Public acceptance is also two-phase. Deployment envelopes remain candidates
+   until a fully validated locator directory is written after the clean log
+   scan; revision, predecessor, operator URL, content hash, signature and
+   crash-recovery archives are all checked before that pointer can advance. A
+   signed scenario bundle is likewise not a public pass by itself. The owner
+   signs a completion record binding the final result, exact bundle payload and
+   immutable local file hashes only after the final scan. The simulator wraps
+   that owner record in each operator's artifact signature, writes it directly
+   through `server.BlobStore`/`startifact` to that operator's rendered isolated
+   MinIO prefix, and reads both content-addressed content and history objects
+   back; no supervised API request occurs after the final scan. Only after all
+   replicas verify does the local completion marker become visible. Independent
+   readers require the byte-identical nested owner commitment at every operator
+   and ignore orphaned or partially published candidates. Advancing-clock,
+   tamper, zero-supervised-API publication, direct-store failure, partial-replica
+   and mid-archive recovery regressions pin these commit semantics. Those
+   signed, content-addressed, fail-closed semantics are the required WHITEPAPER
+   1.0 simulation boundary; they do not by themselves claim storage-level WORM
+   durability against an operator credential or storage administrator.
+
+   **Operator investigation/action — open and required before mainnet durable
+   evidence promotion:** the current shared `blob` bucket was provisioned
+   without object lock, versioning or a validated replication destination, and
+   its service policy permits deletion. The configured testnet credential also
+   cannot perform the protection queries required by
+   `server.ProtectedBlobStore.CheckProtection`. Because MinIO object lock must
+   be selected when a bucket is created, this existing bucket cannot be
+   retrofitted into the required WORM archive. Operators must provision a new
+   lock-enabled, versioned and replicated evidence bucket with a delete-free,
+   least-privilege policy; wire both public readers and direct publishers to it;
+   retain and exact-version-read-back both startifact content and history
+   objects (including the committed scenario bundle); and add a hard doctor
+   protection check before any campaign begins. This infrastructure migration,
+   retained-publication API and live protection proof remain incomplete and are
+   a mainnet-promotion gate, not a completed testnet result.
+
+   That scan separated three causal transport problems which the earlier PID/API
+   checks had hidden. First, all 27 validator `exit could not create contract`
+   errors followed successful contracts and occurred on teardown before a stream
+   ID existed. Connect now carries the exact result out of contract acquisition:
+   a cancellation is V(1) lifecycle telemetry, while a budget exhaustion remains
+   an error even if cancellation races after the decision. Deterministic barriers
+   cover both ordinary and logical-group paths and the decisive race. Second,
+   2,364 of 2,371 fixed 60-second TLS timeouts mapped exactly to ephemeral
+   validator `PostVerify` clients. Providers advertised opportunistic encryption
+   while those clients used encryption-off defaults, so provider return sequences
+   retained an impossible handshake after the plaintext proof completed. Every
+   derived validator tunnel now gets fresh opportunistic responder settings,
+   certificate and identity material, preserving plaintext fallback while making
+   both ends capability-symmetric; validator normal and race regressions pin that
+   boundary.
+
+   Third, the carrier trace reconciled 998 H3-family attempts: all 986 direct-H3
+   and four locally translated H3DNS attempts reached their intended operator,
+   while all eight H3DNSPump attempts incorrectly used the production
+   `whodis.bringyour.com` pump for a simulator-only `127.0.1.x` ingress and none
+   reached the local server. Each provider-swarm member now pins its pump host to
+   the same provisioned operator ingress as its loopback Connect URL; validation
+   rejects an implicit, public or different loopback pump unless that relay is
+   actually provisioned. The paired informational packet-read timeouts were the
+   deadline wakeup quic-go uses to close packet translation, not a second failed
+   request. Packet translation now returns the standard `net.PacketConn` deadline
+   and closed errors in every immediate and timer-driven read/write path and keeps
+   close wakeups below operational INFO severity. Finally, operator Connect
+   construction no longer substitutes an empty TLS loader and reports UDP ready
+   after certificate initialization fails: production startup returns the causal
+   error before any listener goroutine exists. Focused real-DNS-pump, loader
+   failure/success, deadline/close and race regressions make each distinction
+   executable. The clean replay must nevertheless demonstrate successful pump
+   traffic and zero unexplained process-log finding; these fixes are not waivers
+   for a carrier failure.
+
+   The 2026-09-02 22:06 UTC replay was also rejected rather than credited. Its
+   fenced process-log gate found eight fresh fixed-60-second TLS handshake
+   timeouts across four miner swarms. A cross-generation forensic join found 50
+   such timeouts across 12 of 20 swarms: all 50 remote client IDs belonged to
+   prior one-shot validator generations, and 24 current miners had received an
+   obsolete Redis stream route. The operator databases still held 16,967 open
+   contracts from stopped generations. Provider startup preceded taskworker
+   maintenance, `newContract` accepted durable but inactive clients, and stream
+   listeners republished Redis hops without checking durable client activity.
+   The 704 contemporaneous peer-budget refusals were downstream pressure from
+   that stale fanout, not evidence that the intentional eight-peer cap was too
+   small. No M1/M2/M3 epoch is credited from this run.
+
+   The correction is at every ownership boundary. Contract admission now
+   requires active source and destination identities and returns terminal
+   `NoPermission` for a removed identity; active but temporarily disconnected
+   identities remain eligible. Production stream snapshots batch-check the
+   owner and both adjacent identities, atomically prune inactive Redis members,
+   advance the event version and re-read so a concurrent valid add is retained.
+   Every force-close branch, including dispute, direct settlement and malformed
+   quarantine, now verifies PostgreSQL terminal state, removes the Redis stream,
+   aggregates any returned error or panic and fails the cleanup. Open/dispute
+   scan races are deduplicated and zero worker parallelism is rejected.
+
+   Before starting any listener or client, the supervisor now runs that real
+   server/model cleanup under each operator's rendered environment with a fixed
+   pre-start cutoff and requires a separate empty pass; a partial or canceled
+   attempt cannot certify convergence. Taskworkers join the prerequisite health
+   barrier. Shutdown is consumer, provider and infrastructure ordered, with 10,
+   30 and 10 second bounds. Children are detached from the supervisor context
+   only until that explicit sequence completes and retain a kernel parent-death
+   signal as the crash backstop. The user unit uses `KillMode=mixed` and a
+   60-second bound so systemd initially signals only the supervisor and reserves
+   cgroup SIGKILL for the final backstop. It uses `Restart=no`: an integrity or
+   pre-start cleanup failure remains visible until an explicit resume instead of
+   being overwritten by a second automatic cleanup. In-memory process-group
+   signals bind PID, group, start ticks, executable and argv; an out-of-process
+   supervisor stop uses a pidfd after rechecking start ticks, and never signals
+   persisted child PIDs. Deterministic normal/race regressions cover the original
+   stale stream, both hop orientations, active-disconnected eligibility, every
+   force-close branch, empty-pass/cancellation/nonconvergence, parent death,
+   phased/systemd shutdown and exited or reused generations.
+
+   The pre-freeze host audit also found that the installed but inactive user
+   unit predated that source correction and still declared
+   `Restart=on-failure`. No workload was running and the unit had no install
+   symlink or reverse dependency. It was reconciled in place to the current
+   source contract (`Restart=no`, `KillMode=mixed`, `TimeoutStopSec=60`), then
+   daemon-reloaded, stopped and re-observed as static/inactive with zero PID and
+   zero restarts; user lingering was disabled. The four retained PostgreSQL and
+   Redis containers independently declare `restart=no`. Final doctor and launch
+   must re-render and reauthenticate this state, so host configuration drift is
+   evidence to close rather than a reason to assume the checked-in unit was
+   deployed.
+
+   Final publication is now a closed, public evidence graph rather than a signed
+   summary that trusts the producing host. Exactly one semantic evidence object
+   binds the deployment, plan, config, policy, fixed 1,000-miner/202-fleet/
+   200-slot/two-validator/two-pool topology, complete acceptance window and
+   terminal finalized heads. Its recursive owner-signed manifest contains every
+   referenced receipt and artifact on both operator replicas. A secretless
+   analyzer retrieves and rehashes the entire graph, then repeats exact
+   block-pinned Substrate storage/metadata/extrinsic/weight/balance reads and EVM
+   receipt/log/code/ERC-1967/owner/policy/entitlement/reserve calls. It records
+   canonical JSON parameters and raw results in a sealed transcript and refuses
+   to render `FINAL.md` without that replay. This prevents a current-head read,
+   mutable local database or simulator assertion from becoming the trust root.
+
+   Immediately before that replay, a frozen-source planning pass used two
+   byte-equivalent read-only plans at
+   `0x752e814e12c3bcf833a33d0ced064fd5e51726a54ebc1888d3c731676a8e748d`,
+   passed all 59 hard doctor checks, reauthenticated 1,000/1,000 historical
+   miners and completed 2,221/2,221 carried-action audits. It then stopped before
+   any new transaction or process start because the previous stopped
+   `topology.launch` receipt was incorrectly classified as durable live state:
+   the carried audit required `ready=true` before `LaunchDeployment` was allowed
+   to recreate the intentionally stopped supervisor. Topology readiness is now
+   explicitly plan-generation-local. An ancestor receipt is still hash/path/
+   identity-authenticated as historical evidence, but it cannot satisfy the
+   active plan's dependency or enter the carried-live cache; launch must pass the
+   current binary, PID/start-generation, child, fresh-proof and process-log gates
+   before writing a current-plan topology receipt. Same-plan reboot/resume keeps
+   its existing terminal receipt but revalidates the newly live supervisor.
+   Adjacent policy-revision authorization now also authenticates the exact
+   topology and tournament receipt files rather than trusting stage labels;
+   missing, tampered, wrong-identity and duplicate boundary evidence fails
+   closed. Deterministic ordinary and race regressions reproduce the stopped
+   ancestor failure, protect durable carried actions, block every post-topology
+   dependency until current verification, and cover stopped/live/wrong-manifest
+   same-plan resume. The complete isolated PostgreSQL/Redis release selection
+   also passed during this diagnosis, including controller/model normal and race
+   suites and the 541.521-second full proxy suite.
+
+   The rendered simulation operator profile does not currently enable the
+   optional general-stats HMAC export or Grafana push path. Both are safe no-ops
+   and are separate from release-critical `/verify/stats`, proof, process and
+   anomaly evidence, so this does not weaken M1-M3. It remains an explicit MR
+   observability item to configure and exercise before declaring mainnet-ready.
+
+   The prelaunch critical path is now explicitly split from post-capture
+   analysis. `scripts/test-release-1.0-producer-gate.sh` is the bounded launch
+   gate: it compiles the complete validator/simulator graph and runs normal and
+   race regressions for signed attempt checkpoints, terminal cuts, atomic
+   settlement transitions, exact binding and deposit evidence, measurement
+   envelopes/intents, lossless capture, terminal process-log fencing, direct
+   artifact publication, operator proof APIs, PostgreSQL/Redis persistence and
+   the deployable contracts. It finishes by rechecking patch hygiene and the
+   exact release lock. The complete aggregate gate remains mandatory once on
+   the same immutable checkout, but may run concurrently with live acceptance
+   after this producer fence; any failure invalidates the candidate. `doctor`,
+   two approval-identical read-only plans and the approved plan/spend hash
+   remain immediate launch prerequisites. Raw diagnostic JSON may differ only
+   in the explicitly unapproved generation time and finalized observation
+   checkpoints as the live chain advances.
+
+   A passing live phase now ends after all live-only inputs have been collected,
+   content-addressed, strictly reread, secret-scanned, fenced by the terminal log
+   scan, replicated to both operator archives and bound by an owner-signed
+   `capture_closed` completion. Building the typed semantic object, replaying
+   pinned public Substrate/EVM reads, sealing the transcript and rendering
+   `FINAL.md` are read-only, resumable `semantic_verified` work. They run from
+   the frozen graph while the next live acceptance window is progressing; they
+   no longer keep the network idle. A failed or missing analyzer result remains
+   release-fatal, is surfaced to the running campaign stop/error path, and both
+   phases must reach `semantic_verified` before final testnet acceptance. The
+   asynchronous handoff is a separate owner-signed supplement: it binds the
+   exact original `scenario-complete` content hash, result and run, capture and input
+   manifests, semantic/transcript hashes, and an owner-carried envelope for
+   every derived JSON/report byte. File envelopes are replicated and read back
+   from every operator store before the supplement is published or the local
+   commit marker can appear. Resume reuses immutable staged envelopes; a
+   crash-left half of the output pair is content-addressed into quarantine and
+   regenerated only from the closed capture. Lock waits honor campaign
+   cancellation. Public discovery and object-store construction use the
+   captured public/deployment/runtime manifests and exact captured credential
+   digests, never mutable `public.json` or runtime-manifest pointers belonging
+   to preparation of the next phase. The full
+   `scripts/test-release-1.0-local.sh` suite also remains mandatory for the
+   final acceptance record. This scheduling change removes no evidence, epoch,
+   adversarial vector, finality wait or mainnet gate; it only moves work which no
+   longer needs a live service behind the immutable capture boundary. The target
+   prelaunch implementation/gate interval is therefore approximately two to
+   four hours rather than four to seven hours.
+
+   The final evidence-integrity audit then found that the public verifier could
+   query broad history and accept a matching hash substring from an unrelated
+   or fanout page, while direct publication listed an entire storage prefix.
+   It did not bind the signed run, canonical history key, pagination closure and
+   exact object together. The corrected path uses query-complete bounded
+   deployment/artifact locators, exact one-object evidence lookup and strict
+   paged artifact traversal. It also rejects duplicate semantic-supplement
+   hashes before object fetch. The originally generated public `analyze`
+   command omitted its now-mandatory run ID; current manifests include the exact
+   `--run-id`. Exact signed pre-fix manifests are admitted only as one coherent
+   immutable legacy generation for lineage, never mixed with current locators.
+   Same-plan resume retains their bytes, while a release-lock change forces an
+   authorized plan revision and publishes a new strict-format manifest before
+   any final evidence locator is cited. Deterministic tests cover foreign
+   origins, added query keys, mixed generations, tampered predecessors,
+   pagination/cursor/scope drift, duplicates, restart retention and revised-plan
+   migration.
+
+   The final pre-freeze proof audit also removed three ways a plausible report
+   could outrun its chain evidence. Native replay now binds the exact signed
+   call, extrinsic index/hash, event phase, CRv4 lineage and parent-to-reveal
+   stake/reward transition. Historical EVM replay reads coordinator
+   implementation/runtime, operator version, epoch deposit, reserve principal,
+   vault carry/credit/claim state and exact `ClaimPaid` payload at each recorded
+   block. A terminal fleet census reconstructs every ordinary validator cycle,
+   generation and selected/rejected top-200 membership instead of sampling only
+   adversarial transitions. Deterministic fixtures cover successful selected
+   rewards, zero-weight rejected claimants, lifecycle membership at payout time,
+   dishonest deposit penalties, receipt/event substitution, backdating and
+   ambiguous UID ownership. The complete launch selector explicitly names the
+   lifecycle fixture families and a static regression prevents another
+   coverage omission.
+
+   During that audit, two over-broad local source-formatting operations damaged
+   reviewed Go files and were detected before commit. All executable bytes were
+   recovered from independently checked snapshots/edit history and requalified
+   normally and under the race detector. Both release gates now run the new
+   AST-based `sim-testnet/sourceguard` before compiling the simulator: every Go
+   file must remain package `main`, and the characteristic top-level
+   function/type/value rewrite to `self` is rejected while legitimate `self`
+   receivers remain valid. This is a deterministic guard for the root cause,
+   not a waiver for source review; remaining declaration cleanup is manual and
+   the final freeze must be rebuilt from the clean pushed tree.
+
+   A later independent adversarial pass rejected that dirty candidate before
+   freeze. It found that payout artifacts were not yet one-to-one joined to the
+   operator, canonical payout coldkey, signed provider snapshot, measurement
+   window and reliability floor; runtime hashes were compared only with the
+   evidence that declared them rather than the decoded plan and release lock;
+   terminal ordinary-fleet state omitted the setup generation history; and the
+   bounded producer selector did not pin its complete executed-test census.
+   These are release blockers, not report caveats. The corrected design keeps
+   the operator's whitepaper authority to choose its payout split, but binds
+   every row and leaf to the complete independently audited provider snapshot.
+   It anchors all deployed roots and upgrade identities to a content-addressed
+   canonical release lock plus approved plan, proves generation 1 to 2 for all
+   200 setup fleets and the separate challenger/lifecycle branches totaling
+   202, and makes the producer fail on any added, missing, renamed or zero
+   selected semantic test. No live mutation may precede those fixes and frozen
+   reruns.
+
+   A read-only public-testnet lifecycle preflight on 2026-09-03 found and
+   failed closed on a stale role assumption before any mutation: churn
+   identities 1--5 had already been consumed by setup replacements, while the
+   original fleet-5/fleet-6 identities remained live and therefore could not
+   serve as the intended runtime-452 victims. At finalized native block
+   7,922,728 (`0x246be86072be5624a6425e483b24da7f536692a55c386c346e9cc074446beec9`),
+   the complete census instead bound churn-6 to UID 7, churn-7 to UID 8 and
+   churn-8 to UID 9 with their exact owners. The pinned runtime ordering chose
+   churn-6/UID 7. UID 1 was neither immortal nor immune and had zero emission,
+   but it was the subnet's only non-immune UID while
+   `min_allowed_uids=10`; runtime-452 therefore protected it through the
+   minimum-non-immune floor and selected the oldest zero-emission immune row.
+   The root cause was treating originally reserved role numbers as persistent
+   live slots instead of authenticating their current UID/owner and the full
+   prune-order input set. The corrected M2 lifecycle rejects every non-live or
+   shifted role map, records the exact finalized prune inputs, uses
+   churn-6/churn-7 as the two provider identities, churn-1 as the approved
+   fallback and churn-8 as the terminal victim, and replays three plan-bound
+   registrations plus cleanup, commitment, mirror and binding receipts. A
+   deterministic regression covers the observed already-pruned role map and
+   adjacent UID, owner, ordering, immunity and minimum-floor drift. This
+   pre-campaign anomaly is resolved in code but remains part of the final
+   zero-anomaly/root-cause dossier.
+
+   A subsequent producer/capture audit found a second prelaunch lifecycle
+   defect before launch: the first lifecycle schema and fixtures used the EVM
+   settlement-epoch number as though it were Subtensor's native subnet-epoch
+   number. Those are intentionally independent clocks under section 5. Six
+   synthetic `E1`--`E6` validator censuses therefore appeared to fit inside a
+   `5 * 300 + 150`-block release window even though a tempo-360 subnet can
+   produce only four or five native decisions in that interval. Worse, a
+   generation installed in settlement epoch E5 becomes binding-effective in
+   E6; a CRv4 intent made after that activation has a one-native-epoch reveal
+   delay and cannot be guaranteed to apply during the remaining 150 blocks.
+   A public read at finalized native block 7,923,210 confirmed runtime spec
+   452, native subnet epoch 1,226, `tempo=360`,
+   `reveal_period_epochs=1`, last epoch block 7,923,131 and predicted next
+   reveal block 7,923,491.
+
+   The correction keeps those real protocol parameters. Lifecycle evidence
+   carries distinct `settlement_epoch` and `subnet_epoch` domains and records
+   every applied decision in the covered interval. The composite campaign
+   requires four ordered, finalized native milestones: takeover rejected,
+   fallback active, restored provider active and terminal generation active.
+   Each mutation follows the preceding applied milestone; its binding and
+   payout eligibility use the actual settlement epoch observed at execution,
+   never a fixed synthetic offset. `release-1.0` may close only after its five
+   complete settlement epochs and terminal finalization. Reaching the release
+   handoff additionally requires the first three causal native milestones and
+   a finalized terminal binding. Their conservative runtime-454 bound from the
+   release acceptance start is
+   `3 * (reveal_period_epochs + 1) * tempo + 3 * 100 = 2,460` blocks. If that
+   work is not complete at the fixed 1,650-block terminal, `release-1.0`
+   continues through a separately labeled release-handoff evidence tail of at
+   most 810 blocks. The two lifecycle filters and adversarial campaign remain
+   active until their evidence-driven restoration in that tail; neither those
+   tail blocks nor their restoration are reported as accepted-epoch coverage.
+   All other release faults retain their original acceptance-window bounds.
+
+   Before making any production mutation, `production-soak`
+   must authenticate the exact owner-signed release result, completion and
+   handoff bytes named by its durable attempt record; it may neither discover a
+   newer release dynamically nor replace its run ID after cancellation or
+   failure. It then resumes that exact plan/journal-bound, append-only lifecycle
+   and must capture the later terminal-active native decision before the
+   composite `release-candidate` can pass.
+
+   The fixed accepted-epoch geometry is exactly 1,650 release blocks
+   (`5 * 300 + 150`) plus 1,260 production blocks (`3 * 360 + 180`), or 2,910
+   blocks. That is not the complete command-to-terminal interval: release
+   boundary alignment and its authenticated native handoff produce
+   1,743--2,760 scheduler-controlled blocks, while production alignment and its
+   fixed terminal produce 1,261--1,620. The combined exact range is therefore
+   3,004--4,380 blocks, or 10:00:48--14:36:00 at 12 seconds per block. A
+   discarded partial epoch and timeout headroom are not accepted evidence.
+
+   The inclusive EVM evidence deadline is
+   `max(acceptance_terminal_block, native_application_deadline_block)`; native
+   application and EVM evidence retain independent bounds. Release may have a
+   bounded native-handoff tail when its native deadline is later. Under the
+   pinned production profile the native deadline is no later than start+820 and
+   the terminal is start+1,260, so production's EVM deadline equals its terminal
+   and there is no production post-acceptance tail. This overlaps as much of the
+   unavoidable CRv4 wait as possible with the mandatory production window
+   without silently shortening tempo, reveal delay or acceptance.
+   Deterministic regressions use deliberately different counters and phases and
+   reject missing, duplicate, stale-snapshot, reused-UID, ambiguous-owner,
+   handoff substitution, fresh-run-ID rebinding, pre-authentication mutation,
+   adverse phase alignment and overrun of the calculated tail bound.
+
+   Once the producer gate and live replay are clean, `release-1.0` discards its
+   post-preparation partial epoch, observes five sequential 300-block epochs
+   (approximately five hours), and waits through their terminal finalization.
+   `production-soak` then schedules the 360-block policy and observes its
+   future-effective boundary, discards the
+   partial epoch containing the first observation, proves three complete
+   approximately-72-minute epochs, and waits through the final 180-block
+   settlement window. Adversarial actors overlap both happy paths and the
+   possible release-handoff tail. The exact scheduler-controlled interval is
+   10:00:48--14:36:00 at the pinned 12-second cadence, excluding preparation,
+   asynchronous semantic work and any root-cause rerun.
+5. Build the corrected state-aware plan twice and require an identical hash,
+   exact cumulative spend, a coordinator implementation upgrade, and only the
+   required carried/top-up alpha actions. Apply that exact bounded revision, then
+   run `launch --apply --plan-hash ... --detach`. The harness installs/converges
+   the release and runs smoke; no manual Forge, `btcli`, SQL or contract call is
+   part of the release path. Its user-systemd unit is deliberately disabled before
+   start, so the simulator cannot restart after a host reboot.
 6. Keep the deployment running, execute `release-1.0` and `production-soak`, and use
    a second compatible checkout to run `inspect`/`analyze` from a published evidence
    locator. M0B-M3 must pass before the release is called testnet-validated, and
@@ -1940,33 +5070,36 @@ require real-chain evidence and cannot be promoted to “proven” by local mock
 
 ## Appendix A — Reproducible audit commands
 
-### Final local release-gate record (2026-08-21 UTC)
+### Historical local release-gate record (2026-09-02 UTC)
 
-The checked-in aggregate gate is `scripts/test-release-1.0-local.sh`. Its final run
-completed successfully after the release lock was frozen:
+The checked-in aggregate gate is `scripts/test-release-1.0-local.sh`. This run
+completed successfully after its then-current release lock was frozen. It is
+historical provenance and does not approve the 2026-09-04 candidate:
 
 | Gate | Final result |
 |---|---|
-| `go test ./...` in `sn` | Pass, including all miner, validator, protocol, CRv4 and `sim-testnet` packages. |
-| Race detector on release Go packages | Pass for `crv4`, `miner/...`, `protocol`, `sim-testnet` and `validator`. |
-| Slither deployable-contract gate | Pass with Slither 0.11.6 and **zero high/medium findings** across 22 analyzed contracts and 64 detectors. |
-| `forge fmt --check` / clean `forge build --sizes` | Pass; the final clean optimized build completed in 614.50 seconds. The largest deployable release runtime is `STCoordinator` at 20,075 bytes, leaving 4,501 bytes under the EIP-170 limit. The testnet-only governance adversary is 20,907 bytes with 3,669 bytes remaining. |
-| `forge test --summary` | **108 passed, 0 failed, 0 skipped**, including 4,608 stateful reserve/vault invariant-handler calls. |
-| Operator/shared-client pure/unit/compile suites | Pass for `server/st`, `startifact`, subnet transaction/config/payout tests, verify/key-rotation tests, trusted-proxy/session tests, router tests, `api/...`/`model` compilation, all affected `connect` verify/subnet wire tests, all affected `sdk` subnet API tests, and compilation of every package in both shared repositories. |
-| Operator PostgreSQL/Redis integration suites | Pass against the isolated local profile for the complete verify-trail flow, poisoning/failure paths, concurrent fenced mutation, cached-response replay isolation, orphan cleanup, exact/prefix egress indexes, token-owned lock mutual exclusion and stale-release safety, expiry sweeping, and loaded-trail lock-TTL coverage. |
-| Subtensor infrastructure regressions | **23 passed**, covering the pinned playbook/archive/RPC and resolved vulnerability assertions. |
-| Release-lock self-check and patch hygiene | Pass across `sn`, `server`, `connect`, `sdk`, `vault` and `xops`. |
+| `go test ./...` in `sn` | Pass, including all miner, validator, protocol, CRv4 and `sim-testnet` packages; the final ordinary simulator suite completed in 179.823 seconds. |
+| Race detector on release Go packages | Pass for `crv4`, `miner/...`, `protocol`, `sim-testnet` and `validator`; the final full simulator race suite completed in 664.973 seconds under the regression-pinned 15-minute harness deadline. |
+| Slither deployable-contract gate | Pass with Slither 0.11.6 and **zero high/medium findings** for all four deployable testnet roots: coordinator (26 transitive contracts), fleet batcher (27), precompile probe (8), and governance adversary (24), each under 64 detectors; its target-only Foundry graphs are isolated from canonical release artifacts. |
+| `forge fmt --check` / clean `forge build --sizes` | Pass; the optimized Solidity 0.8.24 release compiles with `STCoordinator` at 24,299 bytes (277-byte EIP-170 margin), the storage-isolated testnet coordinator adversary at 2,536 bytes, `STFleetBatcher` at 4,003 bytes, and `STSubnetProbe` at 7,265 bytes. |
+| `forge test --summary` | **156 passed, 0 failed, 0 skipped**, including the epoch-end deposit-deadline boundary, maximum 10-by-4 atomic fleet batches, the live two-share-floor and malformed-absent-UID regressions, stable-v1 governance-drill compatibility, and 4,608 stateful reserve/vault invariant-handler calls with zero reverts. |
+| Operator/shared-client pure/unit/compile suites | Pass for `server/st`, `startifact`, subnet transaction/config/payout tests, verify/key-rotation tests, trusted-proxy/session tests, router tests, all executable server packages, all affected `connect` verify/subnet wire tests, all affected `sdk` subnet API tests, and compilation of every package in both shared repositories. The immutable sim-latency evidence baseline passed all 2,705 manifest entries separately. A separate uncached Connect qualification passed all 2,248 tests in 618.786 seconds with no active leftovers; raw `go test ./...` exceeds Go's 600-second package-wide default rather than hanging in one test. |
+| Operator PostgreSQL/Redis integration suites | Pass inside the final aggregate for verify-trail, poisoning/failure, canonical batched event sync, account-wide nonce reconciliation, coordinator isolation, validator-local assignment filtering, fenced mutation, replay isolation, orphan cleanup, egress index, token locks, expiry and loaded-trail coverage. Controller completed in 139.371 seconds, model in 140.573 seconds, and all 75 proxy roots in 529.355 seconds. Focused race reruns completed in 151.097 and 155.491 seconds. The gate pins `WARP_ENV=local` and the dedicated `10.213.0.1` server/local hostnames before any test which creates or drops databases. Deterministic script regressions prevent those safety exports from being removed or database-backed tests from moving into the pure section. The rendered per-operator profile remains mandatory in M1. |
+| Subtensor infrastructure regressions | **35 passed**, covering the pinned playbook/archive/RPC, backup policy and resolved vulnerability assertions. |
+| Release-lock self-check and patch hygiene | Pass across all twelve release workspace repositories; the exact checkout lock is rechecked after every other gate. |
 
-The contract generator now applies canonical Go formatting before writing its
-payload, so a clean Foundry rebuild followed by `go generate` reproduces the
-checked-in file byte-for-byte. The generated artifact fingerprint excludes
-Foundry's expanded compilation-graph metadata, which can differ between a focused
-and full build despite identical
-deployable bytecode. It still pins exact creation/runtime bytecode (including the
-Solidity metadata suffix), ABI, method identifiers, immutable references and the
-normalized storage layout; source and compiler settings are independently pinned
-in `release.lock.yml`. Generator regression tests cover both this normalization and
-deployment-relevant drift.
+The contract generator applies canonical Go formatting, while the release gate's
+`gencontracts --check` mode deliberately preserves the exact checked-in/live
+deployment payload. Foundry's focused and full compilation graphs can change the
+IPFS digest embedded in Solidity metadata even when all executable bytes are
+identical. The checker therefore normalizes only that 32-byte digest after
+validating the complete Solidity 0.8.24 CBOR envelope. It independently verifies
+the locked full-byte runtime hash and canonical artifact hash, then compares
+creation/runtime executable bytes, ABI, method identifiers, immutable references
+and normalized storage layout exactly. Source and compiler settings remain
+independently pinned in `release.lock.yml`. Generator regressions cover the live
+metadata-only mismatch and adjacent executable, envelope, compiler-version, ABI
+and layout drift.
 
 The digest-pinned PostgreSQL 18/Redis 8 pairs have been created and live-checked on
 the two isolated loopback addresses with authenticated semantic probes and matching
@@ -1975,21 +5108,43 @@ lock-fencing, expiry and orphan-cleanup suites passed against an isolated local
 PostgreSQL/Redis profile on 2026-08-21; its cleanup removed only that profile and
 left the four persistent simulator-owned stores running. The real server/blob
 service account also passed an idempotent content-addressed MinIO write/read/list
-canary against the overlay endpoint. The managed launch profile
-must rerun the same suites with its rendered per-operator runtime vault/config by
-setting `RUN_SERVER_DB_TESTS=1`; invoking the flag without `WARP_ENV` fails closed
-before connecting. The operator/miner/validator topology was
-not launched because the private Subtensor archive is still syncing through historical
-runtimes toward the runtime-447 tip; the overlay listener itself is reachable and independent.
+canary against the overlay endpoint. The managed launch profile must rerun the
+same suites with its rendered per-operator runtime vault/config. For the local
+aggregate, `RUN_SERVER_DB_TESTS=1` now supplies the complete local test identity
+and dedicated server/local hostnames itself; it never inherits a main/canary
+environment. The operator/miner/validator topology was
+not launched in that 2026-08-21 record because the private Subtensor archive was
+still syncing through historical runtimes. The 2026-08-29 public override removes
+that dependency for bounded acceptance, but does not retroactively provide the
+missing archive/load/independence evidence.
 Separately approved bootstrap extrinsics activated netuid 521 and
 acquired alpha; their hashes and finalized postconditions are recorded in section
 7.2 and are not substituted for release-campaign evidence.
+
+The read-only 2026-08-29 public-mode refresh additionally passed the aggregate
+`scripts/test-release-1.0-local.sh` gate: `go test ./...`, release-package race
+tests, Slither 0.11.6 with zero high/medium findings, a clean Solc 0.8.24 build,
+all 131 Foundry tests, generated payload/ABI freshness, operator/shared-client
+suites, and 25 focused Subtensor infrastructure tests. Live `doctor` returned
+`ready=true`; its UID-capacity proof uses one complete finalized
+`state_queryStorageAt` batch instead of 254 burst reads, and identical public
+operational/observer URLs are probed once and explicitly marked as one shared
+observation. Runtime spec/transaction version were 451/1,
+EVM chain ID was 945, finalized Wasm
+matched `0xf3554a22dfcefa9b42b3a0a5e58c1e6c871795ecc9ea9da78bf0900e23e57c08`,
+and exact finalized-block `eth_getLogs`, historical state, metadata, release call
+shapes and all read-only precompile batteries passed. The successful read-only plan
+used release-lock hash
+`0xe92c67bb34ef0508f5a9dd5b9f9b931848feea49c2b7c7a073d10b6b05444aab`
+and the spend/plan values recorded in section 13. These results prove public-mode
+launch readiness, not physical backend independence, archive depth or sustained
+load capacity.
 
 Run the same local gate with:
 
 ```bash
 cd /home/by/urnetwork/sn
-./scripts/test-release-1.0-local.sh
+RUN_SERVER_DB_TESTS=1 ./scripts/test-release-1.0-local.sh
 ```
 
 Foundry was installed using the [official Foundry installation flow](https://getfoundry.sh/getting-started/installation). A new shell should see it through the `.bashrc` change; for the current shell:
@@ -2034,7 +5189,7 @@ Release 1.0 may be declared testnet-validated only when:
 - all public/secret configuration is defined, generated, validated, and reproducibly locked;
 - `sim-testnet launch` can validate/configure the supplied real-testnet netuid, install/verify the release contracts, start the real operator/miner/validator topology on any compatible checkout host, and leave it healthy and persistent;
 - M0A, M0B, M1, M2, and M3 evidence gates pass, including the continuously
-  overlapping 54-vector campaign;
+  overlapping 61-vector campaign;
 - the immutable custody/settlement invariants survive adversarial upgrades and fault drills;
 - two independent validator deployments measure per-NO quality and complete live CRv4 cycles;
 - provider pool claims and multi-client native head rewards both reconcile end to end;
@@ -2047,7 +5202,9 @@ It may be declared **mainnet-ready** only after MR also passes: the complete
 anomaly ledger is root-caused and closed, finney deltas and the exact mainnet
 plan pass the no-broadcast local/fork rehearsal, upstream runtime blockers are
 fixed or proven unreachable, independent reviews and operational recovery drills
-are closed, and the signed dossier names the 2-of-3 Safe/timelock and approved
+are closed, every credential exposed during qualification (including the MinIO
+root credential) is rotated and its least-privilege service account is
+revalidated, and the signed dossier names the 2-of-3 Safe/timelock and approved
 value at risk. Mainnet readiness is not authorization to broadcast that plan.
 
 Until then, “green unit tests” means a component is safe to continue developing—not that release 1.0 is deployable.

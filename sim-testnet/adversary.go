@@ -48,12 +48,15 @@ func adversaryMetricSet(names ...string) map[string]bool {
 var releaseAdversaryMetricCatalog = map[string]map[string]bool{
 	"operator-api-pressure": adversaryMetricSet(
 		"scheduled_fault_rejections", "request_rate", "response_bytes", "5xx_count", "error_rate_ppm", "process_restarts",
+		"p99_latency_ms", "request_p99_ms", "recovery_seconds", "restart_count", "retry_rate", "state_hash_before_after",
 	),
 	"rpc-consistency-pressure": adversaryMetricSet(
 		"finalized_head_lag_blocks", "finalized_lag_blocks", "head_lag_blocks", "hash_disagreement_count", "archive_error_rate_ppm", "rpc_latency_ms", "runtime_spec",
-		"transaction_version",
+		"transaction_version", "state_version", "runtime_code_hash_match",
 		"best_finalized_lag_blocks", "sdk_mev_shield_expired_observations", "subnet_spot_alpha_price", "subnet_moving_alpha_price", "subnet_uid_count",
 		"subnet_tao_reserve_rao", "subnet_alpha_reserve_rao", "spot_price", "moving_price", "tao_reserve_rao", "alpha_reserve_rao",
+		"commit_reveal_enabled", "commit_reject_count", "reveal_reject_count", "normal_class_saturation_ppm", "honest_inclusion_blocks",
+		"finalized_block_latency_ms", "pruning_margin_rank", "p99_latency_ms", "reveal_delay_blocks",
 	),
 	"artifact-integrity-pressure": adversaryMetricSet(
 		"scheduled_fault_rejections", "missing_artifacts", "hash_mismatches", "origin_equivocations", "tamper_rejects", "artifact_tamper_rejections", "root_reproduction_mismatches",
@@ -61,6 +64,7 @@ var releaseAdversaryMetricCatalog = map[string]map[string]bool{
 	"identity-churn-emulation": adversaryMetricSet(
 		"commitment_parser_rejections", "canonical_commitment_accepts", "observer_panics", "stale_binding_rejects", "generation_monotonicity", "uid_rebind_rejects",
 		"binding_generation", "prefix_claim_count", "duplicate_binding_rejects", "unresolved_affiliations", "burn_delta_rao", "uid_capacity", "registration_limit_rejects",
+		"take_before_after", "cooldown_enforced", "denied_alias_count", "proxy_filter_surface_hash",
 	),
 	"custody-boundary-emulation": adversaryMetricSet(
 		"allocation_sum_delta_rao", "domain_mutations_rejected", "domain_mismatch_rejects", "nonce_replays_rejected", "expired_signatures_rejected", "unit_boundary_cases", "budget_delta",
@@ -72,7 +76,12 @@ var releaseAdversaryMetricCatalog = map[string]map[string]bool{
 		"watermark_change_on_reject", "graph_nodes", "cycle_rejections", "empty_set_rejections", "maximum_traversal_nodes", "repatriated_alpha_rao", "repatriated_lock_rao",
 		"residual_derived_rows", "value_delta_rao", "queued_lock_liability_rao", "escrow_backing_rao", "owner_unpriced_alpha_rao", "eviction_margin", "pending_emission_rao", "stranded_input_rao",
 		"replay_rejects", "cross_no_rejects", "tier_snapshot_rate", "cap_remaining_rao", "custody_probe_rejects", "claim_availability", "keeper_delay_blocks", "same_no_carry_rao",
-		"double_claim_rejects", "uncertain_claims",
+		"double_claim_rejects", "uncertain_claims", "terminal_holding_writeoffs", "healthy_holding_claims", "retryable_holding_preserved",
+		"pending_basket_deposit_rao", "root_stake_change_rao", "pending_basket_stake_change_blocked",
+		"settlement_transfer_floor_cases", "captured_subfloor_emission_rao", "premature_claim_payments", "lost_claim_credit_rao",
+		"live_invalid_merkle_proof_rejections", "live_merkle_state_mutations",
+		"duplicate_leaf_rejects", "reentrancy_rejects", "received_funds_delta", "implementation_code_hash", "worst_case_gas", "runtime_code_bytes",
+		"runtime_454_boundary_cases",
 	),
 	"consensus-cabal-emulation": adversaryMetricSet(
 		"consensus_delta_ppm", "honest_consensus_delta_ppm", "honest_incentive_delta_ppm", "follower_consensus_delta_ppm", "active_stake_ppm", "validator_permit_count",
@@ -80,12 +89,14 @@ var releaseAdversaryMetricCatalog = map[string]map[string]bool{
 		"validator_live_count", "intent_recovery_seconds", "vector_hash_divergence", "pending_intents", "last_applied_epoch", "finalized_intents", "mask_coverage_ppm",
 		"independent_validator_coverage", "unresolved_affiliations", "exact_split_error", "stake_sweep_ppm", "clipped_self_weight_ppm", "validator_trust_ppm",
 		"adversary_validator_trust_ppm", "cabal_incentive_ppm",
+		"validator_local_boundary_disagreement", "validator_local_boundary_restoration",
 	),
 	"verify-replay-poison": adversaryMetricSet(
 		"scheduled_fault_rejections", "signed_response_tamper_rejections", "canonical_body_mutation_rejections", "verified_final_responses", "constant_hash_collisions_accepted",
 		"duplicate_hop_rejects", "source_mismatch_rejects", "path_id_collisions", "busy_responses", "replay_hash_mismatch", "assignment_confirmation_delta",
 		"response_size_delta_bytes", "route_distinguishability_ppm", "poison_durable_rows", "stats_delta", "missing_signature_rejections", "invalid_signature_rejections",
 		"unauthorized_trails_created", "requests_to_429", "vpk_count", "active_trails", "5xx_count",
+		"external_plaintext_endpoint_rejections", "real_poison_p95_ratio_ppm", "quality_delta_by_no", "abandonment_rate_ppm", "p99_latency_ms",
 	),
 }
 
@@ -94,19 +105,43 @@ func validateAdversarialMetricCoverage(matrix *AdversarialMatrix, catalog map[st
 		return errors.New("adversarial matrix is absent")
 	}
 	for _, row := range matrix.Rows {
-		measurable := false
-		for _, actorID := range row.ActorIDs {
-			for _, metric := range row.Metrics {
+		for _, metric := range row.Metrics {
+			measurable := false
+			for _, actorID := range row.ActorIDs {
 				if catalog[actorID][metric] {
 					measurable = true
+					break
 				}
 			}
-		}
-		if !measurable {
-			return fmt.Errorf("adversarial matrix row %s has no metric emitted by its mapped actors", row.ID)
+			if !measurable {
+				return fmt.Errorf("adversarial matrix row %s required metric %s is not emitted by a mapped actor", row.ID, metric)
+			}
 		}
 	}
 	return nil
+}
+
+// Require an exact set rather than accepting one sampled member of a larger
+// required set. Duplicate or undeclared names are incomplete evidence too.
+func adversaryMeasuredEveryRequiredMetric(requiredMetrics, measuredMetrics []string) bool {
+	if len(requiredMetrics) == 0 || len(measuredMetrics) != len(requiredMetrics) {
+		return false
+	}
+	required := make(map[string]bool, len(requiredMetrics))
+	for _, metric := range requiredMetrics {
+		if metric == "" || required[metric] {
+			return false
+		}
+		required[metric] = true
+	}
+	measured := make(map[string]bool, len(measuredMetrics))
+	for _, metric := range measuredMetrics {
+		if !required[metric] || measured[metric] {
+			return false
+		}
+		measured[metric] = true
+	}
+	return len(measured) == len(required)
 }
 
 type adversarySamplePhase string
@@ -134,6 +169,9 @@ type AdversaryActorEvidence struct {
 	VectorIDs                []string                           `json:"vector_ids"`
 	StartedAt                string                             `json:"started_at"`
 	StoppedAt                string                             `json:"stopped_at,omitempty"`
+	FirstSampleAt            string                             `json:"first_sample_at,omitempty"`
+	LastSampleAt             string                             `json:"last_sample_at,omitempty"`
+	MaximumSampleGapMillis   int64                              `json:"maximum_sample_gap_milliseconds"`
 	Status                   string                             `json:"status"`
 	Samples                  uint64                             `json:"samples"`
 	ControlSamples           uint64                             `json:"control_samples"`
@@ -195,6 +233,7 @@ type AdversaryCampaignEvidence struct {
 	StoppedAt                 string                    `json:"stopped_at,omitempty"`
 	StartedBeforeHappyPath    bool                      `json:"started_before_happy_path"`
 	StoppedAfterHappyPath     bool                      `json:"stopped_after_happy_path"`
+	MaximumSampleGapMillis    int64                     `json:"maximum_allowed_sample_gap_milliseconds"`
 	MinimumSamplesPerActor    int                       `json:"minimum_samples_per_actor"`
 	MaximumActorErrorRatePPM  uint32                    `json:"maximum_actor_error_rate_ppm"`
 	MaximumP99Milliseconds    int                       `json:"maximum_p99_latency_milliseconds"`
@@ -211,6 +250,7 @@ type adversaryActorState struct {
 	latencies        []int64
 	controlLatencies []int64
 	attackLatencies  []int64
+	lastSampleAt     time.Time
 }
 
 type adversaryCampaign interface {
@@ -367,7 +407,8 @@ func (self *liveAdversaryCampaign) runActor(ctx context.Context, workers *sync.W
 		if ctx.Err() != nil {
 			return
 		}
-		self.record(actor.ID(), phase, self.now().Sub(started), result)
+		completed := self.now().UTC()
+		self.record(actor.ID(), phase, completed, completed.Sub(started), result)
 		sequence++
 		select {
 		case <-ctx.Done():
@@ -377,7 +418,7 @@ func (self *liveAdversaryCampaign) runActor(ctx context.Context, workers *sync.W
 	}
 }
 
-func (self *liveAdversaryCampaign) record(actorID string, phase adversarySamplePhase, duration time.Duration, result adversarySampleResult) {
+func (self *liveAdversaryCampaign) record(actorID string, phase adversarySamplePhase, sampledAt time.Time, duration time.Duration, result adversarySampleResult) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	state := self.states[actorID]
@@ -385,6 +426,26 @@ func (self *liveAdversaryCampaign) record(actorID string, phase adversarySampleP
 		return
 	}
 	evidence := &state.evidence
+	sampledAt = sampledAt.UTC()
+	previous := state.lastSampleAt
+	if previous.IsZero() {
+		if started, err := time.Parse(time.RFC3339Nano, evidence.StartedAt); err == nil {
+			previous = started
+		}
+		evidence.FirstSampleAt = sampledAt.Format(time.RFC3339Nano)
+	}
+	if !previous.IsZero() {
+		gap := sampledAt.Sub(previous).Milliseconds()
+		if gap < 0 {
+			evidence.Errors++
+			gap = 0
+		}
+		if gap > evidence.MaximumSampleGapMillis {
+			evidence.MaximumSampleGapMillis = gap
+		}
+	}
+	state.lastSampleAt = sampledAt
+	evidence.LastSampleAt = sampledAt.Format(time.RFC3339Nano)
 	evidence.LastDetail = result.Detail
 	evidence.Requests += result.Requests
 	if result.MaxInFlight > evidence.MaximumInFlight {
@@ -495,6 +556,12 @@ func (self *liveAdversaryCampaign) Stop(ctx context.Context) (*AdversaryCampaign
 		self.stopped = true
 		self.stoppedAt = self.now().UTC()
 		for _, state := range self.states {
+			if !state.lastSampleAt.IsZero() {
+				gap := self.stoppedAt.Sub(state.lastSampleAt).Milliseconds()
+				if gap > state.evidence.MaximumSampleGapMillis {
+					state.evidence.MaximumSampleGapMillis = gap
+				}
+			}
 			state.evidence.StoppedAt = self.stoppedAt.Format(time.RFC3339Nano)
 			state.evidence.Status = "stopped"
 		}
@@ -598,7 +665,7 @@ func (self *liveAdversaryCampaign) vectorEvidenceLocked(actors map[string]Advers
 			vector.MeasuredMetrics = append(vector.MeasuredMetrics, metricName)
 		}
 		sort.Strings(vector.MeasuredMetrics)
-		if len(vector.MeasuredMetrics) == 0 {
+		if !adversaryMeasuredEveryRequiredMetric(vector.RequiredMetrics, vector.MeasuredMetrics) {
 			healthy = false
 		}
 		if self.stopped {
@@ -626,6 +693,7 @@ func (self *liveAdversaryCampaign) snapshotLocked() *AdversaryCampaignEvidence {
 	evidence := &AdversaryCampaignEvidence{
 		Schema: "urnetwork-adversary-campaign-v1", Release: "1.0", Seed: self.cfg.Seed, MatrixHash: self.matrix.Hash,
 		StartedAt: self.startedAt.Format(time.RFC3339Nano), MinimumSamplesPerActor: self.cfg.MinimumSamplesPerActor,
+		MaximumSampleGapMillis:   int64(self.cfg.SampleIntervalMilliseconds + 2*self.cfg.RequestTimeoutMilliseconds),
 		MaximumActorErrorRatePPM: self.cfg.MaximumActorErrorRatePPM, MaximumP99Milliseconds: self.cfg.MaximumP99LatencyMilliseconds,
 		MaximumAttackControlRatio: self.cfg.MaximumAttackControlP95Ratio,
 		OperatorRequestCeilingQPS: self.cfg.MaximumOperatorRequestsPerSec, RPCRequestCeilingQPS: self.cfg.MaximumRPCRequestsPerSec,
@@ -658,6 +726,23 @@ func (self *liveAdversaryCampaign) snapshotLocked() *AdversaryCampaignEvidence {
 	return evidence
 }
 
+func adversaryActorGapCoverage(evidence *AdversaryCampaignEvidence, actor AdversaryActorEvidence) (bool, string) {
+	if evidence == nil || evidence.MaximumSampleGapMillis <= 0 || actor.MaximumSampleGapMillis < 0 || actor.MaximumSampleGapMillis > evidence.MaximumSampleGapMillis || actor.StartedAt != evidence.StartedAt || actor.StoppedAt != evidence.StoppedAt {
+		return false, "campaign or actor sampling-gap bounds are incomplete"
+	}
+	campaignStarted, campaignErr := time.Parse(time.RFC3339Nano, evidence.StartedAt)
+	happyStarted, happyStartErr := time.Parse(time.RFC3339Nano, evidence.HappyPathStartedAt)
+	happyCompleted, happyCompleteErr := time.Parse(time.RFC3339Nano, evidence.HappyPathCompletedAt)
+	campaignStopped, campaignStopErr := time.Parse(time.RFC3339Nano, evidence.StoppedAt)
+	first, firstErr := time.Parse(time.RFC3339Nano, actor.FirstSampleAt)
+	last, lastErr := time.Parse(time.RFC3339Nano, actor.LastSampleAt)
+	allowed := time.Duration(evidence.MaximumSampleGapMillis) * time.Millisecond
+	passed := campaignErr == nil && happyStartErr == nil && happyCompleteErr == nil && campaignStopErr == nil && firstErr == nil && lastErr == nil &&
+		!campaignStarted.After(happyStarted) && !happyStarted.After(happyCompleted) && !happyCompleted.After(campaignStopped) &&
+		!first.Before(campaignStarted) && !first.After(happyStarted.Add(allowed)) && !last.Before(happyCompleted.Add(-allowed)) && !last.After(campaignStopped) && !last.Before(first)
+	return passed, fmt.Sprintf("first=%s last=%s max_gap_ms=%d allowed_ms=%d happy_start=%s happy_complete=%s", actor.FirstSampleAt, actor.LastSampleAt, actor.MaximumSampleGapMillis, evidence.MaximumSampleGapMillis, evidence.HappyPathStartedAt, evidence.HappyPathCompletedAt)
+}
+
 func adversaryAssertions(evidence *AdversaryCampaignEvidence, started time.Time, observationHash string) []AssertionRecord {
 	now := time.Now().UTC()
 	build := func(id string, passed bool, message string) AssertionRecord {
@@ -673,9 +758,22 @@ func adversaryAssertions(evidence *AdversaryCampaignEvidence, started time.Time,
 	seenVectors := map[string]bool{}
 	for _, vector := range evidence.Vectors {
 		seenVectors[vector.ID] = true
-		passed := vector.Status == "pass" && vector.SampleFloor >= uint64(evidence.MinimumSamplesPerActor) && vector.ConcurrentCoverage != "invalid" && len(vector.ActorIDs) != 0 && len(vector.LocalTests) != 0 && len(vector.RequiredMetrics) != 0 && len(vector.MeasuredMetrics) != 0
+		passed := vector.Status == "pass" && vector.SampleFloor >= uint64(evidence.MinimumSamplesPerActor) && vector.ConcurrentCoverage != "invalid" && len(vector.ActorIDs) != 0 && len(vector.LocalTests) != 0 && adversaryMeasuredEveryRequiredMetric(vector.RequiredMetrics, vector.MeasuredMetrics)
 		assertions = append(assertions, build("adversary_vector_"+vector.ID, passed, fmt.Sprintf("mode=%s coverage=%s status=%s sample_floor=%d errors=%d max_p99_ms=%d measured_metrics=%v", vector.ExecutionMode, vector.ConcurrentCoverage, vector.Status, vector.SampleFloor, vector.Errors, vector.MaximumP99LatencyMilliseconds, vector.MeasuredMetrics)))
 	}
+	liveMerklePassed := false
+	liveMerkleMessage := "custody actor or live Merkle metrics are absent"
+	for _, actor := range evidence.Actors {
+		if actor.ID != "custody-boundary-emulation" {
+			continue
+		}
+		rejections, rejected := actor.Metrics["live_invalid_merkle_proof_rejections"]
+		mutations, measured := actor.Metrics["live_merkle_state_mutations"]
+		liveMerklePassed = rejected && measured && rejections.Samples > 0 && rejections.Minimum >= 2 && mutations.Samples > 0 && mutations.Maximum == 0
+		liveMerkleMessage = fmt.Sprintf("rejection_samples=%d rejection_min=%d mutation_samples=%d mutation_max=%d", rejections.Samples, rejections.Minimum, mutations.Samples, mutations.Maximum)
+		break
+	}
+	assertions = append(assertions, build("adversary_live_invalid_merkle_proof", liveMerklePassed, liveMerkleMessage))
 	for _, id := range requiredAdversarialVectors {
 		if !seenVectors[id] {
 			assertions = append(assertions, build("adversary_vector_"+id, false, "researched vector is absent from campaign evidence"))
@@ -686,9 +784,11 @@ func adversaryAssertions(evidence *AdversaryCampaignEvidence, started time.Time,
 		errorHealthy := actor.ErrorRatePPM <= evidence.MaximumActorErrorRatePPM && (evidence.MaximumActorErrorRatePPM != 0 || actor.Errors == 0)
 		ratioHealthy := actor.AttackControlP95RatioPPM == 0 || actor.AttackControlP95RatioPPM <= evidence.MaximumAttackControlRatio
 		healthy := actor.Status == "stopped" && errorHealthy && ratioHealthy && actor.P99LatencyMilliseconds <= int64(evidence.MaximumP99Milliseconds)
+		gapHealthy, gapMessage := adversaryActorGapCoverage(evidence, actor)
 		assertions = append(assertions,
 			build("adversary_"+actor.ID+"_samples", minimum, fmt.Sprintf("samples=%d control=%d attack=%d skipped=%d minimum=%d", actor.Samples, actor.ControlSamples, actor.AttackSamples, actor.Skipped, evidence.MinimumSamplesPerActor)),
 			build("adversary_"+actor.ID+"_resilience", healthy, fmt.Sprintf("status=%s errors_ppm=%d p99_ms=%d attack_control_p95_ratio_ppm=%d maximum_ratio_ppm=%d requests=%d max_in_flight=%d", actor.Status, actor.ErrorRatePPM, actor.P99LatencyMilliseconds, actor.AttackControlP95RatioPPM, evidence.MaximumAttackControlRatio, actor.Requests, actor.MaximumInFlight)),
+			build("adversary_"+actor.ID+"_continuous_sampling", gapHealthy, gapMessage),
 		)
 	}
 	sort.Slice(assertions, func(i, j int) bool { return assertions[i].ID < assertions[j].ID })

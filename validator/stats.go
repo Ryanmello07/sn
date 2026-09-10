@@ -38,14 +38,20 @@ package validator
 // engine accumulates, per provider, the set of distinct egress-IP-hashes it
 // served on VERIFIED trail hops (RecordEgressHash, fed from the signed FINAL
 // proof — server-assigned hops only, seed excluded, §7.6, symmetric with the
-// confirmation stats). EgressIpHashes() exposes those sets so the steerer can
+// confirmation stats). TakeEgressIpHashes() rotates those sets so the steerer can
 // count each fleet's distinct routable IPs and split shared ones (§8.4). The
-// sets are windowed like the counters (reset at Fold) and left ephemeral — they
-// are not a_min-gated (one verified hop proves an IP routable) and the durable
-// smoothing is the steerer's per-UID score EMA, not this window.
+// head window is the native tempo, independent of the longer settlement epoch:
+// it is atomically detached by the native steerer, not reset by Fold. The sets
+// are ephemeral, are not a_min-gated (one verified hop proves an IP routable),
+// and the durable smoothing is the steerer's per-UID score EMA.
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"maps"
 	"math"
 	"math/bits"
 	"os"
@@ -171,25 +177,57 @@ func WilsonLower(c uint64, a uint64, z float64) float64 {
 
 // statsSnapshot is the persisted form (state_dir/stats.json).
 type statsSnapshot struct {
-	Version int                        `json:"v"`
-	Ema     map[string]float64         `json:"ema"`
-	EmaPPM  map[string]uint32          `json:"ema_ppm,omitempty"`
-	Window  map[string]*ProviderWindow `json:"window"`
+	Version                        int                          `json:"v"`
+	SettlementEpoch                *uint64                      `json:"settlement_epoch,omitempty"`
+	EgressGeneration               uint64                       `json:"egress_generation,omitempty"`
+	AttemptLastAppliedSequence     uint64                       `json:"attempt_last_applied_sequence,omitempty"`
+	AttemptSettlementFirstSequence uint64                       `json:"attempt_settlement_first_sequence,omitempty"`
+	AttemptEgressFirstSequence     uint64                       `json:"attempt_egress_first_sequence,omitempty"`
+	SettlementTransition           *AttemptSettlementTransition `json:"settlement_transition,omitempty"`
+	AttemptV2                      *attemptStatsV2State         `json:"attempt_v2,omitempty"`
+	Ema                            map[string]float64           `json:"ema"`
+	EmaPPM                         map[string]uint32            `json:"ema_ppm,omitempty"`
+	Window                         map[string]*ProviderWindow   `json:"window"`
+	Egress                         map[string][]string          `json:"egress,omitempty"`
 }
 
-// StatsEngine aggregates per-provider counters and cross-epoch EMAs.
-// Safe for concurrent use.
+// Aggregates per-provider counters and cross-epoch EMAs. Safe for concurrent
+// use: mutators and persistence retain one exclusive write token; readers only
+// take the short state mutex. External callbacks may read the old coherent
+// generation but must not recursively mutate an engine owned by their caller.
 type StatsEngine struct {
-	mu     sync.Mutex
-	cfg    StatsConfig
-	window map[connect.Id]*ProviderWindow
-	ema    map[connect.Id]float64
-	emaPPM map[connect.Id]uint32
+	mu            sync.Mutex
+	writeGateOnce sync.Once
+	writeGate     chan struct{}
+	writeOrder    uint64
+	writeInitErr  error
+	writeOwner    *statsWriteOwner
+	writeHooks    statsWriteHooks
+	cfg           StatsConfig
+	window        map[connect.Id]*ProviderWindow
+	ema           map[connect.Id]float64
+	emaPPM        map[connect.Id]uint32
 	// egress is the per-provider set of distinct routable egress-IP-hashes seen
-	// this window (§11.1, D27 — the head routable-IP score). Reset at Fold,
-	// ephemeral (not persisted): it rebuilds from fresh trails, and the steerer
-	// EMA-smooths the derived per-fleet score across tempos.
+	// in the current native-tempo window (§11.1, D27). It is independent of the
+	// settlement-quality Fold clock and remains ephemeral; the steerer persists
+	// the derived per-fleet EMA across tempos.
 	egress map[connect.Id]map[[32]byte]bool
+
+	settlementEpoch      uint64
+	settlementEpochKnown bool
+	egressGeneration     uint64
+
+	attemptLedger                  *AttemptLedger
+	attemptLastAppliedSequence     uint64
+	attemptSettlementFirstSequence uint64
+	attemptEgressFirstSequence     uint64
+	activeAttemptCount             uint64
+	attemptCutPending              bool
+	// Tracks the settlement owner's target separately from an ordinary detach.
+	attemptSettlementCutPending bool
+	attemptSettlementCutEpoch   uint64
+	settlementTransition        *AttemptSettlementTransition
+	attemptV2                   *attemptStatsV2State
 }
 
 func NewStatsEngine(cfg StatsConfig) *StatsEngine {
@@ -215,6 +253,8 @@ func (self *StatsEngine) windowFor(hop connect.Id) *ProviderWindow {
 // Call it when an ASSIGN names hop as the pending next hop — never for the
 // validator-chosen seed (§7.6).
 func (self *StatsEngine) RecordAssignment(hop connect.Id) {
+	owner := self.lockStatsWrite("record-assignment")
+	defer owner.release()
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	self.windowFor(hop).Assignments++
@@ -224,6 +264,8 @@ func (self *StatsEngine) RecordAssignment(hop connect.Id) {
 // measured round-trip latency (§7.5 — record per step, at confirmation
 // time, so an abandoned trail keeps the slow hop's sample).
 func (self *StatsEngine) RecordConfirmation(hop connect.Id, latencyMs float64) {
+	owner := self.lockStatsWrite("record-confirmation")
+	defer owner.release()
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	w := self.windowFor(hop)
@@ -240,6 +282,8 @@ func (self *StatsEngine) RecordEgressHash(hop connect.Id, egressHash [32]byte) {
 	if egressHash == ([32]byte{}) {
 		return
 	}
+	owner := self.lockStatsWrite("record-egress")
+	defer owner.release()
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	set, ok := self.egress[hop]
@@ -265,6 +309,26 @@ func (self *StatsEngine) EgressIpHashes() map[connect.Id]map[[32]byte]bool {
 		}
 		out[id] = cp
 	}
+	return out
+}
+
+// TakeEgressIpHashes atomically returns and rotates the native-tempo head
+// window. Proofs recorded after the swap belong to the following tempo and
+// cannot be erased by a concurrent copy-then-clear race.
+func (self *StatsEngine) TakeEgressIpHashes() map[connect.Id]map[[32]byte]bool {
+	owner := self.lockStatsWrite("take-egress")
+	defer owner.release()
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	out := make(map[connect.Id]map[[32]byte]bool, len(self.egress))
+	for id, set := range self.egress {
+		cp := make(map[[32]byte]bool, len(set))
+		for hash := range set {
+			cp[hash] = true
+		}
+		out[id] = cp
+	}
+	self.egress = map[connect.Id]map[[32]byte]bool{}
 	return out
 }
 
@@ -304,7 +368,12 @@ func (self *StatsEngine) qualityRawLocked(w *ProviderWindow) float64 {
 // across architectures and independent implementations.
 func (self *StatsEngine) qualityRawPPMLocked(w *ProviderWindow) uint32 {
 	reliability := uint64(protocol.ReliabilityPPM(w.Confirmations, w.Assignments, self.cfg.AMin))
-	p95 := uint64(w.Percentile(0.95))
+	buckets := make([]uint64, statsLatencyBuckets)
+	copy(buckets, w.LatencyBuckets[:])
+	p95, err := releaseP95UpperMillis(buckets)
+	if err != nil {
+		return 0
+	}
 	denom := self.cfg.LatRefMillis + p95
 	if denom == 0 {
 		return 0
@@ -385,9 +454,32 @@ func (self *StatsEngine) Exposure() map[connect.Id]uint64 {
 // Fold applies the cross-epoch EMA (§11.1) and resets the window. Call at
 // contract epoch boundaries. Providers below a_min carry their EMA forward
 // untouched (one sparse epoch does not decay an established provider).
-func (self *StatsEngine) Fold() {
+func (self *StatsEngine) Fold() error {
+	owner := self.lockStatsWrite("fold")
+	defer owner.release()
 	self.mu.Lock()
 	defer self.mu.Unlock()
+	if self.attemptV2 != nil {
+		return errors.New("compact attempt statistics require an authenticated terminal fold")
+	}
+	self.foldWithLock()
+	return nil
+}
+
+// Legacy steering has no independently authenticated compact settlement
+// authority. Refuse it before any chain lookup or external weight submission.
+func (self *StatsEngine) requireLegacyAttemptStats() error {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	if self.attemptV2 != nil {
+		return errors.New("compact attempt statistics require the authenticated v2 steering path")
+	}
+	return nil
+}
+
+// foldWithLock advances the quality EMA and clears one settlement window. The
+// caller must hold the engine state lock.
+func (self *StatsEngine) foldWithLock() {
 	for id, w := range self.window {
 		if w.Assignments < self.cfg.AMin {
 			continue
@@ -406,9 +498,6 @@ func (self *StatsEngine) Fold() {
 		}
 	}
 	self.window = map[connect.Id]*ProviderWindow{}
-	// The egress-IP-hash sets are windowed too (§11.1): the per-fleet score is
-	// recomputed from the fresh window each epoch and EMA-smoothed by the steerer.
-	self.egress = map[connect.Id]map[[32]byte]bool{}
 }
 
 // WindowCounts returns (a, c) for one provider — test/diagnostic hook.
@@ -422,37 +511,185 @@ func (self *StatsEngine) WindowCounts(hop connect.Id) (uint64, uint64) {
 	return w.Assignments, w.Confirmations
 }
 
-// Save persists a snapshot to <dir>/stats.json.
-func (self *StatsEngine) Save(dir string) error {
-	self.mu.Lock()
-	snap := statsSnapshot{
-		Version: 2,
-		Ema:     map[string]float64{},
-		EmaPPM:  map[string]uint32{},
-		Window:  map[string]*ProviderWindow{},
+// snapshotWithLock copies the complete durable statistics state. The caller
+// must hold the engine state lock.
+func (self *StatsEngine) snapshotWithLock() statsSnapshot {
+	version := 4
+	if self.attemptLedger != nil || self.attemptLastAppliedSequence != 0 || self.attemptSettlementFirstSequence != 0 || self.attemptEgressFirstSequence != 0 {
+		version = 5
+	}
+	if self.attemptV2 != nil {
+		version = 6
+	}
+	snapshot := statsSnapshot{
+		Version: version, Ema: map[string]float64{}, EmaPPM: map[string]uint32{},
+		Window: map[string]*ProviderWindow{}, Egress: map[string][]string{},
+		EgressGeneration: self.egressGeneration, AttemptLastAppliedSequence: self.attemptLastAppliedSequence,
+		AttemptSettlementFirstSequence: self.attemptSettlementFirstSequence, AttemptEgressFirstSequence: self.attemptEgressFirstSequence,
+		SettlementTransition: self.settlementTransition,
+		AttemptV2:            self.attemptV2,
+	}
+	if self.settlementEpochKnown {
+		epoch := self.settlementEpoch
+		snapshot.SettlementEpoch = &epoch
 	}
 	for id, v := range self.ema {
-		snap.Ema[id.String()] = v
+		snapshot.Ema[id.String()] = v
 	}
 	for id, v := range self.emaPPM {
-		snap.EmaPPM[id.String()] = v
+		snapshot.EmaPPM[id.String()] = v
 	}
 	for id, w := range self.window {
 		cp := *w
-		snap.Window[id.String()] = &cp
+		snapshot.Window[id.String()] = &cp
 	}
-	self.mu.Unlock()
+	for id, hashes := range self.egress {
+		encoded := make([]string, 0, len(hashes))
+		for hash := range hashes {
+			encoded = append(encoded, fmt.Sprintf("0x%x", hash))
+		}
+		sort.Strings(encoded)
+		snapshot.Egress[id.String()] = encoded
+	}
+	return snapshot
+}
 
-	b, err := json.MarshalIndent(snap, "", "  ")
+// encodeStatsSnapshot returns the durable human-readable state representation.
+func encodeStatsSnapshot(snapshot statsSnapshot) ([]byte, error) {
+	if err := validateAttemptStatsV2Snapshot(snapshot); err != nil {
+		return nil, err
+	}
+	b, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
+		return nil, err
+	}
+	return append(b, '\n'), nil
+}
+
+// Save persists a snapshot to <dir>/stats.json.
+func (self *StatsEngine) Save(dir string) error {
+	owner := self.lockStatsWrite("save")
+	defer owner.release()
+	return self.saveOwned(dir, owner.persist)
+}
+
+// AdvanceSettlementEpoch durably applies at most one exact boundary fold. It
+// retains exclusive write ownership, not the reader mutex, through the atomic
+// write so an epoch cannot admit events before its persisted state. A skipped epoch is
+// unrecoverable from local counters and therefore fails closed.
+func (self *StatsEngine) AdvanceSettlementEpoch(epoch uint64, dir string) (resultErr error) {
+	owner := self.lockStatsWrite("advance-epoch")
+	defer owner.release()
+	if err := self.requireLegacyAttemptStats(); err != nil {
 		return err
 	}
-	return atomicStateWrite(filepath.Join(dir, "stats.json"), b, 0o600)
+	defer func() { resultErr = errors.Join(resultErr, owner.finishSnapshot()) }()
+	if err := owner.prepareSnapshot(dir, false); err != nil {
+		return err
+	}
+	candidate := owner.clone()
+	err := candidate.advanceSettlementEpochOwned(epoch, dir, owner.persist)
+	finishErr := owner.finishSnapshot()
+	if err == nil && finishErr != nil {
+		return finishErr
+	}
+	err = errors.Join(err, finishErr)
+	owner.publish(candidate)
+	return err
+}
+
+// Operates on an exclusively owned candidate; even a retryable failure retains
+// its original admission reservation while failed snapshots roll back the fold.
+func (self *StatsEngine) advanceSettlementEpochOwned(epoch uint64, dir string, persist func(statsSnapshotWrite) error) error {
+	if self.attemptV2 != nil {
+		return errors.New("compact attempt statistics require the v2 settlement coordinator")
+	}
+	var nextAttemptSequence uint64
+	if self.attemptLedger != nil {
+		head, err := self.attemptLedger.checkedHead()
+		if err != nil || head.LastSequence == ^uint64(0) {
+			return errors.Join(errors.New("cannot advance statistics from an unavailable attempt head"), err)
+		}
+		nextAttemptSequence = head.LastSequence + 1
+	}
+	if self.settlementEpochKnown {
+		if epoch < self.settlementEpoch {
+			return fmt.Errorf("settlement epoch regressed from %d to %d", self.settlementEpoch, epoch)
+		}
+		if epoch == self.settlementEpoch {
+			return nil
+		}
+		if self.settlementEpoch == ^uint64(0) || epoch != self.settlementEpoch+1 {
+			return fmt.Errorf("settlement epoch jumped from %d to %d", self.settlementEpoch, epoch)
+		}
+	} else if len(self.window) != 0 {
+		return errors.New("legacy statistics window has no settlement epoch ownership")
+	}
+	if self.attemptLedger != nil && self.settlementEpochKnown && epoch != self.settlementEpoch {
+		return errors.New("attempt-backed settlement advancement requires the validator-wide coordinator")
+	}
+	if self.attemptLedger != nil {
+		self.attemptCutPending = true
+		if self.activeAttemptCount != 0 {
+			return errAttemptCutPending
+		}
+	}
+	priorWindow := self.window
+	priorEMA := self.ema
+	priorEMAPPM := self.emaPPM
+	priorEgress := self.egress
+	priorEgressGeneration := self.egressGeneration
+	priorEpoch, priorKnown := self.settlementEpoch, self.settlementEpochKnown
+	priorSettlementFirst := self.attemptSettlementFirstSequence
+	priorEgressFirst := self.attemptEgressFirstSequence
+	if self.settlementEpochKnown {
+		self.window = cloneProviderWindows(self.window)
+		self.ema = maps.Clone(self.ema)
+		self.emaPPM = maps.Clone(self.emaPPM)
+		self.foldStatsOwned()
+	}
+	self.settlementEpoch, self.settlementEpochKnown = epoch, true
+	if self.attemptLedger != nil {
+		if self.egressGeneration == ^uint64(0) {
+			self.window, self.ema, self.emaPPM = priorWindow, priorEMA, priorEMAPPM
+			self.settlementEpoch, self.settlementEpochKnown = priorEpoch, priorKnown
+			return errors.New("release statistics egress generation overflow")
+		}
+		self.attemptSettlementFirstSequence = nextAttemptSequence
+		self.attemptEgressFirstSequence = nextAttemptSequence
+		self.egress = map[connect.Id]map[[32]byte]bool{}
+		self.egressGeneration++
+	}
+	err := self.saveOwned(dir, persist)
+	if err != nil {
+		self.window, self.ema, self.emaPPM = priorWindow, priorEMA, priorEMAPPM
+		self.egress, self.egressGeneration = priorEgress, priorEgressGeneration
+		self.settlementEpoch, self.settlementEpochKnown = priorEpoch, priorKnown
+		self.attemptSettlementFirstSequence, self.attemptEgressFirstSequence = priorSettlementFirst, priorEgressFirst
+		return err
+	}
+	self.attemptCutPending = false
+	return nil
 }
 
 // Load restores a snapshot from <dir>/stats.json; a missing file is a clean
-// start. Unparseable ids are skipped.
+// start. Corrupt, ambiguous or partially canonical state fails closed.
 func (self *StatsEngine) Load(dir string) error {
+	owner := self.lockStatsWrite("load")
+	defer owner.release()
+	candidate := owner.clone()
+	if candidate.attemptLedger != nil || candidate.activeAttemptCount != 0 || candidate.attemptCutPending || candidate.attemptSettlementCutPending {
+		return errors.New("statistics engine is already owned before loading state")
+	}
+	if err := candidate.loadStatsOwned(dir); err != nil {
+		return err
+	}
+	owner.publish(candidate)
+	return nil
+}
+
+// Decode and validate the complete snapshot before it can replace public state.
+func (self *StatsEngine) loadStatsOwned(dir string) error {
 	b, err := os.ReadFile(filepath.Join(dir, "stats.json"))
 	if os.IsNotExist(err) {
 		return nil
@@ -460,25 +697,70 @@ func (self *StatsEngine) Load(dir string) error {
 	if err != nil {
 		return err
 	}
+	return self.loadStatsSnapshotOwned(b)
+}
+
+// Recovery decodes the exact journal postimage into an unpublished candidate.
+// Local shape validation never substitutes for independent all-operator replay.
+func (self *StatsEngine) loadStatsSnapshotOwned(b []byte) error {
 	var snap statsSnapshot
-	if err := json.Unmarshal(b, &snap); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&snap); err != nil {
 		return err
 	}
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	for idStr, v := range snap.Ema {
-		if id, err := connect.ParseId(idStr); err == nil {
-			self.ema[id] = v
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("statistics snapshot contains trailing JSON")
 		}
+		return err
+	}
+	if snap.Version < 1 || snap.Version > 6 {
+		return fmt.Errorf("unsupported statistics snapshot version %d", snap.Version)
+	}
+	if err := validateAttemptStatsV2Snapshot(snap); err != nil {
+		return err
+	}
+	if snap.Version < 4 && len(snap.Egress) != 0 {
+		return errors.New("legacy statistics egress window has no durable generation")
+	}
+	if len(self.window) != 0 || len(self.ema) != 0 || len(self.emaPPM) != 0 || len(self.egress) != 0 || self.settlementEpochKnown || self.egressGeneration != 0 || self.settlementTransition != nil || self.attemptV2 != nil {
+		return errors.New("statistics engine must be empty before loading state")
+	}
+	if snap.SettlementEpoch != nil {
+		self.settlementEpoch = *snap.SettlementEpoch
+		self.settlementEpochKnown = true
+	}
+	self.egressGeneration = snap.EgressGeneration
+	self.attemptLastAppliedSequence = snap.AttemptLastAppliedSequence
+	self.attemptSettlementFirstSequence = snap.AttemptSettlementFirstSequence
+	self.attemptEgressFirstSequence = snap.AttemptEgressFirstSequence
+	self.settlementTransition = snap.SettlementTransition
+	self.attemptV2 = snap.AttemptV2
+	if snap.Version < 5 && (self.attemptLastAppliedSequence != 0 || self.attemptSettlementFirstSequence != 0 || self.attemptEgressFirstSequence != 0) {
+		return errors.New("legacy statistics snapshot contains attempt ledger cursors")
+	}
+	if snap.Version >= 5 && (self.attemptSettlementFirstSequence == 0 || self.attemptEgressFirstSequence < self.attemptSettlementFirstSequence || self.attemptLastAppliedSequence+1 < self.attemptEgressFirstSequence) {
+		return errors.New("statistics attempt ledger cursors are invalid")
+	}
+	for idStr, v := range snap.Ema {
+		id, err := connect.ParseId(idStr)
+		if err != nil || id.String() != idStr || math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > 1 {
+			return fmt.Errorf("invalid persisted reporting EMA for provider %q", idStr)
+		}
+		self.ema[id] = v
 	}
 	for idStr, v := range snap.EmaPPM {
-		if id, err := connect.ParseId(idStr); err == nil {
-			self.emaPPM[id] = v
+		id, err := connect.ParseId(idStr)
+		if err != nil || id.String() != idStr || v > 1_000_000 {
+			return fmt.Errorf("invalid persisted exact EMA for provider %q", idStr)
 		}
+		self.emaPPM[id] = v
 	}
 	// Deterministic migration from the pre-v2 reporting EMA. This occurs once;
 	// all subsequent folds and snapshots use the exact integer representation.
-	if len(snap.EmaPPM) == 0 {
+	if snap.Version < 6 && len(snap.EmaPPM) == 0 {
 		for id, v := range self.ema {
 			if v <= 0 {
 				self.emaPPM[id] = 0
@@ -490,12 +772,79 @@ func (self *StatsEngine) Load(dir string) error {
 		}
 	}
 	for idStr, w := range snap.Window {
-		if id, err := connect.ParseId(idStr); err == nil && w != nil {
-			cp := *w
-			self.window[id] = &cp
+		id, err := connect.ParseId(idStr)
+		if err != nil || id.String() != idStr || w == nil || w.Confirmations > w.Assignments {
+			return fmt.Errorf("invalid persisted window for provider %q", idStr)
+		}
+		var samples uint64
+		for _, count := range w.LatencyBuckets {
+			if ^uint64(0)-samples < count {
+				return fmt.Errorf("persisted latency samples overflow for provider %q", idStr)
+			}
+			samples += count
+		}
+		if samples != w.Confirmations {
+			return fmt.Errorf("persisted latency samples differ from confirmations for provider %q", idStr)
+		}
+		cp := *w
+		self.window[id] = &cp
+	}
+	for idStr, encodedHashes := range snap.Egress {
+		id, err := connect.ParseId(idStr)
+		if err != nil || id.String() != idStr {
+			return fmt.Errorf("invalid persisted egress provider id %q", idStr)
+		}
+		prior := ""
+		for _, encodedHash := range encodedHashes {
+			if encodedHash <= prior {
+				return fmt.Errorf("persisted egress hashes for %s are not strictly ordered", id)
+			}
+			hash, err := parseReleaseHex32("persisted egress hash", encodedHash, false)
+			if err != nil {
+				return err
+			}
+			if self.egress[id] == nil {
+				self.egress[id] = map[[32]byte]bool{}
+			}
+			self.egress[id][hash] = true
+			prior = encodedHash
 		}
 	}
+	if self.settlementTransition != nil {
+		var err error
+		if self.attemptV2 != nil && self.attemptV2.Terminal != nil {
+			err = VerifyAttemptSettlementTransition(self.settlementTransition)
+		} else {
+			err = verifyAttemptSettlementTransitionForMeasurement(self.settlementTransition, self.currentReleaseStatsMeasurement())
+		}
+		if err != nil {
+			return fmt.Errorf("persisted settlement transition: %w", err)
+		}
+	}
+	if self.attemptV2 != nil {
+		if terminal := self.attemptV2.Terminal; terminal != nil && self.currentReleaseStatsMeasurement().Config != terminal.PreFold.Config {
+			return errors.New("compact persisted statistics scoring config differs")
+		}
+		// Plain Load is deliberately not activation. Only the complete startup
+		// coordinator clears this gate after independent full-batch replay.
+		self.attemptCutPending = true
+		self.attemptSettlementCutPending = true
+		self.attemptSettlementCutEpoch = self.settlementEpoch
+	}
 	return nil
+}
+
+// cloneProviderWindows makes a deep copy for transactional fold rollback.
+func cloneProviderWindows(windows map[connect.Id]*ProviderWindow) map[connect.Id]*ProviderWindow {
+	cloned := make(map[connect.Id]*ProviderWindow, len(windows))
+	for id, window := range windows {
+		if window == nil {
+			continue
+		}
+		windowCopy := *window
+		cloned[id] = &windowCopy
+	}
+	return cloned
 }
 
 // SortedQuality returns Quality() as a deterministic slice (by id) — used

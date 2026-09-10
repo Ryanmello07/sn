@@ -626,9 +626,9 @@ time/region} rather than reading marginal ratios.
 ### 8.1 The mapping (partly new work)
 
 The hop `client_id` comes from the request **source IP**, which is the egress IP of
-the provider the validator routed through. Extract the source IP exactly as
-`session/client_session.go:41` does — headers in order **`X-UR-Forwarded-For`**, then
-**`X-Forwarded-For`** (+`X-Forwarded-Source-Port`), then `r.RemoteAddr`.
+the provider the validator routed through. Extract it exactly as
+`session/client_session.go` does: **`X-UR-Forwarded-For`**, which Warp must
+overwrite, then `r.RemoteAddr` only when that header is absent or malformed.
 
 The egress IPs exist in `proxy_client.client_ipv4` / `proxy_client_ipv4`
 (`db_migrations.go`), but there is **no reverse index** `egress_ipv4 → client_id`
@@ -839,11 +839,11 @@ for each NO-pool UID n:
 normalize pool so Σ pool = 1 − θ
 
 w = head ⊕ pool                            # ONE vector over all miner UIDs
-apply signed-policy max_weight_limit_u16   # v447 native getter is 65535/no-cap; fail if infeasible
+apply signed-policy max_weight_limit_u16   # v453 native getter remains 65535/no-cap; fail if infeasible
 commit / reveal w                          # commit-reveal ON: the score / θ signal is subjective, anti-copy
 ```
 
-Runtime v447 retains `MaxWeightsLimit` storage but its effective getter is
+Runtime v453 retains `MaxWeightsLimit` storage but its effective getter is
 hard-coded to `65535`, so changing that storage does not impose a native cap.
 Release 1.0 validators therefore load the cap from the exact signed policy,
 apply it before serialization, persist it with the intent, and audit the

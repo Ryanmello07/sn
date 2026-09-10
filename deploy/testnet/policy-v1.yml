@@ -1,5 +1,6 @@
 policy:
   schema: urnetwork-policy-v1
+  network_profile: testnet
   policy_id: 1
   effective_epoch: 0
   settlement:
@@ -15,12 +16,14 @@ policy:
     rounding: largest_remainder_then_client_id_ascending
   production_cadence:
     # sim-testnet schedules this exact snapshot for currentEpoch+1 only after
-    # the 20 accelerated epochs reconcile. The active short epoch is unchanged.
-    after_accelerated_epochs: 20
-    epoch_blocks: 50400
-    root_commit_window_blocks: 1200
-    finalize_offset_blocks: 14400
-    close_grace_blocks: 120
+    # the five accelerated epochs reconcile. The active short epoch is unchanged.
+    after_accelerated_epochs: 5
+    # A 72-minute testnet UR block at the pinned 12 second chain cadence.
+    # Mainnet uses the separately locked 50,400-block/seven-day policy.
+    epoch_blocks: 360
+    root_commit_window_blocks: 60
+    finalize_offset_blocks: 180
+    close_grace_blocks: 6
   steering:
     theta:
       numerator: 3
@@ -32,17 +35,30 @@ policy:
     head_score_ema:
       numerator: 1
       denominator: 4
-    # Runtime 447 hardcodes the native getter to 65535. Release validators pin
+    maximum_head_fleets: 200
+    # Runtime 454 retains the native getter at 65535. Release validators pin
     # this feasible two-NO bootstrap cap in the signed policy instead.
     max_weight_limit_u16: 32768
     empty_channel: cede_to_nonempty
     arithmetic: integer_rational_v1
   deposit:
     unit: rao_per_gib
-    epoch_cap_rao_per_operator: 100000000
-    # 2 NOs × 20 epochs × 0.1 alpha, plus 1 alpha voluntary conviction.
-    total_test_campaign_cap_rao: 5000000000
+    # Runtime 454 retains the reserve movement floor observed on the live subnet.
+    # Ten alpha leaves a wide margin above that dynamic minimum.
+    epoch_cap_rao_per_operator: 10000000000
+    # Funds both NOs through five accelerated epochs, one deliberately dishonest
+    # production deposit, its recovery, one conservatively discarded partial
+    # production epoch, three fully observed production epochs, the terminal
+    # boundary, a runtime-valid 5-alpha dishonest underpayment, and 1 alpha of
+    # voluntary conviction. This is the demand-side
+    # campaign cap only: validator bootstrap stake is independently sized to
+    # establish the reserve majority and an outside-validator position.
+    total_test_campaign_cap_rao: 196000000000
     tier_snapshot: conviction_before_epoch
+    usage_lag_epochs: 1
+    usage_artifact: signed_payout_artifact_total_usage_bytes
+    mismatch_action: zero_pool_weight
+    unavailable_action: zero_pool_weight_after_root_window
     tiers:
       - min_conviction_rao: 0
         rate_numerator_rao_per_gib: 1000000

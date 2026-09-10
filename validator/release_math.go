@@ -99,18 +99,9 @@ func sumExactInputs(inputs []ExactWeightInput, masked map[uint16]bool) (map[uint
 }
 
 func depositRateAt(policy protocol.DepositPolicy, conviction *big.Int) (*big.Rat, error) {
-	if conviction == nil || conviction.Sign() < 0 {
-		return nil, errors.New("invalid conviction")
-	}
-	var selected *protocol.DepositTier
-	for i := range policy.Tiers {
-		tier := &policy.Tiers[i]
-		if conviction.Cmp(new(big.Int).SetUint64(tier.MinConvictionRao)) >= 0 {
-			selected = tier
-		}
-	}
-	if selected == nil || selected.RateNumeratorRaoPerGiB == 0 || selected.RateDenominator == 0 {
-		return nil, errors.New("no valid deposit rate for conviction")
+	selected, err := protocol.DepositTierAt(policy, conviction)
+	if err != nil {
+		return nil, err
 	}
 	return new(big.Rat).SetFrac(
 		new(big.Int).SetUint64(selected.RateNumeratorRaoPerGiB),
@@ -146,32 +137,11 @@ func PoolQualityPPM(stats *StatsEngine, bound map[connect.Id]bool) uint32 {
 	if stats == nil {
 		return 0
 	}
-	quality := stats.QualityPPM()
-	exposure := stats.Exposure()
-	var numerator, denominator uint64
-	for id, q := range quality {
-		if bound[id] {
-			continue
-		}
-		weight := exposure[id]
-		if weight == 0 {
-			weight = 1
-		}
-		// q <= 1e6 and an in-memory window cannot approach uint64 overflow;
-		// use saturation defensively so malformed snapshots fail low.
-		if q != 0 && weight > (^uint64(0)-numerator)/uint64(q) {
-			return 0
-		}
-		numerator += uint64(q) * weight
-		if ^uint64(0)-denominator < weight {
-			return 0
-		}
-		denominator += weight
-	}
-	if denominator == 0 {
+	verified, err := VerifyReleaseStatsMeasurement(stats.currentReleaseStatsMeasurement())
+	if err != nil {
 		return 0
 	}
-	return uint32(numerator / denominator)
+	return PoolQualityFromReleaseStats(verified, bound)
 }
 
 func ExactHeadScores(fleets map[uint16]map[[32]byte]bool) map[uint16]*big.Rat {

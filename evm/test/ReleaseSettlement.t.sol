@@ -5,9 +5,13 @@ import {ReleaseBase} from "./utils/ReleaseBase.sol";
 import {STCoordinator} from "../src/STCoordinator.sol";
 import {STSettlementVault} from "../src/STSettlementVault.sol";
 import {STCoordinatorAdversary} from "../src/testnet/STCoordinatorAdversary.sol";
+import {NativeBalance} from "../src/NativeBalance.sol";
+import {INeuron_ADDRESS} from "../src/interfaces/neuron.sol";
+import {ISR25519VERIFY_ADDRESS} from "../src/interfaces/sr25519Verify.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-contract MaliciousCoordinatorV2 is STCoordinator {
+/// @dev Reuses the stateless hostile UUPS implementation for the real vault attack.
+contract MaliciousCoordinatorV2 is STCoordinatorAdversary {
     function attackRewrite(
         STSettlementVault target,
         uint256 epoch,
@@ -17,6 +21,36 @@ contract MaliciousCoordinatorV2 is STCoordinator {
         uint64 expiry
     ) external {
         target.finalizeEntitlement(epoch, noId, root, artifact, expiry);
+    }
+}
+
+contract NativeBalanceHarness {
+    function beforeSuppliedValue(uint256 currentBalance, uint256 suppliedValue)
+        external
+        pure
+        returns (uint256)
+    {
+        return NativeBalance.beforeSuppliedValue(currentBalance, suppliedValue);
+    }
+}
+
+contract Runtime453FrameHarness {
+    function delegateRegister(uint16 netuid, bytes32 hotkey, uint64 limitPrice) external returns (bool) {
+        (bool ok,) = INeuron_ADDRESS.delegatecall(
+            abi.encodeWithSignature("registerLimit(uint16,bytes32,uint64)", netuid, hotkey, limitPrice)
+        );
+        return ok;
+    }
+
+    function delegateVerify(bytes32 message, bytes32 pubkey, bytes32 r, bytes32 s)
+        external
+        returns (bool ok, bool verified)
+    {
+        bytes memory result;
+        (ok, result) = ISR25519VERIFY_ADDRESS.delegatecall(
+            abi.encodeWithSignature("verify(bytes32,bytes32,bytes32,bytes32)", message, pubkey, r, s)
+        );
+        if (ok) verified = abi.decode(result, (bool));
     }
 }
 
@@ -57,16 +91,59 @@ contract ReleaseSettlementTest is ReleaseBase {
     }
 
     function test_registrationRejectsZeroBurnLimit() public {
-        STSettlementVault unregistered =
-            new STSettlementVault(NETUID, keccak256("zero-limit-escrow"), VAULT_COLDKEY, 1, address(this));
+        STSettlementVault unregistered = new STSettlementVault(
+            NETUID, keccak256("zero-limit-escrow"), VAULT_COLDKEY, 1, MINIMUM_TRANSFER_TAO_RAO, address(this)
+        );
         vm.expectRevert(STSettlementVault.InvalidConfiguration.selector);
         unregistered.registerEscrow(0);
+    }
+
+    function test_runtime453ExistentialDepositCannotUnderflowFirstRegistration() public {
+        NativeBalanceHarness harness = new NativeBalanceHarness();
+        uint256 supplied = 1_000_000 * 1e9;
+        uint256 runtimeExistentialDeposit = 500 * 1e9;
+
+        assertEq(harness.beforeSuppliedValue(supplied - runtimeExistentialDeposit, supplied), 0);
+    }
+
+    function test_runtime453RegistrationPreservesExistingReducibleBalance() public {
+        NativeBalanceHarness harness = new NativeBalanceHarness();
+        uint256 supplied = 1_000_000 * 1e9;
+        uint256 existingReducibleBalance = 71_000 * 1e9;
+
+        assertEq(
+            harness.beforeSuppliedValue(existingReducibleBalance + supplied, supplied),
+            existingReducibleBalance
+        );
+    }
+
+    function test_standardEVMRegistrationPreservesExistingBalance() public {
+        NativeBalanceHarness harness = new NativeBalanceHarness();
+        uint256 supplied = 1 ether;
+        uint256 existingBalance = 3 ether;
+
+        assertEq(harness.beforeSuppliedValue(existingBalance + supplied, supplied), existingBalance);
+    }
+
+    function test_runtime453RetainsV452ForeignFramePolicy() public {
+        Runtime453FrameHarness harness = new Runtime453FrameHarness();
+
+        assertFalse(harness.delegateRegister(NETUID, keccak256("foreign-frame"), REGISTRATION_BURN_LIMIT));
+        (bool ok, bool verified) = harness.delegateVerify(
+            keccak256("message"), keccak256("pubkey"), bytes32(uint256(1)), bytes32(uint256(2))
+        );
+        assertTrue(ok);
+        assertTrue(verified);
+
+        assertEq(neuron.lastRegistrant(), address(vault));
+        assertEq(neuron.lastNetuid(), NETUID);
     }
 
     function test_registrationSurplusReturnsThroughVaultAndCoordinator() public {
         address payer = makeAddr("registration-payer");
         bytes32 escrow = keccak256("refund-escrow");
-        STSettlementVault unregistered = new STSettlementVault(NETUID, escrow, VAULT_COLDKEY, 1, payer);
+        STSettlementVault unregistered =
+            new STSettlementVault(NETUID, escrow, VAULT_COLDKEY, 1, MINIMUM_TRANSFER_TAO_RAO, payer);
         neuron.setUid(NETUID, escrow, 40);
         vm.deal(payer, 2 ether);
         uint256 payerBefore = payer.balance;
@@ -101,8 +178,14 @@ contract ReleaseSettlementTest is ReleaseBase {
     }
 
     function test_coordinatorCannotInitializeAgainstAnUnregisteredEscrow() public {
-        STSettlementVault unregistered =
-            new STSettlementVault(NETUID, keccak256("unregistered-escrow"), VAULT_COLDKEY, 1, address(this));
+        STSettlementVault unregistered = new STSettlementVault(
+            NETUID,
+            keccak256("unregistered-escrow"),
+            VAULT_COLDKEY,
+            1,
+            MINIMUM_TRANSFER_TAO_RAO,
+            address(this)
+        );
         STCoordinator nextImplementation = new STCoordinator();
         vm.expectRevert(STCoordinator.InvalidConfiguration.selector);
         new ERC1967Proxy(
@@ -124,6 +207,25 @@ contract ReleaseSettlementTest is ReleaseBase {
         vault.claim(0, NO1, PROVIDER1, 10_000, proof);
         assertEq(staking.stakes(ESCROW_HOTKEY, PROVIDER1), 1_000);
         assertEq(vault.totalPaid(), 1_000);
+        assertTrue(vault.conservationHolds());
+    }
+
+    function test_lateFinalizerPreservesMinimumClaimWindowWithoutStrandingRoot() public {
+        _accrue(NO1, 1_000);
+        _close(0, NO1);
+        (bytes32 root,) = _singleLeaf(PROVIDER1, 10_000);
+        vm.prank(rootSigner1);
+        coordinator.commitOperatorRoot(0, NO1, root, keccak256("late-finalizer-artifact"));
+
+        uint256 policyExpiry = coordinator.epochStartBlock(10) - 1;
+        vm.roll(policyExpiry + 7);
+        uint256 finalizedAt = block.number;
+        coordinator.finalizeOperatorEpoch(0, NO1);
+
+        STSettlementVault.Entitlement memory entitlement = vault.entitlement(0, NO1);
+        assertEq(uint256(entitlement.status), uint256(STSettlementVault.EpochStatus.Finalized));
+        assertEq(entitlement.total, 1_000);
+        assertEq(entitlement.expiryBlock, finalizedAt + MINIMUM_CLAIM_TTL_BLOCKS);
         assertTrue(vault.conservationHolds());
     }
 
@@ -230,6 +332,17 @@ contract ReleaseSettlementTest is ReleaseBase {
         assertEq(afterEntitlement.artifactHash, beforeEntitlement.artifactHash);
         assertEq(afterEntitlement.total, beforeEntitlement.total);
         assertEq(afterEntitlement.expiryBlock, beforeEntitlement.expiryBlock);
+
+        STCoordinator reviewed = new STCoordinator();
+        vm.prank(owner);
+        STCoordinatorAdversary(payable(address(coordinator))).upgradeToAndCall(address(reviewed), bytes(""));
+        assertEq(coordinator.owner(), owner);
+        assertEq(coordinator.netuid(), NETUID);
+        assertEq(address(coordinator.settlementVault()), address(vault));
+        assertEq(address(coordinator.reserveSink()), address(sink));
+        assertTrue(coordinator.paused());
+        vm.prank(owner);
+        coordinator.setPaused(false);
 
         // Claims are deliberately outside the coordinator pause/upgrade path.
         vault.claim(0, NO1, PROVIDER1, 10_000, proof);

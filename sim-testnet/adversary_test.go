@@ -3,21 +3,31 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/ethereum/go-ethereum/common"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/urfoundation/sn/payoutartifact"
+	"github.com/urfoundation/sn/stabi"
 	"github.com/urnetwork/connect"
 )
 
@@ -96,15 +106,27 @@ func (self *scenarioAdversaryStub) Stop(context.Context) (*AdversaryCampaignEvid
 func (self *scenarioAdversaryStub) Snapshot() *AdversaryCampaignEvidence { return self.evidence }
 
 func healthyAdversaryEvidence() *AdversaryCampaignEvidence {
+	started := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	happyStarted := started.Add(time.Minute)
+	happyCompleted := happyStarted.Add(10 * time.Minute)
+	stopped := happyCompleted.Add(time.Second)
 	evidence := &AdversaryCampaignEvidence{
 		Schema: "urnetwork-adversary-campaign-v1", Release: "1.0", MatrixHash: "0x" + strings.Repeat("ab", 32),
+		StartedAt: started.Format(time.RFC3339Nano), HappyPathStartedAt: happyStarted.Format(time.RFC3339Nano), HappyPathCompletedAt: happyCompleted.Format(time.RFC3339Nano), StoppedAt: stopped.Format(time.RFC3339Nano),
 		StartedBeforeHappyPath: true, StoppedAfterHappyPath: true, MinimumSamplesPerActor: 10,
+		MaximumSampleGapMillis:   25_000,
 		MaximumActorErrorRatePPM: 10_000, MaximumP99Milliseconds: 15_000, MaximumAttackControlRatio: 20_000_000, Status: "stopped",
 	}
 	for _, id := range releaseAdversaryActorIDs {
+		metrics := map[string]AdversaryMetricEvidence{}
+		if id == "custody-boundary-emulation" {
+			metrics["live_invalid_merkle_proof_rejections"] = AdversaryMetricEvidence{Samples: 1, Minimum: 2, Maximum: 2, Last: 2}
+			metrics["live_merkle_state_mutations"] = AdversaryMetricEvidence{Samples: 1, Minimum: 0, Maximum: 0, Last: 0}
+		}
 		evidence.Actors = append(evidence.Actors, AdversaryActorEvidence{
 			ID: id, VectorIDs: []string{"vector"}, Status: "stopped", Samples: 10, ControlSamples: 2, AttackSamples: 8,
-			Successful: 10, P99LatencyMilliseconds: 10,
+			StartedAt: evidence.StartedAt, StoppedAt: evidence.StoppedAt, FirstSampleAt: started.Add(time.Second).Format(time.RFC3339Nano), LastSampleAt: happyCompleted.Format(time.RFC3339Nano), MaximumSampleGapMillis: 1_000,
+			Successful: 10, P99LatencyMilliseconds: 10, Metrics: metrics,
 		})
 	}
 	for _, id := range requiredAdversarialVectors {
@@ -146,8 +168,280 @@ func TestAdversarialMetricCoverageRejectsUnmeasuredRow(t *testing.T) {
 	matrix := &AdversarialMatrix{Rows: []AdversarialMatrixRow{{
 		ID: "unmeasured", ActorIDs: []string{"operator-api-pressure"}, Metrics: []string{"never_emitted"},
 	}}}
-	if err := validateAdversarialMetricCoverage(matrix, releaseAdversaryMetricCatalog); err == nil || !strings.Contains(err.Error(), "no metric emitted") {
+	if err := validateAdversarialMetricCoverage(matrix, releaseAdversaryMetricCatalog); err == nil || !strings.Contains(err.Error(), "required metric never_emitted") {
 		t.Fatalf("unmeasured matrix row error=%v", err)
+	}
+}
+
+// Rejects a row whose mapped actor omits one required metric.
+func TestAdversarialMetricCoverageRejectsPartiallyMeasurableRow(t *testing.T) {
+	matrix := &AdversarialMatrix{Rows: []AdversarialMatrixRow{{
+		ID: "partially-measurable", ActorIDs: []string{"operator-api-pressure"}, Metrics: []string{"request_rate", "never_emitted"},
+	}}}
+	if err := validateAdversarialMetricCoverage(matrix, releaseAdversaryMetricCatalog); err == nil || !strings.Contains(err.Error(), "required metric never_emitted") {
+		t.Fatalf("partially measurable matrix row error=%v", err)
+	}
+}
+
+// Confirms every reviewed requirement maps to an actor that emits it.
+func TestAdversarialMatrixEveryRequiredMetricHasAnExactMappedActor(t *testing.T) {
+	cfg := testResolvedConfig(t)
+	matrix, err := loadAdversarialMatrix(cfg.Repos.SN, cfg.Config.Scenarios.Adversaries.Matrix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range matrix.Rows {
+		for _, metric := range row.Metrics {
+			var owners []string
+			for _, actorID := range row.ActorIDs {
+				if releaseAdversaryMetricCatalog[actorID][metric] {
+					owners = append(owners, actorID)
+				}
+			}
+			if len(owners) == 0 {
+				t.Fatalf("row=%s metric=%s has no exact mapped actor", row.ID, metric)
+			}
+		}
+	}
+}
+
+// Rejects absent, false, diverging, or unfounded direct runtime state.
+func TestAdversaryCommitRevealRuntimeObservationFailsClosed(t *testing.T) {
+	hash := types.Hash{1}
+	left := adversaryCommitRevealObservation{Endpoint: "wss://operational.example", Finalized: 101, FinalizedHash: hash, Enabled: true, Tempo: 360, RevealPeriods: 2}
+	right := left
+	right.Endpoint = "wss://public.example"
+	delay, err := validateAdversaryCommitRevealObservations(left, right)
+	if err != nil || delay != 720 {
+		t.Fatalf("valid direct commit/reveal observation delay=%d error=%v", delay, err)
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*adversaryCommitRevealObservation, *adversaryCommitRevealObservation)
+	}{
+		{name: "malformed endpoint", mutate: func(left, _ *adversaryCommitRevealObservation) { left.Endpoint = "" }},
+		{name: "false agreement", mutate: func(left, right *adversaryCommitRevealObservation) { left.Enabled, right.Enabled = false, false }},
+		{name: "enabled disagreement", mutate: func(_, right *adversaryCommitRevealObservation) { right.Enabled = false }},
+		{name: "finalized disagreement", mutate: func(_, right *adversaryCommitRevealObservation) { right.Finalized++ }},
+		{name: "hash disagreement", mutate: func(_, right *adversaryCommitRevealObservation) { right.FinalizedHash[0]++ }},
+		{name: "zero tempo", mutate: func(left, _ *adversaryCommitRevealObservation) { left.Tempo = 0 }},
+		{name: "schedule disagreement", mutate: func(_, right *adversaryCommitRevealObservation) { right.RevealPeriods++ }},
+	} {
+		candidateLeft, candidateRight := left, right
+		test.mutate(&candidateLeft, &candidateRight)
+		if value, validationErr := validateAdversaryCommitRevealObservations(candidateLeft, candidateRight); validationErr == nil || value != 0 {
+			t.Errorf("%s value=%d error=%v", test.name, value, validationErr)
+		}
+	}
+}
+
+// Exercises auxiliary models that emit every metric of multi-metric rows.
+func TestAdversaryAdditionalMetricModelsMeasureMultiMetricRows(t *testing.T) {
+	commitRejects, revealRejects, err := adversaryCommitRevealTransitionMetrics(7)
+	if err != nil || commitRejects != 1 || revealRejects != 1 {
+		t.Fatalf("commit/reveal transition metrics=%d/%d error=%v", commitRejects, revealRejects, err)
+	}
+	saturation, honestBlocks, err := adversaryNormalClassAdmissionMetrics()
+	if err != nil || saturation != 1_000_000 || honestBlocks != 1 {
+		t.Fatalf("normal-class metrics=%d/%d error=%v", saturation, honestBlocks, err)
+	}
+	take, cooldown, err := adversaryHotkeySwapMetrics(7)
+	if err != nil || take != 1 || cooldown != 1 {
+		t.Fatalf("hotkey metrics=%d/%d error=%v", take, cooldown, err)
+	}
+	denied, surface, err := adversaryProxyAliasMetrics()
+	if err != nil || denied != 4 || surface == 0 {
+		t.Fatalf("proxy alias metrics=%d/%d error=%v", denied, surface, err)
+	}
+	diverged, restored, err := adversaryValidatorBoundaryMetrics(200)
+	if err != nil || diverged != 1 || restored != 1 {
+		t.Fatalf("validator boundary metrics=%d/%d error=%v", diverged, restored, err)
+	}
+	if _, _, err := adversaryValidatorBoundaryMetrics(199); err == nil {
+		t.Fatal("non-release top-200 boundary was accepted")
+	}
+	duplicateRejects, err := adversaryDuplicateLeafRejections()
+	if err != nil || duplicateRejects != 1 {
+		t.Fatalf("duplicate leaf metrics=%d error=%v", duplicateRejects, err)
+	}
+	reentrancyRejects, receivedDelta, err := adversarySettlementReentrancyMetrics()
+	if err != nil || reentrancyRejects != 1 || receivedDelta != 0 {
+		t.Fatalf("settlement reentrancy metrics=%d/%d error=%v", reentrancyRejects, receivedDelta, err)
+	}
+	worstGas, runtimeBytes, err := adversaryReleaseBytecodeMetrics(testResolvedConfig(t))
+	if err != nil || worstGas == 0 || runtimeBytes == 0 {
+		t.Fatalf("release bytecode metrics=%d/%d error=%v", worstGas, runtimeBytes, err)
+	}
+	plaintextRejects, err := adversaryExternalPlaintextEndpointRejections()
+	if err != nil || plaintextRejects != 2 {
+		t.Fatalf("plaintext endpoint metrics=%d error=%v", plaintextRejects, err)
+	}
+}
+
+// Empty decoded bytes have no decode error; diagnostics must still reject
+// them without wrapping a nil cause. Each case uses an isolated artifact list.
+func TestAdversaryReleaseBytecodeMetricsRejectMalformedAndEmptyRuntime(t *testing.T) {
+	cfg := testResolvedConfig(t)
+	originalArtifacts := ReleaseContractArtifacts
+	t.Cleanup(func() { ReleaseContractArtifacts = originalArtifacts })
+	for _, test := range []struct {
+		name string
+		code string
+		want string
+	}{
+		{name: "empty", code: "", want: "malformed"},
+		{name: "prefix-only", code: "0x", want: "malformed"},
+		{name: "invalid-hex", code: "0xzz", want: "malformed"},
+		{name: "odd-hex", code: "0x1", want: "malformed"},
+		{name: "hash-drift", code: "0x01", want: "hash drifted"},
+	} {
+		ReleaseContractArtifacts = []ContractArtifact{{Name: test.name, RuntimeBytecode: test.code, RuntimeBytecodeHash: originalArtifacts[0].RuntimeBytecodeHash}}
+		gas, size, err := adversaryReleaseBytecodeMetrics(cfg)
+		if err == nil || gas != 0 || size != 0 || !strings.Contains(err.Error(), test.want) || strings.Contains(err.Error(), "%!") {
+			t.Fatalf("%s runtime metrics=%d/%d error=%v", test.name, gas, size, err)
+		}
+		if test.name == "invalid-hex" && !errors.As(err, new(hex.InvalidByteError)) {
+			t.Fatalf("invalid runtime hex lost its decode cause: %v", err)
+		}
+		if test.name == "odd-hex" && !errors.Is(err, hex.ErrLength) {
+			t.Fatalf("odd runtime hex lost its decode cause: %v", err)
+		}
+	}
+}
+
+// Requires finalized implementation code and rejects stale or tampered cache state.
+func TestAdversaryLiveCoordinatorImplementationUsesFinalizedCode(t *testing.T) {
+	cfg := testResolvedConfig(t)
+	stateDir := t.TempDir()
+	gate, err := newAdversaryRequestGate(100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &adversaryHTTP{gate: gate, timeout: time.Second}
+	if observed, requests, err := adversaryLiveCoordinatorImplementationCodeHash(context.Background(), cfg, stateDir, client, 1); err != nil || observed || requests != 0 {
+		t.Fatalf("missing deployment observed=%t requests=%d error=%v", observed, requests, err)
+	}
+	implementation := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	code := []byte{0x60, 0x00, 0x60, 0x00, 0xf3}
+	if err := saveContractDeployment(stateDir, ContractDeployment{
+		Schema:                    "urnetwork-contract-deployment-v1",
+		DeploymentID:              cfg.Config.Deployment.DeploymentID,
+		CoordinatorImplementation: implementation,
+		RuntimeHashes:             map[string]string{implementation.Hex(): ethcrypto.Keccak256Hash(code).Hex()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	badCode := false
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		defer request.Body.Close()
+		var call struct {
+			JSONRPC string            `json:"jsonrpc"`
+			ID      uint64            `json:"id"`
+			Method  string            `json:"method"`
+			Params  []json.RawMessage `json:"params"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&call); err != nil {
+			t.Errorf("decode request: %v", err)
+			return
+		}
+		requests++
+		response := map[string]any{"jsonrpc": "2.0", "id": call.ID}
+		switch call.Method {
+		case "eth_getBlockByNumber":
+			if len(call.Params) != 2 || string(call.Params[0]) != `"finalized"` || string(call.Params[1]) != "false" {
+				t.Errorf("finalized block params=%s", call.Params)
+			}
+			response["result"] = map[string]string{"number": "0x64", "hash": "0x" + strings.Repeat("ab", 32)}
+		case "eth_getCode":
+			var address, block string
+			if len(call.Params) != 2 || json.Unmarshal(call.Params[0], &address) != nil || json.Unmarshal(call.Params[1], &block) != nil || !strings.EqualFold(address, implementation.Hex()) || block != "0x64" {
+				t.Errorf("implementation code params=%s", call.Params)
+			}
+			observedCode := code
+			if badCode {
+				observedCode = []byte{0x60, 0x01}
+			}
+			response["result"] = "0x" + hex.EncodeToString(observedCode)
+		default:
+			response["error"] = map[string]any{"code": -32601, "message": "unknown method"}
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(writer).Encode(response); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+	cfg.OperationalEVM = server.URL
+	actor := &custodyAdversary{cfg: cfg, stateDir: stateDir, rpcHTTP: client}
+	if observed, calls, err := actor.liveImplementationMetric(context.Background(), 7); err != nil || !observed || calls != 2 || requests != 2 {
+		t.Fatalf("finalized implementation observed=%t calls=%d requests=%d error=%v", observed, calls, requests, err)
+	}
+	if observed, calls, err := actor.liveImplementationMetric(context.Background(), 8); err != nil || !observed || calls != 0 || requests != 2 {
+		t.Fatalf("cached implementation observed=%t calls=%d requests=%d error=%v", observed, calls, requests, err)
+	}
+	actor.implementationPassed = false
+	badCode = true
+	if observed, calls, err := actor.liveImplementationMetric(context.Background(), 9); err == nil || observed || calls != 2 || requests != 4 {
+		t.Fatalf("tampered finalized implementation observed=%t calls=%d requests=%d error=%v", observed, calls, requests, err)
+	}
+}
+
+// Caches direct state only after both endpoints agree at a finalized head.
+func TestAdversaryCommitRevealProbeCachesOnlyValidatedDirectState(t *testing.T) {
+	hash := types.Hash{7}
+	left := adversaryCommitRevealObservation{Endpoint: "wss://operational.example", Finalized: 19, FinalizedHash: hash, Enabled: true, Tempo: 360, RevealPeriods: 1}
+	right := left
+	right.Endpoint = "wss://public.example"
+	calls := 0
+	actor := &rpcAdversary{commitRevealProbe: func(context.Context, *ResolvedConfig) (adversaryCommitRevealObservation, adversaryCommitRevealObservation, uint64, error) {
+		calls++
+		return left, right, 360, nil
+	}}
+	for index := 0; index < 2; index++ {
+		observedLeft, observedRight, delay, err := actor.observeCommitReveal(context.Background())
+		if err != nil || observedLeft != left || observedRight != right || delay != 360 {
+			t.Fatalf("call=%d left=%+v right=%+v delay=%d error=%v", index, observedLeft, observedRight, delay, err)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("validated commit/reveal probe calls=%d, want one cached observation", calls)
+	}
+	actor = &rpcAdversary{commitRevealProbe: func(context.Context, *ResolvedConfig) (adversaryCommitRevealObservation, adversaryCommitRevealObservation, uint64, error) {
+		left.Enabled = false
+		return left, right, 360, nil
+	}}
+	if _, _, delay, err := actor.observeCommitReveal(context.Background()); err == nil || delay != 0 {
+		t.Fatalf("false direct commit/reveal state delay=%d error=%v", delay, err)
+	}
+}
+
+// Separates control and poison values derived from live verifier samples.
+func TestVerifyAdversarySupplementalMetricsUseRealControlAndPoisonSamples(t *testing.T) {
+	actor := &verifyAdversary{completedByNo: map[int]uint64{}, attemptedByNo: map[int]uint64{}}
+	control, err := actor.supplementalMetrics(1, adversaryControlPhase, false, 10*time.Millisecond)
+	if err != nil || control["external_plaintext_endpoint_rejections"] != 2 || control["quality_delta_by_no"] != 0 || control["abandonment_rate_ppm"] != 0 {
+		t.Fatalf("control supplemental metrics=%v error=%v", control, err)
+	}
+	poison, err := actor.supplementalMetrics(1, adversaryAttackPhase, true, 20*time.Millisecond)
+	if err != nil || poison["real_poison_p95_ratio_ppm"] != 2_000_000 || poison["p99_latency_ms"] == 0 {
+		t.Fatalf("poison supplemental metrics=%v error=%v", poison, err)
+	}
+}
+
+// Binds healthy durable process identities and aggregate restart observations.
+func TestOperatorSupervisorIdentityBindsDurableIdentityAndRestartCount(t *testing.T) {
+	state := SupervisorState{Processes: []ProcessState{
+		{ID: "operator-1-api", Role: "operator-api", Identity: "no:1", Restarts: 2, Healthy: true},
+		{ID: "operator-2-api", Role: "operator-api", Identity: "no:2", Restarts: 3, Healthy: true},
+	}}
+	restarts, fingerprint, err := operatorSupervisorIdentity(state)
+	if err != nil || restarts != 5 || fingerprint == "" {
+		t.Fatalf("supervisor identity restarts=%d fingerprint=%q error=%v", restarts, fingerprint, err)
+	}
+	state.Processes[0].Healthy = false
+	if _, _, err := operatorSupervisorIdentity(state); err == nil {
+		t.Fatal("unhealthy supervisor process was accepted")
 	}
 }
 
@@ -158,12 +452,13 @@ func TestAdversarialMatrixKeepsChainWideAttacksOffSharedTestnet(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantLocal := map[string]bool{
-		"weights-withhold-late-invalid-reveal":  true,
-		"weights-fee-free-block-fill":           true,
-		"hotkey-swap-reputation-reset":          true,
-		"proxy-scope-alias-bypass":              true,
-		"root-staking-index-state-bloat":        true,
-		"root-claimed-swap-watermark-inflation": true,
+		"weights-withhold-late-invalid-reveal":    true,
+		"weights-fee-free-block-fill":             true,
+		"hotkey-swap-reputation-reset":            true,
+		"proxy-scope-alias-bypass":                true,
+		"root-staking-index-state-bloat":          true,
+		"root-claimed-swap-watermark-inflation":   true,
+		"runtime-signed-precompile-foreign-frame": true,
 	}
 	for _, row := range matrix.Rows {
 		if wantLocal[row.ID] && row.ExecutionMode != "local-runtime-only" {
@@ -189,6 +484,7 @@ func TestAdversarialMatrixReferencesOnlyCheckedInTests(t *testing.T) {
 	discoverGoTestReferences(t, cfg.Repos.SN, "", references)
 	discoverGoTestReferences(t, cfg.Repos.Server, "server", references)
 	discoverSolidityTestReferences(t, filepath.Join(cfg.Repos.SN, "evm", "test"), references)
+	discoverShellTestReferences(t, cfg.Repos.SN, references)
 	for _, row := range matrix.Rows {
 		for _, reference := range row.LocalTests {
 			if !references[reference] {
@@ -322,6 +618,59 @@ func TestAdversaryCampaignEnforcesErrorAndLatencyBounds(t *testing.T) {
 	}
 }
 
+func TestAdversaryCampaignRejectsUnsignedSamplingGapAcrossHappyPath(t *testing.T) {
+	evidence := healthyAdversaryEvidence()
+	evidence.Actors[0].MaximumSampleGapMillis = evidence.MaximumSampleGapMillis + 1
+	wantID := "adversary_" + evidence.Actors[0].ID + "_continuous_sampling"
+	found := false
+	for _, assertion := range adversaryAssertions(evidence, time.Now().Add(-time.Second), "observation") {
+		if assertion.ID == wantID && !assertion.Passed {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("adversary sampling gap did not fail %s", wantID)
+	}
+}
+
+func TestAdversaryCampaignRejectsLastSampleBeforeHappyPathCompletion(t *testing.T) {
+	evidence := healthyAdversaryEvidence()
+	happyCompleted, err := time.Parse(time.RFC3339Nano, evidence.HappyPathCompletedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence.Actors[0].LastSampleAt = happyCompleted.Add(-time.Duration(evidence.MaximumSampleGapMillis+1) * time.Millisecond).Format(time.RFC3339Nano)
+	wantID := "adversary_" + evidence.Actors[0].ID + "_continuous_sampling"
+	found := false
+	for _, assertion := range adversaryAssertions(evidence, time.Now().Add(-time.Second), "observation") {
+		if assertion.ID == wantID && !assertion.Passed {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("early final adversary sample did not fail %s", wantID)
+	}
+}
+
+func TestAdversaryCampaignRequiresLiveInvalidMerkleProofEvidence(t *testing.T) {
+	evidence := healthyAdversaryEvidence()
+	for index := range evidence.Actors {
+		if evidence.Actors[index].ID == "custody-boundary-emulation" {
+			delete(evidence.Actors[index].Metrics, "live_invalid_merkle_proof_rejections")
+			break
+		}
+	}
+	foundFailure := false
+	for _, assertion := range adversaryAssertions(evidence, time.Now().Add(-time.Second), "observation") {
+		if assertion.ID == "adversary_live_invalid_merkle_proof" && !assertion.Passed {
+			foundFailure = true
+		}
+	}
+	if !foundFailure {
+		t.Fatal("campaign without a live InvalidProof observation was accepted")
+	}
+}
+
 func TestAdversaryMetricSnapshotOwnsCampaignHistory(t *testing.T) {
 	state := &adversaryActorState{evidence: AdversaryActorEvidence{
 		ID: "rpc-consistency-pressure",
@@ -386,6 +735,47 @@ func TestAdversaryVectorRequiresNamedMeasuredMetric(t *testing.T) {
 	if vectors[0].Status != "pass" || len(vectors[0].MeasuredMetrics) != 1 || vectors[0].MeasuredMetrics[0] != "required_metric" {
 		t.Fatalf("measured vector evidence=%+v", vectors)
 	}
+}
+
+// Requires every declared metric rather than one representative sample.
+func TestAdversaryVectorRequiresEveryNamedMeasuredMetric(t *testing.T) {
+	campaign := &liveAdversaryCampaign{
+		cfg: AdversaryConfig{MinimumSamplesPerActor: 1, MaximumP99LatencyMilliseconds: 100, MaximumAttackControlP95Ratio: 2_000_000},
+		matrix: &AdversarialMatrix{Rows: []AdversarialMatrixRow{{
+			ID: "vector", Class: "test", ExecutionMode: "bounded-emulation", ActorIDs: []string{"actor"},
+			Metrics: []string{"first_required_metric", "second_required_metric"}, LocalTests: []string{"test"}, Oracle: "sampled",
+		}}},
+		stopped: true,
+	}
+	actor := AdversaryActorEvidence{
+		ID: "actor", Status: "stopped", Samples: 1, ControlSamples: 1, AttackSamples: 1,
+		Metrics: map[string]AdversaryMetricEvidence{"first_required_metric": {Samples: 1, Last: 7}},
+	}
+	vectors := campaign.vectorEvidenceLocked(map[string]AdversaryActorEvidence{"actor": actor})
+	if len(vectors) != 1 || vectors[0].Status != "fail" || len(vectors[0].MeasuredMetrics) != 1 {
+		t.Fatalf("partially measured vector evidence=%+v", vectors)
+	}
+	actor.Metrics["second_required_metric"] = AdversaryMetricEvidence{Samples: 1, Last: 8}
+	vectors = campaign.vectorEvidenceLocked(map[string]AdversaryActorEvidence{"actor": actor})
+	if vectors[0].Status != "pass" || !adversaryMeasuredEveryRequiredMetric(vectors[0].RequiredMetrics, vectors[0].MeasuredMetrics) {
+		t.Fatalf("completely measured vector evidence=%+v", vectors)
+	}
+}
+
+// Rejects assertions that omit any declared measured metric.
+func TestAdversaryAssertionsRequireEveryNamedMeasuredMetric(t *testing.T) {
+	evidence := healthyAdversaryEvidence()
+	evidence.Vectors[0].RequiredMetrics = append(evidence.Vectors[0].RequiredMetrics, "missing_required_metric")
+	wantID := "adversary_vector_" + evidence.Vectors[0].ID
+	for _, assertion := range adversaryAssertions(evidence, time.Now().Add(-time.Second), "observation") {
+		if assertion.ID == wantID {
+			if assertion.Passed {
+				t.Fatalf("partially measured vector passed assertion: %+v", assertion)
+			}
+			return
+		}
+	}
+	t.Fatalf("adversarial vector assertion %s is absent", wantID)
 }
 
 func TestScenarioRunnerPersistsContinuousAdversariesAcrossHappyPath(t *testing.T) {
@@ -476,6 +866,25 @@ func TestCustodyBoundaryEmulationSeparatesDomainsAndConservesRounding(t *testing
 	}
 }
 
+func TestLiveMerkleRetryOnlyMasksTheScheduledOperatorOutage(t *testing.T) {
+	if !liveMerkleRetryable(fmt.Errorf("artifact pending: %w", errLiveMerkleEvidenceUnavailable), false) {
+		t.Fatal("an unavailable entitlement was not retryable")
+	}
+	operatorUnavailable := fmt.Errorf("history: %w", errLiveMerkleOperatorUnavailable)
+	if liveMerkleRetryable(operatorUnavailable, false) || !liveMerkleRetryable(operatorUnavailable, true) {
+		t.Fatal("operator unavailability was not scoped to its scheduled fault")
+	}
+	for _, err := range []error{
+		errors.New("invalid proof succeeded"),
+		errors.New("artifact signature is invalid"),
+		errors.New("entitlement mutated"),
+	} {
+		if liveMerkleRetryable(err, true) {
+			t.Fatalf("scheduled operator outage masked a custody failure: %v", err)
+		}
+	}
+}
+
 func TestRegistrationBurnRaceModelRejectsSmallestPriceDrift(t *testing.T) {
 	delta, capacity, rejected, err := registrationBurnRaceModel(250_000_000, 32, 7)
 	if err != nil || delta != 1 || capacity != 25 || rejected != 1 {
@@ -553,7 +962,7 @@ func TestRPCAdversaryRejectsZeroMovingPriceAndSentinelDrift(t *testing.T) {
 		t.Fatal("zero moving price was accepted despite the mainnet-readiness stop condition")
 	}
 	if err := validateSubnetPrecompileSentinels(positive(10), positive(11), positive(9), positive(9), positive(2), positive(2), positive(100), positive(200)); err == nil {
-		t.Fatal("private/public spot-price drift was accepted")
+		t.Fatal("operational/public spot-price drift was accepted")
 	}
 }
 
@@ -622,6 +1031,16 @@ func TestRootBasketUnstakeSettlesProportionalHiddenReward(t *testing.T) {
 	}
 }
 
+func TestRuntime453RetainsRootBasketFailureIsolation(t *testing.T) {
+	terminal, healthy, retryable, blocked, err := rootBasketFailureIsolationModel(1_000, 100)
+	if err != nil || terminal != 1 || healthy != 1 || retryable != 1 || blocked {
+		t.Fatalf("root basket isolation terminal=%d healthy=%d retryable=%d blocked=%t error=%v", terminal, healthy, retryable, blocked, err)
+	}
+	if _, _, _, _, err := rootBasketFailureIsolationModel(0, 100); err == nil {
+		t.Fatal("zero pending-deposit control was accepted")
+	}
+}
+
 func TestProxyStakeMEVBoundRejectsSandwichSlippage(t *testing.T) {
 	control, err := emulateProxyStakeMEV(1_000_000_000_000, 2_000_000_000_000, 1_000_000_000, 0, 10_000)
 	if err != nil || control.UnshieldedOut != control.BaselineOut || control.UnshieldedLossPPM != 0 || control.ProtectedWouldReject {
@@ -661,6 +1080,21 @@ func TestRuntimeCompositeFailureModelRollsBackEveryWrite(t *testing.T) {
 	})
 	if err == nil || got != initial {
 		t.Fatalf("failed transaction state=%+v error=%v", got, err)
+	}
+}
+
+func TestSettlementTransferFloorModelDefersDustAndAggregatesCredit(t *testing.T) {
+	cases, err := settlementTransferFloorModel(100_000, 568_309)
+	if err != nil || cases != 5 {
+		t.Fatalf("settlement transfer-floor cases=%d error=%v", cases, err)
+	}
+}
+
+func TestSettlementTransferFloorModelRejectsMissingRuntimeEconomics(t *testing.T) {
+	for _, economics := range [][2]uint64{{0, 568_309}, {100_000, 0}} {
+		if _, err := settlementTransferFloorModel(economics[0], economics[1]); err == nil {
+			t.Fatalf("invalid settlement economics %v were accepted", economics)
+		}
 	}
 }
 
@@ -797,13 +1231,45 @@ func TestConcentratedLiquidityFailureIsAtomicAndRetryable(t *testing.T) {
 	}
 }
 
+// The retained v453 supplements model reviewed decisions in v454 and run under live sentinels;
+// they must not be mislabeled as executing the pinned FRAME runtime locally.
+func TestRuntime453DecisionModelsUseBoundedEmulationMode(t *testing.T) {
+	cfg := testResolvedConfig(t)
+	matrix, err := loadAdversarialMatrix(cfg.Repos.SN, cfg.Config.Scenarios.Adversaries.Matrix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{
+		"drand-randomness-signature-binding":         true,
+		"nested-proxy-filter-intersection":           true,
+		"balance-transfer-coldkey-swap-caller":       true,
+		"beta-escrow-stake-transfer-injection":       true,
+		"queued-registration-reservation-rate-price": true,
+	}
+	for _, row := range matrix.Rows {
+		if !want[row.ID] {
+			continue
+		}
+		delete(want, row.ID)
+		if row.ExecutionMode != "bounded-emulation" {
+			t.Errorf("runtime 453 decision model %s uses execution mode %s", row.ID, row.ExecutionMode)
+		}
+		if !slices.Contains(row.LocalTests, "scripts/check-runtime-v454-source.sh") {
+			t.Errorf("retained runtime decision model %s is not backed by the pinned v454 Rust source gate", row.ID)
+		}
+	}
+	for id := range want {
+		t.Errorf("runtime 453 decision model %s is absent", id)
+	}
+}
+
 func TestReleaseLockCoversEveryPublishedSubtensorAdvisory(t *testing.T) {
 	cfg := testResolvedConfig(t)
 	lock := new(ReleaseLock)
 	if err := strictYAML(filepath.Join(cfg.Repos.SN, "deploy", "testnet", "release.lock.yml"), lock); err != nil {
 		t.Fatal(err)
 	}
-	if lock.Runtime.SourceTag != "v447" || lock.Runtime.SourceCommit != "1f090af85d1771c5d8ece1f0910576fbd129906e" || lock.Runtime.SpecVersion < 419 {
+	if err := validateReviewedRuntimeIdentity(lock); err != nil {
 		t.Fatalf("release runtime does not postdate the published advisory fixes: %+v", lock.Runtime)
 	}
 	matrix, err := loadAdversarialMatrix(cfg.Repos.SN, cfg.Config.Scenarios.Adversaries.Matrix)
@@ -923,10 +1389,7 @@ func TestAdversarialRPCBlockDecoderRejectsMalformedAndErrors(t *testing.T) {
 	if _, _, err := decodeRPCBlock(invalid); err == nil {
 		t.Fatal("malformed RPC block was accepted")
 	}
-	withError := rpcResponse{Error: &struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-	}{Code: -32601, Message: "not found"}}
+	withError := rpcResponse{Error: &rpcResponseError{Code: -32601, Message: "not found"}}
 	if _, _, err := decodeRPCBlock(withError); err == nil {
 		t.Fatal("RPC error envelope was accepted as a block")
 	}
@@ -939,25 +1402,232 @@ func TestAdversarialRPCBlockDecoderRejectsMalformedAndErrors(t *testing.T) {
 	}
 }
 
+func TestInvalidMerkleProofResponseRequiresExactCustomError(t *testing.T) {
+	selector := stabi.STSettlementVaultInvalidProofErrorID().Bytes()[:4]
+	encoded := "0x" + hex.EncodeToString(selector)
+	valid := []rpcResponse{
+		{Error: &rpcResponseError{Code: 3, Message: "execution reverted", Data: json.RawMessage(fmt.Sprintf("%q", encoded))}},
+		{Error: &rpcResponseError{Code: 3, Message: "execution reverted", Data: json.RawMessage(fmt.Sprintf(`{"data":%q}`, encoded))}},
+	}
+	for index, response := range valid {
+		if err := requireInvalidProofResponse(response); err != nil {
+			t.Fatalf("valid InvalidProof response %d rejected: %v", index, err)
+		}
+	}
+	wrong := append([]byte(nil), selector...)
+	wrong[0]++
+	invalid := []rpcResponse{
+		{},
+		{Error: &rpcResponseError{Code: 3, Message: "execution reverted"}},
+		{Error: &rpcResponseError{Code: 3, Message: "execution reverted", Data: json.RawMessage(`"reverted"`)}},
+		{Error: &rpcResponseError{Code: 3, Message: "execution reverted", Data: json.RawMessage(fmt.Sprintf("%q", "0x"+hex.EncodeToString(wrong)))}},
+		{Error: &rpcResponseError{Code: 3, Message: "execution reverted", Data: json.RawMessage(fmt.Sprintf("%q", encoded+"00"))}},
+	}
+	for index, response := range invalid {
+		if err := requireInvalidProofResponse(response); err == nil {
+			t.Fatalf("invalid revert response %d was accepted", index)
+		}
+	}
+}
+
+func TestLiveMerkleOperatorSelectionCoversBothAttackPhaseParities(t *testing.T) {
+	passed := map[int]bool{}
+	first := nextLiveMerkleOperator(passed, 2, 1)
+	if first < 1 || first > 2 {
+		t.Fatalf("first live Merkle operator=%d", first)
+	}
+	passed[first] = true
+	second := nextLiveMerkleOperator(passed, 2, 3)
+	if second < 1 || second > 2 || second == first {
+		t.Fatalf("second live Merkle operator=%d after first=%d", second, first)
+	}
+	passed[second] = true
+	if next := nextLiveMerkleOperator(passed, 2, 5); next != 0 {
+		t.Fatalf("complete live Merkle operator set returned %d", next)
+	}
+}
+
+func encodeLiveMerkleEntitlement(artifact *payoutArtifact, mutated bool) []byte {
+	result := make([]byte, 7*32)
+	copy(result[:32], artifact.PayoutRoot[:])
+	artifactHash, _ := hex.DecodeString(strings.TrimPrefix(artifact.ContentHash, "sha256:"))
+	copy(result[32:64], artifactHash)
+	big.NewInt(1_000).FillBytes(result[64:96])
+	big.NewInt(1_000).FillBytes(result[96:128])
+	if mutated {
+		big.NewInt(1).FillBytes(result[128:160])
+	}
+	binary.BigEndian.PutUint64(result[184:192], 500)
+	result[len(result)-1] = 2
+	return result
+}
+
+func TestLiveInvalidMerkleProofProbeUsesPinnedReadOnlyCalls(t *testing.T) {
+	cfg := testResolvedConfig(t)
+	stateDir := t.TempDir()
+	coordinator := common.HexToAddress("0x0000000000000000000000000000000000000100")
+	vault := common.HexToAddress("0x0000000000000000000000000000000000000200")
+	if err := saveContractDeployment(stateDir, ContractDeployment{CoordinatorProxy: coordinator, SettlementVault: vault}); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := payoutartifact.Build(payoutartifact.BuildInput{
+		DeploymentID:         cfg.Config.Deployment.DeploymentID,
+		GenesisHash:          cfg.Public.Chain.GenesisHash,
+		PolicyHash:           cfg.PolicyHash,
+		ChainID:              cfg.ChainID,
+		Netuid:               cfg.Netuid,
+		Coordinator:          coordinator,
+		SettlementVault:      vault,
+		Epoch:                4,
+		NoID:                 1,
+		Start:                payoutartifact.Boundary{Number: 10, Hash: "0x" + strings.Repeat("01", 32)},
+		End:                  payoutartifact.Boundary{Number: 20, Hash: "0x" + strings.Repeat("02", 32)},
+		OperatorSnapshotHash: "sha256:" + strings.Repeat("10", 32),
+		FleetSnapshotHash:    "sha256:" + strings.Repeat("20", 32),
+		Providers: []payoutartifact.ProviderInput{{
+			ClientID: [16]byte{1}, NetworkID: [16]byte{2}, Coldkey: [32]byte{3}, UsageBytes: 100,
+			Assignments: 8, Confirmations: 8, Eligible: true,
+		}},
+		ReliabilityAMin: 8,
+		CreatedAt:       time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := ethcrypto.HexToECDSA(strings.Repeat("11", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := payoutartifact.Sign(artifact, key); err != nil {
+		t.Fatal(err)
+	}
+	artifactBytes, err := json.Marshal(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifactHash := strings.TrimPrefix(artifact.ContentHash, "sha256:")
+	historyKey := fmt.Sprintf("blob/operator-1/st/v1/history/%s/%d/%d/%d/%s.json", cfg.Config.Deployment.DeploymentID, cfg.Netuid, artifact.Epoch, artifact.NoID, artifactHash)
+	historyBytes, err := json.Marshal(payoutArtifactHistoryPage{
+		Schema: "urnetwork-payout-artifact-history-v1",
+		Objects: []payoutArtifactHistoryObject{{
+			Key:         historyKey,
+			Size:        int64(len(artifactBytes)),
+			ContentHash: artifact.ContentHash,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var invalidHistoryQuery atomic.Uint64
+	operatorServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/sn/artifacts":
+			query := request.URL.Query()
+			if request.Method != http.MethodGet || query.Get("deployment_id") != cfg.Config.Deployment.DeploymentID || query.Get("netuid") != strconv.FormatUint(uint64(cfg.Netuid), 10) || query.Get("limit") != strconv.Itoa(payoutArtifactHistoryPageObjects) || query.Get("after") != "" {
+				invalidHistoryQuery.Add(1)
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_, _ = writer.Write(historyBytes)
+		case "/sn/artifact":
+			if request.URL.Query().Get("hash") != artifact.ContentHash {
+				writer.WriteHeader(http.StatusNotFound)
+				return
+			}
+			_, _ = writer.Write(artifactBytes)
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer operatorServer.Close()
+
+	var invalidMethod, invalidBlock atomic.Uint64
+	var claimCalls atomic.Uint64
+	var mutateAfterClaim atomic.Bool
+	rpcServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var envelope struct {
+			JSONRPC string            `json:"jsonrpc"`
+			ID      uint64            `json:"id"`
+			Method  string            `json:"method"`
+			Params  []json.RawMessage `json:"params"`
+		}
+		if json.NewDecoder(request.Body).Decode(&envelope) != nil {
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		response := map[string]any{"jsonrpc": "2.0", "id": envelope.ID}
+		switch envelope.Method {
+		case "eth_getBlockByNumber":
+			response["result"] = map[string]any{"number": "0x64", "hash": "0x" + strings.Repeat("ab", 32)}
+		case "eth_call":
+			if len(envelope.Params) != 2 {
+				invalidBlock.Add(1)
+				break
+			}
+			var call map[string]string
+			var blockTag string
+			if json.Unmarshal(envelope.Params[0], &call) != nil || json.Unmarshal(envelope.Params[1], &blockTag) != nil || blockTag != "0x64" || !strings.EqualFold(call["to"], vault.Hex()) {
+				invalidBlock.Add(1)
+			}
+			data, decodeErr := hex.DecodeString(strings.TrimPrefix(call["data"], "0x"))
+			if decodeErr != nil || len(data) < 4 {
+				invalidMethod.Add(1)
+				break
+			}
+			switch hex.EncodeToString(data[:4]) {
+			case hex.EncodeToString(stabi.NewSTSettlementVault().PackEntitlement(big.NewInt(4), big.NewInt(1))[:4]):
+				response["result"] = "0x" + hex.EncodeToString(encodeLiveMerkleEntitlement(artifact, mutateAfterClaim.Load() && claimCalls.Load() > 0))
+			case hex.EncodeToString(stabi.NewSTSettlementVault().PackConservationHolds()[:4]):
+				conservation := make([]byte, 32)
+				conservation[31] = 1
+				response["result"] = "0x" + hex.EncodeToString(conservation)
+			case hex.EncodeToString(stabi.NewSTSettlementVault().PackClaim(big.NewInt(4), big.NewInt(1), artifact.Leaves[0].Coldkey, big.NewInt(9_999), artifact.Leaves[0].Proof)[:4]):
+				claimCalls.Add(1)
+				response["error"] = map[string]any{"code": 3, "message": "execution reverted", "data": "0x" + hex.EncodeToString(stabi.STSettlementVaultInvalidProofErrorID().Bytes()[:4])}
+			default:
+				invalidMethod.Add(1)
+			}
+		default:
+			invalidMethod.Add(1)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(writer).Encode(response)
+	}))
+	defer rpcServer.Close()
+	gate := func() *adversaryHTTP {
+		return &adversaryHTTP{gate: &adversaryRequestGate{interval: time.Nanosecond, now: time.Now}, timeout: time.Second}
+	}
+	evidence, err := liveInvalidMerkleProofProbe(context.Background(), cfg, stateDir, operatorServer.URL, rpcServer.URL, 1, gate(), gate(), 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if evidence.Epoch != 4 || evidence.NoID != 1 || evidence.FinalizedBlock != 100 || evidence.Requests != 8 || claimCalls.Load() != 1 || invalidHistoryQuery.Load() != 0 || invalidMethod.Load() != 0 || invalidBlock.Load() != 0 {
+		t.Fatalf("live Merkle evidence=%+v claim_calls=%d invalid_history_query=%d invalid_method=%d invalid_block=%d", evidence, claimCalls.Load(), invalidHistoryQuery.Load(), invalidMethod.Load(), invalidBlock.Load())
+	}
+	claimCalls.Store(0)
+	mutateAfterClaim.Store(true)
+	if _, err := liveInvalidMerkleProofProbe(context.Background(), cfg, stateDir, operatorServer.URL, rpcServer.URL, 1, gate(), gate(), 8); err == nil || !strings.Contains(err.Error(), "changed the pinned entitlement") {
+		t.Fatalf("mutated post-rejection state error=%v", err)
+	}
+}
+
 func TestAdversarialRPCRuntimeIdentityRejectsMalformedAndDriftingVersions(t *testing.T) {
-	encode := func(name string, spec, transaction uint32) rpcResponse {
-		result, err := json.Marshal(rpcRuntimeVersion{SpecName: name, SpecVersion: spec, TransactionVersion: transaction})
+	encode := func(name string, spec, transaction uint32, state uint8) rpcResponse {
+		result, err := json.Marshal(runtimeVersionIdentity{SpecName: name, SpecVersion: spec, TransactionVersion: transaction, StateVersion: state})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return rpcResponse{Result: result}
 	}
-	valid, err := decodeRPCRuntimeVersion(encode("node-subtensor", 447, 1))
-	if err != nil || validateRPCRuntimeIdentity(valid, valid, 447, 1) != nil {
+	valid, err := decodeRPCRuntimeVersion(encode("node-subtensor", 453, 1, 1))
+	if err != nil || validateRPCRuntimeIdentity(valid, valid, 453, 1, 1) != nil {
 		t.Fatalf("valid runtime identity rejected: %+v %v", valid, err)
 	}
 	cases := []rpcResponse{
 		{Result: json.RawMessage(`{}`)},
 		{Result: json.RawMessage(`null`)},
-		{Error: &struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		}{Code: -32000, Message: "unavailable"}},
+		{Error: &rpcResponseError{Code: -32000, Message: "unavailable"}},
 	}
 	for index, response := range cases {
 		if _, decodeErr := decodeRPCRuntimeVersion(response); decodeErr == nil {
@@ -965,15 +1635,16 @@ func TestAdversarialRPCRuntimeIdentityRejectsMalformedAndDriftingVersions(t *tes
 		}
 	}
 	identities := []struct {
-		private rpcRuntimeVersion
-		public  rpcRuntimeVersion
+		private runtimeVersionIdentity
+		public  runtimeVersionIdentity
 	}{
-		{private: valid, public: rpcRuntimeVersion{SpecName: "node-subtensor", SpecVersion: 448, TransactionVersion: 1}},
-		{private: valid, public: rpcRuntimeVersion{SpecName: "other", SpecVersion: 447, TransactionVersion: 1}},
-		{private: valid, public: rpcRuntimeVersion{SpecName: "node-subtensor", SpecVersion: 447, TransactionVersion: 2}},
+		{private: valid, public: runtimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 454, TransactionVersion: 1, StateVersion: 1}},
+		{private: valid, public: runtimeVersionIdentity{SpecName: "other", SpecVersion: 453, TransactionVersion: 1, StateVersion: 1}},
+		{private: valid, public: runtimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 453, TransactionVersion: 2, StateVersion: 1}},
+		{private: valid, public: runtimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: 453, TransactionVersion: 1, StateVersion: 2}},
 	}
 	for index, identity := range identities {
-		if identityErr := validateRPCRuntimeIdentity(identity.private, identity.public, 447, 1); identityErr == nil {
+		if identityErr := validateRPCRuntimeIdentity(identity.private, identity.public, 453, 1, 1); identityErr == nil {
 			t.Errorf("drifting runtime identity %d was accepted", index)
 		}
 	}
@@ -993,10 +1664,14 @@ func TestRPCAdversaryRejectsObservedRuntimeDrift(t *testing.T) {
 			}
 			var result any
 			switch call.Method {
+			case "chain_getFinalizedHead":
+				result = "0x" + strings.Repeat("cd", 32)
+			case "chain_getHeader":
+				result = rpcHeader{Number: "0x64"}
 			case "eth_getBlockByNumber":
 				result = rpcBlock{Number: "0x64", Hash: "0x" + strings.Repeat("ab", 32)}
 			case "state_getRuntimeVersion":
-				result = rpcRuntimeVersion{SpecName: "node-subtensor", SpecVersion: spec, TransactionVersion: 1}
+				result = runtimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: spec, TransactionVersion: 1, StateVersion: 1}
 			default:
 				_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": call.ID, "error": map[string]any{"code": -32601, "message": "unknown method"}})
 				return
@@ -1004,15 +1679,16 @@ func TestRPCAdversaryRejectsObservedRuntimeDrift(t *testing.T) {
 			_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": call.ID, "result": result})
 		}))
 	}
-	private := newServer(447)
+	private := newServer(453)
 	defer private.Close()
-	public := newServer(448)
+	public := newServer(454)
 	defer public.Close()
 	cfg := testResolvedConfig(t)
-	cfg.Authority = strings.TrimPrefix(private.URL, "http://")
+	cfg.OperationalEVM = private.URL
 	cfg.Public.Chain.EVMPublicReadEndpoint = public.URL
-	cfg.Release.Runtime.SpecVersion = 447
+	cfg.Release.Runtime.SpecVersion = 453
 	cfg.Release.Runtime.TransactionVersion = 1
+	cfg.Release.Runtime.StateVersion = 1
 	actor := &rpcAdversary{
 		cfg: cfg,
 		http: &adversaryHTTP{
@@ -1021,8 +1697,60 @@ func TestRPCAdversaryRejectsObservedRuntimeDrift(t *testing.T) {
 		},
 	}
 	result := actor.Sample(context.Background(), adversaryAttackPhase, 2)
-	if result.Outcome != adversaryOutcomeError || result.Requests != 8 || !strings.Contains(result.Detail, "runtime specs private=447 public=448 expected=447") {
+	if result.Outcome != adversaryOutcomeError || result.Requests != 10 || !strings.Contains(result.Detail, "runtime specs operational=453 public=454 expected=453") {
 		t.Fatalf("observed runtime drift result=%+v", result)
+	}
+}
+
+func TestRPCAdversaryRejectsObservedRuntimeCodeHashDrift(t *testing.T) {
+	cfg := testResolvedConfig(t)
+	newServer := func(codeHash string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			defer request.Body.Close()
+			var call struct {
+				ID     uint64            `json:"id"`
+				Method string            `json:"method"`
+				Params []json.RawMessage `json:"params"`
+			}
+			if json.NewDecoder(request.Body).Decode(&call) != nil {
+				http.Error(writer, "malformed request", http.StatusBadRequest)
+				return
+			}
+			var result any
+			switch call.Method {
+			case "chain_getFinalizedHead":
+				result = "0x" + strings.Repeat("cd", 32)
+			case "chain_getHeader":
+				result = rpcHeader{Number: "0x64"}
+			case "eth_getBlockByNumber":
+				result = rpcBlock{Number: "0x64", Hash: "0x" + strings.Repeat("ab", 32)}
+			case "state_getRuntimeVersion":
+				if len(call.Params) != 1 || string(call.Params[0]) != `"0x`+strings.Repeat("cd", 32)+`"` {
+					t.Errorf("runtime version was not pinned to native finalized hash: %s", call.Params)
+				}
+				result = runtimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: cfg.Release.Runtime.SpecVersion, TransactionVersion: cfg.Release.Runtime.TransactionVersion, StateVersion: cfg.Release.Runtime.StateVersion}
+			case "state_getStorageHash":
+				if len(call.Params) != 2 || string(call.Params[1]) != `"0x`+strings.Repeat("cd", 32)+`"` {
+					t.Errorf("runtime code hash was not pinned to native finalized hash: %s", call.Params)
+				}
+				result = codeHash
+			default:
+				_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": call.ID, "error": map[string]any{"code": -32601, "message": "unknown method"}})
+				return
+			}
+			_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": call.ID, "result": result})
+		}))
+	}
+	private := newServer(cfg.Release.Runtime.CodeHash)
+	defer private.Close()
+	public := newServer("0x" + strings.Repeat("00", 32))
+	defer public.Close()
+	cfg.OperationalEVM = private.URL
+	cfg.Public.Chain.EVMPublicReadEndpoint = public.URL
+	actor := &rpcAdversary{cfg: cfg, http: &adversaryHTTP{gate: &adversaryRequestGate{now: time.Now}, timeout: time.Second}}
+	result := actor.Sample(context.Background(), adversaryAttackPhase, 2)
+	if result.Outcome != adversaryOutcomeError || result.Requests != 12 || !strings.Contains(result.Detail, "public finalized runtime code hash") {
+		t.Fatalf("observed runtime code-hash drift result=%+v", result)
 	}
 }
 

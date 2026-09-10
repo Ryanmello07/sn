@@ -44,27 +44,45 @@ report="$(mktemp)"
 rm -f -- "$report"
 trap 'rm -f -- "$report"' EXIT
 
+# Slither's Foundry frontend runs `forge clean` for every analysis root. Keep
+# those target-only compilation graphs below the already-ignored canonical
+# out/cache directories so static analysis cannot delete or replace the full
+# release artifacts consumed by the generated-payload freshness gate.
+slither_foundry_out="${SLITHER_FOUNDRY_OUT:-out/slither}"
+slither_foundry_cache="${SLITHER_FOUNDRY_CACHE_PATH:-cache/slither}"
+
 cd "$evm_repo"
 # STSubnet.sol is the retained pre-1.0 monolith and is not installed by
-# sim-testnet. Starting at STCoordinator traverses the complete deployable
-# release graph: coordinator, immutable vault, reserve sink, proxy libraries,
-# and every runtime-precompile interface they import.
-if ! "$slither_bin" src/STCoordinator.sol \
-  --solc "$solc_bin" \
-  --filter-paths 'lib|test|script' \
-  --exclude-low \
-  --exclude-informational \
-  --disable-color \
-  --json "$report"; then
-  if [[ -s "$report" ]]; then
-    jq -r '.results.detectors[]? | "[\(.impact)] \(.check): \(.description)"' "$report" >&2
+# sim-testnet. The coordinator root traverses immutable custody, proxy libraries,
+# and runtime-precompile interfaces. The fleet batcher, disposable precompile
+# probe, hostile governance-drill implementation, and immutable validator
+# evidence journal are separate deployment roots analyzed independently.
+contracts=(
+  src/STCoordinator.sol
+  src/STFleetBatcher.sol
+  src/STValidatorEvidence.sol
+  src/probe/STSubnetProbe.sol
+  src/testnet/STCoordinatorAdversary.sol
+)
+for contract in "${contracts[@]}"; do
+  rm -f -- "$report"
+  if ! FOUNDRY_OUT="$slither_foundry_out" FOUNDRY_CACHE_PATH="$slither_foundry_cache" "$slither_bin" "$contract" \
+    --solc "$solc_bin" \
+    --filter-paths 'lib|test|script' \
+    --exclude-low \
+    --exclude-informational \
+    --disable-color \
+    --json "$report"; then
+    if [[ -s "$report" ]]; then
+      jq -r '.results.detectors[]? | "[\(.impact)] \(.check): \(.description)"' "$report" >&2
+    fi
+    exit 1
   fi
-  exit 1
-fi
 
-if [[ "$(jq '[.results.detectors[]? | select(.impact == "High" or .impact == "Medium")] | length' "$report")" != "0" ]]; then
-  echo "Slither emitted a high/medium finding despite a successful exit" >&2
-  exit 1
-fi
+  if [[ "$(jq '[.results.detectors[]? | select(.impact == "High" or .impact == "Medium")] | length' "$report")" != "0" ]]; then
+    echo "Slither emitted a high/medium finding despite a successful exit for $contract" >&2
+    exit 1
+  fi
+done
 
-echo "release Solidity static gate passed (Slither 0.11.6; no high/medium findings)"
+echo "release Solidity static gate passed for all ${#contracts[@]} deployable roots (Slither 0.11.6; no high/medium findings)"

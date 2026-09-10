@@ -3,6 +3,14 @@ pragma solidity 0.8.24;
 
 import {ReleaseBase} from "./utils/ReleaseBase.sol";
 import {STCoordinator} from "../src/STCoordinator.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
+contract STCoordinatorChainIdHarness is STCoordinator {
+    function checkedChainId(uint256 chainId_) external pure returns (uint64) {
+        return _checkedChainId(chainId_);
+    }
+}
 
 contract ReleaseBindingPolicyTest is ReleaseBase {
     bytes32 internal constant FLEET = keccak256("fleet-one");
@@ -109,6 +117,46 @@ contract ReleaseBindingPolicyTest is ReleaseBase {
         coordinator.bindFleetMember(badSig, sig, _signature(8));
     }
 
+    function test_commitmentMirrorIsMonotonicAndRejectsSameHeightEquivocation() public {
+        bytes32 firstBlockHash = keccak256("finalized-block-1000");
+        vm.prank(oracle);
+        coordinator.mirrorCommitment(HEAD_HOTKEY, COMMITMENT, uint64(block.number), firstBlockHash);
+
+        // An exact retry is idempotent, but finalized history cannot move
+        // backward or name two states at one height.
+        vm.prank(oracle);
+        coordinator.mirrorCommitment(HEAD_HOTKEY, COMMITMENT, uint64(block.number), firstBlockHash);
+
+        vm.prank(oracle);
+        vm.expectRevert(STCoordinator.StaleCommitment.selector);
+        coordinator.mirrorCommitment(
+            HEAD_HOTKEY, COMMITMENT, uint64(block.number - 1), keccak256("older-block")
+        );
+
+        vm.prank(oracle);
+        vm.expectRevert(STCoordinator.StaleCommitment.selector);
+        coordinator.mirrorCommitment(
+            HEAD_HOTKEY, keccak256("equivocating-commitment"), uint64(block.number), firstBlockHash
+        );
+
+        vm.prank(oracle);
+        vm.expectRevert(STCoordinator.StaleCommitment.selector);
+        coordinator.mirrorCommitment(
+            HEAD_HOTKEY, COMMITMENT, uint64(block.number), keccak256("equivocating-block")
+        );
+
+        vm.roll(block.number + 1);
+        bytes32 nextCommitment = keccak256("next-commitment");
+        bytes32 nextBlockHash = keccak256("finalized-block-1001");
+        vm.prank(oracle);
+        coordinator.mirrorCommitment(HEAD_HOTKEY, nextCommitment, uint64(block.number), nextBlockHash);
+        (bytes32 commitment, bytes32 finalizedHash, uint64 finalizedBlock) =
+            coordinator.mirroredCommitments(HEAD_HOTKEY);
+        assertEq(commitment, nextCommitment);
+        assertEq(finalizedHash, nextBlockHash);
+        assertEq(finalizedBlock, block.number);
+    }
+
     function test_clientSignedRevocationIsNextEpochOnly() public {
         _prepareFleet();
         bytes16 clientId = bytes16(uint128(9));
@@ -119,6 +167,32 @@ contract ReleaseBindingPolicyTest is ReleaseBase {
         (bool activeAtTwo,) = coordinator.bindingAt(clientId, 2);
         assertTrue(activeAtOne);
         assertFalse(activeAtTwo);
+    }
+
+    function test_bindingAtFailsClosedWhenRuntimeIdentityIsPrunedOrReassigned() public {
+        _prepareFleet();
+        bytes16 clientId = bytes16(uint128(12));
+        STCoordinator.FleetBinding memory binding = _binding(clientId, keccak256("client-twelve"), 1);
+        coordinator.bindFleetMember(binding, _signature(1), _signature(2));
+
+        (bool activeBefore,) = coordinator.bindingAt(clientId, 1);
+        assertTrue(activeBefore);
+
+        neuron.clearUid(NETUID, HEAD_HOTKEY);
+        (bool activeAfterPrune, STCoordinator.BindingRecord memory prunedRecord) =
+            coordinator.bindingAt(clientId, 1);
+        assertFalse(activeAfterPrune);
+        assertEq(prunedRecord.uid, 42);
+
+        neuron.setUid(NETUID, HEAD_HOTKEY, 43);
+        (bool activeAfterReassignment, STCoordinator.BindingRecord memory reassignedRecord) =
+            coordinator.bindingAt(clientId, 1);
+        assertFalse(activeAfterReassignment);
+        assertEq(reassignedRecord.uid, 42);
+
+        neuron.setUid(NETUID, HEAD_HOTKEY, 42);
+        (bool activeAfterExactRestore,) = coordinator.bindingAt(clientId, 1);
+        assertTrue(activeAfterExactRestore);
     }
 
     function test_futureRotationPreservesPriorGenerationUntilBoundary() public {
@@ -186,6 +260,71 @@ contract ReleaseBindingPolicyTest is ReleaseBase {
         assertEq(coordinator.epochEndBlock(2), START_BLOCK + 2 * EPOCH_BLOCKS + 200);
         assertEq(coordinator.policyAt(1).policyHash, keccak256("release-policy-v1"));
         assertEq(coordinator.policyAt(2).policyHash, keccak256("release-policy-v2"));
+    }
+
+    function test_policyScheduleRejectsEffectiveBlockDowncastOverflow() public {
+        STCoordinator.PolicySnapshot memory next = _policy();
+        next.policyHash = keccak256("overflowing-policy");
+        next.effectiveEpoch = type(uint64).max;
+        uint256 effectiveBlock = uint256(START_BLOCK) + uint256(type(uint64).max) * uint256(EPOCH_BLOCKS);
+
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 64, effectiveBlock)
+        );
+        coordinator.schedulePolicy(next);
+    }
+
+    function test_initialPolicyRejectsDeploymentBlockDowncastOverflow() public {
+        uint256 overflowingBlock = uint256(type(uint64).max) + 1;
+        vm.roll(overflowingBlock);
+        STCoordinator freshImplementation = new STCoordinator();
+        STCoordinator.PolicySnapshot memory policy = _policy();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 64, overflowingBlock)
+        );
+        new ERC1967Proxy(
+            address(freshImplementation),
+            abi.encodeCall(
+                STCoordinator.initialize,
+                (NETUID, owner, guardian, COORD_COLDKEY, vault, sink, oracle, policy)
+            )
+        );
+    }
+
+    function test_rootCommitRejectsBlockNumberDowncastOverflow() public {
+        uint256 epoch = (uint256(type(uint64).max) - uint256(START_BLOCK)) / uint256(EPOCH_BLOCKS);
+        uint256 epochEnd = uint256(START_BLOCK) + (epoch + 1) * uint256(EPOCH_BLOCKS);
+        assertGt(epochEnd, type(uint64).max);
+        vm.roll(epochEnd);
+
+        vm.prank(rootSigner1);
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 64, epochEnd)
+        );
+        coordinator.commitOperatorRoot(epoch, NO1, keccak256("overflow-root"), keccak256("overflow-artifact"));
+    }
+
+    function test_policyScheduleRejectsClaimWindowBelowImmutableVaultMinimum() public {
+        STCoordinator.PolicySnapshot memory next = _policy();
+        next.policyHash = keccak256("short-claim-policy");
+        next.effectiveEpoch = 2;
+        next.claimTTLEpochs = 1;
+        next.claimGraceEpochs = 0;
+
+        vm.prank(owner);
+        vm.expectRevert(STCoordinator.InvalidPolicy.selector);
+        coordinator.schedulePolicy(next);
+    }
+
+    function test_fleetRevokeDigestRejectsChainIDDowncastOverflow() public {
+        STCoordinatorChainIdHarness harness = new STCoordinatorChainIdHarness();
+        uint256 overflowingChainId = uint256(type(uint64).max) + 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 64, overflowingChainId)
+        );
+        harness.checkedChainId(overflowingChainId);
     }
 
     function test_releaseProductionCadenceIsExactAndFutureEffective() public {

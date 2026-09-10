@@ -14,27 +14,26 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/urfoundation/sn/stabi"
 )
 
 type RetirementPlan struct {
-	Schema         string   `json:"schema"`
-	Release        string   `json:"release"`
-	DeploymentID   string   `json:"deployment_id"`
-	ChainID        uint64   `json:"chain_id"`
-	GenesisHash    string   `json:"genesis_hash"`
-	Netuid         uint16   `json:"netuid"`
-	Coordinator    string   `json:"coordinator"`
-	SetupPlanHash  string   `json:"setup_plan_hash"`
-	CurrentEpoch   uint64   `json:"current_epoch"`
-	EffectiveEpoch uint64   `json:"effective_epoch"`
-	Actions        []Action `json:"actions"`
-	MaximumSpend   Spend    `json:"maximum_spend"`
-	ReservedGasWei uint64   `json:"reserved_gas_wei"`
-	PlanHash       string   `json:"plan_hash"`
-	GeneratedAt    string   `json:"generated_at,omitempty"`
+	Schema         string      `json:"schema"`
+	Release        string      `json:"release"`
+	DeploymentID   string      `json:"deployment_id"`
+	ChainID        uint64      `json:"chain_id"`
+	GenesisHash    string      `json:"genesis_hash"`
+	Netuid         uint16      `json:"netuid"`
+	Coordinator    string      `json:"coordinator"`
+	SetupPlanHash  string      `json:"setup_plan_hash"`
+	CurrentEpoch   uint64      `json:"current_epoch"`
+	EffectiveEpoch uint64      `json:"effective_epoch"`
+	Actions        []Action    `json:"actions"`
+	MaximumSpend   Spend       `json:"maximum_spend"`
+	ReservedGasWei DecimalUint `json:"reserved_gas_wei"`
+	PlanHash       string      `json:"plan_hash"`
+	GeneratedAt    string      `json:"generated_at,omitempty"`
 }
 
 func (p RetirementPlan) hash() (string, error) {
@@ -43,13 +42,13 @@ func (p RetirementPlan) hash() (string, error) {
 	return canonicalHashHex(p)
 }
 
-func retirementGasReserve(setup *SetupPlan) (uint64, error) {
+func retirementGasReserve(setup *SetupPlan) (DecimalUint, error) {
 	for _, action := range setup.Actions {
-		if action.ID == "retirement.evm-gas-reserve" && action.Kind == "budget-reserve" && action.Spend.EVMGasWei != 0 {
+		if action.ID == "retirement.evm-gas-reserve" && action.Kind == "budget-reserve" && !action.Spend.EVMGasWei.IsZero() {
 			return action.Spend.EVMGasWei, nil
 		}
 	}
-	return 0, errors.New("approved setup plan has no retirement gas reserve")
+	return "", errors.New("approved setup plan has no retirement gas reserve")
 }
 
 func operatorVersion(values []any) (stabi.STCoordinatorOperatorVersion, error) {
@@ -81,16 +80,29 @@ func buildRetirementPlan(cfg *ResolvedConfig, setup *SetupPlan, deployment *Cont
 		Coordinator: deployment.CoordinatorProxy.Hex(), SetupPlanHash: setup.PlanHash,
 		CurrentEpoch: currentEpoch, EffectiveEpoch: effective, ReservedGasWei: reserved, GeneratedAt: generatedAt.UTC().Format(time.RFC3339),
 	}
-	var allocated uint64
+	allocated := decimalUint64(0)
 	for index, operator := range operators {
 		if !operator.Active || operator.DepositHotkey == ([32]byte{}) || operator.DepositSigner == (common.Address{}) || operator.RootSigner == (common.Address{}) {
 			return nil, fmt.Errorf("operator %d is not an active complete operator at epoch %d", index+1, currentEpoch)
 		}
-		cap := reserved / uint64(len(operators))
-		if index == len(operators)-1 {
-			cap = reserved - allocated
+		cap, capErr := divideDecimalUint(reserved, uint64(len(operators)))
+		if capErr != nil {
+			return nil, capErr
 		}
-		allocated += cap
+		if index == len(operators)-1 {
+			cap, capErr = subtractDecimalUint(reserved, allocated)
+			if capErr != nil {
+				return nil, capErr
+			}
+		}
+		allocated, capErr = addDecimalUint(allocated, cap)
+		if capErr != nil {
+			return nil, capErr
+		}
+		maximumGasUnits, capErr := divideDecimalUint(cap, setup.MaximumEVMFeePerGasWei)
+		if capErr != nil {
+			return nil, capErr
+		}
 		action := Action{
 			ID: fmt.Sprintf("operator.retire.%d.epoch.%d", index+1, effective), Kind: "evm-transaction", Target: fmt.Sprintf("no:%d", index+1),
 			Description: "schedule operator inactive at the next epoch while preserving prior entitlements and claim paths",
@@ -98,21 +110,20 @@ func buildRetirementPlan(cfg *ResolvedConfig, setup *SetupPlan, deployment *Cont
 				"no_id": fmt.Sprint(index + 1), "effective_epoch": fmt.Sprint(effective),
 				"deposit_hotkey": "0x" + hex.EncodeToString(operator.DepositHotkey[:]),
 				"deposit_signer": operator.DepositSigner.Hex(), "root_signer": operator.RootSigner.Hex(),
+				evmMaximumGasUnitsParameter: maximumGasUnits.String(), evmMaximumFeePerGasParameter: strconv.FormatUint(setup.MaximumEVMFeePerGasWei, 10),
 			},
 			Spend: Spend{EVMGasWei: cap},
 		}
-		hash, hashErr := canonicalHashHex(struct {
-			ID, Kind, Target, Description string
-			Parameters                    map[string]string
-			Spend                         Spend
-			DependsOn                     []string
-		}{action.ID, action.Kind, action.Target, action.Description, action.Parameters, action.Spend, action.DependsOn})
+		hash, hashErr := actionIntentHash(action)
 		if hashErr != nil {
 			return nil, hashErr
 		}
 		action.IntentHash = hash
 		p.Actions = append(p.Actions, action)
-		p.MaximumSpend.EVMGasWei += cap
+		p.MaximumSpend.EVMGasWei, capErr = addDecimalUint(p.MaximumSpend.EVMGasWei, cap)
+		if capErr != nil {
+			return nil, capErr
+		}
 	}
 	if p.MaximumSpend.EVMGasWei != reserved {
 		return nil, errors.New("retirement gas allocation does not equal its setup reserve")
@@ -126,11 +137,7 @@ func readRetirementPlan(ctx context.Context, cfg *ResolvedConfig, stateDir strin
 	if err != nil {
 		return nil, fmt.Errorf("retirement requires installed contracts: %w", err)
 	}
-	_, endpoint, err := authorityURLs(cfg.Authority)
-	if err != nil {
-		return nil, err
-	}
-	client, err := ethclient.DialContext(ctx, endpoint)
+	client, err := dialConfiguredEVMClient(ctx, cfg, cfg.OperationalEVM)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +152,7 @@ func readRetirementPlan(ctx context.Context, cfg *ResolvedConfig, stateDir strin
 	}
 	currentValues, err := contractCallAt(ctx, client, deployment.CoordinatorProxy, parsed, "currentEpoch", head.Number)
 	if err != nil || len(currentValues) != 1 {
-		return nil, fmt.Errorf("read finalized current epoch: %w", err)
+		return nil, stateMismatchError(err, "read finalized current epoch returned %d values", len(currentValues))
 	}
 	current, ok := currentValues[0].(*big.Int)
 	if !ok || !current.IsUint64() {
@@ -195,7 +202,7 @@ func runRetirement(ctx context.Context, cfg *ResolvedConfig, stateDir string, op
 	if err != nil {
 		return err
 	}
-	doctor := runDoctor(ctx, cfg, &doctorPlanBudget{Plan: setup, Remaining: remaining})
+	doctor := runDoctor(ctx, cfg, &doctorPlanBudget{Plan: setup, Remaining: remaining, StateDir: stateDir})
 	if err := doctor.Error(); err != nil {
 		return fmt.Errorf("doctor must pass immediately before retirement apply: %w", err)
 	}
@@ -203,14 +210,17 @@ func runRetirement(ctx context.Context, cfg *ResolvedConfig, stateDir string, op
 	if err != nil {
 		return err
 	}
-	executionPlan := *setup
-	executionPlan.PlanHash = plan.PlanHash
-	executionPlan.Actions = append([]Action(nil), plan.Actions...)
-	executor, err := NewExecutor(ctx, cfg, stateDir, &executionPlan, journal, roles)
+	// Authenticate original CREATEs against the setup approval before changing
+	// the executor's action namespace to the separately approved retirement.
+	executor, err := NewExecutor(ctx, cfg, stateDir, setup, journal, roles)
 	if err != nil {
 		return err
 	}
 	defer executor.Close()
+	executionPlan := *setup
+	executionPlan.PlanHash = plan.PlanHash
+	executionPlan.Actions = append([]Action(nil), plan.Actions...)
+	executor.plan = &executionPlan
 	for _, action := range plan.Actions {
 		if err := executor.Execute(ctx, action); err != nil {
 			return err
@@ -280,12 +290,14 @@ func (e *Executor) scheduleOperatorRetirement(ctx context.Context, a Action) err
 		}
 		return nil
 	}
-	currentValues, err := contractCall(ctx, e.owner.client, address, parsed, "currentEpoch")
-	if err != nil || len(currentValues) != 1 {
-		return fmt.Errorf("read current epoch: %w", err)
+	window, ready, err := readFutureEpochTransactionWindow(ctx, e.owner, address, stabi.NewSTCoordinator())
+	if err != nil {
+		return err
 	}
-	current := currentValues[0].(*big.Int)
-	if !current.IsUint64() || current.Uint64() >= effective {
+	if !ready {
+		return errors.New("retirement approval has insufficient next-epoch inclusion time; regenerate the plan")
+	}
+	if window.CurrentEpoch >= effective {
 		return errors.New("retirement approval expired; regenerate the next-epoch plan")
 	}
 	data, err := parsed.Pack("scheduleOperator", new(big.Int).SetUint64(noID), hotkey, depositSigner, rootSigner, false, effective)

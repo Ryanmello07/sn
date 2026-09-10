@@ -5,6 +5,7 @@ repositories:
   discovery: auto
   sn: auto
   server: auto
+  operator_proxy: auto
   vault: auto
   platform_config: auto
 
@@ -27,17 +28,198 @@ launch_inputs:
   wallet_password: vault://main/st.yml#testnet-wallet-password
   chain_id: vault://main/st.yml#testnet-chain-id
   authority: vault://main/st.yml#testnet-authority
+  public_substrate_rpc_override: "wss://test.finney.opentensor.ai:443"
+  public_evm_rpc_override: "https://test.chain.opentensor.ai"
+  public_evm_maximum_requests_per_minute: 40
   object_store_hostname: vault://main/st.yml#testnet-minio-hostname
-  trusted_proxy_cidrs: vault://main/st.yml#testnet-trusted-proxy-cidrs
+  # Approved resolved origins: http://127.0.0.1:18081 and http://127.0.0.1:18082.
   operator_api_origins: vault://main/st.yml#testnet-operator-api-origins
 
 topology:
   operators: 2
-  miners: 8
+  miners: 1000
   validators: 2
-  head_fleets: 2
-  clients_per_head_fleet: 3
+  head_slots: 200
+  head_fleets: 200
+  challenger_fleets: 2
+  clients_per_head_fleet: 4
+  # Netuid 521 already has the owner UID and one external bootstrap UID. These
+  # 47 controlled floor identities make the initial 256-seat topology exact.
+  churn_floor_uids: 47
+  miner_swarm_processes: 20
   operator_assignment: balanced
+
+# Runtime 455 retains TAO pricing for alpha transfers at execution time. Every
+# planned transfer must retain this margin above InitialMinStake at the live spot.
+alpha_transfers:
+  minimum_tao_equivalent_margin_bps: 1000
+
+# The reserve begins with a clear voting majority while validator 2 remains a
+# genuinely independent, economically staked participant. The target/minimum
+# gap absorbs bounded emission and price movement between plan and execution.
+validator_bootstrap:
+  reserve_target_share_bps: 6500
+  reserve_minimum_share_bps: 6000
+  independent_target_alpha_rao: 1000000000000
+  maximum_reserve_repair_alpha_rao: 6000000000000
+  minimum_source_remaining_alpha_rao: 2000000000000
+
+# Static capacities only. Actual setup produces four original signed activation
+# records and all context/history/file references from finalized native/Evm reads.
+# Generated contract/runtime identities come from the admitted setup plan and
+# reviewed release lock, never this template or a lock rendered from dirty source.
+provision_validator_evidence_v2: true
+validator_evidence_activation_gas_units: 1000000
+
+# Each header slot belongs to one validator/operator source. The four sources
+# share 256 slots across the original-activation horizon, including bounded
+# delay/retry admissions. Failed/third-party-won slots are not refunded.
+# At the explicit fee ceiling it reserves 25.6 test Tao of the existing 160 ceiling;
+# the four fixed activations reserve a further 0.4, not a new wallet allowance.
+validator_evidence_relay:
+  max_slots: 256
+  gas_units: 1000000
+
+# Per source: 40 seeds/minute, M8, at most eight durable records/trail.
+# 81920 trails / 655360 records cover the shared funded 10080-block horizon
+# at the configured 12 seconds/block, including partial-minute/restart/active
+# margins. This is a workload forecast, not a chain-speed or delay guarantee.
+# Required accepted geometry remains 5*300 + 3*360 = 2580 observation blocks;
+# preparation, both observation watchdogs and archive gaps retain the same prefix.
+# Raw records are <=16 KiB; replay additionally admits their canonical newline.
+# Every operator admits 1000 providers independently. Combined captures include
+# both operators and the real 10-attempt/5-restart ceilings; same exact decision
+# retries retain the original slot. 16 GiB history and 700000 files are finite
+# ceilings, not allocations or permission to exceed per-file control bounds.
+# Final independent capture derives its source/history census from these owners;
+# its separate 64 MiB graph metadata limit remains enforced.
+validator_evidence_v2:
+  - validator_id: 1
+    evidence:
+      schema: urnetwork-validator-runtime-evidence-v2
+      upload_intent_seconds: 90
+      bounds:
+        disk:
+          maxrecordbytes: 16384
+          maxrecordcount: 655360
+          maxtrailcount: 81920
+          maxrawrecordbytes: 10737418240
+          maxstoragebytes: 25769803776
+          maxstoragefiles: 16384
+          maxlegacybytes: 16777216
+          maxproofbytes: 536870912
+        cut:
+          maxheaderbytes: 65536
+          records:
+            maxdatabytes: 12884901888
+            maxitems: 655360
+            maxchunkbytes: 4194304
+            maxchunks: 4096
+            maxpages: 32
+            maxpagebytes: 65536
+            maxdescriptorsperpage: 128
+            maxmanifestbytes: 4096
+          proofs:
+            maxdatabytes: 536870912
+            maxitems: 81920
+            maxchunkbytes: 4194304
+            maxchunks: 256
+            maxpages: 2
+            maxpagebytes: 65536
+            maxdescriptorsperpage: 128
+            maxmanifestbytes: 4096
+        replay:
+          maxrecordbytes: 16385
+          maxproofbytes: 4096
+          maxtrails: 81920
+          maxscratchbytes: 25769803776
+          maxscratchfiles: 16384
+        persistence:
+          maxsnapshotbytes: 4194304
+          maxjournalbytes: 33554432
+        head_ema:
+          maxfilebytes: 8388608
+          maxentries: 1024
+          maxcontrolbytes: 67108864
+        max_providers: 1000
+        max_egress_hashes: 8192
+        max_fleet_prefixes: 8192
+        max_operators: 2
+        max_head_entries: 1024
+        max_artifact_bytes: 16777216
+        max_control_bytes: 67108864
+        max_input_journal_bytes: 8388608
+        max_participants: 2
+        max_transition_bytes: 4194304
+        max_closure_bytes: 12582912
+        max_history_bytes: 17179869184
+        max_capture_files: 700000
+      operators:
+        - no_id: 1
+        - no_id: 2
+  - validator_id: 2
+    evidence:
+      schema: urnetwork-validator-runtime-evidence-v2
+      upload_intent_seconds: 90
+      bounds:
+        disk:
+          maxrecordbytes: 16384
+          maxrecordcount: 655360
+          maxtrailcount: 81920
+          maxrawrecordbytes: 10737418240
+          maxstoragebytes: 25769803776
+          maxstoragefiles: 16384
+          maxlegacybytes: 16777216
+          maxproofbytes: 536870912
+        cut:
+          maxheaderbytes: 65536
+          records:
+            maxdatabytes: 12884901888
+            maxitems: 655360
+            maxchunkbytes: 4194304
+            maxchunks: 4096
+            maxpages: 32
+            maxpagebytes: 65536
+            maxdescriptorsperpage: 128
+            maxmanifestbytes: 4096
+          proofs:
+            maxdatabytes: 536870912
+            maxitems: 81920
+            maxchunkbytes: 4194304
+            maxchunks: 256
+            maxpages: 2
+            maxpagebytes: 65536
+            maxdescriptorsperpage: 128
+            maxmanifestbytes: 4096
+        replay:
+          maxrecordbytes: 16385
+          maxproofbytes: 4096
+          maxtrails: 81920
+          maxscratchbytes: 25769803776
+          maxscratchfiles: 16384
+        persistence:
+          maxsnapshotbytes: 4194304
+          maxjournalbytes: 33554432
+        head_ema:
+          maxfilebytes: 8388608
+          maxentries: 1024
+          maxcontrolbytes: 67108864
+        max_providers: 1000
+        max_egress_hashes: 8192
+        max_fleet_prefixes: 8192
+        max_operators: 2
+        max_head_entries: 1024
+        max_artifact_bytes: 16777216
+        max_control_bytes: 67108864
+        max_input_journal_bytes: 8388608
+        max_participants: 2
+        max_transition_bytes: 4194304
+        max_closure_bytes: 12582912
+        max_history_bytes: 17179869184
+        max_capture_files: 700000
+      operators:
+        - no_id: 1
+        - no_id: 2
 
 contracts:
   install: true
@@ -57,6 +239,73 @@ artifacts:
   content_addressed: true
   minio_prefix: blob/sim-testnet/${deployment_id}
 
+  # Ordinary accounts have their own finite lane; exhausting it cannot consume
+  # the reserved validator owner allocations below.
+  attempt_upload:
+    # Conservative reservation counters, not allocations or expected writes.
+    # Each logical client still reserves 8 MiB, even inside an Http batch.
+    # Admission derives minima from all 1000 miners, both validators, native
+    # cadence, real retry/restart limits, bounded fallback and hostile traffic.
+    # Actual per-object, in-flight, source-disk and archive caps stay separate.
+    requests_per_hour: 262144
+    bytes_per_hour: 2199023255552
+    account_requests_per_hour: 131072
+    account_bytes_per_hour: 1099511627776
+  # Full accepted streams permit 12 GiB records + 512 MiB proofs per cut.
+  # Even one-hour catch-up of the retained prefix, changed final chunks and
+  # all metadata fits 32768 objects / 32 GiB per original owner. 4194304
+  # disjoint retries include actual refresh polls, failures and hostile replay.
+  # Expected cuts are much smaller; unused quota allocates no object bytes.
+  reserved_attempt_uploads:
+    - admission:
+        # Only this native census cap exists before deployment. The renderer
+        # derives every other field from the exact approved original creation.
+        deployment:
+          maximum_subnet_uids: 256
+        replica_no_id: 1
+        activation_contexts: []
+        maximum_context_bytes: 65536
+        maximum_owners: 4
+        blocks_per_range: 1024
+        maximum_ranges: 16
+        maximum_events_per_range: 256
+        refresh_seconds: 60
+        maximum_refresh_seconds: 120
+        maximum_head_age_seconds: 180
+        maximum_intent_seconds: 120
+        fresh_active_per_owner: 1
+        retry_active_per_owner: 1
+      budget:
+        retry_requests_per_hour: 4194304
+        objects_per_hour: 32768
+        bytes_per_hour: 34359738368
+      native_rpc_urls:
+        - wss://test.finney.opentensor.ai:443
+    - admission:
+        # Only this native census cap exists before deployment. The renderer
+        # derives every other field from the exact approved original creation.
+        deployment:
+          maximum_subnet_uids: 256
+        replica_no_id: 2
+        activation_contexts: []
+        maximum_context_bytes: 65536
+        maximum_owners: 4
+        blocks_per_range: 1024
+        maximum_ranges: 16
+        maximum_events_per_range: 256
+        refresh_seconds: 60
+        maximum_refresh_seconds: 120
+        maximum_head_age_seconds: 180
+        maximum_intent_seconds: 120
+        fresh_active_per_owner: 1
+        retry_active_per_owner: 1
+      budget:
+        retry_requests_per_hour: 4194304
+        objects_per_hour: 32768
+        bytes_per_hour: 34359738368
+      native_rpc_urls:
+        - wss://test.finney.opentensor.ai:443
+
 processes:
   build_from_release_lock: true
   logs: runs/${deployment_id}/processes
@@ -65,9 +314,10 @@ processes:
 scenarios:
   launch: smoke
   release: release-1.0
-  short_epochs: 20
-  production_epochs: 2
+  short_epochs: 5
+  production_epochs: 3
   voluntary_conviction_rao: 1000000000
+  dishonest_deposit_rao: 5000000000
   quality_fault_operator: 2
   quality_fault_start_blocks: 5
   quality_fault_duration_blocks: 20
@@ -89,8 +339,10 @@ budgets:
   maximum_total_tao_rao_from: vault://main/st.yml#testnet-spending-limit-tao-rao
   maximum_total_alpha_rao_from: vault://main/st.yml#testnet-spending-limit-alpha-rao
   maximum_evm_gas_tao_wei_from: vault://main/st.yml#testnet-spending-limit-evm-gas-wei
-  maximum_registrations: 32
-  maximum_registration_burn_rao: 100000000
+  maximum_registrations: 262
+  maximum_registration_burn_rao: 1000000
+  maximum_native_transaction_fee_rao: 3000000
+  maximum_evm_fee_per_gas_wei: 100000000000
 
 secrets:
   generated_role_store: runtime-secret://testnet/sim-testnet/${deployment_id}

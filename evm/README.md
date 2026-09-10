@@ -11,6 +11,15 @@ contracts:
 - `STCoordinator` is the UUPS policy, role, root, commitment, and fleet-binding
   layer. It owns neither reserve nor settlement stake.
 
+Testnet additionally deploys `STFleetBatcher`, `STSubnetProbe`, and the
+testnet-only `STCoordinatorAdversary`. The adversary is a minimal UUPS
+implementation with no linear storage slots: it reads the coordinator's shared
+OpenZeppelin namespaced owner plus the generator-locked coordinator netuid,
+vault, and reserve slots, executes the four custody probes, and permits
+restoration of the reviewed implementation. Its v1 call/event ABI remains
+compatible with an already-installed testnet drill. It is never included in
+the production artifact list.
+
 `src/STSubnet.sol` and its original tests are retained only as pre-1.0 regression
 history. Neither `Deploy.s.sol` nor `sim-testnet` installs it.
 
@@ -19,13 +28,16 @@ history. Neither `Deploy.s.sol` nor `sim-testnet` installs it.
 The load-bearing build pins are Solidity 0.8.24, Cancun, optimizer/via-IR settings
 from `foundry.toml`, and Foundry 1.7.1. Vendored libraries under ignored `lib/` are:
 
-| dependency | tag |
-|---|---|
-| OpenZeppelin contracts | v5.6.1 |
-| OpenZeppelin upgradeable | v5.6.1 |
-| forge-std | v1.16.2 |
+| dependency | tag | reviewed commit |
+|---|---|---|
+| OpenZeppelin contracts | v5.6.1 | `5fd1781b1454fd1ef8e722282f86f9293cacf256` |
+| OpenZeppelin upgradeable | v5.6.1 | `7bf4727aacdbfaa0f36cbd664654d0c9e1dc52bf` |
+| forge-std | v1.16.2 | `bf647bd6046f2f7da30d0c2bf435e5c76a780c1b` |
 
-Install those exact tags without local modifications, then run:
+Install those exact commits without local or untracked modifications. The
+release gate also verifies Foundry 1.7.1 build commit
+`4072e48705af9d93e3c0f6e29e93b5e9a40caed8`; a same-version binary from a
+different build is not accepted. Then run:
 
 ```bash
 export PATH="$HOME/.foundry/bin:$PATH"
@@ -35,8 +47,8 @@ forge test --summary
 ../scripts/test-solidity-static.sh
 ```
 
-After any contract-source or compiler-setting change, refresh the embedded Go
-artifacts and bindings from the reviewed Foundry output:
+After any intentional contract-source or compiler-setting change, refresh the
+embedded Go artifacts and bindings from the reviewed Foundry output:
 
 ```bash
 cd ..
@@ -45,8 +57,17 @@ go generate ./sim-testnet
 ```
 
 `sim-testnet/contracts_gen.go`, `stabi/`, and `deploy/testnet/release.lock.yml`
-must match the final build exactly. Freeze the release lock only after every
-source, generated artifact, and infrastructure change is complete.
+must then be reviewed and frozen together. For an unchanged release, use
+`go run ./sim-testnet/gencontracts --check evm/out sim-testnet/contracts_gen.go`
+instead of regenerating. Foundry compilation graphs can change only the IPFS
+digest inside Solidity's metadata trailer. Write mode preserves a previously
+reviewed payload only when its full-byte runtime hash and canonical artifact
+hash authenticate it against the rebuilt ABI, selectors, storage layout,
+immutable references, and metadata-normalized executable bytes. Check mode
+applies the same rules and rejects every executable, ABI, selector,
+immutable-reference, layout, or compiler-envelope difference. Freeze the
+release lock only after every source, generated artifact, and infrastructure
+change is complete.
 
 ## Contract state and value flow
 
@@ -55,19 +76,30 @@ Each contract has a distinct H160-mirrored Substrate coldkey.
 1. Every NO has an isolated coordinator-owned deposit hotkey plus a scoped EVM
    deposit signer. The native funding intent stages an exact alpha amount there.
 2. `deposit` or `addConviction` checks signer, nonce, deadline, policy caps, and
-   available stake. In one EVM transaction it moves the amount to the reserve
-   hotkey, transfers it to the immutable sink coldkey, records principal, and
-   emits the policy-bound event. Any failed runtime call reverts all accounting.
+   available stake. In one EVM transaction it stages the principal plus a
+   two-rao runtime-453 allowance, moves it to the reserve hotkey, transfers it
+   to the immutable sink coldkey, records only the requested principal, and
+   emits the policy-bound event. Each of the two destination share pools may
+   floor one rao; the sink must still receive at least the full principal and
+   can receive at most the two staged donation rao. Any failed runtime call or
+   wider delta reverts all accounting.
 3. During installation the immutable vault limit-registers its escrow hotkey
-   exactly once under its own mapped coldkey. Runtime 447 burns from the funded
+   exactly once under its own mapped coldkey. Runtime 453 burns from the funded
    caller mirror, so the vault calls the neuron precompile with zero call value.
    It also owns one pool hotkey per NO. A timely boundary call moves the
-   complete realized pool stake to that escrow; a missed boundary defers the
-   still-on-pool stake rather than misattributing a multi-epoch delta.
+   complete realized pool stake to that escrow. The immutable
+   `ST_MINIMUM_TRANSFER_TAO_RAO` must equal finalized runtime-453
+   `DefaultMinTransfer`: a smaller observation remains on the pool to
+   accumulate, while a missed boundary defers it rather than misattributing a
+   multi-epoch delta. Exact pool/escrow deltas are measured before accounting.
 4. The NO commits a root plus canonical artifact hash. Finalization fixes one
    vault entitlement containing captured emission plus same-NO carry. Claims use
-   the shared double-hashed OZ Merkle leaf and transfer alpha stake directly to
-   the provider coldkey. Expired/unclaimed value remains only that NO's carry.
+   the shared double-hashed OZ Merkle leaf. An accepted share first becomes
+   durable credit for the provider coldkey. Sub-floor credits aggregate across
+   claims; qualifying credit transfers directly to that coldkey only after
+   exact source/destination deltas. Runtime/price failures preserve the credit,
+   which can be retried permissionlessly. Expired unclaimed value remains only
+   that NO's carry; accepted credit is never returned to carry.
 
 The executable vault identities are:
 
@@ -105,8 +137,10 @@ deregistration, or UID reuse.
 ERC1967 proxy, limit-registers the vault-owned escrow with the required
 runtime-enforced `ST_REGISTRATION_BURN_LIMIT_RAO` (funded at the full ceiling;
 the actual burn is charged and surplus is returned), then irreversibly fixes
-the proxy as sink recorder
-and vault coordinator. It accepts only Bittensor testnet chain 945 or mainnet chain 964.
+the proxy as sink recorder and vault coordinator. The required
+`ST_MINIMUM_TRANSFER_TAO_RAO` is embedded in vault creation/runtime bytecode and
+must match the finalized public chain manifest. It accepts only Bittensor
+testnet chain 945 or mainnet chain 964.
 Testnet requires a dedicated EOA owner. Mainnet calls the standard Safe
 `getThreshold()`/`getOwners()` views and refuses deployment unless the owner is
 exactly a 2-of-3 Safe with three distinct nonzero owners. Deployer, owner,

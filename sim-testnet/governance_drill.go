@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/urfoundation/sn/stabi"
 )
@@ -95,8 +95,40 @@ func (e *Executor) writeGovernanceEvidence(value *GovernanceDrillEvidence) error
 	return writePublicJSON(e.governanceEvidencePath(), value)
 }
 
-func implementationAt(ctx context.Context, manager *EVMTxManager, proxy common.Address, block uint64) (common.Address, error) {
-	raw, err := manager.client.StorageAt(ctx, proxy, common.HexToHash(erc1967ImplementationSlot), new(big.Int).SetUint64(block))
+func governanceRawCallAt(ctx context.Context, manager *EvmTxManager, from, address common.Address, data []byte, head ChainHead) ([]byte, error) {
+	if manager == nil || manager.client == nil {
+		return nil, errors.New("governance EVM client is unavailable")
+	}
+	if _, err := decodeHex32("governance EVM block hash", head.Hash); err != nil {
+		return nil, err
+	}
+	message := map[string]any{"to": address.Hex(), "data": hexutil.Bytes(data)}
+	if from != (common.Address{}) {
+		message["from"] = from.Hex()
+	}
+	var raw hexutil.Bytes
+	err := manager.client.Client().CallContext(ctx, &raw, "eth_call", message, finalEVMBlockSelector{BlockHash: head.Hash, RequireCanonical: true})
+	return raw, err
+}
+
+func governanceCallAt[T any](ctx context.Context, manager *EvmTxManager, address common.Address, data []byte, unpack func([]byte) (T, error), head ChainHead) (T, error) {
+	var zero T
+	raw, err := governanceRawCallAt(ctx, manager, common.Address{}, address, data, head)
+	if err != nil {
+		return zero, err
+	}
+	return unpack(raw)
+}
+
+func implementationAt(ctx context.Context, manager *EvmTxManager, proxy common.Address, head ChainHead) (common.Address, error) {
+	if manager == nil || manager.client == nil {
+		return common.Address{}, errors.New("governance EVM client is unavailable")
+	}
+	if _, err := decodeHex32("governance EVM block hash", head.Hash); err != nil {
+		return common.Address{}, err
+	}
+	var raw hexutil.Bytes
+	err := manager.client.Client().CallContext(ctx, &raw, "eth_getStorageAt", proxy, erc1967ImplementationSlot, finalEVMBlockSelector{BlockHash: head.Hash, RequireCanonical: true})
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -106,17 +138,33 @@ func implementationAt(ctx context.Context, manager *EVMTxManager, proxy common.A
 	return common.BytesToAddress(raw[12:]), nil
 }
 
+func codeAtCanonicalHead(ctx context.Context, manager *EvmTxManager, address common.Address, head ChainHead) ([]byte, error) {
+	if manager == nil || manager.client == nil {
+		return nil, errors.New("governance EVM client is unavailable")
+	}
+	if _, err := decodeHex32("governance EVM block hash", head.Hash); err != nil {
+		return nil, err
+	}
+	var raw hexutil.Bytes
+	err := manager.client.Client().CallContext(ctx, &raw, "eth_getCode", address, finalEVMBlockSelector{BlockHash: head.Hash, RequireCanonical: true})
+	return raw, err
+}
+
 func (e *Executor) findFinalizedEntitlement(ctx context.Context) (uint64, uint64, stabi.STSettlementVaultEntitlement, error) {
 	coordinator := stabi.NewSTCoordinator()
 	vault := stabi.NewSTSettlementVault()
 	address := e.payloads.Manifest.CoordinatorProxy
-	current, err := rawCoordinatorCall(ctx, e.owner, address, coordinator.PackCurrentEpoch(), coordinator.UnpackCurrentEpoch)
+	head, err := finalizedEVMHead(ctx, e.owner.client)
+	if err != nil {
+		return 0, 0, stabi.STSettlementVaultEntitlement{}, err
+	}
+	current, err := governanceCallAt(ctx, e.owner, address, coordinator.PackCurrentEpoch(), coordinator.UnpackCurrentEpoch, head)
 	if err != nil || !current.IsUint64() {
-		return 0, 0, stabi.STSettlementVaultEntitlement{}, fmt.Errorf("read current epoch: %w", err)
+		return 0, 0, stabi.STSettlementVaultEntitlement{}, stateMismatchError(err, "read current epoch is not uint64")
 	}
 	for epoch := current.Uint64(); ; epoch-- {
 		for noID := 1; noID <= e.cfg.Config.Topology.Operators; noID++ {
-			value, readErr := rawCoordinatorCall(ctx, e.owner, e.payloads.Manifest.SettlementVault, vault.PackEntitlement(new(big.Int).SetUint64(epoch), big.NewInt(int64(noID))), vault.UnpackEntitlement)
+			value, readErr := governanceCallAt(ctx, e.owner, e.payloads.Manifest.SettlementVault, vault.PackEntitlement(new(big.Int).SetUint64(epoch), big.NewInt(int64(noID))), vault.UnpackEntitlement, head)
 			if readErr != nil {
 				return 0, 0, value, readErr
 			}
@@ -148,47 +196,47 @@ func (e *Executor) governanceSnapshot(ctx context.Context, epoch, noID uint64) (
 	}
 	coordinator, vault, reserve := stabi.NewSTCoordinator(), stabi.NewSTSettlementVault(), stabi.NewSTReserveSink()
 	proxy := e.payloads.Manifest.CoordinatorProxy
-	implementation, err := implementationAt(ctx, e.owner, proxy, head.Number)
+	implementation, err := implementationAt(ctx, e.owner, proxy, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
-	owner, err := rawCoordinatorCall(ctx, e.owner, proxy, coordinator.PackOwner(), coordinator.UnpackOwner)
+	owner, err := governanceCallAt(ctx, e.owner, proxy, coordinator.PackOwner(), coordinator.UnpackOwner, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
-	guardian, err := rawCoordinatorCall(ctx, e.owner, proxy, coordinator.PackGuardian(), coordinator.UnpackGuardian)
+	guardian, err := governanceCallAt(ctx, e.owner, proxy, coordinator.PackGuardian(), coordinator.UnpackGuardian, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
-	paused, err := rawCoordinatorCall(ctx, e.owner, proxy, coordinator.PackPaused(), coordinator.UnpackPaused)
+	paused, err := governanceCallAt(ctx, e.owner, proxy, coordinator.PackPaused(), coordinator.UnpackPaused, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
-	current, err := rawCoordinatorCall(ctx, e.owner, proxy, coordinator.PackCurrentEpoch(), coordinator.UnpackCurrentEpoch)
+	current, err := governanceCallAt(ctx, e.owner, proxy, coordinator.PackCurrentEpoch(), coordinator.UnpackCurrentEpoch, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
-	policy, err := rawCoordinatorCall(ctx, e.owner, proxy, coordinator.PackPolicyAt(current), coordinator.UnpackPolicyAt)
+	policy, err := governanceCallAt(ctx, e.owner, proxy, coordinator.PackPolicyAt(current), coordinator.UnpackPolicyAt, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
-	vaultCoordinator, err := rawCoordinatorCall(ctx, e.owner, e.payloads.Manifest.SettlementVault, vault.PackCoordinator(), vault.UnpackCoordinator)
+	vaultCoordinator, err := governanceCallAt(ctx, e.owner, e.payloads.Manifest.SettlementVault, vault.PackCoordinator(), vault.UnpackCoordinator, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
-	reserveRecorder, err := rawCoordinatorCall(ctx, e.owner, e.payloads.Manifest.ReserveSink, reserve.PackRecorder(), reserve.UnpackRecorder)
+	reserveRecorder, err := governanceCallAt(ctx, e.owner, e.payloads.Manifest.ReserveSink, reserve.PackRecorder(), reserve.UnpackRecorder, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
-	principal, err := rawCoordinatorCall(ctx, e.owner, e.payloads.Manifest.ReserveSink, reserve.PackPrincipal(), reserve.UnpackPrincipal)
+	principal, err := governanceCallAt(ctx, e.owner, e.payloads.Manifest.ReserveSink, reserve.PackPrincipal(), reserve.UnpackPrincipal, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
-	live, err := rawCoordinatorCall(ctx, e.owner, e.payloads.Manifest.ReserveSink, reserve.PackLiveStake(), reserve.UnpackLiveStake)
+	live, err := governanceCallAt(ctx, e.owner, e.payloads.Manifest.ReserveSink, reserve.PackLiveStake(), reserve.UnpackLiveStake, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
-	entitlement, err := rawCoordinatorCall(ctx, e.owner, e.payloads.Manifest.SettlementVault, vault.PackEntitlement(new(big.Int).SetUint64(epoch), new(big.Int).SetUint64(noID)), vault.UnpackEntitlement)
+	entitlement, err := governanceCallAt(ctx, e.owner, e.payloads.Manifest.SettlementVault, vault.PackEntitlement(new(big.Int).SetUint64(epoch), new(big.Int).SetUint64(noID)), vault.UnpackEntitlement, head)
 	if err != nil {
 		return GovernanceCustodySnapshot{}, err
 	}
@@ -207,7 +255,7 @@ func (e *Executor) executeGovernanceDrillAction(ctx context.Context, a Action) e
 	case "governance.probe-custody":
 		return e.governanceProbe(ctx, a)
 	case "governance.restore-coordinator":
-		return e.governanceUpgrade(ctx, a, e.payloads.Manifest.CoordinatorImplementation, "restored")
+		return e.governanceUpgrade(ctx, a, e.payloads.CoordinatorUpgrade.Implementation, "restored")
 	case "governance.guardian-unpause":
 		return e.governanceUnpause(ctx, a)
 	default:
@@ -227,7 +275,7 @@ func (e *Executor) governancePause(ctx context.Context, a Action) error {
 	if err != nil {
 		return err
 	}
-	if before.Paused || !strings.EqualFold(before.Implementation, e.payloads.Manifest.CoordinatorImplementation.Hex()) {
+	if before.Paused || !strings.EqualFold(before.Implementation, e.payloads.CoordinatorUpgrade.Implementation.Hex()) {
 		return errors.New("governance drill must start unpaused on the reviewed implementation")
 	}
 	parsed, err := abi.JSON(strings.NewReader(CoordinatorABI))
@@ -245,7 +293,7 @@ func (e *Executor) governancePause(ctx context.Context, a Action) error {
 	}
 	after, err := e.governanceSnapshot(ctx, epoch, noID)
 	if err != nil || !after.Paused {
-		return fmt.Errorf("guardian pause postcondition: %w", err)
+		return stateMismatchError(err, "guardian pause postcondition is false")
 	}
 	evidence := &GovernanceDrillEvidence{Schema: "urnetwork-governance-drill-evidence-v1", DeploymentID: e.cfg.Config.Deployment.DeploymentID, PlanHash: e.plan.PlanHash, Stage: "paused", Before: before, Transactions: map[string]string{a.ID: receipt.TxHash.Hex()}}
 	_ = entitlement // selected value is represented in before at one finalized checkpoint
@@ -265,7 +313,7 @@ func (e *Executor) governanceUpgrade(ctx context.Context, a Action, implementati
 		if headErr != nil {
 			return headErr
 		}
-		got, slotErr := implementationAt(ctx, e.owner, e.payloads.Manifest.CoordinatorProxy, head.Number)
+		got, slotErr := implementationAt(ctx, e.owner, e.payloads.Manifest.CoordinatorProxy, head)
 		if slotErr == nil && got == implementation {
 			return nil
 		}
@@ -287,13 +335,21 @@ func (e *Executor) governanceUpgrade(ctx context.Context, a Action, implementati
 	if err != nil {
 		return err
 	}
-	got, err := implementationAt(ctx, e.owner, proxy, head.Number)
+	got, err := implementationAt(ctx, e.owner, proxy, head)
 	if err != nil || got != implementation {
-		return fmt.Errorf("ERC1967 implementation=%s want=%s: %w", got, implementation, err)
+		return stateMismatchError(err, "ERC1967 implementation=%s want=%s", got, implementation)
 	}
 	evidence.Stage = stage
 	evidence.Transactions[a.ID] = receipt.TxHash.Hex()
 	return e.writeGovernanceEvidence(evidence)
+}
+
+func governanceCustodyProbeCalldata(epoch, noID uint64, replacementRoot, replacementArtifact [32]byte, replacementExpiry uint64, destination, reserveHotkey [32]byte) ([]byte, error) {
+	adversaryABI, err := abi.JSON(strings.NewReader(CoordinatorAdversaryABI))
+	if err != nil {
+		return nil, err
+	}
+	return adversaryABI.Pack("runCustodyProbes", new(big.Int).SetUint64(epoch), new(big.Int).SetUint64(noID), replacementRoot, replacementArtifact, replacementExpiry, destination, reserveHotkey)
 }
 
 func bytes32Label(value string) [32]byte { var out [32]byte; copy(out[:], []byte(value)); return out }
@@ -330,13 +386,13 @@ func (e *Executor) governanceProbe(ctx context.Context, a Action) error {
 	if err != nil {
 		return err
 	}
-	data, err := parsed.Pack("runCustodyProbes", new(big.Int).SetUint64(evidence.Before.Entitlement.Epoch), new(big.Int).SetUint64(evidence.Before.Entitlement.NoID), replacementRoot, replacementArtifact, head.Number+e.cfg.Policy.Settlement.EpochBlocks*e.cfg.Policy.Settlement.ClaimTTLEpochs+100, destination, reserveHotkey)
+	data, err := governanceCustodyProbeCalldata(evidence.Before.Entitlement.Epoch, evidence.Before.Entitlement.NoID, replacementRoot, replacementArtifact, head.Number+e.cfg.Policy.Settlement.EpochBlocks*e.cfg.Policy.Settlement.ClaimTTLEpochs+100, destination, reserveHotkey)
 	if err != nil {
 		return err
 	}
 	owner, _ := e.roles.EVMAddress("testnet-owner")
 	proxy := e.payloads.Manifest.CoordinatorProxy
-	out, err := e.owner.client.CallContract(ctx, ethereum.CallMsg{From: owner, To: &proxy, Data: data}, new(big.Int).SetUint64(head.Number))
+	out, err := governanceRawCallAt(ctx, e.owner, owner, proxy, data, head)
 	if err != nil {
 		return fmt.Errorf("preflight hostile custody probes: %w", err)
 	}
@@ -370,13 +426,16 @@ func (e *Executor) governanceProbe(ctx context.Context, a Action) error {
 		}
 		decoded, unpackErr := probeEvent.Inputs.NonIndexed().Unpack(log.Data)
 		if unpackErr != nil || len(decoded) != 2 {
-			return fmt.Errorf("decode custody probe: %w", unpackErr)
+			return stateMismatchError(unpackErr, "decode custody probe returned %d values", len(decoded))
 		}
 		succeeded, ok := decoded[0].(bool)
 		if !ok || succeeded {
 			return fmt.Errorf("custody probe %s unexpectedly succeeded", name)
 		}
-		results[name] = succeeded
+		if _, duplicate := results[name]; duplicate {
+			return fmt.Errorf("custody probe %s was emitted twice", name)
+		}
+		results[name] = false
 	}
 	if len(results) != len(expected) {
 		return fmt.Errorf("custody probe receipt has %d/%d results", len(results), len(expected))
@@ -434,7 +493,7 @@ func (e *Executor) validateCompletedGovernanceDrill(evidence *GovernanceDrillEvi
 			return fmt.Errorf("custody probe %s succeeded", name)
 		}
 	}
-	if after.Paused || !strings.EqualFold(after.Implementation, e.payloads.Manifest.CoordinatorImplementation.Hex()) || !strings.EqualFold(before.Owner, after.Owner) || !strings.EqualFold(before.Guardian, after.Guardian) || !strings.EqualFold(before.PolicyHash, after.PolicyHash) || !strings.EqualFold(before.VaultCoordinator, after.VaultCoordinator) || !strings.EqualFold(before.ReserveRecorder, after.ReserveRecorder) || before.ReservePrincipalRao != after.ReservePrincipalRao || !sameImmutableEntitlement(before.Entitlement, after.Entitlement) {
+	if after.Paused || !strings.EqualFold(after.Implementation, e.payloads.CoordinatorUpgrade.Implementation.Hex()) || !strings.EqualFold(before.Owner, after.Owner) || !strings.EqualFold(before.Guardian, after.Guardian) || !strings.EqualFold(before.PolicyHash, after.PolicyHash) || !strings.EqualFold(before.VaultCoordinator, after.VaultCoordinator) || !strings.EqualFold(before.ReserveRecorder, after.ReserveRecorder) || before.ReservePrincipalRao != after.ReservePrincipalRao || !sameImmutableEntitlement(before.Entitlement, after.Entitlement) {
 		return errors.New("governance drill changed an immutable custody, role, policy, or entitlement field")
 	}
 	liveBefore, ok1 := new(big.Int).SetString(before.ReserveLiveStakeRao, 10)
@@ -465,7 +524,7 @@ func (e *Executor) verifyGovernanceDrillPostState(ctx context.Context, a Action,
 	if err != nil {
 		return nil, err
 	}
-	implementation, err := implementationAt(ctx, e.owner, e.payloads.Manifest.CoordinatorProxy, head.Number)
+	implementation, err := implementationAt(ctx, e.owner, e.payloads.Manifest.CoordinatorProxy, head)
 	if err != nil {
 		return nil, err
 	}

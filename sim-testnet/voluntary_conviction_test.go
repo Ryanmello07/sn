@@ -1,0 +1,1009 @@
+// Voluntary-conviction tests lock one-time mutation and recovery semantics.
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+)
+
+// Reproduces the live incident: an epoch change must not make a prior
+// cumulative conviction look eligible for a new plan intent.
+func TestVoluntaryConvictionPrestateRejectsCumulativeMutationBeforeNewIntent(t *testing.T) {
+	if err := validateVoluntaryConvictionPrestate(big.NewInt(1_000_000_000), false); err == nil || !strings.Contains(err.Error(), "want zero") {
+		t.Fatalf("new intent accepted a prior cumulative conviction: %v", err)
+	}
+}
+
+// An exact current-intent resume is safe because immutable transaction bytes
+// are recovered rather than recreated with a fresh nonce.
+func TestVoluntaryConvictionPrestateAllowsZeroOrExactIntentResume(t *testing.T) {
+	for _, test := range []struct {
+		cumulative *big.Int
+		resumed    bool
+	}{
+		{cumulative: big.NewInt(0), resumed: false},
+		{cumulative: big.NewInt(0), resumed: true},
+		{cumulative: big.NewInt(1_000_000_000), resumed: true},
+	} {
+		if err := validateVoluntaryConvictionPrestate(test.cumulative, test.resumed); err != nil {
+			t.Fatalf("valid cumulative/resume state %v/%t rejected: %v", test.cumulative, test.resumed, err)
+		}
+	}
+}
+
+// Invalid decoded values fail closed before transaction construction.
+func TestVoluntaryConvictionPrestateRejectsInvalidValues(t *testing.T) {
+	for _, cumulative := range []*big.Int{nil, big.NewInt(-1)} {
+		if err := validateVoluntaryConvictionPrestate(cumulative, false); err == nil {
+			t.Fatalf("invalid cumulative value %v was accepted", cumulative)
+		}
+	}
+}
+
+func TestVoluntaryConvictionRepairIDReservesEveryPriorSequence(t *testing.T) {
+	revised := &SetupPlan{Actions: []Action{{ID: "alpha.repair.operator-deposit.1"}, {ID: "alpha.repair.operator-deposit.2.9"}}}
+	prior := &SetupPlan{Actions: []Action{{ID: "alpha.repair.operator-deposit.1.2"}, {ID: "alpha.repair.operator-deposit.1.4"}}}
+	got, err := nextVoluntaryConvictionRepairActionID(revised, prior)
+	if err != nil || got != "alpha.repair.operator-deposit.1.5" {
+		t.Fatalf("next repair id=%q want alpha.repair.operator-deposit.1.5: %v", got, err)
+	}
+	invalid := &SetupPlan{Actions: []Action{{ID: "alpha.repair.operator-deposit.1.1"}}}
+	if _, err := nextVoluntaryConvictionRepairActionID(invalid); err == nil {
+		t.Fatal("invalid ancestor repair sequence was ignored")
+	}
+}
+
+// Build a gas-only ancestor/source pair matching the live incident without
+// requiring a network endpoint.
+func testVoluntaryConvictionDuplicateRecovery(t *testing.T) (*ResolvedConfig, string, *SetupPlan, *SetupFacts, []JournalEntry, voluntaryConvictionDuplicateRecovery) {
+	t.Helper()
+	cfg := testResolvedConfig(t)
+	roles, err := derivePublicRoles(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ancestor, err := buildPlan(cfg, testSetupFacts(), roles, time.Unix(1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ancestorVoluntary, ancestorReserve *Action
+	for index := range ancestor.Actions {
+		switch ancestor.Actions[index].ID {
+		case voluntaryConvictionActionID:
+			ancestorVoluntary = &ancestor.Actions[index]
+		case "campaign.evm-gas-reserve":
+			ancestorReserve = &ancestor.Actions[index]
+		}
+	}
+	if ancestorVoluntary == nil || ancestorReserve == nil {
+		t.Fatal("test plan lacks voluntary conviction or campaign reserve")
+	}
+	ancestorVoluntary.Parameters[evmMaximumGasUnitsParameter] = "30505000"
+	ancestorVoluntary.Spend.EVMGasWei = multiplyUint64Decimal(30_505_000, cfg.Config.Budgets.MaximumEVMFeePerGasWei)
+	ancestorVoluntary.IntentHash, err = actionIntentHash(*ancestorVoluntary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ancestorReserve.Spend.EVMGasWei, err = subtractDecimalUint(ancestorReserve.Spend.EVMGasWei, "50500000000000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ancestorReserve.IntentHash, err = actionIntentHash(*ancestorReserve)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ancestor.MaximumSpend, err = maximumActionSpend(ancestor.Actions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ancestor.PlanHash, err = ancestor.hash()
+	if err != nil || validatePlanBudget(ancestor) != nil {
+		t.Fatalf("construct original voluntary plan: hash=%v validate=%v", err, validatePlanBudget(ancestor))
+	}
+	stateDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(stateDir, "plans"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	wire, err := json.MarshalIndent(ancestor, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "plans", stringsTrim0x(ancestor.PlanHash)+".json"), append(wire, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prior, err := buildPlan(cfg, testSetupFacts(), roles, time.Unix(2, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prior.PriorPlanHashes = []string{ancestor.PlanHash}
+	prior.PlanHash, err = prior.hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate := actionByID(t, prior, voluntaryConvictionActionID)
+	original := actionByID(t, ancestor, voluntaryConvictionActionID)
+	originalTransaction := "0x" + strings.Repeat("ab", 32)
+	originalBlockHash := "0x" + strings.Repeat("bc", 32)
+	duplicateTransaction := "0x" + strings.Repeat("cd", 32)
+	duplicateBlockHash := "0x" + strings.Repeat("de", 32)
+	evidence := VoluntaryConvictionEvidence{
+		Schema: "urnetwork-voluntary-conviction-evidence-v1", DeploymentID: cfg.Config.Deployment.DeploymentID,
+		NoID: 1, Epoch: 2, AmountRao: strconv.FormatUint(cfg.Config.Scenarios.VoluntaryConvictionRao, 10),
+		BeforeConvictionRao: "0", AfterConvictionRao: strconv.FormatUint(cfg.Config.Scenarios.VoluntaryConvictionRao, 10), Nonce: "1",
+		Funder: prior.Roles.OperatorDepositSigners[0], PolicyHash: cfg.PolicyHash,
+		TransactionHash: originalTransaction, FinalizedBlock: 100, FinalizedHash: originalBlockHash,
+	}
+	entries := []JournalEntry{
+		{PlanHash: ancestor.PlanHash, ActionID: original.ID, IntentHash: original.IntentHash, Stage: StageFinalized, TransactionHash: originalTransaction, BlockNumber: 100, BlockHash: originalBlockHash},
+		{PlanHash: ancestor.PlanHash, ActionID: original.ID, IntentHash: original.IntentHash, Stage: StageVerified},
+		{PlanHash: prior.PlanHash, ActionID: duplicate.ID, IntentHash: duplicate.IntentHash, Stage: StageFinalized, TransactionHash: duplicateTransaction, BlockNumber: 110, BlockHash: duplicateBlockHash},
+	}
+	amount := cfg.Config.Scenarios.VoluntaryConvictionRao
+	after, _ := checkedMul(amount, 2)
+	recovery := voluntaryConvictionDuplicateRecovery{
+		DuplicateTransaction: planRevisionTransaction{PlanHash: prior.PlanHash, ActionID: duplicate.ID, IntentHash: duplicate.IntentHash, TransactionHash: duplicateTransaction, BlockNumber: 110, BlockHash: duplicateBlockHash},
+		DuplicateAction:      duplicate, OriginalAction: original, OriginalPlanHash: ancestor.PlanHash, OriginalIntentHash: original.IntentHash,
+		OriginalPlanPolicyHash: ancestor.PolicyHash, DuplicatePlanPolicyHash: prior.PolicyHash, OriginalEvidence: evidence,
+		DuplicateEpoch: 3, DuplicateNonce: "2", Funder: evidence.Funder, PolicyHash: evidence.PolicyHash,
+		AmountRao: amount, CumulativeBeforeRao: amount, CumulativeAfterRao: after, OperatorPrincipalAfterRao: after,
+		SupersededGasBefore: prior.SupersededSpend.EVMGasWei,
+	}
+	current := *testSetupFacts()
+	return cfg, stateDir, prior, &current, entries, recovery
+}
+
+// The live successful duplicate is adopted once, charged at its approved gas
+// ceiling, repaired in alpha, and placed ahead of the first unverified mirror.
+func TestPlanRevisionReconcilesExactDuplicateVoluntaryConvictionOnce(t *testing.T) {
+	cfg, stateDir, prior, current, entries, recovery := testVoluntaryConvictionDuplicateRecovery(t)
+	persistPlan := func(plan *SetupPlan) {
+		wire, err := json.MarshalIndent(plan, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(stateDir, "plans", stringsTrim0x(plan.PlanHash)+".json"), append(wire, '\n'), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	persistPlan(prior)
+	operatorTransfer := actionByID(t, prior, "alpha.transfer.operator-deposit.1")
+	entries = append(entries, JournalEntry{PlanHash: prior.PlanHash, ActionID: operatorTransfer.ID, IntentHash: operatorTransfer.IntentHash, Stage: StageVerified})
+	revised, err := buildPlanRevisionFromFactsWithMigrationAndRecoveries(cfg, stateDir, prior, current, entries, time.Unix(3, 0), nil, []voluntaryConvictionDuplicateRecovery{recovery})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconciliation := actionByID(t, revised, voluntaryConvictionReconciliationActionID)
+	repair := actionByID(t, revised, reconciliation.Parameters[voluntaryRecoveryRepairActionParameter])
+	if actionByID(t, revised, voluntaryConvictionActionID).IntentHash != recovery.OriginalAction.IntentHash {
+		t.Fatal("the verified original voluntary-conviction intent was not carried")
+	}
+	if repair.Spend.AlphaRao != recovery.AmountRao+reserveRoundingAllowancePerCallRao+alphaTransferDestinationRoundingAllowance ||
+		repair.Parameters[alphaRepairMinimumDestinationParameter] != "100000000020" || !slices.Contains(actionByID(t, revised, "fleet.refresh.oracle-activate").DependsOn, repair.ID) {
+		t.Fatalf("duplicate recovery repair/barrier is invalid: repair=%+v activation=%+v", repair, actionByID(t, revised, "fleet.refresh.oracle-activate"))
+	}
+	wantSuperseded, err := addDecimalUint(recovery.SupersededGasBefore, recovery.DuplicateAction.Spend.EVMGasWei)
+	if err != nil || revised.SupersededSpend.EVMGasWei != wantSuperseded {
+		t.Fatalf("duplicate gas accounting=%s want=%s error=%v", revised.SupersededSpend.EVMGasWei, wantSuperseded, err)
+	}
+	total, err := addSpends(revised.MaximumSpend, revised.SupersededSpend)
+	gasComparison, gasComparisonErr := total.EVMGasWei.Cmp(revised.Limits.EVMGasWei)
+	if err != nil || gasComparisonErr != nil || gasComparison > 0 || validatePlanBudget(revised) != nil {
+		t.Fatalf("recovered cumulative budget=%+v limits=%+v add_error=%v validate=%v", total, revised.Limits, err, validatePlanBudget(revised))
+	}
+	wire, err := json.Marshal(revised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := decodePersistedPlanBytes(wire)
+	if err != nil {
+		t.Fatalf("recovery plan failed its persisted round trip: %v", err)
+	}
+	if actionByID(t, persisted, reconciliation.ID).IntentHash != reconciliation.IntentHash {
+		t.Fatal("persisted recovery action changed identity")
+	}
+
+	entries = append(entries,
+		JournalEntry{PlanHash: revised.PlanHash, ActionID: reconciliation.ID, IntentHash: reconciliation.IntentHash, Stage: StageVerified},
+		JournalEntry{PlanHash: revised.PlanHash, ActionID: repair.ID, IntentHash: repair.IntentHash, Stage: StageVerified},
+	)
+	persistPlan(revised)
+	recovery.AlreadyPlanned = true
+	continued, err := buildPlanRevisionFromFactsWithMigrationAndRecoveries(cfg, stateDir, revised, current, entries, time.Unix(4, 0), nil, []voluntaryConvictionDuplicateRecovery{recovery})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconciliationCount, repairCount := 0, 0
+	for _, action := range continued.Actions {
+		if action.ID == reconciliation.ID {
+			reconciliationCount++
+		}
+		if action.ID == repair.ID {
+			repairCount++
+		}
+	}
+	if reconciliationCount != 1 || repairCount != 1 || continued.SupersededSpend.EVMGasWei != revised.SupersededSpend.EVMGasWei {
+		t.Fatalf("continued recovery duplicated accounting/actions: reconciliation=%d repair=%d spend=%s/%s", reconciliationCount, repairCount, continued.SupersededSpend.EVMGasWei, revised.SupersededSpend.EVMGasWei)
+	}
+	if actionByID(t, continued, voluntaryConvictionActionID).IntentHash != recovery.OriginalAction.IntentHash {
+		t.Fatal("continued recovery rebuilt the already-verified original voluntary conviction")
+	}
+	reconciliationIndex, repairIndex, barrierIndex := -1, -1, -1
+	for index, action := range continued.Actions {
+		switch action.ID {
+		case reconciliation.ID:
+			reconciliationIndex = index
+		case repair.ID:
+			repairIndex = index
+		case "fleet.refresh.oracle-activate":
+			barrierIndex = index
+		}
+	}
+	if reconciliationIndex < 0 || repairIndex <= reconciliationIndex || barrierIndex <= repairIndex {
+		t.Fatalf("continued recovery is not topologically ordered: reconciliation=%d repair=%d barrier=%d", reconciliationIndex, repairIndex, barrierIndex)
+	}
+	if err := validatePlanBudget(continued); err != nil {
+		t.Fatalf("continued recovery plan is invalid: %v", err)
+	}
+}
+
+func TestV10VoluntaryConvictionRecoveryRetainsOriginalIntent(t *testing.T) {
+	cfg, stateDir, prior, current, entries, recovery := testVoluntaryConvictionDuplicateRecovery(t)
+	wire, err := json.MarshalIndent(prior, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "plans", stringsTrim0x(prior.PlanHash)+".json"), append(wire, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := buildPlanRevisionFromFactsWithMigrationAndRecoveries(cfg, stateDir, prior, current, entries, time.Unix(3, 0), nil, []voluntaryConvictionDuplicateRecovery{recovery})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan = validatorEvidenceLegacyPlanSchemaTest(t, plan, setupPlanSchemaV10)
+	reconciliation := actionByID(t, plan, voluntaryConvictionReconciliationActionID)
+	priorHashes := map[string]bool{}
+	for _, hash := range plan.PriorPlanHashes {
+		priorHashes[hash] = true
+	}
+	if _, err := validateVoluntaryConvictionReconciliationAction(plan, reconciliation, priorHashes); err != nil {
+		t.Fatalf("valid v10 conviction recovery was rejected: %v", err)
+	}
+	voluntary := findMutableAction(plan, voluntaryConvictionActionID)
+	voluntary.IntentHash = "0x" + strings.Repeat("fa", 32)
+	if _, err := validateVoluntaryConvictionReconciliationAction(plan, reconciliation, priorHashes); err == nil || !strings.Contains(err.Error(), "authenticated original intent") {
+		t.Fatalf("v10 conviction recovery accepted changed original intent: %v", err)
+	}
+}
+
+func TestCarriedVoluntaryConvictionUsesAuthenticatedSourcePolicy(t *testing.T) {
+	cfg := testResolvedConfig(t)
+	roles, err := derivePublicRoles(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := buildPlan(cfg, testSetupFacts(), roles, time.Unix(1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateDir := t.TempDir()
+	encoded, err := json.MarshalIndent(source, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := atomicWrite(filepath.Join(stateDir, "plans", stringsTrim0x(source.PlanHash)+".json"), append(encoded, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	current := *source
+	current.PlanHash = "0x" + strings.Repeat("aa", 32)
+	current.PriorPlanHashes = []string{source.PlanHash}
+	current.PolicyHash = "0x" + strings.Repeat("bb", 32)
+	action := actionByID(t, &current, voluntaryConvictionActionID)
+	verified := JournalEntry{Stage: StageVerified, PlanHash: source.PlanHash, ActionID: action.ID, IntentHash: action.IntentHash}
+	executor := &Executor{cfg: cfg, stateDir: stateDir, plan: &current}
+	verifier, verifiedAction, err := executor.carriedVoluntaryConvictionSourceExecutor(action, verified)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence := VoluntaryConvictionEvidence{
+		Schema: "urnetwork-voluntary-conviction-evidence-v1", DeploymentID: cfg.Config.Deployment.DeploymentID,
+		NoID: 1, Epoch: 3, AmountRao: strconv.FormatUint(cfg.Config.Scenarios.VoluntaryConvictionRao, 10),
+		BeforeConvictionRao: "0", AfterConvictionRao: strconv.FormatUint(cfg.Config.Scenarios.VoluntaryConvictionRao, 10), Nonce: "4",
+		Funder: source.Roles.OperatorDepositSigners[0], PolicyHash: source.PolicyHash,
+		TransactionHash: "0x" + strings.Repeat("11", 32), FinalizedBlock: 9, FinalizedHash: "0x" + strings.Repeat("22", 32),
+	}
+	if err := voluntaryConvictionEvidenceMatches(cfg, &current, evidence); err == nil {
+		t.Fatal("live failure was not reproduced against the revised policy")
+	}
+	if verifier == executor || verifier.plan.PlanHash != source.PlanHash || verifier.plan.PolicyHash != source.PolicyHash || verifiedAction.IntentHash != verified.IntentHash {
+		t.Fatal("carried verifier did not select the exact authenticated source action")
+	}
+	if err := voluntaryConvictionEvidenceMatches(cfg, verifier.plan, evidence); err != nil {
+		t.Fatalf("source-policy evidence was rejected: %v", err)
+	}
+}
+
+func TestCarriedVoluntaryConvictionRejectsAdjacentLineageMutations(t *testing.T) {
+	cfg := testResolvedConfig(t)
+	roles, err := derivePublicRoles(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := buildPlan(cfg, testSetupFacts(), roles, time.Unix(1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := *source
+	current.PlanHash = "0x" + strings.Repeat("aa", 32)
+	current.PriorPlanHashes = []string{source.PlanHash}
+	action := actionByID(t, &current, voluntaryConvictionActionID)
+	verified := JournalEntry{Stage: StageVerified, PlanHash: source.PlanHash, ActionID: action.ID, IntentHash: action.IntentHash}
+	mutations := []func(*SetupPlan, *SetupPlan, *Action, *JournalEntry){
+		func(_, _ *SetupPlan, _ *Action, entry *JournalEntry) { entry.Stage = StageFinalized },
+		func(active, _ *SetupPlan, _ *Action, _ *JournalEntry) { active.PriorPlanHashes = nil },
+		func(_, _ *SetupPlan, candidate *Action, _ *JournalEntry) {
+			candidate.IntentHash = "0x" + strings.Repeat("cc", 32)
+		},
+		func(_, ancestor *SetupPlan, _ *Action, _ *JournalEntry) { ancestor.DeploymentID = "other" },
+		func(_, ancestor *SetupPlan, _ *Action, _ *JournalEntry) { ancestor.ChainID++ },
+		func(_, ancestor *SetupPlan, _ *Action, _ *JournalEntry) { ancestor.Netuid++ },
+		func(_, ancestor *SetupPlan, _ *Action, _ *JournalEntry) {
+			ancestor.Deployment.CoordinatorProxy = common.HexToAddress("0x1234")
+		},
+		func(_, ancestor *SetupPlan, _ *Action, _ *JournalEntry) {
+			ancestor.Roles.OperatorDepositSigners[0] = common.HexToAddress("0x5678").Hex()
+		},
+	}
+	for index, mutate := range mutations {
+		activeCopy, sourceCopy, actionCopy, entryCopy := current, *source, action, verified
+		activeCopy.PriorPlanHashes = append([]string(nil), current.PriorPlanHashes...)
+		sourceCopy.Roles.OperatorDepositSigners = append([]string(nil), source.Roles.OperatorDepositSigners...)
+		mutate(&activeCopy, &sourceCopy, &actionCopy, &entryCopy)
+		if _, err := exactCarriedVoluntaryConvictionSourceAction(&activeCopy, &sourceCopy, actionCopy, entryCopy); err == nil {
+			t.Errorf("lineage mutation %d was accepted", index)
+		}
+	}
+}
+
+func TestPolicyRevisionCarriesVerifiedConvictionCustodyDependencyBeforeUse(t *testing.T) {
+	cfg, _, prior, current, entries, recovery := testVoluntaryConvictionDuplicateRecovery(t)
+	roles, err := derivePublicRoles(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := actionByID(t, prior, "alpha.transfer.operator-deposit.1")
+	repair := Action{
+		ID: "alpha.repair.operator-deposit.1.2", Kind: "substrate-extrinsic", Target: base.Target,
+		Description: "verified historical custody prerequisite",
+		Parameters: map[string]string{
+			alphaRepairForActionParameter: "alpha.transfer.operator-deposit.1",
+			"campaign_policy_hash":        prior.PolicyHash,
+		},
+		Spend: Spend{AlphaRao: 193_556_675}, DependsOn: []string{base.ID},
+	}
+	repair.IntentHash, err = actionIntentHash(repair)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prior.Actions = append(prior.Actions, repair)
+	entries = append(entries, JournalEntry{PlanHash: prior.PlanHash, ActionID: repair.ID, IntentHash: repair.IntentHash, Stage: StageVerified})
+	for index, dependency := range recovery.OriginalAction.DependsOn {
+		if dependency == base.ID {
+			recovery.OriginalAction.DependsOn[index] = repair.ID
+		}
+	}
+	recovery.OriginalAction.IntentHash, err = actionIntentHash(recovery.OriginalAction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revised, err := buildPlan(cfg, current, roles, time.Unix(3, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := carryVerifiedVoluntaryConvictionCustodyDependency(revised, prior, entries, recovery.OriginalAction); err != nil {
+		t.Fatal(err)
+	}
+	baseIndex, repairIndex, voluntaryIndex := -1, -1, -1
+	for index, action := range revised.Actions {
+		switch action.ID {
+		case base.ID:
+			baseIndex = index
+		case repair.ID:
+			repairIndex = index
+		case voluntaryConvictionActionID:
+			voluntaryIndex = index
+		}
+	}
+	if baseIndex < 0 || repairIndex != baseIndex+1 || voluntaryIndex <= repairIndex || actionByID(t, revised, repair.ID).IntentHash != repair.IntentHash {
+		t.Fatalf("custody prerequisite ordering base=%d repair=%d voluntary=%d", baseIndex, repairIndex, voluntaryIndex)
+	}
+	unverifiedPlan, err := buildPlan(cfg, current, roles, time.Unix(4, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := carryVerifiedVoluntaryConvictionCustodyDependency(unverifiedPlan, prior, entries[:len(entries)-1], recovery.OriginalAction); err == nil || !strings.Contains(err.Error(), "verified journal evidence") {
+		t.Fatalf("unverified custody prerequisite was accepted: %v", err)
+	}
+}
+
+// Reproduce the live v9-to-v10 boundary: the authenticated original depended
+// on a verified custody repair, while a fresh build starts from the base
+// transfer until the later custody-preservation pass runs.
+func TestVoluntaryConvictionRecoveryAlignsExactVerifiedCustodyDependency(t *testing.T) {
+	cfg, stateDir, prior, current, entries, recovery := testVoluntaryConvictionDuplicateRecovery(t)
+	roles, err := derivePublicRoles(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buildFresh := func() *SetupPlan {
+		plan, buildErr := buildPlan(cfg, current, roles, time.Unix(3, 0))
+		if buildErr != nil {
+			t.Fatal(buildErr)
+		}
+		// The live v10 build reconstructed this base transfer from newer facts,
+		// so its fresh intent differed from the verified ancestor later restored
+		// by the alpha-carry pass. Recovery must authenticate the repair's own
+		// ancestor, not this transient fresh representation.
+		for index := range plan.Actions {
+			if plan.Actions[index].ID != "alpha.transfer.operator-deposit.1" {
+				continue
+			}
+			plan.Actions[index].Description += " rebuilt from current facts"
+			plan.Actions[index].IntentHash, buildErr = actionIntentHash(plan.Actions[index])
+			if buildErr != nil {
+				t.Fatal(buildErr)
+			}
+		}
+		return plan
+	}
+	baseTransfer := actionByID(t, buildFresh(), "alpha.transfer.operator-deposit.1")
+	repair := Action{
+		ID: "alpha.repair.operator-deposit.1.2", Kind: "substrate-extrinsic", Target: baseTransfer.Target,
+		Description: "verified operator-1 custody repair",
+		Parameters:  map[string]string{alphaRepairForActionParameter: baseTransfer.ID},
+		Spend:       Spend{AlphaRao: 193_556_675}, DependsOn: []string{baseTransfer.ID},
+	}
+	repair.IntentHash, err = actionIntentHash(repair)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prior.Actions = append(prior.Actions, repair)
+	priorBaseTransfer := actionByID(t, prior, baseTransfer.ID)
+	entries = append(entries,
+		JournalEntry{PlanHash: prior.PlanHash, ActionID: priorBaseTransfer.ID, IntentHash: priorBaseTransfer.IntentHash, Stage: StageVerified},
+		JournalEntry{PlanHash: prior.PlanHash, ActionID: repair.ID, IntentHash: repair.IntentHash, Stage: StageVerified},
+	)
+	recovery.OriginalAction.DependsOn = []string{"accounts.provision", "campaign.evm-gas-reserve", repair.ID}
+	recovery.OriginalAction.IntentHash, err = actionIntentHash(recovery.OriginalAction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovery.OriginalIntentHash = recovery.OriginalAction.IntentHash
+	recovery.DuplicateAction.DependsOn = append([]string(nil), recovery.OriginalAction.DependsOn...)
+	recovery.DuplicateAction.IntentHash, err = actionIntentHash(recovery.DuplicateAction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovery.DuplicateTransaction.IntentHash = recovery.DuplicateAction.IntentHash
+
+	revised := buildFresh()
+	if err := applyVoluntaryConvictionDuplicateRecovery(cfg, stateDir, revised, prior, entries, recovery); err != nil {
+		t.Fatalf("exact verified custody dependency was not aligned: %v", err)
+	}
+	if carried := actionByID(t, revised, voluntaryConvictionActionID); carried.IntentHash != recovery.OriginalAction.IntentHash || !slices.Equal(carried.DependsOn, recovery.OriginalAction.DependsOn) {
+		t.Fatalf("authenticated original was not carried verbatim: %+v", carried)
+	}
+
+	withoutRepairProof := entries[:len(entries)-1]
+	if err := applyVoluntaryConvictionDuplicateRecovery(cfg, stateDir, buildFresh(), prior, withoutRepairProof, recovery); err == nil || !strings.Contains(err.Error(), "lacks exact verification") {
+		t.Fatalf("unverified custody repair aligned a one-shot transaction: %v", err)
+	}
+	withoutBaseProof := append([]JournalEntry(nil), entries[:len(entries)-2]...)
+	withoutBaseProof = append(withoutBaseProof, entries[len(entries)-1])
+	if err := applyVoluntaryConvictionDuplicateRecovery(cfg, stateDir, buildFresh(), prior, withoutBaseProof, recovery); err == nil || !strings.Contains(err.Error(), "lacks exact verification") {
+		t.Fatalf("unverified base transfer aligned a one-shot transaction: %v", err)
+	}
+	changed := recovery
+	changed.OriginalAction = recovery.OriginalAction
+	changed.OriginalAction.Target = "no:2"
+	changed.OriginalAction.IntentHash, err = actionIntentHash(changed.OriginalAction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed.OriginalIntentHash = changed.OriginalAction.IntentHash
+	if err := applyVoluntaryConvictionDuplicateRecovery(cfg, stateDir, buildFresh(), prior, entries, changed); err == nil {
+		t.Fatal("nondependency semantic change crossed verified custody alignment")
+	}
+}
+
+func TestVoluntaryConvictionCustodyPairUsesRepairSourcePlanAfterActiveBaseRebuild(t *testing.T) {
+	base := Action{ID: "alpha.transfer.operator-deposit.1", Kind: "substrate-extrinsic", Target: "0x1234", IntentHash: "0x" + strings.Repeat("11", 32)}
+	repair := Action{
+		ID: "alpha.repair.operator-deposit.1.2", Kind: "substrate-extrinsic", Target: base.Target,
+		Parameters: map[string]string{alphaRepairForActionParameter: base.ID}, Spend: Spend{AlphaRao: 10}, DependsOn: []string{base.ID},
+	}
+	var err error
+	repair.IntentHash, err = actionIntentHash(repair)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceHash := "0x" + strings.Repeat("22", 32)
+	activeHash := "0x" + strings.Repeat("33", 32)
+	source := &SetupPlan{PlanHash: sourceHash, Actions: []Action{base, repair}}
+	rebuiltBase := base
+	rebuiltBase.IntentHash = "0x" + strings.Repeat("44", 32)
+	active := &SetupPlan{PlanHash: activeHash, PriorPlanHashes: []string{sourceHash}, Actions: []Action{rebuiltBase, repair}}
+	entries := []JournalEntry{
+		{Sequence: 10, PlanHash: sourceHash, ActionID: base.ID, IntentHash: base.IntentHash, Stage: StageVerified},
+		{Sequence: 20, PlanHash: sourceHash, ActionID: repair.ID, IntentHash: repair.IntentHash, Stage: StageVerified},
+	}
+	verifiedReceipts := map[string]bool{}
+	resolvedBase, resolvedRepair, err := verifiedVoluntaryConvictionCustodyPair(active, entries, repair.ID,
+		func(planHash string) (*SetupPlan, error) {
+			if planHash != sourceHash {
+				return nil, fmt.Errorf("unexpected plan %s", planHash)
+			}
+			return source, nil
+		},
+		func(entry JournalEntry) error {
+			verifiedReceipts[entry.ActionID+"\x00"+entry.IntentHash] = true
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolvedBase.IntentHash != base.IntentHash || resolvedRepair.IntentHash != repair.IntentHash || len(verifiedReceipts) != 2 {
+		t.Fatalf("source custody pair was not selected exactly: base=%+v repair=%+v receipts=%v", resolvedBase, resolvedRepair, verifiedReceipts)
+	}
+}
+
+func TestVoluntaryConvictionCustodyPairRejectsAdjacentLineageMutations(t *testing.T) {
+	base := Action{ID: "alpha.transfer.operator-deposit.1", Kind: "substrate-extrinsic", Target: "0x1234", IntentHash: "0x" + strings.Repeat("11", 32)}
+	repair := Action{
+		ID: "alpha.repair.operator-deposit.1.2", Kind: "substrate-extrinsic", Target: base.Target,
+		Parameters: map[string]string{alphaRepairForActionParameter: base.ID}, Spend: Spend{AlphaRao: 10}, DependsOn: []string{base.ID},
+	}
+	var err error
+	repair.IntentHash, err = actionIntentHash(repair)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceHash := "0x" + strings.Repeat("22", 32)
+	baselinePlan := SetupPlan{PlanHash: sourceHash, Actions: []Action{base, repair}}
+	baselineActive := SetupPlan{PlanHash: "0x" + strings.Repeat("33", 32), PriorPlanHashes: []string{sourceHash}}
+	baselineEntries := []JournalEntry{
+		{Sequence: 10, PlanHash: sourceHash, ActionID: base.ID, IntentHash: base.IntentHash, Stage: StageVerified},
+		{Sequence: 20, PlanHash: sourceHash, ActionID: repair.ID, IntentHash: repair.IntentHash, Stage: StageVerified},
+	}
+	mutations := []func(*SetupPlan, *SetupPlan, *[]JournalEntry, *bool){
+		func(active, _ *SetupPlan, _ *[]JournalEntry, _ *bool) { active.PriorPlanHashes = nil },
+		func(_, source *SetupPlan, _ *[]JournalEntry, _ *bool) { source.Actions = source.Actions[:1] },
+		func(_, _ *SetupPlan, entries *[]JournalEntry, _ *bool) { (*entries)[0].Sequence = 21 },
+		func(_, _ *SetupPlan, entries *[]JournalEntry, _ *bool) {
+			(*entries)[0].IntentHash = "0x" + strings.Repeat("55", 32)
+		},
+		func(_, source *SetupPlan, _ *[]JournalEntry, _ *bool) { source.Actions[1].Target = "0x5678" },
+		func(_, _ *SetupPlan, _ *[]JournalEntry, failReceipt *bool) { *failReceipt = true },
+	}
+	for index, mutate := range mutations {
+		active, source := baselineActive, baselinePlan
+		active.PriorPlanHashes = append([]string(nil), baselineActive.PriorPlanHashes...)
+		source.Actions = append([]Action(nil), baselinePlan.Actions...)
+		entries := append([]JournalEntry(nil), baselineEntries...)
+		failReceipt := false
+		mutate(&active, &source, &entries, &failReceipt)
+		_, _, err := verifiedVoluntaryConvictionCustodyPair(&active, entries, repair.ID,
+			func(string) (*SetupPlan, error) { return &source, nil },
+			func(JournalEntry) error {
+				if failReceipt {
+					return errors.New("missing receipt")
+				}
+				return nil
+			},
+		)
+		if err == nil {
+			t.Errorf("custody lineage mutation %d was accepted", index)
+		}
+	}
+}
+
+// Reproduces the live v9 plan: a later gas-ceiling refresh serialized a new
+// voluntary-conviction intent ahead of an already-verified reconciliation.
+// V10 rejects that shape before an executor can reach the one-shot action,
+// while the historical v9 bytes remain readable as revision ancestry.
+func TestCurrentPlanRejectsRebuiltVoluntaryConvictionBeforeReconciliation(t *testing.T) {
+	cfg, stateDir, prior, current, entries, recovery := testVoluntaryConvictionDuplicateRecovery(t)
+	wire, err := json.MarshalIndent(prior, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "plans", stringsTrim0x(prior.PlanHash)+".json"), append(wire, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	operatorTransfer := actionByID(t, prior, "alpha.transfer.operator-deposit.1")
+	entries = append(entries, JournalEntry{PlanHash: prior.PlanHash, ActionID: operatorTransfer.ID, IntentHash: operatorTransfer.IntentHash, Stage: StageVerified})
+	plan, err := buildPlanRevisionFromFactsWithMigrationAndRecoveries(cfg, stateDir, prior, current, entries, time.Unix(3, 0), nil, []voluntaryConvictionDuplicateRecovery{recovery})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var voluntary, reserve *Action
+	for index := range plan.Actions {
+		switch plan.Actions[index].ID {
+		case voluntaryConvictionActionID:
+			voluntary = &plan.Actions[index]
+		case "campaign.evm-gas-reserve":
+			reserve = &plan.Actions[index]
+		}
+	}
+	if voluntary == nil || reserve == nil {
+		t.Fatal("recovery plan lacks voluntary conviction or campaign gas reserve")
+	}
+	newGas := multiplyUint64Decimal(35_895_000, cfg.Config.Budgets.MaximumEVMFeePerGasWei)
+	delta, err := subtractDecimalUint(newGas, voluntary.Spend.EVMGasWei)
+	if err != nil {
+		t.Fatal(err)
+	}
+	voluntary.Parameters = cloneStrings(voluntary.Parameters)
+	voluntary.Parameters[evmMaximumGasUnitsParameter] = "35895000"
+	voluntary.Spend.EVMGasWei = newGas
+	voluntary.IntentHash, err = actionIntentHash(*voluntary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reserve.Spend.EVMGasWei, err = subtractDecimalUint(reserve.Spend.EVMGasWei, delta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reserve.IntentHash, err = actionIntentHash(*reserve)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.MaximumSpend, err = maximumActionSpend(plan.Actions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validatePlanBudget(plan); err == nil || !strings.Contains(err.Error(), "does not retain the authenticated original intent") {
+		t.Fatalf("v10 accepted rebuilt recovered voluntary conviction: %v", err)
+	}
+	plan = validatorEvidenceLegacyPlanSchemaTest(t, plan, setupPlanSchemaV9)
+	if err := validatePlanBudget(plan); err != nil {
+		t.Fatalf("historical v9 recovery plan became unreadable: %v", err)
+	}
+	plan.PlanHash, err = plan.hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire, err = json.Marshal(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := decodePersistedPlanBytes(wire)
+	if err != nil {
+		t.Fatalf("persisted v9 recovery ancestry was not authenticated: %v", err)
+	}
+	if persisted.Schema != setupPlanSchemaV9 || persisted.PlanHash != plan.PlanHash {
+		t.Fatalf("persisted v9 recovery ancestry changed: schema=%q hash=%q", persisted.Schema, persisted.PlanHash)
+	}
+}
+
+// A same-id action placed by another recovery cannot borrow verified custody
+// credit unless its complete executable intent is the authenticated ancestor.
+func TestOperatorRepairPreservationRejectsConflictingSpecializedPlacement(t *testing.T) {
+	cfg, stateDir, prior, current, entries, recovery := testVoluntaryConvictionDuplicateRecovery(t)
+	wire, err := json.MarshalIndent(prior, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "plans", stringsTrim0x(prior.PlanHash)+".json"), append(wire, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	operatorTransfer := actionByID(t, prior, "alpha.transfer.operator-deposit.1")
+	entries = append(entries, JournalEntry{PlanHash: prior.PlanHash, ActionID: operatorTransfer.ID, IntentHash: operatorTransfer.IntentHash, Stage: StageVerified})
+	revised, err := buildPlanRevisionFromFactsWithMigrationAndRecoveries(cfg, stateDir, prior, current, entries, time.Unix(3, 0), nil, []voluntaryConvictionDuplicateRecovery{recovery})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconciliation := actionByID(t, revised, voluntaryConvictionReconciliationActionID)
+	repair := actionByID(t, revised, reconciliation.Parameters[voluntaryRecoveryRepairActionParameter])
+	entries = append(entries, JournalEntry{PlanHash: revised.PlanHash, ActionID: repair.ID, IntentHash: repair.IntentHash, Stage: StageVerified})
+	cloneWire, err := json.Marshal(revised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicting, err := decodePersistedPlanBytes(cloneWire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range conflicting.Actions {
+		if conflicting.Actions[index].ID != repair.ID {
+			continue
+		}
+		conflicting.Actions[index].Description += " with conflicting semantics"
+		conflicting.Actions[index].IntentHash, err = actionIntentHash(conflicting.Actions[index])
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := preserveVerifiedOperatorAlphaTransfers(conflicting, revised, entries); err == nil || !strings.Contains(err.Error(), "differs from its verified ancestor") {
+		t.Fatalf("conflicting placed repair was accepted: %v", err)
+	}
+}
+
+func TestPlanRevisionDuplicateRecoveryDoesNotCollideWithVerifiedAlphaRepair(t *testing.T) {
+	cfg, stateDir, prior, current, entries, recovery := testVoluntaryConvictionDuplicateRecovery(t)
+	transfer := actionByID(t, prior, "alpha.transfer.operator-deposit.1")
+	minimum, err := minimumAlphaTransferRao(prior.LiveFacts.DefaultMinTransferRao, prior.LiveFacts.AlphaPriceQ9, prior.AlphaTransferMarginBPS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parameters := alphaTransferActionParameters(minimum, 0, minimum, &prior.LiveFacts, prior.AlphaTransferMarginBPS)
+	parameters[alphaRepairForActionParameter] = transfer.ID
+	parameters[alphaRepairMinimumIncrementParameter] = strconv.FormatUint(minimum-1, 10)
+	parameters["campaign_policy_hash"] = prior.PolicyHash
+	parameters[deploymentManifestHashParameter] = transfer.Parameters[deploymentManifestHashParameter]
+	existingRepair := Action{
+		ID: "alpha.repair.operator-deposit.1.2", Kind: "substrate-extrinsic", Target: transfer.Target,
+		Description: "verified ancestor repair", Parameters: parameters, Spend: Spend{AlphaRao: minimum}, DependsOn: []string{transfer.ID},
+	}
+	existingRepair.IntentHash, err = actionIntentHash(existingRepair)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, action := range prior.Actions {
+		if action.ID == transfer.ID {
+			prior.Actions = append(prior.Actions[:index+1], append([]Action{existingRepair}, prior.Actions[index+1:]...)...)
+			break
+		}
+	}
+	prior.MaximumSpend, err = maximumActionSpend(prior.Actions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldPriorHash := prior.PlanHash
+	prior.PlanHash, err = prior.hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range entries {
+		if entries[index].PlanHash == oldPriorHash {
+			entries[index].PlanHash = prior.PlanHash
+		}
+	}
+	recovery.DuplicateTransaction.PlanHash = prior.PlanHash
+	entries = append(entries,
+		JournalEntry{PlanHash: prior.PlanHash, ActionID: transfer.ID, IntentHash: transfer.IntentHash, Stage: StageVerified},
+		JournalEntry{PlanHash: prior.PlanHash, ActionID: existingRepair.ID, IntentHash: existingRepair.IntentHash, Stage: StageVerified},
+	)
+
+	revised, err := buildPlanRevisionFromFactsWithMigrationAndRecoveries(cfg, stateDir, prior, current, entries, time.Unix(3, 0), nil, []voluntaryConvictionDuplicateRecovery{recovery})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconciliation := actionByID(t, revised, voluntaryConvictionReconciliationActionID)
+	if actionByID(t, revised, voluntaryConvictionActionID).IntentHash != recovery.OriginalAction.IntentHash {
+		t.Fatal("verified original voluntary conviction was rewritten by an adjacent alpha repair")
+	}
+	if reconciliation.Parameters[voluntaryRecoveryRepairActionParameter] != "alpha.repair.operator-deposit.1.3" {
+		t.Fatalf("duplicate recovery reused an ancestor repair id: %+v", reconciliation.Parameters)
+	}
+	counts := map[string]int{}
+	for _, action := range revised.Actions {
+		counts[action.ID]++
+	}
+	if counts[existingRepair.ID] != 1 || counts[reconciliation.Parameters[voluntaryRecoveryRepairActionParameter]] != 1 {
+		t.Fatalf("verified and recovery repairs were not unique: %v", counts)
+	}
+	if err := validatePlanBudget(revised); err != nil {
+		t.Fatalf("collision-free recovery plan is invalid: %v", err)
+	}
+}
+
+// Every semantic field around the special recovery remains fail-closed; this
+// exception cannot admit an unrelated successful EVM transaction.
+func TestDuplicateVoluntaryConvictionRecoveryRejectsSemanticTampering(t *testing.T) {
+	cfg, _, _, _, _, baseline := testVoluntaryConvictionDuplicateRecovery(t)
+	mutations := []func(*voluntaryConvictionDuplicateRecovery){
+		func(value *voluntaryConvictionDuplicateRecovery) {
+			value.DuplicateTransaction.ActionID = "fleet.mirror.1"
+		},
+		func(value *voluntaryConvictionDuplicateRecovery) {
+			value.DuplicateTransaction.IntentHash = "0x" + strings.Repeat("01", 32)
+		},
+		func(value *voluntaryConvictionDuplicateRecovery) { value.DuplicateAction.Target = "no:2" },
+		func(value *voluntaryConvictionDuplicateRecovery) {
+			value.DuplicateAction.Parameters["amount_rao"] = "2"
+		},
+		func(value *voluntaryConvictionDuplicateRecovery) {
+			value.OriginalAction.Parameters[evmMaximumFeePerGasParameter] = "1"
+		},
+		func(value *voluntaryConvictionDuplicateRecovery) {
+			value.OriginalIntentHash = "0x" + strings.Repeat("03", 32)
+		},
+		func(value *voluntaryConvictionDuplicateRecovery) {
+			value.OriginalAction.IntentHash = "0x" + strings.Repeat("04", 32)
+		},
+		func(value *voluntaryConvictionDuplicateRecovery) { value.OriginalPlanHash = "0x01" },
+		func(value *voluntaryConvictionDuplicateRecovery) {
+			value.OriginalPlanPolicyHash = "0x" + strings.Repeat("05", 32)
+		},
+		func(value *voluntaryConvictionDuplicateRecovery) {
+			value.DuplicatePlanPolicyHash = "0x" + strings.Repeat("06", 32)
+		},
+		func(value *voluntaryConvictionDuplicateRecovery) { value.OriginalEvidence.FinalizedBlock = 111 },
+		func(value *voluntaryConvictionDuplicateRecovery) { value.DuplicateNonce = "3" },
+		func(value *voluntaryConvictionDuplicateRecovery) {
+			value.Funder = "0x0000000000000000000000000000000000000001"
+		},
+		func(value *voluntaryConvictionDuplicateRecovery) { value.PolicyHash = "0x" + strings.Repeat("02", 32) },
+		func(value *voluntaryConvictionDuplicateRecovery) { value.CumulativeBeforeRao-- },
+		func(value *voluntaryConvictionDuplicateRecovery) { value.CumulativeAfterRao++ },
+		func(value *voluntaryConvictionDuplicateRecovery) { value.OperatorPrincipalAfterRao++ },
+		func(value *voluntaryConvictionDuplicateRecovery) { value.DuplicateAction.Spend.EVMGasWei = "0" },
+	}
+	for index, mutate := range mutations {
+		candidate := baseline
+		candidate.DuplicateAction.Parameters = cloneStrings(baseline.DuplicateAction.Parameters)
+		candidate.OriginalAction.Parameters = cloneStrings(baseline.OriginalAction.Parameters)
+		mutate(&candidate)
+		if err := validateVoluntaryConvictionDuplicateRecovery(cfg, candidate); err == nil {
+			t.Errorf("semantic duplicate-recovery mutation %d was accepted", index)
+		}
+	}
+}
+
+// The recovery authenticates the signed call envelope as well as its event;
+// each adjacent signer/calldata/value/gas mutation is rejected.
+func TestDuplicateVoluntaryConvictionSignedTransactionBindsEveryExecutableField(t *testing.T) {
+	cfg := testResolvedConfig(t)
+	key, err := crypto.HexToECDSA(strings.Repeat("11", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherKey, err := crypto.HexToECDSA(strings.Repeat("22", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	funder := crypto.PubkeyToAddress(key.PublicKey)
+	coordinator := common.HexToAddress("0x0000000000000000000000000000000000000521")
+	plan := &SetupPlan{ChainID: cfg.ChainID, Deployment: ContractDeployment{CoordinatorProxy: coordinator}, Roles: PublicRoles{OperatorDepositSigners: []string{funder.Hex()}}}
+	action := Action{Parameters: map[string]string{evmMaximumGasUnitsParameter: "200000", evmMaximumFeePerGasParameter: "100000000000"}}
+	parsed, err := abi.JSON(strings.NewReader(CoordinatorABI))
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := voluntaryConvictionEvent{NoID: big.NewInt(1), Epoch: big.NewInt(3), Funder: funder, Amount: big.NewInt(1_000_000_000), Nonce: big.NewInt(2)}
+	receipt := &ethTypes.Receipt{BlockNumber: big.NewInt(100)}
+	type transactionFields struct {
+		key                     string
+		chainID, gas, fee, noID uint64
+		amount, nonce, deadline uint64
+		value                   uint64
+		to                      common.Address
+		wrongMethod             bool
+	}
+	valid := transactionFields{key: strings.Repeat("11", 32), chainID: cfg.ChainID, gas: 200_000, fee: 100_000_000_000, noID: 1, amount: 1_000_000_000, nonce: 2, deadline: 110, to: coordinator}
+	sign := func(fields transactionFields) *ethTypes.Transaction {
+		var data []byte
+		if fields.wrongMethod {
+			data, err = parsed.Pack("currentEpoch")
+		} else {
+			data, err = parsed.Pack("addConviction", new(big.Int).SetUint64(fields.noID), new(big.Int).SetUint64(fields.amount), new(big.Int).SetUint64(fields.nonce), fields.deadline)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		privateKey := key
+		if fields.key == strings.Repeat("22", 32) {
+			privateKey = otherKey
+		}
+		transaction := ethTypes.NewTx(&ethTypes.DynamicFeeTx{
+			ChainID: new(big.Int).SetUint64(fields.chainID), Nonce: 7,
+			GasTipCap: big.NewInt(1), GasFeeCap: new(big.Int).SetUint64(fields.fee), Gas: fields.gas,
+			To: &fields.to, Value: new(big.Int).SetUint64(fields.value), Data: data,
+		})
+		signed, signErr := ethTypes.SignTx(transaction, ethTypes.LatestSignerForChainID(transaction.ChainId()), privateKey)
+		if signErr != nil {
+			t.Fatal(signErr)
+		}
+		return signed
+	}
+	if err := validateDuplicateVoluntaryConvictionTransaction(cfg, plan, action, sign(valid), receipt, event); err != nil {
+		t.Fatalf("valid signed duplicate transaction was rejected: %v", err)
+	}
+	mutations := []func(*transactionFields){
+		func(value *transactionFields) { value.key = strings.Repeat("22", 32) },
+		func(value *transactionFields) { value.chainID-- },
+		func(value *transactionFields) { value.to = common.HexToAddress("0x1") },
+		func(value *transactionFields) { value.value = 1 },
+		func(value *transactionFields) { value.gas++ },
+		func(value *transactionFields) { value.fee++ },
+		func(value *transactionFields) { value.noID = 2 },
+		func(value *transactionFields) { value.amount++ },
+		func(value *transactionFields) { value.nonce++ },
+		func(value *transactionFields) { value.deadline = 99 },
+		func(value *transactionFields) { value.wrongMethod = true },
+	}
+	for index, mutate := range mutations {
+		fields := valid
+		mutate(&fields)
+		if err := validateDuplicateVoluntaryConvictionTransaction(cfg, plan, action, sign(fields), receipt, event); err == nil {
+			t.Errorf("signed duplicate transaction mutation %d was accepted", index)
+		}
+	}
+}
+
+// Event recovery accepts one exact no-id log and rejects ambiguity or a
+// sibling operator event in the same receipt.
+func TestVoluntaryConvictionEventDecoderRequiresExactlyOneMatchingLog(t *testing.T) {
+	parsed, err := abi.JSON(strings.NewReader(CoordinatorABI))
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := parsed.Events["ConvictionAdded"]
+	policy := [32]byte{0x52, 0x1}
+	data, err := event.Inputs.NonIndexed().Pack(big.NewInt(1_000_000_000), policy, big.NewInt(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinator := common.HexToAddress("0x521")
+	funder := common.HexToAddress("0x1234")
+	log := &ethTypes.Log{Address: coordinator, Topics: []common.Hash{event.ID, common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(3)), common.BytesToHash(common.LeftPadBytes(funder.Bytes(), 32))}, Data: data}
+	decoded, err := decodeVoluntaryConvictionEvent(parsed, &ethTypes.Receipt{Logs: []*ethTypes.Log{log}}, coordinator, 1)
+	if err != nil || decoded.Amount.Uint64() != 1_000_000_000 || decoded.Nonce.Uint64() != 2 || decoded.Funder != funder || decoded.PolicyHash != policy {
+		t.Fatalf("exact event decode=%+v error=%v", decoded, err)
+	}
+	duplicate := *log
+	if _, err := decodeVoluntaryConvictionEvent(parsed, &ethTypes.Receipt{Logs: []*ethTypes.Log{log, &duplicate}}, coordinator, 1); err == nil {
+		t.Fatal("ambiguous duplicate ConvictionAdded logs were accepted")
+	}
+	sibling := *log
+	sibling.Topics = append([]common.Hash(nil), log.Topics...)
+	sibling.Topics[1] = common.BigToHash(big.NewInt(2))
+	if _, err := decodeVoluntaryConvictionEvent(parsed, &ethTypes.Receipt{Logs: []*ethTypes.Log{&sibling}}, coordinator, 1); err == nil {
+		t.Fatal("sibling operator ConvictionAdded log was accepted")
+	}
+}
+
+// Reconciliation cannot be verified from a receipt alone; it requires the
+// exact original finalized+verified pair and duplicate finalized checkpoint.
+func TestVoluntaryConvictionReconciliationRequiresEveryJournalProof(t *testing.T) {
+	cfg, stateDir, prior, current, entries, recovery := testVoluntaryConvictionDuplicateRecovery(t)
+	revised, err := buildPlanRevisionFromFactsWithMigrationAndRecoveries(cfg, stateDir, prior, current, entries, time.Unix(3, 0), nil, []voluntaryConvictionDuplicateRecovery{recovery})
+	if err != nil {
+		t.Fatal(err)
+	}
+	action := actionByID(t, revised, voluntaryConvictionReconciliationActionID)
+	if !hasVoluntaryConvictionReconciliationJournalEvidence(revised, action, entries) {
+		t.Fatal("complete reconciliation journal evidence was not recognized")
+	}
+	for removed := range entries {
+		candidate := append([]JournalEntry(nil), entries[:removed]...)
+		candidate = append(candidate, entries[removed+1:]...)
+		if hasVoluntaryConvictionReconciliationJournalEvidence(revised, action, candidate) {
+			t.Errorf("reconciliation remained valid after removing journal entry %d", removed)
+		}
+	}
+}
+
+// A successful transaction outside the exact voluntary action never reaches
+// the special recovery path.
+func TestSuccessfulUnrelatedEVMTransactionHasNoDuplicateRecovery(t *testing.T) {
+	transaction := planRevisionTransaction{ActionID: "fleet.mirror.1", BlockNumber: 10, BlockHash: "0x" + strings.Repeat("11", 32)}
+	if _, err := detectVoluntaryConvictionDuplicateRecovery(t.Context(), nil, "", nil, nil, nil, nil, transaction); err == nil || !strings.Contains(err.Error(), "not a recoverable voluntary conviction") {
+		t.Fatalf("unrelated successful EVM transaction entered duplicate recovery: %v", err)
+	}
+}

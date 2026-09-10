@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,6 +58,7 @@ type PrecompileConformanceEvidence struct {
 type PrecompileCommitmentEvidence struct {
 	ProbeHash              string    `json:"probe_hash"`
 	CanonicalHash          string    `json:"canonical_hash"`
+	CanonicalGeneration    uint64    `json:"canonical_generation"`
 	EncodedProbeBytes      int       `json:"encoded_probe_bytes"`
 	WriteTransactionHash   string    `json:"write_transaction_hash"`
 	WriteFinalizedHead     ChainHead `json:"write_finalized_head"`
@@ -66,6 +68,8 @@ type PrecompileCommitmentEvidence struct {
 	RestoreCommitmentBlock uint64    `json:"restore_commitment_block"`
 	Restored               bool      `json:"restored"`
 }
+
+const precompileCanonicalFleetGeneration uint64 = 2
 
 type PrecompileBatteryEvidence struct {
 	FinalizedHead      ChainHead `json:"finalized_head"`
@@ -192,7 +196,7 @@ func loadPrecompileEvidence(stateDir string) (*PrecompileConformanceEvidence, er
 	got, err := canonicalHashHex(&evidence)
 	evidence.EvidenceHash = want
 	if err != nil || want == "" || got != want {
-		return nil, fmt.Errorf("precompile evidence hash mismatch: got %s want %s: %w", got, want, err)
+		return nil, stateMismatchError(err, "precompile evidence hash mismatch: got %s want %s", got, want)
 	}
 	return &evidence, nil
 }
@@ -232,21 +236,21 @@ func (e *Executor) precompileIdentities(ctx context.Context) (*PrecompileConform
 	}
 	uid, found, err := e.substrate.UID(sample)
 	if err != nil || !found {
-		return nil, sample, move, recovery, fmt.Errorf("precompile sample hotkey has no finalized UID: %w", err)
+		return nil, sample, move, recovery, stateMismatchError(err, "precompile sample hotkey has no finalized UID")
 	}
 	absent := derive32(e.cfg, "precompile/absent-hotkey")
 	if _, found, err := e.substrate.UID(absent); err != nil || found {
-		return nil, sample, move, recovery, fmt.Errorf("precompile absent-hotkey control is registered or unreadable: found=%t err=%w", found, err)
+		return nil, sample, move, recovery, stateMismatchError(err, "precompile absent-hotkey control is registered or unreadable: found=%t", found)
 	}
 	deployer, err := e.roles.EVMAddress("deployer")
 	if err != nil {
 		return nil, sample, move, recovery, err
 	}
-	probeColdkey := ss58Mirror(e.payloads.Manifest.PrecompileProbe)
+	probeColdkey := ss58Mirror(e.payloads.PrecompileProbeAddress)
 	evidence := &PrecompileConformanceEvidence{
 		Schema: "urnetwork-precompile-conformance-v1", DeploymentID: e.cfg.Config.Deployment.DeploymentID,
 		ConfigHash: e.cfg.ConfigHash, PolicyHash: e.cfg.PolicyHash, ChainID: testnetChainID,
-		GenesisHash: testnetGenesis, Netuid: e.cfg.Netuid, ProbeAddress: e.payloads.Manifest.PrecompileProbe.Hex(),
+		GenesisHash: testnetGenesis, Netuid: e.cfg.Netuid, ProbeAddress: e.payloads.PrecompileProbeAddress.Hex(),
 		ProbeColdkey: hexBytesValue(probeColdkey[:]), Owner: deployer.Hex(), SampleHotkey: hexBytesValue(sample[:]), SampleUID: uid,
 		AbsentHotkey: hexBytesValue(absent[:]), MoveHotkey: hexBytesValue(move[:]), RecoveryColdkey: hexBytesValue(recovery[:]),
 	}
@@ -267,15 +271,18 @@ func (e *Executor) executePrecompileConformance(ctx context.Context, action Acti
 		evidence = identity
 	} else if err != nil {
 		return err
-	} else if err := validatePrecompileEvidenceIdentity(e.cfg, &e.payloads.Manifest, evidence); err != nil {
+	} else if err := validatePrecompileEvidenceIdentity(e.cfg, e.payloads.PrecompileProbeAddress, evidence); err != nil {
 		return err
 	}
-	probe := e.payloads.Manifest.PrecompileProbe
+	probe := e.payloads.PrecompileProbeAddress
 	probeColdkey := ss58Mirror(probe)
 
 	switch action.ID {
 	case "precompile.commitment-write", "precompile.commitment-restore":
-		_, _, canonical, err := fleetManifest(e.cfg, e.stateDir, e.roles, 1)
+		if action.Parameters["canonical_generation"] != strconv.FormatUint(precompileCanonicalFleetGeneration, 10) {
+			return errors.New("precompile commitment action does not bind generation 2")
+		}
+		_, canonical, canonicalEvidence, _, err := e.validatedFleetCommitmentGeneration(1, precompileCanonicalFleetGeneration)
 		if err != nil {
 			return err
 		}
@@ -286,6 +293,7 @@ func (e *Executor) executePrecompileConformance(ctx context.Context, action Acti
 		}
 		evidence.Commitment.ProbeHash = hexBytesValue(probeHash[:])
 		evidence.Commitment.CanonicalHash = hexBytesValue(canonical[:])
+		evidence.Commitment.CanonicalGeneration = precompileCanonicalFleetGeneration
 		evidence.Commitment.EncodedProbeBytes = len(encoded)
 		hotkey, err := roleBytes32(e.roles, fleetHotkeyLabel(1))
 		if err != nil {
@@ -296,9 +304,9 @@ func (e *Executor) executePrecompileConformance(ctx context.Context, action Acti
 			return err
 		}
 		if action.ID == "precompile.commitment-write" {
-			if _, prior := e.journal.LatestTransaction(action.ID, action.IntentHash); !prior {
-				current, readErr := e.substrate.chain.FleetCommitmentFinalized(e.cfg.Netuid, hotkey)
-				if readErr != nil || current.Hash != canonical {
+			if _, prior := e.journal.LatestTransaction(e.plan.PlanHash, action.ID, action.IntentHash); !prior {
+				current, readErr := e.substrate.fleetCommitmentFinalized(hotkey)
+				if readErr != nil || current.Hash != canonical || current.CommitmentBlock != canonicalEvidence.CommitmentBlock {
 					return conformanceMismatch("canonical fleet commitment is unavailable before replacement", readErr)
 				}
 			}
@@ -306,12 +314,19 @@ func (e *Executor) executePrecompileConformance(ctx context.Context, action Acti
 			if err != nil {
 				return err
 			}
-			txHash, _, err := e.substrate.SendAs(ctx, e.plan.PlanHash, action, call, signer)
+			txHash, transactionBlock, err := e.substrate.SendAs(ctx, e.plan.PlanHash, action, call, signer)
 			if err != nil {
 				return err
 			}
-			observed, err := e.substrate.chain.FleetCommitmentFinalized(e.cfg.Netuid, hotkey)
-			if err != nil || observed.Hash != probeHash {
+			transactionBlockHash, err := e.substrate.chain.API.RPC.Chain.GetBlockHash(transactionBlock)
+			if err != nil {
+				return err
+			}
+			observed, err := e.substrate.fleetCommitmentAt(hotkey, transactionBlockHash)
+			if err != nil {
+				return conformanceMismatch("replacement commitment finalized mismatch", err)
+			}
+			if err := crv4.ValidateFleetCommitmentWrite(probeHash, transactionBlock, observed); err != nil {
 				return conformanceMismatch("replacement commitment finalized mismatch", err)
 			}
 			evidence.Commitment.WriteTransactionHash = txHash.Hex()
@@ -319,8 +334,8 @@ func (e *Executor) executePrecompileConformance(ctx context.Context, action Acti
 			evidence.Commitment.WriteCommitmentBlock = observed.CommitmentBlock
 			return writePrecompileEvidence(e.stateDir, evidence)
 		}
-		if _, prior := e.journal.LatestTransaction(action.ID, action.IntentHash); !prior {
-			current, readErr := e.substrate.chain.FleetCommitmentFinalized(e.cfg.Netuid, hotkey)
+		if _, prior := e.journal.LatestTransaction(e.plan.PlanHash, action.ID, action.IntentHash); !prior {
+			current, readErr := e.substrate.fleetCommitmentFinalized(hotkey)
 			if readErr != nil || current.Hash != probeHash || evidence.Commitment.WriteTransactionHash == "" {
 				return conformanceMismatch("replacement commitment is unavailable before restore", readErr)
 			}
@@ -329,13 +344,23 @@ func (e *Executor) executePrecompileConformance(ctx context.Context, action Acti
 		if err != nil {
 			return err
 		}
-		txHash, _, err := e.substrate.SendAs(ctx, e.plan.PlanHash, action, call, signer)
+		txHash, transactionBlock, err := e.substrate.SendAs(ctx, e.plan.PlanHash, action, call, signer)
 		if err != nil {
 			return err
 		}
-		observed, err := e.substrate.chain.FleetCommitmentFinalized(e.cfg.Netuid, hotkey)
-		if err != nil || observed.Hash != canonical || observed.CommitmentBlock <= evidence.Commitment.WriteCommitmentBlock {
+		transactionBlockHash, err := e.substrate.chain.API.RPC.Chain.GetBlockHash(transactionBlock)
+		if err != nil {
+			return err
+		}
+		observed, err := e.substrate.fleetCommitmentAt(hotkey, transactionBlockHash)
+		if err != nil {
 			return conformanceMismatch("canonical commitment restore finalized mismatch", err)
+		}
+		if err := crv4.ValidateFleetCommitmentWrite(canonical, transactionBlock, observed); err != nil {
+			return conformanceMismatch("canonical commitment restore finalized mismatch", err)
+		}
+		if observed.CommitmentBlock <= evidence.Commitment.WriteCommitmentBlock {
+			return conformanceMismatch("canonical commitment restore did not advance the registration block", nil)
 		}
 		evidence.Commitment.RestoreTransactionHash = txHash.Hex()
 		evidence.Commitment.RestoreFinalizedHead = ChainHead{Number: observed.FinalizedAt, Hash: observed.FinalizedHash.Hex()}
@@ -373,7 +398,7 @@ func (e *Executor) executePrecompileConformance(ctx context.Context, action Acti
 		}
 		if !passed {
 			_ = writePrecompileEvidence(e.stateDir, evidence)
-			return errors.New("runtime-447 precompile battery failed closed")
+			return errors.New("runtime-454 precompile battery failed closed")
 		}
 		return writePrecompileEvidence(e.stateDir, evidence)
 
@@ -543,7 +568,7 @@ func (e *Executor) executePrecompileConformance(ctx context.Context, action Acti
 }
 
 func (e *Executor) executePrecompileMove(ctx context.Context, action Action, parsed abi.ABI, evidence *PrecompileConformanceEvidence, from, to [32]byte, step *PrecompileMoveStep, amount uint64) error {
-	probe := e.payloads.Manifest.PrecompileProbe
+	probe := e.payloads.PrecompileProbeAddress
 	coldkey := ss58Mirror(probe)
 	if step.AmountRao == 0 {
 		fromBefore, err := e.readStakeFinalized(ctx, from, coldkey)
@@ -594,7 +619,7 @@ func readDividendAtFinalized(ctx context.Context, client *ethclient.Client, prob
 	}
 	values, err := contractCallAt(ctx, client, probe, parsed, "dividendDelta", head.Number, hotkey)
 	if err != nil || len(values) != 3 {
-		return 0, 0, 0, fmt.Errorf("dividendDelta returned %d values: %w", len(values), err)
+		return 0, 0, 0, stateMismatchError(err, "dividendDelta returned %d values", len(values))
 	}
 	baseline, ok := values[0].(*big.Int)
 	if !ok || !baseline.IsUint64() {
@@ -681,16 +706,19 @@ func exactIncrease(before, after, amount uint64) bool {
 
 func hexBytesValue(value []byte) string { return "0x" + hex.EncodeToString(value) }
 
-func validatePrecompileEvidenceIdentity(cfg *ResolvedConfig, deployment *ContractDeployment, evidence *PrecompileConformanceEvidence) error {
-	if evidence == nil || deployment == nil {
-		return errors.New("precompile conformance evidence/deployment is unavailable")
+func validatePrecompileEvidenceIdentity(cfg *ResolvedConfig, probe common.Address, evidence *PrecompileConformanceEvidence) error {
+	if evidence == nil || probe == (common.Address{}) {
+		return errors.New("precompile conformance evidence/probe is unavailable")
 	}
-	if evidence.Schema != "urnetwork-precompile-conformance-v1" || evidence.DeploymentID != cfg.Config.Deployment.DeploymentID || evidence.ConfigHash != cfg.ConfigHash || evidence.PolicyHash != cfg.PolicyHash || evidence.ChainID != testnetChainID || strings.ToLower(evidence.GenesisHash) != testnetGenesis || evidence.Netuid != cfg.Netuid || !strings.EqualFold(evidence.ProbeAddress, deployment.PrecompileProbe.Hex()) {
+	if evidence.Schema != "urnetwork-precompile-conformance-v1" || evidence.DeploymentID != cfg.Config.Deployment.DeploymentID || evidence.ConfigHash != cfg.ConfigHash || evidence.PolicyHash != cfg.PolicyHash || evidence.ChainID != testnetChainID || strings.ToLower(evidence.GenesisHash) != testnetGenesis || evidence.Netuid != cfg.Netuid || !strings.EqualFold(evidence.ProbeAddress, probe.Hex()) {
 		return errors.New("precompile conformance evidence identity does not match the approved deployment")
 	}
-	probeColdkey := ss58Mirror(deployment.PrecompileProbe)
+	probeColdkey := ss58Mirror(probe)
 	if !strings.EqualFold(evidence.ProbeColdkey, hexBytesValue(probeColdkey[:])) {
 		return errors.New("precompile conformance probe coldkey does not match mirror(probe)")
+	}
+	if evidence.Commitment.CanonicalGeneration != 0 && evidence.Commitment.CanonicalGeneration != precompileCanonicalFleetGeneration {
+		return errors.New("precompile conformance evidence names a foreign canonical fleet generation")
 	}
 	return nil
 }
@@ -702,7 +730,7 @@ func validConformanceTransaction(hash, blockHash string, block uint64) bool {
 }
 
 func precompileEvidenceComplete(evidence *PrecompileConformanceEvidence) bool {
-	if evidence == nil || !evidence.Complete || !evidence.Commitment.Restored || evidence.Commitment.EncodedProbeBytes != 34 || evidence.Commitment.ProbeHash == evidence.Commitment.CanonicalHash || !evidence.Battery.Passed || evidence.Seed.DeltaRao == 0 || evidence.Forward.AmountRao == 0 || evidence.Back.AmountRao != evidence.Forward.AmountRao || evidence.Snapshot.BaselineRao == 0 || evidence.Dividend.DeltaRao == 0 || evidence.Transfer.AmountRao == 0 {
+	if evidence == nil || !evidence.Complete || !evidence.Commitment.Restored || evidence.Commitment.CanonicalGeneration != precompileCanonicalFleetGeneration || evidence.Commitment.EncodedProbeBytes != 34 || evidence.Commitment.ProbeHash == evidence.Commitment.CanonicalHash || !evidence.Battery.Passed || evidence.Seed.DeltaRao == 0 || evidence.Forward.AmountRao == 0 || evidence.Back.AmountRao != evidence.Forward.AmountRao || evidence.Snapshot.BaselineRao == 0 || evidence.Dividend.DeltaRao == 0 || evidence.Transfer.AmountRao == 0 {
 		return false
 	}
 	if probeHash, ok := evidenceFixedHex(evidence.Commitment.ProbeHash, 32); !ok || new(big.Int).SetBytes(probeHash).Sign() == 0 {
@@ -745,24 +773,43 @@ func precompileEvidenceComplete(evidence *PrecompileConformanceEvidence) bool {
 		evidence.Dividend.FinalizedHead.Number <= evidence.Transfer.BlockNumber
 }
 
-func (e *Executor) verifySubstrateTransactionEvidence(recorded ChainHead, transactionHash string) error {
-	if e.substrate == nil || !validConformanceTransaction(transactionHash, recorded.Hash, recorded.Number) {
+// Resolves one fresh strict finalized head for callers outside the shared
+// carried-history preflight.
+func (self *Executor) verifySubstrateTransactionEvidence(ctx context.Context, recorded ChainHead, transactionHash string) error {
+	if self.substrate == nil || !validConformanceTransaction(transactionHash, recorded.Hash, recorded.Number) {
 		return errors.New("Substrate transaction evidence is incomplete")
 	}
-	finalizedHash, finalizedNumber, err := e.substrate.finalizedHead()
+	finalizedHash, finalizedNumber, err := self.substrate.finalizedHeadContext(ctx)
 	if err != nil {
 		return err
 	}
-	canonical, err := e.substrate.chain.API.RPC.Chain.GetBlockHash(recorded.Number)
+	return self.verifySubstrateTransactionEvidenceAtHead(ctx, recorded, transactionHash, ChainHead{Number: finalizedNumber, Hash: finalizedHash.Hex()})
+}
+
+// Reuses one strictly authenticated finalized head during a bounded carried-
+// receipt audit. Native finality is monotonic, while each receipt still proves
+// its own canonical block hash, exact runtime artifact and dispatch event.
+func (self *Executor) verifySubstrateTransactionEvidenceAtHead(ctx context.Context, recorded ChainHead, transactionHash string, finalized ChainHead) error {
+	if ctx == nil || self == nil || self.substrate == nil || !validConformanceTransaction(transactionHash, recorded.Hash, recorded.Number) || finalized.Number == 0 || finalized.Hash == "" {
+		return errors.New("Substrate transaction evidence or finalized checkpoint is incomplete")
+	}
+	var canonicalHex string
+	err := retryFinalSemanticRPCCall(ctx, nil, releaseRuntimeRPCRetryPolicy(), func(attemptCtx context.Context) error {
+		return self.substrate.chain.API.Client.CallContext(attemptCtx, &canonicalHex, "chain_getBlockHash", recorded.Number)
+	})
 	if err != nil {
 		return err
 	}
-	ready, err := checkpointVisibility(recorded, ChainHead{Number: finalizedNumber, Hash: finalizedHash.Hex()}, canonical.Hex())
+	canonical, err := gsrpcTypes.NewHashFromHexString(canonicalHex)
+	if err != nil {
+		return err
+	}
+	ready, err := checkpointVisibility(recorded, finalized, canonical.Hex())
 	if err != nil {
 		return err
 	}
 	if !ready {
-		return fmt.Errorf("recorded Substrate block %d is not finalized (head %d)", recorded.Number, finalizedNumber)
+		return fmt.Errorf("recorded Substrate block %d is not finalized (head %d)", recorded.Number, finalized.Number)
 	}
 	blockHash, err := gsrpcTypes.NewHashFromHexString(recorded.Hash)
 	if err != nil {
@@ -772,7 +819,7 @@ func (e *Executor) verifySubstrateTransactionEvidence(recorded ChainHead, transa
 	if err != nil {
 		return err
 	}
-	return e.substrate.chain.VerifyFinalizedExtrinsic(blockHash, txHash)
+	return verifyReleaseHistoryFinalizedExtrinsicContext(ctx, self.substrate.chain, self.cfg, blockHash, txHash)
 }
 
 func batteryTupleCompatible(evidence *PrecompileConformanceEvidence, tuple *precompileBatteryTuple, nominatorMinimum uint64) bool {
@@ -799,17 +846,17 @@ func (e *Executor) verifyCurrentPrecompileBattery(ctx context.Context, head Chai
 	if err != nil {
 		return err
 	}
-	values, err := contractCallAt(ctx, e.deployer.client, e.payloads.Manifest.PrecompileProbe, parsed, "readBattery", head.Number, sample, absent)
+	values, err := contractCallAt(ctx, e.deployer.client, e.payloads.PrecompileProbeAddress, parsed, "readBattery", head.Number, sample, absent)
 	if err != nil || len(values) != 1 {
-		return fmt.Errorf("independent readBattery returned %d values: %w", len(values), err)
+		return stateMismatchError(err, "independent readBattery returned %d values", len(values))
 	}
 	tuple, ok := abi.ConvertType(values[0], new(precompileBatteryTuple)).(*precompileBatteryTuple)
 	if !ok || !batteryTupleCompatible(evidence, tuple, e.plan.LiveFacts.NominatorMinimumRao) {
-		return errors.New("independent runtime-447 precompile battery is incompatible")
+		return errors.New("independent runtime-454 precompile battery is incompatible")
 	}
 	uid, found, err := e.substrate.UID(sample)
 	if err != nil || !found || uid != evidence.SampleUID {
-		return fmt.Errorf("independent native sample UID=%d found=%t, want %d: %w", uid, found, evidence.SampleUID, err)
+		return stateMismatchError(err, "independent native sample UID=%d found=%t, want %d", uid, found, evidence.SampleUID)
 	}
 	return nil
 }
@@ -819,9 +866,24 @@ func (e *Executor) verifyPrecompileChainEvidence(ctx context.Context, action Act
 	var blockNumber uint64
 	switch action.ID {
 	case "precompile.commitment-write":
-		return e.verifySubstrateTransactionEvidence(evidence.Commitment.WriteFinalizedHead, evidence.Commitment.WriteTransactionHash)
+		return e.verifySubstrateTransactionEvidence(ctx, evidence.Commitment.WriteFinalizedHead, evidence.Commitment.WriteTransactionHash)
 	case "precompile.commitment-restore":
-		return e.verifySubstrateTransactionEvidence(evidence.Commitment.RestoreFinalizedHead, evidence.Commitment.RestoreTransactionHash)
+		if err := e.verifySubstrateTransactionEvidence(ctx, evidence.Commitment.RestoreFinalizedHead, evidence.Commitment.RestoreTransactionHash); err != nil {
+			return err
+		}
+		canonical, decodeErr := decodeHex32("precompile canonical commitment", evidence.Commitment.CanonicalHash)
+		if decodeErr != nil || evidence.Commitment.CanonicalGeneration != precompileCanonicalFleetGeneration {
+			return errors.New("precompile restore has no canonical generation-2 commitment")
+		}
+		hotkey, err := roleBytes32(e.roles, fleetHotkeyLabel(1))
+		if err != nil {
+			return err
+		}
+		current, err := e.substrate.fleetCommitmentFinalized(hotkey)
+		if err != nil || current.Hash != canonical || current.CommitmentBlock != evidence.Commitment.RestoreCommitmentBlock {
+			return conformanceMismatch("restored generation-2 commitment is not current finalized state", err)
+		}
+		return nil
 	case "precompile.read-battery":
 		if err := verifyEVMCheckpoint(ctx, e.deployer.client, head, evidence.Battery.FinalizedHead); err != nil {
 			return err
@@ -847,9 +909,9 @@ func (e *Executor) verifyPrecompileChainEvidence(ctx context.Context, action Act
 		if err != nil {
 			return err
 		}
-		baseline, current, since, err := readDividendAtFinalized(ctx, e.deployer.client, e.payloads.Manifest.PrecompileProbe, parsed, sample)
+		baseline, current, since, err := readDividendAtFinalized(ctx, e.deployer.client, e.payloads.PrecompileProbeAddress, parsed, sample)
 		if err != nil || baseline != evidence.Dividend.BaselineRao || since != evidence.Dividend.SinceBlock || current < evidence.Dividend.CurrentRao {
-			return fmt.Errorf("independent dividend state baseline=%d current=%d since=%d: %w", baseline, current, since, err)
+			return stateMismatchError(err, "independent dividend state baseline=%d current=%d since=%d", baseline, current, since)
 		}
 		return nil
 	case "precompile.transfer-out":
@@ -869,15 +931,15 @@ func (e *Executor) verifyPrecompileConformancePostState(ctx context.Context, act
 	if err != nil {
 		return nil, err
 	}
-	if err := validatePrecompileEvidenceIdentity(e.cfg, &e.payloads.Manifest, evidence); err != nil {
+	if err := validatePrecompileEvidenceIdentity(e.cfg, e.payloads.PrecompileProbeAddress, evidence); err != nil {
 		return nil, err
 	}
 	passed := false
 	switch action.ID {
 	case "precompile.commitment-write":
-		passed = evidence.Commitment.EncodedProbeBytes == 34 && evidence.Commitment.ProbeHash != evidence.Commitment.CanonicalHash && validConformanceTransaction(evidence.Commitment.WriteTransactionHash, evidence.Commitment.WriteFinalizedHead.Hash, evidence.Commitment.WriteFinalizedHead.Number) && evidence.Commitment.WriteCommitmentBlock > 0
+		passed = evidence.Commitment.CanonicalGeneration == precompileCanonicalFleetGeneration && evidence.Commitment.EncodedProbeBytes == 34 && evidence.Commitment.ProbeHash != evidence.Commitment.CanonicalHash && validConformanceTransaction(evidence.Commitment.WriteTransactionHash, evidence.Commitment.WriteFinalizedHead.Hash, evidence.Commitment.WriteFinalizedHead.Number) && evidence.Commitment.WriteCommitmentBlock > 0
 	case "precompile.commitment-restore":
-		passed = evidence.Commitment.Restored && evidence.Commitment.RestoreCommitmentBlock > evidence.Commitment.WriteCommitmentBlock && validConformanceTransaction(evidence.Commitment.RestoreTransactionHash, evidence.Commitment.RestoreFinalizedHead.Hash, evidence.Commitment.RestoreFinalizedHead.Number)
+		passed = evidence.Commitment.CanonicalGeneration == precompileCanonicalFleetGeneration && evidence.Commitment.Restored && evidence.Commitment.RestoreCommitmentBlock > evidence.Commitment.WriteCommitmentBlock && validConformanceTransaction(evidence.Commitment.RestoreTransactionHash, evidence.Commitment.RestoreFinalizedHead.Hash, evidence.Commitment.RestoreFinalizedHead.Number)
 	case "precompile.read-battery":
 		passed = evidence.Battery.Passed && evidence.Battery.FinalizedHead.Number > 0
 	case "precompile.seed":

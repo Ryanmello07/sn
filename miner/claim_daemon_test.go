@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -44,6 +45,50 @@ func TestClaimDaemonConfigStrictAndPortable(t *testing.T) {
 	}
 	if _, err := LoadClaimDaemonConfig(path); err == nil {
 		t.Fatal("unknown claim daemon config field accepted")
+	}
+}
+
+// The local parser must consume all input before returning a runnable config.
+func TestClaimDaemonConfigRejectsMalformedTrailingYAML(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "synthetic.key")
+	if err := os.WriteFile(keyPath, []byte("synthetic parser fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	config := ClaimDaemonConfig{SchemaVersion: 1, Release: "1.0", APIURL: "http://operator.example", RPC: []string{"http://rpc.example"}, KeyFile: keyPath, StateDir: filepath.Join(dir, "state"), PollSeconds: 5, LookbackEpochs: 3}
+	fixture, err := yaml.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, testCase := range []struct {
+		name, suffix, wantError string
+	}{
+		{name: "valid"},
+		{name: "comment", suffix: "\n# permitted trailing comment\n"},
+		{name: "explicit document end", suffix: "\n...\n"},
+		{name: "second document", suffix: "\n---\n{}\n", wantError: "multiple YAML documents"},
+		{name: "incomplete mapping", suffix: "\n---\n{\n", wantError: "trailing YAML"},
+		{name: "incomplete sequence", suffix: "\n---\n[unterminated\n", wantError: "trailing YAML"},
+		{name: "invalid escape", suffix: "\n---\n\"\\q\"\n", wantError: "unknown escape"},
+	} {
+		path := filepath.Join(t.TempDir(), "claim.yml")
+		wire := append(append([]byte(nil), fixture...), testCase.suffix...)
+		if err := os.WriteFile(path, wire, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := LoadClaimDaemonConfig(path)
+		if testCase.wantError != "" {
+			if err == nil || !strings.Contains(err.Error(), testCase.wantError) || got != nil {
+				t.Errorf("%s: config present=%t error=%v, want %q", testCase.name, got != nil, err, testCase.wantError)
+			}
+			continue
+		}
+		if err != nil || got == nil {
+			t.Fatalf("%s: valid claim config rejected: %v", testCase.name, err)
+		}
+		if got.KeyFile != config.KeyFile || got.StateDir != config.StateDir || got.PollSeconds != config.PollSeconds {
+			t.Errorf("%s: valid claim config paths or polling changed", testCase.name)
+		}
 	}
 }
 
@@ -128,6 +173,26 @@ type fakeClaimAPI struct {
 	err    error
 }
 
+// The reconciliation callback must execute inside the same lock later used by
+// direct submission and uncertain-transaction rebroadcast.
+func TestClaimReconciliationUsesOperatorChainStateLock(t *testing.T) {
+	var chainStateLock sync.Mutex
+	reconcile := func(context.Context, *ClaimDaemonConfig, claimAPI, *ClaimQueueEntry) (string, error) {
+		if chainStateLock.TryLock() {
+			chainStateLock.Unlock()
+			t.Fatal("claim reconciliation ran outside the operator chain boundary")
+		}
+		return "no-claim", nil
+	}
+	status, err := reconcileClaimEntryWithLock(context.Background(), &ClaimDaemonConfig{}, fakeClaimAPI{}, &ClaimQueueEntry{}, &chainStateLock, reconcile)
+	if err != nil || status != "no-claim" {
+		t.Fatalf("locked reconciliation = %q, %v", status, err)
+	}
+	if _, err := reconcileClaimEntryWithLock(context.Background(), nil, nil, nil, nil, reconcile); err == nil {
+		t.Fatal("nil operator chain boundary was accepted")
+	}
+}
+
 func (f fakeClaimAPI) SnPoolClaimSyncWithContext(context.Context, *sdk.SnPoolClaimArgs) (*sdk.SnPoolClaimResult, error) {
 	return f.result, f.err
 }
@@ -186,5 +251,56 @@ func TestReconcileClaimEntryUsesFinalizedLeafClaimed(t *testing.T) {
 	status, err = reconcileClaimEntry(context.Background(), cfg, fakeClaimAPI{result: &sdk.SnPoolClaimResult{Epoch: 7}}, entry)
 	if err != nil || status != "no-claim" {
 		t.Fatalf("zero payout reconciliation = %q, %v", status, err)
+	}
+}
+
+func TestRecordFinalizedClaimReceiptBindsCanonicalInclusionAndLogs(t *testing.T) {
+	txHash := common.HexToHash("0x1234")
+	blockHash := common.HexToHash("0x5678")
+	receipt := &ethTypes.Receipt{
+		Status:      ethTypes.ReceiptStatusSuccessful,
+		TxHash:      txHash,
+		BlockNumber: big.NewInt(91),
+		BlockHash:   blockHash,
+		Logs: []*ethTypes.Log{{
+			Address:     common.HexToAddress("0x9999"),
+			Topics:      []common.Hash{common.HexToHash("0xabcd")},
+			Data:        []byte{1, 2, 3},
+			BlockNumber: 91,
+			TxHash:      txHash,
+			BlockHash:   blockHash,
+			Index:       7,
+		}},
+	}
+	entry := &ClaimQueueEntry{TxHash: strings.ToLower(txHash.Hex())}
+	if err := recordFinalizedClaimReceipt(entry, receipt); err != nil {
+		t.Fatal(err)
+	}
+	if entry.FinalizedBlock != 91 || entry.FinalizedBlockHash != strings.ToLower(blockHash.Hex()) || entry.ReceiptStatus != ethTypes.ReceiptStatusSuccessful || !strings.HasPrefix(entry.ReceiptLogsHash, "sha256:") || len(entry.ReceiptLogsHash) != len("sha256:")+64 {
+		t.Fatalf("finalized receipt evidence is incomplete: %+v", entry)
+	}
+	wantHash := entry.ReceiptLogsHash
+	receipt.Logs[0].Data[0] ^= 1
+	other := &ClaimQueueEntry{TxHash: strings.ToLower(txHash.Hex())}
+	if err := recordFinalizedClaimReceipt(other, receipt); err != nil {
+		t.Fatal(err)
+	}
+	if other.ReceiptLogsHash == wantHash {
+		t.Fatal("receipt log mutation retained the original evidence hash")
+	}
+
+	for name, mutate := range map[string]func(*ethTypes.Receipt){
+		"failed":            func(value *ethTypes.Receipt) { value.Status = ethTypes.ReceiptStatusFailed },
+		"missing block":     func(value *ethTypes.Receipt) { value.BlockNumber = nil },
+		"wrong transaction": func(value *ethTypes.Receipt) { value.TxHash = common.HexToHash("0x8888") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			copy := *receipt
+			mutate(&copy)
+			candidate := &ClaimQueueEntry{TxHash: strings.ToLower(txHash.Hex())}
+			if err := recordFinalizedClaimReceipt(candidate, &copy); err == nil {
+				t.Fatal("invalid finalized receipt was accepted")
+			}
+		})
 	}
 }

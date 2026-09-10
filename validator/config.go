@@ -11,11 +11,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"gopkg.in/yaml.v3"
@@ -29,6 +31,7 @@ type OperatorConfig struct {
 	NoID              uint64 `yaml:"no_id" json:"no_id"`
 	APIURL            string `yaml:"api_url" json:"api_url"`
 	ConnectURL        string `yaml:"connect_url" json:"connect_url"`
+	ArtifactSigner    string `yaml:"artifact_signer" json:"artifact_signer"`
 	StateDir          string `yaml:"state_dir" json:"state_dir"`
 	NetworkJWTFile    string `yaml:"network_jwt_file" json:"network_jwt_file"`
 	ClientJWTFile     string `yaml:"client_jwt_file" json:"client_jwt_file"`
@@ -37,28 +40,34 @@ type OperatorConfig struct {
 }
 
 type ReleaseConfig struct {
-	SchemaVersion   int              `yaml:"schema_version" json:"schema_version"`
-	Production      bool             `yaml:"production" json:"production"`
-	Release         string           `yaml:"release" json:"release"`
-	ValidatorID     uint64           `yaml:"validator_id" json:"validator_id"`
-	ChainID         uint64           `yaml:"chain_id" json:"chain_id"`
-	GenesisHash     string           `yaml:"genesis_hash" json:"genesis_hash"`
-	RuntimeSpec     uint32           `yaml:"runtime_spec" json:"runtime_spec"`
-	Netuid          uint16           `yaml:"netuid" json:"netuid"`
-	Coordinator     string           `yaml:"coordinator" json:"coordinator"`
-	SettlementVault string           `yaml:"settlement_vault" json:"settlement_vault"`
-	DeployBlock     uint64           `yaml:"deploy_block" json:"deploy_block"`
-	PolicyHash      string           `yaml:"policy_hash" json:"policy_hash"`
-	RPC             []string         `yaml:"rpc" json:"rpc"`
-	Substrate       []string         `yaml:"substrate" json:"substrate"`
-	StateDir        string           `yaml:"state_dir" json:"state_dir"`
-	HotkeySeedFile  string           `yaml:"hotkey_seed_file" json:"hotkey_seed_file"`
-	ControlledNOIDs []uint64         `yaml:"controlled_no_ids" json:"controlled_no_ids"`
-	TrailDepth      int              `yaml:"trail_depth" json:"trail_depth"`
-	PollSeconds     int              `yaml:"poll_seconds" json:"poll_seconds"`
-	VersionKey      uint64           `yaml:"version_key" json:"version_key"`
-	Policy          protocol.Policy  `yaml:"policy" json:"policy"`
-	Operators       []OperatorConfig `yaml:"operators" json:"operators"`
+	SchemaVersion       int                     `yaml:"schema_version" json:"schema_version"`
+	Production          bool                    `yaml:"production" json:"production"`
+	Release             string                  `yaml:"release" json:"release"`
+	DeploymentID        string                  `yaml:"deployment_id" json:"deployment_id"`
+	ValidatorID         uint64                  `yaml:"validator_id" json:"validator_id"`
+	ChainID             uint64                  `yaml:"chain_id" json:"chain_id"`
+	GenesisHash         string                  `yaml:"genesis_hash" json:"genesis_hash"`
+	RuntimeSpec         uint32                  `yaml:"runtime_spec" json:"runtime_spec"`
+	TransactionVersion  uint32                  `yaml:"transaction_version" json:"transaction_version"`
+	StateVersion        uint8                   `yaml:"state_version" json:"state_version"`
+	RuntimeCodeHash     string                  `yaml:"runtime_code_hash" json:"runtime_code_hash"`
+	RuntimeMetadataHash string                  `yaml:"runtime_metadata_hash" json:"runtime_metadata_hash"`
+	Netuid              uint16                  `yaml:"netuid" json:"netuid"`
+	Coordinator         string                  `yaml:"coordinator" json:"coordinator"`
+	SettlementVault     string                  `yaml:"settlement_vault" json:"settlement_vault"`
+	DeployBlock         uint64                  `yaml:"deploy_block" json:"deploy_block"`
+	PolicyHash          string                  `yaml:"policy_hash" json:"policy_hash"`
+	RPC                 []string                `yaml:"rpc" json:"rpc"`
+	Substrate           []string                `yaml:"substrate" json:"substrate"`
+	StateDir            string                  `yaml:"state_dir" json:"state_dir"`
+	HotkeySeedFile      string                  `yaml:"hotkey_seed_file" json:"hotkey_seed_file"`
+	ControlledNOIDs     []uint64                `yaml:"controlled_no_ids" json:"controlled_no_ids"`
+	TrailDepth          int                     `yaml:"trail_depth" json:"trail_depth"`
+	PollSeconds         int                     `yaml:"poll_seconds" json:"poll_seconds"`
+	VersionKey          uint64                  `yaml:"version_key" json:"version_key"`
+	Policy              protocol.Policy         `yaml:"policy" json:"policy"`
+	Operators           []OperatorConfig        `yaml:"operators" json:"operators"`
+	EvidenceV2          ReleaseEvidenceV2Config `yaml:"evidence_v2" json:"evidence_v2"`
 }
 
 func LoadReleaseConfig(path string) (*ReleaseConfig, error) {
@@ -80,8 +89,14 @@ func LoadReleaseConfig(path string) (*ReleaseConfig, error) {
 		return nil, fmt.Errorf("decode validator config %s: %w", abs, err)
 	}
 	var trailing any
-	if err := dec.Decode(&trailing); err == nil {
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return nil, fmt.Errorf("decode validator config %s: trailing YAML: %w", abs, err)
+		}
 		return nil, fmt.Errorf("decode validator config %s: multiple YAML documents", abs)
+	}
+	if err := ValidateReleaseEvidenceV2ConfigYAML(b); err != nil {
+		return nil, fmt.Errorf("decode validator config %s: %w", abs, err)
 	}
 	if err := cfg.normalize(filepath.Dir(abs)); err != nil {
 		return nil, err
@@ -107,6 +122,26 @@ func configPath(base, value string) (string, error) {
 }
 
 func (c *ReleaseConfig) normalize(base string) error {
+	// New evidence authority cannot acquire legitimacy through legacy cleaning.
+	if c.EvidenceV2.Schema != "" {
+		for _, path := range []string{c.StateDir, c.HotkeySeedFile} {
+			if err := ValidateReleaseEvidenceV2Path(path); err != nil {
+				return err
+			}
+		}
+		for _, operator := range c.Operators {
+			if err := ValidateReleaseEvidenceV2Path(operator.StateDir); err != nil {
+				return err
+			}
+			for _, path := range []string{operator.NetworkJWTFile, operator.ClientJWTFile, operator.ClientKeySeedFile} {
+				if path != "" {
+					if err := ValidateReleaseEvidenceV2Path(path); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
 	var err error
 	if c.StateDir, err = configPath(base, c.StateDir); err != nil {
 		return fmt.Errorf("state_dir: %w", err)
@@ -183,7 +218,10 @@ func (c ReleaseConfig) Validate() error {
 	if !c.Production {
 		return errors.New("release config must explicitly set production: true")
 	}
-	if c.ValidatorID == 0 || c.ChainID == 0 || c.RuntimeSpec == 0 || c.Netuid == 0 || c.DeployBlock == 0 {
+	if strings.TrimSpace(c.DeploymentID) == "" || strings.ContainsAny(c.DeploymentID, "/\\.") {
+		return errors.New("deployment_id must be one nonempty safe segment")
+	}
+	if c.ValidatorID == 0 || c.ChainID == 0 || c.RuntimeSpec == 0 || c.TransactionVersion == 0 || c.StateVersion == 0 || c.Netuid == 0 || c.DeployBlock == 0 {
 		return errors.New("validator, chain, runtime, netuid and deploy block must be nonzero")
 	}
 	if !common.IsHexAddress(c.Coordinator) || common.HexToAddress(c.Coordinator) == (common.Address{}) {
@@ -197,6 +235,15 @@ func (c ReleaseConfig) Validate() error {
 		return err
 	}
 	_ = genesis
+	if _, err := parseHash32("runtime_code_hash", c.RuntimeCodeHash); err != nil {
+		return err
+	}
+	if _, err := parseHash32("runtime_metadata_hash", c.RuntimeMetadataHash); err != nil {
+		return err
+	}
+	if err := validateReleaseNativeRuntimeConfig(&c); err != nil {
+		return err
+	}
 	configuredPolicyHash, err := parseHash32("policy_hash", c.PolicyHash)
 	if err != nil {
 		return err
@@ -243,6 +290,7 @@ func (c ReleaseConfig) Validate() error {
 		return fmt.Errorf("configured operators %d below policy minimum %d", len(c.Operators), c.Policy.Safety.MinimumHealthyNOCount)
 	}
 	seenNO := map[uint64]bool{}
+	seenArtifactSigner := map[common.Address]uint64{}
 	seenPath := map[string]string{}
 	for i, op := range c.Operators {
 		if op.NoID == 0 || seenNO[op.NoID] {
@@ -255,8 +303,27 @@ func (c ReleaseConfig) Validate() error {
 		if err := validateEndpoint(fmt.Sprintf("operators[%d].connect_url", i), op.ConnectURL, "ws", "wss"); err != nil {
 			return err
 		}
+		if !common.IsHexAddress(op.ArtifactSigner) || common.HexToAddress(op.ArtifactSigner) == (common.Address{}) {
+			return fmt.Errorf("operators[%d].artifact_signer is missing or zero", i)
+		}
+		artifactSigner := common.HexToAddress(op.ArtifactSigner)
+		if priorNO, exists := seenArtifactSigner[artifactSigner]; exists {
+			return fmt.Errorf("operators[%d].artifact_signer aliases no_id %d", i, priorNO)
+		}
+		seenArtifactSigner[artifactSigner] = op.NoID
 		if op.Concurrency < 1 || op.Concurrency > 128 {
 			return fmt.Errorf("operators[%d].concurrency outside [1,128]", i)
+		}
+		if op.Concurrency > c.Policy.Verify.HardActiveTrailsPerSource {
+			return fmt.Errorf("operators[%d].concurrency exceeds the verify active-trail hard limit", i)
+		}
+		seedInterval, err := releaseSeedAttemptInterval(c.Policy.Verify.HardSeedPerMinutePerSource)
+		if err != nil {
+			return fmt.Errorf("operators[%d] seed pacing: %w", i, err)
+		}
+		maximumInitialWait := time.Duration(op.Concurrency-1) * seedInterval
+		if maximumInitialWait >= time.Duration(c.Policy.Verify.StepTimeoutSeconds)*time.Second {
+			return fmt.Errorf("operators[%d].concurrency cannot enter the seed gate within step_timeout", i)
 		}
 		for label, p := range map[string]string{"state_dir": op.StateDir, "network_jwt_file": op.NetworkJWTFile, "client_jwt_file": op.ClientJWTFile, "client_key_seed_file": op.ClientKeySeedFile} {
 			if !filepath.IsAbs(p) {
@@ -281,5 +348,5 @@ func (c ReleaseConfig) Validate() error {
 			return fmt.Errorf("controlled no_id %d is not in the operator directory", id)
 		}
 	}
-	return nil
+	return c.EvidenceV2.Validate(c.Operators, c.StateDir, c.HotkeySeedFile)
 }

@@ -2,14 +2,56 @@ package protocol
 
 import (
 	"encoding/json"
+	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func testPolicyPath(t *testing.T) string {
 	t.Helper()
 	return filepath.Join("..", "deploy", "testnet", "policy-v1.yml")
+}
+
+func TestRequiredDepositRaoUsesExactTierFloorAndCap(t *testing.T) {
+	policy, err := LoadPolicy(testPolicyPath(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	amount, tier, err := RequiredDepositRao(2*(1<<30)+512, big.NewInt(0), policy.Deposit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amount.Uint64() != 2_000_000 || tier.RateNumeratorRaoPerGiB != 1_000_000 {
+		t.Fatalf("baseline deposit/tier = %s/%+v", amount, tier)
+	}
+	conviction := big.NewInt(1_000_000_000)
+	tier, err = DepositTierAt(policy.Deposit, conviction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Derive an input whose uncapped result is strictly above the locked cap.
+	// A fixed GiB fixture silently stopped testing the cap when the runtime-valid
+	// testnet deposit cap increased.
+	capPlusOne := new(big.Int).Add(new(big.Int).SetUint64(policy.Deposit.EpochCapRaoPerOperator), big.NewInt(1))
+	usageNumerator := new(big.Int).Mul(capPlusOne, new(big.Int).SetUint64(1<<30))
+	usageNumerator.Mul(usageNumerator, new(big.Int).SetUint64(tier.RateDenominator))
+	usageBytes := new(big.Int).Quo(usageNumerator, new(big.Int).SetUint64(tier.RateNumeratorRaoPerGiB))
+	usageBytes.Add(usageBytes, big.NewInt(1))
+	if !usageBytes.IsUint64() {
+		t.Fatalf("cap-crossing usage does not fit uint64: %s", usageBytes)
+	}
+	amount, tier, err = RequiredDepositRao(usageBytes.Uint64(), conviction, policy.Deposit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amount.Uint64() != policy.Deposit.EpochCapRaoPerOperator || tier.RateNumeratorRaoPerGiB != 800_000 {
+		t.Fatalf("capped conviction-tier deposit = %s/%+v", amount, tier)
+	}
+	if _, _, err := RequiredDepositRao(1, big.NewInt(-1), policy.Deposit); err == nil {
+		t.Fatal("negative conviction was accepted")
+	}
 }
 
 func TestLoadPolicyCanonicalHash(t *testing.T) {
@@ -35,6 +77,49 @@ func TestLoadPolicyCanonicalHash(t *testing.T) {
 	h2, _ := p2.HashHex()
 	if h1 != h2 {
 		t.Fatalf("non-deterministic policy hash: %s != %s", h1, h2)
+	}
+}
+
+// A complete first document does not make a malformed second one EOF.
+func TestPolicyRejectsMalformedTrailingYAML(t *testing.T) {
+	fixture, err := os.ReadFile(testPolicyPath(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := ParsePolicy(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantHash, err := policy.HashHex()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, testCase := range []struct {
+		name, suffix, wantError string
+	}{
+		{name: "valid"},
+		{name: "comment", suffix: "\n# permitted trailing comment\n"},
+		{name: "explicit document end", suffix: "\n...\n"},
+		{name: "second document", suffix: "\n---\n{}\n", wantError: "multiple YAML documents"},
+		{name: "incomplete mapping", suffix: "\n---\n{\n", wantError: "trailing YAML"},
+		{name: "incomplete sequence", suffix: "\n---\n[unterminated\n", wantError: "trailing YAML"},
+		{name: "invalid escape", suffix: "\n---\n\"\\q\"\n", wantError: "unknown escape"},
+	} {
+		wire := append(append([]byte(nil), fixture...), testCase.suffix...)
+		got, err := ParsePolicy(wire)
+		if testCase.wantError != "" {
+			if err == nil || !strings.Contains(err.Error(), testCase.wantError) || got != nil {
+				t.Errorf("%s: policy present=%t error=%v, want %q", testCase.name, got != nil, err, testCase.wantError)
+			}
+			continue
+		}
+		if err != nil || got == nil {
+			t.Fatalf("%s: valid policy rejected: %v", testCase.name, err)
+		}
+		gotHash, err := got.HashHex()
+		if err != nil || gotHash != wantHash {
+			t.Errorf("%s: policy changed: hash=%s error=%v", testCase.name, gotHash, err)
+		}
 	}
 }
 
@@ -70,14 +155,16 @@ func TestPolicyCadenceWindowsFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Settlement.CloseGraceBlocks != 5 || p.ProductionCadence.EpochBlocks != 50_400 || p.ProductionCadence.AfterAcceleratedEpochs != 20 {
+	if p.NetworkProfile != "testnet" || p.Settlement.CloseGraceBlocks != 5 || p.ProductionCadence.EpochBlocks != 360 || p.ProductionCadence.AfterAcceleratedEpochs != 5 {
 		t.Fatalf("unexpected release cadence: settlement=%+v production=%+v", p.Settlement, p.ProductionCadence)
 	}
 	tests := []func(*Policy){
 		func(v *Policy) { v.Settlement.CloseGraceBlocks = 0 },
 		func(v *Policy) { v.Settlement.CloseGraceBlocks = v.Settlement.RootCommitWindowBlocks + 1 },
+		func(v *Policy) { v.Settlement.FinalizeOffsetBlocks = v.Settlement.EpochBlocks },
 		func(v *Policy) { v.ProductionCadence.AfterAcceleratedEpochs = 0 },
 		func(v *Policy) { v.ProductionCadence.EpochBlocks = v.Settlement.EpochBlocks },
+		func(v *Policy) { v.ProductionCadence.FinalizeOffsetBlocks = v.ProductionCadence.EpochBlocks },
 		func(v *Policy) {
 			v.ProductionCadence.RootCommitWindowBlocks = v.ProductionCadence.FinalizeOffsetBlocks + 1
 		},
@@ -88,6 +175,33 @@ func TestPolicyCadenceWindowsFailClosed(t *testing.T) {
 		if err := copy.Validate(); err == nil {
 			t.Fatalf("invalid cadence mutation %d accepted", index)
 		}
+	}
+}
+
+func TestPolicyRejectsOverflowingClaimRetentionEpochCount(t *testing.T) {
+	p, err := LoadPolicy(testPolicyPath(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Settlement.ClaimTTLEpochs = ^uint64(0)
+	p.Settlement.ClaimGraceEpochs = 1
+	if err := p.Validate(); err == nil {
+		t.Fatal("overflowing claim-retention epoch count was accepted")
+	}
+}
+
+func TestPolicyRejectsOverflowingProductionClaimBlockHorizon(t *testing.T) {
+	p, err := LoadPolicy(testPolicyPath(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Settlement.ClaimTTLEpochs = ^uint64(0)/p.ProductionCadence.EpochBlocks + 1
+	p.Settlement.ClaimGraceEpochs = 0
+	if p.Settlement.EpochBlocks > ^uint64(0)/p.Settlement.ClaimTTLEpochs {
+		t.Fatal("fixture also overflows the accelerated horizon")
+	}
+	if err := p.Validate(); err == nil {
+		t.Fatal("overflowing production claim block horizon was accepted")
 	}
 }
 
@@ -127,6 +241,24 @@ func TestPolicyRequiresPositiveFinalizedHeadLagBound(t *testing.T) {
 	p.Safety.MaximumFinalizedHeadLagBlocks = 0
 	if err := p.Validate(); err == nil {
 		t.Fatal("unbounded finalized-head lag was accepted")
+	}
+}
+
+func TestPolicyRequiresPositiveVerifyHardLimits(t *testing.T) {
+	mutations := []func(*Policy){
+		func(policy *Policy) { policy.Verify.HardSeedPerMinutePerSource = 0 },
+		func(policy *Policy) { policy.Verify.HardExtendPerMinutePerSource = 0 },
+		func(policy *Policy) { policy.Verify.HardActiveTrailsPerSource = 0 },
+	}
+	for index, mutate := range mutations {
+		policy, err := LoadPolicy(testPolicyPath(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		mutate(policy)
+		if err := policy.Validate(); err == nil {
+			t.Errorf("zero verify hard-limit mutation %d was accepted", index)
+		}
 	}
 }
 

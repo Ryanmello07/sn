@@ -12,6 +12,7 @@ import {IEd25519Verify, IED25519VERIFY_ADDRESS} from "./interfaces/ed25519Verify
 import {ISR25519Verify, ISR25519VERIFY_ADDRESS} from "./interfaces/sr25519Verify.sol";
 import {STReserveSink} from "./STReserveSink.sol";
 import {STSettlementVault} from "./STSettlementVault.sol";
+import {NativeBalance} from "./NativeBalance.sol";
 
 /// @title STCoordinator
 /// @notice Upgradeable release-1.0 policy/roles/binding coordinator. Economic
@@ -21,6 +22,12 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     string public constant FLEET_REVOKE_DOMAIN = "urnetwork/fleet-revoke/v1";
     uint256 public constant MAX_POLICY_VERSIONS = 64;
     uint256 public constant MAX_OPERATOR_VERSIONS = 64;
+    /// @dev Runtime 452 can round each destination share-pool credit down by
+    ///      one rao. A reservation crosses two pools (move, then transfer), so
+    ///      it stages two rao and reconciles both bounded deltas before
+    ///      recording the requested principal.
+    uint256 public constant RUNTIME_SHARE_ROUNDING_ALLOWANCE_RAO = 1;
+    uint256 public constant RESERVE_ROUNDING_ALLOWANCE_RAO = 2;
 
     struct PolicySnapshot {
         bytes32 policyHash;
@@ -122,6 +129,10 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     uint256 private _entered;
 
+    /// @notice Fixed companion for validator evidence commitments. Proof bytes
+    /// remain public artifacts; this address never grants a custody capability.
+    address public validatorEvidence;
+
     event PolicyScheduled(
         uint256 indexed index,
         bytes32 indexed policyHash,
@@ -183,6 +194,7 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     event GuardianSet(address indexed guardian);
     event GuardianScheduled(address indexed guardian, uint64 indexed effectiveEpoch);
     event PausedSet(bool paused, address indexed caller);
+    event ValidatorEvidenceFixed(address indexed evidence);
 
     error Unauthorized();
     error InvalidConfiguration();
@@ -195,6 +207,7 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     error DeadlineExpired();
     error CapExceeded();
     error FundsNotReceived();
+    error RuntimeAccountingMismatch();
     error AlreadyCommitted();
     error InvalidSignature();
     error InvalidBinding();
@@ -251,8 +264,9 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
         PolicySnapshot memory first = initialPolicy;
         first.effectiveEpoch = 0;
-        first.effectiveBlock = uint64(block.number);
+        first.effectiveBlock = SafeCast.toUint64(block.number);
         _validatePolicy(first);
+        _validateSettlementWindow(first);
         _policies.push(first);
         emit PolicyScheduled(0, first.policyHash, 0, first.effectiveBlock);
         emit GuardianSet(guardian_);
@@ -303,8 +317,9 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             revert InvalidEpoch();
         }
         PolicySnapshot memory scheduled = next;
-        scheduled.effectiveBlock = uint64(epochStartBlock(next.effectiveEpoch));
+        scheduled.effectiveBlock = SafeCast.toUint64(epochStartBlock(next.effectiveEpoch));
         _validatePolicy(scheduled);
+        _validateSettlementWindow(scheduled);
         _policies.push(scheduled);
         emit PolicyScheduled(
             _policies.length - 1, scheduled.policyHash, scheduled.effectiveEpoch, scheduled.effectiveBlock
@@ -325,8 +340,20 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         ) revert InvalidPolicy();
         if (
             p.closeGraceBlocks > p.rootCommitWindowBlocks || p.rootCommitWindowBlocks > p.finalizeOffsetBlocks
-                || p.claimGraceEpochs > p.claimTTLEpochs || p.epochDepositCapRao > p.campaignDepositCapRao
+                || p.finalizeOffsetBlocks >= p.epochBlocks || p.claimGraceEpochs > p.claimTTLEpochs
+                || p.epochDepositCapRao > p.campaignDepositCapRao
         ) revert InvalidPolicy();
+    }
+
+    /// @dev A timely finalizer must leave the vault's immutable minimum claim
+    /// window after the policy's finalize offset. Without this check a valid
+    /// governance update could make every entitlement finalization revert.
+    function _validateSettlementWindow(PolicySnapshot memory p) internal view {
+        uint256 claimHorizon =
+            (uint256(p.claimTTLEpochs) + uint256(p.claimGraceEpochs)) * uint256(p.epochBlocks);
+        uint256 required =
+            uint256(settlementVault.minimumClaimTTLBlocks()) + uint256(p.finalizeOffsetBlocks) + 1;
+        if (claimHorizon < required) revert InvalidPolicy();
     }
 
     function operatorCount() external view returns (uint256) {
@@ -363,7 +390,7 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             revert InvalidConfiguration();
         }
         if (effectiveEpoch < currentEpoch()) revert InvalidEpoch();
-        uint256 balanceBefore = address(this).balance - msg.value;
+        uint256 balanceBefore = NativeBalance.beforeSuppliedValue(address(this).balance, msg.value);
         _validateOperator(coldkey, poolHotkey, depositHotkey, depositSigner, rootSigner);
         if (depositHotkeyUsed[depositHotkey]) revert InvalidConfiguration();
         depositHotkeyUsed[depositHotkey] = true;
@@ -407,7 +434,9 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         }
         if (
             effectiveEpoch <= currentEpoch() || effectiveEpoch <= versions[versions.length - 1].effectiveEpoch
-        ) revert InvalidEpoch();
+        ) {
+            revert InvalidEpoch();
+        }
         OperatorVersion storage prior = versions[versions.length - 1];
         _validateOperator(prior.coldkey, prior.poolHotkey, depositHotkey, depositSigner, rootSigner);
         if (depositHotkey != prior.depositHotkey) {
@@ -484,9 +513,14 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         }
         if (campaignReserved + amount > p.campaignDepositCapRao) revert CapExceeded();
 
-        uint256 available =
-            IStaking(ISTAKING_ADDRESS).getStake(op.depositHotkey, selfColdkey, uint256(netuid));
-        if (available < amount) revert FundsNotReceived();
+        uint256 stagedAmount = amount + RESERVE_ROUNDING_ALLOWANCE_RAO;
+        IStaking staking = IStaking(ISTAKING_ADDRESS);
+        uint256 available = staking.getStake(op.depositHotkey, selfColdkey, uint256(netuid));
+        if (available < stagedAmount) revert FundsNotReceived();
+        uint256 coordinatorReserveBefore =
+            staking.getStake(reserveSink.reserveHotkey(), selfColdkey, uint256(netuid));
+        uint256 sinkReserveBefore =
+            staking.getStake(reserveSink.reserveHotkey(), reserveSink.selfColdkey(), uint256(netuid));
         // Commit all coordinator accounting before external runtime calls.
         // Any failed precompile or sink check reverts the complete transaction.
         nextDepositNonce[noId] = nonce + 1;
@@ -498,18 +532,38 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             epochConvictionAdded[epoch_][noId] += amount;
         }
 
-        IStaking(ISTAKING_ADDRESS)
-            .moveStake(
-                op.depositHotkey, reserveSink.reserveHotkey(), uint256(netuid), uint256(netuid), amount
-            );
-        IStaking(ISTAKING_ADDRESS)
-            .transferStake(
-                reserveSink.selfColdkey(),
-                reserveSink.reserveHotkey(),
-                uint256(netuid),
-                uint256(netuid),
-                amount
-            );
+        staking.moveStake(
+            op.depositHotkey, reserveSink.reserveHotkey(), uint256(netuid), uint256(netuid), stagedAmount
+        );
+        uint256 availableAfter = staking.getStake(op.depositHotkey, selfColdkey, uint256(netuid));
+        uint256 coordinatorReserveAfterMove =
+            staking.getStake(reserveSink.reserveHotkey(), selfColdkey, uint256(netuid));
+        if (
+            availableAfter > available || available - availableAfter != stagedAmount
+                || coordinatorReserveAfterMove < coordinatorReserveBefore
+        ) revert RuntimeAccountingMismatch();
+        uint256 movedAmount = coordinatorReserveAfterMove - coordinatorReserveBefore;
+        uint256 minimumIntermediateAmount = amount + RUNTIME_SHARE_ROUNDING_ALLOWANCE_RAO;
+        if (movedAmount < minimumIntermediateAmount || movedAmount > stagedAmount) {
+            revert RuntimeAccountingMismatch();
+        }
+
+        staking.transferStake(
+            reserveSink.selfColdkey(),
+            reserveSink.reserveHotkey(),
+            uint256(netuid),
+            uint256(netuid),
+            movedAmount
+        );
+        uint256 coordinatorReserveAfter =
+            staking.getStake(reserveSink.reserveHotkey(), selfColdkey, uint256(netuid));
+        uint256 sinkReserveAfter =
+            staking.getStake(reserveSink.reserveHotkey(), reserveSink.selfColdkey(), uint256(netuid));
+        if (coordinatorReserveAfter != coordinatorReserveBefore || sinkReserveAfter < sinkReserveBefore) {
+            revert RuntimeAccountingMismatch();
+        }
+        uint256 sinkMovedAmount = sinkReserveAfter - sinkReserveBefore;
+        if (sinkMovedAmount < amount || sinkMovedAmount > movedAmount) revert RuntimeAccountingMismatch();
         reserveSink.recordPrincipal(epoch_, noId, amount);
 
         if (demand) {
@@ -563,7 +617,7 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             payoutRoot: payoutRoot,
             artifactHash: artifactHash,
             committer: msg.sender,
-            commitBlock: uint64(block.number)
+            commitBlock: SafeCast.toUint64(block.number)
         });
         emit OperatorRootCommitted(epoch_, noId, payoutRoot, artifactHash, msg.sender);
     }
@@ -577,6 +631,8 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         if (present) {
             uint256 expiryEpoch = epoch_ + p.claimTTLEpochs + p.claimGraceEpochs + 1;
             uint256 expiry = epochStartBlock(expiryEpoch) - 1;
+            uint256 minimumExpiry = block.number + settlementVault.minimumClaimTTLBlocks();
+            if (expiry < minimumExpiry) expiry = minimumExpiry;
             settlementVault.finalizeEntitlement(
                 epoch_, noId, root.payoutRoot, root.artifactHash, SafeCast.toUint64(expiry)
             );
@@ -604,7 +660,7 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     }
 
     /// @notice Mirrors a commitment only after the indexer has independently
-    /// observed it in finalized pallet state. Runtime 447 has no EVM metadata
+    /// observed it in finalized pallet state. Runtime 452 has no EVM metadata
     /// commitment getter, so this narrowly scoped oracle is an explicit seam.
     function mirrorCommitment(
         bytes32 hotkey,
@@ -617,6 +673,18 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             hotkey == bytes32(0) || commitmentHash == bytes32(0) || finalizedBlockHash == bytes32(0)
                 || finalizedBlock > block.number
         ) revert InvalidConfiguration();
+
+        CommitmentRecord memory prior = mirroredCommitments[hotkey];
+        if (prior.finalizedBlock != 0) {
+            if (finalizedBlock < prior.finalizedBlock) revert StaleCommitment();
+            if (finalizedBlock == prior.finalizedBlock) {
+                if (prior.commitmentHash != commitmentHash || prior.finalizedBlockHash != finalizedBlockHash)
+                {
+                    revert StaleCommitment();
+                }
+                return;
+            }
+        }
         mirroredCommitments[hotkey] = CommitmentRecord({
             commitmentHash: commitmentHash,
             finalizedBlockHash: finalizedBlockHash,
@@ -743,6 +811,10 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             record = candidate;
             active =
                 epoch_ <= candidate.validToEpoch && (!candidate.cleaned || epoch_ < candidate.cleanedAtEpoch);
+            if (active) {
+                (bool exists, uint16 liveUid) = INeuron(INeuron_ADDRESS).getUid(netuid, candidate.hotkey);
+                active = exists && liveUid == candidate.uid;
+            }
             return (active, record);
         }
     }
@@ -755,7 +827,7 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         return keccak256(
             abi.encodePacked(
                 bytes(FLEET_REVOKE_DOMAIN),
-                uint64(block.chainid),
+                _checkedChainId(block.chainid),
                 netuid,
                 address(this),
                 clientId,
@@ -763,6 +835,10 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
                 effectiveEpoch
             )
         );
+    }
+
+    function _checkedChainId(uint256 chainId_) internal pure returns (uint64) {
+        return SafeCast.toUint64(chainId_);
     }
 
     function revokeFleetBinding(
@@ -837,5 +913,13 @@ contract STCoordinator is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
-    uint256[40] private __gap;
+    /// @notice One-time deployment binding, independent of operator root signers.
+    /// The deployment verifier authenticates the companion's immutable domain.
+    function fixValidatorEvidence(address evidence) external onlyOwner {
+        if (validatorEvidence != address(0) || evidence.code.length == 0) revert InvalidConfiguration();
+        validatorEvidence = evidence;
+        emit ValidatorEvidenceFixed(evidence);
+    }
+
+    uint256[39] private __gap;
 }

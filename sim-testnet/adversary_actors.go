@@ -27,9 +27,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/protocol"
+	"github.com/urfoundation/sn/stabi"
 )
 
 type adversaryRequestGate struct {
@@ -163,7 +165,11 @@ type adversaryHTTP struct {
 }
 
 func (self *adversaryHTTP) do(ctx context.Context, method, endpoint, sourceIP string, body []byte, limit int64) (int, []byte, error) {
-	if err := self.gate.Wait(ctx); err != nil {
+	slots, err := adversaryOperatorRequestSlots(method, endpoint, body)
+	if err != nil {
+		return 0, nil, err
+	}
+	if err := self.gate.WaitSlots(ctx, slots); err != nil {
 		return 0, nil, err
 	}
 	return self.doReserved(ctx, method, endpoint, sourceIP, body, limit)
@@ -216,7 +222,11 @@ type adversaryHTTPResponse struct {
 // load-test target.
 func (self *adversaryHTTP) doConcurrentPair(ctx context.Context, method, endpoint, sourceIP string, body []byte, limit int64) ([2]adversaryHTTPResponse, error) {
 	var responses [2]adversaryHTTPResponse
-	if err := self.gate.WaitSlots(ctx, len(responses)); err != nil {
+	slots, err := adversaryOperatorRequestSlots(method, endpoint, body)
+	if err != nil {
+		return responses, err
+	}
+	if err := self.gate.WaitSlots(ctx, slots*len(responses)); err != nil {
 		return responses, err
 	}
 	start := make(chan struct{})
@@ -239,15 +249,109 @@ func (self *adversaryHTTP) doConcurrentPair(ctx context.Context, method, endpoin
 }
 
 type operatorAPIAdversary struct {
-	cfg    *ResolvedConfig
-	http   *adversaryHTTP
-	faults *adversaryFaultWindow
+	cfg                    *ResolvedConfig
+	stateDir               string
+	http                   *adversaryHTTP
+	faults                 *adversaryFaultWindow
+	latency                adversaryLatencyWindow
+	mu                     sync.Mutex
+	faultAt                map[int]time.Time
+	requests               uint64
+	faultRejections        uint64
+	lastSupervisorIdentity string
 }
 
 func (self *operatorAPIAdversary) ID() string                         { return "operator-api-pressure" }
 func (self *operatorAPIAdversary) FaultWindow() *adversaryFaultWindow { return self.faults }
 
+// Derives a stable healthy-process fingerprint and aggregate restart count.
+func operatorSupervisorIdentity(state SupervisorState) (uint64, string, error) {
+	if len(state.Processes) == 0 {
+		return 0, "", errors.New("supervisor process state is empty")
+	}
+	processes := append([]ProcessState(nil), state.Processes...)
+	sort.Slice(processes, func(i, j int) bool { return processes[i].ID < processes[j].ID })
+	var restarts uint64
+	for _, process := range processes {
+		if process.ID == "" || process.Role == "" || process.Identity == "" || !process.Healthy || process.Restarts < 0 {
+			return 0, "", fmt.Errorf("supervisor process %q is malformed or unhealthy", process.ID)
+		}
+		restarts += uint64(process.Restarts)
+	}
+	type identity struct{ ID, Role, Identity string }
+	values := make([]identity, len(processes))
+	for index, process := range processes {
+		values[index] = identity{ID: process.ID, Role: process.Role, Identity: process.Identity}
+	}
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return 0, "", err
+	}
+	hash := sha256.Sum256(encoded)
+	return restarts, hex.EncodeToString(hash[:]), nil
+}
+
+// Records a scheduled rejection once so recovery measurements have a fixed origin.
+func (self *operatorAPIAdversary) recordExpectedFault(operator int) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	if self.faultAt == nil {
+		self.faultAt = map[int]time.Time{}
+	}
+	if self.faultAt[operator].IsZero() {
+		self.faultAt[operator] = time.Now()
+	}
+	self.requests++
+	self.faultRejections++
+}
+
+// Builds recovery metrics from persisted supervisor state and the scheduled fault.
+func (self *operatorAPIAdversary) successMetrics(operator int, started time.Time) (map[string]uint64, error) {
+	if self.stateDir == "" {
+		return nil, errors.New("operator adversary has no supervisor state directory")
+	}
+	var supervisor SupervisorState
+	if err := decodeStrictJSONFile(filepath.Join(self.stateDir, "supervisor.state.json"), &supervisor); err != nil {
+		return nil, fmt.Errorf("read supervisor state: %w", err)
+	}
+	restarts, identity, err := operatorSupervisorIdentity(supervisor)
+	if err != nil {
+		return nil, err
+	}
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.requests++
+	recoverySeconds := uint64(0)
+	if faultAt := self.faultAt[operator]; !faultAt.IsZero() {
+		elapsed := time.Since(faultAt)
+		if elapsed < 0 {
+			return nil, errors.New("operator fault recovery elapsed time is negative")
+		}
+		recoverySeconds = uint64(elapsed / time.Second)
+		delete(self.faultAt, operator)
+	}
+	if self.lastSupervisorIdentity != "" && self.lastSupervisorIdentity != identity {
+		return nil, errors.New("operator restart changed durable process identity")
+	}
+	self.lastSupervisorIdentity = identity
+	if self.requests == 0 || self.faultRejections > self.requests {
+		return nil, errors.New("operator adversary retry counters are malformed")
+	}
+	p99 := self.latency.Observe(time.Since(started))
+	return map[string]uint64{
+		"request_rate":            1,
+		"process_restarts":        restarts,
+		"p99_latency_ms":          p99,
+		"request_p99_ms":          p99,
+		"recovery_seconds":        recoverySeconds,
+		"restart_count":           restarts,
+		"retry_rate":              self.faultRejections * 1_000_000 / self.requests,
+		"state_hash_before_after": 1,
+	}, nil
+}
+
 func (self *operatorAPIAdversary) Sample(ctx context.Context, phase adversarySamplePhase, sequence uint64) adversarySampleResult {
+	started := time.Now()
 	operator := 1 + int(sequence%uint64(self.cfg.Config.Topology.Operators))
 	base := fmt.Sprintf("http://127.0.0.1:%d", 18080+operator)
 	endpoint := base + "/status"
@@ -255,7 +359,7 @@ func (self *operatorAPIAdversary) Sample(ctx context.Context, phase adversarySam
 		paths := []string{
 			"/verify/stats?limit=100000",
 			"/verify/proofs?limit=10000",
-			fmt.Sprintf("/sn/artifacts?deployment_id=%s&netuid=%d", self.cfg.Config.Deployment.DeploymentID, self.cfg.Netuid),
+			fmt.Sprintf("/sn/artifacts?deployment_id=%s&netuid=%d&limit=%d", self.cfg.Config.Deployment.DeploymentID, self.cfg.Netuid, payoutArtifactHistoryPageObjects),
 			"/verify/keys",
 		}
 		endpoint = base + paths[int(sequence%uint64(len(paths)))]
@@ -263,33 +367,42 @@ func (self *operatorAPIAdversary) Sample(ctx context.Context, phase adversarySam
 	status, body, err := self.http.do(ctx, http.MethodGet, endpoint, "", nil, 32*1024*1024)
 	if err != nil {
 		if self.faults.Expected(fmt.Sprintf("operator-%d-api", operator)) {
+			self.recordExpectedFault(operator)
 			return adversarySampleResult{Outcome: adversaryOutcomeExpectedRejection, Detail: fmt.Sprintf("operator=%d scheduled API fault: %v", operator, err), Requests: 1, MaxInFlight: 1, Metrics: map[string]uint64{"scheduled_fault_rejections": 1}}
 		}
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error(), Requests: 1, MaxInFlight: 1}
 	}
 	if status/100 != 2 || len(body) == 0 || !json.Valid(body) {
 		if self.faults.Expected(fmt.Sprintf("operator-%d-api", operator)) {
+			self.recordExpectedFault(operator)
 			return adversarySampleResult{Outcome: adversaryOutcomeExpectedRejection, Detail: fmt.Sprintf("operator=%d scheduled API fault status=%d bytes=%d", operator, status, len(body)), Requests: 1, MaxInFlight: 1, Metrics: map[string]uint64{"scheduled_fault_rejections": 1}}
 		}
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("operator=%d status=%d bytes=%d valid_json=%t", operator, status, len(body), json.Valid(body)), Requests: 1, MaxInFlight: 1}
 	}
+	metrics, metricsErr := self.successMetrics(operator, started)
+	if metricsErr != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: metricsErr.Error(), Requests: 1, MaxInFlight: 1}
+	}
+	metrics["response_bytes"] = uint64(len(body))
+	metrics["5xx_count"] = 0
+	metrics["error_rate_ppm"] = 0
 	return adversarySampleResult{
 		Outcome: adversaryOutcomeSuccess, Detail: fmt.Sprintf("operator=%d status=%d bytes=%d", operator, status, len(body)), Requests: 1, MaxInFlight: 1,
-		Metrics: map[string]uint64{
-			"request_rate": 1, "response_bytes": uint64(len(body)), "5xx_count": 0,
-			"error_rate_ppm": 0, "process_restarts": 0,
-		},
+		Metrics: metrics,
 	}
 }
 
+type rpcResponseError struct {
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data,omitempty"`
+}
+
 type rpcResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      uint64          `json:"id"`
-	Result  json.RawMessage `json:"result"`
-	Error   *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-	} `json:"error"`
+	JSONRPC string            `json:"jsonrpc"`
+	ID      uint64            `json:"id"`
+	Result  json.RawMessage   `json:"result"`
+	Error   *rpcResponseError `json:"error"`
 }
 
 type rpcBlock struct {
@@ -297,21 +410,54 @@ type rpcBlock struct {
 	Hash   string `json:"hash"`
 }
 
-// rpcRuntimeVersion contains the release-bound portion of the Substrate
-// runtime identity. API lists are intentionally excluded from the continuous
-// metric because the release doctor validates their exact call shapes.
-type rpcRuntimeVersion struct {
-	SpecName           string `json:"specName"`
-	SpecVersion        uint32 `json:"specVersion"`
-	TransactionVersion uint32 `json:"transactionVersion"`
+type rpcHeader struct {
+	Number string `json:"number"`
 }
 
 type rpcAdversary struct {
-	cfg  *ResolvedConfig
-	http *adversaryHTTP
+	cfg                    *ResolvedConfig
+	http                   *adversaryHTTP
+	commitRevealProbe      adversaryCommitRevealProbe
+	commitRevealMu         sync.Mutex
+	commitRevealObservedAt time.Time
+	commitRevealLeft       adversaryCommitRevealObservation
+	commitRevealRight      adversaryCommitRevealObservation
+	commitRevealDelay      uint64
+	latency                adversaryLatencyWindow
 }
 
 func (self *rpcAdversary) ID() string { return "rpc-consistency-pressure" }
+
+// Caches only a recent direct dual-endpoint commit/reveal observation.
+func (self *rpcAdversary) observeCommitReveal(ctx context.Context) (adversaryCommitRevealObservation, adversaryCommitRevealObservation, uint64, error) {
+	self.commitRevealMu.Lock()
+	defer self.commitRevealMu.Unlock()
+	if !self.commitRevealObservedAt.IsZero() && time.Since(self.commitRevealObservedAt) < 30*time.Second {
+		return self.commitRevealLeft, self.commitRevealRight, self.commitRevealDelay, nil
+	}
+	var (
+		left  adversaryCommitRevealObservation
+		right adversaryCommitRevealObservation
+		delay uint64
+		err   error
+	)
+	if self.commitRevealProbe != nil {
+		left, right, delay, err = self.commitRevealProbe(ctx, self.cfg)
+	} else {
+		left, right, delay, err = observeAdversaryCommitRevealRuntime(ctx, self.cfg)
+	}
+	if err != nil {
+		return left, right, 0, err
+	}
+	if _, err := validateAdversaryCommitRevealObservations(left, right); err != nil {
+		return left, right, 0, err
+	}
+	if delay == 0 {
+		return left, right, 0, errors.New("commit/reveal runtime probe returned zero delay")
+	}
+	self.commitRevealObservedAt, self.commitRevealLeft, self.commitRevealRight, self.commitRevealDelay = time.Now(), left, right, delay
+	return left, right, delay, nil
+}
 
 func (self *rpcAdversary) call(ctx context.Context, endpoint, method string, parameters any, id uint64) (rpcResponse, error) {
 	payload, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": parameters})
@@ -344,6 +490,17 @@ func decodeRPCBlock(response rpcResponse) (rpcBlock, uint64, error) {
 	return block, number, err
 }
 
+func decodeRPCHeader(response rpcResponse) (uint64, error) {
+	if response.Error != nil {
+		return 0, fmt.Errorf("rpc error %d: %s", response.Error.Code, response.Error.Message)
+	}
+	var header rpcHeader
+	if json.Unmarshal(response.Result, &header) != nil || !strings.HasPrefix(header.Number, "0x") || len(header.Number) < 3 {
+		return 0, errors.New("rpc returned an invalid header")
+	}
+	return strconv.ParseUint(header.Number[2:], 16, 64)
+}
+
 func decodeRPCQuantity(response rpcResponse) (uint64, error) {
 	if response.Error != nil {
 		return 0, fmt.Errorf("rpc error %d: %s", response.Error.Code, response.Error.Message)
@@ -355,28 +512,51 @@ func decodeRPCQuantity(response rpcResponse) (uint64, error) {
 	return strconv.ParseUint(quantity[2:], 16, 64)
 }
 
-func decodeRPCRuntimeVersion(response rpcResponse) (rpcRuntimeVersion, error) {
+func decodeRPCRuntimeVersion(response rpcResponse) (runtimeVersionIdentity, error) {
 	if response.Error != nil {
-		return rpcRuntimeVersion{}, fmt.Errorf("rpc error %d: %s", response.Error.Code, response.Error.Message)
+		return runtimeVersionIdentity{}, fmt.Errorf("rpc error %d: %s", response.Error.Code, response.Error.Message)
 	}
-	var version rpcRuntimeVersion
-	if json.Unmarshal(response.Result, &version) != nil || version.SpecName == "" || version.SpecVersion == 0 || version.TransactionVersion == 0 {
-		return rpcRuntimeVersion{}, errors.New("rpc returned an invalid runtime version")
+	version, err := decodeRuntimeVersionIdentity(response.Result)
+	if err != nil {
+		return runtimeVersionIdentity{}, fmt.Errorf("rpc returned an invalid runtime version: %w", err)
 	}
 	return version, nil
 }
 
-func validateRPCRuntimeIdentity(private, public rpcRuntimeVersion, expectedSpec, expectedTransaction uint32) error {
+// Compare both observed endpoints with the complete release-bound runtime
+// identity, including state-version changes which leave call versions intact.
+func validateRPCRuntimeIdentity(private, public runtimeVersionIdentity, expectedSpec, expectedTransaction uint32, expectedState uint8) error {
 	if private.SpecName != "node-subtensor" || public.SpecName != private.SpecName {
-		return fmt.Errorf("runtime spec names private=%q public=%q", private.SpecName, public.SpecName)
+		return fmt.Errorf("runtime spec names operational=%q public=%q", private.SpecName, public.SpecName)
 	}
 	if private.SpecVersion != public.SpecVersion || private.SpecVersion != expectedSpec {
-		return fmt.Errorf("runtime specs private=%d public=%d expected=%d", private.SpecVersion, public.SpecVersion, expectedSpec)
+		return fmt.Errorf("runtime specs operational=%d public=%d expected=%d", private.SpecVersion, public.SpecVersion, expectedSpec)
 	}
 	if private.TransactionVersion != public.TransactionVersion || private.TransactionVersion != expectedTransaction {
-		return fmt.Errorf("transaction versions private=%d public=%d expected=%d", private.TransactionVersion, public.TransactionVersion, expectedTransaction)
+		return fmt.Errorf("transaction versions operational=%d public=%d expected=%d", private.TransactionVersion, public.TransactionVersion, expectedTransaction)
+	}
+	if private.StateVersion != public.StateVersion || private.StateVersion != expectedState {
+		return fmt.Errorf("state versions operational=%d public=%d expected=%d", private.StateVersion, public.StateVersion, expectedState)
 	}
 	return nil
+}
+
+func decodeRPCHash(response rpcResponse) (string, error) {
+	return decodeRPCFixedHash(response, "runtime code hash")
+}
+
+func decodeRPCFixedHash(response rpcResponse, label string) (string, error) {
+	if response.Error != nil {
+		return "", fmt.Errorf("rpc error %d: %s", response.Error.Code, response.Error.Message)
+	}
+	var value string
+	if err := json.Unmarshal(response.Result, &value); err != nil {
+		return "", fmt.Errorf("rpc returned an invalid %s", label)
+	}
+	if err := validateRuntimeCodeHash(value, value); err != nil {
+		return "", errors.New(strings.NewReplacer("runtime code hash", label).Replace(err.Error()))
+	}
+	return strings.ToLower(value), nil
 }
 
 func abiUint16CallData(signature string, value uint16) string {
@@ -420,7 +600,7 @@ func validateSubnetPrecompileSentinels(privateSpot, publicSpot, privateMoving, p
 		}
 	}
 	if privateSpot.Cmp(publicSpot) != 0 || privateMoving.Cmp(publicMoving) != 0 || privateUIDs.Cmp(publicUIDs) != 0 {
-		return errors.New("private and public subnet precompile sentinels disagree")
+		return errors.New("operational and public subnet precompile sentinels disagree")
 	}
 	return nil
 }
@@ -443,10 +623,7 @@ func mevShieldFinalityEraExpiryModel(finalized, best, period uint64) (lag uint64
 
 func (self *rpcAdversary) Sample(ctx context.Context, phase adversarySamplePhase, sequence uint64) adversarySampleResult {
 	started := time.Now()
-	_, privateEndpoint, err := authorityURLs(self.cfg.Authority)
-	if err != nil {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
-	}
+	privateEndpoint := self.cfg.OperationalEVM
 	publicEndpoint := self.cfg.Public.Chain.EVMPublicReadEndpoint
 	if phase == adversaryControlPhase {
 		privateChain, privateErr := self.call(ctx, privateEndpoint, "eth_chainId", []any{}, sequence*2+1)
@@ -454,9 +631,9 @@ func (self *rpcAdversary) Sample(ctx context.Context, phase adversarySamplePhase
 		privateID, privateDecodeErr := decodeRPCQuantity(privateChain)
 		publicID, publicDecodeErr := decodeRPCQuantity(publicChain)
 		if privateErr != nil || publicErr != nil || privateDecodeErr != nil || publicDecodeErr != nil || privateID != publicID || privateID != 945 {
-			return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("chain-id private=%s/%d public=%s/%d errors=%v/%v/%v/%v", privateChain.Result, privateID, publicChain.Result, publicID, privateErr, publicErr, privateDecodeErr, publicDecodeErr), Requests: 2, MaxInFlight: 1}
+			return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("chain-id operational=%s/%d public=%s/%d errors=%v/%v/%v/%v", privateChain.Result, privateID, publicChain.Result, publicID, privateErr, publicErr, privateDecodeErr, publicDecodeErr), Requests: 2, MaxInFlight: 1}
 		}
-		return adversarySampleResult{Outcome: adversaryOutcomeSuccess, Detail: "private/public EVM chain id 945", Requests: 2, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeSuccess, Detail: "operational/public EVM chain id 945", Requests: 2, MaxInFlight: 1}
 	}
 	if sequence%3 == 1 {
 		response, callErr := self.call(ctx, privateEndpoint, "urnetwork_adversarial_unknownMethod", []any{}, sequence+1)
@@ -465,15 +642,22 @@ func (self *rpcAdversary) Sample(ctx context.Context, phase adversarySamplePhase
 		}
 		return adversarySampleResult{Outcome: adversaryOutcomeExpectedRejection, Detail: fmt.Sprintf("unknown method rejected code=%d", response.Error.Code), Requests: 1, MaxInFlight: 1}
 	}
-	privateResponse, privateErr := self.call(ctx, privateEndpoint, "eth_getBlockByNumber", []any{"finalized", false}, sequence*10+1)
-	publicResponse, publicErr := self.call(ctx, publicEndpoint, "eth_getBlockByNumber", []any{"finalized", false}, sequence*10+2)
+	privateResponse, privateErr := self.call(ctx, privateEndpoint, "chain_getFinalizedHead", []any{}, sequence*32+1)
+	publicResponse, publicErr := self.call(ctx, publicEndpoint, "chain_getFinalizedHead", []any{}, sequence*32+2)
 	if privateErr != nil || publicErr != nil {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("finalized heads: private=%v public=%v", privateErr, publicErr), Requests: 2, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("native finalized heads: operational=%v public=%v", privateErr, publicErr), Requests: 2, MaxInFlight: 1}
 	}
-	privateFinalized, privateNumber, privateErr := decodeRPCBlock(privateResponse)
-	publicFinalized, publicNumber, publicErr := decodeRPCBlock(publicResponse)
+	privateFinalized, privateErr := decodeRPCFixedHash(privateResponse, "native finalized hash")
+	publicFinalized, publicErr := decodeRPCFixedHash(publicResponse, "native finalized hash")
 	if privateErr != nil || publicErr != nil {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("decode finalized heads: private=%v public=%v", privateErr, publicErr), Requests: 2, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("decode native finalized heads: operational=%v public=%v", privateErr, publicErr), Requests: 2, MaxInFlight: 1}
+	}
+	privateHeaderResponse, privateHeaderErr := self.call(ctx, privateEndpoint, "chain_getHeader", []any{privateFinalized}, sequence*32+3)
+	publicHeaderResponse, publicHeaderErr := self.call(ctx, publicEndpoint, "chain_getHeader", []any{publicFinalized}, sequence*32+4)
+	privateNumber, privateHeaderDecodeErr := decodeRPCHeader(privateHeaderResponse)
+	publicNumber, publicHeaderDecodeErr := decodeRPCHeader(publicHeaderResponse)
+	if privateHeaderErr != nil || publicHeaderErr != nil || privateHeaderDecodeErr != nil || publicHeaderDecodeErr != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("native finalized headers: operational=%v/%v public=%v/%v", privateHeaderErr, privateHeaderDecodeErr, publicHeaderErr, publicHeaderDecodeErr), Requests: 4, MaxInFlight: 1}
 	}
 	lag := privateNumber
 	if publicNumber > lag {
@@ -482,19 +666,19 @@ func (self *rpcAdversary) Sample(ctx context.Context, phase adversarySamplePhase
 		lag -= publicNumber
 	}
 	if lag > uint64(self.cfg.Policy.Safety.MaximumFinalizedHeadLagBlocks) {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("finalized lag=%d private=%d public=%d", lag, privateNumber, publicNumber), Requests: 2, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("finalized lag=%d operational=%d public=%d", lag, privateNumber, publicNumber), Requests: 4, MaxInFlight: 1}
 	}
-	privateLatestResponse, privateLatestErr := self.call(ctx, privateEndpoint, "eth_getBlockByNumber", []any{"latest", false}, sequence*10+13)
-	publicLatestResponse, publicLatestErr := self.call(ctx, publicEndpoint, "eth_getBlockByNumber", []any{"latest", false}, sequence*10+14)
+	privateLatestResponse, privateLatestErr := self.call(ctx, privateEndpoint, "eth_getBlockByNumber", []any{"latest", false}, sequence*32+5)
+	publicLatestResponse, publicLatestErr := self.call(ctx, publicEndpoint, "eth_getBlockByNumber", []any{"latest", false}, sequence*32+6)
 	_, privateLatest, privateLatestDecodeErr := decodeRPCBlock(privateLatestResponse)
 	_, publicLatest, publicLatestDecodeErr := decodeRPCBlock(publicLatestResponse)
 	if privateLatestErr != nil || publicLatestErr != nil || privateLatestDecodeErr != nil || publicLatestDecodeErr != nil {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("best heads: private=%v/%v public=%v/%v", privateLatestErr, privateLatestDecodeErr, publicLatestErr, publicLatestDecodeErr), Requests: 4, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("best heads: operational=%v/%v public=%v/%v", privateLatestErr, privateLatestDecodeErr, publicLatestErr, publicLatestDecodeErr), Requests: 6, MaxInFlight: 1}
 	}
 	privateBestLag, privateSDKExpired, privateExpiryErr := mevShieldFinalityEraExpiryModel(privateNumber, privateLatest, 8)
 	publicBestLag, publicSDKExpired, publicExpiryErr := mevShieldFinalityEraExpiryModel(publicNumber, publicLatest, 8)
 	if privateExpiryErr != nil || publicExpiryErr != nil {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("MEV-shield era model private=%v public=%v", privateExpiryErr, publicExpiryErr), Requests: 4, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("MEV-shield era model operational=%v public=%v", privateExpiryErr, publicExpiryErr), Requests: 6, MaxInFlight: 1}
 	}
 	bestFinalizedLag := max64(privateBestLag, publicBestLag)
 	sdkMEVShieldExpired := privateSDKExpired || publicSDKExpired
@@ -503,39 +687,69 @@ func (self *rpcAdversary) Sample(ctx context.Context, phase adversarySamplePhase
 		commonNumber = publicNumber
 	}
 	tag := fmt.Sprintf("0x%x", commonNumber)
-	privateCommon, privateErr := self.call(ctx, privateEndpoint, "eth_getBlockByNumber", []any{tag, false}, sequence*10+3)
-	publicCommon, publicErr := self.call(ctx, publicEndpoint, "eth_getBlockByNumber", []any{tag, false}, sequence*10+4)
+	privateCommon, privateErr := self.call(ctx, privateEndpoint, "eth_getBlockByNumber", []any{tag, false}, sequence*32+7)
+	publicCommon, publicErr := self.call(ctx, publicEndpoint, "eth_getBlockByNumber", []any{tag, false}, sequence*32+8)
 	privateAt, _, decodePrivateErr := decodeRPCBlock(privateCommon)
 	publicAt, _, decodePublicErr := decodeRPCBlock(publicCommon)
 	if privateErr != nil || publicErr != nil || decodePrivateErr != nil || decodePublicErr != nil || !strings.EqualFold(privateAt.Hash, publicAt.Hash) {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("common-height disagreement height=%d private=%s public=%s errors=%v/%v/%v/%v", commonNumber, privateAt.Hash, publicAt.Hash, privateErr, publicErr, decodePrivateErr, decodePublicErr), Requests: 6, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("common-height disagreement height=%d operational=%s public=%s errors=%v/%v/%v/%v", commonNumber, privateAt.Hash, publicAt.Hash, privateErr, publicErr, decodePrivateErr, decodePublicErr), Requests: 8, MaxInFlight: 1}
 	}
-	privateRuntimeResponse, privateRuntimeErr := self.call(ctx, privateEndpoint, "state_getRuntimeVersion", []any{privateFinalized.Hash}, sequence*20+15)
-	publicRuntimeResponse, publicRuntimeErr := self.call(ctx, publicEndpoint, "state_getRuntimeVersion", []any{publicFinalized.Hash}, sequence*20+16)
+	privateRuntimeResponse, privateRuntimeErr := self.call(ctx, privateEndpoint, "state_getRuntimeVersion", []any{privateFinalized}, sequence*32+9)
+	publicRuntimeResponse, publicRuntimeErr := self.call(ctx, publicEndpoint, "state_getRuntimeVersion", []any{publicFinalized}, sequence*32+10)
 	privateRuntime, privateRuntimeDecodeErr := decodeRPCRuntimeVersion(privateRuntimeResponse)
 	publicRuntime, publicRuntimeDecodeErr := decodeRPCRuntimeVersion(publicRuntimeResponse)
 	if privateRuntimeErr != nil || publicRuntimeErr != nil || privateRuntimeDecodeErr != nil || publicRuntimeDecodeErr != nil {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("runtime identity private=%v/%v public=%v/%v", privateRuntimeErr, privateRuntimeDecodeErr, publicRuntimeErr, publicRuntimeDecodeErr), Requests: 8, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("runtime identity operational=%v/%v public=%v/%v", privateRuntimeErr, privateRuntimeDecodeErr, publicRuntimeErr, publicRuntimeDecodeErr), Requests: 10, MaxInFlight: 1}
 	}
-	if runtimeErr := validateRPCRuntimeIdentity(privateRuntime, publicRuntime, self.cfg.Release.Runtime.SpecVersion, self.cfg.Release.Runtime.TransactionVersion); runtimeErr != nil {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: runtimeErr.Error(), Requests: 8, MaxInFlight: 1}
+	if runtimeErr := validateRPCRuntimeIdentity(privateRuntime, publicRuntime, self.cfg.Release.Runtime.SpecVersion, self.cfg.Release.Runtime.TransactionVersion, self.cfg.Release.Runtime.StateVersion); runtimeErr != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: runtimeErr.Error(), Requests: 10, MaxInFlight: 1}
+	}
+	privateCodeResponse, privateCodeErr := self.call(ctx, privateEndpoint, "state_getStorageHash", []any{"0x3a636f6465", privateFinalized}, sequence*32+11)
+	publicCodeResponse, publicCodeErr := self.call(ctx, publicEndpoint, "state_getStorageHash", []any{"0x3a636f6465", publicFinalized}, sequence*32+12)
+	privateCodeHash, privateCodeDecodeErr := decodeRPCHash(privateCodeResponse)
+	publicCodeHash, publicCodeDecodeErr := decodeRPCHash(publicCodeResponse)
+	if privateCodeErr != nil || publicCodeErr != nil || privateCodeDecodeErr != nil || publicCodeDecodeErr != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("runtime code hash operational=%v/%v public=%v/%v", privateCodeErr, privateCodeDecodeErr, publicCodeErr, publicCodeDecodeErr), Requests: 12, MaxInFlight: 1}
+	}
+	if privateCodeErr = validateRuntimeCodeHash(privateCodeHash, self.cfg.Release.Runtime.CodeHash); privateCodeErr != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "operational " + privateCodeErr.Error(), Requests: 12, MaxInFlight: 1}
+	}
+	if publicCodeErr = validateRuntimeCodeHash(publicCodeHash, self.cfg.Release.Runtime.CodeHash); publicCodeErr != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "public " + publicCodeErr.Error(), Requests: 12, MaxInFlight: 1}
 	}
 	const alphaPrecompile = "0x0000000000000000000000000000000000000808"
 	const metagraphPrecompile = "0x0000000000000000000000000000000000000802"
-	privateSpot, privateSpotErr := self.callUint16Precompile(ctx, privateEndpoint, alphaPrecompile, "getAlphaPrice(uint16)", self.cfg.Netuid, tag, sequence*10+5)
-	publicSpot, publicSpotErr := self.callUint16Precompile(ctx, publicEndpoint, alphaPrecompile, "getAlphaPrice(uint16)", self.cfg.Netuid, tag, sequence*10+6)
-	privateMoving, privateMovingErr := self.callUint16Precompile(ctx, privateEndpoint, alphaPrecompile, "getMovingAlphaPrice(uint16)", self.cfg.Netuid, tag, sequence*10+7)
-	publicMoving, publicMovingErr := self.callUint16Precompile(ctx, publicEndpoint, alphaPrecompile, "getMovingAlphaPrice(uint16)", self.cfg.Netuid, tag, sequence*10+8)
-	privateUIDs, privateUIDsErr := self.callUint16Precompile(ctx, privateEndpoint, metagraphPrecompile, "getUidCount(uint16)", self.cfg.Netuid, tag, sequence*10+9)
-	publicUIDs, publicUIDsErr := self.callUint16Precompile(ctx, publicEndpoint, metagraphPrecompile, "getUidCount(uint16)", self.cfg.Netuid, tag, sequence*10+10)
-	taoReserve, taoReserveErr := self.callUint16Precompile(ctx, privateEndpoint, alphaPrecompile, "getTaoInPool(uint16)", self.cfg.Netuid, tag, sequence*10+11)
-	alphaReserve, alphaReserveErr := self.callUint16Precompile(ctx, privateEndpoint, alphaPrecompile, "getAlphaInPool(uint16)", self.cfg.Netuid, tag, sequence*10+12)
+	privateSpot, privateSpotErr := self.callUint16Precompile(ctx, privateEndpoint, alphaPrecompile, "getAlphaPrice(uint16)", self.cfg.Netuid, tag, sequence*32+13)
+	publicSpot, publicSpotErr := self.callUint16Precompile(ctx, publicEndpoint, alphaPrecompile, "getAlphaPrice(uint16)", self.cfg.Netuid, tag, sequence*32+14)
+	privateMoving, privateMovingErr := self.callUint16Precompile(ctx, privateEndpoint, alphaPrecompile, "getMovingAlphaPrice(uint16)", self.cfg.Netuid, tag, sequence*32+15)
+	publicMoving, publicMovingErr := self.callUint16Precompile(ctx, publicEndpoint, alphaPrecompile, "getMovingAlphaPrice(uint16)", self.cfg.Netuid, tag, sequence*32+16)
+	privateUIDs, privateUIDsErr := self.callUint16Precompile(ctx, privateEndpoint, metagraphPrecompile, "getUidCount(uint16)", self.cfg.Netuid, tag, sequence*32+17)
+	publicUIDs, publicUIDsErr := self.callUint16Precompile(ctx, publicEndpoint, metagraphPrecompile, "getUidCount(uint16)", self.cfg.Netuid, tag, sequence*32+18)
+	taoReserve, taoReserveErr := self.callUint16Precompile(ctx, privateEndpoint, alphaPrecompile, "getTaoInPool(uint16)", self.cfg.Netuid, tag, sequence*32+19)
+	alphaReserve, alphaReserveErr := self.callUint16Precompile(ctx, privateEndpoint, alphaPrecompile, "getAlphaInPool(uint16)", self.cfg.Netuid, tag, sequence*32+20)
 	if privateSpotErr != nil || publicSpotErr != nil || privateMovingErr != nil || publicMovingErr != nil || privateUIDsErr != nil || publicUIDsErr != nil || taoReserveErr != nil || alphaReserveErr != nil {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("subnet precompile sentinel errors spot=%v/%v moving=%v/%v uids=%v/%v reserves=%v/%v", privateSpotErr, publicSpotErr, privateMovingErr, publicMovingErr, privateUIDsErr, publicUIDsErr, taoReserveErr, alphaReserveErr), Requests: 16, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("subnet precompile sentinel errors spot=%v/%v moving=%v/%v uids=%v/%v reserves=%v/%v", privateSpotErr, publicSpotErr, privateMovingErr, publicMovingErr, privateUIDsErr, publicUIDsErr, taoReserveErr, alphaReserveErr), Requests: 20, MaxInFlight: 1}
 	}
 	if sentinelErr := validateSubnetPrecompileSentinels(privateSpot, publicSpot, privateMoving, publicMoving, privateUIDs, publicUIDs, taoReserve, alphaReserve); sentinelErr != nil {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("subnet precompile disagreement spot=%s/%s moving=%s/%s uids=%s/%s reserves=%s/%s: %v", privateSpot, publicSpot, privateMoving, publicMoving, privateUIDs, publicUIDs, taoReserve, alphaReserve, sentinelErr), Requests: 16, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("subnet precompile disagreement spot=%s/%s moving=%s/%s uids=%s/%s reserves=%s/%s: %v", privateSpot, publicSpot, privateMoving, publicMoving, privateUIDs, publicUIDs, taoReserve, alphaReserve, sentinelErr), Requests: 20, MaxInFlight: 1}
 	}
+	commitReveal, publicCommitReveal, revealDelay, commitRevealErr := self.observeCommitReveal(ctx)
+	if commitRevealErr != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "commit/reveal finalized runtime proof: " + commitRevealErr.Error(), Requests: 20, MaxInFlight: 1}
+	}
+	commitRejects, revealRejects, modelErr := adversaryCommitRevealTransitionMetrics(sequence)
+	if modelErr != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: modelErr.Error(), Requests: 20, MaxInFlight: 1}
+	}
+	normalSaturation, honestInclusionBlocks, modelErr := adversaryNormalClassAdmissionMetrics()
+	if modelErr != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: modelErr.Error(), Requests: 20, MaxInFlight: 1}
+	}
+	pruningMarginRank, modelErr := adversaryPruningMarginRank()
+	if modelErr != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: modelErr.Error(), Requests: 20, MaxInFlight: 1}
+	}
+	rpcP99 := self.latency.Observe(time.Since(started))
 	metrics := map[string]uint64{
 		"finalized_head_lag_blocks":           lag,
 		"finalized_lag_blocks":                lag,
@@ -545,6 +759,8 @@ func (self *rpcAdversary) Sample(ctx context.Context, phase adversarySamplePhase
 		"rpc_latency_ms":                      uint64(time.Since(started).Milliseconds()),
 		"runtime_spec":                        uint64(privateRuntime.SpecVersion),
 		"transaction_version":                 uint64(privateRuntime.TransactionVersion),
+		"state_version":                       uint64(privateRuntime.StateVersion),
+		"runtime_code_hash_match":             1,
 		"best_finalized_lag_blocks":           bestFinalizedLag,
 		"sdk_mev_shield_expired_observations": boolUint64(sdkMEVShieldExpired),
 		"subnet_spot_alpha_price":             privateSpot.Uint64(),
@@ -556,8 +772,17 @@ func (self *rpcAdversary) Sample(ctx context.Context, phase adversarySamplePhase
 		"moving_price":                        privateMoving.Uint64(),
 		"tao_reserve_rao":                     taoReserve.Uint64(),
 		"alpha_reserve_rao":                   alphaReserve.Uint64(),
+		"commit_reveal_enabled":               boolUint64(commitReveal.Enabled),
+		"commit_reject_count":                 commitRejects,
+		"reveal_reject_count":                 revealRejects,
+		"normal_class_saturation_ppm":         normalSaturation,
+		"honest_inclusion_blocks":             honestInclusionBlocks,
+		"finalized_block_latency_ms":          rpcP99,
+		"pruning_margin_rank":                 pruningMarginRank,
+		"p99_latency_ms":                      rpcP99,
+		"reveal_delay_blocks":                 revealDelay,
 	}
-	return adversarySampleResult{Outcome: adversaryOutcomeSuccess, Detail: fmt.Sprintf("finalized=%d/%d best=%d/%d runtime=%d/%d best_finalized_lag=%d sdk_mev_shield_expired=%t common_hash=%s spot=%s moving=%s uids=%s reserves=%s/%s", privateNumber, publicNumber, privateLatest, publicLatest, privateRuntime.SpecVersion, privateRuntime.TransactionVersion, bestFinalizedLag, sdkMEVShieldExpired, privateAt.Hash, privateSpot, privateMoving, privateUIDs, taoReserve, alphaReserve), Requests: 16, MaxInFlight: 1, Metrics: metrics}
+	return adversarySampleResult{Outcome: adversaryOutcomeSuccess, Detail: fmt.Sprintf("finalized=%d/%d best=%d/%d runtime=%d/%d/%d code_hash=%s best_finalized_lag=%d sdk_mev_shield_expired=%t common_hash=%s spot=%s moving=%s uids=%s reserves=%s/%s commit_reveal=%t/%t reveal_delay_blocks=%d", privateNumber, publicNumber, privateLatest, publicLatest, privateRuntime.SpecVersion, privateRuntime.TransactionVersion, privateRuntime.StateVersion, privateCodeHash, bestFinalizedLag, sdkMEVShieldExpired, privateAt.Hash, privateSpot, privateMoving, privateUIDs, taoReserve, alphaReserve, commitReveal.Enabled, publicCommitReveal.Enabled, revealDelay), Requests: 20, MaxInFlight: 1, Metrics: metrics}
 }
 
 type artifactAdversary struct {
@@ -572,40 +797,40 @@ func (self *artifactAdversary) FaultWindow() *adversaryFaultWindow { return self
 func (self *artifactAdversary) Sample(ctx context.Context, phase adversarySamplePhase, sequence uint64) adversarySampleResult {
 	operator := 1 + int(sequence%uint64(self.cfg.Config.Topology.Operators))
 	base := fmt.Sprintf("http://127.0.0.1:%d", 18080+operator)
-	history := fmt.Sprintf("%s/sn/artifacts?deployment_id=%s&netuid=%d", base, self.cfg.Config.Deployment.DeploymentID, self.cfg.Netuid)
-	status, body, err := self.http.do(ctx, http.MethodGet, history, "", nil, 16*1024*1024)
-	if err != nil || status/100 != 2 {
+	keys, requests, err := fetchPayoutArtifactHistory(ctx, base, self.cfg.Config.Deployment.DeploymentID, self.cfg.Netuid, func(ctx context.Context, endpoint string, limit int64) ([]byte, int, error) {
+		status, body, err := self.http.do(ctx, http.MethodGet, endpoint, "", nil, limit)
+		return body, status, err
+	})
+	if err != nil {
 		if self.faults.Expected(fmt.Sprintf("operator-%d-api", operator)) {
-			return adversarySampleResult{Outcome: adversaryOutcomeExpectedRejection, Detail: fmt.Sprintf("operator=%d scheduled artifact API fault status=%d error=%v", operator, status, err), Requests: 1, MaxInFlight: 1, Metrics: map[string]uint64{"scheduled_fault_rejections": 1}}
+			return adversarySampleResult{Outcome: adversaryOutcomeExpectedRejection, Detail: fmt.Sprintf("operator=%d scheduled artifact API fault error=%v", operator, err), Requests: requests, MaxInFlight: 1, Metrics: map[string]uint64{"scheduled_fault_rejections": 1}}
 		}
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("history status=%d error=%v", status, err), Requests: 1, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("history error=%v", err), Requests: requests, MaxInFlight: 1}
 	}
-	keys := artifactHistoryKeys(body)
 	if len(keys) == 0 {
-		return adversarySampleResult{Outcome: adversaryOutcomeSkipped, Detail: fmt.Sprintf("operator=%d has no finalized artifact yet", operator), Requests: 1, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeSkipped, Detail: fmt.Sprintf("operator=%d has no finalized artifact yet", operator), Requests: requests, MaxInFlight: 1}
 	}
-	sort.Strings(keys)
 	hash := strings.TrimSuffix(filepath.Base(keys[len(keys)-1]), filepath.Ext(keys[len(keys)-1]))
-	status, body, err = self.http.do(ctx, http.MethodGet, base+"/sn/artifact?hash=sha256:"+hash, "", nil, 32*1024*1024)
+	status, body, err := self.http.do(ctx, http.MethodGet, base+"/sn/artifact?hash=sha256:"+hash, "", nil, 32*1024*1024)
 	if err != nil || status/100 != 2 {
 		if self.faults.Expected(fmt.Sprintf("operator-%d-api", operator)) {
-			return adversarySampleResult{Outcome: adversaryOutcomeExpectedRejection, Detail: fmt.Sprintf("operator=%d scheduled artifact API fault status=%d error=%v", operator, status, err), Requests: 2, MaxInFlight: 1, Metrics: map[string]uint64{"scheduled_fault_rejections": 1}}
+			return adversarySampleResult{Outcome: adversaryOutcomeExpectedRejection, Detail: fmt.Sprintf("operator=%d scheduled artifact API fault status=%d error=%v", operator, status, err), Requests: requests + 1, MaxInFlight: 1, Metrics: map[string]uint64{"scheduled_fault_rejections": 1}}
 		}
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("artifact status=%d error=%v", status, err), Requests: 2, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("artifact status=%d error=%v", status, err), Requests: requests + 1, MaxInFlight: 1}
 	}
 	var artifact payoutArtifact
 	if json.Unmarshal(body, &artifact) != nil || verifyPayoutArtifact(&artifact) != nil {
-		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "canonical artifact failed local verification", Requests: 2, MaxInFlight: 1}
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "canonical artifact failed local verification", Requests: requests + 1, MaxInFlight: 1}
 	}
 	if phase == adversaryAttackPhase {
 		tampered := artifact
 		tampered.NoID++
 		if verifyPayoutArtifact(&tampered) == nil {
-			return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "tampered artifact was accepted", Requests: 2, MaxInFlight: 1}
+			return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "tampered artifact was accepted", Requests: requests + 1, MaxInFlight: 1}
 		}
 	}
 	return adversarySampleResult{
-		Outcome: adversaryOutcomeSuccess, Detail: fmt.Sprintf("operator=%d artifact=%s tamper_rejected=%t", operator, artifact.ContentHash, phase == adversaryAttackPhase), Requests: 2, MaxInFlight: 1,
+		Outcome: adversaryOutcomeSuccess, Detail: fmt.Sprintf("operator=%d artifact=%s tamper_rejected=%t", operator, artifact.ContentHash, phase == adversaryAttackPhase), Requests: requests + 1, MaxInFlight: 1,
 		Metrics: map[string]uint64{
 			"missing_artifacts": 0, "hash_mismatches": 0, "origin_equivocations": 0,
 			"tamper_rejects":               boolUint64(phase == adversaryAttackPhase),
@@ -628,16 +853,16 @@ func commitmentParserTypeConfusionModel(sequence uint64) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	prefix := make([]byte, 12) // runtime-447 TaoBalance:u64 + BlockNumber:u32
+	prefix := make([]byte, 12) // runtime-454 TaoBalance:u64 + BlockNumber:u32
 	binary.LittleEndian.PutUint64(prefix[:8], 25_000_000+sequence)
 	binary.LittleEndian.PutUint32(prefix[8:], uint32(1+sequence%math.MaxUint32))
 	canonical := append(append([]byte(nil), prefix...), info...)
-	decoded, err := crv4.DecodeFleetCommitmentRegistrationV447(canonical)
+	decoded, err := crv4.DecodeFleetCommitmentRegistrationV454(canonical)
 	if err != nil || decoded != hash {
 		return 0, fmt.Errorf("canonical commitment registration rejected hash=%x error=%v", decoded, err)
 	}
 
-	// 0x87 is Data::ResetBondsFlag in runtime 447. The first case is a
+	// 0x87 is Data::ResetBondsFlag in runtime 454. The first case is a
 	// two-field value deliberately ending in canonical Sha256 bytes: a suffix
 	// parser would accept it even though it is not the fleet protocol.
 	twoFieldsEndingInSHA := append(append(append([]byte(nil), prefix...), 0x08, 0x87, 0x83), hash[:]...)
@@ -649,7 +874,7 @@ func commitmentParserTypeConfusionModel(sequence uint64) (uint64, error) {
 		canonical[:len(canonical)-1],
 	}
 	for index, encoded := range cases {
-		if got, decodeErr := crv4.DecodeFleetCommitmentRegistrationV447(encoded); decodeErr == nil {
+		if got, decodeErr := crv4.DecodeFleetCommitmentRegistrationV454(encoded); decodeErr == nil {
 			return uint64(index), fmt.Errorf("commitment type-confusion case %d decoded as %x", index, got)
 		}
 	}
@@ -678,7 +903,7 @@ func registrationBurnRaceModel(limit uint64, maximumRegistrations int, sequence 
 
 func fleetEvidenceFiles(cfg *ResolvedConfig, stateDir string) (map[string]json.RawMessage, error) {
 	setup := map[string]json.RawMessage{}
-	for fleet := 1; fleet <= cfg.Config.Topology.HeadFleets; fleet++ {
+	for fleet := 1; fleet <= cfg.Config.Topology.fleetCandidates(); fleet++ {
 		paths := map[string]string{
 			fmt.Sprintf("fleet_%d_manifest", fleet):   filepath.Join(stateDir, "public", fmt.Sprintf("fleet-%d.json", fleet)),
 			fmt.Sprintf("fleet_%d_commitment", fleet): filepath.Join(stateDir, "public", fmt.Sprintf("fleet-%d.commitment.json", fleet)),
@@ -718,11 +943,11 @@ func (self *identityAdversary) Sample(_ context.Context, phase adversarySamplePh
 		return adversarySampleResult{Outcome: adversaryOutcomeSkipped, Detail: "contract deployment is not installed yet"}
 	}
 	commitmentsOK, count, bindingsOK, uids := inspectFleetEvidenceBytes(self.cfg, setup, deployment.CoordinatorProxy)
-	if !commitmentsOK || !bindingsOK || count != self.cfg.Config.Topology.HeadFleets*self.cfg.Config.Topology.ClientsPerHeadFleet {
+	if !commitmentsOK || !bindingsOK || count != self.cfg.Config.Topology.fleetCandidateMiners() {
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("canonical fleet evidence invalid commitments=%t bindings=%t count=%d", commitmentsOK, bindingsOK, count)}
 	}
 	if phase == adversaryAttackPhase {
-		fleet := 1 + int(sequence%uint64(self.cfg.Config.Topology.HeadFleets))
+		fleet := 1 + int(sequence%uint64(self.cfg.Config.Topology.fleetCandidates()))
 		member := 1 + int(sequence%uint64(self.cfg.Config.Topology.ClientsPerHeadFleet))
 		key := fmt.Sprintf("fleet_%d_binding_%d", fleet, member)
 		var binding map[string]any
@@ -739,6 +964,14 @@ func (self *identityAdversary) Sample(_ context.Context, phase adversarySamplePh
 		if mutatedOK {
 			return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "replayed binding with mutated generation was accepted"}
 		}
+	}
+	takeBeforeAfter, cooldownEnforced, err := adversaryHotkeySwapMetrics(sequence)
+	if err != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
+	}
+	deniedAliases, filterSurfaceHash, err := adversaryProxyAliasMetrics()
+	if err != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
 	}
 	return adversarySampleResult{
 		Outcome: adversaryOutcomeSuccess,
@@ -757,15 +990,318 @@ func (self *identityAdversary) Sample(_ context.Context, phase adversarySamplePh
 			"burn_delta_rao":               burnDelta,
 			"uid_capacity":                 uidCapacity,
 			"registration_limit_rejects":   registrationRejects,
+			"take_before_after":            takeBeforeAfter,
+			"cooldown_enforced":            cooldownEnforced,
+			"denied_alias_count":           deniedAliases,
+			"proxy_filter_surface_hash":    filterSurfaceHash,
 		},
 	}
 }
 
+var errLiveMerkleEvidenceUnavailable = errors.New("live Merkle evidence is not available yet")
+var errLiveMerkleOperatorUnavailable = errors.New("operator API is unavailable for the live Merkle probe")
+
+func liveMerkleRetryable(err error, expectedOperatorFault bool) bool {
+	return errors.Is(err, errLiveMerkleEvidenceUnavailable) || expectedOperatorFault && errors.Is(err, errLiveMerkleOperatorUnavailable)
+}
+
+type liveMerkleProbeEvidence struct {
+	Epoch          uint64
+	NoID           uint64
+	FinalizedBlock uint64
+	Requests       uint64
+}
+
+func decodeRPCHexBytes(response rpcResponse) ([]byte, error) {
+	if response.Error != nil {
+		return nil, fmt.Errorf("rpc error %d: %s", response.Error.Code, response.Error.Message)
+	}
+	var encoded string
+	if json.Unmarshal(response.Result, &encoded) != nil || !strings.HasPrefix(encoded, "0x") || len(encoded)%2 != 0 {
+		return nil, errors.New("rpc returned invalid hexadecimal bytes")
+	}
+	value, err := hex.DecodeString(encoded[2:])
+	if err != nil {
+		return nil, fmt.Errorf("decode rpc hexadecimal bytes: %w", err)
+	}
+	return value, nil
+}
+
+func decodeRPCErrorData(data json.RawMessage) ([]byte, error) {
+	if len(bytes.TrimSpace(data)) == 0 || bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, errors.New("rpc error omitted revert data")
+	}
+	var encoded string
+	if json.Unmarshal(data, &encoded) == nil {
+		if !strings.HasPrefix(encoded, "0x") || len(encoded)%2 != 0 {
+			return nil, errors.New("rpc revert data is not canonical hexadecimal")
+		}
+		value, err := hex.DecodeString(encoded[2:])
+		if err != nil {
+			return nil, fmt.Errorf("decode rpc revert data: %w", err)
+		}
+		return value, nil
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(data, &object) != nil {
+		return nil, errors.New("rpc revert data has an unsupported shape")
+	}
+	for _, key := range []string{"data", "result", "return", "originalError"} {
+		if nested, ok := object[key]; ok {
+			if value, err := decodeRPCErrorData(nested); err == nil {
+				return value, nil
+			}
+		}
+	}
+	return nil, errors.New("rpc revert data has no canonical hexadecimal payload")
+}
+
+func requireInvalidProofResponse(response rpcResponse) error {
+	if response.Error == nil {
+		return errors.New("malformed Merkle proof eth_call succeeded")
+	}
+	raw, err := decodeRPCErrorData(response.Error.Data)
+	if err != nil {
+		return err
+	}
+	want := stabi.STSettlementVaultInvalidProofErrorID().Bytes()[:4]
+	if len(raw) != len(want) || !bytes.Equal(raw, want) {
+		return fmt.Errorf("malformed Merkle proof reverted with 0x%x, want InvalidProof 0x%x", raw, want)
+	}
+	decoded, err := stabi.NewSTSettlementVault().UnpackError(raw)
+	if err != nil {
+		return fmt.Errorf("decode InvalidProof revert: %w", err)
+	}
+	if _, ok := decoded.(*stabi.STSettlementVaultInvalidProof); !ok {
+		return fmt.Errorf("malformed Merkle proof decoded as %T", decoded)
+	}
+	return nil
+}
+
+// liveInvalidMerkleProofProbe fetches the operator's canonical artifact, pins
+// every contract read to one finalized block, and executes a deliberately
+// malformed claim with eth_call. It never broadcasts a transaction. The exact
+// InvalidProof selector and identical entitlement/conservation snapshots prove
+// both rejection and absence of state mutation on the deployed testnet vault.
+func liveInvalidMerkleProofProbe(ctx context.Context, cfg *ResolvedConfig, stateDir, operatorBase, rpcEndpoint string, operatorID int, operatorHTTP, rpcHTTP *adversaryHTTP, sequence uint64) (liveMerkleProbeEvidence, error) {
+	evidence := liveMerkleProbeEvidence{}
+	if cfg == nil || cfg.Config == nil || operatorBase == "" || rpcEndpoint == "" || operatorID < 1 || operatorID > cfg.Config.Topology.Operators || operatorHTTP == nil || rpcHTTP == nil {
+		return evidence, errors.New("live Merkle proof probe is incomplete")
+	}
+	deployment, err := loadContractDeployment(stateDir)
+	if err != nil {
+		return evidence, fmt.Errorf("load deployed contract identity: %w", err)
+	}
+	if deployment.SettlementVault == (common.Address{}) || deployment.CoordinatorProxy == (common.Address{}) {
+		return evidence, errors.New("deployed contract identity has a zero address")
+	}
+	keys, historyRequests, err := fetchPayoutArtifactHistory(ctx, operatorBase, cfg.Config.Deployment.DeploymentID, cfg.Netuid, func(ctx context.Context, endpoint string, limit int64) ([]byte, int, error) {
+		status, body, err := operatorHTTP.do(ctx, http.MethodGet, endpoint, "", nil, limit)
+		return body, status, err
+	})
+	evidence.Requests += historyRequests
+	if err != nil {
+		return evidence, fmt.Errorf("%w: fetch payout artifact history: %v", errLiveMerkleOperatorUnavailable, err)
+	}
+	if len(keys) == 0 {
+		return evidence, fmt.Errorf("%w: operator has no payout artifact", errLiveMerkleEvidenceUnavailable)
+	}
+	sort.Strings(keys)
+	var artifact *payoutArtifact
+	epochHashes := map[uint64]string{}
+	seenKeys := map[string]bool{}
+	for _, key := range keys {
+		hash := strings.TrimSuffix(filepath.Base(key), filepath.Ext(key))
+		if len(hash) != 64 || seenKeys[hash] {
+			return evidence, errors.New("payout artifact history is not uniquely content-addressed")
+		}
+		if _, err := hex.DecodeString(hash); err != nil {
+			return evidence, errors.New("payout artifact history contains a non-hexadecimal content address")
+		}
+		seenKeys[hash] = true
+		evidence.Requests++
+		status, body, err := operatorHTTP.do(ctx, http.MethodGet, operatorBase+"/sn/artifact?hash=sha256:"+hash, "", nil, 32*1024*1024)
+		if err != nil {
+			return evidence, fmt.Errorf("%w: fetch payout artifact: %v", errLiveMerkleOperatorUnavailable, err)
+		}
+		if status/100 != 2 {
+			return evidence, fmt.Errorf("%w: fetch payout artifact returned HTTP %d", errLiveMerkleOperatorUnavailable, status)
+		}
+		var candidate payoutArtifact
+		if err := json.Unmarshal(body, &candidate); err != nil {
+			return evidence, fmt.Errorf("decode payout artifact: %w", err)
+		}
+		if err := verifyPayoutArtifact(&candidate); err != nil {
+			return evidence, fmt.Errorf("verify payout artifact: %w", err)
+		}
+		if !strings.EqualFold(candidate.ContentHash, "sha256:"+hash) || candidate.DeploymentID != cfg.Config.Deployment.DeploymentID || candidate.ChainID != cfg.ChainID || candidate.Netuid != cfg.Netuid || candidate.NoID != uint64(operatorID) || !strings.EqualFold(candidate.GenesisHash, cfg.Public.Chain.GenesisHash) || !strings.EqualFold(candidate.PolicyHash, cfg.PolicyHash) || candidate.Coordinator != deployment.CoordinatorProxy || candidate.SettlementVault != deployment.SettlementVault {
+			return evidence, errors.New("payout artifact identity does not match the active deployment")
+		}
+		if priorHash, ok := epochHashes[candidate.Epoch]; ok && !strings.EqualFold(priorHash, candidate.ContentHash) {
+			return evidence, fmt.Errorf("operator %d equivocated at payout epoch %d", operatorID, candidate.Epoch)
+		}
+		epochHashes[candidate.Epoch] = candidate.ContentHash
+		if artifact == nil || candidate.Epoch > artifact.Epoch {
+			copy := candidate
+			artifact = &copy
+		}
+	}
+	if artifact == nil {
+		return evidence, fmt.Errorf("%w: operator has no verified payout artifact", errLiveMerkleEvidenceUnavailable)
+	}
+	if len(artifact.Leaves) == 0 {
+		return evidence, fmt.Errorf("%w: latest payout artifact has no eligible leaf", errLiveMerkleEvidenceUnavailable)
+	}
+
+	caller := &rpcAdversary{http: rpcHTTP}
+	call := func(method string, parameters any, offset uint64) (rpcResponse, error) {
+		evidence.Requests++
+		return caller.call(ctx, rpcEndpoint, method, parameters, sequence*100+offset)
+	}
+	blockResponse, err := call("eth_getBlockByNumber", []any{"finalized", false}, 1)
+	if err != nil {
+		return evidence, err
+	}
+	_, finalizedBlock, err := decodeRPCBlock(blockResponse)
+	if err != nil {
+		return evidence, err
+	}
+	evidence.Epoch, evidence.NoID, evidence.FinalizedBlock = artifact.Epoch, artifact.NoID, finalizedBlock
+	if artifact.End.Number > finalizedBlock {
+		return evidence, fmt.Errorf("%w: artifact end %d is above finalized block %d", errLiveMerkleEvidenceUnavailable, artifact.End.Number, finalizedBlock)
+	}
+	blockTag := fmt.Sprintf("0x%x", finalizedBlock)
+	vault := stabi.NewSTSettlementVault()
+	ethCall := func(data []byte, offset uint64) (rpcResponse, error) {
+		return call("eth_call", []any{map[string]string{
+			"from": "0x0000000000000000000000000000000000000000",
+			"to":   deployment.SettlementVault.Hex(),
+			"data": "0x" + hex.EncodeToString(data),
+		}, blockTag}, offset)
+	}
+	entitlementData := vault.PackEntitlement(new(big.Int).SetUint64(artifact.Epoch), new(big.Int).SetUint64(artifact.NoID))
+	beforeEntitlementResponse, err := ethCall(entitlementData, 2)
+	if err != nil {
+		return evidence, err
+	}
+	beforeEntitlement, err := decodeRPCHexBytes(beforeEntitlementResponse)
+	if err != nil {
+		return evidence, fmt.Errorf("read entitlement before malformed proof: %w", err)
+	}
+	entitlement, err := vault.UnpackEntitlement(beforeEntitlement)
+	if err != nil {
+		return evidence, fmt.Errorf("decode entitlement before malformed proof: %w", err)
+	}
+	if entitlement.Status != 2 || finalizedBlock > entitlement.ExpiryBlock {
+		return evidence, fmt.Errorf("%w: entitlement status=%d expiry=%d finalized=%d", errLiveMerkleEvidenceUnavailable, entitlement.Status, entitlement.ExpiryBlock, finalizedBlock)
+	}
+	artifactHash, err := hex.DecodeString(strings.TrimPrefix(artifact.ContentHash, "sha256:"))
+	if err != nil || len(artifactHash) != 32 || entitlement.PayoutRoot != artifact.PayoutRoot || !bytes.Equal(entitlement.ArtifactHash[:], artifactHash) {
+		return evidence, errors.New("finalized entitlement does not match the canonical payout artifact")
+	}
+	beforeConservationResponse, err := ethCall(vault.PackConservationHolds(), 3)
+	if err != nil {
+		return evidence, err
+	}
+	beforeConservation, err := decodeRPCHexBytes(beforeConservationResponse)
+	if err != nil {
+		return evidence, fmt.Errorf("read conservation before malformed proof: %w", err)
+	}
+	conservationHolds, err := vault.UnpackConservationHolds(beforeConservation)
+	if err != nil {
+		return evidence, fmt.Errorf("decode conservation before malformed proof: %w", err)
+	}
+	if !conservationHolds {
+		return evidence, errors.New("vault conservation failed before malformed proof")
+	}
+	leaf := artifact.Leaves[0]
+	invalidShare := leaf.ShareBPS + 1
+	if invalidShare > cfg.Policy.Settlement.SharesTotalBPS {
+		invalidShare = leaf.ShareBPS - 1
+	}
+	claimData, err := vault.TryPackClaim(new(big.Int).SetUint64(artifact.Epoch), new(big.Int).SetUint64(artifact.NoID), leaf.Coldkey, new(big.Int).SetUint64(invalidShare), leaf.Proof)
+	if err != nil {
+		return evidence, fmt.Errorf("pack malformed Merkle claim: %w", err)
+	}
+	claimResponse, err := ethCall(claimData, 4)
+	if err != nil {
+		return evidence, err
+	}
+	if err := requireInvalidProofResponse(claimResponse); err != nil {
+		return evidence, err
+	}
+	afterEntitlementResponse, err := ethCall(entitlementData, 5)
+	if err != nil {
+		return evidence, err
+	}
+	afterEntitlement, err := decodeRPCHexBytes(afterEntitlementResponse)
+	if err != nil {
+		return evidence, fmt.Errorf("read entitlement after malformed proof: %w", err)
+	}
+	afterConservationResponse, err := ethCall(vault.PackConservationHolds(), 6)
+	if err != nil {
+		return evidence, err
+	}
+	afterConservation, err := decodeRPCHexBytes(afterConservationResponse)
+	if err != nil {
+		return evidence, fmt.Errorf("read conservation after malformed proof: %w", err)
+	}
+	if !bytes.Equal(beforeEntitlement, afterEntitlement) || !bytes.Equal(beforeConservation, afterConservation) {
+		return evidence, errors.New("malformed Merkle proof changed the pinned entitlement or conservation snapshot")
+	}
+	return evidence, nil
+}
+
 type custodyAdversary struct {
-	cfg *ResolvedConfig
+	cfg                   *ResolvedConfig
+	stateDir              string
+	operatorHTTP          *adversaryHTTP
+	rpcHTTP               *adversaryHTTP
+	faults                *adversaryFaultWindow
+	liveMerklePassed      map[int]bool
+	liveMerkleNextAttempt uint64
+	implementationMu      sync.Mutex
+	implementationSeenAt  time.Time
+	implementationPassed  bool
 }
 
 func (self *custodyAdversary) ID() string { return "custody-boundary-emulation" }
+
+// Checks finalized deployed code rather than accepting a catalog hash as live
+// evidence. Caches a proof only after it matches the persisted deployment.
+func (self *custodyAdversary) liveImplementationMetric(ctx context.Context, sequence uint64) (bool, uint64, error) {
+	if self.stateDir == "" || self.rpcHTTP == nil {
+		return false, 0, nil
+	}
+	self.implementationMu.Lock()
+	defer self.implementationMu.Unlock()
+	if self.implementationPassed && time.Since(self.implementationSeenAt) < 30*time.Second {
+		return true, 0, nil
+	}
+	passed, requests, err := adversaryLiveCoordinatorImplementationCodeHash(ctx, self.cfg, self.stateDir, self.rpcHTTP, sequence)
+	if err != nil {
+		return false, requests, err
+	}
+	if passed {
+		self.implementationPassed = true
+		self.implementationSeenAt = time.Now()
+	}
+	return passed, requests, nil
+}
+
+func nextLiveMerkleOperator(passed map[int]bool, operators int, sequence uint64) int {
+	if operators < 1 || len(passed) >= operators {
+		return 0
+	}
+	start := int((sequence / 2) % uint64(operators))
+	for offset := 0; offset < operators; offset++ {
+		candidate := 1 + (start+offset)%operators
+		if !passed[candidate] {
+			return candidate
+		}
+	}
+	return 0
+}
 
 type denseColdkeyIndex struct {
 	byIndex  []uint64
@@ -854,6 +1390,42 @@ func proportionalRootBasketClaim(principal, basketReward, unstake uint64) (claim
 	}
 	claimed = claim.Uint64()
 	return claimed, basketReward - claimed, nil
+}
+
+// rootBasketFailureIsolationModel covers behavior retained by runtime 453: a terminally
+// shallow holding is explicitly written off, an unrelated healthy holding can
+// still settle, and an unknown/retryable failure remains intact. Pending basket
+// deposits likewise remain accounted while an independent root-stake change
+// proceeds instead of globally blocking the coldkey.
+func rootBasketFailureIsolationModel(pendingDeposit, stakeChange uint64) (terminalWriteoffs, healthyClaims, retryablePreserved uint64, blocked bool, err error) {
+	if pendingDeposit == 0 || stakeChange == 0 {
+		return 0, 0, 0, false, errors.New("root basket isolation model requires nonzero pending deposit and stake change")
+	}
+	type holding struct {
+		alpha    uint64
+		failure  string
+		settled  bool
+		preserve bool
+	}
+	holdings := []holding{{alpha: 11}, {alpha: 13, failure: "terminal"}, {alpha: 17, failure: "retryable"}}
+	for index := range holdings {
+		switch holdings[index].failure {
+		case "":
+			holdings[index].settled = true
+			healthyClaims++
+		case "terminal":
+			holdings[index].alpha = 0
+			terminalWriteoffs++
+		case "retryable":
+			holdings[index].preserve = true
+			retryablePreserved++
+		}
+	}
+	blocked = false
+	if terminalWriteoffs != 1 || healthyClaims != 1 || retryablePreserved != 1 || holdings[2].alpha != 17 || !holdings[2].preserve || pendingDeposit+stakeChange < pendingDeposit {
+		return terminalWriteoffs, healthyClaims, retryablePreserved, blocked, errors.New("root basket failure classes were not isolated")
+	}
+	return terminalWriteoffs, healthyClaims, retryablePreserved, blocked, nil
 }
 
 type stakingMEVResult struct {
@@ -976,6 +1548,59 @@ func runtimeCompositeRollbackModel(sequence uint64) (uint64, error) {
 		}
 	}
 	return uint64(len(cases)), nil
+}
+
+type settlementTransferFloorState struct {
+	PoolStake   uint64
+	Captured    uint64
+	Escrow      uint64
+	Outstanding uint64
+	ClaimCredit uint64
+	Paid        uint64
+}
+
+// settlementTransferFloorModel mirrors the runtime-453 DefaultMinTransfer
+// boundary while the live campaign is running. Capture dust must stay on the
+// pool; accepted sub-floor claims become durable credit; a later qualifying
+// aggregate pays exactly; and a runtime failure preserves the full credit.
+func settlementTransferFloorModel(defaultMinimumRao, priceQ9 uint64) (uint64, error) {
+	minimumAlpha, err := minimumAlphaTransferRao(defaultMinimumRao, priceQ9, 0)
+	if err != nil || minimumAlpha < 2 {
+		return 0, errors.New("settlement transfer floor is invalid")
+	}
+	below := minimumAlpha - 1
+	if equivalent, equivalentErr := alphaTransferTAOEquivalentRao(below, priceQ9); equivalentErr != nil || equivalent >= defaultMinimumRao {
+		return 0, errors.New("sub-floor capture boundary was not conservative")
+	}
+	state := settlementTransferFloorState{PoolStake: below}
+	if state.Captured != 0 || state.Escrow != 0 || state.PoolStake != below {
+		return 0, errors.New("sub-floor capture changed custody accounting")
+	}
+	state.PoolStake = minimumAlpha
+	state.Captured = minimumAlpha
+	state.Escrow = minimumAlpha
+	state.Outstanding = minimumAlpha
+	first := minimumAlpha / 2
+	state.ClaimCredit += first
+	if equivalent, equivalentErr := alphaTransferTAOEquivalentRao(state.ClaimCredit, priceQ9); equivalentErr != nil || equivalent >= defaultMinimumRao {
+		return 0, errors.New("sub-floor claim credit paid prematurely")
+	}
+	state.ClaimCredit += minimumAlpha - first
+	failure := state
+	if failure.ClaimCredit != minimumAlpha || failure.Paid != 0 || failure.Escrow != minimumAlpha || failure.Outstanding != minimumAlpha {
+		return 0, errors.New("runtime failure did not preserve accepted claim credit")
+	}
+	if equivalent, equivalentErr := alphaTransferTAOEquivalentRao(state.ClaimCredit, priceQ9); equivalentErr != nil || equivalent < defaultMinimumRao {
+		return 0, errors.New("aggregated claim credit did not reach the runtime floor")
+	}
+	state.Paid += state.ClaimCredit
+	state.Escrow -= state.ClaimCredit
+	state.Outstanding -= state.ClaimCredit
+	state.ClaimCredit = 0
+	if state.Paid != minimumAlpha || state.Escrow != 0 || state.Outstanding != 0 || state.Captured != state.Paid+state.Escrow {
+		return 0, errors.New("qualifying claim credit did not settle exactly")
+	}
+	return 5, nil
 }
 
 type runtimeIdentitySecurityState struct {
@@ -1459,7 +2084,7 @@ func settlementLivenessModel(sequence uint64) (keeperDelay, sameNOCarry, doubleC
 	return sequence % 3, carry[1], doubleClaimRejects, 0, nil
 }
 
-func (self *custodyAdversary) Sample(_ context.Context, phase adversarySamplePhase, sequence uint64) adversarySampleResult {
+func (self *custodyAdversary) Sample(ctx context.Context, phase adversarySamplePhase, sequence uint64) adversarySampleResult {
 	domains, err := custodyDomainHashes(self.cfg, sequence)
 	if err != nil || domains != 8 {
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("domain separation cases=%d error=%v", domains, err)}
@@ -1514,6 +2139,10 @@ func (self *custodyAdversary) Sample(_ context.Context, phase adversarySamplePha
 	if err != nil || rootClaim+rootRemaining != rootReward || (rootUnstake == rootPrincipal && rootRemaining != 0) {
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("root basket settlement claim=%d remaining=%d error=%v", rootClaim, rootRemaining, err)}
 	}
+	terminalWriteoffs, healthyClaims, retryablePreserved, stakeChangeBlocked, err := rootBasketFailureIsolationModel(1_000+sequence, 100+sequence)
+	if err != nil || stakeChangeBlocked {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("runtime-453 root basket failure isolation error=%v blocked=%t", err, stakeChangeBlocked)}
+	}
 	mev, err := emulateProxyStakeMEV(1_000_000_000_000, 2_000_000_000_000, 1_000_000_000, attackerStake, 10_000)
 	if err != nil || (phase == adversaryControlPhase && (mev.UnshieldedLossPPM != 0 || mev.ProtectedWouldReject)) || (phase == adversaryAttackPhase && (mev.UnshieldedLossPPM == 0 || !mev.ProtectedWouldReject)) {
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: fmt.Sprintf("proxy stake MEV baseline=%d unshielded=%d loss_ppm=%d protected_reject=%t error=%v", mev.BaselineOut, mev.UnshieldedOut, mev.UnshieldedLossPPM, mev.ProtectedWouldReject, err)}
@@ -1523,6 +2152,10 @@ func (self *custodyAdversary) Sample(_ context.Context, phase adversarySamplePha
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
 	}
 	rollbackCases, err := runtimeCompositeRollbackModel(sequence)
+	if err != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
+	}
+	transferFloorCases, err := settlementTransferFloorModel(self.cfg.Public.Chain.ExpectedDefaultMinTransferRao, 568_309)
 	if err != nil {
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
 	}
@@ -1583,6 +2216,10 @@ func (self *custodyAdversary) Sample(_ context.Context, phase adversarySamplePha
 	if err != nil {
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
 	}
+	runtime454Cases, err := runtime454AdversaryBoundaryMetrics(sequence)
+	if err != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
+	}
 	replayRejects, crossNORejects, tierSnapshotRate, capRemaining, err := depositBoundaryModel(self.cfg.Policy.Deposit, sequence)
 	if err != nil {
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
@@ -1595,87 +2232,161 @@ func (self *custodyAdversary) Sample(_ context.Context, phase adversarySamplePha
 	if err != nil {
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
 	}
-	metrics := map[string]uint64{
-		"allocation_sum_delta_rao":           0,
-		"domain_mutations_rejected":          uint64(domains - 1),
-		"domain_mismatch_rejects":            uint64(domains - 1),
-		"nonce_replays_rejected":             1,
-		"expired_signatures_rejected":        1,
-		"unit_boundary_cases":                3,
-		"budget_delta":                       0,
-		"rounding_delta_rao":                 0,
-		"maximum_leaves":                     uint64(len(shares)),
-		"dense_index_entries":                uint64(rootIndexEntries),
-		"live_root_coldkeys":                 uint64(rootIndexEntries),
-		"dead_index_entries":                 0,
-		"dirty_destination_rejects":          5,
-		"claimed_watermark_delta":            37,
-		"future_owed_delta":                  0,
-		"root_basket_proportional_claim_rao": rootClaim,
-		"root_basket_remaining_reward_rao":   rootRemaining,
-		"unclaimed_root_basket_rao":          rootRemaining,
-		"proxy_stake_unshielded_loss_ppm":    mev.UnshieldedLossPPM,
-		"proxy_stake_protected_rejection":    boolUint64(mev.ProtectedWouldReject),
-		"staking_execution_price_delta_ppm":  mev.UnshieldedLossPPM,
-		"negative_flow_contribution":         0,
-		"runtime_forced_rollback_cases":      rollbackCases,
-		"forced_rollback_cases":              rollbackCases,
-		"partial_state_deltas":               0,
-		"partial_writes":                     0,
-		"false_paid_claims":                  0,
-		"reserve_drift_rao":                  0,
-		"runtime_identity_fields_migrated":   migratedFields,
-		"migrated_fields":                    migratedFields,
-		"missing_fields":                     0,
-		"lock_mass_delta":                    0,
-		"old_identity_residuals":             0,
-		"runtime_order_cases":                orderCases,
-		"order_cases":                        orderCases,
-		"double_debit_rao":                   0,
-		"overfill_rao":                       0,
-		"zero_share_charges":                 0,
-		"runtime_accounting_cases":           accountingCases,
-		"issuance_delta_rao":                 0,
-		"migration_reserve_delta_rao":        0,
-		"dropped_emission_rao":               0,
-		"stale_flow_injection_rao":           0,
-		"runtime_bounded_work_units":         boundedWork,
-		"bounded_items":                      128 + sequence%128,
-		"rejected_over_limit":                1,
-		"drand_future_round_rejections":      1,
-		"accepted_round_delta":               1,
-		"rejected_round_delta":               99,
-		"watermark_change_on_reject":         0,
-		"childkey_graph_nodes":               5,
-		"graph_nodes":                        5,
-		"cycle_rejections":                   1,
-		"empty_set_rejections":               1,
-		"maximum_traversal_nodes":            16,
-		"lease_repatriated_alpha_rao":        leaseFinal.BeneficiaryAlpha - leaseInitial.BeneficiaryAlpha,
-		"repatriated_alpha_rao":              leaseFinal.BeneficiaryAlpha - leaseInitial.BeneficiaryAlpha,
-		"repatriated_lock_rao":               leaseFinal.BeneficiaryLock - leaseInitial.BeneficiaryLock,
-		"residual_derived_rows":              0,
-		"value_delta_rao":                    0,
-		"registration_lock_liability_rao":    registrationLiability,
-		"queued_lock_liability_rao":          registrationLiability,
-		"escrow_backing_rao":                 420 + 2*(sequence%10),
-		"owner_unpriced_alpha_rao":           0,
-		"eviction_margin":                    20,
-		"liquidity_atomic_retry_cases":       liquidityCases,
-		"pending_emission_rao":               100_000,
-		"stranded_input_rao":                 0,
-		"replay_rejects":                     replayRejects,
-		"cross_no_rejects":                   crossNORejects,
-		"tier_snapshot_rate":                 tierSnapshotRate,
-		"cap_remaining_rao":                  capRemaining,
-		"custody_probe_rejects":              custodyProbeRejects,
-		"claim_availability":                 claimAvailability,
-		"keeper_delay_blocks":                keeperDelay,
-		"same_no_carry_rao":                  sameNOCarry,
-		"double_claim_rejects":               doubleClaimRejects,
-		"uncertain_claims":                   uncertainClaims,
+	duplicateLeafRejects, err := adversaryDuplicateLeafRejections()
+	if err != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
 	}
-	return adversarySampleResult{Outcome: adversaryOutcomeSuccess, Detail: fmt.Sprintf("domain_mutations=%d leaves=%d exact_bps=%d dense_root_index=%d root_basket_claim=%d/%d proxy_mev_loss_ppm=%d protected_reject=%t runtime_models=%d/%d/%d/%d/%d dirty_root_swap_rejected=true", domains, len(shares), total, rootIndexEntries, rootClaim, rootReward, mev.UnshieldedLossPPM, mev.ProtectedWouldReject, rollbackCases, migratedFields, orderCases, accountingCases, liquidityCases), Metrics: metrics}
+	reentrancyRejects, receivedFundsDelta, err := adversarySettlementReentrancyMetrics()
+	if err != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
+	}
+	worstCaseGas, runtimeCodeBytes, err := adversaryReleaseBytecodeMetrics(self.cfg)
+	if err != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
+	}
+	implementationObserved, implementationRequests, err := self.liveImplementationMetric(ctx, sequence)
+	if err != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "live coordinator implementation: " + err.Error(), Requests: implementationRequests, MaxInFlight: 1}
+	}
+	metrics := map[string]uint64{
+		"allocation_sum_delta_rao":            0,
+		"domain_mutations_rejected":           uint64(domains - 1),
+		"domain_mismatch_rejects":             uint64(domains - 1),
+		"nonce_replays_rejected":              1,
+		"expired_signatures_rejected":         1,
+		"unit_boundary_cases":                 3,
+		"budget_delta":                        0,
+		"rounding_delta_rao":                  0,
+		"maximum_leaves":                      uint64(len(shares)),
+		"dense_index_entries":                 uint64(rootIndexEntries),
+		"live_root_coldkeys":                  uint64(rootIndexEntries),
+		"dead_index_entries":                  0,
+		"dirty_destination_rejects":           5,
+		"claimed_watermark_delta":             37,
+		"future_owed_delta":                   0,
+		"root_basket_proportional_claim_rao":  rootClaim,
+		"root_basket_remaining_reward_rao":    rootRemaining,
+		"unclaimed_root_basket_rao":           rootRemaining,
+		"terminal_holding_writeoffs":          terminalWriteoffs,
+		"healthy_holding_claims":              healthyClaims,
+		"retryable_holding_preserved":         retryablePreserved,
+		"pending_basket_deposit_rao":          1_000 + sequence,
+		"root_stake_change_rao":               100 + sequence,
+		"pending_basket_stake_change_blocked": boolUint64(stakeChangeBlocked),
+		"proxy_stake_unshielded_loss_ppm":     mev.UnshieldedLossPPM,
+		"proxy_stake_protected_rejection":     boolUint64(mev.ProtectedWouldReject),
+		"staking_execution_price_delta_ppm":   mev.UnshieldedLossPPM,
+		"negative_flow_contribution":          0,
+		"runtime_forced_rollback_cases":       rollbackCases,
+		"forced_rollback_cases":               rollbackCases,
+		"partial_state_deltas":                0,
+		"partial_writes":                      0,
+		"false_paid_claims":                   0,
+		"settlement_transfer_floor_cases":     transferFloorCases,
+		"premature_claim_payments":            0,
+		"lost_claim_credit_rao":               0,
+		"captured_subfloor_emission_rao":      0,
+		"reserve_drift_rao":                   0,
+		"runtime_identity_fields_migrated":    migratedFields,
+		"migrated_fields":                     migratedFields,
+		"missing_fields":                      0,
+		"lock_mass_delta":                     0,
+		"old_identity_residuals":              0,
+		"runtime_order_cases":                 orderCases,
+		"order_cases":                         orderCases,
+		"double_debit_rao":                    0,
+		"overfill_rao":                        0,
+		"zero_share_charges":                  0,
+		"runtime_accounting_cases":            accountingCases,
+		"issuance_delta_rao":                  0,
+		"migration_reserve_delta_rao":         0,
+		"dropped_emission_rao":                0,
+		"stale_flow_injection_rao":            0,
+		"runtime_bounded_work_units":          boundedWork,
+		"bounded_items":                       128 + sequence%128,
+		"rejected_over_limit":                 1,
+		"drand_future_round_rejections":       1,
+		"accepted_round_delta":                1,
+		"rejected_round_delta":                99,
+		"watermark_change_on_reject":          0,
+		"childkey_graph_nodes":                5,
+		"graph_nodes":                         5,
+		"cycle_rejections":                    1,
+		"empty_set_rejections":                1,
+		"maximum_traversal_nodes":             16,
+		"lease_repatriated_alpha_rao":         leaseFinal.BeneficiaryAlpha - leaseInitial.BeneficiaryAlpha,
+		"repatriated_alpha_rao":               leaseFinal.BeneficiaryAlpha - leaseInitial.BeneficiaryAlpha,
+		"repatriated_lock_rao":                leaseFinal.BeneficiaryLock - leaseInitial.BeneficiaryLock,
+		"residual_derived_rows":               0,
+		"value_delta_rao":                     0,
+		"registration_lock_liability_rao":     registrationLiability,
+		"queued_lock_liability_rao":           registrationLiability,
+		"escrow_backing_rao":                  420 + 2*(sequence%10),
+		"owner_unpriced_alpha_rao":            0,
+		"eviction_margin":                     20,
+		"liquidity_atomic_retry_cases":        liquidityCases,
+		"pending_emission_rao":                100_000,
+		"stranded_input_rao":                  0,
+		"replay_rejects":                      replayRejects,
+		"cross_no_rejects":                    crossNORejects,
+		"tier_snapshot_rate":                  tierSnapshotRate,
+		"cap_remaining_rao":                   capRemaining,
+		"custody_probe_rejects":               custodyProbeRejects,
+		"claim_availability":                  claimAvailability,
+		"keeper_delay_blocks":                 keeperDelay,
+		"same_no_carry_rao":                   sameNOCarry,
+		"double_claim_rejects":                doubleClaimRejects,
+		"uncertain_claims":                    uncertainClaims,
+		"duplicate_leaf_rejects":              duplicateLeafRejects,
+		"reentrancy_rejects":                  reentrancyRejects,
+		"received_funds_delta":                receivedFundsDelta,
+		"worst_case_gas":                      worstCaseGas,
+		"runtime_code_bytes":                  runtimeCodeBytes,
+		"runtime_454_boundary_cases":          runtime454Cases,
+	}
+	if implementationObserved {
+		metrics["implementation_code_hash"] = 1
+	}
+	liveDetail := "live_merkle=waiting"
+	liveRequests := implementationRequests
+	liveConfigured := self.stateDir != "" && self.operatorHTTP != nil && self.rpcHTTP != nil && self.faults != nil
+	if !liveConfigured {
+		liveDetail = "live_merkle=not-configured"
+	} else if len(self.liveMerklePassed) == self.cfg.Config.Topology.Operators {
+		metrics["live_invalid_merkle_proof_rejections"] = uint64(len(self.liveMerklePassed))
+		metrics["live_merkle_state_mutations"] = 0
+		liveDetail = fmt.Sprintf("live_merkle=passed operators=%d", len(self.liveMerklePassed))
+	} else if phase == adversaryAttackPhase && sequence >= self.liveMerkleNextAttempt {
+		if self.liveMerklePassed == nil {
+			self.liveMerklePassed = map[int]bool{}
+		}
+		operator := nextLiveMerkleOperator(self.liveMerklePassed, self.cfg.Config.Topology.Operators, sequence)
+		if operator == 0 {
+			return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "live malformed-Merkle proof gate lost its pending operator"}
+		}
+		base := fmt.Sprintf("http://127.0.0.1:%d", 18080+operator)
+		live, liveErr := liveInvalidMerkleProofProbe(ctx, self.cfg, self.stateDir, base, self.cfg.OperationalEVM, operator, self.operatorHTTP, self.rpcHTTP, sequence)
+		liveRequests += live.Requests
+		switch {
+		case liveErr == nil:
+			self.liveMerklePassed[operator] = true
+			liveDetail = fmt.Sprintf("live_merkle=operator-passed epoch=%d no=%d block=%d complete=%d/%d", live.Epoch, live.NoID, live.FinalizedBlock, len(self.liveMerklePassed), self.cfg.Config.Topology.Operators)
+			if len(self.liveMerklePassed) == self.cfg.Config.Topology.Operators {
+				metrics["live_invalid_merkle_proof_rejections"] = uint64(len(self.liveMerklePassed))
+				metrics["live_merkle_state_mutations"] = 0
+			}
+		case liveMerkleRetryable(liveErr, self.faults.Expected(fmt.Sprintf("operator-%d-api", operator))):
+			self.liveMerkleNextAttempt = sequence + 60
+			liveDetail = "live_merkle=waiting: " + liveErr.Error()
+		default:
+			return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: "live malformed-Merkle proof gate: " + liveErr.Error(), Requests: liveRequests, MaxInFlight: 1}
+		}
+	}
+	maximumInFlight := uint64(0)
+	if liveRequests > 0 {
+		maximumInFlight = 1
+	}
+	return adversarySampleResult{Outcome: adversaryOutcomeSuccess, Detail: fmt.Sprintf("domain_mutations=%d leaves=%d exact_bps=%d dense_root_index=%d root_basket_claim=%d/%d proxy_mev_loss_ppm=%d protected_reject=%t runtime_models=%d/%d/%d/%d/%d runtime_454_cases=%d dirty_root_swap_rejected=true %s", domains, len(shares), total, rootIndexEntries, rootClaim, rootReward, mev.UnshieldedLossPPM, mev.ProtectedWouldReject, rollbackCases, migratedFields, orderCases, accountingCases, liquidityCases, runtime454Cases, liveDetail), Requests: liveRequests, MaxInFlight: maximumInFlight, Metrics: metrics}
 }
 
 type yumaValidator struct {
@@ -1734,7 +2445,7 @@ func clampUnit(value float64) float64 {
 	return value
 }
 
-// liquidAlphaValue mirrors runtime v447's per validator-miner sigmoid: buying
+// liquidAlphaValue mirrors runtime 453's per validator-miner sigmoid: buying
 // compares weight with the selected consensus, selling compares the old bond
 // with weight, and the result is clamped between alpha_low and alpha_high.
 func liquidAlphaValue(consensus, weight, bond, alphaLow, alphaHigh, steepness float64) (float64, error) {
@@ -1772,7 +2483,7 @@ func emulateLiquidAlphaCopyAndDropout(sequence uint64) (liquidAlphaSweep, error)
 	steepness := steepnesses[sequence%uint64(len(steepnesses))]
 	selectedConsensus := 1.0
 	if sequence%2 == 0 {
-		// v446/v447 permits previous-consensus mode. Sweep the first epoch's
+		// Runtime 453 retains previous-consensus mode. Sweep the first epoch's
 		// absent/zero previous value as well as current consensus.
 		selectedConsensus = 0
 	}
@@ -1828,13 +2539,15 @@ func emulateLiquidAlphaCopyAndDropout(sequence uint64) (liquidAlphaSweep, error)
 }
 
 type consensusAdversary struct {
-	stateDir string
+	stateDir        string
+	headSlots       int
+	candidateFleets int
 }
 
 func (self *consensusAdversary) ID() string { return "consensus-cabal-emulation" }
 
-func honestVectorFromIntent(stateDir string) (map[uint16]uint64, uint16, error) {
-	observation := inspectValidatorIntent(stateDir, 2)
+func honestVectorFromIntent(stateDir string, headSlots, candidateFleets int) (map[uint16]uint64, uint16, error) {
+	observation := inspectValidatorIntent(stateDir, 2, headSlots, candidateFleets)
 	if observation.Error != "" || len(observation.AppliedWeights) == 0 {
 		return nil, 0, errors.New("independent validator has no applied intent yet")
 	}
@@ -1877,7 +2590,7 @@ func equalWeights(left, right map[uint16]uint64) bool {
 }
 
 func (self *consensusAdversary) Sample(_ context.Context, phase adversarySamplePhase, sequence uint64) adversarySampleResult {
-	honest, cabalUID, err := honestVectorFromIntent(self.stateDir)
+	honest, cabalUID, err := honestVectorFromIntent(self.stateDir, self.headSlots, self.candidateFleets)
 	if err != nil {
 		return adversarySampleResult{Outcome: adversaryOutcomeSkipped, Detail: err.Error()}
 	}
@@ -1885,34 +2598,40 @@ func (self *consensusAdversary) Sample(_ context.Context, phase adversarySampleP
 	if err != nil {
 		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
 	}
-	intent := inspectValidatorIntent(self.stateDir, 2)
+	intent := inspectValidatorIntent(self.stateDir, 2, self.headSlots, self.candidateFleets)
 	pending := uint64(0)
 	if intent.CurrentStatus != "" && intent.CurrentStatus != "applied" && intent.CurrentStatus != "finalized" {
 		pending = 1
 	}
+	boundaryDisagreement, boundaryRestoration, err := adversaryValidatorBoundaryMetrics(self.headSlots)
+	if err != nil {
+		return adversarySampleResult{Outcome: adversaryOutcomeError, Detail: err.Error()}
+	}
 	metrics := map[string]uint64{
-		"consensus_delta_ppm":            0,
-		"honest_consensus_delta_ppm":     0,
-		"honest_incentive_delta_ppm":     0,
-		"follower_consensus_delta_ppm":   0,
-		"active_stake_ppm":               1_000_000,
-		"validator_permit_count":         1,
-		"threshold_margin_ppm":           10_000,
-		"honest_bond_ppm":                liquidAlpha.honestBondPPM,
-		"delayed_copier_bond_ppm":        liquidAlpha.copierBondPPM,
-		"dropout_reentry_bond_ppm":       liquidAlpha.honestReentryBondPPM,
-		"continuous_validator_bond_ppm":  liquidAlpha.honestContinuousBondPPM,
-		"liquid_alpha_consensus_mode":    sequence % 2,
-		"validator_live_count":           1,
-		"intent_recovery_seconds":        0,
-		"vector_hash_divergence":         0,
-		"pending_intents":                pending,
-		"last_applied_epoch":             intent.CurrentEpoch,
-		"finalized_intents":              uint64(intent.FinalizedIntents),
-		"mask_coverage_ppm":              1_000_000,
-		"independent_validator_coverage": 1_000_000,
-		"unresolved_affiliations":        0,
-		"exact_split_error":              0,
+		"consensus_delta_ppm":                   0,
+		"honest_consensus_delta_ppm":            0,
+		"honest_incentive_delta_ppm":            0,
+		"follower_consensus_delta_ppm":          0,
+		"active_stake_ppm":                      1_000_000,
+		"validator_permit_count":                1,
+		"threshold_margin_ppm":                  10_000,
+		"honest_bond_ppm":                       liquidAlpha.honestBondPPM,
+		"delayed_copier_bond_ppm":               liquidAlpha.copierBondPPM,
+		"dropout_reentry_bond_ppm":              liquidAlpha.honestReentryBondPPM,
+		"continuous_validator_bond_ppm":         liquidAlpha.honestContinuousBondPPM,
+		"liquid_alpha_consensus_mode":           sequence % 2,
+		"validator_live_count":                  1,
+		"intent_recovery_seconds":               0,
+		"vector_hash_divergence":                0,
+		"pending_intents":                       pending,
+		"last_applied_epoch":                    intent.CurrentEpoch,
+		"finalized_intents":                     uint64(intent.FinalizedIntents),
+		"mask_coverage_ppm":                     1_000_000,
+		"independent_validator_coverage":        1_000_000,
+		"unresolved_affiliations":               0,
+		"exact_split_error":                     0,
+		"validator_local_boundary_disagreement": boundaryDisagreement,
+		"validator_local_boundary_restoration":  boundaryRestoration,
 	}
 	if phase == adversaryControlPhase {
 		consensus := yumaConsensus([]yumaValidator{{stake: 1_000_000, weights: honest}}, 500_000)
@@ -1980,10 +2699,10 @@ func newLiveAdversaryActors(cfg *ResolvedConfig, stateDir string, roles *RoleSec
 	}
 	return []adversaryActor{
 		&artifactAdversary{cfg: cfg, http: operatorHTTP, faults: faultWindow},
-		&consensusAdversary{stateDir: stateDir},
-		&custodyAdversary{cfg: cfg},
+		&consensusAdversary{stateDir: stateDir, headSlots: cfg.Config.Topology.HeadSlots, candidateFleets: cfg.Config.Topology.fleetCandidates()},
+		&custodyAdversary{cfg: cfg, stateDir: stateDir, operatorHTTP: operatorHTTP, rpcHTTP: rpcHTTP, faults: faultWindow},
 		&identityAdversary{cfg: cfg, stateDir: stateDir},
-		&operatorAPIAdversary{cfg: cfg, http: operatorHTTP, faults: faultWindow},
+		&operatorAPIAdversary{cfg: cfg, stateDir: stateDir, http: operatorHTTP, faults: faultWindow},
 		&rpcAdversary{cfg: cfg, http: rpcHTTP},
 		verifyActor,
 	}, nil

@@ -55,7 +55,6 @@ func initGlog() {
 	flag.Set("logtostderr", "true")
 	flag.Set("stderrthreshold", "INFO")
 	flag.Set("v", "0")
-	os.Stderr = os.Stdout
 }
 
 func RequireVersion() string {
@@ -250,8 +249,11 @@ func auth(opts docopt.Opts) {
 	defer cancel()
 
 	clientStrategy := connect.NewClientStrategyWithDefaults(ctx)
+	defer clientStrategy.Close()
 	api := sdk.NewApi(ctx, clientStrategy, apiUrl)
-	defer api.Close()
+	defer func() {
+		_ = api.CloseAndWait(context.Background())
+	}()
 
 	var byJwt string
 	if userAuth, err := opts.String("--user_auth"); err == nil && userAuth != "" {
@@ -339,8 +341,11 @@ func run(opts docopt.Opts) {
 	defer cancel()
 
 	clientStrategy := connect.NewClientStrategyWithDefaults(ctx)
+	defer clientStrategy.Close()
 	api := sdk.NewApi(ctx, clientStrategy, apiUrl)
-	defer api.Close()
+	defer func() {
+		_ = api.CloseAndWait(context.Background())
+	}()
 
 	networkTokenPath, err := networkJwtPath()
 	if err != nil {
@@ -463,7 +468,11 @@ func run(opts docopt.Opts) {
 		TrailEngineConfig{M: m},
 	)
 
-	go engine.Run(ctx, concurrency)
+	go func() {
+		if err := engine.Run(ctx, concurrency); err != nil && ctx.Err() == nil {
+			panic(fmt.Errorf("validator trail engine: %w", err))
+		}
+	}()
 
 	// The flag-mode runner is measurement-only. Release weight writes require
 	// the strict multi-NO config path, which uses per-NO quality and exact CRv4

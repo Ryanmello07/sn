@@ -15,12 +15,97 @@ import (
 	"errors"
 	"fmt"
 	mathrand "math/rand"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/urnetwork/connect"
 )
+
+// A crash-torn final line remains rejected, but it cannot consume the next
+// valid proof appended after validator restart.
+func TestProofStoreAppendSeparatesTornTail(t *testing.T) {
+	store, err := NewProofStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.path, []byte(`{"v":1,"trail_id":"torn"`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	want := &ProofRecord{Version: 1, TrailId: connect.NewId(), Coverage: 1, CompleteTimeMs: 1}
+	if err := store.Append(want); err != nil {
+		t.Fatal(err)
+	}
+	records, skipped, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if skipped != 1 || len(records) != 1 || records[0].TrailId != want.TrailId {
+		t.Fatalf("recovered proof store records=%+v skipped=%d", records, skipped)
+	}
+}
+
+func TestProofStoreRejectsSymlinkWithoutMutatingTarget(t *testing.T) {
+	stateDir := t.TempDir()
+	store, err := NewProofStore(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetPath := filepath.Join(t.TempDir(), "target.jsonl")
+	want := []byte("unchanged\n")
+	if err := os.WriteFile(targetPath, want, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(targetPath, store.path); err != nil {
+		t.Fatal(err)
+	}
+	record := &ProofRecord{Version: 1, TrailId: connect.NewId(), Coverage: 1, CompleteTimeMs: 1}
+	if err := store.Append(record); err == nil {
+		t.Fatal("proof store append followed a symlink")
+	}
+	if _, _, err := store.Load(); err == nil {
+		t.Fatal("proof store load followed a symlink")
+	}
+	got, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("proof store symlink target = %q, want %q", got, want)
+	}
+}
+
+func TestProofStoreRejectsPublicFileBeforeAppend(t *testing.T) {
+	store, err := NewProofStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []byte("unchanged\n")
+	if err := os.WriteFile(store.path, want, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Creation permissions are filtered by the host umask. Establish and
+	// observe the adversarial mode explicitly before testing the real reader.
+	if err := os.Chmod(store.path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(store.path); err != nil || info.Mode().Perm() != 0o644 {
+		t.Fatalf("public proof fixture mode was not established: %v %v", info, err)
+	}
+	record := &ProofRecord{Version: 1, TrailId: connect.NewId(), Coverage: 1, CompleteTimeMs: 1}
+	if err := store.Append(record); err == nil {
+		t.Fatal("proof store appended to a public file")
+	}
+	got, err := os.ReadFile(store.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("public proof store = %q, want %q", got, want)
+	}
+}
 
 // mockTrailState is one server-side trail.
 type mockTrailState struct {
@@ -140,7 +225,9 @@ func (self *mockVerifyServer) assignResponse(state *mockTrailState) ([]byte, err
 func (self *mockVerifyServer) finalResponse(state *mockTrailState) ([]byte, error) {
 	hops := make([]connect.VerifyProofHop, len(state.confirmed))
 	for i, hop := range state.confirmed {
-		hops[i] = connect.VerifyProofHop{ClientId: hop, TimeMs: state.confirmedAt[i]}
+		egressIPHash := [32]byte{}
+		copy(egressIPHash[:], hop[:])
+		hops[i] = connect.VerifyProofHop{ClientId: hop, TimeMs: state.confirmedAt[i], EgressIpHash: egressIPHash}
 	}
 	finalMessage, err := connect.BuildVerifyFinalMessage(
 		self.serverKeyId, state.trailId, state.serverNonce, state.vpk, byte(state.m), hops)
@@ -355,6 +442,143 @@ func newTestEngine(t *testing.T, server *mockVerifyServer, validatorKey ed25519.
 	return engine, stats, seedHop
 }
 
+// Concurrent workers reserve one global SEED-attempt sequence. The schedule
+// covers retries as well as fresh trails and catches the former per-worker
+// pacing that exceeded the server's per-VPK hard limit.
+func TestTrailEngineSeedAttemptScheduleIsSharedAndDeterministic(t *testing.T) {
+	engine := &TrailEngine{cfg: TrailEngineConfig{SeedAttemptInterval: 2 * time.Second}}
+	start := time.Unix(1_800_000_000, 0)
+	if delay := engine.reserveSeedAttempt(start); delay != 0 {
+		t.Fatalf("first reservation delay = %s, want immediate", delay)
+	}
+	if delay := engine.reserveSeedAttempt(start); delay != 2*time.Second {
+		t.Fatalf("second reservation delay = %s, want 2s", delay)
+	}
+	if delay := engine.reserveSeedAttempt(start.Add(500 * time.Millisecond)); delay != 3500*time.Millisecond {
+		t.Fatalf("third reservation delay = %s, want 3.5s", delay)
+	}
+	if delay := engine.reserveSeedAttempt(start.Add(10 * time.Second)); delay != 0 {
+		t.Fatalf("idle schedule delay = %s, want immediate", delay)
+	}
+}
+
+// Discovery and SEED posts have independent rate lanes. A slow discovery may
+// not consume the next transport slot, while repeated cold-start discovery
+// failures still cannot spin once per worker.
+func TestTrailEngineSeedDiscoveryScheduleIsIndependentAndDeterministic(t *testing.T) {
+	engine := &TrailEngine{cfg: TrailEngineConfig{SeedAttemptInterval: 2 * time.Second}}
+	start := time.Unix(1_800_000_000, 0)
+	if delay := engine.reserveSeedDiscovery(start); delay != 0 {
+		t.Fatalf("first discovery reservation delay = %s, want immediate", delay)
+	}
+	if delay := engine.reserveSeedAttempt(start); delay != 0 {
+		t.Fatalf("first SEED post reservation delay = %s, want immediate", delay)
+	}
+	if delay := engine.reserveSeedDiscovery(start); delay != 2*time.Second {
+		t.Fatalf("second discovery reservation delay = %s, want 2s", delay)
+	}
+	if delay := engine.reserveSeedAttempt(start); delay != 2*time.Second {
+		t.Fatalf("second SEED post reservation delay = %s, want 2s", delay)
+	}
+}
+
+// RunTrail must consume the shared discovery budget before invoking a picker.
+// The canceled-context fixture is deterministic and catches the former path,
+// which called FindProviders2 even after its owner was already canceled.
+func TestTrailEngineCanceledSeedDiscoveryStopsBeforePicker(t *testing.T) {
+	called := 0
+	engine := &TrailEngine{
+		pickSeed: func(context.Context) (connect.Id, error) {
+			called++
+			return connect.NewId(), nil
+		},
+		cfg: TrailEngineConfig{SeedAttemptInterval: 2 * time.Second},
+	}
+	start := time.Now()
+	if delay := engine.reserveSeedDiscovery(start); delay != 0 {
+		t.Fatalf("initial discovery reservation delay = %s, want immediate", delay)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := engine.RunTrail(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled discovery error = %v, want context cancellation", err)
+	}
+	if called != 0 {
+		t.Fatalf("seed picker calls = %d, want zero", called)
+	}
+}
+
+type failingTrailTransport struct {
+	attempts int
+	cancel   context.CancelFunc
+	cancelAt int
+}
+
+func (self *failingTrailTransport) PostVerify(context.Context, connect.Id, []byte) ([]byte, error) {
+	self.attempts++
+	if self.cancel != nil && self.attempts == self.cancelAt {
+		self.cancel()
+	}
+	return nil, errors.New("synthetic transport failure")
+}
+
+// The server counts every SEED HTTP request, not just logical trails. The
+// attempt hook must therefore run again before each idempotent retry, while an
+// EXTEND call with no hook remains outside the shared SEED budget.
+func TestTrailEngineSeedPacingMetersEveryRetry(t *testing.T) {
+	transport := &failingTrailTransport{}
+	engine := &TrailEngine{
+		transport: transport,
+		cfg: TrailEngineConfig{
+			StepTimeout:    time.Second,
+			ExtendAttempts: 3,
+		},
+	}
+	paced := 0
+	pace := func(context.Context) error {
+		paced++
+		return nil
+	}
+	if _, err := engine.postStep(context.Background(), connect.NewId(), []byte("seed"), pace); err == nil {
+		t.Fatal("failing SEED retries unexpectedly succeeded")
+	}
+	if paced != 3 || transport.attempts != 3 {
+		t.Fatalf("SEED pace/transport attempts = %d/%d, want 3/3", paced, transport.attempts)
+	}
+
+	transport.attempts = 0
+	if _, err := engine.postStep(context.Background(), connect.NewId(), []byte("extend"), nil); err == nil {
+		t.Fatal("failing EXTEND retries unexpectedly succeeded")
+	}
+	if transport.attempts != 3 || paced != 3 {
+		t.Fatalf("EXTEND transport attempts/preserved pace = %d/%d, want 3/3", transport.attempts, paced)
+	}
+}
+
+func TestTrailEngineRunContinuesAfterTransientPeerFailure(t *testing.T) {
+	server, validatorKey, clientID := newMockVerifyServer(t, 12)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	transport := &failingTrailTransport{cancel: cancel, cancelAt: 4}
+	engine := NewTrailEngine(
+		clientID,
+		validatorKey,
+		transport,
+		NewStaticServerKeyRing(server.serverPublicKeys()),
+		func(context.Context) (connect.Id, error) { return server.providers[0], nil },
+		NewStatsEngine(StatsConfig{}),
+		nil,
+		nil,
+		TrailEngineConfig{M: 4, StepTimeout: time.Second, ExtendAttempts: 3, Pace: time.Millisecond},
+	)
+	if err := engine.Run(ctx, 1); err != nil {
+		t.Fatalf("transient peer failure stopped engine with fatal error: %v", err)
+	}
+	if transport.attempts != 4 {
+		t.Fatalf("transient peer attempts = %d, want a second trail after three retries", transport.attempts)
+	}
+}
+
 func TestTrailHappyPath(t *testing.T) {
 	server, validatorKey, clientId := newMockVerifyServer(t, 12)
 	store, err := NewProofStore(t.TempDir())
@@ -378,6 +602,9 @@ func TestTrailHappyPath(t *testing.T) {
 	}
 	if record.Coverage != 4 {
 		t.Fatalf("coverage: %d, want M-1=4", record.Coverage)
+	}
+	if err := VerifyProofRecord(record, validatorKey.Public().(ed25519.PublicKey), server.serverPublicKeys(), 5); err != nil {
+		t.Fatalf("independent proof verification: %v", err)
 	}
 
 	// The record's FinalDigest is the RAW VerifyFinalDigest of the canonical
@@ -428,6 +655,52 @@ func TestTrailHappyPath(t *testing.T) {
 	}
 	if len(records) != 1 || records[0].TrailId != record.TrailId {
 		t.Fatalf("store: %d records", len(records))
+	}
+}
+
+func TestVerifyProofRecordRejectsEverySignedPathMutation(t *testing.T) {
+	server, validatorKey, clientID := newMockVerifyServer(t, 12)
+	store, err := NewProofStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, _, _ := newTestEngine(t, server, validatorKey, clientID, 5, store)
+	record, err := engine.RunTrail(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutations := []struct {
+		name   string
+		mutate func(*ProofRecord)
+	}{
+		{name: "contract epoch", mutate: func(value *ProofRecord) { value.Epoch = 0 }},
+		{name: "validator identity", mutate: func(value *ProofRecord) { value.Vpk[0]++ }},
+		{name: "depth", mutate: func(value *ProofRecord) { value.M-- }},
+		{name: "coverage", mutate: func(value *ProofRecord) { value.Coverage++ }},
+		{name: "server key", mutate: func(value *ProofRecord) { value.ServerKeyId++ }},
+		{name: "hop", mutate: func(value *ProofRecord) { value.Hops[0].ClientId[0]++ }},
+		{name: "duplicate hop", mutate: func(value *ProofRecord) { value.Hops[1].ClientId = value.Hops[0].ClientId }},
+		{name: "hop time", mutate: func(value *ProofRecord) { value.Hops[0].TimeMs = 0 }},
+		{name: "completion", mutate: func(value *ProofRecord) { value.CompleteTimeMs++ }},
+		{name: "digest", mutate: func(value *ProofRecord) { value.FinalDigest[0]++ }},
+		{name: "server signature", mutate: func(value *ProofRecord) { value.FinalSig[0]++ }},
+		{name: "extend signature", mutate: func(value *ProofRecord) { value.VerifierSig[0]++ }},
+		{name: "co-signature", mutate: func(value *ProofRecord) { value.VpkSig[0]++ }},
+		{name: "path id", mutate: func(value *ProofRecord) { value.PathId[0]++ }},
+	}
+	for _, mutation := range mutations {
+		wire, err := json.Marshal(record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var candidate ProofRecord
+		if err := json.Unmarshal(wire, &candidate); err != nil {
+			t.Fatal(err)
+		}
+		mutation.mutate(&candidate)
+		if err := VerifyProofRecord(&candidate, validatorKey.Public().(ed25519.PublicKey), server.serverPublicKeys(), 5); err == nil {
+			t.Fatalf("%s mutation was accepted", mutation.name)
+		}
 	}
 }
 
@@ -570,5 +843,60 @@ func TestTrailSeedFailureNotAttributed(t *testing.T) {
 	}
 	if len(stats.Exposure()) != 0 {
 		t.Fatal("seed failure polluted the stats")
+	}
+}
+
+func TestTrailEngineRunFailsClosedOnAttemptLedgerAppendFailure(t *testing.T) {
+	stateDir := t.TempDir()
+	server, validatorKey, clientID := newMockVerifyServer(t, 12)
+	store, err := NewProofStore(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, stats, _ := newTestEngine(t, server, validatorKey, clientID, 4, store)
+	generation := uint64(1)
+	ledger := configureAttemptLedgerTestEngine(t, engine, stats, stateDir, &generation)
+	expected := errors.New("synthetic durable attempt append failure")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	appendCalls := 0
+	ledger.appendFn = func(string, []byte) error {
+		appendCalls++
+		if appendCalls == 2 {
+			cancel()
+		}
+		return expected
+	}
+	err = engine.Run(ctx, 1)
+	var fatalErr *TrailFatalError
+	if !errors.Is(err, expected) || !errors.As(err, &fatalErr) {
+		t.Fatalf("engine run error = %v, want fatal append failure", err)
+	}
+	if appendCalls != 1 {
+		t.Fatalf("engine continued after durable append failure: append calls %d", appendCalls)
+	}
+	if ledger.LastSequence() != 0 || len(stats.ProviderIDs()) != 0 {
+		t.Fatalf("failed append mutated sequence/providers = %d/%v", ledger.LastSequence(), stats.ProviderIDs())
+	}
+}
+
+func TestTrailEngineRunFailsClosedOnProofProjectionFailure(t *testing.T) {
+	stateDir := t.TempDir()
+	server, validatorKey, clientID := newMockVerifyServer(t, 12)
+	store, err := NewProofStore(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, stats, _ := newTestEngine(t, server, validatorKey, clientID, 4, store)
+	generation := uint64(1)
+	ledger := configureAttemptLedgerTestEngine(t, engine, stats, stateDir, &generation)
+	store.path = stateDir
+	err = engine.Run(context.Background(), 1)
+	var fatalErr *TrailFatalError
+	if err == nil || !errors.As(err, &fatalErr) {
+		t.Fatalf("engine run error = %v, want fatal proof projection failure", err)
+	}
+	if ledger.LastSequence() != 4 || len(stats.ProviderIDs()) != 3 {
+		t.Fatalf("authoritative completion sequence/providers = %d/%v, want 4/3", ledger.LastSequence(), stats.ProviderIDs())
 	}
 }

@@ -4,15 +4,18 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -26,28 +29,875 @@ import (
 	"github.com/urfoundation/sn/stabi"
 )
 
+// Persists the immutable contract identities plus two distinct finalized
+// observations: DeployBlock is when the current release graph was complete,
+// while CoordinatorEventStartBlock is the proxy's first event-sync block.
 type ContractDeployment struct {
-	Schema                        string            `json:"schema"`
-	DeploymentID                  string            `json:"deployment_id"`
-	InitialNonce                  uint64            `json:"initial_nonce"`
-	ReserveSink                   common.Address    `json:"reserve_sink"`
-	SettlementVault               common.Address    `json:"settlement_vault"`
-	CoordinatorImplementation     common.Address    `json:"coordinator_implementation"`
-	CoordinatorProxy              common.Address    `json:"coordinator_proxy"`
-	GovernanceDrillImplementation common.Address    `json:"governance_drill_implementation"`
-	PrecompileProbe               common.Address    `json:"precompile_probe"`
-	DeployBlock                   uint64            `json:"deploy_block,omitempty"`
-	DeployBlockHash               string            `json:"deploy_block_hash,omitempty"`
-	RuntimeHashes                 map[string]string `json:"runtime_hashes,omitempty"`
+	Schema                         string            `json:"schema"`
+	DeploymentID                   string            `json:"deployment_id"`
+	InitialNonce                   uint64            `json:"initial_nonce"`
+	RegistrationRoleGeneration     uint64            `json:"registration_role_generation,omitempty"`
+	ReserveSink                    common.Address    `json:"reserve_sink"`
+	SettlementVault                common.Address    `json:"settlement_vault"`
+	CoordinatorImplementation      common.Address    `json:"coordinator_implementation"`
+	CoordinatorProxy               common.Address    `json:"coordinator_proxy"`
+	GovernanceDrillImplementation  common.Address    `json:"governance_drill_implementation"`
+	PrecompileProbe                common.Address    `json:"precompile_probe"`
+	DeployBlock                    uint64            `json:"deploy_block,omitempty"`
+	DeployBlockHash                string            `json:"deploy_block_hash,omitempty"`
+	CoordinatorEventStartBlock     uint64            `json:"coordinator_event_start_block,omitempty"`
+	CoordinatorEventStartBlockHash string            `json:"coordinator_event_start_block_hash,omitempty"`
+	RuntimeHashes                  map[string]string `json:"runtime_hashes,omitempty"`
+}
+
+// CoordinatorUpgrade is deliberately separate from the immutable deployment
+// identity. Release revisions can therefore retain and audit an already-live
+// sink, vault, proxy, and original implementation while approving one exact
+// additive UUPS implementation at the next deterministic deployer nonce.
+type CoordinatorUpgrade struct {
+	Schema          string         `json:"schema"`
+	DeploymentID    string         `json:"deployment_id"`
+	Implementation  common.Address `json:"implementation"`
+	DeployerNonce   uint64         `json:"deployer_nonce"`
+	RuntimeCodeHash string         `json:"runtime_code_hash"`
+}
+
+// CoordinatorUpgradeBaseline records the exact, finalized compatibility proof
+// used when an interrupted deployment is retained across a locked release
+// change. The sink and vault executable hashes exclude constructor immutable
+// words and Solidity metadata; every full runtime hash remains bound by the
+// authenticated prior/rebound deployment manifests. Repeated-upgrade v3 also
+// binds the immutable proxy's executable body separately so a compilation-
+// graph-only CBOR change cannot masquerade as executable drift.
+type CoordinatorUpgradeBaseline struct {
+	Schema                          string `json:"schema"`
+	PriorDeploymentHash             string `json:"prior_deployment_hash"`
+	ReleaseDeploymentHash           string `json:"release_deployment_hash"`
+	ReboundDeploymentHash           string `json:"rebound_deployment_hash"`
+	ReserveSinkExecutableHash       string `json:"reserve_sink_executable_hash"`
+	SettlementVaultExecutableHash   string `json:"settlement_vault_executable_hash"`
+	GovernanceDrillVersion          string `json:"governance_drill_version"`
+	GovernanceProxiableUUID         string `json:"governance_proxiable_uuid"`
+	DeployerNonce                   uint64 `json:"deployer_nonce"`
+	ProbeAddressEmpty               bool   `json:"probe_address_empty"`
+	ActiveImplementation            string `json:"active_implementation,omitempty"`
+	ActiveImplementationHash        string `json:"active_implementation_runtime_hash,omitempty"`
+	PrecompileProbeExecutableHash   string `json:"precompile_probe_executable_hash,omitempty"`
+	CoordinatorProxyExecutableHash  string `json:"coordinator_proxy_executable_hash,omitempty"`
+	ReplacementPrecompileProbe      string `json:"replacement_precompile_probe,omitempty"`
+	ReplacementPrecompileProbeNonce uint64 `json:"replacement_precompile_probe_nonce,omitempty"`
+	ReplacementPrecompileProbeHash  string `json:"replacement_precompile_probe_runtime_hash,omitempty"`
+	RetiredPrecompileProbe          string `json:"retired_precompile_probe,omitempty"`
+	RetiredPrecompileProbeHash      string `json:"retired_precompile_probe_runtime_hash,omitempty"`
+	FinalizedBlock                  uint64 `json:"finalized_block"`
+	FinalizedBlockHash              string `json:"finalized_block_hash"`
 }
 
 type DeploymentPayloads struct {
-	Manifest                                                                                                   ContractDeployment
-	Reserve, Vault, Implementation, RegisterEscrow, Proxy, GovernanceDrill, FixVault, FixSink, PrecompileProbe []byte
-	ExpectedRuntime                                                                                            map[common.Address][]byte
+	Deployer, CommitmentOracle, FleetBatcherAddress, PrecompileProbeAddress                                                                         common.Address
+	FleetBatcherNonce, PrecompileProbeNonce                                                                                                         uint64
+	Manifest                                                                                                                                        ContractDeployment
+	CoordinatorUpgrade                                                                                                                              CoordinatorUpgrade
+	Reserve, Vault, Implementation, RegisterEscrow, Proxy, GovernanceDrill, FixVault, FixSink, PrecompileProbe, UpgradeImplementation, FleetBatcher []byte
+	ValidatorEvidence                                                                                                                               *validatorEvidenceDeploymentPayloads
+	validatorEvidenceCarry                                                                                                                          *validatorEvidenceCarryObservation
+	FleetBatcherRuntime                                                                                                                             []byte
+	ExpectedRuntime                                                                                                                                 map[common.Address][]byte
+}
+
+func validateCoordinatorUpgradeIdentity(upgrade CoordinatorUpgrade, deployer common.Address, deployment ContractDeployment) error {
+	if (upgrade.Schema != "urnetwork-coordinator-upgrade-v1" && upgrade.Schema != "urnetwork-coordinator-upgrade-v2") || upgrade.DeploymentID != deployment.DeploymentID || deployer == (common.Address{}) || deployment.InitialNonce > ^uint64(0)-9 {
+		return errors.New("coordinator upgrade identity is invalid")
+	}
+	minimumNonce := deployment.InitialNonce + 9
+	if upgrade.Schema == "urnetwork-coordinator-upgrade-v1" && upgrade.DeployerNonce != minimumNonce || upgrade.Schema == "urnetwork-coordinator-upgrade-v2" && upgrade.DeployerNonce <= minimumNonce || upgrade.Implementation != crypto.CreateAddress(deployer, upgrade.DeployerNonce) {
+		return errors.New("coordinator upgrade is not the approved deterministic CREATE")
+	}
+	if _, err := decodeHex32("coordinator upgrade runtime hash", upgrade.RuntimeCodeHash); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (baseline CoordinatorUpgradeBaseline) isZero() bool {
+	return baseline == (CoordinatorUpgradeBaseline{})
+}
+
+func (baseline CoordinatorUpgradeBaseline) isRepeated() bool {
+	return baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v2" || baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v3" || baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v4"
+}
+
+func validateCoordinatorUpgradeBaseline(baseline CoordinatorUpgradeBaseline, deployment ContractDeployment, upgrade CoordinatorUpgrade) error {
+	if baseline.isZero() {
+		return nil
+	}
+	if baseline.Schema != "urnetwork-coordinator-upgrade-baseline-v1" && !baseline.isRepeated() || baseline.FinalizedBlock == 0 || deployment.InitialNonce > ^uint64(0)-9 {
+		return errors.New("coordinator upgrade baseline has an invalid identity, checkpoint, or nonce boundary")
+	}
+	if baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v1" && (!baseline.ProbeAddressEmpty || baseline.DeployerNonce != deployment.InitialNonce+8 || upgrade.Schema != "urnetwork-coordinator-upgrade-v1" || upgrade.DeployerNonce != baseline.DeployerNonce+1) {
+		return errors.New("coordinator upgrade baseline has an invalid v1 nonce boundary")
+	}
+	if baseline.isRepeated() && (upgrade.Schema != "urnetwork-coordinator-upgrade-v2" || baseline.DeployerNonce != upgrade.DeployerNonce || !common.IsHexAddress(baseline.ActiveImplementation) || common.HexToAddress(baseline.ActiveImplementation) == (common.Address{})) {
+		return errors.New("coordinator upgrade baseline has an invalid repeated-upgrade boundary")
+	}
+	if baseline.Schema != "urnetwork-coordinator-upgrade-baseline-v4" && (baseline.ReplacementPrecompileProbe != "" || baseline.ReplacementPrecompileProbeNonce != 0 || baseline.ReplacementPrecompileProbeHash != "" || baseline.RetiredPrecompileProbe != "" || baseline.RetiredPrecompileProbeHash != "") {
+		return errors.New("coordinator upgrade baseline has an invalid retained-probe boundary")
+	}
+	if baseline.Schema != "urnetwork-coordinator-upgrade-baseline-v1" && baseline.Schema != "urnetwork-coordinator-upgrade-baseline-v4" && baseline.ProbeAddressEmpty {
+		return errors.New("repeated coordinator upgrade baseline has an invalid probe observation")
+	}
+	if baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v4" {
+		if !baseline.ProbeAddressEmpty || baseline.ReplacementPrecompileProbeNonce <= deployment.InitialNonce+9 || baseline.ReplacementPrecompileProbeNonce == ^uint64(0) || baseline.ReplacementPrecompileProbeNonce+1 != upgrade.DeployerNonce || !common.IsHexAddress(baseline.ReplacementPrecompileProbe) || !common.IsHexAddress(baseline.RetiredPrecompileProbe) || !strings.EqualFold(baseline.RetiredPrecompileProbe, deployment.PrecompileProbe.Hex()) || strings.EqualFold(baseline.ReplacementPrecompileProbe, baseline.RetiredPrecompileProbe) || strings.EqualFold(baseline.ReplacementPrecompileProbeHash, baseline.RetiredPrecompileProbeHash) {
+			return errors.New("coordinator upgrade baseline has an invalid replacement-probe boundary")
+		}
+		for name, value := range map[string]string{
+			"replacement precompile probe runtime hash": baseline.ReplacementPrecompileProbeHash,
+			"retired precompile probe runtime hash":     baseline.RetiredPrecompileProbeHash,
+		} {
+			if _, err := decodeHex32(name, value); err != nil {
+				return err
+			}
+		}
+	}
+	for name, value := range map[string]string{
+		"prior deployment hash":            baseline.PriorDeploymentHash,
+		"release deployment hash":          baseline.ReleaseDeploymentHash,
+		"rebound deployment hash":          baseline.ReboundDeploymentHash,
+		"reserve sink executable hash":     baseline.ReserveSinkExecutableHash,
+		"settlement vault executable hash": baseline.SettlementVaultExecutableHash,
+		"governance drill version":         baseline.GovernanceDrillVersion,
+		"governance proxiable UUID":        baseline.GovernanceProxiableUUID,
+		"upgrade baseline finalized hash":  baseline.FinalizedBlockHash,
+	} {
+		if _, err := decodeHex32(name, value); err != nil {
+			return err
+		}
+	}
+	if baseline.isRepeated() {
+		for name, value := range map[string]string{
+			"active implementation runtime hash": baseline.ActiveImplementationHash,
+			"precompile probe executable hash":   baseline.PrecompileProbeExecutableHash,
+		} {
+			if _, err := decodeHex32(name, value); err != nil {
+				return err
+			}
+		}
+	}
+	if baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v3" || baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v4" {
+		if _, err := decodeHex32("coordinator proxy executable hash", baseline.CoordinatorProxyExecutableHash); err != nil {
+			return err
+		}
+	}
+	wantVersion := crypto.Keccak256Hash([]byte("urnetwork/coordinator-adversary/v1")).Hex()
+	if !strings.EqualFold(baseline.GovernanceDrillVersion, wantVersion) || !strings.EqualFold(baseline.GovernanceProxiableUUID, erc1967ImplementationSlot) {
+		return errors.New("coordinator upgrade baseline has an incompatible governance drill implementation")
+	}
+	reboundHash, err := contractDeploymentIdentityHash(deployment)
+	if err != nil || reboundHash != baseline.ReboundDeploymentHash {
+		return errors.New("coordinator upgrade baseline does not authenticate the rebound deployment")
+	}
+	if baseline.isRepeated() && (baseline.PriorDeploymentHash != reboundHash || common.HexToAddress(baseline.ActiveImplementation) == upgrade.Implementation) {
+		return errors.New("repeated coordinator upgrade baseline does not bind a distinct active implementation")
+	}
+	return nil
+}
+
+// Authenticates the additive probe generation against the deployment signer.
+func validatePrecompileProbeReplacement(baseline CoordinatorUpgradeBaseline, deployer common.Address, deployment ContractDeployment, upgrade CoordinatorUpgrade) error {
+	if baseline.Schema != "urnetwork-coordinator-upgrade-baseline-v4" {
+		return nil
+	}
+	address := common.HexToAddress(baseline.ReplacementPrecompileProbe)
+	if deployer == (common.Address{}) || address == (common.Address{}) || address != crypto.CreateAddress(deployer, baseline.ReplacementPrecompileProbeNonce) {
+		return errors.New("replacement precompile probe is not the approved deterministic CREATE")
+	}
+	if baseline.ReplacementPrecompileProbeNonce == ^uint64(0) || upgrade.DeployerNonce != baseline.ReplacementPrecompileProbeNonce+1 {
+		return errors.New("replacement precompile probe is not immediately before its coordinator upgrade")
+	}
+	runtimeHashes, err := normalizedDeploymentRuntimeHashes(deployment)
+	if err != nil || !strings.EqualFold(runtimeHashes[deployment.PrecompileProbe], baseline.RetiredPrecompileProbeHash) {
+		return stateMismatchError(err, "retired precompile probe does not match the immutable deployment")
+	}
+	return nil
+}
+
+// Accepts either an absent observation or one complete canonical hash-shaped
+// checkpoint. Chain canonicality and finality are authenticated by callers.
+func validateContractDeploymentCheckpoint(name string, block uint64, blockHash string) error {
+	if (block == 0) != (blockHash == "") {
+		return fmt.Errorf("%s checkpoint is incomplete", name)
+	}
+	if blockHash != "" {
+		decoded, err := decodeHex32(name+" block hash", blockHash)
+		if err != nil {
+			return err
+		}
+		if decoded == ([32]byte{}) {
+			return fmt.Errorf("%s checkpoint has a zero block hash", name)
+		}
+	}
+	return nil
+}
+
+// Returns the inclusive coordinator log boundary rendered to servers and
+// validators. It must never be replaced by the later full-release boundary.
+func contractDeploymentEventSyncBlock(manifest *ContractDeployment) (uint64, error) {
+	if manifest == nil {
+		return 0, errors.New("contract deployment event-sync boundary is unavailable")
+	}
+	if err := validateContractDeploymentCheckpoint("current release", manifest.DeployBlock, manifest.DeployBlockHash); err != nil {
+		return 0, err
+	}
+	if err := validateContractDeploymentCheckpoint("coordinator event start", manifest.CoordinatorEventStartBlock, manifest.CoordinatorEventStartBlockHash); err != nil {
+		return 0, err
+	}
+	if manifest.CoordinatorEventStartBlock == 0 {
+		return 0, errors.New("contract deployment has no coordinator event-sync boundary")
+	}
+	if manifest.DeployBlock == 0 {
+		return 0, errors.New("contract deployment has no current release boundary")
+	}
+	if manifest.DeployBlock != 0 && manifest.CoordinatorEventStartBlock > manifest.DeployBlock {
+		return 0, errors.New("coordinator event-sync boundary follows the current release boundary")
+	}
+	return manifest.CoordinatorEventStartBlock, nil
+}
+
+// Folds one finalized deployment receipt into the two observation domains.
+// Only the proxy receipt fixes event replay; later release CREATEs may advance
+// the full-graph boundary without changing where coordinator history begins.
+func recordContractDeploymentReceipt(manifest *ContractDeployment, actionID string, receipt *types.Receipt, replacementProbe bool) error {
+	if manifest == nil || actionID == "" || receipt == nil || receipt.Status != types.ReceiptStatusSuccessful || receipt.BlockNumber == nil || !receipt.BlockNumber.IsUint64() || receipt.BlockNumber.Sign() <= 0 || receipt.BlockHash == (common.Hash{}) || receipt.TxHash == (common.Hash{}) {
+		return errors.New("contract deployment receipt observation is incomplete")
+	}
+	updated := *manifest
+	if err := validateContractDeploymentCheckpoint("current release", updated.DeployBlock, updated.DeployBlockHash); err != nil {
+		return err
+	}
+	if err := validateContractDeploymentCheckpoint("coordinator event start", updated.CoordinatorEventStartBlock, updated.CoordinatorEventStartBlockHash); err != nil {
+		return err
+	}
+	block := receipt.BlockNumber.Uint64()
+	blockHash := receipt.BlockHash.Hex()
+	if receipt.ContractAddress != (common.Address{}) && !replacementProbe {
+		switch {
+		case updated.DeployBlock < block:
+			updated.DeployBlock = block
+			updated.DeployBlockHash = blockHash
+		case updated.DeployBlock == block && !strings.EqualFold(updated.DeployBlockHash, blockHash):
+			return errors.New("current release receipts disagree on one block hash")
+		}
+	}
+	if actionID != "evm.coordinator-proxy" {
+		if updated.CoordinatorEventStartBlock != 0 {
+			if _, err := contractDeploymentEventSyncBlock(&updated); err != nil {
+				return err
+			}
+		}
+		*manifest = updated
+		return nil
+	}
+	if replacementProbe || receipt.ContractAddress != updated.CoordinatorProxy {
+		return errors.New("coordinator proxy receipt created another contract")
+	}
+	switch {
+	case updated.CoordinatorEventStartBlock == 0:
+		updated.CoordinatorEventStartBlock = block
+		updated.CoordinatorEventStartBlockHash = blockHash
+	case updated.CoordinatorEventStartBlock != block || !strings.EqualFold(updated.CoordinatorEventStartBlockHash, blockHash):
+		return errors.New("coordinator proxy receipt conflicts with its event-sync boundary")
+	}
+	if _, err := contractDeploymentEventSyncBlock(&updated); err != nil {
+		return err
+	}
+	*manifest = updated
+	return nil
+}
+
+// Resolves one exact approved CREATE from the authenticated journal. Repeated
+// finalization, a foreign receipt, or conflicting coordinates are ambiguous
+// evidence and must fail before another deployment transaction is attempted.
+func finalizedContractCreationReceipt(ctx context.Context, reader contractCreationReader, finalized ChainHead, deploymentID string, action Action, address common.Address, entries []JournalEntry, allowedPlanHashes map[string]bool) (*types.Receipt, error) {
+	if ctx == nil || reader == nil || deploymentID == "" || action.ID == "" || action.IntentHash == "" || address == (common.Address{}) || len(allowedPlanHashes) == 0 {
+		return nil, errors.New("contract CREATE receipt context is incomplete")
+	}
+	if action.Parameters["expected_transaction_to"] != "create" || !common.IsHexAddress(action.Parameters["expected_created_address"]) || common.HexToAddress(action.Parameters["expected_created_address"]) != address {
+		return nil, fmt.Errorf("action %s does not approve CREATE at %s", action.ID, address)
+	}
+	var matched *JournalEntry
+	for _, entry := range entries {
+		if entry.DeploymentID != deploymentID || !allowedPlanHashes[entry.PlanHash] || entry.ActionID != action.ID || !actionAcceptsIntent(action, entry.IntentHash) || entry.Stage != StageFinalized {
+			continue
+		}
+		if matched != nil {
+			return nil, fmt.Errorf("action %s has duplicate or conflicting finalized CREATE evidence", action.ID)
+		}
+		transactionHash, err := decodeHex32("contract CREATE transaction hash", entry.TransactionHash)
+		if err != nil || transactionHash == ([32]byte{}) {
+			return nil, stateMismatchError(err, "action %s has an invalid finalized CREATE transaction hash", action.ID)
+		}
+		if entry.BlockNumber == 0 {
+			return nil, fmt.Errorf("action %s has no finalized CREATE block", action.ID)
+		}
+		if err := validateContractDeploymentCheckpoint("contract CREATE", entry.BlockNumber, entry.BlockHash); err != nil {
+			return nil, err
+		}
+		matched = &entry
+	}
+	if matched == nil {
+		return nil, nil
+	}
+	checkpoint := ChainHead{Number: matched.BlockNumber, Hash: matched.BlockHash}
+	if err := verifyEVMCheckpointFromReader(ctx, reader, finalized, checkpoint); err != nil {
+		return nil, fmt.Errorf("action %s finalized CREATE checkpoint: %w", action.ID, err)
+	}
+	receipt, err := reader.TransactionReceipt(ctx, common.HexToHash(matched.TransactionHash))
+	if err != nil {
+		return nil, fmt.Errorf("action %s finalized CREATE receipt: %w", action.ID, err)
+	}
+	if !receiptMatchesEvidence(finalized, receipt, matched.TransactionHash, matched.BlockNumber, matched.BlockHash) || receipt.ContractAddress != address {
+		return nil, fmt.Errorf("action %s CREATE receipt differs from its approved address or finalized journal evidence", action.ID)
+	}
+	transaction, pending, err := reader.TransactionByHash(ctx, receipt.TxHash)
+	if err != nil {
+		return nil, fmt.Errorf("action %s finalized CREATE transaction: %w", action.ID, err)
+	}
+	chainID := new(big.Int).SetUint64(testnetChainID)
+	if transaction == nil || pending || transaction.Hash() != receipt.TxHash || !transaction.Protected() || transaction.ChainId().Cmp(chainID) != 0 {
+		return nil, fmt.Errorf("action %s CREATE transaction has another hash, chain, or inclusion state", action.ID)
+	}
+	signer, err := types.Sender(types.LatestSignerForChainID(chainID), transaction)
+	if err != nil {
+		return nil, fmt.Errorf("action %s CREATE transaction signer: %w", action.ID, err)
+	}
+	if err := validateApprovedEVMTransactionFields(action, signer, transaction.Nonce(), transaction.To(), transaction.Value(), transaction.Data()); err != nil {
+		return nil, fmt.Errorf("action %s CREATE transaction approval: %w", action.ID, err)
+	}
+	return receipt, nil
+}
+
+// The receipt binds inclusion while signed transaction bytes authenticate the
+// original initializer, sender, nonce, target, and value against the approval.
+type contractCreationReader interface {
+	evmReceiptFinalityReader
+	TransactionByHash(context.Context, common.Hash) (*types.Transaction, bool, error)
+}
+
+// Adds finalized code observation so an empty manifest is distinguishable
+// from a process crash after CREATE but before the manifest was saved.
+type contractDeploymentBoundaryReader interface {
+	contractCreationReader
+	CodeAt(context.Context, common.Address, *big.Int) ([]byte, error)
+}
+
+// Authenticates the original proxy boundary using canonical finalized state
+// and one approved journal CREATE. A partial deployment without proxy code
+// remains resumable; deployed code without matching evidence fails closed.
+func reconcileContractDeploymentEventBoundary(ctx context.Context, reader contractDeploymentBoundaryReader, manifest *ContractDeployment, entries []JournalEntry, plan *SetupPlan) (bool, error) {
+	if ctx == nil || reader == nil || manifest == nil || manifest.DeploymentID == "" || manifest.CoordinatorProxy == (common.Address{}) || plan == nil {
+		return false, errors.New("contract deployment event-boundary reconciliation is unavailable")
+	}
+	if err := validateContractDeploymentCheckpoint("current release", manifest.DeployBlock, manifest.DeployBlockHash); err != nil {
+		return false, err
+	}
+	if err := validateContractDeploymentCheckpoint("coordinator event start", manifest.CoordinatorEventStartBlock, manifest.CoordinatorEventStartBlockHash); err != nil {
+		return false, err
+	}
+	finalized, err := finalizedEVMHeadFromReader(ctx, reader)
+	if err != nil {
+		return false, fmt.Errorf("coordinator event-boundary finalized head: %w", err)
+	}
+	if manifest.DeployBlock != 0 {
+		checkpoint := ChainHead{Number: manifest.DeployBlock, Hash: manifest.DeployBlockHash}
+		if err := verifyEVMCheckpointFromReader(ctx, reader, finalized, checkpoint); err != nil {
+			return false, fmt.Errorf("current release checkpoint: %w", err)
+		}
+	}
+	code, err := reader.CodeAt(ctx, manifest.CoordinatorProxy, new(big.Int).SetUint64(finalized.Number))
+	if err != nil {
+		return false, fmt.Errorf("coordinator event-boundary proxy code: %w", err)
+	}
+	var coordinatorReceipt *types.Receipt
+	if len(code) > 0 || len(entries) > 0 {
+		action, err := exactPlanActionByID(plan, "evm.coordinator-proxy")
+		if err != nil {
+			return false, err
+		}
+		coordinatorReceipt, err = finalizedContractCreationReceipt(ctx, reader, finalized, manifest.DeploymentID, action, manifest.CoordinatorProxy, entries, plan.allowedPlanHashes())
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(code) == 0 {
+		if coordinatorReceipt != nil || manifest.CoordinatorEventStartBlock != 0 {
+			return false, errors.New("observed coordinator proxy has no finalized runtime code")
+		}
+		return false, nil
+	}
+	if coordinatorReceipt == nil {
+		return false, errors.New("observed contract deployment has no matching finalized coordinator proxy CREATE receipt")
+	}
+	runtimeHashes, err := normalizedDeploymentRuntimeHashes(plan.Deployment)
+	if err != nil || !strings.EqualFold(runtimeHashes[manifest.CoordinatorProxy], crypto.Keccak256Hash(code).Hex()) {
+		return false, stateMismatchError(err, "coordinator event-boundary proxy runtime differs from the approved deployment")
+	}
+	beforeBlock, beforeHash := manifest.CoordinatorEventStartBlock, manifest.CoordinatorEventStartBlockHash
+	beforeReleaseBlock, beforeReleaseHash := manifest.DeployBlock, manifest.DeployBlockHash
+	if err := recordContractDeploymentReceipt(manifest, "evm.coordinator-proxy", coordinatorReceipt, false); err != nil {
+		return false, err
+	}
+	changed := beforeBlock != manifest.CoordinatorEventStartBlock || !strings.EqualFold(beforeHash, manifest.CoordinatorEventStartBlockHash) || beforeReleaseBlock != manifest.DeployBlock || !strings.EqualFold(beforeReleaseHash, manifest.DeployBlockHash)
+	return changed, nil
+}
+
+// Remove observation fields which advance after deployment while retaining
+// every address, nonce, and expected runtime hash approved before execution.
+func contractDeploymentIdentity(manifest ContractDeployment) ContractDeployment {
+	manifest.DeployBlock = 0
+	manifest.DeployBlockHash = ""
+	manifest.CoordinatorEventStartBlock = 0
+	manifest.CoordinatorEventStartBlockHash = ""
+	return manifest
+}
+
+func contractDeploymentIdentityHash(manifest ContractDeployment) (string, error) {
+	return canonicalHashHex(contractDeploymentIdentity(manifest))
+}
+
+func contractDeploymentAddressesEqual(left, right ContractDeployment) bool {
+	return left.Schema == right.Schema && left.DeploymentID == right.DeploymentID && left.InitialNonce == right.InitialNonce && left.ReserveSink == right.ReserveSink && left.SettlementVault == right.SettlementVault && left.CoordinatorImplementation == right.CoordinatorImplementation && left.CoordinatorProxy == right.CoordinatorProxy && left.GovernanceDrillImplementation == right.GovernanceDrillImplementation && left.PrecompileProbe == right.PrecompileProbe
+}
+
+// Return contracts in their approved CREATE order, excluding intervening
+// calls which consume a deployer nonce but do not create an address.
+func contractDeploymentAddresses(manifest ContractDeployment) []common.Address {
+	return []common.Address{
+		manifest.ReserveSink,
+		manifest.SettlementVault,
+		manifest.CoordinatorImplementation,
+		manifest.CoordinatorProxy,
+		manifest.GovernanceDrillImplementation,
+		manifest.PrecompileProbe,
+	}
+}
+
+// Normalize runtime-hash keys to their address value so checksum case cannot
+// hide a duplicate or make an otherwise exact observed subset look different.
+func normalizedDeploymentRuntimeHashes(manifest ContractDeployment) (map[common.Address]string, error) {
+	result := make(map[common.Address]string, len(manifest.RuntimeHashes))
+	for addressText, hash := range manifest.RuntimeHashes {
+		if !common.IsHexAddress(addressText) {
+			return nil, fmt.Errorf("contract deployment has invalid runtime-hash address %q", addressText)
+		}
+		address := common.HexToAddress(addressText)
+		if _, duplicate := result[address]; duplicate {
+			return nil, fmt.Errorf("contract deployment has duplicate runtime-hash address %s", address)
+		}
+		if _, err := decodeHex32("contract runtime hash", hash); err != nil {
+			return nil, fmt.Errorf("contract deployment address %s has no valid runtime hash: %w", address, err)
+		}
+		result[address] = hash
+	}
+	return result, nil
+}
+
+// Accept an observed subset only when every recorded runtime hash is exactly
+// the release-planned value at that address.
+func contractDeploymentRuntimeHashesCompatible(observed, planned ContractDeployment) bool {
+	observedHashes, observedErr := normalizedDeploymentRuntimeHashes(observed)
+	plannedHashes, plannedErr := normalizedDeploymentRuntimeHashes(planned)
+	if observedErr != nil || plannedErr != nil || len(observedHashes) > len(plannedHashes) {
+		return false
+	}
+	for address, hash := range observedHashes {
+		if !strings.EqualFold(hash, plannedHashes[address]) {
+			return false
+		}
+	}
+	return true
+}
+
+// An in-place release repair may change only the original coordinator
+// implementation artifact. All immutable custody contracts, the proxy, the
+// hostile drill implementation, and the conformance probe remain byte exact.
+func contractDeploymentUpgradeBaselineCompatible(planned, built ContractDeployment) bool {
+	if !contractDeploymentAddressesEqual(planned, built) {
+		return false
+	}
+	plannedHashes, plannedErr := normalizedDeploymentRuntimeHashes(planned)
+	builtHashes, builtErr := normalizedDeploymentRuntimeHashes(built)
+	if plannedErr != nil || builtErr != nil || len(plannedHashes) != len(builtHashes) {
+		return false
+	}
+	for address, hash := range plannedHashes {
+		if address == planned.CoordinatorImplementation {
+			continue
+		}
+		if !strings.EqualFold(hash, builtHashes[address]) {
+			return false
+		}
+	}
+	return plannedHashes[planned.CoordinatorImplementation] != "" && builtHashes[built.CoordinatorImplementation] != ""
+}
+
+// Validate the release-facing half of a finalized legacy-baseline proof.
+// Immutable custody stays in place; v4 alone replaces the disposable probe at
+// an authenticated empty CREATE boundary when its executable semantics changed.
+func validateCoordinatorUpgradeBaselineRelease(baseline CoordinatorUpgradeBaseline, planned, built ContractDeployment, upgrade CoordinatorUpgrade) error {
+	if err := validateCoordinatorUpgradeBaseline(baseline, planned, upgrade); err != nil {
+		return err
+	}
+	if baseline.isZero() || !contractDeploymentAddressesEqual(planned, built) {
+		return errors.New("coordinator upgrade baseline does not match release deployment addresses")
+	}
+	builtHash, err := contractDeploymentIdentityHash(built)
+	if err != nil || builtHash != baseline.ReleaseDeploymentHash {
+		return errors.New("coordinator upgrade baseline does not authenticate the release deployment")
+	}
+	plannedHashes, plannedErr := normalizedDeploymentRuntimeHashes(planned)
+	builtHashes, builtErr := normalizedDeploymentRuntimeHashes(built)
+	if plannedErr != nil || builtErr != nil || len(plannedHashes) != len(builtHashes) {
+		return errors.New("coordinator upgrade baseline runtime hashes are incomplete")
+	}
+	releaseExecuted := []common.Address{planned.CoordinatorProxy, planned.PrecompileProbe}
+	if baseline.isRepeated() {
+		// A repeated upgrade keeps the already-deployed probe. Its executable
+		// body is bound separately after normalizing compiler metadata. V3
+		// does the same for the already-deployed immutable proxy; V2 retains
+		// its historical byte-exact rule while an observer promotes it.
+		if baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v3" || baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v4" {
+			releaseExecuted = nil
+		} else {
+			releaseExecuted = []common.Address{planned.CoordinatorProxy}
+		}
+	}
+	for _, address := range releaseExecuted {
+		if !strings.EqualFold(plannedHashes[address], builtHashes[address]) {
+			return fmt.Errorf("coordinator upgrade baseline changed release-executed runtime %s", address)
+		}
+	}
+	return nil
+}
+
+func validateCoordinatorUpgradePayloadBaseline(baseline CoordinatorUpgradeBaseline, retained ContractDeployment, payloads *DeploymentPayloads) error {
+	if !baseline.isRepeated() {
+		return nil
+	}
+	if payloads == nil {
+		return errors.New("repeated coordinator upgrade payload is unavailable")
+	}
+	if err := validatePrecompileProbeReplacement(baseline, payloads.Deployer, retained, payloads.CoordinatorUpgrade); err != nil {
+		return err
+	}
+	for _, check := range []struct {
+		name     string
+		address  common.Address
+		artifact ContractArtifact
+		want     string
+	}{
+		{"reserve sink", payloads.Manifest.ReserveSink, artifactByName("ReserveSink"), baseline.ReserveSinkExecutableHash},
+		{"settlement vault", payloads.Manifest.SettlementVault, artifactByName("SettlementVault"), baseline.SettlementVaultExecutableHash},
+		{"precompile probe", payloads.PrecompileProbeAddress, TestnetPrecompileProbeArtifact, baseline.PrecompileProbeExecutableHash},
+	} {
+		got, err := normalizedSolidityExecutableHash(payloads.ExpectedRuntime[check.address], check.artifact)
+		if err != nil || got != check.want {
+			return stateMismatchError(err, "repeated coordinator upgrade %s executable=%s want=%s", check.name, got, check.want)
+		}
+	}
+	if baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v3" || baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v4" {
+		got, err := normalizedSolidityExecutableHash(payloads.ExpectedRuntime[payloads.Manifest.CoordinatorProxy], artifactByName("ERC1967Proxy"))
+		if err != nil || got != baseline.CoordinatorProxyExecutableHash {
+			return stateMismatchError(err, "repeated coordinator upgrade proxy executable=%s want=%s", got, baseline.CoordinatorProxyExecutableHash)
+		}
+	}
+	if baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v4" {
+		got := crypto.Keccak256Hash(payloads.ExpectedRuntime[payloads.PrecompileProbeAddress]).Hex()
+		if payloads.PrecompileProbeAddress != common.HexToAddress(baseline.ReplacementPrecompileProbe) || payloads.PrecompileProbeNonce != baseline.ReplacementPrecompileProbeNonce || !strings.EqualFold(got, baseline.ReplacementPrecompileProbeHash) || payloads.CoordinatorUpgrade.DeployerNonce == ^uint64(0) || payloads.FleetBatcherNonce != payloads.CoordinatorUpgrade.DeployerNonce+1 || payloads.FleetBatcherAddress != crypto.CreateAddress(payloads.Deployer, payloads.FleetBatcherNonce) {
+			return fmt.Errorf("replacement precompile probe identity=%s/%d/%s want=%s/%d/%s", payloads.PrecompileProbeAddress, payloads.PrecompileProbeNonce, got, baseline.ReplacementPrecompileProbe, baseline.ReplacementPrecompileProbeNonce, baseline.ReplacementPrecompileProbeHash)
+		}
+	}
+	return nil
+}
+
+// Resolves the disposable probe generation without changing custody identity.
+func effectivePrecompileProbe(deployment ContractDeployment, baseline CoordinatorUpgradeBaseline) common.Address {
+	if baseline.Schema == "urnetwork-coordinator-upgrade-baseline-v4" && common.IsHexAddress(baseline.ReplacementPrecompileProbe) {
+		return common.HexToAddress(baseline.ReplacementPrecompileProbe)
+	}
+	return deployment.PrecompileProbe
+}
+
+// Compare two Solidity runtimes by executable body while retaining canonical
+// metadata and immutable-shape validation on both inputs.
+func matchingNormalizedSolidityExecutableHash(name string, active, release []byte, artifact ContractArtifact) (string, error) {
+	activeHash, err := normalizedSolidityExecutableHash(active, artifact)
+	if err != nil {
+		return "", fmt.Errorf("normalize active %s: %w", name, err)
+	}
+	releaseHash, err := normalizedSolidityExecutableHash(release, artifact)
+	if err != nil || activeHash != releaseHash {
+		return "", stateMismatchError(err, "%s executable changed: active=%s release=%s", name, activeHash, releaseHash)
+	}
+	return activeHash, nil
+}
+
+// Compares a current locked probe to either the prior baseline's authenticated
+// executable or an active runtime built from the same artifact generation.
+func comparePrecompileProbeRelease(active []byte, authenticatedExecutableHash string, release []byte) (string, string, bool, error) {
+	activeHash := authenticatedExecutableHash
+	if activeHash == "" {
+		var err error
+		activeHash, err = normalizedSolidityExecutableHash(active, TestnetPrecompileProbeArtifact)
+		if err != nil {
+			return "", "", true, nil
+		}
+	} else if _, err := decodeHex32("authenticated precompile probe executable hash", activeHash); err != nil {
+		return "", "", false, err
+	}
+	releaseHash, err := normalizedSolidityExecutableHash(release, TestnetPrecompileProbeArtifact)
+	if err != nil {
+		return "", "", false, fmt.Errorf("normalize release precompile probe: %w", err)
+	}
+	return activeHash, releaseHash, !strings.EqualFold(activeHash, releaseHash), nil
+}
+
+// Normalize a Solidity runtime for executable compatibility checks. Immutable
+// words are constructor data, and the trailing CBOR section authenticates the
+// build inputs without changing executable behavior; both remain protected by
+// the full deployment hashes elsewhere in the approved plan.
+func normalizedSolidityExecutable(code []byte, artifact ContractArtifact) ([]byte, error) {
+	template := hexBytes(artifact.RuntimeBytecode)
+	if len(code) != len(template) || len(code) < 3 {
+		return nil, fmt.Errorf("%s runtime length=%d want=%d", artifact.Name, len(code), len(template))
+	}
+	normalized := append([]byte(nil), code...)
+	for name, offsets := range artifact.ImmutableReferences {
+		for _, offset := range offsets {
+			if offset < 0 || offset+32 > len(normalized) {
+				return nil, fmt.Errorf("%s immutable %s offset is out of range", artifact.Name, name)
+			}
+			clear(normalized[offset : offset+32])
+		}
+	}
+	metadataLength := int(binary.BigEndian.Uint16(normalized[len(normalized)-2:]))
+	metadataStart := len(normalized) - metadataLength - 2
+	if metadataLength == 0 || metadataStart <= 0 || metadataStart >= len(normalized)-2 || normalized[metadataStart] < 0xa0 || normalized[metadataStart] > 0xbf {
+		return nil, fmt.Errorf("%s runtime has no canonical Solidity CBOR trailer", artifact.Name)
+	}
+	return normalized[:metadataStart], nil
+}
+
+func normalizedSolidityExecutableHash(code []byte, artifact ContractArtifact) (string, error) {
+	executable, err := normalizedSolidityExecutable(code, artifact)
+	if err != nil {
+		return "", err
+	}
+	return crypto.Keccak256Hash(executable).Hex(), nil
+}
+
+func validateContractDeploymentIdentity(manifest ContractDeployment, deployer common.Address) error {
+	if deployer == (common.Address{}) || manifest.InitialNonce > ^uint64(0)-8 {
+		return errors.New("contract deployment has an invalid deployer or nonce range")
+	}
+	nonceOffsets := []uint64{0, 1, 2, 4, 5, 8}
+	expected := []common.Address{
+		crypto.CreateAddress(deployer, manifest.InitialNonce),
+		crypto.CreateAddress(deployer, manifest.InitialNonce+1),
+		crypto.CreateAddress(deployer, manifest.InitialNonce+2),
+		crypto.CreateAddress(deployer, manifest.InitialNonce+4),
+		crypto.CreateAddress(deployer, manifest.InitialNonce+5),
+		crypto.CreateAddress(deployer, manifest.InitialNonce+8),
+	}
+	actual := contractDeploymentAddresses(manifest)
+	runtimeHashes, err := normalizedDeploymentRuntimeHashes(manifest)
+	if err != nil {
+		return err
+	}
+	seen := map[common.Address]bool{}
+	for index, address := range actual {
+		if address == (common.Address{}) || address != expected[index] || seen[address] {
+			return fmt.Errorf("contract deployment address %d is not the unique CREATE address approved for nonce %d", index, manifest.InitialNonce+nonceOffsets[index])
+		}
+		seen[address] = true
+		if runtimeHashes[address] == "" {
+			return fmt.Errorf("contract deployment address %s has no runtime hash", address)
+		}
+	}
+	if len(runtimeHashes) != len(actual) {
+		return fmt.Errorf("contract deployment has %d runtime hashes, want %d", len(runtimeHashes), len(actual))
+	}
+	return nil
+}
+
+// Bind every deterministic deployer transaction to its exact nonce, target,
+// value, and byte payload. The returned fields become part of the action intent
+// and are checked again against signed transaction bytes before broadcast.
+func deploymentActionEnvelope(payloads *DeploymentPayloads, actionID string, registrationBurnLimitRao uint64) (map[string]string, bool) {
+	if payloads == nil {
+		return nil, false
+	}
+	initialNonce := payloads.Manifest.InitialNonce
+	nonce := initialNonce
+	to := "create"
+	created := common.Address{}
+	value := new(big.Int)
+	var data []byte
+	switch actionID {
+	case "evm.reserve-sink":
+		data, created = payloads.Reserve, payloads.Manifest.ReserveSink
+	case "evm.settlement-vault":
+		nonce, data, created = initialNonce+1, payloads.Vault, payloads.Manifest.SettlementVault
+	case "evm.coordinator-implementation":
+		nonce, data, created = initialNonce+2, payloads.Implementation, payloads.Manifest.CoordinatorImplementation
+	case "evm.vault-register-escrow":
+		nonce, to, data = initialNonce+3, payloads.Manifest.SettlementVault.Hex(), payloads.RegisterEscrow
+		value = registrationFundingWei(registrationBurnLimitRao)
+	case "evm.coordinator-proxy":
+		nonce, data, created = initialNonce+4, payloads.Proxy, payloads.Manifest.CoordinatorProxy
+	case "evm.governance-drill-implementation":
+		nonce, data, created = initialNonce+5, payloads.GovernanceDrill, payloads.Manifest.GovernanceDrillImplementation
+	case "evm.vault-fix-coordinator":
+		nonce, to, data = initialNonce+6, payloads.Manifest.SettlementVault.Hex(), payloads.FixVault
+	case "evm.sink-fix-recorder":
+		nonce, to, data = initialNonce+7, payloads.Manifest.ReserveSink.Hex(), payloads.FixSink
+	case "precompile.probe-deploy":
+		nonce, data, created = payloads.PrecompileProbeNonce, payloads.PrecompileProbe, payloads.PrecompileProbeAddress
+	case "evm.coordinator-upgrade-implementation":
+		nonce, data, created = payloads.CoordinatorUpgrade.DeployerNonce, payloads.UpgradeImplementation, payloads.CoordinatorUpgrade.Implementation
+	case "fleet.refresh.deploy-batcher":
+		nonce, data, created = payloads.FleetBatcherNonce, payloads.FleetBatcher, payloads.FleetBatcherAddress
+	default:
+		return nil, false
+	}
+	result := map[string]string{
+		"expected_signer":         payloads.Deployer.Hex(),
+		"expected_nonce":          strconv.FormatUint(nonce, 10),
+		"expected_transaction_to": to,
+		"expected_value_wei":      value.String(),
+		"expected_data_keccak256": crypto.Keccak256Hash(data).Hex(),
+	}
+	if created != (common.Address{}) {
+		result["expected_created_address"] = created.Hex()
+	}
+	return result, true
 }
 
 func buildDeploymentPayloads(cfg *ResolvedConfig, roles *RoleSecrets, initialNonce uint64) (*DeploymentPayloads, error) {
+	return buildDeploymentPayloadsWithRegistrationGeneration(cfg, roles, initialNonce, 0)
+}
+
+// Moves only the disposable probe to an unused deterministic CREATE boundary.
+func configurePrecompileProbeNonce(payloads *DeploymentPayloads, nonce uint64) error {
+	if payloads == nil || payloads.Deployer == (common.Address{}) || payloads.Manifest.InitialNonce > ^uint64(0)-8 || nonce <= payloads.Manifest.InitialNonce+8 {
+		return errors.New("replacement precompile probe payload context is invalid")
+	}
+	oldAddress := payloads.PrecompileProbeAddress
+	runtime := payloads.ExpectedRuntime[oldAddress]
+	if len(runtime) == 0 {
+		return errors.New("replacement precompile probe has no locked runtime")
+	}
+	address := crypto.CreateAddress(payloads.Deployer, nonce)
+	for _, immutable := range []common.Address{payloads.Manifest.ReserveSink, payloads.Manifest.SettlementVault, payloads.Manifest.CoordinatorImplementation, payloads.Manifest.CoordinatorProxy, payloads.Manifest.GovernanceDrillImplementation} {
+		if address == immutable {
+			return errors.New("replacement precompile probe collides with an immutable deployment address")
+		}
+	}
+	if address == payloads.CoordinatorUpgrade.Implementation || address == payloads.FleetBatcherAddress || payloads.ValidatorEvidence != nil && address == payloads.ValidatorEvidence.Manifest.Address {
+		return errors.New("replacement precompile probe collides with an active release CREATE address")
+	}
+	delete(payloads.ExpectedRuntime, oldAddress)
+	payloads.PrecompileProbeAddress = address
+	payloads.PrecompileProbeNonce = nonce
+	payloads.ExpectedRuntime[address] = runtime
+	return nil
+}
+
+func configureCoordinatorUpgradeNonce(payloads *DeploymentPayloads, nonce uint64) error {
+	if payloads == nil || payloads.Deployer == (common.Address{}) || payloads.CommitmentOracle == (common.Address{}) || payloads.ExpectedRuntime == nil || payloads.Manifest.InitialNonce > ^uint64(0)-10 || nonce == ^uint64(0) {
+		return errors.New("coordinator upgrade payload context is invalid")
+	}
+	minimumNonce := payloads.Manifest.InitialNonce + 9
+	if payloads.PrecompileProbeNonce >= minimumNonce {
+		if payloads.PrecompileProbeNonce == ^uint64(0) {
+			return errors.New("coordinator upgrade nonce range overflows")
+		}
+		minimumNonce = payloads.PrecompileProbeNonce + 1
+	}
+	if nonce < minimumNonce {
+		return fmt.Errorf("coordinator upgrade nonce %d is below initial upgrade nonce %d", nonce, minimumNonce)
+	}
+	implementation := crypto.CreateAddress(payloads.Deployer, nonce)
+	runtime, err := runtimeWithImmutables(artifactByName("Coordinator"), map[string][]byte{"__self": abiWordAddress(implementation)})
+	if err != nil {
+		return err
+	}
+	schema := "urnetwork-coordinator-upgrade-v1"
+	if nonce > payloads.Manifest.InitialNonce+9 {
+		schema = "urnetwork-coordinator-upgrade-v2"
+	}
+	// The batcher and evidence constructors can refuse after this runtime is
+	// built. Keep the old map and all three CREATE identities intact on error.
+	next := *payloads
+	next.ExpectedRuntime = maps.Clone(payloads.ExpectedRuntime)
+	delete(next.ExpectedRuntime, payloads.CoordinatorUpgrade.Implementation)
+	next.ExpectedRuntime[implementation] = runtime
+	next.CoordinatorUpgrade = CoordinatorUpgrade{Schema: schema, DeploymentID: payloads.Manifest.DeploymentID, Implementation: implementation, DeployerNonce: nonce, RuntimeCodeHash: crypto.Keccak256Hash(runtime).Hex()}
+	if err := configureFleetBatcherNonce(&next, nonce+1); err != nil {
+		return err
+	}
+	*payloads = next
+	return nil
+}
+
+// Bind the additive testnet migration helper to the exact nonce immediately
+// after the active coordinator implementation deployment.
+func configureFleetBatcherNonce(payloads *DeploymentPayloads, nonce uint64) error {
+	if payloads == nil || payloads.Deployer == (common.Address{}) || payloads.Manifest.CoordinatorProxy == (common.Address{}) || payloads.CommitmentOracle == (common.Address{}) {
+		return errors.New("fleet batcher payload context is invalid")
+	}
+	parsed, err := abi.JSON(strings.NewReader(FleetBatcherABI))
+	if err != nil {
+		return err
+	}
+	arguments, err := parsed.Constructor.Inputs.Pack(payloads.Manifest.CoordinatorProxy, payloads.CommitmentOracle)
+	if err != nil {
+		return fmt.Errorf("fleet batcher constructor: %w", err)
+	}
+	address := crypto.CreateAddress(payloads.Deployer, nonce)
+	runtime, err := runtimeWithImmutables(TestnetFleetBatcherArtifact, map[string][]byte{
+		"coordinator": abiWordAddress(payloads.Manifest.CoordinatorProxy),
+		"oracle":      abiWordAddress(payloads.CommitmentOracle),
+	})
+	if err != nil {
+		return err
+	}
+	next := *payloads
+	next.FleetBatcherNonce = nonce
+	next.FleetBatcherAddress = address
+	next.FleetBatcher = append(hexBytes(FleetBatcherCreationBytecode), arguments...)
+	next.FleetBatcherRuntime = runtime
+	if payloads.validatorEvidenceCarry != nil {
+		if err := bindValidatorEvidenceCarryPayloads(&next, payloads.validatorEvidenceCarry); err != nil {
+			return err
+		}
+	} else if payloads.ValidatorEvidence != nil {
+		domain := payloads.ValidatorEvidence.Manifest
+		next.ValidatorEvidence, err = buildValidatorEvidenceDeployment(&next, domain.ChainID, domain.GenesisHash, domain.Netuid)
+		if err != nil {
+			return err
+		}
+	}
+	*payloads = next
+	return nil
+}
+
+func buildDeploymentPayloadsWithRegistrationGeneration(cfg *ResolvedConfig, roles *RoleSecrets, initialNonce, generation uint64) (*DeploymentPayloads, error) {
+	if initialNonce > ^uint64(0)-11 {
+		return nil, errors.New("deployment nonce range overflows uint64")
+	}
+	if err := validateContractRegistrationGeneration(cfg.Config.Topology, generation); err != nil {
+		return nil, err
+	}
 	deployer, err := roles.EVMAddress("deployer")
 	if err != nil {
 		return nil, err
@@ -67,12 +917,12 @@ func buildDeploymentPayloads(cfg *ResolvedConfig, roles *RoleSecrets, initialNon
 	// The first three CREATEs are followed by the vault-owned escrow
 	// registration, then the proxy and hostile implementation CREATEs and two
 	// one-shot link calls. The conformance probe is therefore nonce+8.
-	m := ContractDeployment{Schema: "urnetwork-contract-deployment-v1", DeploymentID: cfg.Config.Deployment.DeploymentID, InitialNonce: initialNonce, ReserveSink: crypto.CreateAddress(deployer, initialNonce), SettlementVault: crypto.CreateAddress(deployer, initialNonce+1), CoordinatorImplementation: crypto.CreateAddress(deployer, initialNonce+2), CoordinatorProxy: crypto.CreateAddress(deployer, initialNonce+4), GovernanceDrillImplementation: crypto.CreateAddress(deployer, initialNonce+5), PrecompileProbe: crypto.CreateAddress(deployer, initialNonce+8), RuntimeHashes: map[string]string{}}
+	m := ContractDeployment{Schema: "urnetwork-contract-deployment-v1", DeploymentID: cfg.Config.Deployment.DeploymentID, InitialNonce: initialNonce, RegistrationRoleGeneration: generation, ReserveSink: crypto.CreateAddress(deployer, initialNonce), SettlementVault: crypto.CreateAddress(deployer, initialNonce+1), CoordinatorImplementation: crypto.CreateAddress(deployer, initialNonce+2), CoordinatorProxy: crypto.CreateAddress(deployer, initialNonce+4), GovernanceDrillImplementation: crypto.CreateAddress(deployer, initialNonce+5), PrecompileProbe: crypto.CreateAddress(deployer, initialNonce+8), RuntimeHashes: map[string]string{}}
 	reserveHotkey, err := roleBytes32(roles, "reserve-hotkey")
 	if err != nil {
 		return nil, err
 	}
-	escrowHotkey, err := roleBytes32(roles, "escrow-hotkey")
+	escrowHotkey, err := roleBytes32(roles, escrowHotkeyLabelForGeneration(generation))
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +950,11 @@ func buildDeploymentPayloads(cfg *ResolvedConfig, roles *RoleSecrets, initialNon
 		return nil, fmt.Errorf("reserve constructor: %w", err)
 	}
 	minimumTTL := cfg.Policy.Settlement.EpochBlocks * cfg.Policy.Settlement.ClaimTTLEpochs
-	vaultArgs, err := vaultABI.Constructor.Inputs.Pack(cfg.Netuid, escrowHotkey, vaultSelf, minimumTTL, deployer)
+	minimumTransfer := cfg.Public.Chain.ExpectedDefaultMinTransferRao
+	if minimumTransfer == 0 {
+		return nil, errors.New("runtime DefaultMinTransfer is required for settlement-vault deployment")
+	}
+	vaultArgs, err := vaultABI.Constructor.Inputs.Pack(cfg.Netuid, escrowHotkey, vaultSelf, minimumTTL, minimumTransfer, deployer)
 	if err != nil {
 		return nil, fmt.Errorf("vault constructor: %w", err)
 	}
@@ -137,12 +991,12 @@ func buildDeploymentPayloads(cfg *ResolvedConfig, roles *RoleSecrets, initialNon
 	if err != nil {
 		return nil, err
 	}
-	p := &DeploymentPayloads{Manifest: m, Reserve: append(hexBytes(ReserveSinkCreationBytecode), sinkArgs...), Vault: append(hexBytes(SettlementVaultCreationBytecode), vaultArgs...), Implementation: hexBytes(CoordinatorCreationBytecode), RegisterEscrow: registerEscrow, Proxy: append(hexBytes(ERC1967ProxyCreationBytecode), proxyArgs...), GovernanceDrill: hexBytes(CoordinatorAdversaryCreationBytecode), FixVault: fixVault, FixSink: fixSink, PrecompileProbe: append(hexBytes(SubnetProbeCreationBytecode), probeArgs...), ExpectedRuntime: map[common.Address][]byte{}}
+	p := &DeploymentPayloads{Deployer: deployer, CommitmentOracle: oracle, PrecompileProbeAddress: m.PrecompileProbe, PrecompileProbeNonce: initialNonce + 8, Manifest: m, Reserve: append(hexBytes(ReserveSinkCreationBytecode), sinkArgs...), Vault: append(hexBytes(SettlementVaultCreationBytecode), vaultArgs...), Implementation: hexBytes(CoordinatorCreationBytecode), RegisterEscrow: registerEscrow, Proxy: append(hexBytes(ERC1967ProxyCreationBytecode), proxyArgs...), GovernanceDrill: hexBytes(CoordinatorAdversaryCreationBytecode), FixVault: fixVault, FixSink: fixSink, PrecompileProbe: append(hexBytes(SubnetProbeCreationBytecode), probeArgs...), UpgradeImplementation: hexBytes(CoordinatorCreationBytecode), ExpectedRuntime: map[common.Address][]byte{}}
 	p.ExpectedRuntime[m.ReserveSink], err = runtimeWithImmutables(artifactByName("ReserveSink"), map[string][]byte{"netuid": abiWordUint(uint64(cfg.Netuid)), "reserveHotkey": reserveHotkey[:], "selfColdkey": sinkSelf[:], "bootstrap": abiWordAddress(deployer)})
 	if err != nil {
 		return nil, err
 	}
-	p.ExpectedRuntime[m.SettlementVault], err = runtimeWithImmutables(artifactByName("SettlementVault"), map[string][]byte{"netuid": abiWordUint(uint64(cfg.Netuid)), "escrowHotkey": escrowHotkey[:], "selfColdkey": vaultSelf[:], "minimumClaimTTLBlocks": abiWordUint(minimumTTL), "bootstrap": abiWordAddress(deployer)})
+	p.ExpectedRuntime[m.SettlementVault], err = runtimeWithImmutables(artifactByName("SettlementVault"), map[string][]byte{"netuid": abiWordUint(uint64(cfg.Netuid)), "escrowHotkey": escrowHotkey[:], "selfColdkey": vaultSelf[:], "minimumClaimTTLBlocks": abiWordUint(minimumTTL), "minimumTransferTaoRao": abiWordUint(minimumTransfer), "bootstrap": abiWordAddress(deployer)})
 	if err != nil {
 		return nil, err
 	}
@@ -162,8 +1016,25 @@ func buildDeploymentPayloads(cfg *ResolvedConfig, roles *RoleSecrets, initialNon
 	if err != nil {
 		return nil, err
 	}
+	if err := configureCoordinatorUpgradeNonce(p, initialNonce+9); err != nil {
+		return nil, err
+	}
 	for addr, code := range p.ExpectedRuntime {
+		if addr == p.CoordinatorUpgrade.Implementation {
+			continue
+		}
 		p.Manifest.RuntimeHashes[addr.Hex()] = crypto.Keccak256Hash(code).Hex()
+	}
+	if cfg.Public == nil {
+		return nil, errors.New("validator evidence deployment requires an approved chain identity")
+	}
+	genesis, err := decodeHex32("validator evidence genesis", cfg.Public.Chain.GenesisHash)
+	if err != nil {
+		return nil, err
+	}
+	p.ValidatorEvidence, err = buildValidatorEvidenceDeployment(p, cfg.Public.Chain.ChainID, genesis, cfg.Netuid)
+	if err != nil {
+		return nil, err
 	}
 	return p, nil
 }
@@ -231,7 +1102,12 @@ func max64(a, b uint64) uint64 {
 	return b
 }
 
-type EVMTxManager struct {
+// Sends sharing this manager serialize their account nonce through finality.
+// Independent role managers remain concurrent. Close is an owner-only action
+// after all callers have joined; the manager must not be copied after use.
+type EvmTxManager struct {
+	stateLock    sync.Mutex
+	nonceTurn    chan struct{}
 	client       *ethclient.Client
 	chainID      *big.Int
 	deploymentID string
@@ -240,12 +1116,8 @@ type EVMTxManager struct {
 	key          *ecdsa.PrivateKey
 }
 
-func DialEVMTxManager(ctx context.Context, cfg *ResolvedConfig, stateDir string, j *Journal, roles *RoleSecrets, roleLabel string) (*EVMTxManager, error) {
-	_, httpURL, err := authorityURLs(cfg.Authority)
-	if err != nil {
-		return nil, err
-	}
-	client, err := ethclient.DialContext(ctx, httpURL)
+func DialEvmTxManager(ctx context.Context, cfg *ResolvedConfig, stateDir string, j *Journal, roles *RoleSecrets, roleLabel string) (*EvmTxManager, error) {
+	client, err := dialConfiguredEVMClient(ctx, cfg, cfg.OperationalEVM)
 	if err != nil {
 		return nil, err
 	}
@@ -268,15 +1140,127 @@ func DialEVMTxManager(ctx context.Context, cfg *ResolvedConfig, stateDir string,
 		client.Close()
 		return nil, err
 	}
-	return &EVMTxManager{client: client, chainID: id, deploymentID: cfg.Config.Deployment.DeploymentID, stateDir: stateDir, journal: j, key: key}, nil
+	return &EvmTxManager{client: client, chainID: id, deploymentID: cfg.Config.Deployment.DeploymentID, stateDir: stateDir, journal: j, key: key}, nil
 }
-func (m *EVMTxManager) Close() { m.client.Close() }
-func (m *EVMTxManager) PendingNonce(ctx context.Context) (uint64, error) {
+func (m *EvmTxManager) Close() { m.client.Close() }
+func (m *EvmTxManager) PendingNonce(ctx context.Context) (uint64, error) {
 	return m.client.PendingNonceAt(ctx, crypto.PubkeyToAddress(m.key.PublicKey))
 }
 
-func (m *EVMTxManager) Send(ctx context.Context, planHash string, a Action, to *common.Address, value *big.Int, data []byte) (*types.Receipt, error) {
-	if prior, ok := m.journal.LatestTransaction(a.ID, a.IntentHash); ok {
+// Apply the fixed live-estimate margin without allowing a hostile or malformed
+// RPC result to wrap the uint64 gas limit.
+func paddedEVMGas(estimatedGas uint64) (uint64, error) {
+	padded, ok := checkedAdd(estimatedGas, estimatedGas/5)
+	if !ok {
+		return 0, errors.New("EVM gas estimate margin overflow")
+	}
+	padded, ok = checkedAdd(padded, 25_000)
+	if !ok {
+		return 0, errors.New("EVM gas estimate fixed margin overflow")
+	}
+	return padded, nil
+}
+
+// Enforce gas units, fee price, aggregate spend, value, and current signer
+// balance together before any transaction bytes are persisted or broadcast.
+func validateEVMTransactionEnvelope(action Action, estimatedGas uint64, feeCap, balance, value *big.Int) (uint64, *big.Int, error) {
+	maximumGasUnits, maximumFeePerGas, err := evmActionFeeEnvelope(action)
+	if err != nil {
+		return 0, nil, err
+	}
+	if feeCap == nil || feeCap.Sign() < 0 || !feeCap.IsUint64() || feeCap.Uint64() > maximumFeePerGas {
+		return 0, nil, fmt.Errorf("%s live fee cap %v exceeds approved fee-per-gas ceiling %d", action.ID, feeCap, maximumFeePerGas)
+	}
+	gas, err := paddedEVMGas(estimatedGas)
+	if err != nil {
+		return 0, nil, fmt.Errorf("%s: %w", action.ID, err)
+	}
+	if gas > maximumGasUnits {
+		return 0, nil, fmt.Errorf("%s padded gas %d exceeds approved gas-unit ceiling %d", action.ID, gas, maximumGasUnits)
+	}
+	maximumCost := new(big.Int).Mul(new(big.Int).SetUint64(gas), feeCap)
+	actionCeiling, ceilingErr := action.Spend.EVMGasWei.Big()
+	if ceilingErr != nil {
+		return 0, nil, fmt.Errorf("%s action ceiling: %w", action.ID, ceilingErr)
+	}
+	if maximumCost.Cmp(actionCeiling) > 0 {
+		return 0, nil, fmt.Errorf("%s maximum gas cost %s exceeds action ceiling %s", action.ID, maximumCost, action.Spend.EVMGasWei)
+	}
+	if balance == nil || balance.Sign() < 0 || value == nil || value.Sign() < 0 {
+		return 0, nil, fmt.Errorf("%s has invalid signer balance or transaction value", action.ID)
+	}
+	required := new(big.Int).Add(new(big.Int).Set(maximumCost), value)
+	if balance.Cmp(required) < 0 {
+		return 0, nil, fmt.Errorf("%s signer balance %s is below value-plus-maximum-gas requirement %s", action.ID, balance, required)
+	}
+	return gas, maximumCost, nil
+}
+
+// Verify optional exact transaction fields which are hash-bound into critical
+// deployment actions. Either the complete field set is present or none is.
+func validateApprovedEVMTransactionFields(action Action, signer common.Address, nonce uint64, to *common.Address, value *big.Int, data []byte) error {
+	if action.ID == validatorEvidenceAnchorActionID {
+		if err := validateValidatorEvidenceAnchorTransactionFields(action, signer, to, value, data); err != nil {
+			return err
+		}
+	}
+	keys := []string{"expected_signer", "expected_nonce", "expected_transaction_to", "expected_value_wei", "expected_data_keccak256"}
+	present := 0
+	for _, key := range keys {
+		if action.Parameters[key] != "" {
+			present++
+		}
+	}
+	if present == 0 {
+		return nil
+	}
+	if present != len(keys) {
+		return fmt.Errorf("action %s has an incomplete exact EVM transaction envelope", action.ID)
+	}
+	if !common.IsHexAddress(action.Parameters["expected_signer"]) || common.HexToAddress(action.Parameters["expected_signer"]) != signer {
+		return fmt.Errorf("action %s signer %s differs from approved %s", action.ID, signer, action.Parameters["expected_signer"])
+	}
+	expectedNonce, err := strconv.ParseUint(action.Parameters["expected_nonce"], 10, 64)
+	if err != nil || expectedNonce != nonce {
+		return fmt.Errorf("action %s nonce %d differs from approved %s", action.ID, nonce, action.Parameters["expected_nonce"])
+	}
+	expectedTo := action.Parameters["expected_transaction_to"]
+	if expectedTo == "create" {
+		if to != nil {
+			return fmt.Errorf("action %s expected contract creation, got target %s", action.ID, to.Hex())
+		}
+		created := action.Parameters["expected_created_address"]
+		if !common.IsHexAddress(created) || crypto.CreateAddress(signer, nonce) != common.HexToAddress(created) {
+			return fmt.Errorf("action %s CREATE address differs from approved %s", action.ID, created)
+		}
+	} else if !common.IsHexAddress(expectedTo) || to == nil || *to != common.HexToAddress(expectedTo) {
+		return fmt.Errorf("action %s target differs from approved %s", action.ID, expectedTo)
+	} else if action.Parameters["expected_created_address"] != "" {
+		return fmt.Errorf("action %s call unexpectedly carries a CREATE address", action.ID)
+	}
+	expectedValue, ok := new(big.Int).SetString(action.Parameters["expected_value_wei"], 10)
+	if !ok || expectedValue.Sign() < 0 || value == nil || expectedValue.Cmp(value) != 0 {
+		return fmt.Errorf("action %s value differs from approved %s", action.ID, action.Parameters["expected_value_wei"])
+	}
+	if !strings.EqualFold(crypto.Keccak256Hash(data).Hex(), action.Parameters["expected_data_keccak256"]) {
+		return fmt.Errorf("action %s data hash differs from approved %s", action.ID, action.Parameters["expected_data_keccak256"])
+	}
+	return nil
+}
+
+func (m *EvmTxManager) Send(ctx context.Context, planHash string, a Action, to *common.Address, value *big.Int, data []byte) (*types.Receipt, error) {
+	release, err := m.acquireNonceTurn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return m.sendOwnedNonce(ctx, planHash, a, to, value, data)
+}
+
+// Called only by the account-turn owner, including the evidence relay which
+// binds its exact action nonce before entering this same durable sender.
+func (m *EvmTxManager) sendOwnedNonce(ctx context.Context, planHash string, a Action, to *common.Address, value *big.Int, data []byte) (*types.Receipt, error) {
+	if prior, ok := m.journal.LatestTransaction(planHash, a.ID, a.IntentHash); ok {
 		rawPath := filepath.Join(m.stateDir, "transactions", stringsTrim0x(prior.TransactionHash)+".rlp")
 		raw, err := os.ReadFile(rawPath)
 		if err != nil {
@@ -289,11 +1273,24 @@ func (m *EVMTxManager) Send(ctx context.Context, planHash string, a Action, to *
 		if !strings.EqualFold(tx.Hash().Hex(), prior.TransactionHash) {
 			return nil, fmt.Errorf("persisted EVM transaction hash mismatch: got %s want %s", tx.Hash(), prior.TransactionHash)
 		}
+		if a.ID == validatorEvidenceAnchorActionID && (!tx.Protected() || m.chainID == nil || tx.ChainId().Cmp(m.chainID) != 0) {
+			return nil, errors.New("persisted validator evidence anchor transaction has another or unprotected chain")
+		}
+		signer, err := types.Sender(types.LatestSignerForChainID(m.chainID), &tx)
+		if err != nil {
+			return nil, fmt.Errorf("recover persisted EVM transaction signer: %w", err)
+		}
+		if err := validateApprovedEVMTransactionFields(a, signer, tx.Nonce(), tx.To(), tx.Value(), tx.Data()); err != nil {
+			return nil, fmt.Errorf("persisted EVM transaction approval: %w", err)
+		}
 		return m.waitExactTransaction(ctx, planHash, a, &tx)
 	}
 	from := crypto.PubkeyToAddress(m.key.PublicKey)
 	nonce, err := m.client.PendingNonceAt(ctx, from)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateApprovedEVMTransactionFields(a, from, nonce, to, value, data); err != nil {
 		return nil, err
 	}
 	tip, err := m.client.SuggestGasTipCap(ctx)
@@ -308,15 +1305,25 @@ func (m *EVMTxManager) Send(ctx context.Context, planHash string, a Action, to *
 	if header.BaseFee != nil {
 		feeCap.Add(new(big.Int).Mul(header.BaseFee, big.NewInt(2)), tip)
 	}
+	_, maximumFeePerGas, err := evmActionFeeEnvelope(a)
+	if err != nil {
+		return nil, err
+	}
+	if !feeCap.IsUint64() || feeCap.Uint64() > maximumFeePerGas {
+		return nil, fmt.Errorf("%s live fee cap %s exceeds approved fee-per-gas ceiling %d", a.ID, feeCap, maximumFeePerGas)
+	}
 	msg := ethereum.CallMsg{From: from, To: to, Value: value, Data: data, GasTipCap: tip, GasFeeCap: feeCap}
-	gas, err := m.client.EstimateGas(ctx, msg)
+	estimatedGas, err := m.client.EstimateGas(ctx, msg)
 	if err != nil {
 		return nil, fmt.Errorf("estimate %s: %w", a.ID, err)
 	}
-	gas = gas + gas/5 + 25_000
-	maxCost := new(big.Int).Mul(new(big.Int).SetUint64(gas), feeCap)
-	if maxCost.BitLen() > 64 || maxCost.Uint64() > a.Spend.EVMGasWei {
-		return nil, fmt.Errorf("%s maximum gas %s exceeds action ceiling %d", a.ID, maxCost, a.Spend.EVMGasWei)
+	balance, err := m.client.BalanceAt(ctx, from, nil)
+	if err != nil {
+		return nil, fmt.Errorf("read %s signer balance: %w", a.ID, err)
+	}
+	gas, _, err := validateEVMTransactionEnvelope(a, estimatedGas, feeCap, balance, value)
+	if err != nil {
+		return nil, err
 	}
 	tx := types.NewTx(&types.DynamicFeeTx{ChainID: m.chainID, Nonce: nonce, GasTipCap: tip, GasFeeCap: feeCap, Gas: gas, To: to, Value: value, Data: data})
 	signed, err := types.SignTx(tx, types.LatestSignerForChainID(m.chainID), m.key)
@@ -350,7 +1357,7 @@ func knownEVMTxError(err error) bool {
 		strings.Contains(message, "nonce too low") || strings.Contains(message, "replacement transaction underpriced")
 }
 
-func (m *EVMTxManager) waitExactTransaction(ctx context.Context, planHash string, a Action, signed *types.Transaction) (*types.Receipt, error) {
+func (m *EvmTxManager) waitExactTransaction(ctx context.Context, planHash string, a Action, signed *types.Transaction) (*types.Receipt, error) {
 	if signed == nil {
 		return nil, errors.New("nil persisted EVM transaction")
 	}
@@ -363,7 +1370,7 @@ func (m *EVMTxManager) waitExactTransaction(ctx context.Context, planHash string
 	for {
 		receipt, err := m.client.TransactionReceipt(ctx, signed.Hash())
 		if err == nil {
-			return m.finalizeReceipt(ctx, planHash, a, receipt)
+			return m.finalizeReceipt(ctx, planHash, a, signed.Hash(), receipt)
 		}
 		if err != ethereum.NotFound {
 			return nil, err
@@ -390,52 +1397,108 @@ func (m *EVMTxManager) waitExactTransaction(ctx context.Context, planHash string
 	}
 }
 
-func (m *EVMTxManager) finalizeReceipt(ctx context.Context, planHash string, a Action, r *types.Receipt) (*types.Receipt, error) {
-	if err := m.journal.Append(JournalEntry{DeploymentID: m.deploymentID, PlanHash: planHash, ActionID: a.ID, IntentHash: a.IntentHash, Stage: StageIncluded, TransactionHash: r.TxHash.Hex(), BlockNumber: r.BlockNumber.Uint64(), BlockHash: r.BlockHash.Hex()}); err != nil {
+// The signed intent, not an endpoint's receipt, selects the transaction lane.
+// Refuse malformed inclusion before the first durable journal observation.
+func (m *EvmTxManager) finalizeReceipt(ctx context.Context, planHash string, a Action, expectedHash common.Hash, r *types.Receipt) (*types.Receipt, error) {
+	if err := validateEVMReceiptIdentity(r, expectedHash); err != nil {
+		return nil, err
+	}
+	if err := m.journal.Append(JournalEntry{DeploymentID: m.deploymentID, PlanHash: planHash, ActionID: a.ID, IntentHash: a.IntentHash, Stage: StageIncluded, TransactionHash: expectedHash.Hex(), BlockNumber: r.BlockNumber.Uint64(), BlockHash: r.BlockHash.Hex()}); err != nil {
 		return r, err
 	}
-	finalized, err := waitEVMReceiptFinality(ctx, m.client, r.TxHash)
+	finalized, err := waitEVMReceiptFinality(ctx, m.client, expectedHash)
 	if err != nil {
 		return r, err
 	}
 	if finalized.Status != types.ReceiptStatusSuccessful {
 		return finalized, fmt.Errorf("EVM transaction %s reverted in its canonical inclusion", finalized.TxHash)
 	}
-	if err := m.journal.Append(JournalEntry{DeploymentID: m.deploymentID, PlanHash: planHash, ActionID: a.ID, IntentHash: a.IntentHash, Stage: StageFinalized, TransactionHash: finalized.TxHash.Hex(), BlockNumber: finalized.BlockNumber.Uint64(), BlockHash: finalized.BlockHash.Hex()}); err != nil {
+	if err := m.journal.Append(JournalEntry{DeploymentID: m.deploymentID, PlanHash: planHash, ActionID: a.ID, IntentHash: a.IntentHash, Stage: StageFinalized, TransactionHash: expectedHash.Hex(), BlockNumber: finalized.BlockNumber.Uint64(), BlockHash: finalized.BlockHash.Hex()}); err != nil {
 		return finalized, err
 	}
 	return finalized, nil
 }
-func waitEVMReceiptFinality(ctx context.Context, c *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
-	ticker := time.NewTicker(3 * time.Second)
+
+type evmReceiptFinalityReader interface {
+	evmBlockReader
+	TransactionReceipt(context.Context, common.Hash) (*types.Receipt, error)
+}
+
+type ethEVMReceiptFinalityReader struct {
+	client *ethclient.Client
+}
+
+func (self ethEVMReceiptFinalityReader) EVMBlockByNumber(ctx context.Context, number *big.Int) (ChainHead, error) {
+	return (ethEVMBlockReader{client: self.client}).EVMBlockByNumber(ctx, number)
+}
+
+func (self ethEVMReceiptFinalityReader) TransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	return self.client.TransactionReceipt(ctx, hash)
+}
+
+// Fetches signed bytes by their receipt-bound transaction identity.
+func (self ethEVMReceiptFinalityReader) TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error) {
+	return self.client.TransactionByHash(ctx, hash)
+}
+
+// Reads code at the same finalized height used to authenticate CREATE receipts.
+func (self ethEVMReceiptFinalityReader) CodeAt(ctx context.Context, address common.Address, block *big.Int) ([]byte, error) {
+	return self.client.CodeAt(ctx, address, block)
+}
+
+// Every receipt consumer keeps its independently expected transaction hash.
+// Inclusion fields are checked before narrowing or recording an observation.
+func validateEVMReceiptIdentity(receipt *types.Receipt, expectedHash common.Hash) error {
+	if expectedHash == (common.Hash{}) || receipt == nil || receipt.TxHash != expectedHash || receipt.BlockHash == (common.Hash{}) || receipt.BlockNumber == nil || !receipt.BlockNumber.IsUint64() || receipt.BlockNumber.Sign() <= 0 {
+		return errors.New("EVM receipt differs from the requested transaction or has no valid inclusion block")
+	}
+	return nil
+}
+
+// Read one receipt, the EVM finalized head, and the canonical EVM RPC
+// header at the inclusion height. A canonical mismatch can be a transient
+// reorg, so the caller retries it; malformed RPC data fails immediately.
+func observeEVMReceiptFinality(ctx context.Context, reader evmReceiptFinalityReader, txHash common.Hash) (*types.Receipt, bool, error) {
+	if reader == nil || txHash == (common.Hash{}) {
+		return nil, false, errors.New("EVM finality observation is incomplete")
+	}
+	finalized, err := finalizedEVMHeadFromReader(ctx, reader)
+	if err != nil {
+		return nil, false, err
+	}
+	receipt, err := reader.TransactionReceipt(ctx, txHash)
+	if errors.Is(err, ethereum.NotFound) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if err := validateEVMReceiptIdentity(receipt, txHash); err != nil {
+		return nil, false, err
+	}
+	if finalized.Number < receipt.BlockNumber.Uint64() {
+		return receipt, false, nil
+	}
+	canonicalHash, err := canonicalEVMBlockHash(ctx, reader, receipt.BlockNumber.Uint64())
+	if err != nil {
+		return nil, false, err
+	}
+	return receipt, receiptIsCanonicalAndFinalized(finalized.Number, receipt, canonicalHash), nil
+}
+
+func waitEVMReceiptFinalityWithInterval(ctx context.Context, reader evmReceiptFinalityReader, txHash common.Hash, interval time.Duration) (*types.Receipt, error) {
+	if interval <= 0 {
+		return nil, errors.New("EVM finality polling interval must be positive")
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
-		var hash string
-		if err := c.Client().CallContext(ctx, &hash, "chain_getFinalizedHead"); err != nil {
-			return nil, err
-		}
-		var h struct {
-			Number string `json:"number"`
-		}
-		if err := c.Client().CallContext(ctx, &h, "chain_getHeader", hash); err != nil {
-			return nil, err
-		}
-		n, err := strconv.ParseUint(stringsTrim0x(h.Number), 16, 64)
+		receipt, ready, err := observeEVMReceiptFinality(ctx, reader, txHash)
 		if err != nil {
 			return nil, err
 		}
-		receipt, receiptErr := c.TransactionReceipt(ctx, txHash)
-		if receiptErr != nil && receiptErr != ethereum.NotFound {
-			return nil, receiptErr
-		}
-		if receiptErr == nil && receipt.BlockNumber != nil && receipt.BlockNumber.IsUint64() && n >= receipt.BlockNumber.Uint64() {
-			var canonicalHash string
-			if err := c.Client().CallContext(ctx, &canonicalHash, "chain_getBlockHash", receipt.BlockNumber.Uint64()); err != nil {
-				return nil, err
-			}
-			if receiptIsCanonicalAndFinalized(n, receipt, canonicalHash) {
-				return receipt, nil
-			}
+		if ready {
+			return receipt, nil
 		}
 		select {
 		case <-ctx.Done():
@@ -443,6 +1506,13 @@ func waitEVMReceiptFinality(ctx context.Context, c *ethclient.Client, txHash com
 		case <-ticker.C:
 		}
 	}
+}
+
+func waitEVMReceiptFinality(ctx context.Context, client *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
+	if client == nil {
+		return nil, errors.New("EVM finality client is unavailable")
+	}
+	return waitEVMReceiptFinalityWithInterval(ctx, ethEVMReceiptFinalityReader{client: client}, txHash, 3*time.Second)
 }
 
 func receiptIsCanonicalAndFinalized(finalized uint64, receipt *types.Receipt, canonicalHash string) bool {

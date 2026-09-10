@@ -3,10 +3,12 @@ package miner
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"os/exec"
@@ -35,6 +37,7 @@ type ClaimDaemonConfig struct {
 	APIURL         string   `yaml:"api_url" json:"api_url"`
 	RPC            []string `yaml:"rpc" json:"rpc"`
 	KeyFile        string   `yaml:"key_file" json:"key_file"`
+	JWTFile        string   `yaml:"jwt_file,omitempty" json:"jwt_file,omitempty"`
 	StateDir       string   `yaml:"state_dir" json:"state_dir"`
 	PollSeconds    int      `yaml:"poll_seconds" json:"poll_seconds"`
 	LookbackEpochs uint64   `yaml:"lookback_epochs" json:"lookback_epochs"`
@@ -56,7 +59,10 @@ func LoadClaimDaemonConfig(path string) (*ClaimDaemonConfig, error) {
 		return nil, err
 	}
 	var extra any
-	if err := dec.Decode(&extra); err == nil {
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return nil, fmt.Errorf("claim daemon config contains trailing YAML: %w", err)
+		}
 		return nil, errors.New("claim daemon config contains multiple YAML documents")
 	}
 	base := filepath.Dir(abs)
@@ -68,6 +74,12 @@ func LoadClaimDaemonConfig(path string) (*ClaimDaemonConfig, error) {
 			*value = filepath.Join(base, *value)
 		}
 		*value = filepath.Clean(*value)
+	}
+	if cfg.JWTFile != "" {
+		if !filepath.IsAbs(cfg.JWTFile) {
+			cfg.JWTFile = filepath.Join(base, cfg.JWTFile)
+		}
+		cfg.JWTFile = filepath.Clean(cfg.JWTFile)
 	}
 	if cfg.PollSeconds == 0 {
 		cfg.PollSeconds = 30
@@ -81,18 +93,31 @@ func LoadClaimDaemonConfig(path string) (*ClaimDaemonConfig, error) {
 	if _, err := os.Stat(cfg.KeyFile); err != nil {
 		return nil, fmt.Errorf("claim relayer key: %w", err)
 	}
+	if cfg.JWTFile != "" {
+		info, err := os.Stat(cfg.JWTFile)
+		if err != nil {
+			return nil, fmt.Errorf("claim network JWT: %w", err)
+		}
+		if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+			return nil, errors.New("claim network JWT must be a private regular file")
+		}
+	}
 	return &cfg, nil
 }
 
 type ClaimQueueEntry struct {
-	Epoch       int64  `json:"epoch"`
-	Status      string `json:"status"`
-	Attempts    int    `json:"attempts"`
-	UpdatedAt   string `json:"updated_at"`
-	NextRetryAt string `json:"next_retry_at,omitempty"`
-	TxHash      string `json:"tx_hash,omitempty"`
-	RawTxHex    string `json:"raw_tx_hex,omitempty"`
-	LastError   string `json:"last_error,omitempty"`
+	Epoch              int64  `json:"epoch"`
+	Status             string `json:"status"`
+	Attempts           int    `json:"attempts"`
+	UpdatedAt          string `json:"updated_at"`
+	NextRetryAt        string `json:"next_retry_at,omitempty"`
+	TxHash             string `json:"tx_hash,omitempty"`
+	RawTxHex           string `json:"raw_tx_hex,omitempty"`
+	FinalizedBlock     uint64 `json:"finalized_block,omitempty"`
+	FinalizedBlockHash string `json:"finalized_block_hash,omitempty"`
+	ReceiptStatus      uint64 `json:"receipt_status,omitempty"`
+	ReceiptLogsHash    string `json:"receipt_logs_sha256,omitempty"`
+	LastError          string `json:"last_error,omitempty"`
 }
 
 type ClaimQueue struct {
@@ -470,6 +495,9 @@ func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *s
 // a canonical, finalized failure receipt. A missing or pending transaction is
 // intentionally left uncertain; leafClaimed is checked first on every pass.
 func uncertainClaimRetryable(ctx context.Context, cfg *ClaimDaemonConfig, txHash string) (bool, error) {
+	if cfg == nil {
+		return false, errors.New("claim receipt configuration is unavailable")
+	}
 	raw, err := hex.DecodeString(strings.TrimPrefix(txHash, "0x"))
 	if err != nil || len(raw) != common.HashLength {
 		return false, fmt.Errorf("invalid uncertain transaction hash %q", txHash)
@@ -492,21 +520,26 @@ func uncertainClaimRetryable(ctx context.Context, cfg *ClaimDaemonConfig, txHash
 			failures = append(failures, receiptErr)
 			continue
 		}
+		if receipt == nil || receipt.TxHash != hash || receipt.BlockNumber == nil || !receipt.BlockNumber.IsUint64() || receipt.BlockNumber.Sign() <= 0 || receipt.BlockHash == (common.Hash{}) {
+			client.Close()
+			failures = append(failures, errors.New("uncertain claim receipt has an incomplete or mismatched identity"))
+			continue
+		}
 		finalized, finalErr := finalizedNumber(ctx, client)
-		if finalErr != nil || receipt.BlockNumber == nil || !receipt.BlockNumber.IsUint64() || finalized < receipt.BlockNumber.Uint64() {
+		if finalErr != nil || finalized < receipt.BlockNumber.Uint64() {
 			client.Close()
 			if finalErr != nil {
 				failures = append(failures, finalErr)
 			}
 			continue
 		}
-		header, headerErr := client.HeaderByNumber(ctx, receipt.BlockNumber)
+		block, blockErr := onchain.ReadEVMBlockIdentity(ctx, client, receipt.BlockNumber)
 		client.Close()
-		if headerErr != nil {
-			failures = append(failures, headerErr)
+		if blockErr != nil {
+			failures = append(failures, blockErr)
 			continue
 		}
-		if header.Hash() != receipt.BlockHash {
+		if block.Hash != receipt.BlockHash {
 			return false, fmt.Errorf("transaction %s receipt is not canonical", txHash)
 		}
 		if receipt.Status == types.ReceiptStatusFailed {
@@ -599,6 +632,22 @@ type claimAPI interface {
 	SnPoolClaimSyncWithContext(context.Context, *sdk.SnPoolClaimArgs) (*sdk.SnPoolClaimResult, error)
 }
 
+// The injectable form used to prove that finalized observation shares the
+// operator-local chain/nonce boundary with transaction submission.
+type claimReconcileFunc func(context.Context, *ClaimDaemonConfig, claimAPI, *ClaimQueueEntry) (string, error)
+
+// Serializes multi-call finalized reconciliation for one operator. Without
+// this boundary, hundreds of payable miners can enter a source-wide public RPC
+// queue at once and starve validators even though submissions are serialized.
+func reconcileClaimEntryWithLock(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI, entry *ClaimQueueEntry, chainStateLock *sync.Mutex, reconcile claimReconcileFunc) (string, error) {
+	if chainStateLock == nil || reconcile == nil {
+		return "", errors.New("claim reconciliation chain boundary is unavailable")
+	}
+	chainStateLock.Lock()
+	defer chainStateLock.Unlock()
+	return reconcile(ctx, cfg, api, entry)
+}
+
 func reconcileClaimEntry(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI, entry *ClaimQueueEntry) (string, error) {
 	claim, err := api.SnPoolClaimSyncWithContext(ctx, &sdk.SnPoolClaimArgs{Epoch: entry.Epoch})
 	if err != nil {
@@ -617,6 +666,15 @@ func reconcileClaimEntry(ctx context.Context, cfg *ClaimDaemonConfig, api claimA
 		return "", err
 	}
 	if claimed {
+		if entry.TxHash != "" && entry.FinalizedBlock == 0 {
+			receipt, err := finalizedClaimReceipt(ctx, cfg, entry.TxHash)
+			if err != nil {
+				return "", err
+			}
+			if err := recordFinalizedClaimReceipt(entry, receipt); err != nil {
+				return "", err
+			}
+		}
 		return "finalized", nil
 	}
 	if entry.Status == "uncertain" && entry.TxHash != "" {
@@ -638,7 +696,161 @@ func reconcileClaimEntry(ctx context.Context, cfg *ClaimDaemonConfig, api claimA
 	return "", nil
 }
 
-func runClaimDaemon(configPath string) error {
+func submitClaimDirect(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI, entry *ClaimQueueEntry, submitLock *sync.Mutex, store *claimQueueStore, queue *ClaimQueue) error {
+	claim, err := api.SnPoolClaimSyncWithContext(ctx, &sdk.SnPoolClaimArgs{Epoch: entry.Epoch})
+	if err != nil {
+		return err
+	}
+	if claim.Error != nil {
+		return errors.New(claim.Error.Message)
+	}
+	vault, calldata, err := claimCalldata(claim)
+	if err != nil {
+		return err
+	}
+	if claim.ChainId < 0 {
+		return fmt.Errorf("negative claim chain id %d", claim.ChainId)
+	}
+	key, err := onchain.LoadKeyFile(cfg.KeyFile)
+	if err != nil {
+		return err
+	}
+	if submitLock == nil {
+		return errors.New("claim submit lock is nil")
+	}
+	submitLock.Lock()
+	defer submitLock.Unlock()
+	receipt, err := onchain.SubmitWithHooks(ctx, onchain.SubmitParams{
+		Contract: vault, Rpcs: cfg.RPC, Key: key, Calldata: calldata,
+		ChainID: new(big.Int).SetUint64(uint64(claim.ChainId)),
+	}, onchain.SubmitHooks{
+		Prepared: func(hash common.Hash, raw []byte) error {
+			priorHash, priorRaw := entry.TxHash, entry.RawTxHex
+			entry.TxHash = strings.ToLower(hash.Hex())
+			entry.RawTxHex = "0x" + hex.EncodeToString(raw)
+			entry.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			if saveErr := store.save(queue); saveErr != nil {
+				entry.TxHash, entry.RawTxHex = priorHash, priorRaw
+				return saveErr
+			}
+			return nil
+		},
+		Broadcast: func(hash common.Hash) error {
+			if !strings.EqualFold(entry.TxHash, hash.Hex()) {
+				return errors.New("broadcast transaction hash differs from the durable prepared hash")
+			}
+			entry.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			return store.save(queue)
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return recordFinalizedClaimReceipt(entry, receipt)
+}
+
+// recordFinalizedClaimReceipt binds a successful queue entry to the exact
+// canonical receipt which caused it. Raw signed transaction bytes alone prove
+// intent but not inclusion, so the simulator's immutable evidence capture
+// retains the finalized block and a canonical hash of every receipt log.
+func recordFinalizedClaimReceipt(entry *ClaimQueueEntry, receipt *types.Receipt) error {
+	if entry == nil || receipt == nil || receipt.BlockNumber == nil || !receipt.BlockNumber.IsUint64() || receipt.BlockNumber.Sign() <= 0 || receipt.BlockHash == (common.Hash{}) || receipt.TxHash == (common.Hash{}) {
+		return errors.New("claim returned an incomplete finalized receipt")
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return errors.New("claim finalized with a failed receipt")
+	}
+	if entry.TxHash == "" || !strings.EqualFold(entry.TxHash, receipt.TxHash.Hex()) {
+		return errors.New("claim receipt transaction differs from the durable prepared transaction")
+	}
+	logs, err := json.Marshal(receipt.Logs)
+	if err != nil {
+		return fmt.Errorf("encode claim receipt logs: %w", err)
+	}
+	digest := sha256.Sum256(logs)
+	entry.FinalizedBlock = receipt.BlockNumber.Uint64()
+	entry.FinalizedBlockHash = strings.ToLower(receipt.BlockHash.Hex())
+	entry.ReceiptStatus = receipt.Status
+	entry.ReceiptLogsHash = "sha256:" + hex.EncodeToString(digest[:])
+	return nil
+}
+
+// finalizedClaimReceipt recovers inclusion evidence after a crash between
+// chain finality and the queue fsync. An endpoint must provide a canonical
+// finalized block before its recovered receipt is accepted.
+func finalizedClaimReceipt(ctx context.Context, cfg *ClaimDaemonConfig, txHash string) (*types.Receipt, error) {
+	if cfg == nil {
+		return nil, errors.New("claim receipt configuration is unavailable")
+	}
+	raw, err := hex.DecodeString(strings.TrimPrefix(txHash, "0x"))
+	if err != nil || len(raw) != common.HashLength {
+		return nil, fmt.Errorf("invalid claim transaction hash %q", txHash)
+	}
+	hash := common.BytesToHash(raw)
+	var failures []error
+	for _, endpoint := range cfg.RPC {
+		client, dialErr := ethclient.DialContext(ctx, endpoint)
+		if dialErr != nil {
+			failures = append(failures, dialErr)
+			continue
+		}
+		receipt, receiptErr := client.TransactionReceipt(ctx, hash)
+		if receiptErr != nil {
+			client.Close()
+			failures = append(failures, receiptErr)
+			continue
+		}
+		if receipt == nil || receipt.TxHash != hash || receipt.BlockNumber == nil || !receipt.BlockNumber.IsUint64() || receipt.BlockNumber.Sign() <= 0 || receipt.BlockHash == (common.Hash{}) {
+			client.Close()
+			failures = append(failures, errors.New("claim receipt has an incomplete or mismatched identity"))
+			continue
+		}
+		finalized, finalErr := finalizedNumber(ctx, client)
+		if finalErr != nil || finalized < receipt.BlockNumber.Uint64() {
+			client.Close()
+			if finalErr != nil {
+				failures = append(failures, finalErr)
+			} else {
+				failures = append(failures, errors.New("claim receipt is not finalized"))
+			}
+			continue
+		}
+		block, blockErr := onchain.ReadEVMBlockIdentity(ctx, client, receipt.BlockNumber)
+		client.Close()
+		if blockErr != nil {
+			failures = append(failures, blockErr)
+			continue
+		}
+		if block.Hash != receipt.BlockHash {
+			return nil, fmt.Errorf("claim transaction %s receipt is not canonical", txHash)
+		}
+		return receipt, nil
+	}
+	if len(failures) == 0 {
+		return nil, errors.New("claim receipt has no RPC endpoint")
+	}
+	return nil, errors.Join(failures...)
+}
+
+func readClaimDaemonJWT(cfg *ClaimDaemonConfig) (string, error) {
+	if cfg.JWTFile == "" {
+		return readNetworkJwt()
+	}
+	b, err := os.ReadFile(cfg.JWTFile)
+	if err != nil {
+		return "", err
+	}
+	jwt := strings.TrimSpace(string(b))
+	if jwt == "" {
+		return "", errors.New("claim network JWT is empty")
+	}
+	return jwt, nil
+}
+
+func runClaimDaemonWithLock(ctx context.Context, configPath string, chainStateLock *sync.Mutex, initialDelay time.Duration, onReady func()) error {
+	if ctx == nil {
+		return errors.New("claim daemon context is nil")
+	}
 	cfg, err := LoadClaimDaemonConfig(configPath)
 	if err != nil {
 		return err
@@ -654,35 +866,43 @@ func runClaimDaemon(configPath string) error {
 	if err := store.save(queue); err != nil {
 		return err
 	}
-	executable, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	event := connect.NewEventWithContext(context.Background())
-	event.SetOnSignals(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-	ctx := event.Ctx()
 	strategy := connect.NewClientStrategyWithDefaults(ctx)
+	defer strategy.Close()
 	api := sdk.NewApi(ctx, strategy, cfg.APIURL)
-	defer api.Close()
-	jwt, err := readNetworkJwt()
+	defer func() {
+		_ = api.CloseAndWait(context.Background())
+	}()
+	jwt, err := readClaimDaemonJWT(cfg)
 	if err != nil {
 		return err
 	}
 	api.SetByJwt(jwt)
+	if onReady != nil {
+		onReady()
+	}
+	if initialDelay > 0 {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(initialDelay):
+		}
+	}
 	ticker := time.NewTicker(time.Duration(cfg.PollSeconds) * time.Second)
 	defer ticker.Stop()
 	for {
-		current, err := api.SnEpochSync()
+		current, err := api.SnEpochSyncWithContext(ctx)
 		if err == nil {
 			discoverClaims(queue, current.Epoch, cfg.LookbackEpochs)
-			_ = store.save(queue)
+			if err := store.save(queue); err != nil {
+				return err
+			}
 		}
 		for epoch := int64(0); epoch <= queue.LastDiscovered; epoch++ {
 			entry := queue.Entries[fmt.Sprint(epoch)]
 			if entry == nil || entry.Status == "finalized" || entry.Status == "no-claim" {
 				continue
 			}
-			reconciled, reconcileErr := reconcileClaimEntry(ctx, cfg, api, entry)
+			reconciled, reconcileErr := reconcileClaimEntryWithLock(ctx, cfg, api, entry, chainStateLock, reconcileClaimEntry)
 			if reconciled != "" {
 				entry.Status = reconciled
 				entry.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -728,29 +948,7 @@ func runClaimDaemon(configPath string) error {
 			if err := store.save(queue); err != nil {
 				return err
 			}
-			var persistHashErr error
-			output, claimErr := executeClaim(ctx, executable, cfg, entry, func(hash, raw string) error {
-				entry.TxHash = hash
-				entry.RawTxHex = raw
-				entry.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-				if err := store.save(queue); err != nil {
-					persistHashErr = err
-					return err
-				}
-				return nil
-			}, func(hash string) {
-				entry.TxHash = hash
-				entry.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-				if err := store.save(queue); err != nil {
-					persistHashErr = err
-				}
-			})
-			if persistHashErr != nil {
-				return persistHashErr
-			}
-			if entry.TxHash == "" {
-				entry.TxHash = claimTxHash(output)
-			}
+			claimErr := submitClaimDirect(ctx, cfg, api, entry, chainStateLock, store, queue)
 			entry.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 			if claimErr == nil {
 				entry.Status = "finalized"
@@ -773,4 +971,17 @@ func runClaimDaemon(configPath string) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+// RunClaimDaemon runs the production claim worker using direct package calls;
+// it never shells out to the provider or snclaim CLIs.
+func RunClaimDaemon(ctx context.Context, configPath string) error {
+	var chainStateLock sync.Mutex
+	return runClaimDaemonWithLock(ctx, configPath, &chainStateLock, 0, nil)
+}
+
+func runClaimDaemon(configPath string) error {
+	event := connect.NewEventWithContext(context.Background())
+	event.SetOnSignals(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	return RunClaimDaemon(event.Ctx(), configPath)
 }
