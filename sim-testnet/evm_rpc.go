@@ -357,7 +357,8 @@ func publicEVMRPCResponseIsOverloaded(body []byte) bool {
 		responses = []publicEVMRPCResponse{single}
 	}
 	for _, response := range responses {
-		if response.Error != nil && strings.EqualFold(strings.TrimSpace(response.Error.Message), "upstream overloaded") {
+		if response.Error != nil && (strings.EqualFold(strings.TrimSpace(response.Error.Message), "upstream overloaded") ||
+			strings.EqualFold(strings.TrimSpace(response.Error.Message), "Historical work rate limit exceeded")) {
 			return true
 		}
 	}
