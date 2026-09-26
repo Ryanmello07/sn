@@ -21,7 +21,8 @@ import (
 
 const (
 	processLogGateSchema        = "urnetwork-sim-process-log-gate-v1"
-	processLogClassifierVersion = "urnetwork-sim-process-log-classifier-v12"
+	processLogClassifierVersion = "urnetwork-sim-process-log-classifier-v13"
+	processLogClassifierV12     = "urnetwork-sim-process-log-classifier-v12"
 	processLogClassifierV11     = "urnetwork-sim-process-log-classifier-v11"
 	processLogClassifierV10     = "urnetwork-sim-process-log-classifier-v10"
 	processLogClassifierV2      = "urnetwork-sim-process-log-classifier-v2"
@@ -296,6 +297,9 @@ func classifyProcessLogLine(line []byte) (processLogClassification, bool) {
 	}
 	if processLogArtifactRequestCancellation(text) {
 		return processLogClassification{class: "artifact-request-canceled", summary: "immutable artifact reader canceled its request", nonblockingDisposition: "request-canceled"}, true
+	}
+	if processLogArtifactTransportReset(text) {
+		return processLogClassification{class: "artifact-stream-transport-reset", summary: "immutable artifact stream transport was reset by its peer"}, true
 	}
 
 	// These exact classes are expected protocol/lifecycle noise and have their
@@ -701,7 +705,7 @@ func sameProcessLogCursorInventory(actual, expected []processLogCursor) bool {
 }
 
 func validatePersistedProcessLogGate(state processLogGateState) error {
-	if state.Schema != processLogGateSchema || state.Classifier != processLogClassifierVersion && state.Classifier != processLogClassifierV11 && state.Classifier != processLogClassifierV10 && state.Classifier != processLogClassifierV9 && state.Classifier != processLogClassifierV8 && state.Classifier != processLogClassifierV7 && state.Classifier != processLogClassifierV6 && state.Classifier != processLogClassifierV5 && state.Classifier != processLogClassifierV4 && state.Classifier != processLogClassifierV3 && state.Classifier != processLogClassifierV2 {
+	if state.Schema != processLogGateSchema || state.Classifier != processLogClassifierVersion && state.Classifier != processLogClassifierV12 && state.Classifier != processLogClassifierV11 && state.Classifier != processLogClassifierV10 && state.Classifier != processLogClassifierV9 && state.Classifier != processLogClassifierV8 && state.Classifier != processLogClassifierV7 && state.Classifier != processLogClassifierV6 && state.Classifier != processLogClassifierV5 && state.Classifier != processLogClassifierV4 && state.Classifier != processLogClassifierV3 && state.Classifier != processLogClassifierV2 {
 		return errors.New("process log gate schema or classifier does not match this release")
 	}
 	if state.Classifier == processLogClassifierV2 {
@@ -727,7 +731,7 @@ func validatePersistedProcessLogGate(state processLogGateState) error {
 		return errors.New("process log gate supervisor generation is incomplete")
 	}
 	for _, cursor := range state.Cursors {
-		if state.Classifier != processLogClassifierVersion && state.Classifier != processLogClassifierV11 && state.Classifier != processLogClassifierV10 && cursor.ArtifactCancellationContinuation {
+		if state.Classifier != processLogClassifierVersion && state.Classifier != processLogClassifierV12 && state.Classifier != processLogClassifierV11 && state.Classifier != processLogClassifierV10 && cursor.ArtifactCancellationContinuation {
 			return errors.New("legacy process log classifier has a future artifact continuation")
 		}
 		if cursor.InitialOffset < 0 || cursor.Offset < cursor.InitialOffset || cursor.DigestOffset < cursor.InitialOffset || cursor.DigestOffset > cursor.Offset || (cursor.Device == 0) != (cursor.Inode == 0) || cursor.InitialOffset > 0 && cursor.Inode == 0 || cursor.ScannedBytes != uint64(cursor.Offset-cursor.InitialOffset) || cursor.ChunkChain == "" {
@@ -794,7 +798,7 @@ func migrateProcessLogClassifier(state *processLogGateState) (bool, error) {
 	if state.Classifier == processLogClassifierVersion {
 		return false, nil
 	}
-	if state.Classifier != processLogClassifierV2 && state.Classifier != processLogClassifierV3 && state.Classifier != processLogClassifierV4 && state.Classifier != processLogClassifierV5 && state.Classifier != processLogClassifierV6 && state.Classifier != processLogClassifierV7 && state.Classifier != processLogClassifierV8 && state.Classifier != processLogClassifierV9 && state.Classifier != processLogClassifierV10 && state.Classifier != processLogClassifierV11 {
+	if state.Classifier != processLogClassifierV2 && state.Classifier != processLogClassifierV3 && state.Classifier != processLogClassifierV4 && state.Classifier != processLogClassifierV5 && state.Classifier != processLogClassifierV6 && state.Classifier != processLogClassifierV7 && state.Classifier != processLogClassifierV8 && state.Classifier != processLogClassifierV9 && state.Classifier != processLogClassifierV10 && state.Classifier != processLogClassifierV11 && state.Classifier != processLogClassifierV12 {
 		return false, errors.New("process log classifier has no supported migration")
 	}
 	if err := validatePersistedProcessLogGate(*state); err != nil {
@@ -865,7 +869,7 @@ func (self *processLogGate) Scan(final bool, faults ...processLogFaultScope) (pr
 	scanErr := self.validateBoundSupervisorWithLock()
 	if scanErr == nil {
 		for index := range self.state.Cursors {
-			if err := self.scanCursorWithLock(&self.state.Cursors[index], final, faults, now); err != nil {
+			if err := self.drainCursorWithLock(&self.state.Cursors[index], final, faults, now); err != nil {
 				scanErr = err
 				break
 			}
@@ -1047,7 +1051,7 @@ func (self *processLogGate) BindAcceptance(boundAt time.Time) (processLogScanRes
 	scanErr := self.validateBoundSupervisorWithLock()
 	if scanErr == nil {
 		for index := range self.state.Cursors {
-			if err := self.scanCursorWithLock(&self.state.Cursors[index], false, nil, now); err != nil {
+			if err := self.drainCursorWithLock(&self.state.Cursors[index], false, nil, now); err != nil {
 				scanErr = err
 				break
 			}
@@ -1120,6 +1124,29 @@ func (self *processLogGate) readRangeWithLock(file *os.File, offset, length int6
 	return io.ReadAll(io.NewSectionReader(file, offset, length))
 }
 
+// Drain the size observed at scan start without chasing an actively growing
+// stream forever. A segment is at most 64 MiB, and each completed segment is
+// journaled before the next read. Incomplete final lines stay at the cursor
+// until a later segment supplies the newline (or final acceptance checks it).
+func (self *processLogGate) drainCursorWithLock(cursor *processLogCursor, final bool, faults []processLogFaultScope, observedAt string) error {
+	target := cursor.Offset
+	if info, err := os.Stat(filepath.Join(self.stateDir, cursor.Path)); err == nil {
+		target = info.Size()
+	}
+	for {
+		before := cursor.Offset
+		if err := self.scanCursorWithLock(cursor, final, faults, observedAt); err != nil {
+			return err
+		}
+		if cursor.Offset == before || cursor.Offset >= target {
+			return nil
+		}
+		if err := self.persistWithLock(); err != nil {
+			return err
+		}
+	}
+}
+
 func (self *processLogGate) scanCursorWithLock(cursor *processLogCursor, final bool, faults []processLogFaultScope, observedAt string) error {
 	path := filepath.Join(self.stateDir, cursor.Path)
 	lstat, err := os.Lstat(path)
@@ -1179,8 +1206,7 @@ func (self *processLogGate) scanCursorWithLock(cursor *processLogCursor, final b
 		return nil
 	}
 	if delta > processLogMaximumScanBytes {
-		self.recordFindingWithLock(cursor, processLogClassification{class: "log-overrun", summary: "process log growth exceeded the bounded scanner capacity"}, cursor.Offset, "", observedAt)
-		return nil
+		delta = processLogMaximumScanBytes
 	}
 	data, err := self.readRangeWithLock(file, cursor.Offset, delta)
 	if err != nil {
@@ -1191,8 +1217,9 @@ func (self *processLogGate) scanCursorWithLock(cursor *processLogCursor, final b
 		return nil
 	}
 	completed, classifiable := len(data), len(data)
-	unterminatedFinal := final && data[len(data)-1] != '\n'
-	if !final {
+	segmentFinal := final && cursor.Offset+delta == info.Size()
+	unterminatedFinal := segmentFinal && data[len(data)-1] != '\n'
+	if !segmentFinal {
 		if newline := bytes.LastIndexByte(data, '\n'); newline >= 0 {
 			completed = newline + 1
 		} else {
@@ -1251,7 +1278,7 @@ func (self *processLogGate) scanCursorWithLock(cursor *processLogCursor, final b
 		cursor.ScannedLines++
 	}
 	cursor.Offset += int64(completed)
-	return self.extendChunkChainWithLock(file, cursor, final)
+	return self.extendChunkChainWithLock(file, cursor, segmentFinal)
 }
 
 func (self *processLogGate) verifyAcceptancePrefixWithLock(file *os.File, cursor *processLogCursor) error {

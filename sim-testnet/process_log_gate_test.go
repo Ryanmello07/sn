@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -588,6 +590,53 @@ func TestProcessLogGateChunkChainIsDeterministicAcrossScansAndReload(t *testing.
 	}
 	if oneShotCursor.Offset != partitionedCursor.Offset || oneShotCursor.DigestOffset != partitionedCursor.DigestOffset || oneShotCursor.ScannedBytes != partitionedCursor.ScannedBytes || oneShotCursor.ScannedLines != partitionedCursor.ScannedLines || oneShotCursor.ChunkCount != partitionedCursor.ChunkCount || oneShotCursor.ChunkChain != partitionedCursor.ChunkChain {
 		t.Fatalf("chunk chain depends on scan partitioning: one_shot=%+v partitioned=%+v", oneShotCursor, partitionedCursor)
+	}
+}
+
+func TestProcessLogGateDrainsBacklogBeyondScanLimitAfterInterruptedRead(t *testing.T) {
+	fixture := newProcessLogGateFixture(t, "", "")
+	file, err := os.OpenFile(fixture.stdoutPath, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := append(bytes.Repeat([]byte{'x'}, 512*1024), '\n')
+	for index := 0; index < 129; index++ {
+		if _, err := file.Write(line); err != nil {
+			file.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	firstRead := true
+	fixture.gate.readRangeForTest = func(file *os.File, offset, length int64) ([]byte, error) {
+		if length > processLogMaximumScanBytes {
+			t.Fatalf("unbounded process-log read: %d bytes", length)
+		}
+		if !firstRead {
+			return nil, errors.New("injected read interruption")
+		}
+		firstRead = false
+		return io.ReadAll(io.NewSectionReader(file, offset, length))
+	}
+	if _, err := fixture.gate.Scan(false); err == nil || !strings.Contains(err.Error(), "injected read interruption") {
+		t.Fatalf("scan did not stop at the injected read interruption: %v", err)
+	}
+	checkpoint := processLogCursorFor(t, fixture.gate, "stdout")
+	if checkpoint.Offset <= 0 || checkpoint.Offset >= int64(len(line)*129) {
+		t.Fatalf("bounded scan did not checkpoint the completed first segment: %+v", checkpoint)
+	}
+	reloaded, err := loadProcessLogGate(fixture.dir, fixture.manifest, fixture.supervisor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := reloaded.Scan(true); err != nil || len(result.Findings) != 0 {
+		t.Fatalf("resumed final scan=(%+v,%v)", result, err)
+	}
+	completed := processLogCursorFor(t, reloaded, "stdout")
+	if completed.Offset != int64(len(line)*129) || completed.DigestOffset != completed.Offset || completed.ScannedLines != 129 {
+		t.Fatalf("backlog was not fully accounted for: %+v", completed)
 	}
 }
 

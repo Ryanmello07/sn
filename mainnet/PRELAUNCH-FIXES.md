@@ -2293,6 +2293,26 @@ change the approved executable, but it must not conceal a missing code patch.
 
 ### R48 terminal: process-log throughput, native history and immutable usage
 
+The post-R48 scanner patch on `main` drains the observed log size in bounded
+64 MiB segments, checkpoints each completed cursor before the next read, and
+resumes from that cursor after an interrupted read. Its causal regression
+fails against the R48 scanner and passes with the patch; nearby log-gate tests
+pass in the aligned R48 source workspace. This is a code repair, **not** a
+retroactive R48 acceptance result or proof that the live supervisor uses the
+new binary. The retained R48 process-log journal uses classifier v13; the
+patch carries that classifier forward so a later reader can load it without
+downgrading its findings. The missed native-1696 history and incomplete
+acceptance interval remain open.
+
+The current root checkout cannot compile `go test ./sim-testnet` with its
+adjacent `server` and `sdk` checkouts: the server still calls the older
+three-argument `protocol.RequiredDepositRao`, and the SDK lacks the wallet
+challenge context method and `Purpose` field used by SN. Before producing a
+mainnet binary, lock compatible revisions of all three modules and qualify
+the combined build. The scanner regression was run in the already aligned
+R48 source workspace with the changed files overlaid; that result must not be
+misreported as a passing build of the current root checkout.
+
 [R48's final report](../sim-testnet/FINAL-4.md) records a signed acceptance
 boundary but no fully observed acceptance epoch. The immediate stop was the
 process-log heartbeat: both operator API stderr streams had already exceeded

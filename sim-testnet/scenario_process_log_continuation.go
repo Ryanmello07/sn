@@ -34,6 +34,10 @@ func scenarioProcessLogFailureDeferred(cfg *ResolvedConfig, phase string, failur
 			for _, finding := range failure.findings {
 				switch finding.Class {
 				case "release-steering-attempt-failure", "release-steering-continuity", "tls-handshake-timeout", "packet-read-timeout", "connection-close-timeout", "exit-gap-timeout":
+				case "artifact-stream-transport-reset":
+					if finding.Role != "operator-api" {
+						return false
+					}
 				default:
 					return false
 				}
