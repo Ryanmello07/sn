@@ -2290,3 +2290,57 @@ classification, original-child signaling proof, write-ahead fault intent,
 pending container restore and post-transition completion heads in the
 composed recovery rehearsal. A documentation-only main advance should not
 change the approved executable, but it must not conceal a missing code patch.
+
+### R48 terminal: process-log throughput, native history and immutable usage
+
+[R48's final report](../sim-testnet/FINAL-4.md) records a signed acceptance
+boundary but no fully observed acceptance epoch. The immediate stop was the
+process-log heartbeat: both operator API stderr streams had already exceeded
+the 64 MiB scanner delta before acceptance, and the unchanged cursors produced
+fresh `log-overrun` findings after the boundary. Mainnet's process-log reader
+must consume large growth in bounded, hashed chunks with a durable cursor,
+not classify an ordinary large backlog as permanently unscannable. Keep a
+separate hard failure for inode changes, truncation, changed prefix, unreadable
+bytes and overlong individual lines. Drain and authenticate any pre-boundary
+backlog before binding the acceptance boundary, or disclose and sign an exact
+exception; do not redate the same old gap as a new runtime event. Test a
+multi-gigabyte noisy stream, concurrent append, a scanner crash between chunk
+and cursor commit, rotation/truncation, restart, and a short scheduled fault
+while the backlog is drained. Completion must show every byte accounted for,
+bounded memory, and a fault heartbeat that still meets its block timing.
+
+The other release-blocking class was validator steering repeatedly reporting
+that strict history adoption missed the approved first native epoch 1696.
+There is no authority to backdate that application. Before mainnet, provide
+an owner-signed forward selection and handoff for **both** validators: retain
+the old intent and EMA as historical evidence, choose a future native epoch
+with a measured startup margin, checkpoint the exact source and transaction
+outcome, then prove finalized on-chain weights from both validators at that
+new boundary. A restart, stale runtime change or interrupted read must resume
+that same authorized plan without inventing a prior success. The test must
+cover a missed first epoch, pending transaction reconciliation, process
+restart, exact signed history, and independently queried final weights.
+
+R48 also found 4,183 settled epoch-658 contracts closed by a mixed-version
+operator fleet without immutable `provider_usage`. The guarded one-time
+testnet repair retained at least 3,082,728 bilateral-report bytes as explicit
+uncredited debt (`final_acceptance=false`), allowing ordinary close to proceed
+without guessing providers. Mainnet must deploy the snapshot writer and
+reader as a compatible fleet, check for missing snapshots before settlement
+and before release admission, and reject positive credit reconstructed from
+mutable membership. If a historical repair is unavoidable, it needs an exact
+whole-row/report manifest, serializable changed-row and complete-census
+guards, a canonical per-row debt receipt, replay refusal, and a final report
+that distinguishes omitted usage from paid usage. Rehearse a mixed-version
+rollout and rollback, a canceled contract, altered bilateral report, expanded
+NULL census, wrong epoch/ID/close time, and interrupted commit. The qualified
+testnet server source is `74893863`; it is evidence for the design, not proof
+that the mainnet release image contains the fix.
+
+R48's local epoch-658 close missed its on-chain commitment window, while
+epoch-659 roots later committed on-chain. The mainnet gate must distinguish
+that real chain progress from successful acceptance. It should continue
+collecting a terminal report after recoverable process findings and clean up
+exact pre-armed faults after any terminal failure, while keeping the original
+failed assertions and signed boundary immutable. A partial or provisional
+release must never be silently promoted to mainnet launch approval.
