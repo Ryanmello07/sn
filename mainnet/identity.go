@@ -24,6 +24,7 @@ const maxRpcReplyBytes = 1024 * 1024
 const maxMetadataRpcReplyBytes = 8 * 1024 * 1024
 
 var errRpcIntegrity = errors.New("RPC evidence is inconsistent or malformed")
+var errRpcIdentityMismatch = errors.New("RPC identity mismatch")
 
 // chainIdentity is one finalized, read-only observation from an owned RPC route.
 type chainIdentity struct {
@@ -293,7 +294,7 @@ func (self identityExpectation) match(identity chainIdentity) error {
 		return errors.New("approved network identity is incomplete")
 	}
 	if identity.NativeChain != self.NativeChain || !strings.EqualFold(identity.GenesisHash, self.GenesisHash) || identity.EvmChainId != self.EvmChainId {
-		return fmt.Errorf("RPC identity mismatch: chain=%q genesis=%s EVM=%d; expected chain=%q genesis=%s EVM=%d", identity.NativeChain, identity.GenesisHash, identity.EvmChainId, self.NativeChain, self.GenesisHash, self.EvmChainId)
+		return fmt.Errorf("%w: chain=%q genesis=%s EVM=%d; expected chain=%q genesis=%s EVM=%d", errRpcIdentityMismatch, identity.NativeChain, identity.GenesisHash, identity.EvmChainId, self.NativeChain, self.GenesisHash, self.EvmChainId)
 	}
 	return nil
 }

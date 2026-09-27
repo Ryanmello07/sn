@@ -24,7 +24,7 @@ qualification must use an explicit composed release, including compatible
 SN/server/SDK/Connect/config revisions. Some shared and simulator fixes exist;
 the complete mutating bootstrap, root-validator service and operational repair
 system remain production work. [mainnet/main.go](main.go) implements signer-free
-`inspect`, `monitor`, `subnet-preview`, `root-preview`, `root-monitor`,
+`inspect`, `runtime-snapshot`, `monitor`, `subnet-preview`, `root-preview`, `root-monitor`,
 `check-recycle-mode`, `economic-reference` and offline `source-lock`; `plan`, `apply`, `resume` and root-validator signing are
 not implemented. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)
@@ -78,7 +78,7 @@ The draft policy is `reset.mode: unresolved` and **`emissions.remainder: owner-r
 
 The September 14 design inspected Subtensor [commit `67dcf7f791dc495064c293f080a0702cb433e51e`][subtensor-commit], dated 2026-09-07, following the release-455 merge, in `RaoFoundation/subtensor`. The source-specific capability observations below describe that baseline, **not an attestation of the current mainnet Wasm**. Recheck them against the selected live runtime and approved artifacts before planning any action.
 
-The production inspection gate must extend the current `inspect` command to authenticate one finalized native block and its corresponding canonical EVM block using a separately verified, operator-owned mainnet node. Require an independently approved genesis hash, EVM chain ID 964, native chain identity, complete runtime version, `:code` hash, metadata hash, node build identity, and the reviewed runtime source/artifact mapping. Verify signed extensions, call argument types, storage layouts, and relevant precompile behavior. A matching `specVersion` alone is insufficient; [the existing runtime authenticator](../crv4/runtime_identity.go) already binds more than that number.
+The production inspection gate must authenticate one finalized native block and its corresponding canonical EVM block using a separately verified, operator-owned mainnet node. Require an independently approved genesis hash, EVM chain ID 964, native chain identity, complete runtime version, `:code` hash, metadata hash, node build identity, and the reviewed runtime source/artifact mapping. The `runtime-snapshot` command captures exact finalized code and metadata bytes, verifies code against its storage hash, and repeats canonical/network checks after reading them. Its output remains an unapproved observation. Admission still needs signed-extension, call, storage and precompile review, an independently reviewed source-to-Wasm mapping, and native/EVM finalized mapping. A matching `specVersion` alone is insufficient; [the existing runtime authenticator](../crv4/runtime_identity.go) already binds more than that number.
 
 The read-only observation at **2026-09-27 04:16:25 UTC** compared Snow VPN
 `http://172.28.208.185:9944` with LAN testnet `http://192.168.1.162:9944`.
@@ -429,8 +429,9 @@ actual Yuma payouts. [Command contract and remaining gates](ECONOMIC-GATE.md)
 cover the source-to-code, owner-hotkey, allocation and observation work. Focused
 normal/race tests and vet pass after the 2026-09-27 data-volume recovery.
 
-`inspect`/`monitor` remain single-route identity/finality observers. They do not
-attest runtime code/metadata, map EVM receipt finality, compare independent nodes, inspect SN25
+`inspect`/`monitor` remain single-route identity/finality observers. The
+separate `runtime-snapshot` captures raw finalized code/metadata without
+granting authority. These commands do not map EVM receipt finality, compare independent nodes, inspect SN25
 custody/validator/settlement state, deliver alerts,
 or execute repairs. Those are MG-07 and related production gates. An identity
 snapshot hash proves the captured bytes, not operator approval or node truth.
@@ -439,13 +440,14 @@ Keep the future plan builder pure after authenticated snapshot inputs are suppli
 Separate chain adapters, signer interfaces, state storage and supervisors so
 preview cannot reach a transaction submission path.
 
-Target command surface; `inspect`, `monitor`, `subnet-preview`, the two root observers and the two
+Target command surface; `inspect`, `runtime-snapshot`, `monitor`, `subnet-preview`, the two root observers and the two
 limited economic preconditions above and `source-lock` exist, while the remaining commands are
 designs:
 
 | Command | Behavior |
 | --- | --- |
 | `inspect` | Extend the existing read-only identity capture with authority, census, capabilities, balances, custody and validators; emit a hashed snapshot. |
+| `runtime-snapshot` | Existing signer-free capture of one finalized runtime's exact `:code` and metadata bytes, complete version and node identity; independent approval and source-to-Wasm review remain separate. |
 | `monitor` | Extend the existing read-only identity/finality loop with durable checkpoints, independent comparisons, complete domain health and existing-stack alert delivery. |
 | `subnet-preview` | Existing signer-free finalized SN25/root UID census and owner-trim candidate comparison; full custody and execution-time reset authority remain open. |
 | `root-preview` / `root-monitor` | Existing signer-free finalized root seat and strategy census; an offline [existing-seat action core](ROOT-ACTION.md) exists, but production signing and activation remain separate work. |

@@ -36,7 +36,7 @@ are component responsibilities; assign a named operator before rollout.
 
 | Gate / priority | Owner and linked items | Current state | Next action and completion evidence |
 | --- | --- | --- | --- |
-| MG-01 / P0 — Mainnet identity | Node operator; RT-01/02, PH-04/14/18/19 | **Blocked:** the operator confirms Snow VPN `172.28.208.185:9944` is the intended mainnet route but is still being prepared. The [10:51 UTC read-only inspection](evidence/snow-route-inspect-20260927-1051.json) still returned EVM chain **945** and testnet genesis. | Wait for route cutover, independently approve the mainnet genesis, and capture finalized native/EVM mapping, expected EVM ID 964, code/metadata and node/source identity. Produce a signer-free snapshot; reject the route while it reports testnet. |
+| MG-01 / P0 — Mainnet identity | Node operator; RT-01/02, PH-04/14/18/19 | **Blocked:** the operator confirms Snow VPN `172.28.208.185:9944` is the intended mainnet route but is still being prepared. The [10:51 UTC read-only inspection](evidence/snow-route-inspect-20260927-1051.json) returned EVM chain **945** and testnet genesis. The new `runtime-snapshot` command captures raw code/metadata and canonical block evidence without granting authority; its live Snow sample still reported testnet ID 945. | Wait for route cutover, independently approve mainnet genesis and capture finalized native/EVM mapping, expected EVM ID 964, code/metadata and node/source identity. Qualify the raw snapshot against reviewed source-to-Wasm and execution interfaces; reject the route while it reports testnet. |
 | MG-02 / P0 — Reproducible production release | Release owner; RL-01, PH-06/16 | **In progress:** the [composed source lock and qualification](evidence/source-lock-composed-20260927.md) pin SN `f321ba7c`, server `9f860731` and Connect `c68689c4`. Six SN packages compile; mainnet normal, validator owner-recycle/config selector normal/race, exact 21 receipt cases normal/race, and mainnet/validator vet pass. The server candidate separately passes 291 selected normal/race tests. Complete binary/contract/config release manifest, broader production qualification and rollout remain open. | Lock all generated artifacts, contract bytecode, config, policy, migrations and images alongside these source inputs; qualify actual production paths and approve one immutable manifest. This source lock alone cannot authorize mainnet activation. A later docs-only branch commit does not silently change the frozen source candidate. |
 | MG-03 / P0 — Durable recovery and complete evidence | Transaction/recovery owner; PF-01/03/04, PH-01/02/05/07/17/21/24/25/26 | **In progress:** the [mainnet miner fleet](../miner/FLEET-MAINNET-RUNTIME.md) now persists signed register/publish/bind/revoke intents and reconciles their original canonical outcomes before any identical-byte retry; affected miner/onchain/chain normal, race and vet pass. Other production transaction owners, historical approval correction, journal retention and cross-host custody remain open. | Migrate the retained-evidence model into every production owner; reconcile every original/replacement/cancellation signature and historical approval. Crash/restart and cold/warm-cache qualification must preserve finalized work, custody, failed evidence and single ownership without repeated spend. |
 | MG-04 / P0 — Runtime and native continuity | Chain/validator owner; RT-01 through RT-08, PH-03/04/10/18/19/22 | **In progress:** reviewed artifacts, bounded per-connection metadata reuse and a testnet provisional capability profile exist. The [miner fleet mainnet gate](../miner/FLEET-MAINNET-RUNTIME.md) requires independently approved exact runtime artifacts and covers durable uncertain-send recovery for its four mutating commands; status remains read-only. The canonical nonce reader shared by fleet replay and both validator replay owners now requires the reviewed exact 56-byte Subtensor account layout. Causal tests caught its former rejection of valid rows and acceptance of incompatible ones; affected normal/race/vet passed. No actual mainnet authority or deployment is supplied. Automatic production compatibility and missed-native-boundary recovery remain open. | Extend block/purpose-bound immutable views and operation profiles to every consumer, construction/signing from one view, finite caches and explicit future native handoff. Rehearse compatible/incompatible upgrades, pending transactions and both validator paths; no backdated native success. |
@@ -71,13 +71,14 @@ limit. Bind that exact build into MG-02/MG-08 and qualify creation on the
 selected live runtime; a passing local build does not establish live
 deployability after a source/toolchain change.
 
-The next MG-08 increment supplies an offline-qualified
+The MG-08 action core supplies an offline-qualified
 [existing-seat action owner](ROOT-ACTION.md): mortal root basket encoding,
 one-request signing/nonce ownership, private durable state, exact-byte retries,
 and retained finalized dispatch/fee/runtime-deviation or expiry evidence. Missing
 or empty required state cannot resurrect an allowance, and a runtime change
 blocks new effects while old receipts remain recoverable. The production
-authority/custody/receipt adapters and supervisor are still absent. Native fee
+authority/custody/submission adapters and supervisor are still absent; the
+read-only canonical receipt adapter is implemented. Native fee
 quotes are not atomic caps; source/policy hashes are not on-chain runtime locks.
 Do not activate signing from a read-only-ready sample or invent a heartbeat for
 the accumulation strategy. Mainnet identity, existing seat, complete eligibility,
@@ -875,6 +876,14 @@ wrong genesis and pruned-state responses. A compatible update requires no
 manual version entry or repeated funding; an incompatible consumed interface
 halts that operation with a precise capability error. An ABI match alone does
 not establish unchanged economic semantics.
+
+**Current observation boundary.** `sn-mainnet runtime-snapshot` retains raw
+`:code` and metadata at one finalized hash, confirms the code bytes against
+`state_getStorageHash`, and repeats canonical/genesis/EVM/chain checks after
+the artifact reads. It accepts unfamiliar metadata bytes for review instead
+of pretending an old decoder authorizes them. The Snow sample is testnet
+runtime 471; raw observation is not mainnet runtime admission or a verified
+source-to-Wasm mapping.
 
 **Repair admission follow-up (2026-09-22).** Fleet renewal still demanded a
 static runtime pin after continuation and diagnostics had authenticated the
