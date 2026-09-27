@@ -61,6 +61,15 @@ The reviewed registration-allowed setter is chain-Root-only, beyond the owned
 SN25 keys, and a coldkey-authorized hotkey swap can change an existing UID
 despite a closed registration flag. Admission must account for both facts
 through inclusion. [Registration setter](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs#L3444), [swap implementation](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/swap/swap_hotkey.rs#L2199).
+The owner-trim execution gate can use a bounded safe-set proof instead of an
+atomic hotkey predicate only when every generation removable through call
+expiry is an approved old miner and every protected identity stays immune.
+Prove registration and swap/custody fences, immunity expiry and capacity over
+the complete mortal call window, including earlier same-block actions. A
+closed registration flag alone does not rule out subnet-owner takeover during
+an epoch, which can directly register a neuron; first hotkey swaps also have
+no cooldown. Reconcile actual removals from the finalized receipt.
+Majority-validator weights may change trim order but cannot prove this gate.
 
 MG-08 now has a separate signer-free [root observation foundation](ROOT-VALIDATOR.md):
 `root-preview` and finite `root-monitor` bind the approved mainnet domain and

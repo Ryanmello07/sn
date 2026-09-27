@@ -251,6 +251,23 @@ Ordinary registration pruning is a different algorithm. In the inspected source 
 
 The reset planner must derive the live minimum, timing restrictions, immunity threshold and pruning order, including ties, rather than use the documentation's nominal 64-slot minimum or 30-day trim interval as constants. Select the most effective admissible owner trim by *safe removal of approved old miners*, not merely by the smallest UID count; keep all protected identities and native custody rights intact. An external actor can change the candidate set between preview and execution. A fresh preflight reduces that race but does not eliminate it; destructive automatic apply requires an execution-time guard or a demonstrated invariant under all allowed intervening changes. Otherwise export the unsupported action and report `RESET_CAPABILITY_BLOCKED`. Owner keys are the only available native administrative authority for this launch; do not plan chain-Root calls or imply that a netuid-0 validator seat supplies them.
 
+A narrower owner-key path may be admissible without an atomic hotkey predicate:
+prove that every generation the runtime could remove before the submitted call
+expires is an explicitly approved old miner, while every protected identity
+remains immune throughout that window. Then changes to emission ordering can
+change *which approved old miners* are removed, but cannot remove a protected
+identity. The proof must cover the entire mortal transaction window, including
+earlier same-block actions: registration, hotkey swaps, temporary-immunity
+expiry, owner/immune status, native epoch updates and capacity limits. An
+already closed registration flag is insufficient if a subnet-owner takeover
+can register a neuron directly during an epoch; rule that path out or choose a
+window before the next epoch. First hotkey swaps have no cooldown, so a
+cooldown proof needs an authenticated nonzero last-swap value for each relevant
+coldkey or a concrete custody fence. Majority-validator weights alone do not
+establish any of these conditions. Reconcile actual removals from the
+finalized receipt rather than treating the preview's predicted list as the
+result. [Epoch owner takeover](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/coinbase/run_coinbase.rs#L389), [hotkey swap](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/swap/swap_hotkey.rs#L101).
+
 After a finalized reset, repeat the entire census and compare identities, not just counts. Reconcile commitments, balances and locks separately. Re-establish approved capacity and permitted registration settings before new pool/head registrations; no “temporary” parameter change may remain unreported. Existing settlement/claim service must stay available throughout any migration.
 
 ## Ten percent of native miner allocation
