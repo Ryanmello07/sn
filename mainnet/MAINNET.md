@@ -349,7 +349,7 @@ Manage both services with independent state directories, signer permissions, log
 
 [mainnet/main.go](main.go) currently contains signer-free `inspect`, `monitor`,
 `subnet-preview`, `root-preview`, `root-monitor`, `check-recycle-mode` and `economic-reference`
-commands. `inspect --rpc URL`
+commands, plus the offline `source-lock` command. `inspect --rpc URL`
 emits a content-hashed identity snapshot. Supplying
 any expectation requires all of `--expected-chain`, `--expected-genesis` and
 `--expected-evm-chain-id`; `monitor` always requires all three. The monitor emits
@@ -417,7 +417,7 @@ Separate chain adapters, signer interfaces, state storage and supervisors so
 preview cannot reach a transaction submission path.
 
 Target command surface; `inspect`, `monitor`, `subnet-preview`, the two root observers and the two
-limited economic preconditions above exist, while the remaining commands are
+limited economic preconditions above and `source-lock` exist, while the remaining commands are
 designs:
 
 | Command | Behavior |
@@ -428,6 +428,7 @@ designs:
 | `root-preview` / `root-monitor` | Existing signer-free finalized root seat and strategy census; an offline [existing-seat action core](ROOT-ACTION.md) exists, but production signing and activation remain separate work. |
 | `check-recycle-mode` | Existing signer-free finalized storage-mode precondition; extend with an approved mainnet artifact and operational readback at activation/recovery. |
 | `economic-reference` | Existing signer-free cumulative integer 10%/90% reference from caller-supplied native intervals; actual chain reconciliation remains a separate gate. |
+| `source-lock` | Existing offline lock of clean SN and every local Go replacement Git commit, module checksums, Go version and tool hash. It binds source inputs only; artifacts, rollout approval and qualification remain separate. |
 | `plan` | Build canonical plan/actions and a readable review from config, pinned snapshot, artifacts, closed testnet exceptions and production qualification. No signing or submission. |
 | `apply --accept-plan HASH` | Execute only the exactly reviewed plan with matching signed authorization, prerequisites and ceilings. |
 | `status` / `verify` | Read-only journal reconciliation and current/finalized postcondition verification. |
@@ -435,6 +436,16 @@ designs:
 | `services start` / `services stop` | Run or join the plan's admitted services; starting write-capable validators is an explicit authorized phase. |
 | `report` | Produce a complete acceptance or incomplete/blocked report with evidence references and realized spend. |
 | `repair plan` / `repair apply --accept-plan HASH` | Produce and execute only the exact approved, bounded repair graph; share the existing durable transaction owner and lifetime ledger. Not implemented. |
+
+`source-lock --sn-dir /absolute/sn/path` emits a content-hashed JSON record of
+the clean SN Git HEAD and every local `go.mod` replacement's clean Git HEAD,
+the exact `go.mod`/`go.sum` hashes, current Go version and command-binary hash.
+It refuses modified or untracked repository files and rechecks each HEAD after
+hashing. It reads no RPC and holds no signer. This is one input to the release
+manifest, not an approval or a claim that compiled binaries, Foundry bytecode,
+generated files, ignored files, configuration, migrations or the running images
+match those commits. The release owner must bind those artifacts separately,
+qualify the composed source and approve the resulting immutable manifest.
 
 No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 
