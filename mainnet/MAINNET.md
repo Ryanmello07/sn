@@ -515,12 +515,13 @@ prove a build or image, inspect a deployed migration state, or approve a release
 Ignored Solidity libraries and compiler identities are explicit dependency and
 toolchain inputs; they are not included by the Go source lock alone.
 
-The [current composed local candidate](evidence/release-candidate-v10-20260927.md)
-locks SN `265231f9`, server `a211d56c` and Connect `c68689c4` with all local
-Go replacements. Its [partial actual-file inventory](evidence/release-inventory-candidate-v10-20260927.json)
-hashes 81 selected files, including seven locally built executables, all eight
-server Dockerfiles, the exact package lock, 40 Ubuntu payloads, six signed-index
-inputs and four copied contract artifacts. It has no approved policy or
+The [current composed local candidate](evidence/release-candidate-v11-20260927.md)
+locks SN `265231f9`, server `77cb401e` and Connect `c68689c4` with all local
+Go replacements. Its [partial actual-file inventory](evidence/release-inventory-candidate-v11-20260927.json)
+hashes 85 selected files, including seven locally built executables, all eight
+server Dockerfiles, all seven image-build Makefiles, the exact package lock,
+40 Ubuntu payloads, six signed-index inputs and four copied contract artifacts.
+It has no approved policy or
 published/deployed OCI image identity and remains unapproved.
 Mainnet inventory implementation passed 177 normal tests and all 177 race
 test bodies in a bounded run plus exact continuation; the latter is not one
@@ -568,6 +569,15 @@ produced a different OCI digest from identical pinned inputs; package logs,
 cache and timestamps varied. The release build must either normalize those
 outputs and prove exact repeatability, or identify an independently reviewed
 immutable image without claiming reproducible bytes.
+Server `77cb401e` removes only the two volatile generated files and gives all
+seven image recipes a fixed source epoch and timestamp-rewriting exporter.
+The [no-cache OCI qualification](/mnt/data/sn-testnet/evidence/mainnet-server-image-repro-20260927/RESULT.md)
+repeated API and proxy runnable amd64 platform manifests, configs and layers
+exactly. Its top-level indexes remained distinct because provenance described
+different invocations. The source-level contract tests passed normal/race,
+with offline image smoke. Keep arm64, other service images, independent builder,
+full attestation/SBOM/scanner policy, owned archive, registry publication and
+deployed readback open.
 
 The [owner-recycle measured decision](../validator/OWNER-RECYCLE-MEASUREMENT.md)
 now joins signed successor approval, exact native owner census and fully
