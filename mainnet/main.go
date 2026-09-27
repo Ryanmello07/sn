@@ -33,6 +33,7 @@ type monitorState struct {
 	lastHash         string
 	lastNumber       uint64
 	lastProgressAt   time.Time
+	lastSuccessAt    time.Time
 	unavailableSince time.Time
 }
 
@@ -65,11 +66,13 @@ func (self *monitorState) clearUnavailable() bool {
 func (self *monitorState) observe(now time.Time, identity chainIdentity, stallAfter time.Duration) (string, error) {
 	if self.lastHash == "" {
 		self.lastHash, self.lastNumber, self.lastProgressAt = identity.FinalizedHash, identity.FinalizedNumber, now
+		self.lastSuccessAt = now
 		return "ok", nil
 	}
 	if identity.FinalizedNumber < self.lastNumber || identity.FinalizedNumber == self.lastNumber && !strings.EqualFold(identity.FinalizedHash, self.lastHash) || identity.FinalizedNumber > self.lastNumber && strings.EqualFold(identity.FinalizedHash, self.lastHash) {
 		return "finality-conflict", fmt.Errorf("finalized head changed incompatibly: %d/%s to %d/%s", self.lastNumber, self.lastHash, identity.FinalizedNumber, identity.FinalizedHash)
 	}
+	self.lastSuccessAt = now
 	if identity.FinalizedNumber > self.lastNumber {
 		self.lastHash, self.lastNumber, self.lastProgressAt = identity.FinalizedHash, identity.FinalizedNumber, now
 		return "ok", nil
@@ -144,6 +147,7 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 	interval := flags.Duration("interval", 30*time.Second, "monitor sampling interval")
 	stallAfter := flags.Duration("stall-after", 5*time.Minute, "finality progress alert threshold")
 	checkpointPath := flags.String("checkpoint", "", "absolute path for a durable monitor finality checkpoint")
+	metricsPath := flags.String("metrics-file", "", "absolute .prom path for atomic monitor telemetry")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *rpcUrl == "" {
 		fmt.Fprintln(stderr, "command requires --rpc and no positional arguments")
 		return 2
@@ -167,9 +171,24 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 		fmt.Fprintf(stderr, "mainnet monitor requires EVM chain ID %d\n", mainnetEvmChainId)
 		return 2
 	}
-	if command == "inspect" && *checkpointPath != "" {
-		fmt.Fprintln(stderr, "--checkpoint is only valid for monitor")
+	if command == "inspect" && (*checkpointPath != "" || *metricsPath != "") {
+		fmt.Fprintln(stderr, "--checkpoint and --metrics-file are only valid for monitor")
 		return 2
+	}
+	if *metricsPath != "" && *checkpointPath != "" {
+		metrics, metricsErr := resolveMonitorDestination(*metricsPath)
+		checkpoint, checkpointErr := resolveMonitorDestination(*checkpointPath)
+		if metricsErr != nil || checkpointErr != nil {
+			fmt.Fprintln(stderr, "monitor output paths:", errors.Join(metricsErr, checkpointErr))
+			return 2
+		}
+		if metrics == checkpoint || metrics+".lock" == checkpoint || metrics == checkpoint+".lock" {
+			fmt.Fprintln(stderr, "monitor metrics and checkpoint paths must be separate")
+			return 2
+		}
+		// Ownership must use the destination that passed separation, even if
+		// the original caller-supplied alias changes before the store opens.
+		*checkpointPath = checkpoint
 	}
 	encoder := json.NewEncoder(stdout)
 	if command == "inspect" {
@@ -210,6 +229,34 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 			return 3
 		}
 	}
+	var metrics *monitorMetricsStore
+	if *metricsPath != "" {
+		metrics, err = openMonitorMetrics(*metricsPath)
+		if err != nil {
+			fmt.Fprintln(stderr, "monitor metrics:", err)
+			return 2
+		}
+		defer metrics.close()
+		if err := metrics.initialize(state); err != nil {
+			fmt.Fprintln(stderr, "initialize monitor metrics:", err)
+			return 1
+		}
+	}
+	// Publication follows durable continuity. Errors preserve an explicit failed
+	// event; a stopped/blocked loop leaves a stale textfile for external alerts.
+	publishEvent := func(event *monitorEvent) error {
+		switch event.Status {
+		case "identity-mismatch", "finality-conflict", "rpc-integrity", "finality-stalled", "checkpoint-error":
+			event.Severity = "critical"
+		}
+		if metrics != nil {
+			if err := metrics.save(*event, state); err != nil {
+				event.Detail = fmt.Sprintf("status=%s severity=%s detail=%s; metrics: %v", event.Status, event.Severity, event.Detail, err)
+				event.Status, event.Severity = "metrics-error", "critical"
+			}
+		}
+		return encoder.Encode(event)
+	}
 	for {
 		if ctx.Err() != nil {
 			return 0
@@ -227,7 +274,7 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 			}
 			var changed bool
 			event.Severity, changed = state.observeUnavailable(sampleStartedAt, sampledAt)
-			if changed && checkpoint != nil && state.lastHash != "" {
+			if changed && checkpoint != nil {
 				if saveErr := checkpoint.save(state); saveErr != nil {
 					event.Status, event.Severity = "checkpoint-error", "critical"
 					event.Detail = fmt.Sprintf("%v; checkpoint: %v", readErr, saveErr)
@@ -248,38 +295,38 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 			event.Snapshot = &snapshot
 			if identityErr := expected.match(identity); identityErr != nil {
 				event.Status, event.Detail = "identity-mismatch", identityErr.Error()
-				if encoder.Encode(event) != nil {
+				if publishEvent(&event) != nil || event.Status == "metrics-error" {
 					return 1
 				}
 				return 3
 			}
 			continuous, continuityErr := client.priorFinalizedMatches(ctx, state, identity)
+			sampledAt = now().UTC()
+			event.ObservedAt = sampledAt.Format(time.RFC3339Nano)
 			if continuityErr != nil {
-				sampledAt = now().UTC()
-				event.ObservedAt = sampledAt.Format(time.RFC3339Nano)
 				markUnavailable(continuityErr)
 			} else if !continuous {
 				event.Status, event.Detail = "finality-conflict", "previously finalized block hash changed at its original height"
 			} else {
-				previousHash, previousNumber := state.lastHash, state.lastNumber
+				previousHash, previousNumber, previousSuccess := state.lastHash, state.lastNumber, state.lastSuccessAt
 				event.Status, err = state.observe(sampledAt, identity, *stallAfter)
 				if err != nil {
 					event.Detail = err.Error()
-				} else if recovered := state.clearUnavailable(); checkpoint != nil && (recovered || state.lastHash != previousHash || state.lastNumber != previousNumber) {
+				} else if recovered := state.clearUnavailable(); checkpoint != nil && (recovered || state.lastHash != previousHash || state.lastNumber != previousNumber || !state.lastSuccessAt.Equal(previousSuccess)) {
 					if saveErr := checkpoint.save(state); saveErr != nil {
 						event.Status, event.Severity, event.Detail = "checkpoint-error", "critical", saveErr.Error()
 					}
 				}
 			}
 		}
-		if err := encoder.Encode(event); err != nil {
+		if err := publishEvent(&event); err != nil {
 			fmt.Fprintln(stderr, "write monitor event:", err)
 			return 1
 		}
 		if event.Status == "finality-conflict" || event.Status == "rpc-integrity" {
 			return 3
 		}
-		if event.Status == "checkpoint-error" {
+		if event.Status == "checkpoint-error" || event.Status == "metrics-error" {
 			return 1
 		}
 		select {

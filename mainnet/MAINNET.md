@@ -578,12 +578,12 @@ demonstrates actual wrong-network refusal.
 `monitor --checkpoint /absolute/path/monitor.json` adds a single-owner local
 continuity checkpoint. Before reporting a newly finalized position as healthy,
 it atomically persists the approved chain/genesis/EVM identity, last finalized height and hash, and
-progress time with a content checksum. After a first healthy finalized sample,
-the checkpoint also retains the start of a read outage and clears it only after
-a complete identity and continuity read. An outage before the first healthy
-sample has no finalized position to checkpoint and needs the independent
-monitor dead-man alert. The v2 checkpoint reader accepts a valid prior v1
-finality record and writes v2 on its next state change; a rollback to the old
+progress time with a content checksum. The v3 checkpoint also retains the last
+successful identity/continuity read and the start of an unresolved read outage,
+including an initial outage before any finalized position is known. It clears
+that outage only after a complete identity and continuity read. The reader
+accepts valid v1/v2 records without inventing their missing success times and
+writes v3 on its next state change; a rollback to the old
 binary requires an explicit compatible checkpoint migration, not silent file
 replacement. Restart loads the retained position and checks
 the prior finalized hash against the route; a regression or changed historical
@@ -591,8 +591,20 @@ hash is still visible after process restart. A corrupt, foreign or symlinked
 checkpoint stops admission; an unavailable write emits `checkpoint-error` and
 exits rather than reporting health. The file is local continuity evidence, not
 independent node confirmation or an approval. The operator must place it on a
-durable, backed-up volume and supervise the monitor; alert delivery and
-cross-domain health remain open work.
+durable, backed-up volume and supervise the monitor.
+
+`monitor --metrics-file /absolute/path/monitor.prom` now exports bounded atomic
+textfile gauges to the existing Fluent Bit collector. It exposes completed
+sample freshness, last successful read, finalized progress, unresolved outage
+and explicit status/severity. The [telemetry guide](MONITOR-TELEMETRY.md) and
+tested [alert examples](monitor-alerts.example.yml) include an independently
+supplied expected-host roster so one healthy host cannot conceal a missing
+second host. Actual deployment, ingestion and alert delivery, independent
+supervision and cross-domain health remain open work. A failed export reports
+critical status and exits; stale retained metrics never establish fresh health.
+Restart retains the prior metrics until a completed sample, including a prior
+critical event. Physical path checks prevent checkpoint/metrics lock collisions,
+and success timestamps include the final required continuity read.
 
 An unchanged retained head with a checkpoint progress time ahead of the host
 clock reports stalled until genuine finalized advancement resets the clock.

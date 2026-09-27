@@ -57,19 +57,18 @@ func TestMonitorReadOutageEscalatesAndSurvivesRestart(t *testing.T) {
 	defer server.Close()
 	base := time.Date(2026, 9, 27, 8, 0, 0, 0, time.UTC)
 	sampleTimes := []time.Time{base, base.Add(time.Minute), base.Add(3*time.Minute + time.Second), base.Add(6*time.Minute + time.Second)}
-	times := []time.Time{sampleTimes[0], sampleTimes[0], sampleTimes[1], sampleTimes[1], sampleTimes[2], sampleTimes[2], sampleTimes[3], sampleTimes[3]}
-	index := 0
-	clock := func() time.Time {
-		if index >= len(times) {
-			return times[len(times)-1]
-		}
-		value := times[index]
-		index++
-		return value
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stdout := &outageMonitorWriter{cancel: cancel, failing: &failing}
+	// The completed event advances the fixture clock. Adding a clock read to
+	// production cannot consume the next sample's intended time.
+	clock := func() time.Time {
+		index := stdout.events
+		if index >= len(sampleTimes) {
+			index = len(sampleTimes) - 1
+		}
+		return sampleTimes[index]
+	}
 	path := filepath.Join(t.TempDir(), "monitor.json")
 	var stderr bytes.Buffer
 	exit := runMainWithClock(ctx, []string{
@@ -140,7 +139,7 @@ func TestMonitorReadOutageCountsTheFirstRetryWindow(t *testing.T) {
 }
 
 // A checkpoint from the previously published schema keeps its finalized
-// continuity when upgraded; the first new outage is written as v2.
+// continuity when upgraded; the first new outage is written in the current schema.
 func TestMonitorCheckpointMigratesLegacyFinalityWithoutInventingOutage(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "monitor.json")
 	base := time.Date(2026, 9, 27, 8, 0, 0, 0, time.UTC)

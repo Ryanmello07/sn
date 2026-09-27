@@ -1,3 +1,5 @@
+// Local checkpoint continuity records both finalized history and availability
+// gaps. A checksum detects corruption; it is not independent chain approval.
 package main
 
 import (
@@ -17,7 +19,8 @@ import (
 	"github.com/urfoundation/sn/protocol"
 )
 
-const monitorCheckpointSchema = "urnetwork-mainnet-monitor-checkpoint-v2"
+const monitorCheckpointSchema = "urnetwork-mainnet-monitor-checkpoint-v3"
+const monitorCheckpointOutageSchema = "urnetwork-mainnet-monitor-checkpoint-v2"
 const monitorCheckpointLegacySchema = "urnetwork-mainnet-monitor-checkpoint-v1"
 
 // The checkpoint is local continuity evidence, not an approval or an
@@ -31,13 +34,15 @@ type monitorCheckpointRecord struct {
 	FinalizedAt      uint64 `json:"finalized_number"`
 	LastProgressAt   string `json:"last_progress_at"`
 	UnavailableSince string `json:"unavailable_since,omitempty"`
+	LastSuccessAt    string `json:"last_success_at,omitempty"`
 	ContentHash      string `json:"content_hash"`
 }
 
 type monitorCheckpointStore struct {
-	path     string
-	lock     *os.File
-	expected identityExpectation
+	path          string
+	lock          *os.File
+	expected      identityExpectation
+	syncDirectory func(*os.File) error
 }
 
 // A process owns one checkpoint for its entire monitoring lifetime. The lock
@@ -45,6 +50,10 @@ type monitorCheckpointStore struct {
 func openMonitorCheckpoint(path string, expected identityExpectation) (*monitorCheckpointStore, error) {
 	if !filepath.IsAbs(path) || filepath.Base(path) == "." || expected.NativeChain == "" || !validHash(expected.GenesisHash) || expected.EvmChainId != mainnetEvmChainId {
 		return nil, errors.New("checkpoint path or approved network identity is incomplete")
+	}
+	path, err := resolveMonitorDestination(path)
+	if err != nil {
+		return nil, err
 	}
 	fd, err := syscall.Open(path+".lock", syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0600)
 	if err != nil {
@@ -67,10 +76,15 @@ func (self *monitorCheckpointStore) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	return self.lock.Close()
+	err := self.lock.Close()
+	self.lock = nil
+	return err
 }
 
 func (self *monitorCheckpointStore) load() (*monitorState, error) {
+	if self == nil || self.lock == nil {
+		return nil, errors.New("monitor checkpoint store is closed")
+	}
 	state := &monitorState{}
 	info, err := os.Lstat(self.path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -111,6 +125,9 @@ func (self *monitorCheckpointStore) load() (*monitorState, error) {
 	}
 	progressAt, _ := time.Parse(time.RFC3339Nano, record.LastProgressAt)
 	state = &monitorState{lastHash: record.FinalizedHash, lastNumber: record.FinalizedAt, lastProgressAt: progressAt}
+	if record.LastSuccessAt != "" {
+		state.lastSuccessAt, _ = time.Parse(time.RFC3339Nano, record.LastSuccessAt)
+	}
 	if record.UnavailableSince != "" {
 		state.unavailableSince, _ = time.Parse(time.RFC3339Nano, record.UnavailableSince)
 	}
@@ -118,17 +135,32 @@ func (self *monitorCheckpointStore) load() (*monitorState, error) {
 }
 
 func (self *monitorCheckpointStore) validate(record monitorCheckpointRecord) error {
-	if record.Schema != monitorCheckpointSchema && record.Schema != monitorCheckpointLegacySchema ||
+	if record.Schema != monitorCheckpointSchema && record.Schema != monitorCheckpointOutageSchema && record.Schema != monitorCheckpointLegacySchema ||
 		record.Schema == monitorCheckpointLegacySchema && record.UnavailableSince != "" ||
-		record.NativeChain != self.expected.NativeChain || !strings.EqualFold(record.GenesisHash, self.expected.GenesisHash) || record.EvmChainId != self.expected.EvmChainId || !validHash(record.FinalizedHash) || record.FinalizedAt == 0 {
+		record.Schema != monitorCheckpointSchema && record.LastSuccessAt != "" ||
+		record.NativeChain != self.expected.NativeChain || !strings.EqualFold(record.GenesisHash, self.expected.GenesisHash) || record.EvmChainId != self.expected.EvmChainId {
 		return errors.New("checkpoint identity or finalized position differs")
 	}
-	if _, err := time.Parse(time.RFC3339Nano, record.LastProgressAt); err != nil {
-		return fmt.Errorf("checkpoint progress time is invalid: %w", err)
+	if record.FinalizedHash == "" && record.FinalizedAt == 0 && record.LastProgressAt == "" {
+		if record.Schema != monitorCheckpointSchema || record.UnavailableSince == "" || record.LastSuccessAt != "" {
+			return errors.New("checkpoint without finality requires an initial read outage")
+		}
+	} else {
+		if !validHash(record.FinalizedHash) || record.FinalizedAt == 0 {
+			return errors.New("checkpoint finalized position is incomplete")
+		}
+		if value, err := time.Parse(time.RFC3339Nano, record.LastProgressAt); err != nil || value.IsZero() {
+			return errors.Join(errors.New("checkpoint progress time is invalid"), err)
+		}
 	}
 	if record.UnavailableSince != "" {
-		if _, err := time.Parse(time.RFC3339Nano, record.UnavailableSince); err != nil {
-			return fmt.Errorf("checkpoint read outage time is invalid: %w", err)
+		if value, err := time.Parse(time.RFC3339Nano, record.UnavailableSince); err != nil || value.IsZero() {
+			return errors.Join(errors.New("checkpoint read outage time is invalid"), err)
+		}
+	}
+	if record.LastSuccessAt != "" {
+		if value, err := time.Parse(time.RFC3339Nano, record.LastSuccessAt); err != nil || value.IsZero() {
+			return errors.Join(errors.New("checkpoint successful read time is invalid"), err)
 		}
 	}
 	claimed := record.ContentHash
@@ -150,11 +182,15 @@ func hashMonitorCheckpoint(record monitorCheckpointRecord) (string, error) {
 	return "sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
-// Publish one complete position before reporting a sample as healthy. A
-// failed write leaves the previous file intact for restart reconciliation.
+// Publish one complete position before reporting a sample as healthy.
+// Failed writes may precede or follow rename; callers stop and reopen the
+// complete checkpoint instead of assuming which generation reached storage.
 func (self *monitorCheckpointStore) save(state *monitorState) error {
-	if state == nil || !validHash(state.lastHash) || state.lastNumber == 0 || state.lastProgressAt.IsZero() {
-		return errors.New("monitor checkpoint position is incomplete")
+	if self == nil || self.lock == nil {
+		return errors.New("monitor checkpoint store is closed")
+	}
+	if state == nil {
+		return errors.New("monitor checkpoint state is absent")
 	}
 	if info, err := os.Lstat(self.path); err == nil {
 		if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
@@ -167,7 +203,12 @@ func (self *monitorCheckpointStore) save(state *monitorState) error {
 		Schema: monitorCheckpointSchema, NativeChain: self.expected.NativeChain,
 		GenesisHash: strings.ToLower(self.expected.GenesisHash), EvmChainId: self.expected.EvmChainId,
 		FinalizedHash: strings.ToLower(state.lastHash), FinalizedAt: state.lastNumber,
-		LastProgressAt: state.lastProgressAt.UTC().Format(time.RFC3339Nano),
+	}
+	if !state.lastProgressAt.IsZero() {
+		record.LastProgressAt = state.lastProgressAt.UTC().Format(time.RFC3339Nano)
+	}
+	if !state.lastSuccessAt.IsZero() {
+		record.LastSuccessAt = state.lastSuccessAt.UTC().Format(time.RFC3339Nano)
 	}
 	if !state.unavailableSince.IsZero() {
 		record.UnavailableSince = state.unavailableSince.UTC().Format(time.RFC3339Nano)
@@ -177,27 +218,13 @@ func (self *monitorCheckpointStore) save(state *monitorState) error {
 	if err != nil {
 		return err
 	}
+	if err := self.validate(record); err != nil {
+		return err
+	}
 	raw, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		return err
 	}
 	raw = append(raw, '\n')
-	directory := filepath.Dir(self.path)
-	file, err := os.CreateTemp(directory, ".sn-mainnet-monitor-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	_, writeErr := file.Write(raw)
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(file.Name(), self.path); err != nil {
-		return err
-	}
-	dir, err := os.Open(directory)
-	if err != nil {
-		return err
-	}
-	return errors.Join(dir.Sync(), dir.Close())
+	return publishMonitorFile(self.path, raw, 0600, self.syncDirectory)
 }

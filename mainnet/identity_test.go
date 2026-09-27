@@ -43,6 +43,12 @@ func testRpcServer(t *testing.T, overloadedMethod string, inconsistentHeight ...
 }
 
 func testRpcServerWithEvm(t *testing.T, evmChainId, overloadedMethod string, inconsistentHeight ...bool) (*httptest.Server, func(string) int) {
+	return testRpcServerWithIdentity(t, "Bittensor", evmChainId, overloadedMethod, inconsistentHeight...)
+}
+
+// New command tests supply a synthetic chain name while sharing exact native
+// header fixtures; existing tests preserve their established expectations.
+func testRpcServerWithIdentity(t *testing.T, chainName, evmChainId, overloadedMethod string, inconsistentHeight ...bool) (*httptest.Server, func(string) int) {
 	t.Helper()
 	methodCounts := map[string]int{}
 	var stateLock sync.Mutex
@@ -66,7 +72,7 @@ func testRpcServerWithEvm(t *testing.T, evmChainId, overloadedMethod string, inc
 			return
 		}
 		results := map[string]any{
-			"system_chain":           "Bittensor",
+			"system_chain":           chainName,
 			"chain_getBlockHash":     testGenesisHash,
 			"eth_chainId":            evmChainId,
 			"system_version":         "Subtensor Node test",
