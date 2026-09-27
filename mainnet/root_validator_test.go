@@ -163,7 +163,7 @@ func (self *rootRpcFixture) roundTrip(request *http.Request) (*http.Response, er
 	case "chain_getFinalizedHead":
 		result = testFinalizedHash
 	case "chain_getHeader":
-		result = map[string]string{"number": "0x64"}
+		result = identityTestHeader()
 	case "chain_getBlockHash":
 		if len(call.Params) != 1 {
 			return nil, errors.New("bad root fixture block query")

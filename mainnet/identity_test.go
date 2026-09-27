@@ -18,7 +18,17 @@ import (
 )
 
 const testGenesisHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-const testFinalizedHash = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+// Independently encoded synthetic block 100; observer fixtures share its height.
+const testFinalizedHash = "0xac3adf52d28d2edd2e2d4e3081fe5885f38a0f860758157ccb9c7df51e572f55"
+
+// A complete deterministic header lets identity tests exercise real SCALE
+// authentication. TestIdentityFixtureHeaderMatchesIndependentCodec proves it.
+func identityTestHeader() rootReceiptHeader {
+	header := rootReceiptHeader{ParentHash: testGenesisHash, Number: "0x64", StateRoot: "0x" + strings.Repeat("ab", 32), ExtrinsicsRoot: "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"}
+	header.Digest.Logs = []string{}
+	return header
+}
 
 // roundTripFunc gives deadline tests a synchronous transport without clocks or sockets.
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -61,17 +71,15 @@ func testRpcServerWithEvm(t *testing.T, evmChainId, overloadedMethod string, inc
 			"eth_chainId":            evmChainId,
 			"system_version":         "Subtensor Node test",
 			"chain_getFinalizedHead": testFinalizedHash,
-			"chain_getHeader":        map[string]any{"number": "0x7b852f"},
+			"chain_getHeader":        identityTestHeader(),
 			"state_getRuntimeVersion": map[string]any{
-				"specVersion": uint64(460), "transactionVersion": uint64(1),
+				"specName": "synthetic-runtime", "specVersion": uint64(991), "transactionVersion": uint64(1), "stateVersion": uint8(1),
 			},
 		}
 		result, ok := results[call.Method]
 		if call.Method == "chain_getBlockHash" && len(call.Params) == 1 {
 			switch call.Params[0] {
 			case float64(100):
-				result = testFinalizedHash
-			case float64(0x7b852f):
 				if len(inconsistentHeight) == 0 || !inconsistentHeight[0] {
 					result = testFinalizedHash
 				}
@@ -237,13 +245,13 @@ func TestIdentityReadUsesOneSampleBudget(t *testing.T) {
 			"eth_chainId":             "0x3b1",
 			"system_version":          "synthetic node",
 			"chain_getFinalizedHead":  testFinalizedHash,
-			"chain_getHeader":         map[string]any{"number": "0x7b852f"},
-			"state_getRuntimeVersion": map[string]any{"specVersion": 460, "transactionVersion": 1},
+			"chain_getHeader":         identityTestHeader(),
+			"state_getRuntimeVersion": map[string]any{"specName": "synthetic-runtime", "specVersion": 991, "transactionVersion": 1, "stateVersion": 1},
 		}
 		result := results[call.Method]
 		if call.Method == "chain_getBlockHash" && len(call.Params) == 1 {
 			result = testGenesisHash
-			if call.Params[0] == float64(0x7b852f) {
+			if call.Params[0] == float64(100) {
 				result = testFinalizedHash
 			}
 		}

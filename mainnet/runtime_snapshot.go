@@ -19,7 +19,13 @@ import (
 )
 
 const runtimeSnapshotSchema = "urnetwork-mainnet-runtime-snapshot-v1"
-const maximumRuntimeCodeRpcReplyBytes = 16 * 1024 * 1024
+
+// Raw artifact admission and JSON wire admission are separate bounds. Hex
+// doubles the raw bytes; the prefix, quotes and envelope still need room.
+const maximumRuntimeSnapshotCodeBytes = 8 * 1024 * 1024
+const maximumRuntimeSnapshotMetadataBytes = 4 * 1024 * 1024
+const maximumRuntimeCodeRpcReplyBytes = 2*maximumRuntimeSnapshotCodeBytes + maxRpcReplyBytes
+const maximumRuntimeMetadataSnapshotRpcReplyBytes = 2*maximumRuntimeSnapshotMetadataBytes + maxRpcReplyBytes
 const runtimeCodeStorageKey = "0x3a636f6465"
 
 // The exact code and metadata bytes let an independent reviewer reproduce both
@@ -74,7 +80,7 @@ func (self *rpcClient) readRuntimeSnapshot(ctx context.Context, expected *identi
 		return runtimeSnapshot{}, err
 	}
 	version, err := crv4.DecodeRuntimeVersionIdentity(rawVersion)
-	if err != nil || uint64(version.SpecVersion) != identity.RuntimeSpec || uint64(version.TransactionVersion) != identity.RuntimeTx {
+	if err != nil || version != identity.runtimeVersion {
 		return runtimeSnapshot{}, fmt.Errorf("%w: finalized runtime version changed between identity and artifact reads: %v", errRpcIntegrity, err)
 	}
 	var reportedCodeHash, encodedCode, encodedMetadata string
@@ -87,7 +93,7 @@ func (self *rpcClient) readRuntimeSnapshot(ctx context.Context, expected *identi
 	if err := self.callBoundedRead(sampleCtx, "state_getStorage", []any{runtimeCodeStorageKey, blockHash}, &encodedCode, false, maximumRuntimeCodeRpcReplyBytes); err != nil {
 		return runtimeSnapshot{}, err
 	}
-	code, codeHex, err := decodeRuntimeSnapshotHex("runtime code", encodedCode, maximumRuntimeCodeRpcReplyBytes/2)
+	code, codeHex, err := decodeRuntimeSnapshotHex("runtime code", encodedCode, maximumRuntimeSnapshotCodeBytes)
 	if err != nil {
 		return runtimeSnapshot{}, err
 	}
@@ -96,10 +102,10 @@ func (self *rpcClient) readRuntimeSnapshot(ctx context.Context, expected *identi
 	if !strings.EqualFold(codeHash, reportedCodeHash) {
 		return runtimeSnapshot{}, fmt.Errorf("%w: runtime code bytes differ from storage hash", errRpcIntegrity)
 	}
-	if err := self.call(sampleCtx, "state_getMetadata", []any{blockHash}, &encodedMetadata); err != nil {
+	if err := self.callBoundedRead(sampleCtx, "state_getMetadata", []any{blockHash}, &encodedMetadata, false, maximumRuntimeMetadataSnapshotRpcReplyBytes); err != nil {
 		return runtimeSnapshot{}, err
 	}
-	metadata, metadataHex, err := decodeRuntimeSnapshotHex("runtime metadata", encodedMetadata, maxMetadataRpcReplyBytes/2)
+	metadata, metadataHex, err := decodeRuntimeSnapshotHex("runtime metadata", encodedMetadata, maximumRuntimeSnapshotMetadataBytes)
 	if err != nil {
 		return runtimeSnapshot{}, err
 	}

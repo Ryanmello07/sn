@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/protocol"
 )
 
@@ -39,6 +40,9 @@ type chainIdentity struct {
 	FinalizedNumber uint64 `json:"finalized_number"`
 	RuntimeSpec     uint64 `json:"runtime_spec_version"`
 	RuntimeTx       uint64 `json:"runtime_transaction_version"`
+	// Preserve the complete live tuple for artifact cross-reads without changing
+	// the existing observation schema. It is never reconstructed as authority.
+	runtimeVersion crv4.RuntimeVersionIdentity
 }
 
 // identityEnvelope binds the observation bytes without treating them as approval.
@@ -220,23 +224,18 @@ func (self *rpcClient) readIdentity(ctx context.Context) (chainIdentity, error) 
 	defer cancel()
 	identity := chainIdentity{Schema: identitySchema, RpcUrl: self.url}
 	var evmChainHex string
-	var header struct {
-		Number string `json:"number"`
-	}
-	var runtime struct {
-		SpecVersion        uint64 `json:"specVersion"`
-		TransactionVersion uint64 `json:"transactionVersion"`
-	}
+	var header rootReceiptHeader
+	var rawVersion json.RawMessage
 	for _, step := range []struct {
 		method string
 		params []any
 		result any
 	}{
-		{"system_chain", []any{}, &identity.NativeChain},
-		{"chain_getBlockHash", []any{0}, &identity.GenesisHash},
-		{"eth_chainId", []any{}, &evmChainHex},
-		{"system_version", []any{}, &identity.NodeVersion},
-		{"chain_getFinalizedHead", []any{}, &identity.FinalizedHash},
+		{method: "system_chain", params: []any{}, result: &identity.NativeChain},
+		{method: "chain_getBlockHash", params: []any{0}, result: &identity.GenesisHash},
+		{method: "eth_chainId", params: []any{}, result: &evmChainHex},
+		{method: "system_version", params: []any{}, result: &identity.NodeVersion},
+		{method: "chain_getFinalizedHead", params: []any{}, result: &identity.FinalizedHash},
 	} {
 		if err := self.call(sampleCtx, step.method, step.params, step.result); err != nil {
 			return chainIdentity{}, err
@@ -245,19 +244,34 @@ func (self *rpcClient) readIdentity(ctx context.Context) (chainIdentity, error) 
 	if err := self.call(sampleCtx, "chain_getHeader", []any{identity.FinalizedHash}, &header); err != nil {
 		return chainIdentity{}, err
 	}
-	if err := self.call(sampleCtx, "state_getRuntimeVersion", []any{identity.FinalizedHash}, &runtime); err != nil {
-		return chainIdentity{}, err
+	// Hash spelling is not authority; normalize equivalent hex before hashing
+	// the complete header, including its roots and bounded digest payloads.
+	identity.GenesisHash = strings.ToLower(identity.GenesisHash)
+	identity.FinalizedHash = strings.ToLower(identity.FinalizedHash)
+	header.ParentHash = strings.ToLower(header.ParentHash)
+	header.StateRoot = strings.ToLower(header.StateRoot)
+	header.ExtrinsicsRoot = strings.ToLower(header.ExtrinsicsRoot)
+	for index := range header.Digest.Logs {
+		header.Digest.Logs[index] = strings.ToLower(header.Digest.Logs[index])
 	}
 	var err error
+	identity.FinalizedNumber, err = header.authenticate(identity.FinalizedHash)
+	if err != nil {
+		return chainIdentity{}, fmt.Errorf("%w: finalized header: %v", errRpcIntegrity, err)
+	}
+	if err := self.call(sampleCtx, "state_getRuntimeVersion", []any{identity.FinalizedHash}, &rawVersion); err != nil {
+		return chainIdentity{}, err
+	}
+	runtime, err := crv4.DecodeRuntimeVersionIdentity(rawVersion)
+	if err != nil {
+		return chainIdentity{}, fmt.Errorf("%w: finalized runtime version: %v", errRpcIntegrity, err)
+	}
 	identity.EvmChainId, err = parseHexNumber(evmChainHex)
 	if err != nil {
 		return chainIdentity{}, fmt.Errorf("%w: EVM chain ID: %v", errRpcIntegrity, err)
 	}
-	identity.FinalizedNumber, err = parseHexNumber(header.Number)
-	if err != nil {
-		return chainIdentity{}, fmt.Errorf("%w: finalized block number: %v", errRpcIntegrity, err)
-	}
-	identity.RuntimeSpec, identity.RuntimeTx = runtime.SpecVersion, runtime.TransactionVersion
+	identity.RuntimeSpec, identity.RuntimeTx = uint64(runtime.SpecVersion), uint64(runtime.TransactionVersion)
+	identity.runtimeVersion = runtime
 	if !validHash(identity.GenesisHash) || !validHash(identity.FinalizedHash) || identity.NativeChain == "" || identity.NodeVersion == "" || identity.RuntimeSpec == 0 {
 		return chainIdentity{}, fmt.Errorf("%w: identity is incomplete", errRpcIntegrity)
 	}

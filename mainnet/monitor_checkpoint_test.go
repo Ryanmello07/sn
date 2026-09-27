@@ -52,7 +52,7 @@ func TestMonitorCommandPersistsAndResumesCheckpoint(t *testing.T) {
 		}
 		state, loadErr := store.load()
 		closeErr := store.close()
-		if loadErr != nil || closeErr != nil || state.lastHash != testFinalizedHash || state.lastNumber != 0x7b852f {
+		if loadErr != nil || closeErr != nil || state.lastHash != testFinalizedHash || state.lastNumber != 100 {
 			t.Fatalf("monitor run %d checkpoint: %+v %v %v", run, state, loadErr, closeErr)
 		}
 	}

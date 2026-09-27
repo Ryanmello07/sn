@@ -7,11 +7,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/blake2b"
 )
@@ -21,6 +23,12 @@ func runtimeSnapshotTestServer(t *testing.T, evmChainId string, wrongCodeHash, c
 	t.Helper()
 	code := []byte{0, 97, 115, 109, 1, 0, 0, 0}
 	metadata := []byte{109, 101, 116, 97, 255, 0}
+	return runtimeSnapshotArtifactTestServer(t, evmChainId, wrongCodeHash, changedGenesis, code, metadata)
+}
+
+// Raw artifact sizes are independent of their JSON envelope and hex encoding.
+func runtimeSnapshotArtifactTestServer(t *testing.T, evmChainId string, wrongCodeHash, changedGenesis bool, code, metadata []byte, runtimeVersions ...json.RawMessage) (*httptest.Server, *atomic.Int64) {
+	t.Helper()
 	codeDigest := blake2b.Sum256(code)
 	codeHash := "0x" + hex.EncodeToString(codeDigest[:])
 	if wrongCodeHash {
@@ -28,6 +36,7 @@ func runtimeSnapshotTestServer(t *testing.T, evmChainId string, wrongCodeHash, c
 	}
 	artifactReads := &atomic.Int64{}
 	genesisReads := &atomic.Int64{}
+	versionReads := &atomic.Int64{}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		var call struct {
 			JsonRpc string `json:"jsonrpc"`
@@ -53,7 +62,7 @@ func runtimeSnapshotTestServer(t *testing.T, evmChainId string, wrongCodeHash, c
 			if len(call.Params) != 1 || call.Params[0] != testFinalizedHash {
 				t.Errorf("header was not pinned to finalized hash: %v", call.Params)
 			}
-			result = map[string]any{"number": "0x7b852f"}
+			result = identityTestHeader()
 		case "chain_getBlockHash":
 			if len(call.Params) != 1 {
 				t.Errorf("block lookup has invalid params: %v", call.Params)
@@ -63,13 +72,19 @@ func runtimeSnapshotTestServer(t *testing.T, evmChainId string, wrongCodeHash, c
 				if changedGenesis && genesisReads.Add(1) > 1 {
 					result = testFinalizedHash
 				}
-			} else if call.Params[0] == float64(0x7b852f) {
+			} else if call.Params[0] == float64(100) {
 				result = testFinalizedHash
 			} else {
 				t.Errorf("unexpected block lookup: %v", call.Params)
 			}
 		case "state_getRuntimeVersion":
-			result = map[string]any{"specName": "node-subtensor", "specVersion": 460, "transactionVersion": 1, "stateVersion": 1}
+			if len(call.Params) != 1 || call.Params[0] != testFinalizedHash {
+				t.Errorf("runtime version was not pinned: %v", call.Params)
+			}
+			result = map[string]any{"specName": "synthetic-runtime", "specVersion": 991, "transactionVersion": 1, "stateVersion": 1}
+			if len(runtimeVersions) != 0 {
+				result = runtimeVersions[min(versionReads.Add(1)-1, int64(len(runtimeVersions)-1))]
+			}
 		case "state_getStorageHash":
 			artifactReads.Add(1)
 			if len(call.Params) != 2 || call.Params[0] != runtimeCodeStorageKey || call.Params[1] != testFinalizedHash {
@@ -100,6 +115,73 @@ func runtimeSnapshotTestServer(t *testing.T, evmChainId string, wrongCodeHash, c
 	}))
 	t.Cleanup(server.Close)
 	return server, artifactReads
+}
+
+// Equal spec and transaction numbers cannot hide a different runtime name or
+// trie state version at the same finalized block between two successful reads.
+func TestRuntimeSnapshotRejectsFullVersionDriftAtOneBlock(t *testing.T) {
+	initial := json.RawMessage(`{"specName":"synthetic-runtime","specVersion":991,"transactionVersion":1,"stateVersion":1}`)
+	driftVersions := []json.RawMessage{
+		json.RawMessage(`{"specName":"other-runtime","specVersion":991,"transactionVersion":1,"stateVersion":1}`),
+		json.RawMessage(`{"specName":"synthetic-runtime","specVersion":991,"transactionVersion":1,"stateVersion":0}`),
+	}
+	for _, driftVersion := range driftVersions {
+		server, reads := runtimeSnapshotArtifactTestServer(t, "0x3c4", false, false, []byte{1}, []byte{2}, initial, driftVersion)
+		client, err := newRpcClient(server.URL, time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot, err := client.readRuntimeSnapshot(context.Background(), nil)
+		if !errors.Is(err, errRpcIntegrity) || snapshot.Schema != "" || reads.Load() != 0 {
+			t.Errorf("same-block runtime drift accepted: version=%s schema=%q reads=%d err=%v", driftVersion, snapshot.Schema, reads.Load(), err)
+		}
+	}
+}
+
+// Exact documented raw limits must survive hexadecimal expansion and JSON
+// framing, including the trailing newline a normal server encoder writes.
+func TestRuntimeSnapshotAcceptsExactRawArtifactLimits(t *testing.T) {
+	code := bytes.Repeat([]byte{0xab}, maximumRuntimeSnapshotCodeBytes)
+	metadata := bytes.Repeat([]byte{0xcd}, maximumRuntimeSnapshotMetadataBytes)
+	server, reads := runtimeSnapshotArtifactTestServer(t, "0x3c4", false, false, code, metadata)
+	client, err := newRpcClient(server.URL, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := client.readRuntimeSnapshot(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codeDigest := blake2b.Sum256(code)
+	metadataDigest := blake2b.Sum256(metadata)
+	if len(snapshot.CodeHex) != 2+2*len(code) || len(snapshot.MetadataHex) != 2+2*len(metadata) || snapshot.CodeHash != "0x"+hex.EncodeToString(codeDigest[:]) || snapshot.MetadataHash != "0x"+hex.EncodeToString(metadataDigest[:]) || reads.Load() != 3 {
+		t.Fatalf("exact artifact limits changed byte identity: code=%d metadata=%d reads=%d", len(snapshot.CodeHex), len(snapshot.MetadataHex), reads.Load())
+	}
+}
+
+// Extra wire framing headroom grants no extra raw artifact capacity. An
+// artifact one byte over either bound must fail without publishing a snapshot.
+func TestRuntimeSnapshotRejectsRawArtifactsAboveLimits(t *testing.T) {
+	cases := []struct {
+		label        string
+		codeSize     int
+		metadataSize int
+		reads        int64
+	}{
+		{label: "code", codeSize: maximumRuntimeSnapshotCodeBytes + 1, metadataSize: 1, reads: 2},
+		{label: "metadata", codeSize: 1, metadataSize: maximumRuntimeSnapshotMetadataBytes + 1, reads: 3},
+	}
+	for _, testCase := range cases {
+		server, reads := runtimeSnapshotArtifactTestServer(t, "0x3c4", false, false, bytes.Repeat([]byte{0xab}, testCase.codeSize), bytes.Repeat([]byte{0xcd}, testCase.metadataSize))
+		client, err := newRpcClient(server.URL, time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot, err := client.readRuntimeSnapshot(context.Background(), nil)
+		if !errors.Is(err, errRpcIntegrity) || snapshot.Schema != "" || reads.Load() != testCase.reads {
+			t.Errorf("oversized %s was not rejected: schema=%q reads=%d err=%v", testCase.label, snapshot.Schema, reads.Load(), err)
+		}
+	}
 }
 
 // The raw bytes, their independent hashes and the enclosing digest must agree.

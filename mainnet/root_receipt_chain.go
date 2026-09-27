@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/urfoundation/sn/crv4"
@@ -75,12 +76,14 @@ type rootReceiptHeader struct {
 
 // SCALE header hashing authenticates its parent, roots, height and digest.
 func (self rootReceiptHeader) authenticate(expectedHash string) (uint64, error) {
-	if !rootCanonicalHash(self.ParentHash) || !rootCanonicalHash(self.StateRoot) || !rootCanonicalHash(self.ExtrinsicsRoot) || self.Digest.Logs == nil || len(self.Digest.Logs) > 256 {
-		return 0, errors.New("root finalized header fields are missing or invalid")
-	}
 	number, err := parseHexNumber(self.Number)
 	if err != nil || number > math.MaxUint32 {
 		return 0, errors.New("root finalized header number exceeds native u32")
+	}
+	// Genesis has no parent; later headers must name a real predecessor.
+	validParent := rootCanonicalHash(self.ParentHash) || number == 0 && self.ParentHash == "0x"+strings.Repeat("0", 64)
+	if !validParent || !rootCanonicalHash(self.StateRoot) || !rootCanonicalHash(self.ExtrinsicsRoot) || self.Digest.Logs == nil || len(self.Digest.Logs) > 256 {
+		return 0, errors.New("root finalized header fields are missing or invalid")
 	}
 	parent, _ := hex.DecodeString(self.ParentHash[2:])
 	state, _ := hex.DecodeString(self.StateRoot[2:])

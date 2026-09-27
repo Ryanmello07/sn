@@ -118,7 +118,7 @@ func newRecycleTestClient(t *testing.T, storage *string, mutate func(*types.Meta
 		case "chain_getFinalizedHead":
 			result = testFinalizedHash
 		case "chain_getHeader":
-			result = map[string]any{"number": "0x64"}
+			result = identityTestHeader()
 		case "chain_getBlockHash":
 			if len(call.Params) != 1 {
 				t.Error("wrong block hash parameters")
