@@ -405,14 +405,24 @@ response version/ID, and rejects response bodies exceeding 1 MiB. Hash compariso
 accept equivalent hexadecimal casing. Malformed, inconsistent or oversized RPC
 evidence emits terminal `rpc-integrity`; that status, `identity-mismatch` and
 `finality-conflict` exit with code 3. Availability failures remain `rpc-error`
-observations and do not establish healthy state. The command contains no signer
-or submitter. Focused normal/race tests and vet pass; the retained Snow rejection
+observations and do not establish healthy state. Repeated read failures retain
+their first observed time; `severity` becomes `warning` after two minutes and
+`critical` after five, while the monitor keeps retrying. A host-clock rollback
+escalates immediately rather than postponing the page threshold. The command
+contains no signer or submitter. Focused normal/race tests and vet pass; the retained Snow rejection
 demonstrates actual wrong-network refusal.
 
 `monitor --checkpoint /absolute/path/monitor.json` adds a single-owner local
 continuity checkpoint. Before reporting a newly finalized position as healthy,
 it atomically persists the approved chain/genesis/EVM identity, last finalized height and hash, and
-progress time with a content checksum. Restart loads that position and checks
+progress time with a content checksum. After a first healthy finalized sample,
+the checkpoint also retains the start of a read outage and clears it only after
+a complete identity and continuity read. An outage before the first healthy
+sample has no finalized position to checkpoint and needs the independent
+monitor dead-man alert. The v2 checkpoint reader accepts a valid prior v1
+finality record and writes v2 on its next state change; a rollback to the old
+binary requires an explicit compatible checkpoint migration, not silent file
+replacement. Restart loads the retained position and checks
 the prior finalized hash against the route; a regression or changed historical
 hash is still visible after process restart. A corrupt, foreign or symlinked
 checkpoint stops admission; an unavailable write emits `checkpoint-error` and

@@ -23,15 +23,42 @@ type monitorEvent struct {
 	Schema     string            `json:"schema"`
 	ObservedAt string            `json:"observed_at"`
 	Status     string            `json:"status"`
+	Severity   string            `json:"severity,omitempty"`
 	Detail     string            `json:"detail,omitempty"`
 	Snapshot   *identityEnvelope `json:"snapshot,omitempty"`
 }
 
 // monitorState tracks finalized progress without treating a changing tip as finality.
 type monitorState struct {
-	lastHash       string
-	lastNumber     uint64
-	lastProgressAt time.Time
+	lastHash         string
+	lastNumber       uint64
+	lastProgressAt   time.Time
+	unavailableSince time.Time
+}
+
+// A read outage remains visible across samples and checkpointed restarts.
+// Clock rollback cannot postpone its page threshold indefinitely.
+func (self *monitorState) observeUnavailable(startedAt, now time.Time) (string, bool) {
+	changed := self.unavailableSince.IsZero()
+	if changed {
+		self.unavailableSince = startedAt
+	}
+	if now.Before(self.unavailableSince) || now.Sub(self.unavailableSince) >= 5*time.Minute {
+		return "critical", changed
+	}
+	if now.Sub(self.unavailableSince) >= 2*time.Minute {
+		return "warning", changed
+	}
+	return "", changed
+}
+
+// A fully checked read, including retained finality, ends an outage.
+func (self *monitorState) clearUnavailable() bool {
+	if self.unavailableSince.IsZero() {
+		return false
+	}
+	self.unavailableSince = time.Time{}
+	return true
 }
 
 // observe recognizes frozen or contradictory finalized heads at one route.
@@ -64,6 +91,11 @@ func main() {
 
 // Dispatches signer-free observations and reference accounting with explicit exits.
 func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return runMainWithClock(ctx, args, stdout, stderr, time.Now)
+}
+
+// A supplied clock makes outage and finality deadlines reproducible in tests.
+func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time) int {
 	if len(args) != 0 && args[0] == "release-inventory" {
 		return runReleaseInventoryCommand(ctx, args, stdout, stderr)
 	}
@@ -177,17 +209,30 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			return 0
 		}
 		event := monitorEvent{Schema: monitorSchema}
+		sampleStartedAt := now().UTC()
 		identity, readErr := client.readIdentity(ctx)
-		now := time.Now().UTC()
-		event.ObservedAt = now.Format(time.RFC3339Nano)
+		sampledAt := now().UTC()
+		event.ObservedAt = sampledAt.Format(time.RFC3339Nano)
+		markUnavailable := func(readErr error) {
+			event.Status, event.Detail = "rpc-error", readErr.Error()
+			if errors.Is(readErr, errRpcIntegrity) {
+				event.Status, event.Severity = "rpc-integrity", "critical"
+				return
+			}
+			var changed bool
+			event.Severity, changed = state.observeUnavailable(sampleStartedAt, sampledAt)
+			if changed && checkpoint != nil && state.lastHash != "" {
+				if saveErr := checkpoint.save(state); saveErr != nil {
+					event.Status, event.Severity = "checkpoint-error", "critical"
+					event.Detail = fmt.Sprintf("%v; checkpoint: %v", readErr, saveErr)
+				}
+			}
+		}
 		if readErr != nil {
 			if ctx.Err() != nil {
 				return 0
 			}
-			event.Status, event.Detail = "rpc-error", readErr.Error()
-			if errors.Is(readErr, errRpcIntegrity) {
-				event.Status = "rpc-integrity"
-			}
+			markUnavailable(readErr)
 		} else {
 			snapshot, sealErr := sealIdentity(identity)
 			if sealErr != nil {
@@ -204,20 +249,19 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			}
 			continuous, continuityErr := client.priorFinalizedMatches(ctx, state, identity)
 			if continuityErr != nil {
-				event.Status, event.Detail = "rpc-error", continuityErr.Error()
-				if errors.Is(continuityErr, errRpcIntegrity) {
-					event.Status = "rpc-integrity"
-				}
+				sampledAt = now().UTC()
+				event.ObservedAt = sampledAt.Format(time.RFC3339Nano)
+				markUnavailable(continuityErr)
 			} else if !continuous {
 				event.Status, event.Detail = "finality-conflict", "previously finalized block hash changed at its original height"
 			} else {
 				previousHash, previousNumber := state.lastHash, state.lastNumber
-				event.Status, err = state.observe(now, identity, *stallAfter)
+				event.Status, err = state.observe(sampledAt, identity, *stallAfter)
 				if err != nil {
 					event.Detail = err.Error()
-				} else if checkpoint != nil && (state.lastHash != previousHash || state.lastNumber != previousNumber) {
+				} else if recovered := state.clearUnavailable(); checkpoint != nil && (recovered || state.lastHash != previousHash || state.lastNumber != previousNumber) {
 					if saveErr := checkpoint.save(state); saveErr != nil {
-						event.Status, event.Detail = "checkpoint-error", saveErr.Error()
+						event.Status, event.Severity, event.Detail = "checkpoint-error", "critical", saveErr.Error()
 					}
 				}
 			}

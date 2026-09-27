@@ -17,19 +17,21 @@ import (
 	"github.com/urfoundation/sn/protocol"
 )
 
-const monitorCheckpointSchema = "urnetwork-mainnet-monitor-checkpoint-v1"
+const monitorCheckpointSchema = "urnetwork-mainnet-monitor-checkpoint-v2"
+const monitorCheckpointLegacySchema = "urnetwork-mainnet-monitor-checkpoint-v1"
 
 // The checkpoint is local continuity evidence, not an approval or an
 // independent attestation of the RPC route.
 type monitorCheckpointRecord struct {
-	Schema         string `json:"schema"`
-	NativeChain    string `json:"native_chain"`
-	GenesisHash    string `json:"genesis_hash"`
-	EvmChainId     uint64 `json:"evm_chain_id"`
-	FinalizedHash  string `json:"finalized_hash"`
-	FinalizedAt    uint64 `json:"finalized_number"`
-	LastProgressAt string `json:"last_progress_at"`
-	ContentHash    string `json:"content_hash"`
+	Schema           string `json:"schema"`
+	NativeChain      string `json:"native_chain"`
+	GenesisHash      string `json:"genesis_hash"`
+	EvmChainId       uint64 `json:"evm_chain_id"`
+	FinalizedHash    string `json:"finalized_hash"`
+	FinalizedAt      uint64 `json:"finalized_number"`
+	LastProgressAt   string `json:"last_progress_at"`
+	UnavailableSince string `json:"unavailable_since,omitempty"`
+	ContentHash      string `json:"content_hash"`
 }
 
 type monitorCheckpointStore struct {
@@ -108,15 +110,26 @@ func (self *monitorCheckpointStore) load() (*monitorState, error) {
 		return nil, err
 	}
 	progressAt, _ := time.Parse(time.RFC3339Nano, record.LastProgressAt)
-	return &monitorState{lastHash: record.FinalizedHash, lastNumber: record.FinalizedAt, lastProgressAt: progressAt}, nil
+	state = &monitorState{lastHash: record.FinalizedHash, lastNumber: record.FinalizedAt, lastProgressAt: progressAt}
+	if record.UnavailableSince != "" {
+		state.unavailableSince, _ = time.Parse(time.RFC3339Nano, record.UnavailableSince)
+	}
+	return state, nil
 }
 
 func (self *monitorCheckpointStore) validate(record monitorCheckpointRecord) error {
-	if record.Schema != monitorCheckpointSchema || record.NativeChain != self.expected.NativeChain || !strings.EqualFold(record.GenesisHash, self.expected.GenesisHash) || record.EvmChainId != self.expected.EvmChainId || !validHash(record.FinalizedHash) || record.FinalizedAt == 0 {
+	if record.Schema != monitorCheckpointSchema && record.Schema != monitorCheckpointLegacySchema ||
+		record.Schema == monitorCheckpointLegacySchema && record.UnavailableSince != "" ||
+		record.NativeChain != self.expected.NativeChain || !strings.EqualFold(record.GenesisHash, self.expected.GenesisHash) || record.EvmChainId != self.expected.EvmChainId || !validHash(record.FinalizedHash) || record.FinalizedAt == 0 {
 		return errors.New("checkpoint identity or finalized position differs")
 	}
 	if _, err := time.Parse(time.RFC3339Nano, record.LastProgressAt); err != nil {
 		return fmt.Errorf("checkpoint progress time is invalid: %w", err)
+	}
+	if record.UnavailableSince != "" {
+		if _, err := time.Parse(time.RFC3339Nano, record.UnavailableSince); err != nil {
+			return fmt.Errorf("checkpoint read outage time is invalid: %w", err)
+		}
 	}
 	claimed := record.ContentHash
 	record.ContentHash = ""
@@ -155,6 +168,9 @@ func (self *monitorCheckpointStore) save(state *monitorState) error {
 		GenesisHash: strings.ToLower(self.expected.GenesisHash), EvmChainId: self.expected.EvmChainId,
 		FinalizedHash: strings.ToLower(state.lastHash), FinalizedAt: state.lastNumber,
 		LastProgressAt: state.lastProgressAt.UTC().Format(time.RFC3339Nano),
+	}
+	if !state.unavailableSince.IsZero() {
+		record.UnavailableSince = state.unavailableSince.UTC().Format(time.RFC3339Nano)
 	}
 	var err error
 	record.ContentHash, err = hashMonitorCheckpoint(record)
