@@ -24,8 +24,9 @@ qualification must use an explicit composed release, including compatible
 SN/server/SDK/Connect/config revisions. Some shared and simulator fixes exist;
 the complete mutating bootstrap, root-validator service and operational repair
 system remain production work. [mainnet/main.go](main.go) implements signer-free
-`inspect`, `monitor`, `check-recycle-mode` and `economic-reference`; `plan`,
-`apply`, `resume` and root-validator bootstrap are not implemented. The
+`inspect`, `monitor`, `root-preview`, `root-monitor`, `check-recycle-mode` and
+`economic-reference`; `plan`, `apply`, `resume` and root-validator signing are
+not implemented. The
 [latest Snow inspection](evidence/snow-route-inspect-20260927-0741.json)
 observed chain ID 945, which fails the required mainnet ID 964 gate.
 This plan and its read-only evidence perform no
@@ -59,11 +60,17 @@ The target UR mainnet netuid is SN25 (netuid 25). The user selected `owner-recyc
 
 Two constraints determine the implementation. There is no demonstrated subnet-owner call that arbitrarily clears every miner registration while retaining an arbitrary list of validators. Also, the current UR contracts and validator policy do not provide a standalone switch that changes the native miner allocation to 10%. The planner must expose these as capability decisions, not claim that lowering UID capacity or setting `theta: 0.1` fulfills them. The requested 10% target allows the exact runtime's explicitly established quantization tolerance; a stronger enforceable hard cap is a separate assurance choice, not an additional user requirement.
 
-The read-only monitor and existing UR validator do not implement either the
-separate root-validator service or the 10% native-miner mechanism. Both remain
+The read-only root observer and existing UR validator do not implement either
+the root-validator signing service or the 10% native-miner mechanism. Both remain
 explicit mainnet implementation gates. New zero-price/equal-demand support
 changes operator demand/deposit semantics; it does not by itself cap the native
 miner allocation or choose where the remaining 90% goes.
+
+The miner fleet now has a [mainnet runtime authority gate](../miner/FLEET-MAINNET-RUNTIME.md)
+for register, publish, bind, status and revoke. It requires separately approved
+genesis, source/build review and exact code/metadata/version bytes before
+signing, submission and receipt readback. That source change does not supply
+those approvals or durable uncertain-send reconciliation.
 
 The draft policy is `reset.mode: unresolved` and **`emissions.remainder: owner-recycle`**. A preview remains non-executable while reset capability, the runtime-specific 10%/90% mechanism or other required inputs are unresolved. Qualify the selected economic mechanism before installing an immutable vault or removing existing registrations. The remainder choice is settled; its implementation and exact signed production policy remain work.
 
@@ -317,7 +324,8 @@ Manage both services with independent state directories, signer permissions, log
 ## Go CLI and action model
 
 [mainnet/main.go](main.go) currently contains signer-free `inspect`, `monitor`,
-`check-recycle-mode` and `economic-reference` commands. `inspect --rpc URL`
+`root-preview`, `root-monitor`, `check-recycle-mode` and `economic-reference`
+commands. `inspect --rpc URL`
 emits a content-hashed identity snapshot. Supplying
 any expectation requires all of `--expected-chain`, `--expected-genesis` and
 `--expected-evm-chain-id`; `monitor` always requires all three. The monitor emits
@@ -345,6 +353,13 @@ independent node confirmation or an approval. The operator must place it on a
 durable, backed-up volume and supervise the monitor; alert delivery and
 cross-domain health remain open work.
 
+An unchanged retained head with a checkpoint progress time ahead of the host
+clock reports stalled until genuine finalized advancement resets the clock.
+`root-preview` and finite `root-monitor` perform the separate [read-only root
+census](ROOT-VALIDATOR.md). Their `ready` result means observation policy
+readiness only; `activation_ready` is always false. They load no signer and do
+not register, stake, submit root weights or authorize basket claims.
+
 `check-recycle-mode --rpc URL --policy FILE` binds the finalized mode read to
 independently supplied mainnet genesis, runtime code/metadata and complete
 version pins. It validates the runtime-declared map, enum and Burn fallback and
@@ -367,13 +382,15 @@ Keep the future plan builder pure after authenticated snapshot inputs are suppli
 Separate chain adapters, signer interfaces, state storage and supervisors so
 preview cannot reach a transaction submission path.
 
-Target command surface; `inspect`, `monitor` and the two limited economic
-preconditions above exist, while the remaining commands are designs:
+Target command surface; `inspect`, `monitor`, the two root observers and the two
+limited economic preconditions above exist, while the remaining commands are
+designs:
 
 | Command | Behavior |
 | --- | --- |
 | `inspect` | Extend the existing read-only identity capture with authority, census, capabilities, balances, custody and validators; emit a hashed snapshot. |
 | `monitor` | Extend the existing read-only identity/finality loop with durable checkpoints, independent comparisons, complete domain health and existing-stack alert delivery. |
+| `root-preview` / `root-monitor` | Existing signer-free finalized root seat and strategy census; activation, protected registration and root signing remain separate work. |
 | `check-recycle-mode` | Existing signer-free finalized storage-mode precondition; extend with an approved mainnet artifact and operational readback at activation/recovery. |
 | `economic-reference` | Existing signer-free cumulative integer 10%/90% reference from caller-supplied native intervals; actual chain reconciliation remains a separate gate. |
 | `plan` | Build canonical plan/actions and a readable review from config, pinned snapshot, artifacts, closed testnet exceptions and production qualification. No signing or submission. |
