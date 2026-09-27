@@ -379,15 +379,8 @@ func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoverySto
 	if err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
-	// The reviewed fleet interface uses Subtensor's u64 balance layout, not
-	// the generic Substrate AccountInfo with u128 balances.
-	accountKey, err := types.CreateStorageKey(view.Meta, "System", "Account", record.NativeSigner[:])
-	if err != nil {
-		return fleetRecoveryUnresolved(record, err)
-	}
-	var account snchain.AccountInfo
-	_, err = snchain.ReadStorageAtContext(ctx, view, accountKey, "System", "Account", &account, finalized)
-	if err != nil || uint64(account.Nonce) != record.Nonce {
+	nonce, err := view.AccountNonceAtContext(ctx, record.NativeSigner, finalized)
+	if err != nil || uint64(nonce) != record.Nonce {
 		return fleetRecoveryUnresolved(record, errors.Join(errors.New("native original nonce is not available"), err))
 	}
 	if !apply {

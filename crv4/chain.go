@@ -938,23 +938,6 @@ func (c *Chain) AccountNonceAt(publicKey [32]byte, blockHash types.Hash) (uint32
 	return c.AccountNonceAtContext(context.Background(), publicKey, blockHash)
 }
 
-// AccountNonceAtContext reads the canonical account nonce from an exact block
-// without allowing the recovery loop to wait past its caller cancellation.
-func (c *Chain) AccountNonceAtContext(ctx context.Context, publicKey [32]byte, blockHash types.Hash) (uint32, error) {
-	if blockHash == (types.Hash{}) {
-		return 0, errors.New("crv4: account nonce block hash is zero")
-	}
-	var account types.AccountInfo
-	present, err := c.storageGetForPalletContext(ctx, &account, blockHash, "System", "Account", publicKey[:])
-	if err != nil {
-		return 0, err
-	}
-	if !present {
-		return 0, nil
-	}
-	return uint32(account.Nonce), nil
-}
-
 // NewSignedExtrinsic signs an arbitrary runtime call with the reviewed
 // node-subtensor signed-extension set used by CRv4. It is shared by CRv4 and
 // the commitments pallet so both paths have one exact signing implementation.

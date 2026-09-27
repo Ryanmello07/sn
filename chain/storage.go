@@ -88,21 +88,9 @@ func ReadRequiredStorageAt(chain *crv4.Chain, key types.StorageKey, pallet, stor
 	return ReadRequiredStorageAtContext(context.Background(), chain, key, pallet, storage, value, blockHash)
 }
 
-// AccountInfo matches the reviewed runtime's System.Account value. Subtensor's
-// Balance is u64 (rao); the generic GSRPC AccountInfo assumes u128 and cannot
-// decode this runtime's AccountData.
-type AccountInfo struct {
-	Nonce       types.U32
-	Consumers   types.U32
-	Providers   types.U32
-	Sufficients types.U32
-	Data        struct {
-		Free     types.U64
-		Reserved types.U64
-		Frozen   types.U64
-		Flags    types.U128
-	}
-}
+// Keeps balance and canonical replay nonce readers on the same reviewed u64
+// Subtensor layout while preserving the existing chain package surface.
+type AccountInfo = crv4.SubtensorAccountInfo
 
 // readSubtensorStorage derives a SubtensorModule key and reads it at one block.
 func readSubtensorStorage(ctx context.Context, chain *crv4.Chain, storage string, value any, blockHash types.Hash, args ...[]byte) (bool, error) {

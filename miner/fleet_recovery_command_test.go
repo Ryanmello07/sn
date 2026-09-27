@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"github.com/urfoundation/sn/crv4"
 )
@@ -127,6 +128,42 @@ func TestFleetRecoveryPublishPreparedRestartReplaysExactBytes(t *testing.T) {
 	fixture.stateLock.Unlock()
 	if sent != codec.HexEncodeToString(record.Raw) || fixture.count("system_accountNextIndex") != 0 || fixture.count("author_submitAndWatchExtrinsic") != 1 {
 		t.Fatal("prepared restart generated a new signature or nonce")
+	}
+}
+
+// A present account with trailing bytes cannot authorize replay using only
+// a decoded prefix. The original transaction must remain locally unresolved.
+func TestFleetRecoveryNativeMalformedAccountNeverReplays(t *testing.T) {
+	for _, length := range []int{57, 80} {
+		fixture := newFleetMainnetTestFixture(t)
+		fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, false)}
+		record, signer := fleetRecoveryTestPrepared(t, fixture)
+		store, err := openFleetRecoveryStore()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.put(record, signer); err != nil {
+			t.Fatal(err)
+		}
+		store.close()
+		metadata, _, err := crv4.DecodeRuntimeMetadata(fixture.metadata)
+		if err != nil {
+			t.Fatal(err)
+		}
+		key, err := types.CreateStorageKey(metadata, "System", "Account", record.NativeSigner[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixture.stateLock.Lock()
+		fixture.storage[key.Hex()] = codec.HexEncodeToString(make([]byte, length))
+		fixture.stateLock.Unlock()
+		if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+			t.Errorf("account length %d authorized replay", length)
+		}
+		retained := fleetRecoveryTestRecord(t)
+		if retained.Stage != "prepared" || retained.TxHash != record.TxHash || !bytes.Equal(retained.Raw, record.Raw) || fixture.count("author_submitAndWatchExtrinsic") != 0 || fixture.count("system_accountNextIndex") != 0 {
+			t.Errorf("account length %d advanced the retained transaction", length)
+		}
 	}
 }
 
