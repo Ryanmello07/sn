@@ -373,6 +373,17 @@ receipts can still be reconciled. An admitted 10/90 weight row remains a
 proposal until independent validators and finalized native allocation prove
 the economic result.
 
+Settlement admission also requires the compatible server custody reader and
+migrations through 728. The [retained timestamp correction](PRELAUNCH-FIXES.md)
+prevents historical terminal NULL close times from disappearing out of every
+epoch: it blocks new payout construction before chain reads and retains the
+same debt after archive cleanup. Record the exact historical NULL census before
+coordinated reader/writer/reaper cutover. Unknown timestamps are unresolved
+debt, never guessed epoch assignments or automatic zero-credit exclusions.
+Previously retained artifacts stay immutable and are not certified complete by
+this prospective fix. NetEscrow writer drain, revision/fence restore policy and
+archive capacity remain separate production gates.
+
 ## Contract deployment, custody and initialization
 
 Reuse the release-1.0 contracts and reviewed ABI/artifact generation, with mainnet-specific inputs. The existing [Deploy script](../evm/script/Deploy.s.sol) is the ordering reference, not a command the bootstrap blindly shells out to. The Go planner must build exact transaction payloads and independently read back their results.

@@ -223,6 +223,27 @@ Live operator cutover, economics, reserve/claim conservation, capacity and the
 complete production release gate remain open. The older `0633780c` branch and
 its qualification remain as causal history, not the proposed current-main pin.
 
+**Retained timestamp custody (MG-06/PH-12; source-qualified, 2026-09-27).** Server
+`6e2bcfa7` appends this correction to the v11 server candidate `77cb401e`. The previous
+live/archive reader filtered both stores by `close_time`, silently omitting
+historical terminal rows whose timestamp is NULL. That could produce a partial
+or empty payout despite retained unresolved work. The corrected single-statement
+reader probes at most one unknown-time identity per store and refuses the new
+payout before operator chain reads or artifact construction. Migration 728
+appends a restartable online partial index and exact schema admission; the
+catalog through 727 remains byte-identical. Canceled/open work stays excluded,
+paid/free attribution is unchanged, and archived NULL debt stays unresolved.
+The [causal qualification](/mnt/data/sn-testnet/evidence/mainnet-usage-time-custody-20260927/RESULT.md)
+records red/green live and archived failures, retention rollback/retry, the
+operator barrier, 140 distinct selected tests passing normally and with race
+detection across documented qualification slices, and vet. Index admission also
+accepts the two exactly verified PostgreSQL dump/restore predicate renderings
+without admitting a changed predicate or key order. This does not deploy the
+fix, authorize a historical exclusion
+or make the prior artifacts complete. The coordinated 728 reader/writer/reaper
+cutover, exact historical NULL census, archive capacity and NetEscrow restore
+gates remain required; no close time may be guessed to unblock them.
+
 **RPC read admission (MG-04/MG-07; In progress, 2026-09-27).** The shared
 [JSON validator](../protocol/json_unique.go) and bounded
 [miner](../miner/sn_rpc.go)/[validator](../validator/chain_http_envelope.go) RPC
