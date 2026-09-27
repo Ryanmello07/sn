@@ -23,6 +23,17 @@ each rebuilt file compared byte-for-byte equal to its first build. The retained
 records commands, tool hashes and verified checksums. This is same-source,
 same-toolchain repeatability, not independent toolchain provenance or a proof
 about deployed images.
+These four outputs used the local default Go build profile. The existing
+miner and validator Makefiles use `CGO_ENABLED=0`, `-trimpath`, stripped
+linker flags and a stamped `main.Version` for release builds. The v8 binaries
+therefore prove local buildability and deterministic bytes under the recorded
+profile; they are **not** selected production image binaries. The next
+composed candidate must record and qualify the actual release profile.
+A separate [production-style build probe](/mnt/data/sn-testnet/evidence/mainnet-source-lock-v8-20260927/production-profile/RESULT.md)
+successfully built static Linux/amd64 `CGO_ENABLED=0`, `-trimpath`, stripped
+binaries. The three service CLIs reported their explicit candidate version.
+These outputs are retained separately from the v8 inventory because no
+production version, architecture set or image has been approved.
 
 The [actual-file inventory](release-inventory-candidate-v8-20260927.json)
 records **18** selected files, **156,328,101** bytes, and content hash
