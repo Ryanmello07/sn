@@ -41,6 +41,13 @@ func authenticateReleaseValidatorStakeContext(ctx context.Context, chain *crv4.C
 	}
 	observationCtx, cancel := context.WithTimeout(ctx, releaseNativeEndpointTimeout(cfg))
 	defer cancel()
+	if isOwnerRecycleProductionConfig(cfg) {
+		finalized, err := authenticatePinnedNativeRuntimeContext(observationCtx, chain, cfg)
+		if err != nil {
+			return crv4.ValidatorStakeObservation{}, err
+		}
+		return readReleaseNativeValidatorAtBlockContext(observationCtx, chain, types.Hash(genesis), cfg.Netuid, hotkey, uid, expected, finalized)
+	}
 	return readReleaseNativeValidatorAtContext(observationCtx, chain, types.Hash(genesis), cfg.Netuid, hotkey, uid, expected)
 }
 
@@ -60,6 +67,17 @@ func readReleaseNativeValidatorAtContext(ctx context.Context, chain *crv4.Chain,
 	finalized, err := crv4.FinalizedHeadContext(ctx, chain)
 	if err != nil {
 		return empty, err
+	}
+	return readReleaseNativeValidatorAtBlockContext(ctx, chain, genesis, netuid, hotkey, uid, expected, finalized)
+}
+
+// Production startup keeps the stake read at its already authenticated block;
+// it cannot select a later head outside the approved runtime window.
+func readReleaseNativeValidatorAtBlockContext(ctx context.Context, chain *crv4.Chain, genesis types.Hash, netuid uint16, hotkey [32]byte, uid uint16, expected crv4.RuntimeArtifactIdentity, finalized types.Hash) (crv4.ValidatorStakeObservation, error) {
+	empty := crv4.ValidatorStakeObservation{}
+	if ctx == nil || chain == nil || chain.API == nil || chain.API.Client == nil || finalized == (types.Hash{}) ||
+		genesis == (types.Hash{}) || chain.GenesisHash != genesis || netuid == 0 || hotkey == ([32]byte{}) || uint32(uid) >= releaseNativeValidatorMaximumUIDs {
+		return empty, errors.New("native validator exact-block identity is incomplete")
 	}
 	header, err := chain.HeaderAtContext(ctx, finalized)
 	if err != nil {

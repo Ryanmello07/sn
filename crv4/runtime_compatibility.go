@@ -96,6 +96,7 @@ func (self *Chain) BindRuntimeArtifact(artifact AuthenticatedRuntimeArtifact) er
 	}
 	self.runtimeCompatibilityProof = artifact.compatibilityProof
 	self.runtimeArtifactProof = artifact.authenticationProof
+	self.validatorProducerProof = nil
 	return nil
 }
 

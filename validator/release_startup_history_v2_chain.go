@@ -136,10 +136,28 @@ func authenticateReleaseStartupNativeV2Context(ctx context.Context, native *crv4
 }
 
 func authenticateReleaseStartupNativeV2ContextWithRetainedHistory(ctx context.Context, native *crv4.Chain, initial ReleaseEvidenceV2ActivationContext, journal *releaseMeasurementInputJournal, runtime crv4.RuntimeArtifactIdentity, legacy, retained bool) error {
+	return authenticateReleaseStartupNativeV2ContextWithConfig(ctx, native, initial, journal, runtime, legacy, retained, nil)
+}
+
+// The complete production config survives startup and archive wrappers. The
+// old identity-only entry cannot acquire current or historical mainnet authority.
+func authenticateReleaseStartupNativeV2ContextWithConfig(ctx context.Context, native *crv4.Chain, initial ReleaseEvidenceV2ActivationContext, journal *releaseMeasurementInputJournal, runtime crv4.RuntimeArtifactIdentity, legacy, retained bool, cfg *ReleaseConfig) error {
 	if ctx == nil || journal == nil {
 		return errors.New("startup ordinary native context is absent")
 	}
 	input := journal.MeasurementInput
+	allowed := HistoricalReleaseRuntimeArtifacts(runtime)
+	if initial.Activation.Domain.ChainID == 964 || isOwnerRecycleProductionConfig(cfg) {
+		if !isOwnerRecycleProductionConfig(cfg) || cfg.ChainID != initial.Activation.Domain.ChainID || cfg.GenesisHash != releaseHex32(initial.Activation.Domain.GenesisHash) ||
+			cfg.Netuid != initial.Activation.Domain.Netuid || retained || legacy {
+			return errors.New("production startup native history lost independent configuration or inherited provisional replay")
+		}
+		var err error
+		allowed, err = releaseHistoricalRuntimeArtifactsAt(cfg, input.CutNativeBlock)
+		if err != nil {
+			return err
+		}
+	}
 	hash, err := canonicalAttemptHex32("startup ordinary native hash", input.CutNativeBlockHash, false)
 	if err != nil {
 		return err
@@ -153,7 +171,7 @@ func authenticateReleaseStartupNativeV2ContextWithRetainedHistory(ctx context.Co
 	observed, err := crv4.ReadValidatorScheduleAtContext(ctx, native, crv4.ValidatorScheduleQuery{
 		GenesisHash: types.Hash(initial.Activation.Domain.GenesisHash), BlockHash: types.Hash(hash), BlockNumber: input.CutNativeBlock,
 		Netuid: initial.Activation.Domain.Netuid, Hotkey: initial.Activation.Hotkey, MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs,
-	}, HistoricalReleaseRuntimeArtifacts(runtime)...)
+	}, allowed...)
 	if err != nil {
 		return err
 	}

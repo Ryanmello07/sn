@@ -36,8 +36,26 @@ var (
 // current reviewed owner supplies the complete reviewed historical profile;
 // individual callers cannot accidentally omit a predecessor runtime.
 func readReleaseDecisionV2Context(ctx context.Context, chain *ChainClient, native *crv4.Chain, query releaseDecisionChainV2Query, schedule crv4.ValidatorScheduleQuery, runtime crv4.RuntimeArtifactIdentity) (result *releaseDecisionChainV2Observation, observed crv4.ValidatorScheduleObservation, resultErr error) {
+	return readReleaseDecisionWithConfigV2Context(ctx, chain, native, query, schedule, runtime, nil)
+}
+
+// Mainnet decisions carry the whole independent config authority to their
+// native reader. A tuple-only wrapper cannot infer that authority from a domain.
+func readReleaseDecisionWithConfigV2Context(ctx context.Context, chain *ChainClient, native *crv4.Chain, query releaseDecisionChainV2Query, schedule crv4.ValidatorScheduleQuery, runtime crv4.RuntimeArtifactIdentity, cfg *ReleaseConfig) (result *releaseDecisionChainV2Observation, observed crv4.ValidatorScheduleObservation, resultErr error) {
 	if ctx == nil || schedule.GenesisHash != types.Hash(query.domain.GenesisHash) || schedule.Netuid != query.domain.Netuid {
 		return nil, observed, errors.New("decision native and EVM deployment authorities differ")
+	}
+	allowed := HistoricalReleaseRuntimeArtifacts(runtime)
+	if query.domain.ChainID == 964 || isOwnerRecycleProductionConfig(cfg) {
+		if !isOwnerRecycleProductionConfig(cfg) || cfg.ChainID != query.domain.ChainID || cfg.GenesisHash != schedule.GenesisHash.Hex() || cfg.Netuid != schedule.Netuid ||
+			common.HexToAddress(cfg.Coordinator) != common.Address(query.domain.Coordinator) {
+			return nil, observed, errors.New("production decision lost its independently approved configuration")
+		}
+		var err error
+		allowed, err = releaseHistoricalRuntimeArtifactsAt(cfg, schedule.BlockNumber)
+		if err != nil {
+			return nil, observed, err
+		}
 	}
 	// Capture all query slices before even the native reader's first callback.
 	query, budget, err := ownReleaseDecisionChainV2Query(ctx, query)
@@ -63,7 +81,7 @@ func readReleaseDecisionV2Context(ctx context.Context, chain *ChainClient, nativ
 			result, observed = nil, crv4.ValidatorScheduleObservation{}
 		}
 	}()
-	observed, err = crv4.ReadValidatorScheduleAtContext(ctx, native, schedule, HistoricalReleaseRuntimeArtifacts(runtime)...)
+	observed, err = crv4.ReadValidatorScheduleAtContext(ctx, native, schedule, allowed...)
 	if err := releaseRpcObservationError(err, observed.Stake.MeetsNonSelfStakeAndPermit(), errors.New("decision native signer lacks real stake/permit authority")); err != nil {
 		return nil, observed, err
 	}
@@ -175,7 +193,7 @@ func (self *releaseEvidenceV2StartupHistory) readIntentDecisionSourcesV2(ctx con
 		return result, err
 	}
 	observationCtx, cancel := context.WithTimeout(ctx, releaseNativeEndpointTimeout(&self.cfg))
-	observed, schedule, err := readReleaseDecisionV2Context(observationCtx, chain, native, query, crv4.ValidatorScheduleQuery{GenesisHash: types.Hash(query.domain.GenesisHash), BlockHash: types.Hash(hash), BlockNumber: artifact.NativeSnapshotBlock, Netuid: query.domain.Netuid, Hotkey: first.Activation.Hotkey, MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs}, runtime)
+	observed, schedule, err := readReleaseDecisionWithConfigV2Context(observationCtx, chain, native, query, crv4.ValidatorScheduleQuery{GenesisHash: types.Hash(query.domain.GenesisHash), BlockHash: types.Hash(hash), BlockNumber: artifact.NativeSnapshotBlock, Netuid: query.domain.Netuid, Hotkey: first.Activation.Hotkey, MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs}, runtime, &self.cfg)
 	cancel()
 	if err := releaseRpcObservationError(err, schedule.SubnetEpochIndex == intent.SubnetEpoch && schedule.Stake.Identity.UID == intent.SelfUID, errors.New("historical decision signer or epoch differs from real chain observations")); err != nil {
 		return result, err

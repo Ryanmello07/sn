@@ -238,10 +238,14 @@ func (self *releaseActivationSetup) authenticateEpochAt(ctx context.Context, blo
 // Reads the hotkey's native registration, stake and permit at one native
 // block through the real CRv4 reader, resolving the UID by hotkey.
 func (self *releaseActivationSetup) nativeObservationAt(ctx context.Context, number uint64, hash types.Hash) (crv4.ValidatorScheduleObservation, error) {
+	allowed, err := releaseHistoricalRuntimeArtifactsAt(self.cfg, number)
+	if err != nil {
+		return crv4.ValidatorScheduleObservation{}, err
+	}
 	observation, err := crv4.ReadValidatorScheduleAtContext(ctx, self.native, crv4.ValidatorScheduleQuery{
 		GenesisHash: types.Hash(self.deployment.GenesisHash), BlockHash: hash, BlockNumber: number, Netuid: self.cfg.Netuid,
 		Hotkey: self.hotkey.PublicKey(), MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs,
-	}, HistoricalReleaseRuntimeArtifacts(self.runtime)...)
+	}, allowed...)
 	if err != nil {
 		return observation, fmt.Errorf("native validator observation at block %d: %w", number, err)
 	}
@@ -580,7 +584,7 @@ func (self *releaseActivationSetup) boundary(ctx context.Context, prepared *Rele
 		return nil, false, err
 	}
 	for _, member := range prepared.Members {
-		authority := ReleaseActivationV2Authority{Expected: member.Activation, Journal: journal, RuntimeHash: runtimeHash, ValidatorUID: member.ValidatorUID, NativeRuntime: self.runtime}
+		authority := ReleaseActivationV2Authority{Expected: member.Activation, Journal: journal, RuntimeHash: runtimeHash, ValidatorUID: member.ValidatorUID, NativeRuntime: self.runtime, productionRuntimeConfig: self.cfg}
 		if _, err := self.chain.AuthenticateReleaseActivationV2Context(ctx, self.native, authority, member.Activation, member.VPKSignature, member.HotkeySignature, boundaryBlock, boundaryHash); err != nil {
 			return nil, false, fmt.Errorf("no_id %d activation at boundary %d: %w", member.NoID, boundaryBlock, err)
 		}

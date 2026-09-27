@@ -34,19 +34,20 @@ type ReleaseOwnerRecycleApprovalConfig struct {
 // reviewed artifact and exact owner destinations. Epochs and blocks are native
 // unless named by Proposal, whose effective epoch retains policy semantics.
 type OwnerRecycleApproval struct {
-	Schema                  string               `json:"schema"`
-	ConfigHash              [32]byte             `json:"config_hash"`
-	Proposal                OwnerRecycleProposal `json:"proposal"`
-	NativeChain             string               `json:"native_chain"`
-	RuntimeReviewHash       [32]byte             `json:"runtime_review_hash"`
-	ValidatorHotkey         [32]byte             `json:"validator_hotkey"`
-	SubnetOwner             [32]byte             `json:"subnet_owner"`
-	OwnerHotkeys            [][32]byte           `json:"owner_hotkeys"`
-	FirstNativeEpoch        uint64               `json:"first_native_epoch"`
-	ValidFromNativeBlock    uint64               `json:"valid_from_native_block"`
-	ValidThroughNativeBlock uint64               `json:"valid_through_native_block"`
-	MaximumSubnetUids       uint32               `json:"maximum_subnet_uids"`
-	MaximumOwnedHotkeys     uint32               `json:"maximum_owned_hotkeys"`
+	Schema                  string                          `json:"schema"`
+	ConfigHash              [32]byte                        `json:"config_hash"`
+	Proposal                OwnerRecycleProposal            `json:"proposal"`
+	NativeChain             string                          `json:"native_chain"`
+	RuntimeReviewHash       [32]byte                        `json:"runtime_review_hash"`
+	ValidatorHotkey         [32]byte                        `json:"validator_hotkey"`
+	SubnetOwner             [32]byte                        `json:"subnet_owner"`
+	OwnerHotkeys            [][32]byte                      `json:"owner_hotkeys"`
+	FirstNativeEpoch        uint64                          `json:"first_native_epoch"`
+	ValidFromNativeBlock    uint64                          `json:"valid_from_native_block"`
+	ValidThroughNativeBlock uint64                          `json:"valid_through_native_block"`
+	MaximumSubnetUids       uint32                          `json:"maximum_subnet_uids"`
+	MaximumOwnedHotkeys     uint32                          `json:"maximum_owned_hotkeys"`
+	Production              *OwnerRecycleProductionApproval `json:"production,omitempty"`
 }
 
 // The signature covers a domain-separated canonical body. The exact envelope
@@ -76,14 +77,22 @@ func OwnerRecycleConfigHash(cfg *ReleaseConfig) ([32]byte, error) {
 // Produces a bounded message for an external approval signer; it does not load
 // a key or infer that the caller is authorized to approve the deployment.
 func (self OwnerRecycleApproval) SigningMessage() ([]byte, error) {
-	if self.Schema != ownerRecycleApprovalSchema || len(self.OwnerHotkeys) > maximumOwnerRecycleApprovedHotkeys {
+	if (self.Schema != ownerRecycleApprovalSchema && self.Schema != ownerRecycleProductionApprovalSchema) ||
+		(self.Schema == ownerRecycleApprovalSchema) != (self.Production == nil) || len(self.OwnerHotkeys) > maximumOwnerRecycleApprovedHotkeys {
 		return nil, errors.New("owner-recycle approval schema or owner bound differs")
+	}
+	if self.Production != nil && len(self.Production.ValidatorHotkeys) > maximumOwnerRecycleApprovedHotkeys {
+		return nil, errors.New("owner-recycle production approval exceeds its validator bound")
 	}
 	raw, err := json.Marshal(self)
 	if err != nil || len(raw) > maximumOwnerRecycleApprovalBytes/2 {
 		return nil, errors.Join(errors.New("owner-recycle approval body is unavailable or oversized"), err)
 	}
-	digest := sha256.Sum256(append([]byte("urnetwork-owner-recycle-approval-signature-v1\n"), raw...))
+	domain := "urnetwork-owner-recycle-approval-signature-v1\n"
+	if self.Production != nil {
+		domain = "urnetwork-owner-recycle-production-approval-signature-v2\n"
+	}
+	digest := sha256.Sum256(append([]byte(domain), raw...))
 	return digest[:], nil
 }
 
@@ -93,7 +102,7 @@ func validateOwnerRecycleApprovalScope(cfg *ReleaseConfig) error {
 	if cfg == nil || cfg.OwnerRecycleApproval == nil {
 		return errors.New("owner-recycle approved successor selection is absent")
 	}
-	if cfg.SchemaVersion != ReleaseValidatorSchemaVersion || cfg.Release != "1.0" || cfg.ValidatorID == 0 || cfg.DeployBlock == 0 ||
+	if (cfg.SchemaVersion != ReleaseValidatorSchemaVersion && cfg.SchemaVersion != ReleaseMainnetProductionSchemaVersion) || cfg.Release != "1.0" || cfg.ValidatorID == 0 || cfg.DeployBlock == 0 ||
 		strings.TrimSpace(cfg.DeploymentID) == "" || strings.ContainsAny(cfg.DeploymentID, "/\\.") ||
 		!common.IsHexAddress(cfg.Coordinator) || common.HexToAddress(cfg.Coordinator) == (common.Address{}) ||
 		!common.IsHexAddress(cfg.SettlementVault) || common.HexToAddress(cfg.SettlementVault) == (common.Address{}) {
@@ -165,6 +174,9 @@ func decodeOwnerRecycleApproval(cfg *ReleaseConfig, encoded []byte) (*OwnerRecyc
 		return nil, errors.Join(errors.New("owner-recycle approval must use canonical envelope bytes and one final newline"), err)
 	}
 	approval := &envelope.Approval
+	if err := validateOwnerRecycleProductionApproval(cfg, approval); err != nil {
+		return nil, err
+	}
 	if err := approval.Proposal.Validate(cfg.Policy); err != nil {
 		return nil, err
 	}
@@ -208,6 +220,12 @@ func decodeOwnerRecycleApproval(cfg *ReleaseConfig, encoded []byte) (*OwnerRecyc
 // Restarts consume the original immutable retained bytes, not a changed source
 // file. A new approval hash cannot silently replace this fixed custody record.
 func readRetainedOwnerRecycleApproval(ctx context.Context, cfg *ReleaseConfig) (*OwnerRecycleApprovalEnvelope, error) {
+	if isOwnerRecycleProductionConfig(cfg) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return ownerRecycleProductionApproval(cfg)
+	}
 	if err := validateOwnerRecycleApprovalSelection(cfg); err != nil {
 		return nil, err
 	}
@@ -224,6 +242,9 @@ func readRetainedOwnerRecycleApproval(ctx context.Context, cfg *ReleaseConfig) (
 // Reconciliation may authenticate original receipts, but new sends remain shut
 // until measurement/envelope/intent/archive authority is migrated together.
 func ownerRecycleProductionBoundary(cfg *ReleaseConfig) error {
+	if isOwnerRecycleProductionConfig(cfg) {
+		return validateOwnerRecycleProductionConfig(cfg)
+	}
 	if cfg != nil && (cfg.Policy.NetworkProfile == "mainnet" || cfg.ChainID == 964 || cfg.OwnerRecycleApproval != nil) {
 		return errors.New("owner-recycle successor activation is blocked: authenticated measurement, envelope, intent and archive transition is not implemented; final native allocation remains unobserved")
 	}

@@ -26,6 +26,8 @@ import (
 )
 
 const ReleaseValidatorSchemaVersion = 1
+const ReleaseMainnetProductionSchemaVersion = 3
+const maximumReleaseConfigBytes = 2 * 1024 * 1024
 
 type OperatorConfig struct {
 	NoID              uint64 `yaml:"no_id" json:"no_id"`
@@ -70,14 +72,17 @@ type ReleaseConfig struct {
 	Operators           []OperatorConfig        `yaml:"operators" json:"operators"`
 	EvidenceV2          ReleaseEvidenceV2Config `yaml:"evidence_v2" json:"evidence_v2"`
 
-	SourceRolePredecessorV2 *ReleaseEvidenceV2File             `yaml:"source_role_predecessor_v2,omitempty" json:"source_role_predecessor_v2,omitempty"`
-	OwnerRecycleApproval    *ReleaseOwnerRecycleApprovalConfig `yaml:"owner_recycle_approval,omitempty" json:"owner_recycle_approval,omitempty"`
-	MainnetRuntimeApprovals []ReleaseEvidenceV2File            `yaml:"mainnet_runtime_approvals,omitempty" json:"mainnet_runtime_approvals,omitempty"`
+	SourceRolePredecessorV2    *ReleaseEvidenceV2File             `yaml:"source_role_predecessor_v2,omitempty" json:"source_role_predecessor_v2,omitempty"`
+	OwnerRecycleApproval       *ReleaseOwnerRecycleApprovalConfig `yaml:"owner_recycle_approval,omitempty" json:"owner_recycle_approval,omitempty"`
+	MainnetRuntimeApprovals    []ReleaseEvidenceV2File            `yaml:"mainnet_runtime_approvals,omitempty" json:"mainnet_runtime_approvals,omitempty"`
+	ProductionRuntimeApprovals []ReleaseEvidenceV2File            `yaml:"production_runtime_approvals,omitempty" json:"production_runtime_approvals,omitempty"`
 
 	ProvisionalDeferClosedNativeInput bool   `yaml:"provisional_defer_closed_native_input,omitempty" json:"provisional_defer_closed_native_input,omitempty"`
 	ProvisionalRuntimeCompatibility   string `yaml:"provisional_runtime_compatibility,omitempty" json:"provisional_runtime_compatibility,omitempty"`
 	historyAdoptionV2                 *ReleaseHistoryAdoptionV2
 	mainnetRuntimeHistory             *releaseMainnetRuntimeHistory
+	ownerRecycleProduction            *ownerRecycleProductionAuthority
+	productionRuntimeHistory          *releaseProductionRuntimeHistory
 }
 
 func LoadReleaseConfig(path string) (*ReleaseConfig, error) {
@@ -117,7 +122,16 @@ func loadReleaseConfig(path string, mode releaseConfigLoadMode) (*ReleaseConfig,
 	if err != nil {
 		return nil, err
 	}
-	b, err := os.ReadFile(abs)
+	file, err := os.Open(abs)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maximumReleaseConfigBytes {
+		return nil, errors.Join(errors.New("validator config is not a bounded regular file"), err)
+	}
+	b, err := io.ReadAll(io.LimitReader(file, maximumReleaseConfigBytes+1))
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +145,9 @@ func decodeReleaseConfigBytes(abs string, b []byte) (*ReleaseConfig, error) {
 }
 
 func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMode) (*ReleaseConfig, error) {
+	if len(b) == 0 || len(b) > maximumReleaseConfigBytes {
+		return nil, errors.New("validator config is empty or exceeds its byte bound")
+	}
 	provisionalActivationObservation := mode.provisionalActivationObservation
 	var cfg ReleaseConfig
 	dec := yaml.NewDecoder(bytes.NewReader(b))
@@ -151,7 +168,22 @@ func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMo
 	if err := cfg.normalize(filepath.Dir(abs)); err != nil {
 		return nil, err
 	}
-	if mode.mainnetRuntimeObservation {
+	if cfg.SchemaVersion == ReleaseMainnetProductionSchemaVersion {
+		if mode.mainnetRuntimeObservation || mode.ownerRecycleAdmission || mode.preActivation || mode.provisionalActivationObservation {
+			return nil, errors.New("mainnet production authority is restricted to the producer loader")
+		}
+		cfg.Coordinator = strings.ToLower(cfg.Coordinator)
+		cfg.SettlementVault = strings.ToLower(cfg.SettlementVault)
+		if err := loadOwnerRecycleProductionConfig(&cfg); err != nil {
+			return nil, fmt.Errorf("validator production config %s: %w", abs, err)
+		}
+		if err := loadReleaseProductionRuntimeHistory(&cfg); err != nil {
+			return nil, fmt.Errorf("validator production runtime history %s: %w", abs, err)
+		}
+		if err := cfg.Validate(); err != nil {
+			return nil, fmt.Errorf("validator production config %s: %w", abs, err)
+		}
+	} else if mode.mainnetRuntimeObservation {
 		if err := loadReleaseMainnetRuntimeHistory(&cfg); err != nil {
 			return nil, fmt.Errorf("validator runtime observation config %s: %w", abs, err)
 		}
@@ -321,6 +353,17 @@ func (c ReleaseConfig) validate(historical bool) error {
 // preActivation admits unrendered evidence_v2 operator entries only; it grants
 // no runtime, history or producer authority.
 func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObservation, preActivation, mainnetRuntimeObservation bool) error {
+	production := c.SchemaVersion == ReleaseMainnetProductionSchemaVersion
+	if production {
+		if provisionalActivationObservation || preActivation || mainnetRuntimeObservation {
+			return errors.New("mainnet production authority cannot authorize another config load purpose")
+		}
+		if err := validateOwnerRecycleProductionConfig(&c); err != nil {
+			return err
+		}
+	} else if len(c.ProductionRuntimeApprovals) != 0 || c.productionRuntimeHistory != nil || c.ownerRecycleProduction != nil {
+		return errors.New("production runtime authority requires an authenticated schema 3 config")
+	}
 	if mainnetRuntimeObservation {
 		if err := validateReleaseMainnetRuntimeHistoryScope(&c); err != nil {
 			return err
@@ -328,8 +371,8 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 	} else if err := rejectMainnetRuntimeObservationWrites(&c); err != nil {
 		return err
 	}
-	if (c.SchemaVersion != ReleaseValidatorSchemaVersion && !mainnetRuntimeObservation) || c.Release != "1.0" {
-		return errors.New("schema_version must be 1 and release must be 1.0")
+	if (c.SchemaVersion != ReleaseValidatorSchemaVersion && !mainnetRuntimeObservation && !production) || c.Release != "1.0" {
+		return errors.New("schema_version must be 1 or authenticated production schema 3 and release must be 1.0")
 	}
 	if !c.Production {
 		return errors.New("release config must explicitly set production: true")

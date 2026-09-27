@@ -64,7 +64,7 @@ func (self *releaseRuntimeV2) depositAuditSourcesV2(ctx context.Context, decisio
 		return nil, window, err
 	}
 	observationCtx, cancel := context.WithTimeout(ctx, releaseNativeEndpointTimeout(&self.cfg))
-	observed, schedule, err := readReleaseDecisionV2Context(observationCtx, self.chain, self.native, query, crv4.ValidatorScheduleQuery{GenesisHash: types.Hash(domain.GenesisHash), BlockHash: types.Hash(nativeHash), BlockNumber: decision.NativeSnapshotBlock, Netuid: domain.Netuid, Hotkey: self.hotkey.PublicKey(), MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs}, releaseRuntimeIdentityV2(&self.cfg))
+	observed, schedule, err := readReleaseDecisionWithConfigV2Context(observationCtx, self.chain, self.native, query, crv4.ValidatorScheduleQuery{GenesisHash: types.Hash(domain.GenesisHash), BlockHash: types.Hash(nativeHash), BlockNumber: decision.NativeSnapshotBlock, Netuid: domain.Netuid, Hotkey: self.hotkey.PublicKey(), MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs}, releaseRuntimeIdentityV2(&self.cfg), decisionCfg)
 	cancel()
 	if err := releaseRpcObservationError(err, schedule.SubnetEpochIndex == decision.SubnetEpoch && schedule.Stake.Identity.UID == decision.SelfUID, errors.New("deposit audit native observation differs from its actual decision")); err != nil {
 		return nil, window, err

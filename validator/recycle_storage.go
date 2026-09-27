@@ -101,6 +101,8 @@ func ownerRecycleStorageType(metadata *types.Metadata, id types.Si1LookupTypeID,
 		return definition.IsArray && definition.Array.Len == 32 && ownerRecycleStorageType(metadata, definition.Array.Type, "u8", depth+1)
 	case "accounts":
 		return definition.IsSequence && ownerRecycleStorageType(metadata, definition.Sequence.Type, "account", depth+1)
+	case "u64s":
+		return definition.IsSequence && ownerRecycleStorageType(metadata, definition.Sequence.Type, "u64", depth+1)
 	case "netuid-uid", "netuid-account":
 		if !definition.IsTuple || len(definition.Tuple) != 2 || !ownerRecycleStorageType(metadata, definition.Tuple[0], "u16", depth+1) {
 			return false

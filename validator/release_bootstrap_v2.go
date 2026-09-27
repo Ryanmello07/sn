@@ -243,6 +243,7 @@ func readReleaseEvidenceV2ActivationInputsWithRetainedSetup(ctx context.Context,
 				configured := input.Context
 				input.Observation, errorsByOperator[index] = chain.AuthenticateReleaseActivationV2Context(operationCtx, native, ReleaseActivationV2Authority{
 					Expected: configured.Activation, Journal: common.Address(configured.Journal), RuntimeHash: configured.RuntimeHash, ValidatorUID: configured.ValidatorUID, NativeRuntime: nativeRuntime,
+					productionRuntimeConfig: cfg,
 				}, input.Candidate, input.VPKSignature, input.HotkeySignature, configured.ObservedEVMBlock, configured.ObservedEVMHash)
 				if errorsByOperator[index] == nil && input.Observation.Publication.PublishedBlock > configured.InitialCut.Boundary.EVMBlock {
 					errorsByOperator[index] = errors.New("activation publication follows the configured initial cut boundary")

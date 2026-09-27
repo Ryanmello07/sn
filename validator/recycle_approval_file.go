@@ -17,6 +17,12 @@ func RetainOwnerRecycleApproval(ctx context.Context, cfg *ReleaseConfig) (Releas
 	if err := validateOwnerRecycleApprovalSelection(cfg); err != nil {
 		return ReleaseEvidenceV2File{}, err
 	}
+	if isOwnerRecycleProductionConfig(cfg) {
+		if err := validateOwnerRecycleProductionConfig(cfg); err != nil {
+			return ReleaseEvidenceV2File{}, err
+		}
+		return WriteReleaseEvidenceV2File(ctx, filepath.Join(cfg.StateDir, retainedOwnerRecycleApprovalName), cfg.ownerRecycleProduction.encoded, maximumOwnerRecycleApprovalBytes)
+	}
 	raw, err := ReadReleaseEvidenceV2File(ctx, cfg.OwnerRecycleApproval.Approval, maximumOwnerRecycleApprovalBytes)
 	if err != nil {
 		return ReleaseEvidenceV2File{}, err

@@ -29,6 +29,7 @@ type releaseIntentV2Owner struct {
 	// Invocation authority comes only from the validated retained startup owner.
 	provisionalEpochGaps bool
 	historyAdoption      *releaseHistoryAdoptionV2
+	productionPrepared   *ownerRecyclePreparedAuthorization
 }
 
 type releaseIntentV2Read struct {
@@ -86,7 +87,11 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 	if err != nil {
 		return nil, nil, nil, options, err
 	}
-	if intent.Prepared == nil || intent.Prepared.SourceCommitment == nil || intent.Prepared.SourceCommitment.Hash != releaseHex32(releaseNativeSourceHashV2(measurement)) {
+	sourceHash, err := releaseIntentNativeSourceHash(ctx, measurement, intent)
+	if err != nil {
+		return nil, nil, nil, options, err
+	}
+	if intent.Prepared == nil || intent.Prepared.SourceCommitment == nil || intent.Prepared.SourceCommitment.Hash != releaseHex32(sourceHash) {
 		return nil, nil, nil, options, errors.New("V2 intent lacks its exact pre-Prepared native source commitment")
 	}
 	hotkey := runtime.hotkey.PublicKey()
@@ -94,6 +99,21 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 		return nil, nil, nil, options, errors.New("V2 prepared hotkey differs from independently owned validator identity")
 	}
 	_, verified, err := VerifyReleaseMeasurementEnvelopeV2(ctx, envelope, measurement, hotkey, intent.SelfUID, intent.Prepared.ExtrinsicHash, options)
+	if err != nil {
+		return nil, nil, nil, options, err
+	}
+	var productionStage *ownerRecycleProductionStage
+	if isOwnerRecycleProductionConfig(&runtime.cfg) {
+		productionOptions, err := runtime.measurementReplayOptionsV2(ctx, options, "intent-owner-recycle")
+		if err != nil {
+			return nil, nil, nil, options, err
+		}
+		productionStage, err = prepareOwnerRecycleProductionDecision(ctx, &runtime.cfg, native, runtime.chain, measurement, artifact, verified.Decision, productionOptions)
+		if err != nil {
+			return nil, nil, nil, options, err
+		}
+	}
+	verified.Decision, err = verifyOwnerRecycleProductionIntent(ctx, &runtime.cfg, productionStage, intent, measurement, artifact, verified.Decision)
 	if err != nil {
 		return nil, nil, nil, options, err
 	}
@@ -116,10 +136,17 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 	if err := native.ValidatePreparedSourceWeightsContext(ctx, intent.Prepared, verified.Decision.UIDs, verified.Decision.Scores, releaseSubmitOptions(&runtime.cfg)); err != nil {
 		return nil, nil, nil, options, err
 	}
-	return artifact, verified.Decision, measurement, options, custody.check()
+	if err := errors.Join(custody.check(), ctx.Err()); err != nil {
+		return nil, nil, nil, options, err
+	}
+	if err := self.retainOwnerRecyclePreparedAuthorization(intent); err != nil {
+		return nil, nil, nil, options, err
+	}
+	return artifact, verified.Decision, measurement, options, nil
 }
 
 func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Read, resultErr error) {
+	self.v2.productionPrepared = nil
 	bounds := self.v2.runtime.cfg.EvidenceV2.Bounds
 	result = &releaseIntentV2Read{file: &steeringIntentFile{Schema: steeringIntentSchema}, custody: &releaseEvidenceV2StartupReferences{remaining: bounds.MaxHistoryBytes}}
 	defer func() {
@@ -173,6 +200,9 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 	seen := make(map[string]bool, len(all))
 	var previous *SteeringIntent
 	for index, intent := range all {
+		if err := requireOwnerRecycleProductionFirstIntent(&self.v2.runtime.cfg, previous, intent.SubnetEpoch); err != nil {
+			return result, err
+		}
 		if err := validateSteeringIntentLifecycle(intent, index < len(result.file.History)); err != nil {
 			return result, err
 		}
@@ -400,6 +430,9 @@ func (self *IntentStore) beginV2(ctx context.Context, intent SteeringIntent) (re
 		}
 	}()
 	current := read.file.Current
+	if err := requireOwnerRecycleProductionFirstIntent(&self.v2.runtime.cfg, current, intent.SubnetEpoch); err != nil {
+		return nil, err
+	}
 	if err := self.v2.historyAdoption.requireFirstEpoch(current, intent.SubnetEpoch); err != nil {
 		return nil, err
 	}

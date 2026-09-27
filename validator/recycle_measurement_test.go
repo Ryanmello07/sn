@@ -45,6 +45,11 @@ func newRecycleMeasurementFixtureWithCompleted(t *testing.T, completed int) *rec
 
 // Route and raw decision observations are selected before approval is signed.
 func newRecycleMeasurementFixtureWithSetup(t *testing.T, completed int, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture)) *recycleMeasurementFixture {
+	return newRecycleMeasurementFixtureWithHotkey(t, completed, setup, [32]byte{0x15})
+}
+
+// Select the actual hotkey before any compact proof or approval is signed.
+func newRecycleMeasurementFixtureWithHotkey(t *testing.T, completed int, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture), hotkey [32]byte) *recycleMeasurementFixture {
 	t.Helper()
 	admission := newRecycleAdmissionFixture(t, nil)
 	identity := AttemptLedgerIdentity{DeploymentID: "synthetic-recycle-measured", ChainID: 964, GenesisHash: admission.cfg.GenesisHash,
@@ -52,7 +57,9 @@ func newRecycleMeasurementFixtureWithSetup(t *testing.T, completed int, setup fu
 	provider := newReleaseMeasurementV2TestFixtureWithOperator(t, completed, func(noId uint64) *attemptCutV2SealTestFixture {
 		selected := identity
 		selected.NoID = noId
-		return newAttemptCutV2SealTestFixtureForDomain(t, 8, completed, 1, false, admission.cfg.Policy, selected)
+		fixture := newAttemptCutV2SealTestFixtureForDomain(t, 8, completed, 1, false, admission.cfg.Policy, selected)
+		fixture.expected.Activation.Hotkey = hotkey
+		return fixture
 	})
 	artifact := provider.artifact
 	artifact.NativeSnapshotBlock, artifact.NativeSnapshotHash = 100, admission.finalized.Hex()
@@ -63,7 +70,7 @@ func newRecycleMeasurementFixtureWithSetup(t *testing.T, completed int, setup fu
 	admission.cfg.DeploymentID, admission.cfg.Coordinator = artifact.DeploymentID, artifact.Coordinator
 	admission.cfg.SettlementVault = artifact.SettlementVault
 	admission.cfg.Operators = []OperatorConfig{{NoID: 9}, {NoID: 10}}
-	admission.approval.ValidatorHotkey = [32]byte{0x15}
+	admission.approval.ValidatorHotkey = hotkey
 	admission.approval.FirstNativeEpoch = artifact.SubnetEpoch
 	admission.approval.MaximumSubnetUids = 111
 	if setup != nil {

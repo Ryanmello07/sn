@@ -401,8 +401,11 @@ now verifies an independently pinned approval, immutable local custody and an
 exact finalized runtime/owner census under explicit Recycle mode. It does not
 start steering: both submission paths remain fenced until measurement,
 signatures, pending intents, archive replay, coordinator/client-key policy and
-the native drain boundary use one successor authority. Original pending
-receipts can still be reconciled. An admitted 10/90 weight row remains a
+the native drain boundary use one successor authority. The distinct
+[schema-3 production path](OWNER-RECYCLE-PRODUCTION.md) now joins those inputs
+through the standard V2 producer, exact prepared source/row, a separate hotkey
+sidecar and durable intent/archive replay. Old observation approvals stay
+fenced. Original pending receipts can still be reconciled. An admitted 10/90 weight row remains a
 proposal until independent validators and finalized native allocation prove
 the economic result.
 
@@ -811,6 +814,19 @@ eligibility, API/key/payout history and all activation/signing gates stay open.
 Its [qualification record](/mnt/data/sn-testnet/evidence/mainnet-owner-recycle-readiness-20260927/RESULT.md)
 retains 138 normal and 138 race passes, vet, cross-compile and the final
 naming-only follow-up without claiming launch approval.
+
+The [production transition](OWNER-RECYCLE-PRODUCTION.md) separately enables the
+actual standard validator under an independently signed schema-3 config. It
+authenticates the exact compatible producer interface, validator stake/permit
+and bounded activity, owner census, canonical operator facts and the pinned
+zero-pending-emission activation block, then signs the measured row through the
+real CRv4 source batch. Its sidecar remains bound through durable intent recovery
+and independent archive observation. The same approved config can continue its
+finite epoch window and replay historical decisions after head/cache changes.
+Actual mainnet inputs and economic outcome remain unprovided; changing an
+already-running production config needs durable original config/approval history
+and remains explicit follow-up work. Final economic outcome is a monitored
+postcondition, not a prerequisite to the first submission.
 
 No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 

@@ -28,6 +28,8 @@ type ReleaseActivationV2Authority struct {
 	RuntimeHash   [32]byte
 	ValidatorUID  uint16
 	NativeRuntime crv4.RuntimeArtifactIdentity
+	// Only the loaded producer config can select mainnet runtime history.
+	productionRuntimeConfig *ReleaseConfig
 }
 
 // Value-only observations retain their exact, distinct clocks. Publication is
@@ -75,6 +77,19 @@ func (self *ChainClient) AuthenticateReleaseActivationV2Context(ctx context.Cont
 		block <= expected.EVMBlock || blockHash == ([32]byte{}) {
 		return result, errors.New("activation authentication domain, observer or native UID differs")
 	}
+	allowed := HistoricalReleaseRuntimeArtifacts(authority.NativeRuntime)
+	if expected.Domain.ChainID == 964 || isOwnerRecycleProductionConfig(authority.productionRuntimeConfig) {
+		cfg := authority.productionRuntimeConfig
+		if !isOwnerRecycleProductionConfig(cfg) || cfg.ChainID != expected.Domain.ChainID || cfg.GenesisHash != releaseHex32(expected.Domain.GenesisHash) ||
+			cfg.Netuid != expected.Domain.Netuid || common.HexToAddress(cfg.Coordinator) != common.Address(expected.Domain.Coordinator) {
+			return result, errors.New("production activation lost its independently approved configuration")
+		}
+		var err error
+		allowed, err = releaseHistoricalRuntimeArtifactsAt(cfg, expected.NativeBlock)
+		if err != nil {
+			return result, err
+		}
+	}
 	// Both readers already impose their per-call bounds. Clamp the complete
 	// historical observation to the existing native startup window as well.
 	operationCtx, cancel := context.WithTimeout(ctx, releaseNativeEndpointTimeout(nil))
@@ -97,7 +112,7 @@ func (self *ChainClient) AuthenticateReleaseActivationV2Context(ctx context.Cont
 			GenesisHash: types.Hash(expected.Domain.GenesisHash), BlockHash: types.Hash(expected.NativeHash),
 			BlockNumber: expected.NativeBlock, Netuid: expected.Domain.Netuid,
 			UID: authority.ValidatorUID, MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs,
-		}, HistoricalReleaseRuntimeArtifacts(authority.NativeRuntime)...)
+		}, allowed...)
 		if nativeErr == nil && (observation.Identity.Hotkey != expected.Hotkey || !observation.MeetsNonSelfStakeAndPermit()) {
 			nativeErr = errors.New("activation historical hotkey lacks the exact native stake/permit authority")
 		}

@@ -46,7 +46,11 @@ func authenticateReleaseNativeSourceReferenceV2(ctx context.Context, native *crv
 		return err
 	}
 	prepared := intent.Prepared
-	if prepared.SourceCommitment == nil || prepared.SourceCommitment.Hash != releaseHex32(releaseNativeSourceHashV2(encoded)) || !releaseBlockAtOrBefore(artifact.NativeSnapshotBlock, artifact.NativeSnapshotHash, prepared.PreparedAtBlock, prepared.PreparedAtBlockHash) {
+	sourceHash, err := releaseIntentNativeSourceHash(ctx, encoded, intent)
+	if err != nil {
+		return err
+	}
+	if prepared.SourceCommitment == nil || prepared.SourceCommitment.Hash != releaseHex32(sourceHash) || !releaseBlockAtOrBefore(artifact.NativeSnapshotBlock, artifact.NativeSnapshotHash, prepared.PreparedAtBlock, prepared.PreparedAtBlockHash) {
 		return errors.New("V2 native source does not commit its exact pre-Prepared artifact")
 	}
 	own := *native
@@ -64,7 +68,11 @@ func authenticateReleaseNativeSourceReferenceV2(ctx context.Context, native *crv
 	if err != nil {
 		return err
 	}
-	observed, err := crv4.ReadValidatorScheduleAtContext(ctx, &own, crv4.ValidatorScheduleQuery{GenesisHash: own.GenesisHash, BlockHash: hash, BlockNumber: prepared.PreparedAtBlock, Netuid: cfg.Netuid, Hotkey: hotkey, MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs}, HistoricalReleaseRuntimeArtifacts(releaseRuntimeIdentityV2(cfg))...)
+	allowed, err := releaseHistoricalRuntimeArtifactsAt(cfg, prepared.PreparedAtBlock)
+	if err != nil {
+		return err
+	}
+	observed, err := crv4.ReadValidatorScheduleAtContext(ctx, &own, crv4.ValidatorScheduleQuery{GenesisHash: own.GenesisHash, BlockHash: hash, BlockNumber: prepared.PreparedAtBlock, Netuid: cfg.Netuid, Hotkey: hotkey, MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs}, allowed...)
 	matches := observed.Stake.MeetsNonSelfStakeAndPermit() && observed.SubnetEpochIndex == intent.SubnetEpoch && observed.Stake.Identity.UID == intent.SelfUID
 	if err := releaseRpcObservationError(err, matches, errors.New("V2 prepared signer lacks actual canonical native schedule/eligibility")); err != nil {
 		return err
@@ -303,6 +311,9 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	if err != nil {
 		return err
 	}
+	if err := requireOwnerRecycleProductionFirstIntent(self.cfg, current, nativeState.SubnetEpochIndex); err != nil {
+		return err
+	}
 	if err := self.intents.v2.historyAdoption.requireFirstEpoch(current, nativeState.SubnetEpochIndex); err != nil {
 		return err
 	}
@@ -438,6 +449,21 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 		return err
 	}
 	verifiedMeasurement := verified.Decision
+	var productionStage *ownerRecycleProductionStage
+	if isOwnerRecycleProductionConfig(self.cfg) {
+		options, err = self.runtimeV2.measurementReplayOptionsV2(ctx, options, "owner-recycle-production")
+		if err != nil {
+			return err
+		}
+		productionStage, err = prepareOwnerRecycleProductionDecision(ctx, self.cfg, self.native, self.chain, measurementBytes, measurementArtifact, verifiedMeasurement, options)
+		if err != nil {
+			return err
+		}
+		verifiedMeasurement, err = ownerRecycleProductionRowDecision(verifiedMeasurement, productionStage.proof.Row)
+		if err != nil {
+			return err
+		}
+	}
 	uids := verifiedMeasurement.UIDs
 	scores := verifiedMeasurement.Scores
 	encodedScores, err := rationalJSON(scores)
@@ -461,6 +487,9 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	}
 	submitOptions := releaseSubmitOptions(self.cfg)
 	submitOptions.SourceHash = releaseNativeSourceHashV2(measurementBytes)
+	if productionStage != nil {
+		submitOptions.SourceHash = productionStage.sourceHash
+	}
 	prepared, err := crv4.PrepareWeightsCRv4ExactAtContext(ctx, self.native, self.hotkey, self.cfg.Netuid, uids, scores, submitOptions, preparedRuntimeHash)
 	if err != nil {
 		return classifyProvisionalNativeWeights(ctx, allowWeightRejection, nativeState.SubnetEpochIndex, snapshot.Epoch.Uint64(), err)
@@ -492,6 +521,13 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	if err != nil {
 		return err
 	}
+	var productionIntent *OwnerRecycleProductionIntent
+	if productionStage != nil {
+		productionIntent, err = sealOwnerRecycleProductionIntent(ctx, productionStage, self.hotkey, prepared, envelopeHash)
+		if err != nil {
+			return err
+		}
+	}
 	// From this point an intent may exist even when its write returns an error.
 	// Its normal durable reconciliation must own every subsequent retry.
 	allowReadRetry = false
@@ -511,6 +547,7 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 		MeasurementEnvelopePath: envelopePath,
 		MeasurementEnvelopeHash: envelopeHash,
 		MeasurementEnvelopeSize: envelopeSize,
+		OwnerRecycle:            productionIntent,
 		SelfUID:                 selfUid,
 		MaskedUIDs:              verifiedMeasurement.MaskedUIDs,
 		EligibleHeadUIDs:        headSelectionUIDs(verifiedMeasurement.EligibleHead),
@@ -532,7 +569,11 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	if err := self.headEMA.CommitForEpochV2(ctx, measurementArtifact.SubnetEpoch, measurementArtifact.HeadEMA, measurementArtifact.Policy.Steering.HeadScoreEMA); err != nil {
 		return fmt.Errorf("commit head EMA after steering intent: %w", err)
 	}
-	result, attempted, err := submitPreparedNativeRuntimeContext(ctx, self.native, self.cfg, prepared)
+	submissionConfig, err := self.intents.ownerRecyclePreparedConfig(ctx, self.cfg, prepared)
+	if err != nil {
+		return err
+	}
+	result, attempted, err := submitPreparedNativeRuntimeContext(ctx, self.native, submissionConfig, prepared)
 	if err != nil {
 		if !attempted {
 			return err
@@ -628,6 +669,13 @@ func (self *ReleaseSteerer) reconcilePendingV2(ctx context.Context, current *Ste
 		return false, fmt.Errorf("authenticate native runtime before pending replay: %w", err)
 	}
 	if err := validatePreparedNativeRuntimeContext(ctx, self.native, self.cfg, preparedRuntimeHash, replayHash); err != nil {
+		return false, err
+	}
+	submissionConfig, err := self.intents.ownerRecyclePreparedConfig(ctx, self.cfg, current.Prepared)
+	if err != nil {
+		return false, err
+	}
+	if err := validateOwnerRecyclePreparedAuthorization(submissionConfig, current.Prepared); err != nil {
 		return false, err
 	}
 	result, err := crv4.SubmitPrepared(ctx, self.native, current.Prepared)

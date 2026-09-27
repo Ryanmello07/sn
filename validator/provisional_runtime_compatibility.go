@@ -56,6 +56,12 @@ func validateReleaseNativeSigningRuntime(native *crv4.Chain, cfg *ReleaseConfig)
 	if native == nil || cfg == nil || native.Runtime == nil {
 		return errors.New("native signing runtime is unavailable")
 	}
+	if isOwnerRecycleProductionConfig(cfg) {
+		if err := validateReleaseProductionRuntimeHistory(cfg); err != nil {
+			return err
+		}
+		return native.ValidateValidatorProducerRuntime(releaseNativeRuntimeIdentity(cfg))
+	}
 	if uint32(native.Runtime.SpecVersion) == cfg.RuntimeSpec && uint32(native.Runtime.TransactionVersion) == cfg.TransactionVersion && native.Runtime.SpecName == "node-subtensor" {
 		return nil
 	}
@@ -73,6 +79,20 @@ func validateReleaseNativeSigningRuntime(native *crv4.Chain, cfg *ReleaseConfig)
 func validatePreparedNativeRuntimeContext(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, preparedHash, currentHash types.Hash) error {
 	if err := rejectMainnetRuntimeObservationWrites(cfg); err != nil {
 		return err
+	}
+	if isOwnerRecycleProductionConfig(cfg) {
+		prepared, _, err := authenticateOwnerRecycleProductionArtifactAtContext(ctx, native, cfg, preparedHash, true)
+		if err != nil {
+			return fmt.Errorf("authenticate production prepared runtime: %w", err)
+		}
+		current, _, err := authenticateOwnerRecycleProductionArtifactAtContext(ctx, native, cfg, currentHash, false)
+		if err != nil {
+			return fmt.Errorf("authenticate production replay runtime: %w", err)
+		}
+		if prepared.Version != current.Version || prepared.CodeHash != current.CodeHash || prepared.MetadataHash != current.MetadataHash {
+			return errors.New("production prepared signing runtime differs from current exact artifact")
+		}
+		return nil
 	}
 	expected := crv4.RuntimeArtifactIdentity{Version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: cfg.RuntimeSpec, TransactionVersion: cfg.TransactionVersion, StateVersion: cfg.StateVersion}, CodeHash: cfg.RuntimeCodeHash, MetadataHash: cfg.RuntimeMetadataHash}
 	prepared, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, native, preparedHash, expected)
@@ -101,6 +121,9 @@ func submitPreparedNativeRuntimeContext(ctx context.Context, native *crv4.Chain,
 	}
 	if prepared == nil {
 		return nil, false, errors.New("prepared steering submission is unavailable")
+	}
+	if err := validateOwnerRecyclePreparedAuthorization(cfg, prepared); err != nil {
+		return nil, false, err
 	}
 	preparedHash, err := types.NewHashFromHexString(prepared.PreparedAtBlockHash)
 	if err != nil {

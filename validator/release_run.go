@@ -742,6 +742,11 @@ func runReleaseWithStartupV2(ctx context.Context, configPath string, retainedSet
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	if isOwnerRecycleProductionConfig(cfg) {
+		if _, err := RetainOwnerRecycleApproval(ctx, cfg); err != nil {
+			return err
+		}
+	}
 	hotkeySeed, err := crv4.LoadSeedFile(cfg.HotkeySeedFile)
 	if err != nil {
 		return fmt.Errorf("production hotkey seed: %w", err)
@@ -749,6 +754,12 @@ func runReleaseWithStartupV2(ctx context.Context, configPath string, retainedSet
 	hotkey, err := crv4.KeypairFromSeed(hotkeySeed)
 	if err != nil {
 		return err
+	}
+	if isOwnerRecycleProductionConfig(cfg) {
+		approval, err := ownerRecycleProductionApproval(cfg)
+		if err != nil || hotkey.PublicKey() != approval.Approval.ValidatorHotkey {
+			return errors.Join(errors.New("owner-recycle production hotkey differs from independent approval"), err)
+		}
 	}
 	chain, err := DialReleaseChainContext(ctx, cfg.RPC, common.HexToAddress(cfg.Coordinator))
 	if err != nil {

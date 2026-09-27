@@ -60,6 +60,9 @@ func NewReleaseSteerer(cfg *ReleaseConfig, chain *ChainClient, native *crv4.Chai
 	if err := ownerRecycleProductionBoundary(cfg); err != nil {
 		return nil, err
 	}
+	if isOwnerRecycleProductionConfig(cfg) {
+		return nil, errors.New("owner-recycle production requires the concrete V2 runtime and durable intent owner")
+	}
 	if cfg == nil || chain == nil || native == nil || hotkey == nil {
 		return nil, errors.New("release steerer requires config, EVM chain, native chain and hotkey")
 	}
@@ -768,7 +771,7 @@ func (s *ReleaseSteerer) SubmitOnce(ctx context.Context) error {
 	if err := ownerRecycleProductionBoundary(s.cfg); err != nil {
 		return err
 	}
-	if s.runtimeV2 != nil || s.intents != nil && s.intents.v2 != nil || s.cfg != nil && s.cfg.EvidenceV2.Schema != "" {
+	if isOwnerRecycleProductionConfig(s.cfg) || s.runtimeV2 != nil || s.intents != nil && s.intents.v2 != nil || s.cfg != nil && s.cfg.EvidenceV2.Schema != "" {
 		if err := requireReleaseEvidenceV2Runtime(s); err != nil {
 			return err
 		}

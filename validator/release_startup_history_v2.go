@@ -564,7 +564,7 @@ func readReleaseEvidenceV2StartupHistoryWithRuntime(ctx context.Context, cfg *Re
 		owned.inputByEpoch[journal.SubnetEpoch][member.noID] = journal
 		input := journal.MeasurementInput
 		observationCtx, cancel := context.WithTimeout(ctx, releaseNativeEndpointTimeout(&owned.cfg))
-		err = authenticateReleaseStartupNativeV2ContextWithRetainedHistory(observationCtx, native, initial, journal, runtime, member.legacy, retainedHistoricalRPC)
+		err = authenticateReleaseStartupNativeV2ContextWithConfig(observationCtx, native, initial, journal, runtime, member.legacy, retainedHistoricalRPC, &owned.cfg)
 		cancel()
 		if err != nil {
 			return nil, err

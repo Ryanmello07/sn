@@ -201,7 +201,7 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 		return nil, err
 	}
 	epoch := binary.LittleEndian.Uint64(nativeEpoch)
-	if epoch > approval.FirstNativeEpoch {
+	if approval.Production == nil && epoch > approval.FirstNativeEpoch || approval.Production != nil && !ownerRecycleDecisionEpochApproved(&approval, epoch) {
 		return nil, errors.New("owner-recycle signed first native epoch has passed; no late activation is inferred")
 	}
 	countRaw, err := readFixed("SubnetworkN", 2, false, netuid)
@@ -309,7 +309,7 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 	if err != nil {
 		return nil, err
 	}
-	return &OwnerRecycleAdmissionObservation{
+	observation := &OwnerRecycleAdmissionObservation{
 		ApprovalHash: cfg.OwnerRecycleApproval.Approval.SHA256, ProposalHash: proposalHash, ConfigHash: approval.ConfigHash,
 		NativeEpoch: epoch, FirstNativeEpoch: approval.FirstNativeEpoch, Snapshot: snapshot, RecognizedOwners: recognized,
 		MinimumAllowedWeights: binary.LittleEndian.Uint16(minimum), StoredMaximumWeightLimit: binary.LittleEndian.Uint16(storedCap),
@@ -321,7 +321,14 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 			"provider artifacts, self/controlled masks and independent active validator admission need exact decision-time proof",
 			"final Yuma/native miner allocation, recycled incentive and runtime-derived rounding tolerance are unobserved",
 		},
-	}, nil
+	}
+	if approval.Production != nil {
+		observation.Blockers = []string{
+			"census alone does not authenticate the complete production decision, eligibility or source transaction",
+			"final Yuma/native miner allocation, recycled incentive and runtime-derived rounding tolerance are unobserved",
+		}
+	}
+	return observation, nil
 }
 
 // Bounds hex decoding before copying the storage payload. The transport still

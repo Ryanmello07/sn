@@ -90,7 +90,8 @@ type Chain struct {
 	runtimeCompatibilityProof *runtimeCompatibilityProof
 	// Exact block authentication remains attached to a private bound view,
 	// independently of metadata-cache residency and provisional admission.
-	runtimeArtifactProof *runtimeArtifactProof
+	runtimeArtifactProof   *runtimeArtifactProof
+	validatorProducerProof *runtimeArtifactProof
 }
 
 // contextSubstrateClient adapts GSRPC's context-aware transport to the

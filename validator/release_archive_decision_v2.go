@@ -28,6 +28,7 @@ type ReleaseEvidenceV2DecisionObservation struct {
 	CommitNativeEpoch      uint64                       `json:"commit_native_epoch,omitempty"`
 	RevealNativeEpoch      uint64                       `json:"reveal_native_epoch,omitempty"`
 	ApplicationNativeEpoch uint64                       `json:"application_native_epoch,omitempty"`
+	OwnerRecycle           *OwnerRecycleProductionProof `json:"owner_recycle,omitempty"`
 }
 
 // The prepared snapshot may precede an epoch boundary crossed by inclusion.
@@ -49,7 +50,11 @@ func observeReleaseDecisionLifecycleV2(ctx context.Context, native *crv4.Chain, 
 		if err != nil {
 			return 0, err
 		}
-		actual, err := crv4.ReadValidatorScheduleAtContext(ctx, native, crv4.ValidatorScheduleQuery{GenesisHash: native.GenesisHash, BlockHash: block, BlockNumber: number, Netuid: cfg.Netuid, Hotkey: hotkey, MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs}, HistoricalReleaseRuntimeArtifacts(releaseRuntimeIdentityV2(cfg))...)
+		allowed, err := releaseHistoricalRuntimeArtifactsAt(cfg, number)
+		if err != nil {
+			return 0, err
+		}
+		actual, err := crv4.ReadValidatorScheduleAtContext(ctx, native, crv4.ValidatorScheduleQuery{GenesisHash: native.GenesisHash, BlockHash: block, BlockNumber: number, Netuid: cfg.Netuid, Hotkey: hotkey, MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs}, allowed...)
 		if err != nil {
 			return 0, err
 		}
@@ -100,6 +105,8 @@ func (self *ReleaseEvidenceV2Archive) ObserveSources(ctx context.Context, chain 
 		}
 	}()
 	owner, history := self.owner, self.history
+	self.productionStages = nil
+	productionStages := map[string]*ownerRecycleProductionStage{}
 	bounds := owner.cfg.EvidenceV2.Bounds
 	runtime := releaseRuntimeIdentityV2(&owner.cfg)
 	keys, err := readReleaseServerKeysV2(ctx, &owner.cfg)
@@ -115,7 +122,7 @@ func (self *ReleaseEvidenceV2Archive) ObserveSources(ctx context.Context, chain 
 	}
 	for _, input := range self.inputs {
 		initial := input.Context
-		_, err := chain.AuthenticateReleaseActivationV2Context(ctx, native, ReleaseActivationV2Authority{Expected: initial.Activation, Journal: initial.Journal, RuntimeHash: initial.RuntimeHash, ValidatorUID: initial.ValidatorUID, NativeRuntime: runtime}, input.Candidate, input.VPKSignature, input.HotkeySignature, initial.ObservedEVMBlock, initial.ObservedEVMHash)
+		_, err := chain.AuthenticateReleaseActivationV2Context(ctx, native, ReleaseActivationV2Authority{Expected: initial.Activation, Journal: initial.Journal, RuntimeHash: initial.RuntimeHash, ValidatorUID: initial.ValidatorUID, NativeRuntime: runtime, productionRuntimeConfig: &owner.cfg}, input.Candidate, input.VPKSignature, input.HotkeySignature, initial.ObservedEVMBlock, initial.ObservedEVMHash)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +134,7 @@ func (self *ReleaseEvidenceV2Archive) ObserveSources(ctx context.Context, chain 
 		for _, noID := range slices.Sorted(maps.Keys(history.inputByEpoch[epoch])) {
 			journal := history.inputByEpoch[epoch][noID]
 			initial := history.initial[noID]
-			if err := authenticateReleaseStartupNativeV2Context(ctx, native, initial, journal, runtime, false); err != nil {
+			if err := authenticateReleaseStartupNativeV2ContextWithConfig(ctx, native, initial, journal, runtime, false, false, &owner.cfg); err != nil {
 				return nil, err
 			}
 			input := journal.MeasurementInput
@@ -166,8 +173,29 @@ func (self *ReleaseEvidenceV2Archive) ObserveSources(ctx context.Context, chain 
 		if err := observeReleaseDecisionLifecycleV2(ctx, native, &owner.cfg, &item.Intent, &observation); err != nil {
 			return nil, err
 		}
+		if isOwnerRecycleProductionConfig(&owner.cfg) {
+			options, err := self.decisionOptions(ctx, &item.Intent, artifact, observation)
+			if err != nil {
+				return nil, err
+			}
+			_, provider, err := DecodeReleaseMeasurementArtifactV2(ctx, item.Measurement, options)
+			if err != nil {
+				return nil, err
+			}
+			options, err = self.decisionOptions(ctx, &item.Intent, artifact, observation)
+			if err != nil {
+				return nil, err
+			}
+			stage, err := prepareOwnerRecycleProductionDecision(ctx, &owner.cfg, native, chain, item.Measurement, artifact, provider.Decision, options)
+			if err != nil {
+				return nil, err
+			}
+			observation.OwnerRecycle = &stage.proof
+			productionStages[observation.MeasurementHash] = stage
+		}
 		result = append(result, observation)
 	}
+	self.productionStages = productionStages
 	return result, owner.check(ctx)
 }
 
@@ -225,6 +253,19 @@ func (self *ReleaseEvidenceV2Archive) ReplayDecisions(ctx context.Context, obser
 		}
 		hotkey := self.inputs[0].Context.Activation.Hotkey
 		_, verified, err := VerifyReleaseMeasurementEnvelopeV2(ctx, envelope, item.Measurement, hotkey, item.Intent.SelfUID, item.Intent.Prepared.ExtrinsicHash, options)
+		if err != nil {
+			return err
+		}
+		stage := self.productionStages[observation.MeasurementHash]
+		if isOwnerRecycleProductionConfig(&self.owner.cfg) {
+			observed, err := ownerRecycleProductionProofBytes(ctx, observation.OwnerRecycle, bounds.MaxControlBytes)
+			if err != nil || stage == nil || !bytes.Equal(observed, stage.encoded) {
+				return errors.Join(errors.New("owner-recycle archive needs the complete independently observed production decision"), err)
+			}
+		} else if observation.OwnerRecycle != nil {
+			return errors.New("legacy archive cannot select production by an observation sidecar")
+		}
+		verified.Decision, err = verifyOwnerRecycleProductionIntent(ctx, &self.owner.cfg, stage, &item.Intent, item.Measurement, artifact, verified.Decision)
 		if err != nil {
 			return err
 		}

@@ -109,6 +109,14 @@ func ObserveOwnerRecycleMeasurementAuthority(ctx context.Context, cfg *ReleaseCo
 	if err := json.Unmarshal(raw, &owned); err != nil {
 		return nil, err
 	}
+	// Private production authority survives ownership copies only after its
+	// complete public configuration has been independently matched.
+	if isOwnerRecycleProductionConfig(cfg) {
+		if err := validateOwnerRecycleProductionConfig(cfg); err != nil {
+			return nil, err
+		}
+		owned.ownerRecycleProduction = cfg.ownerRecycleProduction
+	}
 	envelope, err := readRetainedOwnerRecycleApproval(ctx, &owned)
 	if err != nil {
 		return nil, err
@@ -120,7 +128,7 @@ func ObserveOwnerRecycleMeasurementAuthority(ctx context.Context, cfg *ReleaseCo
 	approval := envelope.Approval
 	if expected.DeploymentID != owned.DeploymentID || expected.ChainID != 964 || expected.GenesisHash != owned.GenesisHash ||
 		expected.Coordinator != owned.Coordinator || expected.SettlementVault != owned.SettlementVault || expected.ValidatorID != owned.ValidatorID ||
-		expected.Netuid != owned.Netuid || expected.PolicyHash != owned.PolicyHash || expected.SubnetEpoch != approval.FirstNativeEpoch ||
+		expected.Netuid != owned.Netuid || expected.PolicyHash != owned.PolicyHash || !ownerRecycleDecisionEpochApproved(&approval, expected.SubnetEpoch) ||
 		expected.SettlementEpoch < approval.Proposal.EffectiveEpoch {
 		return nil, errors.New("owner-recycle measurement differs from the approved first decision and unchanged parent domain")
 	}
@@ -168,7 +176,8 @@ func ownerRecycleMeasurementLimit(ctx context.Context, authority *OwnerRecycleMe
 		return 0, errors.New("owner-recycle measurement allowance is absent or oversized")
 	}
 	if options.Expected != authority.expected || !reflect.DeepEqual(options.Policy, authority.config.Policy) ||
-		!slices.Equal(options.ControlledNOIDs, authority.config.ControlledNOIDs) || options.ReplayPolicy != nil {
+		!slices.Equal(options.ControlledNOIDs, authority.config.ControlledNOIDs) ||
+		(options.ReplayPolicy != nil && (!isOwnerRecycleProductionConfig(&authority.config) || !reflect.DeepEqual(*options.ReplayPolicy, options.Policy))) {
 		return 0, errors.New("owner-recycle measurement replay authority differs from its exact approved decision")
 	}
 	if len(authority.config.Operators) < authority.config.Policy.Safety.MinimumHealthyNOCount || len(authority.config.Operators) != len(options.Operators) {

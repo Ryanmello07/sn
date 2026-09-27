@@ -91,6 +91,11 @@ func (self *recycleOperatorFixture) GetBlockByNumber(ctx context.Context, number
 // Every identity and unsigned snapshot is declared before signed approval and
 // provider sealing. No finished testnet evidence is relabeled as mainnet.
 func newRecycleOperatorFixture(t *testing.T) *recycleOperatorFixture {
+	return newRecycleOperatorFixtureWithHotkey(t, [32]byte{0x15})
+}
+
+// Production tests choose the real signer before constructing the evidence.
+func newRecycleOperatorFixtureWithHotkey(t *testing.T, hotkey [32]byte) *recycleOperatorFixture {
 	t.Helper()
 	fixture := &recycleOperatorFixture{releaseDecisionV2TestFixture: newReleaseDecisionV2TestFixture(t)}
 	server := gethrpc.NewServer()
@@ -117,7 +122,7 @@ func newRecycleOperatorFixture(t *testing.T) *recycleOperatorFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { client.Close(); httpServer.Close(); server.Stop() })
-	fixture.measurement = newRecycleMeasurementFixtureWithSetup(t, 2, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
+	fixture.measurement = newRecycleMeasurementFixtureWithHotkey(t, 2, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
 		admission.cfg.RPC = []string{httpServer.URL}
 		artifact := provider.artifact
 		for index := range artifact.DepositAudits {
@@ -127,7 +132,7 @@ func newRecycleOperatorFixture(t *testing.T) *recycleOperatorFixture {
 			audit.ArtifactDeadlineBlock = audit.SourceEndBlock + artifact.Policy.Settlement.RootCommitWindowBlocks
 		}
 		provider.rebuildLegacy(t)
-	})
+	}, hotkey)
 	measurement := fixture.measurement
 	artifact := measurement.provider.artifact
 	fixture.views = map[string]releaseDecisionV2TestView{}
