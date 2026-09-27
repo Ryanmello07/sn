@@ -37,11 +37,11 @@ are component responsibilities; assign a named operator before rollout.
 | Gate / priority | Owner and linked items | Current state | Next action and completion evidence |
 | --- | --- | --- | --- |
 | MG-01 / P0 — Mainnet identity | Node operator; RT-01/02, PH-04/14/18/19 | **Blocked:** the operator confirms Snow VPN `172.28.208.185:9944` is the intended mainnet route but is still being prepared. The [06:03 UTC read-only inspection](evidence/snow-route-inspect-20260927-0603.json) returned EVM chain **945** and testnet genesis. | Wait for route cutover, independently approve the mainnet genesis, and capture finalized native/EVM mapping, expected EVM ID 964, code/metadata and node/source identity. Produce a signer-free snapshot; reject the route while it reports testnet. |
-| MG-02 / P0 — Reproducible production release | Release owner; RL-01, PH-06/16 | **In progress:** the integrated server candidate passes pinned and combined SN/server normal/race selectors; the complete production release manifest, broader qualification and rollout remain open. | Lock SN, server, SDK, Connect, config, toolchain and contract artifacts. Include the selected fixes by commit and file hash; build and qualify that exact composition, then approve an immutable manifest. A docs-only branch advance must not change its authority. |
+| MG-02 / P0 — Reproducible production release | Release owner; RL-01, PH-06/16 | **In progress:** the composed current-main server candidate `9f860731` passes 291 selected tests normally and with race detection, zero skips, plus cross-module compile. The complete production release manifest, broader qualification and rollout remain open. | Lock SN, server, SDK, Connect, config, toolchain and contract artifacts. Include the selected fixes by commit and file hash; build and qualify that exact composition, then approve an immutable manifest. A docs-only branch advance must not change its authority. |
 | MG-03 / P0 — Durable recovery and complete evidence | Transaction/recovery owner; PF-01/03/04, PH-01/02/05/07/17/21/24/25/26 | **In progress:** journal, cache, warmup and scanner implementations exist; R46 historical approval correction remains on a candidate branch. | Migrate required facilities into production owners; reconcile every original/replacement/cancellation signature and historical approval. Crash/restart and cold/warm-cache qualification must preserve finalized work, custody, failed evidence and single ownership without repeated spend. |
 | MG-04 / P0 — Runtime and native continuity | Chain/validator owner; RT-01 through RT-08, PH-03/04/10/18/19/22 | **In progress:** reviewed artifacts and a testnet provisional capability profile exist. Automatic production compatibility and the missed-native-boundary recovery are not accepted. | Implement block/purpose-bound immutable views and operation profiles, construction/signing from one view, finite caches and explicit future native handoff. Rehearse compatible/incompatible upgrades, pending transactions and both validator paths; no backdated native success. |
-| MG-05 / P0 — Policy and identity rollover | Server/validator owner; PF-02/05, PH-07/13/27 | **In progress:** server policy-domain rollover and retained resume are evidenced above; current source integration passes selected normal/race checks, with live operator cutover and readiness still open. | Migrate both operators before APIs, retain old signed histories, activate all validator/operator evidence domains and authenticate persistent peer-key transitions. Prove populated migration, restart, processed-key readiness and fresh proof progress through a future policy boundary. |
-| MG-06 / P0 — Economics, settlement and custody | Protocol/contracts/treasury owner; PH-11/12/14 and R48 usage lessons | **Blocked:** the user selected 90% owner-recycle, but the native 10%/90% mechanism is not implemented; identities/budgets and usage/settlement exceptions remain open. The inspected runtime defaults to Burn. | Implement and qualify the 10% native-miner target and selected 90% owner-recycle path. Read the exact runtime's `RecycleOrBurn[25]`, use one authorized owner/root setter if needed, and verify finalized Recycle **before** any owner-directed 90% weight activation; recheck mode on recovery. Verify final incentives separately. Recycling does not fund the reserve. Bind the selected priced or zero-price semantics explicitly. Prove immutable usage, exact deposits where required, capture/carry/claims, native rounding, liabilities and the NetEscrow ordering repair. Do not infer success from traffic volume. |
+| MG-05 / P0 — Policy and identity rollover | Server/validator owner; PF-02/05, PH-07/13/27 | **In progress:** server policy-domain rollover, retained resume and composed source normal/race qualification are evidenced above; the v651→v724 migration-monitor namespace bug is corrected. Live operator cutover and readiness remain open. | Migrate both operators before APIs, retain old signed histories, activate all validator/operator evidence domains and authenticate persistent peer-key transitions. Prove populated migration, restart, processed-key readiness and fresh proof progress through a future policy boundary. |
+| MG-06 / P0 — Economics, settlement and custody | Protocol/contracts/treasury owner; PH-11/12/14 and R48 usage lessons | **Blocked:** the user selected 90% owner-recycle, but the native 10%/90% mechanism is not implemented; identities/budgets and usage/settlement exceptions remain open. The inspected runtime defaults to Burn. NetEscrow migration 727 and fenced publishers pass composed source tests, but have not been deployed. | Implement and qualify the 10% native-miner target and selected 90% owner-recycle path. Read the exact runtime's `RecycleOrBurn[25]`, use one authorized owner/root setter if needed, and verify finalized Recycle **before** any owner-directed 90% weight activation; recheck mode on recovery. Verify final incentives separately. Recycling does not fund the reserve. Bind the selected priced or zero-price semantics explicitly. Prove immutable usage, exact deposits where required, capture/carry/claims, native rounding, liabilities and a coordinated NetEscrow writer cutover. Do not infer success from traffic volume. |
 | MG-07 / P0 — Continuous monitoring and bounded repair | Operations owner; PH-15/28, PH-01/02/07/09/11/16 | **In progress:** signer-free `inspect`/`monitor` identity and finality commands now exist with focused normal/race tests; independent domain monitoring, deployed alerts and the repair controller remain open. | Implement the [operating model](MAINNET.md#continuous-monitoring-and-repair), approve its SLOs and repair envelopes, provision primary/backup on-call, and rehearse outage, wrong chain, missed deadline, uncertain send, full disk and monitor failure. Independent alerts must survive a stopped application and a stopped controller. |
 | MG-08 / P0 — Mainnet bootstrap and both validator roles | Bootstrap/governance owner; PH-14, [MAINNET.md](MAINNET.md) | **Blocked:** the mutating bootstrap and separate root-validator service remain pending; a read-only identity/monitor foundation does not supply them. Census, reset capability, custody and approvals are inputs. | Implement read-only inspect/plan first. Resolve literal reset feasibility, root registration protection, two UR validators plus the separate netuid-0 role, Safe authority, nonce graph and bounded funding. Produce an executable exact-hash plan only after its prerequisites close. |
 | MG-09 / P1 — Sustained resource and storage capacity | Service/storage owner; PH-08/09/20/23/26 | **Planned:** bounded simulator mechanisms exist; production sizing and restoration receipts are missing. | Measure backlog, bytes, memory, RPC work and queue fairness with the proposed fleet and retention. Bind finite capacity with reviewed margin; prove missing/full-volume behavior, backup restore, multi-gigabyte log drainage and foreground deadline headroom. Required before unattended operation. |
@@ -63,43 +63,35 @@ instruction to restart the closed campaign.
 | --- | --- | --- |
 | Native-chain authentication | [Exact artifacts](../crv4/runtime_identity.go), [reviewed catalog](../crv4/reviewed_runtime.go), [consumed-interface profile](../crv4/runtime_profile.go) and [provisional admission](../crv4/runtime_compatibility.go). | Mainnet operation authority, immutable read/signing views across every consumer, bounded catalog-independent reuse, semantic/economic checks and controlled upgrade evidence. Provisional admission is explicitly testnet-only. |
 | Recovery and service profile | Simulator journal/plan caches and retained warmup cited under PF-01/04; shared server [subnet-operator workload profile](../../server/taskworker/workload_profile.go) under PF-02. | Production package ownership, complete signature discovery, migration/readiness composition, deployed evidence and finite foreground latency. |
-| Client-key rollover | Server `4b2c4587`, projection regression `9da52551`, successful non-accepting retained resume; integrated migrations 724–726 at `0633780c`. | Bind the composed release and coordinate live operator cutover with all consumers; prove current-domain readiness, retained pins and historical replay on the deployed image. |
-| Usage and logs | Qualified epoch-658 usage quarantine `74893863`; immutable usage guard and append-only archive in server `0633780c`; scanner `df7ae2c4`. | Compatible writer/reader fleet and prospective complete settlement; independent streaming observability with durable byte coverage. Historical debt remains uncredited. |
+| Client-key rollover | Server `4b2c4587`, projection regression `9da52551`, successful non-accepting retained resume; composed current-main migrations 724–726 at `9f860731`. | Bind the composed release and coordinate live operator cutover with all consumers; prove current-domain readiness, retained pins and historical replay on the deployed image. |
+| Usage and logs | Qualified epoch-658 usage quarantine `74893863`; immutable usage guard and append-only archive in server `9f860731`; scanner `df7ae2c4`. | Compatible writer/reader fleet and prospective complete settlement; independent streaming observability with durable byte coverage. Historical debt remains uncredited. |
 | Historical lifecycle provenance | Candidate `93949ee3` and `bbed208d` preserve original approved context, including cache reconstruction. | Integrate and qualify the actual recovery reader; include corruption, wrong-approval, changed-config and strict/current-use negative controls. |
 | Production control plane | UR validator and contract/protocol packages; read-only [inspect/monitor foundation](main.go) and [actual Snow identity rejection](evidence/snow-route-inspect-20260927.json). | Mutating mainnet bootstrap, distinct root-validator service, 10% native-miner mechanism, independent domain monitor, authorized repair controller and deployed alerts/runbooks. |
 
-**Server integration (MG-02/05/06; In progress, 2026-09-27).** The root server
-checkout is on `codex/mainnet-server-hardening-20260927` at `0633780c`, containing
-migration 724 (client-key policy domains), 725 (immutable usage guard) and 726
-(append-only archive with atomic delete capture and live/archive reads). The
-[usage custody note](../../server/local/st-provider-usage-custody.md) records
-migration order, reader/writer compatibility and the prospective history boundary.
-Pinned normal/race tests passed. After the branch switch, the combined selector
-against current SN/server source passed normally and under race for server,
-model, monitor and controller. Owned disposable services were cleaned up
-successfully using the recorded ownership recipe. This is source integration
-qualification, not a live migration or production deployment. Coordinated live
-cutover, NetEscrow ordering, durable capacity, economics and the complete release
-gate remain open. A later fetch found that server `origin/main` had advanced to
-`af17d1d2` and diverged from this qualified branch. It lacks several custody
-prerequisites as well as containing newer settlement/probe work. Reconcile the
-complete prerequisite chain on a separate branch and repeat affected tests
-before treating either history as the production source lock.
+**Server integration (MG-02/05/06; source qualified, 2026-09-27).** Server
+branch `codex/mainnet-current-main-20260927` at `9f860731` carries all eleven
+custody prerequisites on `origin/main` base `af17d1d2`, preserving current-main
+settlement batching and provider probes. Migrations 724–726 retain policy
+domains, immutable usage and the append-only archive; migration 727 adds durable
+per-balance reservation revisions and Redis revision-fenced snapshots. The
+v651→v724 migration-monitor namespace correction is included. The
+[composed qualification](</mnt/data/sn-testnet/qualification/mainnet-current-main-20260927/RESULT.md>)
+retains causal failures, exact source locks and 291 identical selected server
+tests in normal and race modes with zero skips, plus SN/Connect integration and
+cross-module compile. The server branch is pushed for review. This qualifies
+source composition, not a live migration or production release.
 
-**NetEscrow ordering candidate (MG-06; source qualified, integration pending).**
-Server commit `224fd163` on `codex/mainnet-netescrow-ordering-20260927`
-adds migration 727 and durable per-balance reservation revisions. Its Redis
-publisher applies exact revision-fenced snapshots, so a delayed create,
-settlement or reconciliation post cannot overwrite newer source state.
-Deterministic preimage failures and final focused normal/race passes are
-retained in the [qualification handoff](/mnt/data/sn-testnet/evidence/mainnet-netescrow-ordering-20260927/RESULT.md).
-This branch is based on the earlier qualified server history; transplant and
-requalify it with current-main settlement batching before release. Deployment
-must replace all additive cache writers together, retain Redis fence keys,
-check migration functions/triggers in the actual database, and measure the
-persistent fence and revision capacity. The Redis mirror can still lag a
-committed PostgreSQL update, so this fix does not establish atomic concurrent
-admission or close the mainnet settlement gate by itself.
+The independent [NetEscrow qualification](/mnt/data/sn-testnet/evidence/mainnet-netescrow-ordering-20260927/RESULT.md)
+reproduces delayed-create/release and zero-byte preimage failures. The composed
+tests cover those paths and current-main settlement amplification. Deployment
+must stop and drain every additive cache writer, migrate the matching catalog,
+upgrade every publisher together, verify actual database guards, and reconcile
+before traffic. Persistent Redis fences and PostgreSQL revision tombstones need
+explicit restoration and capacity policy. The Redis mirror may still lag a
+committed PostgreSQL update; this does not make concurrent admission atomic.
+Live operator cutover, economics, reserve/claim conservation, capacity and the
+complete production release gate remain open. The older `0633780c` branch and
+its qualification remain as causal history, not the proposed current-main pin.
 
 **RPC read admission (MG-04/MG-07; In progress, 2026-09-27).** The shared
 [JSON validator](../protocol/json_unique.go) and bounded
@@ -2533,7 +2525,7 @@ that the mainnet release image contains the fix.
 **P0 retention follow-up (MG-06, PH-09/12; In progress, 2026-09-27).**
 Before the correction, seven-day completed-payment retention deleted
 `transfer_contract` rows and their `provider_usage`, while the epoch reader
-queried only the live table. Server `0633780c` now implements an append-only
+queried only the live table. Server `9f860731` now implements an append-only
 archive and one-snapshot live/archive reader. Exact usage is captured atomically
 with deletion; failed capture aborts deletion and duplicate credit-bearing
 identities fail the window. Pinned and combined normal/race selectors passed,
