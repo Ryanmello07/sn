@@ -71,6 +71,18 @@ limit. Bind that exact build into MG-02/MG-08 and qualify creation on the
 selected live runtime; a passing local build does not establish live
 deployability after a source/toolchain change.
 
+The next MG-08 increment supplies an offline-qualified
+[existing-seat action owner](ROOT-ACTION.md): mortal root basket encoding,
+one-request signing/nonce ownership, private durable state, exact-byte retries,
+and retained finalized dispatch/fee/runtime-deviation or expiry evidence. Missing
+or empty required state cannot resurrect an allowance, and a runtime change
+blocks new effects while old receipts remain recoverable. The production
+authority/custody/receipt adapters and supervisor are still absent. Native fee
+quotes are not atomic caps; source/policy hashes are not on-chain runtime locks.
+Do not activate signing from a read-only-ready sample or invent a heartbeat for
+the accumulation strategy. Mainnet identity, existing seat, complete eligibility,
+approved custody and limits remain explicit gates.
+
 Start with MG-01's read-only route correction and MG-02's source composition.
 Then close the recovery, runtime, policy, settlement and monitoring dependencies
 before MG-08 can apply a reviewed bootstrap plan. MG-09 must close before

@@ -137,10 +137,13 @@ Unchanged finalized progress does not rewrite the checkpoint.
    argument, and `register_limit` rejects netuid 0. A fresh quote is not an atomic
    cap. A separately authorized external registration receipt or a separately
    qualified reverting custody wrapper remains necessary for new seats.
-3. Implement root-specific call encoding, fee/value/count/expiry envelopes,
-   single hotkey signer ownership, durable signed intent/outcome reconciliation,
-   and bounded staking, take, delegation, claim and re-registration actions.
-   Online observers must not acquire coldkeys or silently fund a retention gap.
+3. Connect the offline-qualified [one-action root owner](ROOT-ACTION.md) to
+   separately qualified production authority, custody and canonical receipt
+   adapters. The core supplies a mortal root basket encoder, durable exact-byte
+   signing/recovery and nonce ownership; it is not a deployed signer or a hard
+   native fee cap. Bounded staking, take, delegation, claim and re-registration
+   remain unimplemented. Online observers must not acquire coldkeys or silently
+   fund a retention gap. Accumulate-in-place needs no periodic transaction.
 4. Qualify effective custom-weight eligibility and a selected strategy if
    accumulation is changed. Preserve existing child/basket rights; audit
    retired-network delegation history and the complete basket NAV/all-staker

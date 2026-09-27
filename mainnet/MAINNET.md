@@ -305,6 +305,13 @@ finalized seat, stake, delegation and strategy census; ID 945 is rejected before
 root storage. Their `ready` status means only read-only observation policy
 readiness, and `activation_ready` remains false. Registration, bounded signing,
 effective custom-weight eligibility and complete basket custody remain gates.
+The [existing-seat action owner](ROOT-ACTION.md) now provides an offline-qualified
+mortal root basket encoder, durable one-request signing/nonce ownership and
+receipt/expiry recovery. Production authority, custody and canonical receipt
+adapters are absent; there is no signing command or active root service. The
+accumulate-in-place strategy needs no heartbeat transaction. Changing that
+strategy, signing fees and distributed custody fencing require separate approval
+and qualification; a local reserve is not a native maximum-fee argument.
 The current [UR validator config](../validator/config.go) rejects netuid 0 and is
 not a root-validator implementation.
 
