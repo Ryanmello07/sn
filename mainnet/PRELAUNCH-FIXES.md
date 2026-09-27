@@ -56,11 +56,11 @@ miners toward the bottom of the emission-ranked trim order after native
 processing, but majority control is not a promise of zero weight. Exact finalized
 emission rows, all other eligible neurons, immunity and protected roles must
 be re-censused before proposing a capacity. Root-subnet validator weights do
-not perform SN25 deregistration. [Runtime trim source](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/subnets/uids.rs#L1493), [subnet weight source](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/subnets/weights.rs#L3666).
+not perform SN25 deregistration. [Runtime trim source](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/subnets/uids.rs#L171), [subnet weight source](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/subnets/weights.rs#L865).
 The reviewed registration-allowed setter is chain-Root-only, beyond the owned
 SN25 keys, and a coldkey-authorized hotkey swap can change an existing UID
 despite a closed registration flag. Admission must account for both facts
-through inclusion. [Registration setter](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs#L3444), [swap implementation](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/swap/swap_hotkey.rs#L2199).
+through inclusion. [Registration setter](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs#L728), [swap implementation](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/swap/swap_hotkey.rs#L101).
 The owner-trim execution gate can use a bounded safe-set proof instead of an
 atomic hotkey predicate only when every generation removable through call
 expiry is an approved old miner and every protected identity stays immune.
@@ -70,6 +70,15 @@ closed registration flag alone does not rule out subnet-owner takeover during
 an epoch, which can directly register a neuron; first hotkey swaps also have
 no cooldown. Reconcile actual removals from the finalized receipt.
 Majority-validator weights may change trim order but cannot prove this gate.
+The signer-free [`owner-trim-qualify`](OWNER-TRIM-BOUNDED.md) now checks a
+conservative no-epoch window from authenticated census, metadata and storage,
+including immunity-through-expiry, registration, both swap paths, admin timing,
+lease absence and capacity. It preserves every requested old generation and
+conditional residual count. Favorable predicates leave owner/proxy/pending
+actions, governance/runtime and public subnet-pruning/reuse fences explicitly
+unproved; executable apply,
+actual signed mortality, custody effects and actual-subset receipt/reconciliation
+remain blocked. [Qualification evidence](evidence/owner-trim-bounded-20260927.md).
 
 MG-08 now has a separate signer-free [root observation foundation](ROOT-VALIDATOR.md):
 `root-preview` and finite `root-monitor` bind the approved mainnet domain and

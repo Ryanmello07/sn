@@ -29,7 +29,7 @@ the complete mutating bootstrap, root-validator service and operational repair
 system remain production work. [mainnet/main.go](main.go) implements signer-free
 `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`,
 `monitor`, `subnet-preview`, `owner-trim-plan`, `owner-trim-recheck`,
-`owner-trim-reconcile`, `root-preview`, `root-monitor`,
+`owner-trim-reconcile`, `owner-trim-qualify`, `root-preview`, `root-monitor`,
 `check-recycle-mode`, `economic-reference`, offline `source-lock`,
 [local `release-inventory`](RELEASE-INVENTORY.md), and the
 [signer-free blocked `plan`](PLAN.md); executable planning, `apply`, `resume`
@@ -253,7 +253,7 @@ registration flag does not prevent a coldkey-authorized hotkey swap from
 changing the registered generation. A bounded owner-key execution path must
 therefore establish its protection invariant under actual registration and
 swap/custody behavior through inclusion, or leave the trim as a read-only
-proposal. [Registration setter](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs#L3444), [hotkey swap](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/swap/swap_hotkey.rs#L2199).
+proposal. [Registration setter](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs#L728), [hotkey swap](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/swap/swap_hotkey.rs#L101).
 
 Ordinary registration pruning is a different algorithm. In the inspected source it excludes owner-protected identities but can fall back to temporally immune candidates in some capacity conditions. Do not use the trim immunity model to justify a replacement sequence. `clear_neuron` is an internal implementation routine, not evidence of an owner-callable reset endpoint. [Registration implementation][subtensor-registration]
 
@@ -275,6 +275,19 @@ coldkey or a concrete custody fence. Majority-validator weights alone do not
 establish any of these conditions. Reconcile actual removals from the
 finalized receipt rather than treating the preview's predicted list as the
 result. [Epoch owner takeover](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/coinbase/run_coinbase.rs#L389), [hotkey swap](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/swap/swap_hotkey.rs#L101).
+
+The signer-free [`owner-trim-qualify`](OWNER-TRIM-BOUNDED.md) now tests a
+conservative version of this condition from exact-block RPC evidence: protected
+immunity through a proposed 4–256-block mortal era, closed registration,
+authenticated hotkey cooldowns and coldkey-swap delays/announcements, no native
+epoch or admin-window closure, no lease, and the runtime capacity/immune-ratio
+limits. Approved miners may lose immunity without expanding the approved set.
+Every requested generation remains explicit, including unresolved originals
+and conditional residuals. Passing predicates remain conditional on unproved
+owner/proxy/pending-action, governance/runtime and public subnet-pruning/reuse
+fences; source-to-Wasm,
+custody, actual signed mortality, receipt and subset reconciliation still block
+execution. Exit 0 is evidence only; apply/reset/full-reset remain false.
 
 After a finalized reset, repeat the entire census and compare identities, not just counts. Reconcile commitments, balances and locks separately. Re-establish approved capacity and permitted registration settings before new pool/head registrations; no “temporary” parameter change may remain unreported. Existing settlement/claim service must stay available throughout any migration.
 
@@ -519,6 +532,8 @@ residuals, without changing that admission result.
 `owner-trim-recheck` and `owner-trim-reconcile` extend the read-only evidence
 through drift detection and exact post-state comparison, with the same blocked
 execution status and no signer.
+`owner-trim-qualify` separately evaluates a bounded approved-subset invariant;
+its conditional result retains unproved window assumptions and no apply authority.
 
 The [existing-seat root action owner](ROOT-ACTION.md) is an offline-qualified
 one-action signing and recovery core, not a CLI command or live root validator.

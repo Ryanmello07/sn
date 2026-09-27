@@ -13,8 +13,8 @@ import (
 	"time"
 )
 
-// Exit zero means only matching observations. Execution remains blocked by the
-// reviewed runtime's missing identity predicate and all unproved authority gates.
+// Exit zero means only matching observations. Execution-time selection safety
+// and the independent authority gates remain unproved by this comparison.
 func runOwnerTrimGuardCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "owner-trim-recheck" && args[0] != "owner-trim-reconcile" {
 		fmt.Fprintln(stderr, "expected owner-trim-recheck or owner-trim-reconcile")

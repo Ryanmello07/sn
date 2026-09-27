@@ -117,7 +117,7 @@ func (self *rpcClient) readOwnerTrimGuard(ctx context.Context, policy subnetCens
 	}
 	result := ownerTrimGuard{Schema: ownerTrimGuardSchema, Mode: mode, PlanContentHash: plan.ContentHash,
 		BaselineCensusHash: rebuilt.Census.ContentHash, ExpectedResidual: rebuilt.Residual, ComparisonBlockers: []string{},
-		ExecutionBlockers: []string{"RUNTIME_ATOMIC_IDENTITY_SELECTION_GUARD_NOT_AVAILABLE_IN_REVIEWED_OWNER_CALL",
+		ExecutionBlockers: []string{"OWNER_TRIM_EXECUTION_TIME_SELECTION_SAFETY_NOT_ESTABLISHED",
 			"SOURCE_TO_WASM_PROVENANCE_REQUIRES_INDEPENDENT_REVIEW", "CUSTODY_COLLATERAL_STAKE_CLAIM_AND_HISTORY_AUDIT_NOT_COMPLETE",
 			"OWNER_TRIM_SIGNING_AND_EXECUTION_NOT_IMPLEMENTED", "EXACT_TRIM_RECEIPT_AND_DISPATCH_PHASE_NOT_VERIFIED"}}
 	if mode == "recheck" {

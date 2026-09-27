@@ -71,7 +71,7 @@ func rootTypeMatches(metadata *types.Metadata, id types.Si1LookupTypeID, shape s
 	if def.IsComposite && len(def.Composite.Fields) == 1 {
 		return rootTypeMatches(metadata, def.Composite.Fields[0].Type, shape, depth+1)
 	}
-	primitiveKVs := map[string]types.Si0TypeDefPrimitive{"bool": types.IsBool, "u8": types.IsU8, "u16": types.IsU16, "u64": types.IsU64, "i128": types.IsI128}
+	primitiveKVs := map[string]types.Si0TypeDefPrimitive{"bool": types.IsBool, "u8": types.IsU8, "u16": types.IsU16, "u32": types.IsU32, "u64": types.IsU64, "i128": types.IsI128}
 	if primitive, ok := primitiveKVs[shape]; ok {
 		return def.IsPrimitive && def.Primitive.Si0TypeDefPrimitive == primitive
 	}
@@ -81,8 +81,8 @@ func rootTypeMatches(metadata *types.Metadata, id types.Si1LookupTypeID, shape s
 	case "links", "weights", "u64s", "bools", "accounts":
 		itemShape := map[string]string{"links": "link", "weights": "weight", "u64s": "u64", "bools": "bool", "accounts": "account"}[shape]
 		return def.IsSequence && rootTypeMatches(metadata, def.Sequence.Type, itemShape, depth+1)
-	case "link", "weight", "pending-links":
-		parts := map[string][]string{"link": {"u64", "account"}, "weight": {"u16", "u16"}, "pending-links": {"links", "u64"}}[shape]
+	case "link", "weight", "pending-links", "coldkey-announcement":
+		parts := map[string][]string{"link": {"u64", "account"}, "weight": {"u16", "u16"}, "pending-links": {"links", "u64"}, "coldkey-announcement": {"u32", "account"}}[shape]
 		if !def.IsTuple || len(def.Tuple) != len(parts) {
 			return false
 		}
@@ -154,7 +154,10 @@ func observationStorageProfile(metadata *types.Metadata, specs []rootStorageSpec
 			}
 			for index, shape := range spec.keys {
 				hasher := mapType.Hashers[index]
-				if !rootTypeMatches(metadata, keyIds[index], shape, 0) || (spec.hashers[index] == "identity" && !hasher.IsIdentity) || (spec.hashers[index] == "blake128concat" && !hasher.IsBlake2_128Concat) {
+				matchesHasher := spec.hashers[index] == "identity" && hasher.IsIdentity ||
+					spec.hashers[index] == "blake128concat" && hasher.IsBlake2_128Concat ||
+					spec.hashers[index] == "twox64concat" && hasher.IsTwox64Concat
+				if !rootTypeMatches(metadata, keyIds[index], shape, 0) || !matchesHasher {
 					return nil, fmt.Errorf("root %s key encoding changed", spec.name)
 				}
 			}
@@ -206,7 +209,7 @@ func rootVector(data []byte, width, suffix int) ([]byte, int, error) {
 
 // Fixed widths and full consumption prevent trailing or malicious SCALE data.
 func rootValidateScale(data []byte, shape string) error {
-	widthKVs := map[string]int{"bool": 1, "u8": 1, "u16": 2, "u64": 8, "i128": 16, "account": 32}
+	widthKVs := map[string]int{"bool": 1, "u8": 1, "u16": 2, "u32": 4, "u64": 8, "i128": 16, "account": 32, "coldkey-announcement": 36}
 	if width, ok := widthKVs[shape]; ok {
 		if len(data) != width || shape == "bool" && data[0] > 1 {
 			return fmt.Errorf("invalid exact %s", shape)

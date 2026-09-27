@@ -83,13 +83,16 @@ The [reviewed owner call][admin] accepts only `netuid` and `max_n`. Its
 [selection algorithm][trim] reads emissions and immunity at dispatch and
 compresses surviving UIDs. It has no parameter enforcing this plan's approved
 hotkey/coldkey/generation set or census hash. The [runtime extensions][runtime]
-do not make these client-side reads atomic with dispatch. This result therefore
-always retains
-`RUNTIME_ATOMIC_IDENTITY_SELECTION_GUARD_NOT_AVAILABLE_IN_REVIEWED_OWNER_CALL`.
+do not make these client-side reads atomic with dispatch. This comparison
+therefore retains `OWNER_TRIM_EXECUTION_TIME_SELECTION_SAFETY_NOT_ESTABLISHED`.
 A successful recheck is not a reusable signing or broadcast token. Closing
 registration does not freeze emissions, immunity expiry or privileged churn.
-A reviewed runtime-enforced predicate or another independently qualified
-execution mechanism is still required before a protected trim can be admitted.
+A separately qualified bounded safe-set invariant can establish selection
+safety without an atomic hotkey predicate. The new signer-free
+[`owner-trim-qualify`](OWNER-TRIM-BOUNDED.md) tests the observed predicates for
+that narrower case while retaining explicit unproved external fences and all
+execution gates. It neither relaxes this fixed-plan comparison nor reuses its
+reconciliation for an arbitrary approved subset.
 
 Exit 0 means a complete matching observation; exit 3 means comparison drift or
 an integrity refusal; exit 2 means invalid input; exit 1 means a transport,

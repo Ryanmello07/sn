@@ -192,7 +192,7 @@ func TestOwnerTrimGuardRechecksExactPartialPlanWithoutExecutionAuthority(t *test
 		len(result.ExpectedResidual) != 1 || result.ExpectedResidual[0].Hotkey != policy.Remove[0].Hotkey ||
 		result.PlanContentHash != plan.ContentHash || result.BaselineCensusHash != plan.Census.ContentHash ||
 		result.CurrentCensus.Observation.Identity.FinalizedHash != fixture.afterHash ||
-		!slices.Contains(result.ExecutionBlockers, "RUNTIME_ATOMIC_IDENTITY_SELECTION_GUARD_NOT_AVAILABLE_IN_REVIEWED_OWNER_CALL") {
+		!slices.Contains(result.ExecutionBlockers, "OWNER_TRIM_EXECUTION_TIME_SELECTION_SAFETY_NOT_ESTABLISHED") {
 		t.Fatalf("partial recheck acquired authority or lost residuals: %+v %v", result, err)
 	}
 	_, counts := fixture.counts()
