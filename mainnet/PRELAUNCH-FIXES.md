@@ -37,7 +37,7 @@ are component responsibilities; assign a named operator before rollout.
 | Gate / priority | Owner and linked items | Current state | Next action and completion evidence |
 | --- | --- | --- | --- |
 | MG-01 / P0 — Mainnet identity | Node operator; RT-01/02, PH-04/14/18/19 | **Blocked:** the operator confirms Snow VPN `172.28.208.185:9944` is the intended mainnet route but is still being prepared. The [10:51 UTC read-only inspection](evidence/snow-route-inspect-20260927-1051.json) still returned EVM chain **945** and testnet genesis. | Wait for route cutover, independently approve the mainnet genesis, and capture finalized native/EVM mapping, expected EVM ID 964, code/metadata and node/source identity. Produce a signer-free snapshot; reject the route while it reports testnet. |
-| MG-02 / P0 — Reproducible production release | Release owner; RL-01, PH-06/16 | **In progress:** the composed current-main server candidate `9f860731` passes 291 selected tests normally and with race detection, zero skips, plus cross-module compile. The offline `source-lock` command now refuses dirty SN/local-replacement repositories and records their exact Git commits, module checksums, Go version and tool hash. The complete binary/contract/config release manifest, broader qualification and rollout remain open. | Lock SN, server, SDK, Connect, config, toolchain and contract artifacts. Include the selected fixes by commit and file hash; build and qualify that exact composition, then approve an immutable manifest. A source lock alone does not cover generated or ignored files, deployed images or artifact provenance. A docs-only branch advance must not change its authority. |
+| MG-02 / P0 — Reproducible production release | Release owner; RL-01, PH-06/16 | **In progress:** the [composed source lock and qualification](evidence/source-lock-composed-20260927.md) pin SN `f321ba7c`, server `9f860731` and Connect `c68689c4`. Six SN packages compile; mainnet normal, validator owner-recycle/config selector normal/race, exact 21 receipt cases normal/race, and mainnet/validator vet pass. The server candidate separately passes 291 selected normal/race tests. Complete binary/contract/config release manifest, broader production qualification and rollout remain open. | Lock all generated artifacts, contract bytecode, config, policy, migrations and images alongside these source inputs; qualify actual production paths and approve one immutable manifest. This source lock alone cannot authorize mainnet activation. A later docs-only branch commit does not silently change the frozen source candidate. |
 | MG-03 / P0 — Durable recovery and complete evidence | Transaction/recovery owner; PF-01/03/04, PH-01/02/05/07/17/21/24/25/26 | **In progress:** the [mainnet miner fleet](../miner/FLEET-MAINNET-RUNTIME.md) now persists signed register/publish/bind/revoke intents and reconciles their original canonical outcomes before any identical-byte retry; affected miner/onchain/chain normal, race and vet pass. Other production transaction owners, historical approval correction, journal retention and cross-host custody remain open. | Migrate the retained-evidence model into every production owner; reconcile every original/replacement/cancellation signature and historical approval. Crash/restart and cold/warm-cache qualification must preserve finalized work, custody, failed evidence and single ownership without repeated spend. |
 | MG-04 / P0 — Runtime and native continuity | Chain/validator owner; RT-01 through RT-08, PH-03/04/10/18/19/22 | **In progress:** reviewed artifacts, bounded per-connection metadata reuse and a testnet provisional capability profile exist. The [miner fleet mainnet gate](../miner/FLEET-MAINNET-RUNTIME.md) requires independently approved exact runtime artifacts and covers durable uncertain-send recovery for its four mutating commands; status remains read-only. The canonical nonce reader shared by fleet replay and both validator replay owners now requires the reviewed exact 56-byte Subtensor account layout. Causal tests caught its former rejection of valid rows and acceptance of incompatible ones; affected normal/race/vet passed. No actual mainnet authority or deployment is supplied. Automatic production compatibility and missed-native-boundary recovery remain open. | Extend block/purpose-bound immutable views and operation profiles to every consumer, construction/signing from one view, finite caches and explicit future native handoff. Rehearse compatible/incompatible upgrades, pending transactions and both validator paths; no backdated native success. |
 | MG-05 / P0 — Policy and identity rollover | Server/validator owner; PF-02/05, PH-07/13/27 | **In progress:** server policy-domain rollover, retained resume and composed source normal/race qualification are evidenced above; the v651→v724 migration-monitor namespace bug is corrected. Live operator cutover and readiness remain open. | Migrate both operators before APIs, retain old signed histories, activate all validator/operator evidence domains and authenticate persistent peer-key transitions. Prove populated migration, restart, processed-key readiness and fresh proof progress through a future policy boundary. |
@@ -773,6 +773,14 @@ compacted journals and conflicting receipts. Assert at most one logical economic
 effect, complete attempt/fee accounting, preserved original bytes and no
 automatic nonce reset or duplicate deposit, stake, registration or claim.
 
+**Current implementation boundary.** The [root action owner](ROOT-ACTION.md)
+now reconstructs finalized native ancestry, body commitments, exact signed
+bytes and phase-matched dispatch/fee evidence under an approved historical
+execution profile. Its read-only port has no production signer or submitter;
+the owned RPC remains the finality/storage trust authority. Root UID and
+registration generation are local approval context, not signed call arguments,
+so pending seat changes require custody exclusion or incident reconciliation.
+
 ### PH-03 — Retry at the actual failing I/O boundary
 
 **Lesson.** A healthy owned node still produced transport timeouts; repeatedly
@@ -969,6 +977,13 @@ output, changed endpoint and unauthorized release drift. Unaffected progress
 survives; changed executable, policy, contracts or authority cannot borrow an
 unrelated approval. Exercise restart on the admitted release while main advances.
 
+**Current implementation boundary.** Offline `source-lock` records clean SN
+and local replacement Git heads, module hashes, Go toolchain and executable
+hash. The [composed candidate](evidence/source-lock-composed-20260927.json)
+pins SN `f321ba7c`, server `9f860731` and Connect `c68689c4`. It is an input
+to a release manifest, not a lock of generated artifacts, signed policy,
+Solidity bytecode, configuration, images or approved rollout identity.
+
 ### PH-07 — Process ownership, dependency recovery and readiness
 
 **Lesson.** A taskworker log finding stopped all 33 processes; historical replay
@@ -1156,6 +1171,13 @@ race at the observable store boundary and prove repaired state convergence.
 Independently rebuild leaves/root and every payment amount; vault conservation
 must hold at each pinned transition, including zero-current-capture payments.
 
+**Current implementation boundary.** The [claim-recovery correction](../evm/CLAIM-RECOVERY.md)
+atomically rolls back a failed runtime payment while preserving an accepted
+leaf and provider credit, and the receipt verifier accepts the actual
+zero-based deferral enum. The non-upgradeable vault requires a new deployment;
+its nested EVM/native rollback and exact stake deltas must be rehearsed against
+the authenticated production runtime. Existing vaults are not patched.
+
 ### PH-13 — Protocol identity and proof/traffic continuity
 
 **Lesson.** Stale measurement cuts, skipped settlement rounds, client-key
@@ -1227,6 +1249,13 @@ exceptions plainly. Mainnet activation additionally proves the chosen reset
 capability, 10% denominator/rounding, actual reward outcome and both validator
 roles. Test stale plans, unauthorized calls, competing registrations and policy
 activation races without silently substituting a narrower reset or reward goal.
+
+**Current implementation boundary.** The [signed owner-recycle admission](../validator/OWNER-RECYCLE-ADMISSION.md)
+checks an independently pinned approval, immutable retained bytes and finalized
+runtime/owner/Recycle-mode census. It fences production steering until the same
+successor authority reaches measurement, signatures, pending intents, archives,
+coordinator and client-key domains. An admitted weight row alone does not
+establish a 10% native outcome.
 
 ### PH-17 — Bind derived indexes to the exact plan and generation
 

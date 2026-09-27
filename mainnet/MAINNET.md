@@ -471,6 +471,14 @@ generated files, ignored files, configuration, migrations or the running images
 match those commits. The release owner must bind those artifacts separately,
 qualify the composed source and approve the resulting immutable manifest.
 
+The [current composed candidate](evidence/source-lock-composed-20260927.md)
+locks SN `f321ba7c`, server `9f860731` and Connect `c68689c4` with all local
+Go replacements. Its cross-module compile, mainnet normal suite, selected
+validator normal/race suite, exact receipt normal/race suite and affected vet
+passed. This is offline qualification of those source paths, not a complete
+release or an approved mainnet configuration. Subsequent evidence-only commits
+do not alter the frozen candidate's Git identity.
+
 No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 
 The canonical plan binds schema and action-format versions; exact config/policy bytes; resolved configuration roots and runtime routes; source/dependency/artifact/binary identities; owned-node and runtime identities; native/EVM snapshot hashes; all public roles; census and reset classifications; actual transaction payloads/origins; expected CREATE addresses and nonces; phase dependencies; validity windows; spend/count caps; and the chosen emission-denominator/remainder policy. Hash canonical bytes with domain separation. The signed authorization names that hash, network, expiry, allowed phases and ceilings. Reject duplicate fields, unknown schema versions, overflow, unexpanded substitutions and ambiguous addresses.
