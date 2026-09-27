@@ -151,6 +151,36 @@ func TestProvisionalRuntimeCompatibilityCurrentHistoricalAndDurableEvidence(t *t
 	}
 }
 
+// The simulator wrapper must carry the original opaque proof through private
+// views, and may not reconstruct provisional authority from copied fields.
+func TestProvisionalRuntimeCompatibilityBindingRetainsExactProof(t *testing.T) {
+	cfg := provisionalRuntimeConfigTest(t)
+	chain := provisionalRuntimeChainTest(t, cfg)
+	observed, err := readAuthenticatedRuntimeMetadataAtContext(t.Context(), chain, cfg, types.Hash{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := *chain
+	if err := bindAuthenticatedRuntime(&view, observed); err != nil || view.CurrentRuntimeCompatibilityProfile() != crv4.ProvisionalRuntimeCompatibilityProfile {
+		t.Fatalf("simulator binding discarded its runtime proof: %v", err)
+	}
+	for _, mutate := range []func(*authenticatedRuntimeMetadata){
+		func(value *authenticatedRuntimeMetadata) { value.artifact = crv4.AuthenticatedRuntimeArtifact{} },
+		func(value *authenticatedRuntimeMetadata) { value.CompatibilityProfile = "" },
+		func(value *authenticatedRuntimeMetadata) { value.Version.SpecVersion++ },
+		func(value *authenticatedRuntimeMetadata) { value.Metadata = types.NewMetadataV14() },
+	} {
+		changed := observed
+		mutate(&changed)
+		if err := bindAuthenticatedRuntime(&view, changed); err == nil {
+			t.Error("changed simulator runtime view inherited the original proof")
+		}
+		if view.Meta != observed.Metadata || view.CurrentRuntimeCompatibilityProfile() != crv4.ProvisionalRuntimeCompatibilityProfile {
+			t.Fatal("failed simulator binding changed the retained runtime")
+		}
+	}
+}
+
 func TestProvisionalRuntimeCompatibilityRejectsStrictAndInvalidApproval(t *testing.T) {
 	for _, fault := range []string{"strict", "schema", "plan", "config", "deployment", "final", "chain", "relative-path", "write-failure"} {
 		cfg := provisionalRuntimeConfigTest(t)

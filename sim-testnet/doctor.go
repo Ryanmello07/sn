@@ -812,16 +812,20 @@ func checkSubstrate(r *DoctorReport, cfg *ResolvedConfig, operational bool) {
 		r.add("runtime/metadata-hash-"+name, true, metadataHashErr, fmt.Sprintf("%s finalized=%s", metadataHash, finalized.Hex()))
 
 		if errors.Join(codeHashErr, metadataHashErr) == nil {
-			if compatible != nil {
-				exactMetadata = compatible.Metadata
-			}
-			bindAuthenticatedRuntime(chain, authenticatedRuntimeMetadata{
+			binding := authenticatedRuntimeMetadata{
 				FinalizedHash: finalized,
 				Version:       runtimeVersion,
 				CodeHash:      codeHash,
 				MetadataHash:  metadataHash,
 				Metadata:      exactMetadata,
-			})
+			}
+			if compatible != nil {
+				binding = *compatible
+			}
+			if err := bindAuthenticatedRuntime(chain, binding); err != nil {
+				r.add("runtime/binding-"+name, true, err, "authenticated runtime view")
+				return
+			}
 			runtimeAuthenticated = true
 			metadata, metadataErr := chain.CheckMetadata()
 			metadataDetail := ""

@@ -170,8 +170,9 @@ func (self *fleetMainnetRuntimeAuthority) viewAt(ctx context.Context, chain *crv
 		return nil, err
 	}
 	view := *chain
-	view.Meta = artifact.Metadata
-	view.Runtime = &types.RuntimeVersion{SpecName: artifact.Version.SpecName, SpecVersion: types.U32(artifact.Version.SpecVersion), TransactionVersion: types.U32(artifact.Version.TransactionVersion)}
+	if err := view.BindRuntimeArtifact(artifact); err != nil {
+		return nil, err
+	}
 	return &view, nil
 }
 

@@ -91,7 +91,9 @@ func adversaryCommitRevealAt(ctx context.Context, cfg *ResolvedConfig, endpoint 
 		return result, fmt.Errorf("authenticate runtime at %s: %w", hash.Hex(), err)
 	}
 	historical := *chain
-	bindAuthenticatedRuntime(&historical, authenticated)
+	if err := bindAuthenticatedRuntime(&historical, authenticated); err != nil {
+		return result, err
+	}
 	read := func(storage string, value any) error {
 		key, keyErr := types.CreateStorageKey(historical.Meta, crv4.PalletName, storage, netuidArg(cfg.Netuid))
 		if keyErr != nil {

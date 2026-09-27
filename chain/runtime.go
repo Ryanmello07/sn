@@ -43,11 +43,8 @@ func AuthenticateFinalizedRuntimeContext(ctx context.Context, chain *crv4.Chain,
 		return nil, FinalizedRuntime{}, errors.New("finalized runtime compatibility lacks explicit authority")
 	}
 	bound := *chain
-	bound.Meta = artifact.Metadata
-	bound.Runtime = &types.RuntimeVersion{
-		SpecName:           artifact.Version.SpecName,
-		SpecVersion:        types.U32(artifact.Version.SpecVersion),
-		TransactionVersion: types.U32(artifact.Version.TransactionVersion),
+	if err := bound.BindRuntimeArtifact(artifact); err != nil {
+		return nil, FinalizedRuntime{}, err
 	}
 	return &bound, FinalizedRuntime{Hash: finalized, Number: uint64(header.Number), Artifact: artifact}, nil
 }

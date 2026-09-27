@@ -65,13 +65,7 @@ func bindFleetRuntime(chain *crv4.Chain, artifact crv4.AuthenticatedRuntimeArtif
 	if chain == nil || artifact.BlockHash == (types.Hash{}) || artifact.Metadata == nil || (!reviewed && !chain.RuntimeArtifactCompatible(artifact)) {
 		return errors.New("refusing to bind an unreviewed fleet runtime artifact")
 	}
-	chain.Meta = artifact.Metadata
-	chain.Runtime = &types.RuntimeVersion{
-		SpecName:           artifact.Version.SpecName,
-		SpecVersion:        types.U32(artifact.Version.SpecVersion),
-		TransactionVersion: types.U32(artifact.Version.TransactionVersion),
-	}
-	return nil
+	return chain.BindRuntimeArtifact(artifact)
 }
 
 // Authenticates and binds metadata for one exact block without leaving a

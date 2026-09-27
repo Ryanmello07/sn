@@ -130,7 +130,9 @@ func readFinalNativeRewardAtV2(ctx context.Context, native *crv4.Chain, at Chain
 	if err != nil {
 		return nil, err
 	}
-	own.Meta = artifact.Metadata
+	if err := own.BindRuntimeArtifact(artifact); err != nil {
+		return nil, err
+	}
 	read := func(name string, value any) error {
 		key, err := types.CreateStorageKey(own.Meta, crv4.PalletName, name, netuidArg(netuid))
 		if err != nil {

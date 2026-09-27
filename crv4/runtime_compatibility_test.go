@@ -270,8 +270,9 @@ func TestProvisionalRuntimeCompatibilityExactArtifactAndFailureRecovery(t *testi
 		if err != nil || second.BlockHash != (types.Hash{5}) || second.Metadata != artifact.Metadata || observations != 1 || metadataReads != 1 {
 			t.Fatalf("compatible artifact not reused: %v observations=%d reads=%d", err, observations, metadataReads)
 		}
-		chain.Meta = artifact.Metadata
-		chain.Runtime = &types.RuntimeVersion{SpecName: version.SpecName, SpecVersion: types.U32(version.SpecVersion), TransactionVersion: 1}
+		if err := chain.BindRuntimeArtifact(artifact); err != nil {
+			t.Fatal(err)
+		}
 		if chain.CurrentRuntimeCompatibilityProfile() != ProvisionalRuntimeCompatibilityProfile {
 			t.Fatal("actual signing domain lost profile")
 		}
@@ -340,6 +341,7 @@ func TestProvisionalRuntimeCompatibilitySourceSignsActualDomainAndRejectsRelabel
 	}
 	identity := RuntimeArtifactIdentity{Version: version, CodeHash: types.Hash{9}.Hex(), MetadataHash: hash}
 	chain.provisionalRuntime.artifacts[identity] = AuthenticatedRuntimeArtifact{BlockHash: types.Hash{4}, GenesisHash: chain.GenesisHash, Version: version, CodeHash: identity.CodeHash, MetadataHash: hash, Metadata: metadata, CompatibilityProfile: ProvisionalRuntimeCompatibilityProfile}
+	chain.runtimeCompatibilityProof = &runtimeCompatibilityProof{owner: chain.provisionalRuntime, identity: identity, metadata: metadata}
 	for _, mecid := range []*uint8{nil, new(uint8)} {
 		prepared, key := sourcePreparedTest(t)
 		prepared.Mecid = mecid

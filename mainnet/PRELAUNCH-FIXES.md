@@ -273,7 +273,7 @@ reopen testnet or override the September 27 closure and implementation inventory
 | RT-03 | Construct and sign each native operation from one view; reconcile stale or uncertain attempts | RT-01, RT-02 | Astra | Planned | Deterministic upgrade races preserve signed history and cause no duplicate transaction. |
 | RT-04 | Replace version-specific live admission in simulator, miner, both validator paths and bootstrap | RT-01, RT-02, RT-03 | Astra | Planned | A compatible upgrade needs no binary rebuild or manually added version entry. |
 | RT-05 | Separate observed runtime from deployment, configuration and approval identity | RT-02, RT-04 | Astra | Planned | A compatible upgrade preserves the plan, approvals, leases, completed actions and observed epochs. |
-| RT-06 | Preserve historical proof reuse and make metadata-cache capacity independent of catalog length | RT-01, RT-02 | Astra | In progress | The CRv4 per-connection metadata cache now uses fixed resident capacity, deterministic least-recent-use eviction, and exact-hash uncached admission when every slot is loading; focused qualification and composed release evidence are pending. Older proofs must remain correctly authenticated; eviction, restart and additional runtime versions must retain valid progress. |
+| RT-06 | Preserve historical proof reuse and make metadata-cache capacity independent of catalog length | RT-01, RT-02 | Astra | In progress | The CRv4 per-connection metadata cache has fixed resident capacity, least-recent-use eviction, and exact-hash uncached admission when every slot is loading. The [proof-ownership correction](evidence/runtime-proof-eviction-20260927.md) separates an authenticated provisional view's authority from metadata residency: eviction preserves retained signatures and exact historical reuse, while fresh identity checks and strict/foreign-owner rejection remain. Composed release and production compatibility qualification remain open; no testnet profile grants mainnet authority. |
 | RT-07 | Suspend only operations affected by an unsupported change and expose an actionable reason | RT-02, RT-04 | Astra | Planned | Independent services continue where their dependencies permit; recovery resumes from saved progress. |
 | RT-08 | Qualify upgrade handling and record the mainnet-readiness evidence | RT-01 through RT-07 | Terra | Planned | Affected normal/race tests and a controlled upgrade during an active integration campaign pass with unchanged approvals and reconciled transactions. |
 | RL-01 | Bind launch attestation to an explicitly approved immutable release and its complete input manifest | — | Astra | Planned | Publishing documentation or advancing main does not invalidate an approved unchanged deployment; changed executable, source, policy, contracts or dependencies still require the appropriate new approval. |
@@ -658,6 +658,21 @@ content-addressed artifacts if the measured bound requires them. Cache bounded
 successful compatibility decisions; do not let transient RPC failures poison
 admission. This cache correction alone does not grant production runtime
 compatibility authority.
+
+**2026-09-27 proof ownership correction.** The separate eight-entry provisional
+metadata cache also acted as the authorization registry. Admitting another
+compatible runtime could evict the artifact between authentication and binding,
+or invalidate a retained source signature's independent runtime view. The
+[qualified correction](evidence/runtime-proof-eviction-20260927.md) gives each
+authenticated artifact and bound view an immutable, connection-owned proof.
+It survives eviction without an unbounded authority registry. Reusing a held
+view repeats exact block version, genesis, consumed API and code checks but
+does not repeat metadata/profile validation or its durable observation.
+Miner, validator, shared chain and simulator binding paths retain the proof;
+strict bindings clear it. A new connection still authenticates against its
+explicit authority and records its own observation. This fixes in-process
+proof lifetime, not durable cross-process trust or production compatibility
+admission; cold caches and restart do not inherit testnet authority.
 
 ## Delivery and acceptance
 

@@ -32,6 +32,7 @@ type authenticatedRuntimeMetadata struct {
 	MetadataHash         string
 	Metadata             *types.Metadata
 	CompatibilityProfile string
+	artifact             crv4.AuthenticatedRuntimeArtifact
 }
 
 type historicalRuntimeArtifactIdentity struct {
@@ -238,6 +239,7 @@ func readRuntimeArtifactWithPolicy(ctx context.Context, chain *crv4.Chain, final
 		MetadataHash:         authenticated.MetadataHash,
 		Metadata:             authenticated.Metadata,
 		CompatibilityProfile: authenticated.CompatibilityProfile,
+		artifact:             authenticated,
 	}, nil
 }
 
@@ -251,13 +253,18 @@ func validateRuntimeMetadataHash(observed, expected string) error {
 
 // Bind a chain to metadata and signing versions authenticated at one immutable
 // finalized hash. The state version has already been checked separately.
-func bindAuthenticatedRuntime(chain *crv4.Chain, authenticated authenticatedRuntimeMetadata) {
-	chain.Meta = authenticated.Metadata
-	chain.Runtime = &types.RuntimeVersion{
-		SpecName:           authenticated.Version.SpecName,
-		SpecVersion:        types.U32(authenticated.Version.SpecVersion),
-		TransactionVersion: types.U32(authenticated.Version.TransactionVersion),
+func bindAuthenticatedRuntime(chain *crv4.Chain, authenticated authenticatedRuntimeMetadata) error {
+	artifact := authenticated.artifact
+	if artifact.Metadata != nil {
+		if artifact.BlockHash != authenticated.FinalizedHash || artifact.Version != authenticated.Version || artifact.CodeHash != authenticated.CodeHash || artifact.MetadataHash != authenticated.MetadataHash || artifact.Metadata != authenticated.Metadata || artifact.CompatibilityProfile != authenticated.CompatibilityProfile {
+			return errors.New("retained runtime artifact differs from its authenticated view")
+		}
+	} else {
+		// Strict historical fixtures and doctor checks construct exact identity
+		// fields directly; they cannot synthesize provisional proof authority.
+		artifact = crv4.AuthenticatedRuntimeArtifact{BlockHash: authenticated.FinalizedHash, Version: authenticated.Version, CodeHash: authenticated.CodeHash, MetadataHash: authenticated.MetadataHash, Metadata: authenticated.Metadata, CompatibilityProfile: authenticated.CompatibilityProfile}
 	}
+	return chain.BindRuntimeArtifact(artifact)
 }
 
 // Interface compatibility does not preserve a signature's runtime domain.
@@ -405,7 +412,9 @@ func verifyReleaseHistoryFinalizedExtrinsicContext(ctx context.Context, chain *c
 		return fmt.Errorf("authenticate finalized extrinsic runtime at %s: %w", blockHash.Hex(), err)
 	}
 	historical := *chain
-	bindAuthenticatedRuntime(&historical, authenticated)
+	if err := bindAuthenticatedRuntime(&historical, authenticated); err != nil {
+		return err
+	}
 	return retryFinalSemanticRPCCall(ctx, nil, releaseRuntimeRPCRetryPolicy(), func(attemptCtx context.Context) error {
 		return historical.VerifyFinalizedExtrinsicContext(attemptCtx, blockHash, extrinsicHash)
 	})
@@ -453,7 +462,9 @@ func dialReleaseSubstrateChainContext(ctx context.Context, cfg *ResolvedConfig, 
 	if err != nil {
 		return closeWithError(err)
 	}
-	bindAuthenticatedRuntime(chain, authenticated)
+	if err := bindAuthenticatedRuntime(chain, authenticated); err != nil {
+		return closeWithError(err)
+	}
 	return chain, authenticated, nil
 }
 

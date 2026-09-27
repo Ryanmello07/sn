@@ -132,13 +132,7 @@ func authenticateReleaseNativeRuntimeAtContext(ctx context.Context, chain *crv4.
 	if artifact.CompatibilityProfile != "" && (cfg.ProvisionalRuntimeCompatibility != artifact.CompatibilityProfile || !chain.RuntimeArtifactCompatible(artifact)) {
 		return errors.New("native runtime compatibility lacks explicit validator authority")
 	}
-	chain.Meta = artifact.Metadata
-	chain.Runtime = &types.RuntimeVersion{
-		SpecName:           artifact.Version.SpecName,
-		SpecVersion:        types.U32(artifact.Version.SpecVersion),
-		TransactionVersion: types.U32(artifact.Version.TransactionVersion),
-	}
-	return nil
+	return chain.BindRuntimeArtifact(artifact)
 }
 
 // authenticatePinnedNativeRuntimeContext selects the canonical finalized head

@@ -141,6 +141,14 @@ Protocol block windows and on-chain rate limits still apply.
 
 At admission, record native and EVM clocks separately. Verify their mapping; do not assume equal height or treat an EVM receipt as native finality. Historical reads must remain at the receipt's authenticated block. Until RT-01 through RT-08 are qualified for production, an unknown runtime stops dependent new signing pending explicit adapter admission. The target operating model automatically admits a compatible consumed profile under the approved compatibility policy, retains exact historical identities and suspends only unsupported operations. A testnet provisional profile alone cannot authorize that production behavior.
 
+Retain the authenticated runtime proof with each historical or signing view;
+metadata-cache eviction must not revoke that view or force its immutable audit
+to run again. The [RT-06 correction](evidence/runtime-proof-eviction-20260927.md)
+implements this ownership boundary for provisional consumers while retaining
+fresh block/chain identity checks, exact signing domains and strict mainnet
+rejection. A new connection must establish its own authority; the correction
+does not qualify automatic production runtime admission or durable proof reuse.
+
 Current source changes matter to this design:
 
 | Subject | Source-backed observation | Bootstrap consequence |

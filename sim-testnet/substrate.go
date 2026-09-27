@@ -1161,7 +1161,9 @@ func (self *SubstrateManager) finalizedManagerContext(ctx context.Context) (*Sub
 		return nil, types.Hash{}, 0, err
 	}
 	chain, manager := *self.chain, *self
-	bindAuthenticatedRuntime(&chain, authenticated)
+	if err := bindAuthenticatedRuntime(&chain, authenticated); err != nil {
+		return nil, types.Hash{}, 0, err
+	}
 	manager.chain = &chain
 	return &manager, authenticated.FinalizedHash, number, nil
 }
@@ -1254,7 +1256,9 @@ func (self *SubstrateManager) releaseHistoryChainAtContext(ctx context.Context, 
 		return nil, err
 	}
 	historical := *self.chain
-	bindAuthenticatedRuntime(&historical, authenticated)
+	if err := bindAuthenticatedRuntime(&historical, authenticated); err != nil {
+		return nil, err
+	}
 	return &historical, nil
 }
 
@@ -1509,7 +1513,9 @@ func (self *SubstrateManager) freeBalanceAtBlockContext(ctx context.Context, acc
 		return 0, fmt.Errorf("authenticate requested native block %d/%s: %w", block, hash.Hex(), err)
 	}
 	view := *self.chain
-	bindAuthenticatedRuntime(&view, authenticated)
+	if err := bindAuthenticatedRuntime(&view, authenticated); err != nil {
+		return 0, err
+	}
 	return readFreeBalanceAtHashContext(ctx, &view, account, hash)
 }
 
@@ -1645,7 +1651,9 @@ func (m *SubstrateManager) SendAsWithRecoveryPrecondition(ctx context.Context, p
 		return types.Hash{}, 0, err
 	}
 	signingChain := *m.chain
-	bindAuthenticatedRuntime(&signingChain, signingRuntime)
+	if err := bindAuthenticatedRuntime(&signingChain, signingRuntime); err != nil {
+		return types.Hash{}, 0, err
+	}
 	var nonce uint32
 	if err := m.chain.API.Client.CallContext(ctx, &nonce, "system_accountNextIndex", signer.Address); err != nil {
 		return types.Hash{}, 0, err
@@ -1900,7 +1908,9 @@ func verifyAuthenticatedFinalizedExtrinsicContext(ctx context.Context, chain *cr
 		return fmt.Errorf("authenticated finalized extrinsic metadata identity: %w", err)
 	}
 	finalizedChain := *chain
-	bindAuthenticatedRuntime(&finalizedChain, authenticated)
+	if err := bindAuthenticatedRuntime(&finalizedChain, authenticated); err != nil {
+		return err
+	}
 	return finalizedChain.VerifyFinalizedExtrinsicContext(ctx, blockHash, extrinsicHash)
 }
 
@@ -2061,7 +2071,9 @@ func verifyCompatibilityGatesAt(chain *crv4.Chain, cfg *ResolvedConfig, finalize
 		return nil, fmt.Errorf("authenticate compatibility-gate runtime: %w", err)
 	}
 	authenticatedChain := *chain
-	bindAuthenticatedRuntime(&authenticatedChain, authenticated)
+	if err := bindAuthenticatedRuntime(&authenticatedChain, authenticated); err != nil {
+		return nil, err
+	}
 	out := map[string]any{}
 	names := make([]string, 0, len(cfg.Hyperparameters.ObservedCompatibilityGates))
 	for name := range cfg.Hyperparameters.ObservedCompatibilityGates {

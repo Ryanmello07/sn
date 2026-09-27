@@ -48,6 +48,9 @@ type AuthenticatedRuntimeArtifact struct {
 	Metadata             *types.Metadata
 	CompatibilityProfile string
 	GenesisHash          types.Hash
+	// Issued only after successful profile validation and durable observation.
+	// Copies retain authority even after the connection evicts cached metadata.
+	compatibilityProof *runtimeCompatibilityProof
 }
 
 // Coordinates one in-flight or successfully published immutable metadata load.

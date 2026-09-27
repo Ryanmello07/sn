@@ -85,6 +85,9 @@ type Chain struct {
 	runtimeArtifacts *runtimeMetadataArtifactCache
 	// Set before sharing the connection, and shared by block-local read views.
 	provisionalRuntime *provisionalRuntimeCompatibility
+	// A bound view owns its authenticated capability independently of cache
+	// residency. It is replaced only while the caller exclusively owns the view.
+	runtimeCompatibilityProof *runtimeCompatibilityProof
 }
 
 // contextSubstrateClient adapts GSRPC's context-aware transport to the

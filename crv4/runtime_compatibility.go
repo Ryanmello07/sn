@@ -21,6 +21,15 @@ type provisionalRuntimeCompatibility struct {
 	artifacts map[RuntimeArtifactIdentity]AuthenticatedRuntimeArtifact
 }
 
+// A caller-owned proof retains the exact admitted object and owner. Cache
+// eviction cannot revoke it or grant authority to another connection or tuple.
+// Published proofs are immutable and safe for concurrent readers.
+type runtimeCompatibilityProof struct {
+	owner    *provisionalRuntimeCompatibility
+	identity RuntimeArtifactIdentity
+	metadata *types.Metadata
+}
+
 // Callers opt in only after validating their explicit testnet provisional
 // authority. This policy is immutable after connection publication; copies of
 // a Chain share its cache and durable observer without changing signing pins.
@@ -49,17 +58,41 @@ func (self *Chain) ProvisionalRuntimeCompatibilityEnabled() bool {
 	return self.provisionalRuntime != nil && self.provisionalRuntime.genesis == self.GenesisHash
 }
 
-// A marker on a candidate object is insufficient. Only this connection's
-// successfully checked and durably observed exact artifact can pass binding.
+// A marker on a candidate object is insufficient. The unexported immutable
+// proof must belong to this owner and match every admitted artifact field.
 func (self *Chain) RuntimeArtifactCompatible(artifact AuthenticatedRuntimeArtifact) bool {
-	if !self.ProvisionalRuntimeCompatibilityEnabled() || artifact.CompatibilityProfile != ProvisionalRuntimeCompatibilityProfile || artifact.Metadata == nil {
+	if !self.ProvisionalRuntimeCompatibilityEnabled() || artifact.CompatibilityProfile != ProvisionalRuntimeCompatibilityProfile || artifact.Metadata == nil || artifact.GenesisHash != self.GenesisHash {
 		return false
 	}
 	key := RuntimeArtifactIdentity{Version: artifact.Version, CodeHash: artifact.CodeHash, MetadataHash: artifact.MetadataHash}
-	self.provisionalRuntime.mu.Lock()
-	defer self.provisionalRuntime.mu.Unlock()
-	actual, exists := self.provisionalRuntime.artifacts[key]
-	return exists && actual.Metadata == artifact.Metadata
+	proof := artifact.compatibilityProof
+	return proof != nil && proof.owner == self.provisionalRuntime && proof.identity == key && proof.metadata == artifact.Metadata
+}
+
+// Bind an already authorized artifact while the caller exclusively owns this
+// Chain view. Strict callers still establish their own exact-hash authority;
+// provisional bindings additionally require the connection-issued proof.
+// Failure leaves both the current view and its retained proof unchanged.
+func (self *Chain) BindRuntimeArtifact(artifact AuthenticatedRuntimeArtifact) error {
+	if self == nil || artifact.BlockHash == (types.Hash{}) || artifact.Metadata == nil {
+		return errors.New("runtime binding artifact is incomplete")
+	}
+	if _, err := canonicalRuntimeArtifactIdentity(RuntimeArtifactIdentity{Version: artifact.Version, CodeHash: artifact.CodeHash, MetadataHash: artifact.MetadataHash}); err != nil {
+		return err
+	}
+	if artifact.CompatibilityProfile != "" {
+		if !self.RuntimeArtifactCompatible(artifact) {
+			return errors.New("runtime binding lacks this connection's authenticated compatibility proof")
+		}
+	} else if artifact.compatibilityProof != nil {
+		return errors.New("provisional runtime proof cannot become strict authority")
+	}
+	self.Meta = artifact.Metadata
+	self.Runtime = &types.RuntimeVersion{
+		SpecName: artifact.Version.SpecName, SpecVersion: types.U32(artifact.Version.SpecVersion), TransactionVersion: types.U32(artifact.Version.TransactionVersion),
+	}
+	self.runtimeCompatibilityProof = artifact.compatibilityProof
+	return nil
 }
 
 // Signing uses the real spec version from the checked metadata, and never
@@ -68,12 +101,9 @@ func (self *Chain) CurrentRuntimeCompatibilityProfile() string {
 	if !self.ProvisionalRuntimeCompatibilityEnabled() || self.Runtime == nil || self.Meta == nil {
 		return ""
 	}
-	self.provisionalRuntime.mu.Lock()
-	defer self.provisionalRuntime.mu.Unlock()
-	for _, artifact := range self.provisionalRuntime.artifacts {
-		if artifact.Metadata == self.Meta && artifact.Version.SpecName == self.Runtime.SpecName && artifact.Version.SpecVersion == uint32(self.Runtime.SpecVersion) && artifact.Version.TransactionVersion == uint32(self.Runtime.TransactionVersion) {
-			return ProvisionalRuntimeCompatibilityProfile
-		}
+	proof := self.runtimeCompatibilityProof
+	if proof != nil && proof.owner == self.provisionalRuntime && proof.metadata == self.Meta && proof.identity.Version.SpecName == self.Runtime.SpecName && proof.identity.Version.SpecVersion == uint32(self.Runtime.SpecVersion) && proof.identity.Version.TransactionVersion == uint32(self.Runtime.TransactionVersion) {
+		return ProvisionalRuntimeCompatibilityProfile
 	}
 	return ""
 }
@@ -89,6 +119,9 @@ func authenticateProvisionalRuntimeArtifact(ctx context.Context, chain *Chain, b
 	for _, identity := range allowed {
 		reviewed, ok := ReviewedRuntimeArtifact(identity.Version)
 		if ok && identity == reviewed {
+			continue
+		}
+		if proof := chain.runtimeCompatibilityProof; proof != nil && proof.owner == chain.provisionalRuntime && proof.identity == identity {
 			continue
 		}
 		chain.provisionalRuntime.mu.Lock()
@@ -127,6 +160,16 @@ func authenticateProvisionalRuntimeArtifact(ctx context.Context, chain *Chain, b
 		}
 	}
 	policy := chain.provisionalRuntime
+	// A retained view owns this immutable proof even when the bounded shared
+	// cache has evicted it. Fresh block/version/code/API checks above still run.
+	if proof := chain.runtimeCompatibilityProof; proof != nil && proof.owner == policy && proof.identity.Version == version && proof.identity.CodeHash == code {
+		for _, identity := range allowed {
+			if identity.Version == version && identity.MetadataHash != proof.identity.MetadataHash {
+				return empty, errors.New("explicit provisional runtime metadata pin changed")
+			}
+		}
+		return AuthenticatedRuntimeArtifact{BlockHash: block, Version: version, CodeHash: code, MetadataHash: proof.identity.MetadataHash, Metadata: proof.metadata, CompatibilityProfile: ProvisionalRuntimeCompatibilityProfile, GenesisHash: genesis, compatibilityProof: proof}, ctx.Err()
+	}
 	policy.mu.Lock()
 	var cached AuthenticatedRuntimeArtifact
 	for key, artifact := range policy.artifacts {
@@ -176,6 +219,9 @@ func authenticateProvisionalRuntimeArtifact(ctx context.Context, chain *Chain, b
 	}
 	if prior, exists := policy.artifacts[key]; exists {
 		artifact.Metadata = prior.Metadata
+		artifact.compatibilityProof = prior.compatibilityProof
+	} else {
+		artifact.compatibilityProof = &runtimeCompatibilityProof{owner: policy, identity: key, metadata: artifact.Metadata}
 	}
 	policy.artifacts[key] = artifact
 	policy.mu.Unlock()
