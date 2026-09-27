@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+
 	"github.com/urfoundation/sn/crv4"
 )
 
@@ -23,6 +25,8 @@ type RegisterRequest struct {
 	Journal      *Journal
 	Apply        bool
 	Output       io.Writer
+	// Optional owner approval repeated before signing/broadcast and at receipt.
+	RuntimeAdmission func(context.Context, types.Hash) error
 }
 
 // RegisterResult reports the economics, the decision, and the submit outcome.
@@ -72,6 +76,11 @@ func RegisterHotkey(ctx context.Context, chain *crv4.Chain, req RegisterRequest)
 		return result, err
 	}
 	result.Runtime = runtime
+	if req.RuntimeAdmission != nil {
+		if err := req.RuntimeAdmission(ctx, runtime.Hash); err != nil {
+			return result, err
+		}
+	}
 	fmt.Fprintf(req.Output, "runtime: %s/%d/%d/%d at finalized block %d (%s)\n", runtime.Artifact.Version.SpecName, runtime.Artifact.Version.SpecVersion, runtime.Artifact.Version.TransactionVersion, runtime.Artifact.Version.StateVersion, runtime.Number, runtime.Hash.Hex())
 	economics, err := ReadRegistrationEconomicsAtContext(ctx, bound, req.Netuid, runtime.Hash)
 	if err != nil {
@@ -111,10 +120,15 @@ func RegisterHotkey(ctx context.Context, chain *crv4.Chain, req RegisterRequest)
 	if err != nil {
 		return result, err
 	}
-	submit, err := SubmitCall(ctx, bound, SubmitRequest{Command: req.Command, Netuid: req.Netuid, Hotkey: req.Hotkey, Signer: req.Coldkey, Call: call, FeeLimitRao: req.FeeLimitRao, Journal: req.Journal, Apply: req.Apply, Output: req.Output})
+	submit, err := SubmitCall(ctx, bound, SubmitRequest{Command: req.Command, Netuid: req.Netuid, Hotkey: req.Hotkey, Signer: req.Coldkey, Call: call, FeeLimitRao: req.FeeLimitRao, Journal: req.Journal, Apply: req.Apply, Output: req.Output, RuntimeAdmission: req.RuntimeAdmission})
 	result.Submit = &submit
 	if err != nil || submit.Receipt == nil {
 		return result, err
+	}
+	if req.RuntimeAdmission != nil {
+		if err := req.RuntimeAdmission(ctx, submit.Receipt.BlockHash); err != nil {
+			return result, err
+		}
 	}
 	uid, registered, err = UIDAtContext(ctx, bound, req.Netuid, req.Hotkey, submit.Receipt.BlockHash)
 	if err != nil {

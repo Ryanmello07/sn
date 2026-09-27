@@ -24,6 +24,8 @@ type SubmitRequest struct {
 	Journal     *Journal
 	Apply       bool
 	Output      io.Writer
+	// Zero selects the current finalized head; exact receipts pass their hash.
+	RuntimeAdmission func(context.Context, types.Hash) error
 }
 
 // SubmitResult reports the signed bytes and, when applied, the canonical
@@ -52,6 +54,11 @@ func SubmitCall(ctx context.Context, bound *crv4.Chain, req SubmitRequest) (Subm
 	if err != nil {
 		return result, err
 	}
+	if req.RuntimeAdmission != nil {
+		if err := req.RuntimeAdmission(ctx, types.Hash{}); err != nil {
+			return result, err
+		}
+	}
 	raw, err := EncodeSignedCall(bound, req.Signer.Ring, req.Call, nonce)
 	if err != nil {
 		return result, err
@@ -67,6 +74,11 @@ func SubmitCall(ctx context.Context, bound *crv4.Chain, req SubmitRequest) (Subm
 	if !req.Apply {
 		fmt.Fprintf(req.Output, "dry run: nothing was broadcast; re-run with --apply to submit\n")
 		return result, nil
+	}
+	if req.RuntimeAdmission != nil {
+		if err := req.RuntimeAdmission(ctx, types.Hash{}); err != nil {
+			return result, err
+		}
 	}
 	if err := req.Journal.SaveRaw(result.ExtrinsicHash, raw); err != nil {
 		return result, err

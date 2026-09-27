@@ -117,15 +117,16 @@ func estimateGas(ctx context.Context, client interface {
 
 // txRequest is a prepared contract call for runTx.
 type txRequest struct {
-	contract   common.Address
-	from       common.Address
-	key        *ecdsa.PrivateKey
-	calldata   []byte
-	nonceFloor uint64
-	gasLimit   uint64 // 0 = estimate + 20% headroom
-	dryRun     bool
-	prepared   func(common.Hash, []byte) error
-	broadcast  func(common.Hash) error
+	contract     common.Address
+	from         common.Address
+	key          *ecdsa.PrivateKey
+	calldata     []byte
+	nonceFloor   uint64
+	gasLimit     uint64 // 0 = estimate + 20% headroom
+	dryRun       bool
+	prepared     func(common.Hash, []byte) error
+	broadcast    func(common.Hash) error
+	admitRuntime func(context.Context, *ethclient.Client, *big.Int) error
 }
 
 // runTx runs the submit lifecycle shared by every relayed transaction: an
@@ -178,6 +179,11 @@ func runTx(
 	if err != nil {
 		return nil, fmt.Errorf("gas price: %w", err)
 	}
+	if req.admitRuntime != nil {
+		if err := req.admitRuntime(ctx, client, nil); err != nil {
+			return nil, fmt.Errorf("runtime admission before EVM signing: %w", err)
+		}
+	}
 	tx := types.NewTx(&types.LegacyTx{
 		Nonce:    nonce,
 		GasPrice: gasPrice,
@@ -200,6 +206,11 @@ func runTx(
 		}
 	} else if _, err := fmt.Printf("prepared: tx %s raw 0x%x\n", signed.Hash(), raw); err != nil {
 		return nil, fmt.Errorf("print prepared transaction: %w", err)
+	}
+	if req.admitRuntime != nil {
+		if err := req.admitRuntime(ctx, client, nil); err != nil {
+			return nil, fmt.Errorf("runtime admission before EVM broadcast: %w", err)
+		}
 	}
 	if err := client.SendTransaction(ctx, signed); err != nil {
 		return nil, fmt.Errorf("send: %w", revertError(err))

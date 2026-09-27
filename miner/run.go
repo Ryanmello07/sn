@@ -102,16 +102,21 @@ Usage:
     provider fleet register --manifest=<path> --hotkey_seed_file=<path> --coldkey_seed_file=<path> --substrate=<ws_url>...
         [--burn_limit_rao=<n>] [--fee_limit_rao=<n>] [--apply | --dry-run]
         [--provisional-runtime-compatibility=<profile> --runtime-observation-dir=<path>]
+        [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
         [-v...]
     provider fleet publish --manifest=<path> --substrate=<ws_url>... --hotkey_seed_file=<path>
         [--provisional-runtime-compatibility=<profile> --runtime-observation-dir=<path>]
+        [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
         [-v...]
     provider fleet bind --manifest=<path> --client_id=<hex> --client_seed_file=<path> --hotkey_seed_file=<path> --valid_from_epoch=<e> --valid_to_epoch=<e> --rpc=<rpc_url>... --relayer_key_file=<path> [--dry-run]
+        [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
         [-v...]
     provider fleet status --manifest=<path> --client_id=<hex> --substrate=<ws_url>... --rpc=<rpc_url>...
         [--provisional-runtime-compatibility=<profile> --runtime-observation-dir=<path>]
+        [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
         [-v...]
     provider fleet revoke --manifest=<path> --client_id=<hex> --client_seed_file=<path> --effective_epoch=<e> --rpc=<rpc_url>... --relayer_key_file=<path> [--dry-run]
+        [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
         [-v...]
     provider proxy auth add [<key>] <proxy_user> <proxy_password> [-f]
     provider proxy auth remove [<key>] [--all]
@@ -171,6 +176,8 @@ Options:
 	--substrate=<ws_url>               Substrate websocket endpoint; repeatable ordered failover.
 	--provisional-runtime-compatibility=<profile>  Explicit testnet consumed-runtime profile.
 	--runtime-observation-dir=<path>   Absolute durable directory required with the provisional profile.
+	--mainnet-runtime-authority=<path>  Independently reviewed exact mainnet fleet runtime authority document.
+	--mainnet-runtime-authority-sha256=<hex>  Approved SHA-256 of the exact authority bytes (64 lowercase hex digits).
 	--manifest=<path>                  Canonical urnetwork-fleet-manifest-v1 JSON file.
 	--client_id=<hex>                  Stable 16-byte UR client identity from the fleet manifest.
 	--client_seed_file=<path>          Raw or hex 32-byte Ed25519 client key seed.

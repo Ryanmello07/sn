@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/stabi"
@@ -88,6 +89,9 @@ type SubmitParams struct {
 	NonceFloor uint64   // optional durable minimum, owned by the calling relayer
 	GasLimit   uint64   // 0 = estimate + 20% headroom
 	DryRun     bool
+	// Additional owner authority on this exact connection: nil height means
+	// current finalized state; a receipt supplies its canonical inclusion height.
+	RuntimeAdmission func(context.Context, *ethclient.Client, *big.Int) error
 }
 
 // SubmitHooks make the signed-transaction durability boundary explicit for
@@ -130,6 +134,11 @@ func submit(ctx context.Context, p SubmitParams, mkPrint intentPrinter, hooks Su
 	if p.ChainID != nil && chainID.Cmp(p.ChainID) != 0 {
 		return nil, fmt.Errorf("chain id mismatch: --chain_id=%s but %s reports %s", p.ChainID, rpcURL, chainID)
 	}
+	if p.RuntimeAdmission != nil {
+		if err := p.RuntimeAdmission(ctx, client, nil); err != nil {
+			return nil, fmt.Errorf("runtime admission before EVM preflight: %w", err)
+		}
+	}
 
 	var printIntent func(gasEst uint64, gasErr error)
 	if mkPrint != nil {
@@ -152,15 +161,23 @@ func submit(ctx context.Context, p SubmitParams, mkPrint intentPrinter, hooks Su
 		}
 	}
 
-	return runTx(ctx, client, chainID, txRequest{
-		contract:   p.Contract,
-		from:       from,
-		key:        p.Key,
-		calldata:   p.Calldata,
-		gasLimit:   p.GasLimit,
-		nonceFloor: p.NonceFloor,
-		dryRun:     p.DryRun,
-		prepared:   hooks.Prepared,
-		broadcast:  hooks.Broadcast,
+	receipt, err := runTx(ctx, client, chainID, txRequest{
+		contract:     p.Contract,
+		from:         from,
+		key:          p.Key,
+		calldata:     p.Calldata,
+		gasLimit:     p.GasLimit,
+		nonceFloor:   p.NonceFloor,
+		dryRun:       p.DryRun,
+		prepared:     hooks.Prepared,
+		broadcast:    hooks.Broadcast,
+		admitRuntime: p.RuntimeAdmission,
 	}, printIntent)
+	if err != nil || receipt == nil || p.RuntimeAdmission == nil {
+		return receipt, err
+	}
+	if err := p.RuntimeAdmission(ctx, client, receipt.BlockNumber); err != nil {
+		return receipt, fmt.Errorf("runtime admission at EVM receipt: %w", err)
+	}
+	return receipt, nil
 }

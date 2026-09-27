@@ -47,6 +47,21 @@ func enableFleetProvisionalRuntimeCompatibility(chain *crv4.Chain, manifest *pro
 
 // Ordered endpoint ownership and cancellation remain the normal fleet path.
 func dialFleetNativeOptionsContext(ctx context.Context, opts docopt.Opts, manifest *protocol.FleetManifest) (*crv4.Chain, string, error) {
+	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
+	if err != nil {
+		return nil, "", err
+	}
+	return dialFleetNativeAuthorityContext(ctx, opts, manifest, authority)
+}
+
+// Commands retain one immutable authority snapshot through dial and signing.
+func dialFleetNativeAuthorityContext(ctx context.Context, opts docopt.Opts, manifest *protocol.FleetManifest, authority *fleetMainnetRuntimeAuthority) (*crv4.Chain, string, error) {
+	if authority != nil {
+		return dialFleetNativeWithEndpointContext(ctx, fleetOpts(opts, "--substrate"), fleetNativeEndpointTimeout, context.WithTimeout, crv4.DialChainContext, func(endpointCtx context.Context, chain *crv4.Chain) error {
+			_, _, err := authority.finalizedView(endpointCtx, chain)
+			return err
+		})
+	}
 	profile := fleetOpt(opts, "--provisional-runtime-compatibility")
 	directory := fleetOpt(opts, "--runtime-observation-dir")
 	if err := validateFleetRuntimeCompatibility(manifest, profile, directory); err != nil {

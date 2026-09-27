@@ -126,7 +126,7 @@ func dialFleetNativeWithContext(ctx context.Context, urls []string, endpointTime
 
 // dialFleetNativeWithEndpointContext owns endpoint cleanup on both dial and
 // identity failures. The default production path above supplies WithTimeout
-// and the exact-v454 authenticator; the injected parameters exist solely for
+// and the release authenticator; the injected parameters exist solely for
 // deterministic cancellation and failover tests.
 func dialFleetNativeWithEndpointContext(ctx context.Context, urls []string, endpointTimeout time.Duration, endpointContext fleetNativeEndpointContext, dial fleetNativeDialContext, authenticate fleetNativeRuntimeAuthenticator) (*crv4.Chain, string, error) {
 	if ctx == nil || endpointTimeout <= 0 || endpointContext == nil || dial == nil || authenticate == nil {
@@ -150,13 +150,13 @@ func dialFleetNativeWithEndpointContext(ctx context.Context, urls []string, endp
 		if err := authenticate(endpointCtx, chain); err != nil {
 			cancel()
 			closeFleetNative(chain)
-			errs = append(errs, fmt.Errorf("%s: runtime identity does not match the release pin: %w", endpoint, err))
+			errs = append(errs, fmt.Errorf("%s: runtime identity does not match the selected authority: %w", endpoint, err))
 			continue
 		}
 		cancel()
 		return chain, endpoint, nil
 	}
-	return nil, "", fmt.Errorf("no release Substrate endpoint answered: %w", errors.Join(errs...))
+	return nil, "", fmt.Errorf("no authorized fleet Substrate endpoint answered: %w", errors.Join(errs...))
 }
 
 // closeFleetNative is deliberately nil-safe because dial/auth failure paths
@@ -224,6 +224,10 @@ const fleetDefaultFeeLimitRao = uint64(10_000_000)
 // economics, refuses a burn above the ceiling, and is a dry run unless
 // --apply is given. Every broadcast is journaled under the provider state.
 func fleetRegister(opts docopt.Opts, manifest *protocol.FleetManifest) error {
+	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	hotkeySeed, err := crv4.LoadSeedFile(fleetOpt(opts, "--hotkey_seed_file"))
@@ -257,7 +261,7 @@ func fleetRegister(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	if err != nil {
 		return err
 	}
-	chain, endpoint, err := dialFleetNativeOptionsContext(ctx, opts, manifest)
+	chain, endpoint, err := dialFleetNativeAuthorityContext(ctx, opts, manifest, authority)
 	if err != nil {
 		return err
 	}
@@ -265,16 +269,21 @@ func fleetRegister(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	fmt.Printf("fleet register: netuid %d hotkey 0x%x via %s\n", manifest.Netuid, manifest.Hotkey, endpoint)
 	_, err = snchain.RegisterHotkey(ctx, chain, snchain.RegisterRequest{
 		Command: "provider fleet register", Netuid: manifest.Netuid, Hotkey: manifest.Hotkey, Coldkey: coldkey,
-		BurnLimitRao: burnLimit, FeeLimitRao: feeLimit, Allowed: []crv4.RuntimeArtifactIdentity{fleetReleaseRuntimeArtifact()},
-		Journal: journal, Apply: mustBoolOpt(opts, "--apply"), Output: os.Stdout,
+		BurnLimitRao: burnLimit, FeeLimitRao: feeLimit, Allowed: []crv4.RuntimeArtifactIdentity{authority.artifactIdentity()},
+		RuntimeAdmission: authority.nativeAdmission(chain),
+		Journal:          journal, Apply: mustBoolOpt(opts, "--apply"), Output: os.Stdout,
 	})
 	return err
 }
 
 func fleetPublish(opts docopt.Opts, manifest *protocol.FleetManifest) error {
+	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	chain, endpoint, err := dialFleetNativeOptionsContext(ctx, opts, manifest)
+	chain, endpoint, err := dialFleetNativeAuthorityContext(ctx, opts, manifest, authority)
 	if err != nil {
 		return err
 	}
@@ -291,6 +300,14 @@ func fleetPublish(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 		return errors.New("hotkey seed does not match manifest hotkey")
 	}
 	hash, _ := manifest.CommitmentHash()
+	if authority != nil {
+		verified, err := authority.publish(ctx, chain, hotkey, manifest.Netuid, hash)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("fleet commitment finalized\n  endpoint: %s\n  netuid: %d\n  hotkey: 0x%x\n  commitment: 0x%x\n  extrinsic: %s\n  finalized_block: %d\n  finalized_hash: %s\n", endpoint, manifest.Netuid, manifest.Hotkey, hash, verified.ExtrinsicHash.Hex(), verified.FinalizedAt, verified.FinalizedHash.Hex())
+		return nil
+	}
 	if _, err := authenticateAndBindFleetRuntimeFinalizedContext(ctx, chain); err != nil {
 		return fmt.Errorf("authenticate fleet runtime before publish: %w", err)
 	}
@@ -349,6 +366,16 @@ func fleetBindingAndSign(opts docopt.Opts, manifest *protocol.FleetManifest) (pr
 }
 
 func fleetBind(opts docopt.Opts, manifest *protocol.FleetManifest) error {
+	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
+	defer cancel()
+	rpcs, err := authority.prepareEvm(ctx, fleetOpts(opts, "--rpc"))
+	if err != nil {
+		return err
+	}
 	binding, clientSignature, hotkeySignature, err := fleetBindingAndSign(opts, manifest)
 	if err != nil {
 		return err
@@ -361,9 +388,10 @@ func fleetBind(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	if err != nil {
 		return err
 	}
-	receipt, err := onchain.Submit(context.Background(), onchain.SubmitParams{
-		Contract: common.Address(manifest.Coordinator), Rpcs: fleetOpts(opts, "--rpc"), Key: relayer,
+	receipt, err := onchain.Submit(ctx, onchain.SubmitParams{
+		Contract: common.Address(manifest.Coordinator), Rpcs: rpcs, Key: relayer,
 		Calldata: calldata, ChainID: new(big.Int).SetUint64(manifest.ChainID), DryRun: mustBoolOpt(opts, "--dry-run"),
+		RuntimeAdmission: authority.evmAdmission(),
 	})
 	if err != nil || receipt == nil {
 		return err
@@ -393,6 +421,10 @@ func finalizedCoordinatorCall(ctx context.Context, manifest *protocol.FleetManif
 }
 
 func fleetStatus(opts docopt.Opts, manifest *protocol.FleetManifest) error {
+	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
 	defer cancel()
 	clientID, err := parseClientID16(fleetOpt(opts, "--client_id"))
@@ -400,16 +432,16 @@ func fleetStatus(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 		return err
 	}
 	want, _ := manifest.CommitmentHash()
-	chain, endpoint, err := dialFleetNativeOptionsContext(ctx, opts, manifest)
+	chain, endpoint, err := dialFleetNativeAuthorityContext(ctx, opts, manifest, authority)
 	if err != nil {
 		return err
 	}
-	native, nativeErr := pinnedFleetCommitmentFinalizedContext(ctx, chain, manifest.Netuid, manifest.Hotkey)
+	native, nativeErr := authority.commitmentFinalized(ctx, chain, manifest.Netuid, manifest.Hotkey)
 	chain.API.Client.Close()
 	if nativeErr != nil {
 		return nativeErr
 	}
-	ret, rpc, err := finalizedCoordinatorCall(ctx, manifest, fleetOpts(opts, "--rpc"), stCoordinator.PackGetFleetBinding(clientID))
+	ret, rpc, err := authority.coordinatorCall(ctx, manifest, fleetOpts(opts, "--rpc"), stCoordinator.PackGetFleetBinding(clientID))
 	if err != nil {
 		return err
 	}
@@ -425,6 +457,12 @@ func fleetStatus(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 }
 
 func fleetRevoke(opts docopt.Opts, manifest *protocol.FleetManifest) error {
+	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
+	defer cancel()
 	clientID, err := parseClientID16(fleetOpt(opts, "--client_id"))
 	if err != nil {
 		return err
@@ -437,13 +475,17 @@ func fleetRevoke(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	if err != nil {
 		return err
 	}
-	ret, _, err := finalizedCoordinatorCall(context.Background(), manifest, fleetOpts(opts, "--rpc"), stCoordinator.PackFleetRevokeDigest(clientID, manifest.Generation, effective))
+	ret, endpoint, err := authority.coordinatorCall(ctx, manifest, fleetOpts(opts, "--rpc"), stCoordinator.PackFleetRevokeDigest(clientID, manifest.Generation, effective))
 	if err != nil {
 		return err
 	}
 	digest, err := stCoordinator.UnpackFleetRevokeDigest(ret)
 	if err != nil {
 		return err
+	}
+	wantDigest, err := (protocol.FleetRevoke{ChainID: manifest.ChainID, Netuid: manifest.Netuid, Coordinator: manifest.Coordinator, ClientID: clientID, Generation: manifest.Generation, EffectiveEpoch: effective}).Digest()
+	if err != nil || digest != wantDigest {
+		return errors.Join(errors.New("fleet revoke digest differs from the local signing domain"), err)
 	}
 	private, err := loadEd25519Seed(fleetOpt(opts, "--client_seed_file"))
 	if err != nil {
@@ -461,9 +503,14 @@ func fleetRevoke(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	if err != nil {
 		return err
 	}
-	_, err = onchain.Submit(context.Background(), onchain.SubmitParams{
-		Contract: common.Address(manifest.Coordinator), Rpcs: fleetOpts(opts, "--rpc"), Key: relayer,
+	rpcs := fleetOpts(opts, "--rpc")
+	if authority != nil {
+		rpcs = []string{endpoint}
+	}
+	_, err = onchain.Submit(ctx, onchain.SubmitParams{
+		Contract: common.Address(manifest.Coordinator), Rpcs: rpcs, Key: relayer,
 		Calldata: calldata, ChainID: new(big.Int).SetUint64(manifest.ChainID), DryRun: mustBoolOpt(opts, "--dry-run"),
+		RuntimeAdmission: authority.evmAdmission(),
 	})
 	return err
 }
