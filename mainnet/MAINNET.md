@@ -89,6 +89,11 @@ lookup using the EVM header's decoded number. Equal block numbers alone are
 not a mapping. Its [Snow evidence](evidence/finalized-mapping-snow-20260927.json)
 remains unapproved until the selected mainnet identity, runtime and source
 artifact are independently reviewed.
+The runtime snapshot and mapping must ultimately be captured under one
+authenticated finalized native hash; two separate latest-head observations
+cannot be joined into one launch-plan authority merely because their chain IDs
+match. Preserve the exact shared hash and recheck both commitments after all
+artifact reads.
 
 The read-only observation at **2026-09-27 04:16:25 UTC** compared Snow VPN
 `http://172.28.208.185:9944` with LAN testnet `http://192.168.1.162:9944`.
