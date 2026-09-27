@@ -280,6 +280,13 @@ charges or automatic post replay. Participant sweep publication, Redis account
 payout increments and statistics remain asynchronous residual work. Keep their
 durability/idempotence, complete settlement conservation, per-payer contention,
 archive capacity and coordinated database/cache restore as open launch gates.
+Source review of `b6f49bdb` found the next specific provider-payment gap:
+the terminal settlement transaction can commit before its in-memory post writes
+`transfer_escrow_sweep`. The payment planner reads those PostgreSQL sweep rows,
+so losing the post can omit a provider payment and a duplicate terminal claim
+does not create it. Require a causal lost-post/rollback/replay test and a durable
+same-transaction or journaled correction before MG-06 closure. Redis summary
+counters are a separate, lower-priority publication path.
 
 **Retained timestamp custody (MG-06/PH-12; source-qualified, 2026-09-27).** Server
 `6e2bcfa7` appends this correction to the v11 server candidate `77cb401e`. The previous

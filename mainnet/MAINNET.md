@@ -419,6 +419,11 @@ state before activation. This does not automatically repair old balances or
 make participant sweep/account payout posts atomic or replay-safe. Their
 durability, full conservation and lock-contention capacity remain open gates;
 the migration catalog through 728 is unchanged by this code slice.
+In particular, the terminal settlement can commit before its in-memory
+participant-sweep post creates `transfer_escrow_sweep` rows consumed by the
+payment planner. A lost post can omit a provider payment; terminal-outcome
+replay alone cannot recreate it. Qualify a durable correction with causal
+lost-post, rollback and replay controls before activation.
 
 ## Contract deployment, custody and initialization
 
