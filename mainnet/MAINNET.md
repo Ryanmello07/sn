@@ -1,13 +1,49 @@
-# Mainnet bootstrap program design
+# Mainnet launch and operations plan
 
-Track required prelaunch corrections in
-[PRELAUNCH-FIXES.md](../mainnet/PRELAUNCH-FIXES.md). Its first workstream replaces
-the version-by-version runtime migration requirement below with automatic
-compatible-upgrade handling. Those fixes are proposed and remain unimplemented.
+Updated 2026-09-27. **Mainnet activation is blocked.** The read-only
+[Snow/LAN RPC comparison](evidence/snow-rpc-route-20260927.json) shows that
+`http://172.28.208.185:9944` currently serves the same **testnet** chain as
+`http://192.168.1.162:9944`: EVM chain ID **945** (`0x3b1`), rather than the
+expected mainnet ID 964. Correct the route and independently approve the
+mainnet chain identity before admitting any signer.
 
-Status: design only, 2026-09-14. This document specifies a future Go entry point at `mainnet/main.go`; that program does not exist yet. No mainnet transaction, node query, deployment, UID removal, or validator startup was performed for this design.
+Sim-testnet is closed with known exceptions at the user's direction. The
+[original R48 report](../sim-testnet/FINAL-4.md) remains a failed provisional
+attempt with **zero completed acceptance epochs**. Its later retained resume
+recovered services with no setup actions dispatched and explicitly retained
+`final_acceptance=false`; it did not produce final acceptance. The process-log
+scanner overrun, missed native epoch, policy-scoped client-key rollover,
+historical R46 handoff provenance bug and usage debt are mapped to concrete
+production work in [the gate tracker](PRELAUNCH-FIXES.md#production-gates-in-execution-order).
+Do not restart testnet or make a passing testnet result a fictional input to
+the mainnet plan.
 
-The design is based on SN commit `a59294e98ea02d05125015ae02cf32f2c0059c8a`. The separately running testnet campaign remains the prerequisite for promotion. Its successful local checks alone do not establish mainnet readiness or completion of `FINAL-2.md`.
+The original bootstrap design was based on SN
+`a59294e98ea02d05125015ae02cf32f2c0059c8a`. Subsequent implementation and
+qualification must use an explicit composed release, including compatible
+SN/server/SDK/Connect/config revisions. Some shared and simulator fixes exist;
+the complete mutating bootstrap, root-validator service and operational repair
+system remain production work. [mainnet/main.go](main.go) now implements only
+the read-only `inspect` and `monitor` foundation; `plan`, `apply`, `resume` and
+root-validator bootstrap are not implemented. The [actual inspect capture](evidence/snow-route-inspect-20260927.json)
+observed chain ID 945 and was rejected against expected mainnet ID 964.
+This plan and its read-only evidence perform no
+mainnet transaction, deployment, UID removal or validator activation.
+
+## Bootstrap prerequisites and current blockers
+
+| Prerequisite | Current disposition and next result required |
+| --- | --- |
+| Owned mainnet RPC and independent identity authority | Snow `:9944` is the testnet route in the retained observation. Correct endpoint/port/routing; obtain separately approved genesis, expected EVM ID 964, native/EVM finalized mapping, code/metadata and node/source identity. An operator-approved mainnet genesis is still outstanding. |
+| Immutable qualified release | Compose the actual SN/server/SDK/Connect/config and contract artifacts, including selected branch fixes and migration order; qualify their real interfaces and publish an approved manifest. Historical R48 builds do not qualify later per-user deposit or zero-price changes. |
+| Exact mainnet census and authority | Read SN25 membership, roles, custody, immutable contracts and locks at one finalized snapshot; resolve reset feasibility and all protected identities before making an executable plan. |
+| Economic and custody decisions | The user selected **owner-recycle for the remaining 90%**. Implement and qualify that path and the 10% native-miner target on the actual runtime; finalize mainnet policy, tolerance, keys/Safe, root-registration protection and spend/count/expiry ceilings. Recycled value is not reserve custody. No testnet allowance carries over. |
+| Production safety and liveness | Close the linked recovery, runtime, policy/identity, settlement and monitoring gates; retain independent history and complete signature/nonce ownership. Testnet provisional exceptions grant no mainnet authority. |
+| Operations and staged acceptance | Install monitor/alerts in the existing telemetry stack, name primary/backup on-call, rehearse bounded repair and rollout/rollback, then collect actual native and settlement evidence after an approved activation. |
+
+Read-only inspection and offline implementation can proceed while required
+inputs remain unresolved. The planner must expose those blockers and refuse
+mutating phases until their exact dependencies and authorization are complete.
 
 ## Requested outcome and decisions
 
@@ -18,21 +54,47 @@ The bootstrap must deliver all four requested outcomes:
 3. Begin provider rewards at **10% of the native miner allocation**. This is not 10% of all subnet emission, not a validator take, and not the head/tail steering parameter.
 4. Operate both an owned **root validator on netuid 0** and an owned **validator on the UR subnet**.
 
-The target UR mainnet netuid is SN25 (netuid 25). The owned mainnet node, keys, spend ceilings, reset mechanism, and treatment of the other 90% remain inputs to the future plan. None has a default mainnet address or financial allowance. Existing testnet spend approvals do not authorize mainnet spend.
+The target UR mainnet netuid is SN25 (netuid 25). The user selected `owner-recycle` for the other 90% on 2026-09-27; this recycles native allocation and does not fund our reserve. The verified mainnet RPC route, keys, spend ceilings, reset mechanism and exact runtime implementation remain inputs to the executable plan. None has a default mainnet address or financial allowance. Existing testnet spend approvals do not authorize mainnet spend.
 
 Two constraints determine the implementation. There is no demonstrated subnet-owner call that arbitrarily clears every miner registration while retaining an arbitrary list of validators. Also, the current UR contracts and validator policy do not provide a standalone switch that changes the native miner allocation to 10%. The planner must expose these as capability decisions, not claim that lowering UID capacity or setting `theta: 0.1` fulfills them. The requested 10% target allows the exact runtime's explicitly established quantization tolerance; a stronger enforceable hard cap is a separate assurance choice, not an additional user requirement.
 
-The initial draft policy is therefore `reset.mode: unresolved` and `emissions.remainder: unresolved`. A complete preview may be produced with those fields unresolved, but it must be visibly non-executable. Resolve the economic mechanism before installing an immutable vault or removing existing registrations. No further clarification is needed to complete this design document.
+The read-only monitor and existing UR validator do not implement either the
+separate root-validator service or the 10% native-miner mechanism. Both remain
+explicit mainnet implementation gates. New zero-price/equal-demand support
+changes operator demand/deposit semantics; it does not by itself cap the native
+miner allocation or choose where the remaining 90% goes.
+
+The draft policy is `reset.mode: unresolved` and **`emissions.remainder: owner-recycle`**. A preview remains non-executable while reset capability, the runtime-specific 10%/90% mechanism or other required inputs are unresolved. Qualify the selected economic mechanism before installing an immutable vault or removing existing registrations. The remainder choice is settled; its implementation and exact signed production policy remain work.
 
 ## Source and runtime boundary
 
-The current published Subtensor source inspected here is [commit `67dcf7f791dc495064c293f080a0702cb433e51e`][subtensor-commit], dated 2026-09-07, following the release-455 merge. The official repository now resolves to `RaoFoundation/subtensor`; official documentation is at `bittensor.com/docs`. These are source observations, **not an attestation that mainnet is running that Wasm**.
+The September 14 design inspected Subtensor [commit `67dcf7f791dc495064c293f080a0702cb433e51e`][subtensor-commit], dated 2026-09-07, following the release-455 merge, in `RaoFoundation/subtensor`. The source-specific capability observations below describe that baseline, **not an attestation of the current mainnet Wasm**. Recheck them against the selected live runtime and approved artifacts before planning any action.
 
-The future `inspect` command must authenticate one finalized native block and its corresponding canonical EVM block using a separately verified, operator-owned mainnet node. Require an independently approved genesis hash, EVM chain ID 964, native chain identity, complete runtime version, `:code` hash, metadata hash, node build identity, and the reviewed runtime source/artifact mapping. Verify signed extensions, call argument types, storage layouts, and relevant precompile behavior. A matching `specVersion` alone is insufficient; [the existing runtime authenticator](../crv4/runtime_identity.go) already binds more than that number.
+The production inspection gate must extend the current `inspect` command to authenticate one finalized native block and its corresponding canonical EVM block using a separately verified, operator-owned mainnet node. Require an independently approved genesis hash, EVM chain ID 964, native chain identity, complete runtime version, `:code` hash, metadata hash, node build identity, and the reviewed runtime source/artifact mapping. Verify signed extensions, call argument types, storage layouts, and relevant precompile behavior. A matching `specVersion` alone is insufficient; [the existing runtime authenticator](../crv4/runtime_identity.go) already binds more than that number.
 
-The authorized endpoint `http://192.168.1.162:9944` currently serves the verified **testnet** identity and must therefore be rejected for mainnet now. This is not a permanent blacklist of that numeric address: a later owned mainnet deployment at the same address can be admitted only after separate authorization and a fresh mainnet genesis/runtime attestation. Chain identity is authoritative. Do not infer a mainnet address by changing a port, switch to a named public network, inherit a library's default provider, or use a public fallback. RPC URLs, resolved upstreams, TLS identities where applicable, and local proxy routes are part of the plan. A loopback proxy is acceptable only when its sole upstream is the approved owned mainnet node and its process configuration is authenticated. Preserve the configured zero artificial RPC pacing; bound concurrency and cancel failed work instead of adding delays or alternate providers. Protocol block windows and on-chain rate limits still apply.
+The read-only observation at **2026-09-27 04:16:25 UTC** compared Snow VPN
+`http://172.28.208.185:9944` with LAN testnet `http://192.168.1.162:9944`.
+Both returned `system_chain=Bittensor`, `eth_chainId=0x3b1` (945), node version
+`4.0.0-dev-e18ca67f1a0`, genesis
+`0x8f9cf856bf558a14440e75569c9e58594757048d7b3a84b5d25f6bd978263105`,
+and finalized native head
+`0x3e9119c77dcb7b12557035023f9ad3dbadc60f24443d01c0f32a6c14d81f35d7`.
+The [raw identity record](evidence/snow-rpc-route-20260927.json) has
+`same_identity_and_head=true`. This is an observed **testnet genesis and route**,
+not an approved mainnet genesis. A node's `Bittensor` display name is insufficient
+network authority. Both routes must be rejected for mainnet in this state.
 
-At admission, record native and EVM clocks separately. Verify their mapping; do not assume equal height or treat an EVM receipt as native finality. Historical reads must remain at the receipt's authenticated block. A runtime change stops new signing until a newly qualified adapter and a newly reviewed plan are installed.
+A later mainnet deployment at either address requires the correct owned route,
+fresh readback and independent operator approval of the genesis/runtime domain.
+Do not guess a different port or inherit a library/public fallback. Bind RPC URLs,
+resolved upstreams, TLS identities where applicable and local proxy routes in the
+plan. A loopback proxy must have the approved owned mainnet node as its sole
+upstream. Preserve zero artificial request pacing on that route; bound
+concurrency, retries and cancellation. A separately approved read-only comparison
+node is an independent observer, never a silent signing/submission fallback.
+Protocol block windows and on-chain rate limits still apply.
+
+At admission, record native and EVM clocks separately. Verify their mapping; do not assume equal height or treat an EVM receipt as native finality. Historical reads must remain at the receipt's authenticated block. Until RT-01 through RT-08 are qualified for production, an unknown runtime stops dependent new signing pending explicit adapter admission. The target operating model automatically admits a compatible consumed profile under the approved compatibility policy, retains exact historical identities and suspends only unsupported operations. A testnet provisional profile alone cannot authorize that production behavior.
 
 Current source changes matter to this design:
 
@@ -122,19 +184,19 @@ The existing UR `theta` divides provider distribution between direct head miners
 
 Count entitlement once: native rewards to provider-owned head coldkeys, and provider entitlement funded through tail pools, are the two payment channels. A tail capture followed by a claim is one reward, not two. Target measurement, and any separately selected cap, covers earned entitlement and locked miner reward, not just liquid claims completed so far. Existing valid claims retain their original terms.
 
-### Explicit policies for the other 90%
+### Selected owner-recycle policy for the other 90%
 
 | Policy | Feasibility and consequences | Design disposition |
 | --- | --- | --- |
-| `owner-recycle` | If final Yuma incentive is directed to the runtime-recognized owner-hotkey set, that portion is recycled. It is not placed in our reserve. | Candidate path closest to existing custody architecture, but requires a changed economic policy and a proven final-incentive split. |
-| `owner-burn` | The same owner-directed withholding path can burn instead. Burn/recycle supply effects differ. | Same proof requirements; never choose implicitly from an unset runtime value. |
-| `reserve-custody` | Routes the remainder into an explicitly defined reserve position, with separately enforced accounting and no provider claim on it. | Requires a demonstrated origin/custody route and new economic design. The current vault has no “send 90% to reserve” operation. |
-| `deferred-provider-liability` | Pays 10% now while preserving 90% as future provider claims. | This is payment deferral, not a 10% reward allocation; it does not satisfy the clarified request unless explicitly redefined. |
-| `native-runtime-cap` | A runtime-enforced miner sub-allocation could provide the strongest whole-subnet boundary. | No suitable owner-callable primitive was established in the inspected source. Requires an actually deployed, qualified capability. |
+| `owner-recycle` | If final Yuma incentive is directed to the runtime-recognized owner-hotkey set under recycle mode, that portion is recycled. It is not placed in our reserve or retained as a future provider claim. | **Selected by the user, 2026-09-27.** Implement an explicit mainnet policy successor and prove the actual 10% provider / 90% recycle outcome within the approved runtime tolerance. |
+| `owner-burn` | The same owner-directed withholding path can burn instead. Burn/recycle supply effects differ. | Not selected; verify the actual on-chain mode is recycle. |
+| `reserve-custody` | Routes the remainder into an explicitly defined reserve position, with separately enforced accounting and no provider claim on it. | Not selected. The current vault has no “send 90% to reserve” operation; owner-recycle provides no reserve credit. |
+| `deferred-provider-liability` | Pays 10% now while preserving 90% as future provider claims. | Not selected; recycling does not create a deferred provider liability. |
+| `native-runtime-cap` | A runtime-enforced miner sub-allocation could provide the strongest whole-subnet boundary. | Not the selected mechanism. No suitable owner-callable primitive was established in the inspected source. |
 
 The existing implementation withholds owner-directed incentive in both burn and recycle modes and records the withheld ratio. Choosing recycle does not avoid that accounting. [Owner-directed distribution][subtensor-coinbase] The ratio reduces the subnet's demand share before the emission gate; a 90% withholding policy is economically consequential and does not imply an exact 90% reduction in final TAO allocation after renormalization and gating. [Allocation formula][subtensor-shares]
 
-Release 1.0 explicitly rejected owner-directed burning as its head/tail steering strategy. Selecting either withholding path here therefore requires an explicit replacement of that economic policy, not a hidden bootstrap flag. Preserve the independent-validator objective and signed weight caps: do not raise a cap, create arbitrary owner recipients, or displace validators merely to force a 90% weight destination. [Whitepaper, head/tail decision](../WHITEPAPER.md#138-headtail-split-θ-in-one-mechanism-chosen-not-two-mechanisms-not-owner-burn)
+Release 1.0 explicitly rejected owner-directed burning as its head/tail steering strategy. The selected owner-recycle launch policy must therefore be encoded as an explicit economic-policy successor, with its activation and accounting independently verified. Preserve the independent-validator objective and signed weight caps: do not raise a cap, create arbitrary owner recipients, or displace validators merely to force a 90% weight destination. [Whitepaper, head/tail decision](../WHITEPAPER.md#138-headtail-split-θ-in-one-mechanism-chosen-not-two-mechanisms-not-owner-burn)
 
 A weight proposal is not an enforceable payout fraction. Independent validator weights, Yuma clipping, bonds, activity, permits, normalization and u16 rounding affect final incentive. For either owner-withholding path, qualify the complete runtime outcome against the admitted validator set and review adjacent/adversarial weight states. The draft assurance mode is `observed-native-target`: demonstrate the actual 10% allocation within `Q(k)`, disclose sensitivity to other validators, and monitor subsequent deviation. It does not promise that other validators can never change the outcome. If a stronger `enforced-cap` mode is selected, prove that ceiling under all admitted conditions or report `EMISSION_CAP_UNENFORCEABLE`; an after-the-fact monitor is not enforcement. Halting our validator does not revoke other validators' weights or stop already queued native emission. [Consensus implementation][subtensor-epoch]
 
@@ -146,7 +208,7 @@ Claim “started at 10%” only after the observed native outcomes meet the targ
 
 A reserve design must specify a different enforceable custody path before deployment: who owns each head and pool registration, which precompile call transfers each tranche, which principal and collateral are excluded, who can authorize the transfer, and how cumulative provider liabilities are bounded. Moving all head miners behind a new contract would change release 1.0's provider-owned direct-payment model. Such a design requires its own contract/policy qualification and migration plan; a coordinator upgrade cannot retrofit withdrawal authority into an old vault.
 
-Recommended planning order: assess owner-recycle and owner-burn against the exact runtime and signed policy first, compare their economic effects, then assess a new metered custody design only if the user selects retention of the remainder. Leave `remainder: unresolved` until one complete, reviewable policy is chosen. Do not deploy an immutable contract set while this decision can still invalidate its custody layout.
+Implement the selected owner-recycle path against the exact runtime: authenticate the recognized owner-hotkey set and recycle mode, preserve the signed cap and validator independence, and prove the finalized 10% provider / 90% recycle split with exact interval accounting. Keep the recycle fraction separate from native rounding and supply-side effects. No reserve transfer or new reserve-custody contract is implied. Do not deploy an immutable contract set before the selected path and custody layout are qualified.
 
 ## Contract deployment, custody and initialization
 
@@ -226,21 +288,47 @@ Manage both services with independent state directories, signer permissions, log
 
 ## Go CLI and action model
 
-`mainnet/main.go` should contain argument parsing, signal handling and exit-status mapping. Keep the plan builder pure after its authenticated snapshot inputs are supplied. Separate chain adapters, signer interfaces, state storage and supervisors so preview cannot reach a transaction submission path.
+[mainnet/main.go](main.go) currently contains signer-free `inspect` and `monitor`
+commands. `inspect --rpc URL` emits a content-hashed identity snapshot. Supplying
+any expectation requires all of `--expected-chain`, `--expected-genesis` and
+`--expected-evm-chain-id`; `monitor` always requires all three. The monitor emits
+JSON lines for `ok`, `rpc-error`, `rpc-integrity`, `identity-mismatch`,
+`finality-conflict` or `finality-stalled`, with a default 30-second interval after
+each completed sample and five-minute stall threshold. It detects identity/finality conflicts,
+rechecks the prior finalized block when the head advances, validates JSON-RPC
+response version/ID, and rejects response bodies exceeding 1 MiB. Hash comparisons
+accept equivalent hexadecimal casing. Malformed, inconsistent or oversized RPC
+evidence emits terminal `rpc-integrity`; that status, `identity-mismatch` and
+`finality-conflict` exit with code 3. Availability failures remain `rpc-error`
+observations and do not establish healthy state. The command contains no signer
+or submitter. Focused normal/race tests and vet pass; the retained Snow rejection
+demonstrates actual wrong-network refusal.
 
-Suggested commands:
+This is a single-route identity/finality observer. It does not yet attest runtime
+code/metadata, map EVM receipt finality, compare independent nodes, inspect SN25
+custody/validator/settlement state, persist a restart checkpoint, deliver alerts,
+or execute repairs. Those are MG-07 and related production gates. An identity
+snapshot hash proves the captured bytes, not operator approval or node truth.
+
+Keep the future plan builder pure after authenticated snapshot inputs are supplied.
+Separate chain adapters, signer interfaces, state storage and supervisors so
+preview cannot reach a transaction submission path.
+
+Target command surface; only the limited `inspect`/`monitor` above exists:
 
 | Command | Behavior |
 | --- | --- |
-| `inspect` | Read-only owned-node identity, authority, census, capability, balances, custody and validator observation; emit a hashed snapshot. |
-| `plan` | Build canonical plan/actions and a readable review from config, pinned snapshot, artifacts and testnet acceptance. No signing or submission. |
+| `inspect` | Extend the existing read-only identity capture with authority, census, capabilities, balances, custody and validators; emit a hashed snapshot. |
+| `monitor` | Extend the existing read-only identity/finality loop with durable checkpoints, independent comparisons, complete domain health and existing-stack alert delivery. |
+| `plan` | Build canonical plan/actions and a readable review from config, pinned snapshot, artifacts, closed testnet exceptions and production qualification. No signing or submission. |
 | `apply --accept-plan HASH` | Execute only the exactly reviewed plan with matching signed authorization, prerequisites and ceilings. |
 | `status` / `verify` | Read-only journal reconciliation and current/finalized postcondition verification. |
 | `resume --accept-plan HASH` | Recover in-flight actions, verify retained receipts and continue the same approved graph without duplicate spend. |
 | `services start` / `services stop` | Run or join the plan's admitted services; starting write-capable validators is an explicit authorized phase. |
 | `report` | Produce a complete acceptance or incomplete/blocked report with evidence references and realized spend. |
+| `repair plan` / `repair apply --accept-plan HASH` | Produce and execute only the exact approved, bounded repair graph; share the existing durable transaction owner and lifetime ledger. Not implemented. |
 
-No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every mutating command takes an explicit run directory and accepted plan hash. `inspect` may be run before testnet acceptance using the future authorized mainnet read endpoint; irreversible apply cannot.
+No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 
 The canonical plan binds schema and action-format versions; exact config/policy bytes; resolved configuration roots and runtime routes; source/dependency/artifact/binary identities; owned-node and runtime identities; native/EVM snapshot hashes; all public roles; census and reset classifications; actual transaction payloads/origins; expected CREATE addresses and nonces; phase dependencies; validity windows; spend/count caps; and the chosen emission-denominator/remainder policy. Hash canonical bytes with domain separation. The signed authorization names that hash, network, expiry, allowed phases and ceilings. Reject duplicate fields, unknown schema versions, overflow, unexpanded substitutions and ambiguous addresses.
 
@@ -276,7 +364,9 @@ release:
   contract_manifest: null
   binary_manifest: null
   policy_file: null
-  accepted_testnet_final2: null
+  closed_testnet_report: sim-testnet/FINAL-4.md
+  known_exceptions_manifest: null
+  production_qualification_manifest: null
 roles:
   subnet_owner: null
   evm_deployer: null
@@ -299,7 +389,7 @@ emissions:
   provider_fraction: {numerator: 1, denominator: 10}
   assurance: observed-native-target
   quantization_tolerance_manifest: null
-  remainder: unresolved
+  remainder: owner-recycle
   mechanism_manifest: null
   activation_boundary: null
 root_validator:
@@ -330,6 +420,15 @@ operations:
   signer_manifest: null
   service_manifest: null
   worker_limit: null
+  monitor_manifest: null
+  independent_reader_manifest: null
+  telemetry_and_alert_routes: null
+  slo_manifest: null
+  repair_authorization: null
+  primary_on_call: null
+  backup_on_call: null
+  incident_evidence_store: null
+  rollback_compatibility_manifest: null
 ```
 
 The complete schema also requires action-level value/gas/fee bounds, collateral exposure, swap price/minimum-output limits, claim/deposit policy caps and fee reserves. Totals aggregate economic debits once across EVM and native representations. Refunds are recorded separately; they do not replenish lifetime authorization unless the plan explicitly defines that rule. Reverted transactions consume fee budget. New attempts, repairs and replacements retain the same lifetime ledger.
@@ -338,11 +437,11 @@ The complete schema also requires action-level value/gas/fee bounds, collateral 
 
 | Phase | Admission and work | Completion evidence |
 | --- | --- | --- |
-| 0. Testnet acceptance | Authenticate actual `FINAL-2.md`, its source lock, local gate transcripts, chain/run evidence and finalized reconciliation. | All required testnet outcomes passed; no substituted read-only preview or incomplete run. |
-| 1. Mainnet inspect and review | Verify node/runtime, complete census, authorities, capabilities, keys, artifacts, reset method, 90% policy and budgets. | Canonical feasible plan and exact operator authorization; no unresolved full-scope action. |
+| 0. Evidence and production qualification | Preserve failed R48 and known exceptions; compose the launch release and close applicable MG-02 through MG-07 pre-activation checks on a controlled production-path rehearsal. Read-only identity discovery may proceed independently. | Exact release/qualification/exception manifests; no fabricated testnet pass or provisional authority carried into mainnet. |
+| 1. Mainnet inspect and review | Verify node/runtime, complete census, authorities, capabilities, keys, artifacts, reset method, selected owner-recycle mechanism and budgets. | Canonical feasible plan and exact operator authorization; no unresolved full-scope action. |
 | 2. Cutover/reset | Execute the selected supported reset and configuration changes within their native windows. | Complete before/after census, preserved identities and accounted removals/locks. |
 | 3. Contracts and registration | Deploy exact custody graph, anchor evidence, register approved pool/escrow/head/validator identities. | Canonical finalized receipts, code/getter proofs and registration ownership. |
-| 4. Stake and service readiness | Apply bounded stake/deposit plans; admit both services and the second UR validator/operator safety set. | Current root membership, UR eligibility, authenticated runtime configs and service ownership. |
+| 4. Stake and service readiness | Apply bounded stake/deposit plans; admit both services, the second UR validator/operator safety set, independent monitor and on-call. | Current root membership, UR eligibility, authenticated runtime configs, single service ownership, delivered test alerts and qualified repair/rollout policy. |
 | 5. Emission activation | At the approved native boundary, activate the qualified 10% mechanism and corresponding signed UR policy. | Native incentive outcome, remainder destination, weights, stake/collateral deltas and policy epoch agree. |
 | 6. Acceptance and operations | Observe the specified production interval, settle/claim genuine accrued emission and reconcile all funds. | Self-contained final report; all four requested outcomes satisfied with no open cap/custody exceptions. |
 
@@ -366,6 +465,162 @@ Recovery rules:
 
 There is no automatic rollback of a finalized UID removal, registration burn or immutable deployment. Recovery uses a newly reviewed bounded forward action where supported. Old custody contracts and claim artifacts remain served until their obligations have actually ended. An emergency service stop does not imply that native emission stopped or that the vault may stop honoring claims.
 
+## Continuous monitoring and repair
+
+Mainnet operation needs three separate owners: an independent read-only monitor,
+service supervisors, and a bounded repair controller. The monitor observes and
+reports; supervisors recover an approved process generation; the controller
+executes only already authorized actions. Implement and rehearse this separation
+under MG-07/PH-28 before production activation. The current `monitor` command
+supplies only the identity/finality foundation described above.
+
+### Independent observations and existing telemetry
+
+Run the monitor separately from bootstrap and validator/taskworker lifecycles,
+without signing keys, database write credentials or authority to stop those
+services. Give it its own bounded read budget, durable finalized-block cursor,
+incident store and health signal. Replay from the last verified checkpoint after
+restart; never replace missing observations with an assumed healthy interval.
+Subscriptions wake readers but do not establish finality. Pin events, storage,
+runtime interpretation and native/EVM mapping to the same authenticated block.
+
+Compare the approved owned mainnet RPC against a separately operated,
+independently authorized canonical source at the **same finalized block hash**.
+Different latest heights alone are lag, not a reorganization. Validate both
+identities, their available archive scope and the same transaction/event/storage
+facts; preserve disagreements. The second source is read-only and cannot become
+a submission fallback. Until it is provisioned, expose `independent_rpc=false`;
+Snow and the LAN alias of one backend provide no independent confirmation.
+
+Export SN metrics and structured incident events into the existing xops
+Grafana/Mimir/Loki stack, using its Prometheus-compatible exporter and host
+Fluent Bit paths. Reuse [deployment infrastructure](../../xops/main/ansible/playbook-dbs.yml)
+and [telemetry isolation requirements](../../xops/VULNSCAN2.md): restricted
+telemetry identity, scoped credentials, bounded journald retention and durable
+log cursors. Do not mount signer material, a full vault or Docker control into
+the observer or dashboard. Keep bounded metric labels to deployment, component,
+role and error class; put transaction hashes, client-level detail and exact
+evidence references in the incident store. Monitor telemetry delivery itself
+through a separately hosted dead-man alert and named escalation route.
+
+Every dashboard distinguishes unavailable, pending, healthy and failed facts:
+
+| Domain | Evidence and progress to observe |
+| --- | --- |
+| Chain and authority | Genesis/EVM domain, approved runtime capabilities and code/metadata, finalized age/height, native/EVM mapping, node agreement, endpoint/config/release drift and archive availability. |
+| Validators | Both UR validators' hotkey ownership, permits, non-self eligibility, fresh proof domains through each operator, native source/EMA continuity, durable intents and finalized revealed/applied weight rows. Root seat, stake/retention margin, child delegation and basket are a separate role. |
+| Operators and providers | Current policy and evidence activations, migration version, processed client-key registrations and peer pins, ready provider count, fresh signed usage and bounded queues. HTTP 200 and process liveness do not establish registration or proof success. |
+| Settlement and treasury | Exact source epoch/root/artifact, immutable usage snapshots and uncredited debt; required/observed deposits under the selected policy; pool capture, carry, commitments, finalization, claims and outstanding liabilities. Reconcile native units, collateral/principal and fee/lifetime allowances. Measure the 10% native target and approved tolerance independently of claimed payouts. |
+| Transactions and deadlines | Every signed attempt, nonce owner, uncertain send, replacement/cancellation, canonical receipt and postcondition; blocks remaining to policy, commit, reveal, renewal, claim and evidence-retention deadlines. |
+| Services and resources | Process generation and restart count, last useful checkpoint, database/artifact health, CPU/memory, RPC concurrency, queue age, log byte lag and disk bytes/inodes. No healthy status from a stale lock file. |
+
+### Alert taxonomy and initial SLOs
+
+The following are proposed starting targets. Freeze them in the operations
+manifest after a representative load/recovery rehearsal and before activation.
+They are not claims of measured availability. Protocol deadlines remain exact
+block boundaries; human response targets cannot extend them. Use a lightweight
+health loop while expensive replay proceeds under a separate finite budget.
+
+| Alert class | Starting detection/SLO target | Response |
+| --- | --- | --- |
+| Integrity, authority or accounting conflict | Emit immediately on an authenticated wrong-chain/domain, finalized-hash conflict, invalid signature, custody/conservation mismatch or unauthorized spend. No averaging or transient-error allowance. | Critical page; suspend dependent new signing through its owner and preserve evidence. Continue independent observation and valid claim service where safe. Primary acknowledges within 5 minutes; backup escalation after 5 minutes without acknowledgement. |
+| Monitor or alert path absent | Target a health/progress event at least every 30 seconds; warn after 90 seconds, page after 2 minutes without one. Test alert delivery before activation and after routing changes. | Independent dead-man page; restore observation first. Missing monitor samples remain a gap, not a healthy interval. |
+| RPC/read availability or stalled finality | Record every error as unavailable; warn after 2 minutes of persistent read failure, page after 5. Warn at 3 minutes without finalized advance and page at 5, after calibrating to admitted chain cadence. | Bounded retries/reconnect on approved routes, inspect chain-wide versus node-local failure, and block new actions lacking required fresh evidence. Never compare an unread default value with an approved one. |
+| Deadline or readiness risk | Recompute at least every 30 seconds and on each new finalized block. Warn when remaining blocks fall below the greater of 20% of the window and twice measured p95 completion/finality cost. Page when the admitted completion margin is no longer available, or a required role remains unavailable for 2 minutes. | Resume the exact pending action if authorized; otherwise escalate a concrete forward plan. Record a missed boundary as missed. Both UR validators and every required operator/domain must remain independently visible. |
+| Settlement and reward deviation | Evaluate every due finalized event/epoch and native emission interval; immediate critical alert for conservation or authority failure, deadline alert for missing work, explicit alert for a 10% result outside approved `Q(k)`. | Trace source usage through liabilities and receipts. Do not fabricate usage, increase a governed deposit to a native minimum, or count a late root as timely. |
+| Resource exhaustion or replay backlog | Warn below 20% free bytes/inodes or when forecast capacity is under 24 hours; page below 10% or a shorter time than safe intervention. Alert if log/queue lag exceeds its approved window or foreground work loses its completion margin. | Reduce bounded background admission or restore capacity within policy; never delete signed evidence or increase spend/capacity authority silently. |
+| Recovered incident / recurring degradation | Retain first failure, retry count, recovery evidence and recurrence by stable incident ID. Noncritical pages acknowledged within 15 minutes; unresolved incidents carry an owner and next action. | Review open incidents daily and recurrence/capacity/runtime-change trends weekly. Create a scoped fix with causal regression and affected-path qualification. Recovery does not erase the failure. |
+
+Select recovery-time objectives from real replay and protocol windows before
+launch. Durable intent and signed-transaction recovery has **zero tolerated loss
+of acknowledged records**; a retry may repeat observation but may not repeat an
+economic effect. Local crash recovery requires fsync and restore evidence. A
+zero-loss host-failure objective additionally requires independent durable
+replication before acknowledging/broadcasting signed work; periodic backups
+alone cannot provide it. Bind that recovery design before enabling automated
+spend. Publish actual recovery times and observation gaps alongside the target
+after each exercise or incident.
+
+### Repair authority and durable execution
+
+Provide a standing signed repair envelope for routine operations the operator
+chooses to automate. It binds chain/deployment, immutable release, allowed
+action kinds and exact targets, signers/nonce domains, prerequisites, expiry,
+maximum attempts and action counts, per-action value/gas/fees, total lifetime
+debits, price/minimum-output limits and permitted postconditions. Automation can
+continue within that envelope without asking again for each identical retry.
+Changing its scope or exceeding a bound requires a new exact reviewed plan.
+Default monetary limits are zero until supplied; alert severity never grants
+transaction authority.
+
+| Action | Automation boundary |
+| --- | --- |
+| Reconnect/retry reads, replay authenticated immutable evidence | Allowed within the monitor/worker's finite budget and unchanged authority. Preserve successful checkpoints and typed failures. |
+| Restart an approved service or resume a stopped worker | Allowed by its service manifest only after joining the old process/children and retaining signer, volume and configuration identity. Cap restarts; escalate exhaustion. |
+| Reconcile a previously signed transaction | Read receipts, dispatch, postconditions and nonce state automatically. Rebroadcast the exact bytes or make a replacement only when the owning approved action explicitly permits it and its bounds still hold. |
+| Scheduled renewals, routine claims or approved funding repairs | Automatic only under their own signed targets, amount/count/price/deadline caps and lifetime ledger. A schedule alone is not spending permission. |
+| Policy/rate/source/native-history changes, new registration or stake, destructive reset, custody/contracts, runtime admission, release/schema or endpoint changes | Operator-gated exact plan with the actual required coldkey/Safe/governance authority. No self-approval, permission widening, backdated success, historical signature rewrite or guessed SQL credit. |
+
+Use one durable action/nonce owner shared with the production submitter. Append
+and fsync an incident-bound intent before signing, then exact signed bytes before
+broadcast. Journal `planned → intent-recorded → signed → submitted → finalized
+→ postcondition-verified` with explicit failed, canceled and unresolved branches.
+Store replacement/cancellation attempts separately; retain all paid fees and
+outstanding liabilities across releases and retries. Before any repeat, locate
+the original exact hash and reconcile canonical inclusion, dispatch, finality,
+nonce and economic postcondition. A timeout is an unknown outcome. A new nonce
+or a local database status is not evidence that the old action failed.
+
+The independent monitor confirms the repair's postcondition at finalized state.
+Only then close the incident, retaining its history and action receipts. A local
+repair success with missing chain evidence stays pending. Recovery cannot erase
+failed acceptance assertions or turn an observation gap into a completed epoch.
+
+### On-call, incident evidence and rollout
+
+Before activation, name a primary and backup operator, establish the alert route
+and access to read-only diagnostics and the appropriate signing process, and
+rehearse this runbook:
+
+1. Acknowledge the incident and pin its deployment/release, actual process owners,
+   last good checkpoint and current native/EVM blocks. Distinguish an unavailable
+   read from an authenticated mismatch before deciding containment.
+2. Stop only dependent new signing or unsafe work through its existing owner.
+   Keep monitor, immutable history and valid earned claims available. Preserve
+   signed and in-flight transactions for reconciliation; stopping a process does
+   not stop native emission or remove custody obligations.
+3. Seal an incident bundle: exact config/plan/runtime hashes, raw RPC responses
+   and receipts, relevant signed artifacts, log byte ranges/cursors, queue state,
+   liabilities, alert timeline and attempted repairs. Restrict signed transaction
+   bytes and redact credentials; hash public evidence separately.
+4. Reproduce the actual failure and inspect adjacent callers. Use the standing
+   repair only if every precondition still holds; otherwise prepare the concrete
+   bounded forward plan or code fix, qualify it, and obtain its required authority.
+5. Reconcile transactions and databases before retry or service replacement.
+   Verify the result independently, observe sustained proof/settlement progress,
+   and retain unresolved consequences as open incidents. Record detection,
+   response and recovery times and the follow-up owner.
+
+Roll out immutable images with the qualified source/dependency/config manifest.
+Run read-only shadow checks, then a canary with no duplicate signer and enough
+capacity to preserve the required validator/operator quorum. Stage additive
+database migrations before compatible consumers; specifically rehearse populated
+client-key policy rollover and immutable usage writer/reader compatibility.
+Advance only after current-domain readiness, resource bounds, fresh proofs and
+finalized chain postconditions are observed. Thresholds and canary duration are
+approved in the rollout manifest before execution.
+
+Keep the previous image and an explicit state-format compatibility matrix.
+Rollback is allowed only if the old reader/writer can safely interpret the
+current schema, policies and signed state. An irreversible migration, finalized
+registration, immutable deployment or economic transfer requires forward
+recovery; restoring an old filesystem cannot undo it. Always reconcile in-flight
+transactions and join old owners before changing images. Restore tests must
+prove journals, keys and artifacts remain usable with no duplicate spend. End a
+rollout with an independent state comparison and updated incident/capacity
+records, not just a green process list.
+
 ## Integration with this repository
 
 Reuse importable production packages: [crv4](../crv4) for authenticated runtime/native reads and transaction evidence; [stabi](../stabi) for the release ABI surface; [protocol](../protocol) for policy and domain encoding; [validator](../validator) for UR validation and evidence; and existing cryptographic/address/Merkle primitives where their units and domains match.
@@ -386,7 +641,23 @@ Use interfaces for `FinalizedReader`, `NativeSigner`, `EvmSigner`, `SafeSigner`,
 
 ## Acceptance evidence and implementation qualification
 
-Promotion is gated on the actual full testnet campaign: 33 roles, 1,000 providers, 202 candidates, 200 head positions and two UR validators; five accelerated epochs; the scheduled 360/60/180/6 testnet production policy; and three fully observed production epochs with native/economic/claim reconciliation, as required by that campaign. Authenticate its final report and referenced evidence on the final qualified source. Do not substitute the producer or aggregate local gate alone, a canceled setup, an approved plan, or a partially observed epoch. The testnet report must explicitly close remaining repair/renewal work and finality. The mainnet build has its own release identity and the 50,400-block production policy.
+The closed testnet campaign requested 33 roles, 1,000 providers, 202 candidates,
+200 head positions and two UR validators, five accelerated epochs and a later
+production-policy observation. Those requirements were not completed by R48:
+its original result is failed with zero complete acceptance epochs, and later
+retained recovery remains non-accepting. Preserve that report and its explicit
+exceptions as inputs. Mainnet is not blocked on reopening that campaign; it is
+blocked on the [production gates](PRELAUNCH-FIXES.md#production-gates-in-execution-order)
+and the actual capabilities, accounting and operating evidence required here.
+
+Qualify the composed production release on a controlled integration deployment
+with the relevant failure/recovery cases. Reuse historical tests only with exact
+source/dependency and requirement mapping. A simulator-only patch, canceled
+setup, signed plan, read-only monitor or partially observed epoch cannot replace
+the required evidence. Keep one manifest of implemented, qualified, deployed
+and operationally observed states, with every remaining exception explicit.
+Mainnet has its own release identity, budgets and 50,400-block policy; testnet
+provisional authority and accelerated timing do not carry over.
 
 The future mainnet acceptance bundle contains:
 
@@ -394,7 +665,7 @@ The future mainnet acceptance bundle contains:
 | --- | --- |
 | Reset | Signed target/preserve census, exact finalized removal mechanism, before/after hotkey generations and UID mapping, unchanged required custody/validator ownership, residual stake/lock report. |
 | Contracts | Source/toolchain/artifact hashes, predicted/actual addresses and nonces, creation receipts, runtime bytecode and immutable getters, Safe authority, one-shot links and evidence anchor, preserved custody invariants. |
-| 10% miner rewards | Explicit denominator and activation boundary; exact native interval accounting; finalized incentive outcomes including collateral; direct-head and tail entitlement reconciliation; identified 90% disposition; runtime-derived quantization tolerance and actual target result; proof of a stronger hard cap only if that assurance was selected. |
+| 10% miner rewards | Explicit denominator and activation boundary; exact native interval accounting; finalized incentive outcomes including collateral; direct-head and tail entitlement reconciliation; verified 90% owner-recycle outcome and mode, with no reserve credit; runtime-derived quantization tolerance and actual target result; proof of a stronger hard cap only if that assurance was selected. |
 | Root validator | Real netuid-0 membership and owner mapping, bounded admission receipt, stake/retention observation, child policy, actual basket strategy, live owned service and runtime identity. |
 | UR validator | Real UR eligibility and live applied/revealed CRv4 rows, authenticated evidence/usage, service signer, second UR validator and operator safety minima. |
 | Financial/finality closure | Actual spend including failures, remaining allowance, all transaction owners joined, native/EVM finality mapping, open liabilities and future operations clearly reported. |
@@ -417,7 +688,16 @@ Run bounded normal tests on the frozen implementation, then appropriate race tes
 
 ## Open inputs before an executable mainnet plan
 
-The concrete next work is to finish testnet acceptance, then obtain the owned mainnet node/runtime attestation and a full UR census. That establishes whether literal miner removal is possible with the available authority. In parallel, choose the remaining-90% policy and qualify the actual 10% native allocation with its explicit runtime granularity and assurance level. Select root custody/registration protection, supply actual identities and budgets, and qualify the implementation and any changed economic contracts. Each unresolved item remains visible in the preview and final report; none is converted into an assumed successful outcome.
+First correct Snow's mainnet RPC mapping: the inspected `:9944` route is testnet.
+Obtain an independently approved mainnet genesis/runtime identity and complete
+SN25 census. Compose and qualify the production source/dependency release with
+the retained R48/R46 lessons, then implement the bootstrap mutation paths and
+separate root-validator service. Resolve the actual reset capability and implement the selected 90% owner-recycle
+policy with the observed 10% native allocation and runtime tolerance, root custody and
+registration protection, real identities and budgets. Install independent
+monitoring, existing-stack alerts, bounded repair authority and the on-call
+runbook before activation. Each unresolved item remains visible in the plan and
+report; the closed testnet effort is not relabeled as a pass.
 
 [subtensor-commit]: https://github.com/RaoFoundation/subtensor/commit/67dcf7f791dc495064c293f080a0702cb433e51e
 [subtensor-admin]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs

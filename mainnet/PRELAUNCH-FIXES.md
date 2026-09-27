@@ -1,5 +1,102 @@
 # Mainnet prelaunch fixes
 
+Updated 2026-09-27. This is the production gate tracker for UR mainnet
+SN25 (netuid 25). Sim-testnet is **closed with known exceptions, without final
+acceptance**. There is no R49 requirement or instruction to resume it. Mainnet
+hardening may proceed; launch readiness must be established on the selected
+production release. No mainnet deployment or spend is authorized by this tracker.
+
+## Closed testnet evidence and remaining lessons
+
+Keep the original result, later recovery, and code qualification distinct:
+
+| Evidence | Established result | Production obligation |
+| --- | --- | --- |
+| [Original R48 terminal report](../sim-testnet/FINAL-4.md) and [result](../sim-testnet/peerreview/evidence/FINAL-4-R48/result.json) | Run `20260926T202718.915754659Z-release-1.0` stopped on 2026-09-26 at 22:48:54 UTC with **zero complete acceptance epochs**, five failed assertions out of six, and `final_acceptance=false`. The signed boundary is not an accepted interval. | Preserve the failed result and excluded observations. Qualify actual production behavior independently. |
+| R48 process-log gate | Two API stderr backlogs exceeded a scanner's 64 MiB delta; cursors did not advance. Validator steering also reported a missed approved native epoch 1696. | Adopt durable chunked scanning without starving foreground work; reconcile a separately authorized future native boundary for both validators. |
+| Post-R48 scanner repair, SN `df7ae2c4` | Implemented in [process_log_gate.go](../sim-testnet/process_log_gate.go), with a causal regression and adjacent tests in the aligned R48 workspace. | This is simulator code and qualification, not a repaired R48 verdict or proof of the production image. Integrate and measure backlog/fault-heartbeat behavior on the release. |
+| Retained recovery and client-key rollover | Recovery initially had zero ready providers despite live APIs. Server branch `fix/r48-client-key-policy-runtime-20260926` contains `4b2c4587` and `9da52551`; its policy-domain history fix removed that registration blocker. The [retained resume receipt](/mnt/data/sn-testnet/qualification/r48-continuation-20260926/resume-server-key-fix.json) records `retained_runtime=true`, `setup_actions_dispatched=0`, and **`final_acceptance=false`**. | PF-05 has a concrete server fix and a retained recovery result. Merge/lock the compatible server, migrations and consumers; prove processed-key and proof readiness prospectively. A successful resume cannot supply missed acceptance epochs. |
+| R46 handoff replay during later recovery | [Continuation stderr](/mnt/data/sn-testnet/qualification/r48-continuation-20260926/release-r48c1.stderr) reports `provisional lifecycle cleanup observation differs from retained handoff bytes`. The [R46 handoff](../sim-testnet/runs/ur-subnet-testnet-v1-attempt-4/runs/20260925T172403.199659160Z-release-1.0/fleet-lifecycle-handoff.json) retains its earlier approved lifecycle. The reader used the current recovery approval while validating historical provenance. | Treat this as a historical-approval validator bug, not demonstrated byte corruption. Candidate SN fixes `93949ee3` and `bbed208d` retain the authenticated historical approval through cold and cached replay; composed qualification and release inclusion remain open. Never rewrite the old handoff or relax current authority. |
+| R48 immutable usage repair | Server `74893863` and the [guarded repair evidence](../sim-testnet/peerreview/evidence/FINAL-4-R48/repair-review.json) quarantine 4,183 epoch-658 contracts and retain 3,082,728 reported bytes as uncredited debt. Both epoch-658 roots missed their on-chain commit window; later epoch-659 commits are separate chain progress. | Deploy compatible snapshot writers/readers, retain the debt exception, and prove new usage, deposits, roots, capture and claims end to end. Neither a local close nor later roots repair the missed interval. |
+
+The local recovery links are retained operational evidence, not portable release
+artifacts. Hash and include the relevant sanitized records in the production
+qualification manifest before relying on them outside this workspace. Closure
+of testnet does not erase native-history, economic, archive, custody or coverage
+exceptions.
+
+## Production gates in execution order
+
+These gates consolidate the stable RT/RL/PF/PH IDs below. `Planned` means the
+production work is missing; `In progress` means identified implementation or
+qualification exists but closure is incomplete; `Blocked` names a required
+input or demonstrated incompatibility; `Done` requires the stated evidence.
+An implemented simulator fix is not a completed production gate. Owners below
+are component responsibilities; assign a named operator before rollout.
+
+| Gate / priority | Owner and linked items | Current state | Next action and completion evidence |
+| --- | --- | --- | --- |
+| MG-01 / P0 — Mainnet identity | Node operator; RT-01/02, PH-04/14/18/19 | **Blocked:** [Snow RPC readback](evidence/snow-rpc-route-20260927.json) shows `172.28.208.185:9944` serves EVM chain **945**, the same genesis and finalized head as LAN testnet. | Correct the endpoint/port/route, obtain independent operator approval of mainnet genesis, and capture finalized native/EVM mapping, expected EVM ID 964, code/metadata and node/source identity. Produce a signer-free snapshot; reject the present route. |
+| MG-02 / P0 — Reproducible production release | Release owner; RL-01, PH-06/16 | **In progress:** the integrated server candidate passes pinned and combined SN/server normal/race selectors; the complete production release manifest, broader qualification and rollout remain open. | Lock SN, server, SDK, Connect, config, toolchain and contract artifacts. Include the selected fixes by commit and file hash; build and qualify that exact composition, then approve an immutable manifest. A docs-only branch advance must not change its authority. |
+| MG-03 / P0 — Durable recovery and complete evidence | Transaction/recovery owner; PF-01/03/04, PH-01/02/05/07/17/21/24/25/26 | **In progress:** journal, cache, warmup and scanner implementations exist; R46 historical approval correction remains on a candidate branch. | Migrate required facilities into production owners; reconcile every original/replacement/cancellation signature and historical approval. Crash/restart and cold/warm-cache qualification must preserve finalized work, custody, failed evidence and single ownership without repeated spend. |
+| MG-04 / P0 — Runtime and native continuity | Chain/validator owner; RT-01 through RT-08, PH-03/04/10/18/19/22 | **In progress:** reviewed artifacts and a testnet provisional capability profile exist. Automatic production compatibility and the missed-native-boundary recovery are not accepted. | Implement block/purpose-bound immutable views and operation profiles, construction/signing from one view, finite caches and explicit future native handoff. Rehearse compatible/incompatible upgrades, pending transactions and both validator paths; no backdated native success. |
+| MG-05 / P0 — Policy and identity rollover | Server/validator owner; PF-02/05, PH-07/13/27 | **In progress:** server policy-domain rollover and retained resume are evidenced above; current source integration passes selected normal/race checks, with live operator cutover and readiness still open. | Migrate both operators before APIs, retain old signed histories, activate all validator/operator evidence domains and authenticate persistent peer-key transitions. Prove populated migration, restart, processed-key readiness and fresh proof progress through a future policy boundary. |
+| MG-06 / P0 — Economics, settlement and custody | Protocol/contracts/treasury owner; PH-11/12/14 and R48 usage lessons | **Blocked:** the user selected 90% owner-recycle, but the native 10%/90% mechanism is not implemented; identities/budgets and usage/settlement exceptions remain open. | Implement and qualify the 10% native-miner target and selected 90% owner-recycle path, verifying the actual runtime mode and final incentives. Recycling does not fund the reserve. Bind the selected priced or zero-price semantics explicitly. Prove immutable usage, exact deposits where required, capture/carry/claims, native rounding, liabilities and the NetEscrow ordering repair. Do not infer success from traffic volume. |
+| MG-07 / P0 — Continuous monitoring and bounded repair | Operations owner; PH-15/28, PH-01/02/07/09/11/16 | **In progress:** signer-free `inspect`/`monitor` identity and finality commands now exist with focused normal/race tests; independent domain monitoring, deployed alerts and the repair controller remain open. | Implement the [operating model](MAINNET.md#continuous-monitoring-and-repair), approve its SLOs and repair envelopes, provision primary/backup on-call, and rehearse outage, wrong chain, missed deadline, uncertain send, full disk and monitor failure. Independent alerts must survive a stopped application and a stopped controller. |
+| MG-08 / P0 — Mainnet bootstrap and both validator roles | Bootstrap/governance owner; PH-14, [MAINNET.md](MAINNET.md) | **Blocked:** the mutating bootstrap and separate root-validator service remain pending; a read-only identity/monitor foundation does not supply them. Census, reset capability, custody and approvals are inputs. | Implement read-only inspect/plan first. Resolve literal reset feasibility, root registration protection, two UR validators plus the separate netuid-0 role, Safe authority, nonce graph and bounded funding. Produce an executable exact-hash plan only after its prerequisites close. |
+| MG-09 / P1 — Sustained resource and storage capacity | Service/storage owner; PH-08/09/20/23/26 | **Planned:** bounded simulator mechanisms exist; production sizing and restoration receipts are missing. | Measure backlog, bytes, memory, RPC work and queue fairness with the proposed fleet and retention. Bind finite capacity with reviewed margin; prove missing/full-volume behavior, backup restore, multi-gigabyte log drainage and foreground deadline headroom. Required before unattended operation. |
+| MG-10 / P0 — Qualification, rollout and actual acceptance | Release/operations owner; PH-16 and every affected gate | **Planned:** no accepted composed mainnet release. | Before activation, complete production-path causal regressions, affected normal/race suites and a controlled upgrade/outage/restart/repair rehearsal; retain failed and reused scopes. After bounded activation, observe at least three complete native emission intervals and one full 50,400-block UR settlement/claim cycle before declaring program acceptance. Record pending live evidence as pending. |
+
+Start with MG-01's read-only route correction and MG-02's source composition.
+Then close the recovery, runtime, policy, settlement and monitoring dependencies
+before MG-08 can apply a reviewed bootstrap plan. MG-09 must close before
+unattended operation. MG-10 separates pre-activation qualification from the
+post-activation observations that can only be collected on a running mainnet.
+Record implementation, exact qualification selector/results, deployed image,
+independent observation, remaining action and evidence owner for every gate.
+Historical testnet gates below are lessons and reusable evidence, not an active
+instruction to restart the closed campaign.
+
+## Implemented building blocks and missing production work
+
+| Surface | Already present | Still required |
+| --- | --- | --- |
+| Native-chain authentication | [Exact artifacts](../crv4/runtime_identity.go), [reviewed catalog](../crv4/reviewed_runtime.go), [consumed-interface profile](../crv4/runtime_profile.go) and [provisional admission](../crv4/runtime_compatibility.go). | Mainnet operation authority, immutable read/signing views across every consumer, bounded catalog-independent reuse, semantic/economic checks and controlled upgrade evidence. Provisional admission is explicitly testnet-only. |
+| Recovery and service profile | Simulator journal/plan caches and retained warmup cited under PF-01/04; shared server [subnet-operator workload profile](../../server/taskworker/workload_profile.go) under PF-02. | Production package ownership, complete signature discovery, migration/readiness composition, deployed evidence and finite foreground latency. |
+| Client-key rollover | Server `4b2c4587`, projection regression `9da52551`, successful non-accepting retained resume; integrated migrations 724–726 at `0633780c`. | Bind the composed release and coordinate live operator cutover with all consumers; prove current-domain readiness, retained pins and historical replay on the deployed image. |
+| Usage and logs | Qualified epoch-658 usage quarantine `74893863`; immutable usage guard and append-only archive in server `0633780c`; scanner `df7ae2c4`. | Compatible writer/reader fleet and prospective complete settlement; independent streaming observability with durable byte coverage. Historical debt remains uncredited. |
+| Historical lifecycle provenance | Candidate `93949ee3` and `bbed208d` preserve original approved context, including cache reconstruction. | Integrate and qualify the actual recovery reader; include corruption, wrong-approval, changed-config and strict/current-use negative controls. |
+| Production control plane | UR validator and contract/protocol packages; read-only [inspect/monitor foundation](main.go) and [actual Snow identity rejection](evidence/snow-route-inspect-20260927.json). | Mutating mainnet bootstrap, distinct root-validator service, 10% native-miner mechanism, independent domain monitor, authorized repair controller and deployed alerts/runbooks. |
+
+**Server integration (MG-02/05/06; In progress, 2026-09-27).** The root server
+checkout is on `codex/mainnet-server-hardening-20260927` at `0633780c`, containing
+migration 724 (client-key policy domains), 725 (immutable usage guard) and 726
+(append-only archive with atomic delete capture and live/archive reads). The
+[usage custody note](../../server/local/st-provider-usage-custody.md) records
+migration order, reader/writer compatibility and the prospective history boundary.
+Pinned normal/race tests passed. After the branch switch, the combined selector
+against current SN/server source passed normally and under race for server,
+model, monitor and controller. Owned disposable services were cleaned up
+successfully using the recorded ownership recipe. This is source integration
+qualification, not a live migration or production deployment. Coordinated live
+cutover, NetEscrow ordering, durable capacity, economics and the complete release
+gate remain open.
+
+**RPC read admission (MG-04/MG-07; In progress, 2026-09-27).** The shared
+[JSON validator](../protocol/json_unique.go) and bounded
+[miner](../miner/sn_rpc.go)/[validator](../validator/chain_http_envelope.go) RPC
+readers now reject duplicate keys, including equivalent escaped spellings,
+trailing JSON and HTTP redirects. Targeted normal/race qualification is still
+in progress. The miner transient-read operation now has a tested 90-second
+retry budget; final broader qualification remains pending. MG-04 and MG-07
+remain open; these changes do not close MG-02's full production release gate.
+
+The September 27 SN root includes newer per-user deposit and zero-price policy
+interfaces (`9b386fe8`). Old R48 pricing and build receipts cannot qualify those
+new semantics. Freeze the intended launch policy and matching server/SDK APIs
+under MG-02/06; do not resolve an interface mismatch by silently changing an
+already signed policy or relabeling old economic evidence.
+
 ## Acceptance-window attribution from R44
 
 R44 terminal diagnostics exposed two ways to draw a false conclusion from
@@ -14,11 +111,11 @@ artifact, a missing historical field, an exact-window match and a changed
 root/hash. The testnet repair is SN `f673ca9a`; composed release qualification
 and deployment evidence are still required before this item is Done.
 
-Updated 2026-09-22. This is the canonical tracker for fixes to complete before
-the mainnet launch of the UR subnet (Bittensor SN25, netuid 25). The initial workstream is automatic handling of compatible
-Subtensor runtime upgrades. The [production hardening plan](#production-hardening-from-sim-testnet)
-adds the lessons from the wider testnet finalization. Implementation and
-qualification remain incomplete; no completed production fix is claimed.
+The detailed RT/RL/PF tracker began on 2026-09-22. Its requirements and historical
+qualification receipts remain below; the production gates above determine the
+current execution order. Automatic handling of compatible Subtensor upgrades
+and the wider [hardening requirements](#production-hardening-from-sim-testnet)
+still need production integration and qualification.
 
 For each item, record its implementation commit and relevant test or operational
 evidence before marking it done. Add newly discovered adjacent issues here.
@@ -30,7 +127,8 @@ closes, including the source revision and release containing the fix.
 For each implementation update, record the remaining action, the affected
 checks and any earlier results being reused. Passing tests alone does not mark
 a fix done when its required deployment or operational evidence is still pending.
-The active testnet finalization continues independently.
+Dated incident accounts below describe their state at the time. They do not
+reopen testnet or override the September 27 closure and implementation inventory.
 
 ## Prelaunch fix tracker
 
@@ -51,9 +149,9 @@ The active testnet finalization continues independently.
 | PF-04 | Diagnose validator warmup and support bounded, resumable semantic startup | — | Astra | In progress | Retained validators produce fresh proofs through both operators; startup exposes the pending criterion, uses a justified warmup budget, and preserves valid recovery progress without counting stale proofs as acceptance. |
 | PF-05 | Give client-key histories an authenticated policy-scoped rollover | — | Astra | In progress | A scheduled policy change starts a new signed generation-1 segment for each client; old signed rows remain byte-identical and historically readable, current readers select only the active domain, and all miners regain processed-key readiness without bypassing it. |
 
-Prioritize PF-01, PF-02 and PF-04 for the current testnet recovery. RT-01 through RT-08
-form the subsequent runtime-resilience workstream required before mainnet
-launch; RL-01 can proceed independently. Link the bootstrap implementation and
+PF-01, PF-02 and PF-04 have simulator implementation evidence; their remaining
+work is production adoption and verification under MG-03/05. RT-01 through RT-08
+form MG-04; RL-01 is part of MG-02. Link the bootstrap implementation and
 launch sequence from [MAINNET.md](../mainnet/MAINNET.md) rather than maintaining
 a second launch plan here.
 
@@ -68,16 +166,16 @@ The mainnet implementation order is:
    RT-02, RT-03 and PF-03. These establish the shared interfaces and preserve
    ownership of transactions across upgrades or interrupted startup.
 2. Remove routine restart requirements: RT-04 through RT-07. Work on RL-01
-   independently, and finish the remaining operational verification for PF-01
-   and PF-02 using the current testnet run.
+   independently, and finish production verification for PF-01 and PF-02 on the
+   selected release in the controlled rehearsal.
 3. Complete RT-08 against the composed release, reusing unaffected results.
    Batch independent failures, fix their causes and adjacent paths, and rerun
    the affected checks. An interruption does not erase completed observations.
 
 For each update, attach the implementation commit, affected checks, preserved
 results, deployment evidence and next action to its stable ID. A new issue only
-blocks operations that depend on it. Keep future mainnet work out of the active
-testnet launch path unless that run exposes a concrete dependency.
+blocks operations that depend on it. Preserve testnet evidence as a closed source; qualify changed mainnet consumers
+without restarting its acceptance campaign.
 
 PF-05 follows the 2026-09-24 testnet policy-rate rollover. The new policy
 activated and its runtime was published, but all 20 provider swarms reported
@@ -98,9 +196,10 @@ that barrier. Any consumer using persistent peer key pins also needs an
 authenticated policy transition for its domain ratchet, rather than clearing
 pins. Do not treat HTTP success as
 processed client-key success or mark a provider ready before its current-domain
-registration completes. The active testnet resume retained its supervisor on the
-bounded readiness timeout, so the repair should reuse that generation's durable
-setup evidence rather than redoing on-chain actions.
+registration completes. That testnet resume retained its supervisor on the
+bounded readiness timeout. The later server branch and retained resume receipt
+above establish recovery progress without repeated setup; production closure
+still requires the composed migration and readiness evidence.
 
 RL-01 follows an actual 2026-09-16 launch interruption: the qualified executable
 was built at `541e13cf`, then publishing reports advanced main to `0fd7ffc0`.
@@ -113,7 +212,8 @@ The proposed replacement must authenticate a complete approved release;
 matching only Go files is insufficient. Add deterministic controls for
 documentation-only publication, unrelated later releases, unauthorized input
 drift, revoked releases and restart from the retained approved release.
-This proposed change is not an additional gate for the current testnet run.
+Its production implementation is tracked by MG-02; the historical launch remains
+an unchanged failed attempt.
 
 PF-01 follows source review during the 2026-09-16 managed startup.
 [Carried-action preparation](../sim-testnet/carried_preparation.go) looks up each
@@ -207,7 +307,7 @@ cancellations, malformed or conflicting records, partial export, idempotent
 restart and an uncertain submission. Require complete nonce coverage, unchanged
 spend limits and no duplicate execution. The current qualified collector's
 supported restoration path remains available during implementation; replacing
-it is not a prerequisite for the active testnet continuation.
+the automated production replacement remains open under MG-03.
 
 PF-04 follows the managed resume that ran 09:41:17–10:20:25 UTC on
 2026-09-16. All 1,000 fleet checks and 4,673 carried-action checks completed.
@@ -277,8 +377,8 @@ timeout nor healthy process endpoints alone closes this item.
 
 Proposed design, 2026-09-16. Compatible chain upgrades should continue without
 a subnet rebuild, plan migration, repeated funding, audit restart or lost soak
-progress. The active testnet finalization continues with its qualified release;
-this document describes the subsequent implementation.
+progress. The closed testnet evidence supplies regressions; this document
+describes the subsequent production implementation.
 
 ## Why upgrades currently interrupt us
 
@@ -449,8 +549,8 @@ Astra (`gpt-6-astra`, effort `max`) diagnoses and implements; Terra
 (`gpt-5.6-terra`, effort `medium`) runs affected tests normally and under race.
 The final integration exercise upgrades a controlled runtime while the
 subnet is active and demonstrates continued required observations, reconciled
-transactions and unchanged approvals. This architecture work is not an extra
-preparation gate for the currently running testnet recovery.
+transactions and unchanged approvals. It is a production qualification gate,
+not a request to reopen testnet.
 
 ## Production hardening from sim-testnet
 
@@ -461,8 +561,8 @@ SN `eb926565`, the [full finalization requirements](../FINALIZE.md),
 [independent peer review](../sim-testnet/peerreview/verify/README.md), retained
 failure bundles, and the corrective commits cited below. The
 [September 17 handoff](../FINALIZE-HANDOFF.md) is historical evidence of a stopped
-qualification, not the current execution instruction. The testnet run and its
-remaining acceptance work continue separately.
+qualification, not the current execution instruction. The September 27 closure
+and MG gates above supersede its instructions to continue testnet.
 
 The recurring production risk is that an ordinary interruption can cross too
 many ownership boundaries: an RPC failure invalidates startup, startup stops
@@ -474,8 +574,9 @@ separate claim requiring complete evidence.
 
 This section is a production implementation backlog. A committed simulator
 repair is supporting evidence, not proof that the operator, miner, validator,
-bootstrap or deployed mainnet path has the same protection. All PH items start
-`Planned`; existing RT/RL/PF IDs retain their recorded status and evidence.
+bootstrap or deployed mainnet path has the same protection. PH status denotes
+remaining production work; the implementation inventory above records available
+code without claiming production closure. Existing RT/RL/PF evidence is retained.
 Do not copy testnet provisional flags or import the `sim-testnet` executable
 into production. Extract required generic facilities into neutral packages and
 qualify the production consumers described in [MAINNET.md](../mainnet/MAINNET.md#integration-with-this-repository).
@@ -485,7 +586,7 @@ qualify the production consumers described in [MAINNET.md](../mainnet/MAINNET.md
 `P0` protects funds, authority or required production liveness and must close
 before mainnet activation. `P1` is required operational hardening before an
 unattended mainnet launch; it can proceed alongside the P0 implementation.
-Neither label adds a new gate to the current testnet run. Astra authors and
+These are production gates following the closed testnet effort. Astra authors and
 reviews the implementation; Terra (`gpt-5.6-terra`, effort `medium`) runs the
 affected tests and initial triage. The component column identifies the code
 owner boundary, not an additional agent or approval requirement.
@@ -506,7 +607,7 @@ owner boundary, not an additional agent or approval requirement.
 | PH-12 | P0 | Contracts, operator and claims: complete settlement conservation and authorization | PH-02, PH-04, PH-11 | Planned |
 | PH-13 | P0 | Provider, operator and validator protocol: identity isolation and durable proof progress | PH-01, PH-03, PH-07 | Planned |
 | PH-14 | P0 | Governance/bootstrap: actual capabilities, activated policy and both validator roles | RT-02; PH-10 through PH-12 | Planned |
-| PH-15 | P1 | Status/operations: actionable failure classes, progress and evidence-based ETA | All runtime owners | Planned |
+| PH-15 | P0 | Status/operations: actionable failure classes, progress and evidence-based ETA | All runtime owners; PH-28 | Planned |
 | PH-16 | P0 | Qualification and evidence: deterministic faults, composed coverage and independent replay | Every affected implementation | Planned |
 | PH-17 | P0 | Plan-derived indexes: bind cached lookup structures to their immutable plan/generation owner | PH-01, PH-05, PH-06 | Planned |
 | PH-18 | P0 | Strict readers: re-authorize connection/runtime provenance at every boundary after provisional work | PH-03, PH-04, PH-05 | Planned |
@@ -518,6 +619,8 @@ owner boundary, not an additional agent or approval requirement.
 | PH-24 | P1 | Recovery performance: authenticate each retained plan once per immutable lineage | PH-01, PH-05, PH-17 | Planned |
 | PH-25 | P1 | Supervisor lifecycle: explicit deployment stop joins every owned workload child | PH-01, PH-07, PH-21 | Planned |
 | PH-26 | P1 | Large evidence transport: typed, cancellable public replay with finite admission | PH-03, PH-08, PH-09, PH-20, PH-23 | Planned |
+| PH-27 | P0 | Policy activation: coherent validator evidence and client-key domains across operators | PF-05; PH-10, PH-13, PH-14 | In progress |
+| PH-28 | P0 | Continuous operations: independent monitoring, bounded authorized repair and exercised on-call | PH-01/02/07/09/11/15/16; MG-01/02 | In progress |
 
 Work in parallel on transaction/recovery (PH-01/02/06/11), chain access and
 proofs (PH-03/04/05), service/storage (PH-07/08/09/13), and scheduling/economics
@@ -1037,13 +1140,16 @@ root/governance-only changes and adapt the design to supported constraints.
 A retained 64-validator exception must state its capacity consequence rather
 than pretend the target was met. Follow MAINNET.md for literal UID-reset
 capability, protected identities, actual contract/custody installation,
-**10% of native miner allocation**, disposition of the remainder and **both
+**10% of native miner allocation**, the user-selected **90% owner-recycle**
+policy (no reserve credit), and **both
 the netuid-0 root and UR subnet validator roles**. Scaling all weights or theta
 alone cannot implement the 10% requirement. Recheck role/permit/registration
 eligibility and operating reserve at execution, using approved semantics.
 
-**Closure.** Measure the activated cadence across the required three consecutive
-fully observed production epochs; distinguish it from configured intent.
+**Closure.** Preserve the unmet testnet requirement for three fully observed
+accelerated production-policy epochs. Mainnet uses MAINNET.md's own acceptance
+scope: at least three complete native emission intervals and a full mainnet UR
+settlement/claim cycle, with configured intent distinguished from actual cadence.
 Verify hyperparameters and reserve at pinned blocks and report unresolved
 exceptions plainly. Mainnet activation additionally proves the chosen reset
 capability, 10% denominator/rounding, actual reward outcome and both validator
@@ -1146,6 +1252,48 @@ need bounded retry with the same evidence identity; cancellation from an
 intentional owner stop remains a distinct outcome. Test both repaired transient
 paths and a true unresolved gap, then verify the live log carries enough detail
 to attribute a recurrence without guessing from the error class alone.
+
+### PH-28 — Continuous monitoring and authorized repair
+
+**Production change.** Implement the [mainnet operating model](MAINNET.md#continuous-monitoring-and-repair)
+as three separate owners: a signer-free finalized-chain monitor, bounded service
+supervisors, and a repair controller that consumes an approved action envelope.
+The monitor must survive stopped application processes and failed repairs. It
+compares authenticated state at the same finalized native/EVM checkpoints on
+the owned node and a separately provisioned canonical source, and retains raw
+evidence independently of the transaction owner's claims. Until that second
+source exists, report `independent_rpc=false`; another process reading Snow's
+same backend is not node independence.
+
+Publish bounded metrics and structured incident records to the existing xops
+Grafana/Mimir/Loki and host Fluent Bit infrastructure, with the established
+exporter and credential boundaries. See [deployment infrastructure](../../xops/main/ansible/playbook-dbs.yml)
+and [telemetry isolation](../../xops/VULNSCAN2.md). SN needs domain-specific
+dashboards and alerts, not a second logging service. Telemetry has no signing,
+database-mutation or full-host control authority. A separate dead-man alert
+detects loss of the monitor and of alert delivery.
+
+| Gate | Required operating evidence |
+| --- | --- |
+| SLOs and alert classification | Before activation, bind poll intervals, freshness/deadline margins, finite retry budgets, severity and primary/backup on-call in the operations manifest. Starting targets in MAINNET.md are proposed values, not measured availability. Distinguish unavailable reads, actual identity/integrity mismatches, missing progress, deadline risk and accounting failures. |
+| Complete chain and application view | Prove current node/runtime identity; native/EVM finality mapping; both UR validators' permit, source and applied/revealed rows; root seat/delegation; every operator's policy/client-key/proof domain; usage, deposit, capture, root, carry, claim and liability accounting; release/config drift and pending signed attempts. HTTP 200, process liveness and acknowledged traffic are insufficient. |
+| Automatic actions within authority | Reconnect/retry exact idempotent reads, resume bounded authenticated replay, restart the same approved service after joining its old owner, and reconcile already signed transactions. Any rebroadcast/replacement or scheduled renewal must be explicitly authorized, expiring and capped, with one writer and retained original bytes. A monitor finding alone is never permission to spend. |
+| Operator-gated actions | Changed policy, runtime capability, contract/custody, endpoint authority, release, schema, native-history boundary, allowance, stake, UID reset or new registration requires its exact reviewable action and appropriate signer authority. No blanket autonomous repair, hidden funding or direct historical SQL rewrite. |
+| Repair correctness | Append/fsync intent and signed attempt before effects; reconcile canonical receipts, dispatch, postcondition and nonce before retry; enforce lifetime/per-action/count/deadline caps across restart. Verify the result with the independent monitor and preserve unresolved or rejected repairs as incidents. |
+| Incident and deployment discipline | Retain source/config/plan and process identities, pinned blocks, raw responses, log byte ranges, debt and liabilities, actions and terminal receipts. Reproduce and fix the observed cause, qualify affected/adjacent paths, canary a composed release, and check state-format compatibility before rollback. Finalized transactions and database migrations require a forward recovery plan where rollback is unsafe. |
+| On-call rehearsal | Deliver a real test alert to designated operators, exercise primary/backup escalation and the stop/reconcile/recover/verify runbook, and show that no custody or claim obligation is discarded when a component stops. Preserve the incident timeline and independent recovery evidence. |
+
+**Closure.** On the exact production image, inject RPC loss and wrong-chain
+responses separately; stop the monitor, alert path, an operator and a validator;
+stall a signed transaction; miss a native or policy boundary; exhaust log/disk
+capacity; and create an accounting mismatch. Read outages must remain unknown
+observations, known integrity failures must stop dependent signing, and neither
+may create a successful acceptance sample. Prove alert delivery and durable
+single-owner recovery within the selected SLOs. Review the repair allowlist,
+caps and on-call roster before bounded activation; promote to unattended
+operation only with the required live observations and no open critical
+incidents. Record recurrence and near-miss trends for subsequent fixes without
+erasing the original failures.
 
 ### PH-16 — Deterministic qualification and reviewable evidence
 
@@ -1565,8 +1713,9 @@ must reconcile already submitted transactions and preserve finalized economics.
 Fault injection may use a controlled integration network, but it must exercise
 the production implementations and the actual capability assumptions; mocks
 alone do not establish live precompile, governance or economic behavior.
-Keep the current sim-testnet finalization moving while these mainnet items are
-implemented, promoting only corrections that resolve a concrete active blocker.
+Preserve the closed sim-testnet evidence. Use controlled production-path
+rehearsals for new fixes and record actual mainnet observations after an approved
+activation; neither can rewrite the original R48 outcome.
 
 ### Precompile stake requests versus native share rounding
 
@@ -2015,8 +2164,10 @@ for the same usage. Customer payment status must not affect usage, relative
 provider shares, required deposit or weight. Head exclusion, reliability floors,
 deposit caps, tier snapshots and mismatch rejection remain strict.
 
-Implementation and qualification are pending in the server usage producer.
-Required deterministic regressions compare otherwise identical paid, free and
+The original incident required a new server usage producer. By R48 the
+prospective usage path and the separate `74893863` legacy-quarantine fix had
+implementation evidence; production composition and end-to-end qualification
+remain open. Required regressions compare otherwise identical paid, free and
 same-network transfers; cover forward/companion and multihop attribution,
 duplicate/concurrent close, partial and disputed close, cleanup, exact epoch
 boundaries, mixed financial allocations and zero usage; and trace equal usage
@@ -2304,12 +2455,13 @@ patch carries that classifier forward so a later reader can load it without
 downgrading its findings. The missed native-1696 history and incomplete
 acceptance interval remain open.
 
-The current root checkout cannot compile `go test ./sim-testnet` with its
-adjacent `server` and `sdk` checkouts: the server still calls the older
-three-argument `protocol.RequiredDepositRao`, and the SDK lacks the wallet
-challenge context method and `Purpose` field used by SN. Before producing a
-mainnet binary, lock compatible revisions of all three modules and qualify
-the combined build. The scanner regression was run in the already aligned
+The post-R48 root composition could not compile `go test ./sim-testnet` with its
+adjacent `server` and `sdk` checkouts: the captured server called the older
+three-argument `protocol.RequiredDepositRao`, and the captured SDK lacked the wallet
+challenge context method and `Purpose` field used by SN. Lock compatible
+revisions of the complete production dependencies and qualify the combined
+release. The new signer-free mainnet observer has its own passing focused
+normal/race tests; it does not establish that combined build. The scanner regression was run in the already aligned
 R48 source workspace with the changed files overlaid; that result must not be
 misreported as a passing build of the current root checkout.
 
@@ -2356,6 +2508,18 @@ rollout and rollback, a canceled contract, altered bilateral report, expanded
 NULL census, wrong epoch/ID/close time, and interrupted commit. The qualified
 testnet server source is `74893863`; it is evidence for the design, not proof
 that the mainnet release image contains the fix.
+
+**P0 retention follow-up (MG-06, PH-09/12; In progress, 2026-09-27).**
+Before the correction, seven-day completed-payment retention deleted
+`transfer_contract` rows and their `provider_usage`, while the epoch reader
+queried only the live table. Server `0633780c` now implements an append-only
+archive and one-snapshot live/archive reader. Exact usage is captured atomically
+with deletion; failed capture aborts deletion and duplicate credit-bearing
+identities fail the window. Pinned and combined normal/race selectors passed,
+as recorded in the integration note above. This remains an open production gate:
+coordinate reader/writer/reaper cutover, prove the deployed schema and replay,
+and qualify durable archive capacity. Already deleted rows remain an explicit
+historical gap; do not backfill guessed providers or reconstruct positive credit.
 
 R48's local epoch-658 close missed its on-chain commitment window, while
 epoch-659 roots later committed on-chain. The mainnet gate must distinguish
