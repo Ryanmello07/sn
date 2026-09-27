@@ -185,10 +185,11 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			} else if !continuous {
 				event.Status, event.Detail = "finality-conflict", "previously finalized block hash changed at its original height"
 			} else {
+				previousHash, previousNumber := state.lastHash, state.lastNumber
 				event.Status, err = state.observe(now, identity, *stallAfter)
 				if err != nil {
 					event.Detail = err.Error()
-				} else if checkpoint != nil {
+				} else if checkpoint != nil && (state.lastHash != previousHash || state.lastNumber != previousNumber) {
 					if saveErr := checkpoint.save(state); saveErr != nil {
 						event.Status, event.Detail = "checkpoint-error", saveErr.Error()
 					}

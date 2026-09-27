@@ -312,8 +312,8 @@ or submitter. Focused normal/race tests and vet pass; the retained Snow rejectio
 demonstrates actual wrong-network refusal.
 
 `monitor --checkpoint /absolute/path/monitor.json` adds a single-owner local
-continuity checkpoint. Before reporting a healthy sample it atomically persists
-the approved chain/genesis/EVM identity, last finalized height and hash, and
+continuity checkpoint. Before reporting a newly finalized position as healthy,
+it atomically persists the approved chain/genesis/EVM identity, last finalized height and hash, and
 progress time with a content checksum. Restart loads that position and checks
 the prior finalized hash against the route; a regression or changed historical
 hash is still visible after process restart. A corrupt, foreign or symlinked
