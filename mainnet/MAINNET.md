@@ -508,9 +508,12 @@ across restart. The [root service decision owner](ROOT-SERVICE.md) now couples
 one approved basket decision and its original native intent in one private
 durable journal, with a finite joined supervisor and independent signer/submission
 ports. Its read-only canonical weight view and pinned-runtime normalization
-select an intent, never signing authority. Production live authority, globally
-fenced native signing and submission are absent; there is no signing command
-or active root service. A signed root
+select an intent, never signing authority. The [owned-RPC submission adapter](ROOT-SUBMISSION.md)
+now sends exact signed bytes under separate action/route approval, retains
+uncertain numbered attempts and reconciles canonical outcomes before another
+approved send. Its local composition with offline custody and the service owner
+is qualified. Production live authority, globally fenced native custody and a
+signing device remain absent; there is no signing command or active root service. A signed root
 call does not bind registration generation, so pending-action seat changes need
 custody exclusion or separately authenticated incident reconciliation. The
 accumulate-in-place strategy needs no heartbeat transaction. Changing that
@@ -613,8 +616,10 @@ one-action signing and recovery core, not a CLI command or live root validator.
 It retains the original signed bytes, nonce and fee reservation across ambiguous
 submissions. The [service owner](ROOT-SERVICE.md) now owns the approved decision,
 composite intent and finite supervisor; read-only canonical observation and
-receipt adapters exist. Production current-authority, custody and submission
-adapters must be supplied and qualified before it can publish a root basket;
+receipt adapters exist. The separate [submission adapter](ROOT-SUBMISSION.md)
+implements owned HTTP writes and durable attempt reconciliation. Production
+current-authority and custody adapters, actual route/seat approval and command
+activation must still be supplied and qualified before publishing a root basket;
 the current accumulate-in-place strategy needs no periodic root transaction.
 
 `check-recycle-mode --rpc URL --policy FILE` binds the finalized mode read to
