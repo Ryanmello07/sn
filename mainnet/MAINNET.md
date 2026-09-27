@@ -209,10 +209,14 @@ The owner-key launch target is to remove as many approved old miner registration
 
 UR scoring exclusion cannot erase a retained hotkey's native registration or prevent an independent validator from weighting it. The 10% provider outcome must therefore be checked against the actual post-trim native incentive rows, including every retained old miner. A residual native payout is disclosed as an observed exception; it is not recast as UR provider earnings or a successful full reset.
 
-Operating the majority SN25 validator can help the owner-key reset only
-indirectly: valid low or zero weights on approved old miners may lower their
-observed emissions over future native intervals, making them more likely to be
-chosen by the [emission-ranked owner trim][subtensor-uids]. It cannot deregister
+The majority SN25 validator will run the standard `sn/validator` binary and
+its ordinary evidence-based scoring policy. That can help the owner-key reset
+only indirectly: old miner generations that are absent from eligible head and
+pool evidence receive no positive weight from our validator, which may lower
+their observed emissions over future native intervals and make them more likely
+to be chosen by the [emission-ranked owner trim][subtensor-uids]. Do not assume
+that ownership of the majority seat implies arbitrary zero weights or that an
+old miner with valid current evidence will be excluded. The validator cannot deregister
 anyone, bypass immunity or minimum capacity, force the other validators' votes,
 or grant chain-Root authority. Reobserve finalized emissions and rerun the
 complete protected-identity plan before each proposed trim; never assume a
@@ -233,6 +237,15 @@ Deletion of a registration does not delete historical events, refund registratio
 | `ur-generation-only` | Resets UR application admission/scoring/bindings prospectively. | Explicitly accepted narrower outcome. It makes no claim to remove native UIDs. |
 
 The inspected trim implementation enforces minimum and maximum capacity, protects owner-immune and temporarily immune entries, and requires the immune percentage to remain strictly below its runtime threshold. It removes according to emission rank and migrates the survivors' slot-indexed state. The ordinary `set_max_allowed_uids` path cannot set capacity below the occupied count. [Trim implementation][subtensor-uids], [capacity documentation][max-uids]
+
+At the reviewed runtime, `sudo_set_network_registration_allowed` and the
+per-block registration limit require chain `Root`; the SN25 owner cannot assume
+it can close registration for a trim window. Even an already closed
+registration flag does not prevent a coldkey-authorized hotkey swap from
+changing the registered generation. A bounded owner-key execution path must
+therefore establish its protection invariant under actual registration and
+swap/custody behavior through inclusion, or leave the trim as a read-only
+proposal. [Registration setter](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs#L3444), [hotkey swap](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/swap/swap_hotkey.rs#L2199).
 
 Ordinary registration pruning is a different algorithm. In the inspected source it excludes owner-protected identities but can fall back to temporally immune candidates in some capacity conditions. Do not use the trim immunity model to justify a replacement sequence. `clear_neuron` is an internal implementation routine, not evidence of an owner-callable reset endpoint. [Registration implementation][subtensor-registration]
 

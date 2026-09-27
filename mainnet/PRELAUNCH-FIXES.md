@@ -47,12 +47,20 @@ are component responsibilities; assign a named operator before rollout.
 | MG-09 / P1 — Sustained resource and storage capacity | Service/storage owner; PH-08/09/20/23/26 | **Planned:** bounded simulator mechanisms exist; production sizing and restoration receipts are missing. | Measure backlog, bytes, memory, RPC work and queue fairness with the proposed fleet and retention. Bind finite capacity with reviewed margin; prove missing/full-volume behavior, backup restore, multi-gigabyte log drainage and foreground deadline headroom. Required before unattended operation. |
 | MG-10 / P0 — Qualification, rollout and actual acceptance | Release/operations owner; PH-16 and every affected gate | **Planned:** no accepted composed mainnet release. | Before activation, complete production-path causal regressions, affected normal/race suites and a controlled upgrade/outage/restart/repair rehearsal; retain failed and reused scopes. After bounded activation, observe at least three complete native emission intervals and one full 50,400-block UR settlement/claim cycle before declaring program acceptance. Record pending live evidence as pending. |
 
-For MG-08, the majority SN25 validator is an indirect reset aid, not a native
-removal authority. Its weights may move approved old miners toward the bottom
-of the emission-ranked trim order after native processing. Exact finalized
+For MG-08, the majority SN25 validator runs the standard `sn/validator` binary
+with its ordinary evidence-based scoring policy. It is an indirect reset aid,
+not a native removal authority. Old miners absent from eligible head and pool
+evidence receive no positive weight from our validator; old miners with valid
+current evidence may still be weighted. The resulting weights may move some old
+miners toward the bottom of the emission-ranked trim order after native
+processing, but majority control is not a promise of zero weight. Exact finalized
 emission rows, all other eligible neurons, immunity and protected roles must
 be re-censused before proposing a capacity. Root-subnet validator weights do
 not perform SN25 deregistration. [Runtime trim source](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/subnets/uids.rs#L1493), [subnet weight source](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/subnets/weights.rs#L3666).
+The reviewed registration-allowed setter is chain-Root-only, beyond the owned
+SN25 keys, and a coldkey-authorized hotkey swap can change an existing UID
+despite a closed registration flag. Admission must account for both facts
+through inclusion. [Registration setter](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs#L3444), [swap implementation](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/swap/swap_hotkey.rs#L2199).
 
 MG-08 now has a separate signer-free [root observation foundation](ROOT-VALIDATOR.md):
 `root-preview` and finite `root-monitor` bind the approved mainnet domain and
