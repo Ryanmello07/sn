@@ -265,7 +265,7 @@ func DecodeRuntimeVersionIdentity(raw json.RawMessage) (RuntimeVersionIdentity, 
 			return RuntimeVersionIdentity{}, fmt.Errorf("decode runtime version field %s: %w", key, err)
 		}
 		switch key {
-		case "specName", "specVersion", "transactionVersion", "stateVersion":
+		case "specName", "specVersion", "transactionVersion", "stateVersion", "systemVersion":
 			if _, exists := fields[key]; exists {
 				return RuntimeVersionIdentity{}, fmt.Errorf("runtime version field %s is duplicated", key)
 			}
@@ -306,6 +306,15 @@ func DecodeRuntimeVersionIdentity(raw json.RawMessage) (RuntimeVersionIdentity, 
 	stateVersion, err := decodeRuntimeVersionUint("stateVersion", fields["stateVersion"], 8)
 	if err != nil {
 		return RuntimeVersionIdentity{}, err
+	}
+	if systemVersionRaw, exists := fields["systemVersion"]; exists {
+		systemVersion, err := decodeRuntimeVersionUint("systemVersion", systemVersionRaw, 8)
+		if err != nil {
+			return RuntimeVersionIdentity{}, err
+		}
+		if systemVersion != stateVersion {
+			return RuntimeVersionIdentity{}, errors.New("runtime version stateVersion/systemVersion aliases contradict")
+		}
 	}
 	version.SpecVersion = uint32(specVersion)
 	version.TransactionVersion = uint32(transactionVersion)

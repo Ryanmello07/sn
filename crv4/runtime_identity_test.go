@@ -91,6 +91,32 @@ func setRuntimeIdentityTestResult(result any, value any) error {
 	}
 }
 
+// Both RPC names describe the same state layout; a proxy or runtime reply
+// cannot choose a different layout by supplying contradictory aliases.
+func TestRuntimeVersionRejectsContradictoryStateAliases(t *testing.T) {
+	base := `{"specName":"node-subtensor","specVersion":471,"transactionVersion":1,"stateVersion":1,`
+	for _, test := range []struct {
+		name      string
+		raw       string
+		wantError bool
+	}{
+		{name: "matching", raw: base + `"systemVersion":1}`},
+		{name: "contradictory", raw: base + `"systemVersion":0}`, wantError: true},
+		{name: "invalid", raw: base + `"systemVersion":"1"}`, wantError: true},
+		{name: "duplicate", raw: base + `"systemVersion":1,"systemVersion":0}`, wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			version, err := DecodeRuntimeVersionIdentity(json.RawMessage(test.raw))
+			if (err != nil) != test.wantError {
+				t.Fatalf("decode aliases: version=%+v err=%v", version, err)
+			}
+			if err == nil && version.StateVersion != 1 {
+				t.Fatalf("matching aliases changed state layout: %+v", version)
+			}
+		})
+	}
+}
+
 // Shares one metadata download across concurrent blocks carrying the same
 // complete runtime artifact while retaining per-block version and code reads.
 func TestRuntimeArtifactMetadataIsSingleflightedAcrossExactBlocks(t *testing.T) {
