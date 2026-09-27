@@ -86,6 +86,21 @@ prerequisites as well as containing newer settlement/probe work. Reconcile the
 complete prerequisite chain on a separate branch and repeat affected tests
 before treating either history as the production source lock.
 
+**NetEscrow ordering candidate (MG-06; source qualified, integration pending).**
+Server commit `224fd163` on `codex/mainnet-netescrow-ordering-20260927`
+adds migration 727 and durable per-balance reservation revisions. Its Redis
+publisher applies exact revision-fenced snapshots, so a delayed create,
+settlement or reconciliation post cannot overwrite newer source state.
+Deterministic preimage failures and final focused normal/race passes are
+retained in the [qualification handoff](/mnt/data/sn-testnet/evidence/mainnet-netescrow-ordering-20260927/RESULT.md).
+This branch is based on the earlier qualified server history; transplant and
+requalify it with current-main settlement batching before release. Deployment
+must replace all additive cache writers together, retain Redis fence keys,
+check migration functions/triggers in the actual database, and measure the
+persistent fence and revision capacity. The Redis mirror can still lag a
+committed PostgreSQL update, so this fix does not establish atomic concurrent
+admission or close the mainnet settlement gate by itself.
+
 **RPC read admission (MG-04/MG-07; In progress, 2026-09-27).** The shared
 [JSON validator](../protocol/json_unique.go) and bounded
 [miner](../miner/sn_rpc.go)/[validator](../validator/chain_http_envelope.go) RPC
