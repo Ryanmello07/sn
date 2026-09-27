@@ -431,7 +431,11 @@ normal/race tests and vet pass after the 2026-09-27 data-volume recovery.
 
 `inspect`/`monitor` remain single-route identity/finality observers. The
 separate `runtime-snapshot` captures raw finalized code/metadata without
-granting authority. These commands do not map EVM receipt finality, compare independent nodes, inspect SN25
+granting authority. `inspect` and `monitor` validate the complete runtime tuple
+internally, but their v1 JSON reports only spec/transaction numbers; emit a
+versioned full-tuple observer artifact before using them as independent runtime
+identity evidence. Unknown digest variants require reviewed decoding support.
+These commands do not map EVM receipt finality, compare independent nodes, inspect SN25
 custody/validator/settlement state, deliver alerts,
 or execute repairs. Those are MG-07 and related production gates. An identity
 snapshot hash proves the captured bytes, not operator approval or node truth.
@@ -473,10 +477,12 @@ generated files, ignored files, configuration, migrations or the running images
 match those commits. The release owner must bind those artifacts separately,
 qualify the composed source and approve the resulting immutable manifest.
 
-The [current composed candidate](evidence/source-lock-runtime-snapshot-20260927.md)
-locks SN `55469798`, server `9f860731` and Connect `c68689c4` with all local
+The [current composed candidate](evidence/source-lock-header-auth-20260927.md)
+locks SN `dce2cee1`, server `9f860731` and Connect `c68689c4` with all local
 Go replacements. Its cross-module compile, full mainnet normal suite, focused
-identity/runtime race suite and mainnet vet passed. The earlier
+identity/runtime race suite and mainnet vet passed. Its read-only Snow smoke
+authenticated a real finalized header but still observed testnet EVM ID 945;
+the raw snapshot remains unapproved. The earlier
 [composition](evidence/source-lock-composed-20260927.md) separately qualified
 unchanged validator and receipt selectors. This is offline qualification of
 those source paths, not a complete release or an approved mainnet
