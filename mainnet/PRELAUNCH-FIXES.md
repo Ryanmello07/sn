@@ -80,16 +80,22 @@ model, monitor and controller. Owned disposable services were cleaned up
 successfully using the recorded ownership recipe. This is source integration
 qualification, not a live migration or production deployment. Coordinated live
 cutover, NetEscrow ordering, durable capacity, economics and the complete release
-gate remain open.
+gate remain open. A later fetch found that server `origin/main` had advanced to
+`af17d1d2` and diverged from this qualified branch. It lacks several custody
+prerequisites as well as containing newer settlement/probe work. Reconcile the
+complete prerequisite chain on a separate branch and repeat affected tests
+before treating either history as the production source lock.
 
 **RPC read admission (MG-04/MG-07; In progress, 2026-09-27).** The shared
 [JSON validator](../protocol/json_unique.go) and bounded
 [miner](../miner/sn_rpc.go)/[validator](../validator/chain_http_envelope.go) RPC
 readers now reject duplicate keys, including equivalent escaped spellings,
-trailing JSON and HTTP redirects. Targeted normal/race qualification is still
-in progress. The miner transient-read operation now has a tested 90-second
-retry budget; final broader qualification remains pending. MG-04 and MG-07
-remain open; these changes do not close MG-02's full production release gate.
+case-folded Unicode aliases, trailing JSON and HTTP redirects. The miner
+transient-read operation has a tested 90-second retry budget. Full miner normal
+and race suites passed; all 1,762 validator tests passed in both modes with zero
+skips, and the final Unicode admission change passed focused consumer normal and
+race tests. MG-04 and MG-07 remain open for broader production runtime and
+deployed-monitor qualification; this source result does not close MG-02.
 
 The September 27 SN root includes newer per-user deposit and zero-price policy
 interfaces (`9b386fe8`). Old R48 pricing and build receipts cannot qualify those
