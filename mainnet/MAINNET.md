@@ -389,7 +389,7 @@ Manage both services with independent state directories, signer permissions, log
 
 [mainnet/main.go](main.go) currently contains signer-free `inspect`, `monitor`,
 `subnet-preview`, `root-preview`, `root-monitor`, `check-recycle-mode` and `economic-reference`
-commands, plus the offline `source-lock` command. `inspect --rpc URL`
+commands, plus the offline `source-lock` and blocked-review `plan` commands. `inspect --rpc URL`
 emits a content-hashed identity snapshot. Supplying
 any expectation requires all of `--expected-chain`, `--expected-genesis` and
 `--expected-evm-chain-id`; `monitor` always requires all three. The monitor emits
@@ -457,12 +457,20 @@ custody/validator/settlement state, deliver alerts,
 or execute repairs. Those are MG-07 and related production gates. An identity
 snapshot hash proves the captured bytes, not operator approval or node truth.
 
-Keep the future plan builder pure after authenticated snapshot inputs are supplied.
+The [pure plan foundation](PLAN.md) consumes one `finalized-snapshot`, a source
+lock and release inputs by exact hashes. `plan --outline` exposes the unbound
+dependency graph while approved mainnet identity is unavailable;
+`plan --config FILE` accepts the separate strict JSON review schema and refuses
+testnet EVM945 or an unexpected genesis. Both modes keep every action blocked,
+with no apply authority. Supplied review manifests remain unvalidated until
+their actual semantic/capability/custody checks are implemented.
+
+Keep the executable plan builder pure after authenticated snapshot inputs are supplied.
 Separate chain adapters, signer interfaces, state storage and supervisors so
 preview cannot reach a transaction submission path.
 
 Target command surface; `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`, `monitor`, `subnet-preview`, the two root observers and the two
-limited economic preconditions above and `source-lock` exist, while the remaining commands are
+limited economic preconditions above, `source-lock` and the blocked-review `plan` foundation exist, while the remaining commands are
 designs:
 
 | Command | Behavior |
@@ -477,7 +485,7 @@ designs:
 | `check-recycle-mode` | Existing signer-free finalized storage-mode precondition; extend with an approved mainnet artifact and operational readback at activation/recovery. |
 | `economic-reference` | Existing signer-free cumulative integer 10%/90% reference from caller-supplied native intervals; actual chain reconciliation remains a separate gate. |
 | `source-lock` | Existing offline lock of clean SN and every local Go replacement Git commit, module checksums, Go version and tool hash. It binds source inputs only; artifacts, rollout approval and qualification remain separate. |
-| `plan` | Build canonical plan/actions and a readable review from config, pinned snapshot, artifacts, closed testnet exceptions and production qualification. No signing or submission. |
+| `plan` | Existing pure blocked-review graph via `--outline` or strict JSON `--config FILE`; hashes exact finalized-snapshot/source-lock/release inputs. Every action remains non-executable. Full semantic admission, payloads and executable authorization remain future work. |
 | `apply --accept-plan HASH` | Execute only the exactly reviewed plan with matching signed authorization, prerequisites and ceilings. |
 | `status` / `verify` | Read-only journal reconciliation and current/finalized postcondition verification. |
 | `resume --accept-plan HASH` | Recover in-flight actions, verify retained receipts and continue the same approved graph without duplicate spend. |
@@ -513,18 +521,32 @@ No implicit apply, automatic subnet creation, private-key CLI flags, “force”
 
 The canonical plan binds schema and action-format versions; exact config/policy bytes; resolved configuration roots and runtime routes; source/dependency/artifact/binary identities; owned-node and runtime identities; native/EVM snapshot hashes; all public roles; census and reset classifications; actual transaction payloads/origins; expected CREATE addresses and nonces; phase dependencies; validity windows; spend/count caps; and the chosen emission-denominator/remainder policy. Hash canonical bytes with domain separation. The signed authorization names that hash, network, expiry, allowed phases and ceilings. Reject duplicate fields, unknown schema versions, overflow, unexpanded substitutions and ambiguous addresses.
 
-Future operator examples, shown only as interface design:
+Implemented review commands, with no signing or submission:
+
+```sh
+sn-mainnet plan --outline > /secure/ur-mainnet/review/outline.json
+sn-mainnet plan --config /secure/ur-mainnet/plan-config.json > /secure/ur-mainnet/review/blocked-plan.json
+```
+
+The JSON config and release-input schema are in [PLAN.md](PLAN.md). The resulting
+blocked-plan hash cannot be passed as executable apply authority. The remaining
+operator examples below are future interfaces requiring a separate executable
+schema and complete semantic admission; the implemented `plan` does not accept
+the draft YAML config, `--snapshot`, `--phase` or `--out` flags.
 
 ```sh
 sn-mainnet inspect --config /secure/ur-mainnet/bootstrap.yml --out /secure/ur-mainnet/inspection
-sn-mainnet plan --config /secure/ur-mainnet/bootstrap.yml --snapshot /secure/ur-mainnet/inspection/snapshot.json --phase full --out /secure/ur-mainnet/review
 sn-mainnet apply --plan /secure/ur-mainnet/review/plan.json --accept-plan "$REVIEWED_MAINNET_PLAN_HASH" --authorization /secure/ur-mainnet/authorization.json --run-dir /secure/ur-mainnet/run
 sn-mainnet status --run-dir /secure/ur-mainnet/run
 sn-mainnet resume --run-dir /secure/ur-mainnet/run --accept-plan "$REVIEWED_MAINNET_PLAN_HASH" --authorization /secure/ur-mainnet/authorization.json
 sn-mainnet verify --run-dir /secure/ur-mainnet/run --out /secure/ur-mainnet/verification
 ```
 
-This incomplete config sketch intentionally contains `null` for unapproved identities and monetary values. A real executable plan must reject them. Values represent required fields, not suggested budgets or fake addresses; secret material is supplied through local signer references rather than embedded here.
+This future executable YAML config sketch is not the current JSON review input.
+It intentionally contains `null` for unapproved identities and monetary values.
+A real executable plan must reject them. Values represent required fields, not
+suggested budgets or fake addresses; secret material is supplied through local
+signer references rather than embedded here.
 
 ```yaml
 schema: urnetwork-mainnet-bootstrap-v1
