@@ -24,6 +24,10 @@ import (
 )
 
 const rootActionSchema = "urnetwork-mainnet-root-action-v1"
+
+// Historical action encoding must not follow the observer's future profile.
+// Add a separately reviewed codec instead of changing this V1 source identity.
+const rootActionV1Source = "67dcf7f791dc495064c293f080a0702cb433e51e"
 const rootCallPallet = 7
 const rootWeightsCall = 146
 
@@ -83,7 +87,7 @@ func rootCanonicalHash(value string) bool {
 
 // Requires independent nonempty authority references and explicit local bounds.
 func (self rootActionScope) validate() error {
-	if self.Schema != rootActionSchema || self.Role != "bittensor-root-validator" || self.Netuid != 0 || self.EvmChainId != mainnetEvmChainId || strings.TrimSpace(self.NativeChain) == "" || self.RuntimeSourceCommit != rootProfileSource {
+	if self.Schema != rootActionSchema || self.Role != "bittensor-root-validator" || self.Netuid != 0 || self.EvmChainId != mainnetEvmChainId || strings.TrimSpace(self.NativeChain) == "" || self.RuntimeSourceCommit != rootActionV1Source {
 		return errors.New("root action requires its exact root role, mainnet identity and reviewed runtime source")
 	}
 	for _, value := range []string{self.GenesisHash, self.RuntimeCodeHash, self.RuntimeMetadataHash, self.Hotkey, self.Coldkey} {
@@ -185,7 +189,7 @@ func rootSigningProfile(metadata *types.Metadata) ([]byte, error) {
 	if metadata == nil || metadata.Version != 14 || metadata.AsMetadataV14.Extrinsic.Version != 4 {
 		return nil, errors.New("root signing requires the reviewed metadata14/extrinsic4 profile")
 	}
-	names := []string{"CheckNonZeroSender", "CheckSpecVersion", "CheckTxVersion", "CheckGenesis", "CheckMortality", "CheckNonce", "CheckWeight", "ChargeTransactionPaymentWrapper", "SudoTransactionExtension", "CheckShieldedTxValidity", "SubtensorTransactionExtension", "DrandPriority", "CheckMetadataHash"}
+	names := []string{"CheckNonZeroSender", "CheckSpecVersion", "CheckTxVersion", "CheckGenesis", "CheckMortality", "CheckNonce", "CheckWeight", "ChargeTransactionPayment", "SudoTransactionExtension", "CheckShieldedTxValidity", "SubtensorTransactionExtension", "DrandPriority", "CheckMetadataHash"}
 	values := []string{"unit", "unit", "unit", "unit", "era", "compact32", "unit", "compact64", "unit", "unit", "unit", "unit", "mode"}
 	additional := []string{"unit", "u32", "u32", "account", "account", "unit", "unit", "unit", "unit", "unit", "unit", "unit", "optional-hash"}
 	extensions := metadata.AsMetadataV14.Extrinsic.SignedExtensions

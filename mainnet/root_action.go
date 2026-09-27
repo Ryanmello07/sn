@@ -1,7 +1,7 @@
 // One root action owns its nonce and fee reservation from the first signing
 // request through a verified finalized receipt or finalized mortal expiry.
-// Production authority, custody and canonical-receipt adapters are deliberately
-// absent; a read-only observation cannot construct or activate this service.
+// Authority, custody and submission adapters remain deliberately absent; the
+// read-only canonical receipt port cannot construct or activate this service.
 package main
 
 import (
@@ -63,11 +63,21 @@ type rootActionObservation struct {
 	Hotkey              string                      `json:"hotkey_account_id"`
 	Coldkey             string                      `json:"coldkey_account_id"`
 	Seat                rootSeatExpectation         `json:"seat"`
+	StateUnavailable    bool                        `json:"state_unavailable,omitempty"`
 	AccountNonce        uint32                      `json:"account_nonce"`
 }
 
+// Post-state is distinct from the exact action phase: later calls in the same
+// block may overwrite it. A readback gap remains an explicit operational issue.
+type rootReceiptPostState struct {
+	WeightsScale          string `json:"weights_scale,omitempty"`
+	LastUpdate            uint64 `json:"last_update,omitempty"`
+	LastUpdateStorageHash string `json:"last_update_storage_hash,omitempty"`
+	Issue                 string `json:"issue,omitempty"`
+}
+
 // Receipt adapters must retain exact inclusion index/body, dispatch and fee
-// evidence. The event digest refers to their canonical decoded event bundle;
+// evidence. The event digest refers to the canonical raw SCALE event bundle;
 // this core checks correspondence, not storage trie or consensus proofs.
 type rootActionReceipt struct {
 	BlockNumber             uint64                      `json:"block_number"`
@@ -77,6 +87,7 @@ type rootActionReceipt struct {
 	EventHash               string                      `json:"event_hash"`
 	Success                 bool                        `json:"success"`
 	DispatchError           string                      `json:"dispatch_error,omitempty"`
+	PostState               *rootReceiptPostState       `json:"post_state,omitempty"`
 	ActualFeeRao            uint64                      `json:"actual_fee_rao"`
 	ExecutionRuntimeVersion crv4.RuntimeVersionIdentity `json:"execution_runtime_version"`
 	ExecutionCodeHash       string                      `json:"execution_code_hash"`
@@ -148,7 +159,7 @@ func (self rootActionObservation) matches(action rootAction, signing bool) error
 	if self.NativeChain != scope.NativeChain || self.GenesisHash != scope.GenesisHash || self.EvmChainId != mainnetEvmChainId || self.Hotkey != scope.Hotkey || !rootCanonicalHash(self.FinalizedHash) || self.FinalizedNumber < action.BirthBlock || self.FinalizedNumber > math.MaxUint32 || self.FinalizedNumber == action.BirthBlock && self.FinalizedHash != action.BirthHash {
 		return errors.New("root action reconciliation has a different network or invalid finalized position")
 	}
-	if signing && (self.RuntimeVersion != scope.RuntimeVersion || self.RuntimeCodeHash != scope.RuntimeCodeHash || self.RuntimeMetadataHash != scope.RuntimeMetadataHash || self.Hotkey != scope.Hotkey || self.Coldkey != scope.Coldkey || self.Seat != scope.Seat || self.AccountNonce != action.Nonce || self.FinalizedNumber >= action.BirthBlock+action.Period) {
+	if signing && (self.StateUnavailable || self.RuntimeVersion != scope.RuntimeVersion || self.RuntimeCodeHash != scope.RuntimeCodeHash || self.RuntimeMetadataHash != scope.RuntimeMetadataHash || self.Hotkey != scope.Hotkey || self.Coldkey != scope.Coldkey || self.Seat != scope.Seat || self.AccountNonce != action.Nonce || self.FinalizedNumber >= action.BirthBlock+action.Period) {
 		return errors.New("root action runtime, seat, nonce or mortal window no longer admits a side effect")
 	}
 	return nil
@@ -166,7 +177,7 @@ func (self rootActionReconciliation) validate(action rootAction, raw []byte) err
 	}
 	if self.Receipt != nil {
 		receipt := self.Receipt
-		if len(raw) == 0 || receipt.RawExtrinsic != "0x"+hex.EncodeToString(raw) || !rootCanonicalHash(receipt.BlockHash) || receipt.BlockNumber <= action.BirthBlock || receipt.BlockNumber >= action.BirthBlock+action.Period || receipt.BlockNumber > self.CheckedThrough || self.Observation.AccountNonce <= action.Nonce || !rootCanonicalHash(receipt.EventHash) || receipt.Success && receipt.DispatchError != "" || !receipt.Success && receipt.DispatchError == "" {
+		if len(raw) == 0 || receipt.RawExtrinsic != "0x"+hex.EncodeToString(raw) || !rootCanonicalHash(receipt.BlockHash) || receipt.BlockNumber <= action.BirthBlock || receipt.BlockNumber >= action.BirthBlock+action.Period || receipt.BlockNumber > self.CheckedThrough || !rootCanonicalHash(receipt.EventHash) || receipt.Success && receipt.DispatchError != "" || !receipt.Success && receipt.DispatchError == "" {
 			return errors.New("root action receipt lacks exact bytes, finalized inclusion or dispatch evidence")
 		}
 		if receipt.BlockNumber == self.Observation.FinalizedNumber && receipt.BlockHash != self.Observation.FinalizedHash || !rootCanonicalHash(receipt.ExecutionCodeHash) || !rootCanonicalHash(receipt.ExecutionMetadataHash) || receipt.ExecutionRuntimeVersion.SpecName == "" || receipt.ExecutionRuntimeVersion.SpecVersion == 0 || receipt.ExecutionRuntimeVersion.TransactionVersion == 0 || receipt.ExecutionRuntimeVersion.StateVersion == 0 {
@@ -239,7 +250,7 @@ func rootTerminalPhase(action rootAction, result rootActionReconciliation) strin
 		}
 		return "finalized"
 	}
-	if result.Observation.FinalizedNumber >= action.BirthBlock+action.Period && result.Observation.AccountNonce == action.Nonce {
+	if !result.Observation.StateUnavailable && result.Observation.FinalizedNumber >= action.BirthBlock+action.Period && result.Observation.AccountNonce == action.Nonce {
 		return "expired"
 	}
 	return ""

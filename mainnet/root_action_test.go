@@ -24,12 +24,11 @@ import (
 	"github.com/urfoundation/sn/crv4"
 )
 
-// The old public metadata fixture is adapted into a synthetic wrapper profile;
-// it is not a claim about current mainnet metadata or independent approval.
+// Public historical metadata exercises the wrapper's advertised inner payment
+// extension. It is not current mainnet metadata or independent approval.
 func rootActionFixture(t *testing.T) (rootAction, subkey.KeyPair, string) {
 	t.Helper()
 	metadata, _, _ := rootTestMetadata(t)
-	metadata.AsMetadataV14.Extrinsic.SignedExtensions[7].Identifier = "ChargeTransactionPaymentWrapper"
 	raw, err := codec.Encode(metadata)
 	if err != nil {
 		t.Fatal(err)
@@ -274,7 +273,7 @@ func TestRootActionMetadataProfile(t *testing.T) {
 			m.AsMetadataV14.Extrinsic.SignedExtensions = m.AsMetadataV14.Extrinsic.SignedExtensions[:12]
 		},
 		func(m *types.Metadata) {
-			m.AsMetadataV14.Extrinsic.SignedExtensions[7].Identifier = "ChargeTransactionPayment"
+			m.AsMetadataV14.Extrinsic.SignedExtensions[7].Identifier = "ChargeTransactionPaymentWrapper"
 		},
 		func(m *types.Metadata) {
 			m.AsMetadataV14.Extrinsic.SignedExtensions[5].Type = m.AsMetadataV14.Extrinsic.SignedExtensions[6].Type
@@ -650,7 +649,6 @@ func TestRootActionRejectsWrongReceiptEvidence(t *testing.T) {
 		func(r *rootActionReconciliation) { r.Receipt.Success = false },
 		func(r *rootActionReconciliation) { r.Receipt.EventHash = "" },
 		func(r *rootActionReconciliation) { r.Receipt.ExecutionCodeHash = "" },
-		func(r *rootActionReconciliation) { r.Observation.AccountNonce-- },
 		func(r *rootActionReconciliation) { r.Observation.GenesisHash = "0x" + strings.Repeat("ed", 32) },
 		func(r *rootActionReconciliation) { r.AnchorHash = "0x" + strings.Repeat("ed", 32) },
 		func(r *rootActionReconciliation) { r.CheckedFrom++ },

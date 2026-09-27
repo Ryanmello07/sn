@@ -81,7 +81,7 @@ func newRpcClient(rawUrl string, retryWindow time.Duration) (*rpcClient, error) 
 	}, nil
 }
 
-// rpcReply carries only the JSON-RPC result; remote application errors are not guessed transient.
+// rpcReply retains exact request identity and distinguishes explicit server timeouts.
 type rpcReply struct {
 	JsonRpc string          `json:"jsonrpc"`
 	Id      int             `json:"id"`
@@ -107,6 +107,20 @@ func (self *rpcClient) callWithStorageAbsence(ctx context.Context, method string
 	if method == "state_getMetadata" {
 		replyLimit = maxMetadataRpcReplyBytes
 	}
+	return self.callBoundedRead(ctx, method, params, result, allowAbsent, replyLimit)
+}
+
+// Larger archive replies are opt-in and still bounded. Every invocation owns
+// one finite read-retry budget; callers cannot use this helper for submission.
+func (self *rpcClient) callBoundedRead(ctx context.Context, method string, params []any, result any, allowAbsent bool, replyLimit int) error {
+	if ctx == nil || replyLimit <= 0 || replyLimit > 2*rootBodyBytesLimit+maxRpcReplyBytes || allowAbsent && method != "state_getStorage" {
+		return errors.New("invalid bounded read budget or nullable method")
+	}
+	switch method {
+	case "system_chain", "system_version", "eth_chainId", "chain_getBlockHash", "chain_getFinalizedHead", "chain_getHeader", "chain_getBlock", "state_getRuntimeVersion", "state_getMetadata", "state_getStorageHash", "state_getStorage", "state_getKeysPaged":
+	default:
+		return errors.New("RPC method is outside the read-only mainnet profile")
+	}
 	operationCtx, cancel := context.WithTimeout(ctx, self.retryWindow)
 	defer cancel()
 	requestBody, err := json.Marshal(struct {
@@ -120,7 +134,7 @@ func (self *rpcClient) callWithStorageAbsence(ctx context.Context, method string
 	}
 	var lastErr error
 	for attempt := 0; ; attempt++ {
-		attemptCtx, attemptCancel := context.WithTimeout(operationCtx, 15*time.Second)
+		attemptCtx, attemptCancel := context.WithTimeout(operationCtx, min(self.retryWindow, 60*time.Second))
 		request, requestErr := http.NewRequestWithContext(attemptCtx, http.MethodPost, self.url, bytes.NewReader(requestBody))
 		if requestErr != nil {
 			attemptCancel()
@@ -151,19 +165,27 @@ func (self *rpcClient) callWithStorageAbsence(ctx context.Context, method string
 					return fmt.Errorf("%w: %s: reply has the wrong request identity", errRpcIntegrity, method)
 				}
 				if reply.Error != nil {
+					if len(reply.Result) != 0 && !bytes.Equal(reply.Result, []byte("null")) {
+						attemptCancel()
+						return fmt.Errorf("%w: %s: reply has both result and error", errRpcIntegrity, method)
+					}
+					requestErr = fmt.Errorf("%s: RPC error %d: %s", method, reply.Error.Code, reply.Error.Message)
+					if !rpcTransientReadError(reply.Error.Code, reply.Error.Message) {
+						attemptCancel()
+						return requestErr
+					}
+				} else {
+					if len(reply.Result) == 0 || bytes.Equal(reply.Result, []byte("null")) && !allowAbsent {
+						attemptCancel()
+						return fmt.Errorf("%w: %s: missing result", errRpcIntegrity, method)
+					}
+					decodeErr := json.Unmarshal(reply.Result, result)
 					attemptCancel()
-					return fmt.Errorf("%s: RPC error %d: %s", method, reply.Error.Code, reply.Error.Message)
+					if decodeErr != nil {
+						return fmt.Errorf("%w: %s: invalid result: %v", errRpcIntegrity, method, decodeErr)
+					}
+					return nil
 				}
-				if len(reply.Result) == 0 || bytes.Equal(reply.Result, []byte("null")) && !allowAbsent {
-					attemptCancel()
-					return fmt.Errorf("%w: %s: missing result", errRpcIntegrity, method)
-				}
-				decodeErr := json.Unmarshal(reply.Result, result)
-				attemptCancel()
-				if decodeErr != nil {
-					return fmt.Errorf("%w: %s: invalid result: %v", errRpcIntegrity, method, decodeErr)
-				}
-				return nil
 			} else if response.StatusCode >= http.StatusMultipleChoices && response.StatusCode < http.StatusBadRequest {
 				attemptCancel()
 				return fmt.Errorf("%w: %s: HTTP %d redirect from owned route", errRpcIntegrity, method, response.StatusCode)
@@ -301,4 +323,17 @@ func validHash(value string) bool {
 	}
 	_, err := hex.DecodeString(value[2:])
 	return err == nil
+}
+
+// Only recognized read-timeout responses are retryable. Archive pruning,
+// unknown runtime/method errors and integrity failures remain visible.
+func rpcTransientReadError(code int, message string) bool {
+	if code != -32000 && code != -32001 && code != -32002 && code != -32603 {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(message)) {
+	case "request timeout", "request timed out", "rpc timeout", "query timeout", "timeout":
+		return true
+	}
+	return false
 }

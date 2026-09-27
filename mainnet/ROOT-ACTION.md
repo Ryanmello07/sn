@@ -3,9 +3,11 @@
 The root role now has an offline-qualified **single-action ownership core** in
 [root_action.go](root_action.go), a private durable store in
 [root_action_store.go](root_action_store.go), and a bounded root basket-call
-encoder in [root_signing.go](root_signing.go). There is no production signer,
-authority adapter, canonical receipt adapter, `root-service` command or active
-root weight publisher. This increment does not claim mainnet readiness.
+encoder in [root_signing.go](root_signing.go). The read-only production chain port
+in [root_receipt_chain.go](root_receipt_chain.go) now reconciles finalized native
+receipts. There is no production signer, authority/submission adapter,
+`root-service` command or active root weight publisher. This increment does not
+claim mainnet readiness.
 
 The current proposed strategy remains `accumulate_in_place`: a retained root
 seat requires **no periodic native transaction** for that strategy. The observer
@@ -33,8 +35,11 @@ One action artifact has `schema: urnetwork-mainnet-root-action-v1` and binds:
 
 The profile checks metadata14/extrinsic4, the selected AccountId32 and sr25519
 variants, the complete signed-extension order and consumed wire shapes, and the
-root call's two `Vec<u16>` parameters. The inspected payment wrapper is explicit;
-unknown or reordered extensions are refused. No UR scoring vector can be sent
+root call's two `Vec<u16>` parameters. The inspected payment wrapper's `metadata()`
+returns the inner **`ChargeTransactionPayment`** identifier and shape; expecting
+`ChargeTransactionPaymentWrapper` was a codec bug. Unknown or reordered
+extensions are refused. The V1 codec's source pin is separate from the observer's
+profile so an observer upgrade cannot silently invalidate historical actions. No UR scoring vector can be sent
 through this core without a separately approved root action artifact.
 
 Every action is one-shot for its entire lifetime. Dispatch failure, expiry or
@@ -95,6 +100,11 @@ receipt reconciliation available. A genuine receipt from before an upgrade is
 retained under its original execution runtime. A transaction executed under a
 different code, metadata or full runtime version is stored as `runtime-deviation`
 with its actual result and fee; the observer cannot erase that financial event.
+A later unapproved current runtime is recorded with `state_unavailable: true`:
+no signing or absence expiry can use its unqualified nonce/seat layout, while an
+older receipt remains readable under its independently approved execution
+profile. A later reaped account and reset nonce likewise cannot erase exact
+finalized inclusion. Only absence expiry needs a qualified unchanged nonce.
 
 Expiry requires finalized coverage from birth+1 through death−1, revalidation
 of the original anchor, a finalized head at or beyond death, and an unchanged
@@ -117,11 +127,78 @@ request/count limits independently and reject rollback/replayed authorization.
 The local store is not a hardware signer or an independently authenticated
 transaction log.
 
+## Read-only canonical receipt port
+
+Construction requires an independently supplied native chain, nonzero genesis,
+EVM chain ID 964, the owned HTTP(S) route and one to eight exact runtime/source,
+code and metadata profiles. No defaults are learned from Snow; ID 945, unknown
+source profiles and ambiguous runtime/code entries are rejected. `submit`
+unconditionally returns a disabled error. The shared RPC reader also refuses
+methods outside its explicit read-only list before HTTP delivery.
+
+One reconciliation verifies the native SCALE header hash and every parent link
+from the owned RPC's finalized head back to the exact retained mortal anchor.
+It rejects missing fields, height gaps, changed canonical head hashes and wrong
+network identity, and repeats the network check before returning evidence.
+Modern `RuntimeEnvironmentUpdated` digest8 is decoded directly because the
+pinned GSRPC library omits it. Header digest vectors are bounded before decoding.
+
+Every block body in birth+1 through min(finalized head, death−1) must reproduce
+the authenticated header's ordered extrinsics trie root before inclusion or
+absence is reported. The two known layouts are independently qualified against
+Rust `sp-trie` from SDK `cacb4310f20c7cac83eb3ccd8ed5a5ad4212608a`, locked by
+the inspected Subtensor source. Checking the committed root does not require
+interpreting intervening unknown runtimes. An actual matching receipt still
+requires its independently approved **parent-state execution runtime**, not the
+new code/metadata installed by that block. The admitted source uses
+`systemVersion/stateVersion = 1`: state trie layout1 but extrinsics trie layout0.
+
+The port independently verifies the retained sr25519 signature and all signed
+fields, then requires exact full extrinsic bytes and index, one phase-matched
+System success/failure, one native-u64 `TransactionFeePaid` from the direct hotkey
+with zero tip, and the exact seat's `RootWeightsSet` for success. A failure keeps
+its raw SCALE dispatch error and actual fee. Another transaction's event cannot
+supply the outcome. Duplicate inclusion, duplicate terminal/fee events, absent
+fee storage, trailing SCALE and oversized lengths are rejected. `event_hash`
+is Blake2b-256 of the complete raw canonical SCALE event-storage bundle.
+
+Qualified current state uses metadata-checked **56-byte** Subtensor
+`System.Account` rows, including u64 balances; generic u128-balance account
+layouts are rejected. Root UID, reverse hotkey, owner and registration generation
+are checked at that same finalized hash. Explicit null account storage means
+nonce zero; a failed or malformed read never means absence. Successful root
+weight/last-update post-state is retained separately. A readback gap is an
+explicit `post_state.issue` and does not erase a verified financial receipt.
+Readback is the final state of the entire block and may reflect a later call;
+it is not claimed to be exclusively caused by this transaction.
+
+Each read has an explicit 60–900 second retry budget (normally select 300).
+Individual attempts can use up to 60 seconds, avoiding the prior 15-second cut
+off for a read that may legitimately take longer. Transport/overload errors and recognized server read-timeout replies retry;
+archive pruning, integrity failures and unknown application errors remain
+visible. Reconciliation has a 15-minute total budget and cancellation-aware
+serialization, no detached workers and a 4,096-header ancestry limit. Bodies and
+events are bounded to 10 MiB and 65,536 entries; SCALE traversal is work/depth
+bounded and unsupported shapes fail explicitly. Failed authentication is never
+cached. Runtime metadata is retained only under the full approved tuple.
+Restart re-reads complete history rather than inventing a checkpoint or renewed
+signing allowance. An offline gap beyond the ancestry limit requires separately
+reviewed archive recovery; it cannot become automatic expiry.
+
+**Trust boundary:** the independently approved owned RPC is the authority for
+finality and pinned storage/runtime replies. Header/body commitments and ancestry
+are recomputed, but this port does not verify GRANDPA justifications, storage
+trie proofs or a source-to-Wasm build attestation. A compromised owned node could
+lie about finalized history or state. Choosing stronger independent consensus/
+storage authentication is an outstanding deployment decision, not a property
+of this implementation. No live RPC or chain mutation was used to qualify it.
+
 ## Production adapter contracts and remaining gates
 
-The core's three private interfaces have **no production implementation**. They
-cannot be activated by a policy boolean, a successful `root-preview`, or a
-testnet allowance. Before adding a signing CLI/service, supply and qualify:
+The core now has a production **read-only reconciliation** implementation.
+Authority, custody and submission have no production implementation. They cannot
+be activated by a policy boolean, a successful `root-preview`, or a testnet
+allowance. Before adding a signing CLI/service, supply and qualify:
 
 1. **Independent mainnet authority.** Approved genesis, owned route, exact
    metadata/code/full runtime and source-to-Wasm provenance; approved existing
@@ -145,14 +222,14 @@ testnet allowance. Before adding a signing CLI/service, supply and qualify:
    approval of the bounded residual fee exposure. Do not label this implementation
    max-fee protected. Fresh registration remains separately blocked because the
    inspected root-registration call has no maximum-burn argument.
-4. **Canonical chain/receipt adapter.** Read correct runtime-specific native
-   account layout and pending nonce custody. Authenticate finality/ancestry,
-   complete block bodies and extrinsic roots, exact signed bytes/index, dispatch
-   and actual fee events, execution runtime from the proper parent state, and
-   root-weight state readback. Scan the entire mortal interval with no skipped
-   blocks; a failed read is never absence. The owner checks returned coverage and
-   correspondence but does not verify storage tries or consensus itself. EVM
-   receipts and UR validator evidence do not replace native root receipts.
+4. **Chain trust and receipt activation.** Qualify the implemented port against
+   approved mainnet archive fixtures and exact runtime artifacts; approve the
+   owned-RPC trust boundary or supply independent consensus/storage verification.
+   Connect globally fenced pending-nonce custody and the separately bounded
+   submission adapter. Resolve post-state issues and define archive recovery for
+   gaps beyond 4,096 headers. Unknown receipt execution runtimes still require
+   independent profile review before event/fee interpretation. EVM receipts and
+   UR validator evidence do not replace native root receipts.
 5. **Supervisor and operations.** A finite action queue with its own globally
    reserved limits, bounded cadence/backoff, cancellation/join, alerts and named
    on-call ownership. Reconcile old actions when admission changes; never loop
@@ -168,13 +245,19 @@ three distinct authorities.
 ## Qualification scope
 
 `root_action_test.go` uses real generated test-only sr25519 keys, a public metadata
-fixture explicitly adapted to a synthetic payment-wrapper profile, private
+fixture retaining its real inner payment-extension metadata, private
 disposable files, deterministic durability failures and in-memory authority/chain
 ports. Tests cover signature/domain replay, mortality, extension/shape drift,
 missing authority, lost signer/send responses, both sides of durable writes,
 exact-byte retry, fee/dispatch/runtime deviations, expiry gaps, unexpected nonce
 consumption, stale seat generation and runtime, finality rollback, local lock
-ownership and missing/empty/rehashed state. There is no live RPC or transaction.
+ownership and missing/empty/rehashed state. `root_receipt_test.go` adds synthetic
+HTTP archive fixtures for canonical inclusion, full mortal expiry, parent-runtime
+upgrade decoding, reaped accounts, unknown-current-runtime continuation,
+code deviations, exact signature correspondence, body/header corruption,
+duplicate inclusion, cancellation, retry/restart, wrong-chain/profile rejection,
+post-state gaps and independent Rust trie vectors. There is no live RPC or
+transaction.
 
 Run normal/race/vet qualification with the composed workspace source lock:
 
