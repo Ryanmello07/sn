@@ -97,6 +97,19 @@ type rpcReply struct {
 	} `json:"error"`
 }
 
+// Retains the method and exact server code so optional read capabilities can
+// distinguish an unsupported method without parsing display text.
+type rpcCallError struct {
+	method  string
+	code    int
+	message string
+}
+
+// Preserves the established RPC diagnostic spelling for existing callers.
+func (self *rpcCallError) Error() string {
+	return fmt.Sprintf("%s: RPC error %d: %s", self.method, self.code, self.message)
+}
+
 // call retries transport and overload failures within one total operation budget.
 func (self *rpcClient) call(ctx context.Context, method string, params []any, result any) error {
 	return self.callWithStorageAbsence(ctx, method, params, result, false)
@@ -125,6 +138,15 @@ func (self *rpcClient) callBoundedRead(ctx context.Context, method string, param
 	case "system_chain", "system_version", "eth_chainId", "chain_getBlockHash", "chain_getFinalizedHead", "chain_getHeader", "chain_getBlock", "state_getRuntimeVersion", "state_getMetadata", "state_getStorageHash", "state_getStorage", "state_getKeysPaged":
 	default:
 		return errors.New("RPC method is outside the read-only mainnet profile")
+	}
+	return self.callAdmittedRead(ctx, method, params, result, allowAbsent, replyLimit)
+}
+
+// Only explicit read profiles call this transport. The ordinary profile above
+// keeps its existing whitelist; specialized observations add no global methods.
+func (self *rpcClient) callAdmittedRead(ctx context.Context, method string, params []any, result any, allowAbsent bool, replyLimit int) error {
+	if ctx == nil || replyLimit <= 0 || replyLimit > 2*rootBodyBytesLimit+maxRpcReplyBytes {
+		return errors.New("invalid bounded read budget")
 	}
 	operationCtx, cancel := context.WithTimeout(ctx, self.retryWindow)
 	defer cancel()
@@ -174,7 +196,7 @@ func (self *rpcClient) callBoundedRead(ctx context.Context, method string, param
 						attemptCancel()
 						return fmt.Errorf("%w: %s: reply has both result and error", errRpcIntegrity, method)
 					}
-					requestErr = fmt.Errorf("%s: RPC error %d: %s", method, reply.Error.Code, reply.Error.Message)
+					requestErr = &rpcCallError{method: method, code: reply.Error.Code, message: reply.Error.Message}
 					if !rpcTransientReadError(reply.Error.Code, reply.Error.Message) {
 						attemptCancel()
 						return requestErr
@@ -248,12 +270,7 @@ func (self *rpcClient) readIdentity(ctx context.Context) (chainIdentity, error) 
 	// the complete header, including its roots and bounded digest payloads.
 	identity.GenesisHash = strings.ToLower(identity.GenesisHash)
 	identity.FinalizedHash = strings.ToLower(identity.FinalizedHash)
-	header.ParentHash = strings.ToLower(header.ParentHash)
-	header.StateRoot = strings.ToLower(header.StateRoot)
-	header.ExtrinsicsRoot = strings.ToLower(header.ExtrinsicsRoot)
-	for index := range header.Digest.Logs {
-		header.Digest.Logs[index] = strings.ToLower(header.Digest.Logs[index])
-	}
+	header.normalizeHashes()
 	var err error
 	identity.FinalizedNumber, err = header.authenticate(identity.FinalizedHash)
 	if err != nil {

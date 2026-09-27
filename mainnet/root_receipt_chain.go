@@ -74,6 +74,17 @@ type rootReceiptHeader struct {
 	} `json:"digest"`
 }
 
+// Normalizes hex spelling on one caller-owned decoded header without changing
+// byte identity or converting absent digest logs into an empty vector.
+func (self *rootReceiptHeader) normalizeHashes() {
+	self.ParentHash = strings.ToLower(self.ParentHash)
+	self.StateRoot = strings.ToLower(self.StateRoot)
+	self.ExtrinsicsRoot = strings.ToLower(self.ExtrinsicsRoot)
+	for index := range self.Digest.Logs {
+		self.Digest.Logs[index] = strings.ToLower(self.Digest.Logs[index])
+	}
+}
+
 // SCALE header hashing authenticates its parent, roots, height and digest.
 func (self rootReceiptHeader) authenticate(expectedHash string) (uint64, error) {
 	number, err := parseHexNumber(self.Number)
@@ -117,6 +128,7 @@ func (self *rootCanonicalChain) header(ctx context.Context, hash string) (rootRe
 	if err := self.client.call(ctx, "chain_getHeader", []any{hash}, &header); err != nil {
 		return header, 0, err
 	}
+	header.normalizeHashes()
 	number, err := header.authenticate(hash)
 	return header, number, err
 }
