@@ -209,6 +209,17 @@ The owner-key launch target is to remove as many approved old miner registration
 
 UR scoring exclusion cannot erase a retained hotkey's native registration or prevent an independent validator from weighting it. The 10% provider outcome must therefore be checked against the actual post-trim native incentive rows, including every retained old miner. A residual native payout is disclosed as an observed exception; it is not recast as UR provider earnings or a successful full reset.
 
+Operating the majority SN25 validator can help the owner-key reset only
+indirectly: valid low or zero weights on approved old miners may lower their
+observed emissions over future native intervals, making them more likely to be
+chosen by the [emission-ranked owner trim][subtensor-uids]. It cannot deregister
+anyone, bypass immunity or minimum capacity, force the other validators' votes,
+or grant chain-Root authority. Reobserve finalized emissions and rerun the
+complete protected-identity plan before each proposed trim; never assume a
+submitted weight row has already changed the chain's trim ordering. The
+netuid-0 root validator's weights serve its distinct root basket role, not
+SN25 miner deregistration. [Subnet weight setter][subtensor-weights]
+
 Deletion of a registration does not delete historical events, refund registration cost, erase coldkey assets, or extinguish collateral and claims. Historical UR bindings continue to use their original block-specific mapping. Invalidate or renew only future bindings that reference displaced UID generations; preserve proof and claim history.
 
 ### Supported paths and their limits
