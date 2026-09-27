@@ -173,9 +173,14 @@ blocks new effects while old receipts remain recoverable. The new
 [offline custody handoff](ROOT-OFFLINE-CUSTODY.md) authenticates independent
 exact-action approval, durably imports one matching public native signature and
 recovers the same bytes after interruption; local absence never proves that no
-signature was issued. Production live authority, globally fenced native
-signing/submission adapters and supervisor are still absent; the
-read-only canonical receipt adapter is implemented. Native fee
+signature was issued. The [root service decision owner](ROOT-SERVICE.md) now
+retains a bounded approved-basket decision and original native intent atomically,
+owns finite joined supervision and separates observation, current authority,
+custody and submission capabilities. Exact-block read-only weight observation
+and pinned-runtime normalization supply necessary decision checks; they never
+authorize effects. Production live authority and globally fenced native
+signing/submission adapters are still absent; the read-only canonical receipt
+adapter is implemented. Native fee
 quotes are not atomic caps; source/policy hashes are not on-chain runtime locks.
 Do not activate signing from a read-only-ready sample or invent a heartbeat for
 the accumulation strategy. Mainnet identity, existing seat, complete eligibility,
