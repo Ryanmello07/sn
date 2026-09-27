@@ -52,6 +52,15 @@ mainnet transaction, deployment, UID removal or validator activation.
 Read-only inspection and offline implementation can proceed while required
 inputs remain unresolved. The planner must expose those blockers and refuse
 mutating phases until their exact dependencies and authorization are complete.
+The current Snow xops `vars.yml` still selects `testfinney` with EVM ID 945 and
+the testnet genesis. Its [prepared cutover guard](https://github.com/urnetwork/xops/commit/ec443da)
+is not deployed: it requires the data mount in both full-host and isolated
+lightnode rollouts, renders a network-specific bootnode including finney's
+`/ws` transport, and rejects mixed testnet/mainnet identity inputs. Before
+starting the mainnet node, select distinct reviewed node generations, the
+approved finney genesis and runtime pins, EVM ID 964, bootnode host/port/peer,
+and reference route as one configuration. Observe the started node's finalized
+identity; configuration checks alone do not establish it.
 
 ## Requested outcome and decisions
 

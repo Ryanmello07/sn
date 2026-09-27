@@ -1143,13 +1143,16 @@ Back up signed journals, keys and evidence with separate access policies and
 test restoration. Relocate old data only with ownership checks and preserved
 live paths; paths themselves are not cryptographic identity. Production volume
 selection is deployment configuration, not a hardcoded testnet USB path.
-The Snow xops mount guard in branch
-`codex/mainnet-subtensor-mount-guard-20260927` (commit `ca49e00`) now requires
-the configured data mount before creating node generations and at each systemd
-start. Its Ansible syntax check passed, but the change is not deployed and its
-checked-in chain selection still targets testnet. During the operator's data
-move, verify the actual mount path and volume UUID before applying that branch;
-then switch chain, genesis, runtime and reference pins together for mainnet.
+The Snow xops guard in branch `codex/mainnet-subtensor-mount-guard-20260927`
+(commits `ca49e00`, `ec443da`) requires the configured data mount before either
+playbook inspects or creates a node generation, and at each systemd start. It
+also rejects a finney cutover retaining testnet chain ID, genesis or bootnode,
+and renders the reviewed `/ws` bootnode form for both containers; the monitor
+helper accepts that form. The 36 affected Python tests and both Ansible syntax
+checks passed. The branch is not deployed and its checked-in chain selection
+still targets testnet. During the operator's data move, verify the actual mount
+path and volume UUID before applying that branch; then switch chain, genesis,
+runtime, bootnode and reference pins together for mainnet.
 
 **Closure.** Exercise missing mount, read-only/full volume, inode exhaustion,
 device disconnect/re-enumeration, journal replay, partial write, crash
