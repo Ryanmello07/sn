@@ -10,7 +10,8 @@ Qualification used an isolated branch from
 `6dbbe4fecc632a7769e394d7c695295ce6b16fdc`. The complete
 [external evidence bundle](/mnt/data/sn-testnet/evidence/mainnet-owner-trim-guard-20260927/RESULT.md)
 retains commands, raw test logs, source hashes, exact reviewed runtime bytes,
-the final commit and a checksum manifest.
+the final commit and a checksum manifest. All 34 entries verify; the manifest
+SHA256 is `7bfaa559c4a6ff4cff2069e1436e63069b5b0487911ee2719af32f2899eb3d66`.
 
 | Check | Result |
 | --- | --- |
@@ -18,6 +19,7 @@ the final commit and a checksum manifest.
 | Final identity/historical guard race coverage | 16/16 roots and 14 subtests pass; 94.359s |
 | Final remaining subnet/storage race coverage | 8/8 roots pass; 32.358s |
 | Final `go vet ./mainnet` | exit 0 |
+| Integrated branch monitor/owner-trim/identity/storage/bootstrap selector and vet | pass; 50.373s for selected normal tests |
 | Earlier broad race build | 85/93 roots passed before the default ten-minute package timeout; no assertion failure or race report. The eight unfinished roots are the completed final-source run above. |
 
 The broad race build has separate source hashes. Final review reproduced and

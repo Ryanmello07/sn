@@ -28,7 +28,8 @@ SN/server/SDK/Connect/config revisions. Some shared and simulator fixes exist;
 the complete mutating bootstrap, root-validator service and operational repair
 system remain production work. [mainnet/main.go](main.go) implements signer-free
 `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`,
-`monitor`, `subnet-preview`, `owner-trim-plan`, `root-preview`, `root-monitor`,
+`monitor`, `subnet-preview`, `owner-trim-plan`, `owner-trim-recheck`,
+`owner-trim-reconcile`, `root-preview`, `root-monitor`,
 `check-recycle-mode`, `economic-reference`, offline `source-lock`,
 [local `release-inventory`](RELEASE-INVENTORY.md), and the
 [signer-free blocked `plan`](PLAN.md); executable planning, `apply`, `resume`
@@ -194,6 +195,13 @@ capacities against that authenticated census, predicts removed generations and
 survivor UID mapping, and names each old miner that would remain. Its
 [algorithm and limits](SUBNET-CENSUS.md#best-effort-owner-trim) retain
 `reset_ready=false`, `apply_authority=false` and `full_reset_completed=false`.
+The [recheck and reconciliation commands](OWNER-TRIM-GUARD.md) now rebuild a
+retained plan from its historical authenticated census, refuse drift before a
+prospective call, and compare later exact generations, survivors and root
+membership. A matching read is not a transaction receipt or execution token;
+the reviewed owner call still accepts only netuid and capacity. Any execution
+path must explicitly resolve the protected-identity risk between recheck and
+inclusion, record the actual receipt and reconcile effects.
 
 Construct disjoint `remove`, `preserve`, and `unresolved` sets. Preserve explicit owner and validator hotkeys, including a validator currently lacking a permit, and any reserve, pool or escrow identity whose existing custody or earned claims require continuity. Membership in both a requested removal scope and a protected custody/validator role is an explicit conflict requiring a reviewed resolution; it is not silently omitted from “all.” Third-party validator identities receive the same explicit classification. Snapshot netuid-0 membership independently to prove it was untouched.
 
@@ -459,6 +467,9 @@ census](SUBNET-CENSUS.md), with explicit protected and removal generations;
 `reset_ready` is always false and no UID is changed.
 `owner-trim-plan` adds a bounded ranked partial-trim prediction and explicit
 residuals, without changing that admission result.
+`owner-trim-recheck` and `owner-trim-reconcile` extend the read-only evidence
+through drift detection and exact post-state comparison, with the same blocked
+execution status and no signer.
 
 The [existing-seat root action owner](ROOT-ACTION.md) is an offline-qualified
 one-action signing and recovery core, not a CLI command or live root validator.
