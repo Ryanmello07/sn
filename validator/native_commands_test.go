@@ -80,7 +80,14 @@ func TestNativeCommandUsageForms(t *testing.T) {
 	}
 }
 
+// Both command forms create private seeds and preserve their identity on rerun.
 func TestInitCreatesPrivateSeedsForConfigAndStateDirForms(t *testing.T) {
+	assertInitCreatesPrivateSeeds(t)
+}
+
+// Share the real command checks with the isolated process-umask regression.
+func assertInitCreatesPrivateSeeds(t *testing.T) {
+	t.Helper()
 	path := writeReleaseConfig(t, unrenderedReleaseConfig(t))
 	// The loaded configuration carries the normalized per-operator seed paths
 	// init must honor.
