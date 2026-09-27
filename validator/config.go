@@ -70,7 +70,8 @@ type ReleaseConfig struct {
 	Operators           []OperatorConfig        `yaml:"operators" json:"operators"`
 	EvidenceV2          ReleaseEvidenceV2Config `yaml:"evidence_v2" json:"evidence_v2"`
 
-	SourceRolePredecessorV2 *ReleaseEvidenceV2File `yaml:"source_role_predecessor_v2,omitempty" json:"source_role_predecessor_v2,omitempty"`
+	SourceRolePredecessorV2 *ReleaseEvidenceV2File             `yaml:"source_role_predecessor_v2,omitempty" json:"source_role_predecessor_v2,omitempty"`
+	OwnerRecycleApproval    *ReleaseOwnerRecycleApprovalConfig `yaml:"owner_recycle_approval,omitempty" json:"owner_recycle_approval,omitempty"`
 
 	ProvisionalDeferClosedNativeInput bool   `yaml:"provisional_defer_closed_native_input,omitempty" json:"provisional_defer_closed_native_input,omitempty"`
 	ProvisionalRuntimeCompatibility   string `yaml:"provisional_runtime_compatibility,omitempty" json:"provisional_runtime_compatibility,omitempty"`
@@ -102,6 +103,7 @@ func LoadReleaseConfigPreActivation(path string) (*ReleaseConfig, error) {
 type releaseConfigLoadMode struct {
 	provisionalActivationObservation bool
 	preActivation                    bool
+	ownerRecycleAdmission            bool
 }
 
 func loadReleaseConfig(path string, mode releaseConfigLoadMode) (*ReleaseConfig, error) {
@@ -146,7 +148,16 @@ func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMo
 	if err := cfg.normalize(filepath.Dir(abs)); err != nil {
 		return nil, err
 	}
-	if provisionalActivationObservation {
+	if mode.ownerRecycleAdmission {
+		if err := validateOwnerRecycleApprovalScope(&cfg); err != nil {
+			return nil, fmt.Errorf("validator admission config %s: %w", abs, err)
+		}
+		if cfg.OwnerRecycleApproval.Approval != (ReleaseEvidenceV2File{}) {
+			if err := cfg.OwnerRecycleApproval.Approval.Validate(maximumOwnerRecycleApprovalBytes); err != nil {
+				return nil, fmt.Errorf("validator admission config %s: %w", abs, err)
+			}
+		}
+	} else if provisionalActivationObservation {
 		if err := cfg.validateProvisionalActivationObservation(); err != nil {
 			return nil, fmt.Errorf("validator config %s: %w", abs, err)
 		}
@@ -300,6 +311,11 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 	}
 	if !c.Production {
 		return errors.New("release config must explicitly set production: true")
+	}
+	if c.OwnerRecycleApproval != nil {
+		if err := validateOwnerRecycleApprovalSelection(&c); err != nil {
+			return err
+		}
 	}
 	if c.ProvisionalDeferClosedNativeInput && !provisionalClosedNativeInputEnabled(&c) {
 		return errors.New("provisional closed native input deferral requires chain 945 and testnet policy")

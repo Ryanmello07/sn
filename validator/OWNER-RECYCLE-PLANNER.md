@@ -6,6 +6,11 @@ one validator's proposed head/tail/owner row and refuses activation through
 to `ReleaseSteerer.SubmitOnce`. The existing release policy and its canonical hash
 remain unchanged. No production configuration accepts this draft schema.
 
+The [signed admission slice](OWNER-RECYCLE-ADMISSION.md) now adds independently
+selected approval custody and an authenticated finalized owner/mode reader.
+It remains read-only: measurement, envelope, intent and archive transitions are
+still required, and every mainnet steering entry remains blocked.
+
 The selected policy is a **10% target for providers within the native miner
 allocation**, with the other 90% intended for runtime owner-recycle. A weight row
 can express that target; it cannot enforce that allocation after Yuma. The preview

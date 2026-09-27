@@ -57,6 +57,9 @@ func releaseAttemptClaimMatchesBinding(claim AttemptEgressClaim, binding stabi.S
 }
 
 func NewReleaseSteerer(cfg *ReleaseConfig, chain *ChainClient, native *crv4.Chain, hotkey *crv4.Keypair, contexts []*ReleaseMeasurementContext) (*ReleaseSteerer, error) {
+	if err := ownerRecycleProductionBoundary(cfg); err != nil {
+		return nil, err
+	}
 	if cfg == nil || chain == nil || native == nil || hotkey == nil {
 		return nil, errors.New("release steerer requires config, EVM chain, native chain and hotkey")
 	}
@@ -704,6 +707,9 @@ func (s *ReleaseSteerer) reconcilePending(ctx context.Context, current *Steering
 	}
 	// Historical inclusion can close an old intent, but absent inclusion its
 	// original signing runtime must still be the current approved artifact.
+	if err := ownerRecycleProductionBoundary(s.cfg); err != nil {
+		return false, err
+	}
 	if err := authenticatePinnedNativeRuntimeAtContext(ctx, &historical, s.cfg, preparedRuntimeHash); err != nil {
 		return false, fmt.Errorf("pending steering replay uses a historical signing runtime: %w", err)
 	}
@@ -759,6 +765,9 @@ func (s *ReleaseSteerer) reconcilePending(ctx context.Context, current *Steering
 }
 
 func (s *ReleaseSteerer) SubmitOnce(ctx context.Context) error {
+	if err := ownerRecycleProductionBoundary(s.cfg); err != nil {
+		return err
+	}
 	if s.runtimeV2 != nil || s.intents != nil && s.intents.v2 != nil || s.cfg != nil && s.cfg.EvidenceV2.Schema != "" {
 		if err := requireReleaseEvidenceV2Runtime(s); err != nil {
 			return err

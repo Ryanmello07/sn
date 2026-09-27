@@ -87,6 +87,9 @@ func authenticateReleaseNativeSourceReferenceV2(ctx context.Context, native *crv
 }
 
 func newReleaseSteererV2(cfg *ReleaseConfig, chain *ChainClient, native *crv4.Chain, hotkey *crv4.Keypair, contexts []*ReleaseMeasurementContext, runtime *releaseRuntimeV2) (*ReleaseSteerer, error) {
+	if err := ownerRecycleProductionBoundary(cfg); err != nil {
+		return nil, err
+	}
 	if cfg == nil || chain == nil || !chain.release || native == nil || hotkey == nil || runtime == nil || runtime.ctx == nil || runtime.hotkey == nil || runtime.native != native || runtime.chain != chain || runtime.hotkey.PublicKey() != hotkey.PublicKey() {
 		return nil, errors.New("V2 steerer requires its actual authenticated production root")
 	}
@@ -260,6 +263,9 @@ func (self *ReleaseSteerer) checkSourceRoleV2(ctx context.Context, snapshot *Rel
 }
 
 func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) {
+	if err := ownerRecycleProductionBoundary(self.cfg); err != nil {
+		return err
+	}
 	// Runtime authentication mutates a signing view, never the process-wide
 	// metadata pointer used concurrently by independent native observers.
 	owned := *self
@@ -579,6 +585,9 @@ func (self *ReleaseSteerer) reconcilePendingV2(ctx context.Context, current *Ste
 			return false, err
 		}
 		return true, nil
+	}
+	if err := ownerRecycleProductionBoundary(self.cfg); err != nil {
+		return false, err
 	}
 	if err := authenticatePinnedNativeRuntimeAtContext(ctx, &historical, self.cfg, preparedRuntimeHash); err != nil {
 		return false, fmt.Errorf("pending steering replay uses a historical signing runtime: %w", err)

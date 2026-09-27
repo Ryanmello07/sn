@@ -87,6 +87,9 @@ func validatePreparedNativeRuntimeContext(ctx context.Context, native *crv4.Chai
 // distinguishes admission refusal from an attempted submit with uncertain
 // finality, preserving the existing pending-error persistence behavior.
 func submitPreparedNativeRuntimeContext(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, prepared *crv4.PreparedSubmission) (*crv4.SubmitResult, bool, error) {
+	if err := ownerRecycleProductionBoundary(cfg); err != nil {
+		return nil, false, err
+	}
 	if prepared == nil {
 		return nil, false, errors.New("prepared steering submission is unavailable")
 	}
