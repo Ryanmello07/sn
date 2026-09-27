@@ -171,6 +171,12 @@ weight/last-update post-state is retained separately. A readback gap is an
 explicit `post_state.issue` and does not erase a verified financial receipt.
 Readback is the final state of the entire block and may reflect a later call;
 it is not claimed to be exclusively caused by this transaction.
+The signed root call does not include a registration-generation argument.
+`RootWeightsSet` identifies a UID, while the finalized census identifies its
+current generation; neither alone proves the generation at an earlier
+intra-block execution point. A contradictory UID requires receipt review.
+Production custody must prevent administrative seat changes while an action is
+pending or provide separately authenticated incident reconciliation.
 
 Each read has an explicit 60–900 second retry budget (normally select 300).
 Individual attempts can use up to 60 seconds, avoiding the prior 15-second cut

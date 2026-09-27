@@ -27,7 +27,7 @@ system remain production work. [mainnet/main.go](main.go) implements signer-free
 `inspect`, `monitor`, `subnet-preview`, `root-preview`, `root-monitor`,
 `check-recycle-mode`, `economic-reference` and offline `source-lock`; `plan`, `apply`, `resume` and root-validator signing are
 not implemented. The
-[retained Snow inspection](evidence/snow-route-inspect-20260927-0957.json)
+[retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)
 observed chain ID 945, which fails the required mainnet ID 964 gate.
 This plan and its read-only evidence perform no
 mainnet transaction, deployment, UID removal or validator activation.
@@ -36,7 +36,7 @@ mainnet transaction, deployment, UID removal or validator activation.
 
 | Prerequisite | Current disposition and next result required |
 | --- | --- |
-| Owned mainnet RPC and independent identity authority | The [09:57 UTC read-only inspection](evidence/snow-route-inspect-20260927-0957.json) still observes testnet ID 945 at Snow `:9944`; the node operator says mainnet routing is being prepared. Reinspect after cutover and obtain separately approved genesis, expected EVM ID 964, native/EVM finalized mapping, code/metadata and node/source identity. An operator-approved mainnet genesis is still outstanding. |
+| Owned mainnet RPC and independent identity authority | The [10:51 UTC read-only inspection](evidence/snow-route-inspect-20260927-1051.json) still observes testnet ID 945 at Snow `:9944`; the node operator says mainnet routing is being prepared. Reinspect after cutover and obtain separately approved genesis, expected EVM ID 964, native/EVM finalized mapping, code/metadata and node/source identity. An operator-approved mainnet genesis is still outstanding. |
 | Immutable qualified release | Compose the actual SN/server/SDK/Connect/config and contract artifacts, including selected branch fixes and migration order; qualify their real interfaces and publish an approved manifest. Historical R48 builds do not qualify later per-user deposit or zero-price changes. |
 | Exact mainnet census and authority | Read SN25 membership, roles, custody, immutable contracts and locks at one finalized snapshot; resolve reset feasibility and all protected identities before making an executable plan. |
 | Economic and custody decisions | The user selected **owner-recycle for the remaining 90%**. Implement and qualify that path and the 10% native-miner target on the actual runtime; finalize mainnet policy, tolerance, keys/Safe, root-registration protection and spend/count/expiry ceilings. Recycled value is not reserve custody. No testnet allowance carries over. |
@@ -229,6 +229,14 @@ Claim “started at 10%” only after the observed native outcomes meet the targ
 
 [STSettlementVault](../evm/src/STSettlementVault.sol) captures the eligible pool emission through the configured staking precompile and keeps immutable claim accounting. It has no upgrade or treasury sweep. Its conservation checks distinguish total captured, total paid, escrow accounting, pending funding and outstanding liabilities. Publishing payout roots at 10% while leaving 90% in this vault does not make the remainder an owner reserve or erase its accounting obligations.
 
+The [claim-recovery correction](../evm/CLAIM-RECOVERY.md) keeps an accepted
+Merkle leaf and provider credit if an exact runtime transfer or balance-delta
+check fails. The attempted payment is isolated in a vault self-call so its
+state can roll back without rolling back claim acceptance. This changes the
+non-upgradeable vault's bytecode and requires a new deployment artifact and
+an authenticated runtime rehearsal of nested EVM/native rollback. It does not
+repair an already deployed vault or loosen exact payout accounting.
+
 A reserve design must specify a different enforceable custody path before deployment: who owns each head and pool registration, which precompile call transfers each tranche, which principal and collateral are excluded, who can authorize the transfer, and how cumulative provider liabilities are bounded. Moving all head miners behind a new contract would change release 1.0's provider-owned direct-payment model. Such a design requires its own contract/policy qualification and migration plan; a coordinator upgrade cannot retrofit withdrawal authority into an old vault.
 
 Implement the selected owner-recycle path against the exact runtime: authenticate the recognized owner-hotkey set and recycle mode, preserve the signed cap and validator independence, and prove the finalized 10% provider / 90% recycle split with exact interval accounting. Keep the recycle fraction separate from native rounding and supply-side effects. No reserve transfer or new reserve-custody contract is implied. Do not deploy an immutable contract set before the selected path and custody layout are qualified.
@@ -246,6 +254,16 @@ mainnet registration, masks and protection are unknown. The preview always
 refuses submission and reports its row as a proposed weight fraction; an
 authenticated owner census, signed policy transition and measured native
 Yuma/emission outcome remain separate gates.
+
+The [signed successor admission](../validator/OWNER-RECYCLE-ADMISSION.md)
+now verifies an independently pinned approval, immutable local custody and an
+exact finalized runtime/owner census under explicit Recycle mode. It does not
+start steering: both submission paths remain fenced until measurement,
+signatures, pending intents, archive replay, coordinator/client-key policy and
+the native drain boundary use one successor authority. Original pending
+receipts can still be reconciled. An admitted 10/90 weight row remains a
+proposal until independent validators and finalized native allocation prove
+the economic result.
 
 ## Contract deployment, custody and initialization
 
@@ -307,8 +325,13 @@ readiness, and `activation_ready` remains false. Registration, bounded signing,
 effective custom-weight eligibility and complete basket custody remain gates.
 The [existing-seat action owner](ROOT-ACTION.md) now provides an offline-qualified
 mortal root basket encoder, durable one-request signing/nonce ownership and
-receipt/expiry recovery. Production authority, custody and canonical receipt
-adapters are absent; there is no signing command or active root service. The
+receipt/expiry recovery. Its read-only chain adapter reconstructs canonical
+native inclusion and receipt evidence from the approved owned RPC, with exact
+historical execution-runtime checks; it does not independently prove GRANDPA
+finality or storage. Production signing authority, global custody and submission
+are absent; there is no signing command or active root service. A signed root
+call does not bind registration generation, so pending-action seat changes need
+custody exclusion or separately authenticated incident reconciliation. The
 accumulate-in-place strategy needs no heartbeat transaction. Changing that
 strategy, signing fees and distributed custody fencing require separate approval
 and qualification; a local reserve is not a native maximum-fee argument.
