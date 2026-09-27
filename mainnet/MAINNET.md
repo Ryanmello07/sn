@@ -563,6 +563,11 @@ and base inputs; qualify arm64 image execution, full service behavior,
 source-to-image provenance, selected published OCI manifests and running-image
 readback before MG-02 can close. Local binaries and image IDs are not an
 approved rollout.
+An [uncached API rebuild](/mnt/data/sn-testnet/evidence/mainnet-package-pin-probe-20260927/RESULT.md#forced-rebuild-result)
+produced a different OCI digest from identical pinned inputs; package logs,
+cache and timestamps varied. The release build must either normalize those
+outputs and prove exact repeatability, or identify an independently reviewed
+immutable image without claiming reproducible bytes.
 
 The [owner-recycle measured decision](../validator/OWNER-RECYCLE-MEASUREMENT.md)
 now joins signed successor approval, exact native owner census and fully

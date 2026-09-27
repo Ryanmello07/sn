@@ -33,6 +33,11 @@ built and extracted the selected binaries exactly. Those local image IDs are
 not published manifests or deployed-image evidence. Actual arm64 image/script
 execution, durable owned package archive, byte-identical OCI rebuild,
 source-to-image provenance and full service qualification remain open.
+An explicit [forced API rebuild](/mnt/data/sn-testnet/evidence/mainnet-package-pin-probe-20260927/RESULT.md#forced-rebuild-result)
+confirmed that OCI bytes still drift: the same Dockerfile, binary and pinned
+packages produced a different digest. Exported rootfs comparison isolated
+wall-clock package logs/cache and file timestamps; package pinning alone did
+not make the image reproducible.
 
 The EVM tree and four copied contract artifacts are unchanged from v9; their
 new source-lock binding is not a new source-to-bytecode proof. `policy` and

@@ -98,6 +98,11 @@ includes the lock, payloads and signed-index inputs. Keep MG-02 open for an
 owned package archive/restore, actual arm64 image qualification, selected and
 published OCI manifests, full source-to-image provenance, production rollout
 and running-image readback. A local image digest does not prove publication.
+An [uncached API rebuild](/mnt/data/sn-testnet/evidence/mainnet-package-pin-probe-20260927/RESULT.md#forced-rebuild-result)
+with identical source inputs produced a different OCI digest: package install
+logs/cache embedded wall-clock data and hundreds of file timestamps changed.
+This is a demonstrated reproducibility defect to fix before claiming a
+byte-identical production image build.
 
 The local validator init fixture initially failed under host umask `0002`
 because `testing.TempDir` supplied a group-writable numbered seed parent.
