@@ -20,6 +20,8 @@ import (
 
 const ownerRecycleMeasurementSchema = "urnetwork-owner-recycle-measurement-v1"
 const ownerRecycleDecisionIntentSchema = "urnetwork-owner-recycle-decision-intent-v1"
+const ownerRecycleOperatorMeasurementSchema = "urnetwork-owner-recycle-measurement-v2"
+const ownerRecycleOperatorIntentSchema = "urnetwork-owner-recycle-decision-intent-v2"
 
 // The only current state is a verified arithmetic proposal with missing launch
 // admission. No ready or executable state is defined by this wire version.
@@ -31,11 +33,13 @@ const OwnerRecycleDecisionBlocked OwnerRecycleDecisionStatus = "verified_proposa
 // Its detached bytes are private and cannot be replaced by candidate booleans.
 // It grants this one exact decision's replay, not a reusable activation lease.
 type OwnerRecycleMeasurementAuthority struct {
-	approval    []byte
-	census      []byte
-	expected    ReleaseMeasurementV2Decision
-	config      ReleaseConfig
-	observation OwnerRecycleAdmissionObservation
+	approval             []byte
+	census               []byte
+	expected             ReleaseMeasurementV2Decision
+	config               ReleaseConfig
+	observation          OwnerRecycleAdmissionObservation
+	operatorEvidence     []byte
+	operatorProviderHash string
 }
 
 // The exact and quantized rows are outputs reconstructed from provider proofs.
@@ -58,6 +62,7 @@ type OwnerRecycleMeasurement struct {
 	Approval            []byte                     `json:"approval"`
 	Census              []byte                     `json:"census"`
 	ProviderMeasurement []byte                     `json:"provider_measurement"`
+	OperatorEvidence    []byte                     `json:"operator_evidence,omitempty"`
 	Row                 OwnerRecycleMeasuredRow    `json:"row"`
 }
 
@@ -73,6 +78,7 @@ type OwnerRecycleDecisionIntent struct {
 	ProposalHash            [32]byte                     `json:"proposal_hash"`
 	CensusHash              string                       `json:"census_hash"`
 	ProviderMeasurementHash string                       `json:"provider_measurement_hash"`
+	OperatorEvidenceHash    string                       `json:"operator_evidence_hash,omitempty"`
 	Decision                ReleaseMeasurementV2Decision `json:"decision"`
 	Row                     OwnerRecycleMeasuredRow      `json:"row"`
 	Blockers                []string                     `json:"activation_blockers"`
@@ -249,10 +255,13 @@ func buildOwnerRecycleMeasurement(ctx context.Context, authority *OwnerRecycleMe
 	if err != nil {
 		return nil, err
 	}
-	if uint64(len(providerBytes))+uint64(len(authority.approval))+uint64(len(authority.census)) > limit {
+	if uint64(len(providerBytes))+uint64(len(authority.approval))+uint64(len(authority.census))+uint64(len(authority.operatorEvidence)) > limit {
 		return nil, errors.New("owner-recycle measurement evidence exceeds its complete allowance")
 	}
 	providerBytes = bytes.Clone(providerBytes)
+	if len(authority.operatorEvidence) != 0 && ReleaseMeasurementContentHash(providerBytes) != authority.operatorProviderHash {
+		return nil, errors.New("owner-recycle operator evidence belongs to different exact provider bytes")
+	}
 	artifact, verified, err := DecodeReleaseMeasurementArtifactV2(ctx, providerBytes, options)
 	if err != nil {
 		return nil, err
@@ -261,14 +270,19 @@ func buildOwnerRecycleMeasurement(ctx context.Context, authority *OwnerRecycleMe
 	if err != nil {
 		return nil, err
 	}
-	return &OwnerRecycleMeasurement{Schema: ownerRecycleMeasurementSchema, Status: OwnerRecycleDecisionBlocked,
-		Approval: bytes.Clone(authority.approval), Census: bytes.Clone(authority.census), ProviderMeasurement: providerBytes, Row: row}, ctx.Err()
+	schema := ownerRecycleMeasurementSchema
+	if len(authority.operatorEvidence) != 0 {
+		schema = ownerRecycleOperatorMeasurementSchema
+	}
+	return &OwnerRecycleMeasurement{Schema: schema, Status: OwnerRecycleDecisionBlocked,
+		Approval: bytes.Clone(authority.approval), Census: bytes.Clone(authority.census), ProviderMeasurement: providerBytes,
+		OperatorEvidence: bytes.Clone(authority.operatorEvidence), Row: row}, ctx.Err()
 }
 
 // The immutable references and complete row form a distinct blocked intent.
 // Eligibility, history and outcome gates cannot be cleared by candidate fields.
 func ownerRecycleDecisionIntent(authority *OwnerRecycleMeasurementAuthority, capsule *OwnerRecycleMeasurement, encoded []byte) *OwnerRecycleDecisionIntent {
-	return &OwnerRecycleDecisionIntent{Schema: ownerRecycleDecisionIntentSchema, Status: OwnerRecycleDecisionBlocked,
+	intent := &OwnerRecycleDecisionIntent{Schema: ownerRecycleDecisionIntentSchema, Status: OwnerRecycleDecisionBlocked,
 		CapsuleHash: ReleaseMeasurementContentHash(encoded), ApprovalHash: authority.observation.ApprovalHash,
 		ProposalHash: authority.observation.ProposalHash, CensusHash: ReleaseMeasurementContentHash(capsule.Census),
 		ProviderMeasurementHash: ReleaseMeasurementContentHash(capsule.ProviderMeasurement), Decision: authority.expected, Row: capsule.Row,
@@ -278,6 +292,12 @@ func ownerRecycleDecisionIntent(authority *OwnerRecycleMeasurementAuthority, cap
 			"drained successor activation, signed envelopes, transaction custody and archive transition remain blocked",
 			"final Yuma incentives, owner recycling and the 10/90 native outcome remain unobserved",
 		}}
+	if len(authority.operatorEvidence) != 0 {
+		intent.Schema = ownerRecycleOperatorIntentSchema
+		intent.OperatorEvidenceHash = ReleaseMeasurementContentHash(authority.operatorEvidence)
+		intent.Blockers[1] = "decision-time operator state and source-root window are observed; API health, key/payout custody and full native/EVM history remain unproved"
+	}
+	return intent
 }
 
 // Seals reviewable evidence only. There is no signer, prepared transaction,
@@ -309,6 +329,7 @@ type ownerRecycleMeasurementWire struct {
 	Approval            []byte                     `json:"approval"`
 	Census              []byte                     `json:"census"`
 	ProviderMeasurement []byte                     `json:"provider_measurement"`
+	OperatorEvidence    []byte                     `json:"operator_evidence,omitempty"`
 	Row                 json.RawMessage            `json:"row"`
 }
 
@@ -336,8 +357,13 @@ func ReplayOwnerRecycleMeasurement(ctx context.Context, authority *OwnerRecycleM
 	if err != nil || !bytes.Equal(encoded, append(canonical, '\n')) {
 		return nil, errors.Join(errors.New("owner-recycle capsule is not canonical"), err)
 	}
-	if capsule.Schema != ownerRecycleMeasurementSchema || capsule.Status != OwnerRecycleDecisionBlocked ||
-		!bytes.Equal(capsule.Approval, authority.approval) || !bytes.Equal(capsule.Census, authority.census) {
+	schema := ownerRecycleMeasurementSchema
+	if len(authority.operatorEvidence) != 0 {
+		schema = ownerRecycleOperatorMeasurementSchema
+	}
+	if capsule.Schema != schema || capsule.Status != OwnerRecycleDecisionBlocked ||
+		!bytes.Equal(capsule.Approval, authority.approval) || !bytes.Equal(capsule.Census, authority.census) ||
+		!bytes.Equal(capsule.OperatorEvidence, authority.operatorEvidence) {
 		return nil, errors.New("owner-recycle capsule differs from the original approved decision authority")
 	}
 	rebuilt, err := buildOwnerRecycleMeasurement(ctx, authority, capsule.ProviderMeasurement, options)

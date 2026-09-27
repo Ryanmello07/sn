@@ -590,7 +590,18 @@ validator eligibility, operator health, complete history, drained activation,
 custody, archive and observed final incentives remain MG-06 gates. Its affected
 139-test race selector and final-source 58-test focused normal selector passed;
 the [qualification record](/mnt/data/sn-testnet/evidence/mainnet-owner-recycle-decision-20260927/RESULT.md)
-states the exact limits.
+states the exact limits. The next operator-observed variant invokes the actual
+canonical coordinator reader after full proof replay: it checks active registry,
+pool and provider mappings, exact deposit/conviction amounts, policy and source
+root/window against the measurement, then rechecks chain/genesis and the exact
+EVM decision hash. Its distinct v2 capsule binds those retained facts to the
+original provider bytes; v1 capsules remain byte-compatible. This resolves
+decision-time coordinator claims without treating active registration as API
+health or independently proving the native/EVM mapping. Native validator
+eligibility, API/key/payout history and all activation/signing gates stay open.
+Its [qualification record](/mnt/data/sn-testnet/evidence/mainnet-owner-recycle-readiness-20260927/RESULT.md)
+retains 138 normal and 138 race passes, vet, cross-compile and the final
+naming-only follow-up without claiming launch approval.
 
 No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 

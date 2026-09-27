@@ -40,6 +40,12 @@ func newRecycleMeasurementFixture(t *testing.T) *recycleMeasurementFixture {
 // need only a nonempty genuine head and keep the smaller production M8 corpus.
 func newRecycleMeasurementFixtureWithCompleted(t *testing.T, completed int) *recycleMeasurementFixture {
 	t.Helper()
+	return newRecycleMeasurementFixtureWithSetup(t, completed, nil)
+}
+
+// Route and raw decision observations are selected before approval is signed.
+func newRecycleMeasurementFixtureWithSetup(t *testing.T, completed int, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture)) *recycleMeasurementFixture {
+	t.Helper()
 	admission := newRecycleAdmissionFixture(t, nil)
 	identity := AttemptLedgerIdentity{DeploymentID: "synthetic-recycle-measured", ChainID: 964, GenesisHash: admission.cfg.GenesisHash,
 		Netuid: 25, ValidatorID: 1, ValidatorUID: 7}
@@ -60,6 +66,9 @@ func newRecycleMeasurementFixtureWithCompleted(t *testing.T, completed int) *rec
 	admission.approval.ValidatorHotkey = [32]byte{0x15}
 	admission.approval.FirstNativeEpoch = artifact.SubnetEpoch
 	admission.approval.MaximumSubnetUids = 111
+	if setup != nil {
+		setup(admission, provider)
+	}
 	admission.approval.ConfigHash, _ = OwnerRecycleConfigHash(admission.cfg)
 	_, _, metadata := recycleAdmissionTestMetadata(t, nil)
 	netuid := binary.LittleEndian.AppendUint16(nil, 25)
