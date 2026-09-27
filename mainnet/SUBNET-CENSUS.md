@@ -1,4 +1,4 @@
-# Authenticated SN25 census and reset feasibility preview
+# Authenticated SN25 census and owner trim planning
 
 `subnet-preview` collects one complete, bounded, signer-free SN25 census and an
 excluded netuid-0 membership baseline. It compares an explicit removal scope
@@ -111,7 +111,66 @@ blockers. Invalid input uses exit 2; transport/output failure uses exit 1.
 An actual mainnet policy and live approved runtime remain operator inputs;
 synthetic tests do not close that gate.
 
+## Best-effort owner trim
+
+SN25 launch has owner keys, without an assumed chain-root capability. Use
+`owner-trim-plan` with the same independently approved policy to rank the
+strongest safe partial trim the observed runtime permits:
+
+```sh
+go run ./mainnet owner-trim-plan \
+  --rpc https://rpc.example \
+  --policy /secure/sn25-census-policy.json \
+  --retry-window 5m
+```
+
+This command uses the same authenticated reader once. It does not import a
+caller-produced census or change the existing `subnet-preview` envelope.
+Its separate `urnetwork-mainnet-owner-trim-plan-v1` output retains the complete
+census, raw storage, exact policy-file hash and independent plan content hash.
+The hash covers canonical Go JSON with an empty `content_hash`, prefixed by the
+schema and a zero byte; it is reproducible for the same retained census.
+Fresh samples have their own observed timestamps and are different evidence.
+
+The planner evaluates each removal capacity from observed `MinimumUids` through
+the lesser of `MaximumUids` and occupied count minus one. It keeps the reviewed
+emission order, immunity, percentage rounding and call-metadata checks. It
+rejects every candidate selecting a protected or unresolved generation, even
+when an owner identity is outside the runtime's immune subset or a declared
+validator has no permit. Missing or changed owner/subnet generations and
+incomplete role scopes remain explicit blockers. The current census is bounded
+to 4096 seats; capacities that remove nobody are represented by one compact
+range, including a possible 65535 ceiling.
+
+Candidates are ranked by the number of approved old generations safely removed,
+then the least capacity reduction (larger capacity). Only the best candidate
+retains the full removed-generation and survivor UID mapping. Temporary immunity
+or minimum capacity may leave requested miners in place; each residual retains
+its original hotkey, coldkey, registration block, observed UID and reason.
+These residuals do not invalidate an otherwise safe partial selection. They
+must remain visible in launch reporting; no full-reset success is inferred.
+
+The best candidate can be conditional on a closed admin window or an unproved
+owner cooldown. `runtime_checks_pass_at_observed_block` then remains false.
+The unsigned method bytes contain only the authenticated pallet/call indices,
+netuid 25 and selected capacity. They contain no signer, nonce, fee, era,
+extrinsic signature or dispatch authorization, and are retained only for review.
+
+`reset_ready`, `apply_authority` and `full_reset_completed` are always false.
+The command does not supply an execution-time identity selection guard, audit
+all collateral/stake/claim/history state, establish source-to-Wasm provenance,
+or perform the mandatory post-trim subnet and root censuses. Open registration
+also retains an explicit competing-registration/reentry gate. A successful
+current selection cannot remove any of those execution blockers.
+
+For this command, exit 0 means the best observed partial selection passes the
+modeled source checks at the sampled block; it never means apply-ready. Exit 3
+retains a blocked plan when there is no safe removal or timing is unresolved.
+Identity/integrity refusal returns exit 3 without partial evidence. Invalid
+input remains exit 2 and transport/output failure exit 1. There is no `--apply`
+or signing-key option.
+
 [registration]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/subnets/registration.rs#L242
 [trim]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/subnets/uids.rs#L171
-[admin]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs#L1979
+[admin]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs#L1853
 [percent]: https://github.com/RaoFoundation/polkadot-sdk/blob/cacb4310f20c7cac83eb3ccd8ed5a5ad4212608a/substrate/primitives/arithmetic/src/per_things.rs#L373

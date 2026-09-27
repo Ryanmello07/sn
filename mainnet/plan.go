@@ -146,7 +146,7 @@ func bootstrapRequirements() []planRequirement {
 		{Id: "custody", Description: "Bounded signer/coldkey/Safe custody adapters, permissions, single-writer leases and durable nonce/receipt ownership"},
 		{Id: "limits", Description: "Integer fee/value/stake/registration/lifetime ceilings, collateral exposure and validity windows; no inherited testnet budgets"},
 		{Id: "subnet-census", Description: "Exact SN25 generation and both mapping directions; removal/preservation hotkey generations, residual stake and capacity"},
-		{Id: "reset-capability", Description: "Supported reset method and actual authorized origin; prove pruning/removal targets, immunity, renumbering and preserved roles"},
+		{Id: "reset-capability", Description: "Best-effort owner-authorized trim with execution-time selection guard; prove protected roles, custody, renumbering and explicitly retained old generations"},
 		{Id: "registration-plan", Description: "Bounded pool/escrow/head/validator registrations with identities, actual costs and complete postconditions"},
 		{Id: "root-seat", Description: "Existing netuid-0 hotkey/coldkey seat generation, eligibility, stake/retention, delegation and basket policy; no assumed seat or unbounded registration"},
 		{Id: "ur-validators", Description: "Two independent UR identities with current permits, effective stake, CRv4 policy and revealed/applied row evidence"},
@@ -167,7 +167,7 @@ func bootstrapActions() []planAction {
 	return []planAction{
 		{Id: "qualify-release", Phase: 0, Description: "Review exact source, artifacts and production qualification", DependsOn: []string{}, Requirements: []string{"runtime-authority", "testnet-closure", "testnet-exceptions", "production-qualification", "contract-artifacts", "binary-artifacts", "migration-cutover"}},
 		{Id: "review-authority", Phase: 1, Description: "Establish network, public roles, custody and bounded authority", DependsOn: []string{"qualify-release"}, Requirements: []string{"owned-rpc", "roles", "custody", "limits"}},
-		{Id: "reset-miner-uids", Phase: 2, Description: "Reset only approved SN25 miner generations and prove protected identities survive", DependsOn: []string{"review-authority"}, Requirements: []string{"subnet-census", "reset-capability"}},
+		{Id: "reset-miner-uids", Phase: 2, Description: "Apply the safest owner-authorized partial SN25 trim; prove protected identities survive and report every residual old generation without claiming a full reset", DependsOn: []string{"review-authority"}, Requirements: []string{"subnet-census", "reset-capability"}},
 		{Id: "install-contracts", Phase: 3, Description: "Deploy exact custody graph and prove code, ownership and constructor state", DependsOn: []string{"reset-miner-uids"}, Requirements: []string{"contract-artifacts", "custody", "limits"}},
 		{Id: "register-subnet-roles", Phase: 3, Description: "Register approved pool, escrow, miner and UR-validator generations", DependsOn: []string{"install-contracts"}, Requirements: []string{"registration-plan", "subnet-census", "roles", "limits"}},
 		{Id: "start-root-validator", Phase: 4, Description: "Run the separate netuid-0 role only for an approved existing seat and strategy", DependsOn: []string{"review-authority"}, Requirements: []string{"root-seat", "services", "custody", "limits"}},

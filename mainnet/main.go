@@ -114,7 +114,7 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 	if len(args) != 0 && args[0] == "source-lock" {
 		return runSourceLockCommand(ctx, args, stdout, stderr)
 	}
-	if len(args) != 0 && args[0] == "subnet-preview" {
+	if len(args) != 0 && (args[0] == "subnet-preview" || args[0] == "owner-trim-plan") {
 		return runSubnetCommand(ctx, args, stdout, stderr)
 	}
 	if len(args) != 0 && (args[0] == "root-preview" || args[0] == "root-monitor") {
@@ -124,7 +124,7 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 		return runEconomicCommand(ctx, args, stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "inspect" && args[0] != "monitor" {
-		fmt.Fprintln(stderr, "usage: sn-mainnet inspect|monitor|runtime-snapshot|finalized-mapping|finalized-snapshot --rpc URL [identity flags]; root-preview|root-monitor|subnet-preview --rpc URL --policy FILE; check-recycle-mode --rpc URL --policy FILE; economic-reference --input FILE; source-lock --sn-dir DIR; plan --outline|--config FILE; release-inventory --config FILE")
+		fmt.Fprintln(stderr, "usage: sn-mainnet inspect|monitor|runtime-snapshot|finalized-mapping|finalized-snapshot --rpc URL [identity flags]; root-preview|root-monitor|subnet-preview|owner-trim-plan --rpc URL --policy FILE; check-recycle-mode --rpc URL --policy FILE; economic-reference --input FILE; source-lock --sn-dir DIR; plan --outline|--config FILE; release-inventory --config FILE")
 		return 2
 	}
 	command := args[0]

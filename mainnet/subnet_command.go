@@ -1,5 +1,5 @@
-// The subnet command exports a bounded census and blockers without a signer,
-// transaction constructor, destructive apply mode or endpoint-derived authority.
+// The subnet commands export a bounded census and an optional unsigned method
+// preview without a signer, apply mode or endpoint-derived authority.
 package main
 
 import (
@@ -14,13 +14,18 @@ import (
 
 // Exit zero means complete read-only evidence; reset_ready remains false.
 func runSubnetCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("subnet-preview", flag.ContinueOnError)
+	if len(args) == 0 || args[0] != "subnet-preview" && args[0] != "owner-trim-plan" {
+		fmt.Fprintln(stderr, "expected subnet-preview or owner-trim-plan")
+		return 2
+	}
+	command := args[0]
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	rpcUrl := flags.String("rpc", "", "explicit owned HTTP(S) RPC URL")
 	policyPath := flags.String("policy", "", "independently approved SN25 census and identity-scope policy JSON")
 	retryWindow := flags.Duration("retry-window", 300*time.Second, "one complete bounded census window, 60s through 15m")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *rpcUrl == "" || *policyPath == "" || *retryWindow < 60*time.Second || *retryWindow > 15*time.Minute {
-		fmt.Fprintln(stderr, "subnet-preview requires --rpc URL --policy FILE and a 60s..15m retry-window")
+		fmt.Fprintln(stderr, command+" requires --rpc URL --policy FILE and a 60s..15m retry-window")
 		return 2
 	}
 	var policy subnetCensusPolicy
@@ -45,6 +50,20 @@ func runSubnetCommand(ctx context.Context, args []string, stdout, stderr io.Writ
 			return 3
 		}
 		return 1
+	}
+	if command == "owner-trim-plan" {
+		plan, err := buildOwnerTrimPlan(ctx, policy, preview)
+		if err == nil {
+			err = json.NewEncoder(stdout).Encode(plan)
+		}
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		if plan.Best == nil || !plan.Best.RuntimeReady {
+			return 3
+		}
+		return 0
 	}
 	envelope, err := sealSubnetPreview(preview)
 	if err == nil {
