@@ -18,6 +18,7 @@ import (
 
 const rootCensusLimit = 4096
 const rootReadConcurrency = 8
+const observationCensusKeyBytes = 32 + 2 + 16 + 32
 
 // Shapes describe SCALE encoding, including transparent runtime newtypes.
 type rootStorageSpec struct {
@@ -77,8 +78,8 @@ func rootTypeMatches(metadata *types.Metadata, id types.Si1LookupTypeID, shape s
 	switch shape {
 	case "account":
 		return def.IsArray && def.Array.Len == 32 && rootTypeMatches(metadata, def.Array.Type, "u8", depth+1)
-	case "links", "weights", "u64s":
-		itemShape := map[string]string{"links": "link", "weights": "weight", "u64s": "u64"}[shape]
+	case "links", "weights", "u64s", "bools", "accounts":
+		itemShape := map[string]string{"links": "link", "weights": "weight", "u64s": "u64", "bools": "bool", "accounts": "account"}[shape]
 		return def.IsSequence && rootTypeMatches(metadata, def.Sequence.Type, itemShape, depth+1)
 	case "link", "weight", "pending-links":
 		parts := map[string][]string{"link": {"u64", "account"}, "weight": {"u16", "u16"}, "pending-links": {"links", "u64"}}[shape]
@@ -97,6 +98,11 @@ func rootTypeMatches(metadata *types.Metadata, id types.Si1LookupTypeID, shape s
 
 // Rejects duplicate pallets/items and changes to key, query or value encoding.
 func rootStorageProfile(metadata *types.Metadata) (map[string]types.StorageEntryMetadataV14, error) {
+	return observationStorageProfile(metadata, rootStorageSpecs)
+}
+
+// Each observer supplies the complete set of wire shapes it is allowed to read.
+func observationStorageProfile(metadata *types.Metadata, specs []rootStorageSpec) (map[string]types.StorageEntryMetadataV14, error) {
 	if metadata == nil || metadata.Version != 14 {
 		return nil, errors.New("root observation requires authenticated metadata14")
 	}
@@ -120,7 +126,7 @@ func rootStorageProfile(metadata *types.Metadata) (map[string]types.StorageEntry
 	if palletCount != 1 {
 		return nil, errors.New("root storage pallet is missing or duplicated")
 	}
-	for _, spec := range rootStorageSpecs {
+	for _, spec := range specs {
 		entry, exists := entryKVs[spec.name]
 		if !exists || entry.Modifier.IsOptional != spec.optional || entry.Modifier.IsDefault == spec.optional {
 			return nil, fmt.Errorf("root %s storage query changed", spec.name)
@@ -200,7 +206,7 @@ func rootVector(data []byte, width, suffix int) ([]byte, int, error) {
 
 // Fixed widths and full consumption prevent trailing or malicious SCALE data.
 func rootValidateScale(data []byte, shape string) error {
-	widthKVs := map[string]int{"bool": 1, "u16": 2, "u64": 8, "i128": 16, "account": 32}
+	widthKVs := map[string]int{"bool": 1, "u8": 1, "u16": 2, "u64": 8, "i128": 16, "account": 32}
 	if width, ok := widthKVs[shape]; ok {
 		if len(data) != width || shape == "bool" && data[0] > 1 {
 			return fmt.Errorf("invalid exact %s", shape)
@@ -213,6 +219,10 @@ func rootValidateScale(data []byte, shape string) error {
 		width = 4
 	case "u64s":
 		width = 8
+	case "bools":
+		width = 1
+	case "accounts":
+		width = 32
 	case "links":
 		width = 40
 	case "pending-links":
@@ -220,7 +230,14 @@ func rootValidateScale(data []byte, shape string) error {
 	default:
 		return errors.New("unsupported root SCALE shape")
 	}
-	_, _, err := rootVector(data, width, suffix)
+	body, _, err := rootVector(data, width, suffix)
+	if err == nil && shape == "bools" {
+		for _, value := range body {
+			if value > 1 {
+				return errors.New("invalid SCALE boolean vector member")
+			}
+		}
+	}
 	return err
 }
 
@@ -239,6 +256,7 @@ type rootStorageReader struct {
 	client    *rpcClient
 	metadata  *types.Metadata
 	entries   map[string]types.StorageEntryMetadataV14
+	specs     []rootStorageSpec
 	block     string
 	stateLock sync.Mutex
 	valueKVs  map[string]rootStorageValue
@@ -246,6 +264,21 @@ type rootStorageReader struct {
 
 // A query never substitutes latest state or another route after a failed read.
 func (self *rootStorageReader) read(ctx context.Context, name string, args ...[]byte) (rootStorageValue, error) {
+	specs := self.specs
+	if specs == nil {
+		specs = rootStorageSpecs
+	}
+	shape := ""
+	for _, spec := range specs {
+		if spec.name == name {
+			shape = spec.value
+			break
+		}
+	}
+	entry, exists := self.entries[name]
+	if shape == "" || !exists {
+		return rootStorageValue{}, fmt.Errorf("%w: %s is outside the authenticated observation profile", errRpcIntegrity, name)
+	}
 	key, err := types.CreateStorageKey(self.metadata, "SubtensorModule", name, args...)
 	if err != nil {
 		return rootStorageValue{}, err
@@ -255,7 +288,6 @@ func (self *rootStorageReader) read(ctx context.Context, name string, args ...[]
 		return rootStorageValue{}, fmt.Errorf("root %s: %w", name, err)
 	}
 	value := rootStorageValue{Name: name, Key: key.Hex(), RawStorage: raw, ValueSource: "absent-optional"}
-	entry := self.entries[name]
 	if raw != nil {
 		if !strings.HasPrefix(*raw, "0x") || len(*raw) > 2+2*(4+rootCensusLimit*40+8) {
 			return value, fmt.Errorf("%w: root %s storage is not bounded hex", errRpcIntegrity, name)
@@ -270,12 +302,8 @@ func (self *rootStorageReader) read(ctx context.Context, name string, args ...[]
 		return value, fmt.Errorf("%w: root %s hex: %v", errRpcIntegrity, name, err)
 	}
 	if raw != nil || entry.Modifier.IsDefault {
-		for _, spec := range rootStorageSpecs {
-			if name == spec.name {
-				if err := rootValidateScale(value.data, spec.value); err != nil {
-					return value, fmt.Errorf("%w: root %s: %v", errRpcIntegrity, name, err)
-				}
-			}
+		if err := rootValidateScale(value.data, shape); err != nil {
+			return value, fmt.Errorf("%w: root %s: %v", errRpcIntegrity, name, err)
 		}
 		value.EffectiveScale = "0x" + hex.EncodeToString(value.data)
 	}
@@ -305,7 +333,7 @@ func (self *rootStorageReader) keys(ctx context.Context, prefix []byte) ([]strin
 			return keys, nil
 		}
 		for _, key := range page {
-			if !strings.HasPrefix(key, "0x") {
+			if !strings.HasPrefix(key, "0x") || len(key) > 2+2*observationCensusKeyBytes {
 				return nil, fmt.Errorf("%w: malformed root census key", errRpcIntegrity)
 			}
 			raw, err := hex.DecodeString(key[2:])

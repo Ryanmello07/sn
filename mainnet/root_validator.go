@@ -136,11 +136,16 @@ type rootPreviewEnvelope struct {
 
 // Exact runtime bytes are authenticated before interpreting any root storage.
 func (self *rpcClient) rootRuntime(ctx context.Context, policy rootValidatorPolicy) (chainIdentity, *types.Metadata, error) {
+	return self.readApprovedRuntime(ctx, identityExpectation{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId}, policy.RuntimeVersion, policy.RuntimeCodeHash, policy.RuntimeMetadataHash)
+}
+
+// A storage observer must authenticate its complete runtime before deriving keys.
+func (self *rpcClient) readApprovedRuntime(ctx context.Context, expected identityExpectation, expectedVersion crv4.RuntimeVersionIdentity, expectedCodeHash, expectedMetadataHash string) (chainIdentity, *types.Metadata, error) {
 	identity, err := self.readIdentity(ctx)
 	if err != nil {
 		return identity, nil, err
 	}
-	if err := (identityExpectation{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId}).match(identity); err != nil {
+	if err := expected.match(identity); err != nil {
 		return identity, nil, fmt.Errorf("%w: %v", errRpcIntegrity, err)
 	}
 	var rawVersion json.RawMessage
@@ -148,14 +153,14 @@ func (self *rpcClient) rootRuntime(ctx context.Context, policy rootValidatorPoli
 		return identity, nil, err
 	}
 	version, err := crv4.DecodeRuntimeVersionIdentity(rawVersion)
-	if err != nil || version != policy.RuntimeVersion || uint64(version.SpecVersion) != identity.RuntimeSpec || uint64(version.TransactionVersion) != identity.RuntimeTx {
+	if err != nil || version != expectedVersion || uint64(version.SpecVersion) != identity.RuntimeSpec || uint64(version.TransactionVersion) != identity.RuntimeTx {
 		return identity, nil, fmt.Errorf("%w: root runtime version differs from approved policy: %v", errRpcIntegrity, err)
 	}
 	var codeHash, metadataHex string
 	if err := self.call(ctx, "state_getStorageHash", []any{"0x3a636f6465", identity.FinalizedHash}, &codeHash); err != nil {
 		return identity, nil, err
 	}
-	if !validHash(codeHash) || !strings.EqualFold(codeHash, policy.RuntimeCodeHash) {
+	if !validHash(codeHash) || !strings.EqualFold(codeHash, expectedCodeHash) {
 		return identity, nil, fmt.Errorf("%w: root runtime code differs from approved policy", errRpcIntegrity)
 	}
 	if err := self.call(ctx, "state_getMetadata", []any{identity.FinalizedHash}, &metadataHex); err != nil {
@@ -169,7 +174,7 @@ func (self *rpcClient) rootRuntime(ctx context.Context, policy rootValidatorPoli
 		return identity, nil, fmt.Errorf("%w: malformed root metadata hex", errRpcIntegrity)
 	}
 	digest := blake2b.Sum256(raw)
-	if !strings.EqualFold("0x"+hex.EncodeToString(digest[:]), policy.RuntimeMetadataHash) {
+	if !strings.EqualFold("0x"+hex.EncodeToString(digest[:]), expectedMetadataHash) {
 		return identity, nil, fmt.Errorf("%w: root runtime metadata differs from approved policy", errRpcIntegrity)
 	}
 	metadata, _, err := crv4.DecodeRuntimeMetadata(metadataHex)
