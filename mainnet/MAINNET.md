@@ -5,8 +5,8 @@ Updated 2026-09-27. **Mainnet activation is blocked.** The read-only
 `http://172.28.208.185:9944` served the same **testnet** chain as
 `http://192.168.1.162:9944`: EVM chain ID **945** (`0x3b1`), rather than the
 expected mainnet ID 964. During the operator's node-data move, the
-[18:57 UTC read-only retry](evidence/snow-route-inspect-20260927-1857.json)
-returned HTTP 502 for both chain ID and genesis reads. That is an unavailable
+[23:55 UTC read-only retry](evidence/snow-route-observation-20260927-2355.md)
+returned HTTP 502 for chain-ID reads across seven attempts. That is an unavailable
 route, not a mainnet identity. Verify the restarted route and independently
 approve the mainnet chain identity before admitting any signer.
 
@@ -43,7 +43,7 @@ mainnet transaction, deployment, UID removal or validator activation.
 
 | Prerequisite | Current disposition and next result required |
 | --- | --- |
-| Owned mainnet RPC and independent identity authority | The [10:51 UTC read-only inspection](evidence/snow-route-inspect-20260927-1051.json) observed testnet ID 945 at Snow `:9944`; the [18:57 UTC retry](evidence/snow-route-inspect-20260927-1857.json) returned HTTP 502 during the node-data move. Reinspect after cutover and obtain separately approved genesis, expected EVM ID 964, native/EVM finalized mapping, code/metadata and node/source identity. An operator-approved mainnet genesis is still outstanding. |
+| Owned mainnet RPC and independent identity authority | The [10:51 UTC read-only inspection](evidence/snow-route-inspect-20260927-1051.json) observed testnet ID 945 at Snow `:9944`; the [23:55 UTC retry](evidence/snow-route-observation-20260927-2355.md) returned HTTP 502 across seven chain-ID requests during the node-data move. Reinspect after cutover and obtain separately approved genesis, expected EVM ID 964, native/EVM finalized mapping, code/metadata and node/source identity. An operator-approved mainnet genesis is still outstanding. |
 | Immutable qualified release | Compose the actual SN/server/SDK/Connect/config and contract artifacts, including selected branch fixes and migration order; qualify their real interfaces and publish an approved manifest. Historical R48 builds do not qualify later per-user deposit or zero-price changes. |
 | Exact mainnet census and authority | Read SN25 membership, roles, custody, immutable contracts and locks at one finalized snapshot; resolve reset feasibility and all protected identities before making an executable plan. |
 | Economic and custody decisions | The user selected **owner-recycle for the remaining 90%**. Implement and qualify that path and the 10% native-miner target on the actual runtime; finalize mainnet policy, tolerance, keys/Safe, root-registration protection and spend/count/expiry ceilings. Recycled value is not reserve custody. No testnet allowance carries over. |
