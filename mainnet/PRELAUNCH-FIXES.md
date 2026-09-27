@@ -312,8 +312,8 @@ reopen testnet or override the September 27 closure and implementation inventory
 | --- | --- | --- | --- | --- | --- |
 | RT-01 | Immutable runtime views anchored to the correct block and purpose | — | Astra | In progress | The [validator-read correction](evidence/validator-read-capability-20260927.md) anchors stake and schedule capabilities to the caller-approved exact historical artifact before their first storage decode. Wider historical execution and concurrent signing contexts remain open. |
 | RT-02 | Shared capability profiles for calls, storage, signing, CRv4, custom APIs and precompiles | — | Astra | In progress | [Stake/schedule read profiles](evidence/validator-read-capability-20260927.md) admit an independently approved compatible successor without another compiled spec entry and identify changed consumed storage/API interfaces. Production admission policy and other operation profiles remain open. |
-| RT-03 | Construct and sign each native operation from one view; reconcile stale or uncertain attempts | RT-01, RT-02 | Astra | Planned | Deterministic upgrade races preserve signed history and cause no duplicate transaction. |
-| RT-04 | Replace version-specific live admission in simulator, miner, both validator paths and bootstrap | RT-01, RT-02, RT-03 | Astra | Planned | A compatible upgrade needs no binary rebuild or manually added version entry. |
+| RT-03 | Construct and sign each native operation from one view; reconcile stale or uncertain attempts | RT-01, RT-02 | Astra | In progress | The [source capability correction](evidence/source-runtime-capability-20260927.md) refuses a strict successor's stale preparation view before storage/nonce work and preserves retained signatures across cold reauthentication and metadata eviction. Wider native operation coverage and uncertain-send reconciliation remain open. |
+| RT-04 | Replace version-specific live admission in simulator, miner, both validator paths and bootstrap | RT-01, RT-02, RT-03 | Astra | In progress | [Atomic source encoding](evidence/source-runtime-capability-20260927.md) now accepts an independently approved compatible successor through a block/purpose-bound call/signing capability. Fleet and validator production approval policy, remaining consumers and automatic upgrade qualification remain open. |
 | RT-05 | Separate observed runtime from deployment, configuration and approval identity | RT-02, RT-04 | Astra | Planned | A compatible upgrade preserves the plan, approvals, leases, completed actions and observed epochs. |
 | RT-06 | Preserve historical proof reuse and make metadata-cache capacity independent of catalog length | RT-01, RT-02 | Astra | In progress | The CRv4 per-connection metadata cache has fixed resident capacity, least-recent-use eviction, and exact-hash uncached admission when every slot is loading. The [proof-ownership correction](evidence/runtime-proof-eviction-20260927.md) separates an authenticated provisional view's authority from metadata residency: eviction preserves retained signatures and exact historical reuse, while fresh identity checks and strict/foreign-owner rejection remain. Composed release and production compatibility qualification remain open; no testnet profile grants mainnet authority. |
 | RT-07 | Suspend only operations affected by an unsupported change and expose an actionable reason | RT-02, RT-04 | Astra | Planned | Independent services continue where their dependencies permit; recovery resumes from saved progress. |
@@ -635,10 +635,11 @@ an otherwise identical interface.
 Existing [CheckMetadata](../crv4/chain.go) needs stronger shape validation; storage
 presence and an unknown extension having zero encoded size are insufficient
 for automatic write admission. [preparedSourceEncoding](../crv4/source_commitment.go)
-still needs an explicit encoding profile to replace its version-number list.
-The [selective-metagraph reader](../crv4/validator_stake.go) now has the narrow
-read profile below. Metadata format v14 alone does not establish the custom
-API's return layout.
+now separates schema-level signed-byte validation from its independently
+authenticated source-call/signing capability. The
+[selective-metagraph reader](../crv4/validator_stake.go) has the narrow read
+profile below. Metadata format v14 alone does not establish the custom API's
+return layout.
 
 **2026-09-27 validator read capability (MG-04 / RT-01, RT-02).** The shared
 stake reader previously rejected an independently approved exact artifact
@@ -652,6 +653,21 @@ calls, events and signed extensions do not revoke these read capabilities.
 Exact historical pins and reviewed legacy adapters remain; the profile grants
 no signing authority. Release configuration still requires separate production
 admission, so this closes a redundant read gate without claiming RT-04 complete.
+
+**2026-09-27 atomic source capability (MG-04 / RT-03, RT-04).** The
+[source correction and causal controls](evidence/source-runtime-capability-20260927.md)
+remove the next inner version-only refusal: an approved compatible successor
+could not reconstruct its signed source bytes or construct its atomic call.
+The persisted source schema now controls byte reconstruction; live use requires
+an opaque exact-block artifact witness and matching selected calls plus complete
+ordered signing extensions. The preparation block must match that witness;
+retained-byte validation can use another authenticated block of the same
+artifact without re-signing. Metadata eviction does not revoke the witness.
+Unproved/foreign artifacts, incompatible calls/extensions, changed signature
+domains and stripped provisional authority still fail at their actual admission
+boundaries. This does not widen fleet or validator production configuration
+approval, authorize new runtime tuples or qualify receipt execution at an
+upgrade boundary. Those remain explicit MG-04 work.
 
 Automatic admission accepts upgrades authorized by the chain's governance
 within these supported capabilities and operational bounds. It is not a proof

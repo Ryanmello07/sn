@@ -362,8 +362,11 @@ func TestProvisionalRuntimeCompatibilitySourceSignsActualDomainAndRejectsRelabel
 		}
 		prepared.SourceCommitment.RuntimeSpec = provisionalRuntimeSuccessorTestSpec
 		prepared.SourceCommitment.CompatibilityProfile = ""
-		if _, err := prepared.Validate(); err == nil {
+		if err := chain.ValidatePreparedSource(prepared); err == nil {
 			t.Fatal("provisional signature acquired strict authority")
+		}
+		if err := strict.ValidatePreparedSource(prepared); err == nil {
+			t.Fatal("stripped marker supplied an authenticated strict artifact")
 		}
 	}
 }

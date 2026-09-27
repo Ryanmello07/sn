@@ -87,11 +87,15 @@ func (self *Chain) BindRuntimeArtifact(artifact AuthenticatedRuntimeArtifact) er
 	} else if artifact.compatibilityProof != nil {
 		return errors.New("provisional runtime proof cannot become strict authority")
 	}
+	if proof := artifact.authenticationProof; proof != nil && !proof.matches(self, artifact) {
+		return errors.New("runtime binding differs from its exact-block authentication proof")
+	}
 	self.Meta = artifact.Metadata
 	self.Runtime = &types.RuntimeVersion{
 		SpecName: artifact.Version.SpecName, SpecVersion: types.U32(artifact.Version.SpecVersion), TransactionVersion: types.U32(artifact.Version.TransactionVersion),
 	}
 	self.runtimeCompatibilityProof = artifact.compatibilityProof
+	self.runtimeArtifactProof = artifact.authenticationProof
 	return nil
 }
 

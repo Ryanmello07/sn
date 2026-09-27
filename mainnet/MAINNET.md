@@ -158,6 +158,17 @@ interfaces before storage decoding and retain exact historical pins. They grant
 no new signing or production configuration authority; wider automatic runtime
 admission remains part of RT-01 through RT-08.
 
+The [atomic source capability](evidence/source-runtime-capability-20260927.md)
+also removes the source encoder's redundant spec list for independently
+approved successors. A private bound view retains its exact artifact/block
+witness, then checks the selected atomic calls and ordered signing extensions.
+Source preparation refuses a different block before reading storage or taking
+a nonce. Offline signed-byte reconstruction establishes encoding and signature
+integrity; it cannot grant runtime approval. Original bytes remain reusable
+after cold authentication at the same artifact, while a changed signing domain
+still requires separate reconciliation. Production release approval gates and
+upgrade-boundary receipt qualification remain open.
+
 Current source changes matter to this design:
 
 | Subject | Source-backed observation | Bootstrap consequence |

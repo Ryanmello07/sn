@@ -88,6 +88,9 @@ type Chain struct {
 	// A bound view owns its authenticated capability independently of cache
 	// residency. It is replaced only while the caller exclusively owns the view.
 	runtimeCompatibilityProof *runtimeCompatibilityProof
+	// Exact block authentication remains attached to a private bound view,
+	// independently of metadata-cache residency and provisional admission.
+	runtimeArtifactProof *runtimeArtifactProof
 }
 
 // contextSubstrateClient adapts GSRPC's context-aware transport to the

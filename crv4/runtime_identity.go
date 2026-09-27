@@ -51,6 +51,9 @@ type AuthenticatedRuntimeArtifact struct {
 	// Issued only after successful profile validation and durable observation.
 	// Copies retain authority even after the connection evicts cached metadata.
 	compatibilityProof *runtimeCompatibilityProof
+	// A strict result retains its caller-approved exact-block authentication.
+	// An exported identity or metadata pointer alone cannot synthesize this proof.
+	authenticationProof *runtimeArtifactProof
 }
 
 // Coordinates one in-flight or successfully published immutable metadata load.
@@ -473,5 +476,12 @@ func AuthenticateRuntimeArtifactAtContext(ctx context.Context, chain *Chain, blo
 	result.CodeHash = codeHash
 	result.MetadataHash = metadataHash
 	result.Metadata = metadata
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
+	result.authenticationProof = &runtimeArtifactProof{
+		owner: chain.runtimeMetadataArtifactCache(), api: chain.API, blockHash: blockHash, genesisHash: chain.GenesisHash,
+		identity: *selectedIdentity, metadata: metadata,
+	}
 	return result, nil
 }

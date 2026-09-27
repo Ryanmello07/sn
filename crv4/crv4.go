@@ -270,6 +270,11 @@ func PrepareWeightsCRv4ExactAtContext(ctx context.Context, chain *Chain, kp *Key
 	if preparedHash == (types.Hash{}) {
 		return nil, fmt.Errorf("crv4: preparation block hash is zero")
 	}
+	if opts.SourceHash != ([32]byte{}) {
+		if err := chain.validateSourceRuntimeCapabilityAt(preparedHash, opts.Mecid); err != nil {
+			return nil, err
+		}
+	}
 	state, err := chain.EpochScheduleStateAtContext(ctx, netuid, preparedHash)
 	if err != nil {
 		return nil, err
@@ -347,6 +352,11 @@ func prepareWeightsU16(ctx context.Context, chain *Chain, kp *Keypair, netuid ui
 	}
 	if state == nil || preparedHash == (types.Hash{}) {
 		return nil, fmt.Errorf("crv4: preparation schedule is incomplete")
+	}
+	if opts.SourceHash != ([32]byte{}) {
+		if err := chain.validateSourceRuntimeCapabilityAt(preparedHash, opts.Mecid); err != nil {
+			return nil, err
+		}
 	}
 	now := time.Now
 	if opts.Now != nil {

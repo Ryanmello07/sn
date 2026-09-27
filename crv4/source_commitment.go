@@ -60,15 +60,15 @@ func reviewedSourceEncodingVersion(spec, transaction uint32) bool {
 	return (spec == 454 || spec == 455 || spec == 458 || spec == 459 || spec == 460 || spec == 461 || spec == 467) && transaction == 1
 }
 
-// This strict offline encoding is the audited 454/455/458/459/460/461/467 shape. Live metadata
-// builder below must independently reproduce it; changed call indices,
-// argument order or signed extensions fail closed before any broadcast.
+// The source schema fixes the offline call and payload encoding; the spec is
+// signed domain data, not runtime authority. Live metadata must independently
+// reproduce it under an admitted source capability before any broadcast.
 func preparedSourceEncoding(prepared *PreparedSubmission) (call, fields, payload []byte, resultErr error) {
 	if prepared == nil || prepared.SourceCommitment == nil || prepared.Schema != PreparedSourceSubmissionSchema {
 		return nil, nil, nil, errors.New("crv4: source preparation is absent")
 	}
 	source := prepared.SourceCommitment
-	encodingSupported := reviewedSourceEncodingVersion(source.RuntimeSpec, source.TransactionVersion)
+	encodingSupported := source.RuntimeSpec != 0 && source.TransactionVersion == 1
 	if source.CompatibilityProfile != "" {
 		encodingSupported = source.CompatibilityProfile == ProvisionalRuntimeCompatibilityProfile && source.RuntimeSpec > ReviewedRuntimeSpecVersion && source.TransactionVersion == 1
 	}
@@ -172,8 +172,8 @@ func validatePreparedSourceBytes(prepared *PreparedSubmission, raw []byte) error
 }
 
 func (self *Chain) newSourceCommitmentBatchCall(netuid uint16, mecid *uint8, source [32]byte, ciphertext []byte, round uint64, version uint16) (types.Call, error) {
-	if self == nil || self.Meta == nil || self.Runtime == nil || (!reviewedSourceEncodingVersion(uint32(self.Runtime.SpecVersion), uint32(self.Runtime.TransactionVersion)) && self.CurrentRuntimeCompatibilityProfile() == "") {
-		return types.Call{}, errors.New("crv4: source metadata is not the reviewed runtime")
+	if err := self.validateSourceRuntimeCapabilityAt(types.Hash{}, mecid); err != nil {
+		return types.Call{}, err
 	}
 	anchor, err := self.NewSetFleetCommitmentCall(netuid, source)
 	if err != nil {
@@ -202,7 +202,7 @@ func (self *Chain) ValidatePreparedSource(prepared *PreparedSubmission) error {
 		return err
 	}
 	source := prepared.SourceCommitment
-	if source.CompatibilityProfile != "" && source.CompatibilityProfile != self.CurrentRuntimeCompatibilityProfile() {
+	if source.CompatibilityProfile != self.CurrentRuntimeCompatibilityProfile() {
 		return errors.New("crv4: provisional source has no independently authenticated compatible signing authority")
 	}
 	if source.GenesisHash != self.GenesisHash.Hex() || source.RuntimeSpec != uint32(self.Runtime.SpecVersion) || source.TransactionVersion != uint32(self.Runtime.TransactionVersion) {
