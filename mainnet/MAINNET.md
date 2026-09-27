@@ -440,8 +440,9 @@ designs:
 `source-lock --sn-dir /absolute/sn/path` emits a content-hashed JSON record of
 the clean SN Git HEAD and every local `go.mod` replacement's clean Git HEAD,
 the exact `go.mod`/`go.sum` hashes, current Go version and command-binary hash.
-It refuses modified or untracked repository files and rechecks each HEAD after
-hashing. It reads no RPC and holds no signer. This is one input to the release
+It refuses modified or untracked repository files, ignored replacement module
+files and active `go.work` overrides; it rechecks each HEAD after hashing. It
+reads no RPC and holds no signer. This is one input to the release
 manifest, not an approval or a claim that compiled binaries, Foundry bytecode,
 generated files, ignored files, configuration, migrations or the running images
 match those commits. The release owner must bind those artifacts separately,

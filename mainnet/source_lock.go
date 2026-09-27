@@ -173,6 +173,14 @@ func buildSourceLock(ctx context.Context, rawSnDir string) (sourceLock, error) {
 	if !filepath.IsAbs(snDir) {
 		return sourceLock{}, errors.New("SN source directory is not absolute")
 	}
+	workspaceOutput, err := sourceLockCommand(ctx, snDir, "go", "env", "GOWORK")
+	if err != nil {
+		return sourceLock{}, err
+	}
+	workspace := strings.TrimSpace(string(workspaceOutput))
+	if workspace != "" && workspace != "off" {
+		return sourceLock{}, errors.New("active go.work can replace unlocked source inputs; qualify with GOWORK=off")
+	}
 	moduleBytes, err := os.ReadFile(filepath.Join(snDir, "go.mod"))
 	if err != nil || len(moduleBytes) == 0 || len(moduleBytes) > sourceLockMaximumModuleBytes {
 		return sourceLock{}, errors.Join(errors.New("SN go.mod is unavailable or oversized"), err)

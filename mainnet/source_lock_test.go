@@ -121,3 +121,15 @@ func TestSourceLockRejectsIgnoredReplacementModule(t *testing.T) {
 		t.Fatalf("ignored replacement module was accepted: %v", err)
 	}
 }
+
+func TestSourceLockRejectsActiveWorkspaceOverride(t *testing.T) {
+	snDir, _, _ := sourceLockTestWorkspace(t)
+	workspacePath := filepath.Join(filepath.Dir(snDir), "go.work")
+	if err := os.WriteFile(workspacePath, []byte("go 1.26.5\nuse ./sn\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GOWORK", workspacePath)
+	if _, err := buildSourceLock(context.Background(), snDir); err == nil || !strings.Contains(err.Error(), "active go.work") {
+		t.Fatalf("active workspace override was accepted: %v", err)
+	}
+}
