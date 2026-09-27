@@ -182,7 +182,7 @@ func TestReleaseTerminalReadErrorsRetryThroughExistingOwner(t *testing.T) {
 	fixture.before = func(_ context.Context, name string) error {
 		if name == "epoch-end" {
 			reads++
-			if reads <= releaseSteeringFailureLimit+2 {
+			if submissions <= releaseSteeringFailureLimit+2 {
 				return context.DeadlineExceeded
 			}
 		}
@@ -191,8 +191,8 @@ func TestReleaseTerminalReadErrorsRetryThroughExistingOwner(t *testing.T) {
 	err := runReleaseSteeringLoopWithWaitAndDeferral(t.Context(), func() (uint64, error) { return 7, nil }, func() error {
 		submissions++
 		return fixture.window(t.Context())
-	}, func() bool { return reads <= releaseSteeringFailureLimit+2 }, true)
-	if err != nil || reads != releaseSteeringFailureLimit+3 || submissions != reads {
+	}, func() bool { return submissions <= releaseSteeringFailureLimit+2 }, true)
+	if err != nil || reads != chainReadMaximumAttempts*(releaseSteeringFailureLimit+2)+1 || submissions != releaseSteeringFailureLimit+3 {
 		t.Fatalf("interrupted terminal read exhausted permanent failure budget: reads=%d submissions=%d error=%v", reads, submissions, err)
 	}
 }

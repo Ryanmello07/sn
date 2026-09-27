@@ -142,6 +142,9 @@ func classifyReleaseSnapshotRetryMode(err error, siblingCancellation, legacyText
 		actualTransient := legacyText || transportOrigin
 		return actualTransient || siblingCancellation, actualTransient
 	}
+	if err == gethrpc.ErrMissingBatchResponse {
+		return transportOrigin, transportOrigin
+	}
 	switch cause := err.(type) {
 	case *websocket.CloseError:
 		switch cause.Code {
@@ -156,6 +159,8 @@ func classifyReleaseSnapshotRetryMode(err error, siblingCancellation, legacyText
 	case *net.OpError:
 		return classifyReleaseSnapshotRetryMode(cause.Err, siblingCancellation, legacyText, true)
 	case *attemptStreamHttpReadError:
+		return classifyReleaseSnapshotRetryMode(cause.cause, siblingCancellation, legacyText, true)
+	case *chainRpcMissingResponseError:
 		return classifyReleaseSnapshotRetryMode(cause.cause, siblingCancellation, legacyText, true)
 	}
 	if _, observationStatus := err.(*clientKeyObservationHttpStatusError); observationStatus {

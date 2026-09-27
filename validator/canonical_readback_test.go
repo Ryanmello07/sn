@@ -62,6 +62,7 @@ func canonicalReadbackTestClient(t *testing.T, prior *ChainClient, before func(c
 		})
 	})
 	chain := &ChainClient{client: ethclient.NewClient(client), rpcUrl: prior.rpcUrl, chainId: new(big.Int).Set(prior.chainId), st: prior.st, coordinator: prior.coordinator, contractAddr: prior.contractAddr, release: prior.release}
+	chain.readRetryHooks.wait = chainReadRetryNoWait
 	if chain.release {
 		chain.contract = chain.coordinator.Instance(chain.client, chain.contractAddr)
 	} else {
@@ -77,13 +78,13 @@ func TestValidatorEvidenceCanonicalReadbackPreservesTransport(t *testing.T) {
 		for _, selector := range []string{"0x44d", "0x4b0"} {
 			for _, failure := range []error{context.DeadlineExceeded, io.ErrUnexpectedEOF, &gethrpc.HTTPError{StatusCode: http.StatusServiceUnavailable}, context.Canceled, errors.Join(context.DeadlineExceeded, errors.New("synthetic integrity failure"))} {
 				fixture := newEvidenceTransactionV2Fixture(t, "", nil)
-				inclusionRead, injected := false, false
+				inclusionRead, injected, recovered := false, false, false
 				chain := canonicalReadbackTestClient(t, fixture.chain, func(ctx context.Context, calls []chainBatchRPCRequest) error {
 					for _, call := range calls {
 						if call.Method == "eth_getTransactionByBlockHashAndIndex" {
 							inclusionRead = true
 						}
-						if inclusionRead && !injected && call.Method == "eth_getBlockByNumber" && len(call.Params) == 2 && string(call.Params[0]) == `"`+selector+`"` {
+						if inclusionRead && !recovered && call.Method == "eth_getBlockByNumber" && len(call.Params) == 2 && string(call.Params[0]) == `"`+selector+`"` {
 							injected = true
 							return failure
 						}
@@ -99,6 +100,7 @@ func TestValidatorEvidenceCanonicalReadbackPreservesTransport(t *testing.T) {
 				if !injected || result != nil || !errors.Is(err, failure) || RetryableEvidenceTransportError(err) != retryable || strings.Contains(err.Error(), "canonical boundary changed") {
 					t.Fatalf("winner=%t boundary=%s cause=%v result=%v err=%v", winner, selector, failure, result, err)
 				}
+				recovered = true
 				if result, err := confirm(t.Context(), fixture.expected); err != nil || result == nil || result.Receipt.TxHash != fixture.transaction.Hash() {
 					t.Fatalf("exact readback did not recover after %v: %v", failure, err)
 				}
@@ -210,10 +212,10 @@ func TestValidatorEvidenceReadbackBoundsDirectRequests(t *testing.T) {
 func TestValidatorCanonicalReadbackPreservesUploadAndAttemptErrors(t *testing.T) {
 	for _, scope := range []string{"upload", "attempt-hash", "attempt-epoch"} {
 		fixture := newEvidenceTransactionV2Fixture(t, "", nil)
-		injected := false
+		injected, recovered := false, false
 		chain := canonicalReadbackTestClient(t, fixture.chain, func(ctx context.Context, calls []chainBatchRPCRequest) error {
 			for _, call := range calls {
-				if !injected && (scope == "attempt-epoch" && call.Method == "eth_call" || scope != "attempt-epoch" && call.Method == "eth_getBlockByNumber") {
+				if !recovered && (scope == "attempt-epoch" && call.Method == "eth_call" || scope != "attempt-epoch" && call.Method == "eth_getBlockByNumber") {
 					injected = true
 					return context.DeadlineExceeded
 				}
@@ -230,6 +232,7 @@ func TestValidatorCanonicalReadbackPreservesUploadAndAttemptErrors(t *testing.T)
 		if err := validate(); !injected || !errors.Is(err, context.DeadlineExceeded) || !RetryableEvidenceTransportError(err) {
 			t.Fatalf("%s lost typed read failure: %v", scope, err)
 		}
+		recovered = true
 		if err := validate(); err != nil {
 			t.Fatalf("%s exact boundary did not recover: %v", scope, err)
 		}
@@ -252,7 +255,7 @@ func TestValidatorCanonicalReadbackPreservesDepositScanErrors(t *testing.T) {
 	for _, stage := range []string{"before", "event", "after"} {
 		fixture := &depositedRPCFixture{finalized: 105, epoch: 5, epochStart: 101, contract: common.Address{0xcc}}
 		fixture.logs = []map[string]any{depositedTestLog(fixture.contract, 101)}
-		checkpointReads, injected := 0, false
+		checkpointReads, injected, recovered := 0, false, false
 		chain := canonicalReadbackTestClient(t, fixture.client(t), func(ctx context.Context, calls []chainBatchRPCRequest) error {
 			for _, call := range calls {
 				if call.Method != "eth_getBlockByNumber" || len(call.Params) != 2 {
@@ -265,7 +268,7 @@ func TestValidatorCanonicalReadbackPreservesDepositScanErrors(t *testing.T) {
 				if selector == hexutil.EncodeUint64(fixture.finalized) {
 					checkpointReads++
 				}
-				if !injected && (stage == "before" && checkpointReads == 1 || stage == "event" && selector == hexutil.EncodeUint64(101) || stage == "after" && checkpointReads == 2) {
+				if !recovered && (injected || stage == "before" && checkpointReads == 1 || stage == "event" && selector == hexutil.EncodeUint64(101) || stage == "after" && checkpointReads == 2) {
 					injected = true
 					return context.DeadlineExceeded
 				}
@@ -278,6 +281,7 @@ func TestValidatorCanonicalReadbackPreservesDepositScanErrors(t *testing.T) {
 		if sums, err := scan(); !injected || sums != nil || !errors.Is(err, context.DeadlineExceeded) || !RetryableEvidenceTransportError(err) {
 			t.Fatalf("%s checkpoint exposed sums or lost timeout: %v/%v", stage, sums, err)
 		}
+		recovered = true
 		if sums, err := scan(); err != nil || sums.Get(big.NewInt(1)).Int64() != 100 {
 			t.Fatalf("%s checkpoint did not recover exactly: %v/%v", stage, sums, err)
 		}
@@ -290,13 +294,13 @@ func TestValidatorCanonicalReadbackPreservesDepositLedgerErrors(t *testing.T) {
 	for _, stage := range []string{"epoch", "start", "cached"} {
 		fixture := &depositedRPCFixture{finalized: 105, epoch: 5, epochStart: 101, contract: common.Address{0xcc}}
 		fixture.logs = []map[string]any{depositedTestLog(fixture.contract, 101)}
-		views, injected := 0, false
+		views, injected, recovered := 0, false, false
 		chain := canonicalReadbackTestClient(t, fixture.client(t), func(ctx context.Context, calls []chainBatchRPCRequest) error {
 			for _, call := range calls {
 				if call.Method == "eth_call" {
 					views++
 				}
-				if !injected && (stage == "epoch" && views == 1 || stage == "start" && views == 2 || stage == "cached" && call.Method == "eth_getBlockByNumber" && len(call.Params) == 2 && string(call.Params[0]) == `"0x64"`) {
+				if !recovered && (injected || stage == "epoch" && views == 1 || stage == "start" && views == 2 || stage == "cached" && call.Method == "eth_getBlockByNumber" && len(call.Params) == 2 && string(call.Params[0]) == `"0x64"`) {
 					injected = true
 					return context.DeadlineExceeded
 				}
@@ -307,6 +311,7 @@ func TestValidatorCanonicalReadbackPreservesDepositLedgerErrors(t *testing.T) {
 		if _, _, err := steerer.gatherDeposits(big.NewInt(5)); !injected || !errors.Is(err, context.DeadlineExceeded) || !RetryableEvidenceTransportError(err) || steerer.deposits.scannedThrough != 100 || steerer.deposits.conviction.Get(big.NewInt(1)).Int64() != 25 {
 			t.Fatalf("%s changed ledger or lost timeout: %+v/%v", stage, steerer.deposits, err)
 		}
+		recovered = true
 		if _, sums, err := steerer.gatherDeposits(big.NewInt(5)); err != nil || sums.Get(big.NewInt(1)).Int64() != 125 || steerer.deposits.scannedThrough != 105 {
 			t.Fatalf("%s ledger did not commit exact recovery: %v/%v", stage, sums, err)
 		}

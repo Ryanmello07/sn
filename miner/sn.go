@@ -189,7 +189,8 @@ func claim(opts docopt.Opts) {
 	proofVerifiesServer := merkle.Verify(serverRoot, leaf, proof)
 
 	// read the on-chain root, trying each --rpc endpoint in order until one
-	// answers both eth_chainId and eth_call. The noCommit read calldata is
+	// answers both eth_chainId and eth_call; semantic refusals stop failover.
+	// The noCommit read calldata is
 	// built with sn/stabi; only the http transport is hand-rolled (sn_rpc.go).
 	epochBig := big.NewInt(epoch)
 	chainChecked := false
@@ -197,19 +198,12 @@ func claim(opts docopt.Opts) {
 	var chainId uint64
 	var chainRpcUrl string
 	if 0 < len(rpcUrls) {
+		if poolClaim.ChainId < 0 {
+			panic(fmt.Errorf("claim: server chain id %d is invalid", poolClaim.ChainId))
+		}
 		entitlementCalldata := stSettlementVault.PackEntitlement(epochBig, noId)
 		for _, rpcUrl := range rpcUrls {
-			chainIdHex, rpcErr := ethRpcHexResult(ctx, rpcUrl, "eth_chainId", []any{})
-			if rpcErr != nil {
-				fmt.Printf("rpc %s: %s\n", rpcUrl, rpcErr)
-				continue
-			}
-			rpcChainId, rpcErr := parseEthHexQuantity(chainIdHex)
-			if rpcErr != nil {
-				fmt.Printf("rpc %s: bad eth_chainId %q\n", rpcUrl, chainIdHex)
-				continue
-			}
-			callHex, rpcErr := ethRpcHexResult(ctx, rpcUrl, "eth_call", []any{
+			returnData, rpcErr := ethRpcHexView(ctx, rpcUrl, uint64(poolClaim.ChainId), []any{
 				map[string]any{
 					"to":   poolClaim.ContractAddress,
 					"data": fmt.Sprintf("0x%x", entitlementCalldata),
@@ -217,17 +211,18 @@ func claim(opts docopt.Opts) {
 				"latest",
 			})
 			if rpcErr != nil {
+				if !retryableEthRpcError(rpcErr, false) || ctx.Err() != nil {
+					panic(fmt.Errorf("claim: rpc %s refused: %w", rpcUrl, rpcErr))
+				}
 				fmt.Printf("rpc %s: %s\n", rpcUrl, rpcErr)
 				continue
 			}
-			returnData, rpcErr := parseEthHexBytes(callHex)
-			if rpcErr != nil || len(returnData) < 32 {
-				fmt.Printf("rpc %s: entitlement returned %d bytes; expected >= 32 (wrong vault address?)\n", rpcUrl, len(returnData))
-				continue
+			if len(returnData) < 32 {
+				panic(fmt.Errorf("rpc %s: entitlement returned %d bytes; expected >= 32 (wrong vault address?)", rpcUrl, len(returnData)))
 			}
 			// entitlement returns the tuple with payoutRoot as its first word.
 			copy(chainRoot[:], returnData[:32])
-			chainId = rpcChainId
+			chainId = uint64(poolClaim.ChainId)
 			chainRpcUrl = rpcUrl
 			chainChecked = true
 			break

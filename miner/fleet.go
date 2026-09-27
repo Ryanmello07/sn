@@ -379,26 +379,15 @@ func fleetBind(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 func finalizedCoordinatorCall(ctx context.Context, manifest *protocol.FleetManifest, rpcs []string, calldata []byte) ([]byte, string, error) {
 	var errs []error
 	for _, endpoint := range rpcs {
-		chainIDHex, err := ethRpcHexResult(ctx, endpoint, "eth_chainId", []any{})
+		decoded, err := ethRpcHexView(ctx, endpoint, manifest.ChainID, []any{map[string]any{"to": common.Address(manifest.Coordinator).Hex(), "data": "0x" + hex.EncodeToString(calldata)}, "finalized"})
 		if err != nil {
 			errs = append(errs, err)
+			if !retryableEthRpcError(err, false) || ctx.Err() != nil {
+				return nil, "", fmt.Errorf("finalized coordinator view refused: %w", errors.Join(errs...))
+			}
 			continue
 		}
-		chainID, err := parseEthHexQuantity(chainIDHex)
-		if err != nil || chainID != manifest.ChainID {
-			errs = append(errs, fmt.Errorf("%s chain id %d, manifest %d", endpoint, chainID, manifest.ChainID))
-			continue
-		}
-		result, err := ethRpcHexResult(ctx, endpoint, "eth_call", []any{map[string]any{"to": common.Address(manifest.Coordinator).Hex(), "data": "0x" + hex.EncodeToString(calldata)}, "finalized"})
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		decoded, err := parseEthHexBytes(result)
-		if err == nil {
-			return decoded, endpoint, nil
-		}
-		errs = append(errs, err)
+		return decoded, endpoint, nil
 	}
 	return nil, "", fmt.Errorf("no finalized coordinator view answered: %w", errors.Join(errs...))
 }

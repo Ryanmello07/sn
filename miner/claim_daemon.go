@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	substrateTypes "github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -434,18 +435,32 @@ func claimCalldata(claim *sdk.SnPoolClaimResult) (common.Address, []byte, error)
 	return common.HexToAddress(vault), calldata, nil
 }
 
+// Native header numbers retain their Substrate wire grammar. Ethereum quantity
+// admission must not reinterpret a native finality checkpoint as another domain.
 func finalizedNumber(ctx context.Context, client *ethclient.Client) (uint64, error) {
-	var hash string
+	if ctx == nil || client == nil {
+		return 0, errors.New("native finalized header reader is unavailable")
+	}
+	var hash common.Hash
 	if err := client.Client().CallContext(ctx, &hash, "chain_getFinalizedHead"); err != nil {
 		return 0, err
 	}
-	var header struct {
-		Number string `json:"number"`
+	if hash == (common.Hash{}) {
+		return 0, errors.New("native finalized head is empty")
 	}
-	if err := client.Client().CallContext(ctx, &header, "chain_getHeader", hash); err != nil {
+	var header struct {
+		Number *substrateTypes.BlockNumber `json:"number"`
+	}
+	if err := client.Client().CallContext(ctx, &header, "chain_getHeader", hash.Hex()); err != nil {
 		return 0, err
 	}
-	return parseEthHexQuantity(header.Number)
+	if header.Number == nil {
+		return 0, errors.New("native finalized header number is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	return uint64(*header.Number), nil
 }
 
 func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *sdk.SnPoolClaimResult) (bool, error) {
