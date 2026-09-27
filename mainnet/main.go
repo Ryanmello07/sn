@@ -79,6 +79,7 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	retryWindow := flags.Duration("retry-window", 60*time.Second, "total transient retry window per read")
 	interval := flags.Duration("interval", 30*time.Second, "monitor sampling interval")
 	stallAfter := flags.Duration("stall-after", 5*time.Minute, "finality progress alert threshold")
+	checkpointPath := flags.String("checkpoint", "", "absolute path for a durable monitor finality checkpoint")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *rpcUrl == "" {
 		fmt.Fprintln(stderr, "command requires --rpc and no positional arguments")
 		return 2
@@ -100,6 +101,10 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	if command == "monitor" && expected.EvmChainId != mainnetEvmChainId {
 		fmt.Fprintf(stderr, "mainnet monitor requires EVM chain ID %d\n", mainnetEvmChainId)
+		return 2
+	}
+	if command == "inspect" && *checkpointPath != "" {
+		fmt.Fprintln(stderr, "--checkpoint is only valid for monitor")
 		return 2
 	}
 	encoder := json.NewEncoder(stdout)
@@ -127,6 +132,20 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	state := &monitorState{}
+	var checkpoint *monitorCheckpointStore
+	if *checkpointPath != "" {
+		checkpoint, err = openMonitorCheckpoint(*checkpointPath, expected)
+		if err != nil {
+			fmt.Fprintln(stderr, "monitor checkpoint:", err)
+			return 3
+		}
+		defer checkpoint.close()
+		state, err = checkpoint.load()
+		if err != nil {
+			fmt.Fprintln(stderr, "monitor checkpoint:", err)
+			return 3
+		}
+	}
 	for {
 		if ctx.Err() != nil {
 			return 0
@@ -169,6 +188,10 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 				event.Status, err = state.observe(now, identity, *stallAfter)
 				if err != nil {
 					event.Detail = err.Error()
+				} else if checkpoint != nil {
+					if saveErr := checkpoint.save(state); saveErr != nil {
+						event.Status, event.Detail = "checkpoint-error", saveErr.Error()
+					}
 				}
 			}
 		}
@@ -178,6 +201,9 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		}
 		if event.Status == "finality-conflict" || event.Status == "rpc-integrity" {
 			return 3
+		}
+		if event.Status == "checkpoint-error" {
+			return 1
 		}
 		select {
 		case <-ctx.Done():

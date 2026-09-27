@@ -300,7 +300,7 @@ emits a content-hashed identity snapshot. Supplying
 any expectation requires all of `--expected-chain`, `--expected-genesis` and
 `--expected-evm-chain-id`; `monitor` always requires all three. The monitor emits
 JSON lines for `ok`, `rpc-error`, `rpc-integrity`, `identity-mismatch`,
-`finality-conflict` or `finality-stalled`, with a default 30-second interval after
+`finality-conflict`, `finality-stalled` or `checkpoint-error`, with a default 30-second interval after
 each completed sample and five-minute stall threshold. It detects identity/finality conflicts,
 rechecks the prior finalized block when the head advances, validates JSON-RPC
 response version/ID, and rejects response bodies exceeding 1 MiB. Hash comparisons
@@ -310,6 +310,18 @@ evidence emits terminal `rpc-integrity`; that status, `identity-mismatch` and
 observations and do not establish healthy state. The command contains no signer
 or submitter. Focused normal/race tests and vet pass; the retained Snow rejection
 demonstrates actual wrong-network refusal.
+
+`monitor --checkpoint /absolute/path/monitor.json` adds a single-owner local
+continuity checkpoint. Before reporting a healthy sample it atomically persists
+the approved chain/genesis/EVM identity, last finalized height and hash, and
+progress time with a content checksum. Restart loads that position and checks
+the prior finalized hash against the route; a regression or changed historical
+hash is still visible after process restart. A corrupt, foreign or symlinked
+checkpoint stops admission; an unavailable write emits `checkpoint-error` and
+exits rather than reporting health. The file is local continuity evidence, not
+independent node confirmation or an approval. The operator must place it on a
+durable, backed-up volume and supervise the monitor; alert delivery and
+cross-domain health remain open work.
 
 `check-recycle-mode --rpc URL --policy FILE` binds the finalized mode read to
 independently supplied mainnet genesis, runtime code/metadata and complete
@@ -325,7 +337,7 @@ normal/race tests and vet pass after the 2026-09-27 data-volume recovery.
 
 `inspect`/`monitor` remain single-route identity/finality observers. They do not
 attest runtime code/metadata, map EVM receipt finality, compare independent nodes, inspect SN25
-custody/validator/settlement state, persist a restart checkpoint, deliver alerts,
+custody/validator/settlement state, deliver alerts,
 or execute repairs. Those are MG-07 and related production gates. An identity
 snapshot hash proves the captured bytes, not operator approval or node truth.
 

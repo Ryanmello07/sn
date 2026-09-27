@@ -29,6 +29,10 @@ func (self roundTripFunc) RoundTrip(request *http.Request) (*http.Response, erro
 
 // testRpcServer returns one testnet identity and optionally overloads one read.
 func testRpcServer(t *testing.T, overloadedMethod string, inconsistentHeight ...bool) (*httptest.Server, func(string) int) {
+	return testRpcServerWithEvm(t, "0x3b1", overloadedMethod, inconsistentHeight...)
+}
+
+func testRpcServerWithEvm(t *testing.T, evmChainId, overloadedMethod string, inconsistentHeight ...bool) (*httptest.Server, func(string) int) {
 	t.Helper()
 	methodCounts := map[string]int{}
 	var stateLock sync.Mutex
@@ -54,7 +58,7 @@ func testRpcServer(t *testing.T, overloadedMethod string, inconsistentHeight ...
 		results := map[string]any{
 			"system_chain":           "Bittensor",
 			"chain_getBlockHash":     testGenesisHash,
-			"eth_chainId":            "0x3b1",
+			"eth_chainId":            evmChainId,
 			"system_version":         "Subtensor Node test",
 			"chain_getFinalizedHead": testFinalizedHash,
 			"chain_getHeader":        map[string]any{"number": "0x7b852f"},
