@@ -47,6 +47,16 @@ are component responsibilities; assign a named operator before rollout.
 | MG-09 / P1 — Sustained resource and storage capacity | Service/storage owner; PH-08/09/20/23/26 | **Planned:** bounded simulator mechanisms exist; production sizing and restoration receipts are missing. | Measure backlog, bytes, memory, RPC work and queue fairness with the proposed fleet and retention. Bind finite capacity with reviewed margin; prove missing/full-volume behavior, backup restore, multi-gigabyte log drainage and foreground deadline headroom. Required before unattended operation. |
 | MG-10 / P0 — Qualification, rollout and actual acceptance | Release/operations owner; PH-16 and every affected gate | **Planned:** no accepted composed mainnet release. | Before activation, complete production-path causal regressions, affected normal/race suites and a controlled upgrade/outage/restart/repair rehearsal; retain failed and reused scopes. After bounded activation, observe at least three complete native emission intervals and one full 50,400-block UR settlement/claim cycle before declaring program acceptance. Record pending live evidence as pending. |
 
+MG-08 now has a separate signer-free [root observation foundation](ROOT-VALIDATOR.md):
+`root-preview` and finite `root-monitor` bind the approved mainnet domain and
+runtime artifacts to a complete root seat census, mapping/generation/ownership,
+stake/pruning risk, stored strategy and delegation evidence. Do not equate a
+read-only `ready` sample with mainnet activation. The observer never loads a
+signer, automatically re-registers a pruned seat or mistakes a fresh burn quote
+for a transaction cap. Missing full custom-weight eligibility, historical
+basket/delegation custody and the separate root signing/capability service remain
+explicit blockers; UR validator readiness remains independent.
+
 Start with MG-01's read-only route correction and MG-02's source composition.
 Then close the recovery, runtime, policy, settlement and monitoring dependencies
 before MG-08 can apply a reviewed bootstrap plan. MG-09 must close before

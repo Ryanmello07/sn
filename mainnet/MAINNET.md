@@ -274,7 +274,15 @@ Preserve the current guarantees: the coordinator owns neither custody position, 
 
 ### Root validator on netuid 0
 
-Implement a separate root service/config schema. The current [UR validator config](../validator/config.go) rejects netuid 0 and is not a root-validator implementation.
+The signer-free `root-preview` and bounded `root-monitor` commands now supply a
+separate [root observation policy and service seam](ROOT-VALIDATOR.md). They bind
+independently approved mainnet genesis/full runtime/code/metadata to an exact
+finalized seat, stake, delegation and strategy census; ID 945 is rejected before
+root storage. Their `ready` status means only read-only observation policy
+readiness, and `activation_ready` remains false. Registration, bounded signing,
+effective custom-weight eligibility and complete basket custody remain gates.
+The current [UR validator config](../validator/config.go) rejects netuid 0 and is
+not a root-validator implementation.
 
 For an existing root seat, verify hotkey/coldkey ownership, current membership and registration generation, stake, immunity, delegate take, children/parents, basket configuration and accrued rights before adoption. For a new seat, the inspected runtime uses burn-priced root registration without a prior-stake admission condition; a full root network prunes a lowest-staked eligible seat. Registration alone does not provide enough stake to retain a seat or submit basket weights. [Root registration implementation][subtensor-root]
 
