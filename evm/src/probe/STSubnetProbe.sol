@@ -24,7 +24,7 @@ import {Blake2b} from "../lib/Blake2b.sol";
 ///      bytecode. Forge's local simulation has no implementation for them, so
 ///      a `forge script` that calls them reverts in simulation and never
 ///      reaches the node. The faithful path is to DEPLOY this probe once, then
-///      call its views with `cast call <probe> ... --rpc-url testnet` (a raw
+///      call its views with `cast call <probe> ... --rpc-url <owned-testnet-rpc-url>` (a raw
 ///      eth_call executed ON the node, hitting the real precompiles) and its
 ///      state fns with `cast send`. The custody assumption — "a contract's
 ///      coldkey is mirror(contract)" — can only be tested from a contract, so
@@ -111,7 +111,7 @@ contract STSubnetProbe {
 
     // ------------------------------------------------------------------
     // Read battery — free (gas only). Call ON THE NODE:
-    //   cast call <probe> "readBattery(bytes32,bytes32)((...))" <liveHotkey> <absentHotkey> --rpc-url testnet
+    //   cast call <probe> "readBattery(bytes32,bytes32)((...))" <liveHotkey> <absentHotkey> --rpc-url <owned-testnet-rpc-url>
     // Every precompile touch is individually try/caught, so one missing
     // precompile does not mask the others — the struct shows exactly which
     // assumptions hold on the live runtime.
