@@ -390,7 +390,7 @@ Manage both services with independent state directories, signer permissions, log
 
 [mainnet/main.go](main.go) currently contains signer-free `inspect`, `monitor`,
 `subnet-preview`, `root-preview`, `root-monitor`, `check-recycle-mode` and `economic-reference`
-commands, plus the offline `source-lock` and blocked-review `plan` commands. `inspect --rpc URL`
+commands, plus the offline `source-lock`, `release-inventory` and blocked-review `plan` commands. `inspect --rpc URL`
 emits a content-hashed identity snapshot. Supplying
 any expectation requires all of `--expected-chain`, `--expected-genesis` and
 `--expected-evm-chain-id`; `monitor` always requires all three. The monitor emits
@@ -471,7 +471,7 @@ Separate chain adapters, signer interfaces, state storage and supervisors so
 preview cannot reach a transaction submission path.
 
 Target command surface; `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`, `monitor`, `subnet-preview`, the two root observers and the two
-limited economic preconditions above, `source-lock` and the blocked-review `plan` foundation exist, while the remaining commands are
+limited economic preconditions above, `source-lock`, `release-inventory` and the blocked-review `plan` foundation exist, while the remaining commands are
 designs:
 
 | Command | Behavior |
@@ -486,6 +486,7 @@ designs:
 | `check-recycle-mode` | Existing signer-free finalized storage-mode precondition; extend with an approved mainnet artifact and operational readback at activation/recovery. |
 | `economic-reference` | Existing signer-free cumulative integer 10%/90% reference from caller-supplied native intervals; actual chain reconciliation remains a separate gate. |
 | `source-lock` | Existing offline lock of clean SN and every local Go replacement Git commit, module checksums, Go version and tool hash. It binds source inputs only; artifacts, rollout approval and qualification remain separate. |
+| `release-inventory` | Existing local candidate inventory of exact executable/contract/config/policy/migration/image/dependency/toolchain files, bound to the rechecked source lock; missing categories remain explicit, and release completeness/provenance/deployment approval stay false. |
 | `plan` | Existing pure blocked-review graph via `--outline` or strict JSON `--config FILE`; hashes exact finalized-snapshot/source-lock/release inputs. Every action remains non-executable. Full semantic admission, payloads and executable authorization remain future work. |
 | `apply --accept-plan HASH` | Execute only the exactly reviewed plan with matching signed authorization, prerequisites and ceilings. |
 | `status` / `verify` | Read-only journal reconciliation and current/finalized postcondition verification. |
@@ -504,6 +505,14 @@ manifest, not an approval or a claim that compiled binaries, Foundry bytecode,
 generated files, ignored files, configuration, migrations or the running images
 match those commits. The release owner must bind those artifacts separately,
 qualify the composed source and approve the resulting immutable manifest.
+
+`release-inventory --config FILE` provides the [actual-file candidate
+inventory](RELEASE-INVENTORY.md). It rechecks source closure and selected file
+bytes, refusing stale per-artifact source bindings. It enumerates missing
+categories but does not infer complete coverage from one file per category,
+prove a build or image, inspect a deployed migration state, or approve a release.
+Ignored Solidity libraries and compiler identities are explicit dependency and
+toolchain inputs; they are not included by the Go source lock alone.
 
 The [current composed candidate](evidence/source-lock-blocked-plan-20260927.md)
 locks SN `7175313d`, server `9f860731` and Connect `c68689c4` with all local

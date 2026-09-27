@@ -64,6 +64,9 @@ func main() {
 
 // Dispatches signer-free observations and reference accounting with explicit exits.
 func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) != 0 && args[0] == "release-inventory" {
+		return runReleaseInventoryCommand(ctx, args, stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "plan" {
 		return runPlanCommand(ctx, args, stdout, stderr)
 	}
@@ -89,7 +92,7 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runEconomicCommand(ctx, args, stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "inspect" && args[0] != "monitor" {
-		fmt.Fprintln(stderr, "usage: sn-mainnet inspect|monitor|runtime-snapshot|finalized-mapping|finalized-snapshot --rpc URL [identity flags]; root-preview|root-monitor|subnet-preview --rpc URL --policy FILE; check-recycle-mode --rpc URL --policy FILE; economic-reference --input FILE; source-lock --sn-dir DIR; plan --outline|--config FILE")
+		fmt.Fprintln(stderr, "usage: sn-mainnet inspect|monitor|runtime-snapshot|finalized-mapping|finalized-snapshot --rpc URL [identity flags]; root-preview|root-monitor|subnet-preview --rpc URL --policy FILE; check-recycle-mode --rpc URL --policy FILE; economic-reference --input FILE; source-lock --sn-dir DIR; plan --outline|--config FILE; release-inventory --config FILE")
 		return 2
 	}
 	command := args[0]
