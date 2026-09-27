@@ -153,7 +153,7 @@ reopen testnet or override the September 27 closure and implementation inventory
 | RT-03 | Construct and sign each native operation from one view; reconcile stale or uncertain attempts | RT-01, RT-02 | Astra | Planned | Deterministic upgrade races preserve signed history and cause no duplicate transaction. |
 | RT-04 | Replace version-specific live admission in simulator, miner, both validator paths and bootstrap | RT-01, RT-02, RT-03 | Astra | Planned | A compatible upgrade needs no binary rebuild or manually added version entry. |
 | RT-05 | Separate observed runtime from deployment, configuration and approval identity | RT-02, RT-04 | Astra | Planned | A compatible upgrade preserves the plan, approvals, leases, completed actions and observed epochs. |
-| RT-06 | Preserve historical proof reuse and make metadata-cache capacity independent of catalog length | RT-01, RT-02 | Astra | Planned | Older proofs remain correctly authenticated; eviction, restart and additional runtime versions retain valid progress. |
+| RT-06 | Preserve historical proof reuse and make metadata-cache capacity independent of catalog length | RT-01, RT-02 | Astra | In progress | The CRv4 per-connection metadata cache now uses fixed resident capacity, deterministic least-recent-use eviction, and exact-hash uncached admission when every slot is loading; focused qualification and composed release evidence are pending. Older proofs must remain correctly authenticated; eviction, restart and additional runtime versions must retain valid progress. |
 | RT-07 | Suspend only operations affected by an unsupported change and expose an actionable reason | RT-02, RT-04 | Astra | Planned | Independent services continue where their dependencies permit; recovery resumes from saved progress. |
 | RT-08 | Qualify upgrade handling and record the mainnet-readiness evidence | RT-01 through RT-07 | Terra | Planned | Affected normal/race tests and a controlled upgrade during an active integration campaign pass with unchanged approvals and reconciled transactions. |
 | RL-01 | Bind launch attestation to an explicitly approved immutable release and its complete input manifest | — | Astra | Planned | Publishing documentation or advancing main does not invalidate an approved unchanged deployment; changed executable, source, policy, contracts or dependencies still require the appropriate new approval. |
@@ -528,12 +528,16 @@ plan migrations also preserves existing exact-context hits; broader reuse still
 requires proof that changed verifier and authority inputs invalidate affected
 results.
 
-Replace the [metadata cache](../crv4/runtime_identity.go)'s catalog-sized lifetime
-ceiling with fixed memory/byte limits and safe eviction. Runtime discovery and
-admissible history must not stop merely because more versions have appeared.
-Persist content-addressed artifacts when needed; an evicted entry can be loaded
-and authenticated again. Cache bounded successful compatibility decisions;
-do not let transient RPC failures poison admission.
+The [metadata cache](../crv4/runtime_identity.go) now has a fixed 24-entry
+resident bound independent of catalog length, evicts least-recently-used
+completed entries, and authenticates without caching if all slots are loading.
+Runtime discovery and admissible history no longer stop merely because more
+versions have appeared. An evicted entry is loaded and authenticated again.
+Measure the decoded-byte footprint and add a byte cap or durable
+content-addressed artifacts if the measured bound requires them. Cache bounded
+successful compatibility decisions; do not let transient RPC failures poison
+admission. This cache correction alone does not grant production runtime
+compatibility authority.
 
 ## Delivery and acceptance
 

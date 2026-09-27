@@ -23,10 +23,11 @@ The original bootstrap design was based on SN
 qualification must use an explicit composed release, including compatible
 SN/server/SDK/Connect/config revisions. Some shared and simulator fixes exist;
 the complete mutating bootstrap, root-validator service and operational repair
-system remain production work. [mainnet/main.go](main.go) now implements only
-the read-only `inspect` and `monitor` foundation; `plan`, `apply`, `resume` and
-root-validator bootstrap are not implemented. The [actual inspect capture](evidence/snow-route-inspect-20260927.json)
-observed chain ID 945 and was rejected against expected mainnet ID 964.
+system remain production work. [mainnet/main.go](main.go) implements signer-free
+`inspect`, `monitor`, `check-recycle-mode` and `economic-reference`; `plan`,
+`apply`, `resume` and root-validator bootstrap are not implemented. The
+[latest Snow inspection](evidence/snow-route-inspect-20260927-0741.json)
+observed chain ID 945, which fails the required mainnet ID 964 gate.
 This plan and its read-only evidence perform no
 mainnet transaction, deployment, UID removal or validator activation.
 
@@ -34,7 +35,7 @@ mainnet transaction, deployment, UID removal or validator activation.
 
 | Prerequisite | Current disposition and next result required |
 | --- | --- |
-| Owned mainnet RPC and independent identity authority | Snow `:9944` is the testnet route in the retained observation. Correct endpoint/port/routing; obtain separately approved genesis, expected EVM ID 964, native/EVM finalized mapping, code/metadata and node/source identity. An operator-approved mainnet genesis is still outstanding. |
+| Owned mainnet RPC and independent identity authority | The [07:41 UTC read-only inspection](evidence/snow-route-inspect-20260927-0741.json) still observes testnet ID 945 at Snow `:9944`; the node operator says mainnet routing is being prepared. Reinspect after cutover and obtain separately approved genesis, expected EVM ID 964, native/EVM finalized mapping, code/metadata and node/source identity. An operator-approved mainnet genesis is still outstanding. |
 | Immutable qualified release | Compose the actual SN/server/SDK/Connect/config and contract artifacts, including selected branch fixes and migration order; qualify their real interfaces and publish an approved manifest. Historical R48 builds do not qualify later per-user deposit or zero-price changes. |
 | Exact mainnet census and authority | Read SN25 membership, roles, custody, immutable contracts and locks at one finalized snapshot; resolve reset feasibility and all protected identities before making an executable plan. |
 | Economic and custody decisions | The user selected **owner-recycle for the remaining 90%**. Implement and qualify that path and the 10% native-miner target on the actual runtime; finalize mainnet policy, tolerance, keys/Safe, root-registration protection and spend/count/expiry ceilings. Recycled value is not reserve custody. No testnet allowance carries over. |
@@ -83,6 +84,9 @@ The [raw identity record](evidence/snow-rpc-route-20260927.json) has
 `same_identity_and_head=true`. This is an observed **testnet genesis and route**,
 not an approved mainnet genesis. A node's `Bittensor` display name is insufficient
 network authority. Both routes must be rejected for mainnet in this state.
+The later [07:41 UTC Snow readback](evidence/snow-route-inspect-20260927-0741.json)
+still returned EVM ID 945 and the same testnet genesis; no mainnet route cutover
+has been observed.
 
 A later mainnet deployment at either address requires the correct owned route,
 fresh readback and independent operator approval of the genesis/runtime domain.

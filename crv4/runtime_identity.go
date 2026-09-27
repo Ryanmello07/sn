@@ -55,6 +55,7 @@ type runtimeMetadataArtifactCacheEntry struct {
 	loadDone chan struct{}
 	metadata *types.Metadata
 	err      error
+	lastUse  uint64
 }
 
 // Coalesces loads per independently dialed provider. Methods are safe for
@@ -62,11 +63,16 @@ type runtimeMetadataArtifactCacheEntry struct {
 type runtimeMetadataArtifactCache struct {
 	stateLock       sync.Mutex
 	identityEntries map[RuntimeArtifactIdentity]*runtimeMetadataArtifactCacheEntry
+	nextUse         uint64
 }
 
-// The exact reviewed catalog bounds retained metadata without a separate
-// version-count constant that can omit a newly admitted predecessor.
+// This limits one caller's authority list; it does not limit the number of
+// runtime upgrades a long-lived connection can observe over its lifetime.
 const maximumRuntimeMetadataArtifactsPerChain = len(reviewedRuntimeArtifacts)
+
+// Decoded metadata is large. Eviction bounds resident entries independently
+// of the reviewed history and cannot make the next authenticated upgrade fail.
+const maximumRuntimeMetadataCacheEntries = 24
 
 // Creates an empty, hard-bounded per-provider artifact store.
 func newRuntimeMetadataArtifactCache() *runtimeMetadataArtifactCache {
@@ -132,24 +138,44 @@ func (self *runtimeMetadataArtifactCache) load(ctx context.Context, identity Run
 	}
 	var entry *runtimeMetadataArtifactCacheEntry
 	var existing bool
-	var capacityErr error
+	var uncached bool
 	func() {
 		self.stateLock.Lock()
 		defer self.stateLock.Unlock()
 		entry = self.identityEntries[identity]
 		if entry != nil {
 			existing = true
+			self.nextUse++
+			entry.lastUse = self.nextUse
 			return
 		}
-		if len(self.identityEntries) >= maximumRuntimeMetadataArtifactsPerChain {
-			capacityErr = fmt.Errorf("runtime metadata artifact cache already contains its maximum %d identities", maximumRuntimeMetadataArtifactsPerChain)
-			return
+		if len(self.identityEntries) >= maximumRuntimeMetadataCacheEntries {
+			var oldest RuntimeArtifactIdentity
+			var oldestUse uint64
+			found := false
+			for key, candidate := range self.identityEntries {
+				select {
+				case <-candidate.loadDone:
+					if !found || candidate.lastUse < oldestUse {
+						oldest, oldestUse, found = key, candidate.lastUse, true
+					}
+				default:
+				}
+			}
+			if !found {
+				// Every slot is loading. Authenticate this artifact without
+				// retaining another large metadata object in the cache.
+				uncached = true
+				return
+			}
+			delete(self.identityEntries, oldest)
 		}
-		entry = &runtimeMetadataArtifactCacheEntry{loadDone: make(chan struct{})}
+		self.nextUse++
+		entry = &runtimeMetadataArtifactCacheEntry{loadDone: make(chan struct{}), lastUse: self.nextUse}
 		self.identityEntries[identity] = entry
 	}()
-	if capacityErr != nil {
-		return nil, "", capacityErr
+	if uncached {
+		return loadRuntimeMetadataArtifact(ctx, identity, fetch)
 	}
 	if existing {
 		select {
@@ -160,16 +186,7 @@ func (self *runtimeMetadataArtifactCache) load(ctx context.Context, identity Run
 		}
 	}
 
-	metadata, metadataHash, err := fetch(ctx)
-	if err == nil && metadata == nil {
-		err = errors.New("runtime metadata artifact is nil")
-	}
-	if err == nil {
-		metadataHash, err = canonicalRuntimeArtifactHash("observed runtime metadata hash", metadataHash)
-	}
-	if err == nil && metadataHash != identity.MetadataHash {
-		err = fmt.Errorf("observed runtime metadata hash %s, want %s", metadataHash, identity.MetadataHash)
-	}
+	metadata, metadataHash, err := loadRuntimeMetadataArtifact(ctx, identity, fetch)
 
 	func() {
 		self.stateLock.Lock()
@@ -182,6 +199,22 @@ func (self *runtimeMetadataArtifactCache) load(ctx context.Context, identity Run
 		}
 		close(entry.loadDone)
 	}()
+	return metadata, metadataHash, err
+}
+
+// An evicted or temporarily uncached artifact receives the same exact-byte
+// validation as a retained entry. Cache admission never grants authority.
+func loadRuntimeMetadataArtifact(ctx context.Context, identity RuntimeArtifactIdentity, fetch func(context.Context) (*types.Metadata, string, error)) (*types.Metadata, string, error) {
+	metadata, metadataHash, err := fetch(ctx)
+	if err == nil && metadata == nil {
+		err = errors.New("runtime metadata artifact is nil")
+	}
+	if err == nil {
+		metadataHash, err = canonicalRuntimeArtifactHash("observed runtime metadata hash", metadataHash)
+	}
+	if err == nil && metadataHash != identity.MetadataHash {
+		err = fmt.Errorf("observed runtime metadata hash %s, want %s", metadataHash, identity.MetadataHash)
+	}
 	return metadata, metadataHash, err
 }
 
