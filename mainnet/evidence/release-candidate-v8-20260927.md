@@ -16,6 +16,13 @@ exact JSON SHA-256 is
 The clean `sn-mainnet` binary SHA-256 is
 `59e1a9de54ede993e22630783b11bef40b649b6810639533e65974ac29a9f7cb`.
 A fresh source-lock read reproduced the JSON byte-for-byte.
+All four Go executables were rebuilt from this same clean checkout with a
+**fresh Go build cache**, the same Go 1.26.6 toolchain and `GOWORK=off`;
+each rebuilt file compared byte-for-byte equal to its first build. The retained
+[fresh-build result](/mnt/data/sn-testnet/evidence/mainnet-source-lock-v8-20260927/fresh-build/RESULT.md)
+records commands, tool hashes and verified checksums. This is same-source,
+same-toolchain repeatability, not independent toolchain provenance or a proof
+about deployed images.
 
 The [actual-file inventory](release-inventory-candidate-v8-20260927.json)
 records **18** selected files, **156,328,101** bytes, and content hash
