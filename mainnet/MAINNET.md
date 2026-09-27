@@ -690,7 +690,10 @@ Run bounded normal tests on the frozen implementation, then appropriate race tes
 
 ## Open inputs before an executable mainnet plan
 
-First correct Snow's mainnet RPC mapping: the inspected `:9944` route is testnet.
+Snow VPN `172.28.208.185:9944` is the intended mainnet route, but the node
+operator reports it is still being prepared; the latest read-only inspection
+still returned testnet chain ID 945. Reinspect it after cutover, and do not
+construct or sign mainnet actions until it serves the approved mainnet identity.
 Obtain an independently approved mainnet genesis/runtime identity and complete
 SN25 census. Compose and qualify the production source/dependency release with
 the retained R48/R46 lessons, then implement the bootstrap mutation paths and
