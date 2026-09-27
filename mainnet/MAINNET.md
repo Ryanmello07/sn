@@ -978,6 +978,14 @@ the original exact hash and reconcile canonical inclusion, dispatch, finality,
 nonce and economic postcondition. A timeout is an unknown outcome. A new nonce
 or a local database status is not evidence that the old action failed.
 
+The [operator receipt-census correction](evidence/operator-recovery-census-20260927.md)
+preserves this boundary in the production account reconciler: if a retained
+candidate's receipt cannot be read and no other candidate is canonical, the
+intent remains unresolved. An advanced nonce cannot erase that unknown outcome,
+and elapsed replacement time cannot turn the failed read into new signing
+authority. MG-03/PF-03 still require complete discovery across both operator
+databases and evidence stores, historical-status reconciliation and full fees.
+
 The independent monitor confirms the repair's postcondition at finalized state.
 Only then close the incident, retaining its history and action receipts. A local
 repair success with missing chain evidence stays pending. Recovery cannot erase
