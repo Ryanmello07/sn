@@ -977,6 +977,12 @@ optimizations retain at least one representative full integration path.
 **Lesson.** Root-volume pressure and scratch/cache placement delayed or stopped
 qualification. `a5c23b39` and `2f9ef2b3` introduced data-volume workspaces and
 the [storage adapter](../scripts/test-storage.sh).
+On 2026-09-27 at 07:21 UTC the test-data USB SSD disconnected during isolated
+mainnet-gate work. The kernel aborted its ext4 journal and `/mnt/data`
+disappeared; the device returned under a different `/dev/sd*` name. Recovery
+used the configured filesystem UUID, `e2fsck -p` journal replay (reported
+clean), and remount; the isolated uncommitted worktree reappeared. This is a
+storage-availability incident, not proof that every in-flight write survived.
 
 **Production change.** Configure durable journal/database/artifact storage
 separately from disposable scratch and build caches. Check the intended mount,
@@ -990,7 +996,11 @@ live paths; paths themselves are not cryptographic identity. Production volume
 selection is deployment configuration, not a hardcoded testnet USB path.
 
 **Closure.** Exercise missing mount, read-only/full volume, inode exhaustion,
-partial write, crash before/after rename, cache loss and restored backups.
+device disconnect/re-enumeration, journal replay, partial write, crash
+before/after rename, cache loss and restored backups. Check the mount by UUID
+and filesystem identity before any write after recovery; rehash uncommitted
+artifacts and rerun interrupted tests rather than treating directory
+reappearance as completed work.
 Recover the last authenticated checkpoint without losing a signed attempt or
 marking incomplete publication complete. Release/test entry points propagate
 selected scratch/cache paths to children and remain usable in isolated CI.
