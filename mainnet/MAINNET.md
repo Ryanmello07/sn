@@ -290,8 +290,9 @@ Manage both services with independent state directories, signer permissions, log
 
 ## Go CLI and action model
 
-[mainnet/main.go](main.go) currently contains signer-free `inspect` and `monitor`
-commands. `inspect --rpc URL` emits a content-hashed identity snapshot. Supplying
+[mainnet/main.go](main.go) currently contains signer-free `inspect`, `monitor`,
+`check-recycle-mode` and `economic-reference` commands. `inspect --rpc URL`
+emits a content-hashed identity snapshot. Supplying
 any expectation requires all of `--expected-chain`, `--expected-genesis` and
 `--expected-evm-chain-id`; `monitor` always requires all three. The monitor emits
 JSON lines for `ok`, `rpc-error`, `rpc-integrity`, `identity-mismatch`,
@@ -306,8 +307,20 @@ observations and do not establish healthy state. The command contains no signer
 or submitter. Focused normal/race tests and vet pass; the retained Snow rejection
 demonstrates actual wrong-network refusal.
 
-This is a single-route identity/finality observer. It does not yet attest runtime
-code/metadata, map EVM receipt finality, compare independent nodes, inspect SN25
+`check-recycle-mode --rpc URL --policy FILE` binds the finalized mode read to
+independently supplied mainnet genesis, runtime code/metadata and complete
+version pins. It validates the runtime-declared map, enum and Burn fallback and
+reports whether the finalized value is Recycle. `economic-reference --input FILE`
+computes cumulative integer 10% provider / 90% recycle references from
+caller-supplied native miner tranches, carrying rounding between intervals.
+Both retain `activation_ready=false`: the first proves only mode storage under
+the approved artifact, and the second does not authenticate interval inputs or
+actual Yuma payouts. [Command contract and remaining gates](ECONOMIC-GATE.md)
+cover the source-to-code, owner-hotkey, allocation and observation work. Focused
+normal/race tests and vet pass after the 2026-09-27 data-volume recovery.
+
+`inspect`/`monitor` remain single-route identity/finality observers. They do not
+attest runtime code/metadata, map EVM receipt finality, compare independent nodes, inspect SN25
 custody/validator/settlement state, persist a restart checkpoint, deliver alerts,
 or execute repairs. Those are MG-07 and related production gates. An identity
 snapshot hash proves the captured bytes, not operator approval or node truth.
@@ -316,12 +329,15 @@ Keep the future plan builder pure after authenticated snapshot inputs are suppli
 Separate chain adapters, signer interfaces, state storage and supervisors so
 preview cannot reach a transaction submission path.
 
-Target command surface; only the limited `inspect`/`monitor` above exists:
+Target command surface; `inspect`, `monitor` and the two limited economic
+preconditions above exist, while the remaining commands are designs:
 
 | Command | Behavior |
 | --- | --- |
 | `inspect` | Extend the existing read-only identity capture with authority, census, capabilities, balances, custody and validators; emit a hashed snapshot. |
 | `monitor` | Extend the existing read-only identity/finality loop with durable checkpoints, independent comparisons, complete domain health and existing-stack alert delivery. |
+| `check-recycle-mode` | Existing signer-free finalized storage-mode precondition; extend with an approved mainnet artifact and operational readback at activation/recovery. |
+| `economic-reference` | Existing signer-free cumulative integer 10%/90% reference from caller-supplied native intervals; actual chain reconciliation remains a separate gate. |
 | `plan` | Build canonical plan/actions and a readable review from config, pinned snapshot, artifacts, closed testnet exceptions and production qualification. No signing or submission. |
 | `apply --accept-plan HASH` | Execute only the exactly reviewed plan with matching signed authorization, prerequisites and ceilings. |
 | `status` / `verify` | Read-only journal reconciliation and current/finalized postcondition verification. |
