@@ -632,7 +632,7 @@ prove a build or image, inspect a deployed migration state, or approve a release
 Ignored Solidity libraries and compiler identities are explicit dependency and
 toolchain inputs; they are not included by the Go source lock alone.
 
-The [current composed local candidate](evidence/release-candidate-v11-20260927.md)
+The [earlier composed local candidate](evidence/release-candidate-v11-20260927.md)
 locks SN `265231f9`, server `77cb401e` and Connect `c68689c4` with all local
 Go replacements. Its [partial actual-file inventory](evidence/release-inventory-candidate-v11-20260927.json)
 hashes 85 selected files, including seven locally built executables, all eight
@@ -640,6 +640,16 @@ server Dockerfiles, all seven image-build Makefiles, the exact package lock,
 40 Ubuntu payloads, six signed-index inputs and four copied contract artifacts.
 It has no approved policy or
 published/deployed OCI image identity and remains unapproved.
+The newer server source branch `codex/mainnet-composed-hardening-20260927` at
+`7bf88d79` composes the append-only migration 728 and retained-usage reader
+with the operator receipt-census recovery correction on top of that v11 base.
+Its combined controller selector passed normal, race and vet on disposable
+PostgreSQL/Redis ([composed evidence](evidence/server-composed-hardening-20260927.md)).
+This changes the source identity: the v11 source lock,
+inventory and rebuilt artifacts do **not** attest the newer branch. Refresh
+the complete manifest and production-path qualification before approving a
+deployment. [Timestamp custody](/mnt/data/sn-testnet/evidence/mainnet-usage-time-custody-20260927/RESULT.md),
+[operator recovery](evidence/operator-recovery-census-20260927.md).
 Mainnet inventory implementation passed 177 normal tests and all 177 race
 test bodies in a bounded run plus exact continuation; the latter is not one
 whole-package race pass. A subsequent validator test-fixture correction passed
