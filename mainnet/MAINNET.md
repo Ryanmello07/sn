@@ -575,7 +575,9 @@ The [no-cache OCI qualification](/mnt/data/sn-testnet/evidence/mainnet-server-im
 repeated API and proxy runnable amd64 platform manifests, configs and layers
 exactly. Its top-level indexes remained distinct because provenance described
 different invocations. The source-level contract tests passed normal/race,
-with offline image smoke. Keep arm64, other service images, independent builder,
+with offline image smoke. A separate [v11 taskworker image check](/mnt/data/sn-testnet/evidence/mainnet-server-taskworker-image-20260927/RESULT.md)
+repeated its exact runnable amd64 platform image twice and verified the embedded
+candidate binary in an offline container. Keep arm64, remaining service images, independent builder,
 full attestation/SBOM/scanner policy, owned archive, registry publication and
 deployed readback open.
 
