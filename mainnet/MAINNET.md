@@ -28,7 +28,7 @@ SN/server/SDK/Connect/config revisions. Some shared and simulator fixes exist;
 the complete mutating bootstrap, root-validator service and operational repair
 system remain production work. [mainnet/main.go](main.go) implements signer-free
 `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`,
-`monitor`, `subnet-preview`, `root-preview`, `root-monitor`,
+`monitor`, `subnet-preview`, `owner-trim-plan`, `root-preview`, `root-monitor`,
 `check-recycle-mode`, `economic-reference`, offline `source-lock`,
 [local `release-inventory`](RELEASE-INVENTORY.md), and the
 [signer-free blocked `plan`](PLAN.md); executable planning, `apply`, `resume`
@@ -180,6 +180,11 @@ trim selection. It does not yet collect collateral, stake, claims, commitments,
 EVM associations or every mechanism-specific weight. Even an exact candidate
 set keeps `reset_ready=false`: the trim call cannot bind hotkey generations at
 execution, and the source-selected owner cooldown is not a metadata constant.
+The separate signer-free `owner-trim-plan` command ranks bounded owner
+capacities against that authenticated census, predicts removed generations and
+survivor UID mapping, and names each old miner that would remain. Its
+[algorithm and limits](SUBNET-CENSUS.md#best-effort-owner-trim) retain
+`reset_ready=false`, `apply_authority=false` and `full_reset_completed=false`.
 
 Construct disjoint `remove`, `preserve`, and `unresolved` sets. Preserve explicit owner and validator hotkeys, including a validator currently lacking a permit, and any reserve, pool or escrow identity whose existing custody or earned claims require continuity. Membership in both a requested removal scope and a protected custody/validator role is an explicit conflict requiring a reviewed resolution; it is not silently omitted from “all.” Third-party validator identities receive the same explicit classification. Snapshot netuid-0 membership independently to prove it was untouched.
 
@@ -443,6 +448,8 @@ not register, stake, submit root weights or authorize basket claims.
 `subnet-preview` performs the [read-only SN25 reset feasibility
 census](SUBNET-CENSUS.md), with explicit protected and removal generations;
 `reset_ready` is always false and no UID is changed.
+`owner-trim-plan` adds a bounded ranked partial-trim prediction and explicit
+residuals, without changing that admission result.
 
 The [existing-seat root action owner](ROOT-ACTION.md) is an offline-qualified
 one-action signing and recovery core, not a CLI command or live root validator.

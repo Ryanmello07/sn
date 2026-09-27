@@ -110,6 +110,11 @@ with exact before/after hotkey generations, protected survivors and a named
 disposition for every old miner that remains. This blocked graph does not infer
 that an owner trim can remove all miners, and its `reset-miner-uids` action is
 not executable authority. See [the reset design](MAINNET.md#exact-uid-census-and-reset).
+The separate signer-free [owner-trim planner](SUBNET-CENSUS.md#best-effort-owner-trim)
+now ranks partial owner-key choices and records residual generations from one
+authenticated census. Its prediction cannot satisfy this graph's reset or
+execution authority requirement. The [current offline outline](evidence/blocked-plan-outline-owner-trim-20260927.json)
+incorporates the partial-trim description; earlier outlines remain historical.
 
 The economic target is fixed to the requested **1/10 of native miner allocation
 before withholding**, with **9/10 owner-recycle**, observed-native-target assurance
