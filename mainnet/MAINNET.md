@@ -515,11 +515,12 @@ prove a build or image, inspect a deployed migration state, or approve a release
 Ignored Solidity libraries and compiler identities are explicit dependency and
 toolchain inputs; they are not included by the Go source lock alone.
 
-The [current composed local candidate](evidence/release-candidate-v8-20260927.md)
-locks SN `1862d927`, server `9f860731` and Connect `c68689c4` with all local
-Go replacements. Its [partial actual-file inventory](evidence/release-inventory-candidate-v8-20260927.json)
-hashes 18 selected files, including four locally built executables and four
-contract artifacts, but has no policy or image identity and remains unapproved.
+The [current composed local candidate](evidence/release-candidate-v9-20260927.md)
+locks SN `265231f9`, server `969d6c74` and Connect `c68689c4` with all local
+Go replacements. Its [partial actual-file inventory](evidence/release-inventory-candidate-v9-20260927.json)
+hashes 32 selected files, including six locally built executables, all eight
+server Dockerfiles and four copied contract artifacts. It has no policy or OCI
+image identity and remains unapproved.
 Mainnet inventory implementation passed 177 normal tests and all 177 race
 test bodies in a bounded run plus exact continuation; the latter is not one
 whole-package race pass. A subsequent validator test-fixture correction passed
@@ -535,9 +536,9 @@ offline qualification of those source paths, not a complete release or an
 approved mainnet configuration. The prior
 [v7 source and contract build](evidence/source-lock-blocked-plan-20260927.md)
 remain linked evidence; subsequent evidence-only commits do not alter the
-frozen v8 candidate's Git identity.
+frozen earlier candidates' Git identities.
 
-The v8 binaries use a local exploratory Go profile. An offline
+The earlier v8 binaries use a local exploratory Go profile. An offline
 [production-style probe](/mnt/data/sn-testnet/evidence/mainnet-source-lock-v8-20260927/production-profile/RESULT.md)
 also builds static, trimmed, version-stamped Linux/amd64 SN executables, but
 they are not in the v8 inventory or an approved image. The pinned server API
@@ -545,10 +546,24 @@ and taskworker likewise build and repeat exactly from clean source; their
 [build record](/mnt/data/sn-testnet/evidence/mainnet-server-binaries-20260927/RESULT.md)
 is retained. Server commit `969d6c74` in pushed branch
 `codex/mainnet-server-image-pins-20260927` pins the six service Dockerfile
-bases that still used a mutable Ubuntu tag. Compose that server commit with
-the next SN candidate, choose actual production versions/architectures, and
-inventory built OCI manifest digests and running-image readback before MG-02
-can close. The Dockerfile edit itself does not publish or validate an image.
+bases that still used a mutable Ubuntu tag; it is included in v9. The v9
+[build and inventory record](/mnt/data/sn-testnet/evidence/mainnet-source-lock-v9-20260927/RESULT.md)
+builds static Linux/amd64 SN and server binaries from that exact composition
+and replays the inventory byte-for-byte. Choose approved production versions
+and architectures, then inventory built OCI manifest digests and running-image
+readback before MG-02 can close. Local binaries and Dockerfile pins do not
+publish or validate an image.
+
+The [owner-recycle measured decision](../validator/OWNER-RECYCLE-MEASUREMENT.md)
+now joins signed successor approval, exact native owner census and fully
+replayed original V2 provider proofs in a distinct capsule. It reconstructs
+the proposed 10% provider / 90% owner weight row, but emits only a blocked
+unsigned intent. It cannot enter the existing native signing/submission path;
+validator eligibility, operator health, complete history, drained activation,
+custody, archive and observed final incentives remain MG-06 gates. Its affected
+139-test race selector and final-source 58-test focused normal selector passed;
+the [qualification record](/mnt/data/sn-testnet/evidence/mainnet-owner-recycle-decision-20260927/RESULT.md)
+states the exact limits.
 
 No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 
