@@ -81,12 +81,13 @@ The September 14 design inspected Subtensor [commit `67dcf7f791dc495064c293f080a
 The production inspection gate must authenticate one finalized native block and its corresponding canonical EVM block using a separately verified, operator-owned mainnet node. Require an independently approved genesis hash, EVM chain ID 964, native chain identity, complete runtime version, `:code` hash, metadata hash, node build identity, and the reviewed runtime source/artifact mapping. Verify the finalized native header's complete SCALE bytes against its hash before using that hash for state reads; a header number and same-height lookup are insufficient. Decode one complete runtime identity, rejecting contradictory `stateVersion`/`systemVersion` aliases. The `runtime-snapshot` command captures exact finalized code and metadata bytes, verifies code against its storage hash, and repeats canonical/network checks after reading them. Its output remains an unapproved observation. Admission still needs signed-extension, call, storage and precompile review, an independently reviewed source-to-Wasm mapping, and native/EVM finalized mapping. A matching `specVersion` alone is insufficient; [the existing runtime authenticator](../crv4/runtime_identity.go) already binds more than that number.
 
 For native/EVM mapping, the current Snow testnet header carries a Frontier
-`fron` consensus digest whose payload names an EVM block hash. A production
-observer must authenticate the native header, decode the exact reviewed digest
-variant and payload, derive the EVM hash from it, verify the returned EVM header
-and its canonical hash-by-number lookup, then retain both hashes in one
-observation. Equal block numbers alone are not a mapping. This testnet shape
-remains provisional until the selected mainnet runtime and Frontier source
+`fron` consensus digest whose payload names an EVM block hash. The signer-free
+[`finalized-mapping` command](FINALIZED-MAPPING.md) authenticates the native
+header, decodes the reviewed digest variant, fetches raw EVM RLP by that hash
+with canonicality required, reproduces its Keccak hash, and checks canonical
+lookup using the EVM header's decoded number. Equal block numbers alone are
+not a mapping. Its [Snow evidence](evidence/finalized-mapping-snow-20260927.json)
+remains unapproved until the selected mainnet identity, runtime and source
 artifact are independently reviewed.
 
 The read-only observation at **2026-09-27 04:16:25 UTC** compared Snow VPN
@@ -453,7 +454,7 @@ Keep the future plan builder pure after authenticated snapshot inputs are suppli
 Separate chain adapters, signer interfaces, state storage and supervisors so
 preview cannot reach a transaction submission path.
 
-Target command surface; `inspect`, `runtime-snapshot`, `monitor`, `subnet-preview`, the two root observers and the two
+Target command surface; `inspect`, `runtime-snapshot`, `finalized-mapping`, `monitor`, `subnet-preview`, the two root observers and the two
 limited economic preconditions above and `source-lock` exist, while the remaining commands are
 designs:
 
@@ -461,6 +462,7 @@ designs:
 | --- | --- |
 | `inspect` | Extend the existing read-only identity capture with authority, census, capabilities, balances, custody and validators; emit a hashed snapshot. |
 | `runtime-snapshot` | Existing signer-free capture of one finalized runtime's exact `:code` and metadata bytes, complete version and node identity; independent approval and source-to-Wasm review remain separate. |
+| `finalized-mapping` | Existing signer-free capture of linked finalized native and raw EVM header commitments with an owned-RPC canonicality assertion; no signing or mainnet approval. |
 | `monitor` | Extend the existing read-only identity/finality loop with durable checkpoints, independent comparisons, complete domain health and existing-stack alert delivery. |
 | `subnet-preview` | Existing signer-free finalized SN25/root UID census and owner-trim candidate comparison; full custody and execution-time reset authority remain open. |
 | `root-preview` / `root-monitor` | Existing signer-free finalized root seat and strategy census; an offline [existing-seat action core](ROOT-ACTION.md) exists, but production signing and activation remain separate work. |
@@ -486,12 +488,12 @@ generated files, ignored files, configuration, migrations or the running images
 match those commits. The release owner must bind those artifacts separately,
 qualify the composed source and approve the resulting immutable manifest.
 
-The [current composed candidate](evidence/source-lock-header-auth-20260927.md)
-locks SN `dce2cee1`, server `9f860731` and Connect `c68689c4` with all local
+The [current composed candidate](evidence/source-lock-finalized-mapping-20260927.md)
+locks SN `b571fd04`, server `9f860731` and Connect `c68689c4` with all local
 Go replacements. Its cross-module compile, full mainnet normal suite, focused
-identity/runtime race suite and mainnet vet passed. Its read-only Snow smoke
-authenticated a real finalized header but still observed testnet EVM ID 945;
-the raw snapshot remains unapproved. The earlier
+mapping/identity/runtime race suite and mainnet vet passed. Its read-only Snow
+smoke authenticated linked native and EVM header commitments but still observed
+testnet EVM ID 945; the raw mapping remains unapproved. The earlier
 [composition](evidence/source-lock-composed-20260927.md) separately qualified
 unchanged validator and receipt selectors. This is offline qualification of
 those source paths, not a complete release or an approved mainnet
