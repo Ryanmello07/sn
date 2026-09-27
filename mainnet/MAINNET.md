@@ -537,6 +537,19 @@ approved mainnet configuration. The prior
 remain linked evidence; subsequent evidence-only commits do not alter the
 frozen v8 candidate's Git identity.
 
+The v8 binaries use a local exploratory Go profile. An offline
+[production-style probe](/mnt/data/sn-testnet/evidence/mainnet-source-lock-v8-20260927/production-profile/RESULT.md)
+also builds static, trimmed, version-stamped Linux/amd64 SN executables, but
+they are not in the v8 inventory or an approved image. The pinned server API
+and taskworker likewise build and repeat exactly from clean source; their
+[build record](/mnt/data/sn-testnet/evidence/mainnet-server-binaries-20260927/RESULT.md)
+is retained. Server commit `969d6c74` in pushed branch
+`codex/mainnet-server-image-pins-20260927` pins the six service Dockerfile
+bases that still used a mutable Ubuntu tag. Compose that server commit with
+the next SN candidate, choose actual production versions/architectures, and
+inventory built OCI manifest digests and running-image readback before MG-02
+can close. The Dockerfile edit itself does not publish or validate an image.
+
 No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 
 The canonical plan binds schema and action-format versions; exact config/policy bytes; resolved configuration roots and runtime routes; source/dependency/artifact/binary identities; owned-node and runtime identities; native/EVM snapshot hashes; all public roles; census and reset classifications; actual transaction payloads/origins; expected CREATE addresses and nonces; phase dependencies; validity windows; spend/count caps; and the chosen emission-denominator/remainder policy. Hash canonical bytes with domain separation. The signed authorization names that hash, network, expiry, allowed phases and ceilings. Reject duplicate fields, unknown schema versions, overflow, unexpanded substitutions and ambiguous addresses.

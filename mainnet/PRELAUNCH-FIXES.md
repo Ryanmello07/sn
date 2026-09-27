@@ -71,6 +71,20 @@ limit. Bind that exact build into MG-02/MG-08 and qualify creation on the
 selected live runtime; a passing local build does not establish live
 deployability after a source/toolchain change.
 
+MG-02 also needs the operator executables and their actual image identities.
+Clean server `9f860731` API and taskworker Linux/amd64 binaries build and repeat
+byte-for-byte under their Makefile profile; the
+[external build record](/mnt/data/sn-testnet/evidence/mainnet-server-binaries-20260927/RESULT.md)
+retains both hashes. Adjacent review found six server Dockerfiles still naming
+mutable `ubuntu:24.04` while API pinned its multi-platform digest. Server
+branch `codex/mainnet-server-image-pins-20260927` commit `969d6c74` pins all
+six to that existing digest; both operator binaries remain byte-identical after
+the source-only change. The branch is pushed but not yet part of the current
+SN v8 lock. No OCI image digest, production architecture set, deployment
+manifest or running-image readback exists. Bind the new server commit and
+actual built images into the next release composition; a Dockerfile pin alone
+does not supply an image.
+
 The local validator init fixture initially failed under host umask `0002`
 because `testing.TempDir` supplied a group-writable numbered seed parent.
 The [causal correction](/mnt/data/sn-testnet/evidence/mainnet-seed-fixtures-20260927/RESULT.md)
