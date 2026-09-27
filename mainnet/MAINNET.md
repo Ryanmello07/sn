@@ -26,8 +26,9 @@ the complete mutating bootstrap, root-validator service and operational repair
 system remain production work. [mainnet/main.go](main.go) implements signer-free
 `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`,
 `monitor`, `subnet-preview`, `root-preview`, `root-monitor`,
-`check-recycle-mode`, `economic-reference` and offline `source-lock`; `plan`, `apply`, `resume` and root-validator signing are
-not implemented. The
+`check-recycle-mode`, `economic-reference`, offline `source-lock`, and the
+[signer-free blocked `plan`](PLAN.md); executable planning, `apply`, `resume`
+and root-validator signing are not implemented. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)
 observed chain ID 945, which fails the required mainnet ID 964 gate.
 This plan and its read-only evidence perform no
@@ -504,18 +505,19 @@ generated files, ignored files, configuration, migrations or the running images
 match those commits. The release owner must bind those artifacts separately,
 qualify the composed source and approve the resulting immutable manifest.
 
-The [current composed candidate](evidence/source-lock-finalized-snapshot-20260927.md)
-locks SN `468f79cd`, server `9f860731` and Connect `c68689c4` with all local
-Go replacements. Its cross-module compile, full mainnet normal suite, focused
-combined/runtime/mapping race suite and mainnet vet passed. Its read-only Snow
-smoke authenticated code, metadata and linked native/EVM headers under one
-native hash but still observed testnet EVM ID 945; the raw record remains
-unapproved. The earlier
-[composition](evidence/source-lock-composed-20260927.md) separately qualified
-unchanged validator and receipt selectors. This is offline qualification of
-those source paths, not a complete release or an approved mainnet
-configuration. Subsequent evidence-only commits do not alter the frozen
-candidate's Git identity.
+The [current composed candidate](evidence/source-lock-blocked-plan-20260927.md)
+locks SN `7175313d`, server `9f860731` and Connect `c68689c4` with all local
+Go replacements. Its 169 mainnet normal and 30 focused race tests, vet and
+clean detached build passed. The new [unbound blocked outline](evidence/blocked-plan-outline-20260927.json)
+names ten non-executable actions and 24 missing requirements. Its negative
+control rejects retained Snow testnet EVM ID 945; the earlier
+[same-block Snow observation](evidence/source-lock-finalized-snapshot-20260927.md)
+authenticates code, metadata and linked native/EVM headers but remains
+unapproved. The earlier [composition](evidence/source-lock-composed-20260927.md)
+separately qualified unchanged validator and receipt selectors. This is
+offline qualification of those source paths, not a complete release or an
+approved mainnet configuration. Subsequent evidence-only commits do not alter
+the frozen candidate's Git identity.
 
 No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 
