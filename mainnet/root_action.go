@@ -1,7 +1,7 @@
 // One root action owns its nonce and fee reservation from the first signing
 // request through a verified finalized receipt or finalized mortal expiry.
-// Authority, custody and submission adapters remain deliberately absent; the
-// read-only canonical receipt port cannot construct or activate this service.
+// Live authority, globally fenced signing and submission remain absent. The
+// offline public-signature handoff and read-only receipt port cannot activate it.
 package main
 
 import (

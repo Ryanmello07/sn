@@ -456,8 +456,11 @@ mortal root basket encoder, durable one-request signing/nonce ownership and
 receipt/expiry recovery. Its read-only chain adapter reconstructs canonical
 native inclusion and receipt evidence from the approved owned RPC, with exact
 historical execution-runtime checks; it does not independently prove GRANDPA
-finality or storage. Production signing authority, global custody and submission
-are absent; there is no signing command or active root service. A signed root
+finality or storage. The [offline custody handoff](ROOT-OFFLINE-CUSTODY.md) now
+verifies independent exact-action approval and retains one matching public
+signature before handing it to this owner; missing receipts remain unresolved
+across restart. Production live authority, globally fenced native signing and
+submission are absent; there is no signing command or active root service. A signed root
 call does not bind registration generation, so pending-action seat changes need
 custody exclusion or separately authenticated incident reconciliation. The
 accumulate-in-place strategy needs no heartbeat transaction. Changing that

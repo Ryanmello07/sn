@@ -168,8 +168,12 @@ The MG-08 action core supplies an offline-qualified
 one-request signing/nonce ownership, private durable state, exact-byte retries,
 and retained finalized dispatch/fee/runtime-deviation or expiry evidence. Missing
 or empty required state cannot resurrect an allowance, and a runtime change
-blocks new effects while old receipts remain recoverable. The production
-authority/custody/submission adapters and supervisor are still absent; the
+blocks new effects while old receipts remain recoverable. The new
+[offline custody handoff](ROOT-OFFLINE-CUSTODY.md) authenticates independent
+exact-action approval, durably imports one matching public native signature and
+recovers the same bytes after interruption; local absence never proves that no
+signature was issued. Production live authority, globally fenced native
+signing/submission adapters and supervisor are still absent; the
 read-only canonical receipt adapter is implemented. Native fee
 quotes are not atomic caps; source/policy hashes are not on-chain runtime locks.
 Do not activate signing from a read-only-ready sample or invent a heartbeat for

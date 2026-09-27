@@ -5,7 +5,9 @@ The root role now has an offline-qualified **single-action ownership core** in
 [root_action_store.go](root_action_store.go), and a bounded root basket-call
 encoder in [root_signing.go](root_signing.go). The read-only production chain port
 in [root_receipt_chain.go](root_receipt_chain.go) now reconciles finalized native
-receipts. There is no production signer, authority/submission adapter,
+receipts. The [offline custody handoff](ROOT-OFFLINE-CUSTODY.md) now verifies an
+independently approved packet and durably imports/replays its exact public native
+signature. There is no production native signer, authority/submission adapter,
 `root-service` command or active root weight publisher. This increment does not
 claim mainnet readiness.
 
@@ -201,8 +203,9 @@ of this implementation. No live RPC or chain mutation was used to qualify it.
 
 ## Production adapter contracts and remaining gates
 
-The core now has a production **read-only reconciliation** implementation.
-Authority, custody and submission have no production implementation. They cannot
+The core now has a production **read-only reconciliation** implementation and
+an offline public-signature handoff. Live authority, globally fenced native
+signing and submission have no production implementation. They cannot
 be activated by a policy boolean, a successful `root-preview`, or a testnet
 allowance. Before adding a signing CLI/service, supply and qualify:
 
