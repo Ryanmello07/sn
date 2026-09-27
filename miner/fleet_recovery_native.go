@@ -1,0 +1,409 @@
+// Native production commands have one durable owner across preparation,
+// uncertain transmission, historical dispatch verification and postcondition.
+package miner
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
+	"github.com/docopt/docopt-go"
+
+	snchain "github.com/urfoundation/sn/chain"
+	"github.com/urfoundation/sn/crv4"
+	"github.com/urfoundation/sn/protocol"
+)
+
+const fleetRecoveryScanLimit = 4096
+
+// A verified finite archive range can be continued by the next invocation.
+type fleetRecoveryScanPending struct {
+	number uint64
+	hash   types.Hash
+}
+
+// Diagnostic progress is not a transaction outcome or replacement authority.
+func (self *fleetRecoveryScanPending) Error() string {
+	return fmt.Sprintf("native archive scan checkpointed through %d; re-run to continue bounded recovery", self.number)
+}
+
+// An unresolved liability is never permission to sign a replacement.
+func fleetRecoveryUnresolved(record *fleetRecoveryRecord, err error) error {
+	return fmt.Errorf("fleet %s transaction %s remains unresolved; original signed bytes retained: %w", record.Intent.Action, record.TxHash, err)
+}
+
+// A terminal failed transaction stays terminal and reports failure on every
+// retry. It cannot be silently replaced, but no longer owns a pending nonce.
+func fleetRecoveryCompleted(record *fleetRecoveryRecord) error {
+	if !record.Succeeded {
+		return fmt.Errorf("fleet %s original transaction %s finalized with failure: %s", record.Intent.Action, record.TxHash, record.Outcome)
+	}
+	fmt.Printf("fleet %s already finalized: %s (%s)\n", record.Intent.Action, record.TxHash, record.Outcome)
+	return nil
+}
+
+// Captures exact canonical manifest semantics before loading any signing key.
+func fleetRecoveryNewIntent(action string, authority *fleetMainnetRuntimeAuthority, manifest *protocol.FleetManifest) (fleetRecoveryIntent, error) {
+	raw, err := manifest.Canonical()
+	return fleetRecoveryIntent{Action: action, Genesis: authority.GenesisHash, Manifest: raw}, err
+}
+
+// The original approval is copied at prepare time, not reopened after send.
+func fleetRecoveryPrepared(intent fleetRecoveryIntent, authority *fleetMainnetRuntimeAuthority, start types.Hash, number uint64) *fleetRecoveryRecord {
+	digest := sha256.Sum256(authority.document)
+	return &fleetRecoveryRecord{Schema: fleetRecoverySchema, Id: intent.id(), Intent: intent, Authority: append([]byte(nil), authority.document...), AuthoritySha256: hex.EncodeToString(digest[:]), StartHash: start, StartNumber: number, Stage: "prepared"}
+}
+
+// A reached network must match the original identity even when its current
+// runtime upgraded. Historical recovery authenticates each consumed artifact.
+func (self *fleetMainnetRuntimeAuthority) recoveryNetwork(ctx context.Context, chain *crv4.Chain) error {
+	var genesis types.Hash
+	var name string
+	if err := chain.API.Client.CallContext(ctx, &genesis, "chain_getBlockHash", uint64(0)); err != nil {
+		return err
+	}
+	if err := chain.API.Client.CallContext(ctx, &name, "system_chain"); err != nil {
+		return err
+	}
+	if genesis.Hex() != self.GenesisHash || name != self.NativeChain || chain.GenesisHash != genesis || chain.ProvisionalRuntimeCompatibilityEnabled() {
+		return errors.New("fleet recovery original fresh network identity differs")
+	}
+	return ctx.Err()
+}
+
+// Reads a canonical native header; no equal-number or receipt assertion alone
+// substitutes for canonical hash and parent continuity.
+func fleetRecoveryNativeHeader(ctx context.Context, chain *crv4.Chain, number uint64, want types.Hash) (types.Header, error) {
+	var hash types.Hash
+	if err := chain.API.Client.CallContext(ctx, &hash, "chain_getBlockHash", number); err != nil {
+		return types.Header{}, err
+	}
+	if hash == (types.Hash{}) || (want != (types.Hash{}) && hash != want) {
+		return types.Header{}, errors.New("fleet recovery native canonical hash differs")
+	}
+	header, err := chain.HeaderAtContext(ctx, hash)
+	if err != nil || uint64(header.Number) != number {
+		return types.Header{}, errors.Join(errors.New("fleet recovery native header differs"), err)
+	}
+	return *header, nil
+}
+
+// Registration and publication share the same durable path; testnet retains
+// its existing operational behavior and never acquires this mainnet authority.
+func fleetRecoverableNative(opts docopt.Opts, manifest *protocol.FleetManifest, authority *fleetMainnetRuntimeAuthority, action string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	intent, err := fleetRecoveryNewIntent(action, authority, manifest)
+	if err != nil {
+		return err
+	}
+	store, err := openFleetRecoveryStore()
+	if err != nil {
+		return err
+	}
+	defer store.close()
+	record, err := store.find(intent)
+	if err != nil {
+		return err
+	}
+	seed, err := crv4.LoadSeedFile(fleetOpt(opts, "--hotkey_seed_file"))
+	if err != nil {
+		return err
+	}
+	hotkey, err := crv4.KeypairFromSeed(seed)
+	if err != nil || hotkey.PublicKey() != manifest.Hotkey {
+		return errors.Join(errors.New("hotkey seed does not match manifest hotkey"), err)
+	}
+	key := hotkey
+	if action == "register" {
+		key, err = snchain.LoadKeypairFile(fleetOpt(opts, "--coldkey_seed_file"))
+		if err != nil {
+			return err
+		}
+	}
+	signer := fleetRecoverySigner{native: key}
+	if record != nil {
+		if record.NativeSigner != key.PublicKey() {
+			return errors.New("fleet recovery original native signer differs")
+		}
+		if record.Stage == "finalized" {
+			return fleetRecoveryCompleted(record)
+		}
+		authority, _, err = record.authority()
+		if err != nil {
+			return err
+		}
+	}
+	endpointContext := func(parent context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
+		return context.WithTimeout(parent, budget)
+	}
+	chain, _, err := dialFleetNativeWithEndpointContext(ctx, fleetOpts(opts, "--substrate"), fleetNativeEndpointTimeout, endpointContext, crv4.DialChainContext, authority.recoveryNetwork)
+	if err != nil {
+		return err
+	}
+	defer closeFleetNative(chain)
+	if record != nil {
+		return fleetRecoveryResumeNative(ctx, store, record, signer, authority, chain, action == "publish" || mustBoolOpt(opts, "--apply"))
+	}
+	view, start, err := authority.finalizedView(ctx, chain)
+	if err != nil {
+		return err
+	}
+	header, err := chain.HeaderAtContext(ctx, start)
+	if err != nil {
+		return err
+	}
+	prepare := func(result snchain.SubmitResult) error {
+		record = fleetRecoveryPrepared(intent, authority, start, uint64(header.Number))
+		record.NativeSigner, record.Nonce, record.Raw, record.TxHash = key.PublicKey(), uint64(result.Nonce), append([]byte(nil), result.Raw...), result.ExtrinsicHash.Hex()
+		return store.put(record, signer)
+	}
+	before := func() error {
+		copy := *record
+		copy.Stage = "may_have_sent"
+		if err := store.put(&copy, signer); err != nil {
+			return err
+		}
+		record = &copy
+		return nil
+	}
+	var receipt *crv4.FinalizedExtrinsic
+	if action == "register" {
+		burnLimit, err := fleetUint64Opt(opts, "--burn_limit_rao", 0)
+		if err != nil {
+			return err
+		}
+		feeLimit, err := fleetUint64Opt(opts, "--fee_limit_rao", fleetDefaultFeeLimitRao)
+		if err != nil {
+			return err
+		}
+		stateDir, err := providerStateDir()
+		if err != nil {
+			return err
+		}
+		journal, err := snchain.OpenJournal(filepath.Join(stateDir, "fleet-native"))
+		if err != nil {
+			return err
+		}
+		result, err := snchain.RegisterHotkey(ctx, view, snchain.RegisterRequest{Command: "provider fleet register", Netuid: manifest.Netuid, Hotkey: manifest.Hotkey, Coldkey: key, BurnLimitRao: burnLimit, FeeLimitRao: feeLimit, Allowed: []crv4.RuntimeArtifactIdentity{authority.artifactIdentity()}, RuntimeAdmission: authority.nativeAdmission(chain), Journal: journal, Apply: mustBoolOpt(opts, "--apply"), Output: os.Stdout, Prepared: prepare, BeforeBroadcast: before})
+		if err != nil {
+			if record != nil {
+				return fleetRecoveryUnresolved(record, err)
+			}
+			return err
+		}
+		if result.Submit == nil || result.Submit.Receipt == nil {
+			return nil
+		}
+		receipt = result.Submit.Receipt
+	} else {
+		hash, _ := manifest.CommitmentHash()
+		call, err := view.NewSetFleetCommitmentCall(manifest.Netuid, hash)
+		if err != nil {
+			return err
+		}
+		nonce, err := view.AccountNonceContext(ctx, key.Address())
+		if err != nil {
+			return err
+		}
+		if err := authority.nativeAdmission(chain)(ctx, types.Hash{}); err != nil {
+			return err
+		}
+		raw, err := snchain.EncodeSignedCall(view, key.Ring, call, nonce)
+		if err != nil {
+			return err
+		}
+		if err := prepare(snchain.SubmitResult{Raw: raw, Nonce: nonce, ExtrinsicHash: snchain.ExtrinsicHash(raw)}); err != nil {
+			return err
+		}
+		if err := authority.nativeAdmission(chain)(ctx, types.Hash{}); err != nil {
+			return fleetRecoveryUnresolved(record, err)
+		}
+		if err := before(); err != nil {
+			return err
+		}
+		receipt, err = view.SubmitRawAndWatchFinalized(ctx, codec.HexEncodeToString(record.Raw))
+		if err != nil {
+			return fleetRecoveryUnresolved(record, err)
+		}
+	}
+	return fleetRecoveryFinishNative(ctx, store, record, signer, authority, chain, receipt)
+}
+
+// Historical decoding uses the original exact approval. Neither an upgraded
+// current head nor an error after inclusion causes a fresh signature.
+func fleetRecoveryFinishNative(ctx context.Context, store *fleetRecoveryStore, record *fleetRecoveryRecord, signer fleetRecoverySigner, authority *fleetMainnetRuntimeAuthority, chain *crv4.Chain, receipt *crv4.FinalizedExtrinsic) error {
+	if receipt == nil || receipt.ExtrinsicHash.Hex() != record.TxHash || receipt.BlockNumber <= record.StartNumber {
+		return fleetRecoveryUnresolved(record, errors.New("native receipt identity differs"))
+	}
+	finalized, err := crv4.FinalizedHeadContext(ctx, chain)
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	head, err := chain.HeaderAtContext(ctx, finalized)
+	if err != nil || uint64(head.Number) < receipt.BlockNumber {
+		return fleetRecoveryUnresolved(record, errors.Join(errors.New("native receipt is not covered by finality"), err))
+	}
+	if _, err := fleetRecoveryNativeHeader(ctx, chain, receipt.BlockNumber, receipt.BlockHash); err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	view, err := authority.viewAt(ctx, chain, receipt.BlockHash)
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	if err := view.VerifyFinalizedExtrinsicContext(ctx, receipt.BlockHash, receipt.ExtrinsicHash); err != nil {
+		var failed *crv4.FinalizedDispatchError
+		if !errors.As(err, &failed) || failed.ExtrinsicHash != receipt.ExtrinsicHash || failed.BlockHash != receipt.BlockHash {
+			return fleetRecoveryUnresolved(record, err)
+		}
+		copy := *record
+		copy.NativeReceipt, copy.Stage, copy.Outcome = receipt, "finalized", failed.Error()
+		if err := store.put(&copy, signer); err != nil {
+			return err
+		}
+		return fleetRecoveryCompleted(&copy)
+	}
+	_, manifest, err := record.authority()
+	if err != nil {
+		return err
+	}
+	copy := *record
+	if record.Intent.Action == "publish" {
+		hash, _ := manifest.CommitmentHash()
+		observed, err := authority.commitmentWrite(ctx, chain, manifest.Netuid, manifest.Hotkey, hash, receipt)
+		if err != nil {
+			return fleetRecoveryUnresolved(record, err)
+		}
+		copy.Outcome = fmt.Sprintf("commitment 0x%x written at native block %d", observed.Hash, observed.CommitmentBlock)
+	} else {
+		uid, present, err := snchain.UIDAtContext(ctx, view, manifest.Netuid, manifest.Hotkey, receipt.BlockHash)
+		if err != nil || !present {
+			return fleetRecoveryUnresolved(record, errors.Join(errors.New("native registration readback absent"), err))
+		}
+		owner, err := snchain.HotkeyOwnerAtContext(ctx, view, manifest.Hotkey, receipt.BlockHash)
+		if err != nil || owner != record.NativeSigner {
+			return fleetRecoveryUnresolved(record, errors.Join(errors.New("native registration owner differs"), err))
+		}
+		copy.Outcome = fmt.Sprintf("uid %d registered under 0x%x", uid, owner)
+	}
+	copy.NativeReceipt, copy.Stage, copy.Succeeded = receipt, "finalized", true
+	if err := store.put(&copy, signer); err != nil {
+		return err
+	}
+	fmt.Printf("fleet %s finalized: %s (%s)\n", record.Intent.Action, record.TxHash, copy.Outcome)
+	return nil
+}
+
+// Each invocation scans a finite canonical range, retaining its authenticated
+// absence checkpoint so long archive gaps can continue without starting over.
+func fleetRecoveryResumeNative(ctx context.Context, store *fleetRecoveryStore, record *fleetRecoveryRecord, signer fleetRecoverySigner, authority *fleetMainnetRuntimeAuthority, chain *crv4.Chain, apply bool) error {
+	return fleetRecoveryResumeNativeRange(ctx, store, record, signer, authority, chain, apply, fleetRecoveryScanLimit)
+}
+
+// The range budget is instance-owned so tests can force the exact checkpoint
+// boundary without thousands of synthetic network calls or timing assumptions.
+func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoveryStore, record *fleetRecoveryRecord, signer fleetRecoverySigner, authority *fleetMainnetRuntimeAuthority, chain *crv4.Chain, apply bool, maxBlocks uint64) error {
+	finalized, err := crv4.FinalizedHeadContext(ctx, chain)
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	head, err := chain.HeaderAtContext(ctx, finalized)
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	end := uint64(head.Number)
+	from, parent := record.StartNumber, record.StartHash
+	if record.ScanNumber != 0 {
+		from, parent = record.ScanNumber, record.ScanHash
+	}
+	if maxBlocks == 0 || maxBlocks > fleetRecoveryScanLimit || end < from {
+		return fleetRecoveryUnresolved(record, errors.New("native archive recovery range differs"))
+	}
+	if _, err := fleetRecoveryNativeHeader(ctx, chain, record.StartNumber, record.StartHash); err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	if _, err := fleetRecoveryNativeHeader(ctx, chain, from, parent); err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	through := min(end, from+maxBlocks)
+	for number := from + 1; number <= through; number++ {
+		var hash types.Hash
+		if err := chain.API.Client.CallContext(ctx, &hash, "chain_getBlockHash", number); err != nil {
+			return fleetRecoveryUnresolved(record, err)
+		}
+		header, err := fleetRecoveryNativeHeader(ctx, chain, number, hash)
+		if err != nil || header.ParentHash != parent {
+			return fleetRecoveryUnresolved(record, errors.Join(errors.New("native recovery ancestry differs"), err))
+		}
+		var body *struct {
+			Block *struct {
+				Extrinsics *[]string `json:"extrinsics"`
+			} `json:"block"`
+		}
+		if err := chain.API.Client.CallContext(ctx, &body, "chain_getBlock", hash.Hex()); err != nil {
+			return fleetRecoveryUnresolved(record, err)
+		}
+		if body == nil || body.Block == nil || body.Block.Extrinsics == nil {
+			return fleetRecoveryUnresolved(record, errors.New("native recovery block body unavailable"))
+		}
+		for _, encoded := range *body.Block.Extrinsics {
+			raw, err := codec.HexDecodeString(encoded)
+			if err != nil || len(raw) == 0 {
+				return fleetRecoveryUnresolved(record, errors.New("native recovery extrinsic bytes malformed"))
+			}
+			if snchain.ExtrinsicHash(raw).Hex() == record.TxHash {
+				return fleetRecoveryFinishNative(ctx, store, record, signer, authority, chain, &crv4.FinalizedExtrinsic{ExtrinsicHash: snchain.ExtrinsicHash(raw), BlockHash: hash, BlockNumber: number})
+			}
+		}
+		parent = hash
+	}
+	if through > from {
+		copy := *record
+		copy.ScanNumber, copy.ScanHash = through, parent
+		if err := store.put(&copy, signer); err != nil {
+			return err
+		}
+		record = &copy
+	}
+	if through != end {
+		return fleetRecoveryUnresolved(record, fmt.Errorf("native archive scan checkpointed through %d; re-run to continue bounded recovery", through))
+	}
+	view, err := authority.viewAt(ctx, chain, finalized)
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	// The reviewed fleet interface uses Subtensor's u64 balance layout, not
+	// the generic Substrate AccountInfo with u128 balances.
+	accountKey, err := types.CreateStorageKey(view.Meta, "System", "Account", record.NativeSigner[:])
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	var account snchain.AccountInfo
+	_, err = snchain.ReadStorageAtContext(ctx, view, accountKey, "System", "Account", &account, finalized)
+	if err != nil || uint64(account.Nonce) != record.Nonce {
+		return fleetRecoveryUnresolved(record, errors.Join(errors.New("native original nonce is not available"), err))
+	}
+	if !apply {
+		return fleetRecoveryUnresolved(record, errors.New("native replay requires --apply"))
+	}
+	if err := authority.nativeAdmission(chain)(ctx, types.Hash{}); err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	copy := *record
+	copy.Stage = "may_have_sent"
+	if err := store.put(&copy, signer); err != nil {
+		return err
+	}
+	receipt, err := view.SubmitRawAndWatchFinalized(ctx, codec.HexEncodeToString(record.Raw))
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	return fleetRecoveryFinishNative(ctx, store, &copy, signer, authority, chain, receipt)
+}

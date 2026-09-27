@@ -26,6 +26,9 @@ type SubmitRequest struct {
 	Output      io.Writer
 	// Zero selects the current finalized head; exact receipts pass their hash.
 	RuntimeAdmission func(context.Context, types.Hash) error
+	// An external custody owner persists exact signed bytes and send intent.
+	Prepared        func(SubmitResult) error
+	BeforeBroadcast func() error
 }
 
 // SubmitResult reports the signed bytes and, when applied, the canonical
@@ -75,6 +78,11 @@ func SubmitCall(ctx context.Context, bound *crv4.Chain, req SubmitRequest) (Subm
 		fmt.Fprintf(req.Output, "dry run: nothing was broadcast; re-run with --apply to submit\n")
 		return result, nil
 	}
+	if req.Prepared != nil {
+		if err := req.Prepared(result); err != nil {
+			return result, err
+		}
+	}
 	if req.RuntimeAdmission != nil {
 		if err := req.RuntimeAdmission(ctx, types.Hash{}); err != nil {
 			return result, err
@@ -90,6 +98,11 @@ func SubmitCall(ctx context.Context, bound *crv4.Chain, req SubmitRequest) (Subm
 		return result, err
 	}
 	fmt.Fprintf(req.Output, "broadcast: journaled at %s; waiting for finality...\n", req.Journal.Path())
+	if req.BeforeBroadcast != nil {
+		if err := req.BeforeBroadcast(); err != nil {
+			return result, err
+		}
+	}
 	receipt, err := bound.SubmitRawAndWatchFinalized(ctx, codec.HexEncodeToString(raw))
 	if err != nil {
 		failed := base
@@ -97,11 +110,11 @@ func SubmitCall(ctx context.Context, bound *crv4.Chain, req SubmitRequest) (Subm
 		return result, errors.Join(err, req.Journal.Append(failed))
 	}
 	finalized := base
+	result.Receipt = receipt
 	finalized.Stage, finalized.BlockNumber, finalized.BlockHash = JournalStageFinalized, receipt.BlockNumber, receipt.BlockHash.Hex()
 	if err := req.Journal.Append(finalized); err != nil {
 		return result, err
 	}
-	result.Receipt = receipt
 	fmt.Fprintf(req.Output, "finalized: extrinsic %s in block %d (%s)\n", receipt.ExtrinsicHash.Hex(), receipt.BlockNumber, receipt.BlockHash.Hex())
 	return result, nil
 }

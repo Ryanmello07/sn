@@ -27,6 +27,8 @@ type RegisterRequest struct {
 	Output       io.Writer
 	// Optional owner approval repeated before signing/broadcast and at receipt.
 	RuntimeAdmission func(context.Context, types.Hash) error
+	Prepared         func(SubmitResult) error
+	BeforeBroadcast  func() error
 }
 
 // RegisterResult reports the economics, the decision, and the submit outcome.
@@ -120,7 +122,7 @@ func RegisterHotkey(ctx context.Context, chain *crv4.Chain, req RegisterRequest)
 	if err != nil {
 		return result, err
 	}
-	submit, err := SubmitCall(ctx, bound, SubmitRequest{Command: req.Command, Netuid: req.Netuid, Hotkey: req.Hotkey, Signer: req.Coldkey, Call: call, FeeLimitRao: req.FeeLimitRao, Journal: req.Journal, Apply: req.Apply, Output: req.Output, RuntimeAdmission: req.RuntimeAdmission})
+	submit, err := SubmitCall(ctx, bound, SubmitRequest{Command: req.Command, Netuid: req.Netuid, Hotkey: req.Hotkey, Signer: req.Coldkey, Call: call, FeeLimitRao: req.FeeLimitRao, Journal: req.Journal, Apply: req.Apply, Output: req.Output, RuntimeAdmission: req.RuntimeAdmission, Prepared: req.Prepared, BeforeBroadcast: req.BeforeBroadcast})
 	result.Submit = &submit
 	if err != nil || submit.Receipt == nil {
 		return result, err

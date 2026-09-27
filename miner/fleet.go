@@ -228,6 +228,9 @@ func fleetRegister(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	if err != nil {
 		return err
 	}
+	if authority != nil {
+		return fleetRecoverableNative(opts, manifest, authority, "register")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	hotkeySeed, err := crv4.LoadSeedFile(fleetOpt(opts, "--hotkey_seed_file"))
@@ -280,6 +283,9 @@ func fleetPublish(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
 	if err != nil {
 		return err
+	}
+	if authority != nil {
+		return fleetRecoverableNative(opts, manifest, authority, "publish")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -369,6 +375,9 @@ func fleetBind(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
 	if err != nil {
 		return err
+	}
+	if authority != nil {
+		return fleetRecoverableEvm(opts, manifest, authority, "bind")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
 	defer cancel()
@@ -460,6 +469,9 @@ func fleetRevoke(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
 	if err != nil {
 		return err
+	}
+	if authority != nil {
+		return fleetRecoverableEvm(opts, manifest, authority, "revoke")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
 	defer cancel()

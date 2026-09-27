@@ -35,8 +35,9 @@ The document is a strict JSON object, at most 16 KiB, with these fields:
 The review must establish source-to-Wasm provenance and bind those exact code
 and metadata bytes. It must cover the consumed signed extensions, account and
 registration storage/calls, fee quotation, commitment encoding/storage, finality
-and dispatch events, plus Frontier's native/EVM height relationship and contract
-execution used by fleet commands. The loader verifies the approval document's
+and dispatch events, the Subtensor `System.Account` u64 balance layout, plus
+Frontier's first insertion of `Ethereum.BlockHash` during native finalization
+and contract execution used by fleet commands. The loader verifies the document's
 bytes and required coordinates; it does not perform that source/build audit.
 Version numbers alone, or matching endpoint hashes without the independent
 review, are insufficient. The reviewed coordinator deployment and subnet are
@@ -55,7 +56,7 @@ Bind and revoke use native identity/runtime methods on the **actual EVM
 connection**, as well as EVM chain ID 964. Therefore those routes must expose the
 Substrate read methods too. They authenticate before producing client/hotkey
 consent, on the submitter's connection before preflight/signing/broadcast, and
-at the native height corresponding to the finalized EVM receipt. The coordinator
+at the native block proven to contain the finalized EVM receipt. The coordinator
 address must match the approved manifest scope. Revoke also compares the
 remote finalized digest against the exact locally encoded revocation domain.
 A reached wrong EVM identity does not trigger fallback to another route.
@@ -66,20 +67,70 @@ cannot use a connection carrying provisional authority. A new runtime requires
 a new independent review and approved document; no runtime is auto-adopted.
 The offline `fleet manifest` command remains independent of network admission.
 
-## Receipt and reconciliation limits
+## Durable mainnet fleet recovery
 
-An upgrade or network mismatch after submission can leave a real, finalized
-transaction whose runtime/readback approval fails. The command returns an error
-and does not automatically send again. Native registration keeps its existing
-exact-byte journal; EVM submission keeps its prepared transaction/hash output.
-Those record submission/inclusion, not mainnet runtime or economic acceptance.
+All four production write commands own the same private
+`$URNETWORK_STATE_DIR/fleet-mainnet-recovery` directory (default
+`~/.urnetwork/fleet-mainnet-recovery`). One directory-descriptor lock excludes
+other processes for the entire operation. Every process using these fleet
+signers must use that same retained state directory. Changing or deleting the
+state directory, restoring an older backup, or independently operating the same
+keys elsewhere is outside this local custody guarantee. Use a filesystem with
+working exclusive locks and file/directory fsync; failures stop the command.
 
-RT-03/PF-03 remains open for complete durable intent/result reconciliation across
-process death, unknown send outcomes, and fleet publication/EVM restart. This
-change does not add such a journal or make manual reruns safe. Reconcile the
-original transaction before resubmission; a receipt-admission error is not proof
-that nothing happened. No new approval can retroactively reinterpret an old
-signature or receipt as approved under different runtime bytes.
+Before the first send, the owner durably stores the exact signed transaction,
+actor, nonce, transaction hash, native finalized checkpoint, original approved
+authority bytes and digest, and canonical manifest/command/client/epoch intent.
+The signing actor also signs these custody records and the complete inventory.
+Files are private, regular and opened without following symlinks. Publication
+uses file fsync, atomic rename and directory fsync, including newly created
+parents. Interrupted valid candidates may complete that same local commit;
+invalid candidates, missing initialized journals and signature changes fail
+closed without erasing the previous journal.
+
+The logical operation includes genesis/network, subnet, manifest generation,
+fleet/hotkey and complete commitment semantics, command and client/epoch target.
+Changing runtime approvals or fees cannot create a fresh operation. A pending
+operation blocks every different local fleet write. Repeating a completed
+operation reports its recorded result without another signature or broadcast.
+Intentional republication requires a new canonical manifest/generation; this
+interface does not silently refresh the same commitment at a new block.
+
+After a crash or unknown send result, invoke the same command with the same
+state directory, manifest, semantic arguments and original transaction signer.
+Recovery first seeks the original exact transaction. Native recovery checks
+canonical header/parent continuity, original runtime metadata, dispatch outcome,
+and exact UID/coldkey or commitment-write readback. EVM recovery checks canonical
+finalized EVM inclusion, exact signed bytes at the receipt's transaction index,
+and the first insertion of that EVM hash into native runtime storage. Both the
+native insertion block and its parent require the original approved artifact.
+Matching heights are insufficient; different heights are accepted only when
+that storage proof authenticates the mapping. Success also requires exactly one
+matching coordinator event and binding/revocation readback at the receipt hash.
+
+An absent receipt can permit replay only of the **identical signed bytes** after
+original-runtime and finalized-nonce checks. Native replay additionally requires
+a complete canonical absence scan. Consumed nonce, unavailable archive data,
+missing mapping, conflicting readback or execution under a different artifact
+retain the original liability and refuse replacement. A later current runtime
+upgrade does not prevent historical recovery under the original artifact, but
+does prevent retransmission unless the original current-runtime approval holds.
+A new approval cannot retroactively reinterpret an old signature or receipt.
+
+Canonical scans process at most 4,096 native blocks per invocation and persist
+signed progress; rerun to continue a longer range. The journal is bounded at
+256 operations and 16 MiB and does not prune old liabilities or completed
+identities. Capacity exhaustion fails closed; durable archive/rotation authority
+is a separate operational gate. No lost/deleted legacy transaction is backfilled:
+deployment must establish that these signers have no preexisting unrecorded
+mainnet liability, or reconcile it independently before using this writer.
+
+Proven finalized dispatch/revert failures remain terminal failures on repeat,
+with original bytes and inclusion evidence retained. A failure whose runtime or
+mapping cannot be authenticated remains unresolved. Missing historical authority
+or archive proof needs separately reviewed recovery authority, not a new nonce.
+Terminal custody signatures attest the local verified observation; they are not
+independent chain or economic acceptance attestations.
 
 No mainnet transaction, deployment, or production pin selection is part of this
 source qualification. Independent genesis, runtime source/build review, exact

@@ -34,24 +34,40 @@ import (
 
 // Mutation hooks are explicit Rpc barriers, never timing or scheduler probes.
 type fleetMainnetTestFixture struct {
-	stateLock    sync.Mutex
-	authority    fleetMainnetRuntimeAuthority
-	manifest     *protocol.FleetManifest
-	opts         docopt.Opts
-	server       *httptest.Server
-	genesis      types.Hash
-	head         types.Hash
-	receiptBlock types.Hash
-	metadata     string
-	code         string
-	version      crv4.RuntimeVersionIdentity
-	calls        map[string]int
-	storage      map[string]string
-	hook         func(string)
-	evmChainId   uint64
-	evmTx        common.Hash
-	evmReceipt   *ethtypes.Receipt
-	nativeSigned string
+	stateLock             sync.Mutex
+	authority             fleetMainnetRuntimeAuthority
+	manifest              *protocol.FleetManifest
+	opts                  docopt.Opts
+	server                *httptest.Server
+	genesis               types.Hash
+	head                  types.Hash
+	receiptBlock          types.Hash
+	metadata              string
+	code                  string
+	version               crv4.RuntimeVersionIdentity
+	calls                 map[string]int
+	storage               map[string]string
+	hook                  func(string)
+	evmChainId            uint64
+	evmTx                 common.Hash
+	evmSigned             *ethtypes.Transaction
+	evmReceipt            *ethtypes.Receipt
+	nativeSigned          string
+	finalizedNumber       uint64
+	nativeBlocks          map[uint64]types.Hash
+	historicalVersions    map[string]crv4.RuntimeVersionIdentity
+	nativeNonce           uint64
+	evmNonce              uint64
+	evmBlockNumber        uint64
+	nativeBroadcast       bool
+	nativeDropAck         bool
+	nativeDispatchFailure bool
+	nativeBlockMissing    bool
+	missingMapping        bool
+	mappingAtParent       bool
+	revoked               bool
+	after                 func(string)
+	rpcFailure            func(string) error
 }
 
 // Owns synthetic public metadata, private test seeds, and local Rpc lifecycle.
@@ -63,6 +79,9 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 		t.Fatal(err)
 	}
 	self := &fleetMainnetTestFixture{genesis: types.Hash{0x51}, head: types.Hash{0x52}, receiptBlock: types.Hash{0x53}, metadata: codec.HexEncodeToString(raw), code: (types.Hash{0x54}).Hex(), calls: map[string]int{}, storage: map[string]string{}, evmChainId: 964}
+	self.finalizedNumber, self.evmNonce, self.evmBlockNumber = 100, 1, 102
+	self.nativeBlocks = map[uint64]types.Hash{100: self.head, 101: {0x50}, 102: self.receiptBlock, 103: {0x63}, 104: {0x64}}
+	self.historicalVersions = map[string]crv4.RuntimeVersionIdentity{}
 	self.version = crv4.RuntimeVersionIdentity{SpecName: "synthetic-subtensor", SpecVersion: 8001, TransactionVersion: 1, StateVersion: 1}
 	self.authority = fleetMainnetRuntimeAuthority{Schema: fleetMainnetRuntimeAuthoritySchema, NativeChain: "Synthetic Main Network", GenesisHash: self.genesis.Hex(), EvmChainId: 964, Netuid: 25, Coordinator: strings.ToLower(common.Address{0x55}.Hex()), RuntimeSourceCommit: strings.Repeat("ab", 20), RuntimeReviewScope: fleetMainnetRuntimeReviewScope, RuntimeReviewSha256: strings.Repeat("cd", 32), RuntimeVersion: self.version, RuntimeCodeHash: self.code, RuntimeMetadataHash: metadataHash}
 	directory := filepath.Join(t.TempDir(), "private")
@@ -170,20 +189,20 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 				t.Errorf("invalid native height: %s", call.Params)
 				return
 			}
-			switch number {
-			case 0:
+			if number == 0 {
 				result = self.genesis.Hex()
-			case 100:
-				result = self.head.Hex()
-			case 102:
-				result = self.receiptBlock.Hex()
-			default:
+			} else if hash, ok := self.nativeBlocks[number]; ok {
+				result = hash.Hex()
+			} else {
 				t.Errorf("unexpected native height %d", number)
 			}
 		case "chain_getFinalizedHead":
-			result = self.head.Hex()
+			result = self.nativeBlocks[self.finalizedNumber].Hex()
 		case "state_getRuntimeVersion":
 			result = self.version
+			if historical, ok := self.historicalVersions[str(0)]; ok {
+				result = historical
+			}
 		case "state_getMetadata":
 			result = self.metadata
 		case "state_getStorageHash":
@@ -192,19 +211,33 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 			}
 			result = self.code
 		case "state_getStorage":
+			mappingKey, err := types.CreateStorageKey(metadata, "Ethereum", "BlockHash", append(binary.LittleEndian.AppendUint64(nil, self.evmBlockNumber), make([]byte, 24)...))
+			if err != nil {
+				t.Error(err)
+				return
+			}
 			if value, ok := self.storage[str(0)]; ok {
 				result = value
 			}
-		case "chain_getHeader":
-			height := types.BlockNumber(100)
-			if str(0) == self.receiptBlock.Hex() {
-				height = 102
+			if str(0) == mappingKey.Hex() && !self.missingMapping && (str(1) == self.receiptBlock.Hex() || (self.mappingAtParent && (str(1) == self.nativeBlocks[101].Hex() || str(1) == self.head.Hex()))) {
+				result = (common.Hash{0x62}).Hex()
 			}
-			result = types.Header{Number: height}
+		case "chain_getHeader":
+			for number, hash := range self.nativeBlocks {
+				if str(0) == hash.Hex() {
+					result = types.Header{Number: types.BlockNumber(number), ParentHash: self.nativeBlocks[number-1]}
+				}
+			}
 		case "chain_getBlock":
-			result = map[string]any{"block": map[string]any{"extrinsics": []string{self.nativeSigned}}}
+			if !self.nativeBlockMissing {
+				extrinsics := []string{}
+				if self.nativeBroadcast && str(0) == self.receiptBlock.Hex() {
+					extrinsics = append(extrinsics, self.nativeSigned)
+				}
+				result = map[string]any{"block": map[string]any{"extrinsics": extrinsics}}
+			}
 		case "system_accountNextIndex":
-			result = 0
+			result = self.nativeNonce
 		case "payment_queryInfo":
 			self.nativeSigned = str(0)
 			result = map[string]any{"partialFee": "1"}
@@ -234,7 +267,11 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 				return
 			}
 			if strings.HasPrefix(data, hexutilTest(stCoordinator.PackGetFleetBinding(self.manifest.Members[0].ClientID)[:4])) {
-				encoded, err := contractAbi.Methods["getFleetBinding"].Outputs.Pack(stabi.STCoordinatorBindingRecord{FleetId: self.manifest.FleetID, Hotkey: self.manifest.Hotkey, ClientKey: clientKey, CommitmentHash: hash, Generation: 2, ValidFromEpoch: 10, ValidToEpoch: 20, Uid: 7})
+				to := uint64(20)
+				if self.revoked {
+					to = 14
+				}
+				encoded, err := contractAbi.Methods["getFleetBinding"].Outputs.Pack(stabi.STCoordinatorBindingRecord{FleetId: self.manifest.FleetID, Hotkey: self.manifest.Hotkey, ClientKey: clientKey, CommitmentHash: hash, Generation: 2, ValidFromEpoch: 10, ValidToEpoch: to, Uid: 7})
 				if err != nil {
 					t.Error(err)
 					return
@@ -251,7 +288,7 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 		case "eth_estimateGas":
 			result = "0x5208"
 		case "eth_getTransactionCount":
-			result = "0x1"
+			result = fmt.Sprintf("0x%x", self.evmNonce)
 		case "eth_gasPrice":
 			result = "0x1"
 		case "eth_sendRawTransaction":
@@ -262,16 +299,53 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 				return
 			}
 			self.evmTx = tx.Hash()
-			self.evmReceipt = &ethtypes.Receipt{Status: 1, CumulativeGasUsed: 21000, TxHash: self.evmTx, GasUsed: 21000, BlockHash: common.Hash{0x62}, BlockNumber: big.NewInt(102), Logs: []*ethtypes.Log{}}
+			self.evmSigned = &tx
+			self.evmReceipt = &ethtypes.Receipt{Status: 1, CumulativeGasUsed: 21000, TxHash: self.evmTx, GasUsed: 21000, BlockHash: common.Hash{0x62}, BlockNumber: new(big.Int).SetUint64(self.evmBlockNumber), Logs: []*ethtypes.Log{}}
+			self.finalizedNumber = 102
+			self.evmNonce = tx.Nonce() + 1
+			contractAbi, err := stabi.STCoordinatorMetaData.ParseABI()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			var clientTopic common.Hash
+			copy(clientTopic[:], self.manifest.Members[0].ClientID[:])
+			log := &ethtypes.Log{Address: common.Address(self.manifest.Coordinator), BlockNumber: self.evmBlockNumber, BlockHash: self.evmReceipt.BlockHash, TxHash: self.evmTx}
+			if bytes.Equal(tx.Data()[:4], contractAbi.Methods["bindFleetMember"].ID) {
+				event := contractAbi.Events["FleetBound"]
+				log.Topics = []common.Hash{event.ID, clientTopic, common.Hash(self.manifest.FleetID), common.Hash(self.manifest.Hotkey)}
+				log.Data, err = event.Inputs.NonIndexed().Pack(uint16(7), uint64(2), uint64(10), uint64(20))
+			} else {
+				event := contractAbi.Events["FleetBindingRevoked"]
+				log.Topics = []common.Hash{event.ID, clientTopic}
+				log.Data, err = event.Inputs.NonIndexed().Pack(uint64(2), uint64(15))
+				self.revoked = true
+			}
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			self.evmReceipt.Logs = []*ethtypes.Log{log}
 			result = self.evmTx.Hex()
 		case "eth_getTransactionReceipt":
 			result = self.evmReceipt
+		case "eth_getTransactionByBlockHashAndIndex":
+			result = self.evmSigned
 		case "eth_getBlockByNumber":
-			result = map[string]any{"number": "0x66", "hash": (common.Hash{0x62}).Hex()}
+			result = map[string]any{"number": fmt.Sprintf("0x%x", self.evmBlockNumber), "hash": (common.Hash{0x62}).Hex()}
 		default:
 			t.Errorf("unexpected fleet mainnet Rpc %s", call.Method)
 		}
+		if self.after != nil {
+			self.after(call.Method)
+		}
 		writer.Header().Set("Content-Type", "application/json")
+		if self.rpcFailure != nil {
+			if err := self.rpcFailure(call.Method); err != nil {
+				_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": call.Id, "error": map[string]any{"code": -32000, "message": err.Error()}})
+				return
+			}
+		}
 		if err := json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": call.Id, "result": result}); err != nil {
 			t.Error(err)
 		}

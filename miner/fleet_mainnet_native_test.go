@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -31,6 +32,10 @@ func (self *fleetMainnetTestFixture) nativeWebsocket(t *testing.T, register bool
 		t.Fatal(err)
 	}
 	var palletIndex, successIndex byte
+	eventName := "ExtrinsicSuccess"
+	if self.nativeDispatchFailure {
+		eventName = "ExtrinsicFailed"
+	}
 	found := false
 	for _, pallet := range metadata.AsMetadataV14.Pallets {
 		if pallet.Name != "System" || !pallet.HasEvents {
@@ -38,7 +43,7 @@ func (self *fleetMainnetTestFixture) nativeWebsocket(t *testing.T, register bool
 		}
 		event := metadata.AsMetadataV14.EfficientLookup[pallet.Events.Type.Int64()]
 		for _, variant := range event.Def.Variant.Variants {
-			if variant.Name == "ExtrinsicSuccess" {
+			if string(variant.Name) == eventName {
 				palletIndex = byte(pallet.Index)
 				successIndex = byte(variant.Index)
 				found = true
@@ -53,6 +58,13 @@ func (self *fleetMainnetTestFixture) nativeWebsocket(t *testing.T, register bool
 		t.Fatal(err)
 	}
 	raw := []byte{4, 0, 0, 0, 0, 0, palletIndex, successIndex}
+	if self.nativeDispatchFailure {
+		failed, err := codec.Encode(types.DispatchError{IsBadOrigin: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw = append(raw, failed...)
+	}
 	raw = append(raw, dispatch...)
 	raw = append(raw, 0)
 	eventRegistry, err := registry.NewFactory().CreateEventRegistry(metadata)
@@ -61,7 +73,7 @@ func (self *fleetMainnetTestFixture) nativeWebsocket(t *testing.T, register bool
 	}
 	eventStorage := types.NewStorageDataRaw(raw)
 	decoded, err := parser.NewEventParser().ParseEvents(eventRegistry, &eventStorage)
-	if err != nil || len(decoded) != 1 || decoded[0].Name != "System.ExtrinsicSuccess" || !decoded[0].Phase.IsApplyExtrinsic || decoded[0].Phase.AsApplyExtrinsic != 0 {
+	if err != nil || len(decoded) != 1 || decoded[0].Name != "System."+eventName || !decoded[0].Phase.IsApplyExtrinsic || decoded[0].Phase.AsApplyExtrinsic != 0 {
 		t.Fatalf("synthetic finalized event: %v %v", decoded, err)
 	}
 	eventsKey, err := types.CreateStorageKey(metadata, "System", "Events")
@@ -119,6 +131,24 @@ func (self *fleetMainnetTestFixture) nativeWebsocket(t *testing.T, register bool
 					return
 				}
 				self.storage[eventsKey.Hex()] = codec.HexEncodeToString(raw)
+				self.nativeBroadcast = true
+				self.nativeNonce++
+				self.finalizedNumber = 102
+				signer := self.manifest.Hotkey
+				if register {
+					signer = coldkey.PublicKey()
+				}
+				accountKey, accountErr := types.CreateStorageKey(metadata, "System", "Account", signer[:])
+				account := snchain.AccountInfo{Nonce: types.U32(self.nativeNonce)}
+				account.Data.Free = 1000000
+				account.Data.Flags = types.NewU128(*big.NewInt(0))
+				accountRaw, encodeErr := codec.EncodeToHex(account)
+				if accountErr != nil || encodeErr != nil {
+					self.stateLock.Unlock()
+					t.Error("synthetic account nonce failed")
+					return
+				}
+				self.storage[accountKey.Hex()] = accountRaw
 				if register {
 					self.storage[uidKey.Hex()] = codec.HexEncodeToString(binary.LittleEndian.AppendUint16(nil, 7))
 					owner := coldkey.PublicKey()
@@ -138,7 +168,11 @@ func (self *fleetMainnetTestFixture) nativeWebsocket(t *testing.T, register bool
 					self.hook(call.Method)
 				}
 				block := self.receiptBlock.Hex()
+				dropAck := self.nativeDropAck
 				self.stateLock.Unlock()
+				if dropAck {
+					return
+				}
 				if err := connection.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": call.Id, "result": "synthetic-native-subscription"}); err != nil {
 					t.Error(err)
 					return
@@ -178,7 +212,7 @@ func TestFleetMainnetPublishCommandSignsAndVerifiesApprovedReceipt(t *testing.T)
 	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("chain_getBlock") != 1 || fixture.count("state_getStorageHash") < 5 {
+	if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("chain_getBlock") < 2 || fixture.count("state_getStorageHash") < 5 {
 		t.Fatal("publication did not bind signing and exact finalized receipt")
 	}
 }
@@ -211,7 +245,7 @@ func TestFleetMainnetRegisterCommandAppliesAndChecksReceiptAuthority(t *testing.
 	if err := fleetRegister(fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("chain_getBlock") != 1 || fixture.count("state_getStorageHash") < 5 {
+	if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("chain_getBlock") < 2 || fixture.count("state_getStorageHash") < 5 {
 		t.Fatal("registration lost runtime admission at signing/broadcast/receipt")
 	}
 }

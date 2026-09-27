@@ -30,6 +30,7 @@ const fleetMainnetAuthorityLimit = 16 * 1024
 // interface audit. Matching an Rpc response does not create that provenance.
 // There is deliberately no shipped production genesis, source or runtime pin.
 type fleetMainnetRuntimeAuthority struct {
+	document            []byte
 	Schema              string                      `json:"schema"`
 	NativeChain         string                      `json:"native_chain"`
 	GenesisHash         string                      `json:"genesis_hash"`
@@ -94,6 +95,7 @@ func loadFleetMainnetRuntimeAuthority(opts docopt.Opts, manifest *protocol.Fleet
 	if err := authority.validate(manifest); err != nil {
 		return nil, err
 	}
+	authority.document = append([]byte(nil), raw...)
 	return &authority, nil
 }
 

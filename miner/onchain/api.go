@@ -98,8 +98,10 @@ type SubmitParams struct {
 // long-running relayers. Prepared runs after signing and before broadcast;
 // Broadcast runs immediately after SendTransaction succeeds.
 type SubmitHooks struct {
-	Prepared  func(common.Hash, []byte) error
-	Broadcast func(common.Hash) error
+	Prepared func(common.Hash, []byte) error
+	// Commits an uncertain-send liability before the first network write.
+	BeforeBroadcast func(common.Hash) error
+	Broadcast       func(common.Hash) error
 }
 
 // Submit dials the first reachable rpc (failover), verifies the chain id, and
@@ -162,16 +164,17 @@ func submit(ctx context.Context, p SubmitParams, mkPrint intentPrinter, hooks Su
 	}
 
 	receipt, err := runTx(ctx, client, chainID, txRequest{
-		contract:     p.Contract,
-		from:         from,
-		key:          p.Key,
-		calldata:     p.Calldata,
-		gasLimit:     p.GasLimit,
-		nonceFloor:   p.NonceFloor,
-		dryRun:       p.DryRun,
-		prepared:     hooks.Prepared,
-		broadcast:    hooks.Broadcast,
-		admitRuntime: p.RuntimeAdmission,
+		contract:        p.Contract,
+		from:            from,
+		key:             p.Key,
+		calldata:        p.Calldata,
+		gasLimit:        p.GasLimit,
+		nonceFloor:      p.NonceFloor,
+		dryRun:          p.DryRun,
+		prepared:        hooks.Prepared,
+		beforeBroadcast: hooks.BeforeBroadcast,
+		broadcast:       hooks.Broadcast,
+		admitRuntime:    p.RuntimeAdmission,
 	}, printIntent)
 	if err != nil || receipt == nil || p.RuntimeAdmission == nil {
 		return receipt, err
