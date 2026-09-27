@@ -8,7 +8,10 @@ supervisor joins every operation before returning. This closes the missing
 decision-to-action ownership layer; it does not provide an activated validator.
 
 There is no `root-service` command, native secret loader, signing device
-transport, production mutation-authority adapter, RPC submitter or deployment.
+transport, production mutation-authority adapter or deployment. The separate
+[owned submission adapter](ROOT-SUBMISSION.md) now implements exact-byte native
+HTTP submission and durable uncertain-send reconciliation under its own signed
+route/action approval; it is not wired to a live service.
 The canonical chain's existing `submit` method remains disabled. A successful
 decision, adapter return or supervisor completion is never activation authority;
 every service event keeps `activation_ready: false`.
@@ -121,14 +124,16 @@ Local absence of a signature never becomes a custody-issued never-signed proof.
 The signing bridge requires the exact durable `signing` intent. The submission
 bridge requires exact verified signed bytes and their durable `pending` attempt.
 Its independent `submitRoot` port receives the approved packet, service-config
-hash, broadcast-attempt number and exact extrinsic/hash. A future transport must
-authenticate its own approval, route, fence and attempt identity, and handle that
-identity idempotently. Those fields correlate a request; they do not grant
-authority or prove a custody device's behavior.
+hash, broadcast-attempt number and exact extrinsic/hash. The independently
+[approved owned submitter](ROOT-SUBMISSION.md) authenticates its route/action
+approval, pins original bytes and durably admits each numbered write once.
+Current authority still supplies eligibility, global fencing and exposure.
+Those fields correlate a request; they do not grant authority or prove a
+custody device's behavior.
 
 Production still needs qualified current effective eligibility, global hotkey
 and nonce fencing, device-side durable idempotency/recovery, independently
-admitted submission and owned RPC identity, and enforceable payment exposure.
+approved live submission/owned RPC identity, and enforceable payment exposure.
 The native signature does not bind registration generation, source/code hashes
 or maximum fee. Finalized observations cannot prevent an inclusion-time seat
 change or same-version upgrade. Pending-seat exclusion or authenticated incident

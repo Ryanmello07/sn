@@ -123,8 +123,10 @@ local source/code hashes or a maximum fee. Same-version runtime changes,
 inclusion-time seat churn and native payment exposure retain the limitations in
 [ROOT-ACTION.md](ROOT-ACTION.md). The [service decision owner](ROOT-SERVICE.md)
 now supplies a composite decision/intent journal and finite joined supervisor.
-Production authority and submission adapters and actual signer integration
-remain absent; the existing canonical
+The [owned submission adapter](ROOT-SUBMISSION.md) now supplies separately
+approved native HTTP transport and durable uncertain-send reconciliation.
+Production current authority and actual native signer integration remain absent;
+the existing read-only canonical
 chain port's `submit` method remains unconditionally disabled.
 
 The proposed `accumulate_in_place` strategy still needs no native heartbeat.

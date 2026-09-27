@@ -9,8 +9,10 @@ receipts. The [offline custody handoff](ROOT-OFFLINE-CUSTODY.md) now verifies an
 independently approved packet and durably imports/replays its exact public native
 signature. The [service decision owner](ROOT-SERVICE.md) now atomically couples
 an approved weight decision to this original intent and supplies bounded joined
-supervision with independent signer/submission ports. There is no production
-native signer, authority/submission adapter,
+supervision with independent signer/submission ports. The
+[owned submission adapter](ROOT-SUBMISSION.md) now implements separately approved
+native HTTP submission, one durable attempt identity and original-byte canonical
+reconciliation. There is no production native signer or current-authority adapter,
 `root-service` command or active root weight publisher. This increment does not
 claim mainnet readiness.
 

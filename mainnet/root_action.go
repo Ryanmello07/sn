@@ -1,7 +1,8 @@
 // One root action owns its nonce and fee reservation from the first signing
 // request through a verified finalized receipt or finalized mortal expiry.
-// Live authority, globally fenced signing and submission remain absent. The
-// offline public-signature handoff and read-only receipt port cannot activate it.
+// Live authority and globally fenced signing remain separate unqualified ports.
+// The owned submission adapter also requires independent route/action approval;
+// offline public signatures and read-only receipts cannot activate this owner.
 package main
 
 import (

@@ -113,8 +113,9 @@ type rootServiceReconciler interface {
 }
 
 // A future production submitter must independently admit this exact approved
-// request and signed bytes under its owned route/custody policy. No native rpc
-// transport implements this port here; no route can be inferred from observation.
+// request and signed bytes under its owned route/custody policy. The owned
+// submission adapter implements this port with separate signed route approval;
+// no route can be inferred from observation.
 type rootServiceSubmitter interface {
 	submitRoot(context.Context, rootServiceSubmission) error
 }
