@@ -26,6 +26,24 @@ with 1,810 top-level tests and a large parallel corpus; that run is not a pass
 and is not used to claim qualification. Earlier selected validator and receipt
 suites remain separately evidenced in the preceding source composition.
 
+A clean v7 contract-only Foundry build using Forge 1.7.1, solc 0.8.24 and
+three pinned Forge/OpenZeppelin library commits passed. The exact local
+toolchain and library observation is retained as
+`forge-toolchain-observation.json` in the external evidence directory; this is
+not source-to-bytecode proof. The four deployable artifacts were copied before
+running the complete `forge test --root evm -q` suite, which passed all **226**
+listed tests and regenerated those four artifact files byte-for-byte. Runtime
+sizes are `STCoordinator` **24,564** bytes (12-byte margin under 24,576),
+`STReserveSink` 1,558, `STSettlementVault` 9,486 and
+`STValidatorEvidence` 12,192. The artifact JSON SHA256 values are, respectively,
+`5a51b1f4a426cfe36e760eb5312947abc80fa9a7e4e4a517210d3da0e5278ba3`,
+`8101eae965e845103079485f9a633dbe665e1932827b564a781efab5425e822f`,
+`e57e61d44b1729b823f271add7f81cbd3616d404b8e46eb67c8ec71fcf86e4ec`
+and `b744767e64f0bb2afd76344c0172db51d10affb1868f17a2c6133dbde72688d7`.
+The external `SHA256SUMS` verifies the build/test logs, toolchain observation
+and artifact files. A local build does not prove the selected mainnet EVM's
+code-size rule or successful deployment/readback.
+
 The [unbound outline](blocked-plan-outline-20260927.json) has status
 `unbound_outline`, ten blocked non-executable actions and 24 missing
 requirements; `apply_authority=false` and `activation_ready=false`. It carries
