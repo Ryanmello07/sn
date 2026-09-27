@@ -404,6 +404,22 @@ Previously retained artifacts stay immutable and are not certified complete by
 this prospective fix. NetEscrow writer drain, revision/fence restore policy and
 archive capacity remain separate production gates.
 
+The [atomic payer admission candidate](PRELAUNCH-FIXES.md), composed server
+`b6f49bdb`, removes Redis from
+credit authorization: both origin and companion creation lock payer balances
+and read durable reservations after the lock, while settlement commits the
+consumed-byte debit with the terminal outcome. Retain its causal evidence and
+deploy it only after draining all old creators and asynchronous debit posts.
+The same release must use checked settlement arithmetic: an overflow-safe
+bilateral mean and negative-grant refusal prevent malformed reports/history
+from claiming an outcome without the corresponding consumed-byte debit.
+An old terminal outcome or settled escrow marker cannot establish whether a
+historical debit post ran; independently reconcile exact historical financial
+state before activation. This does not automatically repair old balances or
+make participant sweep/account payout posts atomic or replay-safe. Their
+durability, full conservation and lock-contention capacity remain open gates;
+the migration catalog through 728 is unchanged by this code slice.
+
 ## Contract deployment, custody and initialization
 
 Reuse the release-1.0 contracts and reviewed ABI/artifact generation, with mainnet-specific inputs. The existing [Deploy script](../evm/script/Deploy.s.sol) is the ordering reference, not a command the bootstrap blindly shells out to. The Go planner must build exact transaction payloads and independently read back their results.

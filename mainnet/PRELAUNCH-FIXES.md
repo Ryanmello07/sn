@@ -229,11 +229,56 @@ tests cover those paths and current-main settlement amplification. Deployment
 must stop and drain every additive cache writer, migrate the matching catalog,
 upgrade every publisher together, verify actual database guards, and reconcile
 before traffic. Persistent Redis fences and PostgreSQL revision tombstones need
-explicit restoration and capacity policy. The Redis mirror may still lag a
-committed PostgreSQL update; this does not make concurrent admission atomic.
+explicit restoration and capacity policy. That original mirror-only correction
+did not make admission atomic; the subsequent custody slice below moves the
+admission authority into the database.
 Live operator cutover, economics, reserve/claim conservation, capacity and the
 complete production release gate remain open. The older `0633780c` branch and
 its qualification remain as causal history, not the proposed current-main pin.
+
+**Atomic payer admission (MG-06/PH-12; source-qualified, 2026-09-27).** Composed
+server `b6f49bdb` includes admission `fbadd281` and its required arithmetic
+successor `04e65680` (isolated commit identities). The
+[causal qualification](/mnt/data/sn-testnet/evidence/mainnet-netescrow-admission-20260927/RESULT.md)
+reproduces three failures on composed server `7bf88d79`: a missing create post,
+two deliberately interleaved creators, and a missing settlement debit post can
+all admit the same payer credit twice. Origin and companion creation now lock
+eligible payer balances in stable ID order and read durable reservations in a
+separate read-committed statement after the lock. The terminal settlement owner
+debits consumed payer bytes in the same PostgreSQL commit as its outcome.
+Cache restoration, lost posts, transaction rollback/retry and duplicate
+settlement cannot authorize that credit twice. Migration history through 728,
+signed usage attribution and zero-byte/zero-credit history remain unchanged.
+
+The same review reproduced two settlement arithmetic bypasses: adding two
+maximum signed reports wrapped the mean negative, and a negative legacy grant
+could wrap the cumulative allocation into a false completed debit. Use the
+overflow-safe floor mean and refuse negative consumed reports/grants before
+claiming an outcome. Exact maximum-credit, split-grant, checked reservation
+sum and debit-rollback tests retain the storage-limit boundaries. Negative
+payer balances are already excluded by the database-generated active column;
+that is an adjacent verified control, not another reproduced admission bug.
+
+Qualification retains 123 distinct model normal passes across documented
+slices and the same 123 passing together with race detection on the admission
+source. The arithmetic successor passes 35 affected tests normally and with
+race detection; five monitor checks pass both modes and final model/monitor
+vet passes. Exact sources, causal failures, fixture corrections and separate
+compiled-source boundaries are retained; this is not a claim that the full
+server model suite or production capacity passed. Both disposable PG/Redis
+pairs were removed after qualification. The composed server tree matches the
+qualified final isolated tree exactly; release locks/artifacts must name the
+new composed revision.
+
+This is prospective source qualification, not a deployed financial repair.
+Drain and replace every creator and asynchronous old debit writer together;
+mixed versions cannot preserve this guarantee. Historical terminal outcomes
+and settled escrow markers do not prove an old debit post ran: require exact
+historical balance/debit reconciliation before activation, without guessed
+charges or automatic post replay. Participant sweep publication, Redis account
+payout increments and statistics remain asynchronous residual work. Keep their
+durability/idempotence, complete settlement conservation, per-payer contention,
+archive capacity and coordinated database/cache restore as open launch gates.
 
 **Retained timestamp custody (MG-06/PH-12; source-qualified, 2026-09-27).** Server
 `6e2bcfa7` appends this correction to the v11 server candidate `77cb401e`. The previous
