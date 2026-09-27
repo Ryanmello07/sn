@@ -1342,16 +1342,16 @@ full gates and confirmation runs did not isolate those causes. The handoff's
 `[no tests to run]` example and the retained failed bundles must stay distinguishable
 from passes.
 
-The September 27 combined-source validator package run also exposed a
-qualification-budget error: `-parallel 2` with Go's default 10-minute package
-deadline timed out during the suite's long serial, fsync-heavy phase. The
-reported compact replay errors came from intentional interrupted-read test
-fixtures; their six-case family passed in isolation. A retained diagnostic run
-was deliberately stopped after 350 seconds with 275 top-level passes and no
-assertion failures. This is **not** a full-suite pass or a demonstrated
-production replay defect. Use a measured package deadline and persistent
-per-test log for the frozen release, while keeping changed-path normal/race
-results distinct from the incomplete broad run.
+The September 27 combined-source validator package run hit Go's default
+10-minute deadline under `-parallel 2`. Its original PTY output was truncated,
+so the exact active test cannot be established. The matching compact replay
+error text is deliberately emitted by interrupted-read fixtures; their
+six-case family passed in isolation. A [retained diagnostic](</mnt/data/sn-testnet/evidence/mainnet-validator-timeout-20260927/RESULT.md>)
+was stopped after 350 seconds with 275 top-level passes and no assertion
+failures, while serial, fsync-heavy tests were still running. This is **not** a
+full-suite pass or a demonstrated production replay defect. Use a measured
+package deadline and persistent per-test log for the frozen release, while
+keeping changed-path normal/race results distinct from the incomplete broad run.
 
 **Production change.** Follow [CODESTYLE.md](../../connect/CODESTYLE.md): each
 root cause needs a deterministic pre-fix failure and corrected result at its
