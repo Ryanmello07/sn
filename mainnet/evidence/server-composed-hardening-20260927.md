@@ -8,6 +8,13 @@ receipt-census regression and two-step correction (`e2a3be6f`, `1939c779`,
 of v11. Cherry-picks applied without conflict; the worktree was clean before
 this check.
 
+The branch subsequently advanced to `b6f49bdb` with atomic payer escrow
+admission and checked settlement arithmetic. Its separate causal, normal,
+race and vet qualification is retained in the
+[atomic admission evidence](/mnt/data/sn-testnet/evidence/mainnet-netescrow-admission-20260927/RESULT.md).
+The controller selector below was run at `7bf88d79`; it is not a claim that
+the refreshed complete server release gate ran at `b6f49bdb`.
+
 An independently owned disposable PostgreSQL/Redis fixture ran the combined
 controller selector below at `GOWORK=off`, `GOMAXPROCS=2` and
 `WARP_TEST_ENV_FAIL_FAST=1`:

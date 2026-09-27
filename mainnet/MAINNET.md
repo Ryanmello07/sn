@@ -680,9 +680,10 @@ server Dockerfiles, all seven image-build Makefiles, the exact package lock,
 It has no approved policy or
 published/deployed OCI image identity and remains unapproved.
 The newer server source branch `codex/mainnet-composed-hardening-20260927` at
-`7bf88d79` composes the append-only migration 728 and retained-usage reader
-with the operator receipt-census recovery correction on top of that v11 base.
-Its combined controller selector passed normal, race and vet on disposable
+`b6f49bdb` composes the append-only migration 728 and retained-usage reader,
+the operator receipt-census recovery correction, atomic payer admission and
+checked settlement arithmetic on the v11 base. The earlier `7bf88d79`
+combined controller selector passed normal, race and vet on disposable
 PostgreSQL/Redis ([composed evidence](evidence/server-composed-hardening-20260927.md)).
 This changes the source identity: the v11 source lock,
 inventory and rebuilt artifacts do **not** attest the newer branch. Refresh

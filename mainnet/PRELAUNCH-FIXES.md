@@ -48,8 +48,9 @@ are component responsibilities; assign a named operator before rollout.
 | MG-10 / P0 — Qualification, rollout and actual acceptance | Release/operations owner; PH-16 and every affected gate | **Planned:** no accepted composed mainnet release. | Before activation, complete production-path causal regressions, affected normal/race suites and a controlled upgrade/outage/restart/repair rehearsal; retain failed and reused scopes. After bounded activation, observe at least three complete native emission intervals and one full 50,400-block UR settlement/claim cycle before declaring program acceptance. Record pending live evidence as pending. |
 
 The newer server source branch `codex/mainnet-composed-hardening-20260927` at
-`7bf88d79` includes migration 728 and the operator receipt-census correction
-on the v11 server base. Its combined controller selector passed normal, race
+`b6f49bdb` includes migration 728, the operator receipt-census correction,
+atomic payer admission and checked settlement arithmetic on the v11 server
+base. Its earlier `7bf88d79` combined controller selector passed normal, race
 and vet on disposable PostgreSQL/Redis
 ([evidence](evidence/server-composed-hardening-20260927.md)). This source has no refreshed complete
 release lock, binary/image inventory or deployment approval; the v11 inventory
