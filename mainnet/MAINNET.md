@@ -257,7 +257,14 @@ Reuse the release-1.0 contracts and reviewed ABI/artifact generation, with mainn
 
 Role equivalence must be deliberate. In particular, naming a UR validator “owner validator” does not prove that it is the native `SubnetOwnerHotkey`. The planner checks the actual mapping and does not assume UID 0. Require the existing deployer's distinct owner/guardian/oracle constraints. Inspect Safe singleton bytecode, owners, threshold, enabled modules, guards, fallback handler and pending transactions; an address merely implementing `getOwners` and `getThreshold` is insufficient.
 
-Freeze compiler and dependency versions, creation and deployed bytecode, link/immutable locations, constructor encodings, source identities and storage layout. For a dedicated deployer starting at nonce `n`, the existing core sequence is:
+Freeze compiler and dependency versions, creation and deployed bytecode,
+link/immutable locations, constructor encodings, source identities and storage
+layout. The [current size check](evidence/contract-size-candidate-20260927.md)
+puts `STCoordinator` at 24,564 runtime bytes, just **12 bytes** below Foundry's
+24,576-byte limit; any source or build-input change requires a fresh size and
+exact-artifact deployment rehearsal. The selected live runtime's code-size rule
+still needs authentication. For a dedicated deployer starting at nonce `n`, the
+existing core sequence is:
 
 | Nonce | Action | Required postcondition before its dependants |
 | --- | --- | --- |

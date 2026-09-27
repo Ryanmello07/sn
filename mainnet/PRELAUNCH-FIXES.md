@@ -57,6 +57,13 @@ for a transaction cap. Missing full custom-weight eligibility, historical
 basket/delegation custody and the separate root signing/capability service remain
 explicit blockers; UR validator readiness remains independent.
 
+Contract installation has a narrow build margin: the [2026-09-27 candidate
+size check](evidence/contract-size-candidate-20260927.md) measures
+`STCoordinator` at 24,564 runtime bytes, 12 bytes below Foundry's 24,576-byte
+limit. Bind that exact build into MG-02/MG-08 and qualify creation on the
+selected live runtime; a passing local build does not establish live
+deployability after a source/toolchain change.
+
 Start with MG-01's read-only route correction and MG-02's source composition.
 Then close the recovery, runtime, policy, settlement and monitoring dependencies
 before MG-08 can apply a reviewed bootstrap plan. MG-09 must close before
