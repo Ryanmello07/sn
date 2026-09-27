@@ -216,6 +216,20 @@ A reserve design must specify a different enforceable custody path before deploy
 
 Implement the selected owner-recycle path against the exact runtime: authenticate the recognized owner-hotkey set and recycle mode, preserve the signed cap and validator independence, and prove the finalized 10% provider / 90% recycle split with exact interval accounting. Keep the recycle fraction separate from native rounding and supply-side effects. No reserve transfer or new reserve-custody contract is implied. Do not deploy an immutable contract set before the selected path and custody layout are qualified.
 
+The [signer-free successor preview](../validator/OWNER-RECYCLE-PLANNER.md)
+(`9a287d92`) is an implementation step, not activation. It binds a proposed
+successor to the unchanged parent policy, builds the provider tenth using the
+existing head/tail theta, gives the remainder equally to usable recognized
+owner UIDs, and refuses rows that violate the signed cap before or after u16
+quantization. With the current `32768/65535` per-recipient cap, a single
+owner destination cannot carry 90%; at least two usable registered owner
+hotkeys are necessary. The pinned source permits multiple hotkeys of the
+subnet-owner coldkey and recognizes their incentive for recycling, but their
+mainnet registration, masks and protection are unknown. The preview always
+refuses submission and reports its row as a proposed weight fraction; an
+authenticated owner census, signed policy transition and measured native
+Yuma/emission outcome remain separate gates.
+
 ## Contract deployment, custody and initialization
 
 Reuse the release-1.0 contracts and reviewed ABI/artifact generation, with mainnet-specific inputs. The existing [Deploy script](../evm/script/Deploy.s.sol) is the ordering reference, not a command the bootstrap blindly shells out to. The Go planner must build exact transaction payloads and independently read back their results.
