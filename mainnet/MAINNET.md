@@ -387,6 +387,13 @@ not register, stake, submit root weights or authorize basket claims.
 census](SUBNET-CENSUS.md), with explicit protected and removal generations;
 `reset_ready` is always false and no UID is changed.
 
+The [existing-seat root action owner](ROOT-ACTION.md) is an offline-qualified
+one-action signing and recovery core, not a CLI command or live root validator.
+It retains the original signed bytes, nonce and fee reservation across ambiguous
+submissions. Production authority, custody, canonical receipt and supervisor
+adapters must be supplied and qualified before it can publish a root basket;
+the current accumulate-in-place strategy needs no periodic root transaction.
+
 `check-recycle-mode --rpc URL --policy FILE` binds the finalized mode read to
 independently supplied mainnet genesis, runtime code/metadata and complete
 version pins. It validates the runtime-declared map, enum and Burn fallback and
@@ -418,7 +425,7 @@ designs:
 | `inspect` | Extend the existing read-only identity capture with authority, census, capabilities, balances, custody and validators; emit a hashed snapshot. |
 | `monitor` | Extend the existing read-only identity/finality loop with durable checkpoints, independent comparisons, complete domain health and existing-stack alert delivery. |
 | `subnet-preview` | Existing signer-free finalized SN25/root UID census and owner-trim candidate comparison; full custody and execution-time reset authority remain open. |
-| `root-preview` / `root-monitor` | Existing signer-free finalized root seat and strategy census; activation, protected registration and root signing remain separate work. |
+| `root-preview` / `root-monitor` | Existing signer-free finalized root seat and strategy census; an offline [existing-seat action core](ROOT-ACTION.md) exists, but production signing and activation remain separate work. |
 | `check-recycle-mode` | Existing signer-free finalized storage-mode precondition; extend with an approved mainnet artifact and operational readback at activation/recovery. |
 | `economic-reference` | Existing signer-free cumulative integer 10%/90% reference from caller-supplied native intervals; actual chain reconciliation remains a separate gate. |
 | `plan` | Build canonical plan/actions and a readable review from config, pinned snapshot, artifacts, closed testnet exceptions and production qualification. No signing or submission. |
