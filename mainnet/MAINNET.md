@@ -473,13 +473,15 @@ generated files, ignored files, configuration, migrations or the running images
 match those commits. The release owner must bind those artifacts separately,
 qualify the composed source and approve the resulting immutable manifest.
 
-The [current composed candidate](evidence/source-lock-composed-20260927.md)
-locks SN `f321ba7c`, server `9f860731` and Connect `c68689c4` with all local
-Go replacements. Its cross-module compile, mainnet normal suite, selected
-validator normal/race suite, exact receipt normal/race suite and affected vet
-passed. This is offline qualification of those source paths, not a complete
-release or an approved mainnet configuration. Subsequent evidence-only commits
-do not alter the frozen candidate's Git identity.
+The [current composed candidate](evidence/source-lock-runtime-snapshot-20260927.md)
+locks SN `55469798`, server `9f860731` and Connect `c68689c4` with all local
+Go replacements. Its cross-module compile, full mainnet normal suite, focused
+identity/runtime race suite and mainnet vet passed. The earlier
+[composition](evidence/source-lock-composed-20260927.md) separately qualified
+unchanged validator and receipt selectors. This is offline qualification of
+those source paths, not a complete release or an approved mainnet
+configuration. Subsequent evidence-only commits do not alter the frozen
+candidate's Git identity.
 
 No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 
