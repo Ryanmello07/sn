@@ -118,6 +118,14 @@ tests in normal and race modes with zero skips, plus SN/Connect integration and
 cross-module compile. The server branch is pushed for review. This qualifies
 source composition, not a live migration or production release.
 
+The [offline composed-source lock and SN checks](/mnt/data/sn-testnet/evidence/mainnet-source-lock-20260927/RESULT.md)
+then bind clean SN `c2d7685d`, this server candidate `9f860731`, compatible
+Connect `c68689c4` and every local Go replacement without a `go.work`
+override. Cross-module compile, selected SN normal tests and composed miner/
+mainnet race tests passed. This is a candidate snapshot only: subsequent SN,
+contract, generated-artifact or config changes require a new source/artifact
+lock and affected qualification before MG-02 can close.
+
 The independent [NetEscrow qualification](/mnt/data/sn-testnet/evidence/mainnet-netescrow-ordering-20260927/RESULT.md)
 reproduces delayed-create/release and zero-byte preimage failures. The composed
 tests cover those paths and current-main settlement amplification. Deployment

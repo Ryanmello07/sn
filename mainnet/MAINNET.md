@@ -25,9 +25,9 @@ SN/server/SDK/Connect/config revisions. Some shared and simulator fixes exist;
 the complete mutating bootstrap, root-validator service and operational repair
 system remain production work. [mainnet/main.go](main.go) implements signer-free
 `inspect`, `monitor`, `subnet-preview`, `root-preview`, `root-monitor`,
-`check-recycle-mode` and `economic-reference`; `plan`, `apply`, `resume` and root-validator signing are
+`check-recycle-mode`, `economic-reference` and offline `source-lock`; `plan`, `apply`, `resume` and root-validator signing are
 not implemented. The
-[latest Snow inspection](evidence/snow-route-inspect-20260927-0741.json)
+[retained Snow inspection](evidence/snow-route-inspect-20260927-0957.json)
 observed chain ID 945, which fails the required mainnet ID 964 gate.
 This plan and its read-only evidence perform no
 mainnet transaction, deployment, UID removal or validator activation.
@@ -36,7 +36,7 @@ mainnet transaction, deployment, UID removal or validator activation.
 
 | Prerequisite | Current disposition and next result required |
 | --- | --- |
-| Owned mainnet RPC and independent identity authority | The [07:41 UTC read-only inspection](evidence/snow-route-inspect-20260927-0741.json) still observes testnet ID 945 at Snow `:9944`; the node operator says mainnet routing is being prepared. Reinspect after cutover and obtain separately approved genesis, expected EVM ID 964, native/EVM finalized mapping, code/metadata and node/source identity. An operator-approved mainnet genesis is still outstanding. |
+| Owned mainnet RPC and independent identity authority | The [09:57 UTC read-only inspection](evidence/snow-route-inspect-20260927-0957.json) still observes testnet ID 945 at Snow `:9944`; the node operator says mainnet routing is being prepared. Reinspect after cutover and obtain separately approved genesis, expected EVM ID 964, native/EVM finalized mapping, code/metadata and node/source identity. An operator-approved mainnet genesis is still outstanding. |
 | Immutable qualified release | Compose the actual SN/server/SDK/Connect/config and contract artifacts, including selected branch fixes and migration order; qualify their real interfaces and publish an approved manifest. Historical R48 builds do not qualify later per-user deposit or zero-price changes. |
 | Exact mainnet census and authority | Read SN25 membership, roles, custody, immutable contracts and locks at one finalized snapshot; resolve reset feasibility and all protected identities before making an executable plan. |
 | Economic and custody decisions | The user selected **owner-recycle for the remaining 90%**. Implement and qualify that path and the 10% native-miner target on the actual runtime; finalize mainnet policy, tolerance, keys/Safe, root-registration protection and spend/count/expiry ceilings. Recycled value is not reserve custody. No testnet allowance carries over. |
