@@ -26,7 +26,8 @@ the complete mutating bootstrap, root-validator service and operational repair
 system remain production work. [mainnet/main.go](main.go) implements signer-free
 `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`,
 `monitor`, `subnet-preview`, `root-preview`, `root-monitor`,
-`check-recycle-mode`, `economic-reference`, offline `source-lock`, and the
+`check-recycle-mode`, `economic-reference`, offline `source-lock`,
+[local `release-inventory`](RELEASE-INVENTORY.md), and the
 [signer-free blocked `plan`](PLAN.md); executable planning, `apply`, `resume`
 and root-validator signing are not implemented. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)
@@ -514,10 +515,16 @@ prove a build or image, inspect a deployed migration state, or approve a release
 Ignored Solidity libraries and compiler identities are explicit dependency and
 toolchain inputs; they are not included by the Go source lock alone.
 
-The [current composed candidate](evidence/source-lock-blocked-plan-20260927.md)
-locks SN `7175313d`, server `9f860731` and Connect `c68689c4` with all local
-Go replacements. Its 169 mainnet normal and 30 focused race tests, vet and
-clean detached build passed. The new [unbound blocked outline](evidence/blocked-plan-outline-20260927.json)
+The [current composed local candidate](evidence/release-candidate-v8-20260927.md)
+locks SN `1862d927`, server `9f860731` and Connect `c68689c4` with all local
+Go replacements. Its [partial actual-file inventory](evidence/release-inventory-candidate-v8-20260927.json)
+hashes 18 selected files, including four locally built executables and four
+contract artifacts, but has no policy or image identity and remains unapproved.
+Mainnet inventory implementation passed 177 normal tests and all 177 race
+test bodies in a bounded run plus exact continuation; the latter is not one
+whole-package race pass. A subsequent validator test-fixture correction passed
+87 affected tests normally and under race without changing production seed
+custody. The [unbound blocked outline](evidence/blocked-plan-outline-20260927.json)
 names ten non-executable actions and 24 missing requirements. Its negative
 control rejects retained Snow testnet EVM ID 945; the earlier
 [same-block Snow observation](evidence/source-lock-finalized-snapshot-20260927.md)
@@ -525,8 +532,10 @@ authenticates code, metadata and linked native/EVM headers but remains
 unapproved. The earlier [composition](evidence/source-lock-composed-20260927.md)
 separately qualified unchanged validator and receipt selectors. This is
 offline qualification of those source paths, not a complete release or an
-approved mainnet configuration. Subsequent evidence-only commits do not alter
-the frozen candidate's Git identity.
+approved mainnet configuration. The prior
+[v7 source and contract build](evidence/source-lock-blocked-plan-20260927.md)
+remain linked evidence; subsequent evidence-only commits do not alter the
+frozen v8 candidate's Git identity.
 
 No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 
