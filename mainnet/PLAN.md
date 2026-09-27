@@ -104,6 +104,13 @@ their shared authority prerequisites are satisfied. Activation depends on all
 three branches. The root role never counts toward the required **two distinct
 UR validators and two healthy operators**.
 
+The operator has SN25 owner keys but no chain-Root administrative origin. The
+planned native reset therefore seeks the strongest safe owner-authorized trim,
+with exact before/after hotkey generations, protected survivors and a named
+disposition for every old miner that remains. This blocked graph does not infer
+that an owner trim can remove all miners, and its `reset-miner-uids` action is
+not executable authority. See [the reset design](MAINNET.md#exact-uid-census-and-reset).
+
 The economic target is fixed to the requested **1/10 of native miner allocation
 before withholding**, with **9/10 owner-recycle**, observed-native-target assurance
 and no reserve credit. This is a requested policy, not proof that Yuma or an
