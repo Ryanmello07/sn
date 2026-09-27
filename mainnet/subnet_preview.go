@@ -15,12 +15,18 @@ import (
 
 // The complete sample shares one deadline; an error publishes no partial census.
 func (self *rpcClient) readSubnetPreview(ctx context.Context, policy subnetCensusPolicy, policyHash string) (subnetPreview, error) {
+	return self.readSubnetPreviewAt(ctx, policy, policyHash, "")
+}
+
+// Retained plans are rebuilt from their canonical historical census, never
+// trusted because an imported file carries a self-consistent content hash.
+func (self *rpcClient) readSubnetPreviewAt(ctx context.Context, policy subnetCensusPolicy, policyHash, blockHash string) (subnetPreview, error) {
 	if err := policy.validate(); err != nil {
 		return subnetPreview{}, err
 	}
 	sampleCtx, cancel := context.WithTimeout(ctx, self.retryWindow)
 	defer cancel()
-	identity, metadata, err := self.readApprovedRuntime(sampleCtx, identityExpectation{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId}, policy.RuntimeVersion, policy.RuntimeCodeHash, policy.RuntimeMetadataHash)
+	identity, metadata, err := self.readApprovedRuntimeAt(sampleCtx, identityExpectation{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId}, policy.RuntimeVersion, policy.RuntimeCodeHash, policy.RuntimeMetadataHash, blockHash)
 	if err != nil {
 		return subnetPreview{}, err
 	}

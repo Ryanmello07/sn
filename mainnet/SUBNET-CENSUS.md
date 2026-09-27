@@ -170,6 +170,14 @@ Identity/integrity refusal returns exit 3 without partial evidence. Invalid
 input remains exit 2 and transport/output failure exit 1. There is no `--apply`
 or signing-key option.
 
+The signer-free [recheck and reconciliation guard](OWNER-TRIM-GUARD.md) now
+rebuilds a retained plan from its authenticated historical census, compares a
+fresh finalized census, and reconciles exact old generations, protected
+survivors, UID compression and the excluded root census. It does not close the
+runtime execution-time selection gate: the capacity-only owner call has no
+atomic predicate for approved identities. Recheck/reconciliation results keep
+all execution authority and full-reset flags false.
+
 [registration]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/subnets/registration.rs#L242
 [trim]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/subnets/uids.rs#L171
 [admin]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/admin-utils/src/lib.rs#L1853

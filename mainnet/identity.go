@@ -242,6 +242,15 @@ func (self *rpcClient) callAdmittedRead(ctx context.Context, method string, para
 
 // readIdentity binds the finalized header to its hash and records runtime metadata.
 func (self *rpcClient) readIdentity(ctx context.Context) (chainIdentity, error) {
+	return self.readIdentityAt(ctx, "")
+}
+
+// A retained block must still be canonical and no later than the authenticated
+// finalized head. Empty selects that head; neither mode proves RPC consensus.
+func (self *rpcClient) readIdentityAt(ctx context.Context, blockHash string) (chainIdentity, error) {
+	if blockHash != "" && !rootCanonicalHash(blockHash) {
+		return chainIdentity{}, fmt.Errorf("%w: retained block hash is invalid", errRpcIntegrity)
+	}
 	sampleCtx, cancel := context.WithTimeout(ctx, self.retryWindow)
 	defer cancel()
 	identity := chainIdentity{Schema: identitySchema, RpcUrl: self.url}
@@ -275,6 +284,25 @@ func (self *rpcClient) readIdentity(ctx context.Context) (chainIdentity, error) 
 	identity.FinalizedNumber, err = header.authenticate(identity.FinalizedHash)
 	if err != nil {
 		return chainIdentity{}, fmt.Errorf("%w: finalized header: %v", errRpcIntegrity, err)
+	}
+	if blockHash != "" && blockHash != identity.FinalizedHash {
+		var finalizedByNumber string
+		if err := self.call(sampleCtx, "chain_getBlockHash", []any{identity.FinalizedNumber}, &finalizedByNumber); err != nil {
+			return chainIdentity{}, err
+		}
+		if !validHash(finalizedByNumber) || !strings.EqualFold(finalizedByNumber, identity.FinalizedHash) {
+			return chainIdentity{}, fmt.Errorf("%w: finalized head is not canonical before historical read", errRpcIntegrity)
+		}
+		var retainedHeader rootReceiptHeader
+		if err := self.call(sampleCtx, "chain_getHeader", []any{blockHash}, &retainedHeader); err != nil {
+			return chainIdentity{}, err
+		}
+		retainedHeader.normalizeHashes()
+		number, err := retainedHeader.authenticate(blockHash)
+		if err != nil || number >= identity.FinalizedNumber {
+			return chainIdentity{}, fmt.Errorf("%w: retained header is invalid or not finalized: %v", errRpcIntegrity, err)
+		}
+		identity.FinalizedHash, identity.FinalizedNumber = blockHash, number
 	}
 	if err := self.call(sampleCtx, "state_getRuntimeVersion", []any{identity.FinalizedHash}, &rawVersion); err != nil {
 		return chainIdentity{}, err

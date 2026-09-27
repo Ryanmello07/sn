@@ -277,11 +277,17 @@ func buildOwnerTrimPlan(ctx context.Context, policy subnetCensusPolicy, preview 
 	if err := ctx.Err(); err != nil {
 		return ownerTrimPlan{}, err
 	}
+	plan.ContentHash, err = ownerTrimPlanHash(plan)
+	return plan, err
+}
+
+// The seal is reproducible after decoding, but supplies no policy authority.
+func ownerTrimPlanHash(plan ownerTrimPlan) (string, error) {
+	plan.ContentHash = ""
 	raw, err := json.Marshal(plan)
 	if err != nil {
-		return ownerTrimPlan{}, err
+		return "", err
 	}
 	digest := sha256.Sum256(append([]byte(ownerTrimPlanSchema+"\x00"), raw...))
-	plan.ContentHash = "sha256:" + hex.EncodeToString(digest[:])
-	return plan, nil
+	return "sha256:" + hex.EncodeToString(digest[:]), nil
 }

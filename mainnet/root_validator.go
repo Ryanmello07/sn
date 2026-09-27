@@ -141,7 +141,12 @@ func (self *rpcClient) rootRuntime(ctx context.Context, policy rootValidatorPoli
 
 // A storage observer must authenticate its complete runtime before deriving keys.
 func (self *rpcClient) readApprovedRuntime(ctx context.Context, expected identityExpectation, expectedVersion crv4.RuntimeVersionIdentity, expectedCodeHash, expectedMetadataHash string) (chainIdentity, *types.Metadata, error) {
-	identity, err := self.readIdentity(ctx)
+	return self.readApprovedRuntimeAt(ctx, expected, expectedVersion, expectedCodeHash, expectedMetadataHash, "")
+}
+
+// Historical reads use the same complete runtime pin checks as current reads.
+func (self *rpcClient) readApprovedRuntimeAt(ctx context.Context, expected identityExpectation, expectedVersion crv4.RuntimeVersionIdentity, expectedCodeHash, expectedMetadataHash, blockHash string) (chainIdentity, *types.Metadata, error) {
+	identity, err := self.readIdentityAt(ctx, blockHash)
 	if err != nil {
 		return identity, nil, err
 	}
