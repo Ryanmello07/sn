@@ -24,8 +24,8 @@ qualification must use an explicit composed release, including compatible
 SN/server/SDK/Connect/config revisions. Some shared and simulator fixes exist;
 the complete mutating bootstrap, root-validator service and operational repair
 system remain production work. [mainnet/main.go](main.go) implements signer-free
-`inspect`, `monitor`, `root-preview`, `root-monitor`, `check-recycle-mode` and
-`economic-reference`; `plan`, `apply`, `resume` and root-validator signing are
+`inspect`, `monitor`, `subnet-preview`, `root-preview`, `root-monitor`,
+`check-recycle-mode` and `economic-reference`; `plan`, `apply`, `resume` and root-validator signing are
 not implemented. The
 [latest Snow inspection](evidence/snow-route-inspect-20260927-0741.json)
 observed chain ID 945, which fails the required mainnet ID 964 gate.
@@ -150,6 +150,14 @@ Every planned transaction records its actual origin: native account or proxy rea
 Scope is the approved UR mainnet netuid, SN25 (netuid 25), only. Netuid 0 and other subnets are excluded. A UID is a mutable slot, not a permanent miner identity, and a neuron can perform more than one role. “All miners” must become a signed list of **hotkey identities and registration generations**, not a range such as `1..255` or “all UIDs without a validator permit.”
 
 At finalized block `B`, write `census.json` containing every UID and both directions of its UID/hotkey mapping; coldkey ownership; registration block; owner identity; role classification; permits and activity; native and mechanism-specific emission/weights; immune status and expiry; collateral and other locks; stake positions relevant to custody; commitments and associated EVM identity. Include the block hash and runtime identity for every decoded field. Reconcile the complete cardinality against `SubnetworkN`; missing entries or ambiguous ownership block planning.
+
+The signer-free [SN25 census and reset preview](SUBNET-CENSUS.md) now authenticates
+one finalized runtime and complete forward/reverse SN25 and root identity maps,
+then compares declared protected/removal generations with the inspected owner
+trim selection. It does not yet collect collateral, stake, claims, commitments,
+EVM associations or every mechanism-specific weight. Even an exact candidate
+set keeps `reset_ready=false`: the trim call cannot bind hotkey generations at
+execution, and the source-selected owner cooldown is not a metadata constant.
 
 Construct disjoint `remove`, `preserve`, and `unresolved` sets. Preserve explicit owner and validator hotkeys, including a validator currently lacking a permit, and any reserve, pool or escrow identity whose existing custody or earned claims require continuity. Membership in both a requested removal scope and a protected custody/validator role is an explicit conflict requiring a reviewed resolution; it is not silently omitted from “all.” Third-party validator identities receive the same explicit classification. Snapshot netuid-0 membership independently to prove it was untouched.
 
@@ -333,7 +341,7 @@ Manage both services with independent state directories, signer permissions, log
 ## Go CLI and action model
 
 [mainnet/main.go](main.go) currently contains signer-free `inspect`, `monitor`,
-`root-preview`, `root-monitor`, `check-recycle-mode` and `economic-reference`
+`subnet-preview`, `root-preview`, `root-monitor`, `check-recycle-mode` and `economic-reference`
 commands. `inspect --rpc URL`
 emits a content-hashed identity snapshot. Supplying
 any expectation requires all of `--expected-chain`, `--expected-genesis` and
@@ -368,6 +376,9 @@ clock reports stalled until genuine finalized advancement resets the clock.
 census](ROOT-VALIDATOR.md). Their `ready` result means observation policy
 readiness only; `activation_ready` is always false. They load no signer and do
 not register, stake, submit root weights or authorize basket claims.
+`subnet-preview` performs the [read-only SN25 reset feasibility
+census](SUBNET-CENSUS.md), with explicit protected and removal generations;
+`reset_ready` is always false and no UID is changed.
 
 `check-recycle-mode --rpc URL --policy FILE` binds the finalized mode read to
 independently supplied mainnet genesis, runtime code/metadata and complete
@@ -391,7 +402,7 @@ Keep the future plan builder pure after authenticated snapshot inputs are suppli
 Separate chain adapters, signer interfaces, state storage and supervisors so
 preview cannot reach a transaction submission path.
 
-Target command surface; `inspect`, `monitor`, the two root observers and the two
+Target command surface; `inspect`, `monitor`, `subnet-preview`, the two root observers and the two
 limited economic preconditions above exist, while the remaining commands are
 designs:
 
@@ -399,6 +410,7 @@ designs:
 | --- | --- |
 | `inspect` | Extend the existing read-only identity capture with authority, census, capabilities, balances, custody and validators; emit a hashed snapshot. |
 | `monitor` | Extend the existing read-only identity/finality loop with durable checkpoints, independent comparisons, complete domain health and existing-stack alert delivery. |
+| `subnet-preview` | Existing signer-free finalized SN25/root UID census and owner-trim candidate comparison; full custody and execution-time reset authority remain open. |
 | `root-preview` / `root-monitor` | Existing signer-free finalized root seat and strategy census; activation, protected registration and root signing remain separate work. |
 | `check-recycle-mode` | Existing signer-free finalized storage-mode precondition; extend with an approved mainnet artifact and operational readback at activation/recovery. |
 | `economic-reference` | Existing signer-free cumulative integer 10%/90% reference from caller-supplied native intervals; actual chain reconciliation remains a separate gate. |
