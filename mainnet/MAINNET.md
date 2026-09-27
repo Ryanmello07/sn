@@ -80,6 +80,15 @@ The September 14 design inspected Subtensor [commit `67dcf7f791dc495064c293f080a
 
 The production inspection gate must authenticate one finalized native block and its corresponding canonical EVM block using a separately verified, operator-owned mainnet node. Require an independently approved genesis hash, EVM chain ID 964, native chain identity, complete runtime version, `:code` hash, metadata hash, node build identity, and the reviewed runtime source/artifact mapping. Verify the finalized native header's complete SCALE bytes against its hash before using that hash for state reads; a header number and same-height lookup are insufficient. Decode one complete runtime identity, rejecting contradictory `stateVersion`/`systemVersion` aliases. The `runtime-snapshot` command captures exact finalized code and metadata bytes, verifies code against its storage hash, and repeats canonical/network checks after reading them. Its output remains an unapproved observation. Admission still needs signed-extension, call, storage and precompile review, an independently reviewed source-to-Wasm mapping, and native/EVM finalized mapping. A matching `specVersion` alone is insufficient; [the existing runtime authenticator](../crv4/runtime_identity.go) already binds more than that number.
 
+For native/EVM mapping, the current Snow testnet header carries a Frontier
+`fron` consensus digest whose payload names an EVM block hash. A production
+observer must authenticate the native header, decode the exact reviewed digest
+variant and payload, derive the EVM hash from it, verify the returned EVM header
+and its canonical hash-by-number lookup, then retain both hashes in one
+observation. Equal block numbers alone are not a mapping. This testnet shape
+remains provisional until the selected mainnet runtime and Frontier source
+artifact are independently reviewed.
+
 The read-only observation at **2026-09-27 04:16:25 UTC** compared Snow VPN
 `http://172.28.208.185:9944` with LAN testnet `http://192.168.1.162:9944`.
 Both returned `system_chain=Bittensor`, `eth_chainId=0x3b1` (945), node version

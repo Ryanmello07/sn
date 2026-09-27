@@ -896,6 +896,14 @@ as independently auditable runtime identity. The [latest Snow sample](evidence/r
 is testnet runtime 471; raw observation is not mainnet runtime admission or a
 verified source-to-Wasm mapping.
 
+The owned Snow testnet also exposes a Frontier `fron` digest in finalized
+native headers. At six sampled historical/current heights, its leading EVM
+hash matched `eth_getBlockByNumber` at the corresponding height, while the
+digest payload lengths differed. Implement the reviewed SCALE/PostLog decoder
+and EVM header-hash/canonical-number corroboration before claiming a native/EVM
+mapping; matching heights or a substring of a digest are insufficient. Repeat
+the check against the approved mainnet runtime after route cutover.
+
 **Repair admission follow-up (2026-09-22).** Fleet renewal still demanded a
 static runtime pin after continuation and diagnostics had authenticated the
 same compatible successor. Use one retained-evidence authority model across
