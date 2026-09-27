@@ -306,8 +306,8 @@ reopen testnet or override the September 27 closure and implementation inventory
 
 | ID | Fix | Depends on | Owner | Status | Completion evidence |
 | --- | --- | --- | --- | --- | --- |
-| RT-01 | Immutable runtime views anchored to the correct block and purpose | — | Astra | Planned | Current reads, historical execution and concurrent signing use consistent, separate contexts. |
-| RT-02 | Shared capability profiles for calls, storage, signing, CRv4, custom APIs and precompiles | — | Astra | Planned | Compatible versions pass automatically; changed consumed interfaces identify the precise unsupported capability. |
+| RT-01 | Immutable runtime views anchored to the correct block and purpose | — | Astra | In progress | The [validator-read correction](evidence/validator-read-capability-20260927.md) anchors stake and schedule capabilities to the caller-approved exact historical artifact before their first storage decode. Wider historical execution and concurrent signing contexts remain open. |
+| RT-02 | Shared capability profiles for calls, storage, signing, CRv4, custom APIs and precompiles | — | Astra | In progress | [Stake/schedule read profiles](evidence/validator-read-capability-20260927.md) admit an independently approved compatible successor without another compiled spec entry and identify changed consumed storage/API interfaces. Production admission policy and other operation profiles remain open. |
 | RT-03 | Construct and sign each native operation from one view; reconcile stale or uncertain attempts | RT-01, RT-02 | Astra | Planned | Deterministic upgrade races preserve signed history and cause no duplicate transaction. |
 | RT-04 | Replace version-specific live admission in simulator, miner, both validator paths and bootstrap | RT-01, RT-02, RT-03 | Astra | Planned | A compatible upgrade needs no binary rebuild or manually added version entry. |
 | RT-05 | Separate observed runtime from deployment, configuration and approval identity | RT-02, RT-04 | Astra | Planned | A compatible upgrade preserves the plan, approvals, leases, completed actions and observed epochs. |
@@ -631,9 +631,23 @@ an otherwise identical interface.
 Existing [CheckMetadata](../crv4/chain.go) needs stronger shape validation; storage
 presence and an unknown extension having zero encoded size are insufficient
 for automatic write admission. [preparedSourceEncoding](../crv4/source_commitment.go)
-and the [selective-metagraph reader](../crv4/validator_stake.go) need explicit
-encoding/API profiles to replace their version-number lists. Metadata format
-v14 alone does not establish the custom API's return layout.
+still needs an explicit encoding profile to replace its version-number list.
+The [selective-metagraph reader](../crv4/validator_stake.go) now has the narrow
+read profile below. Metadata format v14 alone does not establish the custom
+API's return layout.
+
+**2026-09-27 validator read capability (MG-04 / RT-01, RT-02).** The shared
+stake reader previously rejected an independently approved exact artifact
+solely because its spec was absent from a seven-version list. The
+[correction and causal tests](evidence/validator-read-capability-20260927.md)
+admit compatible successors through a block-bound read profile: exact consumed
+storage types, hashers, defaults and prefix, plus the selective-metagraph API's
+declared version and complete response decoding. Schedule reads additionally
+require `SubnetEpochIndex` compatibility before reading any storage. Unrelated
+calls, events and signed extensions do not revoke these read capabilities.
+Exact historical pins and reviewed legacy adapters remain; the profile grants
+no signing authority. Release configuration still requires separate production
+admission, so this closes a redundant read gate without claiming RT-04 complete.
 
 Automatic admission accepts upgrades authorized by the chain's governance
 within these supported capabilities and operational bounds. It is not a proof

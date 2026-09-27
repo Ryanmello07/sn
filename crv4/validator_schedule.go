@@ -71,6 +71,9 @@ func ReadValidatorScheduleAtContext(ctx context.Context, chain *Chain, query Val
 	if err != nil {
 		return result, err
 	}
+	if err := validateValidatorReadRuntimeAtContext(ctx, chain, artifact, validatorScheduleRuntimePurpose); err != nil {
+		return result, err
+	}
 	read := func(name string, maximum int, args ...[]byte) ([]byte, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err

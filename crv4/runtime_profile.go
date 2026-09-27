@@ -145,7 +145,15 @@ func runtimeProfileType(metadata *types.Metadata, id types.Si1LookupTypeID, stac
 	}
 }
 
+// Selects only interfaces consumed by the operation. A read capability need
+// not inherit unrelated calls, events or transaction-signing constraints.
 func runtimeProfileShape(metadata *types.Metadata) (map[string]any, error) {
+	return runtimeProfileSelectedShape(metadata, runtimeProfileStorage, runtimeProfileCalls, runtimeProfileEvents, true)
+}
+
+// Shared structural comparison keeps storage defaults, key hashers and SCALE
+// types identical between broad provisional and narrow read-only profiles.
+func runtimeProfileSelectedShape(metadata *types.Metadata, storageNamesKVs, callNamesKVs, eventNamesKVs map[string]string, signing bool) (map[string]any, error) {
 	if metadata == nil || metadata.Version != 14 {
 		return nil, errors.New("runtime compatibility requires metadata14")
 	}
@@ -158,7 +166,7 @@ func runtimeProfileShape(metadata *types.Metadata) (map[string]any, error) {
 		}
 		pallets[string(pallet.Name)] = pallet
 	}
-	for module, names := range runtimeProfileStorage {
+	for module, names := range storageNamesKVs {
 		pallet, ok := pallets[module]
 		if !ok || !pallet.HasStorage {
 			return nil, fmt.Errorf("runtime profile storage pallet %s absent", module)
@@ -201,7 +209,7 @@ func runtimeProfileShape(metadata *types.Metadata) (map[string]any, error) {
 			out[key] = []any{string(pallet.Storage.Prefix), found.Modifier, fmt.Sprintf("%x", []byte(found.Fallback)), encoding}
 		}
 	}
-	for kind, selection := range map[string]map[string]string{"call": runtimeProfileCalls, "event": runtimeProfileEvents} {
+	for kind, selection := range map[string]map[string]string{"call": callNamesKVs, "event": eventNamesKVs} {
 		for module, names := range selection {
 			pallet, ok := pallets[module]
 			if !ok {
@@ -242,6 +250,9 @@ func runtimeProfileShape(metadata *types.Metadata) (map[string]any, error) {
 				}
 			}
 		}
+	}
+	if !signing {
+		return out, nil
 	}
 	extensions := make([]any, 0, len(metadata.AsMetadataV14.Extrinsic.SignedExtensions))
 	for _, extension := range metadata.AsMetadataV14.Extrinsic.SignedExtensions {

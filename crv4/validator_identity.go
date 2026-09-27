@@ -51,6 +51,12 @@ type ValidatorIdentityObservation struct {
 // on an otherwise immutable Chain. RPC transport response limits remain the
 // transport's responsibility; bounded storage decoding adds no unbounded copy.
 func ReadValidatorIdentityAtContext(ctx context.Context, chain *Chain, query ValidatorIdentityQuery, allowed ...RuntimeArtifactIdentity) (ValidatorIdentityObservation, error) {
+	return readValidatorIdentityWithRuntimeAtContext(ctx, chain, query, nil, allowed...)
+}
+
+// A dependent read may require its narrow runtime capability before the first
+// storage decode. Identity-only callers retain their exact-artifact behavior.
+func readValidatorIdentityWithRuntimeAtContext(ctx context.Context, chain *Chain, query ValidatorIdentityQuery, admit func(AuthenticatedRuntimeArtifact) error, allowed ...RuntimeArtifactIdentity) (ValidatorIdentityObservation, error) {
 	empty := ValidatorIdentityObservation{}
 	if ctx == nil || chain == nil || chain.API == nil || chain.API.Client == nil {
 		return empty, errors.New("validator identity context is unavailable")
@@ -119,6 +125,11 @@ func ReadValidatorIdentityAtContext(ctx context.Context, chain *Chain, query Val
 	artifact, err := AuthenticateRuntimeArtifactAtContext(ctx, chain, query.BlockHash, allowed...)
 	if err != nil {
 		return empty, err
+	}
+	if admit != nil {
+		if err := admit(artifact); err != nil {
+			return empty, err
+		}
 	}
 	read := func(name string, maximum int, optional bool, args ...[]byte) ([]byte, error) {
 		if err := ctx.Err(); err != nil {

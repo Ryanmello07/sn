@@ -149,6 +149,15 @@ fresh block/chain identity checks, exact signing domains and strict mainnet
 rejection. A new connection must establish its own authority; the correction
 does not qualify automatic production runtime admission or durable proof reuse.
 
+Validator stake and schedule reads now have [separate block-bound read
+capabilities](evidence/validator-read-capability-20260927.md). An independently
+approved future artifact can satisfy its consumed storage and selective API
+profile without a compiled spec-version entry. A schedule also requires its
+epoch-storage profile; a stake-only read does not. These checks reject changed
+interfaces before storage decoding and retain exact historical pins. They grant
+no new signing or production configuration authority; wider automatic runtime
+admission remains part of RT-01 through RT-08.
+
 Current source changes matter to this design:
 
 | Subject | Source-backed observation | Bootstrap consequence |
