@@ -553,6 +553,11 @@ and replays the inventory byte-for-byte. Choose approved production versions
 and architectures, then inventory built OCI manifest digests and running-image
 readback before MG-02 can close. Local binaries and Dockerfile pins do not
 publish or validate an image.
+The [local API/taskworker image probe](/mnt/data/sn-testnet/evidence/mainnet-images-v9-20260927/RESULT.md)
+confirms the images embed the selected binaries exactly, but its `apt-get`
+reads moving Ubuntu repositories. Its local digests are neither published
+registry identities nor deployed-image evidence; fixed package inputs remain
+a release requirement.
 
 The [owner-recycle measured decision](../validator/OWNER-RECYCLE-MEASUREMENT.md)
 now joins signed successor approval, exact native owner census and fully

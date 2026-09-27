@@ -82,9 +82,17 @@ six to that existing digest; both operator binaries remained byte-identical
 after the source-only change. The branch is pushed and server `969d6c74` is
 now part of the clean v9 source lock. The v9 composition built fresh server
 API/taskworker binaries against SN `265231f9` and inventories all eight server
-Dockerfiles. No OCI image digest, approved production architecture set,
+Dockerfiles. No selected or published OCI image digest, approved production architecture set,
 deployment manifest or running-image readback exists. A Dockerfile pin and
 local binary do not supply an image.
+
+A [local v9 image probe](/mnt/data/sn-testnet/evidence/mainnet-images-v9-20260927/RESULT.md)
+built API and taskworker Linux/amd64 images and extracted binaries matching
+the inventoried files exactly. It recorded local image digests, but pushed no
+image. The Dockerfiles still run `apt-get` against moving Ubuntu repositories;
+the observed `ca-certificates` version is not an immutable build input. Keep
+MG-02 open for fixed package inputs, selected OCI manifests, registry
+publication and running-image readback.
 
 The local validator init fixture initially failed under host umask `0002`
 because `testing.TempDir` supplied a group-writable numbered seed parent.

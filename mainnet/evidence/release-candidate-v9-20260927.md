@@ -24,6 +24,12 @@ replayed byte-for-byte. Its content hash is
 `sha256:a761ee1b2f2961940c9a1503ab37c2582613c9aba08401750c16ff4d02e70916`.
 The complete input, exact binaries and replay outputs are retained in the
 [external build and inventory record](/mnt/data/sn-testnet/evidence/mainnet-source-lock-v9-20260927/RESULT.md).
+Both server images also built locally from the pinned Dockerfiles; extracted
+executables matched the inventoried binaries byte-for-byte. The
+[image probe](/mnt/data/sn-testnet/evidence/mainnet-images-v9-20260927/RESULT.md)
+retains their local digests, inspection and exact build logs. Its `apt-get`
+step reads moving Ubuntu repositories, so this probe does not close image
+reproducibility, registry publication or deployed identity.
 
 The new [owner-recycle measurement](../../validator/OWNER-RECYCLE-MEASUREMENT.md)
 replays original provider proofs against the signed approval and exact native
