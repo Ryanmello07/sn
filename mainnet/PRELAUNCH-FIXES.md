@@ -869,6 +869,12 @@ Historical reads bind genesis, block hash, original runtime/metadata and decoder
 version. An archive-capability refusal identifies the missing proof and blocks
 only dependent work; never substitute a current-state read for a historical
 one. Keep artifact caches bounded independently of the number of known versions.
+Authenticate the complete finalized header against its announced hash, including
+parent, roots and digest, before using that hash to select runtime or storage.
+Decode the complete runtime version through one shared parser; when an RPC
+supplies both `stateVersion` and `systemVersion`, contradictory values are an
+integrity error. An RPC's same-height hash lookup and matching version numbers
+alone do not prove the header or state layout.
 
 **Closure.** Use the RT-08 controlled upgrade plus historical reads on both
 sides of the upgrade, concurrent signing, stale subscriptions, evicted metadata,
