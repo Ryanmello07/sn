@@ -56,6 +56,19 @@ and vet on disposable PostgreSQL/Redis
 release lock, binary/image inventory or deployment approval; the v11 inventory
 does not attest these changes. MG-02, MG-03 and MG-06 remain open.
 
+The first broad server-model run under
+`/mnt/data/sn-testnet/evidence/mainnet-server-model-full-20260927` remains
+**diagnostic collection, not frozen composed-release qualification**. Its
+launcher entered the original server directory, whose relative Go replacements
+resolved active sibling checkouts rather than the prepared pinned workspace.
+The actual running executable and the provenance correction are retained in
+that directory's `PROVENANCE.md`; the run continues to collect all failures.
+For MG-02/MG-10, validate the compiler's actual `go list -m -json all` module
+directories, physical targets, exact revisions and clean state before and after
+qualification. Use real isolated worktrees for every local replacement and
+retain the compiled executable. A prepared workspace or an intended source lock
+does not establish which dependency bytes the compiler used.
+
 For MG-08, the majority SN25 validator runs the standard `sn/validator` binary
 with its ordinary evidence-based scoring policy. It is an indirect reset aid,
 not a native removal authority. Old miners absent from eligible head and pool
