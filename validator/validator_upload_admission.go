@@ -31,7 +31,7 @@ type ValidatorUploadAdmissionConfig struct {
 	Deployment              ValidatorUploadDeployment `json:"deployment" yaml:"deployment"`
 	ReplicaNoID             uint64                    `json:"replica_no_id" yaml:"replica_no_id"`
 	ActivationContexts      []ReleaseEvidenceV2File   `json:"activation_contexts" yaml:"activation_contexts"`
-	ProductionRuntimeConfig ReleaseEvidenceV2File     `json:"production_runtime_config,omitempty" yaml:"production_runtime_config,omitempty"`
+	ProductionRuntimeConfig ReleaseEvidenceV2File     `json:"production_runtime_config,omitzero" yaml:"production_runtime_config,omitempty"`
 	// Provisional testnet continuity discovers only these exact references;
 	// their anchored authentication and current eligibility remain mandatory.
 	ProvisionalSeededDiscoveryOnly bool `json:"provisional_seeded_discovery_only,omitempty" yaml:"provisional_seeded_discovery_only,omitempty"`

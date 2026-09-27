@@ -10,6 +10,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -22,6 +23,34 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/urfoundation/sn/crv4"
 )
+
+// Legacy configuration bytes omit the new authority field, while an explicit
+// production pin survives the same server configuration serialization.
+func TestValidatorUploadProductionRuntimeReferencePreservesAbsentWireField(t *testing.T) {
+	raw, err := json.Marshal(ValidatorUploadAdmissionConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := fields["production_runtime_config"]; present {
+		t.Fatal("absent production pin changed legacy configuration wire fields")
+	}
+	reference := ReleaseEvidenceV2File{Path: "/synthetic/production-runtime.yml", Bytes: 17, SHA256: attemptHex32([32]byte{1})}
+	raw, err = json.Marshal(ValidatorUploadAdmissionConfig{ProductionRuntimeConfig: reference})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored ValidatorUploadAdmissionConfig
+	if err := json.Unmarshal(raw, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.ProductionRuntimeConfig != reference {
+		t.Fatal("explicit production pin was lost during configuration round trip")
+	}
+}
 
 // Tests mutate responses only between synchronous refreshes. Storage reads
 // remain exact-block, while old and current permit are independently controlled.

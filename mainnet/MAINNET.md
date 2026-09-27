@@ -76,11 +76,14 @@ The target UR mainnet netuid is SN25 (netuid 25). The user selected `owner-recyc
 
 Two constraints determine the implementation. There is no demonstrated subnet-owner call that arbitrarily clears every miner registration while retaining an arbitrary list of validators. Also, the current UR contracts and validator policy do not provide a standalone switch that changes the native miner allocation to 10%. The planner must expose these as capability decisions, not claim that lowering UID capacity or setting `theta: 0.1` fulfills them. The requested 10% target allows the exact runtime's explicitly established quantization tolerance; a stronger enforceable hard cap is a separate assurance choice, not an additional user requirement.
 
-The read-only root observer and existing UR validator do not implement either
-the root-validator signing service or the 10% native-miner mechanism. Both remain
-explicit mainnet implementation gates. New zero-price/equal-demand support
-changes operator demand/deposit semantics; it does not by itself cap the native
-miner allocation or choose where the remaining 90% goes.
+The standard UR validator now implements the separately approved
+[schema-3 production path](OWNER-RECYCLE-PRODUCTION.md) for the measured 10/90
+owner-recycle row. Live native economics and migration of already signed work
+remain unqualified. The read-only root observer alone cannot activate a root
+signing service; qualified current authority, actual native custody and service
+wiring remain explicit gates. Zero-price/equal-demand support changes operator
+demand/deposit semantics; it does not by itself cap native miner allocation or
+choose where the remaining 90% goes.
 
 The miner fleet now has a [mainnet runtime authority gate](../miner/FLEET-MAINNET-RUNTIME.md)
 for register, publish, bind, status and revoke. It requires separately approved
@@ -88,7 +91,7 @@ genesis, source/build review and exact code/metadata/version bytes before
 signing, submission and receipt readback. That source change does not supply
 those approvals or durable uncertain-send reconciliation.
 
-The draft policy is `reset.mode: unresolved` and **`emissions.remainder: owner-recycle`**. A preview remains non-executable while reset capability, the runtime-specific 10%/90% mechanism or other required inputs are unresolved. Qualify the selected economic mechanism before installing an immutable vault or removing existing registrations. The remainder choice is settled; its implementation and exact signed production policy remain work.
+The draft policy is `reset.mode: unresolved` and **`emissions.remainder: owner-recycle`**. A preview remains non-executable while reset capability, the runtime-specific 10%/90% mechanism or other required inputs are unresolved. Qualify the selected economic mechanism before installing an immutable vault or removing existing registrations. The remainder choice is settled; live economic qualification and the exact signed production policy remain work.
 
 ## Source and runtime boundary
 
@@ -827,6 +830,15 @@ Actual mainnet inputs and economic outcome remain unprovided; changing an
 already-running production config needs durable original config/approval history
 and remains explicit follow-up work. Final economic outcome is a monitored
 postcondition, not a prerequisite to the first submission.
+
+The [server upload admission](VALIDATOR-UPLOAD-RUNTIME.md) now consumes an
+independently pinned schema-3 configuration and retains only read-only runtime
+intervals, routes and deployment scope. Original activation reads use their
+signed historical window; current eligibility requires the unexpired current
+window. The ordinary upload signer and server-used admission constructor are
+joined in local deterministic tests. This closes the downstream tuple-only
+history gap without granting writer capability or proving remote delivery,
+original economic authority, mainnet deployment or live approval custody.
 
 No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 

@@ -48,10 +48,12 @@ checks.
 
 Local regressions join the ordinary upload signer, real server-used admission
 constructor/refresh/lease, signed synthetic schema-3 config, real native storage
-decoding and a local EVM HTTP fixture. Two controls restore the former decisions:
+decoding and a local EVM HTTP fixture. Three controls restore the former decisions:
 identity-only history rejects the approved production upload; a current-tuple
-observer accepts a height beyond its signed interval. The corrected paths also
-cover expiry, current permit loss, altered config pins and scope, changed network
+observer accepts a height beyond its signed interval; an ordinary optional struct
+tag adds an absent authority field to legacy JSON configuration bytes. An absent
+pin remains omitted, while an explicit pin survives serialization. The corrected
+paths also cover expiry, current permit loss, altered config pins and scope, changed network
 identity, unapproved historical artifacts and cancellation.
 
 This closes downstream runtime-history propagation. It does not prove a live
@@ -59,3 +61,6 @@ mainnet deployment, trusted RPC service, approval custody/revocation, historical
 archive availability, remote upload delivery or service activation. Upload
 admission grants bounded staging capacity; it does not authenticate the eventual
 measurement, migration prefix, settlement outcome or a weight transaction.
+
+[Retained qualification](evidence/upload-runtime-qualification-20260927.md)
+records the exact normal/race binaries, three causal controls and consumer builds.
