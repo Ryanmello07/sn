@@ -99,7 +99,9 @@ A later mainnet deployment at either address requires the correct owned route,
 fresh readback and independent operator approval of the genesis/runtime domain.
 Do not guess a different port or inherit a library/public fallback. Bind RPC URLs,
 resolved upstreams, TLS identities where applicable and local proxy routes in the
-plan. A loopback proxy must have the approved owned mainnet node as its sole
+plan. The Foundry configuration no longer defines public `mainnet` or `testnet`
+RPC aliases; deployment and probe commands require an explicit owned URL. A
+loopback proxy must have the approved owned mainnet node as its sole
 upstream. Preserve zero artificial request pacing on that route; bound
 concurrency, retries and cancellation. A separately approved read-only comparison
 node is an independent observer, never a silent signing/submission fallback.
