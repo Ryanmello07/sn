@@ -39,6 +39,8 @@ type finalizedMappingFixture struct {
 	evmHash           string
 	rawEvmHeader      string
 	transactionHashes []string
+	runtimeCode       []byte
+	runtimeMetadata   []byte
 	fault             func(string, []any, int) (any, bool)
 	rawRequests       []string
 }
@@ -119,7 +121,10 @@ func (self *finalizedMappingFixture) replaceNativeLogs(t *testing.T, logs []stri
 // the rendered Ethereum RPC view cannot reconstruct from its seconds field.
 func newFinalizedMappingFixture(t *testing.T, variant byte, transactionCount int) (*rpcClient, *finalizedMappingFixture) {
 	t.Helper()
-	fixture := &finalizedMappingFixture{counts: map[string]int{}, transactionHashes: make([]string, transactionCount)}
+	fixture := &finalizedMappingFixture{
+		counts: map[string]int{}, transactionHashes: make([]string, transactionCount),
+		runtimeCode: []byte{0, 97, 115, 109, 1, 0, 0, 0}, runtimeMetadata: []byte{109, 101, 116, 97, 255, 0},
+	}
 	for index := range fixture.transactionHashes {
 		fixture.transactionHashes[index] = crypto.Keccak256Hash([]byte(fmt.Sprintf("synthetic transaction %d", index))).Hex()
 	}
@@ -185,7 +190,25 @@ func (self *finalizedMappingFixture) roundTrip(request *http.Request) (*http.Res
 			return nil, errors.New("native lookup guessed EVM height")
 		}
 	case "state_getRuntimeVersion":
+		if len(call.Params) != 1 || call.Params[0] != self.nativeHash {
+			return nil, errors.New("runtime version was not pinned")
+		}
 		result = map[string]any{"specName": "synthetic-runtime", "specVersion": 991, "transactionVersion": 1, "stateVersion": 1}
+	case "state_getStorageHash", "state_getStorage":
+		if len(call.Params) != 2 || call.Params[0] != runtimeCodeStorageKey || call.Params[1] != self.nativeHash {
+			return nil, errors.New("runtime code read was not pinned")
+		}
+		if call.Method == "state_getStorage" {
+			result = "0x" + hex.EncodeToString(self.runtimeCode)
+		} else {
+			digest := blake2b.Sum256(self.runtimeCode)
+			result = "0x" + hex.EncodeToString(digest[:])
+		}
+	case "state_getMetadata":
+		if len(call.Params) != 1 || call.Params[0] != self.nativeHash {
+			return nil, errors.New("runtime metadata read was not pinned")
+		}
+		result = "0x" + hex.EncodeToString(self.runtimeMetadata)
 	case "debug_getRawHeader":
 		if len(call.Params) != 1 {
 			return nil, errors.New("raw header selector count differs")

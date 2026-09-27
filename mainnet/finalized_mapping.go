@@ -210,6 +210,26 @@ func (self *rpcClient) readFinalizedMapping(ctx context.Context, expected *ident
 			return finalizedMapping{}, err
 		}
 	}
+	return self.readFinalizedMappingAtIdentity(sampleCtx, identity)
+}
+
+// Follows an authenticated in-memory finalized identity on the same route;
+// head advancement cannot replace the selected block during composition.
+func (self *rpcClient) readFinalizedMappingAtIdentity(ctx context.Context, identity chainIdentity) (result finalizedMapping, resultErr error) {
+	if ctx == nil {
+		return finalizedMapping{}, errors.New("mapping context is unavailable")
+	}
+	if err := self.validateSnapshotIdentity(identity); err != nil {
+		return finalizedMapping{}, err
+	}
+	sampleCtx, cancel := context.WithTimeout(ctx, self.retryWindow)
+	defer cancel()
+	defer func() {
+		resultErr = errors.Join(resultErr, sampleCtx.Err())
+		if resultErr != nil {
+			result = finalizedMapping{}
+		}
+	}()
 	var nativeHeader rootReceiptHeader
 	if err := self.call(sampleCtx, "chain_getHeader", []any{identity.FinalizedHash}, &nativeHeader); err != nil {
 		return finalizedMapping{}, err

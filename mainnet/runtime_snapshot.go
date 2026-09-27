@@ -74,6 +74,26 @@ func (self *rpcClient) readRuntimeSnapshot(ctx context.Context, expected *identi
 			return runtimeSnapshot{}, err
 		}
 	}
+	return self.readRuntimeSnapshotAtIdentity(sampleCtx, identity)
+}
+
+// Reuses one in-memory identity already authenticated by this route. This
+// helper never samples a new finalized head or imports identity-file authority.
+func (self *rpcClient) readRuntimeSnapshotAtIdentity(ctx context.Context, identity chainIdentity) (result runtimeSnapshot, resultErr error) {
+	if ctx == nil {
+		return runtimeSnapshot{}, errors.New("runtime snapshot context is unavailable")
+	}
+	if err := self.validateSnapshotIdentity(identity); err != nil {
+		return runtimeSnapshot{}, err
+	}
+	sampleCtx, cancel := context.WithTimeout(ctx, self.retryWindow)
+	defer cancel()
+	defer func() {
+		resultErr = errors.Join(resultErr, sampleCtx.Err())
+		if resultErr != nil {
+			result = runtimeSnapshot{}
+		}
+	}()
 	blockHash := identity.FinalizedHash
 	var rawVersion json.RawMessage
 	if err := self.call(sampleCtx, "state_getRuntimeVersion", []any{blockHash}, &rawVersion); err != nil {
