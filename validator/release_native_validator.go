@@ -22,6 +22,9 @@ const releaseNativeValidatorMaximumUIDs = uint32(math.MaxUint16)
 // authentication. No default endpoint, historical block or signing key is made
 // up here; the release config's exact artifact must pass before any RPC.
 func authenticateReleaseValidatorStakeContext(ctx context.Context, chain *crv4.Chain, cfg *ReleaseConfig, hotkey [32]byte, uid uint16) (crv4.ValidatorStakeObservation, error) {
+	if err := rejectMainnetRuntimeObservationWrites(cfg); err != nil {
+		return crv4.ValidatorStakeObservation{}, err
+	}
 	if ctx == nil || cfg == nil {
 		return crv4.ValidatorStakeObservation{}, errors.New("native validator startup context is incomplete")
 	}

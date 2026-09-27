@@ -46,6 +46,9 @@ func releaseNativeRuntimeIdentity(cfg *ReleaseConfig) crv4.RuntimeArtifactIdenti
 
 // loadReleaseHotkey never creates the production hotkey; init does.
 func loadReleaseHotkey(cfg *ReleaseConfig) (*crv4.Keypair, error) {
+	if err := rejectMainnetRuntimeObservationWrites(cfg); err != nil {
+		return nil, err
+	}
 	seed, err := crv4.LoadSeedFile(cfg.HotkeySeedFile)
 	if err != nil {
 		return nil, fmt.Errorf("production hotkey seed %s: %w (run `validator init --config=<path>` to create it)", cfg.HotkeySeedFile, err)
@@ -55,6 +58,9 @@ func loadReleaseHotkey(cfg *ReleaseConfig) (*crv4.Keypair, error) {
 
 // The native transaction journal lives beside the validator's other state.
 func openReleaseNativeJournal(cfg *ReleaseConfig) (*snchain.Journal, error) {
+	if err := rejectMainnetRuntimeObservationWrites(cfg); err != nil {
+		return nil, err
+	}
 	return snchain.OpenJournal(filepath.Join(cfg.StateDir, "native"))
 }
 

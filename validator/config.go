@@ -72,10 +72,12 @@ type ReleaseConfig struct {
 
 	SourceRolePredecessorV2 *ReleaseEvidenceV2File             `yaml:"source_role_predecessor_v2,omitempty" json:"source_role_predecessor_v2,omitempty"`
 	OwnerRecycleApproval    *ReleaseOwnerRecycleApprovalConfig `yaml:"owner_recycle_approval,omitempty" json:"owner_recycle_approval,omitempty"`
+	MainnetRuntimeApprovals []ReleaseEvidenceV2File            `yaml:"mainnet_runtime_approvals,omitempty" json:"mainnet_runtime_approvals,omitempty"`
 
 	ProvisionalDeferClosedNativeInput bool   `yaml:"provisional_defer_closed_native_input,omitempty" json:"provisional_defer_closed_native_input,omitempty"`
 	ProvisionalRuntimeCompatibility   string `yaml:"provisional_runtime_compatibility,omitempty" json:"provisional_runtime_compatibility,omitempty"`
 	historyAdoptionV2                 *ReleaseHistoryAdoptionV2
+	mainnetRuntimeHistory             *releaseMainnetRuntimeHistory
 }
 
 func LoadReleaseConfig(path string) (*ReleaseConfig, error) {
@@ -104,6 +106,7 @@ type releaseConfigLoadMode struct {
 	provisionalActivationObservation bool
 	preActivation                    bool
 	ownerRecycleAdmission            bool
+	mainnetRuntimeObservation        bool
 }
 
 func loadReleaseConfig(path string, mode releaseConfigLoadMode) (*ReleaseConfig, error) {
@@ -148,7 +151,14 @@ func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMo
 	if err := cfg.normalize(filepath.Dir(abs)); err != nil {
 		return nil, err
 	}
-	if mode.ownerRecycleAdmission {
+	if mode.mainnetRuntimeObservation {
+		if err := loadReleaseMainnetRuntimeHistory(&cfg); err != nil {
+			return nil, fmt.Errorf("validator runtime observation config %s: %w", abs, err)
+		}
+		if err := cfg.validateWithMode(false, false, false, true); err != nil {
+			return nil, fmt.Errorf("validator runtime observation config %s: %w", abs, err)
+		}
+	} else if mode.ownerRecycleAdmission {
 		if err := validateOwnerRecycleApprovalScope(&cfg); err != nil {
 			return nil, fmt.Errorf("validator admission config %s: %w", abs, err)
 		}
@@ -162,7 +172,7 @@ func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMo
 			return nil, fmt.Errorf("validator config %s: %w", abs, err)
 		}
 	} else if mode.preActivation {
-		if err := cfg.validateWithMode(false, false, true); err != nil {
+		if err := cfg.validateWithMode(false, false, true, false); err != nil {
 			return nil, fmt.Errorf("validator config %s: %w", abs, err)
 		}
 	} else if err := cfg.Validate(); err != nil {
@@ -173,6 +183,11 @@ func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMo
 	// without rewriting the configured file or retained signed inputs.
 	cfg.Coordinator = strings.ToLower(cfg.Coordinator)
 	cfg.SettlementVault = strings.ToLower(cfg.SettlementVault)
+	if mode.mainnetRuntimeObservation {
+		if err := sealReleaseMainnetRuntimeHistory(&cfg); err != nil {
+			return nil, err
+		}
+	}
 	return &cfg, nil
 }
 
@@ -294,19 +309,26 @@ func (self ReleaseConfig) ValidateHistorical() error {
 // predecessor. Its compatibility profile is permitted only for this read-only
 // observer, whose caller has already verified the immutable handoff.
 func (c ReleaseConfig) validateProvisionalActivationObservation() error {
-	return c.validateWithMode(true, true, false)
+	return c.validateWithMode(true, true, false, false)
 }
 
 // Public archive replay authenticates an original configuration without
 // authorizing it as a current producer or changing its serialized identity.
 func (c ReleaseConfig) validate(historical bool) error {
-	return c.validateWithMode(historical, false, false)
+	return c.validateWithMode(historical, false, false, false)
 }
 
 // preActivation admits unrendered evidence_v2 operator entries only; it grants
 // no runtime, history or producer authority.
-func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObservation, preActivation bool) error {
-	if c.SchemaVersion != ReleaseValidatorSchemaVersion || c.Release != "1.0" {
+func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObservation, preActivation, mainnetRuntimeObservation bool) error {
+	if mainnetRuntimeObservation {
+		if err := validateReleaseMainnetRuntimeHistoryScope(&c); err != nil {
+			return err
+		}
+	} else if err := rejectMainnetRuntimeObservationWrites(&c); err != nil {
+		return err
+	}
+	if (c.SchemaVersion != ReleaseValidatorSchemaVersion && !mainnetRuntimeObservation) || c.Release != "1.0" {
 		return errors.New("schema_version must be 1 and release must be 1.0")
 	}
 	if !c.Production {

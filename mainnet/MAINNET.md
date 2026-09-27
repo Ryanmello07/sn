@@ -169,6 +169,19 @@ after cold authentication at the same artifact, while a changed signing domain
 still requires separate reconciliation. Production release approval gates and
 upgrade-boundary receipt qualification remain open.
 
+The validator now has a separate [mainnet runtime observation admission
+path](evidence/mainnet-runtime-observation-20260927.md). A schema-2 config pins
+an ordered history of independently reviewed exact artifacts, provenance and
+finite native block intervals. Every observation checks the configured route,
+fresh native name/genesis/EVM964 identity, finality and canonical block before
+selecting that interval's artifact; a later approval cannot reinterpret an
+earlier interval or expand an already loaded config. This removes the outer
+compiled-version gate for runtime identity reads. It grants no storage profile,
+producer, signing or submission authority: those remain blocked until the
+complete production successor policy and independently verified mainnet
+identity are qualified. Existing schema-1 config and historical authority stay
+unchanged.
+
 Current source changes matter to this design:
 
 | Subject | Source-backed observation | Bootstrap consequence |

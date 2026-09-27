@@ -366,7 +366,7 @@ reopen testnet or override the September 27 closure and implementation inventory
 | RT-01 | Immutable runtime views anchored to the correct block and purpose | — | Astra | In progress | The [validator-read correction](evidence/validator-read-capability-20260927.md) anchors stake and schedule capabilities to the caller-approved exact historical artifact before their first storage decode. Wider historical execution and concurrent signing contexts remain open. |
 | RT-02 | Shared capability profiles for calls, storage, signing, CRv4, custom APIs and precompiles | — | Astra | In progress | [Stake/schedule read profiles](evidence/validator-read-capability-20260927.md) admit an independently approved compatible successor without another compiled spec entry and identify changed consumed storage/API interfaces. Production admission policy and other operation profiles remain open. |
 | RT-03 | Construct and sign each native operation from one view; reconcile stale or uncertain attempts | RT-01, RT-02 | Astra | In progress | The [source capability correction](evidence/source-runtime-capability-20260927.md) refuses a strict successor's stale preparation view before storage/nonce work and preserves retained signatures across cold reauthentication and metadata eviction. Wider native operation coverage and uncertain-send reconciliation remain open. |
-| RT-04 | Replace version-specific live admission in simulator, miner, both validator paths and bootstrap | RT-01, RT-02, RT-03 | Astra | In progress | [Atomic source encoding](evidence/source-runtime-capability-20260927.md) now accepts an independently approved compatible successor through a block/purpose-bound call/signing capability. Fleet and validator production approval policy, remaining consumers and automatic upgrade qualification remain open. |
+| RT-04 | Replace version-specific live admission in simulator, miner, both validator paths and bootstrap | RT-01, RT-02, RT-03 | Astra | In progress | [Atomic source encoding](evidence/source-runtime-capability-20260927.md) accepts an independently approved compatible successor through a block/purpose-bound call/signing capability. The [outer validator runtime observer](evidence/mainnet-runtime-observation-20260927.md) now admits exact mainnet artifacts through an immutable schema-2 approval history while refusing producer/signing authority. Complete production successor policy, remaining consumers and automatic upgrade qualification remain open. |
 | RT-05 | Separate observed runtime from deployment, configuration and approval identity | RT-02, RT-04 | Astra | Planned | A compatible upgrade preserves the plan, approvals, leases, completed actions and observed epochs. |
 | RT-06 | Preserve historical proof reuse and make metadata-cache capacity independent of catalog length | RT-01, RT-02 | Astra | In progress | The CRv4 per-connection metadata cache has fixed resident capacity, least-recent-use eviction, and exact-hash uncached admission when every slot is loading. The [proof-ownership correction](evidence/runtime-proof-eviction-20260927.md) separates an authenticated provisional view's authority from metadata residency: eviction preserves retained signatures and exact historical reuse, while fresh identity checks and strict/foreign-owner rejection remain. Composed release and production compatibility qualification remain open; no testnet profile grants mainnet authority. |
 | RT-07 | Suspend only operations affected by an unsupported change and expose an actionable reason | RT-02, RT-04 | Astra | Planned | Independent services continue where their dependencies permit; recovery resumes from saved progress. |
@@ -721,6 +721,21 @@ domains and stripped provisional authority still fail at their actual admission
 boundaries. This does not widen fleet or validator production configuration
 approval, authorize new runtime tuples or qualify receipt execution at an
 upgrade boundary. Those remain explicit MG-04 work.
+
+**2026-09-27 mainnet runtime observation (MG-04 / RT-04).** The
+[outer admission correction](evidence/mainnet-runtime-observation-20260927.md)
+accepts independently approved exact mainnet runtime identities through a
+separate schema-2 config. Its bounded history pins each document's size/SHA,
+revision, predecessor bytes, deployment/policy domain, source/review provenance
+and finite native block interval. Successors append disjoint intervals;
+spec-version ordering grants no authority. Reads check fresh native
+name/genesis/EVM964, the approved route, canonical block/finality and the exact
+artifact; config mutations and provisional connections fail. Existing producer,
+bootstrap and archive loaders reject this observation config, and explicit key,
+journal, startup-eligibility, signing and submission guards preserve that split.
+This is a runtime identity observation API, not a storage/call compatibility
+grant or a complete production successor policy. No actual mainnet approval,
+identity or chain write was introduced; MG-04 and RT-04 remain open.
 
 Automatic admission accepts upgrades authorized by the chain's governance
 within these supported capabilities and operational bounds. It is not a proof

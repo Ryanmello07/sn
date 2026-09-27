@@ -50,6 +50,9 @@ func enableReleaseProvisionalRuntimeCompatibility(native *crv4.Chain, cfg *Relea
 // The mutable signing view must contain an already authenticated artifact;
 // config authority and signed source versions remain their original values.
 func validateReleaseNativeSigningRuntime(native *crv4.Chain, cfg *ReleaseConfig) error {
+	if err := rejectMainnetRuntimeObservationWrites(cfg); err != nil {
+		return err
+	}
 	if native == nil || cfg == nil || native.Runtime == nil {
 		return errors.New("native signing runtime is unavailable")
 	}
@@ -68,6 +71,9 @@ func validateReleaseNativeSigningRuntime(native *crv4.Chain, cfg *ReleaseConfig)
 // Compatibility permits fresh signing with the actual version. It cannot
 // make an old unfinalized signature replayable after a runtime replacement.
 func validatePreparedNativeRuntimeContext(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, preparedHash, currentHash types.Hash) error {
+	if err := rejectMainnetRuntimeObservationWrites(cfg); err != nil {
+		return err
+	}
 	expected := crv4.RuntimeArtifactIdentity{Version: crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: cfg.RuntimeSpec, TransactionVersion: cfg.TransactionVersion, StateVersion: cfg.StateVersion}, CodeHash: cfg.RuntimeCodeHash, MetadataHash: cfg.RuntimeMetadataHash}
 	prepared, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, native, preparedHash, expected)
 	if err != nil {
@@ -87,6 +93,9 @@ func validatePreparedNativeRuntimeContext(ctx context.Context, native *crv4.Chai
 // distinguishes admission refusal from an attempted submit with uncertain
 // finality, preserving the existing pending-error persistence behavior.
 func submitPreparedNativeRuntimeContext(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, prepared *crv4.PreparedSubmission) (*crv4.SubmitResult, bool, error) {
+	if err := rejectMainnetRuntimeObservationWrites(cfg); err != nil {
+		return nil, false, err
+	}
 	if err := ownerRecycleProductionBoundary(cfg); err != nil {
 		return nil, false, err
 	}

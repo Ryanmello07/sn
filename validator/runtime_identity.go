@@ -26,6 +26,9 @@ const (
 )
 
 func validateReleaseNativeRuntimeConfig(cfg *ReleaseConfig) error {
+	if cfg != nil && (cfg.SchemaVersion == releaseMainnetRuntimeObservationSchemaVersion || len(cfg.MainnetRuntimeApprovals) != 0 || cfg.mainnetRuntimeHistory != nil) {
+		return validateReleaseMainnetRuntimeHistory(cfg)
+	}
 	if cfg == nil ||
 		cfg.RuntimeSpec != releaseRuntimeSpecVersion ||
 		cfg.TransactionVersion != releaseRuntimeTransactionVersion ||
@@ -40,6 +43,9 @@ func validateReleaseNativeRuntimeConfig(cfg *ReleaseConfig) error {
 // Archive owners retain their exact original artifact. Companion sources began
 // at455; catalog entries before that boundary never gain companion authority.
 func validateReleaseHistoricalNativeRuntimeConfig(cfg *ReleaseConfig) error {
+	if cfg != nil && (cfg.SchemaVersion == releaseMainnetRuntimeObservationSchemaVersion || len(cfg.MainnetRuntimeApprovals) != 0 || cfg.mainnetRuntimeHistory != nil) {
+		return validateReleaseMainnetRuntimeHistory(cfg)
+	}
 	if cfg != nil && cfg.RuntimeSpec >= 455 {
 		artifact, ok := crv4.ReviewedRuntimeArtifact(crv4.RuntimeVersionIdentity{SpecName: "node-subtensor", SpecVersion: cfg.RuntimeSpec, TransactionVersion: cfg.TransactionVersion, StateVersion: cfg.StateVersion})
 		if ok && strings.EqualFold(cfg.RuntimeCodeHash, artifact.CodeHash) && strings.EqualFold(cfg.RuntimeMetadataHash, artifact.MetadataHash) {
@@ -80,6 +86,13 @@ func authenticateHistoricalNativeRuntimeAtContext(ctx context.Context, chain *cr
 func authenticateReleaseNativeRuntimeAtContext(ctx context.Context, chain *crv4.Chain, cfg *ReleaseConfig, finalized types.Hash, historical bool) error {
 	if ctx == nil || chain == nil || cfg == nil || finalized == (types.Hash{}) {
 		return errors.New("native runtime identity context is incomplete")
+	}
+	if cfg.SchemaVersion == releaseMainnetRuntimeObservationSchemaVersion || len(cfg.MainnetRuntimeApprovals) != 0 || cfg.mainnetRuntimeHistory != nil {
+		artifact, _, err := authenticateReleaseMainnetRuntimeAtContext(ctx, chain, cfg, finalized)
+		if err != nil {
+			return err
+		}
+		return chain.BindRuntimeArtifact(artifact)
 	}
 	if err := validateReleaseProvisionalRuntimeCompatibility(cfg); err != nil {
 		return err
