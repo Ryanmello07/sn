@@ -152,6 +152,16 @@ func loadBootstrapRootPlan(ctx context.Context, path string) (bootstrapRootPlan,
 	if err != nil {
 		return bootstrapRootPlan{}, err
 	}
+	return decodeBootstrapRootPlan(ctx, path, raw, digest)
+}
+
+// Composed preparation passes the same immutable bytes whose outer pin it has
+// checked. Reopening a pathname here would separate approval from file identity.
+func decodeBootstrapRootPlan(ctx context.Context, path string, raw []byte, digest string) (bootstrapRootPlan, error) {
+	actual := sha256.Sum256(raw)
+	if len(raw) == 0 || len(raw) > rootServiceStoreLimit || digest != "sha256:"+hex.EncodeToString(actual[:]) {
+		return bootstrapRootPlan{}, errors.New("bootstrap root config bytes differ from their exact input pin")
+	}
 	var config bootstrapRootConfig
 	if err := decodePlanJson(raw, &config); err != nil {
 		return bootstrapRootPlan{}, err

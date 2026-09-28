@@ -12,6 +12,11 @@ result keeps `chain_phases_pending: true` and `activation_ready: false`. The
 separate [blocked review graph](PLAN.md) retains the complete launch scope and
 cannot authorize this phase with its hash.
 
+The [offline chain preparation](BOOTSTRAP-CHAIN.md) composes this owner and the
+reserve CREATE custody owner with a retained trim review and two protected UR
+role inputs. It has a separate accepted plan and durable progress journal;
+chain effects and service activation remain pending.
+
 ## Independent inputs and exact plan
 
 The strict JSON configuration uses schema

@@ -36,8 +36,11 @@ system remain production work. [mainnet/main.go](main.go) implements signer-free
 [`bootstrap plan/apply/resume`](BOOTSTRAP-ROOT.md) retains local root custody
 and imports externally signed payloads, while
 [`bootstrap-contracts preview/plan/apply/resume`](BOOTSTRAP-CONTRACTS.md)
-installs the reserve sink through the approved transaction journal. The complete
-bootstrap, remaining contract graph, native signing device and live role
+installs the reserve sink through the approved transaction journal. The
+[`bootstrap-chain plan/apply/resume`](BOOTSTRAP-CHAIN.md) command composes their
+offline custody preparation with a retained trim review and two protected UR
+role inputs under one restart-safe local journal. The complete bootstrap,
+remaining contract graph, native signing device and live role
 activation remain unfinished. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)
 observed chain ID 945, which fails the required mainnet ID 964 gate.

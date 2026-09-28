@@ -1,5 +1,5 @@
-// Mainnet commands observe approved state and execute one bounded local custody
-// phase. Native signing, submission and live service activation remain separate.
+// Mainnet commands observe approved state and prepare bounded local custody
+// phases. Native signing and live service activation remain separate.
 package main
 
 import (
@@ -106,6 +106,9 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 
 // Test observers cover real file operations and owned waits, not source verdicts.
 func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
+	if len(args) != 0 && args[0] == "bootstrap-chain" {
+		return runBootstrapChainCommand(ctx, args, stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "bootstrap-contracts" {
 		return runBootstrapContractCommand(ctx, args, stdout, stderr)
 	}
@@ -146,7 +149,7 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 		return runEconomicCommand(ctx, args, stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "inspect" && args[0] != "monitor" {
-		fmt.Fprintln(stderr, "usage: sn-mainnet inspect|monitor|runtime-snapshot|finalized-mapping|finalized-snapshot --rpc URL [identity flags]; root-preview|root-monitor|subnet-preview|owner-trim-plan --rpc URL --policy FILE; owner-trim-recheck|owner-trim-reconcile --rpc URL --policy FILE --plan FILE --plan-hash sha256:DIGEST; owner-trim-qualify --rpc URL --policy FILE --window FILE; check-recycle-mode --rpc URL --policy FILE; economic-reference --input FILE; source-lock --sn-dir DIR; plan --outline|--config FILE; bootstrap plan|apply|resume --config FILE [local custody confirmation flags]; release-inventory --config FILE")
+		fmt.Fprintln(stderr, "usage: sn-mainnet inspect|monitor|runtime-snapshot|finalized-mapping|finalized-snapshot --rpc URL [identity flags]; root-preview|root-monitor|subnet-preview|owner-trim-plan --rpc URL --policy FILE; owner-trim-recheck|owner-trim-reconcile --rpc URL --policy FILE --plan FILE --plan-hash sha256:DIGEST; owner-trim-qualify --rpc URL --policy FILE --window FILE; check-recycle-mode --rpc URL --policy FILE; economic-reference --input FILE; source-lock --sn-dir DIR; plan --outline|--config FILE; bootstrap|bootstrap-chain plan|apply|resume --config FILE [local custody confirmation flags]; bootstrap-contracts preview|plan|apply|resume --config FILE; release-inventory --config FILE")
 		return 2
 	}
 	command := args[0]
