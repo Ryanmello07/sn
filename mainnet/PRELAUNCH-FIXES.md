@@ -1277,7 +1277,10 @@ The bounded [source-finality read candidate](evidence/source-finality-read-candi
 separates physical read errors from finality/schedule contradictions and reuses
 one admitted body, index and event vector for dispatch and source proof. Missing
 receipt wire data remains typed unknown evidence; complete contradictory data
-and dispatch failures remain hard errors. Its qualification is pending. This
+and dispatch failures remain hard errors. The paired
+[adjacent-read candidate](evidence/production-read-cause-adjacency-candidate-20260928.md)
+applies the same rule to real miner recovery, owner census/eligibility and
+activation setup reads. Their combined qualification is pending. This
 does not close production loop recovery: current pending/pre-intent/application
 waits, real nonempty durable V2 continuation and exact-terminal receipt-prefix
 reuse still require their own production-owner coverage.

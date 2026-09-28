@@ -45,9 +45,13 @@ func fleetRecoveryDialEvm(ctx context.Context, endpoints []string, authority *fl
 			continue
 		}
 		id, err := client.ChainID(ctx)
-		if err != nil || !id.IsUint64() || id.Uint64() != authority.EvmChainId {
+		if err != nil {
 			client.Close()
-			return nil, "", errors.Join(errors.New("fleet recovery EVM chain id differs"), err)
+			return nil, "", fmt.Errorf("read fleet recovery EVM chain id: %w", err)
+		}
+		if id == nil || !id.IsUint64() || id.Uint64() != authority.EvmChainId {
+			client.Close()
+			return nil, "", errors.New("fleet recovery EVM chain id differs")
 		}
 		if err := authority.recoveryNetwork(ctx, fleetRecoveryEvmNative(client, authority)); err != nil {
 			client.Close()
@@ -55,7 +59,10 @@ func fleetRecoveryDialEvm(ctx context.Context, endpoints []string, authority *fl
 		}
 		return client, endpoint, nil
 	}
-	return nil, "", errors.Join(errors.New("fleet recovery EVM transport unavailable"), errors.Join(errs...))
+	if len(errs) != 0 {
+		return nil, "", fmt.Errorf("fleet recovery EVM transport unavailable: %w", errors.Join(errs...))
+	}
+	return nil, "", errors.New("fleet recovery EVM transport endpoints are absent")
 }
 
 // Intent selection and the journal lock precede every consent or transaction
@@ -212,12 +219,18 @@ func fleetRecoveryEvmMapping(ctx context.Context, record *fleetRecoveryRecord, a
 		return nil, errors.New("fleet recovery EVM receipt identity differs")
 	}
 	finalized, err := onchain.ReadEVMBlockIdentity(ctx, client, big.NewInt(int64(rpc.FinalizedBlockNumber)))
-	if err != nil || finalized.Number < receipt.BlockNumber.Uint64() {
-		return nil, errors.Join(errors.New("fleet recovery EVM receipt is not finalized"), err)
+	if err != nil {
+		return nil, fmt.Errorf("read fleet recovery EVM finalized head: %w", err)
+	}
+	if finalized.Number < receipt.BlockNumber.Uint64() {
+		return nil, errors.New("fleet recovery EVM receipt is not finalized")
 	}
 	canonical, err := onchain.ReadEVMBlockIdentity(ctx, client, receipt.BlockNumber)
-	if err != nil || canonical.Hash != receipt.BlockHash {
-		return nil, errors.Join(errors.New("fleet recovery EVM receipt is not canonical"), err)
+	if err != nil {
+		return nil, fmt.Errorf("read fleet recovery EVM canonical block: %w", err)
+	}
+	if canonical.Hash != receipt.BlockHash {
+		return nil, errors.New("fleet recovery EVM receipt is not canonical")
 	}
 	chain := fleetRecoveryEvmNative(client, authority)
 	if err := authority.recoveryNetwork(ctx, chain); err != nil {
@@ -424,8 +437,11 @@ func fleetRecoveryResumeEvm(ctx context.Context, store *fleetRecoveryStore, reco
 		return fleetRecoveryUnresolved(record, err)
 	}
 	nonce, err := client.NonceAtHash(ctx, record.EvmSigner, head.Hash)
-	if err != nil || nonce != record.Nonce {
-		return fleetRecoveryUnresolved(record, errors.Join(errors.New("original EVM nonce is not available"), err))
+	if err != nil {
+		return fleetRecoveryUnresolved(record, fmt.Errorf("read original EVM nonce: %w", err))
+	}
+	if nonce != record.Nonce {
+		return fleetRecoveryUnresolved(record, errors.New("original EVM nonce is not available"))
 	}
 	if !apply {
 		return fleetRecoveryUnresolved(record, errors.New("EVM replay is disabled by --dry-run"))

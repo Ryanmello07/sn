@@ -126,8 +126,11 @@ func observeOwnerRecycleProductionEligibility(ctx context.Context, cfg *ReleaseC
 		return nil, err
 	}
 	header, err := view.HeaderAtContext(ctx, activationHash)
-	if err != nil || uint64(header.Number) != result.ActivationBlock || result.ActivationBlock > authority.expected.NativeSnapshotBlock {
-		return nil, errors.Join(errors.New("owner-recycle activation is not its signed earlier finalized block"), err)
+	if err != nil {
+		return nil, fmt.Errorf("read owner-recycle activation header: %w", err)
+	}
+	if header == nil || uint64(header.Number) != result.ActivationBlock || result.ActivationBlock > authority.expected.NativeSnapshotBlock {
+		return nil, errors.New("owner-recycle activation is not its signed earlier finalized block")
 	}
 	allowed, err := releaseHistoricalRuntimeArtifactsAt(cfg, result.ActivationBlock)
 	if err != nil {
@@ -149,8 +152,11 @@ func observeOwnerRecycleProductionEligibility(ctx context.Context, cfg *ReleaseC
 		{name: "SubnetEpochIndex", target: &result.ActivationNativeEpoch},
 	} {
 		raw, err := read(activation.Metadata, activationHash, field.name, 8, activationEntries[field.name].Fallback)
-		if err != nil || len(raw) != 8 {
-			return nil, errors.Join(fmt.Errorf("owner-recycle activation %s is not an exact u64", field.name), err)
+		if err != nil {
+			return nil, fmt.Errorf("read owner-recycle activation %s: %w", field.name, err)
+		}
+		if len(raw) != 8 {
+			return nil, fmt.Errorf("owner-recycle activation %s is not an exact u64", field.name)
 		}
 		*field.target = binary.LittleEndian.Uint64(raw)
 	}

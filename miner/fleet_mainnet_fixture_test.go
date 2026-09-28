@@ -72,6 +72,7 @@ type fleetMainnetTestFixture struct {
 	revoked               bool
 	after                 func(string)
 	rpcFailure            func(string) error
+	responseStatus        func(string, []json.RawMessage) int
 }
 
 // Owns synthetic public metadata, private test seeds, and local Rpc lifecycle.
@@ -356,6 +357,12 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 		}
 		if self.after != nil {
 			self.after(call.Method)
+		}
+		if self.responseStatus != nil {
+			if status := self.responseStatus(call.Method, call.Params); status != 0 {
+				http.Error(writer, "synthetic transient RPC response", status)
+				return
+			}
 		}
 		writer.Header().Set("Content-Type", "application/json")
 		if self.rpcFailure != nil {

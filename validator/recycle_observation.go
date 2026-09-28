@@ -146,8 +146,11 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 	}
 	expected := crv4.RuntimeArtifactIdentity{Version: pin.Version, CodeHash: releaseHex32(pin.CodeHash), MetadataHash: releaseHex32(pin.MetadataHash)}
 	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, native, finalized, expected)
-	if err != nil || artifact.CompatibilityProfile != "" {
-		return nil, errors.Join(errors.New("owner-recycle finalized runtime lacks exact independent authority"), err)
+	if err != nil {
+		return nil, fmt.Errorf("read owner-recycle finalized runtime: %w", err)
+	}
+	if artifact.CompatibilityProfile != "" {
+		return nil, errors.New("owner-recycle finalized runtime lacks exact independent authority")
 	}
 	entries, err := ownerRecycleStorageProfile(artifact.Metadata)
 	if err != nil {
@@ -185,16 +188,25 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 	}
 	netuid := binary.LittleEndian.AppendUint16(nil, pin.Netuid)
 	mode, err := readFixed("RecycleOrBurn", 1, false, netuid)
-	if err != nil || mode[0] != 1 {
-		return nil, errors.Join(errors.New("owner-recycle needs explicit finalized Recycle; absent or Burn mode cannot pass"), err)
+	if err != nil {
+		return nil, err
+	}
+	if mode[0] != 1 {
+		return nil, errors.New("owner-recycle needs explicit finalized Recycle; absent or Burn mode cannot pass")
 	}
 	owner, err := readFixed("SubnetOwner", 32, false, netuid)
-	if err != nil || !bytes.Equal(owner, approval.SubnetOwner[:]) {
-		return nil, errors.Join(errors.New("owner-recycle subnet owner differs from approval"), err)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(owner, approval.SubnetOwner[:]) {
+		return nil, errors.New("owner-recycle subnet owner differs from approval")
 	}
 	mechanisms, err := readFixed("MechanismCountCurrent", 1, true, netuid)
-	if err != nil || mechanisms[0] != 1 {
-		return nil, errors.Join(errors.New("owner-recycle requires exactly one native mechanism"), err)
+	if err != nil {
+		return nil, err
+	}
+	if mechanisms[0] != 1 {
+		return nil, errors.New("owner-recycle requires exactly one native mechanism")
 	}
 	nativeEpoch, err := readFixed("SubnetEpochIndex", 8, true, netuid)
 	if err != nil {
@@ -225,8 +237,11 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 			return nil, errors.New("owner-recycle registration census has a zero or duplicate hotkey")
 		}
 		reverse, err := readFixed("Uids", 2, false, netuid, hotkeyRaw)
-		if err != nil || binary.LittleEndian.Uint16(reverse) != uint16(uid) {
-			return nil, errors.Join(errors.New("owner-recycle forward and reverse registrations disagree"), err)
+		if err != nil {
+			return nil, err
+		}
+		if binary.LittleEndian.Uint16(reverse) != uint16(uid) {
+			return nil, errors.New("owner-recycle forward and reverse registrations disagree")
 		}
 		registered, err := readFixed("BlockAtRegistration", 8, false, netuid, uidRaw)
 		if err != nil {

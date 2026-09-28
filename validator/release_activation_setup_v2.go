@@ -321,8 +321,11 @@ func (self *releaseActivationSetup) prepare(ctx context.Context) (*ReleaseActiva
 		prepared.Members = append(prepared.Members, ReleaseActivationMemberV2{NoID: operator.NoID, ValidatorUID: observation.Stake.Identity.UID, Activation: activation})
 	}
 	canonical, err := self.chain.BlockHashContext(ctx, block)
-	if err != nil || canonical != hash {
-		return nil, errors.Join(errors.New("activation preparation EVM snapshot changed during reads"), err)
+	if err != nil {
+		return nil, fmt.Errorf("read activation preparation EVM snapshot after preparation: %w", err)
+	}
+	if canonical != hash {
+		return nil, errors.New("activation preparation EVM snapshot changed during reads")
 	}
 	return prepared, nil
 }
@@ -356,12 +359,18 @@ func (self *releaseActivationSetup) authenticatePrepared(ctx context.Context, pr
 		return err
 	}
 	finalized, _, err := self.chain.FinalizedBlockContext(ctx)
-	if err != nil || finalized < prepared.EVM.Number {
-		return errors.Join(errors.New("activation preparation EVM snapshot is not finalized"), err)
+	if err != nil {
+		return fmt.Errorf("read activation preparation EVM finalized head: %w", err)
+	}
+	if finalized < prepared.EVM.Number {
+		return errors.New("activation preparation EVM snapshot is not finalized")
 	}
 	canonical, err := self.chain.BlockHashContext(ctx, prepared.EVM.Number)
-	if err != nil || canonical != evmHash {
-		return errors.Join(errors.New("activation preparation EVM snapshot is not canonical"), err)
+	if err != nil {
+		return fmt.Errorf("read activation preparation EVM canonical block: %w", err)
+	}
+	if canonical != evmHash {
+		return errors.New("activation preparation EVM snapshot is not canonical")
 	}
 	current, err := self.coordinatorEpochAt(ctx, prepared.EVM.Number, evmHash)
 	if err != nil {

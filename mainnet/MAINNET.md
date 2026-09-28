@@ -868,7 +868,10 @@ postcondition, not a prerequisite to the first submission.
 PH-03 remains open for production continuation across read outages and epoch
 changes. The [source-finality read candidate](evidence/source-finality-read-candidate-20260928.md)
 preserves transport causes and unknown receipt evidence while reusing the exact
-admitted body index/events; qualification is pending. It does not substitute
+admitted body index/events. The paired
+[adjacent-read candidate](evidence/production-read-cause-adjacency-candidate-20260928.md)
+covers miner recovery, owner census/eligibility and activation setup; combined
+qualification is pending. They do not substitute
 for retained-intent reconciliation before fresh snapshots, durable nonempty
 intent-owner tests, bounded authenticated receipt prefixes or same-boundary
 nonce/expiry decisions. Those changes must preserve original signed bytes,
