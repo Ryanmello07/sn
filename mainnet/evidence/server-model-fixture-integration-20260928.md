@@ -22,8 +22,9 @@ and `server-retention-fixture-custody-20260928/sorted-roots` directories.
 
 This addresses all eight asserted failures from the
 [original diagnostic collection](server-model-diagnostic-20260928.md).
-The independent full model body remains on its frozen server `4468a696`
-graph, with later fixture repairs qualified separately. Its final result is
-pending; missing optional configuration scopes and the original deadline
-failure remain disclosed. No release, deployment or live mainnet acceptance
-is established by this integration.
+The independent full model body finished on its frozen server `4468a696`
+graph: [1,108 passed, three known fixture failures, seven skipped and no missing
+roots](server-model-completion-20260928.md). Later fixture repairs are qualified
+separately; the frozen package result remains fail. Optional configuration
+scopes and the original diagnostic deadline failure remain disclosed. No
+release, deployment or live mainnet acceptance is established by this integration.

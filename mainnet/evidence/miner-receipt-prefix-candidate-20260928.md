@@ -1,5 +1,8 @@
 # Miner receipt-prefix candidate — qualification pending
 
+**Subsequent result:** [normal/race qualification and integration passed](receipt-recovery-qualification-20260928.md).
+The original source handoff below is retained for reproduction.
+
 Date: 2026-09-28 UTC. Base: corrected receipt source `ed412c6c`, following
 `9618a1cb`. Worktree:
 `/mnt/data/sn-testnet/worktrees/sn-miner-authenticated-receipt-prefix-20260928`.

@@ -78,17 +78,21 @@ qualification. Use real isolated worktrees for every local replacement and
 retain the compiled executable. A prepared workspace or an intended source lock
 does not establish which dependency bytes the compiler used.
 
-The corrected full model qualification is running separately under
+The corrected full model body finished separately under
 `/mnt/data/sn-testnet/evidence/server-model-final-20260927`, with SN `615a7675`
 and server `4468a696` in real frozen worktrees. The guard checks the actual
 resolved module graph before compilation and after completion; the runner
-retains model/controller/handler executables and build metadata. Its result is
-**pending**, not an accepted composed release. Server `4468a696` corrects the
+retains model/controller/handler executables and build metadata. Its complete
+census is **1,108 passed, three failed and seven skipped; package fail**, with
+no missing roots. This is not an accepted composed release. The
+[completion receipt](evidence/server-model-completion-20260928.md) records
+terminal evidence, qualified corrections and capture limitations. Server
+`4468a696` corrects the
 historical payment, retention and probe fixtures without changing production
 guards or scheduling; 18 affected roots passed normal and race qualification
 ([receipt](https://github.com/urnetwork/server/blob/4468a6961c00cf0ff8b84986259fa9698a7a8441/local/model-fixture-qualification-20260927.md)).
-Its later diagnostic failures are tracked in the linked result; fixture repairs
-are qualified separately while the frozen full body continues.
+Its three remaining fixture failures have separate normal/race qualification
+on the integrated corrections; the original full-body result remains retained.
 
 All eight asserted diagnostic failures now have bounded fixture corrections in
 the composed server branch through `936c3d9563372e8f424d516ee2dd3525555206de`.
@@ -98,7 +102,7 @@ both modes; old-fixture causal controls fail at the intended assertions.
 [Integration evidence](evidence/server-model-fixture-integration-20260928.md)
 records the exact commits and receipts. These changes preserve production
 guards and probe policy; they do not turn the earlier deadline failure or the
-still-running frozen body into a passing full suite.
+completed frozen body's failing package result into a passing full invocation.
 
 The frozen qualification's first direct-binary invocation used the module
 directory instead of the test package directory. Its 15-test prefix is retained
@@ -111,7 +115,10 @@ and the terminal package outcome, recording skips separately. The source tree's
 1,122 function declarations are not the executed census. For future captures,
 use the maintained [qualification owner](../scripts/qualification/main.go),
 which already checks actual package/module paths, executes from the package
-directory and verifies terminal membership; keep the current body running.
+directory and verifies terminal membership. The retained body finished
+naturally, so there is no missing prefix to restart. Its original shell wrapper
+was lost; terminal events, source/binary checks and independently verified
+disposable-service cleanup are retained without inventing a shell exit code.
 The maintained runner also requires physical Go tool paths. A later focused
 capture was refused before compilation because the default host cache path
 traversed a symlink. Use the explicit `/mnt/data` cache and temporary-directory
@@ -1204,8 +1211,10 @@ consumption and mortality must use the same authenticated finalized coverage
 boundary. Reading a newer nonce after an older scan can falsely attribute our
 transaction's inclusion to another transaction. Extend the scan before making
 that inference, and never advance a reusable prefix on an incomplete read.
-The receipt-admission candidate is under qualification; the production wait
-and retained-prefix changes remain separate implementation work.
+The shared complete-body admission and miner cursor correction are now
+[qualified and integrated](evidence/receipt-recovery-qualification-20260928.md).
+The production wait and additional retained-prefix changes remain separate
+implementation work.
 
 The same review found the miner fleet's native recovery cursor accepted an
 explicit empty/truncated extrinsics vector without authenticating its body

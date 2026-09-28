@@ -1,5 +1,9 @@
 # Receipt admission candidate — qualification pending
 
+**Subsequent result:** the corrected candidate and miner adjacency were
+[qualified and integrated](receipt-recovery-qualification-20260928.md).
+The candidate notes below retain the original handoff and failed first capture.
+
 Date: 2026-09-28 UTC. Base source: `a7e0156849f0c8c96ce278400f83a69d2ff29d8a`.
 Worktree: `/mnt/data/sn-testnet/worktrees/sn-mainnet-production-reconciliation-20260928`.
 This candidate has not been tested or integrated. It is sealed for the requested
