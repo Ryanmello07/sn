@@ -482,8 +482,8 @@ The [executable contract phase](BOOTSTRAP-CONTRACTS.md) wires
 public signed-byte custody, a finite owned-HTTP submission allowance and
 canonical transaction/runtime/getter recovery. The next selected actions now
 implement predecessor-bound settlement vault CREATE, coordinator
-implementation CREATE and escrow registration under the same approved graph
-and finite attempts.
+implementation CREATE, escrow registration and atomic initialized proxy
+CREATE under the same approved graph and finite attempts.
 Offline preparation requires no deployment outputs.
 The [reserve qualification](evidence/bootstrap-contract-qualification-20260928.md)
 and [vault qualification](evidence/bootstrap-contract-vault-qualification-20260928.md)
@@ -493,7 +493,8 @@ retain their distinct source graphs and test scopes; the vault candidate passed
 passed 71 focused normal roots, both exact race shards and 446 full normal
 mainnet roots. [Escrow qualification](evidence/bootstrap-contract-escrow-qualification-20260928.md)
 passed 95 selected roots normal/race and 470 full normal roots; live native
-burn/refund behavior remains unmeasured. The remaining
+burn/refund behavior remains unmeasured. [Proxy qualification](evidence/bootstrap-contract-proxy-qualification-20260928.md)
+passed 120 selected roots normal/race and 495 full normal roots. The remaining
 graph, including genuine Safe evidence anchoring, and authenticated live
 authority remain required.
 The separate [nine-action candidate status](evidence/contract-graph-review-block-20260928.md)

@@ -402,10 +402,13 @@ binds both predecessors and authenticates the disabled-initializer storage; its
 controls passed. The [fourth escrow-registration
 action](evidence/bootstrap-contract-escrow-qualification-20260928.md) binds
 the derived vault and three completed predecessors; 95 selected normal/race
-roots, 470 full normal roots and eight causal controls passed. Healthy head advancement is
+roots, 470 full normal roots and eight causal controls passed. The [fifth atomic
+proxy CREATE action](evidence/bootstrap-contract-proxy-qualification-20260928.md)
+passed 120 selected normal/race roots, 495 full normal roots and ten causal
+controls for its initializer, storage and recovery guards. Healthy head advancement is
 revalidated within the operation; an unavailable mapping read does not become a
 successful-value mismatch. EVM signature liability survives local approval
-expiry. The other five installation actions, Safe inner-call success/getter
+expiry. The other four installation actions, Safe inner-call success/getter
 verification and authenticated live custody/network inputs remain open.
 The [approval-preview/offline recovery follow-up](evidence/bootstrap-contract-preview-20260928.md)
 adds a read-only unsigned CLI export of exact approval bytes and preserves
