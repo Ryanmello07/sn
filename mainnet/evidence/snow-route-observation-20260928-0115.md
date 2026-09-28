@@ -129,3 +129,11 @@ and `result.json` is
 `99eb92bba63a7058d77db8d6a1b454aa15abe6ebae61c3f23422c6618912aa51`.
 The HTTP census is in the verbose log. No new chain identity, evidence of the
 upstream cause, public fallback or transaction was obtained in either check.
+
+A later **14:17:47 UTC single read-only check** of the same owned route and
+`eth_chainId` method also returned HTTP 502. Its response body has SHA-256
+`61b30d408583991fd69f3dec694e154cb652471e663328ad9c8482c9021ab5db`;
+raw response and timestamped observation are retained under
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T1417Z`.
+One failed request confirms continued unavailability at that instant but does
+not establish the upstream cause or a new chain identity.
