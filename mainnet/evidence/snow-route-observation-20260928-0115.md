@@ -175,3 +175,9 @@ same response-body SHA-256. The exact timestamp, HTTP status and response body
 are retained under
 `/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T1818Z`.
 No chain identity or upstream-cause evidence was returned.
+
+The **18:48:00 UTC single read-only check** again returned HTTP 502 with the
+same response-body SHA-256. Exact timestamp, status and response body are
+retained under
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T1848Z`.
+It supplies no mainnet chain identity.
