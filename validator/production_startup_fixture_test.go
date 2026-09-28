@@ -65,13 +65,26 @@ type productionStartupEvmTestFixture struct {
 	code      []byte
 	freshRead chan struct{}
 	freshOnce sync.Once
+	release   chan struct{}
+}
+
+// Blocking handlers consume and close the real bounded body before publishing
+// their barrier. An unread POST body can delay net/http cancellation delivery.
+func productionStartupRequestTestBytes(request *http.Request) ([]byte, error) {
+	const maximum = 1024 * 1024
+	raw, readErr := io.ReadAll(io.LimitReader(request.Body, maximum+1))
+	err := errors.Join(readErr, request.Body.Close())
+	if len(raw) > maximum {
+		err = errors.Join(err, errors.New("startup fixture request exceeds its bound"))
+	}
+	return raw, err
 }
 
 // The exact current-only view has a physical HTTP outage. Historical reads
 // remain available; the request barrier lets the test inspect durable progress
 // before releasing/canceling the real request, without an elapsed-time guess.
 func (self *productionStartupEvmTestFixture) allowHttp(writer http.ResponseWriter, request *http.Request) bool {
-	raw, err := io.ReadAll(request.Body)
+	raw, err := productionStartupRequestTestBytes(request)
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
 		return false
@@ -87,7 +100,10 @@ func (self *productionStartupEvmTestFixture) allowHttp(writer http.ResponseWrite
 			self.freshOnce.Do(func() { close(self.freshRead) })
 			writer.WriteHeader(http.StatusServiceUnavailable)
 			writer.(http.Flusher).Flush()
-			<-request.Context().Done()
+			select {
+			case <-request.Context().Done():
+			case <-self.release:
+			}
 			return false
 		}
 	}
@@ -187,6 +203,7 @@ type productionStartupApiTestFixture struct {
 	sessions   int
 	seedRead   chan struct{}
 	seedOnce   sync.Once
+	release    chan struct{}
 }
 
 // Protocol traffic reaches actual HTTP handlers, including JWT refresh and
@@ -215,8 +232,15 @@ func (self *productionStartupApiTestFixture) ServeHTTP(writer http.ResponseWrite
 		_ = json.NewEncoder(writer).Encode(value)
 		return
 	case "/network/find-providers2":
+		if _, err := productionStartupRequestTestBytes(request); err != nil {
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		self.seedOnce.Do(func() { close(self.seedRead) })
-		<-request.Context().Done()
+		select {
+		case <-request.Context().Done():
+		case <-self.release:
+		}
 		return
 	case "/connect":
 		upgrader := websocket.Upgrader{}
@@ -430,7 +454,8 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 		bounds.Cut.Proofs.MaxPageBytes = max(bounds.Cut.Proofs.MaxPageBytes, bounds.Cut.MaxHeaderBytes)
 		bounds.Replay.MaxRecordBytes = max(bounds.Replay.MaxRecordBytes, bounds.Disk.MaxRecordBytes)
 		bounds.Cut.Records.MaxChunkBytes = max(bounds.Cut.Records.MaxChunkBytes, bounds.Replay.MaxRecordBytes)
-		self.evm = &productionStartupEvmTestFixture{operator: production.operator, contexts: self.contextKVs, code: []byte{0x60, 0x00, 0x00}, freshRead: make(chan struct{})}
+		self.evm = &productionStartupEvmTestFixture{operator: production.operator, contexts: self.contextKVs, code: []byte{0x60, 0x00, 0x00}, freshRead: make(chan struct{}), release: make(chan struct{})}
+		t.Cleanup(func() { close(self.evm.release) })
 		production.operator.startup = self.evm
 		production.operator.blocks[80] = [32]byte{0x78}
 		for index := range cfg.Operators {
@@ -490,7 +515,7 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 				t.Fatalf("fixture client token differs from its actual session parser: %v", err)
 			}
 			writeReleaseBootstrapV2TestFile(t, op.ClientJWTFile, []byte(credential))
-			api := &productionStartupApiTestFixture{owner: self, noId: op.NoID, credential: credential, keys: physical.source.server.serverPublicKeys(), objects: map[string][]byte{}, seedRead: make(chan struct{})}
+			api := &productionStartupApiTestFixture{owner: self, noId: op.NoID, credential: credential, keys: physical.source.server.serverPublicKeys(), objects: map[string][]byte{}, seedRead: make(chan struct{}), release: make(chan struct{})}
 			for _, owner := range continuation.inputKVs {
 				for hash, raw := range owner.objects.metadataKVs {
 					api.objects["metadata/"+hash] = bytes.Clone(raw)
@@ -502,7 +527,7 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 				}
 			}
 			server := httptest.NewServer(api)
-			t.Cleanup(server.Close)
+			t.Cleanup(func() { close(api.release); server.Close() })
 			op.APIURL, op.ConnectURL = server.URL, "ws"+strings.TrimPrefix(server.URL, "http")+"/connect"
 			self.origins[index] = api
 		}

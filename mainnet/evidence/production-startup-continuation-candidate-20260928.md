@@ -99,3 +99,29 @@ Then reuse these exact correction bytes for the pending predecessor public-root
 causal control. Its failure must reach the intended unrelated-current-read
 assertion, never count a fixture startup refusal as success. Additional public
 root failures must remain explicit and be corrected in another frozen revision.
+
+## Third fixture correction: bounded blocking HTTP ownership
+
+Correction base: `fca0b16c843601b680d92fbe0a8a3a43dc6365fe`.
+Worktree: `/mnt/data/sn-testnet/worktrees/sn-mainnet-startup-handler-close-20260928`.
+Qualification pending. This revision changes only startup fixture/test sources
+and documentation. Retained-intent public startup passed normal (31.17s) and
+race (189.39s) on fca0; its fresh-root cleanup hung after readiness. Preserve the
+diagnostic stack and those scoped results.
+
+Seed and EVM blocking handlers now consume/close bounded input before their
+barrier and have independent release signals owned by fixture cleanup. Adjacent
+WebSocket loops retain their client connection ownership. No runtime timeout
+or production behavior changes. Compile-only validation is permitted in the
+author lane; final bodies belong to Terra:
+
+```sh
+go test ./validator -run '^TestProductionStartup(RunReleaseInitialDeploymentBecomesReady|BlockedHandlersOwnRequestAndCleanup|BlockedHandlersRejectIncompleteInput)$' -count=1 -timeout=600s
+```
+
+Run normal and race. Then apply the original public-root ordering control to
+`TestProductionStartupRunReleaseReconcilesBeforeCurrentPreparation` with these
+corrected fixtures; a named unrelated-current-read failure is required. Do not
+repeat the unchanged full selection or treat fixture setup/cleanup failures as
+causal evidence. New barrier controls can restore only the old unread seed body
+or remove the independent release to demonstrate their exact ownership seam.

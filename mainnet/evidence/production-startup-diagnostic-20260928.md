@@ -103,3 +103,30 @@ Preserved capture:
 `/mnt/data/sn-testnet/qualification/production-startup-continuation-20260928/cd709cf4/`.
 Normal: 21.931s package exit 1. Race: 147.681s package exit 1. These are fixture
 diagnostics, not causal control successes or a completed public-startup result.
+
+## HTTP fixture cleanup after fca0b16c
+
+At `fca0b16c843601b680d92fbe0a8a3a43dc6365fe`, the real retained-intent public
+root passed normal (31.17s) and race (189.39s). Preserve those results. The fresh
+root reached runtime readiness but its seed HTTP fixture hung during cleanup;
+Terra retained a stack showing `httptest.Close` awaiting the POST handler at
+`production_startup_fixture_test.go:219`. The package termination is not a
+fresh-root pass. Captures remain under
+`/mnt/data/sn-testnet/qualification/production-startup-continuation-20260928/fca0b16c/`.
+
+The seed fixture waited on request cancellation before consuming its POST body.
+The correction reads and closes at most 1 MiB plus an overflow byte before
+publishing the readiness barrier. Both it and the adjacent EVM outage handler
+now have independent fixture cleanup releases; their server owners join after
+release. The EVM handler already consumed input, but lacked a bound, physical
+body close and independent release. The WebSocket handlers are separate read
+loops terminated by their actual client connection owners and contain no
+request-context barrier. No production timeout, request or custody gate changed.
+
+Two deterministic fixture tests require complete/closed input before the barrier,
+join the handlers with a still-live request context, and reject oversized or
+failed-close input before any barrier. The repeated monitor/startup lesson is
+also recorded under PH-16. Terra must run the affected fresh public root and
+these fixture tests normally and with race detection, then the original public
+startup-order causal control using the corrected fixture bytes. Prior retained
+root and unaffected full282 scopes remain reusable.

@@ -2056,6 +2056,14 @@ full gates and confirmation runs did not isolate those causes. The handoff's
 `[no tests to run]` example and the retained failed bundles must stay distinguishable
 from passes.
 
+Blocking HTTP fixtures must consume and close bounded request input before
+waiting on `request.Context()` cancellation, and retain an independent cleanup
+release joined before the test server closes. An unread POST body can prevent
+the expected cancellation notification. This lesson recurred in the monitor
+and public-startup seed handlers; actual runtime completion and a hung fixture
+cleanup are separate results. The startup correction audits both seed and EVM
+outage barriers and preserves prior retained-intent normal/race passes.
+
 The September 27 combined-source validator package run hit Go's default
 10-minute deadline under `-parallel 2`. Its original PTY output was truncated,
 so the exact active test cannot be established. The matching compact replay
