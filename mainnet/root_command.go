@@ -9,24 +9,53 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
 const rootEventSchema = "urnetwork-mainnet-root-monitor-event-v1"
+const rootDiagnosticEventSchema = "urnetwork-mainnet-root-monitor-event-v2"
 
 // Failed samples never retain a prior ready observation as their current state.
 type rootMonitorEvent struct {
-	Schema     string               `json:"schema"`
-	Sample     int                  `json:"sample"`
-	ObservedAt string               `json:"observed_at"`
-	Status     string               `json:"status"`
-	Detail     string               `json:"detail,omitempty"`
-	Snapshot   *rootPreviewEnvelope `json:"snapshot,omitempty"`
+	Schema      string                        `json:"schema"`
+	Sample      int                           `json:"sample"`
+	ObservedAt  string                        `json:"observed_at"`
+	Status      string                        `json:"status"`
+	Detail      string                        `json:"detail,omitempty"`
+	Snapshot    *rootPreviewEnvelope          `json:"snapshot,omitempty"`
+	Observation *rootMonitorObservation       `json:"observation,omitempty"`
+	Publication string                        `json:"publication,omitempty"`
+	Diagnostics *monitorDiagnosticObservation `json:"diagnostics,omitempty"`
+	ReadPhase   string                        `json:"read_phase,omitempty"`
+	ReadCause   string                        `json:"read_cause,omitempty"`
 }
 
 // Read-only readiness is a narrow observation result, never activation approval.
 func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return runRootCommandWithMonitorHooks(ctx, args, stdout, stderr, time.Now, monitorServiceHooks{})
+}
+
+// Long-lived diagnostics have a separate owner even before flag admission.
+// Finite preview output retains its original complete snapshot and I/O contract.
+func runRootCommandWithMonitorHooks(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
 	command := args[0]
+	monitoring := command == "root-monitor"
+	if monitoring {
+		output, err := newMonitorOutput(ctx, stdout, stderr, 0, now)
+		if err != nil {
+			return 3
+		}
+		defer func() {
+			if output.close() != nil {
+				result = 3
+			}
+		}()
+		stdout, stderr = output.events.Writer("chain"), output.errors.Writer("diagnostic")
+	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	rpcUrl := flags.String("rpc", "", "explicit owned HTTP(S) RPC URL")
@@ -36,12 +65,22 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 	samples := flags.Int("samples", 1, "finite monitor sample count, 1 through 10000")
 	stallAfter := flags.Duration("stall-after", 5*time.Minute, "finalized progress alert threshold")
 	checkpointPath := flags.String("checkpoint", "", "absolute durable finalized checkpoint path for root-monitor")
+	metricsPath := flags.String("metrics-file", "", "optional absolute .prom output for root-monitor")
+	metricsRole := flags.String("metrics-role", "", "independent bounded role label, required with metrics-file")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *rpcUrl == "" || *policyPath == "" || *retryWindow < 60*time.Second || *retryWindow > 15*time.Minute || *samples < 1 || *samples > 10000 || *interval <= 0 || *stallAfter <= 0 {
 		fmt.Fprintln(stderr, "root command requires --rpc URL --policy FILE; retry-window must be 60s..15m, samples 1..10000 and intervals positive")
 		return 2
 	}
-	if command == "root-preview" && (*samples != 1 || *checkpointPath != "") {
-		fmt.Fprintln(stderr, "root-preview takes one sample and no checkpoint")
+	if command == "root-preview" && (*samples != 1 || *checkpointPath != "" || *metricsPath != "" || *metricsRole != "") {
+		fmt.Fprintln(stderr, "root-preview takes one sample and no checkpoint or metrics")
+		return 2
+	}
+	if (*metricsPath == "") != (*metricsRole == "") || *metricsRole != "" && !monitorRolePattern.MatchString(*metricsRole) {
+		fmt.Fprintln(stderr, "root-monitor metrics require a file and independent bounded role label")
+		return 2
+	}
+	if *metricsPath != "" && (!filepath.IsAbs(*metricsPath) || filepath.Clean(*metricsPath) != *metricsPath || !strings.HasSuffix(*metricsPath, ".prom")) {
+		fmt.Fprintln(stderr, "root-monitor metrics require an absolute canonical .prom path")
 		return 2
 	}
 	var policy rootValidatorPolicy
@@ -50,12 +89,12 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 		err = policy.validate()
 	}
 	if err != nil {
-		fmt.Fprintln(stderr, err)
+		fmt.Fprintln(stderr, rootCommandErrorDetail(err, "root policy unavailable or invalid", monitoring))
 		return 2
 	}
 	client, err := newRpcClient(*rpcUrl, *retryWindow)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
+		fmt.Fprintln(stderr, rootCommandErrorDetail(err, "root RPC configuration invalid", monitoring))
 		return 2
 	}
 	defer client.httpClient.CloseIdleConnections()
@@ -64,14 +103,59 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 	if *checkpointPath != "" {
 		checkpoint, err = openMonitorCheckpoint(*checkpointPath, identityExpectation{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId})
 		if err != nil {
-			fmt.Fprintln(stderr, err)
+			fmt.Fprintln(stderr, rootCommandErrorDetail(err, "root checkpoint admission failed", monitoring))
 			return 3
 		}
-		defer checkpoint.close()
+		defer func() {
+			file := checkpoint.lock
+			closeErr := checkpoint.close()
+			if hooks.afterClose != nil {
+				closeErr = errors.Join(closeErr, hooks.afterClose("root", "checkpoint", file))
+			}
+			if closeErr != nil {
+				fmt.Fprintln(stderr, "root checkpoint cleanup failed")
+				result = 3
+			}
+		}()
+		if hooks.syncDirectory != nil {
+			checkpoint.syncDirectory = func(file *os.File) error { return hooks.syncDirectory("root", "checkpoint", file) }
+		}
 		state, err = checkpoint.load()
 		if err != nil {
-			fmt.Fprintln(stderr, err)
+			fmt.Fprintln(stderr, rootCommandErrorDetail(err, "root retained checkpoint invalid", monitoring))
 			return 3
+		}
+	}
+	publication := &rootMonitorPublication{outcome: "unconfigured"}
+	if *metricsPath != "" {
+		publication.store, err = openMonitorMetrics(*metricsPath)
+		if err != nil {
+			fmt.Fprintln(stderr, "root metrics admission failed")
+			publication.outcome, publication.disabled = "unavailable", true
+		}
+	}
+	if publication.store != nil {
+		defer func() {
+			file := publication.store.lock
+			closeErr := publication.store.close()
+			if hooks.afterClose != nil {
+				closeErr = errors.Join(closeErr, hooks.afterClose("root", "metrics", file))
+			}
+			if closeErr != nil {
+				fmt.Fprintln(stderr, "root metrics cleanup failed")
+				result = 3
+			}
+		}()
+		if hooks.syncDirectory != nil {
+			publication.store.syncDirectory = func(file *os.File) error { return hooks.syncDirectory("root", "metrics", file) }
+		}
+		publication.outcome = "starting"
+		// Existing output retains its original age until a new sample completes.
+		if _, statErr := os.Lstat(*metricsPath); errors.Is(statErr, os.ErrNotExist) {
+			publication.publish(rootMonitorEvent{Status: "starting", Diagnostics: monitorDiagnosticSnapshot(stdout, stderr)}, state, *metricsRole, time.Time{})
+		} else if statErr != nil {
+			fmt.Fprintln(stderr, "root metrics file unavailable")
+			publication.outcome = "retrying"
 		}
 	}
 	encoder := json.NewEncoder(stdout)
@@ -82,14 +166,17 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 		}
 		event := rootMonitorEvent{Schema: rootEventSchema, Sample: sample}
 		preview, readErr := client.readRootPreview(ctx, policy, policyHash)
-		now := time.Now().UTC()
-		event.ObservedAt = now.Format(time.RFC3339Nano)
+		sampledAt := now().UTC()
+		event.ObservedAt = sampledAt.Format(time.RFC3339Nano)
 		lastExit = 0
 		if readErr != nil {
 			if ctx.Err() != nil {
 				return 0
 			}
-			event.Status, event.Detail = "rpc-error", readErr.Error()
+			event.Status, event.Detail = "rpc-error", rootCommandErrorDetail(readErr, "root sample unavailable", monitoring)
+			if monitoring {
+				event.ReadPhase, event.ReadCause = "sample", rootMonitorReadCause(readErr)
+			}
 			lastExit = 1
 			if errors.Is(readErr, errRpcIntegrity) {
 				event.Status = "rpc-integrity"
@@ -100,7 +187,10 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 			// reads and rechecks the retained height, not the previous tip.
 			continuous, continuityErr := client.priorFinalizedMatches(ctx, state, preview.Identity)
 			if continuityErr != nil {
-				event.Status, event.Detail = "rpc-error", continuityErr.Error()
+				event.Status, event.Detail = "rpc-error", rootCommandErrorDetail(continuityErr, "root continuity read unavailable", monitoring)
+				if monitoring {
+					event.ReadPhase, event.ReadCause = "continuity", rootMonitorReadCause(continuityErr)
+				}
 				lastExit = 1
 				if errors.Is(continuityErr, errRpcIntegrity) {
 					event.Status = "rpc-integrity"
@@ -111,9 +201,9 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 				lastExit = 3
 			} else {
 				previousHash, previousNumber := state.lastHash, state.lastNumber
-				status, observeErr := state.observe(now, preview.Identity, *stallAfter)
+				status, observeErr := state.observe(sampledAt, preview.Identity, *stallAfter)
 				if observeErr != nil {
-					event.Status, event.Detail = status, observeErr.Error()
+					event.Status, event.Detail = status, rootCommandErrorDetail(observeErr, "root finalized continuity changed", monitoring)
 					lastExit = 3
 				} else {
 					event.Status = preview.Status
@@ -128,7 +218,7 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 					}
 					if checkpoint != nil && (state.lastHash != previousHash || state.lastNumber != previousNumber) {
 						if saveErr := checkpoint.save(state); saveErr != nil {
-							event.Status, event.Detail = "checkpoint-error", saveErr.Error()
+							event.Status, event.Detail = "checkpoint-error", rootCommandErrorDetail(saveErr, "root checkpoint write failed", monitoring)
 							preview.ReadOnlyReady, preview.Status = false, "blocked"
 							preview.Blockers = append(preview.Blockers, "ROOT_FINALITY_CHECKPOINT_FAILED")
 							lastExit = 1
@@ -136,16 +226,30 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 					}
 					sealed, sealErr := sealRootPreview(preview)
 					if sealErr != nil {
-						fmt.Fprintln(stderr, sealErr)
+						fmt.Fprintln(stderr, rootCommandErrorDetail(sealErr, "root snapshot sealing failed", monitoring))
 						return 1
 					}
 					event.Snapshot = &sealed
 				}
 			}
 		}
+		if monitoring && ctx.Err() != nil {
+			return 0
+		}
+		if monitoring {
+			event.Schema = rootDiagnosticEventSchema
+			event.Observation = projectRootMonitorObservation(event.Snapshot)
+			event.Snapshot = nil
+			event.Diagnostics = monitorDiagnosticSnapshot(stdout, stderr)
+			publication.publish(event, state, *metricsRole, sampledAt)
+			event.Publication = publication.outcome
+		}
 		if err := encoder.Encode(event); err != nil {
-			fmt.Fprintln(stderr, err)
+			fmt.Fprintln(stderr, rootCommandErrorDetail(err, "root event encoding failed", monitoring))
 			return 1
+		}
+		if monitoring && hooks.afterEvent != nil {
+			hooks.afterEvent(ctx, "root")
 		}
 		if event.Status == "rpc-integrity" || event.Status == "finality-conflict" || event.Status == "checkpoint-error" {
 			return lastExit
@@ -153,11 +257,36 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 		if sample == *samples {
 			return lastExit
 		}
-		select {
-		case <-ctx.Done():
+		if !waitMonitorService(ctx, "root", *interval, hooks) {
 			return 0
-		case <-time.After(*interval):
 		}
 	}
 	return lastExit
+}
+
+// Daemon logs use fixed causes; finite previews retain their operator details.
+func rootCommandErrorDetail(err error, code string, monitoring bool) string {
+	if monitoring {
+		return code
+	}
+	return err.Error()
+}
+
+// Preserve available typed facts without parsing strings or changing retries.
+func rootMonitorReadCause(err error) string {
+	if errors.Is(err, errRpcIntegrity) {
+		return "integrity"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	var call *rpcCallError
+	if errors.As(err, &call) {
+		return "unavailable"
+	}
+	var transport *url.Error
+	if errors.As(err, &transport) {
+		return "transport"
+	}
+	return "unknown"
 }

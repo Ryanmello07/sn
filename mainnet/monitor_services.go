@@ -18,6 +18,7 @@ type monitorServiceHooks struct {
 	read          func(string) monitorServiceReadHooks
 	syncDirectory func(role, kind string, file *os.File) error
 	afterClose    func(role, kind string, file *os.File) error
+	afterEvent    func(context.Context, string)
 	wait          func(context.Context, string, time.Duration) bool
 }
 

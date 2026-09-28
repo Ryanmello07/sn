@@ -150,6 +150,7 @@ type rootServiceOwner struct {
 	ownerCh     chan struct{}
 	actionOwner *rootActionOwner
 	poisoned    bool
+	wait        func(context.Context, time.Duration) bool
 }
 
 // Construction authenticates retained state, without observing or activating.
@@ -160,7 +161,7 @@ func newRootServiceOwner(config rootServiceConfig, store rootServiceStorage, por
 	if store == nil {
 		return nil, errors.New("root service journal is absent")
 	}
-	self := &rootServiceOwner{config: copyRootServiceConfig(config), store: store, ports: ports, ownerCh: make(chan struct{}, 1)}
+	self := &rootServiceOwner{config: copyRootServiceConfig(config), store: store, ports: ports, ownerCh: make(chan struct{}, 1), wait: waitRootService}
 	if _, err := self.load(); err != nil {
 		return nil, err
 	}
@@ -210,12 +211,13 @@ type rootServiceEvent struct {
 	Action          *rootActionStep     `json:"action,omitempty"`
 	ActivationReady bool                `json:"activation_ready"`
 	Detail          string              `json:"detail,omitempty"`
+	terminalFailure bool
 }
 
 // A pending action always wins over new observations. A decision and reserved
 // action are committed atomically; they are never split across journal files.
-func (self *rootServiceOwner) step(ctx context.Context) (rootServiceEvent, error) {
-	result := rootServiceEvent{Status: "blocked"}
+func (self *rootServiceOwner) step(ctx context.Context) (result rootServiceEvent, resultErr error) {
+	result = rootServiceEvent{Status: "blocked"}
 	if ctx == nil {
 		return result, errors.New("root service requires a context")
 	}
@@ -225,6 +227,9 @@ func (self *rootServiceOwner) step(ctx context.Context) (rootServiceEvent, error
 	case <-ctx.Done():
 		return result, ctx.Err()
 	}
+	// Snapshot custody failure before releasing the serialized step. Run must
+	// retain this original error, not replace it with a later poisoned-owner read.
+	defer func() { result.terminalFailure = self.poisoned }()
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
@@ -289,33 +294,26 @@ func (self *rootServiceOwner) step(ctx context.Context) (rootServiceEvent, error
 	return result, nil
 }
 
-// A finite supervisor performs one joined step per cadence. Publication failure
-// stops the run without deleting intent; callers reopen/resume the same journal.
-func (self *rootServiceOwner) Run(ctx context.Context, maximumSteps uint32, interval time.Duration, publish func(rootServiceEvent) error) error {
-	if ctx == nil || maximumSteps == 0 || maximumSteps > 10000 || interval < time.Second || interval > time.Hour || publish == nil {
-		return errors.New("root service run requires context, 1..10000 steps, 1s..1h cadence and an event publisher")
+// The finite supervisor consumes its concrete output owner. Optional delivery
+// never controls journal progress; every port, cadence and exporter is joined.
+func (self *rootServiceOwner) Run(ctx context.Context, maximumSteps uint32, interval time.Duration, output *rootServiceOutput) (runErr error) {
+	if output != nil {
+		defer func() { runErr = errors.Join(runErr, output.close()) }()
+	}
+	if ctx == nil || maximumSteps == 0 || maximumSteps > 10000 || interval < time.Second || interval > time.Hour || output == nil {
+		return errors.New("root service run requires context, 1..10000 steps, 1s..1h cadence and an owned diagnostic exporter")
 	}
 	for step := uint32(0); step < maximumSteps; step++ {
 		result, err := self.step(ctx)
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return errors.Join(err, ctx.Err())
 		}
-		if err != nil {
-			result.Detail = err.Error()
-			if len(result.Detail) > 1024 {
-				result.Detail = result.Detail[:1024]
-			}
-		}
-		if publishErr := publish(result); publishErr != nil {
-			return publishErr
-		}
-		if result.Status == "complete" || result.Status == "blocked" || step+1 == maximumSteps {
+		output.offer(result, err != nil)
+		if result.terminalFailure || result.Status == "complete" || result.Status == "blocked" || step+1 == maximumSteps {
 			return err
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
+		if !self.wait(ctx, interval) {
+			return errors.Join(err, ctx.Err())
 		}
 	}
 	return nil

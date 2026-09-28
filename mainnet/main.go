@@ -140,7 +140,7 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 		return runOwnerTrimBoundedCommand(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) != 0 && (args[0] == "root-preview" || args[0] == "root-monitor") {
-		return runRootCommand(ctx, args, stdout, stderr)
+		return runRootCommandWithMonitorHooks(ctx, args, stdout, stderr, now, hooks)
 	}
 	if len(args) != 0 && (args[0] == "check-recycle-mode" || args[0] == "economic-reference") {
 		return runEconomicCommand(ctx, args, stdout, stderr)

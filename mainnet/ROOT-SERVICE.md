@@ -111,10 +111,30 @@ not permission to duplicate the same hotkey's nonce or spend allowance.
 Operations serialize through context-aware ownership. Canceled waiters do not
 enter; active synchronous ports must return/join before `step` or `Run` returns.
 The externally driven supervisor takes 1–10,000 steps and a 1-second to 1-hour
-cadence, stops on terminal/blocked state, and retains intent when publication
-fails. It starts no detached worker. The caller joins all use before closing the
-store. Local files/process locks do not supply hostile-host rollback resistance
-or cross-host custody exclusion.
+cadence. It stops on terminal/blocked state or poisoned storage, returning the
+original hard cause even if cancellation also arrives. Optional event delivery
+does not stop observation, signing reconciliation or the existing action. The
+caller joins all use before closing the store. Local files/process locks do not
+supply hostile-host rollback resistance or cross-host custody exclusion.
+
+The private `Run` API now consumes a concrete `rootServiceOutput` created with
+`newRootServiceOutput`, replacing the arbitrary synchronous publication callback.
+It closes and joins that owner even when run admission fails. Each diagnostic is
+a fixed scalar projection (`urnetwork-mainnet-root-service-diagnostic-v1`) with
+closed phase/status, observation count, failure presence and previous delivery
+counters. It contains no action vectors, custody packet, signature, raw error or
+inferred activation readiness. The original error remains available to the caller;
+the output path never calls its `Error` or `String` method. Poisoned storage
+cannot hide its original cause behind a later reopen-required error.
+
+The shared [diagnostic owner](../diagnostics/README.md) bounds queue count/bytes,
+write deadlines and final drain. A full, disconnected, unsupported or partially
+written destination remains operational output failure. Descriptor cleanup
+failures are joined with the run result. Delivery snapshots survive `Run` return
+for the embedding to inspect; without an independent consumer they are not an
+alert-delivery claim. This does not wire a production root signing service.
+Finite bootstrap output and its required action/custody writes retain their
+existing behavior and original journal formats.
 
 ## Independent capability boundary
 

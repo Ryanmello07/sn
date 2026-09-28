@@ -622,10 +622,10 @@ func TestRootMonitorContinuesAfterUnavailableSample(t *testing.T) {
 	t.Cleanup(server.Close)
 	var stdout, stderr bytes.Buffer
 	checkpoint := filepath.Join(t.TempDir(), "root-finalized.json")
-	code := runMain(context.Background(), []string{"root-monitor", "--rpc", server.URL, "--policy", rootTestPolicyFile(t, fixture.policy), "--samples", "2", "--interval", "1ns", "--checkpoint", checkpoint}, &stdout, &stderr)
+	code := runRootMonitorTest(context.Background(), []string{"root-monitor", "--rpc", server.URL, "--policy", rootTestPolicyFile(t, fixture.policy), "--samples", "2", "--interval", "1ns", "--checkpoint", checkpoint}, &stdout, &stderr)
 	decoder := json.NewDecoder(&stdout)
 	var first, second rootMonitorEvent
-	if decoder.Decode(&first) != nil || decoder.Decode(&second) != nil || code != 0 || first.Status != "rpc-error" || first.Snapshot != nil || second.Status != "ready" || second.Sample != 2 || second.Snapshot == nil {
+	if decoder.Decode(&first) != nil || decoder.Decode(&second) != nil || code != 0 || first.Status != "rpc-error" || first.Snapshot != nil || first.Observation != nil || first.ReadCause != "unavailable" || first.ReadPhase != "sample" || second.Status != "ready" || second.Sample != 2 || second.Observation == nil {
 		t.Fatalf("bounded recovery failed: exit=%d first=%+v second=%+v stderr=%s", code, first, second, stderr.String())
 	}
 	if _, err := os.Stat(checkpoint); err != nil {
@@ -640,7 +640,7 @@ func TestRootCommandRejectsTestnetAndStopsIntegritySamples(t *testing.T) {
 	fixture.evmChainHex = "0x3b1"
 	server := rootFixtureServer(t, fixture)
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), []string{"root-monitor", "--rpc", server.URL, "--policy", rootTestPolicyFile(t, fixture.policy), "--samples", "3", "--interval", "1ns"}, &stdout, &stderr)
+	code := runRootMonitorTest(context.Background(), []string{"root-monitor", "--rpc", server.URL, "--policy", rootTestPolicyFile(t, fixture.policy), "--samples", "3", "--interval", "1ns"}, &stdout, &stderr)
 	var event rootMonitorEvent
 	if json.Unmarshal(stdout.Bytes(), &event) != nil || code != 3 || event.Status != "rpc-integrity" || event.Snapshot != nil || fixture.count("system_chain") != 1 || fixture.count("state_getStorage") != 0 {
 		t.Fatalf("testnet route was admitted/retried: %d %s %s", code, stdout.String(), stderr.String())
@@ -707,9 +707,9 @@ func TestRootMonitorRetainedStallCannotReportReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), []string{"root-monitor", "--rpc", server.URL, "--policy", rootTestPolicyFile(t, fixture.policy), "--checkpoint", path}, &stdout, &stderr)
+	code := runRootMonitorTest(context.Background(), []string{"root-monitor", "--rpc", server.URL, "--policy", rootTestPolicyFile(t, fixture.policy), "--checkpoint", path}, &stdout, &stderr)
 	var event rootMonitorEvent
-	if json.Unmarshal(stdout.Bytes(), &event) != nil || code != 3 || event.Status != "finality-stalled" || event.Snapshot == nil || event.Snapshot.Observation.ReadOnlyReady || event.Snapshot.Observation.Status != "blocked" {
+	if json.Unmarshal(stdout.Bytes(), &event) != nil || code != 3 || event.Status != "finality-stalled" || event.Observation == nil || event.Observation.ReadOnlyReady {
 		t.Fatalf("stalled finalized state looked ready: %d %s %s", code, stdout.String(), stderr.String())
 	}
 }
@@ -747,9 +747,9 @@ func TestRootMonitorFutureCheckpointCannotReportReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), []string{"root-monitor", "--rpc", server.URL, "--policy", rootTestPolicyFile(t, fixture.policy), "--checkpoint", path}, &stdout, &stderr)
+	code := runRootMonitorTest(context.Background(), []string{"root-monitor", "--rpc", server.URL, "--policy", rootTestPolicyFile(t, fixture.policy), "--checkpoint", path}, &stdout, &stderr)
 	var event rootMonitorEvent
-	if json.Unmarshal(stdout.Bytes(), &event) != nil || code != 3 || event.Status != "finality-stalled" || event.Snapshot == nil || event.Snapshot.Observation.ReadOnlyReady {
+	if json.Unmarshal(stdout.Bytes(), &event) != nil || code != 3 || event.Status != "finality-stalled" || event.Observation == nil || event.Observation.ReadOnlyReady {
 		t.Fatalf("future retained clock looked ready: exit=%d status=%s stderr=%s", code, event.Status, stderr.String())
 	}
 }

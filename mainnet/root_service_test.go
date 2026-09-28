@@ -557,14 +557,17 @@ func TestRootServiceCancellationAndConcurrentSteps(t *testing.T) {
 	}
 }
 
-// Publication failure happens after durable intent. A canceled bounded run
-// joins its reader and cannot leave a detached signing or monitoring worker.
+// Optional publication cannot invalidate durable intent. A canceled bounded
+// run joins its reader and cannot leave a detached output or signing worker.
 func TestRootServiceBoundedRunPreservesIntentAndJoins(t *testing.T) {
 	fixture := newRootServiceFixture(t)
 	owner, store := fixture.open(t, true, fixture.ports())
-	publicationErr := errors.New("synthetic event sink unavailable")
-	if err := owner.Run(context.Background(), 2, time.Hour, func(rootServiceEvent) error { return publicationErr }); !errors.Is(err, publicationErr) {
-		t.Fatal("publisher failure disappeared", err)
+	output, err := newRootServiceOutput(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.Run(context.Background(), 1, time.Hour, output); err != nil || output.snapshot().Unavailable == 0 {
+		t.Fatal("optional publisher changed durable intent result", err)
 	}
 	record, err := store.load()
 	if err != nil || record.Phase != "active" || fixture.signer.signs != 0 {
@@ -575,13 +578,16 @@ func TestRootServiceBoundedRunPreservesIntentAndJoins(t *testing.T) {
 	otherOwner, _ := other.open(t, true, other.ports())
 	ctx, cancel := context.WithCancel(context.Background())
 	finished := make(chan error, 1)
-	published := 0
+	otherOutput, err := newRootServiceOutput(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	go func() {
-		finished <- otherOwner.Run(ctx, 2, time.Hour, func(rootServiceEvent) error { published++; return nil })
+		finished <- otherOwner.Run(ctx, 2, time.Hour, otherOutput)
 	}()
 	<-other.observer.entered
 	cancel()
-	if err := <-finished; !errors.Is(err, context.Canceled) || published != 0 {
+	if err := <-finished; !errors.Is(err, context.Canceled) || otherOutput.snapshot().Dropped != 0 {
 		t.Fatal("canceled run published partial work", err)
 	}
 	<-other.observer.joined

@@ -8,7 +8,8 @@ Substrate Root origin. **No mainnet activation or signing readiness is claimed.*
 ```
 sn-mainnet root-preview --rpc "$OWNED_MAINNET_RPC" --policy /approved/root-observer.json
 sn-mainnet root-monitor --rpc "$OWNED_MAINNET_RPC" --policy /approved/root-observer.json \
-  --samples 120 --interval 30s --checkpoint /owned/root-observer/finalized.json
+  --samples 120 --interval 30s --checkpoint /owned/root-observer/finalized.json \
+  --metrics-file /owned/telemetry/root-primary.prom --metrics-role primary
 ```
 
 The policy must be supplied independently of the node observation. There is no
@@ -53,11 +54,21 @@ storage-trie proof verifier or a native/EVM finality mapping proof.
 
 ## Evidence and readiness scope
 
-Each JSON line has `schema: urnetwork-mainnet-root-monitor-event-v1`, a finite
-sample number, status and a complete content-hashed snapshot when one was
-obtained. Incomplete or inconsistent samples have no successful snapshot. The
-snapshot has `schema: urnetwork-mainnet-root-preview-v1` and keeps raw absence,
-metadata fallback, storage key and effective SCALE bytes separately.
+Finite `root-preview` retains `schema: urnetwork-mainnet-root-monitor-event-v1`
+and a complete content-hashed snapshot when obtained. That snapshot uses
+`urnetwork-mainnet-root-preview-v1` and keeps raw absence, metadata fallback,
+storage key and effective SCALE bytes separately.
+
+Long-lived `root-monitor` now emits compact
+`urnetwork-mainnet-root-monitor-event-v2` records. Migrate log consumers before
+changing the producer: `observation` replaces the potentially large `snapshot`
+with its content hash, policy hash, finalized position and read-only result.
+It is absent after incomplete or inconsistent reads. Retrieve a complete census
+with finite `root-preview`; the diagnostic is not a replay archive. Closed
+`read_phase`/`read_cause` preserve available sample/continuity and timeout,
+transport, unavailable or integrity facts, without raw RPC error text.
+`diagnostics` acknowledges earlier output only; `publication` describes optional
+textfile publication, independently of chain observations. Activation stays false.
 
 The observation includes:
 
@@ -124,6 +135,55 @@ Restarting with a stalled retained head cannot report ready. A retained progress
 timestamp ahead of the host clock is conservatively stalled until genuine
 finalized advancement resets it; clock rollback cannot extend readiness.
 Unchanged finalized progress does not rewrite the checkpoint.
+
+## Independent operational output
+
+The daemon uses the shared [bounded diagnostic owner](../diagnostics/README.md)
+from flag admission through joined cleanup. stdout/stderr aliases share one
+writer. A physically full pipe, disconnected socket or refused regular-file
+logger cannot stall the read loop or its shutdown. Queue admission is not
+delivery; the final bounded drain may discard queued records. Use a supported
+journal/socket/pipe, or an embedding with an actual context-aware write contract.
+Ordinary synchronous file redirection is visibly unavailable to this daemon.
+Finite `root-preview`, plans and bootstrap commands keep their ordinary output
+contract. Required checkpoint writes, identity/finality contradictions and real
+cleanup errors remain hard; optional log failures never grant action authority.
+
+Optional `--metrics-file` reuses the existing exclusive atomic textfile owner
+and Fluent Bit node-exporter collector path. Supply a unique `--metrics-role`
+matching `[a-z][a-z0-9_-]{0,31}` from the independent host role census. Different
+root observers on one collector target require distinct role names and file
+paths. Identity, hashes and RPC errors never become metric labels. Families use
+`sn_mainnet_root_monitor_`, keeping root observations separate from UR validator
+and generic chain metrics; diagnostic series add only `events`/`diagnostics`.
+
+Metrics separate sample time, current complete read, read-only result, last
+successful read, retained finalized evidence/progress, prior textfile
+acknowledgment and log delivery/drop counters. Status codes are 0 starting,
+1 ready, 2 policy blocked, 3 unavailable, 4 stalled, 5 finality conflict,
+6 RPC integrity and 7 checkpoint failure. Publication codes describe the
+**previous** acknowledged state: 0 unconfigured, 1 starting, 2 published,
+3 retrying, 4 ownership error and 5 unavailable. A directory-sync failure may
+follow visible rename; the file cannot acknowledge that write itself. Ordinary
+publication errors retry on the next bounded sample. Failed admission or changed
+path ownership disables only that publisher, leaves the refused target untouched
+and is visible in events as `unavailable`/`ownership-error`. Reopen after repairing
+the owned path. The required continuity checkpoint remains independent.
+
+Existing metrics are not refreshed on startup, and successful reads during a
+log outage still publish independently. No configured metrics file means delivery
+is **not independently observable** from this command: `unconfigured` is not
+healthy output. Missing/refused files need an external expected host/role census;
+stale files and silent process loss need the independent Mimir evaluator. Local
+regular-file operations remain synchronous, size bounded and joined; this change
+does not promise cancellation of a hung filesystem.
+
+[Root alert examples](root-monitor-alerts.example.yml) use provisional thresholds.
+The default 15-minute sample threshold accommodates the 300-second sample budget,
+a separate bounded continuity check and ordinary cadence. Adjust it for a longer
+configured retry window/cadence; do not shorten read retries to make telemetry
+appear fresh. Quiet logs alone are not failed protocol progress. No collector
+configuration, rule installation, notification delivery or deployment is claimed.
 
 ## Remaining deployment and signing gates
 
