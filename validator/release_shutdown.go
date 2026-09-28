@@ -148,7 +148,8 @@ func runReleaseOperatorWorkers(ctx context.Context, cancel context.CancelFunc, c
 				case <-operations.trailReady:
 				}
 			}
-			reportReleaseTrailEngineError(ctx, runtime.engine, operatorID, concurrency, runtimeErrors)
+			trailCtx := withTrailDiagnosticOperator(ctx, operatorID)
+			reportReleaseTrailEngineError(trailCtx, runtime.engine, operatorID, concurrency, runtimeErrors)
 		})
 	}
 	measurements := make([]*ReleaseMeasurementContext, len(runtimes))
