@@ -335,7 +335,7 @@ func TestReleaseSourceRolePredecessorV2RolloutChecksCurrentSlot(t *testing.T) {
 	cfg.RuntimeSpec, cfg.TransactionVersion, cfg.StateVersion = currentCfg.RuntimeSpec, currentCfg.TransactionVersion, currentCfg.StateVersion
 	cfg.RuntimeCodeHash, cfg.RuntimeMetadataHash = currentCfg.RuntimeCodeHash, currentCfg.RuntimeMetadataHash
 	metadata, metadataHex := provisionalValidatorMetadataTest(t, "../crv4/runtime-profile-v1.scale.gz.base64", currentCfg.RuntimeMetadataHash)
-	head := types.Hash{0x45}
+	header, head := releaseReceiptTestHeader(t, f.receipt.hash, f.receipt.number+1)
 	netuid := binary.LittleEndian.AppendUint16(nil, cfg.Netuid)
 	hotkey := f.hotkey.PublicKey()
 	commitmentKey, err := types.CreateStorageKey(metadata, "Commitments", "CommitmentOf", netuid, hotkey[:])
@@ -362,7 +362,7 @@ func TestReleaseSourceRolePredecessorV2RolloutChecksCurrentSlot(t *testing.T) {
 			}
 		case "chain_getHeader":
 			if len(args) == 1 && args[0] == head.Hex() {
-				return setReleaseHistoricalTestResult(result, types.Header{Number: types.BlockNumber(f.receipt.number + 1)})
+				return setReleaseHistoricalTestResult(result, releaseReceiptTestHeaderWire(header))
 			}
 		case "state_getRuntimeVersion":
 			if len(args) == 1 && args[0] == head.Hex() {
