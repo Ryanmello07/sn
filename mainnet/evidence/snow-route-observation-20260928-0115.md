@@ -143,3 +143,8 @@ same response-body SHA-256. Its raw response and timestamped observation are
 retained under
 `/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T1448Z`.
 This adds no mainnet identity or evidence of the upstream cause.
+
+The **15:18:04 UTC single read-only check** also returned HTTP 502 with the
+same response-body SHA-256. Raw response and timestamped observation are under
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T1518Z`.
+The owned route still supplied no mainnet identity at that instant.
