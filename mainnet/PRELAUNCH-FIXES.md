@@ -104,8 +104,20 @@ reproduce their intended failures in both modes
 physical full-pipe test proves actual trail progress and cancellation before
 stdout drains. The receipt retains the original poisoned-ledger cleanup failure
 and exact fixture correction. Required custody failures still stop the affected
-work. Miner callbacks, SDK/internal logging, registration composition and live
+work. SDK/internal logging, registration composition and live
 delivery remain separate work; component coverage is not universal output isolation.
+
+**Miner output and shutdown (September 28; integrated and component qualified).**
+The actual provide owner now separates required authentication/file callbacks
+from blocked stdout, joins admitted HTTP status handlers, and retains panic
+cleanup causes. All 18 affected miner roots and the actual unchanged Warp status
+reader pass normal/race checks; four causal controls reproduce their intended
+failures ([evidence](evidence/miner-diagnostic-output-qualification-20260928.md)).
+Optional versioned status counters report output delivery, while `status: ok`
+remains process liveness. Consumer rollout, readiness and alert delivery remain
+open. PH-15 records a separate pending correction for arbitrary error methods
+invoked during diagnostic classification; the completed output tests remain
+retained.
 
 **Versioned registration grammar (September 28; component qualified).** Server
 candidate `736d7b8f` rejects ambiguous request-field aliases and duplicate or
@@ -2094,6 +2106,20 @@ claim comes solely from a lock/state file. A completed soft-error recovery
 remains in the incident ledger for the improvement batch; missing required
 evidence remains visible in acceptance. Verify meaningful signals under both
 slow but progressing replay and an actual deadlock.
+
+**2026-09-28 optional cause-classification follow-up (correction pending).**
+Bounded output queues alone do not isolate a callback if it first invokes an
+arbitrary error's `Unwrap`, `Is` or `As` method to choose a diagnostic label.
+The miner, trail and release-read diagnostic classifiers contained this
+coupling. Read only concrete owned or standard-library error fields with
+finite traversal; classify custom and opaque wrappers as unknown without
+calling their methods. Retain the original error for its required custody or
+retry owner, whose decision policy remains separate. Required cancellation
+must not wait for an optional diagnostic offer. Root scalar events and the
+shared output queue do not traverse producer errors and are outside this
+correction. Qualify blocking-method barriers, typed-nil and cyclic wrappers,
+and actual authentication/file callbacks without restarting the frozen output
+qualification.
 
 **2026-09-23 release-heartbeat follow-up.** R31 entered the real release epoch
 and then stopped because a heartbeat treated process-log findings as a reason

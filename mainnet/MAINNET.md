@@ -1207,10 +1207,15 @@ proof-warning path now have their separate
 [bounded-output qualification](evidence/trail-diagnostic-output-qualification-20260928.md):
 all 17 affected roots have passing normal/race coverage and five causal controls
 reproduce the intended failures. Physical full-pipe checks cover real proof
-progress and joined cancellation. Required ledger/proof failures remain hard;
-miner callbacks, SDK/internal logging and registration composition remain
-separate scopes. Local output
-acknowledgment does not establish remote ingestion or alert delivery.
+progress and joined cancellation. Required ledger/proof failures remain hard.
+The [miner output and shutdown correction](evidence/miner-diagnostic-output-qualification-20260928.md)
+is also integrated: 18 affected miner roots, the actual Warp status reader and
+four causal controls passed their normal/race checks. Its optional diagnostic
+status extension reports local delivery separately from process liveness;
+consumer compatibility must precede rollout. A separate correction for custom
+error methods in diagnostic classification is pending. SDK/internal logging
+and registration composition remain separate scopes. Local output acknowledgment
+does not establish remote ingestion or alert delivery.
 
 ### Independent observations and existing telemetry
 

@@ -49,8 +49,11 @@ CLI parsing/proxy-file discovery is not part of this physical test. No test load
 live identities or invokes financial actions. Old-path controls restore blocking
 callback output, missing output closure and raw formatting independently.
 
-This is authored source pending Terra normal/race/control qualification. SDK,
-Connect and other internal logging remain a separate boundary: this change does
+Terra normal/race/control qualification has passed; the
+[qualification receipt](miner-diagnostic-output-qualification-20260928.md)
+records exact scope and retained evidence. Arbitrary diagnostic error methods
+have a separate pending correction. SDK, Connect and other internal logging
+remain a separate boundary: this change does
 not claim every library callback or device close is isolated from every sink.
 Existing provider key-file admission/durability policies and fresh authentication
 protocols are unchanged. Miner protocol readiness, durable service-progress
