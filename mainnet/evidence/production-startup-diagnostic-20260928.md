@@ -48,3 +48,12 @@ fixture's config signature after YAML loading. Fixture input now follows the
 existing production-runtime fixture discipline: round-trip and normalize the
 public YAML representation before the independent approval is signed. Production
 hashing, signature checking and retained-authority rules remain unchanged.
+
+The normalized checkpoint `a6889441` reached public capacity validation and
+rejected the private fixture's header allowance. The next fixture correction
+audits the related public gates together: metadata pages admit the declared
+header; replay rows cover the real retained disk allowance; durable limits
+match the physical ledger; scratch roots are provisioned outside every durable
+state and credential namespace. The actual corpus and all production gates
+remain unchanged. These diagnostics show why private helper admission cannot
+stand in for qualification through the public configuration and startup root.

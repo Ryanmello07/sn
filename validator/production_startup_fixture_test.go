@@ -408,6 +408,14 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 		cfg.EvidenceV2.UploadIntentSeconds = 300
 		cfg.EvidenceV2.Bounds.Cut, cfg.EvidenceV2.Bounds.Replay = original.Bounds.Cut, original.Bounds.Replay
 		cfg.EvidenceV2.Bounds.MaxHistoryBytes, cfg.EvidenceV2.Bounds.MaxEgressHashes = original.Bounds.MaxHistoryBytes, original.Bounds.MaxEgressHashes
+		// Match the actual durable ledger census. Public metadata must admit
+		// the separately configured signed header; replay must admit every
+		// row allowed by that physical ledger, not only today's short rows.
+		bounds := &cfg.EvidenceV2.Bounds
+		bounds.Disk = attemptLedgerDiskTestLimits()
+		bounds.Cut.Records.MaxPageBytes = max(bounds.Cut.Records.MaxPageBytes, bounds.Cut.MaxHeaderBytes)
+		bounds.Cut.Proofs.MaxPageBytes = max(bounds.Cut.Proofs.MaxPageBytes, bounds.Cut.MaxHeaderBytes)
+		bounds.Replay.MaxRecordBytes = max(bounds.Replay.MaxRecordBytes, bounds.Disk.MaxRecordBytes)
 		self.evm = &productionStartupEvmTestFixture{operator: production.operator, contexts: self.contextKVs, code: []byte{0x60, 0x00, 0x00}, freshRead: make(chan struct{})}
 		production.operator.startup = self.evm
 		production.operator.blocks[80] = [32]byte{0x78}
@@ -415,7 +423,13 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 			op := &cfg.Operators[index]
 			physical := continuation.inputKVs[op.NoID]
 			input := &cfg.EvidenceV2.Operators[index]
-			input.ReplayScratchRoot, input.SealScratchRoot = original.Operators[index].ReplayScratchRoot, original.Operators[index].SealScratchRoot
+			// Scratch owns distinct provisioned roots outside every durable
+			// state namespace, as required by the real public config loader.
+			for _, path := range []string{input.ReplayScratchRoot, input.SealScratchRoot} {
+				if err := os.MkdirAll(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
 			activation := self.activationKVs[op.NoID]
 			observed, err := parseReleaseHex32("startup publication hash", physical.source.expected.Boundary.EVMBlockHash, false)
 			if err != nil {
