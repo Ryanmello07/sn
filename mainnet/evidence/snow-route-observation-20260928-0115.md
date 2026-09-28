@@ -163,3 +163,15 @@ The **17:18:38 UTC single read-only check** again returned HTTP 502 with the
 same response-body SHA-256. Its raw response and timestamped observation are
 under `/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T1718Z`.
 The owned route supplied no mainnet chain identity at that instant.
+
+The **17:48:02 UTC single read-only check** again returned HTTP 502 with the
+same response-body SHA-256. The exact timestamp, HTTP status and response body
+are retained under
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T1748Z`.
+The owned route still supplied no mainnet identity or upstream-cause evidence.
+
+The **18:18:06 UTC single read-only check** also returned HTTP 502 with the
+same response-body SHA-256. The exact timestamp, HTTP status and response body
+are retained under
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T1818Z`.
+No chain identity or upstream-cause evidence was returned.
