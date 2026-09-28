@@ -710,6 +710,16 @@ completed journals cannot be recreated as fresh allowances. Results separate
 local custody completion, signature awaiting import and pending chain phases.
 This is one implemented phase, not full bootstrap or root service activation.
 
+The [offline chain composition](BOOTSTRAP-CHAIN.md) now joins that root owner,
+reserve CREATE custody, a retained trim review and two distinct protected UR
+role inputs under one durable local preparation. Its [component qualification](evidence/bootstrap-chain-qualification-20260928.md)
+passed 369 full normal roots, all 87 selected race roots in six disjoint shards,
+and four causal families. The original aggregate race timeout remains retained.
+Tests used physical Connect `358cefae`, server `0633780c` and SDK `42241118`;
+they do not qualify the current composed release graph. Executed trim, complete
+contract installation, actual UR producer admission, healthy operators, current
+root authority, all live services and native economic acceptance remain open.
+
 `check-recycle-mode --rpc URL --policy FILE` binds the finalized mode read to
 independently supplied mainnet genesis, runtime code/metadata and complete
 version pins. It validates the runtime-declared map, enum and Burn fallback and

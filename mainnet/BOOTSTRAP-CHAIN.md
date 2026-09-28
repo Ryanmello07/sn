@@ -128,7 +128,10 @@ original signature preservation, interrupted claim/child/publication boundaries,
 lost output, exclusive ownership, missing completed journals, stale transitive
 inputs, duplicate/root-conflicting roles and resealed trim selection. The
 byte-based root-plan regression replaces its pathname between read and decode
-and checks both the pinned result and the distinct reopened control. These are
-synthetic local fixtures. Test execution and causal qualification are assigned
-to the separate Sol test owner; this implementation does not claim those gates
-have passed before their retained results exist.
+and checks both the pinned result and the distinct reopened control. Sol medium's
+[qualification receipt](evidence/bootstrap-chain-qualification-20260928.md)
+records 369 full normal roots, all 87 adjacent race roots across six disjoint
+shards, and four passing fixed controls with four intended mutant failures. It
+retains the original aggregate race timeout and identifies the actual tested
+dependency graph. These synthetic local results do not qualify a different
+composed release or supply any live launch gate.
