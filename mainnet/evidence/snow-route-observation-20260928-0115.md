@@ -107,3 +107,25 @@ and `result.json` has SHA-256
 `1fe3b3d93109a9f3b87665aceaa482d4412d7741fc8a22e05c2c73a81ef7bac4`.
 The HTTP status census comes from the retained verbose log. No new chain
 identity or evidence of the upstream cause was returned.
+
+The **10:51:58 through 10:57:01 UTC** check again returned HTTP 502 for all
+21 requests, exiting 22 after 303.031 seconds. The same owned route and
+read-only `eth_chainId` request used a five-second connect timeout, 15-second
+attempt timeout, 15-second retry delay and 300-second total retry window.
+Raw evidence is in
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T105158Z`.
+The concatenated response hash remains
+`d17f2add25f5d68f08ff9b3556fe3edcc4cdcffa0b5a7cf61ac6e22583b75634`;
+`curl.log` is `9af0bf18524ab1ca1fa07b01e8e313409630a043c1569c2736f9d884ee96304e`;
+`result.json` is `51459c91772c982d52733edf0eb40ca94512f0ab0d59218c33c2437d6590a547`.
+
+The latest check, **13:42:28 through 13:47:31 UTC**, returned HTTP 502 on all
+21 attempts under the same bounds. Curl exited 22 after 303.127 seconds.
+Raw evidence is in
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T134228Z`.
+The response hash again matches above; `curl.log` is
+`aaec6dd6876f7f99969ae03c503348d7c2aafe06797c6b6ff1e3ddd868d7ca7c`,
+and `result.json` is
+`99eb92bba63a7058d77db8d6a1b454aa15abe6ebae61c3f23422c6618912aa51`.
+The HTTP census is in the verbose log. No new chain identity, evidence of the
+upstream cause, public fallback or transaction was obtained in either check.
