@@ -90,5 +90,9 @@ Source regressions cover physical progress files through the real monitor
 command, exact schedule boundaries, deferred epochs, completed versus failed
 receipt reads, old/mixed source records, restart/renewal/late application,
 ambiguous checkpoint sync, role isolation, legacy migration and corruption.
-Author checks are compile-only and vet; behavioral qualification is pending the
-separate test executor's sealed source and causal-control runs.
+[Sol qualification passed](evidence/native-deadline-qualification-20260928.md):
+all 35 selected roots pass normally and with race detection, all five causal
+controls fail at their required assertion in both modes, and the new plus
+inherited service alert suites pass. Author compile/vet and the executor's
+source/module fences also passed. These component results do not establish
+deployment, delivered alerts or live native acceptance.

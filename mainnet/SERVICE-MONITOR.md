@@ -121,10 +121,12 @@ Every gauge begins with `sn_mainnet_validator_`:
 | `settlement_epoch`, `settlement_target_epoch`, `settlement_pending_publications`, `settlement_first_pending_epoch` | Durable closure and still-pending publication remain distinct. |
 | `steering_current`, `steering_last_success_timestamp_seconds`, `steering_status` | Producer's classified loop outcome; absent native epoch stays unknown. |
 | `protocol_deadline_known` | Current native submission forecast or reported epoch crossing, only with the optional deadline policy; never chain acceptance. |
+| `native_deadline_*` | Per-role forecast, explicit completion margins and retained first/latest missed-window incidents; see [native deadline observation](NATIVE-DEADLINES.md). |
 
 Status codes are 0 starting, 1 observed, 2 missing, 3 unavailable, 4 invalid,
 5 identity mismatch, 6 clock incident, 7 stale heartbeat, 8 producer publication
-uncertainty, 9 unknown domain, 10 failed intent and 11 source changed during read.
+uncertainty, 9 unknown domain, 10 failed intent, 11 source changed during read,
+12 native deadline risk and 13 unresolved reported native window miss.
 Severity is 0 none, 1 warning, 2 critical. Publication codes are 0 starting,
 1 previously published, 2 retrying. Intent codes are 0 absent, 1 pending,
 2 finalized, 3 applied, 4 failed. Steering codes are 0 starting, 1 working,
