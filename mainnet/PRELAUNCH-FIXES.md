@@ -83,6 +83,16 @@ guards or scheduling; 18 affected roots passed normal and race qualification
 Its later diagnostic failures are tracked in the linked result; fixture repairs
 are qualified separately while the frozen full body continues.
 
+All eight asserted diagnostic failures now have bounded fixture corrections in
+the composed server branch through `936c3d9563372e8f424d516ee2dd3525555206de`.
+The additional egress chronology selection passes 15 roots normally and with
+race detection. The final two retention fixtures and six custody guards pass
+both modes; old-fixture causal controls fail at the intended assertions.
+[Integration evidence](evidence/server-model-fixture-integration-20260928.md)
+records the exact commits and receipts. These changes preserve production
+guards and probe policy; they do not turn the earlier deadline failure or the
+still-running frozen body into a passing full suite.
+
 The frozen qualification's first direct-binary invocation used the module
 directory instead of the test package directory. Its 15-test prefix is retained
 and disqualified; the corrected body under `server-model-final-20260927/model-run`
@@ -1163,8 +1173,9 @@ steering loop still ties several transient continuation branches to testnet
 provisional permissions. Production disables those permissions. A receipt
 timeout outside an explicitly classified recovery path can therefore spend
 the hard-failure budget; a later epoch change can reject the unfinished epoch
-before reconciliation. The original-config pending branch is being repaired
-and qualified separately. PH-03 remains open until actual production callers
+before reconciliation. The original-config pending branch is now covered by
+the [authority-history qualification](evidence/production-authority-history-qualification-20260928.md).
+PH-03 remains open until actual production callers
 cover current-config pending receipts, pre-intent reads and application
 observation through outage and epoch advance. Preserve unknown or missed
 outcomes and original signed bytes, keep unrelated workers running, and require
@@ -1172,6 +1183,19 @@ reconciliation before another send. A successful retry never manufactures a
 missed emission interval. Review repeated finalized-block scans for reuse of
 authenticated completed prefixes so retries do not perpetually repeat the same
 history.
+
+**Receipt coverage boundary.** A successful null or partial block response is
+unknown evidence, not proof that a signed transaction is absent. Admission must
+authenticate the complete canonical header and ordered extrinsics commitment;
+known commitment layouts do not grant new runtime execution authority. Retry
+unavailable evidence while retaining the exact signed attempt, and distinguish
+it from a proved identity or commitment contradiction. Receipt absence, nonce
+consumption and mortality must use the same authenticated finalized coverage
+boundary. Reading a newer nonce after an older scan can falsely attribute our
+transaction's inclusion to another transaction. Extend the scan before making
+that inference, and never advance a reusable prefix on an incomplete read.
+The receipt-admission candidate is under qualification; the production wait
+and retained-prefix changes remain separate implementation work.
 
 **Closure.** Deterministically inject disconnect, DNS/HTTP failures, timeout
 during body read, missing/reordered batch responses, partial success and a

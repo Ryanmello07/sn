@@ -17,8 +17,13 @@ server checkout remained clean at `b6f49bdbe6a61ef0cca3392b3a3ee47fe4806ec2`.
 | `TestPlanPaymentsMaxDuration`, `TestPlanPaymentsMaxDurationLoop` | Historical custody fixtures corrected in server `4468a696`; affected normal/race qualification retained. |
 | `TestProbeDueQueueIgnoresTheEgressHealthGate` | Probe-health fixture corrected in `4468a696`; affected normal/race qualification retained. |
 | `TestRemoveStragglerContracts`, `TestBackfillContractReapTime` | Terminal/sweep fixtures corrected in `4468a696`; affected normal/race qualification retained. |
-| `TestGetProviderEgressLocationDueOrderingIsStableAcrossLimits` | Fixture timestamp ordering repair passed the affected normal/race tests; causal controls and source sealing are separate work. |
-| `TestRemoveContractBatchesDrainsDuplicateCandidates`, `TestAssignStragglerReapTimeRespectsBudget` | Adjacent fixtures omit required terminal custody fields. Repair and qualification are pending; production custody guards remain intact. |
+| `TestGetProviderEgressLocationDueOrderingIsStableAcrossLimits` | Fixture chronology corrected in `d62f6fcc`; 15 affected roots pass normal/race and causal controls reproduce the original fault. |
+| `TestRemoveContractBatchesDrainsDuplicateCandidates`, `TestAssignStragglerReapTimeRespectsBudget` | Original terminal usage and time supplied in the first fixture insert by `936c3d95`; both roots and six custody guards pass normal/race. Original fixtures reproduce both guard refusals. |
+
+All eight asserted failures have isolated fixture repairs, integrated through
+server `936c3d9563372e8f424d516ee2dd3525555206de`. The
+[integration receipt](server-model-fixture-integration-20260928.md) preserves
+their qualification scope. This does not change the original failed result.
 
 Seven skips require optional inputs absent from this capture: one GeoLite2
 place-list test, five pro/referral configuration tests, and one onboarding
