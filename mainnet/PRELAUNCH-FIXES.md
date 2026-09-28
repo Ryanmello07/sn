@@ -48,7 +48,7 @@ custody, economic, recovery or runtime checks for the deployed roles.
 
 | Gate / priority | Owner and linked items | Current state | Next action and completion evidence |
 | --- | --- | --- | --- |
-| MG-01 / P0 — Mainnet identity | Node operator; RT-01/02, PH-04/14/18/19 | **Blocked:** the operator confirms Snow VPN `172.28.208.185:9944` is the intended mainnet route but is still being prepared. The [same-block finalized observation](evidence/finalized-snapshot-snow-20260927.json) independently reproduces code/metadata, native header and linked EVM header hashes at one native finalized hash, but observed testnet EVM ID **945** and testnet genesis. The [September 28 08:45–08:50 UTC retry](evidence/snow-route-observation-20260928-0115.md#follow-up-recheck) returned HTTP 502 across 21 chain-ID requests; it supplies no new chain identity. Raw bytes remain unapproved evidence. | Wait for route cutover, independently approve mainnet genesis and repeat the same-block observation with expected EVM ID 964 and node/source identity. Qualify raw bytes against reviewed source-to-Wasm and execution interfaces; reject the route while it reports testnet or is unavailable. |
+| MG-01 / P0 — Mainnet identity | Node operator; RT-01/02, PH-04/14/18/19 | **Blocked:** the operator confirms Snow VPN `172.28.208.185:9944` is the intended mainnet route but is still being prepared. The [same-block finalized observation](evidence/finalized-snapshot-snow-20260927.json) independently reproduces code/metadata, native header and linked EVM header hashes at one native finalized hash, but observed testnet EVM ID **945** and testnet genesis. The [September 28 09:50–09:55 UTC retry](evidence/snow-route-observation-20260928-0115.md#follow-up-recheck) returned HTTP 502 across 21 chain-ID requests; it supplies no new chain identity. Raw bytes remain unapproved evidence. | Wait for route cutover, independently approve mainnet genesis and repeat the same-block observation with expected EVM ID 964 and node/source identity. Qualify raw bytes against reviewed source-to-Wasm and execution interfaces; reject the route while it reports testnet or is unavailable. |
 | MG-02 / P0 — Reproducible production release | Release owner; RL-01, PH-06/16 | **In progress:** the [earlier local candidate](evidence/release-candidate-v11-20260927.md) pins SN `265231f9`, server `77cb401e`, Connect `c68689c4` and local Go replacements. Its [partial inventory](evidence/release-inventory-candidate-v11-20260927.json) hashes 85 files, including seven rebuilt binaries, all seven server image-build Makefiles, eight Dockerfiles, the package lock, 40 exact Ubuntu payloads and six signed-index inputs; it reproduces byte-for-byte. The image recipes install checksum-locked packages offline and normalize two volatile outputs/timestamps. Two uncached amd64 builds each of API/proxy and the [taskworker image](/mnt/data/sn-testnet/evidence/mainnet-server-taskworker-image-20260927/RESULT.md) produced identical runnable platform manifests, while provenance-bearing indexes differed; each passed an offline image check. Eight affected recipe checks passed normal/race plus vet. Policy and published/deployed OCI identity are missing; arm64 execution, package archive, independent builder, full attestation/SBOM/scanner policy and remaining service coverage remain open. The owner-recycle selector passed 139 race and 58 focused normal tests. | Complete generated artifacts, contract bytecode and source-to-image provenance, config, policy, migrations, all images and role coverage; qualify actual production paths and approve one immutable manifest. Exact source/file hashes and local platform digests are not deployment authorization. |
 | MG-03 / P0 — Durable recovery and complete evidence | Transaction/recovery owner; PF-01/03/04, PH-01/02/05/07/17/21/24/25/26 | **In progress:** the [mainnet miner fleet](../miner/FLEET-MAINNET-RUNTIME.md) now persists signed register/publish/bind/revoke intents and reconciles their original canonical outcomes before any identical-byte retry; affected miner/onchain/chain normal, race and vet pass. The [operator receipt-census fix](evidence/operator-recovery-census-20260927.md) preserves signed candidates after an inconclusive read; 19 affected test roots pass normal/race, with package vet and formatting checks. Complete cross-database signature discovery, historical approval correction, journal retention and cross-host custody remain open. | Migrate the retained-evidence model into every production owner; reconcile every original/replacement/cancellation signature and historical approval. Crash/restart and cold/warm-cache qualification must preserve finalized work, custody, failed evidence and single ownership without repeated spend. |
 | MG-04 / P0 — Runtime and native continuity | Chain/validator owner; RT-01 through RT-08, PH-03/04/10/18/19/22 | **In progress:** the [standard validator production path](OWNER-RECYCLE-PRODUCTION.md) uses separately signed schema-3 authority, an exact block/purpose-bound producer interface and original authority through startup, preparation, recovery and archive readers. Bounded content-addressed complete config/approval history now preserves signed sidecars, the original drain and proof progress across compatible independently approved renewals and source-file loss. Old configs remain read-only. [Downstream upload admission](VALIDATOR-UPLOAD-RUNTIME.md) projects exact runtime windows from those bundles without retaining producer authority. The [miner fleet mainnet gate](../miner/FLEET-MAINNET-RUNTIME.md) retains exact-artifact and uncertain-send recovery for its four mutations. The shared nonce reader requires the exact reviewed 56-byte Subtensor account layout. No live mainnet authority or deployment is supplied. | Complete remaining consumers, both validator roles, automatic compatible-upgrade and missed-boundary qualification. Arbitrary policy/key/custody changes require separate transitions. Preserve original pending bytes and finalized work; no backdated native success. |
@@ -115,6 +115,14 @@ modes ([evidence](evidence/registration-request-grammar-qualification-20260928.m
 The underlying transaction suite, combined client recovery, redirect handling
 and server-first migration/rollout remain separate gates. This parser result
 does not establish a completed registration release.
+
+The [concurrent-allocation fixture correction](evidence/registration-allocation-attempts-qualification-20260928.md)
+also passes normally and with race detection, with the original isolation
+control reproducing its expected failure in both modes. The fixture counts
+allocation attempts across real transaction rollback/retry; final identity
+equality alone had hidden the extra work. The original ineffective control is
+retained. This test-only correction preserves the ongoing full-model capture
+and does not qualify the newer composed client release.
 
 **MG-04/MG-08 direct production cadence (September 28; source integrated,
 component checks pass).** The [bounded representability fix](evidence/mainnet-steady-cadence-candidate-20260928.md)
@@ -1221,6 +1229,26 @@ Unstarted preparation keeps its checkpoint; a process gap cannot count toward
 continuous acceptance. Qualify duplicate callers, interruption between
 invalidation and publication, retained fleet evidence, successful/completed
 sources, and read-only ownership before promoting the pattern to production.
+
+**2026-09-28 production recovery follow-up (correction pending).** The composed
+registration candidate exposed this coupling again in the actual public root.
+`requireReleaseEvidenceV2Runtime` rebuilt the reserved-attempt replica census
+before native intent reconciliation, and that census rejected an upload
+session's canceled context. Withdrawing an admitted API session therefore
+stopped otherwise valid retained native recovery after ten polling failures.
+The invalid-reply and revocation regressions reproduced this in normal and
+race execution of SN `9a5b2638`; the original captures remain in
+`/mnt/data/sn-testnet/evidence/operator-registration-composed-20260928`.
+Separate immutable configured-source/custody validation from permission to use
+an active publication session. Keep the latter at new publication, preparation,
+signing and rebroadcast boundaries. A revoked API must not erase native
+liabilities; invalid retained authority or custody must still block recovery.
+
+The same tests used optional diagnostic delivery to release their receipt
+fixtures. Bounded output may drop records, so that is not a reliable operation
+barrier. Observe the real state transition through a nonblocking test hook,
+retain the real HTTP/native operations, and assert diagnostic behavior
+separately. Do not make logs part of transaction or recovery authority.
 
 ### PH-02 — Transaction idempotency, partial failure and custody
 

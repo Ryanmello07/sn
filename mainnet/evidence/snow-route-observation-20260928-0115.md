@@ -95,3 +95,15 @@ captures: `response.txt` is
 `b18f57a38c9b795114a174fd1014d1fb1b8f6f795d384bf42bdbafd49aa8c776`.
 The exact timestamps, command, status census and file hashes are in
 `result.json`. No chain identity was returned.
+
+The **09:50:15 through 09:55:18 UTC** check returned HTTP 502 on all
+21 attempts; curl exited 22 after 303.064 seconds with the same request and
+retry bounds. Exact command, timestamps and exit are retained under
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T095000Z`.
+The concatenated `response.txt` hash matches the preceding capture;
+timestamped `curl.log` has SHA-256
+`35f6dbe6fbc647a1ff4ef4b4e79442e3aeb96f37287eee2d47ce1ede7ee22484`,
+and `result.json` has SHA-256
+`1fe3b3d93109a9f3b87665aceaa482d4412d7741fc8a22e05c2c73a81ef7bac4`.
+The HTTP status census comes from the retained verbose log. No new chain
+identity or evidence of the upstream cause was returned.
