@@ -6,9 +6,10 @@ independently approved request, imports a verified native signature and recovers
 the same signed transaction after restart. The previous action owner had only a
 test custody adapter; this supplies a concrete durable offline handoff.
 
-There is no secret loader, native signer, device transport, submission command
-or active root service. The adapter is a package-local construction boundary,
-not a CLI. It cannot establish current eligibility, authenticate custody's
+The [bootstrap local phase](BOOTSTRAP-ROOT.md) now calls this adapter through
+concrete plan/apply/resume commands, with exact public input pins and durable
+child-state reconciliation. There is no secret loader, native signer, device
+transport, submission command or active root service. It cannot establish current eligibility, authenticate custody's
 global nonce fence or authorize live operation. Its successful return means
 that the specified public artifact was verified and retained locally.
 

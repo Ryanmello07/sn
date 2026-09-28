@@ -280,7 +280,7 @@ func bootstrapPlanOutline() bootstrapPlan {
 	}
 	return bootstrapPlan{Schema: bootstrapPlanSchema, Status: "unbound_outline", Netuid: 25, Requirements: requirements, Actions: actions,
 		Economics:         planEconomics{Denominator: "native_miner_allocation_before_withholding", ProviderNumerator: 1, FractionDenominator: 10, RemainderNumerator: 9, Remainder: "owner-recycle", Assurance: "observed-native-target"},
-		ExecutionBlockers: []string{"Supply independently approved mainnet chain/genesis/EVM964 and exact snapshot/source-lock/release inputs before building a bound review", "All actions need their missing semantic capability/custody/role/artifact validators and a separate executable plan authorization"}}
+		ExecutionBlockers: []string{"Supply independently approved mainnet chain/genesis/EVM964 and exact snapshot/source-lock/release inputs before building a bound review", "This review hash cannot authorize the separate executable local-custody phase; chain actions still need their semantic adapters and independent bounded authority"}}
 }
 
 // Exit zero means review output was produced, never that launch is ready.

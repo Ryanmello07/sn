@@ -12,6 +12,10 @@ transport, production mutation-authority adapter or deployment. The separate
 [owned submission adapter](ROOT-SUBMISSION.md) now implements exact-byte native
 HTTP submission and durable uncertain-send reconciliation under its own signed
 route/action approval; it is not wired to a live service.
+The [bootstrap local phase](BOOTSTRAP-ROOT.md) now creates and resumes this
+actual service journal alongside its custody owner. It neither runs the service
+loop nor consumes an observation/broadcast allowance. Its signature import is
+the same public-receipt handoff used by the service's independent signer port.
 The canonical chain's existing `submit` method remains disabled. A successful
 decision, adapter return or supervisor completion is never activation authority;
 every service event keeps `activation_ready: false`.

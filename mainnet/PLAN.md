@@ -3,8 +3,10 @@
 `sn-mainnet plan` produces a reviewable dependency graph, with every action
 explicitly blocked. It does not produce a signed or executable launch plan,
 load a signer, make an RPC request, inspect a live filesystem release, or start
-services. A separate future executable schema and signed authorization are
-required for `apply`; this command's hash must never be accepted as that authority.
+services. Its hash must never be accepted as executable authority. The separate
+[local root-custody phase](BOOTSTRAP-ROOT.md) now implements `bootstrap
+plan/apply/resume` with its own schema, exact approved packet and durable owners;
+it does not execute this review graph or complete the chain bootstrap.
 
 Before the owned mainnet route and independent genesis approval are available:
 
@@ -88,7 +90,7 @@ at most 32 supplemental inputs are accepted. The combined snapshot is bounded
 to 26 MiB to accommodate maximum retained code/metadata hex plus framing.
 JSON rejects duplicate keys, unknown fields, overflow and trailing documents.
 
-The bound output has schema `urnetwork-mainnet-blocked-plan-v1`, `status: blocked`,
+The bound output has schema `urnetwork-mainnet-blocked-plan-v2`, `status: blocked`,
 `apply_authority: false`, `activation_ready: false`, exact raw-file and internal
 hash references, native/EVM hashes and their independently decoded heights.
 Runtime byte hashes, the native header commitment, Frontier digest and raw EVM
@@ -104,6 +106,17 @@ their shared authority prerequisites are satisfied. Activation depends on all
 three branches. The root role never counts toward the required **two distinct
 UR validators and two healthy operators**.
 
+Schema v2 separates preconditions from action `postconditions`. A requirement's
+`produced_by` names its sole producer, which must precede every consumer in the
+dependency graph. Contract inputs contain expected getter values; observed
+getter proofs follow installation. UR service inputs contain approved roles,
+permits and configuration; revealed/applied rows follow activation. Approved
+10/90 mechanics and rounding are activation inputs; realized native economics
+are acceptance outputs. Validation rejects a same-action or downstream fact
+used as a prerequisite. Historical v1 outlines remain review evidence only.
+The [current v2 outline](evidence/blocked-plan-outline-v2-20260928.json) contains
+ten review actions and 30 input/output requirements, all explicitly unvalidated.
+
 The operator has SN25 owner keys but no chain-Root administrative origin. The
 planned native reset therefore seeks the strongest safe owner-authorized trim,
 with exact before/after hotkey generations, protected survivors and a named
@@ -114,25 +127,29 @@ The separate signer-free [owner-trim planner](SUBNET-CENSUS.md#best-effort-owner
 now ranks partial owner-key choices and records residual generations from one
 authenticated census. Its prediction cannot satisfy this graph's reset or
 execution authority requirement. The [current offline outline](evidence/blocked-plan-outline-owner-trim-20260927.json)
-incorporates the partial-trim description; earlier outlines remain historical.
+incorporates the partial-trim description under v1; it remains historical.
 
 The economic target is fixed to the requested **1/10 of native miner allocation
 before withholding**, with **9/10 owner-recycle**, observed-native-target assurance
 and no reserve credit. This is a requested policy, not proof that Yuma or an
-installed contract implements it. The graph requires actual allocation,
-quantization, owner-mode and realized remainder evidence before activation.
+installed contract implements it. Activation requires approved allocation,
+quantization and owner-mode policy. Actual native allocation and realized
+remainder evidence are postconditions collected after activation.
 
 Exact missing interfaces remain explicit: semantic validators for runtime
 authority, release/artifacts, role/custody/limit manifests, complete generation
 census and reset capability, actual deployment/registration payloads, existing
-root seat/strategy and bounded service owner, UR permits/CRv4 quorum, migration
+root seat/strategy and production current-authority admission, UR permits/CRv4 quorum, migration
 cutover, native economic outcomes, monitoring/on-call, and final acceptance.
 Present-day execution also needs a fresh boundary, exact per-action origin,
 nonce/address/postconditions, durable receipt/nonce ownership, lifetime ledger
 and separate signed phase/cap/expiry authorization. The planner invents none.
+The existing root service/custody/submission owners and the executable local
+phase are implemented; actual live authority and the remaining chain bootstrap
+orchestration are distinct outstanding work.
 
 Identical input bytes produce identical bound output. `content_hash` is SHA256
-of `urnetwork-mainnet-blocked-plan-v1` plus a zero byte plus canonical Go JSON
+of `urnetwork-mainnet-blocked-plan-v2` plus a zero byte plus canonical Go JSON
 with `content_hash` set to the empty string. No wall-clock time or mutable
 source tree enters the hash. Exit 0 means only the review JSON was emitted;
 identity mismatch exits 3, malformed/missing input exits 2 with no partial output,

@@ -640,6 +640,15 @@ current-authority and custody adapters, actual route/seat approval and command
 activation must still be supplied and qualified before publishing a root basket;
 the current accumulate-in-place strategy needs no periodic root transaction.
 
+The [executable local root-custody bootstrap phase](BOOTSTRAP-ROOT.md) now wires
+`bootstrap plan/apply/resume` to these existing custody and service owners. It
+completes local journal preparation, exports the approved public packet and
+imports its verified signature without a native key or network operation.
+Resume reconciles actual child state after interrupted progress or output;
+completed journals cannot be recreated as fresh allowances. Results separate
+local custody completion, signature awaiting import and pending chain phases.
+This is one implemented phase, not full bootstrap or root service activation.
+
 `check-recycle-mode --rpc URL --policy FILE` binds the finalized mode read to
 independently supplied mainnet genesis, runtime code/metadata and complete
 version pins. It validates the runtime-declared map, enum and Burn fallback and
@@ -844,7 +853,7 @@ joined in local deterministic tests. This closes the downstream tuple-only
 history gap without granting writer capability or proving remote delivery,
 original economic authority, mainnet deployment or live approval custody.
 
-No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every future mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
+No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
 
 The canonical plan binds schema and action-format versions; exact config/policy bytes; resolved configuration roots and runtime routes; source/dependency/artifact/binary identities; owned-node and runtime identities; native/EVM snapshot hashes; all public roles; census and reset classifications; actual transaction payloads/origins; expected CREATE addresses and nonces; phase dependencies; validity windows; spend/count caps; and the chosen emission-denominator/remainder policy. Hash canonical bytes with domain separation. The signed authorization names that hash, network, expiry, allowed phases and ceilings. Reject duplicate fields, unknown schema versions, overflow, unexpanded substitutions and ambiguous addresses.
 
@@ -856,8 +865,29 @@ sn-mainnet plan --config /secure/ur-mainnet/plan-config.json > /secure/ur-mainne
 ```
 
 The JSON config and release-input schema are in [PLAN.md](PLAN.md). The resulting
-blocked-plan hash cannot be passed as executable apply authority. The remaining
-operator examples below are future interfaces requiring a separate executable
+blocked-plan hash cannot be passed as executable apply authority. Review schema
+v2 separates action preconditions from produced postconditions: deployed getter
+proofs follow installation, revealed/applied validator rows follow activation,
+and realized native economics follow the first approved submission. None is a
+circular prerequisite to its own producer.
+
+The separate implemented local phase uses its own strict JSON schema and exact
+independently approved root custody packet:
+
+```sh
+sn-mainnet bootstrap plan --config /secure/ur-mainnet/bootstrap-root.json > /secure/ur-mainnet/review/root-custody-plan.json
+sn-mainnet bootstrap apply --config /secure/ur-mainnet/bootstrap-root.json --run-dir /secure/ur-mainnet/run --accept-plan-hash "$ROOT_CUSTODY_PLAN_HASH"
+sn-mainnet bootstrap resume --config /secure/ur-mainnet/bootstrap-root.json --run-dir /secure/ur-mainnet/run --accept-plan-hash "$ROOT_CUSTODY_PLAN_HASH"
+```
+
+[BOOTSTRAP-ROOT.md](BOOTSTRAP-ROOT.md) specifies its public-signature import and
+exact recovery contract. It does not perform owner trim, contract installation,
+UR activation or a root broadcast. Complete contract installation must include
+the `STValidatorEvidence` journal and its anchor/coordinator binding; the
+existing `Deploy.s.sol` alone is insufficient. The testnet EVM945 deployment
+manager is not a mainnet adapter.
+
+The remaining operator examples below are future interfaces requiring an executable
 schema and complete semantic admission; the implemented `plan` does not accept
 the draft YAML config, `--snapshot`, `--phase` or `--out` flags.
 
@@ -869,7 +899,7 @@ sn-mainnet resume --run-dir /secure/ur-mainnet/run --accept-plan "$REVIEWED_MAIN
 sn-mainnet verify --run-dir /secure/ur-mainnet/run --out /secure/ur-mainnet/verification
 ```
 
-This future executable YAML config sketch is not the current JSON review input.
+This future executable YAML config sketch is neither current JSON input schema.
 It intentionally contains `null` for unapproved identities and monetary values.
 A real executable plan must reject them. Values represent required fields, not
 suggested budgets or fake addresses; secret material is supplied through local
