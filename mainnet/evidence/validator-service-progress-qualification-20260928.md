@@ -45,7 +45,10 @@ Manifest SHA-256 values:
 - Module inputs: `1c73aa444ce385ba12db9f15ec8cfdbd6d5b2c1c52c795ac1b6d886df22fd0f8`
 - Causal inputs: `64a71a5a6ec6b1ffee9216b2afd3f420e58191e103f5ab46fc5cfd8dbb5b8b12`
 
-MG-07 remains open. The read-only monitor consumer, cross-domain metrics,
-delivered alerts and repair controller are subsequent work. Native schedule
-and steering fields await PH-03's actual loop hooks. A full nonempty production
-V2 begin/update continuation remains separately unqualified.
+MG-07 remains open. Subsequent separately qualified work adds the
+[monitor consumer](service-monitor-qualification-20260928.md) and the native/
+steering hooks in a genuine nonempty
+[production continuation](production-continuation-candidate-20260928.md).
+Other domain coverage, delivered alerts and the repair controller remain open.
+Those subsequent receipts preserve their own exact source and scope; neither
+extends this producer qualification into complete public startup or live acceptance.

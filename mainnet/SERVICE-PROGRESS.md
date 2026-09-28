@@ -81,17 +81,19 @@ consumer to diagnose.
 ## Scope and qualification
 
 This slice adds the producer, command option, bounded wire, and actual owner
-hooks. The read-only mainnet monitor consumer, Prometheus metrics, alert examples,
-independent domain polling, and miner status extension are subsequent slices.
-No telemetry collector or alert delivery is installed or claimed here.
+hooks. The separately qualified [service monitor](SERVICE-MONITOR.md) now adds
+read-only consumption, Prometheus metrics, alert examples and independent role
+polling. Miner status extension, telemetry installation and delivered alerts
+remain open. Neither producer nor consumer qualification establishes deployment.
 
 Deterministic tests exercise actual empty intent custody and physical close
 faults, actual settlement closure/publication and cold disk restart, delayed
 observations, output repair, ownership refusal, blocked I/O, joined cancellation,
 ambiguous writes, and restart/clock ordering. A genuine nonempty production V2
-`begin`/`update` fixture is still being assembled in PH03; this slice does not
-claim successful nonempty end-to-end transition coverage. The typed loop hooks
-will be added at its exact classification branches without changing retries.
+`begin`/`update` fixture and typed native/steering loop hooks are now covered by
+the separate [continuation qualification](evidence/production-continuation-candidate-20260928.md).
+That scope preserves its original race-package timeout and targeted completion;
+it does not establish the complete public startup or live economic outcome.
 
 [Terra qualification passed](evidence/validator-service-progress-qualification-20260928.md):
 47 selected roots passed normally and with race detection, all four causal

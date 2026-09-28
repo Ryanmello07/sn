@@ -1108,16 +1108,24 @@ service supervisors, and a bounded repair controller. The monitor observes and
 reports; supervisors recover an approved process generation; the controller
 executes only already authorized actions. Implement and rehearse this separation
 under MG-07/PH-28 before production activation. The current `monitor` command
-supplies only the identity/finality foundation described above.
+supplies identity/finality observations and an optional read-only
+[`--services` consumer](SERVICE-MONITOR.md) for independently configured
+validator roles.
 
 The standard validator now has a qualified optional
 [`--progress-file` producer](SERVICE-PROGRESS.md). It reports bounded intent and
 settlement observations without acquiring another protocol reader or signer;
 publication failures do not cancel validation. Its separate heartbeat,
 successful-observation, durable-progress and publication-acknowledgment times
-must remain distinct in dashboards. The read-only consumer and delivered
-alerts are still implementation/deployment work; a fresh file alone is not
-proof of healthy validation.
+must remain distinct in dashboards. The consumer now retains these facts across
+outages and restart, with separate per-role checkpoints and atomic metrics.
+[Qualification](evidence/service-monitor-qualification-20260928.md) passed 48
+selected normal/race roots, five controls in both modes and service/chain alert
+rules. Delivered alerts, other production domains, supervision and the repair
+controller remain deployment or implementation work. A fresh file alone is not
+proof of healthy validation. Shared synchronous log output can still block the
+workers and their join; bounded log export and independent stale-file alerts
+must be part of operational readiness.
 
 ### Independent observations and existing telemetry
 

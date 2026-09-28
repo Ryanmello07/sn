@@ -1,5 +1,9 @@
 # MG07 service consumer source candidate
 
+Follow-up: the corrected source completed normal/race, five controls and rule
+qualification. See [the completed receipt](service-monitor-qualification-20260928.md).
+The source-seal description below retains its original pending status.
+
 Base: `52fb3b0f46eec3d69e3580e07526022f7d9dc208`. The qualified producer
 `c67f8471431bfdfb09766d2ea7cc94e151110248` is inherited unchanged. This slice
 changes the mainnet monitor consumer only; it does not edit producer, PH03,

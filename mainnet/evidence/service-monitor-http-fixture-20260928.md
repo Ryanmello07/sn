@@ -1,5 +1,10 @@
 # MG07 blocked HTTP fixture correction
 
+Follow-up: the corrected 48-root normal/race census and five controls completed,
+and service/legacy alert rules passed. See
+[the completed receipt](service-monitor-qualification-20260928.md). The source
+receipt below preserves the original failure and pre-qualification scope.
+
 The first Terra normal capture of `a511e00aeffc85387b120b22955bda13a0568c47`
 reached the real source-mismatch command assertions, then blocked while closing
 its synthetic HTTP server. The handler had waited for request cancellation

@@ -58,9 +58,17 @@ MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal
 and race, with four causal controls and the integrated authority-projection
 check. Actual custody/settlement owners supply its facts; an isolated exporter
-keeps heartbeat, useful progress and confirmed publication separate. The
-read-only monitor consumer, Native/Steering loop hooks and delivered alerts
-remain open.
+keeps heartbeat, useful progress and confirmed publication separate. Native
+and steering hooks are covered by the separate
+[continuation qualification](evidence/production-continuation-candidate-20260928.md).
+The [read-only service consumer](SERVICE-MONITOR.md) is also implemented and
+[qualified](evidence/service-monitor-qualification-20260928.md): 48 selected
+roots pass normal/race, five controls reproduce their required failures in both
+modes, and service plus inherited alert-rule fixtures pass. Each validator
+role retains its own source checks, evidence ages and output files while the
+chain worker retries independently. Protocol deadline inference, other domain
+coverage, bounded log export, delivered alerts and the repair controller remain
+open; source qualification does not establish live monitoring.
 
 The newer server source branch `codex/mainnet-composed-hardening-20260927` at
 `b6f49bdb` includes migration 728, the operator receipt-census correction,
