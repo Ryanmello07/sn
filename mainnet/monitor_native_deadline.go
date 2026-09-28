@@ -206,7 +206,7 @@ func (self *monitorNativeDeadlineHistory) validate(source protocol.ValidatorProg
 	same := first.DetectedAt.Equal(last.DetectedAt) && first.Native == last.Native && first.Steering == last.Steering &&
 		firstIntent == lastIntent && *first.Intent.Value == *last.Intent.Value
 	if self.MissedWindows == 1 && !same || self.MissedWindows > 1 &&
-		(first.Intent.Value.NativeEpoch >= last.Intent.Value.NativeEpoch || first.DetectedAt.After(last.DetectedAt)) {
+		(first.Intent.Value.NativeEpoch >= last.Intent.Value.NativeEpoch || first.DetectedAt.After(last.DetectedAt.Add(monitorServiceClockAllowance))) {
 		return errors.New("native deadline incident history is inconsistent")
 	}
 	return nil

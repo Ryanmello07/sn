@@ -237,7 +237,9 @@ func TestMonitorNativeDeadlineCommandRetainsFirstAndLastMisses(t *testing.T) {
 	if first.State.NativeDeadline == nil {
 		t.Fatal("first incident absent")
 	}
-	fixture.clock.seconds.Add(10)
+	// Native epoch order remains authoritative within the existing consumer
+	// clock allowance; original detection times are retained without rewriting.
+	fixture.clock.seconds.Add(-1)
 	value := monitorDeadlineTestRecord(fixture.clock.now(), 1, 301, 10)
 	value.Intent.Value.NativeEpoch, value.Intent.Value.PreparedAtBlock = 9, 210
 	value.Intent.Value.VectorHash = "0x" + strings.Repeat("6", 64)
