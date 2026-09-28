@@ -100,6 +100,11 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 // A supplied clock makes outage and finality deadlines reproducible in tests.
 func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time) int {
+	return runMainWithMonitorHooks(ctx, args, stdout, stderr, now, monitorServiceHooks{})
+}
+
+// Test observers cover real file operations and owned waits, not source verdicts.
+func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
 	if len(args) != 0 && args[0] == "bootstrap-contracts" {
 		return runBootstrapContractCommand(ctx, args, stdout, stderr)
 	}
@@ -155,6 +160,7 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 	stallAfter := flags.Duration("stall-after", 5*time.Minute, "finality progress alert threshold")
 	checkpointPath := flags.String("checkpoint", "", "absolute path for a durable monitor finality checkpoint")
 	metricsPath := flags.String("metrics-file", "", "absolute .prom path for atomic monitor telemetry")
+	servicesPath := flags.String("services", "", "bounded expected service-role policy; requires checkpoint and metrics-file")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *rpcUrl == "" {
 		fmt.Fprintln(stderr, "command requires --rpc and no positional arguments")
 		return 2
@@ -178,8 +184,8 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 		fmt.Fprintf(stderr, "mainnet monitor requires EVM chain ID %d\n", mainnetEvmChainId)
 		return 2
 	}
-	if command == "inspect" && (*checkpointPath != "" || *metricsPath != "") {
-		fmt.Fprintln(stderr, "--checkpoint and --metrics-file are only valid for monitor")
+	if command == "inspect" && (*checkpointPath != "" || *metricsPath != "" || *servicesPath != "") {
+		fmt.Fprintln(stderr, "--checkpoint, --metrics-file and --services are only valid for monitor")
 		return 2
 	}
 	if *metricsPath != "" && *checkpointPath != "" {
@@ -221,29 +227,53 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 		}
 		return 0
 	}
+	if *servicesPath != "" {
+		if *checkpointPath == "" || *metricsPath == "" {
+			fmt.Fprintln(stderr, "--services requires separate --checkpoint and --metrics-file outputs")
+			return 2
+		}
+		policy, err := loadMonitorServices(ctx, *servicesPath, expected, *checkpointPath, *metricsPath)
+		if err != nil {
+			fmt.Fprintln(stderr, "monitor service policy:", err)
+			return 2
+		}
+		return runMonitorServices(ctx, client, expected, policy, *checkpointPath, *metricsPath, *interval, *stallAfter, stdout, stderr, now, hooks)
+	}
+	return runChainMonitor(ctx, client, expected, *checkpointPath, *metricsPath, *interval, *stallAfter, stdout, stderr, now)
+}
+
+// Chain sampling retains its original continuity, publication and exit rules.
+// Service composition supervises this independently of bounded file reads.
+func runChainMonitor(ctx context.Context, client *rpcClient, expected identityExpectation, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time) (result int) {
+	encoder := json.NewEncoder(stdout)
+	var err error
 	state := &monitorState{}
 	var checkpoint *monitorCheckpointStore
-	if *checkpointPath != "" {
-		checkpoint, err = openMonitorCheckpoint(*checkpointPath, expected)
+	var metrics *monitorMetricsStore
+	defer func() {
+		if err := errors.Join(metrics.close(), checkpoint.close()); err != nil {
+			fmt.Fprintln(stderr, "monitor chain cleanup:", err)
+			result = 3
+		}
+	}()
+	if checkpointPath != "" {
+		checkpoint, err = openMonitorCheckpoint(checkpointPath, expected)
 		if err != nil {
 			fmt.Fprintln(stderr, "monitor checkpoint:", err)
 			return 3
 		}
-		defer checkpoint.close()
 		state, err = checkpoint.load()
 		if err != nil {
 			fmt.Fprintln(stderr, "monitor checkpoint:", err)
 			return 3
 		}
 	}
-	var metrics *monitorMetricsStore
-	if *metricsPath != "" {
-		metrics, err = openMonitorMetrics(*metricsPath)
+	if metricsPath != "" {
+		metrics, err = openMonitorMetrics(metricsPath)
 		if err != nil {
 			fmt.Fprintln(stderr, "monitor metrics:", err)
 			return 2
 		}
-		defer metrics.close()
 		if err := metrics.initialize(state); err != nil {
 			fmt.Fprintln(stderr, "initialize monitor metrics:", err)
 			return 1
@@ -316,7 +346,7 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 				event.Status, event.Detail = "finality-conflict", "previously finalized block hash changed at its original height"
 			} else {
 				previousHash, previousNumber, previousSuccess := state.lastHash, state.lastNumber, state.lastSuccessAt
-				event.Status, err = state.observe(sampledAt, identity, *stallAfter)
+				event.Status, err = state.observe(sampledAt, identity, stallAfter)
 				if err != nil {
 					event.Detail = err.Error()
 				} else if recovered := state.clearUnavailable(); checkpoint != nil && (recovered || state.lastHash != previousHash || state.lastNumber != previousNumber || !state.lastSuccessAt.Equal(previousSuccess)) {
@@ -339,7 +369,7 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 		select {
 		case <-ctx.Done():
 			return 0
-		case <-time.After(*interval):
+		case <-time.After(interval):
 		}
 	}
 }

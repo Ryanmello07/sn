@@ -1,0 +1,177 @@
+# Read-only validator service monitoring
+
+`sn-mainnet monitor --services /absolute/path/services.json` observes the
+[producer's bounded operational file](SERVICE-PROGRESS.md) alongside the
+existing chain monitor. Both `--checkpoint` and `--metrics-file` are required.
+One joined worker observes the chain and one worker observes each configured
+validator role. A chain read using its full retry window cannot delay service
+reads. A blocked role read or ordinary publication error cannot stop its peers.
+The observer never opens an intent store, acquires a signing owner, performs a
+repair, or treats producer reports as independent on-chain acceptance.
+
+The strict policy is at most 16 KiB and contains one through eight roles. Supply
+the expected source from the approved deployment configuration, independently
+of the candidate file. All six identity fields must match exactly. The chain
+id and genesis must also match the command's explicit chain expectation.
+This synthetic example illustrates the shape; its hashes are not approvals:
+
+```json
+{
+  "schema": "urnetwork-mainnet-monitor-services-v1",
+  "validators": [{
+    "role": "alpha",
+    "progress_file": "/var/lib/sn-validator-alpha/progress.json",
+    "expected_source": {
+      "config_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "deployment_id": "synthetic-deployment",
+      "validator_id": 1,
+      "chain_id": 964,
+      "genesis_hash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+      "netuid": 25
+    }
+  }]
+}
+```
+
+For example, add `--services /etc/sn-mainnet/services.json` to the existing
+monitor invocation with `--checkpoint /var/lib/sn-mainnet/monitor.json` and
+`--metrics-file /var/lib/fluent-bit/textfile/monitor.prom`. The command also
+writes `monitor.validator-alpha.json` beside the checkpoint and
+`monitor.validator-alpha.prom` beside the metrics. Each role has separate
+ownership locks. Role names match `[a-z][a-z0-9_-]{0,31}`; duplicate roles,
+duplicate producer identities and overlapping input/output/lock paths are
+refused. Use one complete expected role census per host. Separate monitor
+commands on the same host must not repeat these metric families and role labels;
+different output filenames alone do not distinguish time series.
+
+Precreate physical directories without group/world write permission. Source
+files and metrics may be group-readable; checkpoints and locks are private.
+Aliases, special files, empty/partial/oversized sources and replacements during
+a read are refused. The source limit is the existing 8 KiB producer wire.
+Atomic replacement between observations is expected. Reads own their descriptors
+through identity checks and actual close. Regular-file work is byte-bounded and
+remains joined; a kernel/filesystem stall is not disguised by an abandoned
+timeout goroutine. Put these small files on a local filesystem. Independent
+sample-age alerts remain necessary if a worker or the host stops making progress.
+
+## What observations mean
+
+A completed strict read, process heartbeat, prior acknowledged publication,
+successful domain observation and actual protocol transition have separate
+timestamps. Re-reading an unchanged record cannot refresh its heartbeat,
+intent progress time or settlement progress time. A missing intent is known
+empty only when its producer observation is current and fresh. Missing,
+unavailable, stale or invalid input preserves the last accepted record, with
+current flags cleared. Numeric zero without its current/known flag is unknown.
+
+Current intent, native and settlement evidence must each be fresh. An incomplete
+domain reports `unknown`; the absence of an error is not readiness. Native and
+steering producer hooks are qualified separately. This consumer accepts their
+existing wire fields but does not manufacture them. It exports pending counts,
+original intent creation/progress timestamps, and prepared/reveal/finalized/
+application blocks. `protocol_deadline_known` is always zero in this slice.
+Elapsed wall time alone cannot make an old pending intent stalled: a slow epoch
+or reveal wait may be legitimate. Deadline-based protocol alarms and miner
+progress ingestion remain later work.
+
+Policy renewal may change the current config hash for the same deployment,
+validator, chain, genesis and netuid. Restart retains the previous accepted
+record while requiring a new read matching the independently expected current
+source. Its intent still names its original config and creation time. A candidate
+cannot rewrite the config, creation time or unchanged progress time of the same
+intent vector. The observer grants neither configuration signing authority.
+
+A first failure after a successful healthy period starts a new known outage at
+that failed observation, not at process startup. Before any success, startup
+bounds the initial outage. A persisted unresolved outage retains its boundary
+across restart. A previously healthy checkpoint does not prove when an outage
+began during downtime. Checkpoints retain consumer clock high-water and detected
+future producer clocks; missing input cannot clear a clock incident. A valid
+new observation is required for recovery, and consumer time must catch up to its
+retained high-water within the allowed skew.
+
+## Publication and independent telemetry
+
+Per-role checkpoints are at most 16 KiB; textfiles contain 46 fixed gauges within
+32 KiB. The only new metric label is the independently configured `role`.
+Config/deployment identifiers, paths, vector hashes and raw errors are never
+labels. JSON events use `urnetwork-mainnet-validator-event-v1` and preserve the
+bounded source/intent evidence for the existing log pipeline. Role read failures
+deliberately expose closed classifications rather than raw filesystem details;
+policy admission retains wrapped causes for operator inspection. This change
+does not add a log service or configure Loki ingestion.
+
+Every gauge begins with `sn_mainnet_validator_`:
+
+| Suffix group | Meaning |
+| --- | --- |
+| `sample_timestamp_seconds`, `read_last_success_timestamp_seconds`, `read_current`, `read_outage_started_timestamp_seconds` | Completed consumer observation, successful exact-source read and unresolved read outage. |
+| `status`, `severity`, `clock_fault_timestamp_seconds`, `candidate_heartbeat_timestamp_seconds` | Closed diagnostic state, severity and rejected clock evidence. |
+| `export_status`, `export_last_success_timestamp_seconds`, `checkpoint_current` | Previous acknowledged complete export and current checkpoint result. |
+| `has_record`, `source_current`, `source_config_current`, `heartbeat_timestamp_seconds` | Retained-record presence, fresh exact-source evidence, config match and producer heartbeat. |
+| `producer_publish_status`, `producer_publish_last_success_timestamp_seconds` | Producer's prior publication acknowledgment, distinct from this monitor's exporter. |
+| `intent_current`, `intent_known_empty`, `intent_present`, `intent_original_config`, `intent_status` | Current observation versus retained pending/completed intent; original config differs from current policy. |
+| `intent_observed_timestamp_seconds`, `intent_last_success_timestamp_seconds`, `intent_created_timestamp_seconds`, `intent_progress_timestamp_seconds` | Observation success, original pending age and actual producer-reported lifecycle progress. |
+| `intent_prepared_block`, `intent_reveal_block`, `intent_finalized_block`, `intent_application_block` | Retained original intent boundaries, with no inferred acceptance. |
+| `native_current`, `native_last_success_timestamp_seconds`, `native_epoch`, `native_block` | Authenticated scheduler input reported by the producer, possibly unknown/stale. |
+| `settlement_current`, `settlement_cursor_known`, `settlement_last_success_timestamp_seconds`, `settlement_progress_timestamp_seconds` | Current observation, retained known cursor and actual durable progress. |
+| `settlement_epoch`, `settlement_target_epoch`, `settlement_pending_publications`, `settlement_first_pending_epoch` | Durable closure and still-pending publication remain distinct. |
+| `steering_current`, `steering_last_success_timestamp_seconds`, `steering_status` | Producer's classified loop outcome; absent native epoch stays unknown. |
+| `protocol_deadline_known` | Zero: this slice does not infer protocol deadlines. |
+
+Status codes are 0 starting, 1 observed, 2 missing, 3 unavailable, 4 invalid,
+5 identity mismatch, 6 clock incident, 7 stale heartbeat, 8 producer publication
+uncertainty, 9 unknown domain, 10 failed intent and 11 source changed during read.
+Severity is 0 none, 1 warning, 2 critical. Publication codes are 0 starting,
+1 previously published, 2 retrying. Intent codes are 0 absent, 1 pending,
+2 finalized, 3 applied, 4 failed. Steering codes are 0 starting, 1 working,
+2 epoch wait, 3 reveal wait, 4 receipt pending, 5 receipt transport wait,
+6 read wait, 7 complete and 8 hard error. Retained codes require fresh/current
+flags before they describe current operation.
+
+Role checkpoint/metrics errors retry at 1, 2, 4, 8, 16, 32, then at most 60
+seconds. A new completed observation continues through ordinary export errors;
+the other roles and chain worker keep running. A metrics snapshot reports the
+previous confirmed export time because bytes cannot acknowledge their own
+directory sync. A failure after rename may leave complete visible bytes but
+cannot advance confirmed success. The next attempt reports retrying and
+republishes a complete snapshot. JSON reports the outcome after the attempt.
+Restart preserves existing textfiles until a real sample completes.
+
+Terminal policy, checksum or output-ownership faults cancel the composition,
+join every launched worker, and close every admitted owner. Cleanup errors are
+retained in operator diagnostics and return exit 3. The legacy chain monitor's
+recoverable output result is supervised with bounded retry in service mode;
+its integrity/configuration failures remain terminal. The no-services command
+retains its original exit behavior, with close errors now reported explicitly.
+
+## Provisional alert rules
+
+[service-alerts.example.yml](service-alerts.example.yml) extends the existing
+xops Fluent Bit textfile → Prometheus remote write → Mimir/Grafana path. The
+checked xops planetoid configuration enables `node_exporter_metrics`' textfile
+collector at `/var/lib/fluent-bit/textfile`, scrapes every 15 seconds and adds
+`env`, `host`, `job` labels. No collector, remote receiver or rule installation
+is performed here. Keep the existing [chain rules](monitor-alerts.example.yml)
+alongside the service rules.
+
+Supply `sn_mainnet_validator_expected{env,host,role}=1` from an independent
+expected-service roster in the evaluator. A roster originating only on the
+monitored host cannot detect that host disappearing. Matching includes the
+role, so a healthy validator cannot conceal another missing validator on the
+same host. If the actual routing labels differ, update both roster and rules.
+
+Initial thresholds are **provisional**: heartbeat/domain freshness warns at
+90 seconds, heartbeat becomes critical at 120 seconds, read outages warn at
+120 seconds and become critical at 300 seconds, and future clocks allow
+30 seconds. Example external rules detect missing/stale samples, explicit
+severity, stale producer heartbeat, unknown domains and stale confirmed export.
+An unknown-domain warning describes missing evidence, not a failed protocol
+operation. These thresholds assume a 30-second sample interval and need
+workload qualification before activation; a longer configured interval must
+be reflected in the rules. Test the rules with
+`promtool test rules service-alerts.test.yml`.
+
+Installation, alert routing/delivery, remote ingestion, service supervision,
+operator capture/miner coverage and protocol deadline policy remain open work.
+Source and fixture qualification alone do not establish any of those outcomes.

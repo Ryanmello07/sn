@@ -1,5 +1,6 @@
 // Monitor publications replace complete snapshots. A directory sync failure
-// after rename is ambiguous durability, so the caller reports failure and stops.
+// after rename is ambiguous durability. Callers report failure; a supervising
+// domain may retry a complete snapshot without acknowledging the failed write.
 package main
 
 import (
@@ -8,6 +9,13 @@ import (
 	"os"
 	"path/filepath"
 )
+
+// Only ownership faults are terminal to a composed observer. Ordinary local
+// I/O failures preserve aging output and retry without stopping other domains.
+type monitorOutputOwnershipError struct{ reason string }
+
+// The public role event uses a closed outcome rather than this local detail.
+func (self *monitorOutputOwnershipError) Error() string { return self.reason }
 
 // Resolve the existing parent once before acquiring ownership. Keeping the
 // physical destination also prevents a later alias change redirecting writes.

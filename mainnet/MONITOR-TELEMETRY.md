@@ -6,6 +6,12 @@ eleven fixed Prometheus gauges alongside its existing JSON events. Use
 continuity, the last successful read and the first unresolved outage across
 restart. Both options are implemented in the real monitor command.
 
+Optional `--services /absolute/path/services.json` adds independently sampled,
+bounded validator roles using the existing producer status wire. See
+[service monitoring](SERVICE-MONITOR.md) for exact expected-source policy,
+separate current/retained evidence, per-role metrics and alert examples. A
+blocked chain sample cannot suppress those service observations.
+
 The textfile contains no endpoint, address, key, transaction hash or raw error.
 The existing Fluent Bit `node_exporter_metrics` textfile collector can read it;
 the example xops configuration uses `/var/lib/fluent-bit/textfile` and adds
@@ -92,6 +98,7 @@ normal/race/rule results and the controlled pre-fix failures.
 
 This supplies source and local qualification. Deployment, remote ingestion,
 actual alert delivery, expected-host provisioning, independent monitor
-supervision and validator/settlement/resource domain coverage remain open MG-07
-work. No alert message, service activation or mainnet transaction is performed
+supervision and complete protocol/resource domain coverage remain open MG-07
+work. The service consumer adds producer-reported validator/settlement evidence;
+it is not independent chain acceptance. No alert message, service activation or mainnet transaction is performed
 by the implementation or its tests.

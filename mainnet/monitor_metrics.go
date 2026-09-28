@@ -52,16 +52,13 @@ func openMonitorMetrics(path string) (*monitorMetricsStore, error) {
 	self := &monitorMetricsStore{path: path, lock: lock, directoryInfo: info}
 	opened, err := lock.Stat()
 	if err != nil || !opened.Mode().IsRegular() || opened.Mode().Perm()&0077 != 0 {
-		lock.Close()
-		return nil, errors.Join(errors.New("metrics lock is not a private regular file"), err)
+		return nil, errors.Join(errors.New("metrics lock is not a private regular file"), err, lock.Close())
 	}
 	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		lock.Close()
-		return nil, fmt.Errorf("metrics already has an owner: %w", err)
+		return nil, errors.Join(fmt.Errorf("metrics already has an owner: %w", err), lock.Close())
 	}
 	if err := self.validateDestination(); err != nil {
-		lock.Close()
-		return nil, err
+		return nil, errors.Join(err, lock.Close())
 	}
 	return self, nil
 }
@@ -98,15 +95,26 @@ func (self *monitorMetricsStore) validateDestination() error {
 		return errors.New("metrics store is closed")
 	}
 	info, err := os.Lstat(filepath.Dir(self.path))
-	if err != nil || !info.IsDir() || info.Mode().Perm()&0022 != 0 || !os.SameFile(info, self.directoryInfo) {
-		return errors.Join(errors.New("metrics directory changed"), err)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode().Perm()&0022 != 0 || !os.SameFile(info, self.directoryInfo) {
+		return &monitorOutputOwnershipError{reason: "metrics directory changed"}
+	}
+	ownedLock, lockErr := self.lock.Stat()
+	namedLock, nameErr := os.Lstat(self.path + ".lock")
+	if lockErr != nil || nameErr != nil || !namedLock.Mode().IsRegular() || namedLock.Mode().Perm()&0077 != 0 || !os.SameFile(ownedLock, namedLock) {
+		return &monitorOutputOwnershipError{reason: "metrics lock changed"}
 	}
 	info, err = os.Lstat(self.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 {
-		return errors.Join(errors.New("metrics destination is not a protected regular file"), err)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 {
+		return &monitorOutputOwnershipError{reason: "metrics destination is not a protected regular file"}
 	}
 	return nil
 }
@@ -187,6 +195,17 @@ func (self *monitorMetricsStore) save(event monitorEvent, state *monitorState) e
 	}
 	raw, err := renderMonitorMetrics(event, state)
 	if err != nil {
+		return err
+	}
+	return self.saveRaw(raw)
+}
+
+// Both chain and role metrics use the same bounded atomic textfile owner.
+func (self *monitorMetricsStore) saveRaw(raw []byte) error {
+	if len(raw) == 0 || len(raw) > 32*1024 {
+		return errors.New("monitor metrics exceed their finite textfile bound")
+	}
+	if err := self.validateDestination(); err != nil {
 		return err
 	}
 	return publishMonitorFile(self.path, raw, 0644, self.syncDirectory)
