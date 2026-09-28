@@ -95,14 +95,17 @@ census. Optional metrics failure preserves independent observations, while
 original custody errors remain hard. Live root activation, deployed collection,
 alert delivery and the repair controller remain open.
 
-**Adjacent trail-output finding (September 28).** The actual `TrailEngine.Run`
-loop and a proof-signature warning still write synchronously to stdout. A full
-pipe can stall a trail worker after the outer validator lifecycle has acquired
-bounded diagnostics. Route these exact paths through the same instance-owned
-exporter with closed scalar facts, retaining evidence/custody failures and
-joining output on shutdown. Qualify actual completed/failed trails against a
-physically blocked destination; an outer-loop callback test alone does not
-cover this worker. This finding keeps complete validator output isolation open.
+**Trail-worker output correction (September 28; integrated and component qualified).**
+The actual `TrailEngine.Run` loop and proof-signature warning now use the same
+bounded exporter, with closed scalar facts and explicit operator/epoch identity.
+All 17 affected roots have passing normal/race coverage, and five causal controls
+reproduce their intended failures in both modes
+([evidence](evidence/trail-diagnostic-output-qualification-20260928.md)). The
+physical full-pipe test proves actual trail progress and cancellation before
+stdout drains. The receipt retains the original poisoned-ledger cleanup failure
+and exact fixture correction. Required custody failures still stop the affected
+work. Miner callbacks, SDK/internal logging, registration composition and live
+delivery remain separate work; component coverage is not universal output isolation.
 
 **MG-04/MG-08 direct production cadence (September 28; source integrated,
 component checks pass).** The [bounded representability fix](evidence/mainnet-steady-cadence-candidate-20260928.md)

@@ -1,5 +1,11 @@
 # Validator trail diagnostic output candidate
 
+The source and fixture-only cleanup correction are now integrated and
+[component qualified](trail-diagnostic-output-qualification-20260928.md).
+That receipt records the retained original failure, passing affected scopes,
+five causal controls and operational limits. The text below describes the
+original source candidate and its author-side checks.
+
 This source is isolated from the frozen root-output qualification and from the
 blocked contract/provider-payment work. Its base is root
 `5950a8be9d964d0e66b97e84b8a0a2408b368966`, which already contains the qualified

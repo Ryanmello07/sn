@@ -1202,11 +1202,14 @@ is now integrated and component qualified: 41 roots have passing normal/race
 coverage, six causal families reproduce their intended failures, and vet plus
 seven offline alert rules pass. Root-monitor now emits compact event v2 and
 optional independent metrics; deploy compatible log consumers first. Finite
-preview v1 still supplies the full census. Review also found
-direct synchronous output inside the actual trail worker and its proof-warning
-path. Those paths need their own bounded-owner integration and physical
-blocked-output regression before claiming complete validator output isolation.
-Local output
+preview v1 still supplies the full census. The actual trail worker and its
+proof-warning path now have their separate
+[bounded-output qualification](evidence/trail-diagnostic-output-qualification-20260928.md):
+all 17 affected roots have passing normal/race coverage and five causal controls
+reproduce the intended failures. Physical full-pipe checks cover real proof
+progress and joined cancellation. Required ledger/proof failures remain hard;
+miner callbacks, SDK/internal logging and registration composition remain
+separate scopes. Local output
 acknowledgment does not establish remote ingestion or alert delivery.
 
 ### Independent observations and existing telemetry
