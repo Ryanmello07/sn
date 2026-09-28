@@ -735,6 +735,17 @@ on the frozen composed source graph: 588 root and 183 descendant executions
 passed, with six causal controls in normal/race modes. The result covers bounded
 offline admission; actual chain effects and a complete release remain open.
 
+The v3 offline addition independently pins the separate netuid-0 root role,
+its original action approver and a distinct full-service-config approver. It
+verifies a domain-separated signed approval of the exact child root plan and
+service configuration, retaining only a public inspection and live-authority-
+pending status. V1/v2 journals keep their prior domains and recovery scope.
+The [qualification](evidence/root-role-admission-qualification-20260928.md)
+passed 403 full normal roots, all 38 selected bootstrap-chain race roots in
+three disjoint shards, seven metrics fixture race roots and vet. Live root
+eligibility, key custody, service activation and a composed production release
+remain separate gates.
+
 `check-recycle-mode --rpc URL --policy FILE` binds the finalized mode read to
 independently supplied mainnet genesis, runtime code/metadata and complete
 version pins. It validates the runtime-declared map, enum and Burn fallback and
