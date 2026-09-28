@@ -1,5 +1,11 @@
 # Root daemon output source candidate, 2026-09-28
 
+[Component qualification is complete](root-output-qualification-20260928.md):
+41 roots have scoped normal/race passes after retained fixture corrections,
+six causal families reproduce their intended failures, and vet plus seven
+offline alert rules pass. The following text records the authored source scope;
+the linked receipt supplies executed results and remaining rollout work.
+
 This slice follows bounded diagnostic source `74b827ab864650a8eb5c66b8e512d6719ed3149a`
 and lifecycle fixture `ba6a7ec356738cd8afbe5e4183d501fcd4fbe70f`. Its physical source
 is `/mnt/data/sn-testnet/worktrees/sn-mainnet-root-output-20260928/sn`;

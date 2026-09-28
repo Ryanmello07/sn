@@ -1197,7 +1197,12 @@ and race coverage, with six regression controls in both modes, vet and three
 offline alert-rule suites. Each role retains finite output capacity and actual
 delivery/loss counters. Deploy the progress consumer before the producer's
 optional diagnostic extension, and retain independent missing/stale-file alerts.
-Root-service/root-monitor output has a separate follow-up. Review also found
+The [root-service/root-monitor output follow-up](evidence/root-output-qualification-20260928.md)
+is now integrated and component qualified: 41 roots have passing normal/race
+coverage, six causal families reproduce their intended failures, and vet plus
+seven offline alert rules pass. Root-monitor now emits compact event v2 and
+optional independent metrics; deploy compatible log consumers first. Finite
+preview v1 still supplies the full census. Review also found
 direct synchronous output inside the actual trail worker and its proof-warning
 path. Those paths need their own bounded-owner integration and physical
 blocked-output regression before claiming complete validator output isolation.

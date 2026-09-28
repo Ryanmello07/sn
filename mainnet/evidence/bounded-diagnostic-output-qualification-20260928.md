@@ -58,4 +58,6 @@ field. Metrics distinguish queue admission, completed local writes, loss and
 unavailable output from actual protocol progress. Unsupported regular-file
 daemon redirection is unavailable, and an unconfigured independent metrics
 consumer cannot prove log delivery. Root-service/root-monitor output has a
-separate follow-up; it is outside this 76-root component.
+[separately qualified follow-up](root-output-qualification-20260928.md); it is
+outside this 76-root component. The actual trail-worker stdout path remains
+separate work, so this receipt does not claim complete validator log isolation.

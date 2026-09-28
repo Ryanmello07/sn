@@ -83,8 +83,17 @@ of protocol progress. All 76 affected roots have passing normal/race coverage,
 six causal controls reproduce the intended failures in both modes, and vet plus
 three offline alert-rule suites pass. The receipt preserves the original
 maximum-ID fixture failure and its isolated correction. Consumer-first rollout,
-actual alert delivery, root-service/root-monitor output and other operational
-domains remain separate work.
+actual alert delivery and other operational domains remain separate work.
+
+The [root-service/root-monitor follow-up](evidence/root-output-qualification-20260928.md)
+is also integrated and component qualified. All 41 affected roots have passing
+normal/race coverage; six causal families, mainnet vet and seven offline alert
+rules pass. The receipt retains the refused-sink assertion correction, incomplete
+panicking control capture and exact corrected reuse. Root-monitor's compact
+event v2 needs a consumer-first rollout; finite preview v1 retains the complete
+census. Optional metrics failure preserves independent observations, while
+original custody errors remain hard. Live root activation, deployed collection,
+alert delivery and the repair controller remain open.
 
 **Adjacent trail-output finding (September 28).** The actual `TrailEngine.Run`
 loop and a proof-signature warning still write synchronously to stdout. A full
