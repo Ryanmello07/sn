@@ -119,3 +119,12 @@ authoring this candidate. Source qualification does not supply a live endpoint,
 production approval or mainnet economic acceptance. See the
 [candidate qualification handoff](evidence/operator-registration-candidate-20260928.md)
 for exact source and test scope.
+
+Subsequent component qualification is recorded separately: the
+[server transaction and complete model execution](evidence/registration-server-model-qualification-20260928.md),
+[withdrawal/native recovery](evidence/operator-withdrawal-ownership-qualification-20260928.md),
+[SDK/Connect transport](evidence/registration-request-transport-qualification-20260928.md)
+and [actual production API/database path](evidence/registration-production-api-qualification-20260928.md).
+The retained receipts disclose original failures, seven optional full-model
+skips and exact dependency graphs. Final combined SN consumer checks and the
+server-first rollout remain distinct from these passing component bodies.

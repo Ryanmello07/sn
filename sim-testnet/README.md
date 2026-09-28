@@ -20,7 +20,7 @@ and the exact `--plan-hash` are supplied.
 
 Current assignment, confirmed 2026-09-28: **Sol medium** (`gpt-6-sol`,
 reasoning effort `medium`) executes tests and gates; **Astra max**
-(`gpt-6-astra`, reasoning effort `max`) owns all debugging and fixes. This
+(`gpt-6-astra`, reasoning effort `max`) owns all implementation, debugging and fixes. This
 also governs the active mainnet qualification. Preserve earlier Terra receipts
 and completed work with their original attribution. Testnet is closed under
 [../FINALIZE.md](../FINALIZE.md); the historical campaign instructions below

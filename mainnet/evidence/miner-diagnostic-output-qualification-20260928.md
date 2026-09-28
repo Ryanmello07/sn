@@ -58,9 +58,10 @@ SHA-256 `cf73edc6abe2ddf42c7dbe5aa3840bd12d3093a6349ea7904e0b19cb3ba70368`.
 This does not qualify a later combined registration dependency graph.
 
 Review found a separate optional cause-classification gap: custom `Unwrap`
-methods can run synchronously before an output offer. That follow-up remains
-open and has its own immutable successor; these results are not relabeled as
-proof against arbitrary error callbacks. SDK/internal logging, actual consumer
+methods can run synchronously before an output offer. That follow-up has its
+own [qualified immutable successor](diagnostic-cause-isolation-qualification-20260928.md);
+these original results are not relabeled as proof against arbitrary error
+callbacks. SDK/internal logging, actual consumer
 rollout, protocol readiness, delivered alerts, production custody and mainnet
 activation also remain separate work. No live deployment or chain action was
 performed by this qualification.

@@ -115,9 +115,9 @@ reader pass normal/race checks; four causal controls reproduce their intended
 failures ([evidence](evidence/miner-diagnostic-output-qualification-20260928.md)).
 Optional versioned status counters report output delivery, while `status: ok`
 remains process liveness. Consumer rollout, readiness and alert delivery remain
-open. PH-15 records a separate pending correction for arbitrary error methods
-invoked during diagnostic classification; the completed output tests remain
-retained.
+open. The [diagnostic cause isolation correction](evidence/diagnostic-cause-isolation-qualification-20260928.md)
+also passed all 20 affected roots and five causal controls in both modes and
+is integrated. PH-15 records its scope; the completed output tests remain retained.
 
 **Versioned registration grammar (September 28; component qualified).** Server
 candidate `736d7b8f` rejects ambiguous request-field aliases and duplicate or
@@ -128,16 +128,19 @@ The [underlying transaction qualification](evidence/registration-server-model-qu
 now has 29 passing affected roots normally and under race detection. Its full
 model execution finished with 1,118 passes, seven disclosed configuration/data
 skips and no test failures. The retained checker rejection for undeclared legacy
-subtests is separate from the successful original package exit. Combined client
-recovery, redirect handling and server-first migration/rollout remain separate
-gates; these component results do not establish a completed registration release.
+subtests is separate from the successful original package exit. The
+[SDK/Connect transport checks](evidence/registration-request-transport-qualification-20260928.md)
+and [actual SDK-to-production-API/database checks](evidence/registration-production-api-qualification-20260928.md)
+now pass normally and under race detection, including their causal controls.
+Final combined SN consumer checks and server-first migration/rollout remain
+separate gates; these component results do not establish a deployed release.
 
 The [concurrent-allocation fixture correction](evidence/registration-allocation-attempts-qualification-20260928.md)
 also passes normally and with race detection, with the original isolation
 control reproducing its expected failure in both modes. The fixture counts
 allocation attempts across real transaction rollback/retry; final identity
 equality alone had hidden the extra work. The original ineffective control is
-retained. This test-only correction preserves the ongoing full-model capture
+retained. This test-only correction preserves the completed full-model capture
 and does not qualify the newer composed client release.
 
 **MG-04/MG-08 direct production cadence (September 28; source integrated,
@@ -1107,7 +1110,7 @@ Add deterministic synthetic tests following [CODESTYLE.md](../../connect/CODESTY
 - Artifact eviction, RPC outage/reconnect and process restart retain valid
   progress and cannot turn stale or failed evidence into a passing result.
 
-Astra (`gpt-6-astra`, effort `max`) owns all debugging and fixes; Sol
+Astra (`gpt-6-astra`, effort `max`) owns all implementation, debugging and fixes; Sol
 (`gpt-6-sol`, effort `medium`) runs affected tests normally and under race.
 The final integration exercise upgrades a controlled runtime while the
 subnet is active and demonstrates continued required observations, reconciled
@@ -2139,7 +2142,7 @@ remains in the incident ledger for the improvement batch; missing required
 evidence remains visible in acceptance. Verify meaningful signals under both
 slow but progressing replay and an actual deadlock.
 
-**2026-09-28 optional cause-classification follow-up (correction pending).**
+**2026-09-28 optional cause-classification follow-up (integrated and component qualified).**
 Bounded output queues alone do not isolate a callback if it first invokes an
 arbitrary error's `Unwrap`, `Is` or `As` method to choose a diagnostic label.
 The miner, trail and release-read diagnostic classifiers contained this
@@ -2149,9 +2152,12 @@ calling their methods. Retain the original error for its required custody or
 retry owner, whose decision policy remains separate. Required cancellation
 must not wait for an optional diagnostic offer. Root scalar events and the
 shared output queue do not traverse producer errors and are outside this
-correction. Qualify blocking-method barriers, typed-nil and cyclic wrappers,
-and actual authentication/file callbacks without restarting the frozen output
-qualification.
+correction. The [20-root correction and five causal controls](evidence/diagnostic-cause-isolation-qualification-20260928.md)
+pass normally and under race detection, including blocking-method barriers,
+typed-nil and cyclic wrappers and actual authentication/file callbacks. Opaque
+wrappers report `unknown`; no diagnostic cause grants retry authority. Final
+combined dependency checks and deployment remain separate work, without
+restarting the frozen output qualification.
 
 **2026-09-23 release-heartbeat follow-up.** R31 entered the real release epoch
 and then stopped because a heartbeat treated process-log findings as a reason

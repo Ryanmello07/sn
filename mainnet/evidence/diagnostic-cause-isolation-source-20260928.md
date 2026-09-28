@@ -39,4 +39,6 @@ The source composes root `a089a28ca0f3c72e91821448f02fee90ba03a902` with unchang
 miner dependencies `1b671769ddf801117ef0e197ff97e4bb2cd59b8d` and
 `dc84ec47dfb2393f03d1941422cee65a0cb9ce44` as separate commits. Qualified trail
 fixture and root-output fixes remain present; registration `d3` is not part of
-this graph. Final affected normal/race/control qualification is pending.
+this graph. Qualification was pending at this source seal; the subsequent
+[normal/race/control qualification](diagnostic-cause-isolation-qualification-20260928.md)
+passed and the source is integrated.

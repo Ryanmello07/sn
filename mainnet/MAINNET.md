@@ -1225,9 +1225,12 @@ The [miner output and shutdown correction](evidence/miner-diagnostic-output-qual
 is also integrated: 18 affected miner roots, the actual Warp status reader and
 four causal controls passed their normal/race checks. Its optional diagnostic
 status extension reports local delivery separately from process liveness;
-consumer compatibility must precede rollout. A separate correction for custom
-error methods in diagnostic classification is pending. SDK/internal logging
-and registration composition remain separate scopes. Local output acknowledgment
+consumer compatibility must precede rollout. The separate
+[diagnostic cause isolation correction](evidence/diagnostic-cause-isolation-qualification-20260928.md)
+is integrated and passes 20 affected roots and five causal controls in both
+modes. It never invokes arbitrary error methods for optional labels and leaves
+opaque causes unknown. SDK/internal logging
+and final registration composition remain separate scopes. Local output acknowledgment
 does not establish remote ingestion or alert delivery.
 
 ### Independent observations and existing telemetry
@@ -1469,7 +1472,7 @@ The future mainnet acceptance bundle contains:
 
 Measure activation across at least three complete native emission intervals, and observe a full mainnet UR settlement/claim cycle before declaring settlement acceptance. The 50,400-block cycle cannot be replaced by accelerated testnet timing. Bootstrap may report `DEPLOYED_AWAITING_SETTLEMENT` while that observation is pending; it must not call the whole requested program accepted early.
 
-Implementation qualification is owned by **Sol medium (`gpt-6-sol`, effort `medium`) for tests, race runs, builds and formatting; Astra max (`gpt-6-astra`, effort `max`) for all debugging and fixes**, following the [Go style guide's bug-fix and testing policy](../../connect/CODESTYLE.md). This assignment was confirmed on 2026-09-28; retain earlier Terra evidence under its original attribution and do not rerun completed work because the executing model changed. Every actual fix needs a regression that deterministically reproduces the pre-fix failure and verifies corrected behavior at the observable failing layer. Use explicit barriers, hooks or state transitions for ordering; sleeps, negative timeouts, queue polling and scheduler luck are not the primary proof. Review surrounding code, sibling call sites and similar patterns before declaring the root cause fixed, and record any affected adjacent paths.
+Implementation qualification is owned by **Sol medium (`gpt-6-sol`, effort `medium`) for test and gate execution; Astra max (`gpt-6-astra`, effort `max`) for all implementation, debugging and fixes**, following the [Go style guide's bug-fix and testing policy](../../connect/CODESTYLE.md). This assignment was confirmed on 2026-09-28; retain earlier Terra evidence under its original attribution and do not rerun completed work because the executing model changed. Every actual fix needs a regression that deterministically reproduces the pre-fix failure and verifies corrected behavior at the observable failing layer. Use explicit barriers, hooks or state transitions for ordering; sleeps, negative timeouts, queue polling and scheduler luck are not the primary proof. Review surrounding code, sibling call sites and similar patterns before declaring the root cause fixed, and record any affected adjacent paths.
 
 Keep regression data visibly synthetic: generated test-only identities, `.example` hosts and reserved documentation addresses; sanitize captures before turning them into fixtures and retain necessary raw evidence outside source. Tests are top-level `func TestXxx(t *testing.T)` declarations. Use separate top-level tests or plain table loops for ordinary cases; use `t.Run` only when isolating and asserting a deliberately failing subtest is itself the subject. This document does not execute or request execution of new tests. When implementation is authorized, cover meaningful boundaries and recovery:
 
