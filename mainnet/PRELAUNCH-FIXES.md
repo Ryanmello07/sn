@@ -1210,6 +1210,16 @@ unavailable pruned history have distinct outcomes. Integrity errors containing
 the word "timeout" remain integrity errors. Writes use PH-02 reconciliation,
 not the read-retry loop.
 
+**2026-09-28 native HTTP cause preservation.** The pinned GSRPC HTTP client
+flattened statuses to strings and returned decoder EOF without physical origin.
+The [configured native-read adapter](evidence/native-http-read-causes-20260928.md)
+now preserves typed status and incomplete-body causes before that flattening,
+inside the existing 300-second total/60-second attempt budget. Complete malformed
+JSON, permanent RPC errors, cancellation, body-close failures and mixed integrity
+causes stay hard; writes never gain retry. The source and local regressions await
+Terra qualification. Production continuation must consume the exported typed
+classifier after integration; this transport slice alone does not close PH-03.
+
 **2026-09-28 production steering review.** The standard validator's outer
 steering loop still ties several transient continuation branches to testnet
 provisional permissions. Production disables those permissions. A receipt

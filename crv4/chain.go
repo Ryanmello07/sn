@@ -100,6 +100,7 @@ type contextSubstrateClient struct {
 	url           string
 	readLifecycle substrateRPCReadLifecycle
 	readRetry     substrateRpcReadRetryHooks
+	closeReadHttp func()
 }
 
 // URL identifies the endpoint without exposing transport internals.
@@ -495,11 +496,10 @@ func DialChainContext(ctx context.Context, wsURL string) (*Chain, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	transport, err := gsrpcgeth.DialContext(ctx, wsURL)
+	client, err := dialContextSubstrateClient(ctx, wsURL)
 	if err != nil {
 		return nil, fmt.Errorf("crv4: dial %s: %w", wsURL, err)
 	}
-	client := &contextSubstrateClient{Client: transport, url: wsURL}
 	closeClient := true
 	defer func() {
 		if closeClient {

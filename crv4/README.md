@@ -186,6 +186,36 @@ plus `ApplyMaxWeightLimit` implementing the chain's `check_vec_max_limited`
 constraint `max(w)/sum(w) ≤ max_weight_limit/65535` (self-weight and
 limit=65535 exempt) via exact water-filling.
 
+## Bounded native reads
+
+`DialChainContext` retains GSRPC's codecs and method interface while wrapping
+configured HTTP reads at their physical response boundary. The existing exact
+read allowlist uses one 300-second retry owner, 60-second attempts, unchanged
+arguments and the original capacity gate. A caller's earlier deadline still
+wins. Writes and unknown methods never enter that read owner or gain a retry.
+
+HTTP 408/425/429 and 5xx responses retain a typed
+`SubstrateReadHttpStatusError` with `StatusCode()`. Empty successful HTTP bodies
+and physically interrupted response framing retain read origin. A nonempty,
+fully received malformed JSON document or permanent JSON-RPC error remains
+hard, even if its text says "timeout". Responses are closed before GSRPC decodes
+them; the 32 MiB wire/decompressed-body ceiling covers existing 17 MiB runtime
+and 21 MiB block reply bounds. A body-close or size failure cannot be hidden by
+a sibling retryable status or timeout. Read redirects are refused as permanent
+status outcomes; the configured endpoint is not replaced by a redirect.
+
+`RetryableSubstrateReadTransportError` is the narrow production-continuation
+classifier: every joined cause must be transient and at least one must retain
+this configured read origin. Bare EOF, an arbitrary HTTP-status string, bare
+timeout, caller cancellation, local file errors and mixed integrity errors
+return false. This helper neither grants write authority nor runs another retry
+loop. It does not widen runtime, header, block-body or receipt authentication.
+Websocket behavior and its existing reconnect compatibility remain unchanged.
+
+The [native HTTP cause evidence](../mainnet/evidence/native-http-read-causes-20260928.md)
+records the exact component selector and remaining qualification. No live node
+mutation or signing is part of these local fixtures.
+
 ## Tests
 
 - offline (`go test ./crv4/`): payload goldens, compact-codec edge cases,

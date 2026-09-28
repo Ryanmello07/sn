@@ -1184,6 +1184,13 @@ the original exact hash and reconcile canonical inclusion, dispatch, finality,
 nonce and economic postcondition. A timeout is an unknown outcome. A new nonce
 or a local database status is not evidence that the old action failed.
 
+The [configured native HTTP read adapter](evidence/native-http-read-causes-20260928.md)
+preserves status and physical body failures within the existing finite read
+budget. Production consumers can distinguish that typed unavailability from
+complete malformed evidence and mixed integrity errors; writes retain their
+separate original-byte reconciliation policy. Local component qualification and
+the downstream production-continuation integration remain separate gates.
+
 The [operator receipt-census correction](evidence/operator-recovery-census-20260927.md)
 preserves this boundary in the production account reconciler: if a retained
 candidate's receipt cannot be read and no other candidate is canonical, the

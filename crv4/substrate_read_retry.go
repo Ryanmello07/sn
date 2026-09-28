@@ -1,3 +1,5 @@
+// Allowlisted native reads share finite retry ownership. Structured transport
+// causes retain their origin; RPC application and integrity errors stay hard.
 package crv4
 
 import (
@@ -7,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"syscall"
@@ -31,14 +34,20 @@ func substrateRPCReadMayReplay(method string) bool {
 }
 
 func substrateRPCDisconnected(err error) bool {
-	return retryableSubstrateRpcReadTransport(err, false)
+	return retryableSubstrateRpcReadTransport(err, false, true)
 }
 
 // Every joined cause must be transient. Decoder EOF has no retry authority
 // unless the actual URL/socket boundary retained its transport origin.
-func retryableSubstrateRpcReadTransport(err error, transportOrigin bool) bool {
+func retryableSubstrateRpcReadTransport(err error, transportOrigin, allowReconnectMarker bool) bool {
 	var rpcError gsrpcgeth.Error
 	if err == nil || err == context.Canceled || err == gsrpcgeth.ErrClientQuit || errors.As(err, &rpcError) {
+		return false
+	}
+	if _, localFile := err.(*os.PathError); localFile {
+		return false
+	}
+	if _, closeFailure := err.(*substrateReadHttpCloseError); closeFailure {
 		return false
 	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
@@ -47,20 +56,24 @@ func retryableSubstrateRpcReadTransport(err error, transportOrigin bool) bool {
 			return false
 		}
 		for _, cause := range causes {
-			if !retryableSubstrateRpcReadTransport(cause, transportOrigin) {
+			if !retryableSubstrateRpcReadTransport(cause, transportOrigin, allowReconnectMarker) {
 				return false
 			}
 		}
 		return true
 	}
 	switch cause := err.(type) {
+	case *SubstrateReadHttpStatusError:
+		return retryableSubstrateReadHttpStatus(cause.status)
+	case *substrateReadHttpTransportError:
+		return retryableSubstrateRpcReadTransport(cause.cause, true, false)
 	case *url.Error:
-		return retryableSubstrateRpcReadTransport(cause.Err, true)
+		return retryableSubstrateRpcReadTransport(cause.Err, true, allowReconnectMarker)
 	case *net.OpError:
-		return retryableSubstrateRpcReadTransport(cause.Err, true)
+		return retryableSubstrateRpcReadTransport(cause.Err, true, allowReconnectMarker)
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		return retryableSubstrateRpcReadTransport(wrapped.Unwrap(), transportOrigin)
+		return retryableSubstrateRpcReadTransport(wrapped.Unwrap(), transportOrigin, allowReconnectMarker)
 	}
 	if closed, ok := err.(*websocket.CloseError); ok {
 		switch closed.Code {
@@ -80,7 +93,7 @@ func retryableSubstrateRpcReadTransport(err error, transportOrigin bool) bool {
 	// GSRPC's reconnect marker is private. Only this exact allowlisted read
 	// owner may interpret it; arbitrary RPC application messages cannot retry.
 	return err == context.DeadlineExceeded || err == syscall.ECONNRESET || err == syscall.ECONNREFUSED ||
-		err == syscall.EPIPE || err == syscall.ETIMEDOUT || err == net.ErrClosed || err.Error() == "client reconnected"
+		err == syscall.EPIPE || err == syscall.ETIMEDOUT || err == net.ErrClosed || allowReconnectMarker && err.Error() == "client reconnected"
 }
 
 const substrateRpcReadRetryTimeout = 300 * time.Second
@@ -197,6 +210,9 @@ func (self *contextSubstrateClient) Close() {
 	self.readClosed()
 	self.readLifecycle.close.Do(func() { close(self.readLifecycle.closed) })
 	self.Client.Close()
+	if self.closeReadHttp != nil {
+		self.closeReadHttp()
+	}
 }
 
 func substrateRPCHistoricalCapacity(err error) bool {
@@ -276,6 +292,7 @@ func (self *contextSubstrateClient) CallContext(ctx context.Context, result any,
 		default:
 		}
 		callCtx, stop := withTimeout(ctx, substrateRpcReadAttemptTimeout)
+		callCtx = context.WithValue(callCtx, substrateReadHttpContextKey{}, true)
 		err := self.Client.CallContext(callCtx, result, method, frozen...)
 		err = errors.Join(err, callCtx.Err())
 		stop()
