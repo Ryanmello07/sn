@@ -23,6 +23,9 @@ The [proxy source handoff](evidence/bootstrap-contract-proxy-source-20260928.md)
 records the atomic initializer scope and pending separate behavioral qualification.
 The [reserve binding source handoff](evidence/bootstrap-contract-reserve-link-source-20260928.md)
 records the one-shot call, five-predecessor custody and separate qualification scope.
+The [reserve binding qualification](evidence/bootstrap-contract-reserve-link-qualification-20260928.md)
+records its complete normal/race root coverage, full normal package, causal
+controls and retained fixture/time-limit failures.
 
 The release catalog comes from the existing generator:
 
