@@ -1343,6 +1343,28 @@ foreign-nonce resolution and authenticated durable scan chunks (including miner
 partial ranges) remain open. The native HTTP integration is separately qualified;
 no callback-only loop test closes the remaining physical ownership requirements.
 
+The [public startup continuation candidate](evidence/production-startup-continuation-candidate-20260928.md)
+adds the actual public-root composition with signed historical activation,
+concrete disk/intent owners and real dual-operator sessions. Original liabilities
+are reconciled before current UID/stake/preparation; fresh work waits for the
+current eligibility and settlement-publication owner. Its tests distinguish
+retained nonempty recovery from empty durable stores with already provisioned
+client identities. Qualification is pending. Local semantic reconstruction must
+not restart merely because the independent remote-read budget elapses. Parallel
+native and EVM transient errors remain independently classified, while a hard
+native physical subtree cannot be unwrapped into a retryable leaf.
+
+Still open: durable bounded receipt prefixes in both validator and miner,
+historical-only foreign-nonce reconciliation, live operator API dependency, and
+first/missing-client JWT registration recovery. The latter can mutate identity
+and must retain ambiguous outcomes; wrapping the whole operator constructor in
+read retries or transferring a canceled startup context to its service is unsafe.
+Native production writers continue to require explicit WS/WSS, independently of
+the owned node's HTTP EVM/read capabilities. Helper-only fixture success did not
+prove public config admission: the real-root diagnostics caught WS capability,
+normalized signed-config representation, complete capacity relationships and
+private scratch namespace assumptions; those corrections do not weaken gates.
+
 The bounded [source-finality read candidate](evidence/source-finality-read-candidate-20260928.md)
 separates physical read errors from finality/schedule contradictions and reuses
 one admitted body, index and event vector for dispatch and source proof. Missing

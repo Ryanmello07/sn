@@ -50,6 +50,7 @@ type productionStartupTestFixture struct {
 	configPath    string
 	stateLock     sync.Mutex
 	latestReads   int
+	writeRequests int
 	latestRead    chan struct{}
 	latestOnce    sync.Once
 }
@@ -183,6 +184,8 @@ type productionStartupApiTestFixture struct {
 	objects    map[string][]byte
 	posts      int
 	sessions   int
+	seedRead   chan struct{}
+	seedOnce   sync.Once
 }
 
 // Protocol traffic reaches actual HTTP handlers, including JWT refresh and
@@ -209,6 +212,10 @@ func (self *productionStartupApiTestFixture) ServeHTTP(writer http.ResponseWrite
 			value.Keys = append(value.Keys, &sdk.VerifyServerKey{ServerKeyId: int32(version), PublicKey: key})
 		}
 		_ = json.NewEncoder(writer).Encode(value)
+		return
+	case "/network/find-providers2":
+		self.seedOnce.Do(func() { close(self.seedRead) })
+		<-request.Context().Done()
 		return
 	case "/connect":
 		upgrader := websocket.Upgrader{}
@@ -343,6 +350,11 @@ func (self *productionStartupTestFixture) nativeResponse(ctx context.Context, pa
 	if decoder.Decode(&call) != nil {
 		return reply(nil, errors.New("synthetic native request is malformed"))
 	}
+	if strings.HasPrefix(call.Method, "author_") {
+		self.stateLock.Lock()
+		self.writeRequests++
+		self.stateLock.Unlock()
+	}
 	if (call.Method == "state_getMetadata" || call.Method == "state_getRuntimeVersion") && len(call.Params) == 0 {
 		self.stateLock.Lock()
 		self.latestReads++
@@ -474,7 +486,7 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 				t.Fatal(err)
 			}
 			writeReleaseBootstrapV2TestFile(t, op.ClientJWTFile, []byte(credential))
-			api := &productionStartupApiTestFixture{owner: self, noId: op.NoID, credential: credential, keys: physical.source.server.serverPublicKeys(), objects: map[string][]byte{}}
+			api := &productionStartupApiTestFixture{owner: self, noId: op.NoID, credential: credential, keys: physical.source.server.serverPublicKeys(), objects: map[string][]byte{}, seedRead: make(chan struct{})}
 			for _, owner := range continuation.inputKVs {
 				for hash, raw := range owner.objects.metadataKVs {
 					api.objects["metadata/"+hash] = bytes.Clone(raw)
@@ -542,4 +554,48 @@ func (self *productionStartupTestFixture) storedIntentBytes(t *testing.T) []byte
 		t.Fatal(err)
 	}
 	return slices.Clone(raw)
+}
+
+// A separately signed initial deployment uses genuinely empty private stores.
+// The other fixture's retained M8/source/intent files are not copied or deleted;
+// only its independently selected native state and public activation are reused.
+func (self *productionStartupTestFixture) selectEmptyDeployment(t *testing.T) {
+	t.Helper()
+	self.closePreparation(t)
+	production := self.continuation.production
+	cfg := production.cfg
+	root := t.TempDir()
+	cfg.StateDir = filepath.Join(root, "coordinator")
+	if err := os.Mkdir(cfg.StateDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for index := range cfg.Operators {
+		op := &cfg.Operators[index]
+		op.StateDir = filepath.Join(root, fmt.Sprintf("no-%d", op.NoID))
+		input := &cfg.EvidenceV2.Operators[index]
+		input.ReplayScratchRoot, input.SealScratchRoot = filepath.Join(root, "scratch", fmt.Sprintf("no-%d", op.NoID), "replay"), filepath.Join(root, "scratch", fmt.Sprintf("no-%d", op.NoID), "seal")
+		for _, path := range []string{input.ReplayScratchRoot, input.SealScratchRoot} {
+			if err := os.MkdirAll(path, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	admission := production.operator.measurement.admission
+	normalizeProductionStartupTestConfig(t, cfg, root)
+	var err error
+	admission.approval.ConfigHash, err = OwnerRecycleConfigHash(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admission.sign(t)
+	if err := loadOwnerRecycleProductionConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := loadReleaseProductionRuntimeHistory(cfg); err != nil {
+		t.Fatal(err)
+	}
+	self.configPath = writeReleaseConfig(t, *cfg)
+	if _, err := LoadReleaseConfig(self.configPath); err != nil {
+		t.Fatal(err)
+	}
 }

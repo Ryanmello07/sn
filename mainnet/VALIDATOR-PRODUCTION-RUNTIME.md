@@ -66,5 +66,13 @@ Native archive capture also retains the production owner census, validator
 freshness and stake reads, and exact metadata and drain storage at the signed
 activation hash; capture storage failures abort the read.
 
+Public startup may initialize its read view at the independently signed activation
+hash and authenticate retained original work before current preparation. That
+historical initialization grants no fresh signing capability. New intents and
+trail workers still wait for current eligibility and actual initial settlement
+publication. Native writer routes remain explicitly signed WS/WSS because
+submission uses a WebSocket subscription. HTTP read transport on an approved
+node is not an implicit writer-route fallback.
+
 These local synthetic tests do not establish a live runtime approval,
 validator activation, successful transaction or economic outcome.

@@ -938,6 +938,26 @@ open; this does not close MG-04 or PH-03. The separately
 connects physical native causes to phase-owned waits and corrects response/close
 boundaries. Composed native/EVM startup failures require their later scope.
 
+The separate [public startup continuation candidate](evidence/production-startup-continuation-candidate-20260928.md)
+reopens original native observation at its signed activation block before
+unrelated current preparation. The public `RunRelease` root still authenticates
+activation, both operator histories, real disk ownership and original intent
+custody; current UID/stake and initial settlement publication gate fresh intents
+and trail workers. Local semantic replay uses the caller's lifecycle rather than
+a five-minute I/O deadline. Independent transient native/EVM branches compose
+without losing their physical causes or hiding mixed integrity errors.
+Qualification remains pending. The empty-store case requires independently
+provisioned client identities, keys and existing JWTs; first-client registration
+is not part of that claim. Both operator server-key/public-object/session routes
+remain startup dependencies, and initial missing-JWT registration failure can
+still return from the root after disk replay. That potentially mutating identity
+operation needs its own durable reconciliation, not generic read retries.
+Native production submission uses an explicitly approved WS/WSS route for
+`author_submitAndWatchExtrinsic`; the same node may provide HTTP EVM/read RPC,
+but HTTP read support alone grants no native subscription or writer capability.
+Durable receipt-prefix chunks and historical-only foreign-nonce resolution remain
+open and must preserve original immortal signed bytes.
+
 The [server upload admission](VALIDATOR-UPLOAD-RUNTIME.md) now consumes an
 independently pinned schema-3 configuration and retains only read-only runtime
 intervals, routes and deployment scope. Original activation reads use their
