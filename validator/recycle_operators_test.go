@@ -186,6 +186,11 @@ func newRecycleOperatorFixtureWithInputs(t *testing.T, hotkey [32]byte, complete
 		root, _ := parseReleaseHex32("synthetic root", audit.PayoutRoot, false)
 		artifactHash, _ := parseReleaseHex32("synthetic artifact", audit.CommittedArtifactHash, false)
 		commitment := stabi.RootCommitmentsOutput{PayoutRoot: root, ArtifactHash: artifactHash, Committer: version.RootSigner, CommitBlock: audit.RootCommitBlock}
+		if policy.IsZeroPrice() {
+			// An independently registered root signer does not occupy the
+			// source slot. The complete absent ABI tuple is zero on chain.
+			commitment = stabi.RootCommitmentsOutput{}
+		}
 		fixture.commitments = append(fixture.commitments, commitment)
 		fixture.set(t, "rootCommitments", coordinator.PackRootCommitments(sourceEpoch, id), commitment.PayoutRoot, commitment.ArtifactHash, commitment.Committer, commitment.CommitBlock)
 	}
