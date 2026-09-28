@@ -1,7 +1,7 @@
 # Mainnet steady cadence candidate — 2026-09-28
 
-Status: source integrated; **component normal/race and vet pass; causal controls
-and final release composition pending**. No live network, signing, deployment
+Status: source integrated; **component normal/race, vet and causal controls
+complete; final release composition pending**. No live network, signing, deployment
 or existing policy bytes changed. Base: `59817899cc11d0d3d6086ea3c3d7e52d14130fc6`.
 Worktree: `/mnt/data/sn-testnet/worktrees/sn-mainnet-steady-cadence-20260928`.
 
@@ -37,8 +37,23 @@ The retained result-stream SHA-256 values are:
 | `validator-normal.jsonl` | `f68d4f072c1d27fafd86c02983c697d110a232453916be13aa63e7216d53b778` |
 | `validator-race.jsonl` | `cb5adec7f09f43a2fac413b12cc2e52496311193ca3351e54c226e10971fcb58` |
 
-The three causal overlays below remain pending. Their setup or compile errors
-cannot count as reproducing the intended assertion failures.
+The three causal overlays also completed in both modes. Their six executions
+reached the intended assertions; none is counted from a setup or compile error.
+Evidence is retained separately in
+`/mnt/data/sn-testnet/qualification/mainnet-steady-cadence-20260928/e1d6644c-causal`.
+
+| Control | Intended assertion | Normal / race |
+| --- | --- | --- |
+| Exact predecessor policy parser | `steady mainnet cadence cannot be committed from epoch zero` | Both reproduced |
+| Exact predecessor through the signed public-config loader | `steady mainnet policy cannot enter the actual production loader` | Both reproduced |
+| Omitted steady-window equality | `initial-epoch acquired a steady mainnet policy hash` | Both reproduced |
+
+Five invocations have retained shell exit 1. The original public-config normal
+wrapper was orphaned before recording its shell exit; its JSON stream retains
+both the named assertion and terminal failed test/package events. The separate
+`old-policy-public-config-normal-shell-exit-limitation.txt` records that limit.
+Its completed test body was reused without inventing a shell result or rerunning
+it. Source and module-path fences remained unchanged.
 
 ## Cause and bounded correction
 

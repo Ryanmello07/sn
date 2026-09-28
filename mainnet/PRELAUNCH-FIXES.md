@@ -81,10 +81,11 @@ decision snapshot consumers remain unchanged and compare actual epoch-zero RPC
 bytes against an independently signed public production config in the new tests.
 The installer must derive all initial policy fields from its complete approved
 body and require effective epoch zero. Eleven protocol and thirteen validator
-roots pass normal/race, and vet passes. Predecessor causal controls and composed
-installer acceptance remain pending; the receipt distinguishes the tested
-dependencies from the future release. This is a source-only correction; no
-mainnet configuration or deployment changed.
+roots pass normal/race, and vet passes. Three causal controls each reproduce
+their intended assertion in both modes. Composed installer acceptance remains
+pending; the receipt distinguishes the tested dependencies from the future
+release and retains one missing causal-wrapper exit. This is a source-only
+correction; no mainnet configuration or deployment changed.
 
 The newer server source branch `codex/mainnet-composed-hardening-20260927` at
 `b6f49bdb` includes migration 728, the operator receipt-census correction,

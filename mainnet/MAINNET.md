@@ -535,10 +535,11 @@ bytes and meaning. Testnet still requires its existing positive-count transition
 The two validator snapshot consumers need no relaxation: they compare the actual
 pinned snapshot against that representable canonical policy. The signed public
 config loader and both readers are covered by 24 selected protocol/validator
-tests passing normally and with race detection, plus vet. Causal controls and
-composed installer qualification remain pending; the component receipt records
-its exact dependency scope. Generic Solidity window checks alone do not
-establish composed launch acceptance.
+tests passing normally and with race detection, plus vet. Three causal controls
+each reproduce their intended failure in normal and race execution. Composed
+installer qualification remains pending; the component receipt records its
+dependency scope and one missing causal-wrapper exit. Generic Solidity window
+checks alone do not establish composed launch acceptance.
 
 Preserve the current guarantees: the coordinator owns neither custody position, the sink has no outbound path, and valid earned vault claims survive coordinator pause or upgrade. Pausing new application activity is not a native emission kill switch. Initial contracts establish their epoch clock at deployment, so the plan must include sufficient time to finish setup and a future activation boundary; it cannot assume a dormant deployment has no running clock.
 
