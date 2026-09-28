@@ -28,8 +28,11 @@ type trailDiagnosticFixture struct {
 }
 
 // No measurement admission or proof writer is replaced by this fixture.
-func newTrailDiagnosticFixture(t *testing.T) trailDiagnosticFixture {
+func newTrailDiagnosticFixture(t *testing.T, expectedCloseCause ...error) trailDiagnosticFixture {
 	t.Helper()
+	if len(expectedCloseCause) > 1 {
+		t.Fatal("trail fixture accepts at most one exact close cause")
+	}
 	state := t.TempDir()
 	server, key, clientId := newMockVerifyServer(t, 16)
 	store, err := NewProofStore(state)
@@ -40,7 +43,12 @@ func newTrailDiagnosticFixture(t *testing.T) trailDiagnosticFixture {
 	generation := uint64(1)
 	ledger := configureAttemptLedgerTestEngine(t, engine, stats, state, &generation)
 	t.Cleanup(func() {
-		if err := ledger.Close(); err != nil {
+		err := ledger.Close()
+		if len(expectedCloseCause) == 1 {
+			if !errors.Is(err, expectedCloseCause[0]) || !releaseOnlyErrors(err, expectedCloseCause[0]) {
+				t.Error("trail fixture close lost its exact original fault or added another failure")
+			}
+		} else if err != nil {
 			t.Error("trail fixture ledger close failed")
 		}
 	})
@@ -193,8 +201,12 @@ func TestTrailDiagnosticsRunDistinguishesKnownZeroFromAbsentEpoch(t *testing.T) 
 // failure retryable. Every successful signature remains in its actual ledger.
 func TestTrailDiagnosticsHardCustodyFailureStillStopsRun(t *testing.T) {
 	for _, projection := range []bool{false, true} {
-		fixture := newTrailDiagnosticFixture(t)
 		cause := errors.New("synthetic durable trail append failure")
+		var expectedCloseCause []error
+		if !projection {
+			expectedCloseCause = []error{cause}
+		}
+		fixture := newTrailDiagnosticFixture(t, expectedCloseCause...)
 		appends := 0
 		if projection {
 			if err := os.Mkdir(fixture.store.path, 0700); err != nil {
@@ -231,6 +243,17 @@ func TestTrailDiagnosticsHardCustodyFailureStillStopsRun(t *testing.T) {
 		state := owner.snapshot(time.Now())
 		if state.Runtime.Delivered != 0 || state.Runtime.Dropped == 0 || state.Steering.Delivered != 0 {
 			t.Fatal("blocked trail diagnostics claimed protocol delivery")
+		}
+		closeErr := fixture.ledger.Close()
+		if projection {
+			if closeErr != nil {
+				t.Fatal("proof projection fault unexpectedly changed ledger close")
+			}
+		} else if !errors.Is(closeErr, cause) || !releaseOnlyErrors(closeErr, cause) {
+			t.Fatal("ledger close lost the original append fault or added another failure")
+		}
+		if fixture.ledger.Close() != closeErr {
+			t.Fatal("repeated ledger close replaced its original result")
 		}
 	}
 }
