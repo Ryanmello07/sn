@@ -57,12 +57,14 @@ release lock, binary/image inventory or deployment approval; the v11 inventory
 does not attest these changes. MG-02, MG-03 and MG-06 remain open.
 
 The first broad server-model run under
-`/mnt/data/sn-testnet/evidence/mainnet-server-model-full-20260927` remains
-**diagnostic collection, not frozen composed-release qualification**. Its
+`/mnt/data/sn-testnet/evidence/mainnet-server-model-full-20260927` ended on its
+90-minute deadline with **1,048 passed, eight failed and seven skipped roots**.
+It is [incomplete diagnostic collection](evidence/server-model-diagnostic-20260928.md),
+not frozen composed-release qualification. Its
 launcher entered the original server directory, whose relative Go replacements
 resolved active sibling checkouts rather than the prepared pinned workspace.
-The actual running executable and the provenance correction are retained in
-that directory's `PROVENANCE.md`; the run continues to collect all failures.
+The actual executable and provenance correction are retained alongside that
+directory's `PROVENANCE.md`; disposable-service cleanup completed successfully.
 For MG-02/MG-10, validate the compiler's actual `go list -m -json all` module
 directories, physical targets, exact revisions and clean state before and after
 qualification. Use real isolated worktrees for every local replacement and
@@ -78,7 +80,8 @@ retains model/controller/handler executables and build metadata. Its result is
 historical payment, retention and probe fixtures without changing production
 guards or scheduling; 18 affected roots passed normal and race qualification
 ([receipt](https://github.com/urnetwork/server/blob/4468a6961c00cf0ff8b84986259fa9698a7a8441/local/model-fixture-qualification-20260927.md)).
-The original diagnostic run continues to collect additional failures.
+Its later diagnostic failures are tracked in the linked result; fixture repairs
+are qualified separately while the frozen full body continues.
 
 The frozen qualification's first direct-binary invocation used the module
 directory instead of the test package directory. Its 15-test prefix is retained
