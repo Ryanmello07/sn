@@ -10,8 +10,8 @@ gas used, without treating a maximum fee envelope as actual spend. The command
 does not sign, broadcast, edit an operator database or restore live custody.
 
 Sol medium tested the frozen server source in an isolated physical graph.
-All **38** `strecovery`/CLI roots and **25** adjacent controller/model recovery
-roots passed normally and under race detection; the **15** new roots also
+All **38** `strecovery`/CLI roots and **28** adjacent controller/model roots
+(22 controller and 6 model) passed normally and under race detection; the **15** new roots also
 passed separately in both modes. Vet, formatting, source/module fences and
 private PostgreSQL/Redis cleanup passed. Four isolated causal controls exposed
 the intended incomplete-sibling, gas-used, canonical-block and inclusion-slot
@@ -20,7 +20,7 @@ the passing control count.
 
 The [raw Sol receipt](/mnt/data/sn-testnet/qualification/sol-mg03-receipt-fees-20260928/RESULT.md)
 has SHA-256
-`50e94005c2852089064a6d4fbae4c1cde637ebbfd90d40ef5fb175e8e39453f4`.
+`9b0267a1d078eea5585c3d513a2f585449f7826346ab4f0ed29d421aad5e4d62`.
 No live RPC, signer, production database, custody file or chain state was used.
 
 This is conditional offline accounting, not authenticated production finality
