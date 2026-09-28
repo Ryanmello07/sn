@@ -1262,6 +1262,13 @@ package success. A wrapper's zero exit after interrupted execution is not a
 pass. Preserve valid compiled artifacts and completed work when correcting a
 runner, with the failed invocation and the correction recorded separately.
 
+Bind qualification to the roles and platforms selected for this release.
+Unselected services and architectures remain explicitly unqualified and cannot
+be deployed from its approval; they do not require speculative build or test
+work before the selected release can proceed. Reuse successful unchanged
+scopes by their actual consumed source and dependency identities. A new binary
+hash alone is not a reason to repeat all historical qualification.
+
 Set the qualification environment explicitly before compiling: `GOWORK=off`,
 `GOMAXPROCS=2`, `GOCACHE=/mnt/data/sn-testnet/gocache`, and a capture-specific
 `TMPDIR` under `/mnt/data/sn-testnet/evidence`. Create the temporary directory

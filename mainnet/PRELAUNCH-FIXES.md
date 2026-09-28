@@ -34,6 +34,13 @@ input or demonstrated incompatibility; `Done` requires the stated evidence.
 An implemented simulator fix is not a completed production gate. Owners below
 are component responsibilities; assign a named operator before rollout.
 
+The release manifest must name the production roles and platforms being
+admitted. Qualify every selected artifact and its consumed dependencies, while
+leaving unselected services/platforms explicitly unqualified and unavailable
+for deployment. For example, an explicitly amd64-only release does not require
+an arm64 execution pass. This narrows qualification scope without weakening
+custody, economic, recovery or runtime checks for the deployed roles.
+
 | Gate / priority | Owner and linked items | Current state | Next action and completion evidence |
 | --- | --- | --- | --- |
 | MG-01 / P0 — Mainnet identity | Node operator; RT-01/02, PH-04/14/18/19 | **Blocked:** the operator confirms Snow VPN `172.28.208.185:9944` is the intended mainnet route but is still being prepared. The [same-block finalized observation](evidence/finalized-snapshot-snow-20260927.json) independently reproduces code/metadata, native header and linked EVM header hashes at one native finalized hash, but observed testnet EVM ID **945** and testnet genesis. The [September 28 00:29 UTC retry](evidence/snow-route-observation-20260928-0030.md) returned HTTP 502 across seven chain-ID requests during the node-data move; it supplies no new chain identity. Raw bytes remain unapproved evidence. | Wait for route cutover, independently approve mainnet genesis and repeat the same-block observation with expected EVM ID 964 and node/source identity. Qualify raw bytes against reviewed source-to-Wasm and execution interfaces; reject the route while it reports testnet or is unavailable. |
@@ -350,6 +357,9 @@ so losing the post can omit a provider payment and a duplicate terminal claim
 does not create it. Require a causal lost-post/rollback/replay test and a durable
 same-transaction or journaled correction before MG-06 closure. Redis summary
 counters are a separate, lower-priority publication path.
+An earlier automatic approval review rejected the implementation action for
+this provider-payment correction, citing possible cybersecurity risk. No
+durable correction or successful qualification is claimed for that open item.
 
 **Retained timestamp custody (MG-06/PH-12; source-qualified, 2026-09-27).** Server
 `6e2bcfa7` appends this correction to the v11 server candidate `77cb401e`. The previous
@@ -1197,6 +1207,16 @@ that inference, and never advance a reusable prefix on an incomplete read.
 The receipt-admission candidate is under qualification; the production wait
 and retained-prefix changes remain separate implementation work.
 
+The same review found the miner fleet's native recovery cursor accepted an
+explicit empty/truncated extrinsics vector without authenticating its body
+commitment. Reuse the shared complete-body reader before advancing that cursor.
+Bind new absence checkpoints to a semantic proof version and the existing
+signed attempt; old checkpoints without that proof may require one rescan from
+their original start. Preserve signed bytes, allowances and finalized outcomes.
+Do not invalidate a qualified prefix merely because the executable changed.
+Exercise the actual miner restart path, including a runtime-update digest,
+beside the validator recovery tests.
+
 **Closure.** Deterministically inject disconnect, DNS/HTTP failures, timeout
 during body read, missing/reordered batch responses, partial success and a
 large-batch refusal that succeeds when split. Verify exact call/attempt bounds,
@@ -1860,6 +1880,13 @@ and cleanup outcomes. Run normal/race modes where relevant. Repair the failed
 scope and reuse demonstrably unaffected results; repeat only for a named
 unresolved timing concern. Rerun the representative failed integration when a
 small test cannot establish the workload/resource fix.
+
+A fixture's SDK JSON encoder is not necessarily the RPC wire encoder. Receipt
+qualification exposed an SDK that emits unprefixed block-number hex although
+Substrate serves a `0x` quantity. Keep genuine SCALE header/body commitments,
+serialize the actual wire format explicitly, and require malformed-response
+tests to reach their injected read. An unrelated early fixture rejection is
+not evidence that the intended failure was handled.
 
 Maintain a requirement-to-evidence table for the composed release: original
 failure, root cause, patch and adjacent paths, exact source/dependency/toolchain
