@@ -144,7 +144,9 @@ func TestTrailDiagnosticsRunContinuesAfterReadFailureWithOriginalProof(t *testin
 		t.Fatal("retained original signed proof did not verify")
 	}
 	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
-	if len(lines) != 2 || !strings.Contains(lines[0], "code=trail_failed operator_id=17 operator_known=true trail_kind=seed cause=timeout") ||
+	// postStep retains the timeout in an opaque fmt wrapper. Optional output
+	// preserves the seed kind while leaving that nested cause unknown.
+	if len(lines) != 2 || !strings.Contains(lines[0], "code=trail_failed operator_id=17 operator_known=true trail_kind=seed cause=unknown") ||
 		!strings.Contains(lines[1], "code=trail_complete operator_id=17") || !strings.Contains(lines[1], "depth=8 settlement_epoch=42 settlement_epoch_known=true") {
 		t.Fatal("trail diagnostic lost closed cause or original settlement identity")
 	}
@@ -267,7 +269,8 @@ func (self *trailDiagnosticFormattingProbe) Error() string {
 	return "synthetic private raw transport detail"
 }
 
-// Typed cause classification remains available without text conversion.
+// Arbitrary unwrapping is not needed for the known TrailError kind. The
+// diagnostic cause must remain unknown instead of invoking this method.
 func (*trailDiagnosticFormattingProbe) Unwrap() error { return context.DeadlineExceeded }
 
 // Maximum scalar values still fit one bounded record and the existing runtime
@@ -292,7 +295,7 @@ func TestTrailDiagnosticsClosedFactsNeverFormatRawCause(t *testing.T) {
 		t.Fatal("trail diagnostics formatted arbitrary cause")
 	}
 	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
-	if len(lines) != 2 || len(lines[0]) > 512 || len(lines[1]) > 512 || !strings.Contains(lines[0], "trail_kind=hop cause=timeout") {
+	if len(lines) != 2 || len(lines[0]) > 512 || len(lines[1]) > 512 || !strings.Contains(lines[0], "trail_kind=hop cause=unknown") {
 		t.Fatal("closed trail output exceeded its fixed scalar contract")
 	}
 	state := owner.snapshot(time.Now())

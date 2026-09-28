@@ -4,12 +4,9 @@ package validator
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
-	"net"
-	"syscall"
 
+	"github.com/urfoundation/sn/diagnostics"
 	"github.com/urnetwork/connect"
 )
 
@@ -45,12 +42,11 @@ const (
 	trailDiagnosticSignatureVariant
 )
 
-// The existing trail classification is retained without calling Error/String.
-// Unknown causes remain unknown; this function changes no retry decision.
+// The real trail owner supplies its concrete classification. Diagnostic code
+// never searches arbitrary wrappers or calls their optional methods.
 func trailDiagnosticClassification(err error) (string, string) {
 	kind, cause := "unknown", "unknown"
-	var trailErr *TrailError
-	if errors.As(err, &trailErr) {
+	if trailErr, ok := err.(*TrailError); ok && trailErr != nil {
 		switch trailErr.Kind {
 		case TrailErrorSeed:
 			kind = "seed"
@@ -61,14 +57,14 @@ func trailDiagnosticClassification(err error) (string, string) {
 		case TrailErrorUnknownOutcome:
 			kind = "unknown_final"
 		}
+		err = trailErr.Err
 	}
-	var operationErr *net.OpError
-	switch {
-	case errors.Is(err, context.Canceled):
+	switch diagnostics.ClassifyCause(err) {
+	case diagnostics.CauseCanceled:
 		cause = "canceled"
-	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, syscall.ETIMEDOUT):
+	case diagnostics.CauseTimeout:
 		cause = "timeout"
-	case errors.As(err, &operationErr), errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+	case diagnostics.CauseTransport:
 		cause = "transport"
 	}
 	return kind, cause

@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"syscall"
 	"time"
 
 	"github.com/urfoundation/sn/diagnostics"
@@ -97,48 +96,22 @@ func (self *providerDiagnostics) snapshot() *providerDiagnosticStatus {
 	return &providerDiagnosticStatus{Schema: providerDiagnosticSchema, Authentication: self.exporter.Snapshot("authentication"), Keys: self.exporter.Snapshot("keys"), Extender: self.exporter.Snapshot("extender"), Runtime: self.exporter.Snapshot("runtime")}
 }
 
-// Walk a bounded error tree without Error, String or custom Is methods. Mixed
-// or unknown joined causes stay unknown instead of disguising a hard fault.
+// Preserve the existing wire vocabulary without invoking foreign methods.
+// Opaque joins/custom wrappers remain unknown; original custody keeps the error.
 func providerDiagnosticCause(err error) string {
-	if err == nil {
+	switch diagnostics.ClassifyCause(err) {
+	case diagnostics.CauseNone:
 		return "none"
+	case diagnostics.CauseCanceled:
+		return "canceled"
+	case diagnostics.CauseTimeout:
+		return "timeout"
+	case diagnostics.CausePermission:
+		return "permission"
+	case diagnostics.CauseUnavailable:
+		return "unavailable"
 	}
-	remaining := 32
-	var classify func(error) string
-	classify = func(current error) string {
-		if current == nil || remaining == 0 {
-			return "unknown"
-		}
-		remaining--
-		switch current {
-		case context.Canceled:
-			return "canceled"
-		case context.DeadlineExceeded, syscall.ETIMEDOUT:
-			return "timeout"
-		case syscall.EACCES, syscall.EPERM:
-			return "permission"
-		case syscall.ENOSPC, syscall.ENOENT:
-			return "unavailable"
-		}
-		switch value := current.(type) {
-		case interface{ Unwrap() []error }:
-			cause := ""
-			for _, next := range value.Unwrap() {
-				observed := classify(next)
-				if observed == "unknown" || cause != "" && cause != observed {
-					return "unknown"
-				}
-				cause = observed
-			}
-			if cause != "" {
-				return cause
-			}
-		case interface{ Unwrap() error }:
-			return classify(value.Unwrap())
-		}
-		return "unknown"
-	}
-	return classify(err)
+	return "unknown" // No new miner wire cause is introduced for transport.
 }
 
 // Serialization has fixed field/count bounds before queue admission. An accepted

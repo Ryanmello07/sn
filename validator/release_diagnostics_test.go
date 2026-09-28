@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,7 +106,8 @@ func TestReleaseDiagnosticsRetainsClosedReadFacts(t *testing.T) {
 		expected string
 		known    bool
 	}{
-		{cause: &releaseDiagnosticUnformattedError{cause: context.DeadlineExceeded}, expected: "timeout", known: true},
+		{cause: &releaseDiagnosticUnformattedError{cause: context.DeadlineExceeded}, expected: "unknown", known: true},
+		{cause: &url.Error{Op: "Get", URL: "https://synthetic.example", Err: context.DeadlineExceeded}, expected: "timeout", known: true},
 		{cause: &crv4.ReceiptEvidenceUnavailableError{}, expected: "unavailable", known: false},
 	} {
 		output := &releaseDiagnosticCapture{written: make(chan struct{}, 2)}

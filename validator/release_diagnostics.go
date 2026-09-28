@@ -4,10 +4,9 @@ package validator
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"syscall"
+	"reflect"
 	"time"
 
 	"github.com/urfoundation/sn/crv4"
@@ -68,20 +67,32 @@ type releaseDiagnosticFacts struct {
 	cacheStage    uint8 // 0 unknown, 1 read, 2 write
 }
 
-// This is called only after the operation's existing retry classification.
-// A joined hard cause remains hard; Error/String is never invoked by logging.
+// Retry authority has already been decided by the operation's owner. Optional
+// output reads only concrete tags/fields; opaque joins and foreign wrappers
+// stay unknown without calling retry predicates, Is, As or Unwrap again.
 func releaseDiagnosticReadCause(err error) releaseDiagnosticCause {
-	if err == nil || !retryableProductionSteeringRead(err) {
+	if err == nil {
 		return releaseDiagnosticUnknown
 	}
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, syscall.ETIMEDOUT) {
-		return releaseDiagnosticTimeout
+	value := reflect.ValueOf(err)
+	if value.Kind() == reflect.Pointer && value.IsNil() {
+		return releaseDiagnosticUnknown
 	}
-	var unavailable *crv4.ReceiptEvidenceUnavailableError
-	if errors.As(err, &unavailable) {
+	if _, unavailable := err.(*crv4.ReceiptEvidenceUnavailableError); unavailable {
 		return releaseDiagnosticUnavailable
 	}
-	return releaseDiagnosticTransport
+	// This reviewed helper performs a concrete type switch only. It does not
+	// call transport methods or decide whether the original error is retryable.
+	if crv4.IsSubstrateReadTransportCause(err) {
+		return releaseDiagnosticTransport
+	}
+	switch diagnostics.ClassifyCause(err) {
+	case diagnostics.CauseTimeout:
+		return releaseDiagnosticTimeout
+	case diagnostics.CauseTransport:
+		return releaseDiagnosticTransport
+	}
+	return releaseDiagnosticUnknown
 }
 
 // No output error can change validation or reconciliation authority. The

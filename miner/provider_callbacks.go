@@ -29,20 +29,23 @@ type providerAuthenticationCallbacks struct {
 func (self *providerAuthenticationCallbacks) JwtRefreshed(jwt string) {
 	if err := clientauth.WriteToken(self.clientJwtPath, jwt); err != nil {
 		self.retainFailure(err)
-		self.diagnostics.observe(providerJwtSaveFailed, self.provider, true, err, 0, nil)
 		self.cancel()
+		self.diagnostics.observe(providerJwtSaveFailed, self.provider, true, err, 0, nil)
 	}
 }
 
 // A rejected credential is tombstoned before requesting shutdown. A failed
 // tombstone is retained, without blocking cancellation on an output write.
 func (self *providerAuthenticationCallbacks) AuthLogout() {
-	if err := clientauth.MarkRejected(self.clientJwtPath, self.networkJwtPath); err != nil {
+	err := clientauth.MarkRejected(self.clientJwtPath, self.networkJwtPath)
+	if err != nil {
 		self.retainFailure(err)
+	}
+	self.cancel()
+	if err != nil {
 		self.diagnostics.observe(providerRejectionSaveFailed, self.provider, true, err, 0, nil)
 	}
 	self.diagnostics.observe(providerAuthenticationRejected, self.provider, true, nil, 0, nil)
-	self.cancel()
 }
 
 // Retain one original error without formatting or growing a callback history.
