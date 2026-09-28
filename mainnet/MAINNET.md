@@ -1418,6 +1418,11 @@ preserves original/replacement/cancellation provenance, and supports private
 byte-preserving archive restoration. Its normal/race qualification covers both
 new roots and adjacent controller/model recovery. Production receipt/finality
 joins, actual fees, distributed custody ownership and live restart remain open.
+The [conditional offline receipt/fee join](evidence/operator-receipt-fee-qualification-20260928.md)
+now reports missing and conflicting candidates and counts observed gas once
+per resolved nonce; 63 source roots passed normal and race modes. A separately
+authenticated native-to-EVM mapping and receipt producer are still required
+before it can establish canonical production fees or authorize recovery.
 
 The independent monitor confirms the repair's postcondition at finalized state.
 Only then close the incident, retaining its history and action receipts. A local
