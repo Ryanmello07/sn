@@ -33,3 +33,12 @@ and race qualification. Both live operator server-key/public-object/session rout
 remain startup dependencies; this candidate does not claim offline operator recovery.
 Bounded durable receipt-prefix reuse and historical-only foreign-nonce resolution
 remain separate open work.
+
+The first normal diagnostic at `1ffa1f34` failed in fixture construction: its
+native route used HTTP, while production native submission uses WebSocket
+`author_submitAndWatchExtrinsic`. The corrected fixture serves genuine native
+JSON-RPC over an explicitly signed WebSocket route. No config/approval gate was
+widened, no route is inferred or converted by production code, and HTTP read
+constructor support still grants no subscription/signing authority. Both operator
+API routes and the EVM route remain actual HTTP endpoints. This fixture correction
+requires its own diagnostic; the original failed capture remains evidence.

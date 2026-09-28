@@ -281,31 +281,79 @@ func (self *productionStartupApiTestFixture) ServeHTTP(writer http.ResponseWrite
 // Only raw RPC serialization is adapted. The original strict native fixture
 // still serves exact metadata, canonical bodies, events, source and weight rows.
 func (self *productionStartupTestFixture) serveNative(writer http.ResponseWriter, request *http.Request) {
+	if websocket.IsWebSocketUpgrade(request) {
+		upgrader := websocket.Upgrader{}
+		connection, err := upgrader.Upgrade(writer, request, nil)
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		var writers sync.Mutex
+		var joined sync.WaitGroup
+		ctx, cancel := context.WithCancel(request.Context())
+		defer func() { cancel(); joined.Wait() }()
+		for {
+			_, payload, err := connection.ReadMessage()
+			if err != nil {
+				return
+			}
+			joined.Add(1)
+			go func() {
+				defer joined.Done()
+				response := self.nativeResponse(ctx, payload)
+				writers.Lock()
+				defer writers.Unlock()
+				_ = connection.WriteMessage(websocket.TextMessage, response)
+			}()
+		}
+	}
+	if request.Method != http.MethodPost {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	payload, err := io.ReadAll(io.LimitReader(request.Body, 1024*1024))
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	writer.Header().Set("Content-Type", "application/json")
+	_, _ = writer.Write(self.nativeResponse(request.Context(), payload))
+}
+
+// WebSocket and read-only HTTP share genuine raw native state. Production
+// configuration explicitly approves WebSocket; no constructor changes route.
+func (self *productionStartupTestFixture) nativeResponse(ctx context.Context, payload []byte) []byte {
 	var call struct {
 		Id     json.RawMessage `json:"id"`
 		Method string          `json:"method"`
 		Params []any           `json:"params"`
 	}
-	decoder := json.NewDecoder(request.Body)
+	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.UseNumber()
-	if request.Method != http.MethodPost || decoder.Decode(&call) != nil {
-		writer.WriteHeader(http.StatusBadRequest)
-		return
+	reply := func(result any, err error) []byte {
+		value := map[string]any{"jsonrpc": "2.0", "id": call.Id, "result": result}
+		if err != nil {
+			delete(value, "result")
+			value["error"] = map[string]any{"code": -32000, "message": err.Error()}
+		}
+		encoded, _ := json.Marshal(value)
+		return encoded
+	}
+	if decoder.Decode(&call) != nil {
+		return reply(nil, errors.New("synthetic native request is malformed"))
 	}
 	if (call.Method == "state_getMetadata" || call.Method == "state_getRuntimeVersion") && len(call.Params) == 0 {
 		self.stateLock.Lock()
 		self.latestReads++
 		self.stateLock.Unlock()
 		self.latestOnce.Do(func() { close(self.latestRead) })
-		writer.WriteHeader(http.StatusServiceUnavailable)
-		return
+		return reply(nil, errors.New("synthetic latest metadata is unavailable; exact historical reads remain available"))
 	}
 	for index, param := range call.Params {
 		if number, ok := param.(json.Number); ok {
 			value, err := strconv.ParseUint(string(number), 10, 64)
 			if err != nil {
-				writer.WriteHeader(http.StatusBadRequest)
-				return
+				return reply(nil, err)
 			}
 			call.Params[index] = value
 		}
@@ -317,14 +365,9 @@ func (self *productionStartupTestFixture) serveNative(writer http.ResponseWriter
 		if self.native == nil {
 			return errors.New("startup native fixture requested before source assembly")
 		}
-		return self.native.CallContext(request.Context(), &raw, call.Method, call.Params...)
+		return self.native.CallContext(ctx, &raw, call.Method, call.Params...)
 	}()
-	writer.Header().Set("Content-Type", "application/json")
-	if err != nil {
-		_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": call.Id, "error": map[string]any{"code": -32000, "message": err.Error()}})
-		return
-	}
-	_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": call.Id, "result": raw})
+	return reply(raw, err)
 }
 
 // The public loader receives exactly the independently signed configuration.
@@ -356,8 +399,9 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 		cfg.HotkeySeedFile = filepath.Join(root, "hotkey.seed")
 		seed := [32]byte{0x6a, 0x41}
 		writeReleaseBootstrapV2TestFile(t, cfg.HotkeySeedFile, seed[:])
-		cfg.Substrate = []string{nativeServer.URL}
-		production.operator.measurement.admission.chain.API.Client.(*recycleAdmissionRouteClient).route = nativeServer.URL
+		nativeEndpoint := "ws" + strings.TrimPrefix(nativeServer.URL, "http")
+		cfg.Substrate = []string{nativeEndpoint}
+		production.operator.measurement.admission.chain.API.Client.(*recycleAdmissionRouteClient).route = nativeEndpoint
 		original := cfg.EvidenceV2
 		cfg.EvidenceV2 = releaseEvidenceV2TestConfig(root, cfg.Operators)
 		cfg.EvidenceV2.UploadIntentSeconds = 300
