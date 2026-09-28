@@ -70,6 +70,20 @@ chain worker retries independently. Protocol deadline inference, other domain
 coverage, bounded log export, delivered alerts and the repair controller remain
 open; source qualification does not establish live monitoring.
 
+**New MG-04/MG-08 source blocker (September 28): direct production cadence.**
+The launch plan starts the coordinator at 50,400 blocks from epoch zero, but
+`protocol.Policy.Validate` currently requires a nonzero accelerated period and
+a production cadence longer than the initial settlement cadence for mainnet
+too. Both validator policy readers then require the production snapshot's
+effective epoch to follow that accelerated period. Consequently, the planned
+initial deployment cannot satisfy a valid local policy and those readers at
+the same time. Implement explicit mainnet steady cadence from epoch zero,
+bind the installer to that complete policy, and preserve existing testnet
+transition and historical hash semantics. Qualification must cross public
+policy/config loading and actual coordinator snapshot admission; checking
+generic Solidity window constraints alone cannot close this gate. This is
+active source work, not a deployed mainnet failure.
+
 The newer server source branch `codex/mainnet-composed-hardening-20260927` at
 `b6f49bdb` includes migration 728, the operator receipt-census correction,
 atomic payer admission and checked settlement arithmetic on the v11 server

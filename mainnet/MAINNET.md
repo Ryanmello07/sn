@@ -524,6 +524,15 @@ Only then register the approved operator pool hotkeys under vault custody, estab
 
 Use the actual [mainnet policy validation](../protocol/policy.go): a UR settlement epoch is **50,400 native blocks**, with the reviewed production root-commit/finalization/close windows and claim retention. The deploy script's mainnet reference windows are 1,200 / 14,400 / 120 blocks and 8 claim epochs plus 1 grace epoch. Encode all fields explicitly in the signed mainnet policy; do not inherit accelerated 300- or 360-block testnet settings. Mainnet economic caps, deposit tiers, theta, minimum operator/validator counts and binding horizons need independent review.
 
+Source review on September 28 found that current shared policy validation still
+requires an accelerated initial period even for mainnet, and validator snapshot
+admission refuses a production-cadence snapshot effective at epoch zero. Correct
+that mismatch before deployment: the complete mainnet policy must admit the
+same steady 50,400-block initial snapshot installed by the constructor. Preserve
+testnet transition semantics and qualify the actual public config and validator
+readers together with the installer. A contract accepting its generic window
+constraints does not prove the standard validator will accept those fields.
+
 Preserve the current guarantees: the coordinator owns neither custody position, the sink has no outbound path, and valid earned vault claims survive coordinator pause or upgrade. Pausing new application activity is not a native emission kill switch. Initial contracts establish their epoch clock at deployment, so the plan must include sufficient time to finish setup and a future activation boundary; it cannot assume a dormant deployment has no running clock.
 
 ## Running both validators
