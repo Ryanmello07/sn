@@ -62,3 +62,12 @@ The `bcf95d28` diagnostic exposed the seal helper's later 32 KiB chunk override.
 The public fixture now explicitly admits its real 64 KiB maximum ledger row at
 both replay and chunk boundaries; raising the replay row limit alone was not a
 complete capacity correction. This adds no production default or dynamic bound.
+
+The `ec28042b` run passed public config admission and reached the actual hotkey
+loader, which correctly refused the fixture's umask-dependent TempDir parent.
+Startup fixture roots now use the existing explicitly created 0700 identity
+fixture directory. The physical sweep confirms native/client key files use 0600
+single-link files with owned private immediate parents; operator state and
+reference/scratch roots are separately provisioned, and existing ancestry is
+never chmodded. Approval references already use their private retained owners.
+Production custody checks and Terra's existing captures remain unchanged.

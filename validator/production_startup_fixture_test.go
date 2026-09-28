@@ -388,7 +388,7 @@ func (self *productionStartupTestFixture) nativeResponse(ctx context.Context, pa
 func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture {
 	t.Helper()
 	self := &productionStartupTestFixture{activationKVs: map[uint64]protocol.ValidatorEvidenceActivation{}, contextKVs: map[uint64]ReleaseEvidenceV2ActivationContext{}, latestRead: make(chan struct{})}
-	root := t.TempDir()
+	root := identityTestStateDir(t)
 	nativeServer := httptest.NewServer(http.HandlerFunc(self.serveNative))
 	t.Cleanup(nativeServer.Close)
 	anchor := func(admission *recycleAdmissionFixture, source *attemptCutV2SealTestFixture) {
@@ -564,7 +564,7 @@ func (self *productionStartupTestFixture) selectEmptyDeployment(t *testing.T) {
 	self.closePreparation(t)
 	production := self.continuation.production
 	cfg := production.cfg
-	root := t.TempDir()
+	root := identityTestStateDir(t)
 	cfg.StateDir = filepath.Join(root, "coordinator")
 	if err := os.Mkdir(cfg.StateDir, 0700); err != nil {
 		t.Fatal(err)
