@@ -27,3 +27,14 @@ The [preceding observation](snow-route-observation-20260928-0030.md) also
 returned HTTP 502. The last successful identity observation remains testnet
 chain 945. Mainnet route cutover, expected chain 964 and independently admitted
 mainnet identity are still unestablished.
+
+## Follow-up recheck
+
+The same read-only request and retry settings were repeated from
+**02:01:36 through 02:06:40 UTC** on September 28. All 21 attempts again returned
+HTTP 502; curl exited 22 after 304 seconds. The raw directory is
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T0201Z`.
+Its `body`, `http-status` and `curl.stderr` hashes respectively match the three
+hashes above. The exact timestamps, exit and `response.sha256` are retained
+there. This supplies no new chain identity or evidence of the upstream cause;
+mainnet cutover is still unconfirmed. No public fallback or transaction was used.
