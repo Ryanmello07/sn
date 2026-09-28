@@ -1477,6 +1477,12 @@ from its failed legacy-subtest metadata check; do not claim zero-skip coverage.
 The [combined SN registration and diagnostics check](evidence/registration-diagnostics-composed-qualification-20260928.md)
 passes all seven selected consumer roots normally and under race detection on
 the sealed source graph; all 18 stages and independent after-fences passed.
+The later [integrated mainnet source check](evidence/final-composed-source-qualification-20260928.md)
+combines that graph with the native deadline observer and offline bootstrap:
+379/379 full normal roots and 122/122 selected race roots passed with all 158
+declared descendant executions, zero skips, and unchanged source/module seals.
+It does not replace release-artifact, deployment, custody or live acceptance
+gates.
 The frozen model invocation ended with three now-corrected fixture failures and
 seven optional-configuration skips; it is not recorded as a passing full
 invocation. Preserve these results when assembling the final source composition
