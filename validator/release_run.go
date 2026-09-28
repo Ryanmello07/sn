@@ -209,9 +209,11 @@ func classifyReleaseSnapshotRetryMode(err error, siblingCancellation, legacyText
 		statusCode = httpErr.StatusCode
 	}
 	if statusCode != 0 {
+		if statusCode >= http.StatusInternalServerError && statusCode <= 599 {
+			return true, true
+		}
 		switch statusCode {
-		case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests,
-			http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests:
 			return true, true
 		}
 		return false, false

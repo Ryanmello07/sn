@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/urfoundation/sn/crv4"
 )
@@ -49,7 +50,8 @@ func productionAuthorityPendingTest(t *testing.T, changeRuntime bool) (*ReleaseS
 		}
 		return original(ctx, target, method, args...)
 	}
-	return &ReleaseSteerer{cfg: current, native: measurement.admission.chain, hotkey: fixture.hotkey}, intent
+	return &ReleaseSteerer{cfg: current, native: measurement.admission.chain, hotkey: fixture.hotkey,
+		productionReadHooks: releaseHttpGetRetryHooks{wait: func(context.Context, time.Duration) error { return context.DeadlineExceeded }}}, intent
 }
 
 // Both a same-artifact renewal and an upgraded artifact keep the actual receipt

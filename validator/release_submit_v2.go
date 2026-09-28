@@ -288,15 +288,59 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	native := *self.native
 	owned.native = &native
 	self = &owned
-	nativeHash, err := authenticatePinnedNativeRuntimeContext(ctx, self.native, self.cfg)
-	if err != nil {
-		return fmt.Errorf("authenticate native runtime before steering snapshot: %w", err)
+	var retained *SteeringIntent
+	if isOwnerRecycleProductionConfig(self.cfg) {
+		if err := self.productionRead(ctx, productionReadIntent, nil, func(readCtx context.Context) error {
+			var err error
+			retained, err = self.intents.currentV2(readCtx)
+			return err
+		}); err != nil {
+			return err
+		}
+		if retained != nil && retained.Status == "pending" {
+			resolved, err := self.reconcileProductionPendingV2(ctx, retained, nil)
+			if err != nil {
+				return err
+			}
+			if resolved {
+				return ErrSteeringAlreadyFinal
+			}
+			// A terminal foreign-nonce/dispatch outcome was durably recorded;
+			// the next poll reopens it before considering a successor decision.
+			return &productionSteeringTransition{nativeEpoch: retained.SubnetEpoch}
+		}
+		if retained != nil && retained.Status == "finalized" {
+			return self.observeProductionApplicationV2(ctx, retained)
+		}
 	}
-	nativeState, err := self.native.EpochScheduleStateAtContext(ctx, self.cfg.Netuid, nativeHash)
+	preparingProduction := isOwnerRecycleProductionConfig(self.cfg)
+	defer func() {
+		var wait *productionSteeringReadWait
+		if preparingProduction && !errors.As(resultErr, &wait) && retryableProductionSteeringRead(resultErr) && !errors.Is(ctx.Err(), context.Canceled) {
+			resultErr = &productionSteeringReadWait{phase: productionReadPreparation, cause: resultErr}
+		}
+	}()
+	var nativeHash types.Hash
+	var nativeState *crv4.EpochScheduleState
+	err := self.productionRead(ctx, productionReadPreparation, retained, func(readCtx context.Context) error {
+		var err error
+		nativeHash, err = authenticatePinnedNativeRuntimeContext(readCtx, self.native, self.cfg)
+		if err != nil {
+			return fmt.Errorf("authenticate native runtime before steering snapshot: %w", err)
+		}
+		nativeState, err = self.native.EpochScheduleStateAtContext(readCtx, self.cfg.Netuid, nativeHash)
+		return err
+	})
+	self.runtimeProgress().observeNative(nativeState, err)
 	if err != nil {
 		return err
 	}
-	snapshot, err := self.chain.ReleaseSnapshotContext(ctx)
+	var snapshot *ReleaseSnapshot
+	err = self.productionRead(ctx, productionReadPreparation, retained, func(readCtx context.Context) error {
+		var err error
+		snapshot, err = self.chain.ReleaseSnapshotContext(readCtx)
+		return err
+	})
 	if err != nil {
 		return err
 	}
@@ -539,6 +583,11 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	// From this point an intent may exist even when its write returns an error.
 	// Its normal durable reconciliation must own every subsequent retry.
 	allowReadRetry = false
+	preparingProduction = false
+	var durableIntent *SteeringIntent
+	defer func() {
+		resultErr = self.productionRetainedReadFailure(ctx, productionReadIntent, durableIntent, resultErr)
+	}()
 	intent, err := self.intents.beginV2(ctx, SteeringIntent{
 		ValidatorID:             self.cfg.ValidatorID,
 		Netuid:                  self.cfg.Netuid,
@@ -571,6 +620,7 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	if err != nil {
 		return err
 	}
+	durableIntent = intent
 	if err := self.runtimeV2.publishDepositAuditV2(ctx, measurementArtifact); err != nil {
 		return err
 	}
@@ -597,6 +647,9 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 }
 
 func (self *ReleaseSteerer) reconcilePendingV2(ctx context.Context, current *SteeringIntent, nativeState *crv4.EpochScheduleState) (bool, error) {
+	if isOwnerRecycleProductionConfig(self.cfg) {
+		return self.reconcileProductionPendingV2(ctx, current, nativeState)
+	}
 	if current == nil || current.Status != "pending" || current.Prepared == nil {
 		return false, errors.New("cannot reconcile a non-pending steering intent")
 	}

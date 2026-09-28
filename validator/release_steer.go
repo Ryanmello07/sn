@@ -40,6 +40,7 @@ type ReleaseSteerer struct {
 	headEMA   *HeadEMAStore
 
 	sourceRolePredecessorV2 *releaseSourceRoleWitnessV2
+	productionReadHooks     releaseHttpGetRetryHooks
 
 	// A native-tempo egress window is detached exactly once and then reused for
 	// retries in that epoch. Without this cache, a transient EVM read failure
@@ -1196,6 +1197,9 @@ func releaseSteeringOperationTimeout(cfg *ReleaseConfig) time.Duration {
 func (s *ReleaseSteerer) Run(ctx context.Context) error {
 	poll := time.Duration(s.cfg.PollSeconds) * time.Second
 	operationTimeout := releaseSteeringOperationTimeout(s.cfg)
+	if isOwnerRecycleProductionConfig(s.cfg) {
+		return s.runProductionSteering(ctx, poll, max(operationTimeout, productionSteeringReadTimeout))
+	}
 	return runReleaseSteeringLoopWithPermissions(ctx, poll, func() (uint64, error) {
 		var epoch uint64
 		err := runReleaseSteeringOperation(ctx, operationTimeout, func(operationCtx context.Context) error {

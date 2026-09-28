@@ -1162,6 +1162,15 @@ an unsubmitted action only with evidence that no signed/in-flight attempt
 exists; an immutable deployed predecessor requires a proved successor, not
 rewritten history. Evidence discovery alone never authorizes broadcasting.
 
+**Immortal native liability (2026-09-28).** Current validator preparation signs
+an immortal era. A local epoch crossing or approval deadline is not transaction
+mortality. Keep the exact original bytes pending through an outage/restart;
+before another signature, resolve them with a canonical receipt or prove a
+foreign nonce consumption at the exact fully scanned boundary. A newer advertised
+head may contain our own transaction and cannot supply a nonce against an older
+absence scan. See the [continuation candidate](evidence/production-continuation-candidate-20260928.md);
+its qualification is pending and does not grant old decisions new epoch authority.
+
 **Closure.** Inject crashes before/after intent fsync, signing, send, lost
 response, inclusion, finality and postcondition publication. Cover two operators,
 same-nonce replacements, cancellation, rejected dispatch, partial batches,
@@ -1285,6 +1294,19 @@ current runtime/nonce/custody inputs within the existing bounded operation.
 Test a head advancing during real HTTP readback; the chain must not need to
 stand still for bootstrap to complete. Real identity, authority or ancestry
 changes remain distinct from ordinary progress.
+
+The [2026-09-28 continuation candidate](evidence/production-continuation-candidate-20260928.md)
+adds a production-only outer `Run` branch that reaches durable intent custody
+before current scheduling, plus current-config receipt/application waits and
+same-boundary nonce observation. Its actual nonempty owner fixtures use genuine
+M8 work under a separately signed zero-price policy; they do not claim paid
+capture or economic acceptance. Typed waits preserve original intent bytes and
+age, expose operational unavailability, and do not spend the service's hard-error
+budget. Real mixed integrity/custody failures and cancellation stay distinct.
+Qualification is pending. Full fresh `RunRelease` activation/config/dual-upload
+composition, authenticated durable scan chunks (including miner partial ranges),
+and configured native HTTP error-origin preservation remain open; no callback-only
+loop test closes those physical ownership requirements.
 
 The bounded [source-finality read candidate](evidence/source-finality-read-candidate-20260928.md)
 separates physical read errors from finality/schedule contradictions and reuses

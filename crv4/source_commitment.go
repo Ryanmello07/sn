@@ -521,7 +521,7 @@ func (self *Chain) VerifyFinalizedSourceContext(ctx context.Context, prepared *P
 		return fmt.Errorf("crv4: read source finalized header: %w", err)
 	}
 	if finalizedNumber < receipt.BlockNumber {
-		return errors.New("crv4: source receipt is not finalized")
+		return &ReceiptEvidenceUnavailableError{BlockHash: receipt.BlockHash, Field: "finalized head through retained receipt"}
 	}
 	var canonicalHex string
 	if err := self.API.Client.CallContext(ctx, &canonicalHex, "chain_getBlockHash", receipt.BlockNumber); err != nil {

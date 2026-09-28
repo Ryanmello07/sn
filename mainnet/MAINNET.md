@@ -890,6 +890,22 @@ the steering loop is insufficient. Qualify the complete process restart through
 an outage, original receipt and applied row, while preserving current authority
 checks for new signing and visible independent health reporting.
 
+The [production continuation candidate](evidence/production-continuation-candidate-20260928.md)
+moves the actual production `Run` branch and `submitOnceV2` toward the retained
+intent before unrelated fresh scheduler/runtime/EVM observations. Its first
+qualification scope is real nonempty V2 begin/replay/update/restart, exact
+original receipt and application, and one canonical absence/nonce boundary.
+Production read waits use 300 seconds overall with 60-second attempts; exhausted
+reads remain visible waits, and mixed integrity/custody failures remain hard.
+These native signatures use an immortal era: a later native epoch or local
+approval deadline cannot revoke already signed bytes. Unknown work retains its
+original signature and age until receipt or authenticated foreign nonce use at
+the scanned boundary resolves it. Missed opportunities remain missed.
+Qualification is pending. Full `RunRelease` activation, normalized config and
+dual-upload composition, durable bounded scan-prefix reuse, and native HTTP
+origin propagation remain separately tracked requirements; this candidate
+does not close MG-04 or PH-03.
+
 The [server upload admission](VALIDATOR-UPLOAD-RUNTIME.md) now consumes an
 independently pinned schema-3 configuration and retains only read-only runtime
 intervals, routes and deployment scope. Original activation reads use their

@@ -388,81 +388,95 @@ func decodedErrorIndex(value any) ([4]types.U8, bool) {
 // use the returned block to authenticate and bind its exact metadata before
 // proving dispatch success or failure.
 func (c *Chain) LocateFinalizedExtrinsic(ctx context.Context, extrinsicHash types.Hash, fromBlock uint64) (*FinalizedExtrinsic, bool, error) {
+	scan, err := c.ScanFinalizedExtrinsic(ctx, extrinsicHash, fromBlock)
+	if err != nil {
+		return nil, false, err
+	}
+	receipt := scan.Receipt()
+	return receipt, receipt != nil, nil
+}
+
+// The absence boundary is returned alongside a found receipt so nonce, epoch
+// and mortality reads cannot silently move beyond the fully searched prefix.
+func (c *Chain) ScanFinalizedExtrinsic(ctx context.Context, extrinsicHash types.Hash, fromBlock uint64) (*FinalizedExtrinsicScan, error) {
 	if ctx == nil || c == nil || c.API == nil || c.API.Client == nil {
-		return nil, false, errors.New("crv4: finalized extrinsic search context is unavailable")
+		return nil, errors.New("crv4: finalized extrinsic search context is unavailable")
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	var finalizedHashHex string
 	if err := c.API.Client.CallContext(ctx, &finalizedHashHex, "chain_getFinalizedHead"); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if finalizedHashHex == "" {
-		return nil, false, &ReceiptEvidenceUnavailableError{Field: "finalized head"}
+		return nil, &ReceiptEvidenceUnavailableError{Field: "finalized head"}
 	}
 	finalizedHash, err := receiptHash(finalizedHashHex)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	_, finalizedNumber, err := c.receiptHeaderAt(ctx, finalizedHash)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	var canonicalFinalizedHex string
 	if err := c.API.Client.CallContext(ctx, &canonicalFinalizedHex, "chain_getBlockHash", finalizedNumber); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if canonicalFinalizedHex == "" {
-		return nil, false, &ReceiptEvidenceUnavailableError{BlockHash: finalizedHash, Field: "canonical finalized hash"}
+		return nil, &ReceiptEvidenceUnavailableError{BlockHash: finalizedHash, Field: "canonical finalized hash"}
 	}
 	canonicalFinalized, err := receiptHash(canonicalFinalizedHex)
 	if err != nil || canonicalFinalized != finalizedHash {
-		return nil, false, errors.New("crv4: finalized receipt head is not canonical at its authenticated height")
+		return nil, errors.New("crv4: finalized receipt head is not canonical at its authenticated height")
 	}
+	scan := &FinalizedExtrinsicScan{from: fromBlock, finalizedHash: finalizedHash, finalizedAt: finalizedNumber}
 	if fromBlock > finalizedNumber {
-		return nil, false, nil
+		return scan, nil
 	}
 	var previousHash types.Hash
 	for number := fromBlock; ; number++ {
 		if err := ctx.Err(); err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		var blockHashHex string
 		if err := c.API.Client.CallContext(ctx, &blockHashHex, "chain_getBlockHash", number); err != nil {
-			return nil, false, fmt.Errorf("crv4: block hash %d: %w", number, err)
+			return nil, fmt.Errorf("crv4: block hash %d: %w", number, err)
 		}
 		if blockHashHex == "" {
-			return nil, false, &ReceiptEvidenceUnavailableError{Field: fmt.Sprintf("canonical block hash at %d", number)}
+			return nil, &ReceiptEvidenceUnavailableError{Field: fmt.Sprintf("canonical block hash at %d", number)}
 		}
 		blockHash, err := receiptHash(blockHashHex)
 		if err != nil {
-			return nil, false, fmt.Errorf("crv4: decode block hash %d: %w", number, err)
+			return nil, fmt.Errorf("crv4: decode block hash %d: %w", number, err)
 		}
 		if number == finalizedNumber && blockHash != finalizedHash {
-			return nil, false, errors.New("crv4: receipt scan finalized hash changed")
+			return nil, errors.New("crv4: receipt scan finalized hash changed")
 		}
 		signedBlock, err := c.receiptBlockAt(ctx, blockHash)
 		if err != nil {
-			return nil, false, fmt.Errorf("crv4: block %d: %w", number, err)
+			return nil, fmt.Errorf("crv4: block %d: %w", number, err)
 		}
 		parent, _ := receiptHash(signedBlock.header.ParentHash)
 		if signedBlock.number != number || previousHash != (types.Hash{}) && parent != previousHash {
-			return nil, false, fmt.Errorf("crv4: receipt block %d height or parent differs from the canonical scan", number)
+			return nil, fmt.Errorf("crv4: receipt block %d height or parent differs from the canonical scan", number)
 		}
 		_, found, err := extrinsicIndex(signedBlock.extrinsics, extrinsicHash)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		if found {
-			return &FinalizedExtrinsic{ExtrinsicHash: extrinsicHash, BlockHash: blockHash, BlockNumber: number}, true, nil
+			scan.receipt = &FinalizedExtrinsic{ExtrinsicHash: extrinsicHash, BlockHash: blockHash, BlockNumber: number}
+			return scan, nil
 		}
 		if number == finalizedNumber {
 			break
 		}
 		previousHash = blockHash
 	}
-	return nil, false, nil
+	scan.absent = true
+	return scan, ctx.Err()
 }
 
 // FindFinalizedExtrinsic is the crash-recovery primitive for a previously
