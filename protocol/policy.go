@@ -47,11 +47,9 @@ type SettlementPolicy struct {
 	Rounding               string `json:"rounding" yaml:"rounding"`
 }
 
-// CadenceSnapshot is the future production cadence committed by the policy.
-// It intentionally describes a transition rule instead of one absolute epoch:
-// setup time and testnet block progress are not deterministic, so the harness
-// schedules this snapshot for currentEpoch+1 only after the accelerated gate
-// has completed.
+// Commits either an accelerated-to-production transition or mainnet's steady
+// cadence. A zero transition count is mainnet-only and requires every initial
+// window to equal production. Existing accelerated policy bytes remain unchanged.
 type CadenceSnapshot struct {
 	AfterAcceleratedEpochs uint64 `json:"after_accelerated_epochs" yaml:"after_accelerated_epochs"`
 	EpochBlocks            uint64 `json:"epoch_blocks" yaml:"epoch_blocks"`
@@ -364,11 +362,20 @@ func (p Policy) Validate() error {
 		return errors.New("invalid settlement close/root/finalize windows")
 	}
 	production := p.ProductionCadence
-	if production.AfterAcceleratedEpochs == 0 || production.EpochBlocks == 0 || production.RootCommitWindowBlocks == 0 || production.FinalizeOffsetBlocks == 0 || production.CloseGraceBlocks == 0 {
+	if production.EpochBlocks == 0 || production.RootCommitWindowBlocks == 0 || production.FinalizeOffsetBlocks == 0 || production.CloseGraceBlocks == 0 {
 		return errors.New("production cadence fields must be nonzero")
 	}
-	if production.CloseGraceBlocks > production.RootCommitWindowBlocks || production.RootCommitWindowBlocks > production.FinalizeOffsetBlocks || production.FinalizeOffsetBlocks >= production.EpochBlocks || production.EpochBlocks <= s.EpochBlocks {
+	if production.CloseGraceBlocks > production.RootCommitWindowBlocks || production.RootCommitWindowBlocks > production.FinalizeOffsetBlocks || production.FinalizeOffsetBlocks >= production.EpochBlocks {
 		return errors.New("invalid production cadence")
+	}
+	if production.AfterAcceleratedEpochs == 0 {
+		if p.NetworkProfile != "mainnet" || production.EpochBlocks != s.EpochBlocks ||
+			production.RootCommitWindowBlocks != s.RootCommitWindowBlocks ||
+			production.FinalizeOffsetBlocks != s.FinalizeOffsetBlocks || production.CloseGraceBlocks != s.CloseGraceBlocks {
+			return errors.New("zero accelerated epochs requires an identical steady mainnet cadence")
+		}
+	} else if production.EpochBlocks <= s.EpochBlocks {
+		return errors.New("accelerated production cadence must increase the epoch length")
 	}
 	if p.NetworkProfile == "testnet" && production.EpochBlocks != 360 {
 		return errors.New("testnet UR block must be exactly 360 chain blocks")

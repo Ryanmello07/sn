@@ -10,6 +10,12 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["schema", "network_profile", "policy_id", "effective_epoch", "settlement", "production_cadence", "steering", "deposit", "verify", "binding", "safety"],
+      "allOf": [
+        {
+          "if": {"properties": {"production_cadence": {"properties": {"after_accelerated_epochs": {"const": 0}}, "required": ["after_accelerated_epochs"]}}, "required": ["production_cadence"]},
+          "then": {"properties": {"network_profile": {"const": "mainnet"}, "settlement": {"properties": {"epoch_blocks": {"const": 50400}}}, "production_cadence": {"properties": {"epoch_blocks": {"const": 50400}}}}}
+        }
+      ],
       "properties": {
         "schema": {"const": "urnetwork-policy-v1"},
         "network_profile": {"enum": ["testnet", "mainnet"]},
@@ -47,7 +53,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["after_accelerated_epochs", "epoch_blocks", "root_commit_window_blocks", "finalize_offset_blocks", "close_grace_blocks"],
       "properties": {
-        "after_accelerated_epochs": {"$ref": "#/$defs/positive"},
+        "after_accelerated_epochs": {"$ref": "#/$defs/u64", "description": "Zero is permitted only for steady mainnet cadence: settlement and production epoch/root/finalize/close windows must be identical. Go policy admission enforces the cross-field equality. Positive values retain the accelerated transition semantics."},
         "epoch_blocks": {"$ref": "#/$defs/positive"},
         "root_commit_window_blocks": {"$ref": "#/$defs/positive"},
         "finalize_offset_blocks": {"$ref": "#/$defs/positive"},
