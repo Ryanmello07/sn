@@ -32,17 +32,17 @@ func TestProductionSteeringReadCauseClassification(t *testing.T) {
 		err  error
 		want bool
 	}{
-		{"deadline", context.DeadlineExceeded, true},
-		{"unavailable body", unavailable, true},
-		{"owned HTTP 500", gethrpc.HTTPError{StatusCode: 500}, true},
-		{"owned HTTP 502", gethrpc.HTTPError{StatusCode: 502}, true},
-		{"owned HTTP 401", gethrpc.HTTPError{StatusCode: 401}, false},
-		{"physical EOF", &url.Error{Op: "Post", URL: "https://synthetic.invalid", Err: io.EOF}, true},
-		{"unowned EOF", io.EOF, false},
-		{"cancellation", context.Canceled, false},
-		{"local custody", &os.PathError{Op: "read", Path: "intent.json", Err: context.DeadlineExceeded}, false},
-		{"mixed contradiction", errors.Join(unavailable, hard, context.DeadlineExceeded), false},
-		{"diagnostic text", errors.New("500 timeout EOF block unavailable"), false},
+		{name: "deadline", err: context.DeadlineExceeded, want: true},
+		{name: "unavailable body", err: unavailable, want: true},
+		{name: "owned HTTP 500", err: gethrpc.HTTPError{StatusCode: 500}, want: true},
+		{name: "owned HTTP 502", err: gethrpc.HTTPError{StatusCode: 502}, want: true},
+		{name: "owned HTTP 401", err: gethrpc.HTTPError{StatusCode: 401}, want: false},
+		{name: "physical EOF", err: &url.Error{Op: "Post", URL: "https://synthetic.invalid", Err: io.EOF}, want: true},
+		{name: "unowned EOF", err: io.EOF, want: false},
+		{name: "cancellation", err: context.Canceled, want: false},
+		{name: "local custody", err: &os.PathError{Op: "read", Path: "intent.json", Err: context.DeadlineExceeded}, want: false},
+		{name: "mixed contradiction", err: errors.Join(unavailable, hard, context.DeadlineExceeded), want: false},
+		{name: "diagnostic text", err: errors.New("500 timeout EOF block unavailable"), want: false},
 	}
 	for _, item := range cases {
 		if actual := retryableProductionSteeringRead(item.err); actual != item.want {

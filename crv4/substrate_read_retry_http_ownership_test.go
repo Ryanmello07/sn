@@ -67,17 +67,17 @@ func newSubstrateReadHttpDecoratedFixture(t *testing.T, maximum int64, transport
 // Mixed physical interruption/status and body-close integrity failures stop
 // at one request, retaining both original causes without renewed read authority.
 func TestSubstrateReadHttpBodyCloseFailureRemainsHard(t *testing.T) {
-	for _, kind := range []string{"body", "status", "close-eof"} {
+	for _, kind := range []string{"body", "status", "mixed-close-eof"} {
 		calls, closes := 0, 0
 		closeErr := errors.New("synthetic response ownership close failure")
-		if kind == "close-eof" {
-			closeErr = io.EOF
+		if kind == "mixed-close-eof" {
+			closeErr = errors.Join(io.EOF, closeErr)
 		}
 		client := newSubstrateReadHttpDecoratedFixture(t, 1024, substrateReadHttpTestRoundTripper(func(*http.Request) (*http.Response, error) {
 			calls++
 			status := http.StatusOK
 			var reader io.Reader = &substrateReadHttpBrokenBody{}
-			if kind == "status" || kind == "close-eof" {
+			if kind == "status" || kind == "mixed-close-eof" {
 				status, reader = http.StatusBadGateway, strings.NewReader("synthetic unavailable")
 			}
 			return &http.Response{StatusCode: status, Header: make(http.Header), ContentLength: -1, Body: &substrateReadHttpTestBody{reader: reader, closeErr: closeErr, closes: &closes}}, nil

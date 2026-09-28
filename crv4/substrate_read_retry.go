@@ -47,9 +47,6 @@ func retryableSubstrateRpcReadTransport(err error, transportOrigin, allowReconne
 	if _, localFile := err.(*os.PathError); localFile {
 		return false
 	}
-	if _, closeFailure := err.(*substrateReadHttpCloseError); closeFailure {
-		return false
-	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		causes := joined.Unwrap()
 		if len(causes) == 0 {
@@ -66,6 +63,8 @@ func retryableSubstrateRpcReadTransport(err error, transportOrigin, allowReconne
 	case *SubstrateReadHttpStatusError:
 		return retryableSubstrateReadHttpStatus(cause.status)
 	case *substrateReadHttpTransportError:
+		return retryableSubstrateRpcReadTransport(cause.cause, true, false)
+	case *substrateReadHttpCloseError:
 		return retryableSubstrateRpcReadTransport(cause.cause, true, false)
 	case *url.Error:
 		return retryableSubstrateRpcReadTransport(cause.Err, true, allowReconnectMarker)

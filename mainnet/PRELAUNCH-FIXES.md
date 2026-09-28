@@ -1224,13 +1224,18 @@ flattened statuses to strings and returned decoder EOF without physical origin.
 The [configured native-read adapter](evidence/native-http-read-causes-20260928.md)
 now preserves typed status and incomplete-body causes before that flattening,
 inside the existing 300-second total/60-second attempt budget. Complete malformed
-JSON, permanent RPC errors, cancellation, body-close failures and mixed integrity
+JSON, permanent RPC errors, cancellation and mixed integrity
 causes stay hard; writes never gain retry. All 30 selected roots passed normal
-and race qualification, with ten intended causal failures retained. Integration
-review found that the finite wire ceiling must also include the existing 16 MiB
-decoded event field's hex expansion and JSON envelope; its correction is open.
-Production continuation must consume the exported typed
-classifier after integration; this transport slice alone does not close PH-03.
+and race qualification, with ten intended causal failures retained.
+The [production integration](evidence/production-native-http-integration-20260928.md)
+consumes its strict physical-origin classifier without generic fallback for hard
+native causes. It corrects the finite cap to include the existing 16 MiB event
+field as hex plus 64 KiB of JSON framing, and distinguishes pure HTTP connection
+failures during body close from local-file or mixed integrity failures. A retry
+releases its body and discards idle connections first. The integration's genuine
+configured-client deadline and close controls passed all 23 selected roots
+normally and under race, with six intended control failures retained. This
+transport slice alone does not close PH-03.
 
 **2026-09-28 production steering review.** The standard validator's outer
 steering loop still ties several transient continuation branches to testnet
@@ -1305,8 +1310,8 @@ age, expose operational unavailability, and do not spend the service's hard-erro
 budget. Real mixed integrity/custody failures and cancellation stay distinct.
 Qualification is pending. Full fresh `RunRelease` activation/config/dual-upload
 composition, authenticated durable scan chunks (including miner partial ranges),
-and configured native HTTP error-origin preservation remain open; no callback-only
-loop test closes those physical ownership requirements.
+and qualification of the separate native HTTP integration remain open; no
+callback-only loop test closes those physical ownership requirements.
 
 The bounded [source-finality read candidate](evidence/source-finality-read-candidate-20260928.md)
 separates physical read errors from finality/schedule contradictions and reuses

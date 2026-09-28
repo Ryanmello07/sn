@@ -201,7 +201,7 @@ func (self *Chain) verifyFinalizedExtrinsicContext(ctx context.Context, blockHas
 	if encodedEvents == nil || *encodedEvents == "" || *encodedEvents == "0x" {
 		return nil, &ReceiptEvidenceUnavailableError{BlockHash: blockHash, Field: "System.Events"}
 	}
-	if len(*encodedEvents) > 2+2*16*1024*1024 {
+	if len(*encodedEvents) > 2+2*finalizedExtrinsicEventsBytes {
 		return nil, errors.New("crv4: finalized events storage exceeds the finite block bound")
 	}
 	eventsBytes, err := codec.HexDecodeString(*encodedEvents)

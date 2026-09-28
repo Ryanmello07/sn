@@ -902,8 +902,10 @@ approval deadline cannot revoke already signed bytes. Unknown work retains its
 original signature and age until receipt or authenticated foreign nonce use at
 the scanned boundary resolves it. Missed opportunities remain missed.
 Qualification is pending. Full `RunRelease` activation, normalized config and
-dual-upload composition, durable bounded scan-prefix reuse, and native HTTP
-origin propagation remain separately tracked requirements; this candidate
+dual-upload composition and durable bounded scan-prefix reuse remain separately
+tracked requirements. The [native HTTP integration candidate](evidence/production-native-http-integration-20260928.md)
+consumes physical read origin and preserves finite event-response framing;
+its separate qualification is pending. The continuation candidate
 does not close MG-04 or PH-03.
 
 The [server upload admission](VALIDATOR-UPLOAD-RUNTIME.md) now consumes an
@@ -1217,8 +1219,12 @@ preserves status and physical body failures within the existing finite read
 budget. Production consumers can distinguish that typed unavailability from
 complete malformed evidence and mixed integrity errors; writes retain their
 separate original-byte reconciliation policy. The 30-root component normal/race
-qualification passed. Downstream production continuation and finite response
-headroom for the existing event-field limit remain separate integration gates.
+qualification passed. The [production integration](evidence/production-native-http-integration-20260928.md)
+also passed its 23-root normal/race scope and three regression-control families.
+It admits only pure connection failures from HTTP body
+close after releasing the response and discarding idle connections; local file
+close, cancellation and mixed integrity causes remain hard. Its finite wire cap
+includes the existing 16 MiB event value as hex plus 64 KiB of JSON framing.
 
 The [operator receipt-census correction](evidence/operator-recovery-census-20260927.md)
 preserves this boundary in the production account reconciler: if a retained

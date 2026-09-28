@@ -34,6 +34,9 @@ func retryableProductionSteeringRead(err error) bool {
 	if err == nil {
 		return false
 	}
+	if crv4.HasSubstrateReadTransportCause(err) {
+		return crv4.RetryableSubstrateReadTransportError(err)
+	}
 	if _, ok := err.(*crv4.ReceiptEvidenceUnavailableError); ok {
 		return true
 	}
