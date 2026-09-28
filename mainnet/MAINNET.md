@@ -1220,6 +1220,14 @@ Keep regression data visibly synthetic: generated test-only identities, `.exampl
 
 Run bounded normal tests on the frozen implementation, then appropriate race tests for shared state, journal ownership and supervisors. Retain exact source, binary, selector, package working directory and terminal evidence. Diagnose any actual failure on that capture before retry; preserve failed evidence and use the established confirmation protocol. Reuse unaffected qualification only with an explicit source/dependency mapping; changed custody/runtime economics require their relevant full tests and owned-node rehearsal. There are no mainnet tests against public RPC and no broadcast hidden in a test command.
 
+Use the maintained [qualification owner](../scripts/qualification/main.go) for
+new captures. A retained test binary must run from its authenticated package
+directory, just as `go test` would; the module root is not equivalent. Verify
+the binary's actual test list and complete terminal events, including explicit
+package success. A wrapper's zero exit after interrupted execution is not a
+pass. Preserve valid compiled artifacts and completed work when correcting a
+runner, with the failed invocation and the correction recorded separately.
+
 ## Open inputs before an executable mainnet plan
 
 Snow VPN `172.28.208.185:9944` is the intended mainnet route, but the node

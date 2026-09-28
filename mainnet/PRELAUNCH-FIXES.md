@@ -80,6 +80,19 @@ guards or scheduling; 18 affected roots passed normal and race qualification
 ([receipt](https://github.com/urnetwork/server/blob/4468a6961c00cf0ff8b84986259fa9698a7a8441/local/model-fixture-qualification-20260927.md)).
 The original diagnostic run continues to collect additional failures.
 
+The frozen qualification's first direct-binary invocation used the module
+directory instead of the test package directory. Its 15-test prefix is retained
+and disqualified; the corrected body under `server-model-final-20260927/model-run`
+reuses the same compiled binaries from `server/model`. Source and service cleanup
+checks passed before that correction. Terminating the old `go tool test2json`
+wrapper also returned zero without a complete run: exit status alone is not
+qualification. Require all **1,118 roots listed by the actual Linux binary**
+and the terminal package outcome, recording skips separately. The source tree's
+1,122 function declarations are not the executed census. For future captures,
+use the maintained [qualification owner](../scripts/qualification/main.go),
+which already checks actual package/module paths, executes from the package
+directory and verifies terminal membership; keep the current body running.
+
 For MG-08, the majority SN25 validator runs the standard `sn/validator` binary
 with its ordinary evidence-based scoring policy. It is an indirect reset aid,
 not a native removal authority. Old miners absent from eligible head and pool
