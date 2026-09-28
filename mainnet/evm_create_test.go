@@ -119,11 +119,28 @@ func TestEvmCreateLostReplyReconcilesOriginalInclusion(t *testing.T) {
 	f.prepareSigned()
 	f.loseReply = true
 	_, code, diagnostic := f.command("resume", "--online", "--submit")
-	if code != 1 || !strings.Contains(diagnostic, "uncertain") || len(f.writes) != 1 {
+	f.stateLock.Lock()
+	oneOriginalWrite := len(f.writes) == 1 && bytes.Equal(f.writes[0], f.raw)
+	f.stateLock.Unlock()
+	if code != 1 || !oneOriginalWrite {
 		t.Fatalf("uncertain send was retried or forgotten: %d %s", code, diagnostic)
 	}
+	store, err := openEvmActionStore(f.config, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained, err := store.load()
+	if closeErr := store.close(); err != nil || closeErr != nil {
+		t.Fatalf("uncertain original custody could not reopen: %v %v", err, closeErr)
+	}
+	if retained.Attempts != 1 || retained.Signed != "0x"+hex.EncodeToString(f.raw) || retained.TransactionHash != f.tx.Hash().Hex() || retained.Receipt != nil {
+		t.Fatalf("lost acknowledgement changed durable original liability: %+v", retained)
+	}
 	result, code, diagnostic := f.command("resume", "--online", "--submit")
-	if code != 0 || result.Status != "reserve-created" || result.Attempts != 1 || len(f.writes) != 1 {
+	f.stateLock.Lock()
+	oneOriginalWrite = len(f.writes) == 1 && bytes.Equal(f.writes[0], f.raw)
+	f.stateLock.Unlock()
+	if code != 0 || result.Status != "reserve-created" || result.Attempts != retained.Attempts || result.TransactionHash != retained.TransactionHash || result.Receipt == nil || result.Receipt.TransactionHash != retained.TransactionHash || !oneOriginalWrite {
 		t.Fatalf("lost acknowledgement recovery: %+v %d %s", result, code, diagnostic)
 	}
 }

@@ -32,16 +32,28 @@ errors. The release JSON fixture also preserves its testnet-only generated
 variable names so the retained-bytecode test reaches preservation instead of
 panicking during setup. No existing native root wire contract changes.
 
-Corrected Terra qualification is **pending**. The affected rerun selectors are
-`^TestEvmCreate` (20 roots, including the two new wire roots) and
-`^TestReleaseJsonUsesRetainedReviewedBytecode$`, plus vet and command build.
+The frozen corrected source `576dea586ba30e08fce6f3c7923b9717cc320b54` completed
+Terra normal/race qualification: **19 of 20 EVM roots passed** in each mode;
+the whole selected body still failed (9.539s normal, 45.686s race). The sole
+remaining failure was `TestEvmCreateLostReplyReconcilesOriginalInclusion`, whose
+assertion required the word `uncertain` even though the actual returned error
+said the attempt may have reached the node and required original-byte
+reconciliation. This is not counted as a passing recovery test. The separate
+follow-up removes text coupling and checks the validated durable original
+bytes/hash, spent attempt, and subsequent original-inclusion recovery instead.
+Its selected rerun remains **pending**.
+
+`^TestReleaseJsonUsesRetainedReviewedBytecode$` passed normal/race; vet, command
+build, source and all 154 consumed-source fences passed on that frozen source.
 The unchanged native root submission and other generator bodies retain their
 independent original normal/race evidence; failed package totals are not passes.
-Six causal overlays restore omitted exact-signature checks,
+All six causal overlays reached their intended assertions in both normal and
+race runs. They restore omitted exact-signature checks,
 omitted runtime readback, a send before durable attempt publication, an
 unavailable-read-as-mismatch label, rejection of healthy head progress, and a
-discarded completed scan checkpoint. The controls must fail their intended
-assertions before qualification can be sealed.
+discarded completed scan checkpoint. The raw failed positive root, successful
+roots and 12 intended causal failures remain in the original correction evidence
+directory without replacement by follow-up captures.
 
 Eighteen new EVM roots exercise the real command, exact maintained artifact,
 genuine geth constructor/getters, local HTTP route, unequal native/EVM heights,

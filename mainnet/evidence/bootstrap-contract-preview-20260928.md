@@ -46,10 +46,26 @@ constructs the domain plus typed JSON independently. The signature test signs
 only synthetic local data, admits the unchanged plan, and rejects unsigned,
 changed-plan, wrong-key and wrong-signature resume without altering custody.
 
-The affected normal/race selector is `^Test(EvmCreate|EvmPhasePreview)`; it
-includes the two retained-terminal regressions and the prior EVM cases affected
-by shared validation/fixture changes. Generator and native-root bodies are
-unchanged by this follow-up. Causal controls remove offline terminal projection,
+The complete affected-family selector is `^Test(EvmCreate|EvmPhasePreview)`;
+the bounded follow-up runner selects the eight new roots and the failed
+predecessor lost-reply root, without repeating the other 19 frozen passed roots.
+Generator and native-root bodies are unchanged by this follow-up. Causal
+controls remove offline terminal projection,
 restore the circular signed-only preview gate, omit constructor equivalence,
 or omit independent signature verification. A control qualifies only by
 reaching its exact intended assertion; setup failures are retained failures.
+
+## Lost acknowledgement assertion correction
+
+The frozen corrected predecessor's only remaining EVM failure was a test's
+search for the word `uncertain` in a diagnostic whose actual text says the
+attempt may have reached the node. The follow-up keeps the required failing
+command exit and proves one exact original HTTP write, reopens and validates
+the retained original signed bytes/hash and attempt 1, then requires canonical
+reconciliation of that same transaction with no additional write or attempt.
+No submission, retry, approval or reconciliation policy changes.
+
+Terra can rerun only this failed predecessor root and the eight new offline/
+preview roots; the other 19 positive roots and all 12 intended prior causal
+captures remain valid evidence for their frozen predecessor source. They are
+not labeled as tests of the later source until an affected composed run occurs.
