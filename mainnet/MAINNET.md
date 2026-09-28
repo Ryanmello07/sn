@@ -456,6 +456,14 @@ evidence; report a mapping contradiction only after receiving a conflicting
 value. Keep retries within the approved operation budget and retain unresolved
 signed liabilities for reconciliation.
 
+The first [executable contract phase](BOOTSTRAP-CONTRACTS.md) now wires
+`bootstrap-contracts plan/apply/resume` to exact reserve CREATE preparation,
+public signed-byte custody, a finite owned-HTTP submission allowance and
+canonical transaction/runtime/getter recovery. Offline preparation requires no
+deployment outputs. The candidate's [Terra qualification is pending](evidence/bootstrap-contract-create-20260928.md);
+only this first CREATE is implemented. The remaining graph, including genuine
+Safe evidence anchoring, and authenticated live authority remain required.
+
 | Identity | Custody/authority |
 | --- | --- |
 | Subnet owner coldkey | Native subnet administration; offline or explicitly qualified native multisig/proxy. |

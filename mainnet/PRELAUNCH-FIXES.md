@@ -266,6 +266,16 @@ Do not activate signing from a read-only-ready sample or invent a heartbeat for
 the accumulation strategy. Mainnet identity, existing seat, complete eligibility,
 approved custody and limits remain explicit gates.
 
+The [first executable contract bootstrap phase](BOOTSTRAP-CONTRACTS.md) now
+prepares and resumes reserve CREATE through original public EVM signed bytes,
+bounded durable attempts, shared owned-HTTP transport and canonical
+runtime/getter recovery. The [candidate qualification](evidence/bootstrap-contract-create-20260928.md)
+is pending Terra normal/race and causal controls. Healthy head advancement is
+revalidated within the operation; an unavailable mapping read does not become a
+successful-value mismatch. EVM signature liability survives local approval
+expiry. The other eight installation actions, Safe inner-call success/getter
+verification and authenticated live custody/network inputs remain open.
+
 Start with MG-01's read-only route correction and MG-02's source composition.
 Then close the recovery, runtime, policy, settlement and monitoring dependencies
 before MG-08 can apply a reviewed bootstrap plan. MG-09 must close before

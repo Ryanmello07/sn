@@ -1,0 +1,166 @@
+// Contract installation consumes exact public release artifacts. The generator
+// preserves reviewed bytecode; independent phase approval supplies authority.
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/urfoundation/sn/ss58"
+	"github.com/urfoundation/sn/stabi"
+)
+
+// Semantic immutable names and exact offsets originate in the existing
+// generator's source/layout checks, not mutable deployed contract responses.
+type contractReleaseArtifact struct {
+	Name                string           `json:"name"`
+	Abi                 string           `json:"abi"`
+	Creation            string           `json:"creation"`
+	Runtime             string           `json:"runtime"`
+	RuntimeHash         string           `json:"runtime_hash"`
+	ArtifactHash        string           `json:"artifact_hash"`
+	StorageLayoutHash   string           `json:"storage_layout_hash"`
+	ImmutableReferences map[string][]int `json:"immutable_references"`
+}
+
+// The wire format contains production artifacts only, never simulator helpers.
+type contractReleaseArtifacts struct {
+	Schema    string                    `json:"schema"`
+	Artifacts []contractReleaseArtifact `json:"artifacts"`
+}
+
+// Canonical bytecode is bounded before decoding and never accepts placeholders.
+func contractCode(encoded string, maximum int) ([]byte, error) {
+	if encoded == "" || len(encoded)%2 != 0 || len(encoded) > maximum*2 || strings.ToLower(encoded) != encoded {
+		return nil, errors.New("contract bytecode is empty, noncanonical or oversized")
+	}
+	raw, err := hex.DecodeString(encoded)
+	return raw, err
+}
+
+// Exact file identity is checked before any runtime, signer or journal opens.
+func loadContractRelease(ctx context.Context, reference planFileReference) (contractReleaseArtifacts, error) {
+	var envelope contractReleaseArtifacts
+	raw, hash, err := readBootstrapRootFile(ctx, reference.Path, 2*1024*1024)
+	if err != nil || !planSha256(reference.Sha256) || hash != reference.Sha256 {
+		return envelope, errors.Join(errors.New("contract release differs from its independent content pin"), err)
+	}
+	if err := decodePlanJson(raw, &envelope); err != nil {
+		return envelope, err
+	}
+	if envelope.Schema != "urnetwork-contract-release-artifacts-v1" || len(envelope.Artifacts) != 5 {
+		return envelope, errors.New("contract release must contain the five production artifacts")
+	}
+	wanted := map[string]bool{"ReserveSink": true, "SettlementVault": true, "Coordinator": true, "ERC1967Proxy": true, "ValidatorEvidence": true}
+	for _, artifact := range envelope.Artifacts {
+		if !wanted[artifact.Name] {
+			return envelope, errors.New("contract release has an unknown or duplicated artifact")
+		}
+		delete(wanted, artifact.Name)
+		if _, err := contractCode(artifact.Creation, 48*1024); err != nil {
+			return envelope, err
+		}
+		runtime, err := contractCode(artifact.Runtime, 24*1024)
+		if err != nil || crypto.Keccak256Hash(runtime).Hex() != artifact.RuntimeHash || !rootCanonicalHash(artifact.ArtifactHash) || !planSha256(artifact.StorageLayoutHash) {
+			return envelope, errors.Join(errors.New("contract runtime or release identity differs"), err)
+		}
+		if _, err := abi.JSON(strings.NewReader(artifact.Abi)); err != nil {
+			return envelope, err
+		}
+		used := map[int]bool{}
+		for name, offsets := range artifact.ImmutableReferences {
+			if name == "" || len(offsets) == 0 || len(offsets) > 128 {
+				return envelope, errors.New("contract immutable reference is incomplete")
+			}
+			for _, offset := range offsets {
+				if offset < 0 || offset > len(runtime)-32 {
+					return envelope, errors.New("contract immutable offset exceeds runtime")
+				}
+				for i := offset; i < offset+32; i++ {
+					if used[i] {
+						return envelope, errors.New("contract immutable references overlap")
+					}
+					used[i] = true
+				}
+			}
+		}
+	}
+	return envelope, nil
+}
+
+// Word values are copied; caller-owned maps cannot mutate the compiled result.
+func (self contractReleaseArtifact) withImmutables(values map[string][]byte) ([]byte, error) {
+	runtime, err := contractCode(self.Runtime, 24*1024)
+	if err != nil {
+		return nil, err
+	}
+	if len(values) != len(self.ImmutableReferences) {
+		return nil, errors.New("contract immutable census differs")
+	}
+	for name, offsets := range self.ImmutableReferences {
+		value, ok := values[name]
+		if !ok || len(value) != 32 {
+			return nil, fmt.Errorf("contract immutable %s is absent or not one word", name)
+		}
+		for _, offset := range offsets {
+			if offset < 0 || offset > len(runtime)-32 {
+				return nil, errors.New("contract immutable offset exceeds runtime")
+			}
+			copy(runtime[offset:offset+32], value)
+		}
+	}
+	return runtime, nil
+}
+
+// Getters are compared byte-for-byte at the canonical inclusion block, never
+// against an unpinned latest view or a successful receipt alone.
+type contractGetter struct {
+	Data     string `json:"data"`
+	Expected string `json:"expected"`
+}
+
+// The reserve constructor is the first executable action of installation.
+// Its address-derived custody key is fixed before creation.
+func contractReservePayload(artifact contractReleaseArtifact, netuid uint16, hotkey [32]byte, deployer common.Address, nonce uint64) ([]byte, []byte, []contractGetter, error) {
+	if artifact.Name != "ReserveSink" || netuid != 25 || hotkey == ([32]byte{}) || deployer == (common.Address{}) {
+		return nil, nil, nil, errors.New("reserve deployment domain is incomplete")
+	}
+	creation, err := contractCode(artifact.Creation, 48*1024)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	address := crypto.CreateAddress(deployer, nonce)
+	mirror := ss58.EvmMirrorPubkey(address)
+	word := func(address common.Address) []byte {
+		result := make([]byte, 32)
+		copy(result[12:], address[:])
+		return result
+	}
+	uid := make([]byte, 32)
+	uid[30], uid[31] = byte(netuid>>8), byte(netuid)
+	runtime, err := artifact.withImmutables(map[string][]byte{"netuid": uid, "reserveHotkey": hotkey[:], "selfColdkey": mirror[:], "bootstrap": word(deployer)})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	contract := stabi.NewSTReserveSink()
+	parsed, err := abi.JSON(strings.NewReader(artifact.Abi))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	arguments, err := parsed.Pack("", netuid, hotkey, mirror, deployer)
+	if err != nil || !bytes.Equal(arguments, contract.PackConstructor(netuid, hotkey, mirror, deployer)) {
+		return nil, nil, nil, errors.Join(errors.New("reserve artifact constructor differs from generated binding"), err)
+	}
+	getters := []contractGetter{}
+	for _, getter := range []struct{ data, value []byte }{{data: contract.PackNetuid(), value: uid}, {data: contract.PackReserveHotkey(), value: hotkey[:]}, {data: contract.PackSelfColdkey(), value: mirror[:]}, {data: contract.PackBootstrap(), value: word(deployer)}, {data: contract.PackRecorder(), value: make([]byte, 32)}} {
+		getters = append(getters, contractGetter{Data: "0x" + hex.EncodeToString(getter.data), Expected: "0x" + hex.EncodeToString(getter.value)})
+	}
+	return append(creation, arguments...), runtime, getters, nil
+}

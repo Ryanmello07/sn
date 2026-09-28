@@ -100,6 +100,9 @@ func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 // A supplied clock makes outage and finality deadlines reproducible in tests.
 func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time) int {
+	if len(args) != 0 && args[0] == "bootstrap-contracts" {
+		return runBootstrapContractCommand(ctx, args, stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "bootstrap" {
 		return runBootstrapRootCommand(ctx, args, stdout, stderr)
 	}
