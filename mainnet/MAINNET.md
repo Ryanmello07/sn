@@ -973,7 +973,10 @@ the actual public root. Retained native observation is independent of live JWT
 readiness; new publication, trails, signing and rebroadcast remain gated. Fresh
 creation requires signed per-operator `allow_client_registration`, default false
 with historical encoding preserved. Existing operations reconcile regardless
-of that flag. Qualification and the additive server-first migration/rollout are
+of that flag. Its [withdrawal recovery correction](evidence/operator-withdrawal-ownership-qualification-20260928.md)
+is integrated: 20 affected roots and both causal controls pass normally and
+under race detection. Original failed parent captures remain retained. Final
+dependency composition and the additive server-first migration/rollout remain
 pending; no live identities or deployment are supplied by this source change.
 
 The [qualified receipt-prefix recovery](evidence/receipt-prefix-qualification-20260928.md)

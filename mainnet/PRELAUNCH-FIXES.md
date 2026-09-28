@@ -1246,7 +1246,7 @@ continuous acceptance. Qualify duplicate callers, interruption between
 invalidation and publication, retained fleet evidence, successful/completed
 sources, and read-only ownership before promoting the pattern to production.
 
-**2026-09-28 production recovery follow-up (correction pending).** The composed
+**2026-09-28 production recovery follow-up (integrated and component qualified).** The composed
 registration candidate exposed this coupling again in the actual public root.
 `requireReleaseEvidenceV2Runtime` rebuilt the reserved-attempt replica census
 before native intent reconciliation, and that census rejected an upload
@@ -1259,6 +1259,14 @@ Separate immutable configured-source/custody validation from permission to use
 an active publication session. Keep the latter at new publication, preparation,
 signing and rebroadcast boundaries. A revoked API must not erase native
 liabilities; invalid retained authority or custody must still block recovery.
+
+The [corrected production ownership](evidence/operator-withdrawal-ownership-qualification-20260928.md)
+now passes all 20 affected roots normally and under race detection. Restoring
+the old active-session gate and removing the API-local failure latch each
+reproduce their intended failure in both modes on the corrected fixture.
+Original signed intent, receipt recovery and active-write refusal remain
+separate assertions. Preserve the parent's two real failures and unchanged
+passing work; final dependency composition and deployment remain open.
 
 The same tests used optional diagnostic delivery to release their receipt
 fixtures. Bounded output may drop records, so that is not a reliable operation
