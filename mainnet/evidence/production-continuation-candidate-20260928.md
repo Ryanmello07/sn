@@ -1,9 +1,12 @@
 # Production continuation candidate — 2026-09-28
 
-Status: source candidate; **qualification pending**. No mainnet keys, calls,
-submission, deployment, active simulator process or release lock was changed.
-Astra authored the source and deterministic fixtures. Terra owns normal/race
-test execution; compile-only checks are not a pass claim.
+Status: **component qualification complete** on frozen author
+`18ff77cb33a7fc91c49e5d03040c3db382e23ff1`, following core `89ebd498`.
+Root integrated the core as `c8330bfd` and its receiver-only correction as
+`459510af`; the later native HTTP integration is `05b88228`. No mainnet keys,
+submission, deployment, active simulator or release lock was changed.
+Astra authored the source and deterministic fixtures; Terra executed the bodies.
+Full public startup and durable partial-scan recovery remain open below.
 
 ## Concrete failures addressed
 
@@ -53,10 +56,12 @@ absence, before nonce reconciliation: foreign-nonce resolution under a renewed
 historical grant remains open. Current-authority pending work uses the exact
 same-boundary nonce proof implemented in this candidate.
 
-## Qualification scope to run
+## Qualified scope
 
 All commands use `GOWORK=off GOMAXPROCS=2`, physical
 `GOCACHE=/mnt/data/sn-testnet/gocache`, and a capture-specific physical `TMPDIR`.
+These selectors describe frozen `18ff77cb`; use its retained exact root lists
+when reproducing the scope, rather than counting later additions as old evidence.
 
 - `go test ./crv4 -run '^Test(ReceiptScan|ReceiptBlock|ReceiptHeader|LocateFinalizedExtrinsic)' -count=1`
 - `go test ./validator -run '^Test(ProductionContinuation|ProductionSteering|ProductionAuthorityHistoryPending|ProductionAuthorityHistoryReceipt|ReleaseSourceFinalityRead)' -count=1`
@@ -99,6 +104,44 @@ runtime read. Restore the behind-receipt hard error and HTTP500 omission for the
 two focused controls. Keep successful full test bodies unchanged while correcting
 an independent failed fixture.
 
+## Completed qualification
+
+The completed qualification is retained at
+`/mnt/data/sn-testnet/qualification/production-continuation-20260928/style-18ff77cb`.
+The source remained at clean `18ff77cb` before and after; the resolved module
+graph was byte-identical. Vet passed for `crv4` and `validator`.
+
+| Frozen scope | Normal | Race |
+| --- | --- | --- |
+| CRv4, 10 roots | 10 passed, 0.017 s | 10 passed, 1.116 s |
+| Validator, 22 roots | 22 passed, 120.755 s | 16 passed before the original 600.190 s package timeout; only the interrupted root and five unstarted roots reran, all six passing in 182.462 s |
+| Six decision-control families | Six intended assertion failures | Six intended assertion failures |
+
+Race coverage reaches all 22 validator roots across the two retained captures.
+The original package timeout remains an exit-1 failure, not a passing full
+invocation. The continuation selectors initially used an erroneous terminal `$`
+on family prefixes; enumeration caught the zero-root selection before bodies.
+The corrected prefixes enumerated exactly 10 and 22 roots. No positive result
+depends on a zero-root invocation, timeout or failed fixture setup.
+
+| Retained file | SHA-256 |
+| --- | --- |
+| `crv4-normal.jsonl` | `e2024a325533cdc898ab6eef6480bd85bf9588b0f399da119d8bc2b2caf6aea1` |
+| `crv4-race.jsonl` | `7c8a6b9c0ac7f1d24a0b04855007b5bd33c48a5f4ef3fe2d006ca69639e13035` |
+| `validator-normal.jsonl` | `8b0976a3c52f57861941420dcf0535ae89dd4cb36417ae014c98f8bec8842818` |
+| Original `validator-race.jsonl` | `ed0c9c8c3f472fc4758d581ec4428cd17ab6d4e83b0560fc0167ec12f09c1cfb` |
+| `validator-race-resume.jsonl` | `5d20402d698962fb3858c2c83acb57d64424be4a595ed82ef1385379b6780b57` |
+| Resolved module graph | `85d5eef5512f1cd3f4f9d0d89fa77f602d80b5fe2bfd7d1339d80a6c0b41a765` |
+| `causal/controls.tsv` | `96ff62a99b4ce2fa70737439d83f2669c9de546c1176acdf050493f75ae74306` |
+| `causal/summary.txt` | `8e6975123a17a310b3f6ec76a2b065857d649cd030b62ccd73d6faedddd51684` |
+
+The later [native HTTP composition](production-native-http-integration-20260928.md)
+has its own affected qualification. At integrated `05b88228`, all Go source in
+`crv4`, `validator` and `protocol` matches its qualified author `a0249f6a`
+byte-for-byte. Integration conflicts were confined to documentation, where
+newer source findings and qualification results were preserved. This source
+comparison does not claim a complete mainnet release/dependency attestation.
+
 ## Fixture diagnostics retained
 
 Terra's early single-root diagnostics are under
@@ -111,8 +154,8 @@ and exact first signed envelope bytes. No acceptance rule was relaxed.
 The corrected single-root `TestProductionContinuationDurableIntentOwner` passed
 normally at fixture correction `28380c5f` (Terra, 18.089 seconds; isolated
 cherry-pick `1d4c73eb`, `corrected-28380/normal.jsonl`). This is the fixture's
-begin/current/update/restart result only; continuation and race qualification
-remain pending.
+begin/current/update/restart result only; the completed continuation and race
+scopes are recorded separately above.
 
 ## Explicit remaining work
 
@@ -126,9 +169,9 @@ remain pending.
   granting it fresh signing authority. Its present receipt-only wait is explicit.
 - Miner recovery also needs bounded subrange checkpoints within its 4096-block
   range so a late outage cannot repeatedly discard thousands of successful reads.
-- Configured native HTTP status/EOF physical-origin preservation is a separate
-  author/qualification slice. Consume its exported strict classifier after
-  integration; no diagnostic-text matching is introduced here.
+- Configured native HTTP status/EOF propagation and response/close bounds are
+  qualified in the separate integration linked above. Composition of independent
+  native/EVM failure branches in public startup remains a later affected scope.
 - Automatic compatible runtime policy, skipped-epoch authority and real mainnet
   inputs/economic observations are not supplied by this patch.
 

@@ -890,7 +890,7 @@ the steering loop is insufficient. Qualify the complete process restart through
 an outage, original receipt and applied row, while preserving current authority
 checks for new signing and visible independent health reporting.
 
-The [production continuation candidate](evidence/production-continuation-candidate-20260928.md)
+The [qualified production continuation](evidence/production-continuation-candidate-20260928.md)
 moves the actual production `Run` branch and `submitOnceV2` toward the retained
 intent before unrelated fresh scheduler/runtime/EVM observations. Its first
 qualification scope is real nonempty V2 begin/replay/update/restart, exact
@@ -901,12 +901,15 @@ These native signatures use an immortal era: a later native epoch or local
 approval deadline cannot revoke already signed bytes. Unknown work retains its
 original signature and age until receipt or authenticated foreign nonce use at
 the scanned boundary resolves it. Missed opportunities remain missed.
-Qualification is pending. Full `RunRelease` activation, normalized config and
-dual-upload composition and durable bounded scan-prefix reuse remain separately
-tracked requirements. The [native HTTP integration candidate](evidence/production-native-http-integration-20260928.md)
-consumes physical read origin and preserves finite event-response framing;
-its separate qualification is pending. The continuation candidate
-does not close MG-04 or PH-03.
+All 10 CRv4 and 22 validator roots now have normal/race coverage, with the original
+race timeout and exact six-root completion retained separately. Six regression
+control families reached their intended assertions in both modes. Full
+`RunRelease` activation, normalized config and dual-upload composition, durable
+bounded scan-prefix reuse and historical-only foreign-nonce resolution remain
+open; this does not close MG-04 or PH-03. The separately
+[qualified native HTTP integration](evidence/production-native-http-integration-20260928.md)
+connects physical native causes to phase-owned waits and corrects response/close
+boundaries. Composed native/EVM startup failures require their later scope.
 
 The [server upload admission](VALIDATOR-UPLOAD-RUNTIME.md) now consumes an
 independently pinned schema-3 configuration and retains only read-only runtime

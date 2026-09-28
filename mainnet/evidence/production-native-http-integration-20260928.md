@@ -1,9 +1,10 @@
 # Production native HTTP integration — 2026-09-28
 
-Status: source candidate; **qualification pending**. Astra authored source and
-fixtures; Terra owns normal/race execution. Compile-only checks do not qualify
-runtime behavior. No live endpoint, key, submission, deployment, simulator or
-release lock was touched.
+Status: **component qualification complete** on clean author
+`a0249f6a4d5b154e5a6a242511fac3596dcde62c`, integrated as `05b88228`.
+Astra authored source and fixtures; Terra executed normal/race and controls.
+No live endpoint, key, submission, deployment, simulator or release lock was
+touched. Complete public startup remains a separate requirement.
 
 ## Prerequisites and narrow changes
 
@@ -32,7 +33,7 @@ the complete transient error tree may retry. A local file close, explicit
 cancellation, unknown release defect or any joined integrity cause remains hard.
 Writes and unknown RPC methods still do not enter this read transport.
 
-## Deterministic evidence to collect
+## Deterministic qualification
 
 Use physical `GOCACHE=/mnt/data/sn-testnet/gocache`, a capture-specific physical
 `TMPDIR`, `GOWORK=off` and `GOMAXPROCS=2`. Enumerate roots before normal/race bodies.
@@ -61,6 +62,40 @@ Required causal controls restore the previous 32 MiB limit, previous hard-for-al
 HTTP-close verdict, and rejection of native origin at the phase boundary. Each
 must reach its named behavior assertion, not fail compilation or setup. Preserve
 normal/race logs and source fences separately from prerequisite qualification.
+
+Terra completed the exact frozen scopes in
+`/mnt/data/sn-testnet/qualification/production-native-http-integration-20260928/a0249f6a`.
+
+| Scope | Normal | Race |
+| --- | --- | --- |
+| CRv4 HTTP, 16 roots | 16 passed, 2.390 s | 16 passed, 19.807 s |
+| Validator composition, 7 roots | 7 passed, 0.033 s | 7 passed, 1.183 s |
+| Three controls | Three intended assertion failures | Three intended assertion failures |
+
+The first two controls restore predecessor decisions. The phase-origin refusal
+is an explicit bounded mutation testing composition sensitivity; it is not
+claimed as an exact predecessor implementation. All six captures exited 1 at
+their named behavior assertion. Vet passed. Before/after source records retain
+the same clean author head; the resolved module graph is byte-identical. These
+records do not constitute a whole-release source/dependency attestation.
+
+Root integrated the required continuation fixture/core/style stack and reused
+its already integrated native adapter. The corresponding patch IDs matched;
+no duplicate producer, source-role fixture or native-adapter commit was applied.
+At `05b88228`, all Go files in `crv4`, `validator` and `protocol` match author
+`a0249f6a` exactly. Documentation conflicts retain both the newer root findings
+and this qualification. A narrow installer/root-service composition check is
+separate from these completed component bodies.
+
+| Retained file | SHA-256 |
+| --- | --- |
+| `crv4-normal.jsonl` | `09549f29d04d1ea2ce39dae4328556aecaddd878dd1df14148614d4ff0d0b8a9` |
+| `crv4-race.jsonl` | `7585014c516615d1a721976890a58ba6a429079320de93dc53659ace468e19a0` |
+| `validator-normal.jsonl` | `9e4f76a4759b9e98cda17a048344779b259ab5cf427cc043877f3c497d0a8298` |
+| `validator-race.jsonl` | `f081827cc342acc0d8f62fe97156fb07297dab2b60cb8d628fce0aa80fafe71e` |
+| Resolved module graph | `bcc684d0d13654b9e488eefbfa745ff71841f113e6464d9ed7fa3910636a21bb` |
+| `causal/controls.tsv` | `2fe7127de503d710ca59ad5efa66fb0beac41b7073efa3e17d4007422bbf1d1c` |
+| `causal/summary.txt` | `66b353235eb1c64a8958f753582541429f3e72297b9be05c7d198bae2e6112fd` |
 
 ## Limits and naming-only changes
 

@@ -1238,15 +1238,15 @@ normally and under race, with six intended control failures retained. This
 transport slice alone does not close PH-03.
 
 **2026-09-28 production steering review.** The standard validator's outer
-steering loop still ties several transient continuation branches to testnet
-provisional permissions. Production disables those permissions. A receipt
-timeout outside an explicitly classified recovery path can therefore spend
-the hard-failure budget; a later epoch change can reject the unfinished epoch
-before reconciliation. The original-config pending branch is now covered by
+steering loop tied several transient continuation branches to testnet
+provisional permissions, which production disables. A receipt timeout outside
+an explicitly classified recovery path could spend the hard-failure budget;
+a later epoch change could reject the unfinished epoch before reconciliation.
+The original-config pending branch is now covered by
 the [authority-history qualification](evidence/production-authority-history-qualification-20260928.md).
-PH-03 remains open until actual production callers
-cover current-config pending receipts, pre-intent reads and application
-observation through outage and epoch advance. Preserve unknown or missed
+The separately qualified continuation below covers the affected actual steering
+owners. Full public startup and durable partial scans keep PH-03 open.
+Preserve unknown or missed
 outcomes and original signed bytes, keep unrelated workers running, and require
 reconciliation before another send. A successful retry never manufactures a
 missed emission interval. Review repeated finalized-block scans for reuse of
@@ -1265,8 +1265,8 @@ transaction's inclusion to another transaction. Extend the scan before making
 that inference, and never advance a reusable prefix on an incomplete read.
 The shared complete-body admission and miner cursor correction are now
 [qualified and integrated](evidence/receipt-recovery-qualification-20260928.md).
-The production wait and additional retained-prefix changes remain separate
-implementation work.
+The production waits are qualified separately below; additional durable partial
+prefixes remain implementation work.
 
 The same review found the miner fleet's native recovery cursor accepted an
 explicit empty/truncated extrinsics vector without authenticating its body
@@ -1300,7 +1300,7 @@ Test a head advancing during real HTTP readback; the chain must not need to
 stand still for bootstrap to complete. Real identity, authority or ancestry
 changes remain distinct from ordinary progress.
 
-The [2026-09-28 continuation candidate](evidence/production-continuation-candidate-20260928.md)
+The [qualified 2026-09-28 continuation](evidence/production-continuation-candidate-20260928.md)
 adds a production-only outer `Run` branch that reaches durable intent custody
 before current scheduling, plus current-config receipt/application waits and
 same-boundary nonce observation. Its actual nonempty owner fixtures use genuine
@@ -1308,10 +1308,13 @@ M8 work under a separately signed zero-price policy; they do not claim paid
 capture or economic acceptance. Typed waits preserve original intent bytes and
 age, expose operational unavailability, and do not spend the service's hard-error
 budget. Real mixed integrity/custody failures and cancellation stay distinct.
-Qualification is pending. Full fresh `RunRelease` activation/config/dual-upload
-composition, authenticated durable scan chunks (including miner partial ranges),
-and qualification of the separate native HTTP integration remain open; no
-callback-only loop test closes those physical ownership requirements.
+All 10 CRv4 and 22 validator roots have normal/race coverage, preserving the
+original race timeout and its six-root completion separately. All six control
+families reached their intended assertions in both modes. Full fresh
+`RunRelease` activation/config/dual-upload composition, historical-only
+foreign-nonce resolution and authenticated durable scan chunks (including miner
+partial ranges) remain open. The native HTTP integration is separately qualified;
+no callback-only loop test closes the remaining physical ownership requirements.
 
 The bounded [source-finality read candidate](evidence/source-finality-read-candidate-20260928.md)
 separates physical read errors from finality/schedule contradictions and reuses
@@ -1321,10 +1324,9 @@ and dispatch failures remain hard errors. The paired
 [adjacent-read candidate](evidence/production-read-cause-adjacency-candidate-20260928.md)
 applies the same rule to real miner recovery, owner census/eligibility and
 activation setup reads. Their [combined qualification is complete](evidence/source-read-cause-qualification-20260928.md),
-including normal/race causal controls and the corrected source-role fixture. This
-does not close production loop recovery: current pending/pre-intent/application
-waits, real nonempty durable V2 continuation and exact-terminal receipt-prefix
-reuse still require their own production-owner coverage.
+including normal/race causal controls and the corrected source-role fixture.
+That read component does not replace the separate continuation qualification
+above or the remaining public-startup and durable-prefix work.
 
 Full startup review found the same ordering defect above the steering loop:
 [`runReleaseWithStartupAndProgressV2`](../validator/release_run.go) dials current

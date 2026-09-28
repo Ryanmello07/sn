@@ -2,8 +2,10 @@
 
 The component qualification below completed on clean author source
 `ec2bc584d5640f7d22dc06f79c7e26ea357cb84a`, integrated without conflicts as
-`790dacb0`. This records the transport component; downstream continuation and
-the composed response-size correction remain separate work.
+`790dacb0`. This records the original transport component. The separately
+[qualified continuation integration](production-native-http-integration-20260928.md)
+adds response-size headroom and retries pure physical close failures; its
+evidence does not replace the original component results below.
 
 Author workspace: `/mnt/data/sn-testnet/worktrees/native-http-read-causes-20260928/sn`,
 based on qualified root `b00d1e54be93a5f47d047810dd76ed15744d66fa`.
@@ -72,7 +74,7 @@ Author checks are `go test -mod=readonly -c ./crv4`, `go vet -mod=readonly ./crv
 and formatting/diff checks. **No test bodies ran in the Astra author lane.**
 Terra completed normal/race and causal qualification. No live route, live key,
 signing, broadcast or node mutation was used. Production continuation integration
-with the exported classifier belongs to its separate owner and remains pending.
+with the exported classifier is recorded in the separate receipt linked above.
 
 ## Completed component qualification
 
@@ -113,6 +115,7 @@ component bodies were not rerun.
 Integration review identified a finite-bound edge: the shared receipt reader
 admits up to 16 MiB decoded `System.Events`, whose hexadecimal wire value plus
 JSON-RPC envelope exceeds this component's 32 MiB response ceiling. A follow-up
-must admit that existing field bound with explicit envelope headroom and a
-deterministic boundary test. The original component evidence is preserved;
-this receipt does not claim that follow-up is implemented or qualified.
+admits that existing field bound with explicit envelope headroom and a
+deterministic boundary test. That follow-up is now qualified in the separate
+integration receipt. The original component evidence and its narrower bound
+remain preserved here.
