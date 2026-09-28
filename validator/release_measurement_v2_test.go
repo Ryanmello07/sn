@@ -139,7 +139,9 @@ func newReleaseMeasurementV2TestFixtureWithOperator(t *testing.T, completed int,
 		artifact.Pools = append(artifact.Pools, ReleasePoolMeasurement{NoID: noID, UID: uint16(100 + noID), PoolHotkey: releaseHex32([32]byte{0x61, byte(noID)})})
 		audit := releaseMeasurementDepositAudit(t, seal.policy, noID)
 		if seal.policy.IsZeroPrice() {
+			deadline := audit.ArtifactDeadlineBlock
 			audit = ZeroPriceDepositAudit(42, 42-seal.policy.Deposit.UsageLagEpochs, noID, new(big.Int), new(big.Int))
+			audit.ArtifactDeadlineBlock = deadline
 		}
 		audit.Epoch, audit.SourceEpoch, audit.ObservedAtBlock = 42, 42-seal.policy.Deposit.UsageLagEpochs, artifact.EVMSnapshotBlock
 		artifact.DepositAudits = append(artifact.DepositAudits, audit)

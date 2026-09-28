@@ -171,6 +171,9 @@ func newRecycleOperatorFixtureWithInputs(t *testing.T, hotkey [32]byte, complete
 		audit := artifact.DepositAudits[index]
 		poolHotkey, _ := parseReleaseHex32("synthetic pool", pool.PoolHotkey, false)
 		version := stabi.STCoordinatorOperatorVersion{Coldkey: [32]byte{byte(0x40 + index)}, PoolHotkey: poolHotkey, DepositHotkey: [32]byte{byte(0x50 + index)}, DepositSigner: common.Address{byte(0x60 + index)}, RootSigner: common.HexToAddress(audit.RootSigner), Active: true}
+		if policy.IsZeroPrice() {
+			version.RootSigner = common.Address{0x70, byte(index + 1)}
+		}
 		fixture.versions = append(fixture.versions, version)
 		fixture.set(t, "operatorIdAt", coordinator.PackOperatorIdAt(big.NewInt(int64(index))), id)
 		fixture.set(t, "operatorAt", coordinator.PackOperatorAt(id, epoch), version)
