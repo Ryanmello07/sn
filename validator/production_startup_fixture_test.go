@@ -416,6 +416,7 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 		bounds.Cut.Records.MaxPageBytes = max(bounds.Cut.Records.MaxPageBytes, bounds.Cut.MaxHeaderBytes)
 		bounds.Cut.Proofs.MaxPageBytes = max(bounds.Cut.Proofs.MaxPageBytes, bounds.Cut.MaxHeaderBytes)
 		bounds.Replay.MaxRecordBytes = max(bounds.Replay.MaxRecordBytes, bounds.Disk.MaxRecordBytes)
+		bounds.Cut.Records.MaxChunkBytes = max(bounds.Cut.Records.MaxChunkBytes, bounds.Replay.MaxRecordBytes)
 		self.evm = &productionStartupEvmTestFixture{operator: production.operator, contexts: self.contextKVs, code: []byte{0x60, 0x00, 0x00}, freshRead: make(chan struct{})}
 		production.operator.startup = self.evm
 		production.operator.blocks[80] = [32]byte{0x78}

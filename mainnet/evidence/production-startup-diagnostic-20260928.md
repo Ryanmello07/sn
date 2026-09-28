@@ -57,3 +57,8 @@ match the physical ledger; scratch roots are provisioned outside every durable
 state and credential namespace. The actual corpus and all production gates
 remain unchanged. These diagnostics show why private helper admission cannot
 stand in for qualification through the public configuration and startup root.
+
+The `bcf95d28` diagnostic exposed the seal helper's later 32 KiB chunk override.
+The public fixture now explicitly admits its real 64 KiB maximum ledger row at
+both replay and chunk boundaries; raising the replay row limit alone was not a
+complete capacity correction. This adds no production default or dynamic bound.
