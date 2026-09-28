@@ -218,8 +218,9 @@ deployability after a source/toolchain change.
 The separate nine-action installation candidate has successful complete-command
 normal/race diagnostics, but its [failure-test correction is blocked by automatic
 review](evidence/contract-graph-review-block-20260928.md), citing possible
-cybersecurity risk. The original qualification continues collecting its frozen
-scope and retains the failed Safe inner-outcome test. No corrected fixture,
+cybersecurity risk. The frozen selection has finished its bodies with 47 of 48
+roots passing in each mode, retaining the failed Safe inner-outcome test and
+its non-discriminating control. No corrected fixture,
 complete graph qualification or production integration is claimed. MG-08 stays
 open; unrelated recovery and monitoring work continues.
 
