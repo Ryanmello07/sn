@@ -70,8 +70,8 @@ chain worker retries independently. Protocol deadline inference, other domain
 coverage, bounded log export, delivered alerts and the repair controller remain
 open; source qualification does not establish live monitoring.
 
-**MG-04/MG-08 direct production cadence (September 28; candidate sealed,
-qualification pending).** The [bounded representability fix](evidence/mainnet-steady-cadence-candidate-20260928.md)
+**MG-04/MG-08 direct production cadence (September 28; source integrated,
+component checks pass).** The [bounded representability fix](evidence/mainnet-steady-cadence-candidate-20260928.md)
 permits zero accelerated epochs only for mainnet with four identical
 initial/production windows and a 50,400-block period. It preserves every existing
 positive-count transition, historical mainnet approval, and checked-in testnet
@@ -80,9 +80,11 @@ validator enforces exact cross-field equality. Both current-steering and histori
 decision snapshot consumers remain unchanged and compare actual epoch-zero RPC
 bytes against an independently signed public production config in the new tests.
 The installer must derive all initial policy fields from its complete approved
-body and require effective epoch zero. Normal/race and predecessor causal
-qualification, plus composed installer acceptance, remain pending. This is a
-source-only correction; no mainnet configuration or deployment changed.
+body and require effective epoch zero. Eleven protocol and thirteen validator
+roots pass normal/race, and vet passes. Predecessor causal controls and composed
+installer acceptance remain pending; the receipt distinguishes the tested
+dependencies from the future release. This is a source-only correction; no
+mainnet configuration or deployment changed.
 
 The newer server source branch `codex/mainnet-composed-hardening-20260927` at
 `b6f49bdb` includes migration 728, the operator receipt-census correction,
