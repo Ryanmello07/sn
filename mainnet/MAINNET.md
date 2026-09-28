@@ -32,8 +32,13 @@ system remain production work. [mainnet/main.go](main.go) implements signer-free
 `owner-trim-reconcile`, `owner-trim-qualify`, `root-preview`, `root-monitor`,
 `check-recycle-mode`, `economic-reference`, offline `source-lock`,
 [local `release-inventory`](RELEASE-INVENTORY.md), and the
-[signer-free blocked `plan`](PLAN.md); executable planning, `apply`, `resume`
-and root-validator signing are not implemented. The
+[signer-free blocked `plan`](PLAN.md). Two narrower executable phases now exist:
+[`bootstrap plan/apply/resume`](BOOTSTRAP-ROOT.md) retains local root custody
+and imports externally signed payloads, while
+[`bootstrap-contracts preview/plan/apply/resume`](BOOTSTRAP-CONTRACTS.md)
+installs the reserve sink through the approved transaction journal. The complete
+bootstrap, remaining contract graph, native signing device and live role
+activation remain unfinished. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)
 observed chain ID 945, which fails the required mainnet ID 964 gate.
 This plan and its read-only evidence perform no
@@ -1336,6 +1341,9 @@ the binary's actual test list and complete terminal events, including explicit
 package success. A wrapper's zero exit after interrupted execution is not a
 pass. Preserve valid compiled artifacts and completed work when correcting a
 runner, with the failed invocation and the correction recorded separately.
+Compare the enumerated roots with the independently supplied expected set before
+launching bodies. A nonempty subset is insufficient. Parse declared table schemas
+explicitly; never discard a first row merely because another file had a header.
 
 Bind qualification to the roles and platforms selected for this release.
 Unselected services and architectures remain explicitly unqualified and cannot

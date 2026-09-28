@@ -1,5 +1,15 @@
 # UR Subnet release 1.0 finalization plan
 
+## Current disposition — testnet closed, 2026-09-28
+
+The user closed sim-testnet with known exceptions and moved work to mainnet.
+Do not restart the campaign under the historical instructions below. R48 did
+not establish final acceptance. The active implementation and qualification
+plan is [mainnet/MAINNET.md](mainnet/MAINNET.md), with outstanding work tracked
+in [mainnet/PRELAUNCH-FIXES.md](mainnet/PRELAUNCH-FIXES.md). Astra max authors
+and debugs fixes; Terra medium executes tests and qualification. Preserve
+completed evidence and run only failed, missing or affected scopes.
+
 ## Current execution — full finalization, 2026-09-12
 
 The scope is SN `sim-testnet` finalization. The user has requested full

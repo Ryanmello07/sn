@@ -1989,6 +1989,13 @@ before running: a terminal `$` on a test-family prefix selects no descriptive
 test names. Neither a zero-root invocation nor a runner timeout is a product
 regression result.
 
+A later monitor capture assembled its selector from a headerless outcome table
+as though the first row were a header, omitting one of 48 expected roots. Keep
+that invocation as a 47-root scope and run the missing root separately. Require
+exact expected-versus-selected membership before bodies, including the first
+and last entries; nonzero enumeration alone does not establish complete scope.
+Prefer the maintained qualification owner over another untyped selector wrapper.
+
 **Production change.** Follow [CODESTYLE.md](../../connect/CODESTYLE.md): each
 root cause needs a deterministic pre-fix failure and corrected result at its
 observable layer, using barriers/hooks/state transitions instead of scheduler
