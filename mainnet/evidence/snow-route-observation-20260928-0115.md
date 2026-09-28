@@ -68,3 +68,10 @@ bounds. The raw directory is
 its directory label is separate from the exact retained start/end timestamps.
 The response body, status and stderr hashes match those above. This supplies
 no mainnet identity or additional evidence about the upstream failure.
+
+The **06:33:54 through 06:38:57 UTC** check returned HTTP 502 on all
+21 attempts; curl exited 22 after 303 seconds under the same retry bounds.
+Raw timestamps, body, status, stderr and exit are retained under
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T0634Z`.
+The body, status and stderr hashes again match the three hashes above. No
+chain identity or further upstream diagnosis was obtained.

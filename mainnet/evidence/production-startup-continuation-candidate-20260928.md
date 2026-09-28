@@ -38,7 +38,7 @@ was corrected without rerunning that body. Its trailing metadata cancellation
 is the result of the test's deliberate barrier cancellation. The original
 checker error is retained in `public-order-checker-correction.txt`.
 
-Validator vet passes at `33965615`, and source head/status and module-path
+CRv4 and validator vet pass at `33965615`, and source head/status and module-path
 before/after checks match. The corrected capture did **not** seal physical
 replacement contents or revisions before execution. These are component
 results; retain that limitation and perform only affected interface checks
