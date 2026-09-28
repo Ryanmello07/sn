@@ -16,6 +16,11 @@ The [offline chain preparation](BOOTSTRAP-CHAIN.md) composes this owner and the
 reserve CREATE custody owner with a retained trim review and two protected UR
 role inputs. It has a separate accepted plan and durable progress journal;
 chain effects and service activation remain pending.
+Its v3 input additionally pins the root action approver independently and
+requires a separate domain-separated approval of this complete child plan and
+service configuration, including the observation allowance. The root command's
+v1 plan and journals remain unchanged; their action approval alone is not that
+full-service approval.
 
 ## Independent inputs and exact plan
 

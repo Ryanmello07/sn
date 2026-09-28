@@ -26,6 +26,7 @@ type bootstrapChainFixture struct {
 	root        *bootstrapRootFixture
 	contracts   *evmCreateFixture
 	validators  []*bootstrapChainValidatorFixture
+	rootRole    *bootstrapChainRootFixture
 }
 
 // The test builds a common synthetic runtime/domain from actual census readers,
@@ -94,6 +95,7 @@ func newBootstrapChainFixture(t *testing.T) *bootstrapChainFixture {
 		f.config.Validators = append(f.config.Validators, bootstrapChainValidator{ValidatorId: uint64(i + 1), subnetIdentityExpectation: role.subnetIdentityExpectation,
 			Config: fixture.publish(t), Role: []string{"majority", "secondary"}[i], Implementation: "sn/validator", ApprovalPublicKey: fixture.config.OwnerRecycleApproval.Signer})
 	}
+	f.rootRole = newBootstrapChainRootFixture(t, f)
 	bootstrapRootTestWrite(t, f.path, f.config)
 	f.preparation, err = loadBootstrapChainPreparation(t.Context(), f.path)
 	if err != nil {

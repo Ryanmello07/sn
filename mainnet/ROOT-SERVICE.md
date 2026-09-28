@@ -31,6 +31,15 @@ reservation, bounded broadcast count and private action-state path. EVM945 and
 unapproved routes remain inadmissible. Configuration is supplied independently;
 the journal cannot approve its own replacement configuration or allowance.
 
+The [offline chain preparation](BOOTSTRAP-CHAIN.md) v3 admission independently
+pins both this action approver and a full-service config approver. An external
+domain-separated signature binds the complete root child plan and service
+config, including `MaximumObservations`; the existing action signature alone
+does not bind that service allowance. The accepted review retains the public
+approval and complete child configuration. This offline check supplies no
+`rootActionAuthority` port, current eligibility, custody fence or service start.
+The standalone service and custody journal formats retain their original scope.
+
 This layer supports only an independently approved `explicit_root_weights`
 action. The proposed `accumulate_in_place` strategy still needs no periodic
 native transaction. Root weights allocate a basket over destination **netuids**;

@@ -1,8 +1,9 @@
 # Offline chain preparation
 
 `sn-mainnet bootstrap-chain plan/apply/resume` binds the retained owner-trim
-review, two protected UR schema-3 configs, signed contract phase and signed root
-phase to one durable local preparation. Apply prepares the existing reserve
+review, two protected UR schema-3 configs, separately approved root-service
+config, signed contract phase and signed root phase to one durable local
+preparation. Apply prepares the existing reserve
 CREATE custody owner and [root custody owners](BOOTSTRAP-ROOT.md). It does not
 open an RPC connection, import a signature, issue a transaction or start a
 service. The command has no online or submission option.
@@ -19,7 +20,7 @@ The strict JSON configuration has these fields:
 
 | Field | Required value |
 | --- | --- |
-| `schema` | `urnetwork-mainnet-bootstrap-chain-config-v2` for new preparation |
+| `schema` | `urnetwork-mainnet-bootstrap-chain-config-v3` for new preparation |
 | `deployment_id` | Same independently chosen deployment as both child plans |
 | `netuid` | `25` |
 | `network` | Independently provisioned `native_chain`, `genesis_hash`, `evm_chain_id: 964` |
@@ -29,6 +30,7 @@ The strict JSON configuration has these fields:
 | `contracts` | `{path, sha256}` for the signed [contract phase config](BOOTSTRAP-CONTRACTS.md) |
 | `root` | `{path, sha256}` for the [root bootstrap config](BOOTSTRAP-ROOT.md) |
 | `ur_validators` | Exactly two public role declarations described below |
+| `root_validator` | Independent netuid-0 role, action/config approval keys and pinned config approval described below |
 
 Each role declares `validator_id`, `hotkey_account_id`, `coldkey_account_id`,
 `registration_block`, `config: {path, sha256}`, `role`, `implementation`, and
@@ -44,7 +46,7 @@ requested trim removals. The planned reserve hotkey is also excluded from
 requested removals. The root's exact UID, hotkey, coldkey and registration block
 must match the retained excluded-root census.
 
-V2 decodes the exact pinned config bytes through the standard validator's
+V2 and v3 decode the exact pinned config bytes through the standard validator's
 strict grammar and full initial schema-3 validation, then verifies the declared
 content-addressed production approval and its domain-separated signature.
 Signed hotkey, validator ID, network and deployment must match the independently
@@ -75,11 +77,67 @@ unlike an existing producer's restart loader, it cannot replace a missing or
 changed source with retained-state approval bytes. Approved renewal/history
 requires the existing producer workflow and is outside this composition.
 
-The root and contract approval signatures are verified through their existing
-validators. Their exact network, runtime/source tuple, deployment and state
-paths must agree with the preparation and retained trim policy. Approval keys
-and expected chain identity must be independently provisioned; the command
-cannot establish real authority from a supplied self-signed configuration.
+The root action and contract approval signatures are verified through their
+existing validators. Their exact network, runtime/source tuple, deployment and
+state paths must agree with the preparation and retained trim policy.
+
+## Separate root config admission
+
+V3 requires this independently provisioned `root_validator` declaration:
+
+| Field | Required value |
+| --- | --- |
+| `role`, `netuid` | `bittensor-root-validator`, explicit `0` |
+| `implementation` | `sn/mainnet/root-service` |
+| `hotkey_account_id`, `coldkey_account_id` | Canonical nonzero AccountId32 hex, matching the signed root action and retained root census |
+| `seat` | Exact `{uid, registration_block}` for the existing netuid-0 generation |
+| `strategy` | `explicit_root_weights`, the existing supported service strategy |
+| `action_approval_public_key_ed25519` | Independent public key pin for the existing root action approval |
+| `approval_public_key_ed25519` | Independent public key pin for full service-config approval |
+| `approval` | `{path, sha256}` for the external public service-config approval |
+
+Both keys are canonical nonzero `0x`-prefixed 32-byte Ed25519 public keys. The
+action key must match the root service's custody trust. The full-config key
+verifies the additional approval below; the two approval keys may differ. They
+must come from the operator's approved authority through the independent chain
+input. Neither key is learned from the inspected root service or approval file,
+and arbitrary self-signed input does not establish organizational authority.
+
+The strict approval file has schema
+`urnetwork-mainnet-root-service-approval-v1`, `deployment_id`, `root_plan_hash`,
+`service_config_hash` and `approval_signature_ed25519`. The child
+`bootstrap plan` command produces the read-only root plan whose `content_hash`
+is approved. `service_config_hash` is `sha256:` followed by SHA256 of canonical
+Go JSON for that plan's entire `service` field. Signature bytes are 64-byte
+lowercase hex without `0x`. Ed25519 signs the approval schema string, a zero
+byte, and canonical Go JSON of the approval with an empty signature, in the
+field order listed above. Approval issuance stays with the external approver;
+the command only verifies public signatures.
+
+The child plan seals exact config/service file bytes, the complete action and
+custody trust, network/runtime/source, deployment, run directory and state paths.
+The additional signature therefore covers the full observation allowance and
+service configuration, which the original action signature alone does not
+approve. Changing whitespace in a pinned child file requires a new approval as
+well as a new accepted preparation hash. A signed replacement action key still
+must match the independent role pin. A new valid config approval cannot adopt
+or renew any already claimed custody.
+
+The v3 plan retains `root_validator_config_inspection`, containing the full child
+root plan and config approval. The result reports
+`root_validator_config_verified: true` and
+`root_validator_status: signed-root-service-config-verified-live-authority-pending`.
+These facts authenticate offline configuration only. Current root eligibility,
+effective stake, seat retention, delegation and basket rights, source-to-Wasm
+authority, live route, global custody fencing, fee exposure, key possession and
+the actual service/binary remain unproved. No service loop or current-authority
+adapter is attached. The root role remains separate from both UR validators.
+
+V3 supports the existing explicit-root-weight service only. The read-only
+observer's `accumulate_in_place` policy remains a separate workflow and requires
+no periodic native transaction. This preparation does not change that policy.
+
+## Exact offline inputs
 
 The trim selection is rebuilt from the retained census to reject a resealed
 different removal set. This is offline internal consistency, not authenticated
@@ -91,11 +149,14 @@ All inputs and transitive root-service/contract-artifact references retain
 their exact byte pins. Each input must be a bounded owner-private regular file
 with a physical owner-private parent directory; canonical absolute paths must
 not traverse symlinks. The existing loaders enforce their bounds: chain/root
-configs 1 MiB, contract/UR configs 2 MiB, production approvals 64 KiB, retained
-trim plans 32 MiB. The
+configs 1 MiB, contract/UR configs 2 MiB, UR production approvals 64 KiB, root
+service-config approvals 16 KiB, retained trim plans 32 MiB. The
 contract artifact catalog retains its existing separate bound. The same bytes
 that pass a pin are decoded, without reopening root or validator config paths.
-The resulting preparation plan is bounded to 512 KiB before any journal opens.
+The resulting preparation plan, including its full root inspection, is bounded
+to 512 KiB before any journal opens. The root approval file participates in all
+input/journal and UR custody namespace separation checks. Every invocation reads
+its exact source bytes; retained progress never replaces a missing approval.
 
 ```sh
 sn-mainnet bootstrap-chain plan --config /secure/ur-mainnet/chain-preparation.json
@@ -104,17 +165,20 @@ sn-mainnet bootstrap-chain resume --config /secure/ur-mainnet/chain-preparation.
 ```
 
 Plan is read-only and deterministic. The dedicated
-`urnetwork-mainnet-bootstrap-chain-preparation-v2` seal is SHA256 over that
+`urnetwork-mainnet-bootstrap-chain-preparation-v3` seal is SHA256 over that
 schema, a zero byte and canonical Go JSON with an empty `content_hash`.
 Neither the blocked review graph hash nor an individual child plan hash is
 accepted as the local composition confirmation.
 
-Existing v1 configs and journals remain readable and resumable under their
-original v1 domain and exact hash. Their role config bytes remain opaque and
-their result continues to say
+Existing v1 and v2 configs and journals remain readable and resumable under their
+original domains and exact hashes. V1 role config bytes remain opaque and its
+result continues to say
 `two-protected-role-inputs-pinned-production-admission-pending`; no inspection
-facts or verified flag are added. New `apply` requires v2. A new v2 plan cannot
-adopt or upgrade already claimed v1 custody, even with a newly accepted hash.
+facts or verified flag are added. V2 retains its two verified UR configs and
+original v2 result, without root-role inspection or verified fields. Neither old
+schema accepts a root-role declaration or acquires root-config authority.
+New `apply` requires v3. A new v3 plan cannot adopt or upgrade already claimed
+v1/v2 custody, even with a newly accepted hash.
 
 ## Ownership and recovery
 
@@ -156,6 +220,14 @@ phase, cancellation, durability and output failures exit 1. Keep all journals
 and markers after any failure.
 
 ## Qualification scope
+
+V3 adds deterministic regressions for independently pinned root action/config
+approvers, changed service allowances, exact approval domain and full child
+scope, malformed/missing role inputs, stale or unavailable approval sources,
+custody/input namespace overlap and refusal to renew existing custody. An
+independent pre-v3 wire shape checks exact v2 canonical bytes, hash and result
+scope; v1 recovery retains its existing compatibility check. This source change
+awaits separate Sol qualification; the earlier receipts below do not qualify v3.
 
 V2 adds deterministic controls for real signed two-role admission, absent or
 wrong-domain signatures, independent signer/role/runtime/source disagreement,

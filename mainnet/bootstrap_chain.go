@@ -8,22 +8,24 @@ import (
 	"path/filepath"
 )
 
-const bootstrapChainResultSchema = "urnetwork-mainnet-bootstrap-chain-result-v2"
+const bootstrapChainResultSchema = "urnetwork-mainnet-bootstrap-chain-result-v3"
 
 // Local preparation is complete only after both real child owners are checked.
 // No result claims an executed trim, installation, eligible role or activation.
 type bootstrapChainResult struct {
-	Schema                     string              `json:"schema"`
-	PlanHash                   string              `json:"plan_hash"`
-	LocalPreparationComplete   bool                `json:"local_preparation_complete"`
-	NetworkEffects             bool                `json:"network_effects"`
-	ActivationReady            bool                `json:"activation_ready"`
-	OwnerTrimStatus            string              `json:"owner_trim_status"`
-	UrValidatorsStatus         string              `json:"ur_validators_status"`
-	UrValidatorConfigsVerified bool                `json:"ur_validator_configs_verified,omitempty"`
-	PendingChainPhases         []string            `json:"pending_chain_phases"`
-	Contracts                  evmCreateResult     `json:"contract_custody"`
-	Root                       bootstrapRootResult `json:"root_custody"`
+	Schema                      string              `json:"schema"`
+	PlanHash                    string              `json:"plan_hash"`
+	LocalPreparationComplete    bool                `json:"local_preparation_complete"`
+	NetworkEffects              bool                `json:"network_effects"`
+	ActivationReady             bool                `json:"activation_ready"`
+	OwnerTrimStatus             string              `json:"owner_trim_status"`
+	UrValidatorsStatus          string              `json:"ur_validators_status"`
+	UrValidatorConfigsVerified  bool                `json:"ur_validator_configs_verified,omitempty"`
+	RootValidatorStatus         string              `json:"root_validator_status,omitempty"`
+	RootValidatorConfigVerified bool                `json:"root_validator_config_verified,omitempty"`
+	PendingChainPhases          []string            `json:"pending_chain_phases"`
+	Contracts                   evmCreateResult     `json:"contract_custody"`
+	Root                        bootstrapRootResult `json:"root_custody"`
 }
 
 // The caller holds the chain store's exclusive ownership through all child
@@ -120,9 +122,15 @@ func advanceBootstrapChain(ctx context.Context, store *bootstrapChainStore, boun
 	result = bootstrapChainResult{Schema: bootstrapChainResultSchema, PlanHash: preparation.Plan.ContentHash, LocalPreparationComplete: true,
 		OwnerTrimStatus: "retained-review-execution-blocked", UrValidatorsStatus: "two-protected-role-inputs-pinned-production-admission-pending",
 		PendingChainPhases: bootstrapChainPendingPhases(), Contracts: contracts, Root: root}
-	if preparation.Plan.Config.Schema == bootstrapChainConfigSchema {
+	if preparation.Plan.Config.Schema != bootstrapChainConfigSchemaV1 {
 		result.UrValidatorsStatus = "two-signed-production-configs-verified-live-admission-pending"
 		result.UrValidatorConfigsVerified = true
+		if preparation.Plan.Config.Schema == bootstrapChainConfigSchema {
+			result.RootValidatorStatus = "signed-root-service-config-verified-live-authority-pending"
+			result.RootValidatorConfigVerified = true
+		} else {
+			result.Schema = "urnetwork-mainnet-bootstrap-chain-result-v2"
+		}
 	} else {
 		result.Schema = "urnetwork-mainnet-bootstrap-chain-result-v1"
 	}

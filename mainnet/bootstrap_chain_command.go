@@ -46,7 +46,7 @@ func runBootstrapChainCommand(ctx context.Context, args []string, stdout, stderr
 		return 3
 	}
 	if command == "apply" && preparation.Plan.Config.Schema != bootstrapChainConfigSchema {
-		fmt.Fprintln(stderr, "bootstrap chain new preparation requires v2 production config inspections; existing v1 custody remains resumable at its original scope")
+		fmt.Fprintln(stderr, "bootstrap chain new preparation requires v3 UR and root config inspections; existing v1/v2 custody remains resumable at its original scope")
 		return 3
 	}
 	if err := ctx.Err(); err != nil {

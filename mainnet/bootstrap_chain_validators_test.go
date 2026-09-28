@@ -241,12 +241,13 @@ func TestBootstrapChainValidatorNamespaceSiblingCannotHideAncestor(t *testing.T)
 }
 
 // Exact v1 canonical bytes remain resumable with their original limited status.
-// A v2 review cannot relabel or acquire that already claimed child custody.
+// A v3 review cannot relabel or acquire that already claimed child custody.
 func TestBootstrapChainV1RestartPreservesOriginalScope(t *testing.T) {
 	f := newBootstrapChainFixture(t)
-	v2 := f.config
-	v2.Validators = append([]bootstrapChainValidator(nil), f.config.Validators...)
+	v3 := f.config
+	v3.Validators = append([]bootstrapChainValidator(nil), f.config.Validators...)
 	f.config.Schema = bootstrapChainConfigSchemaV1
+	f.config.RootValidator = nil
 	for i := range f.config.Validators {
 		role := &f.config.Validators[i]
 		role.Role, role.Implementation, role.ApprovalPublicKey = "", "", ""
@@ -260,7 +261,7 @@ func TestBootstrapChainV1RestartPreservesOriginalScope(t *testing.T) {
 	}
 	// This independent old wire shape catches accidental non-omitted v2 fields.
 	legacyRaw, err := json.Marshal(f.preparation.Plan)
-	if err != nil || bytes.Contains(legacyRaw, []byte("ur_validator_config_inspections")) || bytes.Contains(legacyRaw, []byte("approval_public_key_ed25519")) || bytes.Contains(legacyRaw, []byte("implementation")) {
+	if err != nil || bytes.Contains(legacyRaw, []byte("ur_validator_config_inspections")) || bytes.Contains(legacyRaw, []byte("approval_public_key_ed25519")) || bytes.Contains(legacyRaw, []byte("implementation")) || bytes.Contains(legacyRaw, []byte("root_validator")) {
 		t.Fatal("v1 plan acquired new serialized authority fields", err)
 	}
 	unsigned := bytes.Replace(legacyRaw, []byte(f.preparation.Plan.ContentHash), nil, 1)
@@ -287,7 +288,7 @@ func TestBootstrapChainV1RestartPreservesOriginalScope(t *testing.T) {
 		!reflect.DeepEqual(first, got) || !reflect.DeepEqual(before, f.journals(t)) {
 		t.Fatal("v1 restart changed scope, bytes or admission status")
 	}
-	f.config = v2
+	f.config = v3
 	for i, v := range f.validators {
 		f.config.Validators[i].Config = v.publish(t)
 	}
@@ -298,7 +299,7 @@ func TestBootstrapChainV1RestartPreservesOriginalScope(t *testing.T) {
 	}
 	stderr.Reset()
 	if code := f.command(t.Context(), "resume", io.Discard, &stderr); code != 3 || !reflect.DeepEqual(before, f.journals(t)) {
-		t.Fatal("v2 adopted original v1 custody", code, stderr.String())
+		t.Fatal("v3 adopted original v1 custody", code, stderr.String())
 	}
 	if _, err := os.Stat(filepath.Join(f.config.RunDirectory, bootstrapChainStateFile)); err != nil {
 		t.Fatal("v1 custody disappeared", err)
