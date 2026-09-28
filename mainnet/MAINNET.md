@@ -477,14 +477,18 @@ evidence; report a mapping contradiction only after receiving a conflicting
 value. Keep retries within the approved operation budget and retain unresolved
 signed liabilities for reconciliation.
 
-The first [executable contract phase](BOOTSTRAP-CONTRACTS.md) now wires
+The [executable contract phase](BOOTSTRAP-CONTRACTS.md) wires
 `bootstrap-contracts preview/plan/apply/resume` to exact reserve CREATE preparation,
 public signed-byte custody, a finite owned-HTTP submission allowance and
-canonical transaction/runtime/getter recovery. Offline preparation requires no
-deployment outputs. The [retained Terra qualification](evidence/bootstrap-contract-qualification-20260928.md)
-records normal/race results and the passed composed dependency check;
-only this first CREATE is implemented. The remaining graph, including genuine
-Safe evidence anchoring, and authenticated live authority remain required.
+canonical transaction/runtime/getter recovery. The next selected action now
+implements predecessor-bound settlement vault CREATE under the same approved
+graph and finite attempts. Offline preparation requires no deployment outputs.
+The [reserve qualification](evidence/bootstrap-contract-qualification-20260928.md)
+and [vault qualification](evidence/bootstrap-contract-vault-qualification-20260928.md)
+retain their distinct source graphs and test scopes; the vault candidate passed
+51 focused roots normal/race and 426 full normal mainnet roots. The remaining
+graph, including genuine Safe evidence anchoring, and authenticated live
+authority remain required.
 The separate [nine-action candidate status](evidence/contract-graph-review-block-20260928.md)
 records successful complete-command diagnostics and an unresolved failure test.
 Automatic review blocked that test correction; the candidate is not admitted
@@ -1402,8 +1406,14 @@ preserves this boundary in the production account reconciler: if a retained
 candidate's receipt cannot be read and no other candidate is canonical, the
 intent remains unresolved. An advanced nonce cannot erase that unknown outcome,
 and elapsed replacement time cannot turn the failed read into new signing
-authority. MG-03/PF-03 still require complete discovery across both operator
-databases and evidence stores, historical-status reconciliation and full fees.
+authority. MG-03/PF-03 still require live recovery composition, canonical
+historical-status and receipt reconciliation, and actual fee accounting.
+The [status-independent census source](evidence/operator-signature-census-qualification-20260928.md)
+now reads selected databases and retained RLP stores without status filtering,
+preserves original/replacement/cancellation provenance, and supports private
+byte-preserving archive restoration. Its normal/race qualification covers both
+new roots and adjacent controller/model recovery. Production receipt/finality
+joins, actual fees, distributed custody ownership and live restart remain open.
 
 The independent monitor confirms the repair's postcondition at finalized state.
 Only then close the incident, retaining its history and action receipts. A local
