@@ -1,0 +1,29 @@
+# Snow owned-route observation
+
+The signer-free `eth_chainId` probe against
+`http://172.28.208.185:9944` ran from **2026-09-28 01:14:44 UTC** through
+**01:19:47 UTC**. All 21 attempts returned HTTP 502 with the nginx error body.
+The final curl exit was 22. There is no returned chain ID, genesis, runtime or
+finality evidence in this capture.
+
+This probe used a 300-second retry window, a 15-second per-attempt timeout,
+5-second connection timeout and 15-second recovery delay, with at most 20
+retries. Actual elapsed time was 303 seconds: curl's retry window permits the
+last admitted attempt to finish. It is a bounded read-only diagnostic, not a
+production retry-policy or availability qualification. No public fallback or
+chain write was used.
+
+The raw directory is
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T0115Z`.
+Its rounded directory label is separate from the exact timestamps above.
+
+| Retained file | SHA-256 |
+| --- | --- |
+| `chain-id-response.body` | `61b30d408583991fd69f3dec694e154cb652471e663328ad9c8482c9021ab5db` |
+| `http-status.txt` | `38500003733a95b652379a66ee15b3192b116bfcfcdb1aa830956af22a82c66c` |
+| `curl.stderr` | `a3403a7ced4d95cce806a963ce19600e1b20807857723c4d0b2e8916ecfde0f2` |
+
+The [preceding observation](snow-route-observation-20260928-0030.md) also
+returned HTTP 502. The last successful identity observation remains testnet
+chain 945. Mainnet route cutover, expected chain 964 and independently admitted
+mainnet identity are still unestablished.
