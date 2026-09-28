@@ -102,6 +102,12 @@ func (self *rootOutputFormattingProbe) Error() string {
 	return "synthetic read cause"
 }
 
+// Existing command fixtures retain their independent no-formatting sentinel.
+type rootOutputUnformattableError struct{}
+
+// Those unchanged command controls do not restore the Run formatter mutation.
+func (*rootOutputUnformattableError) Error() string { panic("root output formatted arbitrary error") }
+
 // A fault around the actual durable decision commit retains ambiguity exactly.
 type rootOutputFaultStore struct {
 	store  rootServiceStorage
