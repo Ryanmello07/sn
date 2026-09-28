@@ -82,3 +82,16 @@ Exact command, timestamps, response, status, stderr and result are retained in
 `/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T073818Z`.
 The response body, status and stderr hashes match the preceding captures.
 The route remains unavailable; no mainnet identity or transaction was observed.
+
+The **08:45:07 through 08:50:11 UTC** check again returned HTTP 502 on all
+21 attempts; curl exited 22 after 303.088 seconds. The owned endpoint, request,
+per-attempt timeouts and retry window are retained in
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T084500Z`.
+This capture uses verbose timestamped stderr and retains all retry response
+bodies concatenated, so its hashes differ from the preceding single-body
+captures: `response.txt` is
+`d17f2add25f5d68f08ff9b3556fe3edcc4cdcffa0b5a7cf61ac6e22583b75634`;
+`curl.log` is
+`b18f57a38c9b795114a174fd1014d1fb1b8f6f795d384bf42bdbafd49aa8c776`.
+The exact timestamps, command, status census and file hashes are in
+`result.json`. No chain identity was returned.
