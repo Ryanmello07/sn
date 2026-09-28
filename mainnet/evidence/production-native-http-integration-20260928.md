@@ -84,8 +84,18 @@ its already integrated native adapter. The corresponding patch IDs matched;
 no duplicate producer, source-role fixture or native-adapter commit was applied.
 At `05b88228`, all Go files in `crv4`, `validator` and `protocol` match author
 `a0249f6a` exactly. Documentation conflicts retain both the newer root findings
-and this qualification. A narrow installer/root-service composition check is
-separate from these completed component bodies.
+and this qualification.
+
+The narrow installer/root-service composition then passed on actual source
+`fef30e5fd59d07cbca806b49d3826dcc40eb52c0`, which changes only documentation
+after `05b88228`. Compile-only checks passed for `crv4`, `validator` and
+`mainnet`. The exact roots `TestEvmCreateCommandExecutesReviewedReserveAndResumes`
+and `TestRootSubmissionOfflineCustodyServiceComposition` passed normally in
+1.681 seconds and with race detection in 11.212 seconds. The worktree remained
+at the same clean source and its resolved module graph was unchanged. Evidence
+is under `/mnt/data/sn-testnet/qualification/continuation-composed-05b88228`;
+that directory label names the code integration, not the actual execution head.
+The component bodies above were not repeated.
 
 | Retained file | SHA-256 |
 | --- | --- |
@@ -96,6 +106,9 @@ separate from these completed component bodies.
 | Resolved module graph | `bcc684d0d13654b9e488eefbfa745ff71841f113e6464d9ed7fa3910636a21bb` |
 | `causal/controls.tsv` | `2fe7127de503d710ca59ad5efa66fb0beac41b7073efa3e17d4007422bbf1d1c` |
 | `causal/summary.txt` | `66b353235eb1c64a8958f753582541429f3e72297b9be05c7d198bae2e6112fd` |
+| Composed two-root normal stream | `9bdd3a08656d9a494a2b570c50345a5160f4d34f11e1fed41c7b55478be78100` |
+| Composed two-root race stream | `50c18035c60c1aa644dedb5852b8dec92e96af88e214c8bcc0f946a5df5ceb2e` |
+| Composed resolved module graph | `e6502b79a35bbc61f3a9dd3cb7649865ca6bfc39c63573e1e73bf0331e302917` |
 
 ## Limits and naming-only changes
 

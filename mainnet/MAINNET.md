@@ -147,6 +147,14 @@ concurrency, retries and cancellation. A separately approved read-only compariso
 node is an independent observer, never a silent signing/submission fallback.
 Protocol block windows and on-chain rate limits still apply.
 
+The standard UR validator's native submission path uses
+`author_submitAndWatchExtrinsic` and requires an explicitly approved WS/WSS
+route. Its HTTP native-read adapter does not provide subscriptions. Configure
+HTTP EVM/read access and WS native access on the same owned node as distinct
+explicit routes; never infer a URL conversion or silent fallback. A bootstrap
+or observer that submits by a different qualified mechanism retains its own
+transport contract.
+
 At admission, record native and EVM clocks separately. Verify their mapping; do not assume equal height or treat an EVM receipt as native finality. Historical reads must remain at the receipt's authenticated block. Until RT-01 through RT-08 are qualified for production, an unknown runtime stops dependent new signing pending explicit adapter admission. The target operating model automatically admits a compatible consumed profile under the approved compatibility policy, retains exact historical identities and suspends only unsupported operations. A testnet provisional profile alone cannot authorize that production behavior.
 
 Retain the authenticated runtime proof with each historical or signing view;
