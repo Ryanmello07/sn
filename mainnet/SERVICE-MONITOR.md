@@ -138,6 +138,13 @@ cannot advance confirmed success. The next attempt reports retrying and
 republishes a complete snapshot. JSON reports the outcome after the attempt.
 Restart preserves existing textfiles until a real sample completes.
 
+JSON events and diagnostics share a synchronous serialized stdout/stderr sink.
+A physically blocked log sink can eventually block all workers and delay their
+cancellation join, even though source reads and textfiles have separate owners.
+Independent missing/stale-textfile alerts still expose that monitor outage.
+Bounded, cancelable log export remains an MG07 follow-up; role-local file errors
+do not imply that every blocked output is isolated.
+
 Terminal policy, checksum or output-ownership faults cancel the composition,
 join every launched worker, and close every admitted owner. Cleanup errors are
 retained in operator diagnostics and return exit 3. The legacy chain monitor's

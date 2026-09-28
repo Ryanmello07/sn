@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -42,28 +41,17 @@ func TestMonitorRestartRetainsMetricsWhileInitialReadPending(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			entered, release := make(chan struct{}), make(chan struct{})
-			var enterOnce, releaseOnce sync.Once
-			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				enterOnce.Do(func() { close(entered) })
-				select {
-				case <-release:
-				case <-request.Context().Done():
-				}
-				http.Error(writer, "synthetic interrupted read", http.StatusBadRequest)
-			}))
-			defer server.Close()
+			url, entered, left := monitorServicesBlockedChain(t)
 			ctx, cancel := context.WithCancel(context.Background())
 			var stdout, stderr bytes.Buffer
 			done := make(chan struct{})
 			var exit int
 			go func() {
 				defer close(done)
-				exit = runMainWithClock(ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--metrics-file", path}, &stdout, &stderr, func() time.Time { return base.Add(time.Hour) })
+				exit = runMainWithClock(ctx, []string{"monitor", "--rpc", url, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--metrics-file", path}, &stdout, &stderr, func() time.Time { return base.Add(time.Hour) })
 			}()
 			defer func() {
 				cancel()
-				releaseOnce.Do(func() { close(release) })
 				<-done
 			}()
 			select {
@@ -73,8 +61,8 @@ func TestMonitorRestartRetainsMetricsWhileInitialReadPending(t *testing.T) {
 			}
 			pending, readErr := os.ReadFile(path)
 			cancel()
-			releaseOnce.Do(func() { close(release) })
 			<-done
+			<-left
 			if readErr != nil || !bytes.Equal(pending, retained) || exit != 0 || stdout.Len() != 0 {
 				t.Fatalf("restart erased retained %s evidence before a sample: same=%v read=%v exit=%d stdout=%s stderr=%s", prior.Status, bytes.Equal(pending, retained), readErr, exit, stdout.String(), stderr.String())
 			}

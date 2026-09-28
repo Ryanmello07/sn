@@ -191,6 +191,20 @@ func monitorServicesBlockedChain(t *testing.T) (string, <-chan struct{}, <-chan 
 	entered, left := make(chan struct{}), make(chan struct{})
 	var once, leftOnce sync.Once
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		// HTTP/1 starts disconnect detection after request-body EOF. Consume
+		// the real bounded POST before advertising an interruptible read.
+		raw, readErr := io.ReadAll(io.LimitReader(request.Body, 8*1024+1))
+		if err := errors.Join(readErr, request.Body.Close()); err != nil {
+			if request.Context().Err() == nil {
+				t.Errorf("blocked RPC fixture request read: %v", err)
+			}
+			return
+		}
+		if len(raw) > 8*1024 || !json.Valid(raw) {
+			t.Error("blocked RPC fixture requires a bounded complete JSON request")
+			http.Error(writer, "invalid synthetic request", http.StatusBadRequest)
+			return
+		}
 		once.Do(func() { close(entered) })
 		<-request.Context().Done()
 		leftOnce.Do(func() { close(left) })
