@@ -399,10 +399,13 @@ controls on its frozen source graph. The [third coordinator implementation
 CREATE action](evidence/bootstrap-contract-coordinator-qualification-20260928.md)
 binds both predecessors and authenticates the disabled-initializer storage; its
 71 focused roots, split race shards, 446 full normal roots and five causal
-controls passed. Healthy head advancement is
+controls passed. The [fourth escrow-registration
+action](evidence/bootstrap-contract-escrow-qualification-20260928.md) binds
+the derived vault and three completed predecessors; 95 selected normal/race
+roots, 470 full normal roots and eight causal controls passed. Healthy head advancement is
 revalidated within the operation; an unavailable mapping read does not become a
 successful-value mismatch. EVM signature liability survives local approval
-expiry. The other six installation actions, Safe inner-call success/getter
+expiry. The other five installation actions, Safe inner-call success/getter
 verification and authenticated live custody/network inputs remain open.
 The [approval-preview/offline recovery follow-up](evidence/bootstrap-contract-preview-20260928.md)
 adds a read-only unsigned CLI export of exact approval bytes and preserves
