@@ -35,15 +35,7 @@ func (self *ReleaseSteerer) reconcileProductionPendingV2(ctx context.Context, cu
 		return false, err
 	}
 	native := *self.native
-	var scan *crv4.FinalizedExtrinsicScan
-	err = self.productionRead(ctx, productionReadReceipt, current, func(readCtx context.Context) error {
-		if err := authenticateHistoricalNativeRuntimeAtContext(readCtx, &native, decisionCfg, preparedHash); err != nil {
-			return err
-		}
-		var err error
-		scan, err = native.ScanFinalizedExtrinsic(readCtx, txHash, current.Prepared.PreparedAtBlock)
-		return err
-	})
+	receipt, number, boundary, err := self.scanProductionPendingReceipt(ctx, current, decisionCfg, &native, preparedHash, txHash)
 	if err != nil {
 		// Retain the already published original-authority wait surface for
 		// callers observing a renewed config; every other leaf remains hard.
@@ -53,7 +45,7 @@ func (self *ReleaseSteerer) reconcileProductionPendingV2(ctx context.Context, cu
 		}
 		return false, err
 	}
-	if receipt := scan.Receipt(); receipt != nil {
+	if receipt != nil {
 		err := self.productionRead(ctx, productionReadReceipt, current, func(readCtx context.Context) error {
 			if err := authenticateHistoricalNativeRuntimeAtContext(readCtx, &native, self.cfg, receipt.BlockHash); err != nil {
 				return err
@@ -71,11 +63,6 @@ func (self *ReleaseSteerer) reconcileProductionPendingV2(ctx context.Context, cu
 			return false, self.productionRetainedReadFailure(ctx, productionReadIntent, current, err)
 		}
 		return true, nil
-	}
-	number, boundary, covered := scan.AbsenceBoundary()
-	if !covered {
-		return false, &productionSteeringReadWait{phase: productionReadReceipt, nativeEpoch: current.SubnetEpoch, epochKnown: true, extrinsicHash: current.Prepared.ExtrinsicHash,
-			cause: &crv4.ReceiptEvidenceUnavailableError{BlockHash: preparedHash, Field: "finalized coverage through preparation"}}
 	}
 	var state *crv4.EpochScheduleState
 	err = self.productionRead(ctx, productionReadReceipt, current, func(readCtx context.Context) error {
@@ -100,9 +87,6 @@ func (self *ReleaseSteerer) reconcileProductionPendingV2(ctx context.Context, cu
 		return false, &productionSteeringReadWait{phase: productionReadReceipt, nativeEpoch: state.SubnetEpochIndex, epochKnown: true, extrinsicHash: current.Prepared.ExtrinsicHash,
 			cause: &crv4.ReceiptEvidenceUnavailableError{BlockHash: boundary, Field: "finalized schedule caught up to retained intent"}}
 	}
-	if decisionCfg.ownerRecycleProduction.historicalOnly {
-		return false, &productionPendingReconciliation{nativeEpoch: state.SubnetEpochIndex, extrinsicHash: current.Prepared.ExtrinsicHash}
-	}
 	var nonce uint32
 	err = self.productionRead(ctx, productionReadReceipt, current, func(readCtx context.Context) error {
 		var err error
@@ -118,6 +102,9 @@ func (self *ReleaseSteerer) reconcileProductionPendingV2(ctx context.Context, cu
 	}
 	if nonce < current.Prepared.AccountNonce {
 		return false, fmt.Errorf("steering nonce gap at scanned block %d: finalized %d, prepared %d", number, nonce, current.Prepared.AccountNonce)
+	}
+	if decisionCfg.ownerRecycleProduction.historicalOnly {
+		return false, &productionPendingReconciliation{nativeEpoch: state.SubnetEpochIndex, extrinsicHash: current.Prepared.ExtrinsicHash}
 	}
 	if current.SubnetEpoch < state.SubnetEpochIndex {
 		// These signatures have an immortal era. A missed local epoch does

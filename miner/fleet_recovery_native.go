@@ -325,17 +325,6 @@ func fleetRecoveryResumeNative(ctx context.Context, store *fleetRecoveryStore, r
 // The range budget is instance-owned so tests can force the exact checkpoint
 // boundary without thousands of synthetic network calls or timing assumptions.
 func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoveryStore, record *fleetRecoveryRecord, signer fleetRecoverySigner, authority *fleetMainnetRuntimeAuthority, chain *crv4.Chain, apply bool, maxBlocks uint64) error {
-	finalized, err := crv4.FinalizedHeadContext(ctx, chain)
-	if err != nil {
-		return fleetRecoveryUnresolved(record, err)
-	}
-	end, _, err := chain.ReceiptHeaderAtContext(ctx, finalized)
-	if err != nil {
-		return fleetRecoveryUnresolved(record, err)
-	}
-	if _, err := fleetRecoveryNativeHeader(ctx, chain, end, finalized); err != nil {
-		return fleetRecoveryUnresolved(record, err)
-	}
 	from, parent := record.StartNumber, record.StartHash
 	if record.ScanProof == fleetRecoveryNativeScanProof && record.ScanNumber != 0 {
 		from, parent = record.ScanNumber, record.ScanHash
@@ -343,54 +332,71 @@ func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoverySto
 	if record.ScanProof != "" && record.ScanProof != fleetRecoveryNativeScanProof {
 		return fleetRecoveryUnresolved(record, errors.New("native archive scan proof version is unsupported"))
 	}
-	if maxBlocks == 0 || maxBlocks > fleetRecoveryScanLimit || end < from {
+	if maxBlocks == 0 || maxBlocks > fleetRecoveryScanLimit {
 		return fleetRecoveryUnresolved(record, errors.New("native archive recovery range differs"))
 	}
 	if _, err := fleetRecoveryNativeHeader(ctx, chain, record.StartNumber, record.StartHash); err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
-	if _, err := fleetRecoveryNativeHeader(ctx, chain, from, parent); err != nil {
-		return fleetRecoveryUnresolved(record, err)
-	}
-	through := min(end, from+maxBlocks)
 	extrinsicHash, err := types.NewHashFromHexString(record.TxHash)
 	if err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
-	for number := from + 1; number <= through; number++ {
-		var hash types.Hash
-		if err := chain.API.Client.CallContext(ctx, &hash, "chain_getBlockHash", number); err != nil {
-			return fleetRecoveryUnresolved(record, err)
-		}
-		header, err := fleetRecoveryNativeHeader(ctx, chain, number, hash)
+	var finalized types.Hash
+	remaining := maxBlocks
+	for {
+		scan, err := chain.ScanFinalizedExtrinsicRange(ctx, extrinsicHash, crv4.FinalizedExtrinsicScanRange{
+			First: from + 1, PreviousHash: parent, MaximumBlocks: min(remaining, crv4.ReceiptScanChunkBlockLimit),
+		})
 		if err != nil {
+			// The failed body contributes no evidence. Earlier complete bodies
+			// can survive a late read failure without changing its hard/unknown
+			// classification or allocating another signature.
+			if through, hash, covered := scan.AbsenceBoundary(); covered && ctx.Err() == nil {
+				copy := *record
+				copy.ScanNumber, copy.ScanHash, copy.ScanProof = through, hash, fleetRecoveryNativeScanProof
+				if writeErr := store.put(&copy, signer); writeErr != nil {
+					return errors.Join(err, writeErr)
+				}
+				record = &copy
+			}
 			return fleetRecoveryUnresolved(record, err)
 		}
-		if header.ParentHash != parent {
-			return fleetRecoveryUnresolved(record, errors.New("native recovery ancestry differs"))
+		if receipt := scan.Receipt(); receipt != nil {
+			return fleetRecoveryFinishNative(ctx, store, record, signer, authority, chain, receipt)
 		}
-		bodyNumber, bodyParent, found, err := chain.ReceiptBlockExtrinsicContext(ctx, hash, extrinsicHash)
-		if err != nil {
-			return fleetRecoveryUnresolved(record, err)
+		through, hash, covered := scan.AbsenceBoundary()
+		if !covered {
+			end, endHash := scan.FinalizedBoundary()
+			if end < from {
+				return fleetRecoveryUnresolved(record, &crv4.ReceiptEvidenceUnavailableError{BlockHash: parent, Field: "finalized receipt head has not reached retained checkpoint"})
+			}
+			if end != from || endHash != parent {
+				return fleetRecoveryUnresolved(record, errors.New("native archive empty range differs from retained checkpoint"))
+			}
+			// StartNumber was finalized before signing, or a qualified signed
+			// checkpoint already covers this exact head. No newer nonce is read.
+			finalized = endHash
+			break
 		}
-		if bodyNumber != number || bodyParent != parent {
-			return fleetRecoveryUnresolved(record, errors.New("native recovery body ancestry differs"))
+		if through <= from || through-from > remaining {
+			return fleetRecoveryUnresolved(record, errors.New("native archive chunk exceeds its requested range"))
 		}
-		if found {
-			return fleetRecoveryFinishNative(ctx, store, record, signer, authority, chain, &crv4.FinalizedExtrinsic{ExtrinsicHash: extrinsicHash, BlockHash: hash, BlockNumber: number})
-		}
-		parent = hash
-	}
-	if through > from {
 		copy := *record
-		copy.ScanNumber, copy.ScanHash, copy.ScanProof = through, parent, fleetRecoveryNativeScanProof
+		copy.ScanNumber, copy.ScanHash, copy.ScanProof = through, hash, fleetRecoveryNativeScanProof
 		if err := store.put(&copy, signer); err != nil {
 			return err
 		}
 		record = &copy
-	}
-	if through != end {
-		return fleetRecoveryUnresolved(record, fmt.Errorf("native archive scan checkpointed through %d; re-run to continue bounded recovery", through))
+		remaining -= through - from
+		from, parent = through, hash
+		if scan.ReachedFinalizedBoundary() {
+			finalized = hash
+			break
+		}
+		if remaining == 0 {
+			return fleetRecoveryUnresolved(record, fmt.Errorf("native archive scan checkpointed through %d; re-run to continue bounded recovery", through))
+		}
 	}
 	view, err := authority.viewAt(ctx, chain, finalized)
 	if err != nil {

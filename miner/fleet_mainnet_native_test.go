@@ -138,7 +138,7 @@ func (self *fleetMainnetTestFixture) nativeWebsocket(t *testing.T, register bool
 					return
 				}
 				self.nativeNonce++
-				self.finalizedNumber = 102
+				self.finalizedNumber = self.nativeReceiptNumber
 				signer := self.manifest.Hotkey
 				if register {
 					signer = coldkey.PublicKey()
@@ -165,9 +165,9 @@ func (self *fleetMainnetTestFixture) nativeWebsocket(t *testing.T, register bool
 						t.Error("invalid synthetic commitment")
 						return
 					}
-					binary.LittleEndian.PutUint32(record[8:12], 102)
+					binary.LittleEndian.PutUint32(record[8:12], uint32(self.nativeReceiptNumber))
 					self.storage[commitmentKey.Hex()] = codec.HexEncodeToString(record)
-					self.storage[lastKey.Hex()] = codec.HexEncodeToString(binary.LittleEndian.AppendUint32(nil, 102))
+					self.storage[lastKey.Hex()] = codec.HexEncodeToString(binary.LittleEndian.AppendUint32(nil, uint32(self.nativeReceiptNumber)))
 				}
 				if self.hook != nil {
 					self.hook(call.Method)

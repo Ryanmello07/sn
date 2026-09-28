@@ -59,6 +59,8 @@ type fleetMainnetTestFixture struct {
 	nativeBodyOverrides   map[uint64]any
 	nativeBodyReads       map[uint64]int
 	nativeRuntimeUpdateAt uint64
+	nativeReceiptNumber   uint64
+	nativeThrough         uint64
 	historicalVersions    map[string]crv4.RuntimeVersionIdentity
 	nativeNonce           uint64
 	evmNonce              uint64
@@ -86,6 +88,7 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 	self := &fleetMainnetTestFixture{genesis: types.Hash{0x51}, metadata: codec.HexEncodeToString(raw), code: (types.Hash{0x54}).Hex(), calls: map[string]int{}, storage: map[string]string{}, evmChainId: 964,
 		nativeBodyOverrides: map[uint64]any{}, nativeBodyReads: map[uint64]int{}}
 	self.finalizedNumber, self.evmNonce, self.evmBlockNumber = 100, 1, 102
+	self.nativeReceiptNumber, self.nativeThrough = 102, 104
 	self.stateLock.Lock()
 	err = self.rebuildNativeBlocksWithLock()
 	self.stateLock.Unlock()
@@ -249,7 +252,7 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 					result = override
 				} else if !self.nativeBlockMissing {
 					extrinsics := []string{}
-					if self.nativeBroadcast && number == 102 {
+					if self.nativeBroadcast && number == self.nativeReceiptNumber {
 						extrinsics = append(extrinsics, self.nativeSigned)
 					}
 					result = map[string]any{"block": map[string]any{"header": self.nativeHeaderWireWithLock(number), "extrinsics": extrinsics}}

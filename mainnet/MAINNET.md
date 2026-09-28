@@ -964,8 +964,21 @@ operation needs its own durable reconciliation, not generic read retries.
 Native production submission uses an explicitly approved WS/WSS route for
 `author_submitAndWatchExtrinsic`; the same node may provide HTTP EVM/read RPC,
 but HTTP read support alone grants no native subscription or writer capability.
-Durable receipt-prefix chunks and historical-only foreign-nonce resolution remain
-open and must preserve original immortal signed bytes.
+
+The [bounded receipt-prefix candidate](evidence/receipt-prefix-candidate-20260928.md)
+now supplies the shared 128-block scan contract to both native recovery owners.
+Miner records retain their existing signed semantic proof. The validator keeps
+one bounded, original-intent-bound signed acceleration file; cache eviction or
+an incompatible cache schema causes a rescan while custody and exact signed
+bytes remain intact. Completed chunks and admitted partial prefixes persist
+before subsequent reads, including retry after a later timeout. Optional cache
+read/write faults disable disk acceleration and report degradation while original
+intent reconciliation continues; memory-only progress is not a durability claim.
+The bounded public diagnostic exporter is a separate composition dependency. No
+per-block full journal rewrite or executable-hash invalidation is introduced.
+Pending old approvals can resolve authenticated foreign nonce use at the exact
+covered boundary while fresh signing/rebroadcast stays independently gated.
+Qualification is pending; this candidate alone does not close MG-04 or PH-03.
 
 The [server upload admission](VALIDATOR-UPLOAD-RUNTIME.md) now consumes an
 independently pinned schema-3 configuration and retains only read-only runtime

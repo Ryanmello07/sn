@@ -58,9 +58,9 @@ func (self *fleetMainnetTestFixture) nativeHeaderWireWithLock(number uint64) any
 func (self *fleetMainnetTestFixture) rebuildNativeBlocksWithLock() error {
 	self.nativeBlocks, self.nativeHeaders = map[uint64]types.Hash{}, map[uint64]types.Header{}
 	parent := types.Hash{0x50}
-	for number := uint64(100); number <= 104; number++ {
+	for number := uint64(100); number <= self.nativeThrough; number++ {
 		extrinsics := []string{}
-		if number == 102 && self.nativeBroadcast {
+		if number == self.nativeReceiptNumber && self.nativeBroadcast {
 			extrinsics = append(extrinsics, self.nativeSigned)
 		}
 		header, hash, err := fleetReceiptTestHeader(parent, number, extrinsics, number == self.nativeRuntimeUpdateAt)
@@ -70,6 +70,6 @@ func (self *fleetMainnetTestFixture) rebuildNativeBlocksWithLock() error {
 		self.nativeHeaders[number], self.nativeBlocks[number] = header, hash
 		parent = hash
 	}
-	self.head, self.receiptBlock = self.nativeBlocks[100], self.nativeBlocks[102]
+	self.head, self.receiptBlock = self.nativeBlocks[100], self.nativeBlocks[self.nativeReceiptNumber]
 	return nil
 }

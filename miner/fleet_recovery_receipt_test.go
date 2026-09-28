@@ -109,7 +109,7 @@ func TestFleetRecoveryNativeTruncatedBodyNeverAdvancesCheckpoint(t *testing.T) {
 
 // Missing fields and a malformed entry after the matching transaction retain
 // unknown outcome; the latter cannot bypass validation by matching early.
-func TestFleetRecoveryNativeIncompleteBodyNeverAdvancesCheckpoint(t *testing.T) {
+func TestFleetRecoveryNativeIncompleteBodyNeverAdvancesPastEvidence(t *testing.T) {
 	for _, fault := range []string{"null", "missing-header", "missing-vector", "malformed-tail", "wrong-header"} {
 		fixture, original := fleetRecoveryReceiptTestPending(t, false)
 		fixture.stateLock.Lock()
@@ -129,13 +129,17 @@ func TestFleetRecoveryNativeIncompleteBodyNeverAdvancesCheckpoint(t *testing.T) 
 		}
 		fixture.nativeBodyOverrides[102] = response
 		fixture.stateLock.Unlock()
+		wantScan := uint64(0)
+		if fault == "null" || fault == "missing-header" || fault == "missing-vector" {
+			wantScan = 101
+		}
 		for attempt := 0; attempt < 2; attempt++ {
 			if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
 				t.Fatalf("%s incomplete evidence became a receipt", fault)
 			}
 			retained := fleetRecoveryTestRecord(t)
-			if retained.ScanNumber != 0 || retained.Stage != original.Stage || !bytes.Equal(retained.Raw, original.Raw) {
-				t.Fatalf("%s advanced original durable attempt", fault)
+			if retained.ScanNumber != wantScan || retained.Stage != original.Stage || !bytes.Equal(retained.Raw, original.Raw) {
+				t.Fatalf("%s changed the complete prefix boundary: got %d, want %d", fault, retained.ScanNumber, wantScan)
 			}
 		}
 		if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("system_accountNextIndex") != 1 {

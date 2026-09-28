@@ -26,6 +26,7 @@ import (
 // were reconstructed before Stats attachment; no snapshot/header supplies them.
 // The root still owns every runtime and ledger Close after all workers join.
 type releaseRuntimeV2 struct {
+	receiptCache         *productionReceiptCacheState
 	ctx                  context.Context
 	cfg                  ReleaseConfig
 	chain                *ChainClient
@@ -90,7 +91,7 @@ func newReleaseRuntimeV2WithRuntime(ctx context.Context, cfg *ReleaseConfig, cha
 	for _, participant := range history.participants {
 		disk.states[participant.NoID].uploadSource = sources[participant.NoID]
 	}
-	self := &releaseRuntimeV2{ctx: ctx, cfg: history.cfg, chain: chain, native: native, hotkey: ownHotkey, disk: disk, history: history, origins: origins, sources: sources,
+	self := &releaseRuntimeV2{receiptCache: &productionReceiptCacheState{}, ctx: ctx, cfg: history.cfg, chain: chain, native: native, hotkey: ownHotkey, disk: disk, history: history, origins: origins, sources: sources,
 		gate: make(chan struct{}, 1), publications: maps.Clone(history.terminals), publicationContexts: maps.Clone(history.terminalContexts)}
 	if isOwnerRecycleProductionConfig(cfg) {
 		self.preparation = &releaseProductionPreparation{requested: make(chan struct{}), ready: make(chan struct{})}

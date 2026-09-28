@@ -399,6 +399,23 @@ func (c *Chain) LocateFinalizedExtrinsic(ctx context.Context, extrinsicHash type
 // The absence boundary is returned alongside a found receipt so nonce, epoch
 // and mortality reads cannot silently move beyond the fully searched prefix.
 func (self *Chain) ScanFinalizedExtrinsic(ctx context.Context, extrinsicHash types.Hash, fromBlock uint64) (*FinalizedExtrinsicScan, error) {
+	return self.scanFinalizedExtrinsicRange(ctx, extrinsicHash, FinalizedExtrinsicScanRange{First: fromBlock})
+}
+
+// Scans at most one bounded chunk of complete canonical bodies. A caller may
+// persist the returned absence boundary only with its original signed attempt;
+// the supplied start does not establish coverage of any preceding block.
+func (self *Chain) ScanFinalizedExtrinsicRange(ctx context.Context, extrinsicHash types.Hash, requested FinalizedExtrinsicScanRange) (*FinalizedExtrinsicScan, error) {
+	if requested.MaximumBlocks == 0 || requested.MaximumBlocks > ReceiptScanChunkBlockLimit || requested.First == 0 && requested.PreviousHash != (types.Hash{}) {
+		return nil, errors.New("crv4: receipt scan chunk bounds are invalid")
+	}
+	return self.scanFinalizedExtrinsicRange(ctx, extrinsicHash, requested)
+}
+
+// Bounded recovery retains only the completed body prefix on interruption.
+// The accompanying error still governs outcome; unbounded compatibility calls
+// preserve their original all-or-nothing error result.
+func (self *Chain) scanFinalizedExtrinsicRange(ctx context.Context, extrinsicHash types.Hash, requested FinalizedExtrinsicScanRange) (result *FinalizedExtrinsicScan, resultErr error) {
 	if ctx == nil || self == nil || self.API == nil || self.API.Client == nil {
 		return nil, errors.New("crv4: finalized extrinsic search context is unavailable")
 	}
@@ -431,11 +448,41 @@ func (self *Chain) ScanFinalizedExtrinsic(ctx context.Context, extrinsicHash typ
 	if err != nil || canonicalFinalized != finalizedHash {
 		return nil, errors.New("crv4: finalized receipt head is not canonical at its authenticated height")
 	}
-	scan := &FinalizedExtrinsicScan{from: fromBlock, finalizedHash: finalizedHash, finalizedAt: finalizedNumber}
+	fromBlock := requested.First
+	scan := &FinalizedExtrinsicScan{from: fromBlock, previousHash: requested.PreviousHash, extrinsicHash: extrinsicHash, finalizedHash: finalizedHash, finalizedAt: finalizedNumber}
+	defer func() {
+		if requested.MaximumBlocks != 0 && receiptScanUnavailable(resultErr) && scan.absent {
+			result = scan
+		}
+	}()
 	if fromBlock > finalizedNumber {
 		return scan, nil
 	}
-	var previousHash types.Hash
+	previousHash := requested.PreviousHash
+	if previousHash != (types.Hash{}) {
+		_, previousNumber, err := self.receiptHeaderAt(ctx, previousHash)
+		if err != nil {
+			return nil, fmt.Errorf("crv4: receipt scan previous header: %w", err)
+		}
+		if previousNumber+1 != fromBlock {
+			return nil, errors.New("crv4: receipt scan previous header has another height")
+		}
+		var previousCanonical string
+		if err := self.API.Client.CallContext(ctx, &previousCanonical, "chain_getBlockHash", previousNumber); err != nil {
+			return nil, fmt.Errorf("crv4: receipt scan previous canonical hash: %w", err)
+		}
+		if previousCanonical == "" {
+			return nil, &ReceiptEvidenceUnavailableError{BlockHash: previousHash, Field: "previous canonical receipt hash"}
+		}
+		canonical, err := receiptHash(previousCanonical)
+		if err != nil || canonical != previousHash {
+			return nil, errors.New("crv4: receipt scan previous header is no longer canonical")
+		}
+	}
+	through := finalizedNumber
+	if requested.MaximumBlocks != 0 && through-fromBlock+1 > requested.MaximumBlocks {
+		through = fromBlock + requested.MaximumBlocks - 1
+	}
 	for number := fromBlock; ; number++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -467,10 +514,12 @@ func (self *Chain) ScanFinalizedExtrinsic(ctx context.Context, extrinsicHash typ
 			return nil, err
 		}
 		if found {
+			scan.absent = false
 			scan.receipt = &FinalizedExtrinsic{ExtrinsicHash: extrinsicHash, BlockHash: blockHash, BlockNumber: number}
 			return scan, nil
 		}
-		if number == finalizedNumber {
+		scan.through, scan.throughHash, scan.absent = number, blockHash, true
+		if number == through {
 			break
 		}
 		previousHash = blockHash

@@ -165,7 +165,7 @@ func newProductionContinuationTestFixtureWithStartup(t *testing.T, anchor func(*
 		t.Fatal(err)
 	}
 	history.readers[0] = reader
-	self.runtime = &releaseRuntimeV2{ctx: t.Context(), cfg: *cfg, native: production.operator.measurement.admission.chain, chain: production.operator.chain, hotkey: production.hotkey, history: history, gate: make(chan struct{}, 1)}
+	self.runtime = &releaseRuntimeV2{receiptCache: &productionReceiptCacheState{}, ctx: t.Context(), cfg: *cfg, native: production.operator.measurement.admission.chain, chain: production.operator.chain, hotkey: production.hotkey, history: history, gate: make(chan struct{}, 1)}
 	store, err := newReleaseIntentStoreV2(self.runtime)
 	if err != nil {
 		t.Fatal(err)

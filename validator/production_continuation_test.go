@@ -29,6 +29,9 @@ type productionContinuationNativeTestClient struct {
 	fixture           *productionContinuationTestFixture
 	broadcasts        []string
 	bodyError         error
+	bodyErrorKVs      map[uint64]error
+	bodyReads         map[uint64]int
+	blockNumberKVs    map[string]uint64
 	currentReadError  error
 	currentReads      int
 	beforeCurrentRead func()
@@ -105,10 +108,16 @@ func installProductionContinuationNative(t *testing.T, fixture *productionContin
 			return json.Unmarshal(raw, target)
 		}
 		selected := uint64(0)
-		for number := uint64(100); number <= production.head; number++ {
-			if len(args) != 0 && args[len(args)-1] == production.block(number).Hex() {
-				selected = number
-				break
+		if self.blockNumberKVs != nil && len(args) != 0 {
+			if hash, ok := args[len(args)-1].(string); ok {
+				selected = self.blockNumberKVs[hash]
+			}
+		} else {
+			for number := uint64(100); number <= production.head; number++ {
+				if len(args) != 0 && args[len(args)-1] == production.block(number).Hex() {
+					selected = number
+					break
+				}
 			}
 		}
 		if method == "state_getRuntimeVersion" && selected == production.head && selected > self.receiptNumber {
@@ -123,6 +132,12 @@ func installProductionContinuationNative(t *testing.T, fixture *productionContin
 		if method == "chain_getBlock" {
 			if selected == 0 || len(args) != 1 {
 				return errors.New("continuation receipt escaped the canonical fixture chain")
+			}
+			if self.bodyReads != nil {
+				self.bodyReads[selected]++
+			}
+			if err := self.bodyErrorKVs[selected]; err != nil {
+				return err
 			}
 			if self.bodyError != nil {
 				return self.bodyError

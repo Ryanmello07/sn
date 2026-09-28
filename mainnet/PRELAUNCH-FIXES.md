@@ -1326,6 +1326,27 @@ header authenticated with each complete body instead of issuing duplicate
 header/hash reads, while retaining canonical boundary checks and bounded fsync
 work. These continuation improvements remain open after body admission.
 
+**2026-09-28 bounded prefix candidate (qualification pending).** The
+[shared chunk/checkpoint slice](evidence/receipt-prefix-candidate-20260928.md)
+adds at most 128 fully authenticated bodies per chunk and preserves completed
+chunks plus admitted partial prefixes before retrying a later unavailable read.
+Miner recovery keeps its existing signed
+`ScanProof` v1 and 4,096-block command bound. Validator recovery writes one small,
+domain-signed disposable checkpoint tied to the exact original intent/config,
+transaction and contiguous canonical range, without rewriting intent history.
+Missing, empty or stale cache state requires a rescan, never a fresh launch or
+signature; executable changes do not affect its key. Individual chunk reads keep
+the 60-second attempt/300-second total budgets. Deterministic actual-owner
+deadline barriers exercise progress within one interrupted chunk. An incomplete
+body cannot advance coverage, and the saved prefix is rejoined to a canonical
+parent before reuse. Optional cache read/save failures disable disk reuse and
+emit one closed degradation observation; original custody and authority errors
+remain hard. Memory-only progress never claims a successful durable write, and
+the public bounded diagnostic exporter requires separate composition.
+Historical-only original approvals now reach same-boundary nonce reconciliation
+before the no-rebroadcast wait. These source changes do not claim qualification,
+automatic runtime approval or mainnet activation.
+
 The new contract installer review found the same failed-read/contradiction join
 in its native-to-EVM mapping check, plus admission that required the finalized
 head to remain identical throughout preparation. Return failed reads before
