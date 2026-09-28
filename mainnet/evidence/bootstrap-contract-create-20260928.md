@@ -18,9 +18,26 @@ transitive modules needed by the real EVM fixture; existing versions and
 `go.sum` are unchanged. Solidity, generated bindings, reviewed bytecode and
 contract build inputs are unchanged.
 
-Terra qualification is **pending**, with final normal/race selectors
-`^Test(EvmCreate|RootSubmission)` in mainnet and the generator package, vet and
-command build. Six causal overlays restore omitted exact-signature checks,
+The original `c10a2cac` qualification **failed before EVM execution**: the fixture
+encoded its approval signature with `0x`, while the canonical parser requires
+128 unprefixed lowercase hexadecimal characters. The retained original positive
+and causal captures remain in the original evidence directory; the first causal
+failure did not reach its intended signed-nonce assertion and is not counted as
+causal qualification. The correction lives in the separate worktree
+`/mnt/data/sn-testnet/worktrees/mg08-bootstrap-contracts-fix-20260928/sn`, with
+evidence under `mainnet-bootstrap-create-fix-20260928/`. It corrects the fixture,
+documents the distinct key/signature encodings, adds explicit positive/negative
+wire and downstream-admission tests, and checks fixture signing/serialization
+errors. The release JSON fixture also preserves its testnet-only generated
+variable names so the retained-bytecode test reaches preservation instead of
+panicking during setup. No existing native root wire contract changes.
+
+Corrected Terra qualification is **pending**. The affected rerun selectors are
+`^TestEvmCreate` (20 roots, including the two new wire roots) and
+`^TestReleaseJsonUsesRetainedReviewedBytecode$`, plus vet and command build.
+The unchanged native root submission and other generator bodies retain their
+independent original normal/race evidence; failed package totals are not passes.
+Six causal overlays restore omitted exact-signature checks,
 omitted runtime readback, a send before durable attempt publication, an
 unavailable-read-as-mismatch label, rejection of healthy head progress, and a
 discarded completed scan checkpoint. The controls must fail their intended

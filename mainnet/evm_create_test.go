@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,57 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 )
+
+// Public-key and signature encodings are deliberately distinct. A successful
+// independent verification precedes exact signed-payload rejection downstream.
+func TestEvmCreateApprovalSignatureCanonicalWireReachesSignedAdmission(t *testing.T) {
+	f := newEvmCreateFixture(t)
+	if len(f.config.Signature) != 128 || strings.HasPrefix(f.config.Signature, "0x") || f.config.Signature != strings.ToLower(f.config.Signature) {
+		t.Fatal("fixture approval did not emit canonical signature wire")
+	}
+	signature, err := hex.DecodeString(f.config.Signature)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := hex.DecodeString(strings.TrimPrefix(f.config.ApprovalPublicKey, "0x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	message, err := f.config.Plan.signingBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ed25519.Verify(key, message, signature) {
+		t.Fatal("fixture approval bytes fail independent Ed25519 verification")
+	}
+	if err := f.config.validate(); err != nil {
+		t.Fatalf("canonical EVM approval was rejected: %v", err)
+	}
+	if _, code, diagnostic := f.command("apply"); code != 0 {
+		t.Fatalf("canonical wire did not reach local custody: %d %s", code, diagnostic)
+	}
+	changed := f.config.Plan.Actions[0]
+	changed.Nonce++
+	if _, err := changed.signed(f.raw); err == nil || !strings.Contains(err.Error(), "differs from exact approved envelope") {
+		t.Fatalf("canonical approval did not reach the intended signed-nonce boundary: %v", err)
+	}
+}
+
+// No alternate wire spelling or valid-width invalid signature can acquire
+// custody. This does not broaden the existing root offline signature parser.
+func TestEvmCreateApprovalSignatureRejectsAlternateWire(t *testing.T) {
+	f := newEvmCreateFixture(t)
+	for _, value := range []string{"0x" + f.config.Signature, strings.ToUpper(f.config.Signature), f.config.Signature[:126], f.config.Signature + "00", " " + f.config.Signature, strings.Repeat("gg", 64), strings.Repeat("00", 64)} {
+		candidate := copyEvmPhaseConfig(f.config)
+		candidate.Signature = value
+		if err := candidate.validate(); err == nil {
+			t.Fatalf("accepted alternate or invalid approval signature %q", value)
+		}
+	}
+	if len(f.counts) != 0 || len(f.writes) != 0 {
+		t.Fatal("signature wire validation reached RPC")
+	}
+}
 
 // Offline custody preparation must produce no RPC observation or write.
 func (self *evmCreateFixture) prepareSigned() {
@@ -129,13 +181,19 @@ func TestEvmCreateRejectsChangedSignedAuthority(t *testing.T) {
 		case "access-list":
 			transaction.AccessList = types.AccessList{{Address: common.Address{42}}}
 		case "signer":
-			signerKey, _ = crypto.HexToECDSA(strings.Repeat("18", 32))
+			signerKey, err = crypto.HexToECDSA(strings.Repeat("18", 32))
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
 		signed, err := types.SignTx(types.NewTx(transaction), types.LatestSignerForChainID(transaction.ChainID), signerKey)
 		if err != nil {
 			t.Fatal(err)
 		}
-		raw, _ := signed.MarshalBinary()
+		raw, err := signed.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
+		}
 		if _, err := f.config.Plan.Actions[0].signed(raw); err == nil {
 			t.Fatalf("accepted changed signed %s", name)
 		}
@@ -171,7 +229,10 @@ func TestEvmCreateRejectsUnapprovedPlanBeforeCustody(t *testing.T) {
 		case "constructor":
 			candidate.Plan.Actions[0].Data = "0x00"
 		}
-		raw, _ := json.Marshal(candidate)
+		raw, err := json.Marshal(candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(f.configPath, raw, 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -209,10 +270,22 @@ func TestEvmCreateAdmissionRejectsChangedRuntimeNetworkAndNonce(t *testing.T) {
 			}
 			f.config.Plan.Actions[0].Data = "0x" + hex.EncodeToString(data)
 			f.publishConfig()
-			key, _ := crypto.HexToECDSA(strings.Repeat("17", 32))
-			tx, _ := f.config.Plan.Actions[0].unsigned()
-			f.tx, _ = types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(964)), key)
-			f.raw, _ = f.tx.MarshalBinary()
+			key, err := crypto.HexToECDSA(strings.Repeat("17", 32))
+			if err != nil {
+				t.Fatal(err)
+			}
+			tx, err := f.config.Plan.Actions[0].unsigned()
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.tx, err = types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(964)), key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.raw, err = f.tx.MarshalBinary()
+			if err != nil {
+				t.Fatal(err)
+			}
 			// This case imports through the owner below, leaving the unrelated
 			// original signed-byte file unused.
 		}

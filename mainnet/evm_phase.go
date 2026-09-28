@@ -63,6 +63,8 @@ type evmPhasePlan struct {
 
 // Trust is independently provisioned, never learned from retained state.
 // The approval signs the whole graph, not an individual resume invocation.
+// Its signature is exactly 128 unprefixed lowercase hex characters; the public
+// key retains its distinct 0x-prefixed 32-byte encoding.
 type evmPhaseConfig struct {
 	Schema            string       `json:"schema"`
 	ApprovalPublicKey string       `json:"approval_public_key_ed25519"`
@@ -184,8 +186,14 @@ func (self evmPhaseConfig) validate() error {
 		return errors.New("contract phase approval key is invalid")
 	}
 	signature, err := rootOfflineSignatureBytes(self.Signature)
+	if err != nil {
+		return errors.Join(errors.New("contract phase approval signature requires 128 unprefixed lowercase hex characters"), err)
+	}
 	message, msgErr := p.signingBytes()
-	if err != nil || msgErr != nil || !ed25519.Verify(key, message, signature) {
+	if msgErr != nil {
+		return msgErr
+	}
+	if !ed25519.Verify(key, message, signature) {
 		return errors.New("contract phase independent approval is invalid")
 	}
 	return nil

@@ -17,6 +17,7 @@ func releaseJsonTestItems(t *testing.T) []item {
 	for _, definition := range artifactDefinitions {
 		value := testContractItem(t, definition.name, "6001", strings.Repeat("11", 32))
 		value.Release = definition.release
+		value.Variable = definition.variable
 		result = append(result, value)
 	}
 	return result
@@ -107,6 +108,7 @@ func TestReleaseJsonUsesRetainedReviewedBytecode(t *testing.T) {
 	for i := range changed {
 		updated := testContractItem(t, changed[i].Name, "6001", strings.Repeat("22", 32))
 		updated.Release = changed[i].Release
+		updated.Variable = changed[i].Variable
 		changed[i] = updated
 	}
 	preserved, err := preserveReviewedBytecode("contracts_gen.go", generated, changed)

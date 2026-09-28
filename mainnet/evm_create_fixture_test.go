@@ -118,7 +118,10 @@ func evmTestRelease(t *testing.T) contractReleaseArtifacts {
 // Native header commitments are encoded independently through the SCALE codec.
 func evmTestNativeHeader(t *testing.T, parent string, number uint64, logs []string) (rootReceiptHeader, string) {
 	t.Helper()
-	parentHash, _ := native.NewHashFromHexString(parent)
+	parentHash, err := native.NewHashFromHexString(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
 	stateHash := native.Hash{4}
 	bodyHash := native.Hash{5}
 	header := native.Header{ParentHash: parentHash, Number: native.BlockNumber(number), StateRoot: stateHash, ExtrinsicsRoot: bodyHash}
@@ -184,7 +187,10 @@ func newEvmCreateFixture(t *testing.T) *evmCreateFixture {
 	}
 	artifactPath := filepath.Join(directory, "release.json")
 	artifacts := evmTestRelease(t)
-	artifactRaw, _ := json.Marshal(artifacts)
+	artifactRaw, err := json.Marshal(artifacts)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(artifactPath, artifactRaw, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +198,6 @@ func newEvmCreateFixture(t *testing.T) *evmCreateFixture {
 	metadata := native.NewMetadataV14()
 	metadata.MagicNumber = native.MagicNumber
 	metadata.AsMetadataV14.Pallets = []native.PalletMetadataV14{{Name: "Ethereum", HasStorage: true, Storage: native.StorageMetadataV14{Prefix: "Ethereum", Items: []native.StorageEntryMetadataV14{{Name: "BlockHash", Modifier: native.StorageFunctionModifierV0{IsDefault: true}, Type: native.StorageEntryTypeV14{IsMap: true, AsMap: native.MapTypeV14{Hashers: []native.StorageHasherV10{{IsTwox64Concat: true}}}}}}}}}
-	var err error
 	f.metadata, err = codec.Encode(metadata)
 	if err != nil {
 		t.Fatal(err)
@@ -269,13 +274,18 @@ func (self *evmCreateFixture) publishConfig() {
 	seed := sha256.Sum256([]byte("synthetic contract independent approval"))
 	key := ed25519.NewKeyFromSeed(seed[:])
 	self.config.ApprovalPublicKey = "0x" + hex.EncodeToString(key.Public().(ed25519.PublicKey))
-	message, _ := self.config.Plan.signingBytes()
-	self.config.Signature = "0x" + hex.EncodeToString(ed25519.Sign(key, message))
-	raw, _ := json.Marshal(self.config)
+	message, err := self.config.Plan.signingBytes()
+	if err != nil {
+		self.t.Fatal(err)
+	}
+	self.config.Signature = hex.EncodeToString(ed25519.Sign(key, message))
+	raw, err := json.Marshal(self.config)
+	if err != nil {
+		self.t.Fatal(err)
+	}
 	if err := os.WriteFile(self.configPath, raw, 0600); err != nil {
 		self.t.Fatal(err)
 	}
-	var err error
 	self.plan, err = loadEvmCreatePlan(context.Background(), self.configPath)
 	if err != nil {
 		self.t.Fatal(err)

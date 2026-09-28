@@ -31,6 +31,19 @@ channel; a key supplied by an untrusted journal or node is not independent
 authority. `plan` verifies the signature and exact release file before emitting
 the plan hash. `apply` and `resume` require that same accepted hash and directory.
 
+`approval_signature_ed25519` is exactly **128 unprefixed lowercase hexadecimal
+characters** encoding the 64-byte signature. The public-key field is separately
+encoded as `0x` plus 64 lowercase hexadecimal characters. Prefixing the signature
+with `0x`, uppercasing it, or accepting another spelling is invalid. This uses the
+existing root custody signature parser without changing its wire contract.
+
+The current `plan` command requires that independently signed configuration.
+It is not yet an unsigned preparation command. The package's payload and
+approval-message helpers do not constitute an executable operator export path.
+A read-only unsigned artifact/structure validation and exact signing-message
+export is a concrete next bootstrap prerequisite; it must grant no journal or
+submission authority, while `apply/resume` continue to require this signature.
+
 The phase binds the mainnet EVM chain ID 964, independently approved native chain
 and genesis, exact runtime version/code/metadata and inspected source commit,
 native starting checkpoint and finite send window, fixed owned IP/port route,
