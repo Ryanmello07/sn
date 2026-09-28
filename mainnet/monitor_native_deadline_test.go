@@ -419,9 +419,30 @@ func TestMonitorNativeDeadlineCheckpointMigratesLegacyAndRejectsDowngrade(t *tes
 		t.Fatal("legacy checkpoint accepted a hidden deadline incident")
 	}
 	record.Schema = monitorServiceCheckpointSchema
-	record.State.NativeDeadline.FirstMiss.Native.Epoch = 8
-	write()
-	if _, err := owner.load(t.Context()); err == nil {
-		t.Fatal("checksum-valid incident without a crossing was admitted")
+	base := *state.NativeDeadline
+	for _, c := range []struct {
+		name   string
+		change func(*monitorNativeDeadlineHistory)
+		want   string
+	}{
+		{name: "no crossing", change: func(h *monitorNativeDeadlineHistory) { h.FirstMiss.Native.Epoch = 8 }, want: "observed epoch crossing"},
+		{name: "regressed epoch", change: func(h *monitorNativeDeadlineHistory) { h.MissedWindows = 2; h.LastMiss.Intent.Value.NativeEpoch = 7 }, want: "history is inconsistent"},
+		{name: "regressed clock outside allowance", change: func(h *monitorNativeDeadlineHistory) {
+			older := now.Add(-monitorServiceClockAllowance - time.Second)
+			value := monitorDeadlineTestRecord(older, 1, 301, 10)
+			value.Intent.Value.NativeEpoch, value.Intent.Value.PreparedAtBlock = 9, 210
+			h.MissedWindows = 2
+			h.LastMiss = monitorNativeDeadlineIncident{DetectedAt: older, Intent: *value.Intent, Native: *value.Native, Steering: *value.Steering}
+		}, want: "history is inconsistent"},
+	} {
+		history := base
+		first, last := *base.FirstMiss.Intent.Value, *base.LastMiss.Intent.Value
+		history.FirstMiss.Intent.Value, history.LastMiss.Intent.Value = &first, &last
+		c.change(&history)
+		record.State.NativeDeadline = &history
+		write()
+		if _, err := owner.load(t.Context()); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Fatal("checksum-valid incident chronology was not rejected at its actual predicate", c.name, err)
+		}
 	}
 }
