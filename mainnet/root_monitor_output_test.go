@@ -55,7 +55,7 @@ func TestRootMonitorOutputReadOutageRetainsEvidence(t *testing.T) {
 		proxy.ServeHTTP(writer, request)
 	}))
 	defer server.Close()
-	metrics := filepath.Join(t.TempDir(), "root.prom")
+	metrics := filepath.Join(monitorMetricsTestDir(t), "root.prom")
 	clock := &monitorServicesTestClock{}
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	clock.seconds.Store(base.Unix())
@@ -94,7 +94,7 @@ func TestRootMonitorOutputReadOutageRetainsEvidence(t *testing.T) {
 func TestRootMonitorOutputMetricsAmbiguityAndOwnershipStayOptional(t *testing.T) {
 	_, fixture := newRootFixture(t)
 	server := rootFixtureServer(t, fixture)
-	directory := t.TempDir()
+	directory := monitorMetricsTestDir(t)
 	checkpoint, metrics := filepath.Join(directory, "finalized.json"), filepath.Join(directory, "root.prom")
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	clock := &monitorServicesTestClock{}
@@ -225,7 +225,7 @@ func TestRootMonitorOutputUnconfiguredAndCompactWire(t *testing.T) {
 func TestRootMonitorOutputReadCancellationPreservesBudgetAndUnknown(t *testing.T) {
 	_, fixture := newRootFixture(t)
 	url, entered, left := monitorServicesBlockedChain(t)
-	metrics := filepath.Join(t.TempDir(), "root.prom")
+	metrics := filepath.Join(monitorMetricsTestDir(t), "root.prom")
 	args := []string{"root-monitor", "--rpc", url, "--policy", rootTestPolicyFile(t, fixture.policy), "--retry-window", "59s", "--metrics-file", metrics, "--metrics-role", "primary"}
 	if code := runMain(t.Context(), args, io.Discard, io.Discard); code != 2 {
 		t.Fatal("sub-minute retry admitted")
@@ -253,7 +253,7 @@ func TestRootMonitorOutputCustodyAndEarlyCleanupRemainHard(t *testing.T) {
 	_, fixture := newRootFixture(t)
 	server := rootFixtureServer(t, fixture)
 	for _, cleanupFault := range []bool{false, true} {
-		directory := t.TempDir()
+		directory := monitorMetricsTestDir(t)
 		checkpoint := filepath.Join(directory, "finalized.json")
 		metrics := filepath.Join(directory, "root.prom")
 		closed := 0

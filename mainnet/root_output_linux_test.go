@@ -66,7 +66,7 @@ func TestRootMonitorOutputPhysicalBlockedSinkKeepsFilesAndJoins(t *testing.T) {
 	_, fixture := newRootFixture(t)
 	server := rootFixtureServer(t, fixture)
 	reader, writer, originalFlags := rootOutputFullPipe(t)
-	directory := t.TempDir()
+	directory := monitorMetricsTestDir(t)
 	checkpoint, metrics := filepath.Join(directory, "root.json"), filepath.Join(directory, "root.prom")
 	clock := &monitorServicesTestClock{}
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
