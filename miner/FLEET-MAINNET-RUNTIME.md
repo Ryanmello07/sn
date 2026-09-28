@@ -69,6 +69,21 @@ The offline `fleet manifest` command remains independent of network admission.
 
 ## Durable mainnet fleet recovery
 
+Native absence checkpoints carry a signed semantic proof identifier,
+`urnetwork-native-receipt-absence-v1`, bound to the same exact original transaction,
+authority, signer and start block as the recovery record. Before recording such a
+checkpoint, recovery authenticates the full raw header hash, canonical ancestry
+and complete ordered extrinsics commitment. Null, omitted, shortened or malformed
+bodies leave the outcome unresolved. Runtime-update digest tag 8 is preserved
+without depending on the older SDK's header re-encoding.
+
+Older records retain their transaction custody and final outcomes. An unresolved
+old checkpoint without that proof identifier requires one rescan from its original
+start; a qualified smaller cursor may replace it once. Thereafter cursors remain
+monotone and the proof cannot be downgraded. This is independent of executable
+hashes. [The candidate receipt](../mainnet/evidence/miner-receipt-prefix-candidate-20260928.md)
+tracks qualification; source and tests are sealed before any pass is claimed.
+
 All four production write commands own the same private
 `$URNETWORK_STATE_DIR/fleet-mainnet-recovery` directory (default
 `~/.urnetwork/fleet-mainnet-recovery`). One directory-descriptor lock excludes

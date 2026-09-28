@@ -55,6 +55,10 @@ type fleetMainnetTestFixture struct {
 	nativeSigned          string
 	finalizedNumber       uint64
 	nativeBlocks          map[uint64]types.Hash
+	nativeHeaders         map[uint64]types.Header
+	nativeBodyOverrides   map[uint64]any
+	nativeBodyReads       map[uint64]int
+	nativeRuntimeUpdateAt uint64
 	historicalVersions    map[string]crv4.RuntimeVersionIdentity
 	nativeNonce           uint64
 	evmNonce              uint64
@@ -78,9 +82,15 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	self := &fleetMainnetTestFixture{genesis: types.Hash{0x51}, head: types.Hash{0x52}, receiptBlock: types.Hash{0x53}, metadata: codec.HexEncodeToString(raw), code: (types.Hash{0x54}).Hex(), calls: map[string]int{}, storage: map[string]string{}, evmChainId: 964}
+	self := &fleetMainnetTestFixture{genesis: types.Hash{0x51}, metadata: codec.HexEncodeToString(raw), code: (types.Hash{0x54}).Hex(), calls: map[string]int{}, storage: map[string]string{}, evmChainId: 964,
+		nativeBodyOverrides: map[uint64]any{}, nativeBodyReads: map[uint64]int{}}
 	self.finalizedNumber, self.evmNonce, self.evmBlockNumber = 100, 1, 102
-	self.nativeBlocks = map[uint64]types.Hash{100: self.head, 101: {0x50}, 102: self.receiptBlock, 103: {0x63}, 104: {0x64}}
+	self.stateLock.Lock()
+	err = self.rebuildNativeBlocksWithLock()
+	self.stateLock.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
 	self.historicalVersions = map[string]crv4.RuntimeVersionIdentity{}
 	self.version = crv4.RuntimeVersionIdentity{SpecName: "synthetic-subtensor", SpecVersion: 8001, TransactionVersion: 1, StateVersion: 1}
 	self.authority = fleetMainnetRuntimeAuthority{Schema: fleetMainnetRuntimeAuthoritySchema, NativeChain: "Synthetic Main Network", GenesisHash: self.genesis.Hex(), EvmChainId: 964, Netuid: 25, Coordinator: strings.ToLower(common.Address{0x55}.Hex()), RuntimeSourceCommit: strings.Repeat("ab", 20), RuntimeReviewScope: fleetMainnetRuntimeReviewScope, RuntimeReviewSha256: strings.Repeat("cd", 32), RuntimeVersion: self.version, RuntimeCodeHash: self.code, RuntimeMetadataHash: metadataHash}
@@ -225,16 +235,24 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 		case "chain_getHeader":
 			for number, hash := range self.nativeBlocks {
 				if str(0) == hash.Hex() {
-					result = types.Header{Number: types.BlockNumber(number), ParentHash: self.nativeBlocks[number-1]}
+					result = self.nativeHeaderWireWithLock(number)
 				}
 			}
 		case "chain_getBlock":
-			if !self.nativeBlockMissing {
-				extrinsics := []string{}
-				if self.nativeBroadcast && str(0) == self.receiptBlock.Hex() {
-					extrinsics = append(extrinsics, self.nativeSigned)
+			for number, hash := range self.nativeBlocks {
+				if str(0) != hash.Hex() {
+					continue
 				}
-				result = map[string]any{"block": map[string]any{"extrinsics": extrinsics}}
+				self.nativeBodyReads[number]++
+				if override, exists := self.nativeBodyOverrides[number]; exists {
+					result = override
+				} else if !self.nativeBlockMissing {
+					extrinsics := []string{}
+					if self.nativeBroadcast && number == 102 {
+						extrinsics = append(extrinsics, self.nativeSigned)
+					}
+					result = map[string]any{"block": map[string]any{"header": self.nativeHeaderWireWithLock(number), "extrinsics": extrinsics}}
+				}
 			}
 		case "system_accountNextIndex":
 			result = self.nativeNonce

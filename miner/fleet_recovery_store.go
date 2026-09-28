@@ -59,6 +59,7 @@ type fleetRecoveryRecord struct {
 	StartNumber     uint64                         `json:"start_number"`
 	ScanNumber      uint64                         `json:"scan_number,omitempty"`
 	ScanHash        types.Hash                     `json:"scan_hash,omitempty"`
+	ScanProof       string                         `json:"scan_proof,omitempty"`
 	Stage           string                         `json:"stage"`
 	NativeReceipt   *crv4.FinalizedExtrinsic       `json:"native_receipt,omitempty"`
 	EvmReceipt      *ethtypes.Receipt              `json:"evm_receipt,omitempty"`
@@ -67,6 +68,10 @@ type fleetRecoveryRecord struct {
 	Succeeded       bool                           `json:"succeeded,omitempty"`
 	Signature       []byte                         `json:"signature"`
 }
+
+// This semantic version is signed with the complete original recovery record.
+// Legacy cursors predate body commitments and must be rescanned once.
+const fleetRecoveryNativeScanProof = "urnetwork-native-receipt-absence-v1"
 
 // Only this owner signs checkpoint updates. The keys are never serialized.
 type fleetRecoverySigner struct {
@@ -168,6 +173,9 @@ func (self *fleetRecoveryRecord) validate() error {
 	}
 	if (self.ScanNumber == 0) != (self.ScanHash == (types.Hash{})) || (self.ScanNumber != 0 && self.ScanNumber < self.StartNumber) {
 		return errors.New("fleet recovery scan checkpoint differs")
+	}
+	if self.ScanProof != "" && (self.ScanProof != fleetRecoveryNativeScanProof || self.ScanNumber <= self.StartNumber || self.Intent.Action != "register" && self.Intent.Action != "publish") {
+		return errors.New("fleet recovery native scan proof scope differs")
 	}
 	if (self.Stage == "finalized") != (self.Outcome != "") || (self.Stage != "finalized" && (self.NativeReceipt != nil || self.EvmReceipt != nil || self.Mapping != nil || self.Succeeded)) {
 		return errors.New("fleet recovery terminal proof differs from its stage")
@@ -428,9 +436,15 @@ func fleetRecoveryAdvance(old, next *fleetRecoveryRecord) error {
 	before.Succeeded, after.Succeeded = false, false
 	before.ScanNumber, after.ScanNumber = 0, 0
 	before.ScanHash, after.ScanHash = types.Hash{}, types.Hash{}
+	before.ScanProof, after.ScanProof = "", ""
 	oldRaw, _ = json.Marshal(before)
 	nextRaw, _ = json.Marshal(after)
-	if !bytes.Equal(oldRaw, nextRaw) || (old.Stage == "may_have_sent" && next.Stage == "prepared") || next.ScanNumber < old.ScanNumber || (next.ScanNumber == old.ScanNumber && next.ScanHash != old.ScanHash) {
+	// A legacy cursor never proved committed absence. Its one-way semantic
+	// migration may replace that cursor after rescanning the original attempt.
+	proofUpgrade := old.ScanProof == "" && next.ScanProof == fleetRecoveryNativeScanProof && (old.Intent.Action == "register" || old.Intent.Action == "publish") && next.ScanNumber > next.StartNumber
+	if !bytes.Equal(oldRaw, nextRaw) || (old.Stage == "may_have_sent" && next.Stage == "prepared") ||
+		(old.ScanProof != next.ScanProof && !proofUpgrade) ||
+		(!proofUpgrade && (next.ScanNumber < old.ScanNumber || (next.ScanNumber == old.ScanNumber && next.ScanHash != old.ScanHash))) {
 		return errors.New("fleet recovery immutable record replacement refused")
 	}
 	return nil

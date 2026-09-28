@@ -132,6 +132,11 @@ func (self *fleetMainnetTestFixture) nativeWebsocket(t *testing.T, register bool
 				}
 				self.storage[eventsKey.Hex()] = codec.HexEncodeToString(raw)
 				self.nativeBroadcast = true
+				if err := self.rebuildNativeBlocksWithLock(); err != nil {
+					self.stateLock.Unlock()
+					t.Error(err)
+					return
+				}
 				self.nativeNonce++
 				self.finalizedNumber = 102
 				signer := self.manifest.Hotkey

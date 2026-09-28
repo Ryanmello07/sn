@@ -88,11 +88,14 @@ func fleetRecoveryNativeHeader(ctx context.Context, chain *crv4.Chain, number ui
 	if hash == (types.Hash{}) || (want != (types.Hash{}) && hash != want) {
 		return types.Header{}, errors.New("fleet recovery native canonical hash differs")
 	}
-	header, err := chain.HeaderAtContext(ctx, hash)
-	if err != nil || uint64(header.Number) != number {
-		return types.Header{}, errors.Join(errors.New("fleet recovery native header differs"), err)
+	observedNumber, parent, err := chain.ReceiptHeaderAtContext(ctx, hash)
+	if err != nil {
+		return types.Header{}, err
 	}
-	return *header, nil
+	if observedNumber != number {
+		return types.Header{}, errors.New("fleet recovery native header differs")
+	}
+	return types.Header{Number: types.BlockNumber(number), ParentHash: parent}, nil
 }
 
 // Registration and publication share the same durable path; testnet retains
@@ -247,9 +250,15 @@ func fleetRecoveryFinishNative(ctx context.Context, store *fleetRecoveryStore, r
 	if err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
-	head, err := chain.HeaderAtContext(ctx, finalized)
-	if err != nil || uint64(head.Number) < receipt.BlockNumber {
-		return fleetRecoveryUnresolved(record, errors.Join(errors.New("native receipt is not covered by finality"), err))
+	finalizedNumber, _, err := chain.ReceiptHeaderAtContext(ctx, finalized)
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	if finalizedNumber < receipt.BlockNumber {
+		return fleetRecoveryUnresolved(record, errors.New("native receipt is not covered by finality"))
+	}
+	if _, err := fleetRecoveryNativeHeader(ctx, chain, finalizedNumber, finalized); err != nil {
+		return fleetRecoveryUnresolved(record, err)
 	}
 	if _, err := fleetRecoveryNativeHeader(ctx, chain, receipt.BlockNumber, receipt.BlockHash); err != nil {
 		return fleetRecoveryUnresolved(record, err)
@@ -284,12 +293,18 @@ func fleetRecoveryFinishNative(ctx context.Context, store *fleetRecoveryStore, r
 		copy.Outcome = fmt.Sprintf("commitment 0x%x written at native block %d", observed.Hash, observed.CommitmentBlock)
 	} else {
 		uid, present, err := snchain.UIDAtContext(ctx, view, manifest.Netuid, manifest.Hotkey, receipt.BlockHash)
-		if err != nil || !present {
-			return fleetRecoveryUnresolved(record, errors.Join(errors.New("native registration readback absent"), err))
+		if err != nil {
+			return fleetRecoveryUnresolved(record, err)
+		}
+		if !present {
+			return fleetRecoveryUnresolved(record, errors.New("native registration readback absent"))
 		}
 		owner, err := snchain.HotkeyOwnerAtContext(ctx, view, manifest.Hotkey, receipt.BlockHash)
-		if err != nil || owner != record.NativeSigner {
-			return fleetRecoveryUnresolved(record, errors.Join(errors.New("native registration owner differs"), err))
+		if err != nil {
+			return fleetRecoveryUnresolved(record, err)
+		}
+		if owner != record.NativeSigner {
+			return fleetRecoveryUnresolved(record, errors.New("native registration owner differs"))
 		}
 		copy.Outcome = fmt.Sprintf("uid %d registered under 0x%x", uid, owner)
 	}
@@ -314,14 +329,19 @@ func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoverySto
 	if err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
-	head, err := chain.HeaderAtContext(ctx, finalized)
+	end, _, err := chain.ReceiptHeaderAtContext(ctx, finalized)
 	if err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
-	end := uint64(head.Number)
+	if _, err := fleetRecoveryNativeHeader(ctx, chain, end, finalized); err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
 	from, parent := record.StartNumber, record.StartHash
-	if record.ScanNumber != 0 {
+	if record.ScanProof == fleetRecoveryNativeScanProof && record.ScanNumber != 0 {
 		from, parent = record.ScanNumber, record.ScanHash
+	}
+	if record.ScanProof != "" && record.ScanProof != fleetRecoveryNativeScanProof {
+		return fleetRecoveryUnresolved(record, errors.New("native archive scan proof version is unsupported"))
 	}
 	if maxBlocks == 0 || maxBlocks > fleetRecoveryScanLimit || end < from {
 		return fleetRecoveryUnresolved(record, errors.New("native archive recovery range differs"))
@@ -333,40 +353,37 @@ func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoverySto
 		return fleetRecoveryUnresolved(record, err)
 	}
 	through := min(end, from+maxBlocks)
+	extrinsicHash, err := types.NewHashFromHexString(record.TxHash)
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
 	for number := from + 1; number <= through; number++ {
 		var hash types.Hash
 		if err := chain.API.Client.CallContext(ctx, &hash, "chain_getBlockHash", number); err != nil {
 			return fleetRecoveryUnresolved(record, err)
 		}
 		header, err := fleetRecoveryNativeHeader(ctx, chain, number, hash)
-		if err != nil || header.ParentHash != parent {
-			return fleetRecoveryUnresolved(record, errors.Join(errors.New("native recovery ancestry differs"), err))
-		}
-		var body *struct {
-			Block *struct {
-				Extrinsics *[]string `json:"extrinsics"`
-			} `json:"block"`
-		}
-		if err := chain.API.Client.CallContext(ctx, &body, "chain_getBlock", hash.Hex()); err != nil {
+		if err != nil {
 			return fleetRecoveryUnresolved(record, err)
 		}
-		if body == nil || body.Block == nil || body.Block.Extrinsics == nil {
-			return fleetRecoveryUnresolved(record, errors.New("native recovery block body unavailable"))
+		if header.ParentHash != parent {
+			return fleetRecoveryUnresolved(record, errors.New("native recovery ancestry differs"))
 		}
-		for _, encoded := range *body.Block.Extrinsics {
-			raw, err := codec.HexDecodeString(encoded)
-			if err != nil || len(raw) == 0 {
-				return fleetRecoveryUnresolved(record, errors.New("native recovery extrinsic bytes malformed"))
-			}
-			if snchain.ExtrinsicHash(raw).Hex() == record.TxHash {
-				return fleetRecoveryFinishNative(ctx, store, record, signer, authority, chain, &crv4.FinalizedExtrinsic{ExtrinsicHash: snchain.ExtrinsicHash(raw), BlockHash: hash, BlockNumber: number})
-			}
+		bodyNumber, bodyParent, found, err := chain.ReceiptBlockExtrinsicContext(ctx, hash, extrinsicHash)
+		if err != nil {
+			return fleetRecoveryUnresolved(record, err)
+		}
+		if bodyNumber != number || bodyParent != parent {
+			return fleetRecoveryUnresolved(record, errors.New("native recovery body ancestry differs"))
+		}
+		if found {
+			return fleetRecoveryFinishNative(ctx, store, record, signer, authority, chain, &crv4.FinalizedExtrinsic{ExtrinsicHash: extrinsicHash, BlockHash: hash, BlockNumber: number})
 		}
 		parent = hash
 	}
 	if through > from {
 		copy := *record
-		copy.ScanNumber, copy.ScanHash = through, parent
+		copy.ScanNumber, copy.ScanHash, copy.ScanProof = through, parent, fleetRecoveryNativeScanProof
 		if err := store.put(&copy, signer); err != nil {
 			return err
 		}
@@ -380,8 +397,11 @@ func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoverySto
 		return fleetRecoveryUnresolved(record, err)
 	}
 	nonce, err := view.AccountNonceAtContext(ctx, record.NativeSigner, finalized)
-	if err != nil || uint64(nonce) != record.Nonce {
-		return fleetRecoveryUnresolved(record, errors.Join(errors.New("native original nonce is not available"), err))
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	if uint64(nonce) != record.Nonce {
+		return fleetRecoveryUnresolved(record, errors.New("native original nonce is not available"))
 	}
 	if !apply {
 		return fleetRecoveryUnresolved(record, errors.New("native replay requires --apply"))

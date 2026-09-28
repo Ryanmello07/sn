@@ -227,11 +227,13 @@ func fleetRecoveryEvmMapping(ctx context.Context, record *fleetRecoveryRecord, a
 	if err != nil {
 		return nil, err
 	}
-	head, err := chain.HeaderAtContext(ctx, headHash)
+	end, _, err := chain.ReceiptHeaderAtContext(ctx, headHash)
 	if err != nil {
 		return nil, err
 	}
-	end := uint64(head.Number)
+	if _, err := fleetRecoveryNativeHeader(ctx, chain, end, headHash); err != nil {
+		return nil, err
+	}
 	from, parent := record.StartNumber, record.StartHash
 	if record.ScanNumber != 0 {
 		from, parent = record.ScanNumber, record.ScanHash
@@ -252,8 +254,11 @@ func fleetRecoveryEvmMapping(ctx context.Context, record *fleetRecoveryRecord, a
 			return nil, err
 		}
 		header, err := fleetRecoveryNativeHeader(ctx, chain, number, native)
-		if err != nil || header.ParentHash != parent {
-			return nil, errors.Join(errors.New("fleet recovery EVM/native ancestry differs"), err)
+		if err != nil {
+			return nil, err
+		}
+		if header.ParentHash != parent {
+			return nil, errors.New("fleet recovery EVM/native ancestry differs")
 		}
 		// Both artifact/name checks and first-insertion proof are required.
 		artifact, err := authority.authenticateAt(ctx, chain, native)
