@@ -1237,6 +1237,17 @@ header authenticated with each complete body instead of issuing duplicate
 header/hash reads, while retaining canonical boundary checks and bounded fsync
 work. These continuation improvements remain open after body admission.
 
+The new contract installer review found the same failed-read/contradiction join
+in its native-to-EVM mapping check, plus admission that required the finalized
+head to remain identical throughout preparation. Return failed reads before
+evaluating values. Normal finalized-head advancement must not invalidate an
+otherwise authorized original transaction or require restarting its phase.
+Keep historical checks pinned, verify ancestry, and refresh only affected
+current runtime/nonce/custody inputs within the existing bounded operation.
+Test a head advancing during real HTTP readback; the chain must not need to
+stand still for bootstrap to complete. Real identity, authority or ancestry
+changes remain distinct from ordinary progress.
+
 **Closure.** Deterministically inject disconnect, DNS/HTTP failures, timeout
 during body read, missing/reordered batch responses, partial success and a
 large-batch refusal that succeeds when split. Verify exact call/attempt bounds,

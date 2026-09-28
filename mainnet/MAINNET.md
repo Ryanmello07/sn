@@ -448,6 +448,14 @@ lost-post, rollback and replay controls before activation.
 
 Reuse the release-1.0 contracts and reviewed ABI/artifact generation, with mainnet-specific inputs. The existing [Deploy script](../evm/script/Deploy.s.sol) is the ordering reference, not a command the bootstrap blindly shells out to. The Go planner must build exact transaction payloads and independently read back their results.
 
+Prepare against authenticated pinned observations and tolerate ordinary
+finalized-head advancement during the operation. Refresh affected current
+authority, nonce and custody inputs without discarding the original signed
+transaction or completed phase. A failed mapping read remains unavailable
+evidence; report a mapping contradiction only after receiving a conflicting
+value. Keep retries within the approved operation budget and retain unresolved
+signed liabilities for reconciliation.
+
 | Identity | Custody/authority |
 | --- | --- |
 | Subnet owner coldkey | Native subnet administration; offline or explicitly qualified native multisig/proxy. |
@@ -1226,6 +1234,14 @@ the required evidence. Keep one manifest of implemented, qualified, deployed
 and operationally observed states, with every remaining exception explicit.
 Mainnet has its own release identity, budgets and 50,400-block policy; testnet
 provisional authority and accelerated timing do not carry over.
+
+Current component evidence includes the
+[complete server model census and qualified fixture corrections](evidence/server-model-completion-20260928.md)
+and [shared receipt/miner recovery qualification](evidence/receipt-recovery-qualification-20260928.md).
+The frozen model invocation ended with three now-corrected fixture failures and
+seven optional-configuration skips; it is not recorded as a passing full
+invocation. Preserve these results when assembling the final source composition
+and qualify its affected changes without restarting unchanged completed scopes.
 
 The future mainnet acceptance bundle contains:
 
