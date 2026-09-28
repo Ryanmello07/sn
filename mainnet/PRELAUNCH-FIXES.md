@@ -1299,6 +1299,19 @@ does not close production loop recovery: current pending/pre-intent/application
 waits, real nonempty durable V2 continuation and exact-terminal receipt-prefix
 reuse still require their own production-owner coverage.
 
+Full startup review found the same ordering defect above the steering loop:
+[`runReleaseWithStartupAndProgressV2`](../validator/release_run.go) dials current
+native authority and requests a fresh EVM snapshot, UID and stake before opening
+the historical activation, disk and intent owners. Correcting `Run` or
+`submitOnceV2` alone cannot recover a process restart through that barrier.
+Separate preparation-only prerequisites from historical custody recovery. Open
+authenticated retained state first where its original authority permits it;
+unavailable current reads must leave an observable recovery wait and preserve
+independent monitoring. Current chain identity, capability and custody still
+gate new signing. Require actual fresh-start and restart tests through the
+public lifecycle, including activation, both upload owners and original receipt
+reconciliation; callback-only loop tests do not close this requirement.
+
 **Closure.** Deterministically inject disconnect, DNS/HTTP failures, timeout
 during body read, missing/reordered batch responses, partial success and a
 large-batch refusal that succeeds when split. Verify exact call/attempt bounds,
@@ -1964,6 +1977,17 @@ failures, while serial, fsync-heavy tests were still running. This is **not** a
 full-suite pass or a demonstrated production replay defect. Use a measured
 package deadline and persistent per-test log for the frozen release, while
 keeping changed-path normal/race results distinct from the incomplete broad run.
+
+The September 28 continuation selector repeated the deadline problem at a
+smaller scope: its 120.755-second normal run passed all 22 roots, but the race
+run reached a 600.190-second package timeout after 16 passes, without an
+assertion failure. Preserve that package failure and resume only the interrupted
+root plus five unstarted roots. Choose future deadlines from the measured
+workload **in the same mode**, with at least 2× headroom; real compact replay
+has a materially larger race cost than its normal timing. Enumerate selectors
+before running: a terminal `$` on a test-family prefix selects no descriptive
+test names. Neither a zero-root invocation nor a runner timeout is a product
+regression result.
 
 **Production change.** Follow [CODESTYLE.md](../../connect/CODESTYLE.md): each
 root cause needs a deterministic pre-fix failure and corrected result at its

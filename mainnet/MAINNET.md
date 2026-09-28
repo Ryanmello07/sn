@@ -878,6 +878,13 @@ intent-owner tests, bounded authenticated receipt prefixes or same-boundary
 nonce/expiry decisions. Those changes must preserve original signed bytes,
 missed/unknown outcomes and independently approved continuation authority.
 
+The public startup lifecycle must also reach retained recovery before requiring
+fresh signing eligibility. Its current native-runtime, EVM snapshot, UID and
+stake reads precede the historical activation/disk/intent owners. Moving only
+the steering loop is insufficient. Qualify the complete process restart through
+an outage, original receipt and applied row, while preserving current authority
+checks for new signing and visible independent health reporting.
+
 The [server upload admission](VALIDATOR-UPLOAD-RUNTIME.md) now consumes an
 independently pinned schema-3 configuration and retains only read-only runtime
 intervals, routes and deployment scope. Original activation reads use their
