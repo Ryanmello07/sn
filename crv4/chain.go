@@ -398,15 +398,15 @@ func (c *Chain) LocateFinalizedExtrinsic(ctx context.Context, extrinsicHash type
 
 // The absence boundary is returned alongside a found receipt so nonce, epoch
 // and mortality reads cannot silently move beyond the fully searched prefix.
-func (c *Chain) ScanFinalizedExtrinsic(ctx context.Context, extrinsicHash types.Hash, fromBlock uint64) (*FinalizedExtrinsicScan, error) {
-	if ctx == nil || c == nil || c.API == nil || c.API.Client == nil {
+func (self *Chain) ScanFinalizedExtrinsic(ctx context.Context, extrinsicHash types.Hash, fromBlock uint64) (*FinalizedExtrinsicScan, error) {
+	if ctx == nil || self == nil || self.API == nil || self.API.Client == nil {
 		return nil, errors.New("crv4: finalized extrinsic search context is unavailable")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	var finalizedHashHex string
-	if err := c.API.Client.CallContext(ctx, &finalizedHashHex, "chain_getFinalizedHead"); err != nil {
+	if err := self.API.Client.CallContext(ctx, &finalizedHashHex, "chain_getFinalizedHead"); err != nil {
 		return nil, err
 	}
 	if finalizedHashHex == "" {
@@ -416,12 +416,12 @@ func (c *Chain) ScanFinalizedExtrinsic(ctx context.Context, extrinsicHash types.
 	if err != nil {
 		return nil, err
 	}
-	_, finalizedNumber, err := c.receiptHeaderAt(ctx, finalizedHash)
+	_, finalizedNumber, err := self.receiptHeaderAt(ctx, finalizedHash)
 	if err != nil {
 		return nil, err
 	}
 	var canonicalFinalizedHex string
-	if err := c.API.Client.CallContext(ctx, &canonicalFinalizedHex, "chain_getBlockHash", finalizedNumber); err != nil {
+	if err := self.API.Client.CallContext(ctx, &canonicalFinalizedHex, "chain_getBlockHash", finalizedNumber); err != nil {
 		return nil, err
 	}
 	if canonicalFinalizedHex == "" {
@@ -441,7 +441,7 @@ func (c *Chain) ScanFinalizedExtrinsic(ctx context.Context, extrinsicHash types.
 			return nil, err
 		}
 		var blockHashHex string
-		if err := c.API.Client.CallContext(ctx, &blockHashHex, "chain_getBlockHash", number); err != nil {
+		if err := self.API.Client.CallContext(ctx, &blockHashHex, "chain_getBlockHash", number); err != nil {
 			return nil, fmt.Errorf("crv4: block hash %d: %w", number, err)
 		}
 		if blockHashHex == "" {
@@ -454,7 +454,7 @@ func (c *Chain) ScanFinalizedExtrinsic(ctx context.Context, extrinsicHash types.
 		if number == finalizedNumber && blockHash != finalizedHash {
 			return nil, errors.New("crv4: receipt scan finalized hash changed")
 		}
-		signedBlock, err := c.receiptBlockAt(ctx, blockHash)
+		signedBlock, err := self.receiptBlockAt(ctx, blockHash)
 		if err != nil {
 			return nil, fmt.Errorf("crv4: block %d: %w", number, err)
 		}
