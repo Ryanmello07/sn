@@ -37,6 +37,7 @@ type ownerRecycleProductionTestFixture struct {
 	storageNameKVs map[string]string
 	epoch          uint64
 	head           uint64
+	extrinsicsKVs  map[uint64][]string
 }
 
 // The complete reviewed producer interface is retained. Only missing owner
@@ -101,18 +102,23 @@ func ownerRecycleProductionTestMetadata(t *testing.T) (*types.Metadata, string, 
 // Select the real validator hotkey before any M8 artifact is sealed. The
 // production approval is independently signed only after all inputs are fixed.
 func newOwnerRecycleProductionTestFixture(t *testing.T) *ownerRecycleProductionTestFixture {
+	return newOwnerRecycleProductionTestFixtureWithInputs(t, newRecycleOperatorFixtureWithHotkey, nil)
+}
+
+// Continuation fixtures supply independently selected inputs and finite disk
+// capacities before the complete production configuration is signed.
+func newOwnerRecycleProductionTestFixtureWithInputs(t *testing.T, create func(*testing.T, [32]byte) *recycleOperatorFixture, setup func(*ownerRecycleProductionTestFixture)) *ownerRecycleProductionTestFixture {
 	t.Helper()
 	hotkey, err := crv4.KeypairFromSeed([32]byte{0x6a, 0x41})
 	if err != nil {
 		t.Fatal(err)
 	}
-	operator := newRecycleOperatorFixtureWithHotkey(t, hotkey.PublicKey())
+	operator := create(t, hotkey.PublicKey())
 	measurement := operator.measurement
 	admission, artifact := measurement.admission, measurement.provider.artifact
 	metadata, metadataHex, metadataHash := ownerRecycleProductionTestMetadata(t)
 	cfg := admission.cfg
 	cfg.SchemaVersion = ReleaseMainnetProductionSchemaVersion
-	cfg.StateDir = t.TempDir()
 	if err := os.Chmod(cfg.StateDir, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -265,6 +271,9 @@ func newOwnerRecycleProductionTestFixture(t *testing.T) *ownerRecycleProductionT
 		}
 		return original(ctx, target, method, args...)
 	}
+	if setup != nil {
+		setup(self)
+	}
 	admission.approval.ConfigHash, _ = OwnerRecycleConfigHash(cfg)
 	admission.sign(t)
 	if err := loadOwnerRecycleProductionConfig(cfg); err != nil {
@@ -300,7 +309,7 @@ func (self *ownerRecycleProductionTestFixture) receiptBlock(number uint64) (type
 	parent := types.Hash{2}
 	var header types.Header
 	for current := uint64(100); current <= number; current++ {
-		header, parent = releaseReceiptTestHeader(self.test, parent, current)
+		header, parent = releaseReceiptTestHeader(self.test, parent, current, self.extrinsicsKVs[current]...)
 	}
 	return header, parent
 }

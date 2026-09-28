@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/stabi"
 	"github.com/urnetwork/connect"
 )
@@ -96,6 +97,12 @@ func newRecycleOperatorFixture(t *testing.T) *recycleOperatorFixture {
 
 // Production tests choose the real signer before constructing the evidence.
 func newRecycleOperatorFixtureWithHotkey(t *testing.T, hotkey [32]byte) *recycleOperatorFixture {
+	return newRecycleOperatorFixtureWithInputs(t, hotkey, 2, nil, nil)
+}
+
+// Optional independent fixture inputs are fixed before provider sealing and
+// approval. The callback assembles real journals; it cannot admit a verdict.
+func newRecycleOperatorFixtureWithInputs(t *testing.T, hotkey [32]byte, completed int, selectedPolicy *protocol.Policy, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture)) *recycleOperatorFixture {
 	t.Helper()
 	fixture := &recycleOperatorFixture{releaseDecisionV2TestFixture: newReleaseDecisionV2TestFixture(t)}
 	server := gethrpc.NewServer()
@@ -122,17 +129,22 @@ func newRecycleOperatorFixtureWithHotkey(t *testing.T, hotkey [32]byte) *recycle
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { client.Close(); httpServer.Close(); server.Stop() })
-	fixture.measurement = newRecycleMeasurementFixtureWithHotkey(t, 2, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
+	fixture.measurement = newRecycleMeasurementFixtureWithPolicy(t, completed, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
 		admission.cfg.RPC = []string{httpServer.URL}
 		artifact := provider.artifact
 		for index := range artifact.DepositAudits {
 			audit := &artifact.DepositAudits[index]
-			audit.SourceStartHash = releaseHex32([32]byte{0x25})
-			audit.SourceEndHash = releaseHex32([32]byte{0x26})
-			audit.ArtifactDeadlineBlock = audit.SourceEndBlock + artifact.Policy.Settlement.RootCommitWindowBlocks
+			if !artifact.Policy.IsZeroPrice() {
+				audit.SourceStartHash = releaseHex32([32]byte{0x25})
+				audit.SourceEndHash = releaseHex32([32]byte{0x26})
+			}
+			audit.ArtifactDeadlineBlock = 90 + artifact.Policy.Settlement.RootCommitWindowBlocks
+		}
+		if setup != nil {
+			setup(admission, provider)
 		}
 		provider.rebuildLegacy(t)
-	}, hotkey)
+	}, hotkey, selectedPolicy)
 	measurement := fixture.measurement
 	artifact := measurement.provider.artifact
 	fixture.views = map[string]releaseDecisionV2TestView{}

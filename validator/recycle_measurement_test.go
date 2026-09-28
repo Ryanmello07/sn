@@ -19,6 +19,7 @@ import (
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
+	"github.com/urfoundation/sn/protocol"
 )
 
 // Each fixture owns its real approval custody, RPC transcript and proof stores.
@@ -50,8 +51,19 @@ func newRecycleMeasurementFixtureWithSetup(t *testing.T, completed int, setup fu
 
 // Select the actual hotkey before any compact proof or approval is signed.
 func newRecycleMeasurementFixtureWithHotkey(t *testing.T, completed int, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture), hotkey [32]byte) *recycleMeasurementFixture {
+	return newRecycleMeasurementFixtureWithPolicy(t, completed, setup, hotkey, nil)
+}
+
+// A distinct policy is selected before the first proof, ledger signature or
+// proposal approval; existing economic fixtures retain their paid policy.
+func newRecycleMeasurementFixtureWithPolicy(t *testing.T, completed int, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture), hotkey [32]byte, policy *protocol.Policy) *recycleMeasurementFixture {
 	t.Helper()
 	admission := newRecycleAdmissionFixture(t, nil)
+	if policy != nil {
+		admission.cfg.Policy = *policy
+		admission.cfg.PolicyHash, _ = policy.HashHex()
+		admission.approval.Proposal.ParentPolicyHash, _ = policy.Hash()
+	}
 	identity := AttemptLedgerIdentity{DeploymentID: "synthetic-recycle-measured", ChainID: 964, GenesisHash: admission.cfg.GenesisHash,
 		Netuid: 25, ValidatorID: 1, ValidatorUID: 7}
 	provider := newReleaseMeasurementV2TestFixtureWithOperator(t, completed, func(noId uint64) *attemptCutV2SealTestFixture {
