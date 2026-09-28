@@ -18,7 +18,6 @@ import (
 	"github.com/centrifuge/go-substrate-rpc-client/v4/registry"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/registry/parser"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
-	"github.com/centrifuge/go-substrate-rpc-client/v4/types/block"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/extrinsic"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/extrinsic/extensions"
@@ -264,12 +263,18 @@ func (self *Chain) ValidatePreparedSourceWeightsContext(ctx context.Context, pre
 		return err
 	}
 	state, err := self.EpochScheduleStateAtContext(ctx, prepared.Netuid, hash)
-	if err != nil || state.CurrentBlock != prepared.PreparedAtBlock || state.SubnetEpochIndex != prepared.SubnetEpoch || prepared.VersionKey != options.VersionKey {
-		return errors.Join(errors.New("crv4: source preparation differs from the actual schedule/version"), err)
+	if err != nil {
+		return fmt.Errorf("crv4: read source preparation schedule: %w", err)
+	}
+	if state.CurrentBlock != prepared.PreparedAtBlock || state.SubnetEpochIndex != prepared.SubnetEpoch || prepared.VersionKey != options.VersionKey {
+		return errors.New("crv4: source preparation differs from the actual schedule/version")
 	}
 	version, maximum, err := resolveSubmitParametersAtContext(ctx, self, prepared.Netuid, hash, options)
-	if err != nil || prepared.CommitRevealVersion != version {
-		return errors.Join(errors.New("crv4: source commit/reveal version differs from actual controls"), err)
+	if err != nil {
+		return fmt.Errorf("crv4: read source commit/reveal controls: %w", err)
+	}
+	if prepared.CommitRevealVersion != version {
+		return errors.New("crv4: source commit/reveal version differs from actual controls")
 	}
 	capped, err := ApplyMaxWeightLimitRational(scores, maximum)
 	if err != nil {
@@ -488,55 +493,55 @@ func verifySourceCommitmentEvents(prepared *PreparedSubmission, index uint32, re
 // and the single-slot commitment at that exact finalized write block. Recovery
 // reads this historical slot, never the latest overwritten metadata commitment.
 func (self *Chain) VerifyFinalizedSourceContext(ctx context.Context, prepared *PreparedSubmission, receipt *FinalizedExtrinsic) error {
-	if ctx == nil || receipt == nil || receipt.BlockNumber == 0 || receipt.BlockHash == (types.Hash{}) || prepared == nil || receipt.ExtrinsicHash.Hex() != prepared.ExtrinsicHash {
+	if ctx == nil || self == nil || self.API == nil || self.API.Client == nil || receipt == nil || receipt.BlockNumber == 0 || receipt.BlockHash == (types.Hash{}) || prepared == nil || receipt.ExtrinsicHash.Hex() != prepared.ExtrinsicHash {
 		return errors.New("crv4: source finality identity is incomplete")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := self.ValidatePreparedSource(prepared); err != nil {
 		return err
 	}
-	finalized, err := FinalizedHeadContext(ctx, self)
+	var finalizedHex string
+	if err := self.API.Client.CallContext(ctx, &finalizedHex, "chain_getFinalizedHead"); err != nil {
+		return fmt.Errorf("crv4: read source finalized head: %w", err)
+	}
+	if finalizedHex == "" {
+		return &ReceiptEvidenceUnavailableError{Field: "finalized head"}
+	}
+	finalized, err := receiptHash(finalizedHex)
 	if err != nil {
 		return err
 	}
-	header, err := self.HeaderAtContext(ctx, finalized)
-	if err != nil || header == nil || uint64(header.Number) < receipt.BlockNumber {
-		return errors.Join(errors.New("crv4: source receipt is not finalized"), err)
+	_, finalizedNumber, err := self.receiptHeaderAt(ctx, finalized)
+	if err != nil {
+		return fmt.Errorf("crv4: read source finalized header: %w", err)
 	}
-	var canonical types.Hash
-	if err := self.API.Client.CallContext(ctx, &canonical, "chain_getBlockHash", receipt.BlockNumber); err != nil || canonical != receipt.BlockHash {
-		return errors.Join(errors.New("crv4: source receipt is not the canonical native block"), err)
+	if finalizedNumber < receipt.BlockNumber {
+		return errors.New("crv4: source receipt is not finalized")
 	}
-	if err := self.VerifyFinalizedExtrinsicContext(ctx, receipt.BlockHash, receipt.ExtrinsicHash); err != nil {
+	var canonicalHex string
+	if err := self.API.Client.CallContext(ctx, &canonicalHex, "chain_getBlockHash", receipt.BlockNumber); err != nil {
+		return fmt.Errorf("crv4: read source canonical block: %w", err)
+	}
+	if canonicalHex == "" {
+		return &ReceiptEvidenceUnavailableError{BlockHash: receipt.BlockHash, Field: "canonical block hash"}
+	}
+	canonical, err := receiptHash(canonicalHex)
+	if err != nil {
 		return err
 	}
-	var signed block.SignedBlock
-	if err := self.API.Client.CallContext(ctx, &signed, "chain_getBlock", receipt.BlockHash.Hex()); err != nil {
+	if canonical != receipt.BlockHash {
+		return errors.New("crv4: source receipt is not the canonical native block")
+	}
+	verified, err := self.verifyFinalizedExtrinsicContext(ctx, receipt.BlockHash, receipt.ExtrinsicHash)
+	if err != nil {
 		return err
 	}
-	if uint64(signed.Block.Header.Number) != receipt.BlockNumber {
+	if verified.number != receipt.BlockNumber {
 		return errors.New("crv4: source receipt block number differs from actual body")
 	}
-	index, found, err := extrinsicIndex(signed.Block.Extrinsics, receipt.ExtrinsicHash)
-	if err != nil || !found {
-		return errors.Join(errors.New("crv4: source exact transaction is absent"), err)
-	}
-	key, err := types.CreateStorageKey(self.Meta, "System", "Events")
-	if err != nil {
-		return err
-	}
-	raw, err := self.storageRawAtContext(ctx, key, receipt.BlockHash)
-	if err != nil || raw == nil || len(*raw) > 16*1024*1024 {
-		return errors.Join(errors.New("crv4: source events are unavailable or exceed the finite block bound"), err)
-	}
-	registered, err := registry.NewFactory().CreateEventRegistry(self.Meta)
-	if err != nil {
-		return err
-	}
-	records, err := parser.NewEventParser().ParseEvents(registered, raw)
-	if err != nil {
-		return err
-	}
-	if err := verifySourceCommitmentEvents(prepared, index, records); err != nil {
+	if err := verifySourceCommitmentEvents(prepared, verified.index, verified.events); err != nil {
 		return err
 	}
 	public, _ := codec.HexDecodeString(prepared.HotkeyHex)

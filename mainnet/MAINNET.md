@@ -865,6 +865,15 @@ remain separate transitions. Actual mainnet inputs and economic outcome remain
 unprovided. Final economic outcome is a monitored
 postcondition, not a prerequisite to the first submission.
 
+PH-03 remains open for production continuation across read outages and epoch
+changes. The [source-finality read candidate](evidence/source-finality-read-candidate-20260928.md)
+preserves transport causes and unknown receipt evidence while reusing the exact
+admitted body index/events; qualification is pending. It does not substitute
+for retained-intent reconciliation before fresh snapshots, durable nonempty
+intent-owner tests, bounded authenticated receipt prefixes or same-boundary
+nonce/expiry decisions. Those changes must preserve original signed bytes,
+missed/unknown outcomes and independently approved continuation authority.
+
 The [server upload admission](VALIDATOR-UPLOAD-RUNTIME.md) now consumes an
 independently pinned schema-3 configuration and retains only read-only runtime
 intervals, routes and deployment scope. Original activation reads use their

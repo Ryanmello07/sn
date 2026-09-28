@@ -1273,6 +1273,15 @@ Test a head advancing during real HTTP readback; the chain must not need to
 stand still for bootstrap to complete. Real identity, authority or ancestry
 changes remain distinct from ordinary progress.
 
+The bounded [source-finality read candidate](evidence/source-finality-read-candidate-20260928.md)
+separates physical read errors from finality/schedule contradictions and reuses
+one admitted body, index and event vector for dispatch and source proof. Missing
+receipt wire data remains typed unknown evidence; complete contradictory data
+and dispatch failures remain hard errors. Its qualification is pending. This
+does not close production loop recovery: current pending/pre-intent/application
+waits, real nonempty durable V2 continuation and exact-terminal receipt-prefix
+reuse still require their own production-owner coverage.
+
 **Closure.** Deterministically inject disconnect, DNS/HTTP failures, timeout
 during body read, missing/reordered batch responses, partial success and a
 large-batch refusal that succeeds when split. Verify exact call/attempt bounds,

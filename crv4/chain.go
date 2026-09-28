@@ -157,40 +157,64 @@ func extrinsicIndex(encoded []string, hash types.Hash) (uint32, bool, error) {
 // finalizes dispatch failures. Event storage uses metadata bound to the exact
 // reviewed runtime artifact present at this block.
 func (self *Chain) VerifyFinalizedExtrinsicContext(ctx context.Context, blockHash, extrinsicHash types.Hash) error {
+	_, err := self.verifyFinalizedExtrinsicContext(ctx, blockHash, extrinsicHash)
+	return err
+}
+
+// Reuses one admitted body and event decode for callers that must authenticate
+// additional operation events at the same exact extrinsic index.
+type verifiedNativeReceipt struct {
+	number uint64
+	index  uint32
+	events []*parser.Event
+}
+
+// Private receipt evidence is returned only after complete body authentication
+// and dispatch success. Missing storage remains unknown, never a failed call.
+func (self *Chain) verifyFinalizedExtrinsicContext(ctx context.Context, blockHash, extrinsicHash types.Hash) (*verifiedNativeReceipt, error) {
 	if ctx == nil || self == nil || self.API == nil || self.API.Client == nil || self.Meta == nil {
-		return errors.New("crv4: finalized extrinsic metadata context is unavailable")
+		return nil, errors.New("crv4: finalized extrinsic metadata context is unavailable")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	signedBlock, err := self.receiptBlockAt(ctx, blockHash)
 	if err != nil {
-		return fmt.Errorf("crv4: finalized block %s: %w", blockHash.Hex(), err)
+		return nil, fmt.Errorf("crv4: finalized block %s: %w", blockHash.Hex(), err)
 	}
 	index, found, err := extrinsicIndex(signedBlock.extrinsics, extrinsicHash)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !found {
-		return fmt.Errorf("crv4: extrinsic %s absent from finalized block %s", extrinsicHash.Hex(), blockHash.Hex())
+		return nil, fmt.Errorf("crv4: extrinsic %s absent from finalized block %s", extrinsicHash.Hex(), blockHash.Hex())
 	}
 	eventsKey, err := types.CreateStorageKey(self.Meta, "System", "Events")
 	if err != nil {
-		return fmt.Errorf("crv4: construct finalized events key: %w", err)
+		return nil, fmt.Errorf("crv4: construct finalized events key: %w", err)
 	}
-	var encodedEvents string
+	var encodedEvents *string
 	if err := self.API.Client.CallContext(ctx, &encodedEvents, "state_getStorage", eventsKey.Hex(), blockHash.Hex()); err != nil {
-		return fmt.Errorf("crv4: read finalized events at %s: %w", blockHash.Hex(), err)
+		return nil, fmt.Errorf("crv4: read finalized events at %s: %w", blockHash.Hex(), err)
 	}
-	eventsBytes, err := codec.HexDecodeString(encodedEvents)
+	if encodedEvents == nil || *encodedEvents == "" || *encodedEvents == "0x" {
+		return nil, &ReceiptEvidenceUnavailableError{BlockHash: blockHash, Field: "System.Events"}
+	}
+	if len(*encodedEvents) > 2+2*16*1024*1024 {
+		return nil, errors.New("crv4: finalized events storage exceeds the finite block bound")
+	}
+	eventsBytes, err := codec.HexDecodeString(*encodedEvents)
 	if err != nil {
-		return fmt.Errorf("crv4: decode finalized events storage at %s: %w", blockHash.Hex(), err)
+		return nil, fmt.Errorf("crv4: decode finalized events storage at %s: %w", blockHash.Hex(), err)
 	}
 	eventsRaw := types.NewStorageDataRaw(eventsBytes)
 	eventRegistry, err := registry.NewFactory().CreateEventRegistry(self.Meta)
 	if err != nil {
-		return fmt.Errorf("crv4: construct finalized event registry: %w", err)
+		return nil, fmt.Errorf("crv4: construct finalized event registry: %w", err)
 	}
 	records, err := parser.NewEventParser().ParseEvents(eventRegistry, &eventsRaw)
 	if err != nil {
-		return fmt.Errorf("crv4: decode finalized events at %s with bound metadata: %w", blockHash.Hex(), err)
+		return nil, fmt.Errorf("crv4: decode finalized events at %s with bound metadata: %w", blockHash.Hex(), err)
 	}
 	success := false
 	for _, event := range records {
@@ -199,15 +223,18 @@ func (self *Chain) VerifyFinalizedExtrinsicContext(ctx context.Context, blockHas
 		}
 		switch event.Name {
 		case "System.ExtrinsicFailed", "ExtrinsicFailed":
-			return &FinalizedDispatchError{ExtrinsicHash: extrinsicHash, BlockHash: blockHash, Detail: formatDecodedEventFields(self.Meta, event.Fields)}
+			return nil, &FinalizedDispatchError{ExtrinsicHash: extrinsicHash, BlockHash: blockHash, Detail: formatDecodedEventFields(self.Meta, event.Fields)}
 		case "System.ExtrinsicSuccess", "ExtrinsicSuccess":
 			success = true
 		}
 	}
 	if !success {
-		return fmt.Errorf("crv4: extrinsic %s has no System.ExtrinsicSuccess event", extrinsicHash.Hex())
+		return nil, fmt.Errorf("crv4: extrinsic %s has no System.ExtrinsicSuccess event", extrinsicHash.Hex())
 	}
-	return nil
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return &verifiedNativeReceipt{number: signedBlock.number, index: index, events: records}, nil
 }
 
 // Preserves the contextless API for callers outside cancellable release
@@ -370,6 +397,9 @@ func (c *Chain) LocateFinalizedExtrinsic(ctx context.Context, extrinsicHash type
 	if err := c.API.Client.CallContext(ctx, &finalizedHashHex, "chain_getFinalizedHead"); err != nil {
 		return nil, false, err
 	}
+	if finalizedHashHex == "" {
+		return nil, false, &ReceiptEvidenceUnavailableError{Field: "finalized head"}
+	}
 	finalizedHash, err := receiptHash(finalizedHashHex)
 	if err != nil {
 		return nil, false, err
@@ -381,6 +411,9 @@ func (c *Chain) LocateFinalizedExtrinsic(ctx context.Context, extrinsicHash type
 	var canonicalFinalizedHex string
 	if err := c.API.Client.CallContext(ctx, &canonicalFinalizedHex, "chain_getBlockHash", finalizedNumber); err != nil {
 		return nil, false, err
+	}
+	if canonicalFinalizedHex == "" {
+		return nil, false, &ReceiptEvidenceUnavailableError{BlockHash: finalizedHash, Field: "canonical finalized hash"}
 	}
 	canonicalFinalized, err := receiptHash(canonicalFinalizedHex)
 	if err != nil || canonicalFinalized != finalizedHash {
@@ -397,6 +430,9 @@ func (c *Chain) LocateFinalizedExtrinsic(ctx context.Context, extrinsicHash type
 		var blockHashHex string
 		if err := c.API.Client.CallContext(ctx, &blockHashHex, "chain_getBlockHash", number); err != nil {
 			return nil, false, fmt.Errorf("crv4: block hash %d: %w", number, err)
+		}
+		if blockHashHex == "" {
+			return nil, false, &ReceiptEvidenceUnavailableError{Field: fmt.Sprintf("canonical block hash at %d", number)}
 		}
 		blockHash, err := receiptHash(blockHashHex)
 		if err != nil {

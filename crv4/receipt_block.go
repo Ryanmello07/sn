@@ -55,6 +55,17 @@ func receiptHash(value string) (types.Hash, error) {
 // Hashes every SCALE header field after bounded structural admission. The
 // caller supplies the canonical hash independently of the returned JSON.
 func (self receiptHeader) authenticate(expected types.Hash) (uint64, error) {
+	for _, field := range []struct {
+		name  string
+		value string
+	}{{name: "header.number", value: self.Number}, {name: "header.parentHash", value: self.ParentHash}, {name: "header.stateRoot", value: self.StateRoot}, {name: "header.extrinsicsRoot", value: self.ExtrinsicsRoot}} {
+		if field.value == "" {
+			return 0, &ReceiptEvidenceUnavailableError{BlockHash: expected, Field: field.name}
+		}
+	}
+	if self.Digest.Logs == nil {
+		return 0, &ReceiptEvidenceUnavailableError{BlockHash: expected, Field: "header.digest.logs"}
+	}
 	if expected == (types.Hash{}) || len(self.Number) < 3 || len(self.Number) > 10 || !strings.HasPrefix(self.Number, "0x") {
 		return 0, errors.New("crv4: receipt header hash or native u32 number is missing")
 	}
@@ -65,7 +76,7 @@ func (self receiptHeader) authenticate(expected types.Hash) (uint64, error) {
 	parent, parentErr := receiptHash(self.ParentHash)
 	state, stateErr := receiptHash(self.StateRoot)
 	extrinsics, extrinsicsErr := receiptHash(self.ExtrinsicsRoot)
-	if parentErr != nil || stateErr != nil || extrinsicsErr != nil || number != 0 && parent == (types.Hash{}) || state == (types.Hash{}) || extrinsics == (types.Hash{}) || self.Digest.Logs == nil || len(self.Digest.Logs) > 256 {
+	if parentErr != nil || stateErr != nil || extrinsicsErr != nil || number != 0 && parent == (types.Hash{}) || state == (types.Hash{}) || extrinsics == (types.Hash{}) || len(self.Digest.Logs) > 256 {
 		return 0, errors.New("crv4: receipt header fields are missing or invalid")
 	}
 	raw := appendCompact(append([]byte(nil), parent[:]...), number)
@@ -124,6 +135,9 @@ func (self *Chain) receiptHeaderAt(ctx context.Context, hash types.Hash) (receip
 	if err := self.API.Client.CallContext(ctx, &raw, "chain_getHeader", hash.Hex()); err != nil {
 		return receiptHeader{}, 0, err
 	}
+	if len(raw) == 0 {
+		return receiptHeader{}, 0, &ReceiptEvidenceUnavailableError{BlockHash: hash, Field: "header"}
+	}
 	if len(raw) > 2*receiptHeaderBytesLimit+4096 {
 		return receiptHeader{}, 0, errors.New("crv4: receipt header JSON exceeds its bound")
 	}
@@ -142,6 +156,9 @@ func (self *Chain) receiptBlockAt(ctx context.Context, hash types.Hash) (*receip
 	if err := self.API.Client.CallContext(ctx, &raw, "chain_getBlock", hash.Hex()); err != nil {
 		return nil, err
 	}
+	if len(raw) == 0 {
+		return nil, &ReceiptEvidenceUnavailableError{BlockHash: hash, Field: "block"}
+	}
 	if len(raw) > 2*receiptBodyBytesLimit+2*receiptHeaderBytesLimit+receiptBodyCountLimit*8+4096 {
 		return nil, errors.New("crv4: receipt block JSON exceeds its bound")
 	}
@@ -154,8 +171,14 @@ func (self *Chain) receiptBlockAt(ctx context.Context, hash types.Hash) (*receip
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return nil, fmt.Errorf("crv4: decode receipt block: %w", err)
 	}
-	if decoded.Block == nil || decoded.Block.Extrinsics == nil || len(decoded.Block.Extrinsics) > receiptBodyCountLimit {
-		return nil, errors.New("crv4: receipt block or extrinsics vector is incomplete")
+	if decoded.Block == nil {
+		return nil, &ReceiptEvidenceUnavailableError{BlockHash: hash, Field: "block"}
+	}
+	if decoded.Block.Extrinsics == nil {
+		return nil, &ReceiptEvidenceUnavailableError{BlockHash: hash, Field: "block.extrinsics"}
+	}
+	if len(decoded.Block.Extrinsics) > receiptBodyCountLimit {
+		return nil, errors.New("crv4: receipt block extrinsics vector exceeds its bound")
 	}
 	number, err := decoded.Block.Header.authenticate(hash)
 	if err != nil {

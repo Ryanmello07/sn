@@ -392,7 +392,7 @@ func TestReleaseEvidenceV2HistoricalRuntimeSignedReconcileAuthenticatesReceiptBe
 		} else if !errors.Is(err, publicationFault) {
 			t.Fatalf("valid original455 source did not finish receipt proof: %v", err)
 		}
-		if done || receipt.runtimeReads == 0 || receipt.eventReads != 2 || receipt.commitmentReads != 2 || receipt.submissions != 0 || receipt.subscriptions != 0 {
+		if done || receipt.runtimeReads == 0 || receipt.eventReads != 1 || receipt.commitmentReads != 2 || receipt.submissions != 0 || receipt.subscriptions != 0 {
 			t.Fatalf("V2 historical receipt boundary differs: changed_commitment=%t done=%t receipt=%+v error=%v", changedCommitment, done, receipt, err)
 		}
 		after, marshalErr := json.Marshal(prepared)
