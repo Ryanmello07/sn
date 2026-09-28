@@ -123,7 +123,8 @@ func installReleaseHistoricalReconcileReceipt(t *testing.T, native *releaseNativ
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := &releaseHistoricalReconcileReceipt{hash: types.Hash{0x43}, number: native.blockNumber + 1, events: bytes.Clone(events)}
+	receiptHeader, receiptHash := releaseReceiptTestHeader(t, native.block, native.blockNumber+1, prepared.ExtrinsicHex)
+	result := &releaseHistoricalReconcileReceipt{hash: receiptHash, number: native.blockNumber + 1, events: bytes.Clone(events)}
 	var commitmentKey, lastKey types.StorageKey
 	if prepared.SourceCommitment != nil {
 		hotkey, err := hexutil.Decode(prepared.HotkeyHex)
@@ -174,7 +175,7 @@ func installReleaseHistoricalReconcileReceipt(t *testing.T, native *releaseNativ
 			return assign(target, result.hash.Hex())
 		case "chain_getHeader":
 			if len(args) == 1 && args[0] == result.hash.Hex() {
-				return assign(target, types.Header{Number: types.BlockNumber(result.number)})
+				return assign(target, receiptHeader)
 			}
 		case "chain_getBlockHash":
 			if len(args) == 1 && args[0] == result.number {
@@ -186,10 +187,10 @@ func installReleaseHistoricalReconcileReceipt(t *testing.T, native *releaseNativ
 			}
 			result.blocks++
 			if args[0] == native.block.Hex() {
-				return assign(target, block.SignedBlock{Block: block.Block{Header: types.Header{Number: types.BlockNumber(native.blockNumber)}, Extrinsics: []string{}}})
+				return assign(target, block.SignedBlock{Block: block.Block{Header: native.header, Extrinsics: []string{}}})
 			}
 			if args[0] == result.hash.Hex() {
-				return assign(target, block.SignedBlock{Block: block.Block{Header: types.Header{Number: types.BlockNumber(result.number)}, Extrinsics: []string{prepared.ExtrinsicHex}}})
+				return assign(target, block.SignedBlock{Block: block.Block{Header: receiptHeader, Extrinsics: []string{prepared.ExtrinsicHex}}})
 			}
 			return errors.New("receipt body escaped its canonical source blocks")
 		case "state_getRuntimeVersion":

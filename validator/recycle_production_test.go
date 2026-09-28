@@ -26,6 +26,7 @@ import (
 
 // Every instance owns mutable RPC response bytes and synthetic key material.
 type ownerRecycleProductionTestFixture struct {
+	test           *testing.T
 	operator       *recycleOperatorFixture
 	cfg            *ReleaseConfig
 	hotkey         *crv4.Keypair
@@ -124,7 +125,7 @@ func newOwnerRecycleProductionTestFixture(t *testing.T) *ownerRecycleProductionT
 	admission.approval.Proposal.Runtime.MetadataHash, _ = parseHash32("synthetic metadata", metadataHash)
 	admission.approval.ValidFromNativeBlock = 100
 	admission.approval.ValidThroughNativeBlock = 200
-	self := &ownerRecycleProductionTestFixture{operator: operator, cfg: cfg, hotkey: hotkey, metadata: metadata,
+	self := &ownerRecycleProductionTestFixture{test: t, operator: operator, cfg: cfg, hotkey: hotkey, metadata: metadata,
 		validatorUids: []uint16{artifact.SelfUID, 6}, permitKVs: map[uint16]bool{}, stakeKVs: map[uint16]uint64{}, storageNameKVs: map[string]string{}, epoch: artifact.SubnetEpoch, head: 100}
 	registrations := measurement.authority.observation.Snapshot.Registrations
 	hotkeys := [][32]byte{hotkey.PublicKey(), registrations[6].Hotkey}
@@ -213,7 +214,7 @@ func newOwnerRecycleProductionTestFixture(t *testing.T) *ownerRecycleProductionT
 		if method == "chain_getHeader" {
 			for number := uint64(100); number <= self.head; number++ {
 				if len(args) == 1 && args[0] == self.block(number).Hex() {
-					return assign(types.Header{Number: types.BlockNumber(number)})
+					return assign(self.header(number))
 				}
 			}
 			return errors.New("synthetic production header escaped its bounded chain")
@@ -281,10 +282,27 @@ func newOwnerRecycleProductionTestFixture(t *testing.T) *ownerRecycleProductionT
 // Stable exact block identities let a later finality witness advance without
 // changing the original approval, state or provider decision.
 func (self *ownerRecycleProductionTestFixture) block(number uint64) types.Hash {
-	if number == 100 {
-		return self.operator.measurement.admission.finalized
+	_, hash := self.receiptBlock(number)
+	return hash
+}
+
+// Empty canonical bodies exist before a later test installs a real receipt.
+func (self *ownerRecycleProductionTestFixture) header(number uint64) types.Header {
+	header, _ := self.receiptBlock(number)
+	return header
+}
+
+// Hashes are fixed before approvals and artifacts select their native blocks.
+func (self *ownerRecycleProductionTestFixture) receiptBlock(number uint64) (types.Header, types.Hash) {
+	if number < 100 || number > 1000 {
+		self.test.Fatal("synthetic production header height is outside its fixture")
 	}
-	return types.Hash(recycleTestId(uint16(number + 4000)))
+	parent := types.Hash{2}
+	var header types.Header
+	for current := uint64(100); current <= number; current++ {
+		header, parent = releaseReceiptTestHeader(self.test, parent, current)
+	}
+	return header, parent
 }
 
 // Fresh proof scratch is supplied to every genuine replay, as in production.

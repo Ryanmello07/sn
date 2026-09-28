@@ -33,7 +33,7 @@ func TestOwnerRecycleMainnetPendingReplayRefusesBothIntentOwners(t *testing.T) {
 					return errors.New("synthetic pending scan changed original hash")
 				}
 				blockReads++
-				return json.Unmarshal([]byte(`{"block":{"header":{"parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","number":"0x64","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","extrinsicsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","digest":{"logs":[]}},"extrinsics":[]},"justifications":null}`), result)
+				return setReleaseHistoricalTestResult(result, map[string]any{"block": map[string]any{"header": native.header, "extrinsics": []string{}}})
 			}
 			return original.CallContext(ctx, result, method, args...)
 		}}

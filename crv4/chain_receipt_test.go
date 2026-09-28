@@ -2,6 +2,7 @@ package crv4
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -66,7 +67,7 @@ func TestLocateFinalizedExtrinsicPreservesContextAcrossScan(t *testing.T) {
 	raw := []byte{1, 2, 3, 4}
 	digest := blake2b.Sum256(raw)
 	extrinsicHash := types.Hash(digest)
-	finalizedHash := types.Hash{5}
+	header, finalizedHash := receiptTestHeader(t, types.Hash{4}, 5, [][]byte{raw}, 0)
 	calls := 0
 	client := &runtimeIdentityTestClient{callContext: func(ctx context.Context, result any, method string, args ...any) error {
 		if ctx.Value(callerContextKey{}) != callerContextValue {
@@ -80,7 +81,7 @@ func TestLocateFinalizedExtrinsicPreservesContextAcrossScan(t *testing.T) {
 			if len(args) != 1 || args[0] != finalizedHash.Hex() {
 				return errors.New("finalized header hash changed")
 			}
-			*(result.(*types.Header)) = types.Header{Number: types.BlockNumber(5)}
+			return receiptTestAssign(result, header)
 		case "chain_getBlockHash":
 			if len(args) != 1 || args[0] != uint64(5) {
 				return errors.New("finalized block number changed")
@@ -90,7 +91,7 @@ func TestLocateFinalizedExtrinsicPreservesContextAcrossScan(t *testing.T) {
 			if len(args) != 1 || args[0] != finalizedHash.Hex() {
 				return errors.New("finalized block hash changed")
 			}
-			*(result.(*gsrpcblock.SignedBlock)) = gsrpcblock.SignedBlock{Block: gsrpcblock.Block{Extrinsics: []string{codec.HexEncodeToString(raw)}}}
+			return receiptTestAssign(result, gsrpcblock.SignedBlock{Block: gsrpcblock.Block{Header: header, Extrinsics: []string{codec.HexEncodeToString(raw)}}})
 		default:
 			return errors.New("unexpected finalized scan RPC")
 		}
@@ -108,7 +109,17 @@ func TestLocateFinalizedExtrinsicPreservesContextAcrossScan(t *testing.T) {
 	if !found || receipt == nil || receipt.BlockHash != finalizedHash || receipt.BlockNumber != 5 {
 		t.Fatalf("finalized receipt = %+v found=%t", receipt, found)
 	}
-	if calls != 4 {
-		t.Fatalf("finalized scan RPC calls=%d, want 4", calls)
+	if calls != 5 {
+		t.Fatalf("finalized scan RPC calls=%d, want 5", calls)
 	}
+}
+
+// Marshals real JSON through the production destination, retaining omitted and
+// null wire distinctions instead of manufacturing a decoded admission verdict.
+func receiptTestAssign(target, value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, target)
 }

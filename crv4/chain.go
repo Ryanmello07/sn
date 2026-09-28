@@ -22,7 +22,6 @@ import (
 	gsrpcstate "github.com/centrifuge/go-substrate-rpc-client/v4/rpc/state"
 	gsrpcsystem "github.com/centrifuge/go-substrate-rpc-client/v4/rpc/system"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
-	"github.com/centrifuge/go-substrate-rpc-client/v4/types/block"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/extrinsic"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/extrinsic/extensions"
@@ -161,11 +160,11 @@ func (self *Chain) VerifyFinalizedExtrinsicContext(ctx context.Context, blockHas
 	if ctx == nil || self == nil || self.API == nil || self.API.Client == nil || self.Meta == nil {
 		return errors.New("crv4: finalized extrinsic metadata context is unavailable")
 	}
-	var signedBlock block.SignedBlock
-	if err := self.API.Client.CallContext(ctx, &signedBlock, "chain_getBlock", blockHash.Hex()); err != nil {
+	signedBlock, err := self.receiptBlockAt(ctx, blockHash)
+	if err != nil {
 		return fmt.Errorf("crv4: finalized block %s: %w", blockHash.Hex(), err)
 	}
-	index, found, err := extrinsicIndex(signedBlock.Block.Extrinsics, extrinsicHash)
+	index, found, err := extrinsicIndex(signedBlock.extrinsics, extrinsicHash)
 	if err != nil {
 		return err
 	}
@@ -371,18 +370,26 @@ func (c *Chain) LocateFinalizedExtrinsic(ctx context.Context, extrinsicHash type
 	if err := c.API.Client.CallContext(ctx, &finalizedHashHex, "chain_getFinalizedHead"); err != nil {
 		return nil, false, err
 	}
-	finalizedHash, err := types.NewHashFromHexString(finalizedHashHex)
+	finalizedHash, err := receiptHash(finalizedHashHex)
 	if err != nil {
 		return nil, false, err
 	}
-	var header types.Header
-	if err := c.API.Client.CallContext(ctx, &header, "chain_getHeader", finalizedHash.Hex()); err != nil {
+	_, finalizedNumber, err := c.receiptHeaderAt(ctx, finalizedHash)
+	if err != nil {
 		return nil, false, err
 	}
-	finalizedNumber := uint64(header.Number)
+	var canonicalFinalizedHex string
+	if err := c.API.Client.CallContext(ctx, &canonicalFinalizedHex, "chain_getBlockHash", finalizedNumber); err != nil {
+		return nil, false, err
+	}
+	canonicalFinalized, err := receiptHash(canonicalFinalizedHex)
+	if err != nil || canonicalFinalized != finalizedHash {
+		return nil, false, errors.New("crv4: finalized receipt head is not canonical at its authenticated height")
+	}
 	if fromBlock > finalizedNumber {
 		return nil, false, nil
 	}
+	var previousHash types.Hash
 	for number := fromBlock; ; number++ {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
@@ -391,15 +398,22 @@ func (c *Chain) LocateFinalizedExtrinsic(ctx context.Context, extrinsicHash type
 		if err := c.API.Client.CallContext(ctx, &blockHashHex, "chain_getBlockHash", number); err != nil {
 			return nil, false, fmt.Errorf("crv4: block hash %d: %w", number, err)
 		}
-		blockHash, err := types.NewHashFromHexString(blockHashHex)
+		blockHash, err := receiptHash(blockHashHex)
 		if err != nil {
 			return nil, false, fmt.Errorf("crv4: decode block hash %d: %w", number, err)
 		}
-		var signedBlock block.SignedBlock
-		if err := c.API.Client.CallContext(ctx, &signedBlock, "chain_getBlock", blockHash.Hex()); err != nil {
+		if number == finalizedNumber && blockHash != finalizedHash {
+			return nil, false, errors.New("crv4: receipt scan finalized hash changed")
+		}
+		signedBlock, err := c.receiptBlockAt(ctx, blockHash)
+		if err != nil {
 			return nil, false, fmt.Errorf("crv4: block %d: %w", number, err)
 		}
-		_, found, err := extrinsicIndex(signedBlock.Block.Extrinsics, extrinsicHash)
+		parent, _ := receiptHash(signedBlock.header.ParentHash)
+		if signedBlock.number != number || previousHash != (types.Hash{}) && parent != previousHash {
+			return nil, false, fmt.Errorf("crv4: receipt block %d height or parent differs from the canonical scan", number)
+		}
+		_, found, err := extrinsicIndex(signedBlock.extrinsics, extrinsicHash)
 		if err != nil {
 			return nil, false, err
 		}
@@ -409,6 +423,7 @@ func (c *Chain) LocateFinalizedExtrinsic(ctx context.Context, extrinsicHash type
 		if number == finalizedNumber {
 			break
 		}
+		previousHash = blockHash
 	}
 	return nil, false, nil
 }

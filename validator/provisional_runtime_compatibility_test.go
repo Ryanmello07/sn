@@ -91,6 +91,9 @@ type provisionalValidatorRuntimeFixture struct {
 func newProvisionalValidatorRuntimeFixture(t *testing.T) *provisionalValidatorRuntimeFixture {
 	t.Helper()
 	self := &provisionalValidatorRuntimeFixture{cfg: validReleaseConfig(t), block: types.Hash{0xa1}, oldBlock: types.Hash{0xa0}, code: types.Hash{0x77}.Hex(), version: provisionalValidatorSuccessorTestSpec, transaction: 1}
+	oldHeader, oldHash := releaseReceiptTestHeader(t, types.Hash{0xa0}, 100)
+	header, hash := releaseReceiptTestHeader(t, oldHash, 101)
+	self.oldBlock, self.block = oldHash, hash
 	self.cfg.ProvisionalRuntimeCompatibility = crv4.ProvisionalRuntimeCompatibilityProfile
 	self.metadata, self.metadataHex = provisionalValidatorMetadataTest(t, "../crv4/runtime-profile-v1.scale.gz.base64", "0xb0fae6d022b74faf948e3b98463b98b46c4738e87348e24340f91146ededa4bf")
 	self.oldMetadata, self.oldMetadataHex = provisionalValidatorMetadataTest(t, "../crv4/runtime-profile-v1.scale.gz.base64", "0xb0fae6d022b74faf948e3b98463b98b46c4738e87348e24340f91146ededa4bf")
@@ -134,16 +137,16 @@ func newProvisionalValidatorRuntimeFixture(t *testing.T) *provisionalValidatorRu
 			return fmt.Errorf("changed block for %s: %v", method, block)
 		}
 		old := block == self.oldBlock.Hex()
-		number := uint64(101)
+		selectedHeader := header
 		if old {
-			number = 100
+			selectedHeader = oldHeader
 		}
 		switch method {
 		case "chain_getHeader":
-			return setReleaseHistoricalTestResult(result, types.Header{Number: types.BlockNumber(number)})
+			return setReleaseHistoricalTestResult(result, selectedHeader)
 		case "chain_getBlock":
 			self.blocks++
-			return setReleaseHistoricalTestResult(result, map[string]any{"block": map[string]any{"header": types.Header{Number: types.BlockNumber(number)}, "extrinsics": []string{}}})
+			return setReleaseHistoricalTestResult(result, map[string]any{"block": map[string]any{"header": selectedHeader, "extrinsics": []string{}}})
 		case "state_getRuntimeVersion":
 			version, transaction := self.version, self.transaction
 			if old {

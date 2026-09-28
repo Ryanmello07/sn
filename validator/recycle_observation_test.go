@@ -146,6 +146,8 @@ func newRecycleAdmissionFixture(t *testing.T, mutate func(*types.Metadata)) *rec
 		approval: OwnerRecycleApproval{Schema: ownerRecycleApprovalSchema, ConfigHash: configHash, Proposal: proposal,
 			NativeChain: "Synthetic Mainnet", RuntimeReviewHash: recycleTestId(1010), ValidatorHotkey: recycleTestId(4), SubnetOwner: recycleTestId(1011),
 			OwnerHotkeys: [][32]byte{recycleTestId(2), recycleTestId(3)}, FirstNativeEpoch: 20, ValidFromNativeBlock: 90, ValidThroughNativeBlock: 110, MaximumSubnetUids: 6, MaximumOwnedHotkeys: 16}}
+	finalizedHeader, finalizedHash := releaseReceiptTestHeader(t, types.Hash{2}, 100)
+	fixture.finalized = finalizedHash
 	put := func(label, name string, value []byte, args ...[]byte) {
 		key, err := types.CreateStorageKey(metadata, "SubtensorModule", name, args...)
 		if err != nil {
@@ -225,7 +227,7 @@ func newRecycleAdmissionFixture(t *testing.T, mutate func(*types.Metadata)) *rec
 			if len(args) != 1 || args[0] != fixture.finalized.Hex() {
 				return errors.New("synthetic header lost finalized hash")
 			}
-			return assign(target, types.Header{Number: 100})
+			return assign(target, finalizedHeader)
 		case "state_getRuntimeVersion", "state_getMetadata":
 			if len(args) != 1 || args[0] != fixture.finalized.Hex() {
 				return errors.New("synthetic runtime lost finalized hash")

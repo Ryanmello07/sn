@@ -171,7 +171,7 @@ func TestReleaseEvidenceV2HistoricalRuntimePendingSignedV2RefusesNewSubmission(t
 				return errors.New("pending signed source changed block")
 			}
 			blocks++
-			raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": types.Header{Number: types.BlockNumber(fixture.native.blockNumber)}, "extrinsics": []string{}}})
+			raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": fixture.native.header, "extrinsics": []string{}}})
 			if err != nil {
 				return err
 			}
@@ -189,7 +189,8 @@ func TestReleaseEvidenceV2HistoricalRuntimePendingSignedV2RefusesNewSubmission(t
 // canary isolates its runtime dispatch without fabricating successful events.
 func TestReleaseEvidenceV2HistoricalRuntimeFinalizedSourceReachesOriginalEventVerifier(t *testing.T) {
 	fixture := newReleaseHistoricalSourceTestFixture(t)
-	fixture.intent.FinalizedBlock, fixture.intent.FinalizedBlockHash = fixture.native.blockNumber, fixture.native.block.Hex()
+	receipt := installReleaseHistoricalReconcileReceipt(t, fixture.native, fixture.metadataHex, fixture.intent.Prepared, nil)
+	fixture.intent.FinalizedBlock, fixture.intent.FinalizedBlockHash = receipt.number, receipt.hash.Hex()
 	metadata, _, err := crv4.DecodeRuntimeMetadata(fixture.metadataHex)
 	if err != nil {
 		t.Fatal(err)
@@ -206,18 +207,8 @@ func TestReleaseEvidenceV2HistoricalRuntimeFinalizedSourceReachesOriginalEventVe
 		if method == "chain_getBlockHash" && len(args) == 1 && args[0] == fixture.native.blockNumber {
 			return setReleaseHistoricalTestResult(result, canonical.Hex())
 		}
-		if method == "chain_getBlock" {
-			if len(args) != 1 || args[0] != fixture.native.block.Hex() {
-				return errors.New("finalized source changed original block")
-			}
-			raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": types.Header{Number: types.BlockNumber(fixture.native.blockNumber)}, "extrinsics": []string{fixture.intent.Prepared.ExtrinsicHex}}})
-			if err != nil {
-				return err
-			}
-			return json.Unmarshal(raw, result)
-		}
 		if method == "state_getStorage" && len(args) == 2 && args[0] == eventKey.Hex() {
-			if args[1] != fixture.native.block.Hex() {
+			if args[1] != receipt.hash.Hex() {
 				return errors.New("source events changed original block")
 			}
 			events++

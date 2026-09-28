@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/urfoundation/sn/crv4"
 )
 
@@ -39,7 +38,7 @@ func productionAuthorityPendingTest(t *testing.T, changeRuntime bool) (*ReleaseS
 			if args[0] == fixture.block(101).Hex() {
 				number = 101
 			}
-			raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": types.Header{Number: types.BlockNumber(number)}, "extrinsics": []string{}}})
+			raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": fixture.header(number), "extrinsics": []string{}}})
 			if err != nil {
 				return err
 			}
