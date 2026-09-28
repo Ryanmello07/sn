@@ -936,8 +936,9 @@ All 10 CRv4 and 22 validator roots now have normal/race coverage, with the origi
 race timeout and exact six-root completion retained separately. Six regression
 control families reached their intended assertions in both modes. Full
 `RunRelease` activation, normalized config and dual-upload composition have
-their separate component results below. Durable bounded scan-prefix reuse and
-historical-only foreign-nonce resolution remain open; MG-04 and PH-03 remain
+their separate component results below. Bounded scan-prefix reuse and
+historical-only foreign-nonce resolution now have the separate qualification
+below; remaining startup, release and live-authority work keeps MG-04 and PH-03
 incomplete. The separately
 [qualified native HTTP integration](evidence/production-native-http-integration-20260928.md)
 connects physical native causes to phase-owned waits and corrects response/close
@@ -965,7 +966,7 @@ Native production submission uses an explicitly approved WS/WSS route for
 `author_submitAndWatchExtrinsic`; the same node may provide HTTP EVM/read RPC,
 but HTTP read support alone grants no native subscription or writer capability.
 
-The [bounded receipt-prefix candidate](evidence/receipt-prefix-candidate-20260928.md)
+The [qualified receipt-prefix recovery](evidence/receipt-prefix-qualification-20260928.md)
 now supplies the shared 128-block scan contract to both native recovery owners.
 Miner records retain their existing signed semantic proof. The validator keeps
 one bounded, original-intent-bound signed acceleration file; cache eviction or
@@ -974,11 +975,15 @@ bytes remain intact. Completed chunks and admitted partial prefixes persist
 before subsequent reads, including retry after a later timeout. Optional cache
 read/write faults disable disk acceleration and report degradation while original
 intent reconciliation continues; memory-only progress is not a durability claim.
-The bounded public diagnostic exporter is a separate composition dependency. No
+The separately qualified public diagnostic exporter now exposes degradation. No
 per-block full journal rewrite or executable-hash invalidation is introduced.
 Pending old approvals can resolve authenticated foreign nonce use at the exact
 covered boundary while fresh signing/rebroadcast stays independently gated.
-Qualification is pending; this candidate alone does not close MG-04 or PH-03.
+All 56 affected roots have scoped normal/race passes after retained fixture
+corrections; nine causal families and package vet pass. The receipt preserves
+failed captures and the incomplete pre-execution seal for one fixture scope.
+Final release composition, first-client recovery and live authority remain open;
+this component does not close MG-04 or PH-03.
 
 The [server upload admission](VALIDATOR-UPLOAD-RUNTIME.md) now consumes an
 independently pinned schema-3 configuration and retains only read-only runtime

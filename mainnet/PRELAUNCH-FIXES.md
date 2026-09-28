@@ -1297,8 +1297,9 @@ a later epoch change could reject the unfinished epoch before reconciliation.
 The original-config pending branch is now covered by
 the [authority-history qualification](evidence/production-authority-history-qualification-20260928.md).
 The separately qualified continuation below covers the affected actual steering
-owners. Public startup now has separate component qualification below; durable
-partial scans and final release composition keep PH-03 open.
+owners. Public startup and durable partial scans now have separate component
+qualification below; first-client recovery and final release composition keep
+PH-03 open.
 Preserve unknown or missed
 outcomes and original signed bytes, keep unrelated workers running, and require
 reconciliation before another send. A successful retry never manufactures a
@@ -1318,8 +1319,7 @@ transaction's inclusion to another transaction. Extend the scan before making
 that inference, and never advance a reusable prefix on an incomplete read.
 The shared complete-body admission and miner cursor correction are now
 [qualified and integrated](evidence/receipt-recovery-qualification-20260928.md).
-The production waits are qualified separately below; additional durable partial
-prefixes remain implementation work.
+The production waits and durable partial prefixes are qualified separately below.
 
 The same review found the miner fleet's native recovery cursor accepted an
 explicit empty/truncated extrinsics vector without authenticating its body
@@ -1340,10 +1340,10 @@ cursor only after up to 4,096 blocks: add bounded durable subranges so a late
 timeout cannot repeatedly discard thousands of verified reads. Reuse the
 header authenticated with each complete body instead of issuing duplicate
 header/hash reads, while retaining canonical boundary checks and bounded fsync
-work. These continuation improvements remain open after body admission.
+work. The following prefix qualification covers these continuation improvements.
 
-**2026-09-28 bounded prefix candidate (qualification pending).** The
-[shared chunk/checkpoint slice](evidence/receipt-prefix-candidate-20260928.md)
+**2026-09-28 bounded prefix recovery (component qualified).** The
+[shared chunk/checkpoint slice](evidence/receipt-prefix-qualification-20260928.md)
 adds at most 128 fully authenticated bodies per chunk and preserves completed
 chunks plus admitted partial prefixes before retrying a later unavailable read.
 Miner recovery keeps its existing signed
@@ -1358,10 +1358,14 @@ body cannot advance coverage, and the saved prefix is rejoined to a canonical
 parent before reuse. Optional cache read/save failures disable disk reuse and
 emit one closed degradation observation; original custody and authority errors
 remain hard. Memory-only progress never claims a successful durable write, and
-the public bounded diagnostic exporter requires separate composition.
+the separately qualified public bounded diagnostic exporter exposes degradation.
 Historical-only original approvals now reach same-boundary nonce reconciliation
-before the no-rebroadcast wait. These source changes do not claim qualification,
-automatic runtime approval or mainnet activation.
+before the no-rebroadcast wait. All 56 affected roots have scoped normal/race
+passes after retained fixture corrections; nine causal families reached their
+intended assertions in both modes and package vet passes. The receipt records
+original failures, disqualified diagnostic captures and the incomplete
+pre-execution seal of one fixture scope. Final release composition, automatic
+runtime approval and mainnet activation remain open.
 
 The new contract installer review found the same failed-read/contradiction join
 in its native-to-EVM mapping check, plus admission that required the finalized
@@ -1387,7 +1391,8 @@ original race timeout and its six-root completion separately. All six control
 families reached their intended assertions in both modes. Full fresh
 `RunRelease` activation/config/dual-upload composition has its separate results
 below. Historical-only foreign-nonce resolution and authenticated durable scan
-chunks (including miner partial ranges) remain open. The native HTTP integration is separately qualified;
+chunks (including miner partial ranges) have the separate prefix qualification
+above. The native HTTP integration is separately qualified;
 no callback-only loop test closes the remaining physical ownership requirements.
 
 The integrated [public startup continuation](evidence/production-startup-continuation-candidate-20260928.md)
@@ -1407,9 +1412,8 @@ not restart merely because the independent remote-read budget elapses. Parallel
 native and EVM transient errors remain independently classified, while a hard
 native physical subtree cannot be unwrapped into a retryable leaf.
 
-Still open: durable bounded receipt prefixes in both validator and miner,
-historical-only foreign-nonce reconciliation, live operator API dependency, and
-first/missing-client JWT registration recovery. The latter can mutate identity
+Still open: live operator API dependency and first/missing-client JWT
+registration recovery. The latter can mutate identity
 and must retain ambiguous outcomes; wrapping the whole operator constructor in
 read retries or transferring a canceled startup context to its service is unsafe.
 Native production writers continue to require explicit WS/WSS, independently of
@@ -1428,7 +1432,7 @@ applies the same rule to real miner recovery, owner census/eligibility and
 activation setup reads. Their [combined qualification is complete](evidence/source-read-cause-qualification-20260928.md),
 including normal/race causal controls and the corrected source-role fixture.
 That read component does not replace the separate continuation qualification
-above or the remaining composed-release and durable-prefix work.
+above or the remaining composed-release and first-client startup work.
 
 Full startup review found the same ordering defect above the steering loop:
 [`runReleaseWithStartupAndProgressV2`](../validator/release_run.go) previously

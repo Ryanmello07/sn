@@ -1,7 +1,11 @@
 # Bounded native receipt-prefix candidate — 2026-09-28
 
-Qualification pending. Author lane performs compile-only checks; Terra owns
-normal/race/vet bodies and causal controls. No live reads, signing or deployment.
+[Component qualification is complete](receipt-prefix-qualification-20260928.md):
+56 roots have scoped normal/race passes after retained fixture corrections,
+nine causal families reproduce their intended failures, and vet passes. The
+receipt records source-capture limits and final release work still open. Astra
+performed compile-only checks; Terra executed bodies. No live reads, signing
+or deployment.
 
 Base: `a58878eaf15fee744cfc20fd06a17b623a27547f`.
 Worktree: `/mnt/data/sn-testnet/worktrees/sn-mainnet-receipt-prefix-20260928`.
