@@ -49,7 +49,7 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 			PlanHash             string       `json:"plan_hash"`
 			ExecutableAction     string       `json:"executable_action"`
 			InstallationComplete bool         `json:"installation_complete"`
-		}{plan.Config.Plan, plan.Config.Plan.hash(), "reserve-create", false}); err != nil {
+		}{Plan: plan.Config.Plan, PlanHash: plan.Config.Plan.hash(), ExecutableAction: "reserve-create", InstallationComplete: false}); err != nil {
 			fmt.Fprintln(stderr, err)
 			return 1
 		}

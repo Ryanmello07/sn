@@ -111,7 +111,7 @@ func evmReceiptFacts(raw json.RawMessage, record evmActionRecord, plan evmCreate
 	for _, field := range []struct {
 		name   string
 		target *string
-	}{{"transactionHash", &result.TransactionHash}, {"blockHash", &result.BlockHash}, {"contractAddress", &result.ContractAddress}} {
+	}{{name: "transactionHash", target: &result.TransactionHash}, {name: "blockHash", target: &result.BlockHash}, {name: "contractAddress", target: &result.ContractAddress}} {
 		value, err := textField(field.name)
 		if field.name == "contractAddress" && bytes.Equal(fields[field.name], []byte("null")) {
 			value = ""
@@ -172,7 +172,7 @@ func (self *evmOwnedChain) continuity(ctx context.Context, p evmPhasePlan, recor
 	for _, point := range []struct {
 		number uint64
 		hash   string
-	}{{p.StartNativeNumber, p.StartNativeHash}, {record.ScanNumber, record.ScanHash}} {
+	}{{number: p.StartNativeNumber, hash: p.StartNativeHash}, {number: record.ScanNumber, hash: record.ScanHash}} {
 		var hash string
 		if err := self.client.call(ctx, "chain_getBlockHash", []any{point.number}, &hash); err != nil {
 			return err
@@ -395,7 +395,7 @@ func (self *evmOwnedChain) admitCurrent(ctx context.Context, plan evmCreatePlan,
 		method string
 		params []any
 		target *string
-	}{{"eth_getTransactionCount", []any{action.Sender.Hex(), block}, &confirmed}, {"eth_getTransactionCount", []any{action.Sender.Hex(), "pending"}, &pending}, {"eth_getBalance", []any{action.Sender.Hex(), "pending"}, &balance}, {"eth_getCode", []any{plan.Address.Hex(), "pending"}, &code}} {
+	}{{method: "eth_getTransactionCount", params: []any{action.Sender.Hex(), block}, target: &confirmed}, {method: "eth_getTransactionCount", params: []any{action.Sender.Hex(), "pending"}, target: &pending}, {method: "eth_getBalance", params: []any{action.Sender.Hex(), "pending"}, target: &balance}, {method: "eth_getCode", params: []any{plan.Address.Hex(), "pending"}, target: &code}} {
 		if err := self.read(ctx, read.method, read.params, read.target); err != nil {
 			return result, err
 		}
