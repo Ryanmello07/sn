@@ -1184,9 +1184,16 @@ outages and restart, with separate per-role checkpoints and atomic metrics.
 selected normal/race roots, five controls in both modes and service/chain alert
 rules. Delivered alerts, other production domains, supervision and the repair
 controller remain deployment or implementation work. A fresh file alone is not
-proof of healthy validation. Shared synchronous log output can still block the
-workers and their join; bounded log export and independent stale-file alerts
-must be part of operational readiness.
+proof of healthy validation. The integrated
+[bounded output correction](evidence/bounded-diagnostic-output-qualification-20260928.md)
+now prevents blocked log destinations from stalling the standard validator or
+these chain/service workers. Its 76 affected roots have passing scoped normal
+and race coverage, with six regression controls in both modes, vet and three
+offline alert-rule suites. Each role retains finite output capacity and actual
+delivery/loss counters. Deploy the progress consumer before the producer's
+optional diagnostic extension, and retain independent missing/stale-file alerts.
+Root-service/root-monitor output has a separate follow-up. Local output
+acknowledgment does not establish remote ingestion or alert delivery.
 
 ### Independent observations and existing telemetry
 

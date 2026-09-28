@@ -72,8 +72,19 @@ roots pass normal/race, five controls reproduce their required failures in both
 modes, and service plus inherited alert-rule fixtures pass. Each validator
 role retains its own source checks, evidence ages and output files while the
 chain worker retries independently. Protocol deadline inference, other domain
-coverage, bounded log export, delivered alerts and the repair controller remain
+coverage, delivered alerts and the repair controller remain
 open; source qualification does not establish live monitoring.
+
+The integrated [bounded diagnostic exporter](evidence/bounded-diagnostic-output-qualification-20260928.md)
+now isolates standard-validator and chain/service-monitor work from stalled log
+destinations. Each role has finite queue capacity; one joined destination owner
+reports completed writes, dropped records and unavailable output independently
+of protocol progress. All 76 affected roots have passing normal/race coverage,
+six causal controls reproduce the intended failures in both modes, and vet plus
+three offline alert-rule suites pass. The receipt preserves the original
+maximum-ID fixture failure and its isolated correction. Consumer-first rollout,
+actual alert delivery, root-service/root-monitor output and other operational
+domains remain separate work.
 
 **MG-04/MG-08 direct production cadence (September 28; source integrated,
 component checks pass).** The [bounded representability fix](evidence/mainnet-steady-cadence-candidate-20260928.md)

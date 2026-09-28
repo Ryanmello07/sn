@@ -32,8 +32,12 @@ continuity, actual startup/steering waits and public root cache diagnostics.
 Positive delivery assertions use completed-write barriers before shutdown;
 bounded Close is not assumed to flush every queued record.
 
-Author-lane checks are compile-only and vet. Behavioral normal/race and alert-rule
-qualification is pending in the separate Terra lane. Exact selected roots,
+Author-lane checks are compile-only and vet. Separate Terra
+[qualification](bounded-diagnostic-output-qualification-20260928.md) now supplies
+passing scoped normal/race coverage for all 76 selected roots, six causal
+controls in both modes, vet and offline alert-rule checks. The original
+maximum-wire fixture failure and its one-root correction remain separate.
+Exact selected roots,
 guard-disabled controls, physical source/module manifests, runner admission and
 commands are retained at
 `/mnt/data/sn-testnet/evidence/mainnet-bounded-output-20260928/`.
