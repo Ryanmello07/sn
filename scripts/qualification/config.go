@@ -449,8 +449,10 @@ func validTestIdentity(name string) bool {
 	return true
 }
 
-// Derive a complete hierarchy from declarations, never from observed events.
-// A failing child must also declare each failing ancestor and its own literal.
+// A single t.Run name can contain slashes without creating intermediate test
+// identities. The nearest declared prefix owns that child; observed events
+// cannot invent an ancestor. A declared prefix remains a lifecycle constraint,
+// including when an ambiguous flat sibling uses that same prefix.
 func expectedParents(expected expectedSuite) (map[string]string, error) {
 	if len(expected.Outcomes) == 0 || len(expected.Outcomes) > 256*1024 {
 		return nil, errors.New("expected test identity census is empty or exceeds bound")
@@ -462,8 +464,19 @@ func expectedParents(expected expectedSuite) (map[string]string, error) {
 			return nil, errors.New("invalid declared test identity or outcome")
 		}
 		if slash := strings.LastIndexByte(name, '/'); slash >= 0 {
-			parent := name[:slash]
-			if expected.Outcomes[parent] == "" {
+			parent := ""
+			for prefix := name[:slash]; prefix != ""; {
+				if _, declared := expected.Outcomes[prefix]; declared {
+					parent = prefix
+					break
+				}
+				slash = strings.LastIndexByte(prefix, '/')
+				if slash < 0 {
+					break
+				}
+				prefix = prefix[:slash]
+			}
+			if parent == "" {
 				return nil, errors.New("declared descendant has no declared parent")
 			}
 			if outcome == "fail" && expected.Outcomes[parent] != "fail" {
