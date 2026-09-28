@@ -10,7 +10,6 @@ import (
 	gsrpcrpc "github.com/centrifuge/go-substrate-rpc-client/v4/rpc"
 	gsrpcchain "github.com/centrifuge/go-substrate-rpc-client/v4/rpc/chain"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
-	gsrpcblock "github.com/centrifuge/go-substrate-rpc-client/v4/types/block"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"golang.org/x/crypto/blake2b"
 )
@@ -81,7 +80,7 @@ func TestLocateFinalizedExtrinsicPreservesContextAcrossScan(t *testing.T) {
 			if len(args) != 1 || args[0] != finalizedHash.Hex() {
 				return errors.New("finalized header hash changed")
 			}
-			return receiptTestAssign(result, header)
+			return receiptTestAssign(result, receiptTestHeaderWire(header))
 		case "chain_getBlockHash":
 			if len(args) != 1 || args[0] != uint64(5) {
 				return errors.New("finalized block number changed")
@@ -91,7 +90,7 @@ func TestLocateFinalizedExtrinsicPreservesContextAcrossScan(t *testing.T) {
 			if len(args) != 1 || args[0] != finalizedHash.Hex() {
 				return errors.New("finalized block hash changed")
 			}
-			return receiptTestAssign(result, gsrpcblock.SignedBlock{Block: gsrpcblock.Block{Header: header, Extrinsics: []string{codec.HexEncodeToString(raw)}}})
+			return receiptTestAssign(result, map[string]any{"block": map[string]any{"header": receiptTestHeaderWire(header), "extrinsics": []string{codec.HexEncodeToString(raw)}}})
 		default:
 			return errors.New("unexpected finalized scan RPC")
 		}

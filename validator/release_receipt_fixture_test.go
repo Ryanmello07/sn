@@ -3,12 +3,22 @@
 package validator
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"golang.org/x/crypto/blake2b"
 )
+
+// Preserve genuine SDK SCALE commitments while spelling the JSON quantity as
+// Substrate does; the pinned SDK's marshaler omits the required 0x prefix.
+func releaseReceiptTestHeaderWire(header types.Header) any {
+	return struct {
+		types.Header
+		Number string `json:"number"`
+	}{Header: header, Number: fmt.Sprintf("0x%x", uint64(header.Number))}
+}
 
 // The one-entry layout0 root is an independent exact leaf codec, not a call to
 // the production trie implementation. Fixtures need only empty or one entry.

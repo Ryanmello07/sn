@@ -95,7 +95,7 @@ func installReleaseHistoricalTestNative(t *testing.T, native *releaseNativeValid
 			if err := original.CallContext(ctx, &header, method, args...); err != nil {
 				return err
 			}
-			return setReleaseHistoricalTestResult(result, header)
+			return setReleaseHistoricalTestResult(result, releaseReceiptTestHeaderWire(header))
 		}
 		var wire json.RawMessage
 		if err := original.CallContext(ctx, &wire, method, args...); err != nil {
@@ -216,7 +216,7 @@ func releaseHistoricalTestPendingReplay(t *testing.T, versionTwo bool) {
 				return errors.New("pending scan changed original hash")
 			}
 			blockReads++
-			return setReleaseHistoricalTestResult(result, map[string]any{"block": map[string]any{"header": native.header, "extrinsics": []string{}}})
+			return setReleaseHistoricalTestResult(result, map[string]any{"block": map[string]any{"header": releaseReceiptTestHeaderWire(native.header), "extrinsics": []string{}}})
 		}
 		return original.CallContext(ctx, result, method, args...)
 	}}

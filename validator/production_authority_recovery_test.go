@@ -38,7 +38,7 @@ func productionAuthorityPendingTest(t *testing.T, changeRuntime bool) (*ReleaseS
 			if args[0] == fixture.block(101).Hex() {
 				number = 101
 			}
-			raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": fixture.header(number), "extrinsics": []string{}}})
+			raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": releaseReceiptTestHeaderWire(fixture.header(number)), "extrinsics": []string{}}})
 			if err != nil {
 				return err
 			}

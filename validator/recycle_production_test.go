@@ -214,7 +214,7 @@ func newOwnerRecycleProductionTestFixture(t *testing.T) *ownerRecycleProductionT
 		if method == "chain_getHeader" {
 			for number := uint64(100); number <= self.head; number++ {
 				if len(args) == 1 && args[0] == self.block(number).Hex() {
-					return assign(self.header(number))
+					return assign(releaseReceiptTestHeaderWire(self.header(number)))
 				}
 			}
 			return errors.New("synthetic production header escaped its bounded chain")

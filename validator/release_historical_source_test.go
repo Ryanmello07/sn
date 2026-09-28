@@ -171,7 +171,7 @@ func TestReleaseEvidenceV2HistoricalRuntimePendingSignedV2RefusesNewSubmission(t
 				return errors.New("pending signed source changed block")
 			}
 			blocks++
-			raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": fixture.native.header, "extrinsics": []string{}}})
+			raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": releaseReceiptTestHeaderWire(fixture.native.header), "extrinsics": []string{}}})
 			if err != nil {
 				return err
 			}

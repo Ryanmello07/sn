@@ -33,7 +33,7 @@ func TestOwnerRecycleMainnetPendingReplayRefusesBothIntentOwners(t *testing.T) {
 					return errors.New("synthetic pending scan changed original hash")
 				}
 				blockReads++
-				return setReleaseHistoricalTestResult(result, map[string]any{"block": map[string]any{"header": native.header, "extrinsics": []string{}}})
+				return setReleaseHistoricalTestResult(result, map[string]any{"block": map[string]any{"header": releaseReceiptTestHeaderWire(native.header), "extrinsics": []string{}}})
 			}
 			return original.CallContext(ctx, result, method, args...)
 		}}

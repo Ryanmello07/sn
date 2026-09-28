@@ -168,7 +168,7 @@ func newReleaseNativeValidatorUIDTestFixture(t *testing.T, selectedUID uint16, h
 			}
 			header := fixture.header
 			header.Number = types.BlockNumber(fixture.blockNumber)
-			return setReleaseHistoricalTestResult(result, header)
+			return setReleaseHistoricalTestResult(result, releaseReceiptTestHeaderWire(header))
 		case "chain_getBlockHash":
 			if reflect.DeepEqual(args, []any{uint64(0)}) {
 				return setValidatorRuntimeIdentityTestResult(result, fixture.genesis.Hex())

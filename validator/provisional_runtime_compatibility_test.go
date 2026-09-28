@@ -143,10 +143,10 @@ func newProvisionalValidatorRuntimeFixture(t *testing.T) *provisionalValidatorRu
 		}
 		switch method {
 		case "chain_getHeader":
-			return setReleaseHistoricalTestResult(result, selectedHeader)
+			return setReleaseHistoricalTestResult(result, releaseReceiptTestHeaderWire(selectedHeader))
 		case "chain_getBlock":
 			self.blocks++
-			return setReleaseHistoricalTestResult(result, map[string]any{"block": map[string]any{"header": selectedHeader, "extrinsics": []string{}}})
+			return setReleaseHistoricalTestResult(result, map[string]any{"block": map[string]any{"header": releaseReceiptTestHeaderWire(selectedHeader), "extrinsics": []string{}}})
 		case "state_getRuntimeVersion":
 			version, transaction := self.version, self.transaction
 			if old {

@@ -227,7 +227,7 @@ func newRecycleAdmissionFixture(t *testing.T, mutate func(*types.Metadata)) *rec
 			if len(args) != 1 || args[0] != fixture.finalized.Hex() {
 				return errors.New("synthetic header lost finalized hash")
 			}
-			return assign(target, finalizedHeader)
+			return assign(target, releaseReceiptTestHeaderWire(finalizedHeader))
 		case "state_getRuntimeVersion", "state_getMetadata":
 			if len(args) != 1 || args[0] != fixture.finalized.Hex() {
 				return errors.New("synthetic runtime lost finalized hash")

@@ -16,7 +16,6 @@ import (
 
 	gsrpcgeth "github.com/centrifuge/go-substrate-rpc-client/v4/gethrpc"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
-	"github.com/centrifuge/go-substrate-rpc-client/v4/types/block"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/urfoundation/sn/crv4"
@@ -175,7 +174,7 @@ func installReleaseHistoricalReconcileReceipt(t *testing.T, native *releaseNativ
 			return assign(target, result.hash.Hex())
 		case "chain_getHeader":
 			if len(args) == 1 && args[0] == result.hash.Hex() {
-				return assign(target, receiptHeader)
+				return assign(target, releaseReceiptTestHeaderWire(receiptHeader))
 			}
 		case "chain_getBlockHash":
 			if len(args) == 1 && args[0] == result.number {
@@ -187,10 +186,10 @@ func installReleaseHistoricalReconcileReceipt(t *testing.T, native *releaseNativ
 			}
 			result.blocks++
 			if args[0] == native.block.Hex() {
-				return assign(target, block.SignedBlock{Block: block.Block{Header: native.header, Extrinsics: []string{}}})
+				return assign(target, map[string]any{"block": map[string]any{"header": releaseReceiptTestHeaderWire(native.header), "extrinsics": []string{}}})
 			}
 			if args[0] == result.hash.Hex() {
-				return assign(target, block.SignedBlock{Block: block.Block{Header: receiptHeader, Extrinsics: []string{prepared.ExtrinsicHex}}})
+				return assign(target, map[string]any{"block": map[string]any{"header": releaseReceiptTestHeaderWire(receiptHeader), "extrinsics": []string{prepared.ExtrinsicHex}}})
 			}
 			return errors.New("receipt body escaped its canonical source blocks")
 		case "state_getRuntimeVersion":

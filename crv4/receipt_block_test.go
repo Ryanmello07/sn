@@ -32,6 +32,37 @@ func receiptTestHeader(t *testing.T, parent types.Hash, number uint64, body [][]
 	return header, types.Hash(blake2b.Sum256(raw))
 }
 
+// Substrate serializes its number as a 0x-prefixed quantity. The pinned Go SDK
+// hashes the correct SCALE bytes but its JSON marshaler omits that wire prefix.
+func receiptTestHeaderWire(header types.Header) any {
+	return struct {
+		types.Header
+		Number string `json:"number"`
+	}{Header: header, Number: fmt.Sprintf("0x%x", uint64(header.Number))}
+}
+
+// The RPC quantity spelling is independent of SDK JSON marshaling. Preserve
+// the SCALE hash while refusing omitted, unprefixed and overflowing numbers.
+func TestReceiptHeaderRequiresNativeWireQuantity(t *testing.T) {
+	header, hash := receiptTestHeader(t, types.Hash{4}, 5, nil, 0)
+	var decoded receiptHeader
+	if err := receiptTestAssign(&decoded, receiptTestHeaderWire(header)); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Number != "0x5" {
+		t.Fatalf("native RPC number spelling changed: %q", decoded.Number)
+	}
+	if number, err := decoded.authenticate(hash); err != nil || number != 5 {
+		t.Fatalf("canonical wire quantity lost SDK header commitment: %d %v", number, err)
+	}
+	for _, number := range []string{"", "5", "0x", "0x100000000", "0x-5", "0xzz"} {
+		decoded.Number = number
+		if _, err := decoded.authenticate(hash); err == nil {
+			t.Fatalf("invalid native wire quantity accepted: %q", number)
+		}
+	}
+}
+
 // Each client owns complete headers and independently replaceable body JSON.
 type receiptScanTestFixture struct {
 	chain   *Chain
@@ -57,7 +88,7 @@ func newReceiptScanTestFixture(t *testing.T, bodies [][][]byte, layout uint8) *r
 		for index, raw := range body {
 			encoded[index] = codec.HexEncodeToString(raw)
 		}
-		raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": header, "extrinsics": encoded}})
+		raw, err := json.Marshal(map[string]any{"block": map[string]any{"header": receiptTestHeaderWire(header), "extrinsics": encoded}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,7 +118,7 @@ func newReceiptScanTestFixture(t *testing.T, bodies [][][]byte, layout uint8) *r
 			for number, hash := range self.hashes {
 				if len(args) == 1 && args[0] == hash.Hex() {
 					if method == "chain_getHeader" {
-						return receiptTestAssign(target, self.headers[number])
+						return receiptTestAssign(target, receiptTestHeaderWire(self.headers[number]))
 					}
 					return json.Unmarshal(self.bodies[number], target)
 				}
@@ -168,8 +199,12 @@ func TestReceiptScanRejectsIncompleteBodyEvidence(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, hash := range []types.Hash{{99}, types.Hash(blake2b.Sum256(transaction))} {
+			fixture.calls = nil
 			if receipt, found, err := fixture.chain.LocateFinalizedExtrinsic(t.Context(), hash, 5); err == nil || found || receipt != nil {
 				t.Fatalf("%s became receipt or absence: %+v %t %v", fault, receipt, found, err)
+			}
+			if len(fixture.calls) == 0 || fixture.calls[len(fixture.calls)-1] != "chain_getBlock" {
+				t.Fatalf("%s did not reach its body fault: %v", fault, fixture.calls)
 			}
 		}
 		fixture.chain.Meta = types.NewMetadataV14()
@@ -190,7 +225,7 @@ func TestReceiptHeaderSupportsRuntimeUpdateDigest(t *testing.T) {
 	raw = append(raw[:len(raw)-1], 4, 8)
 	hash := types.Hash(blake2b.Sum256(raw))
 	var decoded receiptHeader
-	if err := receiptTestAssign(&decoded, header); err != nil {
+	if err := receiptTestAssign(&decoded, receiptTestHeaderWire(header)); err != nil {
 		t.Fatal(err)
 	}
 	decoded.Digest.Logs = []string{"0x08"}
@@ -218,7 +253,7 @@ func TestReceiptScanRejectsDisconnectedCanonicalBodies(t *testing.T) {
 		header, hash := receiptTestHeader(t, types.Hash{9}, number, nil, 0)
 		fixture.headers[selected], fixture.hashes[selected] = header, hash
 		var err error
-		fixture.bodies[selected], err = json.Marshal(map[string]any{"block": map[string]any{"header": header, "extrinsics": []string{}}})
+		fixture.bodies[selected], err = json.Marshal(map[string]any{"block": map[string]any{"header": receiptTestHeaderWire(header), "extrinsics": []string{}}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -241,7 +276,7 @@ func TestReceiptScanRejectsUnboundFinality(t *testing.T) {
 			if method == "chain_getHeader" && fault == "wrong-header" {
 				header := fixture.headers[5]
 				header.Number = 4
-				return true, receiptTestAssign(target, header)
+				return true, receiptTestAssign(target, receiptTestHeaderWire(header))
 			}
 			if method == "chain_getFinalizedHead" && (fault == "short-hash" || fault == "zero-hash") {
 				value := "0x01"

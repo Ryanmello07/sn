@@ -55,3 +55,17 @@ retaining new tests, then run `TestReceiptScanRejectsIncompleteBodyEvidence` in
 normal and race modes. A named assertion showing incomplete body acceptance is
 required; build errors, panics, timeouts or races do not count as reproduction.
 All results remain pending until the exact candidate finishes qualification.
+# Fixture correction awaiting qualification
+
+The first frozen run at `9618a1cb` exposed a fixture serialization defect:
+the pinned GSRPC `types.BlockNumber.MarshalJSON` emits unprefixed hexadecimal.
+Substrate's [native header serializer and independent quantity tests](https://github.com/paritytech/polkadot-sdk/blob/master/substrate/primitives/runtime/src/generic/header.rs)
+use `0x`-prefixed quantities. The source admission requirement remains unchanged.
+Corrected fixtures explicitly emit the real wire spelling while retaining their
+SDK-generated SCALE commitments. The malformed-body regression now also proves
+it reaches `chain_getBlock`, so a prior finality rejection cannot satisfy it.
+
+This correction changes test fixtures only. Normal/race qualification and the
+original-source causal control must be repeated on the corrected source; no pass
+is claimed here. The initial failed logs remain under
+`/mnt/data/sn-testnet/qualification/production-reconciliation-20260928/`.
