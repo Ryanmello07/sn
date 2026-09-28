@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -91,12 +92,15 @@ func TestRootOutputRunFaultsPreserveOriginalActionAndRestart(t *testing.T) {
 	}
 }
 
-// Calling Error is itself a failing boundary; the original identity remains
-// inspectable with errors.Is without creating an oversized diagnostic string.
-type rootOutputUnformattableError struct{}
+// The formatting probe retains identity and lets a causal root fail normally,
+// so one forbidden call cannot abort the remaining independent controls.
+type rootOutputFormattingProbe struct{ calls atomic.Uint64 }
 
-// This cause deliberately has no safe textual representation.
-func (*rootOutputUnformattableError) Error() string { panic("root output formatted arbitrary error") }
+// Only an unintended diagnostic conversion increments this counter.
+func (self *rootOutputFormattingProbe) Error() string {
+	self.calls.Add(1)
+	return "synthetic read cause"
+}
 
 // A fault around the actual durable decision commit retains ambiguity exactly.
 type rootOutputFaultStore struct {
@@ -174,7 +178,7 @@ func TestRootOutputRunRetainsHardCustodyCause(t *testing.T) {
 // method never runs inside either publication or the supervisor itself.
 func TestRootOutputRunNeverFormatsReadCause(t *testing.T) {
 	fixture := newRootServiceFixture(t)
-	cause := &rootOutputUnformattableError{}
+	cause := &rootOutputFormattingProbe{}
 	fixture.observer.err = cause
 	owner, _ := fixture.open(t, true, fixture.ports())
 	output, err := newRootServiceOutput(t.Context(), nil)
@@ -182,6 +186,9 @@ func TestRootOutputRunNeverFormatsReadCause(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = owner.Run(t.Context(), 1, time.Second, output)
+	if cause.calls.Load() != 0 {
+		t.Fatal("root output formatted arbitrary error")
+	}
 	if !errors.Is(err, cause) || fixture.observer.calls != 1 || fixture.signer.signs != 0 {
 		t.Fatal("read error identity or bounded work changed")
 	}
