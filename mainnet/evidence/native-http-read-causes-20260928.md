@@ -1,5 +1,10 @@
 # Native configured HTTP read cause preservation, 2026-09-28
 
+The component qualification below completed on clean author source
+`ec2bc584d5640f7d22dc06f79c7e26ea357cb84a`, integrated without conflicts as
+`790dacb0`. This records the transport component; downstream continuation and
+the composed response-size correction remain separate work.
+
 Author workspace: `/mnt/data/sn-testnet/worktrees/native-http-read-causes-20260928/sn`,
 based on qualified root `b00d1e54be93a5f47d047810dd76ed15744d66fa`.
 Evidence and Terra runner:
@@ -65,6 +70,49 @@ reach their exact intended assertions.
 
 Author checks are `go test -mod=readonly -c ./crv4`, `go vet -mod=readonly ./crv4`
 and formatting/diff checks. **No test bodies ran in the Astra author lane.**
-Normal/race and causal qualification are pending Terra. No live route, live key,
-signing, broadcast or node mutation is used. Production continuation integration
+Terra completed normal/race and causal qualification. No live route, live key,
+signing, broadcast or node mutation was used. Production continuation integration
 with the exported classifier belongs to its separate owner and remains pending.
+
+## Completed component qualification
+
+The selector `^Test(SubstrateRead|DialChainContext|ContextSubstrateClientRecognizesOnlyPrivateIPv4AsOwnedRoute)`
+ran all 30 selected top-level roots: normal 64.441 seconds and race 65.622
+seconds, both package results passing. Five controlled regression families
+reached their intended named assertions in both modes, with ten retained
+exit-1 captures: flattened status, decoder-before-framing, write replay,
+hidden close failure and mixed integrity classification. Vet and build passed.
+The source, 89 consumed local files and qualification-tool manifests passed
+before and after; the author head remained unchanged and its worktree clean.
+
+Root integration combined the constructor change with the separately qualified
+receipt/source reader changes in `crv4/chain.go`. The HTTP adapter, retry owner
+and their new tests match the qualified source exactly. On integrated
+`790dacb0`, compile-only checks passed for `crv4`, `validator` and `mainnet`.
+The two roots `TestSubstrateReadHttpDialChainRecoversInitialization` and
+`TestLocateFinalizedExtrinsicPreservesContextAcrossScan` then passed normally
+(1.012 seconds) and with race detection (1.092 seconds). The integrated head
+remained unchanged, with only documentation edits present, and the resolved
+module graph was byte-identical before and after. Those checks are retained in
+`/mnt/data/sn-testnet/qualification/native-http-read-causes-20260928/integrated-790dacb0`.
+They do not constitute a complete release/dependency attestation; unaffected
+component bodies were not rerun.
+
+| Retained input or result | SHA-256 |
+| --- | --- |
+| Source manifest | `c1d6d26966e3f0b387892cb18c5f5d37e15dce79409cd0f04379418a0a61660b` |
+| Consumed local source manifest | `eac072dde6952d531a77ae721bf75e0e0371658bb99f1a6fe528b1ad173aa93e` |
+| Qualification tools | `823ef97cf22108f73397a8b44fec431fbf590a87bbf8636672f7c5fef1142eb6` |
+| Aggregate result | `52ee4dc23644386d51506e517793e44f333ef395b4eb200b20bbc59aad3df6ef` |
+| Normal event stream | `78975a6d27023c635b13db531b07aaa55a5cd205c0fb5fc2d443f157248a09ae` |
+| Race event stream | `74b9d246b9ff9c8797a1c904d6c422d3f379000b15b759b37b217d23514a407c` |
+| Integrated two-root normal event stream | `5bf65165ad3f5c3b5d128288fe4cad9cc5b35637c53a1f05d5056e6491ef2b2c` |
+| Integrated two-root race event stream | `90ce6e7094b8eecc2469f685b1e79663860e0556c97a3de92adaed09ca352b04` |
+| Integrated resolved module graph, before/after | `e6502b79a35bbc61f3a9dd3cb7649865ca6bfc39c63573e1e73bf0331e302917` |
+
+Integration review identified a finite-bound edge: the shared receipt reader
+admits up to 16 MiB decoded `System.Events`, whose hexadecimal wire value plus
+JSON-RPC envelope exceeds this component's 32 MiB response ceiling. A follow-up
+must admit that existing field bound with explicit envelope headroom and a
+deterministic boundary test. The original component evidence is preserved;
+this receipt does not claim that follow-up is implemented or qualified.

@@ -213,7 +213,8 @@ loop. It does not widen runtime, header, block-body or receipt authentication.
 Websocket behavior and its existing reconnect compatibility remain unchanged.
 
 The [native HTTP cause evidence](../mainnet/evidence/native-http-read-causes-20260928.md)
-records the exact component selector and remaining qualification. No live node
+records the passed component normal/race selector and remaining integration
+work, including envelope headroom for the existing event-field limit. No live node
 mutation or signing is part of these local fixtures.
 
 ## Tests

@@ -45,3 +45,10 @@ with the same retry bounds. All 21 attempts returned HTTP 502 and curl exited
 invocation used `--fail` and retained no error response body. Its raw directory
 is `/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T0235Z`.
 Mainnet identity remains unverified.
+
+The next check ran from **04:00:29 through 04:05:32 UTC** on September 28
+with the same retry bounds. All 21 requests again returned HTTP 502; curl
+exited 22 after 303 seconds. The error body, status and stderr match the three
+hashes above. Raw timestamps and results are retained under
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T0400Z`.
+This remains an availability observation with no new chain identity.
