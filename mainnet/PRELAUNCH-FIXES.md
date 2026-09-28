@@ -54,6 +54,14 @@ custody, economic, recovery or runtime checks for the deployed roles.
 | MG-09 / P1 — Sustained resource and storage capacity | Service/storage owner; PH-08/09/20/23/26 | **Planned:** bounded simulator mechanisms exist; production sizing and restoration receipts are missing. | Measure backlog, bytes, memory, RPC work and queue fairness with the proposed fleet and retention. Bind finite capacity with reviewed margin; prove missing/full-volume behavior, backup restore, multi-gigabyte log drainage and foreground deadline headroom. Required before unattended operation. |
 | MG-10 / P0 — Qualification, rollout and actual acceptance | Release/operations owner; PH-16 and every affected gate | **Planned:** no accepted composed mainnet release. | Before activation, complete production-path causal regressions, affected normal/race suites and a controlled upgrade/outage/restart/repair rehearsal; retain failed and reused scopes. After bounded activation, observe at least three complete native emission intervals and one full 50,400-block UR settlement/claim cycle before declaring program acceptance. Record pending live evidence as pending. |
 
+MG-07 now includes the qualified standard-validator
+[service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal
+and race, with four causal controls and the integrated authority-projection
+check. Actual custody/settlement owners supply its facts; an isolated exporter
+keeps heartbeat, useful progress and confirmed publication separate. The
+read-only monitor consumer, Native/Steering loop hooks and delivered alerts
+remain open.
+
 The newer server source branch `codex/mainnet-composed-hardening-20260927` at
 `b6f49bdb` includes migration 728, the operator receipt-census correction,
 atomic payer admission and checked settlement arithmetic on the v11 server

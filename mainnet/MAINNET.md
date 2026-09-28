@@ -1042,6 +1042,15 @@ executes only already authorized actions. Implement and rehearse this separation
 under MG-07/PH-28 before production activation. The current `monitor` command
 supplies only the identity/finality foundation described above.
 
+The standard validator now has a qualified optional
+[`--progress-file` producer](SERVICE-PROGRESS.md). It reports bounded intent and
+settlement observations without acquiring another protocol reader or signer;
+publication failures do not cancel validation. Its separate heartbeat,
+successful-observation, durable-progress and publication-acknowledgment times
+must remain distinct in dashboards. The read-only consumer and delivered
+alerts are still implementation/deployment work; a fresh file alone is not
+proof of healthy validation.
+
 ### Independent observations and existing telemetry
 
 Run the monitor separately from bootstrap and validator/taskworker lifecycles,

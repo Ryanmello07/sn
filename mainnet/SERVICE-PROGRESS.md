@@ -93,6 +93,9 @@ ambiguous writes, and restart/clock ordering. A genuine nonempty production V2
 claim successful nonempty end-to-end transition coverage. The typed loop hooks
 will be added at its exact classification branches without changing retries.
 
-Final normal/race execution and causal controls are pending the requested Terra
-qualification lane. Compile/vet investigation and the earlier bounded normal
-investigation are kept separately from final source qualification.
+[Terra qualification passed](evidence/validator-service-progress-qualification-20260928.md):
+47 selected roots passed normally and with race detection, all four causal
+controls failed as intended in both modes, and vet passed. The integrated
+packages compile together and the changed-dependency original-authority
+projection passes both modes. Earlier compile/vet and bounded normal
+investigations remain separate from final source qualification.
