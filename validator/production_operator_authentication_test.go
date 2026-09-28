@@ -58,7 +58,7 @@ func (self *productionAuthenticationTestOutput) WriteContext(ctx context.Context
 
 // Complete invalid refreshes latch only the API owner, both during startup and
 // after genuine successful admission. The real canonical receipt is released
-// only after the hard diagnostic; durable native work still reaches applied.
+// only after the real API withdrawal; diagnostics are checked separately.
 func TestProductionAuthenticationRunReleaseInvalidApiKeepsObservation(t *testing.T) {
 	for _, admitted := range []bool{false, true} {
 		fixture := newProductionStartupTestFixture(t)
@@ -69,8 +69,10 @@ func TestProductionAuthenticationRunReleaseInvalidApiKeepsObservation(t *testing
 		continuation.production.extrinsicsKVs = map[uint64][]string{103: {pending.Prepared.ExtrinsicHex}}
 		continuation.production.epoch++
 		output := &productionAuthenticationTestOutput{wait: make(chan struct{}), invalid: make(chan struct{})}
+		withdrawn := make(chan struct{})
+		var withdrawnOnce sync.Once
 		_, receiptHash := continuation.production.receiptBlock(103)
-		fixture.nativeBodyWaitHash, fixture.nativeBodyWait = receiptHash.Hex(), output.invalid
+		fixture.nativeBodyWaitHash, fixture.nativeBodyWait = receiptHash.Hex(), withdrawn
 		api := fixture.origins[0]
 		api.invalidRefresh = `{"by_jwt":"synthetic invalid token","error":{"message":"synthetic conflicting refusal"}}`
 		if admitted {
@@ -82,7 +84,12 @@ func TestProductionAuthenticationRunReleaseInvalidApiKeepsObservation(t *testing
 			t.Fatal(err)
 		}
 		fixture.closePreparation(t)
-		ctx, cancel := context.WithCancel(context.WithValue(t.Context(), releaseDiagnosticHooksKey{}, releaseDiagnosticHooks{writer: output}))
+		observed := context.WithValue(t.Context(), productionAuthenticationReadHooksKey{}, productionAuthenticationReadHooks{observe: func(value productionAuthenticationObservation) {
+			if value.noId == 9 && !value.ready && value.recoveryRequired {
+				withdrawnOnce.Do(func() { close(withdrawn) })
+			}
+		}})
+		ctx, cancel := context.WithCancel(context.WithValue(observed, releaseDiagnosticHooksKey{}, releaseDiagnosticHooks{writer: output}))
 		done := make(chan error, 1)
 		go func() { done <- RunRelease(ctx, fixture.configPath) }()
 		select {
@@ -98,6 +105,11 @@ func TestProductionAuthenticationRunReleaseInvalidApiKeepsObservation(t *testing
 		cancel()
 		if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatal(err)
+		}
+		select {
+		case <-withdrawn:
+		default:
+			t.Fatal("native receipt escaped actual API withdrawal")
 		}
 		select {
 		case <-output.invalid:
@@ -140,8 +152,10 @@ func TestProductionAuthenticationRunReleaseRevocationKeepsObservation(t *testing
 	continuation.production.extrinsicsKVs = map[uint64][]string{103: {pending.Prepared.ExtrinsicHex}}
 	continuation.production.epoch++
 	output := &productionAuthenticationTestOutput{wait: make(chan struct{}), revoked: make(chan struct{})}
+	withdrawn := make(chan struct{})
+	var withdrawnOnce sync.Once
 	_, receiptHash := continuation.production.receiptBlock(103)
-	fixture.nativeBodyWaitHash, fixture.nativeBodyWait = receiptHash.Hex(), output.revoked
+	fixture.nativeBodyWaitHash, fixture.nativeBodyWait = receiptHash.Hex(), withdrawn
 	api := fixture.origins[0]
 	api.rejectRefreshAfter = 1
 	marker := continuation.production.cfg.Operators[0].ClientJWTFile + ".rejected"
@@ -156,7 +170,12 @@ func TestProductionAuthenticationRunReleaseRevocationKeepsObservation(t *testing
 		}
 	}
 	fixture.closePreparation(t)
-	ctx, cancel := context.WithCancel(context.WithValue(t.Context(), releaseDiagnosticHooksKey{}, releaseDiagnosticHooks{writer: output}))
+	observed := context.WithValue(t.Context(), productionAuthenticationReadHooksKey{}, productionAuthenticationReadHooks{observe: func(value productionAuthenticationObservation) {
+		if value.noId == 9 && !value.ready && value.recoveryRequired {
+			withdrawnOnce.Do(func() { close(withdrawn) })
+		}
+	}})
+	ctx, cancel := context.WithCancel(context.WithValue(observed, releaseDiagnosticHooksKey{}, releaseDiagnosticHooks{writer: output}))
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- RunRelease(ctx, fixture.configPath) }()
@@ -172,6 +191,11 @@ func TestProductionAuthenticationRunReleaseRevocationKeepsObservation(t *testing
 	cancel()
 	if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+	select {
+	case <-withdrawn:
+	default:
+		t.Fatal("native receipt escaped actual revocation and persistence attempt")
 	}
 	select {
 	case <-output.revoked:

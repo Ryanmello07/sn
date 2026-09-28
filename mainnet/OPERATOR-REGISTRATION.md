@@ -84,6 +84,17 @@ the operator-owned trail context. The real trail workers join independently;
 mixed cancellation and a durable proof failure remain hard. A failed rejection
 marker write emits a closed diagnostic and never re-enables the old session.
 
+The outer native operation validates immutable configured upload/source ownership
+separately from live destination readiness. Qualification of the initial candidate
+found that rebuilding active upload writers before every `SubmitOnce` made a
+correct API withdrawal cancel receipt recovery before it could read the retained
+intent. The successor preserves exact route, bounds, concrete writer, activation
+and source-key checks there; publication builders and already obtained callbacks
+still reject a closed session. Native receipt/nonce/application observation does
+not need active upload credentials. Its public-root fixtures order the native
+response after a copied real withdrawal transition; optional lossy diagnostics
+remain separately asserted and do not authorize or release native work.
+
 An already present legacy client receives a durable `.registration.existing`
 identity marker before refresh. Losing that token later cannot consume the
 fresh-create flag or mint another client; explicit identity recovery is required.

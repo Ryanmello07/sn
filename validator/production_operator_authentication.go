@@ -157,6 +157,23 @@ func observeProductionAuthenticationWait(ctx context.Context, progress *releaseP
 type productionAuthenticationReadHooksKey struct{}
 type productionAuthenticationReadHooks struct {
 	withTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)
+	// Optional tests observe copied completed transitions without granting
+	// readiness. The observer must return immediately and owns no runtime.
+	observe func(productionAuthenticationObservation)
+}
+
+type productionAuthenticationObservation struct {
+	noId             uint64
+	ready            bool
+	recoveryRequired bool
+}
+
+// Called after the real atomic/session transition, outside locks. Optional
+// diagnostic delivery is lossy and therefore cannot order recovery fixtures.
+func observeProductionAuthentication(ctx context.Context, noId uint64, owner *productionOperatorAuthentication) {
+	if hooks, ok := ctx.Value(productionAuthenticationReadHooksKey{}).(productionAuthenticationReadHooks); ok && hooks.observe != nil {
+		hooks.observe(productionAuthenticationObservation{noId: noId, ready: owner.ready.Load(), recoveryRequired: owner.recoveryRequired.Load()})
+	}
 }
 
 func productionAuthenticationAttemptContext(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -259,6 +276,7 @@ func newProductionReleaseOperator(ctx context.Context, cfg *ReleaseConfig, op Op
 					owner.recoveryRequired.Store(true)
 					owner.cancelTrails()
 					api.Close()
+					observeProductionAuthentication(ctx, op.NoID, owner)
 					releaseDiagnostic(ctx, "operator", "authentication_recovery_required", 0, false, 0, releaseDiagnosticFacts{operatorId: op.NoID, operatorKnown: true, cause: releaseDiagnosticHardError})
 					return nil // Latched; no automatic API retry or replacement.
 				}
@@ -290,6 +308,7 @@ func newProductionReleaseOperator(ctx context.Context, cfg *ReleaseConfig, op Op
 			upload.close()
 			transport.Close()
 			api.Close()
+			observeProductionAuthentication(ctx, op.NoID, owner)
 			releaseDiagnostic(ctx, "operator", code, 0, false, 0, releaseDiagnosticFacts{operatorId: op.NoID, operatorKnown: true, cause: releaseDiagnosticHardError})
 		}
 		refresh := api.AddJwtRefreshListener(clientauth.JwtRefreshListenerFunc(func(refreshed string) {
@@ -324,6 +343,7 @@ func newProductionReleaseOperator(ctx context.Context, cfg *ReleaseConfig, op Op
 			if err := clientauth.MarkRejected(op.ClientJWTFile, op.NetworkJWTFile); err != nil {
 				code = "jwt_rejection_save_failed"
 			}
+			observeProductionAuthentication(ctx, op.NoID, owner)
 			releaseDiagnostic(ctx, "operator", code, 0, false, 0, releaseDiagnosticFacts{operatorId: op.NoID, operatorKnown: true, cause: releaseDiagnosticHardError})
 		}))
 		closeConnected = func() error {
@@ -336,6 +356,7 @@ func newProductionReleaseOperator(ctx context.Context, cfg *ReleaseConfig, op Op
 		durableCredential.Store(token)
 		owner.ready.Store(true)
 		close(owner.admitted)
+		observeProductionAuthentication(ctx, op.NoID, owner)
 		releaseDiagnostic(ctx, "operator", "authentication_ready", 0, false, 0, releaseDiagnosticFacts{operatorId: op.NoID, operatorKnown: true})
 		api.StartJwtRefresh()
 		return nil

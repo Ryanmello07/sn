@@ -207,6 +207,9 @@ func requireReleaseEvidenceV2Runtime(self *ReleaseSteerer) error {
 			return errors.New("V2 production artifact reader differs from its configured source")
 		}
 	}
+	if isOwnerRecycleProductionConfig(self.cfg) {
+		return validateReleaseReservedAttemptCensusOwnershipV2(self.cfg, runtime.origins, runtime.runtimes)
+	}
 	_, err := releaseReservedAttemptCensusReplicasV2(self.cfg, runtime.origins, runtime.runtimes)
 	return err
 }
