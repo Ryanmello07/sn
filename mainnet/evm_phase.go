@@ -139,9 +139,9 @@ func (self evmPhasePlan) hash() string {
 	}{Domain: evmPhaseSchema, Bytes: raw})
 }
 
-// The graph is finite and preserves its original sender/nonce and total cost
-// reservations. Known descendants remain sealed but cannot execute in this slice.
-func (self evmPhaseConfig) validate() error {
+// Unsigned review enforces the same finite structure, identities, fee envelope
+// and key encoding. This check alone never admits an action owner or journal.
+func (self evmPhaseConfig) validateStructure() error {
 	p := self.Plan
 	if self.Schema != evmPhaseConfigSchema || p.Schema != evmPhaseSchema || !planLabel(p.DeploymentId) || p.Network.NativeChain == "" || p.Network.EvmChainId != mainnetEvmChainId || !rootCanonicalHash(p.Network.GenesisHash) || p.Netuid != 25 || !rootCanonicalHash(p.ReserveHotkey) || !planLabel(p.CustodyId) || !planSha256(p.CustodyFenceHash) || !planSha256(p.CutoverEvidenceHash) || !planSha256(p.SourceLockHash) || !planSha256(p.Artifacts.Sha256) || !bootstrapRootAbsolutePath(p.Artifacts.Path) || !bootstrapRootAbsolutePath(p.RunDirectory) || p.StartNativeNumber == 0 || !rootCanonicalHash(p.StartNativeHash) || p.ValidThroughNative <= p.StartNativeNumber || p.ValidThroughNative-p.StartNativeNumber > 7200 || p.MaximumAttempts == 0 || p.MaximumAttempts > 8 || len(p.Actions) == 0 || len(p.Actions) > 9 {
 		return errors.New("contract phase lacks exact identity, scope or finite bounds")
@@ -185,11 +185,24 @@ func (self evmPhaseConfig) validate() error {
 	if err != nil || len(key) != 32 {
 		return errors.New("contract phase approval key is invalid")
 	}
+	return nil
+}
+
+// Execution always verifies the independently supplied approval after complete
+// structural admission. Preview cannot change or waive this authority boundary.
+func (self evmPhaseConfig) validate() error {
+	if err := self.validateStructure(); err != nil {
+		return err
+	}
+	key, err := rootReceiptHex(self.ApprovalPublicKey, 32)
+	if err != nil {
+		return err
+	}
 	signature, err := rootOfflineSignatureBytes(self.Signature)
 	if err != nil {
 		return errors.Join(errors.New("contract phase approval signature requires 128 unprefixed lowercase hex characters"), err)
 	}
-	message, msgErr := p.signingBytes()
+	message, msgErr := self.Plan.signingBytes()
 	if msgErr != nil {
 		return msgErr
 	}
@@ -208,29 +221,47 @@ type evmCreatePlan struct {
 	Getters []contractGetter
 }
 
-// Rebuilding the constructor and every immutable rejects a signed arbitrary
-// CREATE hidden behind the reserve action name. No external operation occurs.
-func loadEvmCreatePlan(ctx context.Context, path string) (evmCreatePlan, error) {
-	var result evmCreatePlan
+// Both review paths decode one bounded public config with duplicate/unknown
+// fields rejected. Signature policy stays with the caller, not the file loader.
+func readEvmPhaseConfig(ctx context.Context, path string) (evmPhaseConfig, error) {
+	var config evmPhaseConfig
 	raw, _, err := readBootstrapRootFile(ctx, path, 2*1024*1024)
 	if err != nil {
-		return result, err
+		return config, err
 	}
-	if err := decodePlanJson(raw, &result.Config); err != nil {
-		return result, err
+	if err := decodePlanJson(raw, &config); err != nil {
+		return config, err
 	}
-	if err := result.Config.validate(); err != nil {
-		return result, err
+	return config, nil
+}
+
+// Signed commands still require independent approval and an existing private
+// custody directory. Read-only unsigned review never calls this admission path.
+func loadEvmCreatePlan(ctx context.Context, path string) (evmCreatePlan, error) {
+	config, err := readEvmPhaseConfig(ctx, path)
+	if err != nil {
+		return evmCreatePlan{}, err
 	}
-	p := result.Config.Plan
+	if err := config.validate(); err != nil {
+		return evmCreatePlan{}, err
+	}
+	if err := bootstrapRootDirectory(config.Plan.RunDirectory); err != nil {
+		return evmCreatePlan{}, err
+	}
+	return buildEvmCreatePlan(ctx, config, path)
+}
+
+// Rebuilding the constructor and immutables rejects arbitrary CREATE payloads
+// in both signed and unsigned review. Only config and artifact files are read;
+// the future custody directory is compared syntactically and never inspected.
+func buildEvmCreatePlan(ctx context.Context, config evmPhaseConfig, path string) (evmCreatePlan, error) {
+	result := evmCreatePlan{Config: config}
+	p := config.Plan
 	statePath := filepath.Join(p.RunDirectory, evmCreateStateFile)
 	for _, input := range []string{path, p.Artifacts.Path} {
 		if input == statePath || input == statePath+".lock" {
 			return result, errors.New("contract phase input aliases its journal")
 		}
-	}
-	if err := bootstrapRootDirectory(p.RunDirectory); err != nil {
-		return result, err
 	}
 	artifacts, err := loadContractRelease(ctx, p.Artifacts)
 	if err != nil {

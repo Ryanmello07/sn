@@ -16,33 +16,46 @@ import (
 // Plan output names the first implemented action and never claims installation.
 func runBootstrapContractCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) < 2 || args[0] != "bootstrap-contracts" {
-		fmt.Fprintln(stderr, "usage: bootstrap-contracts plan|apply|resume --config FILE")
+		fmt.Fprintln(stderr, "usage: bootstrap-contracts preview|plan|apply|resume --config FILE")
 		return 2
 	}
 	command := args[1]
-	if command != "plan" && command != "apply" && command != "resume" {
+	if command != "preview" && command != "plan" && command != "apply" && command != "resume" {
 		fmt.Fprintln(stderr, "unknown contract phase command")
 		return 2
 	}
 	flags := flag.NewFlagSet("bootstrap-contracts "+command, flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	configPath := flags.String("config", "", "independently provisioned signed phase configuration")
+	configPath := flags.String("config", "", "phase configuration; only preview accepts an unsigned draft")
 	accepted := flags.String("accept-plan-hash", "", "exact reviewed phase hash")
 	runDirectory := flags.String("run-dir", "", "approved private journal directory")
 	signaturePath := flags.String("signed-transaction", "", "private regular file containing original public transaction bytes")
 	signatureHash := flags.String("signed-transaction-hash", "", "sha256 pin of original public signed-byte file")
 	online := flags.Bool("online", false, "read the independently approved owned RPC route")
 	submit := flags.Bool("submit", false, "permit one originally approved, durably counted HTTP submission")
-	if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 || *configPath == "" || command == "plan" && (*accepted != "" || *runDirectory != "" || *signaturePath != "" || *signatureHash != "" || *online || *submit) || command != "plan" && (*accepted == "" || *runDirectory == "") || (*signaturePath == "") != (*signatureHash == "") || *signaturePath != "" && (command != "resume" || !planSha256(*signatureHash)) || (*online || *submit) && command != "resume" || *submit && !*online {
+	review := command == "plan" || command == "preview"
+	if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 || *configPath == "" || review && (*accepted != "" || *runDirectory != "" || *signaturePath != "" || *signatureHash != "" || *online || *submit) || !review && (*accepted == "" || *runDirectory == "") || (*signaturePath == "") != (*signatureHash == "") || *signaturePath != "" && (command != "resume" || !planSha256(*signatureHash)) || (*online || *submit) && command != "resume" || *submit && !*online {
 		fmt.Fprintln(stderr, "contract phase requires exact config/plan/run directory; only resume accepts pinned signed bytes, --online and --submit")
 		return 2
+	}
+	encoder := json.NewEncoder(stdout)
+	if command == "preview" {
+		preview, err := loadEvmPhasePreview(ctx, *configPath)
+		if err != nil {
+			fmt.Fprintln(stderr, "contract phase unsigned preview:", err)
+			return 2
+		}
+		if err := encoder.Encode(preview); err != nil {
+			fmt.Fprintln(stderr, "contract phase unsigned preview output:", err)
+			return 1
+		}
+		return 0
 	}
 	plan, err := loadEvmCreatePlan(ctx, *configPath)
 	if err != nil {
 		fmt.Fprintln(stderr, "contract phase authority:", err)
 		return 2
 	}
-	encoder := json.NewEncoder(stdout)
 	if command == "plan" {
 		if err := encoder.Encode(struct {
 			Plan                 evmPhasePlan `json:"plan"`

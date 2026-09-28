@@ -457,12 +457,17 @@ value. Keep retries within the approved operation budget and retain unresolved
 signed liabilities for reconciliation.
 
 The first [executable contract phase](BOOTSTRAP-CONTRACTS.md) now wires
-`bootstrap-contracts plan/apply/resume` to exact reserve CREATE preparation,
+`bootstrap-contracts preview/plan/apply/resume` to exact reserve CREATE preparation,
 public signed-byte custody, a finite owned-HTTP submission allowance and
 canonical transaction/runtime/getter recovery. Offline preparation requires no
 deployment outputs. The candidate's [Terra qualification is pending](evidence/bootstrap-contract-create-20260928.md);
 only this first CREATE is implemented. The remaining graph, including genuine
 Safe evidence anchoring, and authenticated live authority remain required.
+Unsigned `preview` exports the exact independently signable approval bytes after
+local structural/artifact review without opening custody or a network route.
+Signed commands retain the approval check. Offline reopen preserves completed
+receipts as explicitly retained observations, not fresh chain audits; these
+[follow-up command regressions await Terra qualification](evidence/bootstrap-contract-preview-20260928.md).
 
 | Identity | Custody/authority |
 | --- | --- |

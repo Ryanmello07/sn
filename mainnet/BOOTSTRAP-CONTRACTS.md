@@ -1,6 +1,6 @@
 # Executable contract bootstrap: reserve CREATE
 
-`bootstrap-contracts plan/apply/resume` implements the first installation action:
+`bootstrap-contracts preview/plan/apply/resume` implements the first installation action:
 an exact `STReserveSink` CREATE through retained public EVM custody and the owned
 HTTP submission adapter. It does not install the remaining contracts, anchor
 evidence, register miners, change emissions, activate validators, or complete
@@ -37,12 +37,38 @@ encoded as `0x` plus 64 lowercase hexadecimal characters. Prefixing the signatur
 with `0x`, uppercasing it, or accepting another spelling is invalid. This uses the
 existing root custody signature parser without changing its wire contract.
 
-The current `plan` command requires that independently signed configuration.
-It is not yet an unsigned preparation command. The package's payload and
-approval-message helpers do not constitute an executable operator export path.
-A read-only unsigned artifact/structure validation and exact signing-message
-export is a concrete next bootstrap prerequisite; it must grant no journal or
-submission authority, while `apply/resume` continue to require this signature.
+`preview` accepts the same configuration with an empty
+`approval_signature_ed25519`. It validates the finite graph, public-key format,
+route syntax, amount bounds, exact artifact file and reserve constructor, then
+exports the typed plan, plan hash, predicted address/runtime hash, and exact
+domain-separated approval bytes as `approval_signing_message_hex` (unprefixed
+lowercase hexadecimal). `approval_signing_message_sha256` identifies those
+bytes. The exported `approval_verified` value is always false. A supplied
+signature is rejected by preview; `plan` is the signed approval review command.
+
+Preview reads only the draft and artifact files. It does not inspect or create
+the future run directory, acquire its journal lock, load a key, or open a network
+route. A valid preview does not authenticate externally supplied runtime,
+custody, cutover or network claims. Provide those exact inputs through the
+independent approval workflow; no live values are inferred by this command.
+
+Prepare the bounded draft, review the exported plan and exact payload, then
+have the independent approval signer sign the **decoded message bytes**, not
+the SHA-256 digest or the text containing hexadecimal characters:
+
+```sh
+umask 077
+sn-mainnet bootstrap-contracts preview --config /secure/ur-mainnet/contract-phase.unsigned.json > /secure/ur-mainnet/contract-phase.preview.json
+jq -r '.approval_signing_message_hex' /secure/ur-mainnet/contract-phase.preview.json | xxd -r -p > /secure/ur-mainnet/contract-phase.approval.bin
+```
+
+Put the returned 64-byte signature's canonical 128-character encoding into the
+same config's `approval_signature_ed25519` field. Preserve the exact typed plan
+and independently provisioned public key. JSON whitespace may change; any
+plan-field change requires a fresh review and signature. `plan`, `apply` and
+`resume` all verify this signature before any journal or RPC owner can open.
+Preview accepts no execution, signed-transaction, run-directory or accepted-hash
+flags. Its successful exit only means local structural/artifact review passed.
 
 The phase binds the mainnet EVM chain ID 964, independently approved native chain
 and genesis, exact runtime version/code/metadata and inspected source commit,
@@ -127,6 +153,10 @@ governance freeze. Owned RPC finality/state remain assertions, not GRANDPA or
 storage proofs. All live identity, route, funding, runtime and custody approvals
 remain required inputs. No live signing, RPC write or deployment qualified this
 candidate.
+
+The [offline recovery and approval-preview follow-up](evidence/bootstrap-contract-preview-20260928.md)
+has separate command regressions and pending Terra qualification. Its local
+signature fixture does not supply live approval authority.
 
 EVM signatures have **no native block expiry**. The finite native window only
 stops new local submissions. Retained bytes remain a liability until a canonical

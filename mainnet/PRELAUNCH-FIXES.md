@@ -275,6 +275,11 @@ revalidated within the operation; an unavailable mapping read does not become a
 successful-value mismatch. EVM signature liability survives local approval
 expiry. The other eight installation actions, Safe inner-call success/getter
 verification and authenticated live custody/network inputs remain open.
+The [approval-preview/offline recovery follow-up](evidence/bootstrap-contract-preview-20260928.md)
+adds a read-only unsigned CLI export of exact approval bytes and preserves
+terminal receipts on offline reopen with an explicit retained-observation label.
+Preview opens no journal or route; signed execution remains independently
+approved. Its deterministic command tests await the separate Terra lane.
 
 Start with MG-01's read-only route correction and MG-02's source composition.
 Then close the recovery, runtime, policy, settlement and monitoring dependencies
