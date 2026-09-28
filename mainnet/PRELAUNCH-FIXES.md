@@ -69,6 +69,17 @@ qualification. Use real isolated worktrees for every local replacement and
 retain the compiled executable. A prepared workspace or an intended source lock
 does not establish which dependency bytes the compiler used.
 
+The corrected full model qualification is running separately under
+`/mnt/data/sn-testnet/evidence/server-model-final-20260927`, with SN `615a7675`
+and server `4468a696` in real frozen worktrees. The guard checks the actual
+resolved module graph before compilation and after completion; the runner
+retains model/controller/handler executables and build metadata. Its result is
+**pending**, not an accepted composed release. Server `4468a696` corrects the
+historical payment, retention and probe fixtures without changing production
+guards or scheduling; 18 affected roots passed normal and race qualification
+([receipt](https://github.com/urnetwork/server/blob/4468a6961c00cf0ff8b84986259fa9698a7a8441/local/model-fixture-qualification-20260927.md)).
+The original diagnostic run continues to collect additional failures.
+
 For MG-08, the majority SN25 validator runs the standard `sn/validator` binary
 with its ordinary evidence-based scoring policy. It is an indirect reset aid,
 not a native removal authority. Old miners absent from eligible head and pool
