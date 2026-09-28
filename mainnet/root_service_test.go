@@ -557,17 +557,29 @@ func TestRootServiceCancellationAndConcurrentSteps(t *testing.T) {
 	}
 }
 
+// An arbitrary synchronous writer has no admitted cancellation contract.
+type rootServiceRefusedOutput struct{ calls int }
+
+// Recording a call distinguishes refusal from an attempted failed write.
+func (self *rootServiceRefusedOutput) Write([]byte) (int, error) {
+	self.calls++
+	return 0, errors.New("synthetic unsupported writer called")
+}
+
 // Optional publication cannot invalidate durable intent. A canceled bounded
 // run joins its reader and cannot leave a detached output or signing worker.
 func TestRootServiceBoundedRunPreservesIntentAndJoins(t *testing.T) {
 	fixture := newRootServiceFixture(t)
 	owner, store := fixture.open(t, true, fixture.ports())
-	output, err := newRootServiceOutput(t.Context(), nil)
+	refused := &rootServiceRefusedOutput{}
+	output, err := newRootServiceOutput(t.Context(), refused)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.Run(context.Background(), 1, time.Hour, output); err != nil || output.snapshot().Unavailable == 0 {
-		t.Fatal("optional publisher changed durable intent result", err)
+	runErr := owner.Run(context.Background(), 1, time.Hour, output)
+	publication := output.snapshot()
+	if runErr != nil || publication.Outcome != "unavailable" || publication.Dropped != 1 || publication.Delivered != 0 || publication.Unavailable != 0 || refused.calls != 0 {
+		t.Fatal("optional publisher changed durable intent result", runErr)
 	}
 	record, err := store.load()
 	if err != nil || record.Phase != "active" || fixture.signer.signs != 0 {
