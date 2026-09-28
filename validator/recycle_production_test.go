@@ -334,6 +334,14 @@ func (self *ownerRecycleProductionTestFixture) stage(t *testing.T) (*ownerRecycl
 // signed atomic source/weights batch. The RPC fixture has no send implementation.
 func (self *ownerRecycleProductionTestFixture) intent(t *testing.T, stage *ownerRecycleProductionStage, provider *VerifiedReleaseMeasurement) *SteeringIntent {
 	t.Helper()
+	intent, _ := self.intentAndEnvelope(t, stage, provider)
+	return intent
+}
+
+// Content addressing retains the original randomized envelope signature;
+// signing the same fields again does not reproduce the same envelope bytes.
+func (self *ownerRecycleProductionTestFixture) intentAndEnvelope(t *testing.T, stage *ownerRecycleProductionStage, provider *VerifiedReleaseMeasurement) (*SteeringIntent, []byte) {
+	t.Helper()
 	measurement := self.operator.measurement
 	native := measurement.admission.chain
 	selected, err := types.NewHashFromHexString(stage.proof.Decision.NativeSnapshotHash)
@@ -357,7 +365,7 @@ func (self *ownerRecycleProductionTestFixture) intent(t *testing.T, stage *owner
 	if _, err := prepared.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	_, envelopeHash, _, err := SealReleaseMeasurementEnvelopeV2(t.Context(), measurement.encoded, measurement.provider.artifact.SelfUID, self.hotkey, prepared.ExtrinsicHash, time.Unix(2_000_000_000, 0), measurement.provider.options(t))
+	envelope, envelopeHash, _, err := SealReleaseMeasurementEnvelopeV2(t.Context(), measurement.encoded, measurement.provider.artifact.SelfUID, self.hotkey, prepared.ExtrinsicHash, time.Unix(2_000_000_000, 0), measurement.provider.options(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +385,7 @@ func (self *ownerRecycleProductionTestFixture) intent(t *testing.T, stage *owner
 		encoded, _ := rationalJSON([]*big.Rat{head.Score})
 		intent.EligibleHeadScores = append(intent.EligibleHeadScores, encoded[0])
 	}
-	return intent
+	return intent, envelope
 }
 
 // Real first-decision preparation now reaches a signed 10/90 row; signatures

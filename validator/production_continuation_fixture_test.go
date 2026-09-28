@@ -18,7 +18,6 @@ import (
 	"slices"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/urfoundation/sn/protocol"
 )
@@ -164,13 +163,9 @@ func newProductionContinuationTestFixture(t *testing.T) *productionContinuationT
 	}
 	self.steerer = &ReleaseSteerer{cfg: &self.runtime.cfg, runtimeV2: self.runtime, native: self.runtime.native, chain: self.runtime.chain, hotkey: self.runtime.hotkey, intents: store}
 	stage, provider := production.stage(t)
-	self.intent = production.intent(t, stage, provider)
+	self.intent, self.envelope = production.intentAndEnvelope(t, stage, provider)
 	measurement := production.operator.measurement
 	self.intent.MeasurementArtifactPath, self.intent.MeasurementArtifactSize, err = persistReleaseMeasurementArtifact(cfg.StateDir, measurement.encoded, self.intent.MeasurementArtifactHash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	self.envelope, _, _, err = SealReleaseMeasurementEnvelopeV2(t.Context(), measurement.encoded, measurement.provider.artifact.SelfUID, production.hotkey, self.intent.Prepared.ExtrinsicHash, time.Unix(2_000_000_000, 0), measurement.provider.options(t))
 	if err != nil {
 		t.Fatal(err)
 	}
