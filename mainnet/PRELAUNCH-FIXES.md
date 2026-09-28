@@ -579,7 +579,7 @@ reopen testnet or override the September 27 closure and implementation inventory
 | RT-05 | Separate observed runtime from deployment, configuration and approval identity | RT-02, RT-04 | Astra | Planned | A compatible upgrade preserves the plan, approvals, leases, completed actions and observed epochs. |
 | RT-06 | Preserve historical proof reuse and make metadata-cache capacity independent of catalog length | RT-01, RT-02 | Astra | In progress | The CRv4 per-connection metadata cache has fixed resident capacity, least-recent-use eviction, and exact-hash uncached admission when every slot is loading. The [proof-ownership correction](evidence/runtime-proof-eviction-20260927.md) separates an authenticated provisional view's authority from metadata residency: eviction preserves retained signatures and exact historical reuse, while fresh identity checks and strict/foreign-owner rejection remain. Composed release and production compatibility qualification remain open; no testnet profile grants mainnet authority. |
 | RT-07 | Suspend only operations affected by an unsupported change and expose an actionable reason | RT-02, RT-04 | Astra | Planned | Independent services continue where their dependencies permit; recovery resumes from saved progress. |
-| RT-08 | Qualify upgrade handling and record the mainnet-readiness evidence | RT-01 through RT-07 | Terra | Planned | Affected normal/race tests and a controlled upgrade during an active integration campaign pass with unchanged approvals and reconciled transactions. |
+| RT-08 | Qualify upgrade handling and record the mainnet-readiness evidence | RT-01 through RT-07 | Sol medium | Planned | Affected normal/race tests and a controlled upgrade during an active integration campaign pass with unchanged approvals and reconciled transactions. |
 | RL-01 | Bind launch attestation to an explicitly approved immutable release and its complete input manifest | — | Astra | Planned | Publishing documentation or advancing main does not invalidate an approved unchanged deployment; changed executable, source, policy, contracts or dependencies still require the appropriate new approval. |
 | PF-01 | Reuse an immutable journal index and authenticated historical plans within one reconciliation | — | Astra | In progress | Deterministic work-count tests bound journal indexing by entries and plan authentication by distinct sources, while each receipt retains its own identity and postcondition checks. |
 | PF-02 | Give simulator operator taskworkers an explicit workload profile, including retained queue handling | — | Astra | In progress | Required subnet/operator tasks run for both operators; excluded queued tasks and post hooks remain untouched; production defaults and restart behavior pass affected tests and managed startup. |
@@ -1107,8 +1107,8 @@ Add deterministic synthetic tests following [CODESTYLE.md](../../connect/CODESTY
 - Artifact eviction, RPC outage/reconnect and process restart retain valid
   progress and cannot turn stale or failed evidence into a passing result.
 
-Astra (`gpt-6-astra`, effort `max`) diagnoses and implements; Terra
-(`gpt-5.6-terra`, effort `medium`) runs affected tests normally and under race.
+Astra (`gpt-6-astra`, effort `max`) owns all debugging and fixes; Sol
+(`gpt-6-sol`, effort `medium`) runs affected tests normally and under race.
 The final integration exercise upgrades a controlled runtime while the
 subnet is active and demonstrates continued required observations, reconciled
 transactions and unchanged approvals. It is a production qualification gate,
@@ -1149,8 +1149,10 @@ qualify the production consumers described in [MAINNET.md](../mainnet/MAINNET.md
 before mainnet activation. `P1` is required operational hardening before an
 unattended mainnet launch; it can proceed alongside the P0 implementation.
 These are production gates following the closed testnet effort. Astra authors and
-reviews the implementation; Terra (`gpt-5.6-terra`, effort `medium`) runs the
-affected tests and initial triage. The component column identifies the code
+reviews the implementation; Sol (`gpt-6-sol`, effort `medium`) runs the
+affected tests and reports their exact failures to Astra max for debugging.
+Preserve prior Terra receipts without repeating completed work for this model
+change. The component column identifies the code
 owner boundary, not an additional agent or approval requirement.
 
 | ID | Priority | Production component and outcome | Existing work / dependencies | Status |
@@ -2323,7 +2325,7 @@ observer. Preserve the first report's separate public-node comparison with its
 original scope. A production independent observer, when provisioned, must have
 its own declared endpoint, chain identity and observed checkpoints.
 
-**Closure.** Terra's affected qualifications plus controlled production-path
+**Closure.** The affected qualifications plus controlled production-path
 fault injection must prove the corresponding PH requirements. The final
 exercise combines compatible runtime upgrade, interrupted submission, temporary
 network loss, service/dependency restart and replay/cache reuse while retaining

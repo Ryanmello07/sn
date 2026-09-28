@@ -18,6 +18,14 @@ and the exact `--plan-hash` are supplied.
 
 ## Agent execution policy
 
+Current assignment, confirmed 2026-09-28: **Sol medium** (`gpt-6-sol`,
+reasoning effort `medium`) executes tests and gates; **Astra max**
+(`gpt-6-astra`, reasoning effort `max`) owns all debugging and fixes. This
+also governs the active mainnet qualification. Preserve earlier Terra receipts
+and completed work with their original attribution. Testnet is closed under
+[../FINALIZE.md](../FINALIZE.md); the historical campaign instructions below
+do not authorize a restart.
+
 This harness owns SN testnet finalization under [../FINALIZE.md](../FINALIZE.md).
 Number finalization reports: [FINAL.md](FINAL.md) is report 1; the current
 finalization uses [FINAL-2.md](FINAL-2.md), followed by `FINAL-3.md`, `FINAL-4.md`,

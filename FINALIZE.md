@@ -7,7 +7,7 @@ Do not restart the campaign under the historical instructions below. R48 did
 not establish final acceptance. The active implementation and qualification
 plan is [mainnet/MAINNET.md](mainnet/MAINNET.md), with outstanding work tracked
 in [mainnet/PRELAUNCH-FIXES.md](mainnet/PRELAUNCH-FIXES.md). Astra max authors
-and debugs fixes; Terra medium executes tests and qualification. Preserve
+and debugs fixes; Sol medium executes tests and qualification. Preserve
 completed evidence and run only failed, missing or affected scopes.
 
 ## Current execution — full finalization, 2026-09-12
