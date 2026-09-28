@@ -31,7 +31,7 @@ func TestValidatorDiagnosticsConsumerFirstWireAndByteBound(t *testing.T) {
 		t.Fatal("legacy producer gained known output", err)
 	}
 	value := validatorDiagnosticTestValue()
-	value.Source.DeploymentId = strings.Repeat("synthetic", 32)
+	value.Source.DeploymentId = strings.Repeat("test", 64)
 	raw, err = value.Encode()
 	if err != nil || len(raw) > MaxValidatorProgressBytes {
 		t.Fatal("bounded extension escaped wire", err)
