@@ -482,3 +482,63 @@ func TestProviderDiagnosticsStatusOwnerJoins(t *testing.T) {
 	closed = true
 	client.CloseIdleConnections()
 }
+
+// Shutdown cancels a real admitted request, then joins its Status work. The
+// entry/context barriers make the overlap explicit without timing guesses.
+func TestProviderDiagnosticsStatusShutdownJoinsAdmittedHandler(t *testing.T) {
+	t.Setenv("WARP_VERSION", "1.2.3")
+	t.Setenv("WARP_HOST", "synthetic-provider.example")
+	owner := newProviderDiagnosticTestOwner(t, &providerRefusedWriter{})
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	entered := make(chan struct{})
+	canceled := make(chan struct{})
+	release := make(chan struct{})
+	var completed atomic.Bool
+	server := startProviderStatusServer(listener, owner, cancel, providerStatusHooks{afterAdmit: func(ctx context.Context) {
+		close(entered)
+		<-ctx.Done()
+		close(canceled)
+		<-release
+		completed.Store(true)
+	}})
+	requestDone := make(chan struct{})
+	client := &http.Client{Timeout: 15 * time.Second}
+	go func() {
+		defer close(requestDone)
+		response, _ := client.Get("http://" + listener.Addr().String() + "/status")
+		if response != nil {
+			_ = response.Body.Close()
+		}
+	}()
+	select {
+	case <-entered:
+	case <-time.After(15 * time.Second):
+		close(release)
+		_ = server.close()
+		<-requestDone
+		t.Fatal("status request was not admitted")
+	}
+	closed := make(chan error, 1)
+	go func() { closed <- server.close() }()
+	select {
+	case <-canceled:
+	case <-time.After(15 * time.Second):
+		close(release)
+		<-closed
+		<-requestDone
+		t.Fatal("status shutdown did not cancel the admitted request")
+	}
+	close(release)
+	if err := <-closed; err != nil || !completed.Load() || ctx.Err() != context.Canceled {
+		t.Fatal("status close returned before admitted handler completion")
+	}
+	<-requestDone
+	client.CloseIdleConnections()
+	// A request racing behind closed admission cannot call the original hook.
+	server.handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/status", nil))
+}

@@ -477,6 +477,17 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 	defer func() { returnErr = errors.Join(returnErr, status.close()) }()
 
 	provideWithProxy := func(index uint64, proxySettings *connect.ProxySettings) (returnErr error) {
+		defer func() {
+			// Registered first, this runs after every real cleanup below.
+			// Keep cleanup causes even when an SDK/operation panics.
+			if cause := recover(); cause != nil {
+				if original, ok := cause.(error); ok {
+					returnErr = errors.Join(returnErr, original)
+				} else {
+					returnErr = errors.Join(returnErr, errors.New("provider worker panicked"))
+				}
+			}
+		}()
 		proxyCtx, proxyCancel := context.WithCancel(ctx)
 		defer proxyCancel()
 

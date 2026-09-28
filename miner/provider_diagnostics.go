@@ -33,6 +33,7 @@ const (
 	providerWorkerFailed
 	providerStatusStarted
 	providerStatusFailed
+	providerStatusNotice
 )
 
 // Immutable scalar status can be compared without formatting SDK error strings.
@@ -176,6 +177,8 @@ func (self *providerDiagnostics) observe(event providerDiagnosticEvent, provider
 		code = "status_started"
 	case providerStatusFailed:
 		code = "status_failed"
+	case providerStatusNotice:
+		code = "http_notice"
 	}
 	if event != providerExtenderObserved {
 		extender = nil

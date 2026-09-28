@@ -20,7 +20,10 @@ coalesce without retaining arbitrary SDK error or address strings.
 
 The provide run owns its status listener, provider workers and output owner. A
 status bind refusal precedes launching provider children. Worker completion and
-cancellation join those owners; normal command return preserves the previous
+cancellation close handler admission, interrupt HTTP I/O and join Serve plus
+every previously admitted Status handler before the output owner closes. Late
+requests do not enter Status. Panic recovery preserves both the original error
+and later cleanup causes. Normal command return preserves the previous
 zero completion exit while permitting deferred signal cleanup. Finite CLI setup,
 authentication, wallet, claim and proxy commands retain their existing behavior.
 The provider worker's original errors remain available at the owned run boundary;
