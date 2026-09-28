@@ -38,3 +38,10 @@ Its `body`, `http-status` and `curl.stderr` hashes respectively match the three
 hashes above. The exact timestamps, exit and `response.sha256` are retained
 there. This supplies no new chain identity or evidence of the upstream cause;
 mainnet cutover is still unconfirmed. No public fallback or transaction was used.
+
+A further request ran from **02:34:18 through 02:39:24 UTC** on September 28
+with the same retry bounds. All 21 attempts returned HTTP 502 and curl exited
+22 after 306 seconds. The status and stderr hashes match those above; this
+invocation used `--fail` and retained no error response body. Its raw directory
+is `/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T0235Z`.
+Mainnet identity remains unverified.
