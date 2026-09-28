@@ -18,7 +18,7 @@ import (
 
 // The fixture returns no transaction from actual block bodies; it does not
 // replace the receipt finder or fabricate inclusion/expiry/dispatch success.
-func productionAuthorityPendingTest(t *testing.T, changeRuntime bool) (*ReleaseSteerer, *SteeringIntent) {
+func productionAuthorityPendingTest(t *testing.T, changeRuntime bool) (*ReleaseSteerer, *SteeringIntent, *ownerRecycleProductionTestFixture) {
 	t.Helper()
 	fixture := newOwnerRecycleProductionTestFixture(t)
 	stage, provider := fixture.stage(t)
@@ -73,14 +73,14 @@ func productionAuthorityPendingTest(t *testing.T, changeRuntime bool) (*ReleaseS
 		return original(ctx, target, method, args...)
 	}
 	return &ReleaseSteerer{cfg: current, native: measurement.admission.chain, hotkey: fixture.hotkey,
-		productionReadHooks: releaseHttpGetRetryHooks{wait: func(context.Context, time.Duration) error { return context.DeadlineExceeded }}}, intent
+		productionReadHooks: releaseHttpGetRetryHooks{wait: func(context.Context, time.Duration) error { return context.DeadlineExceeded }}}, intent, fixture
 }
 
 // Both a same-artifact renewal and an upgraded artifact keep the actual receipt
 // polling alive beyond the fatal retry ceiling, without completing the epoch.
 func TestProductionAuthorityHistoryPendingWaitKeepsLoopAlive(t *testing.T) {
 	for _, changeRuntime := range []bool{false, true} {
-		steerer, intent := productionAuthorityPendingTest(t, changeRuntime)
+		steerer, intent, _ := productionAuthorityPendingTest(t, changeRuntime)
 		originalHash, originalPrepared := intent.Prepared.ExtrinsicHash, intent.Prepared
 		attempts := 0
 		err := runReleaseSteeringLoopWithWait(t.Context(), func() (uint64, error) { return intent.SubnetEpoch, nil }, func() error {
@@ -104,7 +104,7 @@ func TestProductionAuthorityHistoryPendingWaitKeepsLoopAlive(t *testing.T) {
 // Crossing a boundary invokes reconciliation again; it cannot infer success
 // from the old wait. Its next real error remains observable to the owner.
 func TestProductionAuthorityHistoryPendingWaitReconcilesNextEpoch(t *testing.T) {
-	steerer, intent := productionAuthorityPendingTest(t, false)
+	steerer, intent, _ := productionAuthorityPendingTest(t, false)
 	_, pending := steerer.reconcilePendingV2(t.Context(), intent, &crv4.EpochScheduleState{SubnetEpochIndex: intent.SubnetEpoch})
 	var typed *productionPendingReconciliation
 	if !errors.As(pending, &typed) {
@@ -133,7 +133,7 @@ func TestProductionAuthorityHistoryPendingWaitReconcilesNextEpoch(t *testing.T) 
 // A typed wait is not a wildcard. Mixed integrity, wrong epoch, prior hard
 // causes and cancellation retain the loop's original failure/owner semantics.
 func TestProductionAuthorityHistoryPendingWaitPreservesHardFailures(t *testing.T) {
-	steerer, intent := productionAuthorityPendingTest(t, false)
+	steerer, intent, _ := productionAuthorityPendingTest(t, false)
 	_, pending := steerer.reconcilePendingV2(t.Context(), intent, &crv4.EpochScheduleState{SubnetEpochIndex: intent.SubnetEpoch})
 	var typed *productionPendingReconciliation
 	if !errors.As(pending, &typed) {
@@ -177,12 +177,21 @@ func TestProductionAuthorityHistoryPendingWaitPreservesHardFailures(t *testing.T
 // observation. A later epoch must retry that scan rather than fabricate expiry,
 // spend the failure budget or kill the independently running proof workers.
 func TestProductionAuthorityHistoryPendingReceiptTimeoutKeepsObservation(t *testing.T) {
-	steerer, intent := productionAuthorityPendingTest(t, false)
+	steerer, intent, fixture := productionAuthorityPendingTest(t, false)
 	client := steerer.native.API.Client.(*recycleAdmissionRouteClient).validatorRuntimeIdentityTestClient
 	original := client.callContext
 	scanErr := error(nil)
+	faultReads := 0
+	cachedBodyReads := 0
 	client.callContext = func(ctx context.Context, target any, method string, args ...any) error {
+		if method == "chain_getBlock" && scanErr == nil {
+			cachedBodyReads++
+		}
 		if method == "chain_getBlock" && scanErr != nil {
+			if len(args) != 1 || args[0] != fixture.block(102).Hex() {
+				t.Fatal("receipt fault was not reached at the new uncached canonical block")
+			}
+			faultReads++
 			return scanErr
 		}
 		return original(ctx, target, method, args...)
@@ -199,6 +208,9 @@ func TestProductionAuthorityHistoryPendingReceiptTimeoutKeepsObservation(t *test
 	}, func() error {
 		attempts++
 		if attempts > 1 {
+			// The original complete absence through101 is intentionally reused.
+			// Only new canonical evidence can exercise a later body outage.
+			fixture.head = 102
 			scanErr = context.DeadlineExceeded
 		}
 		resolved, err := steerer.reconcilePendingV2(t.Context(), intent, &crv4.EpochScheduleState{SubnetEpochIndex: currentEpoch})
@@ -208,15 +220,16 @@ func TestProductionAuthorityHistoryPendingReceiptTimeoutKeepsObservation(t *test
 		}
 		return err
 	}, func() bool { return reads < releaseSteeringFailureLimit+3 })
-	if err != nil || reads != releaseSteeringFailureLimit+3 || attempts != reads || intent.Status != "pending" || intent.Prepared.ExtrinsicHash != originalHash {
+	if err != nil || reads != releaseSteeringFailureLimit+3 || attempts != reads || faultReads < attempts-1 || cachedBodyReads != 2 || intent.Status != "pending" || intent.Prepared.ExtrinsicHash != originalHash {
 		t.Fatalf("receipt outage lost original progress across boundary: reads=%d attempts=%d error=%v", reads, attempts, err)
 	}
 	broken := errors.New("synthetic receipt integrity failure")
 	for _, cause := range []error{errors.Join(context.DeadlineExceeded, broken), context.Canceled} {
 		scanErr = cause
+		before := faultReads
 		_, err := steerer.reconcilePendingV2(t.Context(), intent, &crv4.EpochScheduleState{SubnetEpochIndex: currentEpoch})
 		var pending *productionPendingReconciliation
-		if !errors.Is(err, cause) || errors.As(err, &pending) {
+		if !errors.Is(err, cause) || errors.As(err, &pending) || faultReads != before+1 {
 			t.Fatalf("receipt wait masked independent failure/cancellation: %v", err)
 		}
 	}

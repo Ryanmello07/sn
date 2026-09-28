@@ -15,3 +15,9 @@ Terra should preserve the original failed capture at `/mnt/data/sn-testnet/quali
 ```
 
 Reuse completed original-candidate positives and their causal controls. Production bytes and the diagnostic callback interface are unchanged, so the separately authored bounded-output composition remains valid.
+
+## Uncached-read follow-up
+
+Terra's `093272b6` normal run passed four roots and found one further fixture assumption: after the first complete scan through block 101, the timeout case kept the same finalized head and injected its error into `chain_getBlock`, a read the new cache correctly skipped. The fixture now advances its independently authenticated canonical head to 102 and requires timeout, mixed-integrity and cancellation faults to reach that exact uncached body. It verifies that the two original bodies are read once, while every later fault remains visible without altering the original intent.
+
+This follow-up changes only the pending-recovery fixture and this receipt. Reuse the other four corrected roots and all unchanged scanner/miner positives. Terra's remaining selector is `^TestProductionAuthorityHistoryPendingReceiptTimeoutKeepsObservation$`, normal and race. The previous result remains at `/mnt/data/sn-testnet/qualification/receipt-prefix-20260928/terra-093272b6/normal.jsonl`. Author qualification remains compile-only; no production byte changed.
