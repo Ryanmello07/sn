@@ -62,8 +62,14 @@ func newProductionContinuationTestFixture(t *testing.T) *productionContinuationT
 			for index, input := range artifact.Inputs {
 				operator := provider.operators[input.NoID]
 				source := operator.seal
-				self.contextKVs[input.NoID] = source.expected
 				physical := releaseStatsV2RuntimeTestFixtureFor(t, source, source.engine.stats, source.ledger)
+				// Standalone seal fixtures use a separately selected generation;
+				// continuation takes the actual Stats cursor before publication.
+				expected, err := physical.stats.releaseStatsV2Context(t.Context(), source.expected.Boundary, physical.options)
+				if err != nil {
+					t.Fatal(err)
+				}
+				source.expected, self.contextKVs[input.NoID] = expected, expected
 				if err := physical.stats.Save(physical.dir); err != nil {
 					t.Fatal(err)
 				}
