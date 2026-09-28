@@ -249,7 +249,12 @@ func readReleaseEvidenceV2ActivationInputsWithRetainedSetup(ctx context.Context,
 					errorsByOperator[index] = errors.New("activation publication follows the configured initial cut boundary")
 				}
 				if errorsByOperator[index] != nil {
-					cancel()
+					// Production collects the bounded complete census. Canceling
+					// peers here would turn a pure read outage into a joined hard
+					// cancellation and discard independent diagnostics.
+					if !isOwnerRecycleProductionConfig(cfg) {
+						cancel()
+					}
 					return
 				}
 			}

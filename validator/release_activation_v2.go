@@ -42,8 +42,9 @@ type VerifiedReleaseActivationV2 struct {
 }
 
 // Uses real ChainClient and CRV4 readers, without eligibility or inclusion
-// callbacks. Independent native/EVM observations overlap; any failure cancels
-// and joins the sibling, and no partial result escapes cancellation or error.
+// callbacks. Independent native/EVM observations overlap and join. Production
+// completes both bounded readers so sibling cancellation cannot hide the real
+// cause; no partial result escapes cancellation or error.
 func (self *ChainClient) AuthenticateReleaseActivationV2Context(ctx context.Context, native *crv4.Chain, authority ReleaseActivationV2Authority, candidate protocol.ValidatorEvidenceActivation, vpkSignature, hotkeySignature []byte, block uint64, blockHash [32]byte) (result VerifiedReleaseActivationV2, resultErr error) {
 	if ctx == nil {
 		return result, errors.New("activation authentication context is nil")
@@ -98,11 +99,12 @@ func (self *ChainClient) AuthenticateReleaseActivationV2Context(ctx context.Cont
 	var evmErr, nativeErr error
 	var publication ValidatorEvidenceActivationPublication
 	var observation crv4.ValidatorStakeObservation
+	production := isOwnerRecycleProductionConfig(authority.productionRuntimeConfig)
 	joined.Add(2)
 	go func() {
 		defer joined.Done()
 		publication, evmErr = self.readReleaseActivationV2EVMContext(operationCtx, authority, block, blockHash)
-		if evmErr != nil {
+		if evmErr != nil && !production {
 			cancel()
 		}
 	}()
@@ -116,7 +118,7 @@ func (self *ChainClient) AuthenticateReleaseActivationV2Context(ctx context.Cont
 		if nativeErr == nil && (observation.Identity.Hotkey != expected.Hotkey || !observation.MeetsNonSelfStakeAndPermit()) {
 			nativeErr = errors.New("activation historical hotkey lacks the exact native stake/permit authority")
 		}
-		if nativeErr != nil {
+		if nativeErr != nil && !production {
 			cancel()
 		}
 	}()

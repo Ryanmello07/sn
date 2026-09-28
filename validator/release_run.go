@@ -780,47 +780,94 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 			return errors.Join(errors.New("owner-recycle production hotkey differs from independent approval"), err)
 		}
 	}
-	chain, err := DialReleaseChainContext(ctx, cfg.RPC, common.HexToAddress(cfg.Coordinator))
-	if err != nil {
+	production := isOwnerRecycleProductionConfig(cfg)
+	startupStage := func(stage string, operation func(context.Context) error) error {
+		if production {
+			return awaitProductionStartupStage(ctx, cfg, progress, stage, operation)
+		}
+		return operation(ctx)
+	}
+	var chain *ChainClient
+	defer func() {
+		if chain != nil {
+			chain.Close()
+		}
+	}()
+	if err := startupStage("EVM identity", func(attempt context.Context) error {
+		if chain != nil {
+			chain.Close()
+		}
+		var err error
+		chain, err = DialReleaseChainContext(attempt, cfg.RPC, common.HexToAddress(cfg.Coordinator))
+		return err
+	}); err != nil {
 		return err
 	}
-	defer chain.Close()
-	native, err := dialPinnedNative(ctx, cfg)
-	if err != nil {
+	var native *crv4.Chain
+	defer func() {
+		if native != nil {
+			native.API.Client.Close()
+		}
+	}()
+	if err := startupStage("native identity", func(attempt context.Context) error {
+		if native != nil {
+			native.API.Client.Close()
+		}
+		var err error
+		if production {
+			native, err = dialProductionNativeHistory(attempt, cfg)
+		} else {
+			native, err = dialPinnedNative(attempt, cfg)
+		}
+		return err
+	}); err != nil {
 		return err
 	}
-	defer native.API.Client.Close()
 
 	var settlementEpoch atomic.Uint64
-	snapshot, err := loadInitialReleaseSnapshot(ctx, chain.ReleaseSnapshotContext, waitReleaseSnapshotRetry)
-	if err != nil {
-		return err
-	}
-	settlementEpoch.Store(snapshot.Epoch.Uint64())
+	var snapshot *ReleaseSnapshot
 	var activationInputs []releaseEvidenceV2ActivationInput
-	if retainedSetup != nil {
-		activationInputs, err = loadReleaseEvidenceV2ActivationInputsWithRetainedSetup(ctx, cfg, chain, native, hotkey.PublicKey(), retainedSetup)
+	if production {
+		// Historical signatures and pinned chain observations can reopen old
+		// liability without asking current preparation for permission first.
+		err = startupStage("activation history", func(attempt context.Context) error {
+			var err error
+			activationInputs, err = loadReleaseEvidenceV2ActivationInputsWithRetainedSetup(attempt, cfg, chain, native, hotkey.PublicKey(), nil)
+			return err
+		})
 		if err != nil {
 			return fmt.Errorf("reserved upload activation startup: %w", err)
 		}
-	}
-	var validatorUID uint16
-	var found bool
-	if retainedSetup != nil {
-		validatorUID, found, err = findProvisionalValidatorUIDAtHashContext(ctx, chain, snapshot, cfg.Netuid, hotkey.PublicKey(), activationInputs)
 	} else {
-		validatorUID, found, err = chain.FindUidByHotkeyAtHashContext(ctx, snapshot.BlockNumber, snapshot.BlockHash, cfg.Netuid, hotkey.PublicKey())
-	}
-	if err != nil || !found {
-		return fmt.Errorf("release validator hotkey has no UID at finalized EVM block %d: %w", snapshot.BlockNumber, err)
-	}
-	if _, err := authenticateReleaseValidatorStakeContext(ctx, native, cfg, hotkey.PublicKey(), validatorUID); err != nil {
-		return err
-	}
-	if retainedSetup == nil {
-		activationInputs, err = loadReleaseEvidenceV2ActivationInputsWithRetainedSetup(ctx, cfg, chain, native, hotkey.PublicKey(), nil)
+		snapshot, err = loadInitialReleaseSnapshot(ctx, chain.ReleaseSnapshotContext, waitReleaseSnapshotRetry)
 		if err != nil {
-			return fmt.Errorf("reserved upload activation startup: %w", err)
+			return err
+		}
+		settlementEpoch.Store(snapshot.Epoch.Uint64())
+		if retainedSetup != nil {
+			activationInputs, err = loadReleaseEvidenceV2ActivationInputsWithRetainedSetup(ctx, cfg, chain, native, hotkey.PublicKey(), retainedSetup)
+			if err != nil {
+				return fmt.Errorf("reserved upload activation startup: %w", err)
+			}
+		}
+		var validatorUID uint16
+		var found bool
+		if retainedSetup != nil {
+			validatorUID, found, err = findProvisionalValidatorUIDAtHashContext(ctx, chain, snapshot, cfg.Netuid, hotkey.PublicKey(), activationInputs)
+		} else {
+			validatorUID, found, err = chain.FindUidByHotkeyAtHashContext(ctx, snapshot.BlockNumber, snapshot.BlockHash, cfg.Netuid, hotkey.PublicKey())
+		}
+		if err != nil || !found {
+			return fmt.Errorf("release validator hotkey has no UID at finalized EVM block %d: %w", snapshot.BlockNumber, err)
+		}
+		if _, err := authenticateReleaseValidatorStakeContext(ctx, native, cfg, hotkey.PublicKey(), validatorUID); err != nil {
+			return err
+		}
+		if retainedSetup == nil {
+			activationInputs, err = loadReleaseEvidenceV2ActivationInputsWithRetainedSetup(ctx, cfg, chain, native, hotkey.PublicKey(), nil)
+			if err != nil {
+				return fmt.Errorf("reserved upload activation startup: %w", err)
+			}
 		}
 	}
 	if len(cfg.Operators) < 2 {
@@ -830,24 +877,56 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	if _, err := newReleaseEvidenceV2StartupReaders(origins, cfg.EvidenceV2.Bounds.Cut); err != nil {
 		return err
 	}
-	serverKeys, err := readReleaseServerKeysV2(ctx, cfg)
-	if err != nil {
+	var serverKeys map[uint64]map[byte]ed25519.PublicKey
+	if err := startupStage("server-key history", func(attempt context.Context) error {
+		var err error
+		serverKeys, err = readReleaseServerKeysV2(attempt, cfg)
+		return err
+	}); err != nil {
 		return fmt.Errorf("release V2 server-key startup: %w", err)
 	}
-	disk, err := openReleaseEvidenceV2DiskState(ctx, cfg, activationInputs, serverKeys)
-	if err != nil {
-		return fmt.Errorf("release V2 disk startup: %w", err)
-	}
+	var disk *releaseEvidenceV2DiskState
 	defer func() {
 		cancel()
-		returnErr = errors.Join(returnErr, disk.close())
+		if disk != nil {
+			returnErr = errors.Join(returnErr, disk.close())
+		}
 	}()
-	runtimeV2, err := newReleaseRuntimeV2(ctx, cfg, chain, native, hotkey, activationInputs, serverKeys, origins, disk)
-	if err != nil {
+	var runtimeV2 *releaseRuntimeV2
+	if err := startupStage("disk and intent history", func(attempt context.Context) error {
+		// A failed semantic attempt closes the old disk census before a new
+		// dormant image is acquired. Its durable journals remain untouched.
+		if disk != nil {
+			if err := disk.close(); err != nil {
+				return err
+			}
+			disk = nil
+		}
+		var err error
+		disk, err = openReleaseEvidenceV2DiskState(attempt, cfg, activationInputs, serverKeys)
+		if err != nil {
+			return fmt.Errorf("release V2 disk startup: %w", err)
+		}
+		runtimeV2, err = newReleaseRuntimeV2(attempt, cfg, chain, native, hotkey, activationInputs, serverKeys, origins, disk)
+		if err != nil {
+			return errors.Join(err, disk.close())
+		}
+		return nil
+	}); err != nil {
 		return fmt.Errorf("release V2 semantic startup: %w", err)
 	}
+	// Bounded startup has closed all temporary replay/reference owners. The
+	// completed runtime now belongs to the enclosing service, not that attempt.
+	runtimeV2.ctx = ctx
 	runtimeV2.progress = progress
-	progress.observeSettlement(progress.nextSequence(), runtimeV2.progressSettlement(snapshot.Epoch.Uint64()), nil)
+	if production {
+		epoch, err := runtimeV2.authenticatedStartupEpoch()
+		if err != nil {
+			return err
+		}
+		settlementEpoch.Store(epoch)
+	}
+	progress.observeSettlement(progress.nextSequence(), runtimeV2.progressSettlement(settlementEpoch.Load()), nil)
 	boundaryCtx := ctx
 	if retainedSetup != nil {
 		// Scope longer reads to shared preparation; trail callers keep their
@@ -885,26 +964,45 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	for index, runtime := range runtimes {
 		measurements[index] = runtime.measurement
 	}
-	steerer, err := loadReleaseSteererV2WithRetry(ctx, func() (*ReleaseSteerer, error) {
-		return newReleaseSteererV2(cfg, chain, native, hotkey, measurements, runtimeV2)
-	}, waitReleaseSnapshotRetry)
+	var steerer *ReleaseSteerer
+	if production {
+		err = startupStage("native retained owner", func(attempt context.Context) error {
+			var err error
+			steerer, err = newReleaseSteererV2Context(attempt, cfg, chain, native, hotkey, measurements, runtimeV2)
+			return err
+		})
+	} else {
+		steerer, err = loadReleaseSteererV2WithRetry(ctx, func() (*ReleaseSteerer, error) {
+			return newReleaseSteererV2(cfg, chain, native, hotkey, measurements, runtimeV2)
+		}, waitReleaseSnapshotRetry)
+	}
 	if err != nil {
 		return fmt.Errorf("release V2 native startup: %w", err)
 	}
-	if err := advanceInitialReleaseWithRetry(ctx, snapshot, chain.ReleaseSnapshotContext, runtimeV2.advance, waitReleaseSnapshotRetry); err != nil {
-		return fmt.Errorf("release V2 initial terminal publication: %w", err)
+	if !production {
+		if err := advanceInitialReleaseWithRetry(ctx, snapshot, chain.ReleaseSnapshotContext, runtimeV2.advance, waitReleaseSnapshotRetry); err != nil {
+			return fmt.Errorf("release V2 initial terminal publication: %w", err)
+		}
 	}
 	workersOwnResources = true
+	var trailReady <-chan struct{}
+	if production {
+		trailReady = runtimeV2.preparation.ready
+	}
 	return runReleaseOperatorWorkers(ctx, cancel, cfg, runtimes, releaseRuntimeOperations{
 		refresh: func(ctx context.Context) error {
+			if production {
+				return steerer.runProductionPreparationAndRefresh(ctx)
+			}
 			return runReleaseSettlementRefresh(ctx, time.Duration(cfg.PollSeconds)*time.Second, chain.ReleaseSnapshotContext, runtimeV2.advance, func(*ReleaseSnapshot) {}, waitReleaseSnapshotRetry)
 		},
 		newSteerer: func([]*ReleaseMeasurementContext) (releaseSteererRunner, error) {
 			return steerer, nil
 		},
 		running: func() {
-			fmt.Printf("validator release 1.0 running: validator=%d netuid=%d hotkey=%s operators=%d\n", cfg.ValidatorID, cfg.Netuid, hotkey.Address(), len(runtimes))
+			fmt.Printf("validator release 1.0 runtime active: validator=%d netuid=%d hotkey=%s operators=%d\n", cfg.ValidatorID, cfg.Netuid, hotkey.Address(), len(runtimes))
 		},
+		trailReady: trailReady,
 	})
 }
 

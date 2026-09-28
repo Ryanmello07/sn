@@ -103,10 +103,21 @@ func authenticateReleaseNativeSourceReferenceV2(ctx context.Context, native *crv
 }
 
 func newReleaseSteererV2(cfg *ReleaseConfig, chain *ChainClient, native *crv4.Chain, hotkey *crv4.Keypair, contexts []*ReleaseMeasurementContext, runtime *releaseRuntimeV2) (*ReleaseSteerer, error) {
+	var ctx context.Context
+	if runtime != nil {
+		ctx = runtime.ctx
+	}
+	return newReleaseSteererV2Context(ctx, cfg, chain, native, hotkey, contexts, runtime)
+}
+
+// Startup reads have a bounded context while the completed steerer retains its
+// enclosing runtime lifecycle. Canceling a successful startup attempt cannot
+// cancel the service or remove the predecessor proof's read budget.
+func newReleaseSteererV2Context(ctx context.Context, cfg *ReleaseConfig, chain *ChainClient, native *crv4.Chain, hotkey *crv4.Keypair, contexts []*ReleaseMeasurementContext, runtime *releaseRuntimeV2) (*ReleaseSteerer, error) {
 	if err := ownerRecycleProductionBoundary(cfg); err != nil {
 		return nil, err
 	}
-	if cfg == nil || chain == nil || !chain.release || native == nil || hotkey == nil || runtime == nil || runtime.ctx == nil || runtime.hotkey == nil || runtime.native != native || runtime.chain != chain || runtime.hotkey.PublicKey() != hotkey.PublicKey() {
+	if ctx == nil || cfg == nil || chain == nil || !chain.release || native == nil || hotkey == nil || runtime == nil || runtime.ctx == nil || runtime.hotkey == nil || runtime.native != native || runtime.chain != chain || runtime.hotkey.PublicKey() != hotkey.PublicKey() {
 		return nil, errors.New("V2 steerer requires its actual authenticated production root")
 	}
 	if !reflect.DeepEqual(*cfg, runtime.cfg) {
@@ -141,10 +152,10 @@ func newReleaseSteererV2(cfg *ReleaseConfig, chain *ChainClient, native *crv4.Ch
 	if err != nil {
 		return nil, err
 	}
-	if _, err := intents.currentV2(runtime.ctx); err != nil {
+	if _, err := intents.currentV2(ctx); err != nil {
 		return nil, err
 	}
-	ema, err := NewHeadEMAStoreV2(runtime.ctx, ownedCfg.StateDir, ownedCfg.EvidenceV2.Bounds.HeadEMA)
+	ema, err := NewHeadEMAStoreV2(ctx, ownedCfg.StateDir, ownedCfg.EvidenceV2.Bounds.HeadEMA)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +165,7 @@ func newReleaseSteererV2(cfg *ReleaseConfig, chain *ChainClient, native *crv4.Ch
 	if err := requireReleaseEvidenceV2Runtime(self); err != nil {
 		return nil, err
 	}
-	self.sourceRolePredecessorV2, err = authenticateReleaseSourceRolePredecessorV2(runtime.ctx, &ownedCfg, native, self.hotkey.PublicKey())
+	self.sourceRolePredecessorV2, err = authenticateReleaseSourceRolePredecessorV2(ctx, &ownedCfg, native, self.hotkey.PublicKey())
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +181,9 @@ func requireReleaseEvidenceV2Runtime(self *ReleaseSteerer) error {
 	runtime := self.runtimeV2
 	if runtime.ctx == nil || runtime.history == nil || runtime.disk == nil || runtime.gate == nil || runtime.hotkey == nil || runtime.native == nil || runtime.chain == nil || !runtime.chain.release || self.hotkey != runtime.hotkey || self.native != runtime.native || self.chain != runtime.chain {
 		return errors.New("V2 production chain or semantic startup owner differs")
+	}
+	if isOwnerRecycleProductionConfig(self.cfg) && (runtime.preparation == nil || runtime.preparation.requested == nil || runtime.preparation.ready == nil) {
+		return errors.New("V2 production fresh preparation ownership is absent")
 	}
 	if err := runtime.ctx.Err(); err != nil {
 		return err
@@ -311,6 +325,9 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 		}
 		if retained != nil && retained.Status == "finalized" {
 			return self.observeProductionApplicationV2(ctx, retained)
+		}
+		if err := self.requestProductionPreparation(retained); err != nil {
+			return err
 		}
 	}
 	preparingProduction := isOwnerRecycleProductionConfig(self.cfg)

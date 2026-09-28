@@ -504,6 +504,22 @@ func DialChain(wsURL string) (*Chain, error) {
 // convenience constructor performs contextless initialization RPCs, so this
 // builds the equivalent API surface after the exact context-aware reads.
 func DialChainContext(ctx context.Context, wsURL string) (*Chain, error) {
+	return dialChainAtContext(ctx, wsURL, nil)
+}
+
+// DialChainAtContext initializes observation at one caller-selected historical
+// hash. It grants no artifact or signing authority: the caller must authenticate
+// that exact block and purpose before consuming its metadata or preparing a call.
+func DialChainAtContext(ctx context.Context, endpoint string, block types.Hash) (*Chain, error) {
+	if block == (types.Hash{}) {
+		return nil, errors.New("crv4: historical dial block is absent")
+	}
+	return dialChainAtContext(ctx, endpoint, &block)
+}
+
+// Initialization shares one transport owner; a historical caller never probes
+// the unrelated current metadata/version merely to reopen approved old work.
+func dialChainAtContext(ctx context.Context, wsURL string, block *types.Hash) (*Chain, error) {
 	if ctx == nil || wsURL == "" {
 		return nil, errors.New("crv4: dial context or endpoint is unavailable")
 	}
@@ -521,8 +537,12 @@ func DialChainContext(ctx context.Context, wsURL string) (*Chain, error) {
 		}
 	}()
 
+	var at []any
+	if block != nil {
+		at = []any{block.Hex()}
+	}
 	var encodedMetadata string
-	if err := client.CallContext(ctx, &encodedMetadata, "state_getMetadata"); err != nil {
+	if err := client.CallContext(ctx, &encodedMetadata, "state_getMetadata", at...); err != nil {
 		return nil, fmt.Errorf("crv4: metadata: %w", err)
 	}
 	metadata, _, err := DecodeRuntimeMetadata(encodedMetadata)
@@ -541,7 +561,7 @@ func DialChainContext(ctx context.Context, wsURL string) (*Chain, error) {
 	}
 
 	var runtime types.RuntimeVersion
-	if err := client.CallContext(ctx, &runtime, "state_getRuntimeVersion"); err != nil {
+	if err := client.CallContext(ctx, &runtime, "state_getRuntimeVersion", at...); err != nil {
 		return nil, fmt.Errorf("crv4: runtime version: %w", err)
 	}
 	api := &gsrpc.SubstrateAPI{

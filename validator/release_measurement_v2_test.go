@@ -53,6 +53,12 @@ func newReleaseMeasurementV2TestFixture(t *testing.T, completed int) *releaseMea
 // A separately declared synthetic domain still passes through the same real
 // engine, ledger, compact sealing and independent legacy scoring oracle.
 func newReleaseMeasurementV2TestFixtureWithOperator(t *testing.T, completed int, create func(uint64) *attemptCutV2SealTestFixture) *releaseMeasurementV2TestFixture {
+	return newReleaseMeasurementV2TestFixtureWithActivation(t, completed, create, nil)
+}
+
+// Full startup selects its signed activation before sealing any compact cut;
+// measurement-only callers retain their separately pinned synthetic anchor.
+func newReleaseMeasurementV2TestFixtureWithActivation(t *testing.T, completed int, create func(uint64) *attemptCutV2SealTestFixture, anchor func(*attemptCutV2SealTestFixture)) *releaseMeasurementV2TestFixture {
 	t.Helper()
 	fixture := &releaseMeasurementV2TestFixture{operators: map[uint64]*releaseMeasurementV2TestOperator{}}
 	artifact := &ReleaseMeasurementArtifact{
@@ -66,7 +72,11 @@ func newReleaseMeasurementV2TestFixtureWithOperator(t *testing.T, completed int,
 		// These caller-pinned, distinct earlier activation anchors are fixed
 		// before actual sealing. This fixture proves full cut authentication,
 		// not historical chain publication of the earlier activation records.
-		seal.expected.Activation.Domain.ActivationHash = [32]byte{0x14, byte(noID)}
+		if anchor == nil {
+			seal.expected.Activation.Domain.ActivationHash = [32]byte{0x14, byte(noID)}
+		} else {
+			anchor(seal)
+		}
 		if seal.policy.Verify.TrailDepth != 8 || seal.policy.Safety.MinimumHealthyNOCount != 2 {
 			t.Fatal("real release policy M8/two-operator safety precondition changed")
 		}

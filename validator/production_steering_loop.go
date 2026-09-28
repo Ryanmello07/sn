@@ -28,6 +28,7 @@ func runReleaseProductionSteeringLoopWithWait(ctx context.Context, submit func()
 		var readWait *productionSteeringReadWait
 		var originalPending *productionPendingReconciliation
 		var transition *productionSteeringTransition
+		var preparation *productionPreparationPending
 		switch {
 		case err == nil || releaseOnlyErrors(err, ErrSteeringAlreadyFinal):
 			failures, pendingErr = 0, nil
@@ -39,6 +40,9 @@ func runReleaseProductionSteeringLoopWithWait(ctx context.Context, submit func()
 			}
 			progress.observeSteering(readWait.nativeEpoch, readWait.epochKnown, outcome, false)
 			fmt.Printf("release steer: %v; retaining progress for the next poll\n", readWait)
+		case errors.As(err, &preparation) && releaseOnlyErrors(err, preparation):
+			progress.observeSteering(preparation.nativeEpoch, preparation.epochKnown, "read_wait", false)
+			fmt.Printf("release steer: %v\n", preparation)
 		case errors.As(err, &originalPending) && (originalPending.cause == nil || retryableProductionSteeringRead(originalPending.cause)) && releaseOnlyErrors(err, originalPending):
 			progress.observeSteering(originalPending.nativeEpoch, true, "receipt_pending", originalPending.cause == nil)
 			fmt.Printf("release steer: %v; no new signature while the original outcome is unknown\n", originalPending)

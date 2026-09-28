@@ -34,7 +34,7 @@ func retryableProductionSteeringRead(err error) bool {
 	if err == nil {
 		return false
 	}
-	if crv4.HasSubstrateReadTransportCause(err) {
+	if crv4.IsSubstrateReadTransportCause(err) {
 		return crv4.RetryableSubstrateReadTransportError(err)
 	}
 	if _, ok := err.(*crv4.ReceiptEvidenceUnavailableError); ok {
@@ -43,9 +43,6 @@ func retryableProductionSteeringRead(err error) bool {
 	switch err.(type) {
 	case *os.PathError, *TrailFatalError:
 		return false
-	}
-	if RetryableEvidenceTransportError(err) {
-		return true
 	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		causes := joined.Unwrap()
@@ -57,6 +54,12 @@ func retryableProductionSteeringRead(err error) bool {
 				return false
 			}
 		}
+		return true
+	}
+	// A wrapper around a native origin must reach its opaque verdict before
+	// generic transport classification. Independent joined readers above can
+	// each retain their own actual native/EVM/unavailable response cause.
+	if !crv4.HasSubstrateReadTransportCause(err) && RetryableEvidenceTransportError(err) {
 		return true
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {

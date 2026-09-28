@@ -57,6 +57,12 @@ func newRecycleMeasurementFixtureWithHotkey(t *testing.T, completed int, setup f
 // A distinct policy is selected before the first proof, ledger signature or
 // proposal approval; existing economic fixtures retain their paid policy.
 func newRecycleMeasurementFixtureWithPolicy(t *testing.T, completed int, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture), hotkey [32]byte, policy *protocol.Policy) *recycleMeasurementFixture {
+	return newRecycleMeasurementFixtureWithActivation(t, completed, setup, hotkey, policy, nil)
+}
+
+// The startup variant signs an actual activation record before compact proof
+// construction, with a ledger-owned first egress generation for empty history.
+func newRecycleMeasurementFixtureWithActivation(t *testing.T, completed int, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture), hotkey [32]byte, policy *protocol.Policy, anchor func(*recycleAdmissionFixture, *attemptCutV2SealTestFixture)) *recycleMeasurementFixture {
 	t.Helper()
 	admission := newRecycleAdmissionFixture(t, nil)
 	if policy != nil {
@@ -66,13 +72,17 @@ func newRecycleMeasurementFixtureWithPolicy(t *testing.T, completed int, setup f
 	}
 	identity := AttemptLedgerIdentity{DeploymentID: "synthetic-recycle-measured", ChainID: 964, GenesisHash: admission.cfg.GenesisHash,
 		Netuid: 25, ValidatorID: 1, ValidatorUID: 7}
-	provider := newReleaseMeasurementV2TestFixtureWithOperator(t, completed, func(noId uint64) *attemptCutV2SealTestFixture {
+	var activate func(*attemptCutV2SealTestFixture)
+	if anchor != nil {
+		activate = func(seal *attemptCutV2SealTestFixture) { anchor(admission, seal) }
+	}
+	provider := newReleaseMeasurementV2TestFixtureWithActivation(t, completed, func(noId uint64) *attemptCutV2SealTestFixture {
 		selected := identity
 		selected.NoID = noId
-		fixture := newAttemptCutV2SealTestFixtureForDomain(t, 8, completed, 1, false, admission.cfg.Policy, selected)
+		fixture := newAttemptCutV2SealTestFixtureForDomain(t, 8, completed, 1, anchor != nil, admission.cfg.Policy, selected)
 		fixture.expected.Activation.Hotkey = hotkey
 		return fixture
-	})
+	}, activate)
 	artifact := provider.artifact
 	artifact.NativeSnapshotBlock, artifact.NativeSnapshotHash = 100, admission.finalized.Hex()
 	for index := range artifact.Inputs {

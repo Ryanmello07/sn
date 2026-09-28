@@ -40,6 +40,27 @@ type recycleOperatorFixture struct {
 	retargetGenesis   bool
 	retargetDecision  bool
 	beforeRouteReturn func(int)
+	startup           *productionStartupEvmTestFixture
+}
+
+// Startup adds independent historical journal ABI responses to the original
+// exact decision reader. Existing fixtures keep the original dispatch intact.
+func (self *recycleOperatorFixture) Call(ctx context.Context, call map[string]hexutil.Bytes, selector gethrpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	if self.startup != nil {
+		if value, found, err := self.startup.view(ctx, call, selector); found || err != nil {
+			return value, err
+		}
+	}
+	return self.releaseDecisionV2TestFixture.Call(ctx, call, selector)
+}
+
+// The historical code image is served only at the independently pinned
+// activation publication block and actual journal address.
+func (self *recycleOperatorFixture) GetCode(ctx context.Context, target common.Address, selector gethrpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	if self.startup == nil {
+		return nil, errors.New("synthetic operator has no journal code image")
+	}
+	return self.startup.codeAt(ctx, target, selector)
 }
 
 // The first route is selected before approval; late drift happens only after
@@ -103,6 +124,12 @@ func newRecycleOperatorFixtureWithHotkey(t *testing.T, hotkey [32]byte) *recycle
 // Optional independent fixture inputs are fixed before provider sealing and
 // approval. The callback assembles real journals; it cannot admit a verdict.
 func newRecycleOperatorFixtureWithInputs(t *testing.T, hotkey [32]byte, completed int, selectedPolicy *protocol.Policy, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture)) *recycleOperatorFixture {
+	return newRecycleOperatorFixtureWithActivation(t, hotkey, completed, selectedPolicy, setup, nil)
+}
+
+// Full startup can provide real activation bytes without rewriting any signed
+// provider evidence after its compact stream has been sealed.
+func newRecycleOperatorFixtureWithActivation(t *testing.T, hotkey [32]byte, completed int, selectedPolicy *protocol.Policy, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture), anchor func(*recycleAdmissionFixture, *attemptCutV2SealTestFixture)) *recycleOperatorFixture {
 	t.Helper()
 	fixture := &recycleOperatorFixture{releaseDecisionV2TestFixture: newReleaseDecisionV2TestFixture(t)}
 	server := gethrpc.NewServer()
@@ -110,6 +137,9 @@ func newRecycleOperatorFixtureWithInputs(t *testing.T, hotkey [32]byte, complete
 		t.Fatal(err)
 	}
 	httpServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if fixture.startup != nil && !fixture.startup.allowHttp(writer, request) {
+			return
+		}
 		count := func() int {
 			fixture.stateLock.Lock()
 			defer fixture.stateLock.Unlock()
@@ -129,7 +159,7 @@ func newRecycleOperatorFixtureWithInputs(t *testing.T, hotkey [32]byte, complete
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { client.Close(); httpServer.Close(); server.Stop() })
-	fixture.measurement = newRecycleMeasurementFixtureWithPolicy(t, completed, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
+	fixture.measurement = newRecycleMeasurementFixtureWithActivation(t, completed, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
 		admission.cfg.RPC = []string{httpServer.URL}
 		artifact := provider.artifact
 		for index := range artifact.DepositAudits {
@@ -144,7 +174,7 @@ func newRecycleOperatorFixtureWithInputs(t *testing.T, hotkey [32]byte, complete
 			setup(admission, provider)
 		}
 		provider.rebuildLegacy(t)
-	}, hotkey, selectedPolicy)
+	}, hotkey, selectedPolicy, anchor)
 	measurement := fixture.measurement
 	artifact := measurement.provider.artifact
 	fixture.views = map[string]releaseDecisionV2TestView{}

@@ -24,6 +24,7 @@ type releaseRuntimeOperations struct {
 	refresh    func(context.Context) error
 	newSteerer func([]*ReleaseMeasurementContext) (releaseSteererRunner, error)
 	running    func()
+	trailReady <-chan struct{}
 }
 
 // Every non-nil cause must be an explicitly allowed lifecycle result. In
@@ -139,7 +140,16 @@ func runReleaseOperatorWorkers(ctx context.Context, cancel context.CancelFunc, c
 	for index, runtime := range runtimes {
 		operatorID := cfg.Operators[index].NoID
 		concurrency := cfg.Operators[index].Concurrency
-		workers.Go(func() { reportReleaseTrailEngineError(ctx, runtime.engine, operatorID, concurrency, runtimeErrors) })
+		workers.Go(func() {
+			if operations.trailReady != nil {
+				select {
+				case <-ctx.Done():
+					return
+				case <-operations.trailReady:
+				}
+			}
+			reportReleaseTrailEngineError(ctx, runtime.engine, operatorID, concurrency, runtimeErrors)
+		})
 	}
 	measurements := make([]*ReleaseMeasurementContext, len(runtimes))
 	for i, runtime := range runtimes {

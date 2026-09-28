@@ -38,6 +38,12 @@ type productionContinuationTestFixture struct {
 // No current binding claims a local key; each real historical provider remains
 // independently replayed into the operator pool under the signed zero-price policy.
 func newProductionContinuationTestFixture(t *testing.T) *productionContinuationTestFixture {
+	return newProductionContinuationTestFixtureWithStartup(t, nil, nil)
+}
+
+// Additional activation/configuration inputs are fixed before proof sealing
+// and independent approval. Neither callback can bypass an authority reader.
+func newProductionContinuationTestFixtureWithStartup(t *testing.T, anchor func(*recycleAdmissionFixture, *attemptCutV2SealTestFixture), configure func(*ownerRecycleProductionTestFixture, *productionContinuationTestFixture)) *productionContinuationTestFixture {
 	t.Helper()
 	self := &productionContinuationTestFixture{inputKVs: map[uint64]*releaseStatsV2RuntimeTestFixture{}, journalKVs: map[uint64]*releaseMeasurementInputJournal{}, contextKVs: map[uint64]AttemptCutV2Context{}}
 	policy := recycleTestInput(t).ParentPolicy
@@ -51,7 +57,7 @@ func newProductionContinuationTestFixture(t *testing.T) *productionContinuationT
 		t.Fatal(err)
 	}
 	self.production = newOwnerRecycleProductionTestFixtureWithInputs(t, func(t *testing.T, hotkey [32]byte) *recycleOperatorFixture {
-		return newRecycleOperatorFixtureWithInputs(t, hotkey, 15, &policy, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
+		return newRecycleOperatorFixtureWithActivation(t, hotkey, 15, &policy, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
 			artifact, cfg := provider.artifact, admission.cfg
 			for index := range artifact.Bindings {
 				binding := &artifact.Bindings[index]
@@ -102,7 +108,7 @@ func newProductionContinuationTestFixture(t *testing.T) *productionContinuationT
 				operator.metadata, operator.data = physical.options.Seal.ReadMetadata, physical.options.Seal.OpenData
 				artifact.Inputs[index] = actual
 			}
-		})
+		}, anchor)
 	}, func(production *ownerRecycleProductionTestFixture) {
 		cfg := production.cfg
 		bounds := &cfg.EvidenceV2.Bounds
@@ -110,6 +116,9 @@ func newProductionContinuationTestFixture(t *testing.T) *productionContinuationT
 		bounds.MaxHeadEntries, bounds.MaxProviders, bounds.MaxEgressHashes, bounds.MaxFleetPrefixes = 128, 64, 1024, 64
 		bounds.MaxParticipants = 2
 		bounds.Cut, bounds.Replay = self.inputKVs[9].source.bounds, self.inputKVs[9].source.replay
+		if configure != nil {
+			configure(production, self)
+		}
 	})
 	production, cfg := self.production, self.production.cfg
 	history := &releaseEvidenceV2StartupHistory{cfg: *cfg, initial: map[uint64]ReleaseEvidenceV2ActivationContext{}, keys: map[uint64]map[byte]ed25519.PublicKey{},

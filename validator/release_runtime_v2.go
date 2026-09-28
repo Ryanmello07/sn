@@ -42,6 +42,7 @@ type releaseRuntimeV2 struct {
 	retainedStartupEpoch uint64
 	publishEpoch         func(uint64)
 	progress             *releaseProgress
+	preparation          *releaseProductionPreparation
 	nativeReservations   map[uint64]uint64                       // no_id -> native epoch, owned by gate
 	nativeInputNoIdKVs   map[uint64]*releaseRuntimeNativeInputV2 // one unpublished/adopting cut per operator, owned by gate
 }
@@ -91,6 +92,9 @@ func newReleaseRuntimeV2WithRuntime(ctx context.Context, cfg *ReleaseConfig, cha
 	}
 	self := &releaseRuntimeV2{ctx: ctx, cfg: history.cfg, chain: chain, native: native, hotkey: ownHotkey, disk: disk, history: history, origins: origins, sources: sources,
 		gate: make(chan struct{}, 1), publications: maps.Clone(history.terminals), publicationContexts: maps.Clone(history.terminalContexts)}
+	if isOwnerRecycleProductionConfig(cfg) {
+		self.preparation = &releaseProductionPreparation{requested: make(chan struct{}), ready: make(chan struct{})}
+	}
 	if history.retainedStartup {
 		self.retainedStartupEpoch = history.current[history.participants[0].NoID].epoch
 	}

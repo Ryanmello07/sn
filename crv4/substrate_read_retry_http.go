@@ -95,8 +95,7 @@ func RetryableSubstrateReadTransportError(err error) bool {
 // A consumer must not fall back to generic URL/EOF unwrapping after this owner
 // rejects a native close or mixed error. Presence is separate from retryability.
 func HasSubstrateReadTransportCause(err error) bool {
-	switch err.(type) {
-	case *SubstrateReadHttpStatusError, *substrateReadHttpTransportError, *substrateReadHttpCloseError:
+	if IsSubstrateReadTransportCause(err) {
 		return true
 	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
@@ -108,6 +107,17 @@ func HasSubstrateReadTransportCause(err error) bool {
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
 		return HasSubstrateReadTransportCause(wrapped.Unwrap())
+	}
+	return false
+}
+
+// A composed read owner treats each native transport boundary as an opaque
+// subtree. It may combine independent transient readers, but must never unwrap
+// a rejected native close or framing cause into a generic retryable deadline.
+func IsSubstrateReadTransportCause(err error) bool {
+	switch err.(type) {
+	case *SubstrateReadHttpStatusError, *substrateReadHttpTransportError, *substrateReadHttpCloseError:
+		return true
 	}
 	return false
 }
