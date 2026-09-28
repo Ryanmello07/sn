@@ -107,6 +107,15 @@ and exact fixture correction. Required custody failures still stop the affected
 work. Miner callbacks, SDK/internal logging, registration composition and live
 delivery remain separate work; component coverage is not universal output isolation.
 
+**Versioned registration grammar (September 28; component qualified).** Server
+candidate `736d7b8f` rejects ambiguous request-field aliases and duplicate or
+invalid values before allocation. Its focused test passes normally and with
+race detection; the exact old parser reproduces the expected failure in both
+modes ([evidence](evidence/registration-request-grammar-qualification-20260928.md)).
+The underlying transaction suite, combined client recovery, redirect handling
+and server-first migration/rollout remain separate gates. This parser result
+does not establish a completed registration release.
+
 **MG-04/MG-08 direct production cadence (September 28; source integrated,
 component checks pass).** The [bounded representability fix](evidence/mainnet-steady-cadence-candidate-20260928.md)
 permits zero accelerated epochs only for mainnet with four identical
