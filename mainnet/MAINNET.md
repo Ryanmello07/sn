@@ -1191,13 +1191,17 @@ rules. Delivered alerts, other production domains, supervision and the repair
 controller remain deployment or implementation work. A fresh file alone is not
 proof of healthy validation. The integrated
 [bounded output correction](evidence/bounded-diagnostic-output-qualification-20260928.md)
-now prevents blocked log destinations from stalling the standard validator or
-these chain/service workers. Its 76 affected roots have passing scoped normal
+now isolates validator startup, steering and runtime diagnostics, plus these
+chain/service workers, from blocked log destinations. Its 76 affected roots have passing scoped normal
 and race coverage, with six regression controls in both modes, vet and three
 offline alert-rule suites. Each role retains finite output capacity and actual
 delivery/loss counters. Deploy the progress consumer before the producer's
 optional diagnostic extension, and retain independent missing/stale-file alerts.
-Root-service/root-monitor output has a separate follow-up. Local output
+Root-service/root-monitor output has a separate follow-up. Review also found
+direct synchronous output inside the actual trail worker and its proof-warning
+path. Those paths need their own bounded-owner integration and physical
+blocked-output regression before claiming complete validator output isolation.
+Local output
 acknowledgment does not establish remote ingestion or alert delivery.
 
 ### Independent observations and existing telemetry

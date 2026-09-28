@@ -76,7 +76,7 @@ coverage, delivered alerts and the repair controller remain
 open; source qualification does not establish live monitoring.
 
 The integrated [bounded diagnostic exporter](evidence/bounded-diagnostic-output-qualification-20260928.md)
-now isolates standard-validator and chain/service-monitor work from stalled log
+now isolates validator startup/steering/runtime diagnostics and chain/service-monitor work from stalled log
 destinations. Each role has finite queue capacity; one joined destination owner
 reports completed writes, dropped records and unavailable output independently
 of protocol progress. All 76 affected roots have passing normal/race coverage,
@@ -85,6 +85,15 @@ three offline alert-rule suites pass. The receipt preserves the original
 maximum-ID fixture failure and its isolated correction. Consumer-first rollout,
 actual alert delivery, root-service/root-monitor output and other operational
 domains remain separate work.
+
+**Adjacent trail-output finding (September 28).** The actual `TrailEngine.Run`
+loop and a proof-signature warning still write synchronously to stdout. A full
+pipe can stall a trail worker after the outer validator lifecycle has acquired
+bounded diagnostics. Route these exact paths through the same instance-owned
+exporter with closed scalar facts, retaining evidence/custody failures and
+joining output on shutdown. Qualify actual completed/failed trails against a
+physically blocked destination; an outer-loop callback test alone does not
+cover this worker. This finding keeps complete validator output isolation open.
 
 **MG-04/MG-08 direct production cadence (September 28; source integrated,
 component checks pass).** The [bounded representability fix](evidence/mainnet-steady-cadence-candidate-20260928.md)
