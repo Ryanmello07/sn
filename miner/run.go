@@ -4,15 +4,16 @@ import (
 	"bufio"
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	mathrand "math/rand"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -418,11 +419,8 @@ func provide(opts docopt.Opts) {
 		panic(err)
 	}
 
-	event := connect.NewEventWithContext(context.Background())
-	event.SetOnSignals(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-	ctx, cancel := context.WithCancel(event.Ctx())
-	defer cancel()
+	ctx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	defer stopSignals()
 
 	// subnet claim wallet (sn/PLAN.md 7.3, decision D-2): validate the
 	// ss58 coldkey locally, prove it with --coldkey_seed_file or
@@ -445,14 +443,47 @@ func provide(opts docopt.Opts) {
 	)
 	applyProviderProcessMemory(memoryPlan)
 
-	provideWithProxy := func(proxySettings *connect.ProxySettings) {
+	settings := providerRunSettings{apiUrl: apiUrl, connectUrl: connectUrl, port: port, proxySettings: allProxySettings, memoryPlan: memoryPlan, testEgressDialer: testEgressDialer}
+	// Preserve the legacy zero exit on daemon completion. Unlike os.Exit, a
+	// normal return releases the signal owner and all owned daemon workers.
+	_ = settings.run(ctx, os.Stdout)
+}
+
+// Each invocation owns its output, status server and provider children. The
+// finite CLI setup above retains its existing output and validation behavior.
+func (self providerRunSettings) run(parent context.Context, writer io.Writer) (returnErr error) {
+	output, err := newProviderDiagnostics(parent, writer)
+	if err != nil {
+		return err
+	}
+	hooks, _ := parent.Value(providerDiagnosticHooksKey{}).(providerDiagnosticHooks)
+	defer func() {
+		closeErr := output.close()
+		returnErr = errors.Join(returnErr, closeErr)
+		if hooks.afterClose != nil {
+			hooks.afterClose(output, closeErr)
+		}
+	}()
+	if hooks.afterCreate != nil {
+		hooks.afterCreate(output)
+	}
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+	status, err := newProviderStatusServer(self.port, output, cancel)
+	if err != nil {
+		output.observe(providerStatusFailed, 0, false, err, 0, nil)
+		return err
+	}
+	defer func() { returnErr = errors.Join(returnErr, status.close()) }()
+
+	provideWithProxy := func(index uint64, proxySettings *connect.ProxySettings) (returnErr error) {
 		proxyCtx, proxyCancel := context.WithCancel(ctx)
 		defer proxyCancel()
 
 		clientStrategySettings := connect.DefaultClientStrategySettings()
 		clientStrategySettings.ProxySettings = proxySettings
-		clientStrategySettings.DialContextSettings = testEgressDialer
-		networkSpace := sdk.NewNetworkSpaceWithUrls(proxyCtx, apiUrl, connectUrl, clientStrategySettings)
+		clientStrategySettings.DialContextSettings = self.testEgressDialer
+		networkSpace := sdk.NewNetworkSpaceWithUrls(proxyCtx, self.apiUrl, self.connectUrl, clientStrategySettings)
 		defer networkSpace.Close()
 		api := networkSpace.GetApi()
 
@@ -465,7 +496,7 @@ func provide(opts docopt.Opts) {
 			panic(err)
 		}
 
-		byClientJwt, clientId, err := func() (string, connect.Id, error) {
+		byClientJwt, _, err := func() (string, connect.Id, error) {
 			for {
 				byClientJwt, clientId, err := clientauth.LoadOrCreateClientJwt(
 					proxyCtx,
@@ -478,7 +509,7 @@ func provide(opts docopt.Opts) {
 					return byClientJwt, clientId, nil
 				}
 				retryDelay := time.Duration(500+mathrand.Intn(10000)) * time.Millisecond
-				fmt.Printf("init proxy auth failed. Will retry in %.2fs\n", float64(retryDelay/time.Millisecond)/1000.0)
+				output.observe(providerAuthenticationWait, index, true, err, retryDelay, nil)
 				select {
 				case <-proxyCtx.Done():
 					return "", connect.Id{}, proxyCtx.Err()
@@ -488,26 +519,21 @@ func provide(opts docopt.Opts) {
 		}()
 		if err != nil {
 			if proxyCtx.Err() != nil {
-				return
+				return nil
 			}
 			panic(err)
 		}
 
-		refreshSub := api.AddJwtRefreshListener(clientauth.JwtRefreshListenerFunc(func(jwt string) {
-			if err := clientauth.WriteToken(clientJwtPath, jwt); err != nil {
-				fmt.Printf("provider client JWT save failed: %s\n", err)
-				cancel()
-			}
-		}))
-		defer refreshSub.Close()
-		logoutSub := api.AddAuthLogoutListener(clientauth.AuthLogoutListenerFunc(func() {
-			if err := clientauth.MarkRejected(clientJwtPath, networkJwtPath); err != nil {
-				fmt.Printf("provider client JWT rejection save failed: %s\n", err)
-			}
-			fmt.Printf("provider authentication was rejected; run `provider auth` if the bootstrap credential is no longer valid\n")
-			cancel()
-		}))
-		defer logoutSub.Close()
+		callbacks := &providerAuthenticationCallbacks{diagnostics: output, provider: index, clientJwtPath: clientJwtPath, networkJwtPath: networkJwtPath, cancel: cancel}
+		refreshSub := api.AddJwtRefreshListener(callbacks)
+		logoutSub := api.AddAuthLogoutListener(callbacks)
+		defer func() {
+			// Callbacks can cancel, but only this enclosing owner joins them.
+			returnErr = errors.Join(returnErr, api.CloseAndWait(context.Background()))
+			refreshSub.Close()
+			logoutSub.Close()
+			returnErr = errors.Join(returnErr, callbacks.failure())
+		}()
 
 		seed, _ := readProviderClientKeySeed()
 		certPem, keyPem, _ := readProviderTlsCertAndKey()
@@ -519,8 +545,8 @@ func provide(opts docopt.Opts) {
 		// the role would activate under a new key every launch and the
 		// operator would revoke the old one as fast as it publishes it.
 		settings.KeyMaterial.SetExtenderKeySeed(extenderKeySeed)
-		applyProviderMemoryTarget(settings, memoryPlan.DeviceMemoryTargetByteCount)
-		settings.ProviderDialContextSettings = testEgressDialer
+		applyProviderMemoryTarget(settings, self.memoryPlan.DeviceMemoryTargetByteCount)
+		settings.ProviderDialContextSettings = self.testEgressDialer
 		instanceId := sdk.NewId()
 		device, err := sdk.NewDeviceLocal(
 			networkSpace,
@@ -535,7 +561,7 @@ func provide(opts docopt.Opts) {
 			panic(err)
 		}
 		defer func() {
-			_ = device.CloseAndWait(context.Background())
+			returnErr = errors.Join(returnErr, device.CloseAndWait(context.Background()))
 		}()
 
 		// Always-on public mode includes network and friends/family service,
@@ -543,111 +569,63 @@ func provide(opts docopt.Opts) {
 		device.SetProvideControlMode(sdk.ProvideControlModeAlways)
 
 		keyMaterial := device.GetKeyMaterial()
-		if seed := keyMaterial.GetClientKeySeed(); 0 < len(seed) {
-			if err := writeProviderClientKeySeed(seed); err != nil {
-				fmt.Printf("provider client key save failed: %s\n", err)
-			}
-		}
-		certPem = keyMaterial.GetProvideTlsCertificatePem()
-		keyPem = keyMaterial.GetProvideTlsPrivateKeyPem()
-		if 0 < len(certPem) && 0 < len(keyPem) {
-			if err := writeProviderTlsCertAndKey(certPem, keyPem); err != nil {
-				fmt.Printf("provider tls cert/key save failed: %s\n", err)
-			}
-		}
-		// the role generates an identity when there was none to pass in, so
-		// the seed is read back and kept for the next launch
-		if extenderKeySeed = keyMaterial.GetExtenderKeySeed(); 0 < len(extenderKeySeed) {
-			if err := writeProviderExtenderKeySeed(extenderKeySeed); err != nil {
-				fmt.Printf("provider extender key save failed: %s\n", err)
-			}
-		}
-
-		fmt.Printf("client_id: %s\n", clientId)
-		fmt.Printf("instance_id: %s\n", instanceId)
-		printProviderExtenderIdentity(extenderKeySeed)
+		persistProviderKeyMaterial(output, index, keyMaterial)
+		observeProviderExtenderIdentity(output, index, keyMaterial.GetExtenderKeySeed())
 		// one line per change, so the activation prints once it settles and
 		// nothing repeats while it holds (connect/EXTENDER.md F3, G3)
 		extenderStatusSub := device.AddExtenderProvideStatusChangeListener(
-			newProviderExtenderStatusListener())
+			newProviderExtenderStatusListener(output, index))
 		defer extenderStatusSub.Close()
 
 		select {
 		case <-proxyCtx.Done():
 		}
+		return nil
 	}
 
 	var wg sync.WaitGroup
-
-	if 0 < len(allProxySettings) {
-		fmt.Printf("Using %d proxy servers:\n", len(allProxySettings))
-
-		for i, proxySettings := range allProxySettings {
-			var user string
-			var password string
-			if proxySettings.Auth != nil {
-				user = proxySettings.Auth.User
-				password = proxySettings.Auth.Password
-			}
-			fmt.Printf("  proxy[%d] %s (%s/%s)\n",
-				i,
-				proxySettings.Address,
-				obfuscateUser(user),
-				obfuscatePassword(password),
-			)
-		}
-		for i, proxySettings := range allProxySettings {
-			wg.Add(1)
-			go connect.HandleError(func() {
-				defer wg.Done()
-
-				initialDelay := time.Duration(i) * 100 * time.Millisecond
-				select {
-				case <-ctx.Done():
-				case <-time.After(initialDelay):
-				}
-
-				provideWithProxy(proxySettings)
-			})
-		}
-	} else {
+	providers := self.proxySettings
+	if len(providers) == 0 {
+		providers = []*connect.ProxySettings{nil}
+	}
+	results := make(chan error, len(providers))
+	for index, proxySettings := range providers {
 		wg.Add(1)
-		go connect.HandleError(func() {
+		go func() {
 			defer wg.Done()
-			provideWithProxy(nil)
-		})
-	}
-
-	if 0 < port {
-		fmt.Printf(
-			"Provider %s started. Status on *:%d\n",
-			RequireVersion(),
-			port,
-		)
-		statusServer := &http.Server{
-			Addr:    fmt.Sprintf(":%d", port),
-			Handler: &Status{},
-		}
-		defer statusServer.Shutdown(ctx)
-
-		go connect.HandleError(func() {
-			defer cancel()
-			err := statusServer.ListenAndServe()
-			if err != nil {
-				fmt.Printf("status error: %s\n", err)
+			var result error
+			defer func() {
+				if cause := recover(); cause != nil {
+					if original, ok := cause.(error); ok {
+						result = original
+					} else {
+						result = errors.New("provider worker panicked")
+					}
+				}
+				if result != nil {
+					output.observe(providerWorkerFailed, uint64(index), true, result, 0, nil)
+				}
+				results <- result
+			}()
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Duration(index) * 100 * time.Millisecond):
 			}
-		}, cancel)
-	} else {
-		fmt.Printf(
-			"Provider %s started\n",
-			RequireVersion(),
-		)
+			if ctx.Err() != nil {
+				return
+			}
+			output.observe(providerStarted, uint64(index), true, nil, 0, nil)
+			result = provideWithProxy(uint64(index), proxySettings)
+		}()
 	}
-
 	wg.Wait()
-
-	// exit
-	os.Exit(0)
+	cancel()
+	close(results)
+	for result := range results {
+		returnErr = errors.Join(returnErr, result)
+	}
+	return returnErr
 }
 
 // providerStateDir returns the absolute path of the provider state
@@ -756,90 +734,6 @@ func writeProviderExtenderKeySeed(extenderKeySeed []byte) error {
 	return os.WriteFile(p, extenderKeySeed, 0600)
 }
 
-// Prints the extender public key this provider activates under, which is what
-// the operator's records name and what the mesh peer id is derived from (B1).
-func printProviderExtenderIdentity(extenderKeySeed []byte) {
-	if len(extenderKeySeed) == 0 {
-		return
-	}
-	publicKey, err := connect.ExtenderPublicKeyFromSeed(extenderKeySeed)
-	if err != nil {
-		fmt.Printf("provider extender key is not readable: %s\n", err)
-		return
-	}
-	fmt.Printf("extender_public_key: %s\n", hex.EncodeToString(publicKey))
-}
-
-// providerExtenderStatusListener prints the provider extender status whenever
-// it changes (connect/EXTENDER.md F3, G3), so one line lands when the
-// activation settles and nothing repeats while it holds. The sdk already
-// coalesces these callbacks to at most one per second.
-type providerExtenderStatusListener struct {
-	stateLock sync.Mutex
-	line      string
-}
-
-func newProviderExtenderStatusListener() *providerExtenderStatusListener {
-	return &providerExtenderStatusListener{}
-}
-
-func (self *providerExtenderStatusListener) ExtenderProvideStatusChanged(
-	status *sdk.ExtenderProvideStatus,
-) {
-	line := providerExtenderStatusLine(status)
-	changed := func() bool {
-		self.stateLock.Lock()
-		defer self.stateLock.Unlock()
-		if self.line == line {
-			return false
-		}
-		self.line = line
-		return true
-	}()
-	if changed {
-		fmt.Printf("extender: %s\n", line)
-	}
-}
-
-// One extender status as a line, carrying only what changes: whether the
-// carriers bound, which families are activated and where, and the newest
-// failure either half is standing on.
-func providerExtenderStatusLine(status *sdk.ExtenderProvideStatus) string {
-	if status == nil || !status.Enabled {
-		return "off"
-	}
-	parts := []string{}
-	if status.Listening {
-		parts = append(parts, "listening")
-	} else {
-		parts = append(parts, "not listening")
-	}
-	if status.ListenError != "" {
-		parts = append(parts, "carriers "+status.ListenError)
-	}
-	for _, family := range []struct {
-		name      string
-		activated bool
-		ip        string
-	}{
-		{name: "v4", activated: status.ActivatedV4, ip: status.Ipv4},
-		{name: "v6", activated: status.ActivatedV6, ip: status.Ipv6},
-	} {
-		if family.activated {
-			parts = append(parts, fmt.Sprintf("%s activated at %s", family.name, family.ip))
-		} else {
-			parts = append(parts, family.name+" not activated")
-		}
-	}
-	if status.LastActivationError != "" {
-		parts = append(parts, "last error "+status.LastActivationError)
-	}
-	if status.RevokedTime != 0 {
-		parts = append(parts, "revoked")
-	}
-	return strings.Join(parts, ", ")
-}
-
 // readProviderTlsCertAndKey loads the sequence-level TLS server cert
 // chain and matching private key from `~/.urnetwork/.provider.cert`
 // (PEM, leaf first, possibly chained) and the private key from the
@@ -901,22 +795,25 @@ func writeProviderTlsCertAndKey(certPem, keyPem []byte) error {
 }
 
 type Status struct {
+	diagnostics *providerDiagnostics
 }
 
 func (self *Status) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	type WarpStatusResult struct {
-		Version       string `json:"version,omitempty"`
-		ConfigVersion string `json:"config_version,omitempty"`
-		Status        string `json:"status"`
-		ClientAddress string `json:"client_address,omitempty"`
-		Host          string `json:"host"`
+		Version       string                    `json:"version,omitempty"`
+		ConfigVersion string                    `json:"config_version,omitempty"`
+		Status        string                    `json:"status"`
+		ClientAddress string                    `json:"client_address,omitempty"`
+		Host          string                    `json:"host"`
+		Diagnostics   *providerDiagnosticStatus `json:"diagnostics,omitempty"`
 	}
 
 	result := &WarpStatusResult{
 		Version: RequireVersion(),
 		// ConfigVersion: RequireConfigVersion(),
-		Status: "ok",
-		Host:   RequireHost(),
+		Status:      "ok",
+		Host:        RequireHost(),
+		Diagnostics: self.diagnostics.snapshot(),
 	}
 
 	responseJson, err := json.Marshal(result)
