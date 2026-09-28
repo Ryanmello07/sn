@@ -1,5 +1,9 @@
 # Contract offline recovery and approval preparation follow-up
 
+The [subsequent qualification receipt](bootstrap-contract-qualification-20260928.md)
+records the nine-root normal/race pass, ten intended causal failures and
+integration. The original author handoff below retains its earlier status.
+
 This follow-up is based on `576dea586ba30e08fce6f3c7923b9717cc320b54` in
 `/mnt/data/sn-testnet/worktrees/mg08-bootstrap-contracts-preview-20260928/sn`.
 The preceding candidate and all its Terra captures remain frozen. The evidence

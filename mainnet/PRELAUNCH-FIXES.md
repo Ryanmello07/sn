@@ -269,8 +269,9 @@ approved custody and limits remain explicit gates.
 The [first executable contract bootstrap phase](BOOTSTRAP-CONTRACTS.md) now
 prepares and resumes reserve CREATE through original public EVM signed bytes,
 bounded durable attempts, shared owned-HTTP transport and canonical
-runtime/getter recovery. The [candidate qualification](evidence/bootstrap-contract-create-20260928.md)
-is pending Terra normal/race and causal controls. Healthy head advancement is
+runtime/getter recovery. The [qualification receipt](evidence/bootstrap-contract-qualification-20260928.md)
+records passed normal/race scopes and causal controls, with the composed
+dependency check still separate. Healthy head advancement is
 revalidated within the operation; an unavailable mapping read does not become a
 successful-value mismatch. EVM signature liability survives local approval
 expiry. The other eight installation actions, Safe inner-call success/getter
@@ -279,7 +280,8 @@ The [approval-preview/offline recovery follow-up](evidence/bootstrap-contract-pr
 adds a read-only unsigned CLI export of exact approval bytes and preserves
 terminal receipts on offline reopen with an explicit retained-observation label.
 Preview opens no journal or route; signed execution remains independently
-approved. Its deterministic command tests await the separate Terra lane.
+approved. Its nine affected command roots and five causal cases pass normally
+and with race detection; this is local qualification, not live installation.
 
 Start with MG-01's read-only route correction and MG-02's source composition.
 Then close the recovery, runtime, policy, settlement and monitoring dependencies

@@ -1,5 +1,9 @@
 # Reserve CREATE candidate, 2026-09-28
 
+The [subsequent qualification receipt](bootstrap-contract-qualification-20260928.md)
+records completed scopes, fixture corrections and integration. The original
+candidate and pending-work notes below remain as the handoff history.
+
 This candidate adds executable `bootstrap-contracts plan/apply/resume` for the
 first reserve CREATE, exact release-artifact export, public signed-byte custody,
 finite original-byte HTTP submission and canonical inclusion/runtime/getter

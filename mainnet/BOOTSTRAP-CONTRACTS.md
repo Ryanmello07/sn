@@ -4,8 +4,8 @@
 an exact `STReserveSink` CREATE through retained public EVM custody and the owned
 HTTP submission adapter. It does not install the remaining contracts, anchor
 evidence, register miners, change emissions, activate validators, or complete
-mainnet bootstrap. The candidate's test bodies await the separate Terra lane;
-see [qualification scope](evidence/bootstrap-contract-create-20260928.md).
+mainnet bootstrap. See the [qualification receipt](evidence/bootstrap-contract-qualification-20260928.md)
+for passed normal/race scopes, retained fixture failures and remaining checks.
 
 The release catalog comes from the existing generator:
 
@@ -155,7 +155,7 @@ remain required inputs. No live signing, RPC write or deployment qualified this
 candidate.
 
 The [offline recovery and approval-preview follow-up](evidence/bootstrap-contract-preview-20260928.md)
-has separate command regressions and pending Terra qualification. Its local
+has separate command regressions that passed normal/race qualification. Its local
 signature fixture does not supply live approval authority.
 
 EVM signatures have **no native block expiry**. The finite native window only
