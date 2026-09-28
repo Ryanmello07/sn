@@ -25,6 +25,11 @@ qualification manifest before relying on them outside this workspace. Closure
 of testnet does not erase native-history, economic, archive, custody or coverage
 exceptions.
 
+The [closed testnet service cleanup](evidence/closed-testnet-services-20260928.md)
+also stopped its four unused PostgreSQL/Redis containers after preserving their
+state. Production shutdown must account for owned containers as well as process
+children; retained evidence must not depend on keeping obsolete services alive.
+
 ## Production gates in execution order
 
 These gates consolidate the stable RT/RL/PF/PH IDs below. `Planned` means the
