@@ -11,8 +11,8 @@ signing, submission, release or deployment was used.
 The source-finality reader previously joined a header/canonical-read timeout
 with an assertion that the receipt was not finalized/canonical, before the
 read had returned evidence. The strict retry classifier correctly rejected
-that mixed error. The adjacent prepared-source schedule/control readers had
-the same mistake. These paths now preserve the actual read error separately
+that mixed error. The adjacent prepared-source schedule/control readers and
+absent-slot `LastCommitment` reader had the same mistake. These paths now preserve the actual read error separately
 from a successfully observed contradiction.
 
 The source verifier also fetched its body and event vector a second time,
@@ -37,7 +37,8 @@ New tests use a real original-runtime signed source batch, real metadata and
 SCALE event encoding, genuine header/body commitments and physical RPC fault
 injection. They verify read recovery with unchanged signed bytes, no submission,
 single-body/event reuse, missing-data distinctions, hard and joined-error
-controls, cancellation, and adjacent preparation reads. The existing actual
+controls, cancellation, adjacent preparation reads, and absent-slot timeout →
+recovered complete absence → actual occupied-slot refusal. The existing actual
 V2 reconcile test remains stopped by its named publication fault; it does not
 claim a successful nonempty durable V2 store transition.
 
@@ -63,7 +64,7 @@ monitor candidate is imported or claimed qualified by this batch.
 
 Causal control: overlay only `6720f152:crv4/source_commitment.go`, retaining the
 new private receipt helper, exact wire fixtures and new tests. Normal and race
-runs of `^TestReleaseSource(FinalityReadPreservesTransportCause|FinalityReadUsesOneAdmittedBodyAndEvents|PreparationReadPreservesTransportCause|PreparationControlReadPreservesTransportCause)$`
+runs of `^TestReleaseSource(FinalityReadPreservesTransportCause|FinalityReadUsesOneAdmittedBodyAndEvents|PreparationReadPreservesTransportCause|PreparationControlReadPreservesTransportCause|SlotReadPreservesTransportCause)$`
 must fail the named timeout-as-contradiction or repeated-admitted-read assertion.
 Build errors, setup failure, panic, race report or timeout are not a valid causal
 reproduction. All candidate and predecessor-control results remain pending.

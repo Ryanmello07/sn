@@ -376,8 +376,11 @@ func (self *Chain) SourceCommitmentSlotAtContext(ctx context.Context, netuid uin
 		return nil, err
 	}
 	last, err := self.storageRawAtContext(ctx, lastKey, hash)
-	if err != nil || last != nil {
-		return nil, errors.Join(errors.New("crv4: absent source slot has occupied or inaccessible LastCommitment"), err)
+	if err != nil {
+		return nil, fmt.Errorf("crv4: read absent source slot LastCommitment: %w", err)
+	}
+	if last != nil {
+		return nil, errors.New("crv4: absent source slot has occupied LastCommitment")
 	}
 	return nil, ctx.Err()
 }

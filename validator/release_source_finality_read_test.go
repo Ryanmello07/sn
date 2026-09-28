@@ -352,3 +352,63 @@ func TestReleaseSourceFinalityReadCancellationRemainsUnknown(t *testing.T) {
 		t.Fatalf("canceled source read changed receipt authority: %v", err)
 	}
 }
+
+// An absent CommitmentOf is not sufficient: a timed-out LastCommitment keeps
+// the slot unknown until both exact-block reads actually establish absence.
+func TestReleaseSourceSlotReadPreservesTransportCause(t *testing.T) {
+	fixture := newReleaseSourceFinalityReadFixture(t)
+	prepared := fixture.source.intent.Prepared
+	hotkey, err := types.NewHashFromHexString(prepared.HotkeyHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitmentKey, err := types.CreateStorageKey(fixture.chain.Meta, "Commitments", "CommitmentOf", binary.LittleEndian.AppendUint16(nil, prepared.Netuid), hotkey[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	lastKey, err := types.CreateStorageKey(fixture.chain.Meta, "Commitments", "LastCommitment", binary.LittleEndian.AppendUint16(nil, prepared.Netuid), hotkey[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := json.Marshal(prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitmentReads, lastReads := 0, 0
+	fixture.fault = func(_ context.Context, target any, method string, args ...any) (bool, error) {
+		if method != "state_getStorage" || len(args) != 2 || args[1] != fixture.source.native.block.Hex() {
+			return false, nil
+		}
+		if args[0] == commitmentKey.Hex() {
+			commitmentReads++
+			return true, setReleaseHistoricalTestResult(target, nil)
+		}
+		if args[0] == lastKey.Hex() {
+			lastReads++
+			if lastReads == 1 {
+				return true, context.DeadlineExceeded
+			}
+			if lastReads == 3 {
+				return true, setReleaseHistoricalTestResult(target, hexutil.Encode(binary.LittleEndian.AppendUint32(nil, 1)))
+			}
+			return true, setReleaseHistoricalTestResult(target, nil)
+		}
+		return false, nil
+	}
+	slot, err := fixture.chain.SourceCommitmentSlotAtContext(t.Context(), prepared.Netuid, [32]byte(hotkey), fixture.source.native.block)
+	if slot != nil || !errors.Is(err, context.DeadlineExceeded) || !RetryableEvidenceTransportError(err) || commitmentReads != 1 || lastReads != 1 {
+		t.Fatalf("absent-slot LastCommitment timeout became an occupied-slot contradiction: %+v %v reads=%d/%d", slot, err, commitmentReads, lastReads)
+	}
+	slot, err = fixture.chain.SourceCommitmentSlotAtContext(t.Context(), prepared.Netuid, [32]byte(hotkey), fixture.source.native.block)
+	if err != nil || slot != nil || commitmentReads != 2 || lastReads != 2 {
+		t.Fatalf("recovered slot did not establish exact complete absence: %+v %v reads=%d/%d", slot, err, commitmentReads, lastReads)
+	}
+	slot, err = fixture.chain.SourceCommitmentSlotAtContext(t.Context(), prepared.Netuid, [32]byte(hotkey), fixture.source.native.block)
+	if err == nil || slot != nil || RetryableEvidenceTransportError(err) || !strings.Contains(err.Error(), "occupied LastCommitment") {
+		t.Fatalf("occupied LastCommitment became a retry or empty slot: %+v %v", slot, err)
+	}
+	after, marshalErr := json.Marshal(prepared)
+	if marshalErr != nil || !bytes.Equal(before, after) || fixture.receipt.submissions != 0 || fixture.receipt.subscriptions != 0 {
+		t.Fatalf("slot recovery changed signed bytes or submitted: %v", marshalErr)
+	}
+}
