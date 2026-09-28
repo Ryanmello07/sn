@@ -32,7 +32,7 @@ func productionReceiptContinuationTestCensus(native *productionContinuationNativ
 // an evicted cache rescans without touching custody, then later self inclusion
 // resolves exactly the original once-broadcast transaction across native epochs.
 func TestProductionReceiptChunkResumesDurableIntentAfterOutageAndEviction(t *testing.T) {
-	fixture := newProductionContinuationTestFixture(t)
+	fixture := newProductionContinuationTestFixtureThrough(t, 230)
 	native := installProductionContinuationNative(t, fixture)
 	pending := fixture.beginAndLoseAcknowledgement(t, native)
 	original, err := os.ReadFile(fixture.steerer.intents.path)

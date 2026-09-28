@@ -4,12 +4,15 @@ package validator
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"github.com/urfoundation/sn/crv4"
 )
 
@@ -30,7 +33,26 @@ func productionAuthorityPendingTest(t *testing.T, changeRuntime bool) (*ReleaseS
 	}
 	client := measurement.admission.chain.API.Client.(*recycleAdmissionRouteClient).validatorRuntimeIdentityTestClient
 	original := client.callContext
+	public := fixture.hotkey.PublicKey()
+	accountKey, err := types.CreateStorageKey(fixture.metadata, "System", "Account", public[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The reviewed Subtensor account uses four u32 counters, three u64
+	// balances and u128 flags. Preserve the original pending nonce exactly.
+	account := make([]byte, 4*4+3*8+16)
+	binary.LittleEndian.PutUint32(account, intent.Prepared.AccountNonce)
 	client.callContext = func(ctx context.Context, target any, method string, args ...any) error {
+		if method == "state_getStorage" && len(args) == 2 && args[0] == accountKey.Hex() {
+			if args[1] != fixture.block(101).Hex() {
+				t.Fatal("original pending nonce escaped the authenticated receipt coverage boundary")
+			}
+			raw, err := json.Marshal(codec.HexEncodeToString(account))
+			if err != nil {
+				return err
+			}
+			return json.Unmarshal(raw, target)
+		}
 		if method == "chain_getBlock" {
 			if len(args) != 1 || args[0] != fixture.block(100).Hex() && args[0] != fixture.block(101).Hex() {
 				t.Fatal("original receipt scan escaped the retained finalized range")

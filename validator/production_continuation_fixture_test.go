@@ -44,6 +44,18 @@ func newProductionContinuationTestFixture(t *testing.T) *productionContinuationT
 // Additional activation/configuration inputs are fixed before proof sealing
 // and independent approval. Neither callback can bypass an authority reader.
 func newProductionContinuationTestFixtureWithStartup(t *testing.T, anchor func(*recycleAdmissionFixture, *attemptCutV2SealTestFixture), configure func(*ownerRecycleProductionTestFixture, *productionContinuationTestFixture)) *productionContinuationTestFixture {
+	return newProductionContinuationTestFixtureWithStartupThrough(t, 200, anchor, configure)
+}
+
+// Long receipt scans select their finite read window before the independent
+// approval, source envelope and original native intent are signed.
+func newProductionContinuationTestFixtureThrough(t *testing.T, through uint64) *productionContinuationTestFixture {
+	return newProductionContinuationTestFixtureWithStartupThrough(t, through, nil, nil)
+}
+
+// Startup and long-scan fixtures compose their inputs before the same real
+// independent approval. The ordinary startup window remains unchanged.
+func newProductionContinuationTestFixtureWithStartupThrough(t *testing.T, through uint64, anchor func(*recycleAdmissionFixture, *attemptCutV2SealTestFixture), configure func(*ownerRecycleProductionTestFixture, *productionContinuationTestFixture)) *productionContinuationTestFixture {
 	t.Helper()
 	self := &productionContinuationTestFixture{inputKVs: map[uint64]*releaseStatsV2RuntimeTestFixture{}, journalKVs: map[uint64]*releaseMeasurementInputJournal{}, contextKVs: map[uint64]AttemptCutV2Context{}}
 	policy := recycleTestInput(t).ParentPolicy
@@ -110,6 +122,7 @@ func newProductionContinuationTestFixtureWithStartup(t *testing.T, anchor func(*
 			}
 		}, anchor)
 	}, func(production *ownerRecycleProductionTestFixture) {
+		production.operator.measurement.admission.approval.ValidThroughNativeBlock = through
 		cfg := production.cfg
 		bounds := &cfg.EvidenceV2.Bounds
 		bounds.MaxHistoryBytes, bounds.MaxInputJournalBytes = 32*1024*1024, 1024*1024
