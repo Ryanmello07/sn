@@ -9,8 +9,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,6 +28,7 @@ type releaseProgress struct {
 	settlementSequence uint64
 	now                func() time.Time
 	publisher          *releaseProgressPublisher
+	diagnostics        *releaseDiagnostics
 }
 
 // Configuration hashing uses the same complete canonical body as independent
@@ -50,7 +49,7 @@ func newReleaseProgress(ctx context.Context, cfg *ReleaseConfig, path string) (*
 		return nil, err
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	self := &releaseProgress{now: time.Now, value: protocol.ValidatorProgress{
+	self := &releaseProgress{now: time.Now, diagnostics: releaseDiagnosticOwner(ctx), value: protocol.ValidatorProgress{
 		Schema: protocol.ValidatorProgressSchema, Source: source,
 		InstanceId: hex.EncodeToString(instance[:]), StartedAt: now, HeartbeatAt: now,
 		Publisher: protocol.ValidatorPublicationObservation{Outcome: "starting"},
@@ -59,7 +58,7 @@ func newReleaseProgress(ctx context.Context, cfg *ReleaseConfig, path string) (*
 		return nil, err
 	}
 	self.publisher = newReleaseProgressPublisher(ctx, self, path, cfg.StateDir, func(state string) {
-		fmt.Fprintf(os.Stderr, "validator progress: %s\n", state)
+		releaseDiagnostic(ctx, "progress", state, 0, false, 0)
 	})
 	return self, nil
 }
@@ -357,9 +356,15 @@ func (self *releaseProgress) retain(previous *protocol.ValidatorProgress) {
 // Encoding happens under the short memory lock. Filesystem writes happen only
 // after return, so a blocked or failing exporter cannot own protocol progress.
 func (self *releaseProgress) snapshot() ([]byte, error) {
+	// Delivery observations precede this heartbeat and hold no progress lock.
+	// Nested progress fields remain protected through their bounded encoding.
+	diagnosticAt := self.now().UTC()
+	diagnostic := self.diagnostics.snapshot(diagnosticAt)
+	now := self.now().UTC()
 	self.stateLock.Lock()
 	defer self.stateLock.Unlock()
 	value := self.value
-	value.HeartbeatAt = self.now().UTC().Format(time.RFC3339Nano)
+	value.HeartbeatAt = now.Format(time.RFC3339Nano)
+	value.Diagnostics = diagnostic
 	return value.Encode()
 }

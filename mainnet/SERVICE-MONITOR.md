@@ -138,12 +138,41 @@ cannot advance confirmed success. The next attempt reports retrying and
 republishes a complete snapshot. JSON reports the outcome after the attempt.
 Restart preserves existing textfiles until a real sample completes.
 
-JSON events and diagnostics share a synchronous serialized stdout/stderr sink.
-A physically blocked log sink can eventually block all workers and delay their
-cancellation join, even though source reads and textfiles have separate owners.
-Independent missing/stale-textfile alerts still expose that monitor outage.
-Bounded, cancelable log export remains an MG07 follow-up; role-local file errors
-do not imply that every blocked output is isolated.
+JSON events and diagnostics use the [bounded daemon exporter](../diagnostics/README.md).
+Each expected role has two independent 16 KiB queue slots. A full log destination
+cannot block sampling, textfile publication, or cancellation. Aliased stdout and
+stderr share one writer; failed partial output disables that destination to
+prevent record splicing. Zero-byte failures remain retryable. Linux daemon logs
+must use journal/socket/pipe/terminal output or an explicit cancellation-aware
+embedding. Regular-file redirection is reported unavailable and is never silently
+treated as accepted logging. Finite CLI commands keep their original output.
+
+The existing `sn_mainnet_validator_output_*{role,stream}` families describe this
+monitor's prior delivery state. `stream` is `events` or `diagnostics`; status is
+0 starting, 1 delivered, 2 retrying, 3 unavailable. `known`,
+`last_success_timestamp_seconds`, `delivered_total`, `dropped_total`,
+`dropped_bytes_total`, and `unavailable_total` are independent of protocol
+observations. Counters saturate and reset with process restart. An idle diagnostic
+stream need not produce recent records, so acknowledgment age alone is not a
+stall alarm. Unsupported sinks have known unavailable state from admission.
+
+The optional producer `diagnostics` wire extension exposes the same local states
+through `sn_mainnet_validator_producer_diagnostic_*{role,domain}`. Domains are the
+fixed census `startup`, `steering`, `progress`, `operator`, `runtime`; `current`
+requires both a fresh producer source and diagnostic observation. Retained counts
+remain available with current=0. Same-instance counter rollback is refused;
+changed instance IDs permit fresh counters. Diagnostic timestamps participate in
+clock checks and do not advance native, intent or settlement progress.
+
+Deploy consumers first: upgraded consumers accept old records with diagnostics
+unknown, while old strict consumers reject the new optional member. The complete
+producer wire remains at most 8 KiB. Producer snapshots acknowledge earlier log
+writes, never their own file publication. Startup/read waits retain closed cause
+and phase categories and original epoch knowledge; JWT failures retain numeric
+operator identity, and optional receipt-cache faults retain read/write stage.
+No raw read error or custody content is formatted into these producer messages.
+Chain event read/publication detail is likewise deliberately redacted to closed
+descriptions; finite admission and local cleanup diagnostics retain wrapped causes.
 
 Terminal policy, checksum or output-ownership faults cancel the composition,
 join every launched worker, and close every admitted owner. Cleanup errors are
@@ -160,7 +189,10 @@ checked xops planetoid configuration enables `node_exporter_metrics`' textfile
 collector at `/var/lib/fluent-bit/textfile`, scrapes every 15 seconds and adds
 `env`, `host`, `job` labels. No collector, remote receiver or rule installation
 is performed here. Keep the existing [chain rules](monitor-alerts.example.yml)
-alongside the service rules.
+alongside the service rules and [diagnostic rules](diagnostic-alerts.example.yml).
+The diagnostic examples use provisional two-minute unavailable and five-minute
+drop windows. They supplement the independent expected-source and stale-file
+rules; they do not prove installation, Loki ingestion, or delivered alerts.
 
 Supply `sn_mainnet_validator_expected{env,host,role}=1` from an independent
 expected-service roster in the evaluator. A roster originating only on the

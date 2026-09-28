@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 	"time"
 )
 
@@ -22,28 +21,16 @@ type monitorServiceHooks struct {
 	wait          func(context.Context, string, time.Duration) bool
 }
 
-// Synchronize the shared JSON/log sink without sharing role sampling locks.
-type monitorServiceWriter struct {
-	stateLock sync.Mutex
-	writer    io.Writer
-}
-
-// One complete JSON line remains indivisible across independently sampled roles.
-func (self *monitorServiceWriter) Write(raw []byte) (int, error) {
-	self.stateLock.Lock()
-	defer self.stateLock.Unlock()
-	return self.writer.Write(raw)
-}
-
 // Role events contain bounded operational evidence and a closed export outcome.
 type monitorServiceEvent struct {
-	Schema      string                 `json:"schema"`
-	Role        string                 `json:"role"`
-	ObservedAt  string                 `json:"observed_at"`
-	Status      string                 `json:"status"`
-	Severity    string                 `json:"severity,omitempty"`
-	Publication string                 `json:"publication"`
-	State       *monitorValidatorState `json:"state"`
+	Schema      string                        `json:"schema"`
+	Role        string                        `json:"role"`
+	ObservedAt  string                        `json:"observed_at"`
+	Status      string                        `json:"status"`
+	Severity    string                        `json:"severity,omitempty"`
+	Publication string                        `json:"publication"`
+	State       *monitorValidatorState        `json:"state"`
+	Diagnostics *monitorDiagnosticObservation `json:"diagnostics,omitempty"`
 }
 
 // Every domain owns its output files and all retries until the parent joins it.
@@ -73,7 +60,16 @@ func waitMonitorService(ctx context.Context, role string, duration time.Duration
 func runMonitorServices(ctx context.Context, client *rpcClient, expected identityExpectation, policy *monitorServicesPolicy, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	output, diagnostic := &monitorServiceWriter{writer: stdout}, &monitorServiceWriter{writer: stderr}
+	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators), now)
+	if err != nil {
+		return 3
+	}
+	defer func() {
+		if output.close() != nil {
+			result = 3
+		}
+	}()
+	diagnostic := output.errors.Writer("diagnostic")
 	var workers []*monitorValidatorWorker
 	defer func() {
 		var cleanupErr error
@@ -138,7 +134,7 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	go func() {
 		backoff := time.Second
 		for ctx.Err() == nil {
-			exit := runChainMonitor(ctx, client, expected, checkpointPath, metricsPath, interval, stallAfter, output, diagnostic, now)
+			exit := runChainMonitor(ctx, client, expected, checkpointPath, metricsPath, interval, stallAfter, output.events.Writer("chain"), diagnostic, now, hooks)
 			if exit != 1 || ctx.Err() != nil {
 				results <- exit
 				return
@@ -151,8 +147,9 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		}
 		results <- 0
 	}()
-	for _, worker := range workers {
-		go func() { results <- worker.run(ctx, interval, output, now, hooks) }()
+	for index, worker := range workers {
+		writer := output.events.Writer(fmt.Sprintf("validator%d", index))
+		go func() { results <- worker.run(ctx, interval, writer, diagnostic, now, hooks) }()
 	}
 	for remaining := len(workers) + 1; remaining > 0; remaining-- {
 		exit := <-results
@@ -168,7 +165,7 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 
 // Completed source reads continue through ordinary checkpoint/metrics errors.
 // The previous acknowledged export timestamp cannot advance on ambiguous writes.
-func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Duration, stdout io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
+func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
 	startedAt := now().UTC()
 	publication := "starting"
 	backoff := time.Second
@@ -192,6 +189,8 @@ func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Durat
 		if renderErr != nil {
 			return 3
 		}
+		observation := monitorDiagnosticSnapshot(stdout, stderr)
+		raw = appendMonitorOutputMetrics(raw, "sn_mainnet_validator", self.policy.Role, observation)
 		metricsErr := self.metrics.saveRaw(raw)
 		combined := errors.Join(checkpointErr, metricsErr)
 		var ownership *monitorOutputOwnershipError
@@ -204,6 +203,7 @@ func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Durat
 		}
 		status, severity := self.state.condition(sampledAt)
 		event := monitorServiceEvent{Schema: "urnetwork-mainnet-validator-event-v1", Role: self.policy.Role, ObservedAt: sampledAt.Format(time.RFC3339Nano), Status: status, Severity: severity, Publication: publication, State: self.state}
+		event.Diagnostics = observation
 		if terminal {
 			event.Publication, event.Severity = "ownership-error", "critical"
 		}

@@ -568,7 +568,7 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 	transport := NewTunnelTransport(ctx, strategy, TunnelTransportConfig{ApiUrl: op.APIURL, ConnectUrl: op.ConnectURL, ByClientJwt: api.GetByJwt, SourceClientId: clientID})
 	refreshSub := api.AddJwtRefreshListener(clientauth.JwtRefreshListenerFunc(func(jwt string) {
 		if err := clientauth.WriteToken(op.ClientJWTFile, jwt); err != nil {
-			fmt.Printf("validator no_id %d JWT save failed: %v\n", op.NoID, err)
+			releaseDiagnostic(ctx, "operator", "jwt_save_failed", 0, false, 0, releaseDiagnosticFacts{operatorId: op.NoID, operatorKnown: true, cause: releaseDiagnosticHardError})
 			cancelled.Store(true)
 			upload.close()
 			transport.Close()
@@ -755,9 +755,34 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	ctx, diagnosticOwner, diagnosticErr := newReleaseDiagnostics(ctx, os.Stderr, time.Now)
+	if diagnosticErr != nil {
+		return diagnosticErr
+	}
+	defer func() {
+		// Diagnostic cleanup cannot stop reconciliation or replace its result.
+		// The owner retains close faults as unavailable and joins before return.
+		err := diagnosticOwner.close()
+		if hooks, ok := ctx.Value(releaseDiagnosticHooksKey{}).(releaseDiagnosticHooks); ok && hooks.afterClose != nil {
+			hooks.afterClose(diagnosticOwner, err)
+		}
+	}()
+	ctx = withProductionReceiptCacheDiagnostic(ctx, func(value productionReceiptCacheObservation) {
+		var stage uint8
+		switch value.stage {
+		case productionReceiptCacheRead:
+			stage = 1
+		case productionReceiptCacheWrite:
+			stage = 2
+		}
+		releaseDiagnostic(ctx, "steering", "receipt_cache_disabled", value.nativeEpoch, true, 0, releaseDiagnosticFacts{phase: productionReadReceipt, cacheStage: stage})
+	})
+	if hooks, ok := ctx.Value(releaseDiagnosticHooksKey{}).(releaseDiagnosticHooks); ok && hooks.afterCreate != nil {
+		hooks.afterCreate(ctx, diagnosticOwner)
+	}
 	progress, progressErr := newReleaseProgress(ctx, cfg, progressPath)
 	if progressErr != nil {
-		fmt.Fprintln(os.Stderr, "validator progress: publisher_disabled_configuration")
+		releaseDiagnostic(ctx, "progress", "publisher_disabled_configuration", 0, false, 0)
 	}
 	defer progress.close()
 
@@ -1000,7 +1025,7 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 			return steerer, nil
 		},
 		running: func() {
-			fmt.Printf("validator release 1.0 runtime active: validator=%d netuid=%d hotkey=%s operators=%d\n", cfg.ValidatorID, cfg.Netuid, hotkey.Address(), len(runtimes))
+			releaseDiagnostic(ctx, "runtime", "runtime_active", 0, false, 0)
 		},
 		trailReady: trailReady,
 	})

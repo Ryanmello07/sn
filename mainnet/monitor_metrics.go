@@ -184,7 +184,7 @@ func renderMonitorMetrics(event monitorEvent, state *monitorState) ([]byte, erro
 	} {
 		fmt.Fprintf(&output, "# HELP sn_mainnet_monitor_%s %s\n# TYPE sn_mainnet_monitor_%s gauge\nsn_mainnet_monitor_%s %s\n", metric.name, metric.help, metric.name, metric.name, metric.value)
 	}
-	return []byte(output.String()), nil
+	return appendMonitorOutputMetrics([]byte(output.String()), "sn_mainnet_monitor", "", event.Diagnostics), nil
 }
 
 // Failed publication never refreshes the last successful read. A directory-sync

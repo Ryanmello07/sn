@@ -21,12 +21,13 @@ const mainnetEvmChainId = 964
 
 // monitorEvent is one JSON line suitable for the existing log/alert pipeline.
 type monitorEvent struct {
-	Schema     string            `json:"schema"`
-	ObservedAt string            `json:"observed_at"`
-	Status     string            `json:"status"`
-	Severity   string            `json:"severity,omitempty"`
-	Detail     string            `json:"detail,omitempty"`
-	Snapshot   *identityEnvelope `json:"snapshot,omitempty"`
+	Schema      string                        `json:"schema"`
+	ObservedAt  string                        `json:"observed_at"`
+	Status      string                        `json:"status"`
+	Severity    string                        `json:"severity,omitempty"`
+	Detail      string                        `json:"detail,omitempty"`
+	Snapshot    *identityEnvelope             `json:"snapshot,omitempty"`
+	Diagnostics *monitorDiagnosticObservation `json:"diagnostics,omitempty"`
 }
 
 // monitorState tracks finalized progress without treating a changing tip as finality.
@@ -239,12 +240,12 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 		}
 		return runMonitorServices(ctx, client, expected, policy, *checkpointPath, *metricsPath, *interval, *stallAfter, stdout, stderr, now, hooks)
 	}
-	return runChainMonitor(ctx, client, expected, *checkpointPath, *metricsPath, *interval, *stallAfter, stdout, stderr, now)
+	return runMonitorOnly(ctx, client, expected, *checkpointPath, *metricsPath, *interval, *stallAfter, stdout, stderr, now, hooks)
 }
 
 // Chain sampling retains its original continuity, publication and exit rules.
 // Service composition supervises this independently of bounded file reads.
-func runChainMonitor(ctx context.Context, client *rpcClient, expected identityExpectation, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time) (result int) {
+func runChainMonitor(ctx context.Context, client *rpcClient, expected identityExpectation, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
 	encoder := json.NewEncoder(stdout)
 	var err error
 	state := &monitorState{}
@@ -282,13 +283,14 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 	// Publication follows durable continuity. Errors preserve an explicit failed
 	// event; a stopped/blocked loop leaves a stale textfile for external alerts.
 	publishEvent := func(event *monitorEvent) error {
+		event.Diagnostics = monitorDiagnosticSnapshot(stdout, stderr)
 		switch event.Status {
 		case "identity-mismatch", "finality-conflict", "rpc-integrity", "finality-stalled", "checkpoint-error":
 			event.Severity = "critical"
 		}
 		if metrics != nil {
 			if err := metrics.save(*event, state); err != nil {
-				event.Detail = fmt.Sprintf("status=%s severity=%s detail=%s; metrics: %v", event.Status, event.Severity, event.Detail, err)
+				event.Detail = fmt.Sprintf("status=%s severity=%s; metrics publication unavailable", event.Status, event.Severity)
 				event.Status, event.Severity = "metrics-error", "critical"
 			}
 		}
@@ -304,7 +306,10 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 		sampledAt := now().UTC()
 		event.ObservedAt = sampledAt.Format(time.RFC3339Nano)
 		markUnavailable := func(readErr error) {
-			event.Status, event.Detail = "rpc-error", readErr.Error()
+			event.Status, event.Detail = "rpc-error", "RPC observation unavailable"
+			if errors.Is(readErr, context.DeadlineExceeded) {
+				event.Detail = "RPC observation timed out"
+			}
 			if errors.Is(readErr, errRpcIntegrity) {
 				event.Status, event.Severity = "rpc-integrity", "critical"
 				return
@@ -314,7 +319,7 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 			if changed && checkpoint != nil {
 				if saveErr := checkpoint.save(state); saveErr != nil {
 					event.Status, event.Severity = "checkpoint-error", "critical"
-					event.Detail = fmt.Sprintf("%v; checkpoint: %v", readErr, saveErr)
+					event.Detail = "RPC observation and checkpoint publication unavailable"
 				}
 			}
 		}
@@ -331,7 +336,7 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 			}
 			event.Snapshot = &snapshot
 			if identityErr := expected.match(identity); identityErr != nil {
-				event.Status, event.Detail = "identity-mismatch", identityErr.Error()
+				event.Status, event.Detail = "identity-mismatch", "observed identity differs from expected configuration"
 				if publishEvent(&event) != nil || event.Status == "metrics-error" {
 					return 1
 				}
@@ -348,10 +353,10 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 				previousHash, previousNumber, previousSuccess := state.lastHash, state.lastNumber, state.lastSuccessAt
 				event.Status, err = state.observe(sampledAt, identity, stallAfter)
 				if err != nil {
-					event.Detail = err.Error()
+					event.Detail = "finality progress observation failed"
 				} else if recovered := state.clearUnavailable(); checkpoint != nil && (recovered || state.lastHash != previousHash || state.lastNumber != previousNumber || !state.lastSuccessAt.Equal(previousSuccess)) {
 					if saveErr := checkpoint.save(state); saveErr != nil {
-						event.Status, event.Severity, event.Detail = "checkpoint-error", "critical", saveErr.Error()
+						event.Status, event.Severity, event.Detail = "checkpoint-error", "critical", "checkpoint publication unavailable"
 					}
 				}
 			}
@@ -366,10 +371,8 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 		if event.Status == "checkpoint-error" || event.Status == "metrics-error" {
 			return 1
 		}
-		select {
-		case <-ctx.Done():
+		if !waitMonitorService(ctx, "chain", interval, hooks) {
 			return 0
-		case <-time.After(interval):
 		}
 	}
 }

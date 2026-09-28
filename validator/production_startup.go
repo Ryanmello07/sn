@@ -111,7 +111,11 @@ func awaitProductionStartupStage(ctx context.Context, cfg *ReleaseConfig, progre
 			return errors.Join(err, ctx.Err())
 		}
 		progress.observeSteering(0, false, "read_wait", false)
-		fmt.Printf("release startup %s remains unavailable; retaining original state: %v\n", stage, err)
+		code := map[string]string{"EVM identity": "startup_evm_identity_unavailable", "native identity": "startup_native_identity_unavailable", "activation history": "startup_activation_history_unavailable", "server-key history": "startup_server_key_history_unavailable", "disk and intent history": "startup_disk_intent_history_unavailable", "native retained owner": "startup_native_owner_unavailable"}[stage]
+		if code == "" {
+			code = "startup_unavailable"
+		}
+		releaseDiagnostic(ctx, "startup", code, 0, false, 0, releaseDiagnosticFacts{cause: releaseDiagnosticReadCause(err)})
 		if err := waitReleaseSnapshotRetry(ctx, time.Duration(cfg.PollSeconds)*time.Second); err != nil {
 			return err
 		}
@@ -182,7 +186,7 @@ func (self *ReleaseSteerer) runProductionPreparationAndRefresh(ctx context.Conte
 				return fmt.Errorf("production preparation or settlement integrity: %w", err)
 			}
 			runtime.progress.observeSteering(0, false, "read_wait", false)
-			fmt.Printf("release preparation remains unavailable; retaining durable state: %v\n", err)
+			releaseDiagnostic(ctx, "startup", "preparation_unavailable", 0, false, 0, releaseDiagnosticFacts{phase: productionReadPreparation, cause: releaseDiagnosticReadCause(err)})
 		} else if first {
 			runtime.preparation.readyOnce.Do(func() { close(runtime.preparation.ready) })
 			first = false

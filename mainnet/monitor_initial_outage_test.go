@@ -29,7 +29,7 @@ func TestMonitorInitialOutageSurvivesCommandRestart(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		stdout := &cancelMonitorWriter{cancel: cancel}
 		var stderr bytes.Buffer
-		exit := runMainWithClock(ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", expected.NativeChain, "--expected-genesis", expected.GenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", path, "--metrics-file", metricsPath, "--retry-window", "1s"}, stdout, &stderr, func() time.Time { return now })
+		exit := runMonitorTestWithClock(ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", expected.NativeChain, "--expected-genesis", expected.GenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", path, "--metrics-file", metricsPath, "--retry-window", "1s"}, stdout, &stderr, func() time.Time { return now })
 		cancel()
 		var event monitorEvent
 		if err := json.Unmarshal(stdout.Bytes(), &event); err != nil || exit != 0 || event.Status != "rpc-error" || index > 0 && event.Severity != "critical" {
@@ -54,7 +54,7 @@ func TestMonitorInitialOutageSurvivesCommandRestart(t *testing.T) {
 	stdout := &cancelMonitorWriter{cancel: cancel}
 	var stderr bytes.Buffer
 	recoveredAt := base.Add(7 * time.Minute)
-	exit := runMainWithClock(ctx, []string{"monitor", "--rpc", healthy.URL, "--expected-chain", expected.NativeChain, "--expected-genesis", expected.GenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", path, "--metrics-file", metricsPath}, stdout, &stderr, func() time.Time { return recoveredAt })
+	exit := runMonitorTestWithClock(ctx, []string{"monitor", "--rpc", healthy.URL, "--expected-chain", expected.NativeChain, "--expected-genesis", expected.GenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", path, "--metrics-file", metricsPath}, stdout, &stderr, func() time.Time { return recoveredAt })
 	cancel()
 	if exit != 0 {
 		t.Fatalf("initial outage could not recover: exit=%d %s", exit, stderr.String())
@@ -163,7 +163,7 @@ func TestMonitorMetricsCommandMarksIntegrityAndStallsCritical(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		stdout := &cancelMonitorWriter{cancel: cancel}
 		var stderr bytes.Buffer
-		exit := runMainWithClock(ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", checkpointPath, "--metrics-file", metricsPath}, stdout, &stderr, func() time.Time { return base })
+		exit := runMonitorTestWithClock(ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", checkpointPath, "--metrics-file", metricsPath}, stdout, &stderr, func() time.Time { return base })
 		cancel()
 		var event monitorEvent
 		if err := json.Unmarshal(stdout.Bytes(), &event); err != nil || exit != test.exit || event.Status != test.status || event.Severity != "critical" {

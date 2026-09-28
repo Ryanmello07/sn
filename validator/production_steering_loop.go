@@ -39,13 +39,13 @@ func runReleaseProductionSteeringLoopWithWait(ctx context.Context, submit func()
 				outcome = "receipt_transport_wait"
 			}
 			progress.observeSteering(readWait.nativeEpoch, readWait.epochKnown, outcome, false)
-			fmt.Printf("release steer: %v; retaining progress for the next poll\n", readWait)
+			releaseDiagnostic(ctx, "steering", outcome, readWait.nativeEpoch, readWait.epochKnown, 0, releaseDiagnosticFacts{phase: readWait.phase, cause: releaseDiagnosticReadCause(readWait.cause)})
 		case errors.As(err, &preparation) && releaseOnlyErrors(err, preparation):
 			progress.observeSteering(preparation.nativeEpoch, preparation.epochKnown, "read_wait", false)
-			fmt.Printf("release steer: %v\n", preparation)
+			releaseDiagnostic(ctx, "steering", "preparation_pending", preparation.nativeEpoch, preparation.epochKnown, 0, releaseDiagnosticFacts{phase: productionReadPreparation})
 		case errors.As(err, &originalPending) && (originalPending.cause == nil || retryableProductionSteeringRead(originalPending.cause)) && releaseOnlyErrors(err, originalPending):
 			progress.observeSteering(originalPending.nativeEpoch, true, "receipt_pending", originalPending.cause == nil)
-			fmt.Printf("release steer: %v; no new signature while the original outcome is unknown\n", originalPending)
+			releaseDiagnostic(ctx, "steering", "receipt_pending", originalPending.nativeEpoch, true, 0, releaseDiagnosticFacts{phase: productionReadReceipt, cause: releaseDiagnosticReadCause(originalPending.cause)})
 		case errors.As(err, &transition) && releaseOnlyErrors(err, transition):
 			outcome := "working"
 			if transition.revealWait {
@@ -59,7 +59,7 @@ func runReleaseProductionSteeringLoopWithWait(ctx context.Context, submit func()
 			failures++
 			pendingErr = errors.Join(pendingErr, err)
 			progress.observeSteering(0, false, "hard_error", false)
-			fmt.Printf("release steer: production hard failure %d: %v\n", failures, err)
+			releaseDiagnostic(ctx, "steering", "hard_error", 0, false, uint64(failures), releaseDiagnosticFacts{cause: releaseDiagnosticHardError})
 		}
 		if failures >= releaseSteeringFailureLimit {
 			return fmt.Errorf("release steering failed %d consecutive attempts: %w", failures, pendingErr)

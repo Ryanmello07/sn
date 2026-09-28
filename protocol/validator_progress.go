@@ -39,6 +39,35 @@ type ValidatorProgress struct {
 	Native      *ValidatorNativeObservation     `json:"native,omitempty"`
 	Settlement  *ValidatorSettlementObservation `json:"settlement,omitempty"`
 	Steering    *ValidatorSteeringObservation   `json:"steering,omitempty"`
+	Diagnostics *ValidatorDiagnosticObservation `json:"diagnostics,omitempty"`
+}
+
+// A fixed domain census reports only this producer instance's diagnostic
+// exporter. These counts never indicate protocol progress or alert delivery.
+type ValidatorDiagnosticObservation struct {
+	ObservedAt string                   `json:"observed_at"`
+	Startup    ValidatorDiagnosticState `json:"startup"`
+	Steering   ValidatorDiagnosticState `json:"steering"`
+	Progress   ValidatorDiagnosticState `json:"progress"`
+	Operator   ValidatorDiagnosticState `json:"operator"`
+	Runtime    ValidatorDiagnosticState `json:"runtime"`
+}
+
+// Counters saturate and reset with InstanceId. LastSuccessAt acknowledges a
+// prior completed sink write; it cannot attest to this status file's own write.
+type ValidatorDiagnosticState struct {
+	Outcome       string `json:"outcome"`
+	Delivered     uint64 `json:"delivered"`
+	Dropped       uint64 `json:"dropped"`
+	DroppedBytes  uint64 `json:"dropped_bytes"`
+	Unavailable   uint64 `json:"unavailable"`
+	LastSuccessAt string `json:"last_success_at,omitempty"`
+}
+
+// The immutable order supplies bounded metric routing without accepting labels
+// from producer JSON. Returned values contain no aliased mutable memory.
+func (self ValidatorDiagnosticObservation) States() [5]ValidatorDiagnosticState {
+	return [5]ValidatorDiagnosticState{self.Startup, self.Steering, self.Progress, self.Operator, self.Runtime}
 }
 
 // The file reports the previous completed publication attempt. Its own
@@ -221,6 +250,21 @@ func (self ValidatorProgress) Validate() error {
 		case "starting", "working", "epoch_wait", "reveal_wait", "receipt_pending", "receipt_transport_wait", "read_wait", "complete", "hard_error":
 		default:
 			return errors.New("validator steering outcome is unknown")
+		}
+	}
+	if value := self.Diagnostics; value != nil {
+		if !validTime(value.ObservedAt) {
+			return errors.New("validator diagnostic observation time is invalid")
+		}
+		for _, state := range value.States() {
+			if state.LastSuccessAt != "" && !validTime(state.LastSuccessAt) || (state.LastSuccessAt == "") != (state.Delivered == 0) || state.Outcome == "delivered" && state.Delivered == 0 {
+				return errors.New("validator diagnostic acknowledgment is incomplete")
+			}
+			switch state.Outcome {
+			case "starting", "delivered", "retrying", "unavailable":
+			default:
+				return errors.New("validator diagnostic outcome is unknown")
+			}
 		}
 	}
 	return nil

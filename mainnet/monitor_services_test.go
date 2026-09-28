@@ -102,12 +102,21 @@ type monitorServicesTestWriter struct{ events chan monitorServiceEvent }
 
 // Discard only chain-schema events; retain every actual service event.
 func (self *monitorServicesTestWriter) Write(raw []byte) (int, error) {
+	return self.WriteContext(context.Background(), raw)
+}
+
+// Cancellation reaches the actual event receiver, with no abandoned writer.
+func (self *monitorServicesTestWriter) WriteContext(ctx context.Context, raw []byte) (int, error) {
 	var event monitorServiceEvent
 	if err := json.Unmarshal(raw, &event); err != nil {
 		return 0, err
 	}
 	if event.Schema == "urnetwork-mainnet-validator-event-v1" {
-		self.events <- event
+		select {
+		case self.events <- event:
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
 	}
 	return len(raw), nil
 }
@@ -226,6 +235,9 @@ func monitorServicesGauges(t testing.TB, path, role string) map[string]float64 {
 			continue
 		}
 		fields := strings.Fields(line)
+		if len(fields) == 2 && (strings.HasPrefix(fields[0], "sn_mainnet_validator_output_") || strings.HasPrefix(fields[0], "sn_mainnet_validator_producer_diagnostic_")) {
+			continue // Closed stream/domain families are checked independently.
+		}
 		if len(fields) != 2 || !strings.HasSuffix(fields[0], "{role="+strconv.Quote(role)+"}") || !strings.HasPrefix(fields[0], "sn_mainnet_validator_") {
 			t.Fatalf("invalid role metric %q", line)
 		}

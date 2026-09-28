@@ -62,6 +62,12 @@ func monitorProgressMaximumTime(value *protocol.ValidatorProgress) time.Time {
 	if value.Steering != nil {
 		times = append(times, value.Steering.ObservedAt, value.Steering.LastSuccessAt)
 	}
+	if value.Diagnostics != nil {
+		times = append(times, value.Diagnostics.ObservedAt)
+		for _, state := range value.Diagnostics.States() {
+			times = append(times, state.LastSuccessAt)
+		}
+	}
 	var maximum time.Time
 	for _, value := range times {
 		if parsed := monitorProgressTime(value); parsed.After(maximum) {
@@ -87,6 +93,21 @@ func (self *monitorValidatorState) observe(startedAt, now time.Time, value *prot
 			code, self.ClockFaultAt = "clock", maximum
 		}
 		if prior := self.Record; prior != nil {
+			if prior.InstanceId == value.InstanceId && prior.Diagnostics != nil && value.Diagnostics != nil {
+				if before := monitorProgressTime(prior.Diagnostics.ObservedAt); before.After(monitorProgressTime(value.Diagnostics.ObservedAt).Add(monitorServiceClockAllowance)) {
+					code, self.ClockFaultAt = "clock", before
+				}
+				previous, next := prior.Diagnostics.States(), value.Diagnostics.States()
+				for index, old := range previous {
+					current := next[index]
+					if current.Delivered < old.Delivered || current.Dropped < old.Dropped || current.DroppedBytes < old.DroppedBytes || current.Unavailable < old.Unavailable {
+						code = "invalid"
+					}
+					if before := monitorProgressTime(old.LastSuccessAt); before.After(monitorProgressTime(current.LastSuccessAt).Add(monitorServiceClockAllowance)) {
+						code, self.ClockFaultAt = "clock", before
+					}
+				}
+			}
 			if prior.InstanceId == value.InstanceId && monitorProgressTime(prior.HeartbeatAt).After(self.CandidateHeartbeatAt.Add(monitorServiceClockAllowance)) {
 				code, self.ClockFaultAt = "clock", monitorProgressTime(prior.HeartbeatAt)
 			}

@@ -1,7 +1,8 @@
 # Monitor telemetry and restart continuity
 
 `sn-mainnet monitor --metrics-file /absolute/path/monitor.prom` publishes
-eleven fixed Prometheus gauges alongside its existing JSON events. Use
+eleven fixed chain gauges and bounded diagnostic-delivery series alongside its
+existing JSON events. Use
 `--checkpoint /absolute/private/path/monitor.json` to retain finalized
 continuity, the last successful read and the first unresolved outage across
 restart. Both options are implemented in the real monitor command.
@@ -11,6 +12,13 @@ bounded validator roles using the existing producer status wire. See
 [service monitoring](SERVICE-MONITOR.md) for exact expected-source policy,
 separate current/retained evidence, per-role metrics and alert examples. A
 blocked chain sample cannot suppress those service observations.
+
+Long-lived event/diagnostic output uses the bounded exporter described in
+[service monitoring](SERVICE-MONITOR.md). `sn_mainnet_monitor_output_*{stream}`
+reports the standalone chain command's local delivery/drop state. Diagnostic
+congestion never refreshes successful chain observations and no longer holds
+the sampling worker. Regular-file daemon log sinks are explicitly unavailable;
+textfile metrics remain independent. Ordinary finite CLI output is unchanged.
 
 The textfile contains no endpoint, address, key, transaction hash or raw error.
 The existing Fluent Bit `node_exporter_metrics` textfile collector can read it;
