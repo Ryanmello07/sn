@@ -1121,6 +1121,14 @@ after each exercise or incident.
 
 ### Repair authority and durable execution
 
+Service stop/drain must use retained process ownership even when replacement
+configuration is invalid or RPC is unavailable. Verify the exact process
+generation and join its children; retain journals, uncertain signed work and
+volumes. Campaign closure records which services remain necessary and proves
+the others stopped. The [testnet shutdown observation](evidence/closed-testnet-service-stop-20260928.md)
+shows why publishing a terminal report alone is insufficient. Qualify this
+path before production service activation.
+
 Provide a standing signed repair envelope for routine operations the operator
 chooses to automate. It binds chain/deployment, immutable release, allowed
 action kinds and exact targets, signers/nonce domains, prerequisites, expiry,

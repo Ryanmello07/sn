@@ -1480,10 +1480,24 @@ semantic readiness and acceptance health. Retain healthy workers when one
 recovers; wait for a canceled owner's children before replacement. A saturated
 restart budget surfaces an actionable degraded state, not a green endpoint.
 
+**2026-09-28 closure follow-up.** The closed testnet campaign left its supervisor
+and 31 workers running after both validators stopped. The original `stop`
+command then refused unrelated current launch settings before reaching its
+shutdown handler. The verified service owner completed a graceful shutdown;
+the [retained observation](evidence/closed-testnet-service-stop-20260928.md)
+records both outcomes. Campaign closure must explicitly retain or stop each
+owned service, with a reason and owner. Dispatch stop/drain from authenticated
+retained process identity independently of new-launch configuration and live
+RPC availability. Preserve journals and volumes; prove old workers exited
+before admitting a replacement. This operational cleanup does not establish
+that the production shutdown path is qualified.
+
 **Closure.** Kill an operator or validator independently, restart an owned
 database/object-store container, lose the observer connection, rotate the
 executable path and simulate PID reuse. Verify no duplicate signer/sidecar,
 no orphan process, no unexpected volume recreation and joined shutdown.
+Include invalid replacement configuration and an unavailable RPC during stop;
+neither may prevent terminating the exact already-owned process generation.
 Delayed replay must expose progress; both UR validators must eventually produce
 fresh verified trails through every required operator. The root validator's
 readiness is its own netuid-0 role, never a substitute for a second UR validator.
