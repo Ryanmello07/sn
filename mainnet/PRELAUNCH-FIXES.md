@@ -1312,6 +1312,17 @@ gate new signing. Require actual fresh-start and restart tests through the
 public lifecycle, including activation, both upload owners and original receipt
 reconciliation; callback-only loop tests do not close this requirement.
 
+The startup composition exposed two adjacent retry defects. Parallel native and
+EVM checks can both fail transiently, but applying the native-only classifier
+to their entire joined error makes an ordinary EVM HTTP failure terminal.
+Classify independent branches at their owning boundary, retaining each native
+subtree's hard verdict for local, integrity or permanent failures. Also keep
+the 300-second I/O retry budget separate from total semantic recovery: valid
+local M8/history replay may take longer. An I/O timer must not repeatedly
+discard and restart that work. Local reconstruction follows caller cancellation
+and retained checkpoints; actual network operations retain finite retry owners.
+Both corrections belong to the pending public-startup qualification.
+
 **Closure.** Deterministically inject disconnect, DNS/HTTP failures, timeout
 during body read, missing/reordered batch responses, partial success and a
 large-batch refusal that succeeds when split. Verify exact call/attempt bounds,
@@ -1995,6 +2006,15 @@ that invocation as a 47-root scope and run the missing root separately. Require
 exact expected-versus-selected membership before bodies, including the first
 and last entries; nonzero enumeration alone does not establish complete scope.
 Prefer the maintained qualification owner over another untyped selector wrapper.
+
+The monitor's blocked HTTP fixture then consumed its whole package deadline in
+server cleanup after the real monitor workers had exited. Its handler waited
+for request cancellation without reading the POST body, preventing HTTP/1's
+background disconnect read from starting. A blocked-read fixture must consume
+and close the bounded real request before advertising its cancellation barrier.
+Join the actual handler; manually releasing a separate test channel cannot
+establish production cancellation. Keep the failed capture and qualify the
+corrected shared fixture and its adjacent restart consumer.
 
 **Production change.** Follow [CODESTYLE.md](../../connect/CODESTYLE.md): each
 root cause needs a deterministic pre-fix failure and corrected result at its
