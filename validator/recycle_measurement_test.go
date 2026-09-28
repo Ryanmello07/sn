@@ -7,11 +7,13 @@ package validator
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"math/big"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -74,14 +76,25 @@ func newRecycleMeasurementFixtureWithActivation(t *testing.T, completed int, set
 		Netuid: 25, ValidatorID: 1, ValidatorUID: 7}
 	var activate func(*attemptCutV2SealTestFixture)
 	if anchor != nil {
-		activate = func(seal *attemptCutV2SealTestFixture) { anchor(admission, seal) }
+		activate = func(seal *attemptCutV2SealTestFixture) {
+			// The source already persisted this activation before its first
+			// trail. Repeating the declarative anchor cannot reinterpret it.
+			original := seal.expected.Activation
+			anchor(admission, seal)
+			if seal.expected.Activation != original {
+				t.Fatal("startup compact sealing changed its durable activation")
+			}
+		}
 	}
 	provider := newReleaseMeasurementV2TestFixtureWithActivation(t, completed, func(noId uint64) *attemptCutV2SealTestFixture {
 		selected := identity
 		selected.NoID = noId
-		fixture := newAttemptCutV2SealTestFixtureForDomain(t, 8, completed, 1, anchor != nil, admission.cfg.Policy, selected)
-		fixture.expected.Activation.Hotkey = hotkey
-		return fixture
+		if anchor == nil {
+			fixture := newAttemptCutV2SealTestFixtureForDomain(t, 8, completed, 1, false, admission.cfg.Policy, selected)
+			fixture.expected.Activation.Hotkey = hotkey
+			return fixture
+		}
+		return newRecycleActivatedMeasurementTestSource(t, admission, selected, hotkey, completed, anchor)
 	}, activate)
 	artifact := provider.artifact
 	artifact.NativeSnapshotBlock, artifact.NativeSnapshotHash = 100, admission.finalized.Hex()
@@ -140,6 +153,45 @@ func newRecycleMeasurementFixtureWithActivation(t *testing.T, completed int, set
 		t.Fatal(err)
 	}
 	return &recycleMeasurementFixture{admission: admission, provider: provider, encoded: encoded, authority: authority}
+}
+
+// A startup source executes the real empty-prefix V2 transaction before any
+// M8 work. Its single local operator is the complete declared source census;
+// both independent sources are later joined by the public production root.
+// No activation marker or reconstructed counters are pasted into a snapshot.
+func newRecycleActivatedMeasurementTestSource(t *testing.T, admission *recycleAdmissionFixture, identity AttemptLedgerIdentity, hotkey [32]byte, completed int, anchor func(*recycleAdmissionFixture, *attemptCutV2SealTestFixture)) *attemptCutV2SealTestFixture {
+	t.Helper()
+	fixture := newAttemptCutV2SealTestFixtureForDomain(t, 8, 0, 0, true, admission.cfg.Policy, identity)
+	fixture.expected.Activation.Hotkey = hotkey
+	anchor(admission, fixture)
+	seal, _ := newAttemptCutV2SealTestOptions(t, fixture)
+	owner := &attemptSettlementRuntimeV2TestFixture{
+		coordinator:  newAttemptSettlementRuntimeV2TestStateDir(t),
+		participants: []AttemptSettlementRuntimeV2Participant{{NoID: identity.NoID, StateDir: filepath.Dir(fixture.ledger.path), Stats: fixture.engine.stats, Ledger: fixture.ledger}},
+		fixtures:     []*attemptCutV2SealTestFixture{fixture}, sealers: map[uint64]AttemptCutV2SealOptions{identity.NoID: seal},
+	}
+	if err := InitializeAttemptSettlementEpochV2(t.Context(), owner.coordinator, owner.participants, fixture.expected.Boundary.SettlementEpoch, owner.options(t).Authority, runtimeAttemptSettlementV2TestPersistence()); err != nil {
+		t.Fatalf("actual source activation before genuine M8 work: %v", err)
+	}
+	initial := fixture.engine.stats.snapshotStats()
+	if initial.AttemptV2 == nil || initial.AttemptV2.Activation != fixture.expected.Activation || initial.AttemptLastAppliedSequence != 0 || initial.EgressGeneration != 1 {
+		t.Fatal("real initial source owner did not retain its exact empty activation")
+	}
+	owner.trails(t, 0, completed, 1)
+	head, err := fixture.ledger.Head()
+	if err != nil || head.LastSequence != uint64(completed*8+2) {
+		t.Fatalf("activated source lost its genuine complete/failed trail census: %v", err)
+	}
+	if err := fixture.ledger.Walk(t.Context(), 1, head.LastSequence, func(record AttemptRecord) error {
+		if err := VerifyAttemptRecord(&record, fixture.ledger.identity, fixture.key.Public().(ed25519.PublicKey), fixture.server.serverPublicKeys()); err != nil {
+			return err
+		}
+		fixture.recordTs = append(fixture.recordTs, record)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return fixture
 }
 
 // Fresh replay namespaces prevent fixture retries from borrowing an old result.

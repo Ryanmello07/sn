@@ -71,3 +71,31 @@ reconciliation; it cannot be wrapped in generic read retries. Native writer
 configuration still requires WS/WSS for `author_submitAndWatchExtrinsic`; HTTP
 EVM/read capability on the same node grants no writer fallback. An epoch or local
 approval deadline does not revoke already signed immortal bytes.
+
+## Second fixture correction: real initial activation and complete JWT
+
+Correction base: `cd709cf4c07a01e0c05087123c814791cd45e201`.
+Worktree: `/mnt/data/sn-testnet/worktrees/sn-mainnet-startup-boundary-jwt-20260928`.
+Qualification remains pending. This changes test fixture files only
+(`recycle_measurement_test.go`, `production_startup_fixture_test.go`) and these
+receipts. No production implementation changed after the frozen full282 scope.
+
+The retained-source fixture now runs the real V2 initializer before any genuine
+M8 trail; source-local setup declares its complete one-operator census and the
+public root later joins both independently created sources under the signed
+complete config. Initial activation and ordinary detach are genuine durable
+owners. The token factory supplies the required device identifier for both
+stored and refreshed session bytes. See the preserved diagnostic receipt for
+both prior normal/race failures.
+
+Run the two affected public roots, normal and race, without repeating passed
+unrelated full282 bodies:
+
+```sh
+go test ./validator -run '^TestProductionStartupRunRelease(ReconcilesBeforeCurrentPreparation|InitialDeploymentBecomesReady)$' -count=1 -timeout=600s
+```
+
+Then reuse these exact correction bytes for the pending predecessor public-root
+causal control. Its failure must reach the intended unrelated-current-read
+assertion, never count a fixture startup refusal as success. Additional public
+root failures must remain explicit and be corrected in another frozen revision.

@@ -32,6 +32,7 @@ import (
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
 	gojwt "github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"github.com/urfoundation/sn/clientauth"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/stabi"
 	"github.com/urnetwork/sdk"
@@ -481,9 +482,12 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 			op.NetworkJWTFile = filepath.Join(root, fmt.Sprintf("no-%d", op.NoID), "network.jwt")
 			op.ArtifactSigner = common.Address{byte(op.NoID)}.Hex()
 			writeReleaseBootstrapV2TestFile(t, op.ClientKeySeedFile, physical.source.key.Seed())
-			credential, err := gojwt.NewWithClaims(gojwt.SigningMethodNone, gojwt.MapClaims{"client_id": physical.source.engine.clientId.String(), "exp": time.Now().Add(30 * 24 * time.Hour).Unix()}).SignedString(gojwt.UnsafeAllowNoneSignatureType)
+			credential, err := gojwt.NewWithClaims(gojwt.SigningMethodNone, gojwt.MapClaims{"client_id": physical.source.engine.clientId.String(), "device_id": releaseMeasurementTestID(op.NoID).String(), "exp": time.Now().Add(30 * 24 * time.Hour).Unix()}).SignedString(gojwt.UnsafeAllowNoneSignatureType)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if clientId, err := clientauth.ClientIdFromJwt(credential); err != nil || clientId != physical.source.engine.clientId {
+				t.Fatalf("fixture client token differs from its actual session parser: %v", err)
 			}
 			writeReleaseBootstrapV2TestFile(t, op.ClientJWTFile, []byte(credential))
 			api := &productionStartupApiTestFixture{owner: self, noId: op.NoID, credential: credential, keys: physical.source.server.serverPublicKeys(), objects: map[string][]byte{}, seedRead: make(chan struct{})}

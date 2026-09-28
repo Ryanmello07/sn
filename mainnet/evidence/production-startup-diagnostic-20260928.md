@@ -71,3 +71,35 @@ single-link files with owned private immediate parents; operator state and
 reference/scratch roots are separately provisioned, and existing ancestry is
 never chmodded. Approval references already use their private retained owners.
 Production custody checks and Terra's existing captures remain unchanged.
+
+## Physical-owner correction after cd709cf4
+
+Terra preserved the full `282fb402` census and separately ran only the two
+public roots on `cd709cf4`. The private seed-parent correction passed its
+previous refusal. Both modes then exposed two independent fixture errors:
+
+- Retained source: the measurement-only fixture had generated genuine signed
+  M8 rows and an ordinary cursor rotation without executing the initial V2
+  statistics activation. Its saved inactive image could not represent the
+  authenticated advanced cursor. Normal/race correctly refused
+  `startup inactive image is not the independently pinned initial boundary`.
+- Fresh source: its synthetic stored/refresh token omitted `device_id`.
+  Both modes correctly refused the incomplete session identity.
+
+The correction uses the real `InitializeAttemptSettlementEpochV2` owner for
+each independently declared empty source before running its genuine M8 trails.
+The same normal signed cut, immutable input journal, production measurement,
+sidecar and durable intent pipeline follows. It does not paste an activation
+flag into a completed image or waive nonempty activation refusal. Existing
+measurement-only callers retain their original source path.
+
+One synthetic token now contains both required identifiers, is checked by
+`clientauth.ClientIdFromJwt`, and is reused byte-identically for the stored
+credential and actual HTTP refresh response. No session, custody or production
+activation guard changed. The exact two public roots must still reach original
+receipt/application and fresh readiness, respectively; qualification is pending.
+
+Preserved capture:
+`/mnt/data/sn-testnet/qualification/production-startup-continuation-20260928/cd709cf4/`.
+Normal: 21.931s package exit 1. Race: 147.681s package exit 1. These are fixture
+diagnostics, not causal control successes or a completed public-startup result.
