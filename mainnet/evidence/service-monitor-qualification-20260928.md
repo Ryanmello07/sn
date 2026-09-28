@@ -72,3 +72,15 @@ rosters, supervision, other production domains and the authorized repair
 controller are not deployed or qualified by these local fixtures. Protocol
 deadlines remain explicitly unknown. A blocked synchronous log sink can still
 stall workers and their join; bounded log export is separate pending work.
+
+The composed branch check at clean `424af08ce301ac0597feb74e6374e32a6adabbab`
+also passed `./mainnet` compilation and exactly two real-command roots:
+`TestMonitorServicesCommandSeparatesBlockedChainAndRoleOutage` and
+`TestMonitorServicesCommandRenewalRetainsOriginalIntentThroughOutage`.
+Normal/race bodies took 0.144s/1.212s. This checks the newer native/continuation
+dependencies while reusing the unchanged 48-root consumer results. Source stayed
+clean and resolved modules were byte-identical before/after. Raw output is
+`/mnt/data/sn-testnet/qualification/service-monitor-composed-424af08c/`:
+normal SHA-256 `e9a651008372b17ccc78d68c285f1443c1c665671b1a6f581276b3d24daed1b7`,
+race `94cb186aa91658ac67a4d1899fa162648c328f77ba49e04cfa4ecb1c74ce7886`,
+modules `e6502b79a35bbc61f3a9dd3cb7649865ca6bfc39c63573e1e73bf0331e302917`.
