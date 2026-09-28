@@ -52,3 +52,11 @@ exited 22 after 303 seconds. The error body, status and stderr match the three
 hashes above. Raw timestamps and results are retained under
 `/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T0400Z`.
 This remains an availability observation with no new chain identity.
+
+The **04:42:10 through 04:47:13 UTC** check again returned HTTP 502 on all
+21 attempts, with curl exit 22 after 303 seconds. It used the same explicit
+owned route, request and retry bounds. The retained `response.body`,
+`http-status.txt` and `curl.stderr` reproduce the three hashes above. Exact
+timestamps and exit are in
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T044210Z`.
+No mainnet identity, public fallback or transaction is present in this capture.
