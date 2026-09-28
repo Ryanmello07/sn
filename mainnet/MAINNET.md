@@ -910,12 +910,12 @@ intent-owner tests, bounded authenticated receipt prefixes or same-boundary
 nonce/expiry decisions. Those changes must preserve original signed bytes,
 missed/unknown outcomes and independently approved continuation authority.
 
-The public startup lifecycle must also reach retained recovery before requiring
-fresh signing eligibility. Its current native-runtime, EVM snapshot, UID and
-stake reads precede the historical activation/disk/intent owners. Moving only
-the steering loop is insufficient. Qualify the complete process restart through
-an outage, original receipt and applied row, while preserving current authority
-checks for new signing and visible independent health reporting.
+The public startup lifecycle now reaches authenticated retained recovery before
+requiring fresh signing eligibility. Its former native-runtime, EVM snapshot,
+UID and stake ordering could prevent the historical activation/disk/intent
+owners from opening. The separate startup scope below exercises the complete
+public root through an outage, original receipt and applied row while keeping
+current authority checks for new signing.
 
 The [qualified production continuation](evidence/production-continuation-candidate-20260928.md)
 moves the actual production `Run` branch and `submitOnceV2` toward the retained
@@ -931,14 +931,15 @@ the scanned boundary resolves it. Missed opportunities remain missed.
 All 10 CRv4 and 22 validator roots now have normal/race coverage, with the original
 race timeout and exact six-root completion retained separately. Six regression
 control families reached their intended assertions in both modes. Full
-`RunRelease` activation, normalized config and dual-upload composition, durable
-bounded scan-prefix reuse and historical-only foreign-nonce resolution remain
-open; this does not close MG-04 or PH-03. The separately
+`RunRelease` activation, normalized config and dual-upload composition have
+their separate component results below. Durable bounded scan-prefix reuse and
+historical-only foreign-nonce resolution remain open; MG-04 and PH-03 remain
+incomplete. The separately
 [qualified native HTTP integration](evidence/production-native-http-integration-20260928.md)
 connects physical native causes to phase-owned waits and corrects response/close
 boundaries. Composed native/EVM startup failures require their later scope.
 
-The separate [public startup continuation candidate](evidence/production-startup-continuation-candidate-20260928.md)
+The integrated [public startup continuation](evidence/production-startup-continuation-candidate-20260928.md)
 reopens original native observation at its signed activation block before
 unrelated current preparation. The public `RunRelease` root still authenticates
 activation, both operator histories, real disk ownership and original intent
@@ -946,7 +947,11 @@ custody; current UID/stake and initial settlement publication gate fresh intents
 and trail workers. Local semantic replay uses the caller's lifecycle rather than
 a five-minute I/O deadline. Independent transient native/EVM branches compose
 without losing their physical causes or hiding mixed integrity errors.
-Qualification remains pending. The empty-store case requires independently
+Its affected roots now have normal/race coverage, five causal controls reproduce
+the intended failures in both modes, and validator vet passes. The receipt
+preserves original fixture failures, reused passing scopes and the missing
+pre-execution dependency-content seal; final release composition remains open.
+The empty-store case requires independently
 provisioned client identities, keys and existing JWTs; first-client registration
 is not part of that claim. Both operator server-key/public-object/session routes
 remain startup dependencies, and initial missing-JWT registration failure can

@@ -1272,7 +1272,8 @@ a later epoch change could reject the unfinished epoch before reconciliation.
 The original-config pending branch is now covered by
 the [authority-history qualification](evidence/production-authority-history-qualification-20260928.md).
 The separately qualified continuation below covers the affected actual steering
-owners. Full public startup and durable partial scans keep PH-03 open.
+owners. Public startup now has separate component qualification below; durable
+partial scans and final release composition keep PH-03 open.
 Preserve unknown or missed
 outcomes and original signed bytes, keep unrelated workers running, and require
 reconciliation before another send. A successful retry never manufactures a
@@ -1338,18 +1339,24 @@ budget. Real mixed integrity/custody failures and cancellation stay distinct.
 All 10 CRv4 and 22 validator roots have normal/race coverage, preserving the
 original race timeout and its six-root completion separately. All six control
 families reached their intended assertions in both modes. Full fresh
-`RunRelease` activation/config/dual-upload composition, historical-only
-foreign-nonce resolution and authenticated durable scan chunks (including miner
-partial ranges) remain open. The native HTTP integration is separately qualified;
+`RunRelease` activation/config/dual-upload composition has its separate results
+below. Historical-only foreign-nonce resolution and authenticated durable scan
+chunks (including miner partial ranges) remain open. The native HTTP integration is separately qualified;
 no callback-only loop test closes the remaining physical ownership requirements.
 
-The [public startup continuation candidate](evidence/production-startup-continuation-candidate-20260928.md)
+The integrated [public startup continuation](evidence/production-startup-continuation-candidate-20260928.md)
 adds the actual public-root composition with signed historical activation,
 concrete disk/intent owners and real dual-operator sessions. Original liabilities
 are reconciled before current UID/stake/preparation; fresh work waits for the
 current eligibility and settlement-publication owner. Its tests distinguish
 retained nonempty recovery from empty durable stores with already provisioned
-client identities. Qualification is pending. Local semantic reconstruction must
+client identities. All original 67 validator roots now have passing scoped
+normal/race coverage, plus two handler regressions and four CRv4 roots. Five
+causal controls reproduce their intended failures in both modes; validator vet
+passes. Original failed packages, cleanup interruptions and a corrected checker
+literal remain retained. The capture fenced source and module paths but omitted
+a contemporaneous physical dependency-content seal; final release composition
+remains open. Local semantic reconstruction must
 not restart merely because the independent remote-read budget elapses. Parallel
 native and EVM transient errors remain independently classified, while a hard
 native physical subtree cannot be unwrapped into a retryable leaf.
@@ -1375,12 +1382,12 @@ applies the same rule to real miner recovery, owner census/eligibility and
 activation setup reads. Their [combined qualification is complete](evidence/source-read-cause-qualification-20260928.md),
 including normal/race causal controls and the corrected source-role fixture.
 That read component does not replace the separate continuation qualification
-above or the remaining public-startup and durable-prefix work.
+above or the remaining composed-release and durable-prefix work.
 
 Full startup review found the same ordering defect above the steering loop:
-[`runReleaseWithStartupAndProgressV2`](../validator/release_run.go) dials current
-native authority and requests a fresh EVM snapshot, UID and stake before opening
-the historical activation, disk and intent owners. Correcting `Run` or
+[`runReleaseWithStartupAndProgressV2`](../validator/release_run.go) previously
+dialed current native authority and requested a fresh EVM snapshot, UID and stake
+before opening the historical activation, disk and intent owners. Correcting `Run` or
 `submitOnceV2` alone cannot recover a process restart through that barrier.
 Separate preparation-only prerequisites from historical custody recovery. Open
 authenticated retained state first where its original authority permits it;
@@ -1399,7 +1406,7 @@ the 300-second I/O retry budget separate from total semantic recovery: valid
 local M8/history replay may take longer. An I/O timer must not repeatedly
 discard and restart that work. Local reconstruction follows caller cancellation
 and retained checkpoints; actual network operations retain finite retry owners.
-Both corrections belong to the pending public-startup qualification.
+Both corrections now have public-startup component qualification above.
 
 **Closure.** Deterministically inject disconnect, DNS/HTTP failures, timeout
 during body read, missing/reordered batch responses, partial success and a
