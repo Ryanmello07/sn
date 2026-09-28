@@ -1454,6 +1454,9 @@ passes all 29 affected roots normally and under race detection. Its full model
 body completed all 1,125 roots with 1,118 passes, seven explicit fixture-input
 skips and no failures. Retain the original successful package exit separately
 from its failed legacy-subtest metadata check; do not claim zero-skip coverage.
+The [combined SN registration and diagnostics check](evidence/registration-diagnostics-composed-qualification-20260928.md)
+passes all seven selected consumer roots normally and under race detection on
+the sealed source graph; all 18 stages and independent after-fences passed.
 The frozen model invocation ended with three now-corrected fixture failures and
 seven optional-configuration skips; it is not recorded as a passing full
 invocation. Preserve these results when assembling the final source composition

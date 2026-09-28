@@ -132,8 +132,11 @@ subtests is separate from the successful original package exit. The
 [SDK/Connect transport checks](evidence/registration-request-transport-qualification-20260928.md)
 and [actual SDK-to-production-API/database checks](evidence/registration-production-api-qualification-20260928.md)
 now pass normally and under race detection, including their causal controls.
-Final combined SN consumer checks and server-first migration/rollout remain
-separate gates; these component results do not establish a deployed release.
+The [final combined SN consumer check](evidence/registration-diagnostics-composed-qualification-20260928.md)
+now passes all seven selected roots normally and under race detection on one
+sealed registration/diagnostics source graph; all 18 maintained stages and the
+independent after-fences passed. Server-first migration/rollout remains a
+separate gate; these source results do not establish a deployed release.
 
 The [concurrent-allocation fixture correction](evidence/registration-allocation-attempts-qualification-20260928.md)
 also passes normally and with race detection, with the original isolation
