@@ -211,15 +211,12 @@ func TestProductionContinuationDurableIntentOwner(t *testing.T) {
 	if err != nil || !bytes.Equal(before, after) {
 		t.Fatalf("read-only restart changed the stored intent: %v", err)
 	}
-	if err := fixture.steerer.intents.updateV2(t.Context(), intent.VectorHash, "pending", func(current *SteeringIntent) error {
-		current.Error = "synthetic acknowledgement timeout; exact bytes retained"
-		return nil
-	}); err != nil {
+	if err := fixture.steerer.intents.updateV2(t.Context(), intent.VectorHash, "pending", nil); err != nil {
 		t.Fatalf("actual nonempty V2 update: %v", err)
 	}
 	restarted = fixture.restart(t)
-	if restarted.Error == "" || restarted.Prepared.ExtrinsicHex != intent.Prepared.ExtrinsicHex || restarted.VectorHash != intent.VectorHash {
-		t.Fatal("durable update lost the pending signature or wait")
+	if restarted.Status != "pending" || restarted.Error != "" || restarted.Prepared.ExtrinsicHex != intent.Prepared.ExtrinsicHex || restarted.VectorHash != intent.VectorHash {
+		t.Fatal("durable update lost the pending signature or invented failure")
 	}
 	raw, err := json.Marshal(restarted)
 	if err != nil || !bytes.Contains(raw, []byte(fmt.Sprintf("\"subnet_epoch\":%d", intent.SubnetEpoch))) {
