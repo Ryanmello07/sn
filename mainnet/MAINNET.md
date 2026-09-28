@@ -1476,6 +1476,14 @@ Compare the enumerated roots with the independently supplied expected set before
 launching bodies. A nonempty subset is insufficient. Parse declared table schemas
 explicitly; never discard a first row merely because another file had a header.
 
+The [literal slash checker correction](evidence/qualification-slash-parent-qualification-20260928.md)
+now preserves source-declared Go child names without inventing intermediate
+test events. Its 31-root normal/race qualification and two causal controls
+passed before it replayed retained Connect evidence. Both original 33-root,
+32-descendant captures now match; no test body was repeated. A corrected
+checker or declaration must retain the original failed invocation, body exit
+and source fences instead of turning metadata repair into a complete rerun.
+
 Bind qualification to the roles and platforms selected for this release.
 Unselected services and architectures remain explicitly unqualified and cannot
 be deployed from its approval; they do not require speculative build or test

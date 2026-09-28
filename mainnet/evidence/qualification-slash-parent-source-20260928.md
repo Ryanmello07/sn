@@ -27,7 +27,9 @@ names and shard ownership. The only updated legacy expectation replaces a
 literal slash child incorrectly classified as an orphan with an actual
 undeclared-root orphan. The production event verifier is unchanged.
 
-Qualification is pending at this source seal. Terra will run the affected
+Qualification was pending at this source seal. The subsequent
+[qualification and retained-event replay](qualification-slash-parent-qualification-20260928.md)
+passed. The original proposed scope follows: Terra will run the affected
 checker roots in normal and race modes and controls that restore the immediate
 prefix rule or skip genuine declared ancestors. Only after those pass should
 the retained Connect events be replayed with the independently reviewed full

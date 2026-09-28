@@ -2234,6 +2234,17 @@ exact expected-versus-selected membership before bodies, including the first
 and last entries; nonzero enumeration alone does not establish complete scope.
 Prefer the maintained qualification owner over another untyped selector wrapper.
 
+Go permits one literal `t.Run` name to contain slashes without emitting every
+intermediate prefix as a test. The old declaration parser rejected complete
+retained HTTP results by requiring those nonexistent events. The
+[qualified correction](evidence/qualification-slash-parent-qualification-20260928.md)
+uses the nearest explicitly source-declared ancestor, preserving exact event
+membership, genuine parent ordering, failure literals and original binary exit.
+Its own 31-root normal/race checks and two controls passed before read-only
+replay recovered both original 33-root/32-descendant results. Keep declaration
+repair separate from body execution; do not rerun successful unchanged bodies
+to repair a checker. Ambiguous flat sibling prefixes remain an explicit limit.
+
 The monitor's blocked HTTP fixture then consumed its whole package deadline in
 server cleanup after the real monitor workers had exited. Its handler waited
 for request cancellation without reading the POST body, preventing HTTP/1's
