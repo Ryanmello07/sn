@@ -50,7 +50,7 @@ func observeOwnerRecycleProductionEligibility(ctx context.Context, cfg *ReleaseC
 	production := approval.Production
 	block := types.Hash(authority.observation.Snapshot.FinalizedHash)
 	view := *native
-	if err := authenticateOwnerRecycleProductionRuntimeAtContext(ctx, &view, cfg, block); err != nil {
+	if err := authenticateHistoricalNativeRuntimeAtContext(ctx, &view, cfg, block); err != nil {
 		return nil, err
 	}
 	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, &view, block, releaseRuntimeIdentityV2(cfg))
@@ -84,7 +84,7 @@ func observeOwnerRecycleProductionEligibility(ctx context.Context, cfg *ReleaseC
 	if err != nil {
 		return nil, err
 	}
-	result := &OwnerRecycleProductionEligibility{ActivationBlock: approval.ValidFromNativeBlock, ActivationHash: production.ActivationNativeHash}
+	result := &OwnerRecycleProductionEligibility{ActivationBlock: ownerRecycleActivationBlock(&approval), ActivationHash: production.ActivationNativeHash}
 	coldkeysKVs := map[[32]byte]bool{}
 	for _, hotkey := range production.ValidatorHotkeys {
 		var registration *OwnerRecycleRegistration
@@ -122,14 +122,18 @@ func observeOwnerRecycleProductionEligibility(ctx context.Context, cfg *ReleaseC
 			LastUpdate: last, RegistrationBlock: registration.RegistrationBlock})
 	}
 	activationHash := types.Hash(production.ActivationNativeHash)
-	if err := authenticateOwnerRecycleProductionRuntimeAtContext(ctx, &view, cfg, activationHash); err != nil {
+	if err := authenticateHistoricalNativeRuntimeAtContext(ctx, &view, cfg, activationHash); err != nil {
 		return nil, err
 	}
 	header, err := view.HeaderAtContext(ctx, activationHash)
-	if err != nil || uint64(header.Number) != approval.ValidFromNativeBlock || approval.ValidFromNativeBlock > authority.expected.NativeSnapshotBlock {
+	if err != nil || uint64(header.Number) != result.ActivationBlock || result.ActivationBlock > authority.expected.NativeSnapshotBlock {
 		return nil, errors.Join(errors.New("owner-recycle activation is not its signed earlier finalized block"), err)
 	}
-	activation, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, &view, activationHash, releaseRuntimeIdentityV2(cfg))
+	allowed, err := releaseHistoricalRuntimeArtifactsAt(cfg, result.ActivationBlock)
+	if err != nil {
+		return nil, err
+	}
+	activation, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, &view, activationHash, allowed...)
 	if err != nil {
 		return nil, err
 	}

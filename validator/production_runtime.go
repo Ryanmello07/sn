@@ -50,6 +50,12 @@ func authenticateOwnerRecycleProductionArtifactAtContext(ctx context.Context, na
 	if err := validateReleaseProductionRuntimeHistory(cfg); err != nil {
 		return empty, 0, err
 	}
+	if err := validateReleaseProductionAuthorityHistory(cfg); err != nil {
+		return empty, 0, err
+	}
+	if !historical && cfg.ownerRecycleProduction.historicalOnly {
+		return empty, 0, errors.New("original production authority permits historical reads only")
+	}
 	if ctx == nil || native == nil || native.API == nil || native.API.Client == nil || block == (types.Hash{}) ||
 		native.ProvisionalRuntimeCompatibilityEnabled() || !slices.Contains(cfg.Substrate, native.API.Client.URL()) {
 		return empty, 0, errors.New("production runtime requires an approved non-provisional connection and exact block")

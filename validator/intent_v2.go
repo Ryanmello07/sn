@@ -67,6 +67,10 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 	nativeCopy := *runtime.native
 	native := &nativeCopy
 	var options ReleaseMeasurementV2Options
+	decisionCfg, err := productionConfigForIntent(&runtime.cfg, intent)
+	if err != nil {
+		return nil, nil, nil, options, err
+	}
 	measurement, err := runtime.history.readContentReference(ctx, custody, intent.MeasurementArtifactPath, intent.MeasurementArtifactHash, intent.MeasurementArtifactSize, bounds.MaxArtifactBytes, false)
 	if err != nil {
 		return nil, nil, nil, options, err
@@ -108,12 +112,12 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 		if err != nil {
 			return nil, nil, nil, options, err
 		}
-		productionStage, err = prepareOwnerRecycleProductionDecision(ctx, &runtime.cfg, native, runtime.chain, measurement, artifact, verified.Decision, productionOptions)
+		productionStage, err = prepareOwnerRecycleProductionDecision(ctx, decisionCfg, native, runtime.chain, measurement, artifact, verified.Decision, productionOptions)
 		if err != nil {
 			return nil, nil, nil, options, err
 		}
 	}
-	verified.Decision, err = verifyOwnerRecycleProductionIntent(ctx, &runtime.cfg, productionStage, intent, measurement, artifact, verified.Decision)
+	verified.Decision, err = verifyOwnerRecycleProductionIntent(ctx, decisionCfg, productionStage, intent, measurement, artifact, verified.Decision)
 	if err != nil {
 		return nil, nil, nil, options, err
 	}
@@ -130,10 +134,10 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 	if err != nil {
 		return nil, nil, nil, options, err
 	}
-	if err := authenticateHistoricalNativeRuntimeAtContext(ctx, native, &runtime.cfg, preparedHash); err != nil {
+	if err := authenticateHistoricalNativeRuntimeAtContext(ctx, native, decisionCfg, preparedHash); err != nil {
 		return nil, nil, nil, options, err
 	}
-	if err := native.ValidatePreparedSourceWeightsContext(ctx, intent.Prepared, verified.Decision.UIDs, verified.Decision.Scores, releaseSubmitOptions(&runtime.cfg)); err != nil {
+	if err := native.ValidatePreparedSourceWeightsContext(ctx, intent.Prepared, verified.Decision.UIDs, verified.Decision.Scores, releaseSubmitOptions(decisionCfg)); err != nil {
 		return nil, nil, nil, options, err
 	}
 	if err := errors.Join(custody.check(), ctx.Err()); err != nil {

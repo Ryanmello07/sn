@@ -197,11 +197,15 @@ func CaptureReleaseNativeSourceV2(ctx context.Context, native *crv4.Chain, cfg *
 		return err
 	}
 	if isOwnerRecycleProductionConfig(cfg) {
-		authority, err := ObserveOwnerRecycleMeasurementAuthority(ctx, cfg, owned, releaseMeasurementV2Decision(artifact))
+		decisionCfg, err := productionConfigForIntent(cfg, intent)
 		if err != nil {
 			return err
 		}
-		if _, err := observeOwnerRecycleProductionEligibility(ctx, cfg, owned, authority); err != nil {
+		authority, err := ObserveOwnerRecycleMeasurementAuthority(ctx, decisionCfg, owned, releaseMeasurementV2Decision(artifact))
+		if err != nil {
+			return err
+		}
+		if _, err := observeOwnerRecycleProductionEligibility(ctx, decisionCfg, owned, authority); err != nil {
 			return err
 		}
 	}

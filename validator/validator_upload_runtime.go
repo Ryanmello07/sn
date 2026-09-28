@@ -74,9 +74,12 @@ func loadValidatorUploadRuntimeContext(ctx context.Context, deployment Validator
 	deployment.productionRuntime = nil
 	owner := &validatorUploadRuntimeAuthority{deployment: deployment, nativeChain: approved.Approval.NativeChain, nativeRoutes: slices.Clone(cfg.Substrate),
 		current: validatorUploadRuntimeWindow{from: approved.Approval.ValidFromNativeBlock, through: approved.Approval.ValidThroughNativeBlock, artifact: deployment.NativeRuntime}}
-	for _, approval := range cfg.productionRuntimeHistory.approvals {
-		owner.history = append(owner.history, validatorUploadRuntimeWindow{from: approval.ValidFromBlock, through: approval.ValidThroughBlock,
-			artifact: crv4.RuntimeArtifactIdentity{Version: approval.RuntimeVersion, CodeHash: approval.RuntimeCodeHash, MetadataHash: approval.RuntimeMetadataHash}})
+	windows, err := productionHistoricalRuntimeWindows(cfg)
+	if err != nil {
+		return ValidatorUploadDeployment{}, err
+	}
+	for _, window := range windows {
+		owner.history = append(owner.history, validatorUploadRuntimeWindow{from: window.from, through: window.through, artifact: window.artifact})
 	}
 	if err := ctx.Err(); err != nil {
 		return ValidatorUploadDeployment{}, err

@@ -297,6 +297,13 @@ func (self *releaseEvidenceV2StartupHistory) matchIntentReference(ctx context.Co
 	if err := verifyReleaseMeasurementCommonIdentity(artifact); err != nil {
 		return err
 	}
+	decisionCfg, err := productionConfigForIntent(&self.cfg, intent)
+	if err != nil {
+		return err
+	}
+	owned := *self
+	owned.cfg = *decisionCfg
+	self = &owned
 	if uint64(len(artifact.HeadEMA)) > self.cfg.EvidenceV2.Bounds.MaxHeadEntries {
 		return errors.New("startup reference head transcript exceeds its finite census")
 	}

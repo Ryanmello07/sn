@@ -191,6 +191,89 @@ func TestValidatorUploadProductionRuntimeAdmitsApprovedHistoricalEnvelope(t *tes
 	}
 }
 
+// A renewed config retains the original complete signed authority. The server
+// projects its old runtime window without requiring a duplicate history doc or
+// acquiring economic/signing authority from the retained bundle.
+func TestValidatorUploadProductionRuntimeRetainsRenewedAuthorityWindow(t *testing.T) {
+	fixture := newValidatorUploadProductionTestFixture(t)
+	production := fixture.production
+	originalCfg := production.cfg
+	current, _ := productionAuthorityTestSuccessor(t, originalCfg, production.approval, production.private, true)
+	production.cfg = current
+	production.path = writeReleaseConfig(t, *current)
+	record := &fixture.upload.authority.Expected
+	record.NativeBlock = 101
+	record.NativeHash = [32]byte(mainnetRuntimeTestBlock(101))
+	fixture.upload.records = make(map[[32]byte]ValidatorEvidenceActivationPublication)
+	fixture.upload.events = nil
+	fixture.upload.publish(t, *record, 1001, ed25519.NewKeyFromSeed(append([]byte{0x41}, make([]byte, 31)...)))
+	fixture.config.Deployment.NativeRuntime = releaseNativeRuntimeIdentity(current)
+	raw, err := os.ReadFile(production.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.config.ProductionRuntimeConfig = mainnetRuntimeTestWriteBytes(t, filepath.Join(identityTestStateDir(t), "renewed-production.yml"), raw)
+	client := production.rpc.native.API.Client.(*validatorRuntimeIdentityTestClient)
+	original := client.callContext
+	client.callContext = func(ctx context.Context, result any, method string, args ...any) error {
+		// The synthetic registrations/stake are unchanged from block 100 to
+		// 101, while runtime identity remains bound to the actual queried block.
+		if (method == "state_getStorage" || method == "state_call") && len(args) != 0 && args[len(args)-1] == mainnetRuntimeTestBlock(101).Hex() {
+			args = append([]any(nil), args...)
+			args[len(args)-1] = mainnetRuntimeTestBlock(100).Hex()
+		}
+		if method == "state_getRuntimeVersion" || method == "state_getStorageHash" {
+			hash, err := types.NewHashFromHexString(fmt.Sprint(args[len(args)-1]))
+			if err != nil {
+				return err
+			}
+			if binary.LittleEndian.Uint64(hash[:8]) >= 102 {
+				if method == "state_getStorageHash" {
+					return setReleaseHistoricalTestResult(result, current.RuntimeCodeHash)
+				}
+				return setReleaseHistoricalTestResult(result, map[string]any{"specName": "node-subtensor", "specVersion": current.RuntimeSpec,
+					"transactionVersion": current.TransactionVersion, "stateVersion": current.StateVersion, "apis": []any{[]any{"0x8375104b299b74c5", 2}}})
+			}
+		}
+		return original(ctx, result, method, args...)
+	}
+	owner, err := NewValidatorUploadAdmission(t.Context(), fixture.upload.chain, production.rpc.native, fixture.config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(owner.Close)
+	if err := owner.WaitReady(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("renewed-production-upload")
+	header, session, digest := validatorUploadAdmissionTestHeader(t, fixture.upload, *record, 0x41, "retained-production-session", data)
+	lease, err := owner.Begin(t.Context(), header, session, 1, digest, uint64(len(data)))
+	if err != nil {
+		t.Fatalf("renewal lost the actual original activation admission: %v", err)
+	}
+	lease.Close()
+	owner.Close()
+	if fixture.historicalReads == 0 || fixture.currentReads == 0 || production.rpc.native.ValidateValidatorProducerRuntime(fixture.config.Deployment.NativeRuntime) == nil {
+		t.Fatal("renewed upload omitted native evidence or acquired producer authority")
+	}
+	restarted := fixture.owner(t)
+	old, err := restarted.config.Deployment.runtimeArtifactsAt(101, true)
+	if err != nil || len(old) != 1 || old[0] != releaseNativeRuntimeIdentity(originalCfg) {
+		t.Fatalf("upload projection lost the exact original runtime: %v", err)
+	}
+	if _, err := restarted.config.Deployment.runtimeArtifactsAt(101, false); err == nil {
+		t.Fatal("original bundle widened the current runtime window")
+	}
+	for _, path := range []string{fixture.config.ProductionRuntimeConfig.Path, current.OwnerRecycleApproval.Approval.Path, current.ProductionAuthorityHistory[0].Path} {
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := restarted.refresh(t.Context(), fixture.upload.now); err != nil || len(restarted.entries) != 1 {
+		t.Fatalf("renewed runtime projection reopened economic authority: %v", err)
+	}
+}
+
 // The same current bytes outside the signed interval cannot refresh staging.
 // The production loop invalidates its cache on this error and cancels leases.
 func TestValidatorUploadProductionRuntimeRejectsCurrentWindowExpiry(t *testing.T) {

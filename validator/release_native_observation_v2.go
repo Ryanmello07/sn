@@ -199,6 +199,11 @@ func matchObservedNativeSourceV2(cfg *ReleaseConfig, hotkey [32]byte, intent *St
 	if err := verifyReleaseMeasurementCommonIdentity(artifact); err != nil {
 		return err
 	}
+	var err error
+	cfg, err = productionConfigForIntent(cfg, intent)
+	if err != nil {
+		return err
+	}
 	if cfg.PreviousPolicy != nil || !strings.EqualFold(cfg.PolicyHash, artifact.PolicyHash) {
 		decisionCfg, err := releaseConfigForPolicyHash(cfg, artifact.PolicyHash)
 		if err != nil {

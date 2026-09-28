@@ -826,16 +826,20 @@ zero-pending-emission activation block, then signs the measured row through the
 real CRv4 source batch. Its sidecar remains bound through durable intent recovery
 and independent archive observation. The same approved config can continue its
 finite epoch window and replay historical decisions after head/cache changes.
-Actual mainnet inputs and economic outcome remain unprovided; changing an
-already-running production config needs durable original config/approval history
-and remains explicit follow-up work. Final economic outcome is a monitored
+Bounded content-addressed original config/approval bundles now preserve prior
+sidecars across compatible independently signed renewals, source-file loss and
+restart. The original drained activation and proof progress remain intact;
+current signing never inherits an old grant. Policy, signer and custody migrations
+remain separate transitions. Actual mainnet inputs and economic outcome remain
+unprovided. Final economic outcome is a monitored
 postcondition, not a prerequisite to the first submission.
 
 The [server upload admission](VALIDATOR-UPLOAD-RUNTIME.md) now consumes an
 independently pinned schema-3 configuration and retains only read-only runtime
 intervals, routes and deployment scope. Original activation reads use their
 signed historical window; current eligibility requires the unexpired current
-window. The ordinary upload signer and server-used admission constructor are
+window. Its detached projection includes validated original authority bundles
+without carrying economic configs or signing authority. The ordinary upload signer and server-used admission constructor are
 joined in local deterministic tests. This closes the downstream tuple-only
 history gap without granting writer capability or proving remote delivery,
 original economic authority, mainnet deployment or live approval custody.

@@ -35,6 +35,14 @@ Prepared replay requires both the original and current exact artifacts to match,
 as well as the independently authenticated durable production intent; an old
 signature is never rewritten for a replacement runtime.
 
+Compatible configuration renewal uses the separate bounded
+`production_authority_history` described in the
+[production transition](OWNER-RECYCLE-PRODUCTION.md#durable-original-production-authority).
+Old sidecars resolve their original complete config and signed approval, while
+current signing remains under the new independent approval. Original authority
+never becomes a new prepared grant. The signed original drain block and first
+native epoch survive a later runtime window; another drain is not required.
+
 `production_runtime_approvals` is optional for an initial deployment. When present,
 it contains at most 64 private content-addressed files of at most 16 KiB each.
 Each document uses `urnetwork-validator-production-runtime-history-v1`, the same
@@ -44,13 +52,17 @@ above. Revision 1 has no predecessor; later revisions name the immediately prior
 file's SHA-256. Closed intervals are ordered, nonoverlapping and strictly earlier
 than the current signed block window. Gaps grant no authority. A reviewed rollback
 uses its own explicit interval; version-number ordering grants no history.
+Complete original authority bundles also contribute their exact effective runtime
+windows, so a renewal need not duplicate those facts in tuple-only documents.
+Any overlapping explicit document must agree with the retained original bytes.
 
 Historical startup, activation, decision and source readers preserve each original
 artifact at its original block and retain the loaded config through their wrappers.
 Current signing uses only the current signed window. Observation-history files cannot be
 relabeled as production history, and compiled testnet artifacts are never added
-implicitly. Retain approval and history files for restart and independent archive
-replay. Native archive capture also retains the production owner census, validator
+implicitly. Content-addressed approval, bundle and runtime-document retention
+supports restart after provisioning source loss and independent archive replay.
+Native archive capture also retains the production owner census, validator
 freshness and stake reads, and exact metadata and drain storage at the signed
 activation hash; capture storage failures abort the read.
 

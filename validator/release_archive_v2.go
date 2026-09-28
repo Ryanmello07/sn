@@ -121,6 +121,7 @@ func newReleaseEvidenceV2ArchiveOwner(ctx context.Context, options ReleaseEviden
 	if isOwnerRecycleProductionConfig(options.Config) {
 		cfg.ownerRecycleProduction = options.Config.ownerRecycleProduction
 		cfg.productionRuntimeHistory = options.Config.productionRuntimeHistory
+		cfg.productionAuthorityHistory = options.Config.productionAuthorityHistory
 		if err := validateOwnerRecycleProductionConfig(&cfg); err != nil {
 			return nil, err
 		}

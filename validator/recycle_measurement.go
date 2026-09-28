@@ -98,7 +98,10 @@ func ObserveOwnerRecycleMeasurementAuthority(ctx context.Context, cfg *ReleaseCo
 		return nil, err
 	}
 	remaining := uint64(maximumOwnerRecycleConfigBytes)
-	if err := releaseMeasurementV2ControlStorage(ctx, reflect.ValueOf(cfg), &remaining); err != nil {
+	wireConfig := *cfg
+	wireConfig.ownerRecycleProduction, wireConfig.productionRuntimeHistory, wireConfig.productionAuthorityHistory = nil, nil, nil
+	wireConfig.mainnetRuntimeHistory, wireConfig.historyAdoptionV2 = nil, nil
+	if err := releaseMeasurementV2ControlStorage(ctx, reflect.ValueOf(&wireConfig), &remaining); err != nil {
 		return nil, fmt.Errorf("owner-recycle measurement configuration bound: %w", err)
 	}
 	raw, err := json.Marshal(cfg)
@@ -112,10 +115,12 @@ func ObserveOwnerRecycleMeasurementAuthority(ctx context.Context, cfg *ReleaseCo
 	// Private production authority survives ownership copies only after its
 	// complete public configuration has been independently matched.
 	if isOwnerRecycleProductionConfig(cfg) {
-		if err := validateOwnerRecycleProductionConfig(cfg); err != nil {
+		if err := validateReleaseProductionAuthorityHistory(cfg); err != nil {
 			return nil, err
 		}
 		owned.ownerRecycleProduction = cfg.ownerRecycleProduction
+		owned.productionRuntimeHistory = cfg.productionRuntimeHistory
+		owned.productionAuthorityHistory = cfg.productionAuthorityHistory
 	}
 	envelope, err := readRetainedOwnerRecycleApproval(ctx, &owned)
 	if err != nil {

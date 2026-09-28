@@ -139,7 +139,11 @@ func (self *releaseEvidenceV2StartupHistory) readIntentDecisionSourcesV2(ctx con
 			result = releaseIntentDecisionSourcesV2{}
 		}
 	}()
-	decisionCfg, err := releaseConfigForPolicyHash(&self.cfg, artifact.PolicyHash)
+	originalCfg, err := productionConfigForIntent(&self.cfg, intent)
+	if err != nil {
+		return result, err
+	}
+	decisionCfg, err := releaseConfigForPolicyHash(originalCfg, artifact.PolicyHash)
 	if err != nil {
 		return result, err
 	}

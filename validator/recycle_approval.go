@@ -243,7 +243,13 @@ func readRetainedOwnerRecycleApproval(ctx context.Context, cfg *ReleaseConfig) (
 // until measurement/envelope/intent/archive authority is migrated together.
 func ownerRecycleProductionBoundary(cfg *ReleaseConfig) error {
 	if isOwnerRecycleProductionConfig(cfg) {
-		return validateOwnerRecycleProductionConfig(cfg)
+		if err := validateReleaseProductionAuthorityHistory(cfg); err != nil {
+			return err
+		}
+		if cfg.ownerRecycleProduction.historicalOnly {
+			return errors.New("original production authority cannot start a current writer")
+		}
+		return nil
 	}
 	if cfg != nil && (cfg.Policy.NetworkProfile == "mainnet" || cfg.ChainID == 964 || cfg.OwnerRecycleApproval != nil) {
 		return errors.New("owner-recycle successor activation is blocked: authenticated measurement, envelope, intent and archive transition is not implemented; final native allocation remains unobserved")

@@ -1034,6 +1034,7 @@ func runReleaseSteeringLoopWithWaitAndPermissions(ctx context.Context, epoch fun
 	deferred := false
 	weightRejected := false
 	retryableCut := false
+	pendingReconciliation := false
 	rejectedAttempts := 0
 	failures := 0
 	// At most the existing failure budget is retained. Expected drain polls
@@ -1056,15 +1057,19 @@ func runReleaseSteeringLoopWithWaitAndPermissions(ctx context.Context, epoch fun
 				return errors.Join(fmt.Errorf("release steering epoch regressed from %d to %d", targetEpoch, currentEpoch), pendingErr)
 			}
 			if !targetKnown || currentEpoch > targetEpoch {
-				if targetKnown && !completed && !deferred && !weightRejected && !retryableCut {
+				if targetKnown && !completed && !deferred && !weightRejected && !retryableCut && !pendingReconciliation {
 					return errors.Join(fmt.Errorf("release steering advanced from incomplete epoch %d to %d", targetEpoch, currentEpoch), pendingErr)
 				}
 				if targetKnown && retryableCut {
 					fmt.Printf("release steer: provisional native epoch %d retryable cut continued in native epoch %d; no process restart\n", targetEpoch, currentEpoch)
 				}
+				if targetKnown && pendingReconciliation {
+					fmt.Printf("release steer: original pending transaction from native epoch %d requires receipt or expiry reconciliation in native epoch %d; no completion inferred\n", targetEpoch, currentEpoch)
+				}
 				targetEpoch, targetKnown, completed, failures = currentEpoch, true, false, 0
 				deferred = false
 				retryableCut = false
+				pendingReconciliation = false
 				weightRejected, rejectedAttempts = false, 0
 				pendingErr = nil
 			}
@@ -1074,12 +1079,21 @@ func runReleaseSteeringLoopWithWaitAndPermissions(ctx context.Context, epoch fun
 				var rejected *provisionalNativeWeightRejection
 				var interrupted *provisionalNativeReadInterruption
 				var replayInterrupted *attemptReplayReadInterruption
+				var originalPending *productionPendingReconciliation
+				pendingReconciliation = false
 				retryablePreparation, interruptedPreparation := classifyReleasePreparationRetry(err)
 				if err == nil || releaseOnlyErrors(err, ErrSteeringAlreadyFinal) {
 					completed, failures = true, 0
 					retryableCut = false
 					weightRejected = false
 					pendingErr = nil
+				} else if errors.As(err, &originalPending) && originalPending.nativeEpoch == targetEpoch && releaseOnlyErrors(err, originalPending) {
+					// This is a real retained intent awaiting observation, not a
+					// failed preparation or permission to skip its native outcome.
+					// Keep prior hard causes; the next epoch must reconcile it.
+					pendingReconciliation = pendingErr == nil
+					weightRejected, retryableCut = false, false
+					fmt.Printf("release steer: %v; retrying receipt observation on next poll\n", originalPending)
 				} else if errors.As(err, &closedInput) && (allowDeferral || allowFreshWeights && closedInput.beforeFirstIntent) && closedInput.nativeEpoch == targetEpoch && releaseOnlyErrors(err, errProvisionalClosedNativeInput) && pendingErr == nil {
 					deferred, failures, pendingErr = true, 0, nil
 					retryableCut = false
@@ -1134,6 +1148,7 @@ func runReleaseSteeringLoopWithWaitAndPermissions(ctx context.Context, epoch fun
 			fmt.Printf("release steer: finalized scheduler read interrupted: %v; retrying on next poll\n", err)
 		} else {
 			schedulerErr = nil
+			pendingReconciliation = false
 			weightRejected = false
 			retryableCut = false
 			failures++

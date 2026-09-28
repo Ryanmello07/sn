@@ -27,6 +27,9 @@ func validateOwnerRecyclePreparedAuthorization(cfg *ReleaseConfig, prepared *crv
 	if err := validateOwnerRecycleProductionConfig(cfg); err != nil {
 		return err
 	}
+	if cfg.ownerRecycleProduction.historicalOnly {
+		return errors.New("original production authority cannot authorize a current submission")
+	}
 	if prepared == nil || cfg.ownerRecycleProduction.prepared == nil {
 		return errors.New("owner-recycle submission lacks an authenticated durable production intent")
 	}
@@ -50,12 +53,16 @@ func (self *IntentStore) retainOwnerRecyclePreparedAuthorization(intent *Steerin
 	if intent == nil || intent.OwnerRecycle == nil || intent.Prepared == nil {
 		return errors.New("owner-recycle verified intent is incomplete")
 	}
+	decisionCfg, err := productionConfigForIntent(&self.v2.runtime.cfg, intent)
+	if err != nil {
+		return err
+	}
 	raw, err := json.Marshal(intent.Prepared)
 	if err != nil {
 		return err
 	}
 	self.v2.productionPrepared = &ownerRecyclePreparedAuthorization{
-		configHash: self.v2.runtime.cfg.ownerRecycleProduction.configHash, preparedHash: sha256.Sum256(raw)}
+		configHash: decisionCfg.ownerRecycleProduction.configHash, preparedHash: sha256.Sum256(raw)}
 	return nil
 }
 

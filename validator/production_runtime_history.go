@@ -25,12 +25,36 @@ type releaseProductionRuntimeApproval releaseMainnetRuntimeApproval
 // an old tuple never gains current signing authority through this history.
 type releaseProductionRuntimeHistory struct {
 	approvals  []releaseProductionRuntimeApproval
+	encoded    [][]byte
 	configHash [32]byte
 }
 
 // The current signed envelope already grants one finite exact-artifact window.
 // Optional earlier windows must be explicit, ordered, nonoverlapping and bounded.
 func loadReleaseProductionRuntimeHistory(cfg *ReleaseConfig) error {
+	if len(cfg.ProductionRuntimeApprovals) > maximumReleaseMainnetRuntimeApprovals {
+		return errors.New("production runtime history exceeds its approval bound")
+	}
+	encoded := make([][]byte, len(cfg.ProductionRuntimeApprovals))
+	for index, reference := range cfg.ProductionRuntimeApprovals {
+		raw, sourceErr := ReadReleaseEvidenceV2File(context.Background(), reference, maximumReleaseMainnetRuntimeApprovalBytes)
+		if sourceErr != nil {
+			retained := reference
+			retained.Path = retainedProductionRuntimePath(cfg, reference.SHA256)
+			var err error
+			raw, err = ReadReleaseEvidenceV2File(context.Background(), retained, maximumReleaseMainnetRuntimeApprovalBytes)
+			if err != nil {
+				return fmt.Errorf("production runtime history %d: %w", index+1, errors.Join(sourceErr, err))
+			}
+		}
+		encoded[index] = raw
+	}
+	return loadReleaseProductionRuntimeHistoryBytes(cfg, encoded)
+}
+
+// Original runtime documents travel with the complete signed authority, so
+// decoding historical evidence never depends on the original source pathname.
+func loadReleaseProductionRuntimeHistoryBytes(cfg *ReleaseConfig, encoded [][]byte) error {
 	approved, err := ownerRecycleProductionApproval(cfg)
 	if err != nil {
 		return err
@@ -38,13 +62,13 @@ func loadReleaseProductionRuntimeHistory(cfg *ReleaseConfig) error {
 	if cfg.RuntimeSpec == 0 || cfg.TransactionVersion != 1 || cfg.StateVersion != 1 || approved.Approval.ValidThroughNativeBlock > math.MaxUint32 {
 		return errors.New("production runtime requires supported signing encodings and a bounded native block window")
 	}
-	if len(cfg.ProductionRuntimeApprovals) > maximumReleaseMainnetRuntimeApprovals {
+	if len(cfg.ProductionRuntimeApprovals) > maximumReleaseMainnetRuntimeApprovals || len(encoded) != len(cfg.ProductionRuntimeApprovals) {
 		return errors.New("production runtime history exceeds its approval bound")
 	}
 	history := &releaseProductionRuntimeHistory{}
 	for index, reference := range cfg.ProductionRuntimeApprovals {
-		raw, err := ReadReleaseEvidenceV2File(context.Background(), reference, maximumReleaseMainnetRuntimeApprovalBytes)
-		if err != nil {
+		raw := encoded[index]
+		if err := matchProductionAuthorityBytes(reference, raw, maximumReleaseMainnetRuntimeApprovalBytes); err != nil {
 			return fmt.Errorf("production runtime history %d: %w", index+1, err)
 		}
 		if err := protocol.ValidateUniqueJsonKeys(raw); err != nil {
@@ -63,6 +87,7 @@ func loadReleaseProductionRuntimeHistory(cfg *ReleaseConfig) error {
 			return fmt.Errorf("production runtime history %d: %w", index+1, err)
 		}
 		history.approvals = append(history.approvals, approval)
+		history.encoded = append(history.encoded, bytes.Clone(raw))
 	}
 	raw, err := json.Marshal(cfg)
 	if err != nil {
@@ -135,9 +160,13 @@ func releaseProductionRuntimeAt(cfg *ReleaseConfig, block uint64, historical boo
 		return releaseNativeRuntimeIdentity(cfg), nil
 	}
 	if historical {
-		for _, approval := range cfg.productionRuntimeHistory.approvals {
-			if approval.ValidFromBlock <= block && block <= approval.ValidThroughBlock {
-				return crv4.RuntimeArtifactIdentity{Version: approval.RuntimeVersion, CodeHash: approval.RuntimeCodeHash, MetadataHash: approval.RuntimeMetadataHash}, nil
+		windows, err := productionHistoricalRuntimeWindows(cfg)
+		if err != nil {
+			return crv4.RuntimeArtifactIdentity{}, err
+		}
+		for _, window := range windows {
+			if window.from <= block && block <= window.through {
+				return window.artifact, nil
 			}
 		}
 	}

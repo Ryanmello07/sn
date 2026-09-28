@@ -76,6 +76,7 @@ type ReleaseConfig struct {
 	OwnerRecycleApproval       *ReleaseOwnerRecycleApprovalConfig `yaml:"owner_recycle_approval,omitempty" json:"owner_recycle_approval,omitempty"`
 	MainnetRuntimeApprovals    []ReleaseEvidenceV2File            `yaml:"mainnet_runtime_approvals,omitempty" json:"mainnet_runtime_approvals,omitempty"`
 	ProductionRuntimeApprovals []ReleaseEvidenceV2File            `yaml:"production_runtime_approvals,omitempty" json:"production_runtime_approvals,omitempty"`
+	ProductionAuthorityHistory []ReleaseEvidenceV2File            `yaml:"production_authority_history,omitempty" json:"production_authority_history,omitempty"`
 
 	ProvisionalDeferClosedNativeInput bool   `yaml:"provisional_defer_closed_native_input,omitempty" json:"provisional_defer_closed_native_input,omitempty"`
 	ProvisionalRuntimeCompatibility   string `yaml:"provisional_runtime_compatibility,omitempty" json:"provisional_runtime_compatibility,omitempty"`
@@ -83,6 +84,7 @@ type ReleaseConfig struct {
 	mainnetRuntimeHistory             *releaseMainnetRuntimeHistory
 	ownerRecycleProduction            *ownerRecycleProductionAuthority
 	productionRuntimeHistory          *releaseProductionRuntimeHistory
+	productionAuthorityHistory        *releaseProductionAuthorityHistory
 }
 
 func LoadReleaseConfig(path string) (*ReleaseConfig, error) {
@@ -179,6 +181,9 @@ func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMo
 		}
 		if err := loadReleaseProductionRuntimeHistory(&cfg); err != nil {
 			return nil, fmt.Errorf("validator production runtime history %s: %w", abs, err)
+		}
+		if err := loadReleaseProductionAuthorityHistory(&cfg); err != nil {
+			return nil, fmt.Errorf("validator production authority history %s: %w", abs, err)
 		}
 		if err := cfg.Validate(); err != nil {
 			return nil, fmt.Errorf("validator production config %s: %w", abs, err)
@@ -361,7 +366,10 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 		if err := validateOwnerRecycleProductionConfig(&c); err != nil {
 			return err
 		}
-	} else if len(c.ProductionRuntimeApprovals) != 0 || c.productionRuntimeHistory != nil || c.ownerRecycleProduction != nil {
+		if err := validateReleaseProductionAuthorityHistory(&c); err != nil {
+			return err
+		}
+	} else if isOwnerRecycleProductionConfig(&c) {
 		return errors.New("production runtime authority requires an authenticated schema 3 config")
 	}
 	if mainnetRuntimeObservation {

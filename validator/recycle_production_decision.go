@@ -152,7 +152,7 @@ func sealOwnerRecycleProductionIntent(ctx context.Context, stage *ownerRecyclePr
 		return nil, errors.New("owner-recycle production seal lacks authenticated preparation")
 	}
 	approval, err := ownerRecycleProductionApproval(&stage.authority.config)
-	if err != nil || approval.Approval.ValidatorHotkey != hotkey.PublicKey() || prepared.HotkeyHex != releaseHex32(hotkey.PublicKey()) ||
+	if err != nil || stage.authority.config.ownerRecycleProduction.historicalOnly || approval.Approval.ValidatorHotkey != hotkey.PublicKey() || prepared.HotkeyHex != releaseHex32(hotkey.PublicKey()) ||
 		prepared.SourceCommitment == nil || prepared.SourceCommitment.Hash != releaseHex32(stage.sourceHash) || prepared.SubnetEpoch != stage.proof.Decision.SubnetEpoch || !slices.Equal(prepared.UIDs, stage.proof.Row.Uids) ||
 		!slices.Equal(prepared.Values, stage.proof.Row.Values) {
 		return nil, errors.Join(errors.New("owner-recycle production signer, native epoch or prepared row differs"), err)

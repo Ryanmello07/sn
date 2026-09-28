@@ -25,21 +25,33 @@ type OwnerRecycleProductionApproval struct {
 	MaximumLastUpdateAge    uint64     `json:"maximum_last_update_age"`
 	ValidThroughNativeEpoch uint64     `json:"valid_through_native_epoch"`
 	ActivationNativeHash    [32]byte   `json:"activation_native_hash"`
+	ActivationNativeBlock   uint64     `json:"activation_native_block,omitempty"`
 }
 
 // Only the signature loader creates this owned authority. Exported config
 // fields alone cannot recreate it, and later mutation invalidates its seal.
 type ownerRecycleProductionAuthority struct {
-	encoded    []byte
-	configHash [32]byte
-	selection  ReleaseOwnerRecycleApprovalConfig
-	prepared   *ownerRecyclePreparedAuthorization
+	encoded        []byte
+	configHash     [32]byte
+	selection      ReleaseOwnerRecycleApprovalConfig
+	prepared       *ownerRecyclePreparedAuthorization
+	historicalOnly bool
+}
+
+// Initial schema-3 approvals retain their original wire meaning. A compatible
+// successor explicitly preserves that first economic block across runtime windows.
+func ownerRecycleActivationBlock(approval *OwnerRecycleApproval) uint64 {
+	if approval.Production.ActivationNativeBlock != 0 {
+		return approval.Production.ActivationNativeBlock
+	}
+	return approval.ValidFromNativeBlock
 }
 
 // Schema selection is only routing; it is never an authority check.
 func isOwnerRecycleProductionConfig(cfg *ReleaseConfig) bool {
 	return cfg != nil && (cfg.SchemaVersion == ReleaseMainnetProductionSchemaVersion || cfg.ownerRecycleProduction != nil ||
-		cfg.productionRuntimeHistory != nil || len(cfg.ProductionRuntimeApprovals) != 0)
+		cfg.productionRuntimeHistory != nil || len(cfg.ProductionRuntimeApprovals) != 0 ||
+		cfg.productionAuthorityHistory != nil || len(cfg.ProductionAuthorityHistory) != 0)
 }
 
 // Old observer approvals permit only their first decision. Production has an
@@ -90,6 +102,10 @@ func validateOwnerRecycleProductionApproval(cfg *ReleaseConfig, approval *OwnerR
 		len(p.ValidatorHotkeys) > maximumOwnerRecycleApprovedHotkeys {
 		return errors.New("owner-recycle production approval lacks its exact purpose, finite epoch window or validator census")
 	}
+	if ownerRecycleActivationBlock(approval) > approval.ValidFromNativeBlock ||
+		ownerRecycleActivationBlock(approval) < approval.ValidFromNativeBlock && len(cfg.ProductionAuthorityHistory) == 0 {
+		return errors.New("owner-recycle earlier economic activation requires original production authority history")
+	}
 	foundSelf := false
 	for index, hotkey := range p.ValidatorHotkeys {
 		if hotkey == ([32]byte{}) || index > 0 && bytes.Compare(p.ValidatorHotkeys[index-1][:], hotkey[:]) >= 0 {
@@ -120,12 +136,31 @@ func loadOwnerRecycleProductionConfig(cfg *ReleaseConfig) error {
 	reference := cfg.OwnerRecycleApproval.Approval
 	raw, sourceErr := ReadReleaseEvidenceV2File(context.Background(), reference, maximumOwnerRecycleApprovalBytes)
 	if sourceErr != nil {
-		reference.Path = filepath.Join(cfg.StateDir, retainedOwnerRecycleApprovalName)
+		reference.Path = retainedProductionApprovalPath(cfg)
 		var err error
 		raw, err = ReadReleaseEvidenceV2File(context.Background(), reference, maximumOwnerRecycleApprovalBytes)
 		if err != nil {
-			return errors.Join(sourceErr, err)
+			reference.Path = filepath.Join(cfg.StateDir, retainedOwnerRecycleApprovalName)
+			raw, err = ReadReleaseEvidenceV2File(context.Background(), reference, maximumOwnerRecycleApprovalBytes)
+			if err != nil {
+				return errors.Join(sourceErr, err)
+			}
 		}
+	}
+	return loadOwnerRecycleProductionConfigBytes(cfg, raw)
+}
+
+// A selected immutable history bundle can supply these original bytes after
+// their source path disappears. The original independent signature still gates.
+func loadOwnerRecycleProductionConfigBytes(cfg *ReleaseConfig, raw []byte) error {
+	if cfg == nil || cfg.SchemaVersion != ReleaseMainnetProductionSchemaVersion {
+		return errors.New("production authority bytes require schema 3")
+	}
+	if err := validateOwnerRecycleApprovalSelection(cfg); err != nil {
+		return err
+	}
+	if err := matchProductionAuthorityBytes(cfg.OwnerRecycleApproval.Approval, raw, maximumOwnerRecycleApprovalBytes); err != nil {
+		return err
 	}
 	if _, err := decodeOwnerRecycleApproval(cfg, raw); err != nil {
 		return err

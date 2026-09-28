@@ -38,6 +38,12 @@ func releaseRuntimeIdentityV2(cfg *ReleaseConfig) crv4.RuntimeArtifactIdentity {
 // workers. Exact head math is subsequently replayed by the V2 intent store;
 // this boundary proves native byte identity, finality and real signer authority.
 func authenticateReleaseNativeSourceReferenceV2(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, intent *SteeringIntent, artifact *ReleaseMeasurementArtifact) error {
+	lifecycleCfg := cfg
+	var err error
+	cfg, err = productionConfigForIntent(cfg, intent)
+	if err != nil {
+		return err
+	}
 	if ctx == nil || native == nil || cfg == nil || intent == nil || intent.Prepared == nil || artifact == nil || artifact.Schema != ReleaseMeasurementSchemaV2 {
 		return errors.New("V2 native source reference owner is incomplete")
 	}
@@ -88,7 +94,9 @@ func authenticateReleaseNativeSourceReferenceV2(ctx context.Context, native *crv
 	if err != nil {
 		return err
 	}
-	if err := authenticateHistoricalNativeRuntimeAtContext(ctx, &own, cfg, blockHash); err != nil {
+	// The signed source keeps its original authority. Its eventual receipt is
+	// a distinct historical read and may belong to a later approved window.
+	if err := authenticateHistoricalNativeRuntimeAtContext(ctx, &own, lifecycleCfg, blockHash); err != nil {
 		return err
 	}
 	return own.VerifyFinalizedSourceContext(ctx, prepared, &crv4.FinalizedExtrinsic{ExtrinsicHash: txHash, BlockHash: blockHash, BlockNumber: intent.FinalizedBlock})
@@ -600,7 +608,11 @@ func (self *ReleaseSteerer) reconcilePendingV2(ctx context.Context, current *Ste
 		return false, fmt.Errorf("pending steering preparation hash: %w", err)
 	}
 	historical := *self.native
-	if err := authenticateHistoricalNativeRuntimeAtContext(ctx, &historical, self.cfg, preparedRuntimeHash); err != nil {
+	decisionCfg, err := productionConfigForIntent(self.cfg, current)
+	if err != nil {
+		return false, err
+	}
+	if err := authenticateHistoricalNativeRuntimeAtContext(ctx, &historical, decisionCfg, preparedRuntimeHash); err != nil {
 		return false, fmt.Errorf("authenticate pending steering preparation runtime at %s: %w", preparedRuntimeHash.Hex(), err)
 	}
 	hash, err := types.NewHashFromHexString(current.Prepared.ExtrinsicHash)
@@ -609,7 +621,12 @@ func (self *ReleaseSteerer) reconcilePendingV2(ctx context.Context, current *Ste
 	}
 	receipt, found, err := historical.LocateFinalizedExtrinsic(ctx, hash, current.Prepared.PreparedAtBlock)
 	if err != nil {
-		return false, fmt.Errorf("reconcile pending steering finality: %w", err)
+		cause := fmt.Errorf("reconcile pending steering finality: %w", err)
+		if isOwnerRecycleProductionConfig(self.cfg) && decisionCfg.ownerRecycleProduction.historicalOnly && nativeState != nil &&
+			ctx != nil && !errors.Is(ctx.Err(), context.Canceled) && RetryableEvidenceTransportError(err) {
+			return false, &productionPendingReconciliation{nativeEpoch: nativeState.SubnetEpochIndex, extrinsicHash: current.Prepared.ExtrinsicHash, cause: cause}
+		}
+		return false, cause
 	}
 	if found {
 		if err := authenticateHistoricalNativeRuntimeAtContext(ctx, &historical, self.cfg, receipt.BlockHash); err != nil {
@@ -630,9 +647,6 @@ func (self *ReleaseSteerer) reconcilePendingV2(ctx context.Context, current *Ste
 	if err := ownerRecycleProductionBoundary(self.cfg); err != nil {
 		return false, err
 	}
-	if err := authenticatePinnedNativeRuntimeAtContext(ctx, &historical, self.cfg, preparedRuntimeHash); err != nil {
-		return false, fmt.Errorf("pending steering replay uses a historical signing runtime: %w", err)
-	}
 	if current.SubnetEpoch < nativeState.SubnetEpochIndex {
 		err := fmt.Errorf("unfinalized steering submission expired at subnet epoch %d", current.SubnetEpoch)
 		if markErr := self.intents.markFailedV2(ctx, current.VectorHash, err); markErr != nil {
@@ -642,6 +656,12 @@ func (self *ReleaseSteerer) reconcilePendingV2(ctx context.Context, current *Ste
 	}
 	if current.SubnetEpoch > nativeState.SubnetEpochIndex {
 		return false, fmt.Errorf("pending steering epoch %d is ahead of finalized epoch %d", current.SubnetEpoch, nativeState.SubnetEpochIndex)
+	}
+	if isOwnerRecycleProductionConfig(self.cfg) && decisionCfg.ownerRecycleProduction.historicalOnly {
+		return false, &productionPendingReconciliation{nativeEpoch: nativeState.SubnetEpochIndex, extrinsicHash: current.Prepared.ExtrinsicHash}
+	}
+	if err := authenticatePinnedNativeRuntimeAtContext(ctx, &historical, self.cfg, preparedRuntimeHash); err != nil {
+		return false, fmt.Errorf("pending steering replay uses a historical signing runtime: %w", err)
 	}
 	nonceHash, err := authenticatePinnedNativeRuntimeContext(ctx, self.native, self.cfg)
 	if err != nil {

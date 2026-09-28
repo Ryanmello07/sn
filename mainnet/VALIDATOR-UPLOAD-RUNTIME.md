@@ -19,13 +19,17 @@ them changes the signed configuration. Custody paths remain strings: the upload
 loader never opens a native seed, starts a producer or submits a transaction.
 
 The loader checks the exact config bytes, the separate approval signature and
-the finite production history. It matches chain, genesis, subnet, coordinator,
+the finite production history, including exact original full-authority bundles
+selected by a renewed config. It matches chain, genesis, subnet, coordinator,
 settlement vault, deployment identity and current runtime against the server's
 independent deployment. The upload census bound cannot exceed the signed bound.
 It then discards the complete configuration and its production signing capsule,
 retaining only immutable read-only deployment, route and runtime-window values.
 Later reads do not reopen the mutable input paths. A new process independently
 loads the pinned files again.
+The runtime-only projection combines those original windows with explicit runtime
+documents and rejects conflicting overlaps before discarding the full authority.
+It does not retain original economic configs or any prepared submission grant.
 
 Every mainnet refresh checks the native route against the signed route list and
 reads its chain name, genesis and EVM chain identifier. Activation authentication
@@ -55,6 +59,10 @@ tag adds an absent authority field to legacy JSON configuration bytes. An absent
 pin remains omitted, while an explicit pin survives serialization. The corrected
 paths also cover expiry, current permit loss, altered config pins and scope, changed network
 identity, unapproved historical artifacts and cancellation.
+The [authority-history qualification](evidence/production-authority-history-qualification-20260928.md)
+adds an actual signed upload whose original activation depends on a renewal
+bundle rather than a duplicate runtime document. Both historical and current
+eligibility are read, and the detached projection survives source-file deletion.
 
 This closes downstream runtime-history propagation. It does not prove a live
 mainnet deployment, trusted RPC service, approval custody/revocation, historical

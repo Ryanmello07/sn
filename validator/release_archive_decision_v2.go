@@ -152,6 +152,10 @@ func (self *ReleaseEvidenceV2Archive) ObserveSources(ctx context.Context, chain 
 		}
 	}
 	for _, item := range self.intents {
+		decisionCfg, err := productionConfigForIntent(&owner.cfg, &item.Intent)
+		if err != nil {
+			return nil, err
+		}
 		artifact, err := decodeReleaseMeasurementV2Bytes(ctx, item.Measurement, bounds.MaxArtifactBytes, bounds.MaxOperators)
 		if err != nil {
 			return nil, err
@@ -186,7 +190,7 @@ func (self *ReleaseEvidenceV2Archive) ObserveSources(ctx context.Context, chain 
 			if err != nil {
 				return nil, err
 			}
-			stage, err := prepareOwnerRecycleProductionDecision(ctx, &owner.cfg, native, chain, item.Measurement, artifact, provider.Decision, options)
+			stage, err := prepareOwnerRecycleProductionDecision(ctx, decisionCfg, native, chain, item.Measurement, artifact, provider.Decision, options)
 			if err != nil {
 				return nil, err
 			}
@@ -265,7 +269,11 @@ func (self *ReleaseEvidenceV2Archive) ReplayDecisions(ctx context.Context, obser
 		} else if observation.OwnerRecycle != nil {
 			return errors.New("legacy archive cannot select production by an observation sidecar")
 		}
-		verified.Decision, err = verifyOwnerRecycleProductionIntent(ctx, &self.owner.cfg, stage, &item.Intent, item.Measurement, artifact, verified.Decision)
+		decisionCfg, err := productionConfigForIntent(&self.owner.cfg, &item.Intent)
+		if err != nil {
+			return err
+		}
+		verified.Decision, err = verifyOwnerRecycleProductionIntent(ctx, decisionCfg, stage, &item.Intent, item.Measurement, artifact, verified.Decision)
 		if err != nil {
 			return err
 		}
@@ -289,15 +297,19 @@ func (self *ReleaseEvidenceV2Archive) ReplayDecisions(ctx context.Context, obser
 
 func (self *ReleaseEvidenceV2Archive) decisionOptions(ctx context.Context, intent *SteeringIntent, artifact *ReleaseMeasurementArtifact, observation ReleaseEvidenceV2DecisionObservation) (ReleaseMeasurementV2Options, error) {
 	history, bounds := self.history, self.owner.cfg.EvidenceV2.Bounds
+	decisionCfg, err := productionConfigForIntent(&self.owner.cfg, intent)
+	if err != nil {
+		return ReleaseMeasurementV2Options{}, err
+	}
 	contexts, inputs := history.inputContextsByEpoch[intent.SubnetEpoch], history.inputByEpoch[intent.SubnetEpoch]
 	if len(contexts) != len(history.participants) || len(inputs) != len(contexts) || len(artifact.Inputs) != len(contexts) {
 		return ReleaseMeasurementV2Options{}, errors.New("archive decision lacks a complete independently replayed native cut")
 	}
-	decisionPolicy, err := ReleasePolicyForHash(&history.cfg, observation.Decision.PolicyHash)
+	decisionPolicy, err := ReleasePolicyForHash(decisionCfg, observation.Decision.PolicyHash)
 	if err != nil {
 		return ReleaseMeasurementV2Options{}, err
 	}
-	controlled := slices.Clone(history.cfg.ControlledNOIDs)
+	controlled := slices.Clone(decisionCfg.ControlledNOIDs)
 	slices.Sort(controlled)
 	result := ReleaseMeasurementV2Options{Expected: observation.Decision, Policy: decisionPolicy, ControlledNOIDs: controlled, Bindings: observation.Bindings, Pools: observation.Pools, DepositAudits: observation.DepositAudits, Operators: map[uint64]ReleaseMeasurementV2OperatorOptions{}, MaxOperators: bounds.MaxOperators, MaxHeadEntries: bounds.MaxHeadEntries, MaxArtifactBytes: bounds.MaxArtifactBytes, MaxControlBytes: bounds.MaxControlBytes}
 	for _, participant := range history.participants {
