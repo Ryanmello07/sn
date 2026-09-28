@@ -1433,6 +1433,11 @@ provisional authority and accelerated timing do not carry over.
 Current component evidence includes the
 [complete server model census and qualified fixture corrections](evidence/server-model-completion-20260928.md)
 and [shared receipt/miner recovery qualification](evidence/receipt-recovery-qualification-20260928.md).
+The later [registration transaction qualification](evidence/registration-server-model-qualification-20260928.md)
+passes all 29 affected roots normally and under race detection. Its full model
+body completed all 1,125 roots with 1,118 passes, seven explicit fixture-input
+skips and no failures. Retain the original successful package exit separately
+from its failed legacy-subtest metadata check; do not claim zero-skip coverage.
 The frozen model invocation ended with three now-corrected fixture failures and
 seven optional-configuration skips; it is not recorded as a passing full
 invocation. Preserve these results when assembling the final source composition

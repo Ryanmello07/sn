@@ -124,9 +124,13 @@ candidate `736d7b8f` rejects ambiguous request-field aliases and duplicate or
 invalid values before allocation. Its focused test passes normally and with
 race detection; the exact old parser reproduces the expected failure in both
 modes ([evidence](evidence/registration-request-grammar-qualification-20260928.md)).
-The underlying transaction suite, combined client recovery, redirect handling
-and server-first migration/rollout remain separate gates. This parser result
-does not establish a completed registration release.
+The [underlying transaction qualification](evidence/registration-server-model-qualification-20260928.md)
+now has 29 passing affected roots normally and under race detection. Its full
+model execution finished with 1,118 passes, seven disclosed configuration/data
+skips and no test failures. The retained checker rejection for undeclared legacy
+subtests is separate from the successful original package exit. Combined client
+recovery, redirect handling and server-first migration/rollout remain separate
+gates; these component results do not establish a completed registration release.
 
 The [concurrent-allocation fixture correction](evidence/registration-allocation-attempts-qualification-20260928.md)
 also passes normally and with race detection, with the original isolation
