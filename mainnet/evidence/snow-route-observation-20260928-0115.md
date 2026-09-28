@@ -60,3 +60,11 @@ owned route, request and retry bounds. The retained `response.body`,
 timestamps and exit are in
 `/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T044210Z`.
 No mainnet identity, public fallback or transaction is present in this capture.
+
+The **05:29:35 through 05:34:38 UTC** check again returned HTTP 502 on all
+21 attempts; curl exited 22 after 303 seconds using the same request and retry
+bounds. The raw directory is
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T0531Z`;
+its directory label is separate from the exact retained start/end timestamps.
+The response body, status and stderr hashes match those above. This supplies
+no mainnet identity or additional evidence about the upstream failure.
