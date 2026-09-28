@@ -1194,7 +1194,9 @@ before another signature, resolve them with a canonical receipt or prove a
 foreign nonce consumption at the exact fully scanned boundary. A newer advertised
 head may contain our own transaction and cannot supply a nonce against an older
 absence scan. See the [continuation candidate](evidence/production-continuation-candidate-20260928.md);
-its qualification is pending and does not grant old decisions new epoch authority.
+its affected normal/race qualification is complete and does not grant old
+decisions new epoch authority. Public startup and durable partial-scan recovery
+retain their separate qualification scopes.
 
 **Closure.** Inject crashes before/after intent fsync, signing, send, lost
 response, inclusion, finality and postcondition publication. Cover two operators,

@@ -49,10 +49,12 @@ transcript census, signer, or background protocol worker.
 
 A fresh successful observation is separate from progress: a validator can
 legitimately wait for an epoch or a reveal block. Intents retain their actual
-prepared, reveal, finalized, and application blocks. The optional native
-schedule and classified steering fields are reserved for the PH03 loop hook;
-this producer slice does not populate them. A consumer must report unavailable
-schedule evidence as unknown rather than inventing a deadline or acceptance.
+prepared, reveal, finalized, and application blocks. The qualified production
+continuation hooks now populate the optional native schedule from authenticated
+reads and the steering outcome from the actual loop. Failed reads retain the
+previous observation with its original age and mark it unavailable. A consumer
+must report absent or unavailable schedule evidence as unknown rather than
+inventing a deadline or acceptance.
 
 ## Failure and restart
 

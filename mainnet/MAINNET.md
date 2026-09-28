@@ -94,7 +94,9 @@ The miner fleet now has a [mainnet runtime authority gate](../miner/FLEET-MAINNE
 for register, publish, bind, status and revoke. It requires separately approved
 genesis, source/build review and exact code/metadata/version bytes before
 signing, submission and receipt readback. That source change does not supply
-those approvals or durable uncertain-send reconciliation.
+those approvals. Its separately qualified durable recovery retains original
+signed transactions and reconciles uncertain sends; partial-scan checkpointing,
+automatic runtime admission and live deployment remain separate work.
 
 The draft policy is `reset.mode: unresolved` and **`emissions.remainder: owner-recycle`**. A preview remains non-executable while reset capability, the runtime-specific 10%/90% mechanism or other required inputs are unresolved. Qualify the selected economic mechanism before installing an immutable vault or removing existing registrations. The remainder choice is settled; live economic qualification and the exact signed production policy remain work.
 
