@@ -42,3 +42,9 @@ widened, no route is inferred or converted by production code, and HTTP read
 constructor support still grants no subscription/signing authority. Both operator
 API routes and the EVM route remain actual HTTP endpoints. This fixture correction
 requires its own diagnostic; the original failed capture remains evidence.
+
+The WebSocket diagnostic at `af2a6603` passed the route boundary but refused the
+fixture's config signature after YAML loading. Fixture input now follows the
+existing production-runtime fixture discipline: round-trip and normalize the
+public YAML representation before the independent approval is signed. Production
+hashing, signature checking and retained-authority rules remain unchanged.

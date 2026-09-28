@@ -35,6 +35,7 @@ import (
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/stabi"
 	"github.com/urnetwork/sdk"
+	"gopkg.in/yaml.v3"
 )
 
 // All signed values are fixed before serving. The native owner serializes raw
@@ -474,9 +475,7 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 			op.APIURL, op.ConnectURL = server.URL, "ws"+strings.TrimPrefix(server.URL, "http")+"/connect"
 			self.origins[index] = api
 		}
-		if err := cfg.normalize(root); err != nil {
-			t.Fatal(err)
-		}
+		normalizeProductionStartupTestConfig(t, cfg, root)
 	})
 	self.native = installProductionContinuationNative(t, self.continuation)
 	self.configPath = writeReleaseConfig(t, *self.continuation.production.cfg)
@@ -484,6 +483,28 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 		t.Fatalf("complete independently approved startup configuration: %v", err)
 	}
 	return self
+}
+
+// The independent approver signs precisely the public loader's representation,
+// including YAML's omitted/empty list grammar and normalized absolute paths.
+// This runs before signing, never rewrites already approved authority bytes.
+func normalizeProductionStartupTestConfig(t *testing.T, cfg *ReleaseConfig, root string) {
+	t.Helper()
+	if err := cfg.normalize(root); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var normalized ReleaseConfig
+	if err := yaml.Unmarshal(raw, &normalized); err != nil {
+		t.Fatal(err)
+	}
+	if err := normalized.normalize(root); err != nil {
+		t.Fatal(err)
+	}
+	*cfg = normalized
 }
 
 // All fixture preparation owners close before the public root opens the same
