@@ -50,8 +50,22 @@ The final affected normal/race selector is **`^TestBootstrap`**, covering
 20 roots (12 new command/owner/dependency roots and eight existing review-plan
 roots). The retained `qualify.sh` runs both, five expected-failing causal
 controls, vet, CLI build and source verification with explicit `GOCACHE`,
-`TMPDIR`, `GOWORK=off` and `GOMAXPROCS=2`. The independent final-source runner is
-pending at this candidate handoff; no final race pass is claimed here.
+`TMPDIR`, `GOWORK=off` and `GOMAXPROCS=2`. Terra medium completed this final
+qualification on clean candidate `5fd9dffa1f6783a97b4f48c80025fd174dbad718`:
+**20/20 roots passed normally in 20.439s and under race detection in
+153.847s**. All five causal controls failed their intended root; package vet,
+CLI build and before/after candidate and consumed-source checks passed. The
+candidate source manifest SHA-256 is
+`9c21b84b4b24cc303c83e76875cfebaa2dbea8b7cecdea5cb0de76f1251984e7`.
+
+The integration at `fb59705a9afb763954b6cf8a979d01cbd46b6328` contains identical
+mainnet Go files and the separately qualified validator authority-history
+changes. Terra's separate `go test -run '^$' ./mainnet ./crv4 ./validator`
+composition compile passed with clean, unchanged source before and after.
+That compile executed no test bodies. Raw `normal.jsonl`, `race.jsonl`, both
+selection files, causal-control results, source checks and `composition-*`
+records remain in the evidence directory above. The earlier full-package
+normal and 18-root race results retain their preliminary-source scope.
 
 ## Provenance and limits
 
