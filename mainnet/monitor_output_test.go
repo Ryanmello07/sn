@@ -135,6 +135,9 @@ func TestMonitorOutputEarlyAdmissionStillJoinsBlockedSink(t *testing.T) {
 	hooks := monitorServiceHooks{afterClose: func(_, _ string, file *os.File) error {
 		_, err := file.Stat()
 		closed = errors.Is(err, os.ErrClosed)
+		// The admission diagnostic was queued before cleanup. Observe its
+		// actual blocked write before allowing the bounded final drain.
+		<-sink.entered
 		return nil
 	}}
 	if exit := runMainWithMonitorHooks(t.Context(), fixture.args("http://rpc.example"), sink, sink, fixture.clock.now, hooks); exit != 3 || !closed {
