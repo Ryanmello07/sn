@@ -480,13 +480,17 @@ signed liabilities for reconciliation.
 The [executable contract phase](BOOTSTRAP-CONTRACTS.md) wires
 `bootstrap-contracts preview/plan/apply/resume` to exact reserve CREATE preparation,
 public signed-byte custody, a finite owned-HTTP submission allowance and
-canonical transaction/runtime/getter recovery. The next selected action now
-implements predecessor-bound settlement vault CREATE under the same approved
-graph and finite attempts. Offline preparation requires no deployment outputs.
+canonical transaction/runtime/getter recovery. The next selected actions now
+implement predecessor-bound settlement vault CREATE and coordinator
+implementation CREATE under the same approved graph and finite attempts.
+Offline preparation requires no deployment outputs.
 The [reserve qualification](evidence/bootstrap-contract-qualification-20260928.md)
 and [vault qualification](evidence/bootstrap-contract-vault-qualification-20260928.md)
 retain their distinct source graphs and test scopes; the vault candidate passed
-51 focused roots normal/race and 426 full normal mainnet roots. The remaining
+51 focused roots normal/race and 426 full normal mainnet roots. The
+[coordinator qualification](evidence/bootstrap-contract-coordinator-qualification-20260928.md)
+passed 71 focused normal roots, both exact race shards and 446 full normal
+mainnet roots. The remaining
 graph, including genuine Safe evidence anchoring, and authenticated live
 authority remain required.
 The separate [nine-action candidate status](evidence/contract-graph-review-block-20260928.md)
