@@ -137,3 +137,9 @@ raw response and timestamped observation are retained under
 `/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T1417Z`.
 One failed request confirms continued unavailability at that instant but does
 not establish the upstream cause or a new chain identity.
+
+The **14:48:40 UTC single read-only check** again returned HTTP 502 and the
+same response-body SHA-256. Its raw response and timestamped observation are
+retained under
+`/mnt/data/sn-testnet/evidence/mainnet-route-observation-20260928T1448Z`.
+This adds no mainnet identity or evidence of the upstream cause.
