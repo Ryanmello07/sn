@@ -1217,6 +1217,17 @@ Do not invalidate a qualified prefix merely because the executable changed.
 Exercise the actual miner restart path, including a runtime-update digest,
 beside the validator recovery tests.
 
+The continuation review also found `VerifyFinalizedSourceContext` attaching a
+canonicality/finality contradiction to a failed read before any contradictory
+value was returned, then fetching the receipt body again to derive its event
+index. Return the I/O cause first and reuse the admitted body/index for exact
+dispatch and source-event checks. Miner scan ranges currently publish their
+cursor only after up to 4,096 blocks: add bounded durable subranges so a late
+timeout cannot repeatedly discard thousands of verified reads. Reuse the
+header authenticated with each complete body instead of issuing duplicate
+header/hash reads, while retaining canonical boundary checks and bounded fsync
+work. These continuation improvements remain open after body admission.
+
 **Closure.** Deterministically inject disconnect, DNS/HTTP failures, timeout
 during body read, missing/reordered batch responses, partial success and a
 large-batch refusal that succeeds when split. Verify exact call/attempt bounds,
