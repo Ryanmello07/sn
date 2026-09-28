@@ -1490,6 +1490,24 @@ Still open: live operator API dependency and first/missing-client JWT
 registration recovery. The latter can mutate identity
 and must retain ambiguous outcomes; wrapping the whole operator constructor in
 read retries or transferring a canceled startup context to its service is unsafe.
+
+The [operator registration candidate](OPERATOR-REGISTRATION.md) now implements
+the separate mutation owner: persistent opaque request plus first-send anchor,
+atomic server allocation/dedup and stable-scope tombstone, exact replay and
+durable credential handoff. The actual public root constructs local evidence
+owners before its independent authentication worker, so retained receipt and
+application observation can continue while first/legacy client recovery waits.
+New publication, trails, fresh signing and rebroadcast still require readiness.
+Signed `allow_client_registration` defaults false and preserves older omitted/
+false configuration hashes; it authorizes one new operation, never renewal or
+revocation bypass. Existing requests replay without that flag. Shared SDK
+refresh rejects null/duplicate/mixed responses before both startup and background
+callers; complete bad responses do not become success or confirmed logout.
+The [handoff](evidence/operator-registration-candidate-20260928.md) keeps source
+qualification pending. The additive DB migration and every approved operator's
+versioned route must deploy before fresh clients; legacy missing identities
+cannot be guessed from an empty native history. Public server-key and immutable
+evidence availability remain separate startup inputs.
 Native production writers continue to require explicit WS/WSS, independently of
 the owned node's HTTP EVM/read capabilities. Helper-only fixture success did not
 prove public config admission: the real-root diagnostics caught WS capability,

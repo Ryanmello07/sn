@@ -58,13 +58,14 @@ type releaseSnapshotLoader func(context.Context) (*ReleaseSnapshot, error)
 type releaseSnapshotRetryWait func(context.Context, time.Duration) error
 
 type releaseOperatorRuntime struct {
-	measurement   *ReleaseMeasurementContext
-	stats         *StatsEngine
-	engine        releaseTrailRunner
-	close         func() error
-	attemptUpload *releaseAttemptUploadV2
-	attemptSource *releaseAttemptUploadSourceV2
-	attemptLedger *AttemptLedger
+	measurement    *ReleaseMeasurementContext
+	stats          *StatsEngine
+	engine         releaseTrailRunner
+	close          func() error
+	attemptUpload  *releaseAttemptUploadV2
+	attemptSource  *releaseAttemptUploadSourceV2
+	attemptLedger  *AttemptLedger
+	authentication *productionOperatorAuthentication
 }
 
 type releaseTrailRunner interface {
@@ -543,6 +544,9 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 	}
 	strategy := connect.NewClientStrategy(ctx, strategySettings)
 	api := sdk.NewApi(ctx, strategy, op.APIURL)
+	if isOwnerRecycleProductionConfig(cfg) {
+		return newProductionReleaseOperator(ctx, cfg, op, epochFn, attemptResolver, attemptState, seed, privateKey, artifactReader, seedAttemptInterval, strategy, api)
+	}
 	byClientJWT, clientID, err := clientauth.LoadOrCreateClientJwt(ctx, api, op.NetworkJWTFile, op.ClientJWTFile, fmt.Sprintf("validator-%d no-%d release-1.0", cfg.ValidatorID, op.NoID))
 	if err != nil {
 		closeErr := api.CloseAndWait(context.Background())

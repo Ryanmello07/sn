@@ -559,6 +559,9 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	if productionStage != nil {
 		submitOptions.SourceHash = productionStage.sourceHash
 	}
+	if err := self.runtimeV2.authenticationPending(current); err != nil {
+		return err
+	}
 	prepared, err := crv4.PrepareWeightsCRv4ExactAtContext(ctx, self.native, self.hotkey, self.cfg.Netuid, uids, scores, submitOptions, preparedRuntimeHash)
 	if err != nil {
 		return classifyProvisionalNativeWeights(ctx, allowWeightRejection, nativeState.SubnetEpochIndex, snapshot.Epoch.Uint64(), err)
@@ -646,6 +649,9 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	}
 	submissionConfig, err := self.intents.ownerRecyclePreparedConfig(ctx, self.cfg, prepared)
 	if err != nil {
+		return err
+	}
+	if err := self.runtimeV2.authenticationPending(intent); err != nil {
 		return err
 	}
 	result, attempted, err := submitPreparedNativeRuntimeContext(ctx, self.native, submissionConfig, prepared)

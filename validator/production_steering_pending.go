@@ -111,6 +111,9 @@ func (self *ReleaseSteerer) reconcileProductionPendingV2(ctx context.Context, cu
 		// not extinguish their chain liability or permit a replacement vector.
 		return false, &productionPendingReconciliation{nativeEpoch: state.SubnetEpochIndex, extrinsicHash: current.Prepared.ExtrinsicHash}
 	}
+	if err := self.runtimeV2.authenticationPending(current); err != nil {
+		return false, err
+	}
 	var signingHash types.Hash
 	err = self.productionRead(ctx, productionReadReceipt, current, func(readCtx context.Context) error {
 		var err error
@@ -138,6 +141,9 @@ func (self *ReleaseSteerer) reconcileProductionPendingV2(ctx context.Context, cu
 		return false, self.productionRetainedReadFailure(ctx, productionReadIntent, current, err)
 	}
 	if err := validateOwnerRecyclePreparedAuthorization(submissionCfg, current.Prepared); err != nil {
+		return false, err
+	}
+	if err := self.runtimeV2.authenticationPending(current); err != nil {
 		return false, err
 	}
 	result, err := crv4.SubmitPrepared(ctx, &native, current.Prepared)

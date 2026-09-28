@@ -30,15 +30,16 @@ const ReleaseMainnetProductionSchemaVersion = 3
 const maximumReleaseConfigBytes = 2 * 1024 * 1024
 
 type OperatorConfig struct {
-	NoID              uint64 `yaml:"no_id" json:"no_id"`
-	APIURL            string `yaml:"api_url" json:"api_url"`
-	ConnectURL        string `yaml:"connect_url" json:"connect_url"`
-	ArtifactSigner    string `yaml:"artifact_signer" json:"artifact_signer"`
-	StateDir          string `yaml:"state_dir" json:"state_dir"`
-	NetworkJWTFile    string `yaml:"network_jwt_file" json:"network_jwt_file"`
-	ClientJWTFile     string `yaml:"client_jwt_file" json:"client_jwt_file"`
-	ClientKeySeedFile string `yaml:"client_key_seed_file" json:"client_key_seed_file"`
-	Concurrency       int    `yaml:"concurrency" json:"concurrency"`
+	NoID                    uint64 `yaml:"no_id" json:"no_id"`
+	APIURL                  string `yaml:"api_url" json:"api_url"`
+	ConnectURL              string `yaml:"connect_url" json:"connect_url"`
+	ArtifactSigner          string `yaml:"artifact_signer" json:"artifact_signer"`
+	StateDir                string `yaml:"state_dir" json:"state_dir"`
+	NetworkJWTFile          string `yaml:"network_jwt_file" json:"network_jwt_file"`
+	ClientJWTFile           string `yaml:"client_jwt_file" json:"client_jwt_file"`
+	AllowClientRegistration bool   `yaml:"allow_client_registration,omitempty" json:"allow_client_registration,omitempty"`
+	ClientKeySeedFile       string `yaml:"client_key_seed_file" json:"client_key_seed_file"`
+	Concurrency             int    `yaml:"concurrency" json:"concurrency"`
 }
 
 type ReleaseConfig struct {
@@ -489,6 +490,9 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 			return fmt.Errorf("operators[%d] has zero or duplicate no_id", i)
 		}
 		seenNO[op.NoID] = true
+		if op.AllowClientRegistration && c.SchemaVersion != ReleaseMainnetProductionSchemaVersion {
+			return fmt.Errorf("operators[%d].allow_client_registration requires independently approved production schema3", i)
+		}
 		if err := validateEndpoint(fmt.Sprintf("operators[%d].api_url", i), op.APIURL, "http", "https"); err != nil {
 			return err
 		}

@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,18 +43,20 @@ import (
 // All signed values are fixed before serving. The native owner serializes raw
 // fixture state; tests alter it only between joined service lifecycles.
 type productionStartupTestFixture struct {
-	continuation  *productionContinuationTestFixture
-	native        *productionContinuationNativeTestClient
-	activationKVs map[uint64]protocol.ValidatorEvidenceActivation
-	contextKVs    map[uint64]ReleaseEvidenceV2ActivationContext
-	origins       [2]*productionStartupApiTestFixture
-	evm           *productionStartupEvmTestFixture
-	configPath    string
-	stateLock     sync.Mutex
-	latestReads   int
-	writeRequests int
-	latestRead    chan struct{}
-	latestOnce    sync.Once
+	continuation       *productionContinuationTestFixture
+	native             *productionContinuationNativeTestClient
+	activationKVs      map[uint64]protocol.ValidatorEvidenceActivation
+	contextKVs         map[uint64]ReleaseEvidenceV2ActivationContext
+	origins            [2]*productionStartupApiTestFixture
+	evm                *productionStartupEvmTestFixture
+	configPath         string
+	stateLock          sync.Mutex
+	latestReads        int
+	writeRequests      int
+	latestRead         chan struct{}
+	latestOnce         sync.Once
+	nativeBodyWaitHash string
+	nativeBodyWait     <-chan struct{}
 }
 
 // Journal views are independently ABI encoded, rather than supplied as a
@@ -193,17 +196,62 @@ func (self *productionStartupEvmTestFixture) view(ctx context.Context, call map[
 // Each origin owns real public bytes and enforces source signatures plus its
 // distinct destination session. Both origins begin with the signed corpus.
 type productionStartupApiTestFixture struct {
-	owner      *productionStartupTestFixture
-	noId       uint64
-	credential string
-	keys       map[byte]ed25519.PublicKey
-	stateLock  sync.Mutex
-	objects    map[string][]byte
-	posts      int
-	sessions   int
-	seedRead   chan struct{}
-	seedOnce   sync.Once
-	release    chan struct{}
+	owner                   *productionStartupTestFixture
+	noId                    uint64
+	credential              string
+	keys                    map[byte]ed25519.PublicKey
+	stateLock               sync.Mutex
+	objects                 map[string][]byte
+	posts                   int
+	sessions                int
+	seedRead                chan struct{}
+	seedOnce                sync.Once
+	release                 chan struct{}
+	registrationUnavailable bool
+	registrationRequest     []byte
+	registrationPosts       int
+	registrationRead        chan struct{}
+	registrationOnce        sync.Once
+	rejectRefreshAfter      int
+	beforeRefreshReject     func(context.Context)
+	beforeRefresh           func(context.Context)
+	invalidRefreshAfter     int
+	invalidRefresh          string
+}
+
+// This HTTP fixture retains one exact operation even when its reply is lost.
+// The separate server suite exercises the actual database allocation owner.
+func (self *productionStartupApiTestFixture) registerClient(writer http.ResponseWriter, request *http.Request) {
+	raw, err := productionStartupRequestTestBytes(request)
+	var args sdk.RegisterNetworkClientArgs
+	if err != nil || request.Method != http.MethodPost || json.Unmarshal(raw, &args) != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	self.stateLock.Lock()
+	if self.registrationRequest == nil {
+		self.registrationRequest = bytes.Clone(raw)
+	}
+	same := bytes.Equal(self.registrationRequest, raw)
+	self.registrationPosts++
+	unavailable := self.registrationUnavailable
+	self.stateLock.Unlock()
+	self.registrationOnce.Do(func() { close(self.registrationRead) })
+	if !same {
+		writer.WriteHeader(http.StatusConflict)
+		return
+	}
+	if unavailable {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	claims := gojwt.MapClaims{}
+	if _, _, err := gojwt.NewParser().ParseUnverified(self.credential, claims); err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	digest := sha256.Sum256(raw)
+	_ = json.NewEncoder(writer).Encode(map[string]any{"schema": sdk.NetworkClientRegistrationSchema, "registration_id": args.RegistrationId, "request_sha256": hex.EncodeToString(digest[:]), "client_id": claims["client_id"], "device_id": claims["device_id"], "by_client_jwt": self.credential})
 }
 
 // Protocol traffic reaches actual HTTP handlers, including JWT refresh and
@@ -211,6 +259,9 @@ type productionStartupApiTestFixture struct {
 func (self *productionStartupApiTestFixture) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Content-Type", "application/json")
 	switch request.URL.Path {
+	case "/network/register-client-v1":
+		self.registerClient(writer, request)
+		return
 	case "/hello":
 		writer.WriteHeader(http.StatusOK)
 		return
@@ -221,7 +272,43 @@ func (self *productionStartupApiTestFixture) ServeHTTP(writer http.ResponseWrite
 		}
 		self.stateLock.Lock()
 		self.sessions++
+		invalid := self.invalidRefresh
+		if self.sessions <= self.invalidRefreshAfter {
+			invalid = ""
+		}
+		reject := self.rejectRefreshAfter > 0 && self.sessions > self.rejectRefreshAfter
+		beforeReject := self.beforeRefreshReject
+		beforeRefresh := self.beforeRefresh
+		if reject {
+			self.beforeRefreshReject = nil
+		}
 		self.stateLock.Unlock()
+		if beforeRefresh != nil {
+			if _, err := productionStartupRequestTestBytes(request); err != nil {
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			beforeRefresh(request.Context())
+		}
+		if invalid != "" {
+			if _, err := productionStartupRequestTestBytes(request); err != nil {
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_, _ = writer.Write([]byte(invalid))
+			return
+		}
+		if reject {
+			if _, err := productionStartupRequestTestBytes(request); err != nil {
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if beforeReject != nil {
+				beforeReject(request.Context())
+			}
+			writer.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		_ = json.NewEncoder(writer).Encode(map[string]string{"by_jwt": self.credential})
 		return
 	case "/verify/keys":
@@ -375,6 +462,13 @@ func (self *productionStartupTestFixture) nativeResponse(ctx context.Context, pa
 	if decoder.Decode(&call) != nil {
 		return reply(nil, errors.New("synthetic native request is malformed"))
 	}
+	if call.Method == "chain_getBlock" && len(call.Params) == 1 && call.Params[0] == self.nativeBodyWaitHash && self.nativeBodyWait != nil {
+		select {
+		case <-ctx.Done():
+			return reply(nil, ctx.Err())
+		case <-self.nativeBodyWait:
+		}
+	}
 	if strings.HasPrefix(call.Method, "author_") {
 		self.stateLock.Lock()
 		self.writeRequests++
@@ -411,6 +505,12 @@ func (self *productionStartupTestFixture) nativeResponse(ctx context.Context, pa
 // The public loader receives exactly the independently signed configuration.
 // This factory never changes it after the proposal signature is generated.
 func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture {
+	return newProductionStartupTestFixtureWithRegistration(t, false)
+}
+
+// Opt-in belongs to the actual complete signed configuration, before any
+// source or intent exists. Default fixtures preserve historical config bytes.
+func newProductionStartupTestFixtureWithRegistration(t *testing.T, allowRegistration bool) *productionStartupTestFixture {
 	t.Helper()
 	self := &productionStartupTestFixture{activationKVs: map[uint64]protocol.ValidatorEvidenceActivation{}, contextKVs: map[uint64]ReleaseEvidenceV2ActivationContext{}, latestRead: make(chan struct{})}
 	root := identityTestStateDir(t)
@@ -460,6 +560,7 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 		production.operator.blocks[80] = [32]byte{0x78}
 		for index := range cfg.Operators {
 			op := &cfg.Operators[index]
+			op.AllowClientRegistration = allowRegistration
 			physical := continuation.inputKVs[op.NoID]
 			input := &cfg.EvidenceV2.Operators[index]
 			// Scratch owns distinct provisioned roots outside every durable
@@ -507,7 +608,16 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 			op.NetworkJWTFile = filepath.Join(root, fmt.Sprintf("no-%d", op.NoID), "network.jwt")
 			op.ArtifactSigner = common.Address{byte(op.NoID)}.Hex()
 			writeReleaseBootstrapV2TestFile(t, op.ClientKeySeedFile, physical.source.key.Seed())
-			credential, err := gojwt.NewWithClaims(gojwt.SigningMethodNone, gojwt.MapClaims{"client_id": physical.source.engine.clientId.String(), "device_id": releaseMeasurementTestID(op.NoID).String(), "exp": time.Now().Add(30 * 24 * time.Hour).Unix()}).SignedString(gojwt.UnsafeAllowNoneSignatureType)
+			claims := gojwt.MapClaims{"client_id": physical.source.engine.clientId.String(), "device_id": releaseMeasurementTestID(op.NoID).String(), "exp": time.Now().Add(30 * 24 * time.Hour).Unix()}
+			if allowRegistration {
+				claims["network_id"], claims["user_id"], claims["roles"], claims["principal"] = releaseMeasurementTestID(201).String(), releaseMeasurementTestID(202).String(), []string{"admin"}, "synthetic-operator"
+				bootstrap, err := gojwt.NewWithClaims(gojwt.SigningMethodNone, gojwt.MapClaims{"network_id": claims["network_id"], "user_id": claims["user_id"], "roles": claims["roles"], "principal": claims["principal"], "exp": claims["exp"]}).SignedString(gojwt.UnsafeAllowNoneSignatureType)
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeReleaseBootstrapV2TestFile(t, op.NetworkJWTFile, []byte(bootstrap))
+			}
+			credential, err := gojwt.NewWithClaims(gojwt.SigningMethodNone, claims).SignedString(gojwt.UnsafeAllowNoneSignatureType)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -515,7 +625,7 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 				t.Fatalf("fixture client token differs from its actual session parser: %v", err)
 			}
 			writeReleaseBootstrapV2TestFile(t, op.ClientJWTFile, []byte(credential))
-			api := &productionStartupApiTestFixture{owner: self, noId: op.NoID, credential: credential, keys: physical.source.server.serverPublicKeys(), objects: map[string][]byte{}, seedRead: make(chan struct{}), release: make(chan struct{})}
+			api := &productionStartupApiTestFixture{owner: self, noId: op.NoID, credential: credential, keys: physical.source.server.serverPublicKeys(), objects: map[string][]byte{}, seedRead: make(chan struct{}), release: make(chan struct{}), registrationRead: make(chan struct{})}
 			for _, owner := range continuation.inputKVs {
 				for hash, raw := range owner.objects.metadataKVs {
 					api.objects["metadata/"+hash] = bytes.Clone(raw)

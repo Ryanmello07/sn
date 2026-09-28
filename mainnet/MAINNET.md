@@ -966,6 +966,16 @@ Native production submission uses an explicitly approved WS/WSS route for
 `author_submitAndWatchExtrinsic`; the same node may provide HTTP EVM/read RPC,
 but HTTP read support alone grants no native subscription or writer capability.
 
+The [operator registration candidate](OPERATOR-REGISTRATION.md) addresses the
+separate first/missing-client barrier with durable request/identity custody, a
+dedicated idempotent server route and an independent authentication worker in
+the actual public root. Retained native observation is independent of live JWT
+readiness; new publication, trails, signing and rebroadcast remain gated. Fresh
+creation requires signed per-operator `allow_client_registration`, default false
+with historical encoding preserved. Existing operations reconcile regardless
+of that flag. Qualification and the additive server-first migration/rollout are
+pending; no live identities or deployment are supplied by this source change.
+
 The [qualified receipt-prefix recovery](evidence/receipt-prefix-qualification-20260928.md)
 now supplies the shared 128-block scan contract to both native recovery owners.
 Miner records retain their existing signed semantic proof. The validator keeps

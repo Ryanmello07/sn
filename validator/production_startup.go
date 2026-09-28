@@ -47,6 +47,9 @@ func (self *ReleaseSteerer) requestProductionPreparation(intent *SteeringIntent)
 		return errors.New("production current preparation channels are absent")
 	}
 	owner.requestOnce.Do(func() { close(owner.requested) })
+	if err := self.runtimeV2.authenticationPending(intent); err != nil {
+		return err
+	}
 	select {
 	case <-owner.ready:
 		return nil
@@ -154,6 +157,17 @@ func (self *ReleaseSteerer) runProductionPreparationAndRefresh(ctx context.Conte
 	}
 	first := true
 	for {
+		if err := runtime.authenticationPending(nil); err != nil {
+			var wait *productionOperatorAuthenticationPending
+			if !errors.As(err, &wait) {
+				return err
+			}
+			observeProductionAuthenticationWait(ctx, runtime.progress, wait)
+			if err := waitReleaseSnapshotRetry(ctx, time.Duration(self.cfg.PollSeconds)*time.Second); err != nil {
+				return err
+			}
+			continue
+		}
 		var snapshot *ReleaseSnapshot
 		err := self.productionRead(ctx, productionReadPreparation, nil, func(attempt context.Context) error {
 			var err error

@@ -29,6 +29,7 @@ func runReleaseProductionSteeringLoopWithWait(ctx context.Context, submit func()
 		var originalPending *productionPendingReconciliation
 		var transition *productionSteeringTransition
 		var preparation *productionPreparationPending
+		var authentication *productionOperatorAuthenticationPending
 		switch {
 		case err == nil || releaseOnlyErrors(err, ErrSteeringAlreadyFinal):
 			failures, pendingErr = 0, nil
@@ -43,6 +44,8 @@ func runReleaseProductionSteeringLoopWithWait(ctx context.Context, submit func()
 		case errors.As(err, &preparation) && releaseOnlyErrors(err, preparation):
 			progress.observeSteering(preparation.nativeEpoch, preparation.epochKnown, "read_wait", false)
 			releaseDiagnostic(ctx, "steering", "preparation_pending", preparation.nativeEpoch, preparation.epochKnown, 0, releaseDiagnosticFacts{phase: productionReadPreparation})
+		case errors.As(err, &authentication) && releaseOnlyErrors(err, authentication):
+			observeProductionAuthenticationWait(ctx, progress, authentication)
 		case errors.As(err, &originalPending) && (originalPending.cause == nil || retryableProductionSteeringRead(originalPending.cause)) && releaseOnlyErrors(err, originalPending):
 			progress.observeSteering(originalPending.nativeEpoch, true, "receipt_pending", originalPending.cause == nil)
 			releaseDiagnostic(ctx, "steering", "receipt_pending", originalPending.nativeEpoch, true, 0, releaseDiagnosticFacts{phase: productionReadReceipt, cause: releaseDiagnosticReadCause(originalPending.cause)})

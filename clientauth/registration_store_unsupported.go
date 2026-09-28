@@ -1,0 +1,24 @@
+//go:build !linux && !darwin
+
+package clientauth
+
+// New durable registration requires descriptor-relative private custody;
+// legacy authentication remains available on platforms without this owner.
+
+import "errors"
+
+type registrationStore struct{}
+
+func openRegistrationStore(string) (*registrationStore, error) {
+	return nil, errors.New("durable client registration requires Unix custody support")
+}
+
+func (self *registrationStore) read(string) ([]byte, error) {
+	return nil, errors.New("durable client registration custody is unavailable")
+}
+
+func (self *registrationStore) write(string, []byte) error {
+	return errors.New("durable client registration custody is unavailable")
+}
+
+func (self *registrationStore) close() error { return nil }
