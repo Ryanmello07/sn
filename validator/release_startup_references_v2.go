@@ -25,6 +25,7 @@ type releaseEvidenceV2StartupReferences struct {
 	remaining uint64
 	closed    bool
 	closeErr  error
+	readHooks releaseMeasurementInputV2ReadHooks
 	// The separate public replay owner resolves only an authenticated closed
 	// source census. Runtime startup always retains descriptor ownership above.
 	archive *releaseEvidenceV2ArchiveOwner
@@ -51,7 +52,7 @@ func (self *releaseEvidenceV2StartupReferences) read(ctx context.Context, path s
 		self.remaining -= uint64(len(encoded))
 		return encoded, self.archive.check(ctx)
 	}
-	owner, err := acquireReleaseMeasurementInputV2Owner(ctx, path, readLimit, releaseMeasurementInputV2ReadHooks{}, false)
+	owner, err := acquireReleaseMeasurementInputV2Owner(ctx, path, readLimit, self.readHooks, false)
 	self.owners = append(self.owners, owner)
 	if err != nil {
 		return nil, err

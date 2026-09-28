@@ -700,11 +700,23 @@ func RunRelease(ctx context.Context, configPath string) (returnErr error) {
 	return runReleaseWithActivationSetup(ctx, configPath, nil)
 }
 
+// Optional operational output cannot grant authority or change the configured
+// protocol owner. A publisher failure never cancels validation or reconciliation.
+func RunReleaseWithProgress(ctx context.Context, configPath, progressPath string) error {
+	return runReleaseWithStartupAndProgressV2(ctx, configPath, nil, nil, progressPath)
+}
+
 func runReleaseWithActivationSetup(ctx context.Context, configPath string, retainedSetup *ProvisionalActivationSetupV2) (returnErr error) {
 	return runReleaseWithStartupV2(ctx, configPath, retainedSetup, nil)
 }
 
 func runReleaseWithStartupV2(ctx context.Context, configPath string, retainedSetup *ProvisionalActivationSetupV2, adoption *ReleaseHistoryAdoptionV2) (returnErr error) {
+	return runReleaseWithStartupAndProgressV2(ctx, configPath, retainedSetup, adoption, "")
+}
+
+// One optional publisher shares only the parent lifecycle, never its signer,
+// stores or retry decisions. Its deferred close always joins the owned worker.
+func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, retainedSetup *ProvisionalActivationSetupV2, adoption *ReleaseHistoryAdoptionV2, progressPath string) (returnErr error) {
 	if ctx == nil {
 		return errors.New("release production lifecycle context is unavailable")
 	}
@@ -741,6 +753,11 @@ func runReleaseWithStartupV2(ctx context.Context, configPath string, retainedSet
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	progress, progressErr := newReleaseProgress(ctx, cfg, progressPath)
+	if progressErr != nil {
+		fmt.Fprintln(os.Stderr, "validator progress: publisher_disabled_configuration")
+	}
+	defer progress.close()
 
 	if isOwnerRecycleProductionConfig(cfg) {
 		if _, err := RetainOwnerRecycleApproval(ctx, cfg); err != nil {
@@ -827,6 +844,8 @@ func runReleaseWithStartupV2(ctx context.Context, configPath string, retainedSet
 	if err != nil {
 		return fmt.Errorf("release V2 semantic startup: %w", err)
 	}
+	runtimeV2.progress = progress
+	progress.observeSettlement(progress.nextSequence(), runtimeV2.progressSettlement(snapshot.Epoch.Uint64()), nil)
 	boundaryCtx := ctx
 	if retainedSetup != nil {
 		// Scope longer reads to shared preparation; trail callers keep their
@@ -887,10 +906,10 @@ func runReleaseWithStartupV2(ctx context.Context, configPath string, retainedSet
 	})
 }
 
-func runReleaseConfig(configPath string) {
+func runReleaseConfig(configPath, progressPath string) {
 	event := connect.NewEventWithContext(context.Background())
 	event.SetOnSignals(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-	if err := RunRelease(event.Ctx(), configPath); err != nil {
+	if err := RunReleaseWithProgress(event.Ctx(), configPath, progressPath); err != nil {
 		panic(err)
 	}
 }

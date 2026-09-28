@@ -30,6 +30,8 @@ type releaseIntentV2Owner struct {
 	provisionalEpochGaps bool
 	historyAdoption      *releaseHistoryAdoptionV2
 	productionPrepared   *ownerRecyclePreparedAuthorization
+	// Fault observers run after physical reference operations, never instead.
+	referenceReadHooks releaseMeasurementInputV2ReadHooks
 }
 
 type releaseIntentV2Read struct {
@@ -152,7 +154,7 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Read, resultErr error) {
 	self.v2.productionPrepared = nil
 	bounds := self.v2.runtime.cfg.EvidenceV2.Bounds
-	result = &releaseIntentV2Read{file: &steeringIntentFile{Schema: steeringIntentSchema}, custody: &releaseEvidenceV2StartupReferences{remaining: bounds.MaxHistoryBytes}}
+	result = &releaseIntentV2Read{file: &steeringIntentFile{Schema: steeringIntentSchema}, custody: &releaseEvidenceV2StartupReferences{remaining: bounds.MaxHistoryBytes, readHooks: self.v2.referenceReadHooks}}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, result.custody.close())
@@ -363,7 +365,8 @@ func (self *IntentStore) currentV2(ctx context.Context) (result *SteeringIntent,
 	if err != nil {
 		return nil, err
 	}
-	defer release()
+	sequence := self.v2.runtime.progress.nextSequence()
+	defer func() { self.finishProgressV2(release, sequence, result, resultErr) }()
 	read, err := self.readV2(ctx)
 	if err != nil {
 		return nil, err
@@ -422,7 +425,8 @@ func (self *IntentStore) beginV2(ctx context.Context, intent SteeringIntent) (re
 	if err != nil {
 		return nil, err
 	}
-	defer release()
+	sequence := self.v2.runtime.progress.nextSequence()
+	defer func() { self.finishProgressV2(release, sequence, result, resultErr) }()
 	read, err := self.readV2(ctx)
 	if err != nil {
 		return nil, err
@@ -495,7 +499,9 @@ func (self *IntentStore) updateV2(ctx context.Context, vectorHash, status string
 	if err != nil {
 		return err
 	}
-	defer release()
+	sequence := self.v2.runtime.progress.nextSequence()
+	var current *SteeringIntent
+	defer func() { self.finishProgressV2(release, sequence, current, resultErr) }()
 	read, err := self.readV2(ctx)
 	if err != nil {
 		return err
@@ -504,6 +510,7 @@ func (self *IntentStore) updateV2(ctx context.Context, vectorHash, status string
 	if read.file.Current == nil || read.file.Current.VectorHash != vectorHash {
 		return errors.New("V2 intent differs from the current immutable vector")
 	}
+	current = read.file.Current
 	if mutate != nil {
 		if err := mutate(read.file.Current); err != nil {
 			return err

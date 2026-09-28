@@ -41,6 +41,7 @@ type releaseRuntimeV2 struct {
 	publicationContexts  map[uint64]map[uint64]AttemptCutV2Context
 	retainedStartupEpoch uint64
 	publishEpoch         func(uint64)
+	progress             *releaseProgress
 	nativeReservations   map[uint64]uint64                       // no_id -> native epoch, owned by gate
 	nativeInputNoIdKVs   map[uint64]*releaseRuntimeNativeInputV2 // one unpublished/adopting cut per operator, owned by gate
 }
@@ -336,12 +337,21 @@ func (self *releaseRuntimeV2) publishWithReadHooks(ctx context.Context, snapshot
 	return ctx.Err()
 }
 
-func (self *releaseRuntimeV2) advance(ctx context.Context, snapshot *ReleaseSnapshot) error {
+func (self *releaseRuntimeV2) advance(ctx context.Context, snapshot *ReleaseSnapshot) (resultErr error) {
 	release, err := self.acquire(ctx)
 	if err != nil {
 		return err
 	}
-	defer release()
+	sequence := self.progress.nextSequence()
+	defer func() {
+		var target uint64
+		if snapshot != nil && snapshot.Epoch != nil && snapshot.Epoch.IsUint64() {
+			target = snapshot.Epoch.Uint64()
+		}
+		value := self.progressSettlement(target)
+		release()
+		self.progress.observeSettlement(sequence, value, resultErr)
+	}()
 	return self.advanceOwned(ctx, snapshot)
 }
 

@@ -91,7 +91,7 @@ Usage:
         [-v...]
     validator activate --config=<path> [--relayer_key_file=<path>] [--apply | --dry-run]
         [-v...]
-    validator run --config=<path>
+    validator run --config=<path> [--progress-file=<path>]
         [-v...]
     validator run [--api_url=<api_url>] [--connect_url=<connect_url>]
         [--concurrency=<n>] [--m=<depth>]
@@ -111,6 +111,7 @@ Options:
 	--config=<path>                Strict release-1.0 production configuration; the only weight-writing mode.
                                  init/register/stake/activate/status accept it before its evidence_v2
                                  inputs are rendered; run does not.
+	--progress-file=<path>         Optional bounded operational JSON outside protocol state.
     --coldkey_seed_file=<path>   sr25519 coldkey seed (64 hex chars or 32 raw bytes) that signs
                                  register_limit / add_stake. The release config carries no coldkey and
                                  the EVM key's mirror account cannot sign a native extrinsic, so the
@@ -357,7 +358,8 @@ func auth(opts docopt.Opts) {
 
 func run(opts docopt.Opts) {
 	if configPath := optString(opts, "--config", ""); configPath != "" {
-		runReleaseConfig(configPath)
+		progressPath, _ := opts.String("--progress-file")
+		runReleaseConfig(configPath, progressPath)
 		return
 	}
 	if err := rejectLegacySteeringOptions(opts); err != nil {
