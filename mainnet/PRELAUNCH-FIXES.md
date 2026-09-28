@@ -92,6 +92,11 @@ and the terminal package outcome, recording skips separately. The source tree's
 use the maintained [qualification owner](../scripts/qualification/main.go),
 which already checks actual package/module paths, executes from the package
 directory and verifies terminal membership; keep the current body running.
+The maintained runner also requires physical Go tool paths. A later focused
+capture was refused before compilation because the default host cache path
+traversed a symlink. Use the explicit `/mnt/data` cache and temporary-directory
+profile in [MAINNET.md](MAINNET.md#acceptance-evidence-and-implementation-qualification)
+for new captures; retain that preflight failure separately from executed tests.
 
 For MG-08, the majority SN25 validator runs the standard `sn/validator` binary
 with its ordinary evidence-based scoring policy. It is an indirect reset aid,

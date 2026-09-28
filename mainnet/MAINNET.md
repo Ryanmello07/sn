@@ -1228,6 +1228,15 @@ package success. A wrapper's zero exit after interrupted execution is not a
 pass. Preserve valid compiled artifacts and completed work when correcting a
 runner, with the failed invocation and the correction recorded separately.
 
+Set the qualification environment explicitly before compiling: `GOWORK=off`,
+`GOMAXPROCS=2`, `GOCACHE=/mnt/data/sn-testnet/gocache`, and a capture-specific
+`TMPDIR` under `/mnt/data/sn-testnet/evidence`. Create the temporary directory
+first. Record the actual Go executable, resolved tool paths and module graph;
+the host's default cache symlink is not a physical tool path. A preflight
+refusal before any test body executes is a runner failure, not a product test
+failure. Correct that environment and retain the refused invocation without
+restarting unrelated bodies already in progress.
+
 ## Open inputs before an executable mainnet plan
 
 Snow VPN `172.28.208.185:9944` is the intended mainnet route, but the node
