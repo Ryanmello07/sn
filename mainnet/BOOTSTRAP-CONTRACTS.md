@@ -76,6 +76,10 @@ sn-mainnet bootstrap-contracts resume --config /secure/ur-mainnet/contract-phase
 The result distinguishes `signature-awaiting-import`, `signed-custody-complete`,
 uncertain/pending chain work, `reserve-created`, and a reverted CREATE with its
 nonce consumed. `installation_complete` and `activation_ready` remain false.
+An offline reopen preserves either completed status and the original receipt,
+with `receipt_observation: "retained"`. A successful online receipt audit emits
+`receipt_observation: "revalidated-online"`. Retained completion is historical
+local evidence; it does not claim a new observation of canonical chain state.
 An online observation requires explicit `--online` on `resume`; adding `--submit`
 permits at most one originally approved attempt after reconciliation and fresh
 admission. The command never loads a key, generates a transaction replacement,

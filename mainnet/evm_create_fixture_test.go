@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -175,6 +177,7 @@ type evmCreateFixture struct {
 	counts     map[string]int
 	mine       bool
 	loseReply  bool
+	gasFailure bool
 	override   func(string, []any, any) any
 }
 
@@ -324,13 +327,20 @@ func (self *evmCreateFixture) execute() error {
 	}
 	self.vm.BlockNumber = new(big.Int).SetUint64(nextEvm)
 	code, address, left, err := runtime.Create(self.tx.Data(), &self.vm)
-	if err != nil {
+	if self.gasFailure {
+		if !errors.Is(err, vm.ErrOutOfGas) && !errors.Is(err, vm.ErrCodeStoreOutOfGas) {
+			return fmt.Errorf("expected genuine CREATE gas failure: %w", err)
+		}
+		if len(self.state.GetCode(self.plan.Address)) != 0 || self.state.GetNonce(self.config.Plan.Actions[0].Sender) != self.tx.Nonce()+1 {
+			return errors.New("failed CREATE did not consume only its original nonce")
+		}
+	} else if err != nil {
 		return err
-	}
-	if address != self.plan.Address || !bytes.Equal(code, self.plan.Runtime) {
+	} else if address != self.plan.Address || !bytes.Equal(code, self.plan.Runtime) {
 		return fmt.Errorf("genuine EVM constructor differs from approved immutable projection")
 	}
-	header := &types.Header{ParentHash: common.HexToHash(parentHash), UncleHash: types.EmptyUncleHash, Root: self.state.IntermediateRoot(true), TxHash: types.DeriveSha(types.Transactions{self.tx}, trie.NewStackTrie(nil)), ReceiptHash: types.EmptyReceiptsHash, Difficulty: big.NewInt(0), Number: new(big.Int).SetUint64(nextEvm), GasLimit: 75_000_000, GasUsed: 2_000_000 - left, Time: 1700000001001}
+	gasUsed := self.vm.GasLimit - left
+	header := &types.Header{ParentHash: common.HexToHash(parentHash), UncleHash: types.EmptyUncleHash, Root: self.state.IntermediateRoot(true), TxHash: types.DeriveSha(types.Transactions{self.tx}, trie.NewStackTrie(nil)), ReceiptHash: types.EmptyReceiptsHash, Difficulty: big.NewInt(0), Number: new(big.Int).SetUint64(nextEvm), GasLimit: 75_000_000, GasUsed: gasUsed, Time: 1700000001001}
 	raw, err := rlp.EncodeToBytes(header)
 	if err != nil {
 		return err
@@ -350,7 +360,10 @@ func (self *evmCreateFixture) execute() error {
 		return keyErr
 	}
 	self.storageKey = key.Hex()
-	self.receipt = map[string]any{"transactionHash": self.tx.Hash().Hex(), "blockHash": hash, "blockNumber": fmt.Sprintf("0x%x", nextEvm), "transactionIndex": "0x0", "status": "0x1", "gasUsed": fmt.Sprintf("0x%x", 2_000_000-left), "effectiveGasPrice": "0x2", "contractAddress": strings.ToLower(address.Hex())}
+	self.receipt = map[string]any{"transactionHash": self.tx.Hash().Hex(), "blockHash": hash, "blockNumber": fmt.Sprintf("0x%x", nextEvm), "transactionIndex": "0x0", "status": "0x1", "gasUsed": fmt.Sprintf("0x%x", gasUsed), "effectiveGasPrice": "0x2", "contractAddress": strings.ToLower(address.Hex())}
+	if self.gasFailure {
+		self.receipt["status"], self.receipt["contractAddress"] = "0x0", nil
+	}
 	return nil
 }
 

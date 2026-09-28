@@ -53,6 +53,7 @@ type evmCreateResult struct {
 	TransactionHash      string            `json:"transaction_hash,omitempty"`
 	Attempts             uint8             `json:"attempts"`
 	Receipt              *evmCreateReceipt `json:"receipt,omitempty"`
+	ReceiptObservation   string            `json:"receipt_observation,omitempty"`
 	InstallationComplete bool              `json:"installation_complete"`
 	ActivationReady      bool              `json:"activation_ready"`
 	RemainingActions     []string          `json:"remaining_actions"`
@@ -146,6 +147,12 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 	if record.Signed != "" {
 		status = "signed-custody-complete"
 	}
+	if record.Receipt != nil {
+		status = "reserve-created"
+		if record.Receipt.Status == 0 {
+			status = "create-reverted-nonce-consumed"
+		}
+	}
 	if online {
 		if self.chain == nil || record.Signed == "" {
 			return result, errors.New("EVM online reconciliation requires retained signed bytes and an owned adapter")
@@ -186,7 +193,11 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 			}
 		}
 	}
-	return self.result(record, status), ctx.Err()
+	result = self.result(record, status)
+	if online && result.Receipt != nil {
+		result.ReceiptObservation = "revalidated-online"
+	}
+	return result, ctx.Err()
 }
 
 // Public signing material contains the exact envelope; it cannot sign itself.
@@ -194,5 +205,9 @@ func (self *evmCreateOwner) result(record evmActionRecord, status string) evmCre
 	tx, _ := self.plan.Config.Plan.Actions[0].unsigned()
 	raw, _ := tx.MarshalBinary()
 	signer := types.LatestSignerForChainID(big.NewInt(mainnetEvmChainId))
-	return evmCreateResult{PlanHash: self.plan.Config.Plan.hash(), Status: status, Address: self.plan.Address.Hex(), SigningDigest: signer.Hash(tx).Hex(), UnsignedTransaction: "0x" + hex.EncodeToString(raw), TransactionHash: record.TransactionHash, Attempts: record.Attempts, Receipt: record.Receipt, RemainingActions: []string{"vault-create", "coordinator-create", "escrow-register", "proxy-create", "reserve-link", "vault-link", "evidence-create", "evidence-anchor"}}
+	result := evmCreateResult{PlanHash: self.plan.Config.Plan.hash(), Status: status, Address: self.plan.Address.Hex(), SigningDigest: signer.Hash(tx).Hex(), UnsignedTransaction: "0x" + hex.EncodeToString(raw), TransactionHash: record.TransactionHash, Attempts: record.Attempts, Receipt: record.Receipt, RemainingActions: []string{"vault-create", "coordinator-create", "escrow-register", "proxy-create", "reserve-link", "vault-link", "evidence-create", "evidence-anchor"}}
+	if record.Receipt != nil {
+		result.ReceiptObservation = "retained"
+	}
+	return result
 }
