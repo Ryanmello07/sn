@@ -1202,7 +1202,12 @@ outages and restart, with separate per-role checkpoints and atomic metrics.
 selected normal/race roots, five controls in both modes and service/chain alert
 rules. Delivered alerts, other production domains, supervision and the repair
 controller remain deployment or implementation work. A fresh file alone is not
-proof of healthy validation. The integrated
+proof of healthy validation. The optional [native deadline observer](NATIVE-DEADLINES.md)
+adds explicit completion margins, submission-window forecasts and retained
+reported epoch misses through the actual per-role worker. It grants no receipt,
+signature-expiry or success authority; late applied reports cannot clear a
+historical incident. Its separate behavioral qualification, production margins
+and deployed alert path remain pending. The integrated
 [bounded output correction](evidence/bounded-diagnostic-output-qualification-20260928.md)
 now isolates validator startup, steering and runtime diagnostics, plus these
 chain/service workers, from blocked log destinations. Its 76 affected roots have passing scoped normal

@@ -33,6 +33,7 @@ type monitorValidatorPolicy struct {
 	Role           string                           `json:"role"`
 	ProgressFile   string                           `json:"progress_file"`
 	ExpectedSource protocol.ValidatorProgressSource `json:"expected_source"`
+	NativeDeadline *monitorNativeDeadlinePolicy     `json:"native_deadline,omitempty"`
 }
 
 // A role label cannot contain arbitrary paths, hashes, error text or quoting.
@@ -82,6 +83,9 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 	roles := map[string]bool{}
 	sources := map[protocol.ValidatorProgressSource]bool{}
 	for _, validator := range policy.Validators {
+		if err := validator.NativeDeadline.validate(); err != nil {
+			return nil, err
+		}
 		if !monitorRolePattern.MatchString(validator.Role) || roles[validator.Role] {
 			return nil, errors.New("service roles must be unique bounded names")
 		}

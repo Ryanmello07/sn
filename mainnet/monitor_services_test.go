@@ -251,7 +251,7 @@ func monitorServicesGauges(t testing.TB, path, role string) map[string]float64 {
 		}
 		values[name] = value
 	}
-	if len(raw) > 32*1024 || len(values) != 46 {
+	if len(raw) > 32*1024 || len(values) != 64 {
 		t.Fatalf("unbounded or incomplete gauge census: %d bytes %d metrics", len(raw), len(values))
 	}
 	return values

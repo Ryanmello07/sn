@@ -18,15 +18,16 @@ const monitorServiceClockAllowance = 30 * time.Second
 // A restart never restores readCurrent. The last accepted record remains
 // usable retained evidence while missing, invalid or future input is refused.
 type monitorValidatorState struct {
-	SampleAt                 time.Time                   `json:"sample_at"`
-	HighWaterAt              time.Time                   `json:"high_water_at"`
-	LastReadSuccessAt        time.Time                   `json:"last_read_success_at"`
-	OutageSince              time.Time                   `json:"outage_since"`
-	ClockFaultAt             time.Time                   `json:"clock_fault_at"`
-	CandidateHeartbeatAt     time.Time                   `json:"candidate_heartbeat_at"`
-	ReadStatus               string                      `json:"read_status"`
-	Record                   *protocol.ValidatorProgress `json:"record,omitempty"`
-	PublicationLastSuccessAt time.Time                   `json:"publication_last_success_at"`
+	SampleAt                 time.Time                     `json:"sample_at"`
+	HighWaterAt              time.Time                     `json:"high_water_at"`
+	LastReadSuccessAt        time.Time                     `json:"last_read_success_at"`
+	OutageSince              time.Time                     `json:"outage_since"`
+	ClockFaultAt             time.Time                     `json:"clock_fault_at"`
+	CandidateHeartbeatAt     time.Time                     `json:"candidate_heartbeat_at"`
+	ReadStatus               string                        `json:"read_status"`
+	Record                   *protocol.ValidatorProgress   `json:"record,omitempty"`
+	PublicationLastSuccessAt time.Time                     `json:"publication_last_success_at"`
+	NativeDeadline           *monitorNativeDeadlineHistory `json:"native_deadline,omitempty"`
 	readCurrent              bool
 }
 
@@ -35,6 +36,7 @@ var monitorServiceStatusCodes = map[string]int{
 	"starting": 0, "observed": 1, "missing": 2, "unavailable": 3,
 	"invalid": 4, "identity": 5, "clock": 6, "stale": 7,
 	"publisher": 8, "unknown": 9, "intent-failed": 10, "changed": 11,
+	"native-deadline": 12, "native-window-missed": 13,
 }
 
 // Times are parsed only after the strict producer decoder validated the wire.
@@ -150,7 +152,27 @@ func (self *monitorValidatorState) sourceCurrent(now time.Time) bool {
 
 // A complete current observation is distinct from protocol progress. Native
 // schedule absence stays unknown; no elapsed wall time invents a chain deadline.
-func (self *monitorValidatorState) condition(now time.Time) (string, string) {
+func (self *monitorValidatorState) condition(now time.Time, policy monitorValidatorPolicy) (string, string) {
+	status, severity := self.observationCondition(now)
+	if severity == "critical" {
+		return status, severity
+	}
+	if self.NativeDeadline != nil {
+		return "native-window-missed", "critical"
+	}
+	deadline := self.nativeDeadline(policy, now)
+	if deadline.Status == "critical" || deadline.Status == "missed-window" {
+		return "native-deadline", "critical"
+	}
+	if deadline.Status == "warning" {
+		return "native-deadline", "warning"
+	}
+	return status, severity
+}
+
+// Read availability and producer freshness remain separate from retained
+// deadline incidents. An otherwise healthy sample cannot clear an old miss.
+func (self *monitorValidatorState) observationCondition(now time.Time) (string, string) {
 	if self.SampleAt.IsZero() {
 		return "starting", ""
 	}

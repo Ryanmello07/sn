@@ -69,10 +69,13 @@ domain reports `unknown`; the absence of an error is not readiness. Native and
 steering producer hooks are qualified separately. This consumer accepts their
 existing wire fields but does not manufacture them. It exports pending counts,
 original intent creation/progress timestamps, and prepared/reveal/finalized/
-application blocks. `protocol_deadline_known` is always zero in this slice.
-Elapsed wall time alone cannot make an old pending intent stalled: a slow epoch
-or reveal wait may be legitimate. Deadline-based protocol alarms and miner
-progress ingestion remain later work.
+application blocks. Optional [native deadline observation](NATIVE-DEADLINES.md)
+now forecasts the submission window from these native schedule fields and
+retains a reported missed window after a completed receipt search crosses the
+original intent's epoch. It needs an explicit per-role completion margin;
+without that policy `protocol_deadline_known` remains zero. Reveal blocks are
+earliest predictions, not expiry deadlines. Elapsed wall time alone cannot
+make an old pending intent stalled. Miner progress ingestion remains later work.
 
 Policy renewal may change the current config hash for the same deployment,
 validator, chain, genesis and netuid. Restart retains the previous accepted
@@ -117,7 +120,7 @@ Every gauge begins with `sn_mainnet_validator_`:
 | `settlement_current`, `settlement_cursor_known`, `settlement_last_success_timestamp_seconds`, `settlement_progress_timestamp_seconds` | Current observation, retained known cursor and actual durable progress. |
 | `settlement_epoch`, `settlement_target_epoch`, `settlement_pending_publications`, `settlement_first_pending_epoch` | Durable closure and still-pending publication remain distinct. |
 | `steering_current`, `steering_last_success_timestamp_seconds`, `steering_status` | Producer's classified loop outcome; absent native epoch stays unknown. |
-| `protocol_deadline_known` | Zero: this slice does not infer protocol deadlines. |
+| `protocol_deadline_known` | Current native submission forecast or reported epoch crossing, only with the optional deadline policy; never chain acceptance. |
 
 Status codes are 0 starting, 1 observed, 2 missing, 3 unavailable, 4 invalid,
 5 identity mismatch, 6 clock incident, 7 stale heartbeat, 8 producer publication
@@ -212,5 +215,5 @@ be reflected in the rules. Test the rules with
 `promtool test rules service-alerts.test.yml`.
 
 Installation, alert routing/delivery, remote ingestion, service supervision,
-operator capture/miner coverage and protocol deadline policy remain open work.
+operator capture/miner coverage and measured production deadline margins remain open work.
 Source and fixture qualification alone do not establish any of those outcomes.

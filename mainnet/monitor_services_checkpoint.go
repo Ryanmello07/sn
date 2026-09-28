@@ -16,7 +16,7 @@ import (
 	"github.com/urfoundation/sn/protocol"
 )
 
-const monitorServiceCheckpointSchema = "urnetwork-mainnet-validator-checkpoint-v1"
+const monitorServiceCheckpointSchema = "urnetwork-mainnet-validator-checkpoint-v2"
 const maxMonitorServiceCheckpointBytes = 16 * 1024
 
 // The role and independent source are checksummed alongside retained evidence.
@@ -92,7 +92,8 @@ func (self *monitorServiceCheckpoint) load(ctx context.Context) (*monitorValidat
 		return nil, errors.New("service checkpoint contains trailing JSON")
 	}
 	actual, err := hashMonitorServiceCheckpoint(record)
-	if err != nil || actual != record.ContentHash || record.Schema != monitorServiceCheckpointSchema || record.Role != self.policy.Role || !monitorSameProducerRole(record.Expected, self.policy.ExpectedSource) {
+	legacy := record.Schema == "urnetwork-mainnet-validator-checkpoint-v1" && record.State.NativeDeadline == nil
+	if err != nil || actual != record.ContentHash || record.Schema != monitorServiceCheckpointSchema && !legacy || record.Role != self.policy.Role || !monitorSameProducerRole(record.Expected, self.policy.ExpectedSource) {
 		return nil, errors.New("service checkpoint checksum or expected producer differs")
 	}
 	if err := validateMonitorValidatorState(record.State); err != nil {
@@ -119,7 +120,13 @@ func validateMonitorValidatorState(state monitorValidatorState) error {
 		return errors.New("service checkpoint has incomplete read evidence")
 	}
 	if state.Record != nil {
-		return state.Record.Validate()
+		if err := state.Record.Validate(); err != nil {
+			return err
+		}
+		return state.NativeDeadline.validate(state.Record.Source)
+	}
+	if state.NativeDeadline != nil {
+		return errors.New("service checkpoint deadline incident lost its producer identity")
 	}
 	return nil
 }

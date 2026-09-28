@@ -75,6 +75,15 @@ chain worker retries independently. Protocol deadline inference, other domain
 coverage, delivered alerts and the repair controller remain
 open; source qualification does not establish live monitoring.
 
+The optional [native submission deadline observer](NATIVE-DEADLINES.md) now
+wires explicit per-role completion margins into the actual service worker.
+It distinguishes schedule forecasts and unavailable reads from a completed
+receipt-pending report after the original intent's native epoch. First/latest
+missed-window evidence survives restart, renewal and late application reports.
+It has no success or incident-clear authority. Source regressions are authored;
+separate normal/race and causal qualification, production margins, deployed
+collection and alert delivery remain pending.
+
 The integrated [bounded diagnostic exporter](evidence/bounded-diagnostic-output-qualification-20260928.md)
 now isolates validator startup/steering/runtime diagnostics and chain/service-monitor work from stalled log
 destinations. Each role has finite queue capacity; one joined destination owner

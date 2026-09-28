@@ -15,7 +15,7 @@ func renderMonitorValidatorMetrics(policy monitorValidatorPolicy, state *monitor
 	if state == nil || !monitorRolePattern.MatchString(policy.Role) {
 		return nil, errors.New("validator metrics require a bounded role and state")
 	}
-	status, severity := state.condition(state.SampleAt)
+	status, severity := state.condition(state.SampleAt, policy)
 	statusCode, known := monitorServiceStatusCodes[status]
 	if !known {
 		return nil, errors.New("validator metrics status is unknown")
@@ -65,7 +65,6 @@ func renderMonitorValidatorMetrics(policy monitorValidatorPolicy, state *monitor
 		{name: "checkpoint_current", value: flag(checkpointCurrent)},
 		{name: "has_record", value: flag(state.Record != nil)},
 		{name: "source_current", value: flag(state.sourceCurrent(state.SampleAt))},
-		{name: "protocol_deadline_known", value: 0},
 	}
 	// A zero value is always paired with a current/known flag; it cannot turn a
 	// missing intent into known empty or an unknown cursor into epoch zero.
@@ -143,6 +142,39 @@ func renderMonitorValidatorMetrics(policy monitorValidatorPolicy, state *monitor
 		{name: "settlement_pending_publications", value: pending}, {name: "settlement_first_pending_epoch", value: firstPending},
 		{name: "steering_current", value: flag(steeringCurrent)}, {name: "steering_last_success_timestamp_seconds", value: steeringSuccess},
 		{name: "steering_status", value: steeringStatus},
+	}...)
+	deadline := state.nativeDeadline(policy, state.SampleAt)
+	var misses, firstEpoch, lastEpoch, firstBlock, lastBlock uint64
+	var firstAt, lastAt int64
+	if history := state.NativeDeadline; history != nil {
+		misses = history.MissedWindows
+		firstEpoch, lastEpoch = history.FirstMiss.Intent.Value.NativeEpoch, history.LastMiss.Intent.Value.NativeEpoch
+		firstBlock, lastBlock = history.FirstMiss.Native.Block, history.LastMiss.Native.Block
+		firstAt, lastAt = stamp(history.FirstMiss.DetectedAt), stamp(history.LastMiss.DetectedAt)
+	}
+	values = append(values, []struct {
+		name  string
+		value any
+	}{
+		{name: "protocol_deadline_known", value: flag(deadline.Known)},
+		{name: "native_deadline_enabled", value: flag(policy.NativeDeadline != nil)},
+		{name: "native_deadline_current", value: flag(deadline.Current)},
+		{name: "native_deadline_status", value: monitorNativeDeadlineStatusCodes[deadline.Status]},
+		{name: "native_deadline_intent_epoch", value: deadline.IntentEpoch},
+		{name: "native_deadline_observed_epoch", value: deadline.ObservedEpoch},
+		{name: "native_deadline_observed_block", value: deadline.ObservedBlock},
+		{name: "native_deadline_projected_boundary_block", value: deadline.ProjectedBoundaryBlock},
+		{name: "native_deadline_blocks_remaining", value: deadline.BlocksRemaining},
+		{name: "native_deadline_warning_blocks", value: deadline.WarningBlocks},
+		{name: "native_deadline_critical_blocks", value: deadline.CriticalBlocks},
+		{name: "native_deadline_unresolved", value: flag(state.NativeDeadline != nil)},
+		{name: "native_deadline_missed_windows", value: misses},
+		{name: "native_deadline_first_miss_timestamp_seconds", value: firstAt},
+		{name: "native_deadline_last_miss_timestamp_seconds", value: lastAt},
+		{name: "native_deadline_first_miss_intent_epoch", value: firstEpoch},
+		{name: "native_deadline_last_miss_intent_epoch", value: lastEpoch},
+		{name: "native_deadline_first_miss_observed_block", value: firstBlock},
+		{name: "native_deadline_last_miss_observed_block", value: lastBlock},
 	}...)
 	var output strings.Builder
 	for _, metric := range values {

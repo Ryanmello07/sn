@@ -24,14 +24,15 @@ type monitorServiceHooks struct {
 
 // Role events contain bounded operational evidence and a closed export outcome.
 type monitorServiceEvent struct {
-	Schema      string                        `json:"schema"`
-	Role        string                        `json:"role"`
-	ObservedAt  string                        `json:"observed_at"`
-	Status      string                        `json:"status"`
-	Severity    string                        `json:"severity,omitempty"`
-	Publication string                        `json:"publication"`
-	State       *monitorValidatorState        `json:"state"`
-	Diagnostics *monitorDiagnosticObservation `json:"diagnostics,omitempty"`
+	Schema         string                            `json:"schema"`
+	Role           string                            `json:"role"`
+	ObservedAt     string                            `json:"observed_at"`
+	Status         string                            `json:"status"`
+	Severity       string                            `json:"severity,omitempty"`
+	Publication    string                            `json:"publication"`
+	State          *monitorValidatorState            `json:"state"`
+	Diagnostics    *monitorDiagnosticObservation     `json:"diagnostics,omitempty"`
+	NativeDeadline *monitorNativeDeadlineObservation `json:"native_deadline,omitempty"`
 }
 
 // Every domain owns its output files and all retries until the parent joins it.
@@ -182,6 +183,7 @@ func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Durat
 		}
 		sampledAt := now().UTC()
 		self.state.observe(startedAt, sampledAt, value, code)
+		self.state.retainNativeDeadline(self.policy, sampledAt)
 		checkpointErr := self.checkpoint.save(self.state)
 		if checkpointErr != nil {
 			publication = "retrying"
@@ -202,8 +204,12 @@ func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Durat
 			publication = "published"
 			self.state.PublicationLastSuccessAt = sampledAt
 		}
-		status, severity := self.state.condition(sampledAt)
+		status, severity := self.state.condition(sampledAt, self.policy)
 		event := monitorServiceEvent{Schema: "urnetwork-mainnet-validator-event-v1", Role: self.policy.Role, ObservedAt: sampledAt.Format(time.RFC3339Nano), Status: status, Severity: severity, Publication: publication, State: self.state}
+		if self.policy.NativeDeadline != nil || self.state.NativeDeadline != nil {
+			deadline := self.state.nativeDeadline(self.policy, sampledAt)
+			event.NativeDeadline = &deadline
+		}
 		event.Diagnostics = observation
 		if terminal {
 			event.Publication, event.Severity = "ownership-error", "critical"

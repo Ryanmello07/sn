@@ -55,3 +55,28 @@ groups:
           severity: warning
         annotations:
           summary: "Validator {{ $labels.role }} protocol observations remain unknown on {{ $labels.host }}"
+      - alert: SnMainnetValidatorNativeDeadlineWarning
+        expr: (sn_mainnet_validator_native_deadline_status == 6) and on (env, host, role) (sn_mainnet_validator_native_deadline_current == 1) and on (env, host, role) (sn_mainnet_validator_protocol_deadline_known == 1)
+        labels:
+          severity: warning
+        annotations:
+          summary: "Validator {{ $labels.role }} native submission window is approaching on {{ $labels.host }}"
+      - alert: SnMainnetValidatorNativeDeadlineCritical
+        expr: (sn_mainnet_validator_native_deadline_status == 7) and on (env, host, role) (sn_mainnet_validator_native_deadline_current == 1) and on (env, host, role) (sn_mainnet_validator_protocol_deadline_known == 1)
+        labels:
+          severity: critical
+        annotations:
+          summary: "Validator {{ $labels.role }} native submission completion margin is exhausted on {{ $labels.host }}"
+      - alert: SnMainnetValidatorNativeWindowMissed
+        expr: sn_mainnet_validator_native_deadline_unresolved == 1
+        labels:
+          severity: critical
+        annotations:
+          summary: "Validator {{ $labels.role }} has an unresolved reported native window miss on {{ $labels.host }}"
+      - alert: SnMainnetValidatorNativeDeadlineUnknown
+        expr: (sn_mainnet_validator_native_deadline_status >= 1) and (sn_mainnet_validator_native_deadline_status <= 3) and on (env, host, role) (sn_mainnet_validator_native_deadline_enabled == 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Validator {{ $labels.role }} native deadline evidence is unavailable on {{ $labels.host }}"
