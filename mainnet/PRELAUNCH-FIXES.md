@@ -270,8 +270,8 @@ The [first executable contract bootstrap phase](BOOTSTRAP-CONTRACTS.md) now
 prepares and resumes reserve CREATE through original public EVM signed bytes,
 bounded durable attempts, shared owned-HTTP transport and canonical
 runtime/getter recovery. The [qualification receipt](evidence/bootstrap-contract-qualification-20260928.md)
-records passed normal/race scopes and causal controls, with the composed
-dependency check still separate. Healthy head advancement is
+records passed normal/race scopes, causal controls and the subsequent composed
+dependency check. Healthy head advancement is
 revalidated within the operation; an unavailable mapping read does not become a
 successful-value mismatch. EVM signature liability survives local approval
 expiry. The other eight installation actions, Safe inner-call success/getter
@@ -1280,7 +1280,8 @@ receipt wire data remains typed unknown evidence; complete contradictory data
 and dispatch failures remain hard errors. The paired
 [adjacent-read candidate](evidence/production-read-cause-adjacency-candidate-20260928.md)
 applies the same rule to real miner recovery, owner census/eligibility and
-activation setup reads. Their combined qualification is pending. This
+activation setup reads. Their [combined qualification is complete](evidence/source-read-cause-qualification-20260928.md),
+including normal/race causal controls and the corrected source-role fixture. This
 does not close production loop recovery: current pending/pre-intent/application
 waits, real nonempty durable V2 continuation and exact-terminal receipt-prefix
 reuse still require their own production-owner coverage.

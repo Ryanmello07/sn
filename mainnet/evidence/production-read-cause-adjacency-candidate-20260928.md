@@ -1,5 +1,9 @@
 # Production read-cause adjacency — qualification pending
 
+The [subsequent qualification receipt](source-read-cause-qualification-20260928.md)
+records completed normal/race scopes, causal controls and integration. The
+original author handoff below retains its earlier status.
+
 Date: 2026-09-28 UTC. Worktree:
 `/mnt/data/sn-testnet/worktrees/sn-mainnet-production-read-waits-20260928`.
 This follows source-read candidates `9ae7f1f4` and `08bb86fc`; together they are

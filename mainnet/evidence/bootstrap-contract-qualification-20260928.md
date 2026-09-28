@@ -50,14 +50,25 @@ The consumed local package graph in these installer batches contains SN source
 and versioned external modules; unrelated sibling repositories were not consumed.
 Comparing the 152-file preview manifest with the integrated tree found one
 changed dependency, `crv4/chain.go`, from the separately qualified receipt-reader
-work. A small composed CREATE/native-custody check is required for that change;
+work. That change required a small composed CREATE/native-custody check;
 unaffected bodies and controls do not need a blanket rerun.
+
+That composed check subsequently passed on integrated `61a3a23d`:
+`TestEvmCreateCommandExecutesReviewedReserveAndResumes` and
+`TestRootSubmissionOfflineCustodyServiceComposition` both passed normally
+(1.740 seconds) and with race detection (11.172 seconds). Compile-only checks
+for all five affected packages passed separately. The integrated head and
+consumed source hashes remained unchanged; concurrent root edits were confined
+to documentation. See the [source-read receipt](source-read-cause-qualification-20260928.md)
+for its input/result hashes and exact scope. This closes that composed
+dependency check, not the remaining installation actions.
 
 Raw directories:
 
 - `/mnt/data/sn-testnet/evidence/mainnet-bootstrap-create-20260928`
 - `/mnt/data/sn-testnet/evidence/mainnet-bootstrap-create-fix-20260928`
 - `/mnt/data/sn-testnet/evidence/mainnet-bootstrap-contracts-preview-20260928`
+- `/mnt/data/sn-testnet/qualification/source-finality-read-20260928/integrated`
 
 | Retained input or result | SHA-256 |
 | --- | --- |

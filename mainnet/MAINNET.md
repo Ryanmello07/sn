@@ -461,7 +461,7 @@ The first [executable contract phase](BOOTSTRAP-CONTRACTS.md) now wires
 public signed-byte custody, a finite owned-HTTP submission allowance and
 canonical transaction/runtime/getter recovery. Offline preparation requires no
 deployment outputs. The [retained Terra qualification](evidence/bootstrap-contract-qualification-20260928.md)
-records normal/race results and the remaining composed dependency check;
+records normal/race results and the passed composed dependency check;
 only this first CREATE is implemented. The remaining graph, including genuine
 Safe evidence anchoring, and authenticated live authority remain required.
 Unsigned `preview` exports the exact independently signable approval bytes after
@@ -870,8 +870,9 @@ changes. The [source-finality read candidate](evidence/source-finality-read-cand
 preserves transport causes and unknown receipt evidence while reusing the exact
 admitted body index/events. The paired
 [adjacent-read candidate](evidence/production-read-cause-adjacency-candidate-20260928.md)
-covers miner recovery, owner census/eligibility and activation setup; combined
-qualification is pending. They do not substitute
+covers miner recovery, owner census/eligibility and activation setup. Their
+[combined qualification is complete](evidence/source-read-cause-qualification-20260928.md),
+with original fixture failures and corrections retained. They do not substitute
 for retained-intent reconciliation before fresh snapshots, durable nonempty
 intent-owner tests, bounded authenticated receipt prefixes or same-boundary
 nonce/expiry decisions. Those changes must preserve original signed bytes,

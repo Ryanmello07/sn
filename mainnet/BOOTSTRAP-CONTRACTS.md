@@ -5,7 +5,8 @@ an exact `STReserveSink` CREATE through retained public EVM custody and the owne
 HTTP submission adapter. It does not install the remaining contracts, anchor
 evidence, register miners, change emissions, activate validators, or complete
 mainnet bootstrap. See the [qualification receipt](evidence/bootstrap-contract-qualification-20260928.md)
-for passed normal/race scopes, retained fixture failures and remaining checks.
+for passed normal/race scopes, retained fixture failures and the composed
+dependency check. The remaining installation actions are still open.
 
 The release catalog comes from the existing generator:
 
