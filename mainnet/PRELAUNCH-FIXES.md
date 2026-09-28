@@ -1,6 +1,6 @@
 # Mainnet prelaunch fixes
 
-Updated 2026-09-27. This is the production gate tracker for UR mainnet
+Updated 2026-09-28. This is the production gate tracker for UR mainnet
 SN25 (netuid 25). Sim-testnet is **closed with known exceptions, without final
 acceptance**. There is no R49 requirement or instruction to resume it. Mainnet
 hardening may proceed; launch readiness must be established on the selected
@@ -1136,6 +1136,21 @@ Cancellation, malformed data, wrong identity, permanent contract revert and
 unavailable pruned history have distinct outcomes. Integrity errors containing
 the word "timeout" remain integrity errors. Writes use PH-02 reconciliation,
 not the read-retry loop.
+
+**2026-09-28 production steering review.** The standard validator's outer
+steering loop still ties several transient continuation branches to testnet
+provisional permissions. Production disables those permissions. A receipt
+timeout outside an explicitly classified recovery path can therefore spend
+the hard-failure budget; a later epoch change can reject the unfinished epoch
+before reconciliation. The original-config pending branch is being repaired
+and qualified separately. PH-03 remains open until actual production callers
+cover current-config pending receipts, pre-intent reads and application
+observation through outage and epoch advance. Preserve unknown or missed
+outcomes and original signed bytes, keep unrelated workers running, and require
+reconciliation before another send. A successful retry never manufactures a
+missed emission interval. Review repeated finalized-block scans for reuse of
+authenticated completed prefixes so retries do not perpetually repeat the same
+history.
 
 **Closure.** Deterministically inject disconnect, DNS/HTTP failures, timeout
 during body read, missing/reordered batch responses, partial success and a
