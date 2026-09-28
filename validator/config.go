@@ -147,11 +147,12 @@ func decodeReleaseConfigBytes(abs string, b []byte) (*ReleaseConfig, error) {
 	return decodeReleaseConfigBytesMode(abs, b, releaseConfigLoadMode{})
 }
 
-func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMode) (*ReleaseConfig, error) {
+// Parse the exact borrowed document once, preserving the regular loader's
+// strict grammar and normalization without loading any approval or key.
+func decodeReleaseConfigDocument(abs string, b []byte) (*ReleaseConfig, error) {
 	if len(b) == 0 || len(b) > maximumReleaseConfigBytes {
 		return nil, errors.New("validator config is empty or exceeds its byte bound")
 	}
-	provisionalActivationObservation := mode.provisionalActivationObservation
 	var cfg ReleaseConfig
 	dec := yaml.NewDecoder(bytes.NewReader(b))
 	dec.KnownFields(true)
@@ -171,6 +172,17 @@ func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMo
 	if err := cfg.normalize(filepath.Dir(abs)); err != nil {
 		return nil, err
 	}
+	return &cfg, nil
+}
+
+// Purpose-specific authority is installed only after the common byte decoder.
+func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMode) (*ReleaseConfig, error) {
+	decoded, err := decodeReleaseConfigDocument(abs, b)
+	if err != nil {
+		return nil, err
+	}
+	cfg := *decoded
+	provisionalActivationObservation := mode.provisionalActivationObservation
 	if cfg.SchemaVersion == ReleaseMainnetProductionSchemaVersion {
 		if mode.mainnetRuntimeObservation || mode.ownerRecycleAdmission || mode.preActivation || mode.provisionalActivationObservation {
 			return nil, errors.New("mainnet production authority is restricted to the producer loader")

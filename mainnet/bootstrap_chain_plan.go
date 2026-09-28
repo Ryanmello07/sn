@@ -13,19 +13,26 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/urfoundation/sn/validator"
 )
 
-const bootstrapChainConfigSchema = "urnetwork-mainnet-bootstrap-chain-config-v1"
-const bootstrapChainPlanSchema = "urnetwork-mainnet-bootstrap-chain-preparation-v1"
+const bootstrapChainConfigSchemaV1 = "urnetwork-mainnet-bootstrap-chain-config-v1"
+const bootstrapChainPlanSchemaV1 = "urnetwork-mainnet-bootstrap-chain-preparation-v1"
+const bootstrapChainConfigSchema = "urnetwork-mainnet-bootstrap-chain-config-v2"
+const bootstrapChainPlanSchema = "urnetwork-mainnet-bootstrap-chain-preparation-v2"
 const bootstrapChainStateFile = "bootstrap-chain.json"
 const maximumBootstrapChainPlanBytes = 512 * 1024
 
-// These are public launch intentions, not producer admission. Config bytes are
-// pinned without loading credentials, approvals, signers or validator services.
+// The intended majority and secondary roles use the standard validator config
+// grammar. Role labels do not prove live stake, key custody or service identity.
 type bootstrapChainValidator struct {
 	ValidatorId uint64 `json:"validator_id"`
 	subnetIdentityExpectation
-	Config planFileReference `json:"config"`
+	Config            planFileReference `json:"config"`
+	Role              string            `json:"role,omitempty"`
+	Implementation    string            `json:"implementation,omitempty"`
+	ApprovalPublicKey string            `json:"approval_public_key_ed25519,omitempty"`
 }
 
 // All network, deployment and custody coordinates are independently supplied.
@@ -46,19 +53,20 @@ type bootstrapChainConfig struct {
 // The domain and fixed false flags distinguish local custody preparation from
 // an executable chain graph. Existing trim blockers remain part of its seal.
 type bootstrapChainPlan struct {
-	Schema               string               `json:"schema"`
-	ConfigPath           string               `json:"config_path"`
-	ConfigSha256         string               `json:"config_sha256"`
-	Config               bootstrapChainConfig `json:"config"`
-	OwnerTrimContentHash string               `json:"owner_trim_content_hash"`
-	OwnerTrimBlockers    []string             `json:"owner_trim_execution_blockers"`
-	ContractPlanHash     string               `json:"contract_plan_hash"`
-	RootPlanHash         string               `json:"root_plan_hash"`
-	PendingChainPhases   []string             `json:"pending_chain_phases"`
-	NetworkEffects       bool                 `json:"network_effects"`
-	NativeSigning        bool                 `json:"native_signing"`
-	ActivationReady      bool                 `json:"activation_ready"`
-	ContentHash          string               `json:"content_hash"`
+	Schema               string                                    `json:"schema"`
+	ConfigPath           string                                    `json:"config_path"`
+	ConfigSha256         string                                    `json:"config_sha256"`
+	Config               bootstrapChainConfig                      `json:"config"`
+	OwnerTrimContentHash string                                    `json:"owner_trim_content_hash"`
+	OwnerTrimBlockers    []string                                  `json:"owner_trim_execution_blockers"`
+	ContractPlanHash     string                                    `json:"contract_plan_hash"`
+	RootPlanHash         string                                    `json:"root_plan_hash"`
+	ValidatorInspections []validator.ProductionBootstrapInspection `json:"ur_validator_config_inspections,omitempty"`
+	PendingChainPhases   []string                                  `json:"pending_chain_phases"`
+	NetworkEffects       bool                                      `json:"network_effects"`
+	NativeSigning        bool                                      `json:"native_signing"`
+	ActivationReady      bool                                      `json:"activation_ready"`
+	ContentHash          string                                    `json:"content_hash"`
 }
 
 // Only validated, in-memory child projections reach the offline owner. Their
@@ -73,7 +81,7 @@ type bootstrapChainPreparation struct {
 func bootstrapChainPlanHash(plan bootstrapChainPlan) string {
 	plan.ContentHash = ""
 	raw, _ := json.Marshal(plan)
-	digest := sha256.Sum256(append([]byte(bootstrapChainPlanSchema+"\x00"), raw...))
+	digest := sha256.Sum256(append([]byte(plan.Schema+"\x00"), raw...))
 	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
@@ -90,7 +98,8 @@ func (self bootstrapChainPlan) validate() error {
 	if err != nil || len(raw) > maximumBootstrapChainPlanBytes {
 		return errors.Join(errors.New("bootstrap chain preparation exceeds its retained plan bound"), err)
 	}
-	if self.Schema != bootstrapChainPlanSchema || c.Schema != bootstrapChainConfigSchema || !planLabel(c.DeploymentId) || c.Netuid != 25 ||
+	legacy := self.Schema == bootstrapChainPlanSchemaV1 && c.Schema == bootstrapChainConfigSchemaV1
+	if (!legacy && (self.Schema != bootstrapChainPlanSchema || c.Schema != bootstrapChainConfigSchema)) || !planLabel(c.DeploymentId) || c.Netuid != 25 ||
 		strings.TrimSpace(c.Network.NativeChain) == "" || !rootCanonicalHash(c.Network.GenesisHash) || c.Network.EvmChainId != mainnetEvmChainId ||
 		!bootstrapRootAbsolutePath(c.RunDirectory) || !bootstrapRootAbsolutePath(self.ConfigPath) || !planSha256(self.ConfigSha256) ||
 		!planSha256(self.OwnerTrimContentHash) || !planSha256(self.ContractPlanHash) || !planSha256(self.RootPlanHash) ||
@@ -108,6 +117,16 @@ func (self bootstrapChainPlan) validate() error {
 			i != 0 && (role.ValidatorId == c.Validators[0].ValidatorId || role.Hotkey == c.Validators[0].Hotkey || role.Config.Path == c.Validators[0].Config.Path || role.Config.Sha256 == c.Validators[0].Config.Sha256) {
 			return errors.New("bootstrap chain requires two distinct explicit UR validator identities and config inputs")
 		}
+		if legacy {
+			if role.Role != "" || role.Implementation != "" || role.ApprovalPublicKey != "" || len(self.ValidatorInspections) != 0 {
+				return errors.New("bootstrap chain v1 cannot acquire production config inspection authority")
+			}
+		} else if role.Role != []string{"majority", "secondary"}[i] || role.Implementation != "sn/validator" || !rootCanonicalHash(role.ApprovalPublicKey) {
+			return errors.New("bootstrap chain requires ordered majority and secondary sn/validator roles with independent approval signer pins")
+		}
+	}
+	if !legacy {
+		return validateBootstrapChainValidatorInspections(c, self.ValidatorInspections)
 	}
 	return nil
 }
@@ -135,6 +154,9 @@ func (self bootstrapChainPreparation) validate() error {
 			return errors.New("bootstrap chain inputs overlap each other, a journal or a lock marker")
 		}
 		seen[path] = true
+	}
+	if c.Schema == bootstrapChainConfigSchema {
+		return validateBootstrapChainValidatorPaths(self.Plan.ValidatorInspections, seen)
 	}
 	return nil
 }
@@ -170,7 +192,7 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 	if err := decodePlanJson(raw, &config); err != nil {
 		return result, err
 	}
-	if config.Schema != bootstrapChainConfigSchema || len(config.Validators) != 2 {
+	if (config.Schema != bootstrapChainConfigSchema && config.Schema != bootstrapChainConfigSchemaV1) || len(config.Validators) != 2 {
 		return result, errors.New("bootstrap chain config requires its schema and exactly two UR roles")
 	}
 	if err := bootstrapRootDirectory(config.RunDirectory); err != nil {
@@ -236,6 +258,7 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 		scope.RuntimeSourceCommit != policy.RuntimeSourceCommit || scope.RuntimeVersion != policy.RuntimeVersion || scope.RuntimeCodeHash != policy.RuntimeCodeHash || scope.RuntimeMetadataHash != policy.RuntimeMetadataHash {
 		return result, errors.New("bootstrap chain trim, contract and root runtime/network expectations differ")
 	}
+	var inspections []validator.ProductionBootstrapInspection
 	for _, role := range config.Validators {
 		if role.RegistrationBlock == nil || role.Hotkey == scope.Hotkey {
 			return result, errors.New("bootstrap chain UR role is incomplete or reuses the separate root identity")
@@ -249,8 +272,22 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 		if !protected || !survives {
 			return result, errors.New("bootstrap chain UR validator generation is not explicitly protected and retained by the trim plan")
 		}
-		if _, err := readBootstrapChainInput(ctx, role.Config, 2*1024*1024); err != nil {
+		configRaw, err := readBootstrapChainInput(ctx, role.Config, 2*1024*1024)
+		if err != nil {
 			return result, err
+		}
+		if config.Schema == bootstrapChainConfigSchema {
+			inspection, err := validator.InspectProductionBootstrapConfig(ctx, role.Config.Path, configRaw)
+			if err != nil {
+				return result, fmt.Errorf("bootstrap chain validator %d production config: %w", role.ValidatorId, err)
+			}
+			pin := inspection.Approval.Proposal.Runtime
+			if pin.Version != policy.RuntimeVersion || pin.SourceCommit != policy.RuntimeSourceCommit ||
+				fmt.Sprintf("0x%x", pin.CodeHash) != policy.RuntimeCodeHash || fmt.Sprintf("0x%x", pin.MetadataHash) != policy.RuntimeMetadataHash ||
+				fmt.Sprintf("0x%x", inspection.Approval.SubnetOwner) != policy.SubnetOwnerColdkey {
+				return result, errors.New("bootstrap chain validator approved runtime/source or subnet owner differs from independent trim and child scope")
+			}
+			inspections = append(inspections, *inspection)
 		}
 	}
 	if slices.ContainsFunc(policy.Remove, func(candidate subnetIdentityExpectation) bool {
@@ -264,7 +301,10 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 		return result, errors.New("bootstrap chain separate root generation differs from the retained excluded-root census")
 	}
 	result.Plan = bootstrapChainPlan{Schema: bootstrapChainPlanSchema, ConfigPath: path, ConfigSha256: digest, Config: config,
-		OwnerTrimContentHash: trim.ContentHash, OwnerTrimBlockers: trim.ExecutionBlockers, ContractPlanHash: contracts.Plan.hash(), RootPlanHash: result.Root.ContentHash, PendingChainPhases: bootstrapChainPendingPhases()}
+		OwnerTrimContentHash: trim.ContentHash, OwnerTrimBlockers: trim.ExecutionBlockers, ContractPlanHash: contracts.Plan.hash(), RootPlanHash: result.Root.ContentHash, ValidatorInspections: inspections, PendingChainPhases: bootstrapChainPendingPhases()}
+	if config.Schema == bootstrapChainConfigSchemaV1 {
+		result.Plan.Schema = bootstrapChainPlanSchemaV1
+	}
 	result.Plan.ContentHash = bootstrapChainPlanHash(result.Plan)
 	return result, errors.Join(result.validate(), ctx.Err())
 }

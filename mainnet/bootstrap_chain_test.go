@@ -25,6 +25,7 @@ type bootstrapChainFixture struct {
 	preparation bootstrapChainPreparation
 	root        *bootstrapRootFixture
 	contracts   *evmCreateFixture
+	validators  []*bootstrapChainValidatorFixture
 }
 
 // The test builds a common synthetic runtime/domain from actual census readers,
@@ -32,6 +33,8 @@ type bootstrapChainFixture struct {
 func newBootstrapChainFixture(t *testing.T) *bootstrapChainFixture {
 	t.Helper()
 	client, census, policy := newSubnetFixture(t)
+	policy.RuntimeVersion.SpecName, policy.RuntimeVersion.TransactionVersion = "node-subtensor", 1
+	census.version = policy.RuntimeVersion
 	root := newBootstrapRootFixture(t)
 	contracts := newEvmCreateFixture(t)
 	network := planNetwork{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId}
@@ -86,11 +89,10 @@ func newBootstrapChainFixture(t *testing.T) *bootstrapChainFixture {
 			OwnerTrimPolicy: policyRef, OwnerTrimPlan: bootstrapRootTestWrite(t, filepath.Join(configDirectory, "trim-plan.json"), trim),
 			Contracts: bootstrapRootTestWrite(t, contracts.configPath, contracts.config), Root: bootstrapRootTestWrite(t, root.configPath, root.config)}}
 	for i, role := range policy.Preserve {
-		path := filepath.Join(configDirectory, []string{"validator-one.json", "validator-two.json"}[i])
-		// Deliberately not a complete production config: the preparation command
-		// must describe these as pinned inputs, never as admitted services.
-		config := bootstrapRootTestWrite(t, path, map[string]any{"schema_version": 3, "validator_id": i + 1, "production_admission": "pending"})
-		f.config.Validators = append(f.config.Validators, bootstrapChainValidator{ValidatorId: uint64(i + 1), subnetIdentityExpectation: role.subnetIdentityExpectation, Config: config})
+		fixture := newBootstrapChainValidatorFixture(t, f, policy, i)
+		f.validators = append(f.validators, fixture)
+		f.config.Validators = append(f.config.Validators, bootstrapChainValidator{ValidatorId: uint64(i + 1), subnetIdentityExpectation: role.subnetIdentityExpectation,
+			Config: fixture.publish(t), Role: []string{"majority", "secondary"}[i], Implementation: "sn/validator", ApprovalPublicKey: fixture.config.OwnerRecycleApproval.Signer})
 	}
 	bootstrapRootTestWrite(t, f.path, f.config)
 	f.preparation, err = loadBootstrapChainPreparation(t.Context(), f.path)
@@ -158,7 +160,7 @@ func TestBootstrapChainCommandPreparesExistingCustodyOffline(t *testing.T) {
 	}
 	result := f.result(t, "apply")
 	if !result.LocalPreparationComplete || result.NetworkEffects || result.ActivationReady || len(result.PendingChainPhases) != 5 ||
-		result.OwnerTrimStatus != "retained-review-execution-blocked" || result.UrValidatorsStatus != "two-protected-role-inputs-pinned-production-admission-pending" ||
+		result.OwnerTrimStatus != "retained-review-execution-blocked" || result.UrValidatorsStatus != "two-signed-production-configs-verified-live-admission-pending" || !result.UrValidatorConfigsVerified ||
 		result.Contracts.Status != "signature-awaiting-import" || result.Contracts.Attempts != 0 || result.Contracts.InstallationComplete ||
 		!result.Root.LocalCustodyComplete || result.Root.SignatureStatus != "awaiting-import" || result.Root.Observations != 0 || result.Root.Broadcasts != 0 || result.Root.ActivationReady {
 		t.Fatalf("local preparation hid pending authority or effects: %+v", result)

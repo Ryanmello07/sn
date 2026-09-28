@@ -45,6 +45,10 @@ func runBootstrapChainCommand(ctx context.Context, args []string, stdout, stderr
 		fmt.Fprintln(stderr, "bootstrap chain accepted plan or run directory differs; no journal opened")
 		return 3
 	}
+	if command == "apply" && preparation.Plan.Config.Schema != bootstrapChainConfigSchema {
+		fmt.Fprintln(stderr, "bootstrap chain new preparation requires v2 production config inspections; existing v1 custody remains resumable at its original scope")
+		return 3
+	}
 	if err := ctx.Err(); err != nil {
 		fmt.Fprintln(stderr, "bootstrap chain canceled:", err)
 		return 1

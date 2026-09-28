@@ -39,7 +39,10 @@ and imports externally signed payloads, while
 installs the reserve sink through the approved transaction journal. The
 [`bootstrap-chain plan/apply/resume`](BOOTSTRAP-CHAIN.md) command composes their
 offline custody preparation with a retained trim review and two protected UR
-role inputs under one restart-safe local journal. The complete bootstrap,
+role inputs under one restart-safe local journal. Its v2 preparation verifies
+both initial schema-3 signed configs against independent role/runtime inputs;
+its [offline qualification](evidence/ur-bootstrap-admission-qualification-20260928.md)
+keeps live producer eligibility and service activation as separate gates. The complete bootstrap,
 remaining contract graph, native signing device and live role
 activation remain unfinished. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)
@@ -719,6 +722,18 @@ Tests used physical Connect `358cefae`, server `0633780c` and SDK `42241118`;
 they do not qualify the current composed release graph. Executed trim, complete
 contract installation, actual UR producer admission, healthy operators, current
 root authority, all live services and native economic acceptance remain open.
+
+The v2 offline admission addition now reuses the standard validator's strict
+schema-3 config and production approval verification for the intended majority
+and secondary UR roles. It binds exact public identities, independent signer
+pins and runtime/source/deployment to the retained protected generations.
+Current stake/permit, key possession, operator evidence and healthy services,
+deployed contracts and runtime authenticity remain unproven. V1 journals retain
+their original limited status and cannot be silently upgraded. This addition
+and its shared config decoder extraction are now [qualified](evidence/ur-bootstrap-admission-qualification-20260928.md)
+on the frozen composed source graph: 588 root and 183 descendant executions
+passed, with six causal controls in normal/race modes. The result covers bounded
+offline admission; actual chain effects and a complete release remain open.
 
 `check-recycle-mode --rpc URL --policy FILE` binds the finalized mode read to
 independently supplied mainnet genesis, runtime code/metadata and complete
@@ -1483,6 +1498,14 @@ combines that graph with the native deadline observer and offline bootstrap:
 declared descendant executions, zero skips, and unchanged source/module seals.
 It does not replace release-artifact, deployment, custody or live acceptance
 gates.
+The subsequent [two-UR-config admission qualification](evidence/ur-bootstrap-admission-qualification-20260928.md)
+uses the same physical dependency refs with the v2 bootstrap source. Its full
+normal mainnet census and affected mainnet/validator normal/race suites pass
+all 588 root and 183 descendant executions. Six original control captures
+retain their twelve intended failures; strict maintained resume accepts all
+24 stages without rerunning bodies. Earlier metadata and mode refusals remain
+recorded. This does not reuse validator package qualification wholesale or
+supply live identity, producer eligibility, signing or service activation.
 The frozen model invocation ended with three now-corrected fixture failures and
 seven optional-configuration skips; it is not recorded as a passing full
 invocation. Preserve these results when assembling the final source composition
