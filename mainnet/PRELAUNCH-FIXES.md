@@ -487,6 +487,19 @@ input/source fences. The original unsorted-census refusal, global input-seal
 refusal and R2 binary-mode refusal remain recorded. These bounded offline
 results keep all live chain/service/economic and release gates open.
 
+The September 29 MG-08 `bootstrap-chain readiness` source increment adds a
+bounded read-only phase after accepted v3 preparation. It checks original child
+journals under shared read-only locks, then observes both UR generations,
+activity, permits and signed block windows plus the separate root seat and
+mortal checkpoint at one finalized snapshot. Conflicting generations and
+subnet scope remain per-role blockers; transport/runtime/integrity gaps return
+explicit unresolved output without partial eligibility. It preserves exact
+signed approvals, child allowances and all five pending chain phases. Its
+deterministic regressions await separate Sol behavioral qualification. Current
+authority, effective stake/eligibility, global custody and signing-device
+fencing, contract completion, service activation and actual native 10/90
+outcomes remain open gates.
+
 Start with MG-01's read-only route correction and MG-02's source composition.
 Then close the recovery, runtime, policy, settlement and monitoring dependencies
 before MG-08 can apply a reviewed bootstrap plan. MG-09 must close before

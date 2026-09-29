@@ -27,6 +27,8 @@ type bootstrapChainFixture struct {
 	contracts   *evmCreateFixture
 	validators  []*bootstrapChainValidatorFixture
 	rootRole    *bootstrapChainRootFixture
+	client      *rpcClient
+	census      *rootRpcFixture
 }
 
 // The test builds a common synthetic runtime/domain from actual census readers,
@@ -85,7 +87,7 @@ func newBootstrapChainFixture(t *testing.T) *bootstrapChainFixture {
 	contracts.config.Plan.RunDirectory = root.config.RunDirectory
 	contracts.config.Plan.Runtime = rootReceiptProfile{RuntimeSourceCommit: policy.RuntimeSourceCommit, RuntimeVersion: policy.RuntimeVersion, RuntimeCodeHash: policy.RuntimeCodeHash, RuntimeMetadataHash: policy.RuntimeMetadataHash}
 	contracts.publishConfig()
-	f := &bootstrapChainFixture{path: filepath.Join(configDirectory, "chain.json"), root: root, contracts: contracts,
+	f := &bootstrapChainFixture{path: filepath.Join(configDirectory, "chain.json"), root: root, contracts: contracts, client: client, census: census,
 		config: bootstrapChainConfig{Schema: bootstrapChainConfigSchema, DeploymentId: root.config.DeploymentId, Netuid: 25, Network: network, RunDirectory: root.config.RunDirectory,
 			OwnerTrimPolicy: policyRef, OwnerTrimPlan: bootstrapRootTestWrite(t, filepath.Join(configDirectory, "trim-plan.json"), trim),
 			Contracts: bootstrapRootTestWrite(t, contracts.configPath, contracts.config), Root: bootstrapRootTestWrite(t, root.configPath, root.config)}}

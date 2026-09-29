@@ -43,7 +43,13 @@ offline custody preparation with a retained trim review and two protected UR
 role inputs under one restart-safe local journal. Its v2 preparation verifies
 both initial schema-3 signed configs against independent role/runtime inputs;
 its [offline qualification](evidence/ur-bootstrap-admission-qualification-20260928.md)
-keeps live producer eligibility and service activation as separate gates. The complete bootstrap,
+keeps live producer eligibility and service activation as separate gates. V3
+independently approves the separate root-service configuration. The read-only
+`bootstrap-chain readiness` increment binds that accepted v3 preparation and
+its original child journals to one current finalized census, with distinct
+UR/root generation, permit, window and checkpoint blockers. It retains false
+activation/current-authority flags and all pending chain phases; separate
+behavioral qualification remains pending. The complete bootstrap,
 Safe evidence anchor, native signing device and live role
 activation remain unfinished. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)

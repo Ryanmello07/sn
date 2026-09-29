@@ -1,4 +1,4 @@
-# Offline chain preparation
+# Chain preparation and read-only readiness
 
 `sn-mainnet bootstrap-chain plan/apply/resume` binds the retained owner-trim
 review, two protected UR schema-3 configs, separately approved root-service
@@ -6,13 +6,73 @@ config, signed contract phase and signed root phase to one durable local
 preparation. Apply prepares the existing reserve
 CREATE custody owner and [root custody owners](BOOTSTRAP-ROOT.md). It does not
 open an RPC connection, import a signature, issue a transaction or start a
-service. The command has no online or submission option.
+service. These three preparation modes have no online or submission option.
+The separate `readiness` mode observes current finalized role prerequisites
+from an explicitly selected route after checking the original v3 custody.
 
 This closes the missing composition and restart boundary between the separate
 preparation commands. Every result retains `activation_ready: false`,
 `network_effects: false` and the outstanding chain phases. A successful local
 preparation does not establish a safe executed trim, full contract installation,
 two eligible validators, a running root role or realized native economics.
+
+## Read-only current prerequisites
+
+After local preparation, run:
+
+```sh
+sn-mainnet bootstrap-chain readiness --config /private/chain.json \
+  --run-dir /private/custody --accept-plan-hash sha256:REVIEWED_DIGEST \
+  --rpc https://owned-rpc.example --retry-window 300s
+```
+
+The command reloads the original independently pinned approvals and requires
+the same accepted v3 plan and run directory. It opens all five existing markers
+read-only, takes nonblocking shared locks, and verifies the complete original
+journals and their signature lineage. Missing or interrupted state is unresolved;
+readiness never creates, repairs, signs, imports or advances it. Concurrent
+custody writers must finish before observation starts. V1/v2 journals retain
+their original resume behavior and cannot acquire v3 readiness scope.
+
+One bounded census at one authenticated finalized block checks the approved
+network, runtime code and metadata, subnet owner/generation, both UR hotkey,
+coldkey and registration generations, current activity and validator permits,
+signed native block windows, and the signed maximum subnet census count. The
+separate netuid-0 role checks its exact approved uid and registration generation,
+mortal action window and canonical era checkpoint. A canonical block recheck
+after the checkpoint read detects a changed finalized mapping. Original trim
+removal requests remain review evidence; completing these role checks does not
+claim the old miners were removed or that the trim is executable.
+
+Results use `urnetwork-mainnet-bootstrap-chain-readiness-v1`, bind the accepted
+plan, the five retained journal hashes, the complete census envelope and distinct
+majority/secondary/root blockers. `observed-prerequisites` means only the listed
+read-only checks passed; `blocked` retains a complete observation with explicit
+conflicts. An unavailable route, unsupported or changed runtime, incomplete
+census or changed finalized mapping returns `unresolved`, with no partial role
+success. HTTP 502 cannot become a retained-census fallback. Each invocation
+observes again; it never reuses an earlier readiness result as authority.
+
+`current_authority_verified`, `native_signing`, `network_effects` and
+`activation_ready` remain false. Each role separately retains its missing
+activation prerequisites. These include the UR native epoch window and signed
+activation checkpoint, production admission/operator health, deployed contract
+verification, effective stake majority, and signing-device/global custody
+fencing. Root effective delegated stake, eligibility, nonce/weight requirements,
+independent current authority and actual service activation remain unresolved.
+All five original pending chain phases remain in every result.
+
+Exit 0 means the bounded observed prerequisites passed. Exit 3 means an
+observed blocker, integrity refusal or old-scope refusal; exit 1 means unresolved
+transport/custody/cancellation or output failure; exit 2 means invalid flags,
+route or independently approved input. Only completed input admission produces
+the readiness result. A route supplies observations, never submission approval.
+
+The September 29 source increment includes deterministic command/restart,
+stale-generation, permit/activity, signed-window, checkpoint conflict, reorg,
+route/runtime failure, missing-state and lock-release regressions. Behavioral
+qualification is pending its separate Sol receipt; compilation is not a claim
+of live eligibility or activation.
 
 ## Inputs and review
 
