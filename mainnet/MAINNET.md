@@ -1500,6 +1500,21 @@ This qualifies collection source only: node capability and the supplied native/
 EVM mapping remain explicitly unapproved, actual fees remain null, and no
 finality, canonical-accounting or spending authority is created.
 
+The [qualified native finality proof](evidence/operator-native-finality-proof-qualification-20260929.md)
+is integrated at server `44636e5e`. Its offline `verify-finality` command checks
+GRANDPA weighted certificates, native header ancestry and delayed scheduled
+authority handoffs, then binds the exact native Frontier digest to the
+collection's raw EVM header. All 89 affected recovery/CLI roots pass normal
+and race, including 18 new roots and three private-database roots; five causal
+controls pass. These proofs are relative to a separately pinned checkpoint.
+No independent genesis/checkpoint approval or deployed-runtime provenance is
+supplied, and all finality, canonical-accounting and spending authorization
+flags remain false. Actual fees remain null: native denomination conversion,
+debits and best-effort refunds require authenticated runtime evidence beyond
+receipt gas or reported prices. Checkpoint admission, bounded native-proof
+capture, account nonce proofs, service adoption, release composition and live
+custody/restart remain open MG-03/PF-03 work.
+
 The independent monitor confirms the repair's postcondition at finalized state.
 Only then close the incident, retaining its history and action receipts. A local
 repair success with missing chain evidence stays pending. Recovery cannot erase
