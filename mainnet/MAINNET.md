@@ -58,18 +58,24 @@ It retains false activation/current-authority flags and all pending chain phases
 The [offline contract prerequisite increment](BOOTSTRAP-CHAIN.md#offline-contract-installation-prerequisites)
 exposes the original eight-attempt/nine-action mismatch before signing and
 inspects original action custody without replay. Its [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
-passes twelve new roots and six causal controls normal/race; the separate
-270-root adjacent scope remains pending. Eight retained successful actions
+passes twelve new roots and six causal controls normal/race. The separate
+[partial adjacent battery](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
+passes 150/270 roots in both modes; 120 remain unrun. Eight retained successful actions
 leave only the evidence anchor unfinished. A signed successor adoption owner,
 Safe authority/provenance and relayer custody remain unimplemented.
 The [qualified unsigned successor proposal](evidence/bootstrap-contract-successor-qualification-20260929.md)
 retains the eight completed seals and any ninth reservation while computing
 additive attempt/lifetime ceilings for the unfinished anchor and retry margin.
 Six new and twelve inherited roots pass normal/race with six causal controls in
-both modes. A separate successful full-v3 public-command fixture remains open.
-The earlier fifteen-root MG-07/prerequisite composed smoke also passes both modes
-on exact `79ff2c6e`; it predates the successor. Neither result supplies Safe
-authority, signed adoption or live installation.
+both modes. The [separate full-v3 public-command fixture](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md)
+now passes normal/race and all six intended causal executions on `c294fefd`.
+It uses genuine local eight-action execution and original v3 preparation. Its
+finite 60-second local send budget is approved before custody; the earlier d7
+one-second race timeout remains preserved as a noncausal attempt.
+The earlier fifteen-root MG-07/prerequisite composed smoke passes both modes on
+`79ff2c6e`, and the later twelve-root successor composed smoke passes both modes
+on `1e2b2abb`. These scoped results supply no Safe authority, signed adoption or
+live installation; the separate SDK count remains 543/618 with 75 pending.
 The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),
 integrated at `ce567305`, adds durable exact-action recovery and actual-subset
 reconciliation under original v3 custody. Sol's 25 focused roots and exact

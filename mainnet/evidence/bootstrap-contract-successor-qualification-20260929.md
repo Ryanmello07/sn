@@ -26,11 +26,13 @@ anchor plus approved retry margin determines additional capacity; no eight-actio
 replay is requested. Safe authority and a durable signed-successor adoption/
 execution owner remain absent. The output grants no financial or signing authority.
 
-The successful full-v3 public-command path was **not** exercised by a separate
-new complete-graph fixture. The completed projection and original preparation
-reader are independently covered; that additional integrated fixture remains an
-adjacent coverage gap. The 276-root impact census is not a package-pass claim.
-The prior 270-root broad adjacent qualification remains separate and pending.
+This original receipt independently covered the completed projection and
+preparation reader without a separate successful full-v3 public-command fixture.
+That specific gap is now closed by the separately qualified [c294 fixture](bootstrap-contract-successor-full-v3-qualification-20260929.md),
+whose exact source, full-graph execution, causal controls and preserved first
+attempt are recorded there. The 276-root impact census is not a package-pass
+claim. The separate prerequisite battery is partial at 150/270 roots in both
+modes, with 120 unrun; it does not expand this original receipt's scope.
 
 | Retained receipt | SHA-256 |
 | --- | --- |

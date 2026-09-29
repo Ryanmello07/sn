@@ -118,6 +118,8 @@ label nor a local artifact hash can replace these prerequisites.
 
 This bounded source increment has [scoped Sol qualification](evidence/bootstrap-contract-successor-qualification-20260929.md):
 six new and twelve inherited roots pass normal/race, with six causal controls in
-both modes. A separate successful full-v3 public-command fixture and the broad
-adjacent qualification remain open. It does not install contracts, approve more spending, run the
+both modes. The [separate successful full-v3 public-command fixture](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md)
+passes normal/race plus six intended causal executions on `c294fefd`.
+The broad prerequisite battery remains partial at 150/270 roots in both modes,
+with 120 unrun. It does not install contracts, approve more spending, run the
 10/90 native economy or activate either UR validator or the separate root role.

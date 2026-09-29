@@ -13,9 +13,10 @@ All twelve new `TestBootstrapContract*` roots started and passed in normal and
 race modes, with package PASS and process exit zero in both. Normal wall time
 was 39.13 seconds; race was 294.57 seconds. No root failed or skipped. Each of
 six isolated causal controls compiled and failed its intended named behavioral
-assertion in both modes, giving twelve discriminating executions. The exact
-270-root adjacent qualification remains pending; this receipt does not imply
-whole-package or composed-release behavioral qualification.
+assertion in both modes, giving twelve discriminating executions. The separate
+[partial adjacent receipt](bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
+now records 150/270 roots passing in both modes, with 120 unrun. It does not
+expand this focused receipt into whole-package or composed-release qualification.
 
 The original handoff hashes verified before and after behavior. All eleven
 physical source-fence entries stayed clean at their exact commits and trees.

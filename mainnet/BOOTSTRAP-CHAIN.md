@@ -119,8 +119,8 @@ These requirements permit an approved increase without restarting deployment.
 The [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
 passes all twelve missing/partial custody, cap-change, exact completed-prefix
 reuse, lock-release and command-scope roots in normal and race modes, with six
-causal controls in both modes. The broader 270-root adjacent qualification
-remains pending; no live installation is claimed.
+causal controls in both modes. The broader [partial adjacent qualification](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
+passes 150/270 roots in both modes; 120 remain unrun. No live installation is claimed.
 
 The separate [unsigned successor proposal](BOOTSTRAP-CONTRACT-SUCCESSOR.md)
 reads all eight completed originals, preserves their seals and any ninth reserved
@@ -129,8 +129,10 @@ anchor and retry margin. It creates no successor approval or execution custody;
 the Safe provenance and signed migration owner remain unresolved.
 Its [scoped qualification](evidence/bootstrap-contract-successor-qualification-20260929.md)
 passes six new and twelve inherited roots normal/race plus six causal controls
-in both modes. A separate successful full-v3 public-command fixture remains an
-adjacent gap; this proposal does not create executable authority.
+in both modes. The separate [successful full-v3 public-command fixture](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md)
+passes normal/race and all six causal executions on `c294fefd`, retaining its
+original five preparation journals and eight executed contract actions.
+This proposal does not create executable authority.
 
 ## Read-only current prerequisites
 

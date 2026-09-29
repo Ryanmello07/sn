@@ -123,8 +123,10 @@ A cap change needs a new independently signed successor that adopts the original
 prefix, reconciles unfinished signed nonces, and conserves cumulative attempts
 and lifetime financial exposure. That adoption owner and the Safe executor remain
 unimplemented. The [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
-passes all twelve new roots normal/race with six causal controls in both modes;
-the 270-root adjacent scope remains pending. This does not close MG-08 or
+passes all twelve new roots normal/race with six causal controls in both modes.
+The separate [partial adjacent battery](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
+passes 150/270 roots in both modes, with ten package PASS/exit-zero terminals
+and no root failures or skips; 120 roots remain unrun. This does not close MG-08 or
 establish installation, role activation or native 10/90 acceptance.
 
 The separate [unsigned contract successor proposal](BOOTSTRAP-CONTRACT-SUCCESSOR.md)
@@ -136,9 +138,17 @@ and lifetime ceilings, and preserve an original ninth reservation. It does not
 sign or execute a successor. A new durable adoption owner and reviewed Safe
 source/ABI/storage/digest profile remain required before executable authority can
 be admitted; changed original v1 approvals cannot adopt old custody.
-A separate successful full-v3 public-command fixture remains an adjacent gap.
-The fifteen-root MG-07/prerequisite composed smoke also passes both modes on
-exact `79ff2c6e`; it predates the successor and does not close broad coverage.
+The [separate full-v3 public-command fixture](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md)
+closes that specific gap on `c294fefd`: its positive root passes normal/race,
+and all six causal executions reach the intended assertion. It approves the
+successful full-metadata fixture's finite 60-second send budget before custody.
+The original d7 control's one-second local POST timeout remains a preserved
+noncausal attempt; production deadlines and targeted lost-reply fixtures are
+unchanged. Give successful full-graph fixtures enough bounded local execution
+time while retaining every causal case and the separate long-root scheduling
+lesson above. The fifteen-root MG-07/prerequisite smoke on `79ff2c6e` and the
+twelve-root successor smoke on `1e2b2abb` pass both modes on their own exact
+graphs; neither expands the partial adjacent battery or SDK package coverage.
 
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal
