@@ -1,6 +1,6 @@
 # Mainnet launch and operations plan
 
-Updated 2026-09-28. **Mainnet activation is blocked.** The read-only
+Updated 2026-09-29. **Mainnet activation is blocked.** The read-only
 [Snow/LAN RPC comparison](evidence/snow-rpc-route-20260927.json) showed that
 `http://172.28.208.185:9944` served the same **testnet** chain as
 `http://192.168.1.162:9944`: EVM chain ID **945** (`0x3b1`), rather than the
@@ -36,14 +36,15 @@ system remain production work. [mainnet/main.go](main.go) implements signer-free
 [`bootstrap plan/apply/resume`](BOOTSTRAP-ROOT.md) retains local root custody
 and imports externally signed payloads, while
 [`bootstrap-contracts preview/plan/apply/resume`](BOOTSTRAP-CONTRACTS.md)
-installs the reserve sink through the approved transaction journal. The
+prepares the first eight installation actions through unanchored validator
+evidence CREATE under the approved transaction journal. The
 [`bootstrap-chain plan/apply/resume`](BOOTSTRAP-CHAIN.md) command composes their
 offline custody preparation with a retained trim review and two protected UR
 role inputs under one restart-safe local journal. Its v2 preparation verifies
 both initial schema-3 signed configs against independent role/runtime inputs;
 its [offline qualification](evidence/ur-bootstrap-admission-qualification-20260928.md)
 keeps live producer eligibility and service activation as separate gates. The complete bootstrap,
-remaining contract graph, native signing device and live role
+Safe evidence anchor, native signing device and live role
 activation remain unfinished. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)
 observed chain ID 945, which fails the required mainnet ID 964 gate.
@@ -494,9 +495,12 @@ passed 71 focused normal roots, both exact race shards and 446 full normal
 mainnet roots. [Escrow qualification](evidence/bootstrap-contract-escrow-qualification-20260928.md)
 passed 95 selected roots normal/race and 470 full normal roots; live native
 burn/refund behavior remains unmeasured. [Proxy qualification](evidence/bootstrap-contract-proxy-qualification-20260928.md)
-passed 120 selected roots normal/race and 495 full normal roots. The remaining
-graph, including genuine Safe evidence anchoring, and authenticated live
-authority remain required.
+passed 120 selected roots normal/race and 495 full normal roots. Genuine Safe
+evidence anchoring and authenticated live authority remain required. The
+[scoped graph qualification](evidence/bootstrap-contract-plan-graph-qualification-20260929.md)
+passes five graph, 28 evidence and 177 adjacent roots normally and under race,
+with six causal controls. The broader `./mainnet` normal package stopped at its
+60-minute window after 299 passing roots and zero assertions; it is incomplete.
 The separate [nine-action candidate status](evidence/contract-graph-review-block-20260928.md)
 records successful complete-command diagnostics and an unresolved failure test.
 Automatic review blocked that test correction; the candidate is not admitted
@@ -543,7 +547,7 @@ existing core sequence is:
 
 The escrow registration deliberately consumes a nonce before proxy creation. Predict all addresses before construction because the mapped coldkeys are immutable. Native rao-to-EVM-value conversion uses `1 rao = 10^9 wei` here; bounds and conversions must reject overflow. Authenticate `blake2_256("evm:" || H160)` against the runtime mapping before custody is funded.
 
-The first eight actions through `n+7` have an offline executable path; evidence CREATE is provisionally integrated pending race qualification and live authority. Anchor [STValidatorEvidence](../evm/src/STValidatorEvidence.sol) as a separately planned subsequent action with its genesis/deployment domain and coordinator/vault identities. The current release uses the coordinator's one-shot `fixValidatorEvidence`; an existing foreign anchor is a hard conflict. The Safe's inner nonce and a relayer's outer EVM nonce are distinct from the deployer CREATE graph and each need independently retained custody and canonical postconditions. Use the fresh mainnet nonce graph, not the sim-testnet graph's extra upgrade, fleet-helper or adversarial contracts. Mainnet artifacts must not include those test fixtures by default. [Evidence deployment reference](../sim-testnet/evidence_deployment.go), [readback reference](../sim-testnet/evidence_deployment_runtime.go)
+The first eight actions through `n+7` have an offline executable path with complete scoped normal and race qualification; no live authority or installation is established. Anchor [STValidatorEvidence](../evm/src/STValidatorEvidence.sol) as a separately planned subsequent action with its genesis/deployment domain and coordinator/vault identities. The current release uses the coordinator's one-shot `fixValidatorEvidence`; an existing foreign anchor is a hard conflict. The Safe's inner nonce and a relayer's outer EVM nonce are distinct from the deployer CREATE graph and each need independently retained custody and canonical postconditions. Use the fresh mainnet nonce graph, not the sim-testnet graph's extra upgrade, fleet-helper or adversarial contracts. Mainnet artifacts must not include those test fixtures by default. [Evidence deployment reference](../sim-testnet/evidence_deployment.go), [readback reference](../sim-testnet/evidence_deployment_runtime.go)
 
 Only then register the approved operator pool hotkeys under vault custody, establish reserve-target eligibility, activate evidence identities and future bindings, and fund reviewed stake/deposit positions. Provider-owned head miners register through their own authorized identities; bootstrap cannot sign for unrelated miners. Every registration is present in the spend/count plan. Reconcile pool/escrow collateral and minimum-transfer semantics before the first production capture; immutable custody must not become stranded by an unqualified runtime change.
 

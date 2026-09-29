@@ -1,6 +1,6 @@
 # Mainnet prelaunch fixes
 
-Updated 2026-09-28. This is the production gate tracker for UR mainnet
+Updated 2026-09-29. This is the production gate tracker for UR mainnet
 SN25 (netuid 25). Sim-testnet is **closed with known exceptions, without final
 acceptance**. There is no R49 requirement or instruction to resume it. Mainnet
 hardening may proceed; launch readiness must be established on the selected
