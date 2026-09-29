@@ -58,3 +58,7 @@ private synthetic files, local HTTP, real custody/refresh and worker barriers.
 The full local lifecycle fixture reaches seed discovery and joined shutdown; it
 does not reach ephemeral tunnel-client creation or prove successful live trail
 completion or mainnet readiness.
+
+Existing proof and stats storage keeps its separate path ownership and existing
+stats-load error behavior. This primary-identity migration does not establish a
+new recovery guarantee for corrupted or replaced measurement history.

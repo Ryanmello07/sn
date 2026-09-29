@@ -475,7 +475,9 @@ func TestMeasurementRunJoinsWorkersBeforeReleasingKey(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	discovered := make(chan struct{})
+	refreshed := make(chan struct{})
 	var discoveryOnce sync.Once
+	var refreshOnce sync.Once
 	fixture.onDiscovery = func() { discoveryOnce.Do(func() { close(discovered) }) }
 	trailAtJoin, releaseTrail := make(chan struct{}), make(chan struct{})
 	waiting := make(chan struct{})
@@ -483,7 +485,7 @@ func TestMeasurementRunJoinsWorkersBeforeReleasingKey(t *testing.T) {
 	release := func() { releaseOnce.Do(func() { close(releaseTrail) }) }
 	defer release()
 	var trailJoined, statsJoined, apiJoined, earlyApiJoin atomic.Bool
-	hooks := measurementRunHooks{beforeWorkersWait: func() { close(waiting) }, afterTrailJoined: func() { close(trailAtJoin); <-releaseTrail; trailJoined.Store(true) }, afterStatsJoined: func() { statsJoined.Store(true) }, afterApiJoined: func() {
+	hooks := measurementRunHooks{afterRefreshPersisted: func() { refreshOnce.Do(func() { close(refreshed) }) }, beforeWorkersWait: func() { close(waiting) }, afterTrailJoined: func() { close(trailAtJoin); <-releaseTrail; trailJoined.Store(true) }, afterStatsJoined: func() { statsJoined.Store(true) }, afterApiJoined: func() {
 		if !trailJoined.Load() || !statsJoined.Load() {
 			earlyApiJoin.Store(true)
 		}
@@ -507,6 +509,11 @@ func TestMeasurementRunJoinsWorkersBeforeReleasingKey(t *testing.T) {
 	case <-discovered:
 	case <-time.After(60 * time.Second):
 		t.Fatal("real measurement engine did not issue seed discovery")
+	}
+	select {
+	case <-refreshed:
+	case <-time.After(60 * time.Second):
+		t.Fatal("measurement worker fixture did not join its startup refresh persistence")
 	}
 	cancel()
 	select {
