@@ -575,6 +575,16 @@ ancestry, runtime or custody observations still stop the write.
 
 ## Remaining live trust and graph work
 
+The offline [chain contract prerequisite phase](BOOTSTRAP-CHAIN.md#offline-contract-installation-prerequisites)
+now exposes the complete approved prefix and eight-attempt/nine-action mismatch
+before signing. It can inspect all retained action receipts without opening RPC
+or changing original custody. A shorter approval and missing Safe anchor do not
+force replay: a future independently signed successor must adopt completed
+receipts, reconcile unfinished signed nonces, and reserve only unfinished sends
+plus an approved retry margin while conserving cumulative attempts and lifetime
+financial exposure. That successor adoption path remains unimplemented; changing
+the original signed cap cannot reinterpret its retained journals.
+
 The local flock is not a distributed deployer-key fence. Signed hashes attest
 externally reviewed evidence; this command does not independently prove the
 cutover, global custody exclusivity, source-to-Wasm provenance or ongoing runtime

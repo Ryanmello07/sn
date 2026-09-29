@@ -16,6 +16,110 @@ preparation commands. Every result retains `activation_ready: false`,
 preparation does not establish a safe executed trim, full contract installation,
 two eligible validators, a running root role or realized native economics.
 
+## Offline contract installation prerequisites
+
+Review the installation scope before preparing or importing transaction custody:
+
+```sh
+sn-mainnet bootstrap-chain contract-plan --config /private/chain.json
+```
+
+This reads the original independently pinned v3 approvals and release artifacts,
+rebuilds every approved implemented action projection through evidence CREATE,
+and reports the full nine-action installation scope. It opens no journal or
+network route. A shorter approved prefix remains valid for its original actions;
+missing anchor approval cannot invalidate or replay earlier completed work.
+An approved ninth envelope is reported as `sealed-reservation-only`: its outer
+transaction fields do not establish Safe-inner semantics or authority.
+
+After preparation or any completed action, inspect the same retained custody:
+
+```sh
+sn-mainnet bootstrap-chain contract-readiness --config /private/chain.json \
+  --run-dir /private/custody --accept-plan-hash sha256:ORIGINAL_V3_DIGEST
+```
+
+The command first verifies all five original preparation journals under shared
+locks, then retains shared locks for the approved contract prefix. Each existing
+action must carry its original complete marker, signed config, exact signature,
+predecessor seal, cumulative attempt allowance and successful receipt's semantic
+and financial postconditions. The report retains each receipt and both journal
+hashes. `receipt_observation: retained` is historical local evidence; there is no
+current canonical chain audit. All original files and markers stay unchanged.
+Later absent journal/marker pairs are `not-claimed`. A missing original journal,
+partial claim, conflicting owner, changed lineage or invalid receipt is
+`unresolved`; inspection cannot repair it. A valid earlier prefix remains visible
+if a later child is unresolved, but complete attempt accounting remains false.
+Missing later journals are stable while the reserve's shared lock prevents a
+cooperating contract writer from acquiring the prefix.
+
+Results use `urnetwork-mainnet-bootstrap-chain-contract-readiness-v1`. Every
+result preserves all five pending chain phases and false signing, network effect,
+current-chain, Safe-authority, installation and activation flags. Exit 3 means
+the bounded inspection finished with explicit installation blockers; exit 1
+means unresolved custody/cancellation/output, and exit 2 means invalid inputs or
+flags. Neither mode accepts RPC, signing, import, submission or service flags.
+Original preparation plan schemas/hashes and v1/v2 resume semantics are unchanged;
+older scope cannot acquire this inspection through a new accepted hash.
+
+### Remaining authority and forward-only budget work
+
+Eight original actions are executable. The ninth, `fixValidatorEvidence`, is an
+owner-only call on the initialized proxy. `Deploy.s.sol` stops after vault
+binding, and `STCoordinator.sol` checks only that the one-time evidence address
+has code. Installation therefore still needs the independently authenticated
+evidence immutable domain and code provenance, exact Safe runtime/owner/threshold,
+Safe transaction digest/nonce/signatures, separate relayer nonce/fee custody,
+Safe-inner success, exact binding event and canonical coordinator getter. An
+outer receipt status of one cannot substitute for these observations. The
+configured owner address and release file hash alone do not prove them.
+
+The original contract schema caps cumulative local attempts at eight. Nine fresh
+installation sends exceed that bound, and even an approved nine-action prefix
+does not implement a full-installation attempt policy. Both new modes expose the
+mismatch before live signing. `minimum_fresh_installation_attempts: 9` describes
+a fresh installation, **not** a requirement to replay completed actions. With
+eight retained successful receipts, `unfinished_actions` contains only
+`evidence-anchor`, spent attempts remain eight, and the original remaining
+allowance is zero. A signed pending action remains a liability and must first be
+reconciled; an additional send is not automatically necessary.
+
+Increasing `maximum_attempts` in place cannot solve this: every original marker
+and record binds the exact signed config, and every descendant binds its complete
+predecessor record. Even a separately signed changed config cannot adopt those
+records. Values above eight are also outside the original schema. The actual
+structural gap is an independently approved successor owner that can adopt a
+completed prefix while conserving original liabilities. No successor executor
+or approval is synthesized here. The report binds its requirements to the
+original contract plan/config and the validated retained action seals.
+
+The required successor code path must use a new domain/schema and separate
+durable claim, with an independent signature covering:
+
+1. The original plan/config hashes, custody ID and directory, every adopted
+   action's exact journal/content seal, original signed envelope/transaction hash,
+   receipt and predecessor relation. Completed actions are adopted without
+   re-signing or replay. Before an online action, their historical receipts must
+   be reauthenticated through the existing canonical adapter.
+2. Every unfinished original nonce and signature, with reconciliation before
+   deciding whether another send is needed. No expiry or failed transport reply
+   releases original EVM liability. Added actions require explicit envelope,
+   artifact, owner/Safe and relayer authority; they cannot inherit it from adoption.
+3. An absolute cumulative attempt cap at least equal to original recorded
+   attempts plus the finite approved allowance for unfinished sends and a retry
+   margin. The original spent attempts are an immutable floor. A successor
+   cannot reset counters, and a further successor must include all earlier spend.
+4. A lifetime value-plus-maximum-gas cap conserving all unresolved original
+   reservations and canonical spend, with explicit incremental reservations for
+   added actions/senders. Separate Safe-inner and outer-relayer liabilities and
+   current funding checks must remain bounded. Renewing approval cannot silently
+   renew spent financial authority.
+
+These requirements permit an approved increase without restarting deployment.
+The new source includes deterministic missing/partial custody, cap-change,
+exact completed-prefix reuse, lock-release and command-scope regressions.
+Behavioral qualification remains pending; no live installation is claimed.
+
 ## Read-only current prerequisites
 
 After local preparation, run:
