@@ -411,7 +411,10 @@ successful-value mismatch. EVM signature liability survives local approval
 expiry. The [sixth reserve-binding action](evidence/bootstrap-contract-reserve-link-qualification-20260928.md)
 passed all 27 roots normally and under race detection, the 523-root full normal
 package, ten adjacent low-gas roots in both modes, and four causal controls.
-The other three installation actions, Safe inner-call success/getter
+The [seventh vault-binding action](evidence/bootstrap-contract-vault-link-qualification-20260929.md)
+passed its corrected checkpoint normally and all 29 roots under race detection,
+plus six adjacent checkpoint roots in both modes and a selector causal control.
+The other two installation actions, Safe inner-call success/getter
 verification and authenticated live custody/network inputs remain open.
 The [approval-preview/offline recovery follow-up](evidence/bootstrap-contract-preview-20260928.md)
 adds a read-only unsigned CLI export of exact approval bytes and preserves

@@ -29,7 +29,10 @@ controls and retained fixture/time-limit failures.
 The [getter-gas fixture correction](evidence/bootstrap-contract-read-gas-fixture-correction-20260928.md)
 records its reproduced positive failure and independent read simulation budget.
 The [vault binding source handoff](evidence/bootstrap-contract-vault-link-source-20260928.md)
-records its packed storage, six-predecessor custody and pending qualification.
+records its packed storage and six-predecessor custody. Its
+[qualification](evidence/bootstrap-contract-vault-link-qualification-20260929.md)
+covers all 29 race roots, the corrected checkpoint normal root, adjacent
+checkpoint roots, causal controls and retained test-time-limit attempts.
 
 The release catalog comes from the existing generator:
 
