@@ -14,6 +14,37 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// A release catalog is broader than its materialized member set. Missing, empty
+// and malformed unselected variants must never reach the oracle decoder.
+func TestSafeExecutionOracleFiltersVariantBeforeDecoding(t *testing.T) {
+	for _, c := range safeExecutionTestProfiles {
+		pin, _, members := safeReleaseTestInputs(t, c.version, c.variant)
+		var selected, unselected safeReleaseArtifactPin
+		for _, artifact := range pin.Artifacts {
+			if artifact.Name == c.variant {
+				selected = artifact
+			} else if artifact.Name != "SafeProxy" {
+				unselected = artifact
+			}
+		}
+		if selected.Name == "" || unselected.Name == "" || len(members[unselected.ArchivePath]) != 0 {
+			t.Fatal("oracle regression did not retain a broader catalog than selected members")
+		}
+		for _, unselectedBytes := range [][]byte{nil, {}, []byte("synthetic ignored non-JSON member")} {
+			if unselectedBytes == nil {
+				delete(members, unselected.ArchivePath)
+			} else {
+				members[unselected.ArchivePath] = unselectedBytes
+			}
+			raw, singleton, proxy := safeExecutionOracleArtifacts(t, pin, c.variant, members)
+			if safeReleaseHash(raw) != selected.ArtifactSha256 || singleton.Name != c.variant || proxy.Name != "SafeProxy" ||
+				len(singleton.Runtime) < 4 || len(proxy.Runtime) < 4 {
+				t.Fatal("unselected artifact changed the selected oracle census")
+			}
+		}
+	}
+}
+
 // Both maintained versions and variants must match the actual proxy domain.
 func TestSafeExecutionDigestMatchesPinnedProxyAndSingleton(t *testing.T) {
 	for _, c := range safeExecutionTestProfiles {

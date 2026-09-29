@@ -41,6 +41,36 @@ type safeExecutionFixture struct {
 	owners      []common.Address
 }
 
+// The catalog includes both singleton variants, while the archive reader retains
+// only the selected variant and proxy. Filter before accessing or decoding bytes.
+func safeExecutionOracleArtifacts(t *testing.T, pin safeReleasePin, variant string, members map[string][]byte) ([]byte, safeReleaseArtifact, safeReleaseArtifact) {
+	t.Helper()
+	var rawSingleton []byte
+	var singleton, proxy safeReleaseArtifact
+	for _, artifactPin := range pin.Artifacts {
+		if artifactPin.Name != variant && artifactPin.Name != "SafeProxy" {
+			continue
+		}
+		raw := members[artifactPin.ArchivePath]
+		if len(raw) == 0 {
+			t.Fatalf("selected oracle artifact is absent: %s", artifactPin.Name)
+		}
+		var artifact safeReleaseArtifact
+		if err := json.Unmarshal(raw, &artifact); err != nil {
+			t.Fatalf("selected oracle artifact could not decode: %s: %v", artifactPin.Name, err)
+		}
+		if artifactPin.Name == "SafeProxy" {
+			proxy = artifact
+		} else {
+			rawSingleton, singleton = slices.Clone(raw), artifact
+		}
+	}
+	if len(rawSingleton) == 0 || singleton.Name != variant || proxy.Name != "SafeProxy" {
+		t.Fatal("selected oracle artifact census differs")
+	}
+	return rawSingleton, singleton, proxy
+}
+
 // The oracle executes the pinned proxy, so its digest domain uses proxy storage
 // and address rather than a copied Go implementation of the signing algorithm.
 func newSafeExecutionFixture(t *testing.T, version, variant string) *safeExecutionFixture {
@@ -54,21 +84,13 @@ func newSafeExecutionFixture(t *testing.T, version, variant string) *safeExecuti
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, artifactPin := range pin.Artifacts {
-		var artifact safeReleaseArtifact
-		if err := json.Unmarshal(members[artifactPin.ArchivePath], &artifact); err != nil {
-			t.Fatal(err)
-		}
-		if artifactPin.Name == "SafeProxy" {
-			self.state.SetCode(proxy, common.FromHex(artifact.Runtime), tracing.CodeChangeUnspecified)
-		} else if artifactPin.Name == variant {
-			self.rawArtifact = slices.Clone(members[artifactPin.ArchivePath])
-			self.state.SetCode(singleton, common.FromHex(artifact.Runtime), tracing.CodeChangeUnspecified)
-			self.oracleAbi, err = abi.JSON(bytes.NewReader(artifact.Abi))
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
+	rawSingleton, singletonArtifact, proxyArtifact := safeExecutionOracleArtifacts(t, pin, variant, members)
+	self.rawArtifact = rawSingleton
+	self.state.SetCode(proxy, common.FromHex(proxyArtifact.Runtime), tracing.CodeChangeUnspecified)
+	self.state.SetCode(singleton, common.FromHex(singletonArtifact.Runtime), tracing.CodeChangeUnspecified)
+	self.oracleAbi, err = abi.JSON(bytes.NewReader(singletonArtifact.Abi))
+	if err != nil {
+		t.Fatal(err)
 	}
 	self.profile, err = newSafeExecutionProfile(version, variant, self.rawArtifact)
 	if err != nil {
