@@ -4,7 +4,10 @@
 [signed local preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md) to exact published
 Safe release bytes and the [pure Safe digest calculation](SAFE-EXECUTION-EVIDENCE.md).
 It produces a sealed, unsigned execution review for the one remaining evidence
-anchor. The executable successor owner remains unimplemented.
+anchor. A separate [execution custody and owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md)
+now retains independently approved signatures, cumulative attempts and separate
+nonce claims. Its production canonical adapter remains unimplemented; this
+review command retains its existing offline scope.
 
 ```sh
 sn-mainnet bootstrap-chain contract-successor-safe-review \

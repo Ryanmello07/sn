@@ -61,8 +61,13 @@ inspects original action custody without replay. Its [focused qualification](evi
 passes twelve new roots and six causal controls normal/race. The separate
 [partial adjacent battery](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
 passes 150/270 roots in both modes; 120 remain unrun. Eight retained successful actions
-leave only the evidence anchor unfinished. An executable successor adoption owner,
-current Safe authority/binding and relayer custody remain unimplemented.
+leave only the evidence anchor unfinished. The separate
+[execution custody and owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) now implements an
+independent approval domain, exact eight-action adoption, separate local nonce
+registry claims and durable cumulative one-send/reconciliation machinery.
+Independent behavioral qualification and a production canonical adapter for
+current Safe/evidence authority, original receipt reauthentication and relayer
+signer custody remain required. Public commands perform local custody only.
 The qualified [signed local successor preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
 adds a separate approval domain and fixed resumable local claim while preserving
 original receipts and additive proposed floors. Its [scoped receipt](evidence/bootstrap-successor-preparation-qualification-20260929.md)
@@ -119,8 +124,10 @@ This is unsigned review: owner signatures and complete outer calldata are absent
 and no nonce, budget, execution approval or global custody is allocated. The
 native review window cannot expire a Safe signature because it is outside the
 Safe digest. Canonical original receipt adoption, current Safe/evidence authority,
-signature lifetime and window enforcement, globally fenced relayer custody and
-the durable executable successor owner remain launch gates. No mainnet transaction,
+signature lifetime and window enforcement and globally fenced relayer signer
+custody remain launch gates. The separate execution owner enforces its conditional
+state transitions in code; its production canonical adapter remains unimplemented.
+No mainnet transaction,
 contract installation or validator activation is established by this increment.
 The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),
 integrated at `ce567305`, adds durable exact-action recovery and actual-subset

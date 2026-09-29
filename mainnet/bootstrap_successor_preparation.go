@@ -266,6 +266,9 @@ func validateBootstrapSuccessorPreparationPaths(preparation bootstrapChainPrepar
 		if strings.HasPrefix(path, c.RunDirectory+string(filepath.Separator)+bootstrapSuccessorStagePrefix) {
 			return errors.New("successor staged custody namespace overlaps an approved input or validator path")
 		}
+		if strings.HasPrefix(path, c.RunDirectory+string(filepath.Separator)+bootstrapSuccessorExecutionPrefix) || strings.HasPrefix(path, c.RunDirectory+string(filepath.Separator)+bootstrapSuccessorExecutionStagePrefix) {
+			return errors.New("successor execution custody namespace overlaps an approved input or validator path")
+		}
 	}
 	return nil
 }

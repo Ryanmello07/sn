@@ -118,6 +118,12 @@ they do not claim to emulate hardware power-loss behavior or unsupported filesys
 
 ## Conserved floors and unresolved authority
 
+The separate [execution custody owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) can now
+adopt this exact record under another signed domain, retain approved signatures
+and both nonce claims, and conserve durable attempts through interrupted sends.
+Its canonical adapter and behavioral qualification remain open; this preparation
+command's scope and flags do not change.
+
 The new record retains the original complete approval/config and receipt seals
 by reference. It never rewrites old plans or journals, signs old actions again,
 or allocates nine fresh transactions. Eight retained attempts plus a proposed
