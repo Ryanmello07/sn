@@ -850,7 +850,7 @@ server Dockerfiles, all seven image-build Makefiles, the exact package lock,
 40 Ubuntu payloads, six signed-index inputs and four copied contract artifacts.
 It has no approved policy or
 published/deployed OCI image identity and remains unapproved.
-The newer server source branch `codex/mainnet-composed-hardening-20260927` at
+The September 27 server source branch `codex/mainnet-composed-hardening-20260927` at
 `b6f49bdb` composes the append-only migration 728 and retained-usage reader,
 the operator receipt-census recovery correction, atomic payer admission and
 checked settlement arithmetic on the v11 base. The earlier `7bf88d79`
@@ -861,6 +861,14 @@ inventory and rebuilt artifacts do **not** attest the newer branch. Refresh
 the complete manifest and production-path qualification before approving a
 deployment. [Timestamp custody](/mnt/data/sn-testnet/evidence/mainnet-usage-time-custody-20260927/RESULT.md),
 [operator recovery](evidence/operator-recovery-census-20260927.md).
+The subsequent [MG03/R48 source composition](evidence/operator-mg03-r48-composition-20260929.md)
+is integrated at server root `05fee56f`. Its full-merge parent preserves both
+original histories and the complete qualified census/receipt/controller
+lineage; the successor adds only two composition tests. Sol's normal/race
+receipts cover 134 affected roots on the merge and, separately, two new plus
+52 adjacent model roots on the successor. Their exact pinned physical graph
+does not qualify the current dependency roots as a combined release. Refresh
+the source/artifact lock and composed build before deployment.
 Mainnet inventory implementation passed 177 normal tests and all 177 race
 test bodies in a bounded run plus exact continuation; the latter is not one
 whole-package race pass. A subsequent validator test-fixture correction passed
@@ -1523,7 +1531,11 @@ provisional authority and accelerated timing do not carry over.
 Current component evidence includes the
 [complete server model census and qualified fixture corrections](evidence/server-model-completion-20260928.md)
 and [shared receipt/miner recovery qualification](evidence/receipt-recovery-qualification-20260928.md).
-The later [registration transaction qualification](evidence/registration-server-model-qualification-20260928.md)
+The [September 29 server source composition](evidence/operator-mg03-r48-composition-20260929.md)
+retains those historical approvals and records the new scoped normal/race
+qualification of its full merge and test successor. It does not claim a new
+full-model run or a composed production release.
+The [registration transaction qualification](evidence/registration-server-model-qualification-20260928.md)
 passes all 29 affected roots normally and under race detection. Its full model
 body completed all 1,125 roots with 1,118 passes, seven explicit fixture-input
 skips and no failures. Retain the original successful package exit separately
