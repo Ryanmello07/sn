@@ -1298,6 +1298,13 @@ supplies identity/finality observations and an optional read-only
 [`--services` consumer](SERVICE-MONITOR.md) for independently configured
 validator roles.
 
+The [read incident continuity increment](READ-INCIDENTS.md) preserves stable
+per-role outage IDs, first/latest failures, successful-read recovery evidence and
+recurrence through checkpoint restart. Read recovery does not establish service
+health or grant repair/spend authority. The bounded summaries need independently
+retained events for complete incident timelines. Normal/race qualification,
+compatible checkpoint rollout, deployment and alert delivery remain pending.
+
 The standard validator now has a qualified optional
 [`--progress-file` producer](SERVICE-PROGRESS.md). It reports bounded intent and
 settlement observations without acquiring another protocol reader or signer;

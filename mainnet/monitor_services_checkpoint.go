@@ -16,7 +16,7 @@ import (
 	"github.com/urfoundation/sn/protocol"
 )
 
-const monitorServiceCheckpointSchema = "urnetwork-mainnet-validator-checkpoint-v2"
+const monitorServiceCheckpointSchema = "urnetwork-mainnet-validator-checkpoint-v3"
 const maxMonitorServiceCheckpointBytes = 16 * 1024
 
 // The role and independent source are checksummed alongside retained evidence.
@@ -92,7 +92,8 @@ func (self *monitorServiceCheckpoint) load(ctx context.Context) (*monitorValidat
 		return nil, errors.New("service checkpoint contains trailing JSON")
 	}
 	actual, err := hashMonitorServiceCheckpoint(record)
-	legacy := record.Schema == "urnetwork-mainnet-validator-checkpoint-v1" && record.State.NativeDeadline == nil
+	legacy := (record.Schema == "urnetwork-mainnet-validator-checkpoint-v1" && record.State.NativeDeadline == nil ||
+		record.Schema == "urnetwork-mainnet-validator-checkpoint-v2") && record.State.ReadIncidents == nil
 	if err != nil || actual != record.ContentHash || record.Schema != monitorServiceCheckpointSchema && !legacy || record.Role != self.policy.Role || !monitorSameProducerRole(record.Expected, self.policy.ExpectedSource) {
 		return nil, errors.New("service checkpoint checksum or expected producer differs")
 	}
@@ -101,6 +102,16 @@ func (self *monitorServiceCheckpoint) load(ctx context.Context) (*monitorValidat
 	}
 	if record.State.Record != nil && !monitorSameProducerRole(record.State.Record.Source, record.Expected) {
 		return nil, errors.New("retained service record differs from its role")
+	}
+	if legacy {
+		originalPolicy := self.policy
+		originalPolicy.ExpectedSource = record.Expected
+		if err := record.State.migrateReadIncidents(originalPolicy); err != nil {
+			return nil, err
+		}
+	}
+	if err := record.State.ReadIncidents.validate(self.policy, &record.State); err != nil {
+		return nil, err
 	}
 	return &record.State, nil
 }
@@ -168,6 +179,16 @@ func (self *monitorServiceCheckpoint) save(state *monitorValidatorState) error {
 		return err
 	}
 	if err := validateMonitorValidatorState(*state); err != nil {
+		return err
+	}
+	// Direct callers may supply one legacy-shaped observation. The worker
+	// already retained its completed read before attempting any publication.
+	if state.ReadIncidents == nil {
+		if err := state.retainReadIncident(self.policy); err != nil {
+			return err
+		}
+	}
+	if err := state.ReadIncidents.validate(self.policy, state); err != nil {
 		return err
 	}
 	record := monitorServiceCheckpointRecord{Schema: monitorServiceCheckpointSchema, Role: self.policy.Role, Expected: self.policy.ExpectedSource, State: *state}

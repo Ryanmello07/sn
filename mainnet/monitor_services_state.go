@@ -28,6 +28,7 @@ type monitorValidatorState struct {
 	Record                   *protocol.ValidatorProgress   `json:"record,omitempty"`
 	PublicationLastSuccessAt time.Time                     `json:"publication_last_success_at"`
 	NativeDeadline           *monitorNativeDeadlineHistory `json:"native_deadline,omitempty"`
+	ReadIncidents            *monitorReadIncidentHistory   `json:"read_incidents,omitempty"`
 	readCurrent              bool
 }
 
