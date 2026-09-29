@@ -116,9 +116,11 @@ durable claim, with an independent signature covering:
    renew spent financial authority.
 
 These requirements permit an approved increase without restarting deployment.
-The new source includes deterministic missing/partial custody, cap-change,
-exact completed-prefix reuse, lock-release and command-scope regressions.
-Behavioral qualification remains pending; no live installation is claimed.
+The [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
+passes all twelve missing/partial custody, cap-change, exact completed-prefix
+reuse, lock-release and command-scope roots in normal and race modes, with six
+causal controls in both modes. The broader 270-root adjacent qualification
+remains pending; no live installation is claimed.
 
 ## Read-only current prerequisites
 

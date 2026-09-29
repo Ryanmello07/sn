@@ -55,6 +55,13 @@ terminated after its passing prefix; the exact 148-root disjoint race union is
 the qualified coverage. The later [composed source check](/mnt/data/sn-testnet/qualification/mg08-bootstrap-readiness-20260929/COMPOSED-RESULT.md)
 passes focused normal/race, vet and fences on SN `e35771ec` and server `b7c8c743`.
 It retains false activation/current-authority flags and all pending chain phases.
+The [offline contract prerequisite increment](BOOTSTRAP-CHAIN.md#offline-contract-installation-prerequisites)
+exposes the original eight-attempt/nine-action mismatch before signing and
+inspects original action custody without replay. Its [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
+passes twelve new roots and six causal controls normal/race; the separate
+270-root adjacent scope remains pending. Eight retained successful actions
+leave only the evidence anchor unfinished. A signed successor adoption owner,
+Safe authority/provenance and relayer custody remain unimplemented.
 The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),
 integrated at `ce567305`, adds durable exact-action recovery and actual-subset
 reconciliation under original v3 custody. Sol's 25 focused roots and exact

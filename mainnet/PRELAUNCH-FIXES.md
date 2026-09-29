@@ -114,9 +114,10 @@ completed actions leave only the anchor unfinished and do not require replay.
 A cap change needs a new independently signed successor that adopts the original
 prefix, reconciles unfinished signed nonces, and conserves cumulative attempts
 and lifetime financial exposure. That adoption owner and the Safe executor remain
-unimplemented. The new source/tests await separate behavioral qualification;
-this does not close MG-08 or establish installation, role activation or native
-10/90 acceptance.
+unimplemented. The [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
+passes all twelve new roots normal/race with six causal controls in both modes;
+the 270-root adjacent scope remains pending. This does not close MG-08 or
+establish installation, role activation or native 10/90 acceptance.
 
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal
