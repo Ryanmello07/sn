@@ -97,8 +97,10 @@ retained high-water within the allowed skew.
 first/latest failure summaries, successful-read recovery evidence and recurrence
 counts across restart. A successful read closes only its read incident; stale
 producer evidence and unresolved native deadlines keep their own status. Legacy
-history is explicitly unknown. The v3 checkpoint needs compatible rollback and
-log consumers; normal/race qualification and live deployment remain pending.
+history is explicitly unknown. The [qualified source receipt](evidence/read-incident-continuity-qualification-20260929.md)
+records all 82 affected normal/race roots and six causal controls in both modes.
+The v3 checkpoint still needs compatible rollback and log consumers; live
+deployment remains pending.
 
 ## Publication and independent telemetry
 

@@ -1318,7 +1318,10 @@ per-role outage IDs, first/latest failures, successful-read recovery evidence an
 recurrence through checkpoint restart. Read recovery does not establish service
 health or grant repair/spend authority. The bounded summaries need independently
 retained events for complete incident timelines. Normal/race qualification,
-compatible checkpoint rollout, deployment and alert delivery remain pending.
+covering all 82 affected roots and six causal controls in both modes, is recorded
+in the [qualified read incident receipt](evidence/read-incident-continuity-qualification-20260929.md)
+for integrated source `1bb311fc`. Compatible checkpoint rollout, deployment and
+alert delivery remain pending.
 
 The standard validator now has a qualified optional
 [`--progress-file` producer](SERVICE-PROGRESS.md). It reports bounded intent and
@@ -1545,9 +1548,22 @@ No independent genesis/checkpoint approval or deployed-runtime provenance is
 supplied, and all finality, canonical-accounting and spending authorization
 flags remain false. Actual fees remain null: native denomination conversion,
 debits and best-effort refunds require authenticated runtime evidence beyond
-receipt gas or reported prices. Checkpoint admission, bounded native-proof
-capture, account nonce proofs, service adoption, release composition and live
+receipt gas or reported prices. Checkpoint admission, account nonce proofs,
+service adoption, release composition and live
 custody/restart remain open MG-03/PF-03 work.
+
+The [qualified bounded native finality capture](evidence/operator-native-finality-capture-qualification-20260929.md)
+is integrated at server `5ff7bf02`. `capture-finality` retains exact native
+headers, stored certificates and durable request/byte reservations, then replays
+the existing offline verifier before private proof publication. Proof v2 accepts
+a bounded certified descendant while preserving the original collection boundary
+and its exact Frontier mapping. Completed restart replays offline; partial
+evidence and spent budgets survive failed reads. All 112 affected roots pass
+normal/race, including 23 new roots and three private-database roots; seven causal
+controls discriminate in both modes, and vet/source/module fences pass. Archive
+capability and independent checkpoint/runtime authority remain unapproved;
+native account and debit/refund proofs, composed release and live custody remain
+open. Actual fees remain null, and no accounting or spending authority is added.
 
 The [pinned-runtime fee dependency review](https://github.com/urnetwork/server/blob/cfcbfcbaa13b4f4d298acfeca761a7252c18ddee/strecovery/ACTUAL-FEE-DEPENDENCIES.md)
 is integrated at server `cfcbfcba` as documentation only. Generic balance

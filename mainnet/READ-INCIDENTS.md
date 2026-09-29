@@ -4,8 +4,10 @@ The `monitor --services` worker retains read outages in each role's existing
 private checkpoint. Previously, a successful source read cleared `outage_since`
 and left no durable outage identity, recovery record or recurrence count. The
 new `read_incidents` state keeps bounded continuity after recovery and restart.
-This is an MG-07/PH-28 source increment; normal/race and causal qualification,
-deployment, delivered alerts and the complete incident store remain pending.
+This MG-07/PH-28 increment is integrated at `1bb311fc`; its
+[qualification receipt](evidence/read-incident-continuity-qualification-20260929.md)
+records all 82 affected roots and six causal controls in normal/race modes.
+Deployment, delivered alerts and the complete incident store remain pending.
 
 One contiguous sequence of `missing`, `unavailable`, `changed`, `invalid`,
 `identity` or `clock` reads opens one incident. Its ID hashes a domain tag, the
@@ -76,7 +78,7 @@ use the existing `sn_mainnet_validator_read_incident_` prefix and `role` label:
 | `last_recovery_timestamp_seconds` | Latest successful-read recovery, retained through the next outage. |
 | `latest_failed_reads`, `latest_failure_status` | Failed attempts and final failure class of the latest incident; status uses the existing service codes. |
 
-Qualification must run the real worker/restart/cancellation, corruption,
+The qualified scope covers the real worker/restart/cancellation, corruption,
 migration, recurrence, publication-ambiguity and finite-capacity regressions in
 `monitor_read_incident_test.go`, plus the adjacent service/native-deadline/output
 paths. A stopped observer and collector still require independent absent/stale
