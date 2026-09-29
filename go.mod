@@ -9,6 +9,7 @@ require (
 	github.com/ethereum/go-ethereum v1.17.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gorilla/websocket v1.5.3
+	github.com/holiman/uint256 v1.3.2
 	github.com/quic-go/quic-go v0.61.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/urnetwork/connect v0.0.0
@@ -70,7 +71,6 @@ require (
 	github.com/gtank/ristretto255 v0.1.2 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
-	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/ipfs/go-cid v0.6.2 // indirect
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6 // indirect
@@ -196,11 +196,15 @@ require (
 	src.agwa.name/tlshacks v0.0.4 // indirect
 )
 
-// validator (and miner) import connect; connect imports glog. Replaces in a
-// dependency's go.mod are ignored, so the main module declares both.
-replace github.com/urnetwork/connect => ../connect
+// Client authentication requires this reviewed SDK/Connect pair. Versioned
+// replacements also cover the v0.0.0 placeholders required by sibling modules;
+// a clean but older ../sdk or ../connect must not select different source.
+replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20260928101830-b163f9dd9ac3
 
-replace github.com/pion/sctp => ../connect/sctp
+replace github.com/urnetwork/sdk => github.com/urnetwork/sdk v0.0.0-20260928100458-516521fb16da
+
+// A dependency's replaces are ignored, so pin Connect's SCTP fork here too.
+replace github.com/pion/sctp => github.com/urnetwork/connect/sctp v0.0.0-20260928101830-b163f9dd9ac3
 
 replace github.com/urnetwork/server => ../server
 
@@ -210,8 +214,6 @@ replace github.com/urnetwork/warp => ../warp
 replace github.com/urnetwork/proxy => ../proxy
 
 replace github.com/urnetwork/userwireguard => ../userwireguard
-
-replace github.com/urnetwork/sdk => ../sdk
 
 replace github.com/urnetwork/glog => ../glog
 

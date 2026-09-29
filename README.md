@@ -191,3 +191,10 @@ The release workspace also requires sibling `server` and `operator-proxy`
 checkouts. The testnet harness discovers both by Go module identity and binds
 the operator-proxy production source plus its exact clean Git commit into the
 release lock.
+
+SN pins the client-authentication SDK, Connect, and Connect's SCTP fork with
+versioned replacements in `go.mod`; these dependencies do not follow sibling
+checkout HEADs. Use `GOWORK=off` for this module graph. The remaining local
+replacements still require the release workspace. See the
+[source-graph correction and qualification handoff](mainnet/evidence/clientauth-source-graph-correction-20260929.md)
+for exact revisions and the independent module-resolution regression tests.
