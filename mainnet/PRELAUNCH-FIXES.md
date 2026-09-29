@@ -91,6 +91,16 @@ and zero assertions, so that broader check remains incomplete. Live deployment
 is a separate gate; do not treat a package timer or a cached success from a
 prior invocation as approval.
 
+MG-10 testing lesson (2026-09-29): the SDK-pinned 618-root unsharded race
+process reached its one-hour package timeout while
+`TestEvmEscrowRegisterClaimRecoveryKeepsFourLocks` had been active for about
+25 seconds; no top-level root failure was observed. Bounded shard/wave coverage
+stood at 615/618 roots at that capture. Split broad race suites into disjoint,
+exact root shards, retain each shard's package exit and the original timeout,
+and preserve completed results without resetting their evidence. Remaining
+race coverage stays pending until the full root census and successful package
+exits are reconciled.
+
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal
 and race, with four causal controls and the integrated authority-projection

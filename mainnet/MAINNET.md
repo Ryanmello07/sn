@@ -970,6 +970,16 @@ Native denominator, quantization, recipient generation, entitlement, actual
 owner recycling and the 10/90 outcome remain unresolved. This incremental
 source integration does not approve a release or mainnet activation.
 
+MG-10 testing lesson (2026-09-29): the SDK-pinned 618-root unsharded race
+process reached its one-hour package timeout while
+`TestEvmEscrowRegisterClaimRecoveryKeepsFourLocks` had been active for about
+25 seconds; no top-level root failure was observed. Bounded shard/wave coverage
+stood at 615/618 roots at that capture. Split broad race suites into disjoint,
+exact root shards, retain each shard's package exit and the original timeout,
+and preserve completed results without resetting their evidence. Remaining
+race coverage stays pending until the full root census and successful package
+exits are reconciled.
+
 The [owner-recycle measured decision](../validator/OWNER-RECYCLE-MEASUREMENT.md)
 now joins signed successor approval, exact native owner census and fully
 replayed original V2 provider proofs in a distinct capsule. It reconstructs
