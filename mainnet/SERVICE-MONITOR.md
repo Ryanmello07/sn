@@ -93,9 +93,16 @@ future producer clocks; missing input cannot clear a clock incident. A valid
 new observation is required for recovery, and consumer time must catch up to its
 retained high-water within the allowed skew.
 
+[Read incident continuity](READ-INCIDENTS.md) now retains stable outage IDs,
+first/latest failure summaries, successful-read recovery evidence and recurrence
+counts across restart. A successful read closes only its read incident; stale
+producer evidence and unresolved native deadlines keep their own status. Legacy
+history is explicitly unknown. The v3 checkpoint needs compatible rollback and
+log consumers; normal/race qualification and live deployment remain pending.
+
 ## Publication and independent telemetry
 
-Per-role checkpoints are at most 16 KiB; textfiles contain 46 fixed gauges within
+Per-role checkpoints are at most 16 KiB; textfiles contain 74 fixed role gauges within
 32 KiB. The only new metric label is the independently configured `role`.
 Config/deployment identifiers, paths, vector hashes and raw errors are never
 labels. JSON events use `urnetwork-mainnet-validator-event-v1` and preserve the
@@ -109,6 +116,7 @@ Every gauge begins with `sn_mainnet_validator_`:
 | Suffix group | Meaning |
 | --- | --- |
 | `sample_timestamp_seconds`, `read_last_success_timestamp_seconds`, `read_current`, `read_outage_started_timestamp_seconds` | Completed consumer observation, successful exact-source read and unresolved read outage. |
+| `read_incident_*` | Durable first/latest failures, read recovery and recurrence; see [read incident continuity](READ-INCIDENTS.md). |
 | `status`, `severity`, `clock_fault_timestamp_seconds`, `candidate_heartbeat_timestamp_seconds` | Closed diagnostic state, severity and rejected clock evidence. |
 | `export_status`, `export_last_success_timestamp_seconds`, `checkpoint_current` | Previous acknowledged complete export and current checkpoint result. |
 | `has_record`, `source_current`, `source_config_current`, `heartbeat_timestamp_seconds` | Retained-record presence, fresh exact-source evidence, config match and producer heartbeat. |

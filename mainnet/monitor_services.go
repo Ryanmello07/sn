@@ -183,6 +183,10 @@ func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Durat
 		}
 		sampledAt := now().UTC()
 		self.state.observe(startedAt, sampledAt, value, code)
+		if err := self.state.retainReadIncident(self.policy); err != nil {
+			fmt.Fprintln(stderr, "monitor service read incident:", err)
+			return 3
+		}
 		self.state.retainNativeDeadline(self.policy, sampledAt)
 		checkpointErr := self.checkpoint.save(self.state)
 		if checkpointErr != nil {

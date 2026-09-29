@@ -107,6 +107,13 @@ chain worker retries independently. Application/reveal and settlement deadline
 inference, other domain coverage, delivered alerts and the repair controller remain
 open; source qualification does not establish live monitoring.
 
+The MG-07 [read incident continuity increment](READ-INCIDENTS.md) now carries
+stable outage IDs, first/latest failures, successful-read recovery and recurrence
+through per-role checkpoint restart. Legacy history remains explicitly unknown;
+recovery does not attest to service health or authorize repair/spend. Source
+normal/race qualification, complete incident retention, compatible rollout and
+actual alert delivery remain open.
+
 The optional [native submission deadline observer](NATIVE-DEADLINES.md) now
 wires explicit per-role completion margins into the actual service worker.
 It distinguishes schedule forecasts and unavailable reads from a completed

@@ -180,7 +180,8 @@ func renderMonitorValidatorMetrics(policy monitorValidatorPolicy, state *monitor
 	for _, metric := range values {
 		fmt.Fprintf(&output, "# TYPE sn_mainnet_validator_%s gauge\nsn_mainnet_validator_%s{role=%q} %v\n", metric.name, metric.name, policy.Role, metric.value)
 	}
-	raw := appendMonitorProducerDiagnostics([]byte(output.String()), policy.Role, state)
+	raw := appendMonitorReadIncidentMetrics([]byte(output.String()), policy.Role, state.ReadIncidents)
+	raw = appendMonitorProducerDiagnostics(raw, policy.Role, state)
 	if len(raw) > 32*1024 {
 		return nil, errors.New("validator metrics exceed their bound")
 	}
