@@ -230,8 +230,9 @@ state root by replaying receipt/finality proofs, then checks raw storage proofs
 against it. All 16 focused and six adjacent roots pass normal/race with package
 exit zero; all 21 causal controls discriminate in both modes. The pinned SDK
 oracle supplies 18 exact vectors, and the two prior fixture/control anomalies
-remain separate. Runtime decoding and earlier receipt/parent-root reads are
-absent. Checkpoint approval, proof capture, fee attribution, owner-window/global-
+remain separate. Its API covers the collection boundary; the qualified historical
+interface below adds selected receipt/parent reads. Runtime decoding, checkpoint
+approval, proof capture, fee attribution, owner-window/global-
 custody authority and service adoption remain open, with actual fees null.
 
 The MG-03/PF-03 [qualified historical receipt/native fee-context source](evidence/operator-native-fee-context-qualification-20260929.md)
@@ -242,9 +243,20 @@ composed smoke passes 30 of 138 available roots per normal/race mode. It preserv
 all signed history while deriving exact receipt-native
 child/parent contexts; missing or ambiguous coverage remains unresolved. Actual
 fees remain null and source-profile mapping grants no payer/runtime authority.
-The current native StorageProof slice covers only the collection-boundary root;
-historical child/parent reads and runtime-qualified withdrawal/refund attribution
-remain separate implementation and qualification dependencies.
+The original native StorageProof interface covers the collection-boundary root;
+the qualified historical interface below adds selected child/parent reads.
+Runtime-qualified withdrawal/refund attribution remains a separate dependency.
+
+The MG-03/PF-03 [qualified historical native StorageProof API](evidence/operator-historical-native-storage-qualification-20260929.md)
+is integrated at server `80c0e1b7`. Fresh receipt/native context replay derives
+the exact selected parent
+execution or child post-state root. A unique checkpoint child can prove raw reads
+while its parent stays unavailable and nested fee coverage stays incomplete;
+that child cannot become an execution-parent substitute. All 20 new and 30
+adjacent roots pass normal/race with package exit zero; all 21 causal controls
+discriminate in both modes. This 50-root scope does not claim whole-package
+coverage. Runtime decoding, payer/fee attribution,
+owner-window/global-custody authority and live action remain absent; fees are null.
 
 The optional [native submission deadline observer](NATIVE-DEADLINES.md) now
 wires explicit per-role completion margins into the actual service worker.

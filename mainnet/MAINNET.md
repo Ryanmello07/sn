@@ -1628,8 +1628,10 @@ later certificate cannot move that state root. All 16 focused and six adjacent
 roots pass normal/race with package exit zero, and all 21 causal controls
 discriminate in both modes. The independent pinned-SDK oracle supplies 18 exact
 vectors. Both earlier fixture/control anomalies remain separately preserved.
-Runtime decoding, earlier receipt/parent roots, proof capture, account/fee
-authority and live custody remain open; actual fees stay null. This scoped
+Its original API covers the collection boundary; the qualified historical
+interface below supplies selected receipt/parent reads. Runtime decoding, proof
+capture, account/fee authority and live custody remain open; actual fees stay null.
+This scoped
 qualification creates no owner-window, global-custody or spending authority.
 
 The [pinned-runtime fee dependency review](https://github.com/urnetwork/server/blob/cfcbfcbaa13b4f4d298acfeca761a7252c18ddee/strecovery/ACTUAL-FEE-DEPENDENCIES.md)
@@ -1637,8 +1639,8 @@ is integrated at server `cfcbfcba` as documentation only. Generic balance
 events share an extrinsic phase with native precompile effects; block balance
 deltas also include non-fee effects, and a failed best-effort refund lacks a
 fee-specific record. Neither proves general operator-call gas debits. Actual
-fees remain null. The next dependency is bounded native-state capture and
-authentication at each required historical receipt/parent root, followed by
+fees remain null. The next dependency is bounded capture of historical raw
+proofs and execution-runtime/source/metadata admission, followed by
 runtime-qualified debit/refund
 attribution through historical execution replay or an admitted fee-specific
 runtime event. A future event cannot reconstruct historical fees. Independent
@@ -1655,10 +1657,22 @@ composed smoke passes 30 of 138 available roots per normal/race mode. It derives
 each receipt block's exact native commitment candidates and linked parent root
 while keeping absent/ambiguous mappings unresolved.
 Its source-profile account mapping supplies no runtime or payer admission, and
-all actual fee amounts remain null. The integrated native StorageProof verifier
-verifies only collection-boundary reads; historical receipt child and parent
-roots need a separately qualified proof interface before runtime/debit
-attribution. These prerequisite slices do not close MG-03/PF-03.
+all actual fee amounts remain null. The original native StorageProof interface
+covers collection-boundary reads; the separately qualified historical interface
+below joins selected child/parent proofs. Runtime/debit attribution remains
+separate. These prerequisite slices do not close MG-03/PF-03.
+
+The [qualified historical native StorageProof API](evidence/operator-historical-native-storage-qualification-20260929.md)
+is integrated at server `80c0e1b7`. It freshly replays receipt/native fee contexts
+and derives one exact
+receipt block's linked parent execution root or child post-state root internally.
+A valid checkpoint child remains provable while its missing parent and incomplete
+fee context stay explicit; parent fallback, ambiguous mappings and descendant
+substitution are refused. All 20 new plus 30 adjacent roots pass normal/race with
+package exit zero; all 21 causal controls discriminate in both modes. This is
+50 selected roots per mode, not whole-package coverage. Runtime/payer/fee
+interpretation, live
+authority and custody remain absent, and actual fees stay null.
 
 The independent monitor confirms the repair's postcondition at finalized state.
 Only then close the incident, retaining its history and action receipts. A local
