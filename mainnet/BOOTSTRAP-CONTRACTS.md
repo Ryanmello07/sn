@@ -39,8 +39,19 @@ records its provisional eight-action prefix and separate pending qualification.
 
 Evidence CREATE (index seven) is provisionally integrated with the
 [admission test correction](evidence/bootstrap-contract-evidence-admission-test-correction-20260929.md).
-All 28 normal action roots passed; race qualification and live deployment gates
-remain open.
+Its initial integration had all 28 normal action roots passing, with race and
+live deployment gates still open.
+
+The [graph work correction](evidence/bootstrap-contract-plan-graph-work-20260929.md)
+is provisionally integrated from frozen source `1c87fce8`. The
+[provisional test receipt](/mnt/data/sn-testnet/qualification/sol-evm-plan-graph-work-20260929/RESULT-provisional.md)
+records complete scoped checks: 5/5 graph roots, 28/28 evidence roots and 177/177
+adjacent roots pass normally and under race, and all six graph causal controls
+discriminate. The exact seven-predecessor checkpoint race passed in 1975.38 seconds
+under its 60-minute retry; the original 30-minute package timeout remains recorded
+as a test time limit, not a product failure. The independent full `./mainnet`
+normal package remains pending. These scoped results do not close live deployment
+gates or establish a full package pass.
 
 The release catalog comes from the existing generator:
 
