@@ -22,7 +22,7 @@ func runBootstrapChainCommand(ctx context.Context, args []string, stdout, stderr
 		return runBootstrapTrimCommand(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) < 2 || args[1] != "plan" && args[1] != "apply" && args[1] != "resume" && args[1] != "readiness" {
-		fmt.Fprintln(stderr, "bootstrap-chain requires plan, apply, resume, read-only readiness, contract-plan or offline contract-readiness")
+		fmt.Fprintln(stderr, "bootstrap-chain requires plan, apply, resume, read-only readiness, contract-plan, offline contract-readiness or unsigned contract-successor-plan")
 		return 2
 	}
 	command := args[1]

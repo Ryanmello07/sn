@@ -116,6 +116,11 @@ durable claim, with an independent signature covering:
    renew spent financial authority.
 
 These requirements permit an approved increase without restarting deployment.
+The separate [unsigned successor proposal](BOOTSTRAP-CONTRACT-SUCCESSOR.md)
+reads all eight completed originals, preserves their seals and any ninth reserved
+envelope, and computes an additive attempt/lifetime proposal for the unfinished
+anchor and retry margin. It creates no successor approval or execution custody;
+the Safe provenance and signed migration owner remain unresolved.
 The new source includes deterministic missing/partial custody, cap-change,
 exact completed-prefix reuse, lock-release and command-scope regressions.
 Behavioral qualification remains pending; no live installation is claimed.
