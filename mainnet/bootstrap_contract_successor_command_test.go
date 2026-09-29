@@ -46,6 +46,9 @@ func newBootstrapSuccessorCommandFixture(t *testing.T) *bootstrapChainFixture {
 	f.config.OwnerTrimPlan = bootstrapRootTestWrite(t, f.config.OwnerTrimPlan.Path, trim)
 	contracts.config.Plan.Network, contracts.config.Plan.DeploymentId = f.config.Network, f.config.DeploymentId
 	contracts.config.Plan.RunDirectory = f.config.RunDirectory
+	// Genuine inclusion decodes full native metadata under race instrumentation.
+	// This success-path fixture approves the existing finite send bound up front.
+	contracts.config.Plan.Route.SendTimeoutSeconds = 60
 	contracts.config.Plan.Runtime = rootReceiptProfile{RuntimeSourceCommit: policy.RuntimeSourceCommit, RuntimeVersion: policy.RuntimeVersion,
 		RuntimeCodeHash: policy.RuntimeCodeHash, RuntimeMetadataHash: policy.RuntimeMetadataHash}
 	contracts.metadata, err = hex.DecodeString(f.census.metadataHex[2:])
@@ -118,7 +121,7 @@ func TestBootstrapContractSuccessorCommandAdoptsCompleteV3Custody(t *testing.T) 
 			{"--online", "--submit"}, {"--online"},
 		} {
 			if _, code, diagnostic := f.contracts.command("resume", append([]string{"--action", action.Id}, args...)...); code != 0 {
-				t.Fatalf("execute genuine action %s: %d %s", action.Id, code, diagnostic)
+				t.Fatalf("execute genuine action %s %v: %d %s", action.Id, args, code, diagnostic)
 			}
 		}
 	}
