@@ -191,8 +191,17 @@ Source preparation refuses a different block before reading storage or taking
 a nonce. Offline signed-byte reconstruction establishes encoding and signature
 integrity; it cannot grant runtime approval. Original bytes remain reusable
 after cold authentication at the same artifact, while a changed signing domain
-still requires separate reconciliation. Production release approval gates and
-upgrade-boundary receipt qualification remain open.
+still requires separate reconciliation.
+
+The standard validator's [qualified source-receipt correction](evidence/validator-source-runtime-qualification-20260929.md)
+keeps original preparation, parent execution and post-state runtime views
+separate across an independently approved upgrade. Original signed bytes stay
+fixed; events use execution metadata and commitment readback uses post-state
+metadata. All 103 selected receipt and adjacent roots pass normal and race
+qualification. Changed execution signing domains, unsupported consumed
+interfaces and absent historical approvals still fail. Automatic runtime
+approval, wider current-head consumers, both validator roles and live release
+qualification remain open.
 
 The validator now has a separate [mainnet runtime observation admission
 path](evidence/mainnet-runtime-observation-20260927.md). A schema-2 config pins
