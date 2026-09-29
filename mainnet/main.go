@@ -148,8 +148,11 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && (args[0] == "check-recycle-mode" || args[0] == "economic-reference") {
 		return runEconomicCommand(ctx, args, stdout, stderr)
 	}
+	if len(args) != 0 && args[0] == "observe-native-miner-emission" {
+		return runEconomicEmissionCommand(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || args[0] != "inspect" && args[0] != "monitor" {
-		fmt.Fprintln(stderr, "usage: sn-mainnet inspect|monitor|runtime-snapshot|finalized-mapping|finalized-snapshot --rpc URL [identity flags]; root-preview|root-monitor|subnet-preview|owner-trim-plan --rpc URL --policy FILE; owner-trim-recheck|owner-trim-reconcile --rpc URL --policy FILE --plan FILE --plan-hash sha256:DIGEST; owner-trim-qualify --rpc URL --policy FILE --window FILE; check-recycle-mode --rpc URL --policy FILE; economic-reference --input FILE; source-lock --sn-dir DIR; plan --outline|--config FILE; bootstrap|bootstrap-chain plan|apply|resume --config FILE [local custody confirmation flags]; bootstrap-chain readiness --config FILE --run-dir DIR --accept-plan-hash HASH --rpc URL; bootstrap-contracts preview|plan|apply|resume --config FILE; release-inventory --config FILE")
+		fmt.Fprintln(stderr, "usage: sn-mainnet inspect|monitor|runtime-snapshot|finalized-mapping|finalized-snapshot --rpc URL [identity flags]; root-preview|root-monitor|subnet-preview|owner-trim-plan --rpc URL --policy FILE; owner-trim-recheck|owner-trim-reconcile --rpc URL --policy FILE --plan FILE --plan-hash sha256:DIGEST; owner-trim-qualify --rpc URL --policy FILE --window FILE; check-recycle-mode|observe-native-miner-emission --rpc URL --policy FILE; economic-reference --input FILE; source-lock --sn-dir DIR; plan --outline|--config FILE; bootstrap|bootstrap-chain plan|apply|resume --config FILE [local custody confirmation flags]; bootstrap-chain readiness --config FILE --run-dir DIR --accept-plan-hash HASH --rpc URL; bootstrap-contracts preview|plan|apply|resume --config FILE; release-inventory --config FILE")
 		return 2
 	}
 	command := args[0]
