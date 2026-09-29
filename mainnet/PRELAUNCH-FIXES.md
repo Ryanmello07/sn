@@ -237,7 +237,8 @@ custody authority and service adoption remain open, with actual fees null.
 The MG-03/PF-03 [qualified historical receipt/native fee-context source](evidence/operator-native-fee-context-qualification-20260929.md)
 at server `41527380` passes all ten new and 122 affected roots normal/race,
 including three disposable-database roots; all six causal controls discriminate
-in both modes. Integration remains pending in storage-first order. It preserves
+in both modes. It is integrated after storage as server `1bccc3cd`; a separate
+composed smoke passes 30 of 138 available roots per normal/race mode. It preserves
 all signed history while deriving exact receipt-native
 child/parent contexts; missing or ambiguous coverage remains unresolved. Actual
 fees remain null and source-profile mapping grants no payer/runtime authority.

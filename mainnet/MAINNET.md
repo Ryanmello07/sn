@@ -1650,11 +1650,12 @@ accounting or spending authority and does not close MG-03/PF-03.
 The [qualified historical receipt/native fee-context source](evidence/operator-native-fee-context-qualification-20260929.md)
 at server `41527380` passes all ten new and 122 affected roots in normal/race,
 including three disposable-database roots; six causal controls discriminate in
-both modes. Shared integration remains pending in storage-first order. It derives
+both modes. It is integrated after storage as server `1bccc3cd`; a separate
+composed smoke passes 30 of 138 available roots per normal/race mode. It derives
 each receipt block's exact native commitment candidates and linked parent root
 while keeping absent/ambiguous mappings unresolved.
 Its source-profile account mapping supplies no runtime or payer admission, and
-all actual fee amounts remain null. The separate native StorageProof candidate
+all actual fee amounts remain null. The integrated native StorageProof verifier
 verifies only collection-boundary reads; historical receipt child and parent
 roots need a separately qualified proof interface before runtime/debit
 attribution. These prerequisite slices do not close MG-03/PF-03.

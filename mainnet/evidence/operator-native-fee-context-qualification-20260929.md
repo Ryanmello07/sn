@@ -1,11 +1,15 @@
 # MG-03 historical receipt/native fee-context qualification
 
-**Independent source qualification passed; shared integration is pending.**
+**Independent source qualification passed; shared integration is complete.**
 The exact qualified server candidate is
 `4152738039880408ade55edec3e42c1ecf2e40ec`, tree
 `c685d73209c643c4137a1c3fe0546809059b34af`, based on qualified native finality
-capture `5ff7bf0264b775920049910896c23ec58862429f`. This receipt does not claim
-shared-source integration, a remote push or a passing composed release.
+capture `5ff7bf0264b775920049910896c23ec58862429f`. It was merged after qualified
+StorageProof `6201504ec18cd42b54083681c5dc5ca62fdcdb41` as server
+`1bccc3cd7138faefddaa3ab4df15c5cc77e1bd4a`, tree
+`1fd1f1155abfcfa600bd1891ef7bc56081f6c346`. The non-force push and exact remote
+head on `codex/mainnet-server-hardening-20260927` were independently verified.
+This records source integration, not an admitted production release.
 
 The [offline fee-context contract](https://github.com/urnetwork/server/blob/4152738039880408ade55edec3e42c1ecf2e40ec/strecovery/NATIVE-FEE-CONTEXTS.md)
 replays the existing pinned archive, receipt collection, checkpoint and GRANDPA
@@ -69,14 +73,36 @@ its [69-artifact manifest](/mnt/data/sn-testnet/qualification/mg03-native-fee-ev
 has SHA256 `b41fcb1a606eee311b522dab60073b823b8141a2a3994f401e41b53048c70815`.
 These author artifacts are not an independent behavioral receipt.
 
-The planned source order is qualified native StorageProof child
-`6201504ec18cd42b54083681c5dc5ca62fdcdb41`, then this fee-context source.
-The two candidates modify disjoint server paths. A metadata merge preflight
-checks every resulting candidate blob and unchanged `go.mod`/`go.sum`;
-it does not qualify their composed behavior. The predicted tree is
-`1fd1f1155abfcfa600bd1891ef7bc56081f6c346`. Shared integration remains held until
-storage qualification and its preceding integration complete; composed smoke
-must attest the exact resulting source and physical graph separately.
+Integration preserved that storage-first order and every qualified candidate
+blob. The two candidates modify disjoint server paths; the actual merged tree
+matches the metadata preflight and changes neither `go.mod` nor `go.sum`.
+Sol separately qualified a 30-root normal/race smoke on the exact integrated
+source and physical graph: 26 recovery roots and four CLI roots, each with
+package PASS and process exit 0, with no missing, extra, failed or skipped roots.
+All nine physical source entries stayed clean and the resolved module JSON
+stayed byte-identical. Astra independently verified all 20 Sol and 12 author
+manifest entries, all four raw package streams and the physical graph again.
+Composed vet passed; Astra executed no behavioral test body.
+
+The evidence retains three distinct coverage scopes:
+
+| Source | Positive coverage per normal/race mode | Causal coverage |
+| --- | --- | --- |
+| StorageProof `6201504e` | 16 focused + 6 adjacent roots | 21 controls, 42 executions |
+| Fee contexts `41527380` | All 122 affected roots, including 3 disposable-database roots | 6 controls, 12 executions |
+| Composed `1bccc3cd` | 30 of 138 available roots | No new controls or database run |
+
+The scoped composed smoke does not establish full composed-package, production
+service or release qualification. Its source graph SHA256 is
+`a3e76005e2db001b4dcde211ae2a5bc1342ed5a2afd16b17fec3b3ca330bc9e9`;
+resolved module JSON SHA256 is
+`4074d412032078ec0ea10d73581924887334a4f1cb76b9e7e110ce6d2abb34bb`.
+
+| Composed receipt | SHA256 |
+| --- | --- |
+| [Sol composed result](/mnt/data/sn-testnet/qualification/mg03-native-state-fee-context-compose-sol-20260929/frozen-1bccc/SOL-RESULT.md) | `747401ef196437ceb0cbe771586caa01b9b6ca221c24470e709ef33ddccd0def` |
+| [20-file composed manifest](/mnt/data/sn-testnet/qualification/mg03-native-state-fee-context-compose-sol-20260929/frozen-1bccc/SHA256SUMS) | `81a3aba04e86c2066b1ea4e532c9c2843b9635bc2aeb6af921679cddcb92acf1` |
+| [Independent composed audit](/mnt/data/sn-testnet/qualification/mg03-fee-context-integration-preflight-20260929/COMPOSED-SMOKE-AUDIT.json) | `15998f499524af1260f9b2cb52f940b057ebc9504b4dc9294481ceda84bd5b98` |
 
 ## Historical storage-proof dependency and gate impact
 
