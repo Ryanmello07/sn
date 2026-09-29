@@ -13,6 +13,18 @@ func openRegistrationStore(string) (*registrationStore, error) {
 	return nil, errors.New("durable client registration requires Unix custody support")
 }
 
+func openRegistrationStoreForOwner(string, *registrationStore) (*registrationStore, error) {
+	return nil, errors.New("provider custody requires Unix directory ownership")
+}
+
+func (self *registrationStore) check() error {
+	return errors.New("durable client registration custody is unavailable")
+}
+
+func (self *registrationStore) remove(string) error {
+	return errors.New("durable client registration custody is unavailable")
+}
+
 func (self *registrationStore) read(string) ([]byte, error) {
 	return nil, errors.New("durable client registration custody is unavailable")
 }

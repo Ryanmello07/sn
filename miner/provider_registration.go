@@ -4,7 +4,6 @@ package miner
 
 import (
 	"context"
-	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -88,20 +87,11 @@ func providerRegistrationRetryable(err error, depth int) bool {
 
 // Each attempt is finite. Later attempts replay the same durably retained
 // operation and never fall back to the legacy allocating endpoint.
-func authenticateProvider(ctx context.Context, api *sdk.Api, networkPath, clientPath string, seed []byte, slot string, allowCreate bool, output *providerDiagnostics, index uint64) (string, connect.Id, error) {
-	if len(seed) != ed25519.SeedSize {
-		return "", connect.Id{}, errors.New("provider registration lacks its retained client key")
-	}
-	endpoint, err := api.NetworkClientRegistrationEndpoint()
-	if err != nil {
-		return "", connect.Id{}, err
-	}
-	public := ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey)
-	scope := clientauth.RegistrationScope{Endpoint: endpoint, ClientKey: "0x" + hex.EncodeToString(public), ClientRole: "provider-v1", ClientSlot: slot}
+func authenticateProvider(ctx context.Context, api *sdk.Api, networkPath, clientPath string, keyOwner *clientauth.ProviderClientKeyOwner, slot string, allowCreate bool, output *providerDiagnostics, index uint64) (string, connect.Id, error) {
 	hooks, _ := ctx.Value(providerRegistrationHooksKey{}).(providerRegistrationHooks)
 	for {
 		attempt, cancel := context.WithTimeout(ctx, 300*time.Second)
-		token, id, err := clientauth.LoadOrRegisterClientJwt(attempt, api, networkPath, clientPath, "provider", scope, allowCreate)
+		token, id, err := keyOwner.LoadOrRegisterClientJwt(attempt, api, networkPath, clientPath, slot, allowCreate)
 		cancel()
 		if hooks.afterAttempt != nil {
 			if hookErr := hooks.afterAttempt(err); hookErr != nil {
@@ -110,7 +100,7 @@ func authenticateProvider(ctx context.Context, api *sdk.Api, networkPath, client
 		}
 		if err == nil {
 			if hooks.afterAuthenticated != nil {
-				if err := hooks.afterAuthenticated(token, id, append([]byte(nil), seed...)); err != nil {
+				if err := hooks.afterAuthenticated(token, id, keyOwner.Seed()); err != nil {
 					return "", connect.Id{}, err
 				}
 			}

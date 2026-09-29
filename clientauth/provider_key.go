@@ -13,6 +13,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/urnetwork/connect"
+	"github.com/urnetwork/sdk"
 )
 
 // The caller owns Close after every device and authentication worker has joined.
@@ -138,13 +141,7 @@ func admitProviderKeyMarker(store *registrationStore, adoptLegacy bool) error {
 		if name == ".provider.cert" || name == ".provider.extender.key" {
 			continue
 		}
-		legacyJwt := name == ".provider.jwt"
-		if strings.HasPrefix(name, ".provider-") && strings.HasSuffix(name, ".jwt") {
-			value := strings.TrimSuffix(strings.TrimPrefix(name, ".provider-"), ".jwt")
-			raw, err := hex.DecodeString(value)
-			legacyJwt = err == nil && len(raw) == 8 && value == hex.EncodeToString(raw)
-		}
-		if !legacyJwt {
+		if !providerClientCredentialName(name) {
 			return &RegistrationRefusedError{Code: "provider_key_legacy_adoption_has_nonlegacy_history"}
 		}
 		raw, err := store.read(name)
@@ -161,6 +158,63 @@ func admitProviderKeyMarker(store *registrationStore, adoptLegacy bool) error {
 		return &RegistrationRefusedError{Code: "provider_key_legacy_adoption_lacks_credential"}
 	}
 	return nil
+}
+
+// Only the direct credential or the established proxy credential name can be
+// written through this key owner. Callers cannot select its seed or marker.
+func providerClientCredentialName(name string) bool {
+	if name == ".provider.jwt" {
+		return true
+	}
+	if !strings.HasPrefix(name, ".provider-") || !strings.HasSuffix(name, ".jwt") {
+		return false
+	}
+	value := strings.TrimSuffix(strings.TrimPrefix(name, ".provider-"), ".jwt")
+	raw, err := hex.DecodeString(value)
+	return err == nil && len(raw) == 8 && value == hex.EncodeToString(raw)
+}
+
+// Every attempt borrows the same physical key directory. The immutable cached
+// key is useful only with that original custody, never a replacement pathname.
+func (self *ProviderClientKeyOwner) LoadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, clientPath, slot string, allowCreate bool) (string, connect.Id, error) {
+	if self == nil || self.store == nil || len(self.seed) != ed25519.SeedSize || !providerClientCredentialName(filepath.Base(clientPath)) || api == nil {
+		return "", connect.Id{}, errors.New("provider registration lacks its retained custody owner")
+	}
+	endpoint, err := api.NetworkClientRegistrationEndpoint()
+	if err != nil {
+		return "", connect.Id{}, err
+	}
+	public := ed25519.NewKeyFromSeed(self.seed).Public().(ed25519.PublicKey)
+	scope := RegistrationScope{Endpoint: endpoint, ClientKey: "0x" + hex.EncodeToString(public), ClientRole: "provider-v1", ClientSlot: slot}
+	return loadOrRegisterClientJwtInDirectory(ctx, api, networkPath, clientPath, "provider", scope, allowCreate, registrationHooks{}, self.store)
+}
+
+// A completed refresh can update only a credential in the key owner's original
+// directory. The enclosing API callback still validates its original identity.
+func (self *ProviderClientKeyOwner) PersistClientJwt(clientPath, token string) (returnErr error) {
+	if self == nil || self.store == nil || !providerClientCredentialName(filepath.Base(clientPath)) || strings.TrimSpace(token) == "" {
+		return errors.New("provider refresh lacks owned credential custody")
+	}
+	store, err := openRegistrationStoreForOwner(clientPath, self.store)
+	if err != nil {
+		return err
+	}
+	defer func() { returnErr = errors.Join(returnErr, store.close()) }()
+	return store.write(filepath.Base(clientPath), []byte(strings.TrimSpace(token)))
+}
+
+// A confirmed rejection is sticky in original provider custody. It never reads
+// a replacement directory's bootstrap or uses fresh login as creation authority.
+func (self *ProviderClientKeyOwner) RejectClientJwt(clientPath string) (returnErr error) {
+	if self == nil || self.store == nil || !providerClientCredentialName(filepath.Base(clientPath)) {
+		return errors.New("provider rejection lacks owned credential custody")
+	}
+	store, err := openRegistrationStoreForOwner(clientPath, self.store)
+	if err != nil {
+		return err
+	}
+	defer func() { returnErr = errors.Join(returnErr, store.close()) }()
+	return errors.Join(store.remove(filepath.Base(clientPath)), store.write(filepath.Base(rejectionPath(clientPath)), []byte("blocked")))
 }
 
 // Independent device settings receive their own immutable seed copy.

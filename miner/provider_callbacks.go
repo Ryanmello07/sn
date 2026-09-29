@@ -23,11 +23,18 @@ type providerAuthenticationCallbacks struct {
 	clientJwtPath  string
 	networkJwtPath string
 	cancel         context.CancelFunc
+	custody        *clientauth.ProviderClientKeyOwner
 }
 
 // Required token persistence precedes its existing global cancellation policy.
 func (self *providerAuthenticationCallbacks) JwtRefreshed(jwt string) {
-	if err := clientauth.WriteToken(self.clientJwtPath, jwt); err != nil {
+	var err error
+	if self.custody != nil {
+		err = self.custody.PersistClientJwt(self.clientJwtPath, jwt)
+	} else {
+		err = clientauth.WriteToken(self.clientJwtPath, jwt)
+	}
+	if err != nil {
 		self.retainFailure(err)
 		self.cancel()
 		self.diagnostics.observe(providerJwtSaveFailed, self.provider, true, err, 0, nil)
@@ -37,7 +44,12 @@ func (self *providerAuthenticationCallbacks) JwtRefreshed(jwt string) {
 // A rejected credential is tombstoned before requesting shutdown. A failed
 // tombstone is retained, without blocking cancellation on an output write.
 func (self *providerAuthenticationCallbacks) AuthLogout() {
-	err := clientauth.MarkRejected(self.clientJwtPath, self.networkJwtPath)
+	var err error
+	if self.custody != nil {
+		err = self.custody.RejectClientJwt(self.clientJwtPath)
+	} else {
+		err = clientauth.MarkRejected(self.clientJwtPath, self.networkJwtPath)
+	}
 	if err != nil {
 		self.retainFailure(err)
 	}

@@ -33,6 +33,7 @@ const (
 	providerStatusStarted
 	providerStatusFailed
 	providerStatusNotice
+	providerStartupRecoveryRequired
 )
 
 // Immutable scalar status can be compared without formatting SDK error strings.
@@ -152,12 +153,18 @@ func (self *providerDiagnostics) observe(event providerDiagnosticEvent, provider
 		code = "status_failed"
 	case providerStatusNotice:
 		code = "http_notice"
+	case providerStartupRecoveryRequired:
+		domain, code = "authentication", "startup_recovery_required"
 	}
 	if event != providerExtenderObserved {
 		extender = nil
 	}
 	if retry < 0 {
 		retry = 0
+	}
+	guidance := ""
+	if event == providerStartupRecoveryRequired {
+		guidance = "Check proxy slots and restore original provider custody. Known new work: --allow-client-registration. Verified original legacy key/JWT: --adopt-legacy-provider-key. See miner/PROVIDER-REGISTRATION.md."
 	}
 	record := struct {
 		Schema        string                       `json:"schema"`
@@ -168,7 +175,8 @@ func (self *providerDiagnostics) observe(event providerDiagnosticEvent, provider
 		Cause         string                       `json:"cause"`
 		RetryMs       uint64                       `json:"retry_ms"`
 		Extender      *providerExtenderObservation `json:"extender,omitempty"`
-	}{Schema: providerDiagnosticSchema, Domain: domain, Event: code, Provider: provider, ProviderKnown: known, Cause: providerDiagnosticCause(err), RetryMs: uint64(retry / time.Millisecond), Extender: extender}
+		Guidance      string                       `json:"guidance,omitempty"`
+	}{Schema: providerDiagnosticSchema, Domain: domain, Event: code, Provider: provider, ProviderKnown: known, Cause: providerDiagnosticCause(err), RetryMs: uint64(retry / time.Millisecond), Extender: extender, Guidance: guidance}
 	raw, encodeErr := json.Marshal(record)
 	if encodeErr != nil {
 		return // All fields above are scalar; no arbitrary marshaler is invoked.

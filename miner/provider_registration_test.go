@@ -715,3 +715,112 @@ func TestProviderDiagnosticsRunAuthenticationWaitCancels(t *testing.T) {
 		t.Fatal("authentication wait held provider cancellation")
 	}
 }
+
+// A real unavailable attempt releases its slot lock but retains the physical
+// key-directory owner. Replacement paths cannot manufacture another request.
+func TestProviderRegistrationRetryRejectsReplacedDirectory(t *testing.T) {
+	fixture := newProviderRegistrationFixture(t)
+	fixture.status = http.StatusServiceUnavailable
+	retained := filepath.Join(t.TempDir(), "retained")
+	var original []byte
+	var replaced bool
+	err := fixture.run(t.Context(), true, providerRegistrationHooks{afterAttempt: func(err error) error {
+		if replaced {
+			return nil
+		}
+		if !providerRegistrationRetryable(err, 0) {
+			return errors.New("synthetic directory barrier did not follow unavailable HTTP")
+		}
+		var readErr error
+		original, readErr = os.ReadFile(filepath.Join(fixture.dir, ".provider.jwt.registration"))
+		if readErr != nil {
+			return readErr
+		}
+		if err := os.Rename(fixture.dir, retained); err != nil {
+			return err
+		}
+		if err := os.Mkdir(fixture.dir, 0700); err != nil {
+			return err
+		}
+		for _, name := range []string{".provider.key", ".provider.key.identity"} {
+			raw, err := os.ReadFile(filepath.Join(retained, name))
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(fixture.dir, name), raw, 0600); err != nil {
+				return err
+			}
+		}
+		if err := clientauth.WriteToken(filepath.Join(fixture.dir, "jwt"), providerRegistrationTestToken(t, "", "replacement-bootstrap")); err != nil {
+			return err
+		}
+		replaced = true
+		return nil
+	}})
+	posts, legacy, allocated, _ := fixture.counts()
+	_, newRequestErr := os.Stat(filepath.Join(fixture.dir, ".provider.jwt.registration"))
+	_, newLockErr := os.Stat(filepath.Join(fixture.dir, ".provider.jwt.registration.lock"))
+	retainedRequest, readErr := os.ReadFile(filepath.Join(retained, ".provider.jwt.registration"))
+	if !replaced || err == nil || posts != 1 || legacy != 0 || allocated != 1 || !errors.Is(newRequestErr, os.ErrNotExist) || !errors.Is(newLockErr, os.ErrNotExist) || readErr != nil || !bytes.Equal(original, retainedRequest) {
+		t.Fatal("provider retry consulted replacement custody instead of its original directory", err)
+	}
+}
+
+// Real refresh/logout callbacks use the same descriptor-bound custody. A
+// replacement namespace cannot receive a renewed token or rejection tombstone.
+func TestProviderRegistrationCallbacksRetainPhysicalCustody(t *testing.T) {
+	for _, action := range []string{"refresh", "logout"} {
+		for _, replace := range []bool{false, true} {
+			dir := t.TempDir()
+			path := filepath.Join(dir, ".provider.jwt")
+			keyOwner, err := clientauth.OpenProviderClientKey(t.Context(), filepath.Join(dir, ".provider.key"), clientauth.ProviderClientKeyOptions{AllowCreate: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = keyOwner.Close() })
+			initial := providerRegistrationTestToken(t, "00000000-0000-0000-0000-000000000101", "original")
+			refreshed := providerRegistrationTestToken(t, "00000000-0000-0000-0000-000000000101", "refreshed")
+			replacement := providerRegistrationTestToken(t, "00000000-0000-0000-0000-000000000102", "replacement")
+			if err := clientauth.WriteToken(path, initial); err != nil {
+				t.Fatal(err)
+			}
+			originalPath := path
+			if replace {
+				retained := filepath.Join(t.TempDir(), "retained")
+				if err := os.Rename(dir, retained); err != nil {
+					t.Fatal(err)
+				}
+				originalPath = filepath.Join(retained, ".provider.jwt")
+				if err := clientauth.WriteToken(path, replacement); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			output := newProviderDiagnosticTestOwner(t, &providerRefusedWriter{})
+			callbacks := &providerAuthenticationCallbacks{diagnostics: output, clientJwtPath: path, networkJwtPath: filepath.Join(dir, "jwt"), cancel: cancel, custody: keyOwner}
+			if action == "refresh" {
+				(&providerBoundRefresh{original: initial, callbacks: callbacks}).JwtRefreshed(refreshed)
+			} else {
+				callbacks.AuthLogout()
+			}
+			stored, readErr := clientauth.ReadToken(path)
+			marker, markerErr := clientauth.ReadToken(path + ".rejected")
+			if replace {
+				original, originalErr := clientauth.ReadToken(originalPath)
+				if ctx.Err() == nil || callbacks.failure() == nil || readErr != nil || stored != replacement || !errors.Is(markerErr, os.ErrNotExist) || originalErr != nil || original != initial {
+					t.Fatal("provider callback wrote through a replacement custody directory", action)
+				}
+			} else if action == "refresh" {
+				if callbacks.failure() != nil || ctx.Err() != nil || readErr != nil || stored != refreshed {
+					t.Fatal("provider owned refresh did not persist its original client")
+				}
+			} else if callbacks.failure() != nil || ctx.Err() == nil || !errors.Is(readErr, os.ErrNotExist) || markerErr != nil || marker != "blocked" {
+				t.Fatal("provider owned rejection did not retain its sticky tombstone")
+			}
+			cancel()
+			if err := keyOwner.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}

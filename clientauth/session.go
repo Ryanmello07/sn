@@ -231,6 +231,12 @@ func refreshStoredClientJwt(ctx context.Context, api *sdk.Api, networkPath, clie
 // Production observation does not need speculative API readiness. Its caller
 // requires successful refresh, including after an unpersisted old revocation.
 func refreshStoredClientJwtWithReadiness(ctx context.Context, api *sdk.Api, networkPath, clientPath, token string, persist func(string) error, allowUnavailable bool) (string, connect.Id, error) {
+	return refreshStoredClientJwtWithCustody(ctx, api, token, persist, func() error { return clearRejection(clientPath) }, func() error { return MarkRejected(clientPath, networkPath) }, allowUnavailable)
+}
+
+// Credential owners supply their real persistence and rejection effects. The
+// provider uses descriptor-relative custody; older consumers keep their paths.
+func refreshStoredClientJwtWithCustody(ctx context.Context, api *sdk.Api, token string, persist func(string) error, clearRejected, markRejected func() error, allowUnavailable bool) (string, connect.Id, error) {
 	clientId, err := ClientIdFromJwt(token)
 	if err != nil {
 		return "", connect.Id{}, fmt.Errorf("invalid stored client JWT: %w", err)
@@ -250,7 +256,7 @@ func refreshStoredClientJwtWithReadiness(ctx context.Context, api *sdk.Api, netw
 		if err := persist(result.ByJwt); err != nil {
 			return "", connect.Id{}, err
 		}
-		if err := clearRejection(clientPath); err != nil {
+		if err := clearRejected(); err != nil {
 			return "", connect.Id{}, err
 		}
 		api.SetByJwt(result.ByJwt)
@@ -261,7 +267,7 @@ func refreshStoredClientJwtWithReadiness(ctx context.Context, api *sdk.Api, netw
 		confirmedRejected = true
 	}
 	if confirmedRejected {
-		if err := MarkRejected(clientPath, networkPath); err != nil {
+		if err := markRejected(); err != nil {
 			return "", connect.Id{}, err
 		}
 		if !allowUnavailable {

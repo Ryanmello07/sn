@@ -72,6 +72,12 @@ per-network operation/scope uniqueness. Legacy allocations do not have that
 server registration row; a lost legacy reply cannot be reconstructed here.
 
 The shared key owner remains held until every device and API callback joins.
+Registration stores are opened relative to that owner's directory descriptor;
+bootstrap/rejection reads and refresh/logout credential writes use the same
+physical custody. Renaming or replacing the state directory stops new work
+before it can select replacement files. A completed response cannot write into
+a substituted directory. Provider revocation retains a sticky `blocked` marker;
+fresh network login does not erase this recovery requirement.
 Device setup receives the retained seed and must return the same seed. Its
 best-effort certificate/extender writes cannot overwrite the critical client
 key. File ownership, private modes, no-follow opens, link refusal and directory
@@ -86,6 +92,9 @@ context, with the same retained operation. Completed refusals, unsupported
 routes, malformed replies, changed identity and local custody errors stop that
 worker. Cancellation retains the error and joins its owners. The CLI preserves
 its prior daemon-completion exit policy; the internal runner returns the cause.
+Admission failures offer a closed `startup_recovery_required` message with flag
+and custody guidance before the existing bounded diagnostic drain. Unavailable
+output remains best effort and never holds authentication or shutdown.
 Live refresh checks stable principal, roles and client/device identity before
 persisting. SDK integrity notices cancel only their still-current credential
 generation, including protection against stale equal-byte replacement logins.
@@ -95,7 +104,9 @@ generation, including protection against stale equal-byte replacement logins.
 Deterministic fixtures use private temporary files, real local HTTP and the real
 SDK/daemon authentication path. Barriers cover seed fsync, request/binding
 publication, committed lost replies, restart, proxy membership and joined key
-ownership. No fixture establishes live API or chain authority. Independent
+ownership. Daemon fixtures stop at the authenticated handoff before constructing
+a full serving device; refresh/logout callbacks are exercised separately. No
+fixture establishes live API or chain authority. Independent
 normal/race and causal qualification must name the exact source and physical
 module graph; compiling this candidate alone is not behavioral qualification.
 

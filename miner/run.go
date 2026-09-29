@@ -482,14 +482,19 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 	}
 	defer func() { returnErr = errors.Join(returnErr, status.close()) }()
 	if err := validateProviderRegistrationSlots(self.proxySettings); err != nil {
+		output.observe(providerStartupRecoveryRequired, 0, false, err, 0, nil)
 		return err
 	}
 	keyPath, err := providerStatePath(".provider.key")
 	if err != nil {
+		output.observe(providerStartupRecoveryRequired, 0, false, err, 0, nil)
 		return err
 	}
 	keyOwner, err := clientauth.OpenProviderClientKey(ctx, keyPath, clientauth.ProviderClientKeyOptions{AllowCreate: self.allowClientRegistration, AdoptLegacyKey: self.adoptLegacyProviderKey})
 	if err != nil {
+		if ctx.Err() == nil {
+			output.observe(providerStartupRecoveryRequired, 0, false, err, 0, nil)
+		}
 		return err
 	}
 	defer func() { returnErr = errors.Join(returnErr, keyOwner.Close()) }()
@@ -534,12 +539,15 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		}
 
 		seed := keyOwner.Seed()
-		byClientJwt, _, err := authenticateProvider(proxyCtx, api, networkJwtPath, clientJwtPath, seed, providerRegistrationSlot(proxySettings), self.allowClientRegistration, output, index)
+		byClientJwt, _, err := authenticateProvider(proxyCtx, api, networkJwtPath, clientJwtPath, keyOwner, providerRegistrationSlot(proxySettings), self.allowClientRegistration, output, index)
 		if err != nil {
+			if proxyCtx.Err() == nil {
+				output.observe(providerStartupRecoveryRequired, index, true, err, 0, nil)
+			}
 			return err
 		}
 
-		callbacks := &providerAuthenticationCallbacks{diagnostics: output, provider: index, clientJwtPath: clientJwtPath, networkJwtPath: networkJwtPath, cancel: cancel}
+		callbacks := &providerAuthenticationCallbacks{diagnostics: output, provider: index, clientJwtPath: clientJwtPath, networkJwtPath: networkJwtPath, cancel: cancel, custody: keyOwner}
 		boundRefresh := &providerBoundRefresh{original: byClientJwt, callbacks: callbacks}
 		refreshSub := api.AddJwtRefreshListener(boundRefresh)
 		integritySub := api.AddClientRefreshIntegrityListener(boundRefresh)

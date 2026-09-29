@@ -77,6 +77,43 @@ func openRegistrationStore(clientPath string) (_ *registrationStore, returnErr e
 	return self, nil
 }
 
+// Provider slots borrow the key owner's physical directory, never a fresh
+// pathname selection. The descriptor remains tied to that inode across reads,
+// writes and retries; check refuses a renamed/replaced visible namespace.
+func openRegistrationStoreForOwner(clientPath string, owner *registrationStore) (_ *registrationStore, returnErr error) {
+	if owner == nil || owner.directory == nil || owner.lock == nil || !filepath.IsAbs(clientPath) || filepath.Clean(clientPath) != clientPath || filepath.Dir(clientPath) != owner.path {
+		return nil, errors.New("provider client custody differs from its retained directory owner")
+	}
+	if err := owner.check(); err != nil {
+		return nil, err
+	}
+	flags := unix.O_RDONLY | unix.O_DIRECTORY | unix.O_NOFOLLOW | unix.O_NONBLOCK | unix.O_CLOEXEC
+	fd, err := unix.Openat(int(owner.directory.Fd()), ".", flags, 0)
+	if err != nil {
+		return nil, err
+	}
+	self := &registrationStore{directory: os.NewFile(uintptr(fd), owner.path), path: owner.path, client: filepath.Base(clientPath), anchor: owner.anchor}
+	defer func() {
+		if returnErr != nil {
+			returnErr = errors.Join(returnErr, self.close())
+		}
+	}()
+	if err := self.check(); err != nil {
+		return nil, err
+	}
+	self.lock, err = self.open(self.client+".registration.lock", unix.O_RDWR|unix.O_CREAT)
+	if err != nil {
+		return nil, err
+	}
+	if err := unix.Flock(int(self.lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		return nil, errors.New("registration credential already has an active owner")
+	}
+	if err := self.check(); err != nil {
+		return nil, err
+	}
+	return self, nil
+}
+
 // All leaf opens are nonblocking/no-follow and then check descriptor metadata.
 func (self *registrationStore) open(name string, flags int) (*os.File, error) {
 	if name == "" || filepath.Base(name) != name || name == "." || name == ".." {
@@ -156,6 +193,25 @@ func (self *registrationStore) names(maximum int) ([]string, error) {
 		return nil, errors.New("registration directory census exceeds its bound")
 	}
 	return names, self.check()
+}
+
+// Deletion uses the same owned directory as publication. A missing leaf is
+// already absent; a successful unlink is durable before the caller proceeds.
+func (self *registrationStore) remove(name string) error {
+	if name == "" || filepath.Base(name) != name || name == "." || name == ".." {
+		return errors.New("registration removal leaf is invalid")
+	}
+	if err := self.check(); err != nil {
+		return err
+	}
+	err := unix.Unlinkat(int(self.directory.Fd()), name, 0)
+	if errors.Is(err, unix.ENOENT) {
+		return self.check()
+	}
+	if err != nil {
+		return err
+	}
+	return errors.Join(self.directory.Sync(), self.check())
 }
 
 // Rename publishes complete bytes; a failed directory sync remains an error

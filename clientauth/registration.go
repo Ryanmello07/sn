@@ -91,6 +91,12 @@ func LoadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, cli
 }
 
 func loadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, clientPath, description string, scope RegistrationScope, allowCreate bool, hooks registrationHooks) (_ string, _ connect.Id, returnErr error) {
+	return loadOrRegisterClientJwtInDirectory(ctx, api, networkPath, clientPath, description, scope, allowCreate, hooks, nil)
+}
+
+// A provider supplies its key owner's physical directory. Historical callers
+// retain their existing independent custody through the nil-directory wrapper.
+func loadOrRegisterClientJwtInDirectory(ctx context.Context, api *sdk.Api, networkPath, clientPath, description string, scope RegistrationScope, allowCreate bool, hooks registrationHooks, directory *registrationStore) (_ string, _ connect.Id, returnErr error) {
 	if ctx == nil || api == nil {
 		return "", connect.Id{}, errors.New("registration has no operation owner")
 	}
@@ -128,11 +134,42 @@ func loadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, cli
 			return "", connect.Id{}, errors.New("registration scope has an invalid genesis or client key")
 		}
 	}
-	owner, err := openRegistrationStore(clientPath)
+	var owner *registrationStore
+	if directory == nil {
+		owner, err = openRegistrationStore(clientPath)
+	} else {
+		if filepath.Dir(networkPath) != filepath.Dir(clientPath) || filepath.Clean(networkPath) != networkPath || !filepath.IsAbs(networkPath) {
+			return "", connect.Id{}, errors.New("provider bootstrap differs from its owned custody directory")
+		}
+		owner, err = openRegistrationStoreForOwner(clientPath, directory)
+	}
 	if err != nil {
 		return "", connect.Id{}, err
 	}
 	defer func() { returnErr = errors.Join(returnErr, owner.close()) }()
+	readToken := ReadToken
+	clearRejected := func() error { return clearRejection(clientPath) }
+	markRejected := func() error { return MarkRejected(clientPath, networkPath) }
+	if directory != nil {
+		readToken = func(path string) (string, error) {
+			if filepath.Dir(path) != filepath.Dir(clientPath) {
+				return "", errors.New("provider credential read escaped its owned directory")
+			}
+			raw, err := owner.read(filepath.Base(path))
+			if err != nil {
+				return "", err
+			}
+			value := strings.TrimSpace(string(raw))
+			if value == "" {
+				return "", errors.New("provider credential is empty")
+			}
+			return value, nil
+		}
+		clearRejected = func() error { return owner.remove(filepath.Base(rejectionPath(clientPath))) }
+		markRejected = func() error {
+			return errors.Join(owner.remove(filepath.Base(clientPath)), owner.write(filepath.Base(rejectionPath(clientPath)), []byte("blocked")))
+		}
+	}
 	clientName, recordName := filepath.Base(clientPath), filepath.Base(clientPath)+".registration"
 	anchorName := recordName + ".started"
 	legacyName := recordName + ".existing"
@@ -208,7 +245,7 @@ func loadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, cli
 				}
 			}
 		}
-		return refreshStoredClientJwtWithReadiness(ctx, api, networkPath, clientPath, token, func(token string) error { return owner.write(clientName, []byte(token)) }, false)
+		return refreshStoredClientJwtWithCustody(ctx, api, token, func(token string) error { return owner.write(clientName, []byte(token)) }, clearRejected, markRejected, false)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", connect.Id{}, err
 	}
@@ -218,7 +255,7 @@ func loadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, cli
 	if record == nil && !allowCreate {
 		return "", connect.Id{}, &RegistrationRefusedError{Code: "legacy_identity_requires_explicit_recovery"}
 	}
-	bootstrap, err := ReadToken(networkPath)
+	bootstrap, err := readToken(networkPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", connect.Id{}, &RegistrationRefusedError{Code: "network_authentication_missing"}
@@ -229,8 +266,8 @@ func loadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, cli
 	if err != nil || !validRegistrationIdentityId(identity.NetworkId) || !validRegistrationIdentityId(identity.UserId) || identity.clientId != "" || identity.deviceId != "" {
 		return "", connect.Id{}, errors.New("registration bootstrap does not name a network principal")
 	}
-	if marker, err := ReadToken(rejectionPath(clientPath)); err == nil {
-		if marker == "blocked" || marker == networkCredentialFingerprint(networkPath, bootstrap) {
+	if marker, err := readToken(rejectionPath(clientPath)); err == nil {
+		if directory != nil || marker == "blocked" || marker == networkCredentialFingerprint(networkPath, bootstrap) {
 			return "", connect.Id{}, &RegistrationRefusedError{Code: "client_revoked"}
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -277,6 +314,9 @@ func loadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, cli
 		}
 	}
 	api.SetByJwt(bootstrap)
+	if err := owner.check(); err != nil {
+		return "", connect.Id{}, err
+	}
 	result, err := api.RegisterNetworkClientSyncWithContext(ctx, &record.Request)
 	if err != nil {
 		return "", connect.Id{}, err
@@ -306,7 +346,7 @@ func loadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, cli
 	if err := owner.write(clientName, []byte(result.ByClientJwt)); err != nil {
 		return "", connect.Id{}, err
 	}
-	if err := clearRejection(clientPath); err != nil {
+	if err := clearRejected(); err != nil {
 		return "", connect.Id{}, err
 	}
 	api.SetByJwt(result.ByClientJwt)
