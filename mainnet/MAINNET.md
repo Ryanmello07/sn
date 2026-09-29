@@ -62,7 +62,7 @@ passes twelve new roots and six causal controls normal/race. The separate
 [partial adjacent battery](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
 passes 150/270 roots in both modes; 120 remain unrun. Eight retained successful actions
 leave only the evidence anchor unfinished. A signed successor adoption owner,
-Safe authority/provenance and relayer custody remain unimplemented.
+current Safe authority/binding and relayer custody remain unimplemented.
 The [qualified unsigned successor proposal](evidence/bootstrap-contract-successor-qualification-20260929.md)
 retains the eight completed seals and any ninth reservation while computing
 additive attempt/lifetime ceilings for the unfinished anchor and retry margin.
@@ -76,6 +76,13 @@ The earlier fifteen-root MG-07/prerequisite composed smoke passes both modes on
 `79ff2c6e`, and the later twelve-root successor composed smoke passes both modes
 on `1e2b2abb`. These scoped results supply no Safe authority, signed adoption or
 live installation; the separate SDK count remains 543/618 with 75 pending.
+The [qualified offline Safe release verifier](evidence/safe-release-profile-qualification-20260929.md)
+checks explicit 1.4.1/1.5.0 Safe/SafeL2 published proxy/singleton code, ABI,
+source/compiler inputs and storage layout. Its six new and four adjacent roots
+pass normal/race with sixteen intended causal executions. Independent rebuild,
+current account and initializer-owner binding, authority, signing and execution
+remain false. Existing versus new Safe is unresolved; a different new address
+requires separately authorized ownership migration from the retained owner.
 The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),
 integrated at `ce567305`, adds durable exact-action recovery and actual-subset
 reconciliation under original v3 custody. Sol's 25 focused roots and exact

@@ -44,5 +44,7 @@ ownership migration. These artifact results cannot relabel that owner, revise an
 old signed plan, authorize a successor, replay completed actions or grant more
 spending. The existing-versus-new Safe choice remains independent of this command.
 
-Source implementation and deterministic regression/causal qualification are
-tracked separately. This document does not claim live installation.
+The [scoped Sol qualification](evidence/safe-release-profile-qualification-20260929.md)
+passes six new and four adjacent roots normally and with race detection, plus
+all sixteen intended causal executions. It verifies this offline artifact
+boundary; live installation and executable successor authority remain open.

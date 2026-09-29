@@ -97,16 +97,18 @@ installation complete. These transitions require their own causal qualification.
 
 ## Authority and provenance prerequisites
 
-The repository's production artifact catalog contains only ReserveSink,
-SettlementVault, Coordinator, ERC1967Proxy and ValidatorEvidence. It has no reviewed
-Safe singleton/proxy artifact, versioned Safe ABI/storage profile, transaction
-digest implementation or separate Safe custody owner. The simulator's direct
-owner anchor call cannot supply those production authorities. `fixValidatorEvidence`
+The deployment catalog covers ReserveSink, SettlementVault, Coordinator,
+ERC1967Proxy and ValidatorEvidence. The separate [qualified offline Safe release verifier](SAFE-RELEASE-VERIFY.md)
+now pins explicit 1.4.1/1.5.0 Safe/SafeL2 singleton/proxy artifacts, ABI,
+published source/compiler inputs and storage layout. It establishes no current
+account authority, independent rebuild, transaction-digest implementation or
+separate Safe custody owner. The simulator's direct owner anchor call cannot
+supply those production authorities. `fixValidatorEvidence`
 is `onlyOwner`, accepts code at a one-time address and does not itself establish
 the evidence immutable genesis/deployment/coordinator domain.
 
-Before an executable successor can be approved, supply and qualify the exact
-Safe source/build/runtime/storage profile, then authenticate the current singleton,
+Before an executable successor can be approved, complete independent release/build
+review of the selected pinned profile, then authenticate the current singleton,
 owners/threshold, modules, guard, fallback handler, nonce and pending transaction
 state at the selected finalized mainnet point. Admit exact Safe operation and
 signature semantics under that profile, and independently fence the relayer's

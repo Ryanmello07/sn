@@ -126,7 +126,10 @@ The separate [unsigned successor proposal](BOOTSTRAP-CONTRACT-SUCCESSOR.md)
 reads all eight completed originals, preserves their seals and any ninth reserved
 envelope, and computes an additive attempt/lifetime proposal for the unfinished
 anchor and retry margin. It creates no successor approval or execution custody;
-the Safe provenance and signed migration owner remain unresolved.
+current Safe authority/binding and the signed migration owner remain unresolved.
+The separate [qualified offline Safe profile verifier](SAFE-RELEASE-VERIFY.md)
+checks explicit published proxy/singleton artifacts, ABI, source/compiler inputs
+and storage layout, while retaining false live-account and authority flags.
 Its [scoped qualification](evidence/bootstrap-contract-successor-qualification-20260929.md)
 passes six new and twelve inherited roots normal/race plus six causal controls
 in both modes. The separate [successful full-v3 public-command fixture](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md)

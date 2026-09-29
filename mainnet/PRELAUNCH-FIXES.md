@@ -135,9 +135,9 @@ six new and twelve inherited roots pass normal/race, with six causal controls
 in both modes. It can retain eight
 completed receipt seals, carry original spend forward, propose additive attempt
 and lifetime ceilings, and preserve an original ninth reservation. It does not
-sign or execute a successor. A new durable adoption owner and reviewed Safe
-source/ABI/storage/digest profile remain required before executable authority can
-be admitted; changed original v1 approvals cannot adopt old custody.
+sign or execute a successor. A new durable adoption owner and current Safe
+authority/digest proof remain required before executable authority can be
+admitted; changed original v1 approvals cannot adopt old custody.
 The [separate full-v3 public-command fixture](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md)
 closes that specific gap on `c294fefd`: its positive root passes normal/race,
 and all six causal executions reach the intended assertion. It approves the
@@ -149,6 +149,16 @@ time while retaining every causal case and the separate long-root scheduling
 lesson above. The fifteen-root MG-07/prerequisite smoke on `79ff2c6e` and the
 twelve-root successor smoke on `1e2b2abb` pass both modes on their own exact
 graphs; neither expands the partial adjacent battery or SDK package coverage.
+
+The [offline Safe release verifier](SAFE-RELEASE-VERIFY.md) now has [scoped Sol qualification](evidence/safe-release-profile-qualification-20260929.md):
+six new and four adjacent roots pass normal/race, and eight causal controls each
+reach their intended assertion in both modes. Explicit version/variant profiles
+bind unchanged published archives, proxy/singleton code, ABI, compiler inputs,
+source provenance and storage layout. Independent compiler rebuild, live Safe
+binding/authority and signing/execution remain unresolved. Existing versus new
+Safe remains a user decision; a new address must match retained initializerOwner
+or have separately authorized ownership migration. This artifact-only increment
+does not grant signed successor adoption, nonce custody or evidence-anchor execution.
 
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal
