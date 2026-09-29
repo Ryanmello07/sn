@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -78,30 +79,41 @@ func runSafeReleaseVerify(ctx context.Context, args []string, stdout, stderr io.
 		fmt.Fprintln(stderr, "Safe published archive:", err)
 		return 1
 	}
-	members, err := readSafeReleaseMembers(ctx, raw, profile, *variant)
+	result, _, err := inspectSafeReleaseArchive(ctx, profile, *variant, *archivePath, raw)
 	if err != nil {
-		fmt.Fprintln(stderr, "Safe published archive:", err)
+		fmt.Fprintln(stderr, "Safe published artifact provenance:", err)
 		return 1
+	}
+	if err := json.NewEncoder(stdout).Encode(result); err != nil {
+		fmt.Fprintln(stderr, "Safe verification output:", err)
+		return 1
+	}
+	return 0
+}
+
+// Shared archive admission authenticates the full published release before a
+// successor may use its singleton ABI. Returned members are local owned bytes.
+func inspectSafeReleaseArchive(ctx context.Context, profile safeReleasePin, variant, path string, raw []byte) (safeReleaseVerification, map[string][]byte, error) {
+	members, err := readSafeReleaseMembers(ctx, raw, profile, variant)
+	if err != nil {
+		return safeReleaseVerification{}, nil, err
 	}
 	var metadata struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
 	}
 	if err := json.Unmarshal(members["package/package.json"], &metadata); err != nil || metadata.Name != profile.PackageName || metadata.Version != profile.Version {
-		fmt.Fprintln(stderr, "Safe published package identity differs")
-		return 1
+		return safeReleaseVerification{}, nil, errors.New("Safe published package identity differs")
 	}
-	artifacts, err := verifySafeReleaseBuild(members, profile, *variant)
+	artifacts, err := verifySafeReleaseBuild(members, profile, variant)
 	if err != nil {
-		fmt.Fprintln(stderr, "Safe published artifact provenance:", err)
-		return 1
+		return safeReleaseVerification{}, nil, err
 	}
 	if err := ctx.Err(); err != nil {
-		fmt.Fprintln(stderr, "Safe verification canceled:", err)
-		return 1
+		return safeReleaseVerification{}, nil, err
 	}
 	result := safeReleaseVerification{Schema: safeReleaseVerificationSchema, Status: "published-release-artifacts-verified",
-		Version: profile.Version, Variant: *variant, PackageName: profile.PackageName, ArchivePath: *archivePath,
+		Version: profile.Version, Variant: variant, PackageName: profile.PackageName, ArchivePath: path,
 		ArchiveSha256: profile.ArchiveSha256, CatalogSha256: safeReleaseHash(safeReleasePinsJson), SourceCommit: profile.SourceCommit, SourceTree: profile.SourceTree,
 		SourceInventoryHash: rootObjectHash(profile.SourceHashes), SourceFileCount: len(profile.SourceHashes), Dependencies: profile.Dependencies,
 		BuildInfoSha256: profile.BuildInfoSha256, SolcVersion: profile.SolcVersion, SolcLongVersion: profile.SolcLongVersion, CompilerSettingsSha256: profile.SettingsSha256,
@@ -111,9 +123,5 @@ func runSafeReleaseVerify(ctx context.Context, args []string, stdout, stderr io.
 			"CURRENT_SAFE_NONCE_AND_GLOBAL_CUSTODY", "SIGNED_SUCCESSOR_ADOPTION_AND_CUMULATIVE_CAPS", "EXACT_SAFE_DIGEST_SIGNATURES_AND_RELAYER",
 			"CANONICAL_RECEIPT_SAFE_INNER_SUCCESS_AND_EVIDENCE_DOMAIN"}}
 	result.ContentHash = rootObjectHash(result)
-	if err := json.NewEncoder(stdout).Encode(result); err != nil {
-		fmt.Fprintln(stderr, "Safe verification output:", err)
-		return 1
-	}
-	return 0
+	return result, members, nil
 }

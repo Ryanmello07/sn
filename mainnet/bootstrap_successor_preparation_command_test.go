@@ -210,6 +210,16 @@ func TestBootstrapSuccessorPreparationSeparatesOriginalInputsAndOwners(t *testin
 		if err := validateBootstrapSuccessorPreparationPaths(f.preparation, plans, requestPath, path); err == nil {
 			t.Fatal("preparation approval aliases input or reserved custody", path)
 		}
+		if err := validateBootstrapSuccessorPreparationPaths(f.preparation, plans, requestPath, approvalPath, path); err == nil {
+			t.Fatal("additional review input aliases original or prepared custody", path)
+		}
+	}
+	archivePath := filepath.Join(filepath.Dir(f.path), "synthetic-reviewed-release.tgz")
+	if err := validateBootstrapSuccessorPreparationPaths(f.preparation, plans, requestPath, approvalPath, archivePath); err != nil {
+		t.Fatal("independent review archive refused", err)
+	}
+	if err := validateBootstrapSuccessorPreparationPaths(f.preparation, plans, requestPath, approvalPath, archivePath, archivePath); err == nil {
+		t.Fatal("additional review inputs alias each other")
 	}
 	for _, path := range []string{filepath.Join(f.config.RunDirectory, bootstrapSuccessorPreparationFile), filepath.Join(f.config.RunDirectory, bootstrapSuccessorStagePrefix+"synthetic.claim")} {
 		changed := f.preparation

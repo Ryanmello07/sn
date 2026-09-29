@@ -168,7 +168,7 @@ func (self bootstrapSuccessorPreparationApproval) validate(expected bootstrapSuc
 
 // Hold the five original shared locks while callers claim or reopen the child.
 // In particular, the reserve lock also fences every cooperating action writer.
-func loadBootstrapSuccessorPreparation(ctx context.Context, configPath, runDirectory, accepted, requestPath, approvalPath string) (_ bootstrapSuccessorPreparationPlan, _ *bootstrapChainReadinessState, resultErr error) {
+func loadBootstrapSuccessorPreparation(ctx context.Context, configPath, runDirectory, accepted, requestPath, approvalPath string, additionalPaths ...string) (_ bootstrapSuccessorPreparationPlan, _ *bootstrapChainReadinessState, resultErr error) {
 	var plan bootstrapSuccessorPreparationPlan
 	preparation, err := loadBootstrapChainPreparation(ctx, configPath)
 	if err != nil {
@@ -187,7 +187,7 @@ func loadBootstrapSuccessorPreparation(ctx context.Context, configPath, runDirec
 	}
 	_, plans, err := prepareBootstrapContractReadiness(ctx, preparation.Contracts, preparation.Plan.Config.Contracts.Path)
 	if err == nil {
-		err = validateBootstrapSuccessorPreparationPaths(preparation, plans, requestPath, approvalPath)
+		err = validateBootstrapSuccessorPreparationPaths(preparation, plans, requestPath, approvalPath, additionalPaths...)
 	}
 	if err != nil {
 		return plan, nil, err
@@ -224,7 +224,7 @@ func loadBootstrapSuccessorPreparation(ctx context.Context, configPath, runDirec
 
 // The fixed destination and its staged namespace cannot borrow any original
 // input or validator path. Admission changes no original plan or journal hash.
-func validateBootstrapSuccessorPreparationPaths(preparation bootstrapChainPreparation, plans []evmCreatePlan, requestPath, approvalPath string) error {
+func validateBootstrapSuccessorPreparationPaths(preparation bootstrapChainPreparation, plans []evmCreatePlan, requestPath, approvalPath string, additionalPaths ...string) error {
 	if err := validateBootstrapContractReadinessPaths(preparation, plans); err != nil {
 		return err
 	}
@@ -247,6 +247,7 @@ func validateBootstrapSuccessorPreparationPaths(preparation bootstrapChainPrepar
 	if approvalPath != "" {
 		inputs = append(inputs, approvalPath)
 	}
+	inputs = append(inputs, additionalPaths...)
 	for _, path := range inputs {
 		if !bootstrapRootAbsolutePath(path) || seen[path] {
 			return errors.New("successor input aliases original or prepared custody or another input")
