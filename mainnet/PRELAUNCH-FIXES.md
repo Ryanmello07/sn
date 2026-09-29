@@ -68,6 +68,13 @@ Both sources are integrated; 76 affected roots pass normal/race and all 292
 miner roots pass plain normal. The composed release still needs custody,
 restart and aggregate fleet-capacity qualification before deployment.
 
+The [MG03/R48 server source composition](evidence/operator-mg03-r48-composition-20260929.md)
+now preserves both original histories in a full merge whose tree matches the
+qualified MG03 branch byte-for-byte. Its six conflict resolutions and complete
+controller lineage are retained; fresh affected normal/race tests and the
+composed server release are still pending. Do not substitute a narrow
+receipt/fee cherry-pick for this complete source graph.
+
 MG-08 also exposed a production bootstrap scaling failure: action-seven
 validation repeatedly expanded a shared predecessor graph, making one call
 copy 128 projections and hash the same 106 KB approval configuration 254 times.
