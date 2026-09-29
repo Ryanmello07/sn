@@ -63,6 +63,10 @@ passes twelve new roots and six causal controls normal/race. The separate
 passes 150/270 roots in both modes; 120 remain unrun. Eight retained successful actions
 leave only the evidence anchor unfinished. A signed successor adoption owner,
 current Safe authority/binding and relayer custody remain unimplemented.
+The isolated [signed local successor preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
+adds a separate approval domain and fixed resumable local claim while preserving
+original receipts and additive proposed floors. It awaits independent behavioral
+qualification and provides no executable allowance, Safe authority or signing.
 The [qualified unsigned successor proposal](evidence/bootstrap-contract-successor-qualification-20260929.md)
 retains the eight completed seals and any ninth reservation while computing
 additive attempt/lifetime ceilings for the unfinished anchor and retry margin.

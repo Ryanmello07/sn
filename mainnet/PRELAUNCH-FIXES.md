@@ -138,6 +138,12 @@ and lifetime ceilings, and preserve an original ninth reservation. It does not
 sign or execute a successor. A new durable adoption owner and current Safe
 authority/digest proof remain required before executable authority can be
 admitted; changed original v1 approvals cannot adopt old custody.
+The isolated [signed local preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md) adds
+one fixed original-root claim, a distinct independently verified preparation
+approval and resumable publication. Behavioral qualification is pending.
+It preserves the eight retained receipts and cumulative floors; no executable
+allowance, Safe authority or signing path is created. Copy/restore/move onto a
+different physical root requires a separately approved migration.
 The [separate full-v3 public-command fixture](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md)
 closes that specific gap on `c294fefd`: its positive root passes normal/race,
 and all six causal executions reach the intended assertion. It approves the

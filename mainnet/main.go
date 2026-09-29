@@ -156,6 +156,7 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	}
 	if len(args) == 0 || args[0] != "inspect" && args[0] != "monitor" {
 		fmt.Fprintln(stderr, "offline artifacts: sn-mainnet safe-release-verify --version 1.4.1|1.5.0 --variant Safe|SafeL2 --archive ABSOLUTE_FILE")
+		fmt.Fprintln(stderr, "offline successor preparation: bootstrap-chain contract-successor-preview|contract-successor-prepare|contract-successor-resume --config FILE --run-dir DIR --accept-plan-hash HASH --request FILE [exact preparation approval flags]")
 		fmt.Fprintln(stderr, "usage: sn-mainnet inspect|monitor|runtime-snapshot|finalized-mapping|finalized-snapshot --rpc URL [identity flags]; root-preview|root-monitor|subnet-preview|owner-trim-plan --rpc URL --policy FILE; owner-trim-recheck|owner-trim-reconcile --rpc URL --policy FILE --plan FILE --plan-hash sha256:DIGEST; owner-trim-qualify --rpc URL --policy FILE --window FILE; check-recycle-mode|observe-native-miner-emission --rpc URL --policy FILE; economic-reference --input FILE; source-lock --sn-dir DIR; plan --outline|--config FILE; bootstrap|bootstrap-chain plan|apply|resume --config FILE [local custody confirmation flags]; bootstrap-chain readiness --config FILE --run-dir DIR --accept-plan-hash HASH --rpc URL; bootstrap-chain contract-plan|contract-readiness|contract-successor-plan --config FILE [original custody confirmation flags]; bootstrap-contracts preview|plan|apply|resume --config FILE; release-inventory --config FILE")
 		return 2
 	}

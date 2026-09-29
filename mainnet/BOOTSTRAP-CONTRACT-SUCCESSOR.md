@@ -60,6 +60,13 @@ There is no RPC, signature import, apply, resume, submission or service option.
 
 ## Required signed successor and custody migration
 
+The separate [signed local preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
+now has an isolated implementation awaiting behavioral qualification. It adds
+a distinct approval domain and one fixed durable local claim, revalidates the
+original eight receipts, preserves additive floors and resumes interrupted
+publication. It grants no execution allowance or Safe authority. The unsigned
+proposal command and original v1 approval/markers retain their existing scope.
+
 The executable successor remains unimplemented. Increasing the v1 contract
 schema's eight-attempt cap cannot migrate custody: every existing marker binds
 the full signed config and each descendant binds its original predecessor record.
