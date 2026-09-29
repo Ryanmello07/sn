@@ -142,7 +142,8 @@ func newProvisionalFleetRuntimeFixture(t *testing.T) *provisionalFleetRuntimeFix
 func TestFleetProvisionalRuntimeFlagsRequireExplicitTestnetAuthority(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "runtime")
 	args := []string{"fleet", "publish", "--manifest=synthetic.json", "--substrate=wss://native.example", "--hotkey_seed_file=synthetic.seed", "--provisional-runtime-compatibility=" + crv4.ProvisionalRuntimeCompatibilityProfile, "--runtime-observation-dir=" + directory}
-	opts, err := docopt.ParseArgs(mainUsage(), args, "test")
+	parser := &docopt.Parser{HelpHandler: docopt.NoHelpHandler}
+	opts, err := parser.ParseArgs(mainUsage(), args, "test")
 	if err != nil {
 		t.Fatal(err)
 	}

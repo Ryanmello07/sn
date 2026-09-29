@@ -91,6 +91,7 @@ func TestFleetMainnetRuntimeCancellationNeverReachesSigning(t *testing.T) {
 
 // Each command grammar preserves the independently supplied document digest.
 func TestFleetMainnetCliRetainsIndependentAuthorityFlags(t *testing.T) {
+	parser := &docopt.Parser{HelpHandler: docopt.NoHelpHandler}
 	for _, command := range [][]string{
 		{"register", "--hotkey_seed_file=hotkey.seed", "--coldkey_seed_file=coldkey.seed", "--substrate=wss://native.example"},
 		{"publish", "--hotkey_seed_file=hotkey.seed", "--substrate=wss://native.example"},
@@ -100,7 +101,7 @@ func TestFleetMainnetCliRetainsIndependentAuthorityFlags(t *testing.T) {
 	} {
 		args := append([]string{"fleet"}, command...)
 		args = append(args, "--manifest=fleet.json", "--mainnet-runtime-authority=reviewed.json", "--mainnet-runtime-authority-sha256="+strings.Repeat("1", 64))
-		opts, err := docopt.ParseArgs(mainUsage(), args, "test")
+		opts, err := parser.ParseArgs(mainUsage(), args, "test")
 		if err != nil || fleetOpt(opts, "--mainnet-runtime-authority") != "reviewed.json" || fleetOpt(opts, "--mainnet-runtime-authority-sha256") != strings.Repeat("1", 64) {
 			t.Errorf("%s lost explicit production authority flags: %v", command[0], err)
 		}

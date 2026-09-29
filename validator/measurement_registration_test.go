@@ -627,7 +627,7 @@ func TestMeasurementRefreshValidatesIdentityBeforePersistenceAndPublication(t *t
 
 func TestMeasurementCliPreservesProductionDispatchAndNoCreateFlag(t *testing.T) {
 	for _, args := range [][]string{{"run", "--state_dir=/synthetic/measurement", "--adopt-legacy-measurement-key"}, {"run", "--config=/synthetic/production.yml"}} {
-		opts, err := docopt.ParseArgs(mainUsage(), args, "synthetic")
+		opts, err := parseValidatorArgsForTest(t, args)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -643,8 +643,12 @@ func TestMeasurementCliPreservesProductionDispatchAndNoCreateFlag(t *testing.T) 
 		}
 	}
 	for _, args := range [][]string{{"run", "--allow-client-registration"}, {"run", "--config=/synthetic/production.yml", "--adopt-legacy-measurement-key"}} {
-		if _, err := docopt.ParseArgs(mainUsage(), args, "synthetic"); err == nil {
-			t.Fatal("measurement CLI created or mixed production registration authority")
+		// Expected invalid input must return through the real parser, not
+		// terminate the test process through docopt's default help handler.
+		_, err := parseValidatorArgsForTest(t, args)
+		var invalid *docopt.UserError
+		if !errors.As(err, &invalid) {
+			t.Fatal("measurement CLI admitted creation or mixed-mode flags", args, err)
 		}
 	}
 }
