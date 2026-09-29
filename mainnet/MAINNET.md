@@ -55,11 +55,15 @@ terminated after its passing prefix; the exact 148-root disjoint race union is
 the qualified coverage. The later [composed source check](/mnt/data/sn-testnet/qualification/mg08-bootstrap-readiness-20260929/COMPOSED-RESULT.md)
 passes focused normal/race, vet and fences on SN `e35771ec` and server `b7c8c743`.
 It retains false activation/current-authority flags and all pending chain phases.
-The next [owner-trim action source checkpoint](evidence/owner-trim-execution-source-20260929.md)
-adds durable exact-action recovery and actual-subset reconciliation under the
-original v3 custody. Its separate approval cannot replace current authority;
-production signing and submission remain blocked on the named enforcement and
-custody capabilities, and behavioral qualification remains pending. The owned
+The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),
+integrated at `ce567305`, adds durable exact-action recovery and actual-subset
+reconciliation under original v3 custody. Sol's 25 focused roots and exact
+229-root expanded union pass normal/race, with vet and eight causal controls.
+The failed first candidate `4033609` and its null-storage failure remain
+preserved; the successor corrects the production proxy reader. Its separate
+approval cannot replace current authority: production signing and submission
+remain blocked on the named enforcement and custody capabilities. The pending
+best-effort risk-policy choice is not assumed or enabled. The owned
 Snow route still returned HTTP 502 at 06:59 UTC on September 29, providing no
 current mainnet identity or authority. The complete bootstrap,
 Safe evidence anchor, native signing device and live role

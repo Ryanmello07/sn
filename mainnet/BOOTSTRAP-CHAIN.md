@@ -141,9 +141,19 @@ The executable owner requires that independent capability before signing and
 again before each send; the owned adapter independently refuses an absent one.
 Conditional qualification and signed configuration are insufficient. A possible
 best-effort risk policy would need separate explicit approval and implementation;
-this checkpoint does not assume or enable it. Mainnet genesis, current metadata,
-owned route and custody remain unresolved. See the
+that choice remains pending and this phase does not assume or enable it.
+Mainnet genesis, current metadata, owned route and custody remain unresolved. See the
 [source checkpoint and qualification scope](evidence/owner-trim-execution-source-20260929.md).
+
+The [qualified successor](evidence/owner-trim-null-storage-repair-20260929.md)
+`ce567305` is integrated with original v3 approval/custody semantics intact.
+Sol's 25 focused roots and exact 229-root expanded union pass normal/race,
+with vet and all eight causal controls. Its 23 new roots include the proxy-reader
+repair; two pre-existing command roots also match the focused selector.
+R1 `4033609` remains a preserved failed qualification: 21/22 focused and
+225/226 expanded roots passed in each mode before the null-storage bug was
+fixed. These local results do not supply the missing production capabilities
+or establish a native reset, service activation or live acceptance.
 
 ## Inputs and review
 
