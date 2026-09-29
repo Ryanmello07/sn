@@ -90,3 +90,31 @@ both validator roles, composed release/dependency qualification and live
 upgrade acceptance remain open. Tests used deterministic local RPC fixtures
 and synthetic signatures; no live chain, custody key or deployment was touched.
 The hashed local raw records must be archived with any portable release proof.
+
+**Test-style follow-up (2026-09-29).** Frozen candidate
+`2b6102d7e03305f8b1dbf9a294368218d4eaa932` follows root
+`1ab013a033f538a6cc220694fd0d4c199d505c20` and is integrated unchanged by
+fast-forward on `codex/mainnet-hardening-20260927`. Its only changed file is
+`validator/production_source_receipt_test.go`. A plain loop replaces the
+ordinary `t.Run` boundary for the two homogeneous digest variants; contextual
+errors retain both case outcomes. All seven top-level names remain unchanged.
+The unused import and acronym comment capitalization are also corrected.
+All production files remain byte-identical to the preceding root.
+
+Sol's sealed [style qualification receipt](/mnt/data/sn-testnet/qualification/validator-receipt-test-style-20260929/RESULT.md)
+has SHA-256 `a3f18bbfd83a4b0aa9abc01311f22a650aafc2acd589d0081fe7d60e0b7f8073`.
+The seven declared roots passed normal and race qualification with zero
+failures, skips or child events; `go vet ./validator` also passed. The isolated
+old-post-state control failed in both modes at the intended independent
+signing-authority mismatch, with both digest variants reported. No race report
+occurred. These are the focused follow-up results; the earlier 103-root
+qualification above was not rerun for this test-only change.
+
+The [exact selector](/mnt/data/sn-testnet/qualification/validator-receipt-test-style-20260929/focused.selector),
+raw normal/race logs, causal patch and pinned dependency records remain beside
+the sealed receipt. The module graph was byte-identical before, after and
+following qualification, SHA-256
+`fda5020aa587f3d135f7e310b97e5f9dacf3403bbc7f489f2c2844a8cc2584e5`.
+Integration verified the test file against the frozen candidate, SHA-256
+`492811dd2aea115b0bdeafb02d6d3f0ecaad3c7aa9b9e6ac11c3e70020cfec70`;
+no behavioral reruns or production changes were needed during integration.

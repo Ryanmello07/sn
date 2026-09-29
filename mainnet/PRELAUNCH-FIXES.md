@@ -1740,6 +1740,12 @@ signing authority. The complete-header receipt path covers an upgrade digest;
 other SDK current-head readers, both validator roles, automatic admission and
 live upgrade qualification remain open.
 
+The [qualified test-style follow-up](evidence/validator-source-runtime-qualification-20260929.md)
+keeps all seven receipt roots top-level and replaces the digest subtests with
+a plain loop. Those seven roots pass normal/race and validator vet passes;
+both digest variants still fail the isolated old-post-state control.
+Production bytes are unchanged.
+
 **Production change.** Deliver RT-01 through RT-08 across miner, operator, both
 validator roles and bootstrap. Construct and sign from one immutable runtime
 view; validate consumed call/storage/API/precompile/signing capabilities.
