@@ -38,9 +38,32 @@ under the same pinned dependency versions, with SN/npipe resolved to the shared
 merge. The command logs, module resolution and freshly measured physical roots
 are retained at
 `/home/by/urnetwork/temp/mg08-safe-release-integration-20260929`.
-Composed behavioral qualification of the merge remains separate from the
-candidate's scoped receipt. The author ran no behavioral tests, live RPC,
+Composed behavioral qualification of the merge is recorded separately below.
+The author ran no behavioral tests, live RPC,
 signing or broadcasts during this integration.
+
+## Separate composed qualification
+
+Sol subsequently qualified the exact integration merge `18a88db403bb8ae0b2fe43eae9d0e479cd96857a`,
+tree `4a8fd2705ef248f14eb504d6503892afe23ae56b`, with nine selected roots in both
+normal and race modes: the six Safe roots, full-v3 successor command, successor
+proposal and MG-07 read-incident continuity. Both invocations finished with exact
+9/9 root PASS, package PASS and exit zero (108.49 and 470.28 seconds). There were
+no root failures or skips. All seven physical local modules stayed clean and
+unchanged, resolved modules matched byte-for-byte and `go mod verify` passed.
+This composed graph includes qualified shared server `5ff7bf02`; it is distinct
+from the isolated verifier graph above.
+
+| Composed receipt | SHA-256 |
+| --- | --- |
+| [Sol result](/mnt/data/sn-testnet/qualification/mg08-safe-composed-sol-20260929/SOL-RESULT.md) | `63425ad947b64b9b9967ecf3e4c51139b5a50c5e02ce1dae02e1a5e2ad2cc251` |
+| [Structured result](/mnt/data/sn-testnet/qualification/mg08-safe-composed-sol-20260929/COMPOSED-qualification.json) | `e45e68db00c02280497137629e2a137e4ecc76a803f8c3cc400860a4c88e7710` |
+| [19-file manifest](/mnt/data/sn-testnet/qualification/mg08-safe-composed-sol-20260929/SHA256SUMS) | `80421b6775411b0986eea6b511de58832c3e28e252ae5caaa8c4fc69a738b102` |
+
+Astra independently checked the manifest, every selected root and package terminal,
+process exits, identical before/after graphs and fresh actual Git roots, heads,
+trees and clean state. This receipt adds no current Safe, account, signing or
+installation authority and does not expand the partial coverage described below.
 
 ## Verified scope and remaining authority
 
