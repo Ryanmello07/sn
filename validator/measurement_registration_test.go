@@ -480,12 +480,13 @@ func TestMeasurementRunJoinsWorkersBeforeReleasingKey(t *testing.T) {
 	var refreshOnce sync.Once
 	fixture.onDiscovery = func() { discoveryOnce.Do(func() { close(discovered) }) }
 	trailAtJoin, releaseTrail := make(chan struct{}), make(chan struct{})
+	statsAtJoin := make(chan struct{})
 	waiting := make(chan struct{})
 	var releaseOnce sync.Once
 	release := func() { releaseOnce.Do(func() { close(releaseTrail) }) }
 	defer release()
 	var trailJoined, statsJoined, apiJoined, earlyApiJoin atomic.Bool
-	hooks := measurementRunHooks{afterRefreshPersisted: func() { refreshOnce.Do(func() { close(refreshed) }) }, beforeWorkersWait: func() { close(waiting) }, afterTrailJoined: func() { close(trailAtJoin); <-releaseTrail; trailJoined.Store(true) }, afterStatsJoined: func() { statsJoined.Store(true) }, afterApiJoined: func() {
+	hooks := measurementRunHooks{afterRefreshPersisted: func() { refreshOnce.Do(func() { close(refreshed) }) }, beforeWorkersWait: func() { close(waiting) }, afterTrailJoined: func() { close(trailAtJoin); <-releaseTrail; trailJoined.Store(true) }, afterStatsJoined: func() { statsJoined.Store(true); close(statsAtJoin) }, afterApiJoined: func() {
 		if !trailJoined.Load() || !statsJoined.Load() {
 			earlyApiJoin.Store(true)
 		}
@@ -526,6 +527,18 @@ func TestMeasurementRunJoinsWorkersBeforeReleasingKey(t *testing.T) {
 	case <-time.After(60 * time.Second):
 		t.Fatal("measurement owner did not reach worker wait")
 	}
+	select {
+	case <-statsAtJoin:
+	case <-time.After(60 * time.Second):
+		t.Fatal("measurement periodic stats worker did not join")
+	}
+	// A slow fixture may already have a periodic snapshot. Its worker has
+	// stopped and the trail worker still holds final shutdown, so removing
+	// that earlier file isolates the real final save without timing bounds.
+	statsPath := filepath.Join(fixture.dir, "stats.json")
+	if err := os.Remove(statsPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
 	other, err := clientauth.OpenValidatorMeasurementClientKey(t.Context(), filepath.Join(fixture.dir, ".validator.key"), false)
 	if other != nil {
 		_ = other.Close()
@@ -553,7 +566,7 @@ func TestMeasurementRunJoinsWorkersBeforeReleasingKey(t *testing.T) {
 	if err := owner.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(fixture.dir, "stats.json")); err != nil {
+	if _, err := os.Stat(statsPath); err != nil {
 		t.Fatal("measurement joined shutdown omitted its final stats save", err)
 	}
 }
