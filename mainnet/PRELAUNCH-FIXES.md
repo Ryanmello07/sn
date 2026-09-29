@@ -119,6 +119,14 @@ passes all twelve new roots normal/race with six causal controls in both modes;
 the 270-root adjacent scope remains pending. This does not close MG-08 or
 establish installation, role activation or native 10/90 acceptance.
 
+The separate [unsigned contract successor proposal](BOOTSTRAP-CONTRACT-SUCCESSOR.md)
+is a bounded offline implementation awaiting qualification. It can retain eight
+completed receipt seals, carry original spend forward, propose additive attempt
+and lifetime ceilings, and preserve an original ninth reservation. It does not
+sign or execute a successor. A new durable adoption owner and reviewed Safe
+source/ABI/storage/digest profile remain required before executable authority can
+be admitted; changed original v1 approvals cannot adopt old custody.
+
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal
 and race, with four causal controls and the integrated authority-projection

@@ -122,6 +122,12 @@ reuse, lock-release and command-scope roots in normal and race modes, with six
 causal controls in both modes. The broader 270-root adjacent qualification
 remains pending; no live installation is claimed.
 
+The separate [unsigned successor proposal](BOOTSTRAP-CONTRACT-SUCCESSOR.md)
+reads all eight completed originals, preserves their seals and any ninth reserved
+envelope, and computes an additive attempt/lifetime proposal for the unfinished
+anchor and retry margin. It creates no successor approval or execution custody;
+the Safe provenance and signed migration owner remain unresolved.
+
 ## Read-only current prerequisites
 
 After local preparation, run:
