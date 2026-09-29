@@ -25,7 +25,7 @@ func TestProviderRegistrationCliRefusalHasClosedGuidance(t *testing.T) {
 	}
 	for _, phase := range []string{"fresh", "legacy", "duplicate"} {
 		fixture := newProviderRegistrationFixture(t)
-		privateHome := t.TempDir()
+		privateHome := providerRegistrationPrivateDir(t)
 		if phase == "legacy" {
 			if err := os.WriteFile(filepath.Join(fixture.dir, ".provider.key"), bytes.Repeat([]byte{31}, 32), 0600); err != nil {
 				t.Fatal(err)

@@ -45,20 +45,32 @@ type providerRegistrationTestRecord struct {
 // One fixture models versioned server dedup and deliberately non-idempotent
 // legacy allocation. Real PostgreSQL allocation is independently qualified.
 type providerRegistrationFixture struct {
-	test        *testing.T
-	dir         string
-	server      *httptest.Server
-	stateLock   sync.Mutex
-	requests    map[string][]byte
-	clients     map[string]string
-	posts       int
-	legacy      int
-	allocations int
-	refreshes   int
-	statuses    []int
-	status      int
-	malformed   bool
-	onCommit    func()
+	test           *testing.T
+	dir            string
+	server         *httptest.Server
+	stateLock      sync.Mutex
+	requests       map[string][]byte
+	clients        map[string]string
+	posts          int
+	legacy         int
+	allocations    int
+	refreshes      int
+	refreshClients map[string]int
+	statuses       []int
+	status         int
+	malformed      bool
+	onCommit       func()
+}
+
+// Explicit private parents keep both positive and negative custody fixtures
+// independent of the runner's umask.
+func providerRegistrationPrivateDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
 
 // Signatures are deliberately absent: these tokens exercise local identity
@@ -80,10 +92,7 @@ func providerRegistrationTestToken(t *testing.T, client, marker string) string {
 // DNS name, account or network endpoint is used by the fixture.
 func newProviderRegistrationFixture(t *testing.T) *providerRegistrationFixture {
 	t.Helper()
-	self := &providerRegistrationFixture{test: t, dir: t.TempDir(), requests: map[string][]byte{}, clients: map[string]string{}}
-	if err := os.Chmod(self.dir, 0700); err != nil {
-		t.Fatal(err)
-	}
+	self := &providerRegistrationFixture{test: t, dir: providerRegistrationPrivateDir(t), requests: map[string][]byte{}, clients: map[string]string{}, refreshClients: map[string]int{}}
 	t.Setenv("URNETWORK_STATE_DIR", self.dir)
 	if err := clientauth.WriteToken(filepath.Join(self.dir, "jwt"), providerRegistrationTestToken(t, "", "bootstrap")); err != nil {
 		t.Fatal(err)
@@ -118,6 +127,18 @@ func (self *providerRegistrationFixture) counts() (int, int, int, int) {
 	self.stateLock.Lock()
 	defer self.stateLock.Unlock()
 	return self.posts, self.legacy, self.allocations, self.refreshes
+}
+
+// Parallel transport can race several physical GETs for one logical refresh.
+// Client identities, authenticated handoffs and allocation POSTs are separate.
+func (self *providerRegistrationFixture) refreshedClients() map[string]int {
+	self.stateLock.Lock()
+	defer self.stateLock.Unlock()
+	result := make(map[string]int, len(self.refreshClients))
+	for id, count := range self.refreshClients {
+		result[id] = count
+	}
+	return result
 }
 
 // A versioned POST must already name the exact durable key, request and anchor.
@@ -194,6 +215,7 @@ func (self *providerRegistrationFixture) serveHttp(w http.ResponseWriter, r *htt
 		}
 		self.stateLock.Lock()
 		self.refreshes++
+		self.refreshClients[client]++
 		self.stateLock.Unlock()
 		_ = json.NewEncoder(w).Encode(map[string]string{"by_jwt": providerRegistrationTestToken(self.test, client, "refreshed")})
 		return
@@ -426,12 +448,30 @@ func TestProviderRegistrationSlotsSurviveCredentialAndOrderChanges(t *testing.T)
 	first := &connect.ProxySettings{Network: "tcp", Address: "192.0.2.10:1080", Auth: &proxy.Auth{User: "synthetic-first", Password: "synthetic-password"}}
 	second := &connect.ProxySettings{Network: "tcp", Address: "192.0.2.11:1080"}
 	stop := errors.New("synthetic proxy authentication handoff")
-	hooks := providerRegistrationHooks{afterAuthenticated: func(string, connect.Id, []byte) error { return stop }}
+	var handoffLock sync.Mutex
+	handoffs := map[string]int{}
+	var handoffSeed []byte
+	hooks := providerRegistrationHooks{afterAuthenticated: func(_ string, id connect.Id, seed []byte) error {
+		handoffLock.Lock()
+		defer handoffLock.Unlock()
+		if handoffSeed == nil {
+			handoffSeed = bytes.Clone(seed)
+		} else if !bytes.Equal(handoffSeed, seed) {
+			t.Error("provider slots did not retain their shared identity key")
+		}
+		handoffs[id.String()]++
+		return stop
+	}}
 	if err := fixture.run(t.Context(), true, hooks, nil, first, second); !errors.Is(err, stop) {
 		t.Fatal(err)
 	}
+	posts, legacy, allocated, refreshed := fixture.counts()
+	t.Logf("provider slot allocation: posts=%d legacy=%d allocated=%d physical_refreshes=%d handoffs=%v", posts, legacy, allocated, refreshed, handoffs)
+	if posts != 3 || legacy != 0 || allocated != 3 || refreshed != 0 || len(handoffs) != 3 {
+		t.Fatal("provider slots did not complete three original allocations")
+	}
 	paths := map[string]bool{}
-	requests := map[string]sdk.RegisterNetworkClientArgs{}
+	records := map[string]providerRegistrationTestRecord{}
 	for _, member := range []*connect.ProxySettings{nil, first, second} {
 		path, err := providerClientJwtPath(member)
 		if err != nil || paths[path] {
@@ -440,26 +480,32 @@ func TestProviderRegistrationSlotsSurviveCredentialAndOrderChanges(t *testing.T)
 		paths[path] = true
 		raw, err := os.ReadFile(path + ".registration")
 		var record providerRegistrationTestRecord
-		if err != nil || json.Unmarshal(raw, &record) != nil || record.Scope.ClientSlot != providerRegistrationSlot(member) || record.Request.DeviceDescription != "provider" {
+		if err != nil || json.Unmarshal(raw, &record) != nil || record.Scope.ClientSlot != providerRegistrationSlot(member) || record.Request.DeviceDescription != "provider" || record.ClientId == "" || record.DeviceId == "" || handoffs[record.ClientId] != 1 {
 			t.Fatal("provider slot did not retain its exact stable identity")
 		}
-		requests[path] = record.Request
+		records[path] = record
 	}
 	rotated := *first
 	rotated.Auth = &proxy.Auth{User: "synthetic-rotated", Password: "synthetic-new-password"}
 	if err := fixture.run(t.Context(), false, hooks, second, &rotated, nil); !errors.Is(err, stop) {
 		t.Fatal(err)
 	}
-	posts, legacy, allocated, refreshed := fixture.counts()
-	if posts != 3 || legacy != 0 || allocated != 3 || refreshed != 3 {
+	posts, legacy, allocated, refreshed = fixture.counts()
+	refreshClients := fixture.refreshedClients()
+	t.Logf("provider slot restart: posts=%d legacy=%d allocated=%d physical_refreshes=%d refreshed_clients=%v handoffs=%v", posts, legacy, allocated, refreshed, refreshClients, handoffs)
+	if posts != 3 || legacy != 0 || allocated != 3 || refreshed < 3 || len(refreshClients) != 3 || len(handoffs) != 3 {
 		t.Fatal("provider proxy credentials or ordering changed allocation identity")
 	}
-	for path, original := range requests {
+	for path, original := range records {
 		raw, err := os.ReadFile(path + ".registration")
 		var record providerRegistrationTestRecord
-		if err != nil || json.Unmarshal(raw, &record) != nil || record.Request != original {
+		if err != nil || json.Unmarshal(raw, &record) != nil || record != original || handoffs[original.ClientId] != 2 || refreshClients[original.ClientId] < 1 {
 			t.Fatal("provider proxy restart changed its original request")
 		}
+	}
+	seed, err := os.ReadFile(filepath.Join(fixture.dir, ".provider.key"))
+	if err != nil || !bytes.Equal(seed, handoffSeed) {
+		t.Fatal("provider slots did not retain their durable identity key")
 	}
 }
 
@@ -492,7 +538,14 @@ func TestProviderRegistrationAdoptsLegacyAndRefusesLostCredential(t *testing.T) 
 		t.Fatal(err)
 	}
 	stop := errors.New("synthetic legacy refresh handoff")
-	hooks := providerRegistrationHooks{afterAuthenticated: func(string, connect.Id, []byte) error { return stop }}
+	var handoffs atomic.Int32
+	hooks := providerRegistrationHooks{afterAuthenticated: func(_ string, id connect.Id, _ []byte) error {
+		if id.String() != "00000000-0000-0000-0000-000000000101" {
+			t.Error("provider legacy adoption changed its authenticated client")
+		}
+		handoffs.Add(1)
+		return stop
+	}}
 	if err := fixture.run(t.Context(), true, hooks); err == nil || errors.Is(err, stop) {
 		t.Fatal("provider silently blessed an unproven legacy seed with new-create permission")
 	}
@@ -507,6 +560,12 @@ func TestProviderRegistrationAdoptsLegacyAndRefusesLostCredential(t *testing.T) 
 	if err := settings.run(context.WithValue(ctx, providerRegistrationHooksKey{}, hooks), &providerRefusedWriter{}); !errors.Is(err, stop) {
 		t.Fatal("provider explicit legacy key adoption did not refresh its original credential", err)
 	}
+	posts, legacy, allocated, refreshed = fixture.counts()
+	t.Logf("provider legacy adoption: posts=%d legacy=%d allocated=%d physical_refreshes=%d handoffs=%d", posts, legacy, allocated, refreshed, handoffs.Load())
+	if posts != 0 || legacy != 0 || allocated != 0 || refreshed < 1 || handoffs.Load() != 1 || len(fixture.refreshedClients()) != 1 {
+		t.Fatal("provider legacy adoption did not retain exactly one client without allocation")
+	}
+	refreshBaseline := refreshed
 	marker, err := os.ReadFile(clientPath + ".registration.existing")
 	if err != nil || len(marker) == 0 {
 		t.Fatal("provider legacy adoption did not retain identity custody")
@@ -516,8 +575,17 @@ func TestProviderRegistrationAdoptsLegacyAndRefusesLostCredential(t *testing.T) 
 	}
 	err = fixture.run(t.Context(), true, hooks)
 	posts, legacy, allocated, refreshed = fixture.counts()
-	if err == nil || errors.Is(err, stop) || posts != 0 || legacy != 0 || allocated != 0 || refreshed != 1 {
+	t.Logf("provider lost legacy credential: posts=%d legacy=%d allocated=%d physical_refreshes=%d baseline_refreshes=%d handoffs=%d", posts, legacy, allocated, refreshed, refreshBaseline, handoffs.Load())
+	var refused *clientauth.RegistrationRefusedError
+	if !errors.As(err, &refused) || refused.Code != "legacy_identity_requires_explicit_recovery" || errors.Is(err, stop) || posts != 0 || legacy != 0 || allocated != 0 || refreshed != refreshBaseline || handoffs.Load() != 1 {
 		t.Fatal("provider lost legacy credential became a replacement allocation", err)
+	}
+	retained, markerErr := os.ReadFile(clientPath + ".registration.existing")
+	retainedSeed, seedErr := os.ReadFile(keyPath)
+	_, clientErr := os.Stat(clientPath)
+	_, recordErr := os.Stat(clientPath + ".registration")
+	if markerErr != nil || !bytes.Equal(marker, retained) || seedErr != nil || !bytes.Equal(seed, retainedSeed) || !errors.Is(clientErr, os.ErrNotExist) || !errors.Is(recordErr, os.ErrNotExist) {
+		t.Fatal("provider lost legacy credential rewrote its original custody")
 	}
 }
 
@@ -580,7 +648,7 @@ func TestProviderRegistrationRefreshPreservesOriginalIdentity(t *testing.T) {
 	for _, fault := range []string{"valid", "client", "principal", "roles"} {
 		changed := fault != "valid"
 		ctx, cancel := context.WithCancel(t.Context())
-		path := filepath.Join(t.TempDir(), "client.jwt")
+		path := filepath.Join(providerRegistrationPrivateDir(t), "client.jwt")
 		initial := providerRegistrationTestToken(t, "00000000-0000-0000-0000-000000000101", "initial")
 		refreshed := providerRegistrationTestToken(t, "00000000-0000-0000-0000-000000000101", "refreshed")
 		if fault == "client" {
@@ -721,7 +789,7 @@ func TestProviderDiagnosticsRunAuthenticationWaitCancels(t *testing.T) {
 func TestProviderRegistrationRetryRejectsReplacedDirectory(t *testing.T) {
 	fixture := newProviderRegistrationFixture(t)
 	fixture.status = http.StatusServiceUnavailable
-	retained := filepath.Join(t.TempDir(), "retained")
+	retained := filepath.Join(providerRegistrationPrivateDir(t), "retained")
 	var original []byte
 	var replaced bool
 	err := fixture.run(t.Context(), true, providerRegistrationHooks{afterAttempt: func(err error) error {
@@ -771,7 +839,7 @@ func TestProviderRegistrationRetryRejectsReplacedDirectory(t *testing.T) {
 func TestProviderRegistrationCallbacksRetainPhysicalCustody(t *testing.T) {
 	for _, action := range []string{"refresh", "logout"} {
 		for _, replace := range []bool{false, true} {
-			dir := t.TempDir()
+			dir := providerRegistrationPrivateDir(t)
 			path := filepath.Join(dir, ".provider.jwt")
 			keyOwner, err := clientauth.OpenProviderClientKey(t.Context(), filepath.Join(dir, ".provider.key"), clientauth.ProviderClientKeyOptions{AllowCreate: true})
 			if err != nil {
@@ -786,7 +854,7 @@ func TestProviderRegistrationCallbacksRetainPhysicalCustody(t *testing.T) {
 			}
 			originalPath := path
 			if replace {
-				retained := filepath.Join(t.TempDir(), "retained")
+				retained := filepath.Join(providerRegistrationPrivateDir(t), "retained")
 				if err := os.Rename(dir, retained); err != nil {
 					t.Fatal(err)
 				}

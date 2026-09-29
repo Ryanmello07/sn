@@ -17,6 +17,17 @@ import (
 	"testing"
 )
 
+// Custody fixtures set their own privacy instead of inheriting the test
+// process's umask. Negative cases must reach their intended custody guard.
+func providerRegistrationPrivateDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 // Only the actual purpose/key/endpoint/slot select this provider operation.
 func providerRegistrationTestScope(fixture *registrationTestFixture) RegistrationScope {
 	return RegistrationScope{Endpoint: fixture.scope.Endpoint, ClientKey: "0x" + strings.Repeat("34", 32), ClientRole: "provider-v1", ClientSlot: "direct"}
@@ -154,7 +165,7 @@ func TestProviderRegistrationRefusesChangedRetainedScope(t *testing.T) {
 // The key exists privately and its public marker is durable before any caller
 // may construct a registration. The global owner spans all proxy credentials.
 func TestProviderClientKeyCreationAndLifetimeAreExplicit(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".provider.key")
+	path := filepath.Join(providerRegistrationPrivateDir(t), ".provider.key")
 	if owner, err := OpenProviderClientKey(t.Context(), path, ProviderClientKeyOptions{}); err == nil || owner != nil {
 		t.Fatal("missing provider key consumed implicit creation authority")
 	}
@@ -194,7 +205,7 @@ func TestProviderClientKeyCreationAndLifetimeAreExplicit(t *testing.T) {
 // A crash after key publication but before marker publication retains that key;
 // marker-only or other retained history must never imply a fresh installation.
 func TestProviderClientKeyRecoversPublishedSeedAndRejectsMissingHistory(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".provider.key")
+	path := filepath.Join(providerRegistrationPrivateDir(t), ".provider.key")
 	seed := bytes.Repeat([]byte{9}, ed25519.SeedSize)
 	if err := os.WriteFile(path, seed, 0600); err != nil {
 		t.Fatal(err)
@@ -207,7 +218,7 @@ func TestProviderClientKeyRecoversPublishedSeedAndRejectsMissingHistory(t *testi
 		t.Fatal(err)
 	}
 	for _, name := range []string{".provider.key.identity", ".provider.jwt", ".provider.jwt.registration", ".provider.jwt.registration.started", ".provider.jwt.registration.existing", ".provider-0123456789abcdef.jwt", ".provider.unknown", ".provider.cert"} {
-		path := filepath.Join(t.TempDir(), ".provider.key")
+		path := filepath.Join(providerRegistrationPrivateDir(t), ".provider.key")
 		if err := os.WriteFile(filepath.Join(filepath.Dir(path), name), []byte("synthetic retained identity"), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -224,7 +235,7 @@ func TestProviderClientKeyRecoversPublishedSeedAndRejectsMissingHistory(t *testi
 // Interruption after the real seed fsync must reuse those bytes and complete
 // the marker before any request can consume the returned public identity.
 func TestProviderClientKeyCrashAfterSeedReusesOriginal(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".provider.key")
+	path := filepath.Join(providerRegistrationPrivateDir(t), ".provider.key")
 	stop := errors.New("synthetic crash after provider seed fsync")
 	owner, err := openProviderClientKey(t.Context(), path, ProviderClientKeyOptions{AllowCreate: true}, providerClientKeyHooks{afterSeed: func() error { return stop }})
 	if !errors.Is(err, stop) || owner != nil {
@@ -251,7 +262,7 @@ func TestProviderClientKeyCrashAfterSeedReusesOriginal(t *testing.T) {
 // A first-upgrade assertion cannot erase versioned records or earlier adoption.
 func TestProviderClientKeyMissingMarkerDoesNotBlessRetainedHistory(t *testing.T) {
 	for _, name := range []string{".provider.jwt.registration", ".provider.jwt.registration.started", ".provider.jwt.registration.existing", ".provider.jwt.registration.lock", ".provider.jwt.rejected", ".provider.unknown"} {
-		path := filepath.Join(t.TempDir(), ".provider.key")
+		path := filepath.Join(providerRegistrationPrivateDir(t), ".provider.key")
 		if err := os.WriteFile(path, bytes.Repeat([]byte{19}, ed25519.SeedSize), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -268,7 +279,7 @@ func TestProviderClientKeyMissingMarkerDoesNotBlessRetainedHistory(t *testing.T)
 			}
 		}
 	}
-	if owner, err := OpenProviderClientKey(t.Context(), filepath.Join(t.TempDir(), ".provider.key"), ProviderClientKeyOptions{AllowCreate: true, AdoptLegacyKey: true}); err == nil || owner != nil {
+	if owner, err := OpenProviderClientKey(t.Context(), filepath.Join(providerRegistrationPrivateDir(t), ".provider.key"), ProviderClientKeyOptions{AllowCreate: true, AdoptLegacyKey: true}); err == nil || owner != nil {
 		t.Fatal("provider legacy key adoption also granted new creation")
 	}
 }
@@ -277,7 +288,7 @@ func TestProviderClientKeyMissingMarkerDoesNotBlessRetainedHistory(t *testing.T)
 // namespace guards must execute before reading key bytes or replacing files.
 func TestProviderClientKeyRejectsChangedOrUnsafeCustody(t *testing.T) {
 	for _, fault := range []string{"short", "zero", "mode", "symlink", "hardlink", "marker"} {
-		path := filepath.Join(t.TempDir(), ".provider.key")
+		path := filepath.Join(providerRegistrationPrivateDir(t), ".provider.key")
 		seed := bytes.Repeat([]byte{7}, ed25519.SeedSize)
 		if fault == "short" {
 			seed = seed[:31]
@@ -315,7 +326,7 @@ func TestProviderClientKeyRejectsChangedOrUnsafeCustody(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if owner, err := OpenProviderClientKey(ctx, filepath.Join(t.TempDir(), ".provider.key"), ProviderClientKeyOptions{AllowCreate: true}); !errors.Is(err, context.Canceled) || owner != nil {
+	if owner, err := OpenProviderClientKey(ctx, filepath.Join(providerRegistrationPrivateDir(t), ".provider.key"), ProviderClientKeyOptions{AllowCreate: true}); !errors.Is(err, context.Canceled) || owner != nil {
 		t.Fatal("canceled key preparation created custody")
 	}
 }
