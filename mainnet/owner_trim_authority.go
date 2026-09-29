@@ -185,7 +185,9 @@ func (self *ownerTrimCanonicalChain) readCurrentWindow(ctx context.Context, acti
 	if err != nil {
 		return ownerTrimCurrentWindow{}, err
 	}
-	if err := self.client.call(operationCtx, "state_getStorage", []any{key.Hex(), observation.FinalizedHash}, &result.ProxyStorage); err != nil {
+	// Only an explicit null may select the already authenticated default. The
+	// optional-storage reader still rejects a response with no result field.
+	if err := self.client.callWithStorageAbsence(operationCtx, "state_getStorage", []any{key.Hex(), observation.FinalizedHash}, &result.ProxyStorage, true); err != nil {
 		return ownerTrimCurrentWindow{}, err
 	}
 	result.ProxyStorageKey = key.Hex()

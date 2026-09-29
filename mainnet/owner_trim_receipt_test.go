@@ -2,12 +2,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
@@ -171,6 +176,98 @@ func TestOwnerTrimAuthorityCurrentPruningBoundaryNeverGrantsEnforcement(t *testi
 	window, err = chain.readCurrentWindow(t.Context(), action, observation)
 	if err != nil || window.PublicPruningFenced || len(window.Blockers) == 0 || window.NetworkImmuneUntil != 107 {
 		t.Fatalf("last inclusion boundary allowed public subnet pruning: %+v %v", window, err)
+	}
+}
+
+// A null storage result and an explicitly stored empty tuple share the reviewed
+// predicate but retain distinct raw evidence. Neither supplies future authority.
+func TestOwnerTrimAuthorityProxyNullAndStoredDefault(t *testing.T) {
+	for _, stored := range []bool{false, true} {
+		chain, fixture, observation := newOwnerTrimWindowTestFixture(t)
+		owner, _ := hex.DecodeString(chain.config.Action.Coldkey[2:])
+		key, err := types.CreateStorageKey(fixture.metadata, "Proxy", "Proxies", owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, exists := fixture.storageKVs[key.Hex()]; exists || fixture.omitStorage {
+			t.Fatal("synthetic absent proxy must emit an explicit null result")
+		}
+		value := "0x" + strings.Repeat("00", 9)
+		if stored {
+			fixture.storageKVs[key.Hex()] = value
+		}
+		window, err := chain.readCurrentWindow(t.Context(), chain.config.Action, observation)
+		if err != nil || !window.OwnerProxiesAbsent || window.ProxyStorageKey != key.Hex() ||
+			(window.ProxyStorage != nil) != stored || stored && *window.ProxyStorage != value ||
+			!window.PublicPruningFenced || !window.Qualification.ConditionalSafeSet || len(window.Blockers) != 0 ||
+			window.CurrentAuthorityVerified || len(window.RequiredEnforcement) == 0 {
+			t.Fatalf("stored=%t lost exact optional proxy evidence: %+v %v", stored, window, err)
+		}
+		if fixture.count("author_submitExtrinsic") != 0 {
+			t.Fatal("proxy absence performed a network write")
+		}
+	}
+}
+
+// Fault only the final Proxy.Proxies read, after the valid census and nonce.
+// Missing or wrongly typed result fields must never become absence witnesses.
+func TestOwnerTrimAuthorityProxyMissingResultIsIntegrityFailure(t *testing.T) {
+	for _, body := range []string{`{"jsonrpc":"2.0","id":1}`, `{"jsonrpc":"2.0","id":1,"result":0}`, `{"jsonrpc":"2.0","id":1,"result":{}}`} {
+		chain, fixture, observation := newOwnerTrimWindowTestFixture(t)
+		owner, _ := hex.DecodeString(chain.config.Action.Coldkey[2:])
+		key, err := types.CreateStorageKey(fixture.metadata, "Proxy", "Proxies", owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		transport := chain.client.httpClient.Transport
+		var proxyReads atomic.Int32
+		chain.client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			raw, err := io.ReadAll(request.Body)
+			request.Body.Close()
+			if err != nil {
+				return nil, err
+			}
+			request.Body = io.NopCloser(bytes.NewReader(raw))
+			var call struct {
+				Method string            `json:"method"`
+				Params []json.RawMessage `json:"params"`
+			}
+			if err := json.Unmarshal(raw, &call); err != nil {
+				return nil, err
+			}
+			if call.Method == "state_getStorage" && len(call.Params) == 2 && string(call.Params[0]) == `"`+key.Hex()+`"` {
+				if string(call.Params[1]) != `"`+observation.FinalizedHash+`"` {
+					return nil, errors.New("proxy fault escaped the exact finalized block")
+				}
+				proxyReads.Add(1)
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+			}
+			return transport.RoundTrip(request)
+		})
+		window, err := chain.readCurrentWindow(t.Context(), chain.config.Action, observation)
+		if !errors.Is(err, errRpcIntegrity) || !strings.Contains(err.Error(), "state_getStorage:") || proxyReads.Load() != 1 ||
+			window.OwnerProxiesAbsent || window.CurrentAuthorityVerified || window.ProxyStorage != nil || window.ProxyStorageKey != "" {
+			t.Fatalf("malformed proxy reply %s was not an exact terminal integrity failure: %+v %v reads=%d", body, window, err, proxyReads.Load())
+		}
+	}
+}
+
+// A present row with an unresolved deposit or malformed tuple cannot be treated
+// as the empty default, even when its vector prefix reports zero delegations.
+func TestOwnerTrimAuthorityProxyAmbiguousRowsRemainBlocked(t *testing.T) {
+	for _, value := range []string{"0x", "0x" + strings.Repeat("00", 8), "0x" + strings.Repeat("00", 10), "0x000100000000000000"} {
+		chain, fixture, observation := newOwnerTrimWindowTestFixture(t)
+		owner, _ := hex.DecodeString(chain.config.Action.Coldkey[2:])
+		key, err := types.CreateStorageKey(fixture.metadata, "Proxy", "Proxies", owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixture.storageKVs[key.Hex()] = value
+		window, err := chain.readCurrentWindow(t.Context(), chain.config.Action, observation)
+		if err != nil || window.ProxyStorage == nil || *window.ProxyStorage != value || window.OwnerProxiesAbsent ||
+			!slices.Contains(window.Blockers, "OWNER_TRIM_ACTIVE_OR_UNRESOLVED_PROXY_DELEGATION") || window.CurrentAuthorityVerified {
+			t.Fatalf("unresolved proxy row %s became an empty default: %+v %v", value, window, err)
+		}
 	}
 }
 
