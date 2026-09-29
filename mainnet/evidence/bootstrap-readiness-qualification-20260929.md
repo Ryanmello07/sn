@@ -29,8 +29,10 @@ anchor change occurred.
 The 148-root adjacent scope includes the ten new roots; these are not 158
 distinct tests. At integration, race coverage came from passing root events
 in the broad selector and seven completed shards. The redundant whole-selector
-process was still running, so its overall exit was not counted as a pass.
-The immutable receipt snapshot below retains that limitation.
+process was still running at integration and was later intentionally terminated
+after its passing prefix. Its overall exit is not counted as a pass. The exact
+148-root disjoint race union remains the qualified coverage; the immutable
+integration receipt below preserves the state known at that earlier boundary.
 
 The controls remove the UR birth-block comparison, force a root checkpoint
 match, omit the final canonical-hash refusal and ignore marker-content
@@ -59,8 +61,14 @@ failure is counted as qualification.
 | [Original Astra handoff](/mnt/data/sn-testnet/qualification/mg08-bootstrap-readiness-20260929/astra/HANDOFF.md) | `33d4f843f6b75b73c8e1245245355d90bb2f66d2e02bbdeb033e86ef18e58c7a` |
 
 The [Sol working receipt](/mnt/data/sn-testnet/qualification/mg08-bootstrap-readiness-20260929/SOL-RESULT.md)
-may append the redundant broad-run outcome; the snapshots above remain the
-exact integration basis. The [command documentation](../BOOTSTRAP-CHAIN.md)
+records the intentionally terminated redundant run; the snapshots above remain
+the exact integration basis. The later
+[composed check](/mnt/data/sn-testnet/qualification/mg08-bootstrap-readiness-20260929/COMPOSED-RESULT.md)
+(SHA-256 `a68f0b1f755504128733be1954115a9e68e16c7cd4f92e6317ba6868440bda0f`)
+qualifies SN `e35771ec` with server `b7c8c743`: all ten focused roots passed
+normal/race, vet and exact source/module fences passed. This is composed source
+qualification and supplies no live authority or acceptance.
+The [command documentation](../BOOTSTRAP-CHAIN.md)
 defines the observed prerequisites and the separate activation blockers.
 
 MG-08 remains blocked for live activation. Mainnet genesis and route identity,

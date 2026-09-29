@@ -72,6 +72,15 @@ func ownerTrimWindowMetadata(metadata *types.Metadata) (uint64, error) {
 // A single deadline covers census, additional evidence and final canonical/head
 // rechecks. Interruption, stale input or changing runtime yields no partial result.
 func (self *rpcClient) readOwnerTrimBoundedQualification(ctx context.Context, policy subnetCensusPolicy, policyHash string, window ownerTrimWindow, windowHash string) (ownerTrimBoundedQualification, error) {
+	if err := policy.validate(); err != nil {
+		return ownerTrimBoundedQualification{}, err
+	}
+	return self.readOwnerTrimBoundedTarget(ctx, policy, policyHash, window, windowHash, *policy.TrimMaximumUids)
+}
+
+// The execution owner supplies its separately approved target; observation-only
+// callers continue to use the exact original policy target above.
+func (self *rpcClient) readOwnerTrimBoundedTarget(ctx context.Context, policy subnetCensusPolicy, policyHash string, window ownerTrimWindow, windowHash string, maximum uint16) (ownerTrimBoundedQualification, error) {
 	if ctx == nil {
 		return ownerTrimBoundedQualification{}, errors.New("owner trim qualification requires a context")
 	}
@@ -171,7 +180,7 @@ func (self *rpcClient) readOwnerTrimBoundedQualification(ctx context.Context, po
 		return ownerTrimBoundedQualification{}, err
 	}
 	state.Storage = reader.evidence()
-	result, err := qualifyOwnerTrimWindow(sampleCtx, policy, policyHash, window, windowHash, census, state)
+	result, err := qualifyOwnerTrimWindowTarget(sampleCtx, policy, policyHash, window, windowHash, census, state, maximum)
 	if err != nil {
 		return ownerTrimBoundedQualification{}, err
 	}

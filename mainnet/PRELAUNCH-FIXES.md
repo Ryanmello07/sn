@@ -499,10 +499,27 @@ signed approvals, child allowances and all five pending chain phases. Its
 passes ten new normal/race roots and the exact 148-root adjacent normal/race
 scope, with vet, unchanged source/module fences and four causal controls.
 The root integrated exact qualified source `6627d15f`; the receipt records the
-race union and preserves the still-running redundant broad-run limitation.
+exact race union. Sol later intentionally terminated the redundant broad process
+after its passing prefix; that process has no claimed successful terminal exit.
+The [composed receipt](/mnt/data/sn-testnet/qualification/mg08-bootstrap-readiness-20260929/COMPOSED-RESULT.md)
+passes focused 10/10 normal/race, vet and fences on SN `e35771ec` plus server
+`b7c8c743`, without changing the earlier exact 148-root qualification.
 Current authority, effective stake/eligibility, global custody and signing-device
 fencing, contract completion, service activation and actual native 10/90
 outcomes remain open gates.
+
+The isolated September 29 [owner-trim action increment](evidence/owner-trim-execution-source-20260929.md)
+adds a separately approved coldkey action and owned route, a fixed sixth journal
+under original v3 custody locks, exact signature/nonce/era recovery, canonical
+dispatch/fee receipts and before/after actual-subset correspondence with explicit
+old-miner residuals. Transaction finality and a completed native reset are
+separate outcomes; unavailable post-state admits only readback continuation.
+Current runtime predicates include proxy absence, nonce, bounded selection,
+protected generations and subnet immunity through expiry. Independent enforced
+owner/governance/custody/provenance/exposure authority remains required; a
+conditional pass never supplies it. Behavioral qualification is pending in this
+source checkpoint. The owned Snow read returned HTTP 502 at 06:59 UTC on
+September 29; no current mainnet identity or live authority was established.
 
 Start with MG-01's read-only route correction and MG-02's source composition.
 Then close the recovery, runtime, policy, settlement and monitoring dependencies

@@ -105,6 +105,15 @@ type ownerTrimBoundedQualification struct {
 // through actual immunity. No epoch is allowed, preserving roles and preventing
 // conviction takeover registration under the listed unchanged-state assumptions.
 func qualifyOwnerTrimWindow(ctx context.Context, policy subnetCensusPolicy, policyHash string, window ownerTrimWindow, windowHash string, census subnetPreview, state ownerTrimWindowState) (ownerTrimBoundedQualification, error) {
+	if err := policy.validate(); err != nil {
+		return ownerTrimBoundedQualification{}, err
+	}
+	return qualifyOwnerTrimWindowTarget(ctx, policy, policyHash, window, windowHash, census, state, *policy.TrimMaximumUids)
+}
+
+// The action path may choose only its separately approved retained best capacity.
+// It does not rewrite the original policy file or its historical qualification.
+func qualifyOwnerTrimWindowTarget(ctx context.Context, policy subnetCensusPolicy, policyHash string, window ownerTrimWindow, windowHash string, census subnetPreview, state ownerTrimWindowState, maximum uint16) (ownerTrimBoundedQualification, error) {
 	if ctx == nil {
 		return ownerTrimBoundedQualification{}, errors.New("owner trim qualification requires a context")
 	}
@@ -122,7 +131,7 @@ func qualifyOwnerTrimWindow(ctx context.Context, policy subnetCensusPolicy, poli
 	}
 	result := ownerTrimBoundedQualification{
 		Schema: ownerTrimBoundedSchema, Status: "bounded-predicates-failed-execution-blocked", Window: window, WindowFileHash: windowHash,
-		WindowState: state, DeathExclusive: window.FinalizedNumber + window.MortalPeriod, MaximumUids: *policy.TrimMaximumUids,
+		WindowState: state, DeathExclusive: window.FinalizedNumber + window.MortalPeriod, MaximumUids: maximum,
 		RemovableGenerations: []subnetRegistration{}, RequestedGenerations: []ownerTrimBoundedResidual{}, QualificationBlockers: []string{},
 		RequiredAssumptions: []string{
 			"OWNER_PROXY_MULTISIG_AND_PENDING_ACTIONS_PRESERVE_SCOPE_IMMUNITY_CAPACITY_AND_EPOCH_SETTINGS_THROUGH_EXPIRY",

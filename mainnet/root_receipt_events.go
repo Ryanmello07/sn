@@ -20,6 +20,11 @@ type rootReceiptEvent struct {
 
 // Rejects duplicate indices and validates every receipt-bearing field shape.
 func rootReceiptEvents(metadata *types.Metadata) (map[[2]byte]rootReceiptEvent, error) {
+	return nativeReceiptEvents(metadata, true)
+}
+
+// Common dispatch/fee evidence does not require a root-weight event for a trim.
+func nativeReceiptEvents(metadata *types.Metadata, rootWeights bool) (map[[2]byte]rootReceiptEvent, error) {
 	if metadata == nil || metadata.Version != 14 {
 		return nil, errors.New("root receipts require reviewed metadata14")
 	}
@@ -66,7 +71,11 @@ func rootReceiptEvents(metadata *types.Metadata) (map[[2]byte]rootReceiptEvent, 
 			}
 		}
 	}
-	for _, name := range []string{"TransactionPayment.TransactionFeePaid", "System.ExtrinsicSuccess", "System.ExtrinsicFailed", "SubtensorModule.RootWeightsSet"} {
+	required := []string{"TransactionPayment.TransactionFeePaid", "System.ExtrinsicSuccess", "System.ExtrinsicFailed"}
+	if rootWeights {
+		required = append(required, "SubtensorModule.RootWeightsSet")
+	}
+	for _, name := range required {
 		if known[name] != 1 {
 			return nil, fmt.Errorf("root receipt required event %s absent or duplicated", name)
 		}
@@ -78,11 +87,17 @@ func rootReceiptEvents(metadata *types.Metadata) (map[[2]byte]rootReceiptEvent, 
 // basket call additionally requires its exact seat's RootWeightsSet event;
 // dispatch failure may not borrow a root-weight event from another phase.
 func rootDecodeReceiptEvents(metadata *types.Metadata, raw []byte, extrinsicIndex uint32, bodyCount int, action rootAction) (rootActionReceipt, error) {
+	return nativeDecodeReceiptEvents(metadata, raw, extrinsicIndex, bodyCount, action.Scope.Hotkey, &action.Scope.Seat.Uid)
+}
+
+// The optional root seat selects only the root protocol's extra event. A trim
+// has no per-removal event; its census correspondence must remain separate.
+func nativeDecodeReceiptEvents(metadata *types.Metadata, raw []byte, extrinsicIndex uint32, bodyCount int, payer string, rootSeat *uint16) (rootActionReceipt, error) {
 	receipt := rootActionReceipt{EventHash: rootExtrinsicHash(raw)}
 	if len(raw) == 0 || len(raw) > rootBodyBytesLimit || int(extrinsicIndex) >= bodyCount {
 		return receipt, errors.New("root receipt event bundle or inclusion index is invalid")
 	}
-	events, err := rootReceiptEvents(metadata)
+	events, err := nativeReceiptEvents(metadata, rootSeat != nil)
 	if err != nil {
 		return receipt, err
 	}
@@ -144,18 +159,22 @@ func rootDecodeReceiptEvents(metadata *types.Metadata, raw []byte, extrinsicInde
 			receipt.DispatchError = "scale:0x" + hex.EncodeToString(fields[0])
 		case "TransactionPayment.TransactionFeePaid":
 			feeCount++
-			if "0x"+hex.EncodeToString(fields[0]) != action.Scope.Hotkey || binary.LittleEndian.Uint64(fields[2]) != 0 {
+			if "0x"+hex.EncodeToString(fields[0]) != payer || binary.LittleEndian.Uint64(fields[2]) != 0 {
 				return receipt, errors.New("root receipt actual payer or tip differs from direct zero-tip action")
 			}
 			receipt.ActualFeeRao = binary.LittleEndian.Uint64(fields[1])
 		case "SubtensorModule.RootWeightsSet":
 			rootWeightCount++
-			if binary.LittleEndian.Uint16(fields[0]) != action.Scope.Seat.Uid {
+			if rootSeat == nil || binary.LittleEndian.Uint16(fields[0]) != *rootSeat {
 				return receipt, errors.New("root receipt weight event has another root seat")
 			}
 		}
 	}
-	if reader.offset != len(raw) || terminalCount != 1 || feeCount != 1 || receipt.Success && rootWeightCount != 1 || !receipt.Success && rootWeightCount != 0 {
+	wantedWeights := 0
+	if rootSeat != nil && receipt.Success {
+		wantedWeights = 1
+	}
+	if reader.offset != len(raw) || terminalCount != 1 || feeCount != 1 || rootWeightCount != wantedWeights {
 		return receipt, errors.New("root receipt has trailing, missing, duplicated or contradictory outcome evidence")
 	}
 	return receipt, nil

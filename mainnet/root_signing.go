@@ -186,24 +186,33 @@ func rootSigningType(metadata *types.Metadata, id types.Si1LookupTypeID, shape s
 // Admits only the inspected version-4 extension order and root basket setter.
 // Shape compatibility does not establish source-to-Wasm semantics or eligibility.
 func rootSigningProfile(metadata *types.Metadata) ([]byte, error) {
+	if err := nativeSigningProfile(metadata); err != nil {
+		return nil, err
+	}
+	return rootWeightsSigningCall(metadata)
+}
+
+// Both native roles use the same reviewed envelope, without borrowing another
+// role's call or authority. The caller validates its own exact call separately.
+func nativeSigningProfile(metadata *types.Metadata) error {
 	if metadata == nil || metadata.Version != 14 || metadata.AsMetadataV14.Extrinsic.Version != 4 {
-		return nil, errors.New("root signing requires the reviewed metadata14/extrinsic4 profile")
+		return errors.New("native signing requires the reviewed metadata14/extrinsic4 profile")
 	}
 	names := []string{"CheckNonZeroSender", "CheckSpecVersion", "CheckTxVersion", "CheckGenesis", "CheckMortality", "CheckNonce", "CheckWeight", "ChargeTransactionPayment", "SudoTransactionExtension", "CheckShieldedTxValidity", "SubtensorTransactionExtension", "DrandPriority", "CheckMetadataHash"}
 	values := []string{"unit", "unit", "unit", "unit", "era", "compact32", "unit", "compact64", "unit", "unit", "unit", "unit", "mode"}
 	additional := []string{"unit", "u32", "u32", "account", "account", "unit", "unit", "unit", "unit", "unit", "unit", "unit", "optional-hash"}
 	extensions := metadata.AsMetadataV14.Extrinsic.SignedExtensions
 	if len(extensions) != len(names) {
-		return nil, errors.New("root signed extension count changed")
+		return errors.New("native signed extension count changed")
 	}
 	for index, extension := range extensions {
 		if string(extension.Identifier) != names[index] || !rootSigningType(metadata, extension.Type, values[index], 0) || !rootSigningType(metadata, extension.AdditionalSigned, additional[index], 0) {
-			return nil, fmt.Errorf("root signed extension %d name or wire shape changed", index)
+			return fmt.Errorf("native signed extension %d name or wire shape changed", index)
 		}
 	}
 	extrinsicType := metadata.AsMetadataV14.EfficientLookup[metadata.AsMetadataV14.Extrinsic.Type.Int64()]
 	if extrinsicType == nil {
-		return nil, errors.New("root extrinsic type parameters are missing")
+		return errors.New("native extrinsic type parameters are missing")
 	}
 	for _, expected := range []struct {
 		parameter string
@@ -221,27 +230,32 @@ func rootSigningProfile(metadata *types.Metadata) ([]byte, error) {
 			}
 			entry := metadata.AsMetadataV14.EfficientLookup[parameter.Type.Int64()]
 			if !parameter.HasType || entry == nil || !entry.Def.IsVariant {
-				return nil, errors.New("root address/signature type shape changed")
+				return errors.New("native address/signature type shape changed")
 			}
 			seenIndices := map[uint8]bool{}
 			for _, variant := range entry.Def.Variant.Variants {
 				if seenIndices[uint8(variant.Index)] {
-					return nil, errors.New("root address/signature has duplicate variant indices")
+					return errors.New("native address/signature has duplicate variant indices")
 				}
 				seenIndices[uint8(variant.Index)] = true
 				if string(variant.Name) != expected.variant {
 					continue
 				}
 				if uint8(variant.Index) != expected.index || len(variant.Fields) != 1 || !rootSigningType(metadata, variant.Fields[0].Type, expected.shape, 0) {
-					return nil, errors.New("root selected address/signature encoding changed")
+					return errors.New("native selected address/signature encoding changed")
 				}
 				matched++
 			}
 		}
 		if matched != 1 {
-			return nil, errors.New("root selected address/signature parameter missing or duplicated")
+			return errors.New("native selected address/signature parameter missing or duplicated")
 		}
 	}
+	return nil
+}
+
+// Root weights retain their original independently checked call profile.
+func rootWeightsSigningCall(metadata *types.Metadata) ([]byte, error) {
 	var callIndex []byte
 	palletCount := 0
 	for _, pallet := range metadata.AsMetadataV14.Pallets {

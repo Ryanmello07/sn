@@ -50,8 +50,18 @@ its original child journals to one current finalized census, with distinct
 UR/root generation, permit, window and checkpoint blockers. Its
 [exact-source qualification](evidence/bootstrap-readiness-qualification-20260929.md)
 passes all ten new normal/race roots, the 148-root adjacent normal/race scope,
-vet and four causal controls. It retains false activation/current-authority
-flags and all pending chain phases. The complete bootstrap,
+vet and four causal controls. The redundant broad race process was intentionally
+terminated after its passing prefix; the exact 148-root disjoint race union is
+the qualified coverage. The later [composed source check](/mnt/data/sn-testnet/qualification/mg08-bootstrap-readiness-20260929/COMPOSED-RESULT.md)
+passes focused normal/race, vet and fences on SN `e35771ec` and server `b7c8c743`.
+It retains false activation/current-authority flags and all pending chain phases.
+The next [owner-trim action source checkpoint](evidence/owner-trim-execution-source-20260929.md)
+adds durable exact-action recovery and actual-subset reconciliation under the
+original v3 custody. Its separate approval cannot replace current authority;
+production signing and submission remain blocked on the named enforcement and
+custody capabilities, and behavioral qualification remains pending. The owned
+Snow route still returned HTTP 502 at 06:59 UTC on September 29, providing no
+current mainnet identity or authority. The complete bootstrap,
 Safe evidence anchor, native signing device and live role
 activation remain unfinished. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)

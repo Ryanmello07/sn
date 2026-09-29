@@ -1,4 +1,4 @@
-# Chain preparation and read-only readiness
+# Chain preparation, readiness and retained trim action
 
 `sn-mainnet bootstrap-chain plan/apply/resume` binds the retained owner-trim
 review, two protected UR schema-3 configs, separately approved root-service
@@ -75,6 +75,75 @@ route/runtime failure, missing-state and lock-release regressions. Its
 passes all ten new roots and the exact 148-root adjacent scope in normal/race
 modes, plus vet and four causal controls. This qualifies the recorded source
 and module graph; live eligibility and activation remain unresolved.
+
+## Separately approved owner-trim action
+
+The trim phase retains the exact accepted v3 preparation and its five existing
+journals. It adds one fixed `owner-trim-action.json` with a permanent exclusive
+marker. `trim-plan` reads an unsigned `urnetwork-mainnet-owner-trim-execution-v1`
+template and exact runtime metadata, fills the original preparation/custody,
+policy/review, subnet owner/generation and reviewed best-capacity bindings, and
+emits an unsigned config. The template supplies the independently selected
+custody ID, nonce, finalized birth/hash, period, fee reserve, broadcast limit and
+owned route. No nonce or anchor is inferred from a public service.
+
+```sh
+sn-mainnet bootstrap-chain trim-plan --config /private/chain.json \
+  --run-dir /private/custody --accept-plan-hash sha256:ORIGINAL_V3_DIGEST \
+  --trim-config /private/trim-template.json --metadata /private/runtime.hex \
+  --trim-approval-key 0xINDEPENDENT_PUBLIC_KEY
+```
+
+An external approver signs the execution schema, a zero byte, and canonical Go
+JSON for the complete config with `approval_signature_ed25519` empty. The key
+is supplied independently with every invocation; the config cannot provide its
+own trust. This fresh domain covers the exact native action and canonical owned
+IP route, TLS pin when HTTPS, read/send deadlines, custody and financial bounds.
+The original v3 approvals remain unchanged. Native sr25519 signs the direct
+owner call's standard mortal payload, not the separate approval envelope.
+
+After external approval, `trim-apply` claims the new local action and
+`trim-resume` reopens it, using the same flags except `--metadata`. Neither opens
+RPC or signs. `trim-import --signature /private/original-signature.hex` retains
+one independently obtained public native signature; it never creates one and
+cannot replace valid original bytes or resolve unknown signing custody.
+`trim-reconcile` reads only the signed owned route and can settle original
+dispatch/fees, mortal expiry or nonce conflict. It has no `--rpc` override and
+no authority, signing, submission or activation switch.
+
+The durable executor implements signing recovery, numbered submission attempts
+and exact canonical receipt recovery. The concrete native adapter authenticates
+headers, complete block bodies, phase-specific dispatch and the coldkey's fee.
+These reads trust the independently approved owned node for consensus/storage;
+they do not implement a light client or storage proofs. A signature lookup or
+send timeout preserves the same action, nonce, era and allowance. Any ambiguous
+journal publication requires reopening. New approval cannot adopt old custody.
+
+Financial finality is reported separately from generation correspondence. The
+parent and inclusion-block censuses retain exact protected UR/root generations,
+actual surviving UID compression and every observed old-miner residual. A later
+same-block call may affect post-state; no missing generation is falsely attributed
+solely to this trim. If post-state is unavailable, the financial receipt remains
+durable and a later reconcile can fill only the missing readback. The command
+never reports a full reset or service activation.
+
+Current admission rechecks the exact nonce/call/profile and original generation
+scope, the existing bounded safe-set predicates, absence of owner proxies and
+network immunity through the **original** expiry. Rechecking at a later head
+conservatively demands a full period beyond that head while retaining the
+original action expiry. This may refuse a shorter safe remainder; it cannot
+renew the action. Proxy absence does not freeze future proxy/multisig actions.
+Subnet immunity does not prevent a privileged dissolution or immunity change.
+
+No production capability currently enforces future owner/governance/root
+changes, global coldkey exclusivity, source-to-Wasm provenance and fee exposure.
+The executable owner requires that independent capability before signing and
+again before each send; the owned adapter independently refuses an absent one.
+Conditional qualification and signed configuration are insufficient. A possible
+best-effort risk policy would need separate explicit approval and implementation;
+this checkpoint does not assume or enable it. Mainnet genesis, current metadata,
+owned route and custody remain unresolved. See the
+[source checkpoint and qualification scope](evidence/owner-trim-execution-source-20260929.md).
 
 ## Inputs and review
 

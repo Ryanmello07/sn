@@ -100,6 +100,22 @@ func rootAccountProfile(metadata *types.Metadata) error {
 // Every historical state is addressed by hash. An execution runtime is read
 // at its block's parent, including the block that itself installs new code.
 func (self *rootCanonicalChain) runtimeAt(ctx context.Context, block string) (rootReceiptRuntime, error) {
+	runtime, err := self.nativeRuntimeAt(ctx, block)
+	if err != nil {
+		return runtime, err
+	}
+	if _, err := rootSigningProfile(runtime.metadata); err != nil {
+		return rootReceiptRuntime{}, err
+	}
+	if _, err := rootReceiptEvents(runtime.metadata); err != nil {
+		return rootReceiptRuntime{}, err
+	}
+	return runtime, nil
+}
+
+// Authenticate the shared native envelope and financial events without granting
+// a root or owner call profile. Each role checks its call after this read.
+func (self *rootCanonicalChain) nativeRuntimeAt(ctx context.Context, block string) (rootReceiptRuntime, error) {
 	var rawVersion json.RawMessage
 	var codeHash string
 	if err := self.client.call(ctx, "state_getRuntimeVersion", []any{block}, &rawVersion); err != nil {
@@ -134,13 +150,13 @@ func (self *rootCanonicalChain) runtimeAt(ctx context.Context, block string) (ro
 		if err != nil || digest != profile.RuntimeMetadataHash {
 			return rootReceiptRuntime{}, errors.Join(errors.New("root receipt metadata differs from independent artifact"), err)
 		}
-		if _, err := rootSigningProfile(metadata); err != nil {
+		if err := nativeSigningProfile(metadata); err != nil {
 			return rootReceiptRuntime{}, err
 		}
 		if err := rootAccountProfile(metadata); err != nil {
 			return rootReceiptRuntime{}, err
 		}
-		if _, err := rootReceiptEvents(metadata); err != nil {
+		if _, err := nativeReceiptEvents(metadata, false); err != nil {
 			return rootReceiptRuntime{}, err
 		}
 		entry, err := rootSystemEntry(metadata, "Events")
