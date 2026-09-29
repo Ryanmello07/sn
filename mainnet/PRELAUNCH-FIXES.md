@@ -2334,6 +2334,24 @@ through SDK/operator/provider boundaries. Keep traffic ownership/accounting
 durable while controllers or observers restart. Retain the safety differences
 between testnet provisional gap handling and admissible mainnet history.
 
+**Provider registration follow-up (2026-09-29; qualification pending).** The
+[isolated provider candidate](evidence/provider-client-registration-candidate-20260929.md)
+replaces first-client allocation in `provide`/`auth-provide` with the existing
+versioned request protocol. One retained seed owns all direct/proxy slots;
+key/request publication precedes POST, replay retains the original operation,
+and required registration/refresh/logout custody stays on that owner's physical
+directory. New allocation needs explicit permission. First-upgrade legacy-key
+adoption is a separate operator assertion, not a key-to-JWT proof or permission
+to replace a lost identity. The planned independent scope is 114 selected roots
+per normal/race mode and 17 causal variants; initial fixture failures are
+retained and do not count as qualification. Public daemon fixtures stop at
+authenticated handoff, with refresh/logout tested separately, so full serving,
+processed-key and proof readiness remain open. The active no-config measurement
+validator remains a legacy registration caller under separate migration; this
+provider slice cannot claim all role startup paths are repaired. Approved live
+API deployment, actual custody, native/contract admission, economic acceptance
+and independent operational monitoring remain external gates. PH-13 stays open.
+
 **Closure.** Inject stale generations, delayed proofs, mixed operator keys,
 skipped rounds, partial artifact uploads, backpressure and controller restarts.
 Test both normal and replay/fast paths at the layer where identity is consumed.

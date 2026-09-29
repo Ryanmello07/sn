@@ -1,0 +1,109 @@
+# Provider client registration candidate
+
+Independent qualification and shared integration are pending. This is an
+isolated provider startup change; no live registration, signer use, chain action
+or production custody migration has occurred.
+
+The frozen candidate is SN `60934fb069a812b3f0105df24339a88fc45619db`, tree
+`7565ae59a7a24fb448f9d555d934d92a993eae4f`, on shared base
+`de480675e20c9010a27d585e37b61165b617d9db`. Its
+[implementation handoff](/mnt/data/sn-testnet/qualification/miner-client-registration-20260929/frozen-609/HANDOFF.md)
+has SHA256 `17ed81b095d9fc37313f9ae173bd694507c5927ebca9548b9973eac2a985f18e`;
+the 105-file manifest has SHA256
+`416981b9795f45550ef6e9224ae55ce361f1e6bfdf9e20ea38d0d068c37faefd`.
+The child corrects exactly three test files from preserved implementation
+`e32becc989a906e88c4a93bc72f0d67f1e779cf6`; every production and source module
+byte remains unchanged. The complete candidate changes 17 files from the
+shared base. Neither source is admitted for shared integration yet.
+
+The selected physical graph uses SDK
+`516521fb16da46c9f4bff0b58221e1941694f616`, Connect
+`b163f9dd9ac374942fe97331f26631248a9c1f81`, and server
+`80c0e1b7d9fb48ee6f929bca8158ac925b114fe0`. The handoff pins eight clean Git
+roots and ten selected local module entries through an external readonly
+modfile. SN's `go.mod` and `go.sum` are unchanged. The newer shared SDK422
+does not contain the required versioned registration/integrity API and cannot
+silently replace SDK516 in this qualification.
+
+`provide` and `auth-provide` formerly called the legacy allocating endpoint
+before persisting the shared provider key. A committed lost reply or interrupted
+credential write could therefore create another client on restart. The candidate
+retains the seed, public identity marker, original request and first-send anchor
+before the versioned POST, then durably binds the server identity before exposing
+its JWT. Restart and typed transient retries reuse that exact operation.
+
+The opaque provider scope contains the exact SDK-returned registration endpoint,
+retained public key, closed `provider-v1` role, and direct or full proxy-slot hash.
+Proxy credentials and order do not select identity. Duplicate effective slots or
+credential paths are rejected before workers start. Chain, deployment, operator
+and validator fields remain absent; prior validator scope bytes are preserved.
+The existing versioned server protocol requires no new wire format here.
+
+New work requires `--allow-client-registration`. The mutually exclusive
+`--adopt-legacy-provider-key` supports a first-upgrade refresh only when the
+operator asserts that the unmarked seed is the original retained key. JWT
+claims cannot authenticate that historical link. Neither flag repairs missing
+key/marker custody with retained versioned history or authorizes replacement of
+a lost/revoked client. Complete deletion of all local custody, or all history
+for one slot, remains locally indistinguishable from a fresh installation or
+new slot; no recovery proof is claimed.
+
+The global provider key owner spans all worker, device and API joins. Registration
+attempts, bootstrap/rejection reads and required refresh/logout writes use its
+physical directory descriptors. A replaced pathname cannot select new operation
+custody or receive renewed credentials. Closed startup diagnostics explain
+refusal without paths, tokens, proxy passwords or raw errors, through the
+existing bounded final drain. The public daemon's prior completion exit policy
+is retained.
+
+The planned independent selection is unchanged by the fixture correction:
+
+| Package | Selected roots per mode | Package census | New roots |
+| --- | ---: | ---: | ---: |
+| clientauth | 25 | 25 | 9 |
+| miner | 79 | 307 | 15 |
+| validator | 10 | 1992 | 0 |
+| Total | 114 | 2324 | 24 |
+
+This is the full clientauth package and selected miner/validator adjacency.
+It does not establish full affected-package coverage. Seventeen causal variants
+must reach their specified semantic assertion in both normal and race modes;
+build, fixture, panic and global-timeout failures are not causal evidence.
+Author compilation and vet pass for all three packages; all 17 variants compile.
+Source/module checks and the static census pass. No behavioral test body was
+executed by the author, and independent normal/race results are not yet a sealed
+PASS receipt.
+
+The original e32 capture is retained under
+`/mnt/data/sn-testnet/qualification/miner-client-registration-sol-20260929/frozen-e32`.
+Three clientauth roots initially encountered a group-writable test parent under
+umask 0002, correctly rejected by the production custody guard. Under private
+umask 077 those roots pass, while two miner assertions fail after treating each
+logical refresh as exactly one physical GET. The pinned SDK uses parallel GET
+transport; that source explains the flawed count assumption, but the failed
+streams do not report the actual counter values. The correction explicitly
+makes fixture parents private and distinguishes exact client/handoff/allocation
+identity from physical refresh attempts. It requires identical original slot
+records/key, exact authenticated identities, no additional allocation and the
+unchanged HTTP-count baseline after the typed lost-legacy refusal. It must be
+independently requalified under the ordinary environment, with original failure
+streams retained. At the child handoff, the original e32 validator race process
+was still running separately and was explicitly excluded from child evidence.
+
+The daemon fixtures use the actual startup and SDK HTTP path but stop at
+authenticated handoff before full serving-device construction. Refresh/logout
+callbacks and the actual public CLI refusal are separate fixtures. The synthetic
+allocation ledger does not newly qualify production PostgreSQL allocation;
+the [existing actual API/database result](registration-production-api-qualification-20260928.md)
+remains a separate prerequisite. Qualification is Linux-specific; other supported
+platforms are not newly covered.
+
+The active no-config measurement validator still calls the legacy loader and
+needs separate existing-custody-only migration. Configured schema-3 production
+operator authentication has its own qualified owner; the legacy release and
+simulation callers are not migrated here. This provider candidate supplies no
+processed-key, traffic/proof, validator membership or serving readiness; no
+runtime identity, native finality, actual fee, contract/Safe authority, economic
+acceptance or live approval. API/migration deployment and operator-owned custody,
+all chain/contract/economic launch gates, and deployed independent monitoring
+remain required. MG-04 and PH-13 are not closed by this component.
