@@ -188,6 +188,26 @@ empty and malformed unselected members. The earlier artifact verifier's separate
 nine-root composed smoke passes both modes on `18a88db4`. These results do not
 close the 75 SDK package gaps or 120 unrun MG-08 adjacent roots.
 
+The [offline successor Safe review](BOOTSTRAP-SUCCESSOR-SAFE-REVIEW.md) has
+[scoped independent qualification](evidence/bootstrap-successor-safe-review-qualification-20260929.md)
+on `d0207448`. It connects the original v3 graph, completed independent preparation and
+full selected Safe release to the exact zero-value evidence-anchor CALL digest.
+Its new read-only preparation consumer rejects absent, partial, forged, staged,
+unsafe or actively published claims without repairing their bytes. The proposed
+relayer liability includes both completed maximum envelopes and any original
+ninth reservation; original attempts and additive ceilings remain unchanged.
+Test compilation and vet pass. Nine new and four adjacent roots pass independent
+normal/race runs, including the full-v3 public command and published-bytecode
+digest oracle. All fourteen causal executions reach their intended assertion;
+the sealed logs, patches, exact source and dependency graph were independently
+checked. This does not close MG-08 or broaden prior package coverage.
+Safe owner signatures and complete outer calldata remain absent, as do
+execution approval, nonce/budget allocation and live authority. The review's native
+window is outside the Safe digest and cannot expire a signature. Canonical
+eight-receipt adoption, Safe/evidence state, signature lifetime/window enforcement,
+globally fenced relayer custody and a durable successor execution owner must still
+be implemented and qualified before evidence anchoring or activation.
+
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal
 and race, with four causal controls and the integrated authority-projection

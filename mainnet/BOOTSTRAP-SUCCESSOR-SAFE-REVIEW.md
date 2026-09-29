@@ -92,5 +92,8 @@ Safe/relayer custody, funding, execution-time enforcement and durable cumulative
 send accounting remain required. Completion must authenticate canonical Safe
 inner success and the one-shot coordinator/evidence domain binding. This review
 does not grant any of those authorities. Its deterministic tests include actual
-published Safe bytecode and a full public v3 eight-action fixture; behavioral
-qualification is performed separately on a frozen source snapshot.
+published Safe bytecode and a full public v3 eight-action fixture. The
+[scoped independent qualification](evidence/bootstrap-successor-safe-review-qualification-20260929.md)
+on frozen `d0207448` passes nine focused and four adjacent roots in both normal
+and race modes, with fourteen intended causal failures. It does not establish
+full-package or later composed-release coverage.
