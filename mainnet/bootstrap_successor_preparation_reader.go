@@ -17,6 +17,12 @@ import (
 // Callers retain the five original shared preparation locks until this reader
 // closes. A shared directory lock excludes preparation publication and recovery.
 func openBootstrapSuccessorPreparationReader(ctx context.Context, expected bootstrapSuccessorPreparationPlan, hook func(string) error) (_ *bootstrapSuccessorPreparationStore, _ bootstrapSuccessorPreparationRecord, resultErr error) {
+	return openBootstrapSuccessorPreparationReaderMode(ctx, expected, false, hook)
+}
+
+// Execution ownership acquires the same physical directory exclusively before
+// borrowing preparation bytes. It never upgrades a shared lock in place.
+func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected bootstrapSuccessorPreparationPlan, exclusive bool, hook func(string) error) (_ *bootstrapSuccessorPreparationStore, _ bootstrapSuccessorPreparationRecord, resultErr error) {
 	var record bootstrapSuccessorPreparationRecord
 	if ctx == nil {
 		return nil, record, errors.New("successor preparation reader context is absent")
@@ -43,7 +49,11 @@ func openBootstrapSuccessorPreparationReader(ctx context.Context, expected boots
 			resultErr = errors.Join(resultErr, self.close())
 		}
 	}()
-	if err := unix.Flock(fd, unix.LOCK_SH|unix.LOCK_NB); err != nil {
+	mode := unix.LOCK_SH
+	if exclusive {
+		mode = unix.LOCK_EX
+	}
+	if err := unix.Flock(fd, mode|unix.LOCK_NB); err != nil {
 		return nil, record, errors.Join(errors.New("successor preparation has an active local owner"), err)
 	}
 	if err := self.checkpoint("reader-acquired"); err != nil {

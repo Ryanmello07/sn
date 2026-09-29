@@ -121,8 +121,9 @@ Completed canonical-action receipts remain historical retained facts; eight
 completed actions leave only the anchor unfinished and do not require replay.
 A cap change needs a new independently signed successor that adopts the original
 prefix, reconciles unfinished signed nonces, and conserves cumulative attempts
-and lifetime financial exposure. That adoption owner and the Safe executor remain
-unimplemented. The [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
+and lifetime financial exposure. The later conditional execution custody owner
+is described below; its production canonical adapter remains unimplemented.
+The [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
 passes all twelve new roots normal/race with six causal controls in both modes.
 The separate [partial adjacent battery](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
 passes 150/270 roots in both modes, with ten package PASS/exit-zero terminals
@@ -135,9 +136,9 @@ six new and twelve inherited roots pass normal/race, with six causal controls
 in both modes. It can retain eight
 completed receipt seals, carry original spend forward, propose additive attempt
 and lifetime ceilings, and preserve an original ninth reservation. It does not
-sign or execute a successor. A new durable adoption owner and current Safe
-authority/digest proof remain required before executable authority can be
-admitted; changed original v1 approvals cannot adopt old custody.
+sign or execute a successor. The later durable adoption owner has its own domain;
+current Safe authority and canonical receipt proof remain required before live
+execution. Changed original v1 approvals cannot adopt old custody.
 The qualified [signed local preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md) adds
 one fixed original-root claim, a distinct independently verified preparation
 approval and resumable publication. Its [scoped receipt](evidence/bootstrap-successor-preparation-qualification-20260929.md)
@@ -205,8 +206,43 @@ Safe owner signatures and complete outer calldata remain absent, as do
 execution approval, nonce/budget allocation and live authority. The review's native
 window is outside the Safe digest and cannot expire a signature. Canonical
 eight-receipt adoption, Safe/evidence state, signature lifetime/window enforcement,
-globally fenced relayer custody and a durable successor execution owner must still
-be implemented and qualified before evidence anchoring or activation.
+globally fenced relayer signer custody and a production canonical execution
+adapter must still be implemented and qualified before evidence anchoring or
+activation.
+
+The [successor execution custody and owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) now
+binds independently approved signatures and an exact outer envelope to the
+original eight-receipt adoption, cumulative attempt/financial floors and distinct
+Safe-inner/relayer-outer nonce claims. Its public commands remain offline; the
+internal one-send machine requires an authenticated adapter for every historical,
+current-state and canonical receipt decision. Its
+[scoped qualification receipt](evidence/bootstrap-successor-execution-qualification-20260929.md)
+records twenty-one focused and six adjacent roots passing normal/race on
+corrected `75ea2158`, including interrupted publication, counted attempts, ambiguous send recovery,
+nonce conflicts, exact inner success and the full public-v3 original graph.
+Ten isolated causal controls each reach their intended assertion in normal/race,
+and the forty-five-file evidence manifest verifies. This does not close MG-08 or
+broaden earlier package coverage.
+
+The initial twenty fixture failures remain preserved: private binary files had
+shared temporary parent directories. The test-only correction explicitly uses
+`0700` parents; production readers remain strict. The first corrected race run
+hit the default ten-minute package timer after fifteen passing roots and zero
+failed root assertions. The unchanged twenty-one-root retry passes in 662.949s
+with an explicit twenty-minute harness budget. The public-v3 and thirty-boundary
+recovery roots together account for about 398 seconds under race. Size the whole
+qualification from measured fixture cost; preserve timed-out attempts and keep
+production transaction deadlines unchanged.
+
+The missing production adapter must canonically reauthenticate every original
+receipt/postcondition, selected Safe release and finalized/pending authority,
+original unexecuted reservation, current evidence domain and exact inner outcome,
+then perform one bounded write over the approved owned route. Enforced signer
+cutover to one registry, independently approved mainnet genesis/runtime and Safe
+authority, funding, actual owner/relayer signatures and live readback remain
+separate gates. Local locks and synthetic adapters do not supply those facts.
+Later successors, filesystem migration, fee replacement and independently proved
+external sends require separate approved liability-preserving transitions.
 
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal

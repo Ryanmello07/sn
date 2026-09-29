@@ -68,7 +68,10 @@ resumes interrupted publication. Current canonical reauthentication remains a
 separate gate. It grants no execution allowance or Safe authority. The unsigned
 proposal command and original v1 approval/markers retain their existing scope.
 
-The executable successor remains unimplemented. Increasing the v1 contract
+The [successor execution owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) now implements
+independent approval, durable exact-prefix adoption, separate nonce claims and
+one-send reconciliation machinery, with [scoped independent qualification](evidence/bootstrap-successor-execution-qualification-20260929.md).
+Its production canonical adapter remains unimplemented. Increasing the v1 contract
 schema's eight-attempt cap cannot migrate custody: every existing marker binds
 the full signed config and each descendant binds its original predecessor record.
 Replacing that config invalidates those seals; it cannot adopt completed work.
@@ -81,7 +84,7 @@ unexecuted original liabilities. It creates no new approval, signature, nonce
 reservation, outer transaction or executable allowance. Canonical state and the
 separate globally fenced execution owner remain unresolved.
 
-The next implementation needs a new versioned successor plan and independently
+The execution implementation uses a new versioned successor plan and independently
 signed approval domain, distinct from both the original contract approval and
 this unsigned request/proposal schema. The approval must cover:
 
@@ -99,7 +102,7 @@ this unsigned request/proposal schema. The approval must cover:
    Original attempts and maximum unresolved liabilities are immutable floors.
    A later successor must cover every earlier successor seal and spend as well.
 
-A new journal owner should acquire all original locks in their existing order,
+The new journal owner acquires original locks in their existing order,
 validate exact completed custody, and claim a separate successor destination
 without rewriting original markers. Its durable creation state must bind the
 approved adoption list before admitting any signature or incremented allowance.
