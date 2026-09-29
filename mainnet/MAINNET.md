@@ -62,6 +62,14 @@ passes twelve new roots and six causal controls normal/race; the separate
 270-root adjacent scope remains pending. Eight retained successful actions
 leave only the evidence anchor unfinished. A signed successor adoption owner,
 Safe authority/provenance and relayer custody remain unimplemented.
+The [qualified unsigned successor proposal](evidence/bootstrap-contract-successor-qualification-20260929.md)
+retains the eight completed seals and any ninth reservation while computing
+additive attempt/lifetime ceilings for the unfinished anchor and retry margin.
+Six new and twelve inherited roots pass normal/race with six causal controls in
+both modes. A separate successful full-v3 public-command fixture remains open.
+The earlier fifteen-root MG-07/prerequisite composed smoke also passes both modes
+on exact `79ff2c6e`; it predates the successor. Neither result supplies Safe
+authority, signed adoption or live installation.
 The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),
 integrated at `ce567305`, adds durable exact-action recovery and actual-subset
 reconciliation under original v3 custody. Sol's 25 focused roots and exact
@@ -969,8 +977,9 @@ The [incremental SDK/MG06 composition](evidence/incremental-source-composition-2
 preserves the original source histories and the reviewed versioned SDK, Connect
 and SCTP pins. Its 37 focused roots pass normal/race and four mainnet smoke roots
 pass normally; the original SDK candidate has complete 618-root normal coverage.
-Its race root-body union is 618/618, but only 410/618 are backed by package-PASS
-streams at the audited snapshot; 208 and broad race package closure remain pending.
+Its race root-body union is 618/618. The [corrected SDK snapshot](evidence/bootstrap-contract-successor-qualification-20260929.md#separate-sdk-package-coverage-and-scheduling-lesson)
+now records 543/618 backed by package-PASS streams, with 75 pending and no root
+failures. This separate source graph still lacks broad race package closure.
 The bounded
 [`observe-native-miner-emission` reader](ECONOMIC-GATE.md#bounded-native-incentive-observation)
 retains canonical event/state evidence with complete and partial outcomes. Its
@@ -991,6 +1000,13 @@ no package terminal at that snapshot. Use disjoint exact root shards, retain
 each shard's source fence, package exit and original timeout, and preserve
 completed results without resetting their evidence. Broad race package
 qualification remains open.
+
+The [later scheduling review](evidence/bootstrap-contract-successor-qualification-20260929.md#separate-sdk-package-coverage-and-scheduling-lesson)
+records 543/618 package-backed SDK roots and 75 pending. The evidence predecessor
+checkpoint root runs fourteen serial fixtures and passed in about 28 minutes in
+both its shard and exact-root retry; no product failure was established. Give
+that root its own package/time budget and group other roots by measured duration
+without reducing causal cases. Preserve the earlier timeout evidence.
 
 The [owner-recycle measured decision](../validator/OWNER-RECYCLE-MEASUREMENT.md)
 now joins signed successor approval, exact native owner census and fully

@@ -104,6 +104,14 @@ each shard's source fence, package exit and original timeout, and preserve
 completed results without resetting their evidence. Broad race package
 qualification remains open.
 
+The [corrected SDK coverage and scheduling review](evidence/bootstrap-contract-successor-qualification-20260929.md#separate-sdk-package-coverage-and-scheduling-lesson)
+now records 543/618 roots backed by package-PASS race streams, 75 pending and no
+root failures. The evidence predecessor checkpoint root executes fourteen serial
+fixtures and passed in about 28 minutes in both its shard and exact-root retry.
+Isolate that long root into its own package/time budget and partition other roots
+by observed duration; retain all causal cases and the original timeout records.
+This is a qualification scheduling lesson, not a demonstrated product failure.
+
 The MG-08 [offline contract prerequisite increment](BOOTSTRAP-CHAIN.md#offline-contract-installation-prerequisites)
 adds `bootstrap-chain contract-plan` before custody and `contract-readiness`
 over the original v3 preparation and retained action journals. It exposes missing
@@ -120,12 +128,17 @@ the 270-root adjacent scope remains pending. This does not close MG-08 or
 establish installation, role activation or native 10/90 acceptance.
 
 The separate [unsigned contract successor proposal](BOOTSTRAP-CONTRACT-SUCCESSOR.md)
-is a bounded offline implementation awaiting qualification. It can retain eight
+has [scoped Sol qualification](evidence/bootstrap-contract-successor-qualification-20260929.md):
+six new and twelve inherited roots pass normal/race, with six causal controls
+in both modes. It can retain eight
 completed receipt seals, carry original spend forward, propose additive attempt
 and lifetime ceilings, and preserve an original ninth reservation. It does not
 sign or execute a successor. A new durable adoption owner and reviewed Safe
 source/ABI/storage/digest profile remain required before executable authority can
 be admitted; changed original v1 approvals cannot adopt old custody.
+A separate successful full-v3 public-command fixture remains an adjacent gap.
+The fifteen-root MG-07/prerequisite composed smoke also passes both modes on
+exact `79ff2c6e`; it predates the successor and does not close broad coverage.
 
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal

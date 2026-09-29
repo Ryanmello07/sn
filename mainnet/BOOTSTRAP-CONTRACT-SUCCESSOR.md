@@ -116,6 +116,8 @@ An outer EVM status of one does not prove Safe-inner execution success, the expe
 event, the one-shot coordinator getter or current authority. Neither an address
 label nor a local artifact hash can replace these prerequisites.
 
-This bounded source increment is offline and awaits independent Sol behavioral
-qualification. It does not install contracts, approve more spending, run the
+This bounded source increment has [scoped Sol qualification](evidence/bootstrap-contract-successor-qualification-20260929.md):
+six new and twelve inherited roots pass normal/race, with six causal controls in
+both modes. A separate successful full-v3 public-command fixture and the broad
+adjacent qualification remain open. It does not install contracts, approve more spending, run the
 10/90 native economy or activate either UR validator or the separate root role.

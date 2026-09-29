@@ -127,6 +127,10 @@ reads all eight completed originals, preserves their seals and any ninth reserve
 envelope, and computes an additive attempt/lifetime proposal for the unfinished
 anchor and retry margin. It creates no successor approval or execution custody;
 the Safe provenance and signed migration owner remain unresolved.
+Its [scoped qualification](evidence/bootstrap-contract-successor-qualification-20260929.md)
+passes six new and twelve inherited roots normal/race plus six causal controls
+in both modes. A separate successful full-v3 public-command fixture remains an
+adjacent gap; this proposal does not create executable authority.
 
 ## Read-only current prerequisites
 
