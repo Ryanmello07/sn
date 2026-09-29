@@ -68,6 +68,17 @@ Both sources are integrated; 76 affected roots pass normal/race and all 292
 miner roots pass plain normal. The composed release still needs custody,
 restart and aggregate fleet-capacity qualification before deployment.
 
+MG-08 also exposed a production bootstrap scaling failure: action-seven
+validation repeatedly expanded a shared predecessor graph, making one call
+copy 128 projections and hash the same 106 KB approval configuration 254 times.
+The [integrated graph correction](evidence/bootstrap-contract-plan-graph-work-20260929.md)
+keeps one private copy and one validation per distinct object within each
+invocation while retaining the exact approval, journal and output encoding.
+Its scoped qualification passed 5 graph, 28 evidence and 177 adjacent roots in
+both normal and race modes, with six causal controls. The independent full
+`./mainnet` package and live deployment remain separate gates; do not treat a
+package timer or a cached success from a prior invocation as approval.
+
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal
 and race, with four causal controls and the integrated authority-projection
