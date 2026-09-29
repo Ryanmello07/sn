@@ -25,9 +25,9 @@ import (
 
 const registrationRecordSchema = "urnetwork-durable-client-registration-v1"
 
-// An operator's deployment or a provider's explicit service role, together with
+// An operator's deployment or an explicit service role, together with
 // client-key ownership, selects the operation. No whole config hash, executable,
-// token bytes, token timestamp or mutable policy does. Provider fields are
+// token bytes, token timestamp or mutable policy does. Service fields are
 // omitted for historical validator scopes, preserving their canonical bytes.
 type RegistrationScope struct {
 	Endpoint     string `json:"endpoint"`
@@ -97,6 +97,13 @@ func loadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, cli
 // A provider supplies its key owner's physical directory. Historical callers
 // retain their existing independent custody through the nil-directory wrapper.
 func loadOrRegisterClientJwtInDirectory(ctx context.Context, api *sdk.Api, networkPath, clientPath, description string, scope RegistrationScope, allowCreate bool, hooks registrationHooks, directory *registrationStore) (_ string, _ connect.Id, returnErr error) {
+	return loadOrRegisterClientJwtWithCustody(ctx, api, networkPath, clientPath, description, scope, allowCreate, hooks, directory, nil)
+}
+
+// Measurement custody may borrow its separately owned, read-only bootstrap
+// directory. The reader is opened only for an already retained operation;
+// provider and production-validator wrappers keep their original boundaries.
+func loadOrRegisterClientJwtWithCustody(ctx context.Context, api *sdk.Api, networkPath, clientPath, description string, scope RegistrationScope, allowCreate bool, hooks registrationHooks, directory *registrationStore, bootstrapOwner func() (*registrationStore, error)) (_ string, _ connect.Id, returnErr error) {
 	if ctx == nil || api == nil {
 		return "", connect.Id{}, errors.New("registration has no operation owner")
 	}
@@ -117,9 +124,12 @@ func loadOrRegisterClientJwtInDirectory(ctx context.Context, api *sdk.Api, netwo
 		}
 		values = append(values, scope.GenesisHash)
 	} else {
-		if scope.ClientRole != "provider-v1" ||
+		if (scope.ClientRole != "provider-v1" && scope.ClientRole != "validator-measurement-v1") ||
 			scope.DeploymentId != "" || scope.ChainId != 0 || scope.GenesisHash != "" || scope.Netuid != 0 || scope.ValidatorId != 0 || scope.OperatorNoId != 0 {
 			return "", connect.Id{}, errors.New("registration service role is unsupported or mixed with chain authority")
+		}
+		if scope.ClientRole == "validator-measurement-v1" && (scope.ClientSlot != "direct" || allowCreate) {
+			return "", connect.Id{}, errors.New("measurement registration requires its retained direct operation")
 		}
 		if scope.ClientSlot != "direct" {
 			slot, err := hex.DecodeString(strings.TrimPrefix(scope.ClientSlot, "proxy-sha256:"))
@@ -134,12 +144,15 @@ func loadOrRegisterClientJwtInDirectory(ctx context.Context, api *sdk.Api, netwo
 			return "", connect.Id{}, errors.New("registration scope has an invalid genesis or client key")
 		}
 	}
+	if bootstrapOwner != nil && (directory == nil || scope.ClientRole != "validator-measurement-v1" || allowCreate) {
+		return "", connect.Id{}, errors.New("separate bootstrap custody is restricted to retained measurement work")
+	}
 	var owner *registrationStore
 	if directory == nil {
 		owner, err = openRegistrationStore(clientPath)
 	} else {
-		if filepath.Dir(networkPath) != filepath.Dir(clientPath) || filepath.Clean(networkPath) != networkPath || !filepath.IsAbs(networkPath) {
-			return "", connect.Id{}, errors.New("provider bootstrap differs from its owned custody directory")
+		if (bootstrapOwner == nil && filepath.Dir(networkPath) != filepath.Dir(clientPath)) || filepath.Clean(networkPath) != networkPath || !filepath.IsAbs(networkPath) {
+			return "", connect.Id{}, errors.New("service bootstrap differs from its owned custody directory")
 		}
 		owner, err = openRegistrationStoreForOwner(clientPath, directory)
 	}
@@ -150,12 +163,21 @@ func loadOrRegisterClientJwtInDirectory(ctx context.Context, api *sdk.Api, netwo
 	readToken := ReadToken
 	clearRejected := func() error { return clearRejection(clientPath) }
 	markRejected := func() error { return MarkRejected(clientPath, networkPath) }
+	var bootstrapStore *registrationStore
 	if directory != nil {
 		readToken = func(path string) (string, error) {
-			if filepath.Dir(path) != filepath.Dir(clientPath) {
+			reader := owner
+			if path == networkPath && bootstrapOwner != nil {
+				var err error
+				bootstrapStore, err = bootstrapOwner()
+				if err != nil {
+					return "", err
+				}
+				reader = bootstrapStore
+			} else if filepath.Dir(path) != filepath.Dir(clientPath) {
 				return "", errors.New("provider credential read escaped its owned directory")
 			}
-			raw, err := owner.read(filepath.Base(path))
+			raw, err := reader.read(filepath.Base(path))
 			if err != nil {
 				return "", err
 			}
@@ -316,6 +338,11 @@ func loadOrRegisterClientJwtInDirectory(ctx context.Context, api *sdk.Api, netwo
 	api.SetByJwt(bootstrap)
 	if err := owner.check(); err != nil {
 		return "", connect.Id{}, err
+	}
+	if bootstrapStore != nil {
+		if err := bootstrapStore.check(); err != nil {
+			return "", connect.Id{}, err
+		}
 	}
 	result, err := api.RegisterNetworkClientSyncWithContext(ctx, &record.Request)
 	if err != nil {

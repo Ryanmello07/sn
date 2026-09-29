@@ -21,12 +21,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
-	"time"
 
 	"golang.org/x/term"
 
@@ -96,7 +95,7 @@ Usage:
     validator run [--api_url=<api_url>] [--connect_url=<connect_url>]
         [--concurrency=<n>] [--m=<depth>]
         [--rpc=<rpc_url>]... [--contract=<addr>] [--state_dir=<path>]
-        [-v...]
+        [--adopt-legacy-measurement-key] [-v...]
     validator status [--config=<path>] [--api_url=<api_url>]
         [--rpc=<rpc_url>]... [--contract=<addr>] [--netuid=<id>]
         [--evm_key_file=<path>] [--hotkey_seed_file=<path>] [--state_dir=<path>]
@@ -134,6 +133,8 @@ Options:
     --connect_url=<connect_url>  Custom connect (platform transport) URL.
     --user_auth=<user_auth>      Login with a username.
     --password=<password>        Login with a password (prompted when omitted).
+    --adopt-legacy-measurement-key  Assert the existing measurement seed is original when first adopting
+                                 a legacy client JWT; never creates a key or a client.
     --concurrency=<n>            Concurrent trail walkers [default: 4].
     --m=<depth>                  Requested trail depth M (server clamps to [4,16]) [default: 8].
     --rpc=<rpc_url>              EVM json-rpc endpoint (repeatable; ordered failover).
@@ -365,187 +366,15 @@ func run(opts docopt.Opts) {
 	if err := rejectLegacySteeringOptions(opts); err != nil {
 		panic(err)
 	}
-	apiUrl := optString(opts, "--api_url", DefaultApiUrl)
-	connectUrl := optString(opts, "--connect_url", DefaultConnectUrl)
-	concurrency := optInt(opts, "--concurrency", 4)
-	m := optInt(opts, "--m", connect.VerifyMDefault)
-
-	identityOpts := identityOptionsFromOpts(opts)
-	identity, err := LoadIdentity(identityOpts)
+	settings, err := measurementSettingsFromOpts(opts)
 	if err != nil {
 		panic(err)
 	}
-
-	event := connect.NewEventWithContext(context.Background())
-	event.SetOnSignals(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-	ctx, cancel := context.WithCancel(event.Ctx())
-	defer cancel()
-
-	clientStrategy := connect.NewClientStrategyWithDefaults(ctx)
-	defer clientStrategy.Close()
-	api := sdk.NewApi(ctx, clientStrategy, apiUrl)
-	defer func() {
-		_ = api.CloseAndWait(context.Background())
-	}()
-
-	networkTokenPath, err := networkJwtPath()
-	if err != nil {
+	ctx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	defer stopSignals()
+	if err := settings.run(ctx, os.Stdout); err != nil {
 		panic(err)
 	}
-	clientTokenPath := filepath.Join(identity.StateDir, ".validator.jwt")
-	byClientJwt, clientId, err := clientauth.LoadOrCreateClientJwt(
-		ctx,
-		api,
-		networkTokenPath,
-		clientTokenPath,
-		fmt.Sprintf("validator %s", RequireVersion()),
-	)
-	if err != nil {
-		panic(err)
-	}
-	refreshPersistSub := api.AddJwtRefreshListener(clientauth.JwtRefreshListenerFunc(func(jwt string) {
-		if err := clientauth.WriteToken(clientTokenPath, jwt); err != nil {
-			fmt.Printf("validator client JWT save failed: %s\n", err)
-			cancel()
-		}
-	}))
-	defer refreshPersistSub.Close()
-	logoutSub := api.AddAuthLogoutListener(clientauth.AuthLogoutListenerFunc(func() {
-		if err := clientauth.MarkRejected(clientTokenPath, networkTokenPath); err != nil {
-			fmt.Printf("validator client JWT rejection save failed: %s\n", err)
-		}
-		fmt.Printf("validator authentication was rejected; run `validator auth` if the bootstrap credential is no longer valid\n")
-		cancel()
-	}))
-	defer logoutSub.Close()
-
-	// Client identity: authenticate a client id under the network, then
-	// run a connect client whose ClientKeySeed is the persisted vpk seed —
-	// the ClientKeyManager publishes the vpk to the platform
-	// (ckey_<clientId>), which is what the /verify server checks SEED
-	// bodies against (VALIDATOR.md §2).
-	fmt.Printf("client_id: %s\n", clientId)
-	fmt.Printf("vpk: %s\n", hex.EncodeToString(identity.Vpk))
-
-	clientSettings := connect.DefaultClientSettings()
-	clientSettings.ClientKeySeed = identity.VpkSeed
-	clientOob := connect.NewApiOutOfBandControl(ctx, clientStrategy, byClientJwt, apiUrl)
-	identityClient := connect.NewClient(ctx, clientId, clientOob, clientSettings)
-	defer identityClient.Close()
-	instanceId := connect.NewId()
-	platformTransport := connect.NewPlatformTransportWithDefaults(ctx, clientStrategy, identityClient.RouteManager(), connectUrl, &connect.ClientAuth{
-		ByJwt:      byClientJwt,
-		InstanceId: instanceId,
-		AppVersion: RequireVersion(),
-	})
-	refreshTransportSub := api.AddJwtRefreshListener(clientauth.JwtRefreshListenerFunc(func(jwt string) {
-		clientOob.SetByJwt(jwt)
-		platformTransport.SetAuth(&connect.ClientAuth{
-			ByJwt:      jwt,
-			InstanceId: instanceId,
-			AppVersion: RequireVersion(),
-		})
-	}))
-	defer refreshTransportSub.Close()
-	api.StartJwtRefresh()
-
-	// Optional chain access: epoch stamping for proofs + steering reads.
-	var chain *ChainClient
-	if len(optStringList(opts, "--rpc")) > 0 && optString(opts, "--contract", "") != "" {
-		chain, err = dialChainFromOpts(opts)
-		if err != nil {
-			panic(err)
-		}
-		defer chain.Close()
-		fmt.Printf("chain: %s (chain id %s)\n", chain.RpcUrl(), chain.ChainId())
-	} else {
-		fmt.Printf("chain: not configured (proofs will carry epoch 0; steering disabled)\n")
-	}
-
-	// Cached epoch for proof stamping.
-	var cachedEpoch atomic.Uint64
-	epochFn := func() uint64 { return cachedEpoch.Load() }
-	if chain != nil {
-		refreshEpoch := func() {
-			if epoch, err := chain.Epoch(); err == nil {
-				cachedEpoch.Store(epoch.Uint64())
-			}
-		}
-		refreshEpoch()
-		go func() {
-			ticker := time.NewTicker(30 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					refreshEpoch()
-				}
-			}
-		}()
-	}
-
-	stats := NewStatsEngine(StatsConfig{})
-	if err := stats.Load(identity.StateDir); err != nil {
-		fmt.Printf("stats load: %v (starting fresh)\n", err)
-	}
-	store, err := NewProofStore(identity.StateDir)
-	if err != nil {
-		panic(err)
-	}
-
-	transport := NewTunnelTransport(ctx, clientStrategy, TunnelTransportConfig{
-		ApiUrl:         apiUrl,
-		ConnectUrl:     connectUrl,
-		ByClientJwt:    api.GetByJwt,
-		SourceClientId: clientId,
-	})
-	keyRing := NewApiServerKeyRing(api)
-	seedPicker := NewFindProvidersSeedPicker(api, clientId)
-
-	engine := NewTrailEngine(
-		clientId, identity.Vsk, transport, keyRing, seedPicker, stats, store, epochFn,
-		TrailEngineConfig{M: m},
-	)
-
-	go func() {
-		if err := engine.Run(ctx, concurrency); err != nil && ctx.Err() == nil {
-			panic(fmt.Errorf("validator trail engine: %w", err))
-		}
-	}()
-
-	// The flag-mode runner is measurement-only. Release weight writes require
-	// the strict multi-NO config path, which uses per-NO quality and exact CRv4
-	// intents. There is no CLI route to the legacy global-quality aggregator.
-	fmt.Printf("steering: disabled in legacy flag mode; use --config for release-1.0 steering\n")
-
-	// Periodic stats snapshots + final save on shutdown.
-	go func() {
-		ticker := time.NewTicker(60 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if err := stats.Save(identity.StateDir); err != nil {
-					fmt.Printf("stats save: %v\n", err)
-				}
-			}
-		}
-	}()
-
-	fmt.Printf("validator %s running (concurrency %d, M %d)\n", RequireVersion(), concurrency, m)
-	<-ctx.Done()
-	if err := transport.CloseAndWait(context.Background()); err != nil {
-		fmt.Printf("tunnel transport shutdown: %v\n", err)
-		os.Exit(1)
-	}
-	if err := stats.Save(identity.StateDir); err != nil {
-		fmt.Printf("stats save: %v\n", err)
-	}
-	os.Exit(0)
 }
 
 func rejectLegacySteeringOptions(opts docopt.Opts) error {
