@@ -104,6 +104,20 @@ each shard's source fence, package exit and original timeout, and preserve
 completed results without resetting their evidence. Broad race package
 qualification remains open.
 
+The MG-08 [offline contract prerequisite increment](BOOTSTRAP-CHAIN.md#offline-contract-installation-prerequisites)
+adds `bootstrap-chain contract-plan` before custody and `contract-readiness`
+over the original v3 preparation and retained action journals. It exposes missing
+anchor approval, the original eight-attempt/nine-action mismatch, and unresolved
+Safe-inner authority, code/runtime provenance, relayer funding and custody.
+Completed canonical-action receipts remain historical retained facts; eight
+completed actions leave only the anchor unfinished and do not require replay.
+A cap change needs a new independently signed successor that adopts the original
+prefix, reconciles unfinished signed nonces, and conserves cumulative attempts
+and lifetime financial exposure. That adoption owner and the Safe executor remain
+unimplemented. The new source/tests await separate behavioral qualification;
+this does not close MG-08 or establish installation, role activation or native
+10/90 acceptance.
+
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal
 and race, with four causal controls and the integrated authority-projection

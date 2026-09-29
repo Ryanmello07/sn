@@ -15,11 +15,14 @@ import (
 // Exact accepted preparation and run-directory identities precede any mutation.
 // Every resume reloads its independently pinned inputs before retained ownership.
 func runBootstrapChainCommand(ctx context.Context, args []string, stdout, stderr io.Writer) (result int) {
+	if len(args) > 1 && strings.HasPrefix(args[1], "contract-") {
+		return runBootstrapChainContractCommand(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) > 1 && strings.HasPrefix(args[1], "trim-") {
 		return runBootstrapTrimCommand(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) < 2 || args[1] != "plan" && args[1] != "apply" && args[1] != "resume" && args[1] != "readiness" {
-		fmt.Fprintln(stderr, "bootstrap-chain requires plan, apply, resume or read-only readiness")
+		fmt.Fprintln(stderr, "bootstrap-chain requires plan, apply, resume, read-only readiness, contract-plan or offline contract-readiness")
 		return 2
 	}
 	command := args[1]
