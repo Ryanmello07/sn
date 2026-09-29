@@ -83,6 +83,15 @@ pass normal/race with sixteen intended causal executions. Independent rebuild,
 current account and initializer-owner binding, authority, signing and execution
 remain false. Existing versus new Safe is unresolved; a different new address
 requires separately authorized ownership migration from the retained owner.
+The [qualified pure Safe evidence layer](evidence/safe-execution-evidence-qualification-20260929.md)
+binds the exact EIP-712 digest, supplied signature structure/recovery and declared
+inner outcome/nonce semantics to those published profiles. Thirteen focused and
+four adjacent roots pass normal/race; all twenty-six causal executions reach
+their intended assertion. The corrected oracle filters the selected variant
+before decoding; the earlier e074 setup failures remain preserved as unqualified.
+This layer has no command, signer, current owner/threshold proof, canonical
+receipt authentication, custody or execution path. The artifact verifier's
+separate nine-root composed smoke also passes normal/race on `18a88db4`.
 The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),
 integrated at `ce567305`, adds durable exact-action recovery and actual-subset
 reconciliation under original v3 custody. Sol's 25 focused roots and exact

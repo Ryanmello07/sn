@@ -2,8 +2,10 @@
 
 `safe_execution_evidence.go` adds bounded internal calculations for the published
 Safe and SafeL2 1.4.1 and 1.5.0 profiles. This layer has no command, network client,
-signer, selected live account, custody owner or broadcast path. Behavioral
-qualification is pending; compile-only validation is not behavioral evidence.
+signer, selected live account, custody owner or broadcast path. Its
+[scoped independent qualification](evidence/safe-execution-evidence-qualification-20260929.md)
+passes thirteen focused and four adjacent roots in normal and race modes,
+with thirteen causal controls reaching their intended assertion in both modes.
 
 The constructor authenticates exact singleton artifact bytes against the immutable
 [release catalog](SAFE-RELEASE-VERIFY.md), then owns an immutable parsed ABI. The
