@@ -1446,9 +1446,23 @@ new roots and adjacent controller/model recovery. Production receipt/finality
 joins, actual fees, distributed custody ownership and live restart remain open.
 The [conditional offline receipt/fee join](evidence/operator-receipt-fee-qualification-20260928.md)
 now reports missing and conflicting candidates and counts observed gas once
-per resolved nonce; 63 source roots passed normal and race modes. A separately
-authenticated native-to-EVM mapping and receipt producer are still required
+per resolved nonce; its recovery and adjacent controller/model roots passed
+normal and race modes. A separately authenticated native-to-EVM mapping and
+receipt producer are still required
 before it can establish canonical production fees or authorize recovery.
+
+The [qualified receipt commitment verifier](evidence/operator-receipt-commitments-qualification-20260929.md)
+is now integrated at server `fbe0c039`. Its offline `verify-receipts` command
+authenticates exact archived signed bytes and receipt status at the same trie
+index, derives gas from the committed receipt and its predecessor, and verifies
+consecutive raw Frontier headers through the supplied EVM boundary. All 52
+recovery/CLI roots pass normal and race, including 14 new roots and three
+private-database roots; four causal controls pass. This closes source-level
+verification of those commitments only. Actual fees remain null: the raw Frontier
+header does not commit the RPC-rendered base fee, and runtime/native debits
+remain unproven. Independent native finality/mapping, boundary account nonce
+proofs, a bounded production observation collector, service adoption, release
+composition and live custody/restart qualification remain open MG-03/PF-03 work.
 
 The independent monitor confirms the repair's postcondition at finalized state.
 Only then close the incident, retaining its history and action receipts. A local
