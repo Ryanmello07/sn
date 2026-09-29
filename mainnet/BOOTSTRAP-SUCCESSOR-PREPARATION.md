@@ -9,6 +9,12 @@ passes thirteen focused and three adjacent roots normal/race, with all thirty-tw
 intended causal executions. It neither authorizes additional sends nor makes the
 evidence anchor executable.
 
+The [offline Safe review](BOOTSTRAP-SUCCESSOR-SAFE-REVIEW.md) can now borrow a
+completed claim under shared directory ownership, independently reconstruct its
+original graph and compute the exact anchor digest from pinned Safe releases.
+That reader refuses partial claims without repairing them and leaves execution
+approval, signature import and all live authority unresolved.
+
 ```sh
 sn-mainnet bootstrap-chain contract-successor-preview \
   --config /private/chain.json --run-dir /private/custody \

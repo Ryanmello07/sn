@@ -73,6 +73,14 @@ schema's eight-attempt cap cannot migrate custody: every existing marker binds
 the full signed config and each descendant binds its original predecessor record.
 Replacing that config invalidates those seals; it cannot adopt completed work.
 
+The next [offline Safe review bridge](BOOTSTRAP-SUCCESSOR-SAFE-REVIEW.md) now
+reconstructs that exact completed preparation under shared ownership, verifies
+the selected complete published Safe release and derives the retained anchor's
+zero-value CALL digest. Its bounded relayer intention preserves completed and
+unexecuted original liabilities. It creates no new approval, signature, nonce
+reservation, outer transaction or executable allowance. Canonical state and the
+separate globally fenced execution owner remain unresolved.
+
 The next implementation needs a new versioned successor plan and independently
 signed approval domain, distinct from both the original contract approval and
 this unsigned request/proposal schema. The approval must cover:
