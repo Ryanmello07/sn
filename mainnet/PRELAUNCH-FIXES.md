@@ -2334,20 +2334,21 @@ through SDK/operator/provider boundaries. Keep traffic ownership/accounting
 durable while controllers or observers restart. Retain the safety differences
 between testnet provisional gap handling and admissible mainnet history.
 
-**Provider registration follow-up (2026-09-29; qualification pending).** The
-[isolated provider candidate](evidence/provider-client-registration-candidate-20260929.md)
+**Provider registration follow-up (2026-09-29; qualified and integrated).** The
+[provider registration change](evidence/provider-client-registration-candidate-20260929.md)
 replaces first-client allocation in `provide`/`auth-provide` with the existing
 versioned request protocol. One retained seed owns all direct/proxy slots;
 key/request publication precedes POST, replay retains the original operation,
 and required registration/refresh/logout custody stays on that owner's physical
 directory. New allocation needs explicit permission. First-upgrade legacy-key
 adoption is a separate operator assertion, not a key-to-JWT proof or permission
-to replace a lost identity. The planned independent scope is 114 selected roots
-per normal/race mode and 17 causal variants in both modes (34 executions);
-the sealed e32 fixture-failure receipt remains separate from child qualification.
-Public daemon fixtures stop at authenticated handoff, with refresh/logout
-tested separately, so full serving,
-processed-key and proof readiness remain open. The active no-config measurement
+to replace a lost identity. The source is qualified and integrated: 114 selected
+roots pass per normal/race mode (228 executions), and all 17 causal variants
+are valid in both modes (34 executions). This is 114/2324 package roots, not
+full miner/validator coverage. The sealed e32 fixture-failure receipt remains
+separate from child qualification. Public daemon fixtures stop at authenticated
+handoff, with refresh/logout tested separately, so full serving, processed-key
+and proof readiness remain open. The active no-config measurement
 validator remains a legacy registration caller under separate migration; this
 provider slice cannot claim all role startup paths are repaired. Approved live
 API deployment, actual custody, native/contract admission, economic acceptance

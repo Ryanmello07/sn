@@ -1157,21 +1157,22 @@ under race detection. Original failed parent captures remain retained. Final
 dependency composition and the additive server-first migration/rollout remain
 pending; no live identities or deployment are supplied by this source change.
 
-The separate [provider client-registration candidate](evidence/provider-client-registration-candidate-20260929.md)
+The qualified and integrated [provider client-registration change](evidence/provider-client-registration-candidate-20260929.md)
 migrates `provide` and `auth-provide` to the existing versioned API protocol.
 The provider seed and original request are durable before allocation; direct
 and proxy slots retain their actual endpoint/key identity without a fabricated
 validator or chain identity. Explicit new-registration permission and explicit
 legacy-key adoption are separate decisions. Registration retries and required
 refresh/logout writes stay bound to the original physical custody directory.
-Independent qualification remains pending after retained fixture failures;
-the planned scope is 114 selected roots per mode, not the full miner/validator
-packages. Daemon fixtures reach authenticated handoff before serving-device
-construction, with separate callback fixtures. The active no-config
-measurement validator still uses the legacy allocator and has separate
+All 114 selected roots pass per normal/race mode (228 executions), and all 17
+causal variants are valid in both modes (34 executions). The selection covers
+114/2324 package roots; it is not full miner/validator coverage. Original e32
+fixture failures remain sealed separately. Daemon fixtures reach authenticated
+handoff before serving-device construction, with separate callback fixtures.
+The active no-config measurement validator still uses the legacy allocator and has separate
 migration work. API deployment, real custody/adoption decisions, processed-key
 and proof readiness, chain/contract authority and all live launch gates remain
-open; this candidate does not close MG-04 or PH-13.
+open; this component does not close MG-04 or PH-13.
 
 The [qualified receipt-prefix recovery](evidence/receipt-prefix-qualification-20260928.md)
 now supplies the shared 128-block scan contract to both native recovery owners.
