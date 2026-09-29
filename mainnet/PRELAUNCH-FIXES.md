@@ -147,6 +147,10 @@ cumulative proposed floors; no executable allowance, Safe authority or signing
 path is created. Copy/restore/move onto a different physical root requires a
 separately approved migration. The original full-v3 command remains an explicit
 adjacent root, and an eighth-action control checks its extracted fixture helper.
+The [separate six-root composed smoke](evidence/bootstrap-successor-preparation-qualification-20260929.md#separate-composed-smoke)
+passes normal/race on exact merge `93a0a060`. It composes both full-v3 commands,
+same-root resume, pure Safe calculations and MG-07 incident recovery without
+expanding the separately pending broader package coverage or live authority.
 The [separate full-v3 public-command fixture](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md)
 closes that specific gap on `c294fefd`: its positive root passes normal/race,
 and all six causal executions reach the intended assertion. It approves the

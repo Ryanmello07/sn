@@ -69,6 +69,9 @@ original receipts and additive proposed floors. Its [scoped receipt](evidence/bo
 passes thirteen focused and three adjacent roots normal/race, plus thirty-two
 intended causal executions. It provides no executable allowance, Safe authority
 or signing; a different physical custody root requires approved migration.
+Its [separate six-root composed smoke](evidence/bootstrap-successor-preparation-qualification-20260929.md#separate-composed-smoke)
+passes normal/race on exact merge `93a0a060`, including both full-v3 commands,
+same-root recovery, pure Safe calculations and MG-07 incident recovery.
 The [qualified unsigned successor proposal](evidence/bootstrap-contract-successor-qualification-20260929.md)
 retains the eight completed seals and any ninth reservation while computing
 additive attempt/lifetime ceilings for the unfinished anchor and retry margin.

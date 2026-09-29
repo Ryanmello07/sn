@@ -17,7 +17,8 @@ coverage and no failed, skipped or missing roots. Sixteen independent causal
 patches each compile and fail their exact named assertion in both modes, with
 the selected root/package FAIL and exit 1: thirty-two intended executions.
 No unexpected failure occurred. This is selected-scope qualification, not a
-full-package result or qualification of the subsequent merged composition.
+full-package result. The subsequent merged composition has its own scoped
+qualification below.
 
 Evidence is retained at
 `/mnt/data/sn-testnet/qualification/mg08-signed-successor-preparation-sol-20260929`:
@@ -89,9 +90,49 @@ recorded initializerOwner or have separately approved ownership migration.
 
 The separately verified [four-root pure Safe composed smoke](safe-execution-evidence-qualification-20260929.md#separate-composed-smoke)
 passes normal/race on exact `c648495f`. It predates and does not qualify this
-new preparation source or merge. Preparation merge smoke remains separately
-pending. SDK coverage remains 543/618 package-backed race roots with 75 pending;
+new preparation source or merge. The preparation merge smoke is recorded below.
+SDK coverage remains 543/618 package-backed race roots with 75 pending;
 broader MG-08 coverage remains 150/270 normal/race roots with 120 unrun. The
 earlier e074 fixture setup anomaly and d7 noncausal one-second send timeout remain
 preserved in their own receipts. No live RPC, signing, transaction, installation
 or activation was performed by this increment.
+
+## Separate composed smoke
+
+The exact merge `93a0a060151ed2b7ccb02086bc7c249315a20ad9`, tree
+`cec0389f9e7719cc92d1b121737262b3a89f46e3`, also passes an independent normal/race
+smoke from the detached clean worktree
+`/home/by/urnetwork/temp/mg08-signed-preparation-composed-smoke-20260929/sn`.
+Both streams have all six selected top-level roots PASS, package PASS, exit 0
+and no failed, skipped or missing roots:
+
+- `TestBootstrapSuccessorPreparationCommandRetainsActualV3Prefix`
+- `TestBootstrapSuccessorPreparationClaimsOnceAndResumesSameRoot`
+- `TestBootstrapContractSuccessorCommandAdoptsCompleteV3Custody`
+- `TestSafeExecutionDigestMatchesPinnedProxyAndSingleton`
+- `TestSafeExecutionOutcomesFollowPinnedContractAndNonce`
+- `TestMonitorReadIncidentCommandRecoveryRecurrenceAndRestart`
+
+Evidence is retained at
+`/mnt/data/sn-testnet/qualification/mg08-signed-preparation-composed-sol-20260929`:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `SOL-RESULT.md` | `073340e9683c27c4ab70f373ecbc46478a4b1e477acf2875205f4afe527c2aab` |
+| `SOL-RESULT.json` | `0ac0acc3ea9a7b05910f09c07c770e48946333c5de9c06fc626143b5abde14b7` |
+| `SHA256SUMS` (18 files) | `063a11c811cab826c6ffd58dfff72ab26dddeacf520a4a40e0421b6bf0cb7167` |
+| Exact before/after module bytes | `e8c8b9fb3bb14bce0eb6d460343ea377ad3a2967d16968f5dc869f285c3da209` |
+| Exact before/after source fence | `b6ba9d32d13fba2fe0fc08d287c744ca3089daf09cb40f70fca16b18b8a75b96` |
+
+Astra independently verified all eighteen manifest files, the raw root/package
+terminals and process exits, identical before/after module/fence bytes and all
+eleven actual clean physical roots. Ten local modules resolve; Warp remains a
+separately fenced unselected path. Connect `b163f9dd`, SDK `516521fb` and server
+`cfcbfcba` remain the graph's exact pins. The 572.342-second race stream includes
+both genuine full-v3 command fixtures and completed within its bounded package
+budget. No causal case was removed or production deadline changed.
+
+This smoke checks the composition of already qualified source increments. It
+does not expand the 543/618 SDK or 150/270 broader MG-08 counts, and it supplies
+no current mainnet observation, signing custody, Safe authority or permission
+to execute the proposed successor.
