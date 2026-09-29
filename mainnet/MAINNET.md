@@ -47,9 +47,11 @@ keeps live producer eligibility and service activation as separate gates. V3
 independently approves the separate root-service configuration. The read-only
 `bootstrap-chain readiness` increment binds that accepted v3 preparation and
 its original child journals to one current finalized census, with distinct
-UR/root generation, permit, window and checkpoint blockers. It retains false
-activation/current-authority flags and all pending chain phases; separate
-behavioral qualification remains pending. The complete bootstrap,
+UR/root generation, permit, window and checkpoint blockers. Its
+[exact-source qualification](evidence/bootstrap-readiness-qualification-20260929.md)
+passes all ten new normal/race roots, the 148-root adjacent normal/race scope,
+vet and four causal controls. It retains false activation/current-authority
+flags and all pending chain phases. The complete bootstrap,
 Safe evidence anchor, native signing device and live role
 activation remain unfinished. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)

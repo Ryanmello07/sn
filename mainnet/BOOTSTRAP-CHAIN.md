@@ -70,9 +70,11 @@ the readiness result. A route supplies observations, never submission approval.
 
 The September 29 source increment includes deterministic command/restart,
 stale-generation, permit/activity, signed-window, checkpoint conflict, reorg,
-route/runtime failure, missing-state and lock-release regressions. Behavioral
-qualification is pending its separate Sol receipt; compilation is not a claim
-of live eligibility or activation.
+route/runtime failure, missing-state and lock-release regressions. Its
+[Sol qualification](evidence/bootstrap-readiness-qualification-20260929.md)
+passes all ten new roots and the exact 148-root adjacent scope in normal/race
+modes, plus vet and four causal controls. This qualifies the recorded source
+and module graph; live eligibility and activation remain unresolved.
 
 ## Inputs and review
 
@@ -286,8 +288,10 @@ approvers, changed service allowances, exact approval domain and full child
 scope, malformed/missing role inputs, stale or unavailable approval sources,
 custody/input namespace overlap and refusal to renew existing custody. An
 independent pre-v3 wire shape checks exact v2 canonical bytes, hash and result
-scope; v1 recovery retains its existing compatibility check. This source change
-awaits separate Sol qualification; the earlier receipts below do not qualify v3.
+scope; v1 recovery retains its existing compatibility check. Its separate
+[v3 qualification](evidence/root-role-admission-qualification-20260928.md)
+records 403 full normal roots and all 38 bootstrap-chain race roots. The
+earlier v1/v2 receipts below retain their original narrower scope.
 
 V2 adds deterministic controls for real signed two-role admission, absent or
 wrong-domain signatures, independent signer/role/runtime/source disagreement,
