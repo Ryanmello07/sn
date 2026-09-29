@@ -198,3 +198,5 @@ checkout HEADs. Use `GOWORK=off` for this module graph. The remaining local
 replacements still require the release workspace. See the
 [source-graph correction and qualification handoff](mainnet/evidence/clientauth-source-graph-correction-20260929.md)
 for exact revisions and the independent module-resolution regression tests.
+The [incremental composition record](mainnet/evidence/incremental-source-composition-20260929.md)
+retains the completed SDK/MG06 checks and explicitly pending broad SDK race run.

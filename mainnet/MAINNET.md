@@ -958,6 +958,18 @@ candidate binary in an offline container. Keep arm64, remaining service images, 
 full attestation/SBOM/scanner policy, owned archive, registry publication and
 deployed readback open.
 
+The [incremental SDK/MG06 composition](evidence/incremental-source-composition-20260929.md)
+preserves the original source histories and the reviewed versioned SDK, Connect
+and SCTP pins. Its 37 focused roots pass normal/race and four mainnet smoke roots
+pass normally; the original SDK candidate has complete 618-root normal coverage,
+while broad race qualification remains pending. The bounded
+[`observe-native-miner-emission` reader](ECONOMIC-GATE.md#bounded-native-incentive-observation)
+retains canonical event/state evidence with complete and partial outcomes. Its
+18 focused and 170 adjacent roots pass normal/race, with eight causal controls.
+Native denominator, quantization, recipient generation, entitlement, actual
+owner recycling and the 10/90 outcome remain unresolved. This incremental
+source integration does not approve a release or mainnet activation.
+
 The [owner-recycle measured decision](../validator/OWNER-RECYCLE-MEASUREMENT.md)
 now joins signed successor approval, exact native owner census and fully
 replayed original V2 provider proofs in a distinct capsule. It reconstructs
@@ -1514,6 +1526,20 @@ debits and best-effort refunds require authenticated runtime evidence beyond
 receipt gas or reported prices. Checkpoint admission, bounded native-proof
 capture, account nonce proofs, service adoption, release composition and live
 custody/restart remain open MG-03/PF-03 work.
+
+The [pinned-runtime fee dependency review](https://github.com/urnetwork/server/blob/cfcbfcbaa13b4f4d298acfeca761a7252c18ddee/strecovery/ACTUAL-FEE-DEPENDENCIES.md)
+is integrated at server `cfcbfcba` as documentation only. Generic balance
+events share an extrinsic phase with native precompile effects; block balance
+deltas also include non-fee effects, and a failed best-effort refund lacks a
+fee-specific record. Neither proves general operator-call gas debits. Actual
+fees remain null. The next dependency is bounded authenticated native-state
+capture and verification, followed by runtime-qualified debit/refund
+attribution through historical execution replay or an admitted fee-specific
+runtime event. A future event cannot reconstruct historical fees. Independent
+genesis/checkpoint and source-to-deployed-runtime admission remain separate;
+an approved live checkpoint is not required to implement or qualify offline
+proof machinery. This source review supplies no new behavioral qualification,
+accounting or spending authority and does not close MG-03/PF-03.
 
 The independent monitor confirms the repair's postcondition at finalized state.
 Only then close the incident, retaining its history and action receipts. A local

@@ -113,6 +113,11 @@ Its output keeps `actual_native_outcome_verified`,
 
 ## Bounded native incentive observation
 
+The [incremental composition record](evidence/incremental-source-composition-20260929.md)
+retains the observer's 18 focused and 170 adjacent normal/race root results,
+eight causal controls and its separate 37-root SDK/MG06 composed qualification.
+These source checks leave every economic and activation gate below unresolved.
+
 ```sh
 sn-mainnet observe-native-miner-emission --rpc "$OWNED_ARCHIVE_RPC_URL" \
   --policy approved-native-observation.json
