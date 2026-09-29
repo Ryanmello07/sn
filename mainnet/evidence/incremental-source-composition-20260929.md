@@ -3,9 +3,11 @@
 This is a provisional source integration with explicit qualification limits.
 The reviewed SDK graph and bounded native incentive observer have completed
 their focused normal/race and causal checks. The original SDK candidate has
-normal coverage for all 618 mainnet roots; its broad race qualification remains
-pending and its processes continue running. No full mainnet race pass, full
-636-root composed pass, approved release or deployment is claimed.
+normal coverage for all 618 mainnet roots. The later race audit records 618/618
+root-body passes, with 410/618 backed by package-PASS streams and 208 still
+pending that terminal coverage. Broad race package qualification remains open.
+No single-process full mainnet race pass, full 636-root composed pass, approved
+release or deployment is claimed.
 
 ## Preserved source history
 
@@ -39,17 +41,30 @@ The baseline failure has not been recast as a behavioral result.
 | Scope and exact SN candidate | Normal | Race | Controls / limits |
 | --- | --- | --- | --- |
 | SDK focused, `86ebb8c1` | 19/19 | 19/19 | Three distinct SDK/Connect/SCTP sibling overrides compiled and failed their named identity assertions |
-| SDK mainnet, `86ebb8c1` | 618/618 exact root union | **Pending** | Four normal shards have package passes; original unsharded normal/race processes and broad race shards remain separate evidence |
+| SDK mainnet, `86ebb8c1` | 618/618 exact root union | 618/618 root-body passes; 410/618 with package PASS, 208 pending | Four normal shards have package passes. Original unsharded race and six initial race shards timed out at one hour; wave2/08 had no terminal at the audited snapshot. These package outcomes remain separate evidence. |
 | MG06 focused, `9bc0a53b` | 18/18 | 18/18 | Eight single-edit mutants compiled and failed the intended guard assertions |
 | MG06 adjacent, `9bc0a53b` | 170/170 | 170/170 exact root union | Three race shards have package passes; original adjacent race remained active at sealing |
 | Composed focused, `1ab09820` | 37/37 | 37/37 | 18 MG06 + 16 client authentication + 3 source graph roots; every selected root observed, all six commands exit zero |
 | Composed representative smoke, `1ab09820` | 4/4 | Not selected | Separate seventh command exits zero |
 
-Exact per-root unions establish the declared root coverage; they do not claim
-that an original long-running unsharded package process has finished. The broad
-SDK race run was not stopped for this integration. Any later failure remains
-evidence and requires diagnosis and a qualified successor; provisional
-integration does not turn pending or failed output into a pass.
+The [independent SDK race audit](/mnt/data/sn-testnet/qualification/mg07-read-incidents-sol-20260929/sdk-race-audit.json),
+SHA256 `80f858409dcdf7c1e8705b9a66b696d8b78c97590ffa2352b6f0c206a2ee2414`,
+was checked against its 618-root census, all 23 retained JSON prefixes, nine
+physical source fences and the original module-fence hashes. Every top-level
+root has a passing body outcome, with no root failure or skip. Only 410 roots
+have a pass inside a stream whose package itself passed; the other 208 still
+need that coverage. This distinguishes body completion from package cleanup,
+race checks and exit. Duplicate attempts remain separately recorded.
+
+The original unsharded SDK race run and six initial shards timed out at one
+hour; those package failures are preserved. The unsharded timeout occurred while
+`TestEvmEscrowRegisterClaimRecoveryKeepsFourLocks` had been active for about
+25 seconds, not after that root had consumed an hour. Wave2/08 had no package
+terminal in the audited snapshot. Targeted bounded race shards must close the
+exact uncovered set before broad package qualification is declared. Keep each
+shard's source/root census, terminal exit and original timeout, and preserve
+completed results. This audit adds no current-composition, release or deployment
+acceptance and does not turn pending or failed package output into a pass.
 
 Astra performed compile-only/vet, formatting, module verification and source
 fences. Sol owned behavioral execution. Retained composed compile/vet checks

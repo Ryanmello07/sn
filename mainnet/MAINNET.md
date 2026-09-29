@@ -961,8 +961,10 @@ deployed readback open.
 The [incremental SDK/MG06 composition](evidence/incremental-source-composition-20260929.md)
 preserves the original source histories and the reviewed versioned SDK, Connect
 and SCTP pins. Its 37 focused roots pass normal/race and four mainnet smoke roots
-pass normally; the original SDK candidate has complete 618-root normal coverage,
-while broad race qualification remains pending. The bounded
+pass normally; the original SDK candidate has complete 618-root normal coverage.
+Its race root-body union is 618/618, but only 410/618 are backed by package-PASS
+streams at the audited snapshot; 208 and broad race package closure remain pending.
+The bounded
 [`observe-native-miner-emission` reader](ECONOMIC-GATE.md#bounded-native-incentive-observation)
 retains canonical event/state evidence with complete and partial outcomes. Its
 18 focused and 170 adjacent roots pass normal/race, with eight causal controls.
@@ -973,12 +975,15 @@ source integration does not approve a release or mainnet activation.
 MG-10 testing lesson (2026-09-29): the SDK-pinned 618-root unsharded race
 process reached its one-hour package timeout while
 `TestEvmEscrowRegisterClaimRecoveryKeepsFourLocks` had been active for about
-25 seconds; no top-level root failure was observed. Bounded shard/wave coverage
-stood at 615/618 roots at that capture. Split broad race suites into disjoint,
-exact root shards, retain each shard's package exit and the original timeout,
-and preserve completed results without resetting their evidence. Remaining
-race coverage stays pending until the full root census and successful package
-exits are reconciled.
+25 seconds; no top-level root failure was observed. The subsequent
+[audit](evidence/incremental-source-composition-20260929.md#completed-and-pending-qualification)
+records 618/618 top-level root-body passes, but only 410/618 have a pass inside
+a stream with package PASS; 208 still require terminal package coverage.
+Preserve the original unsharded and six initial shard timeouts; wave2/08 had
+no package terminal at that snapshot. Use disjoint exact root shards, retain
+each shard's source fence, package exit and original timeout, and preserve
+completed results without resetting their evidence. Broad race package
+qualification remains open.
 
 The [owner-recycle measured decision](../validator/OWNER-RECYCLE-MEASUREMENT.md)
 now joins signed successor approval, exact native owner census and fully
