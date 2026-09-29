@@ -206,7 +206,7 @@ func TestSafeReleaseStorageBindsSingletonOwnerAndNonceSlots(t *testing.T) {
 // if an internal parser caller supplies their outer hash as a synthetic pin.
 func TestSafeReleaseArchiveBoundsRequiredMembers(t *testing.T) {
 	profile, _, members := safeReleaseTestInputs(t, "1.4.1", "Safe")
-	for _, change := range []string{"missing", "duplicate", "link", "oversized"} {
+	for _, change := range []string{"missing", "duplicate", "link", "oversized", "repacked"} {
 		var compressed bytes.Buffer
 		zip := gzip.NewWriter(&compressed)
 		writer := tar.NewWriter(zip)
@@ -252,7 +252,9 @@ func TestSafeReleaseArchiveBoundsRequiredMembers(t *testing.T) {
 			t.Fatal(err)
 		}
 		changed := profile
-		changed.ArchiveSha256 = safeReleaseHash(compressed.Bytes())
+		if change != "repacked" {
+			changed.ArchiveSha256 = safeReleaseHash(compressed.Bytes())
+		}
 		if _, err := readSafeReleaseMembers(t.Context(), compressed.Bytes(), changed, "Safe"); err == nil {
 			t.Fatal("Safe bounded archive admitted", change)
 		}
