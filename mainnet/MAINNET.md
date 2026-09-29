@@ -1455,8 +1455,8 @@ joins, actual fees, distributed custody ownership and live restart remain open.
 The [conditional offline receipt/fee join](evidence/operator-receipt-fee-qualification-20260928.md)
 now reports missing and conflicting candidates and counts observed gas once
 per resolved nonce; its recovery and adjacent controller/model roots passed
-normal and race modes. A separately authenticated native-to-EVM mapping and
-receipt producer are still required
+normal and race modes. A separately authenticated native-to-EVM mapping,
+owned-node receipt capability and exact runtime fee evidence are still required
 before it can establish canonical production fees or authorize recovery.
 
 The [qualified receipt commitment verifier](evidence/operator-receipt-commitments-qualification-20260929.md)
@@ -1469,8 +1469,22 @@ private-database roots; four causal controls pass. This closes source-level
 verification of those commitments only. Actual fees remain null: the raw Frontier
 header does not commit the RPC-rendered base fee, and runtime/native debits
 remain unproven. Independent native finality/mapping, boundary account nonce
-proofs, a bounded production observation collector, service adoption, release
+proofs, owned-node collector capability, service adoption, release
 composition and live custody/restart qualification remain open MG-03/PF-03 work.
+
+The [qualified bounded collector](evidence/operator-receipt-collector-qualification-20260929.md)
+is integrated at server `b7c8c743`. Its `collect-receipts` command reads every
+archived signed candidate, authenticates complete raw block/receipt vectors,
+builds the proofs and replays the verifier before publishing one private,
+create-only evidence file. `verify-collection` replays it entirely offline.
+Transient reads retain exact selectors within configurable 60–900 second retry
+windows (default 300), a total deadline and shared request/byte budgets.
+All 71 affected recovery/CLI roots pass normal and race, including 19 new roots
+and three private-database roots; five causal controls pass. The original failed
+publication-mode assertion and its test/documentation correction remain retained.
+This qualifies collection source only: node capability and the supplied native/
+EVM mapping remain explicitly unapproved, actual fees remain null, and no
+finality, canonical-accounting or spending authority is created.
 
 The independent monitor confirms the repair's postcondition at finalized state.
 Only then close the incident, retaining its history and action receipts. A local
