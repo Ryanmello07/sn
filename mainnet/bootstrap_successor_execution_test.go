@@ -18,6 +18,25 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// Both signature inputs must reach the real private-file reader independently
+// of ambient umask. A private file in a shared directory still fails admission.
+func TestBootstrapSuccessorExecutionFixturesUsePrivateInputDirectories(t *testing.T) {
+	for _, name := range []string{"synthetic-safe-signatures.bin", "synthetic-relayer-transaction.bin"} {
+		raw := []byte("synthetic pinned binary input " + name)
+		reference := bootstrapSuccessorExecutionTestRaw(t, name, raw)
+		retained, digest, err := readBootstrapRootFile(t.Context(), reference.Path, 1024)
+		if err != nil || !bytes.Equal(retained, raw) || digest != reference.Sha256 {
+			t.Fatal("binary fixture did not reach exact private input admission", name, err)
+		}
+		if err := os.Chmod(filepath.Dir(reference.Path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := readBootstrapRootFile(t.Context(), reference.Path, 1024); err == nil || !strings.Contains(err.Error(), "directory is not owner-private") {
+			t.Fatal("private binary file bypassed its shared parent directory", name, err)
+		}
+	}
+}
+
 // Neither original nor preparation signatures can substitute for this domain;
 // the expected original key and reconstructed plan remain independent inputs.
 func TestBootstrapSuccessorExecutionRequiresIndependentExactApproval(t *testing.T) {

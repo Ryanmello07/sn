@@ -86,10 +86,7 @@ func TestBootstrapSuccessorExecutionCommandReconstructsAndRetainsV3Custody(t *te
 		raw[64] += 27
 		signatures = append(signatures, raw...)
 	}
-	registry := t.TempDir()
-	if err := os.Chmod(registry, 0700); err != nil {
-		t.Fatal(err)
-	}
+	registry := bootstrapSuccessorExecutionTestDirectory(t)
 	executionRequest := bootstrapSuccessorExecutionRequest{Schema: bootstrapSuccessorExecutionRequestSchema, SafeReviewHash: review.ContentHash,
 		RegistryDirectory: registry, Owners: oracle.owners, Singleton: common.BytesToAddress(crypto.Keccak256([]byte("synthetic public singleton"))),
 		SafeSignatures: bootstrapSuccessorExecutionTestRaw(t, "synthetic-public-safe-signatures.bin", signatures)}

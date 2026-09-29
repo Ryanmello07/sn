@@ -76,10 +76,7 @@ func newBootstrapSuccessorExecutionNonceFixture(t *testing.T, safeNonce string, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry := t.TempDir()
-	if err := os.Chmod(registry, 0700); err != nil {
-		t.Fatal(err)
-	}
+	registry := bootstrapSuccessorExecutionTestDirectory(t)
 	request := bootstrapSuccessorExecutionRequest{Schema: bootstrapSuccessorExecutionRequestSchema, SafeReviewHash: review.ContentHash, RegistryDirectory: registry,
 		Owners: slices.Clone(oracle.owners), Singleton: common.BytesToAddress(crypto.Keccak256([]byte("synthetic singleton 1.4.1Safe")))}
 	draft := bootstrapSuccessorExecutionPlan{Review: review, Request: request}
@@ -103,7 +100,7 @@ func newBootstrapSuccessorExecutionNonceFixture(t *testing.T, safeNonce string, 
 		t.Fatal(err)
 	}
 	request.RelayerTransaction = bootstrapSuccessorExecutionTestRaw(t, "synthetic-relayer-transaction.bin", raw)
-	requestReference := bootstrapRootTestWrite(t, filepath.Join(t.TempDir(), "synthetic-execution-request.json"), request)
+	requestReference := bootstrapRootTestWrite(t, filepath.Join(bootstrapSuccessorExecutionTestDirectory(t), "synthetic-execution-request.json"), request)
 	plan, err := buildBootstrapSuccessorExecution(t.Context(), review, request, requestReference, oracle.profile)
 	if err != nil {
 		t.Fatal(err)
@@ -128,10 +125,22 @@ func newBootstrapSuccessorExecutionNonceFixture(t *testing.T, safeNonce string, 
 	return f
 }
 
-// Binary files have literal pinned bytes; signature hex belongs only in plans.
+// Testing.TempDir uses ambient creation permissions for its numbered children.
+// Every admitted fixture directory therefore declares the production mode.
+func bootstrapSuccessorExecutionTestDirectory(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return directory
+}
+
+// Binary files have literal pinned bytes and a private parent. Signature hex
+// belongs only in plans; permissive temporary directories are not custody.
 func bootstrapSuccessorExecutionTestRaw(t *testing.T, name string, raw []byte) planFileReference {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), name)
+	path := filepath.Join(bootstrapSuccessorExecutionTestDirectory(t), name)
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
