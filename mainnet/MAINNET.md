@@ -65,9 +65,17 @@ leave only the evidence anchor unfinished. The separate
 [execution custody and owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) now implements an
 independent approval domain, exact eight-action adoption, separate local nonce
 registry claims and durable cumulative one-send/reconciliation machinery.
-Independent behavioral qualification and a production canonical adapter for
-current Safe/evidence authority, original receipt reauthentication and relayer
-signer custody remain required. Public commands perform local custody only.
+Its [scoped qualification receipt](evidence/bootstrap-successor-execution-qualification-20260929.md)
+records twenty-one focused and six adjacent roots passing normal/race on
+corrected `75ea2158`, with ten causal control pairs and a verified forty-five-file
+evidence manifest.
+The first private-input fixture failures and the later ten-minute race
+harness timeout remain preserved. The exact race retry passes with an explicit
+twenty-minute package budget, without changing production deadlines.
+A production canonical adapter for current Safe/evidence authority, original
+receipt reauthentication and enforced relayer signer cutover remains unimplemented.
+Public commands perform local custody only; the internal owner uses explicitly
+synthetic canonical responses in its tests.
 The qualified [signed local successor preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
 adds a separate approval domain and fixed resumable local claim while preserving
 original receipts and additive proposed floors. Its [scoped receipt](evidence/bootstrap-successor-preparation-qualification-20260929.md)

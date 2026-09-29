@@ -4,7 +4,10 @@ The successor now has a separate signed execution domain, durable adoption and
 nonce ownership, and a one-send execution state machine. Public commands can
 preview, claim and recover that custody offline. **The production canonical
 adapter is still unimplemented. There is no public online or submit option.**
-This source change is awaiting independent behavioral qualification.
+Its [scoped independent qualification](evidence/bootstrap-successor-execution-qualification-20260929.md)
+passes twenty-one focused and six adjacent roots normal/race, with ten causal
+control pairs. All tests use offline custody and explicitly synthetic canonical
+responses; the receipt records the remaining production adapter work.
 
 The owner can execute behind `bootstrapSuccessorExecutionChain` in deterministic
 tests. That interface is a trust boundary implemented by code; a JSON report,

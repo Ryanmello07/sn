@@ -70,8 +70,8 @@ proposal command and original v1 approval/markers retain their existing scope.
 
 The [successor execution owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) now implements
 independent approval, durable exact-prefix adoption, separate nonce claims and
-one-send reconciliation machinery. Its production canonical adapter remains
-unimplemented and its behavioral qualification is pending. Increasing the v1 contract
+one-send reconciliation machinery, with [scoped independent qualification](evidence/bootstrap-successor-execution-qualification-20260929.md).
+Its production canonical adapter remains unimplemented. Increasing the v1 contract
 schema's eight-attempt cap cannot migrate custody: every existing marker binds
 the full signed config and each descendant binds its original predecessor record.
 Replacing that config invalidates those seals; it cannot adopt completed work.
