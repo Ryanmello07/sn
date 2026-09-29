@@ -234,6 +234,17 @@ remain separate. Runtime decoding and earlier receipt/parent-root reads are
 absent. Checkpoint approval, proof capture, fee attribution, owner-window/global-
 custody authority and service adoption remain open, with actual fees null.
 
+The MG-03/PF-03 [qualified historical receipt/native fee-context source](evidence/operator-native-fee-context-qualification-20260929.md)
+at server `41527380` passes all ten new and 122 affected roots normal/race,
+including three disposable-database roots; all six causal controls discriminate
+in both modes. Integration remains pending in storage-first order. It preserves
+all signed history while deriving exact receipt-native
+child/parent contexts; missing or ambiguous coverage remains unresolved. Actual
+fees remain null and source-profile mapping grants no payer/runtime authority.
+The current native StorageProof slice covers only the collection-boundary root;
+historical child/parent reads and runtime-qualified withdrawal/refund attribution
+remain separate implementation and qualification dependencies.
+
 The optional [native submission deadline observer](NATIVE-DEADLINES.md) now
 wires explicit per-role completion margins into the actual service worker.
 It distinguishes schedule forecasts and unavailable reads from a completed
