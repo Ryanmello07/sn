@@ -149,6 +149,9 @@ func validateBootstrapContractReadinessPaths(preparation bootstrapChainPreparati
 // Planning precedes custody and signing. Retained inspection requires the exact
 // accepted v3 preparation and borrows its original five journals read-only.
 func runBootstrapChainContractCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && (args[0] == "contract-successor-preview" || args[0] == "contract-successor-prepare" || args[0] == "contract-successor-resume") {
+		return runBootstrapSuccessorPreparationCommand(ctx, args, stdout, stderr)
+	}
 	if len(args) > 0 && args[0] == "contract-successor-plan" {
 		return runBootstrapContractSuccessorCommand(ctx, args[1:], stdout, stderr)
 	}

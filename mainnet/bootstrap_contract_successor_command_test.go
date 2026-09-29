@@ -95,10 +95,10 @@ func newBootstrapSuccessorCommandFixture(t *testing.T) *bootstrapChainFixture {
 	return f
 }
 
-// One full graph covers the public output boundary, exact preparation and
-// receipt adoption, unchanged custody, output failure and released ownership.
-func TestBootstrapContractSuccessorCommandAdoptsCompleteV3Custody(t *testing.T) {
-	f := newBootstrapSuccessorCommandFixture(t)
+// Complete the genuine original preparation and eight actions once per public
+// command fixture; each success fixture has its finite send budget approved up front.
+func bootstrapSuccessorCommandTestComplete(t *testing.T, f *bootstrapChainFixture) bootstrapChainResult {
+	t.Helper()
 	prepared := f.result(t, "apply")
 	if !prepared.LocalPreparationComplete || !prepared.UrValidatorConfigsVerified || !prepared.RootValidatorConfigVerified || len(f.journals(t)) != 10 {
 		t.Fatal("full-v3 fixture did not claim five original preparation owners")
@@ -129,6 +129,14 @@ func TestBootstrapContractSuccessorCommandAdoptsCompleteV3Custody(t *testing.T) 
 	if retained.Contracts.Status != "reserve-created" || retained.Contracts.TransactionHash == "" || retained.NetworkEffects || retained.ActivationReady {
 		t.Fatalf("prepared v3 scope did not retain genuine reserve completion: %+v", retained)
 	}
+	return retained
+}
+
+// One full graph covers the public output boundary, exact preparation and
+// receipt adoption, unchanged custody, output failure and released ownership.
+func TestBootstrapContractSuccessorCommandAdoptsCompleteV3Custody(t *testing.T) {
+	f := newBootstrapSuccessorCommandFixture(t)
+	retained := bootstrapSuccessorCommandTestComplete(t, f)
 	before := bootstrapContractTestJournals(t, f.config.RunDirectory)
 	maps.Copy(before, f.journals(t))
 	custodyNames := func() []string {
@@ -163,7 +171,7 @@ func TestBootstrapContractSuccessorCommandAdoptsCompleteV3Custody(t *testing.T) 
 			t.Fatal(err)
 		}
 		if proposal.LocalPreparation == nil || proposal.LocalPreparation.ContractTransactionHash != retained.Contracts.TransactionHash || proposal.RequestSha256 != requestReference.Sha256 ||
-			proposal.Request.BootstrapPlanHash != prepared.PlanHash || proposal.OriginalConfigHash != rootObjectHash(f.contracts.config) ||
+			proposal.Request.BootstrapPlanHash != retained.PlanHash || proposal.OriginalConfigHash != rootObjectHash(f.contracts.config) ||
 			len(proposal.AdoptedActions) != 8 || len(proposal.UnfinishedActions) != 1 || proposal.UnfinishedActions[0] != "evidence-anchor" ||
 			proposal.Budget.RetainedAttempts != 8 || proposal.Budget.ProposedMaximumCumulativeAttempts != 10 || proposal.Budget.ProposedRemainingAttempts != 2 ||
 			proposal.Budget.RetryMarginAttempts != 1 || proposal.Budget.ProposedMaximumLifetimeWei != "2244000000" ||
