@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -67,8 +66,8 @@ func installProductionSourceReceiptTest(t *testing.T, continuation *productionCo
 		if err != nil || len(raw) == 0 || raw[len(raw)-1] != 0 {
 			t.Fatal("synthetic receipt header does not end in its empty digest vector")
 		}
-		// The SDK cannot encode digest8. Append its reviewed one-byte wire
-		// directly to the one-entry SCALE digest vector, then hash all fields.
+		// The sdk cannot encode digest8. Append its reviewed one-byte wire
+		// directly to the one-entry scale digest vector, then hash all fields.
 		raw = append(raw[:len(raw)-1], 4, 8)
 		receiptHash = types.Hash(blake2b.Sum256(raw))
 		headerWire["digest"] = map[string]any{"logs": []string{"0x08"}}
@@ -77,7 +76,7 @@ func installProductionSourceReceiptTest(t *testing.T, continuation *productionCo
 	var finalizedWire any = headerWire
 	if upgradeDigest {
 		// Observe the upgrade receipt from the next finalized block. Other
-		// native readers still use the SDK for their finalized-head number;
+		// native readers still use the sdk for their finalized-head number;
 		// the receipt itself must retain its actual digest8 and parent.
 		production.head = 102
 		finalizedHeader, hash := releaseReceiptTestHeader(t, receiptHash, 102)
@@ -99,7 +98,7 @@ func installProductionSourceReceiptTest(t *testing.T, continuation *productionCo
 				return err
 			}
 		}
-		// Match the transport's JSON decode for typed hashes/headers, nullable
+		// Match the transport's json decode for typed hashes/headers, nullable
 		// storage and capture's bounded custom result, as well as raw replies.
 		assign := func(value any) error { return setReleaseHistoricalTestResult(target, value) }
 		if strings.HasPrefix(method, "author_") {
@@ -155,25 +154,25 @@ func installProductionSourceReceiptTest(t *testing.T, continuation *productionCo
 // upgrade instead of validating old signature fields against new post-state.
 func TestProductionSourceReceiptPreservesSignedUpgradeBoundary(t *testing.T) {
 	for _, digest := range []bool{false, true} {
-		t.Run(fmt.Sprintf("upgrade_digest_%t", digest), func(t *testing.T) {
-			fixture := newProductionSourceReceiptTestFixture(t, digest)
-			intent := *fixture.intent
-			intent.FinalizedBlock, intent.FinalizedBlockHash = fixture.receipt.BlockNumber, fixture.receipt.BlockHash.Hex()
-			native := fixture.production.operator.measurement.admission.chain
-			metadata, runtime := native.Meta, native.Runtime
-			before, _ := json.Marshal(fixture.intent)
-			if err := authenticateReleaseNativeSourceReferenceV2(t.Context(), native, fixture.current, &intent, fixture.production.operator.measurement.provider.artifact); err != nil {
-				t.Fatal(err)
-			}
-			after, _ := json.Marshal(fixture.intent)
-			if fixture.eventReads != 1 || fixture.stateReads != 2 || !bytes.Equal(before, after) || native.Meta != metadata || native.Runtime != runtime || len(fixture.native.broadcasts) != 0 {
-				t.Fatal("receipt proof changed original bytes/view or skipped actual events and commitment reads")
-			}
-			original, err := productionConfigForIntent(fixture.current, &intent)
-			if err != nil || !original.ownerRecycleProduction.historicalOnly || original.RuntimeSpec == fixture.current.RuntimeSpec || ownerRecycleProductionBoundary(original) == nil {
-				t.Fatalf("receipt proof lost original read-only approval: %v", err)
-			}
-		})
+		fixture := newProductionSourceReceiptTestFixture(t, digest)
+		intent := *fixture.intent
+		intent.FinalizedBlock, intent.FinalizedBlockHash = fixture.receipt.BlockNumber, fixture.receipt.BlockHash.Hex()
+		native := fixture.production.operator.measurement.admission.chain
+		metadata, runtime := native.Meta, native.Runtime
+		before, _ := json.Marshal(fixture.intent)
+		if err := authenticateReleaseNativeSourceReferenceV2(t.Context(), native, fixture.current, &intent, fixture.production.operator.measurement.provider.artifact); err != nil {
+			t.Errorf("upgrade_digest=%t: %v", digest, err)
+			continue
+		}
+		after, _ := json.Marshal(fixture.intent)
+		if fixture.eventReads != 1 || fixture.stateReads != 2 || !bytes.Equal(before, after) || native.Meta != metadata || native.Runtime != runtime || len(fixture.native.broadcasts) != 0 {
+			t.Errorf("upgrade_digest=%t: receipt proof changed original bytes/view or skipped actual events and commitment reads", digest)
+			continue
+		}
+		original, err := productionConfigForIntent(fixture.current, &intent)
+		if err != nil || !original.ownerRecycleProduction.historicalOnly || original.RuntimeSpec == fixture.current.RuntimeSpec || ownerRecycleProductionBoundary(original) == nil {
+			t.Errorf("upgrade_digest=%t: receipt proof lost original read-only approval: %v", digest, err)
+		}
 	}
 }
 
