@@ -22,7 +22,8 @@ That exact test fails under JSON mode on both candidate and parent and passes
 under plain mode on both. The full-package pass used plain `go test -v` with
 separate streams.
 
-This qualifies the isolated ownership fix, not a production deployment. An
-adjacent bounded-size read/publication successor is being reviewed separately;
-its qualification must preserve the ownership result before integration into
-the mainnet release.
+The [bounded-size read/publication successor](miner-claim-queue-capacity-qualification-20260929.md)
+has now passed separate qualification. Ownership was integrated as `ebd97a72`
+and the successor as `f7a06f45`; their product and test files match the frozen
+qualified source byte-for-byte. Production deployment and composed release
+qualification remain separate gates.

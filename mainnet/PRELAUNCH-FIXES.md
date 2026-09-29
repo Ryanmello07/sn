@@ -59,12 +59,14 @@ custody, economic, recovery or runtime checks for the deployed roles.
 | MG-09 / P1 — Sustained resource and storage capacity | Service/storage owner; PH-08/09/20/23/26 | **Planned:** bounded simulator mechanisms exist; production sizing and restoration receipts are missing. | Measure backlog, bytes, memory, RPC work and queue fairness with the proposed fleet and retention. Bind finite capacity with reviewed margin; prove missing/full-volume behavior, backup restore, multi-gigabyte log drainage and foreground deadline headroom. Required before unattended operation. |
 | MG-10 / P0 — Qualification, rollout and actual acceptance | Release/operations owner; PH-16 and every affected gate | **Planned:** no accepted composed mainnet release. | Before activation, complete production-path causal regressions, affected normal/race suites and a controlled upgrade/outage/restart/repair rehearsal; retain failed and reused scopes. After bounded activation, observe at least three complete native emission intervals and one full 50,400-block UR settlement/claim cycle before declaring program acceptance. Record pending live evidence as pending. |
 
-MG-03 also includes a [qualified isolated miner claim-queue owner fix](evidence/miner-claim-queue-owner-qualification-20260929.md).
+MG-03 also includes a [qualified miner claim-queue owner fix](evidence/miner-claim-queue-owner-qualification-20260929.md).
 It locks the physical queue directory across read, publication and joined
 shutdown so duplicate daemons or a replaced pathname cannot split signed
-outcome custody. The adjacent unbounded retained-file read/publication is being
-fixed and qualified separately. Neither source qualification is a deployment;
-the composed release still needs the same custody and restart gates.
+outcome custody. The separately [qualified retained-byte successor](evidence/miner-claim-queue-capacity-qualification-20260929.md)
+caps each queue at 16 MiB and preserves oversized retained bytes on refusal.
+Both sources are integrated; 76 affected roots pass normal/race and all 292
+miner roots pass plain normal. The composed release still needs custody,
+restart and aggregate fleet-capacity qualification before deployment.
 
 MG-07 now includes the qualified standard-validator
 [service-progress producer](SERVICE-PROGRESS.md): 47 selected roots pass normal

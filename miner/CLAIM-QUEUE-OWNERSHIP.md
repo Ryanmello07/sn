@@ -36,9 +36,9 @@ growth after that check cannot evade admission. A refused read returns no
 queue. A refused publication creates no temporary file and leaves the previous
 queue and its signed fields intact. Publication also checks the retained regular
 file's size, so a repeated or changed save cannot replace an oversized file
-after its prior acknowledgement was invalidated. The limit does not authorize truncation,
-compaction, a fresh queue, or another nonce; an oversized retained file needs
-separately reviewed recovery.
+after its prior acknowledgement was invalidated. The limit does not authorize
+truncation, compaction, a fresh queue, or another nonce; an oversized retained
+file needs separately reviewed recovery.
 
 The sizing fixture uses the actual v1 queue and signed claim ABI/RLP encoding:
 1,024 retained epochs, a 16-node proof and 2 KiB of diagnostic text per record,
@@ -67,7 +67,9 @@ and a shared nonce owner across different queues/processes remain separate
 production gates. The process-local swarm nonce admission retains its original
 scope. Unsupported platforms refuse daemon startup before creating state.
 
-The ownership source at `b7e84b2f` has separate normal/race and causal-control
-qualification. The retained-byte successor and its deterministic boundary
-regressions are a separate qualification candidate. No mainnet route, key,
-transaction, receipt or deployment is supplied by either change.
+The [ownership source at `b7e84b2f`](../mainnet/evidence/miner-claim-queue-owner-qualification-20260929.md)
+and [retained-byte successor at `4a9b9e6a`](../mainnet/evidence/miner-claim-queue-capacity-qualification-20260929.md)
+passed independent normal/race, full miner normal, vet and causal-control
+qualification. Their product and test files were integrated byte-for-byte
+into the mainnet hardening branch. No mainnet route, key, transaction, receipt
+or deployment is supplied by either change.
