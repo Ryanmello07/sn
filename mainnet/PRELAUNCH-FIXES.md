@@ -224,6 +224,16 @@ capability, independent checkpoint/genesis/runtime admission, native account
 and fee proofs, production service adoption, composed release and live custody
 remain open, and actual fees remain null.
 
+The MG-03 [qualified bounded native StorageProof verifier](evidence/operator-native-storage-proof-qualification-20260929.md)
+is integrated at server `6201504e`. It derives the original collection-boundary
+state root by replaying receipt/finality proofs, then checks raw storage proofs
+against it. All 16 focused and six adjacent roots pass normal/race with package
+exit zero; all 21 causal controls discriminate in both modes. The pinned SDK
+oracle supplies 18 exact vectors, and the two prior fixture/control anomalies
+remain separate. Runtime decoding and earlier receipt/parent-root reads are
+absent. Checkpoint approval, proof capture, fee attribution, owner-window/global-
+custody authority and service adoption remain open, with actual fees null.
+
 The optional [native submission deadline observer](NATIVE-DEADLINES.md) now
 wires explicit per-role completion margins into the actual service worker.
 It distinguishes schedule forecasts and unavailable reads from a completed

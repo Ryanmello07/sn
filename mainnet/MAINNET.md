@@ -1621,13 +1621,25 @@ capability and independent checkpoint/runtime authority remain unapproved;
 native account and debit/refund proofs, composed release and live custody remain
 open. Actual fees remain null, and no accounting or spending authority is added.
 
+The [qualified bounded native StorageProof verifier](evidence/operator-native-storage-proof-qualification-20260929.md)
+is integrated at server `6201504e`. Its offline library replays receipt/finality
+proofs before checking raw storage bytes at the original collection boundary; a
+later certificate cannot move that state root. All 16 focused and six adjacent
+roots pass normal/race with package exit zero, and all 21 causal controls
+discriminate in both modes. The independent pinned-SDK oracle supplies 18 exact
+vectors. Both earlier fixture/control anomalies remain separately preserved.
+Runtime decoding, earlier receipt/parent roots, proof capture, account/fee
+authority and live custody remain open; actual fees stay null. This scoped
+qualification creates no owner-window, global-custody or spending authority.
+
 The [pinned-runtime fee dependency review](https://github.com/urnetwork/server/blob/cfcbfcbaa13b4f4d298acfeca761a7252c18ddee/strecovery/ACTUAL-FEE-DEPENDENCIES.md)
 is integrated at server `cfcbfcba` as documentation only. Generic balance
 events share an extrinsic phase with native precompile effects; block balance
 deltas also include non-fee effects, and a failed best-effort refund lacks a
 fee-specific record. Neither proves general operator-call gas debits. Actual
-fees remain null. The next dependency is bounded authenticated native-state
-capture and verification, followed by runtime-qualified debit/refund
+fees remain null. The next dependency is bounded native-state capture and
+authentication at each required historical receipt/parent root, followed by
+runtime-qualified debit/refund
 attribution through historical execution replay or an admitted fee-specific
 runtime event. A future event cannot reconstruct historical fees. Independent
 genesis/checkpoint and source-to-deployed-runtime admission remain separate;
