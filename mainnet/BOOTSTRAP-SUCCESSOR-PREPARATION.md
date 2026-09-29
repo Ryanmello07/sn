@@ -4,8 +4,10 @@ The `bootstrap-chain contract-successor-preview`, `contract-successor-prepare`
 and `contract-successor-resume` commands add one independently approved **local
 preparation** under the original custody root. They preserve the five original
 preparation journals, eight contract receipts, signatures and counted attempts.
-This isolated increment awaits independent behavioral qualification. It neither
-authorizes additional sends nor makes the evidence anchor executable.
+Its [scoped independent qualification](evidence/bootstrap-successor-preparation-qualification-20260929.md)
+passes thirteen focused and three adjacent roots normal/race, with all thirty-two
+intended causal executions. It neither authorizes additional sends nor makes the
+evidence anchor executable.
 
 ```sh
 sn-mainnet bootstrap-chain contract-successor-preview \

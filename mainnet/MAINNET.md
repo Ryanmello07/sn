@@ -61,12 +61,14 @@ inspects original action custody without replay. Its [focused qualification](evi
 passes twelve new roots and six causal controls normal/race. The separate
 [partial adjacent battery](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
 passes 150/270 roots in both modes; 120 remain unrun. Eight retained successful actions
-leave only the evidence anchor unfinished. A signed successor adoption owner,
+leave only the evidence anchor unfinished. An executable successor adoption owner,
 current Safe authority/binding and relayer custody remain unimplemented.
-The isolated [signed local successor preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
+The qualified [signed local successor preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
 adds a separate approval domain and fixed resumable local claim while preserving
-original receipts and additive proposed floors. It awaits independent behavioral
-qualification and provides no executable allowance, Safe authority or signing.
+original receipts and additive proposed floors. Its [scoped receipt](evidence/bootstrap-successor-preparation-qualification-20260929.md)
+passes thirteen focused and three adjacent roots normal/race, plus thirty-two
+intended causal executions. It provides no executable allowance, Safe authority
+or signing; a different physical custody root requires approved migration.
 The [qualified unsigned successor proposal](evidence/bootstrap-contract-successor-qualification-20260929.md)
 retains the eight completed seals and any ninth reservation while computing
 additive attempt/lifetime ceilings for the unfinished anchor and retry margin.
@@ -96,6 +98,8 @@ before decoding; the earlier e074 setup failures remain preserved as unqualified
 This layer has no command, signer, current owner/threshold proof, canonical
 receipt authentication, custody or execution path. The artifact verifier's
 separate nine-root composed smoke also passes normal/race on `18a88db4`.
+The pure layer's [separate four-root composed smoke](evidence/safe-execution-evidence-qualification-20260929.md#separate-composed-smoke)
+passes both modes on `c648495f`; it predates the signed local preparation merge.
 The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),
 integrated at `ce567305`, adds durable exact-action recovery and actual-subset
 reconciliation under original v3 custody. Sol's 25 focused roots and exact

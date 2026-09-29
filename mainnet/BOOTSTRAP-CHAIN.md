@@ -122,12 +122,14 @@ reuse, lock-release and command-scope roots in normal and race modes, with six
 causal controls in both modes. The broader [partial adjacent qualification](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
 passes 150/270 roots in both modes; 120 remain unrun. No live installation is claimed.
 
-The isolated [signed local successor preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
+The qualified [signed local successor preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
 adds preview/prepare/resume under one fixed original physical custody root.
 It separately approves local retained-prefix preparation with additive proposed
 ceilings; it grants no executable allowance, Safe authority or signing path.
-Independent behavioral qualification is pending. A copied or moved root requires
-separately approved migration; ordinary same-root restart retains the claim.
+Its [scoped receipt](evidence/bootstrap-successor-preparation-qualification-20260929.md)
+covers thirteen focused and three adjacent roots normal/race and thirty-two
+intended causal executions. A copied or moved root requires separately approved
+migration; ordinary same-root restart retains the claim.
 
 The separate [unsigned successor proposal](BOOTSTRAP-CONTRACT-SUCCESSOR.md)
 reads all eight completed originals, preserves their seals and any ninth reserved

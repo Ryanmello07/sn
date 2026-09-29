@@ -61,10 +61,11 @@ There is no RPC, signature import, apply, resume, submission or service option.
 ## Required signed successor and custody migration
 
 The separate [signed local preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
-now has an isolated implementation awaiting behavioral qualification. It adds
-a distinct approval domain and one fixed durable local claim, revalidates the
-original eight receipts, preserves additive floors and resumes interrupted
-publication. It grants no execution allowance or Safe authority. The unsigned
+now has [independent scoped qualification](evidence/bootstrap-successor-preparation-qualification-20260929.md).
+It adds a distinct approval domain and one fixed durable local claim, locally
+authenticates the original eight receipt records, preserves additive floors and
+resumes interrupted publication. Current canonical reauthentication remains a
+separate gate. It grants no execution allowance or Safe authority. The unsigned
 proposal command and original v1 approval/markers retain their existing scope.
 
 The executable successor remains unimplemented. Increasing the v1 contract

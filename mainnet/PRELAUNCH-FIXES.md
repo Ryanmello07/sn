@@ -138,12 +138,15 @@ and lifetime ceilings, and preserve an original ninth reservation. It does not
 sign or execute a successor. A new durable adoption owner and current Safe
 authority/digest proof remain required before executable authority can be
 admitted; changed original v1 approvals cannot adopt old custody.
-The isolated [signed local preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md) adds
+The qualified [signed local preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md) adds
 one fixed original-root claim, a distinct independently verified preparation
-approval and resumable publication. Behavioral qualification is pending.
-It preserves the eight retained receipts and cumulative floors; no executable
-allowance, Safe authority or signing path is created. Copy/restore/move onto a
-different physical root requires a separately approved migration.
+approval and resumable publication. Its [scoped receipt](evidence/bootstrap-successor-preparation-qualification-20260929.md)
+passes thirteen focused and three adjacent roots normal/race, with thirty-two
+intended causal executions. It preserves the eight retained receipts and
+cumulative proposed floors; no executable allowance, Safe authority or signing
+path is created. Copy/restore/move onto a different physical root requires a
+separately approved migration. The original full-v3 command remains an explicit
+adjacent root, and an eighth-action control checks its extracted fixture helper.
 The [separate full-v3 public-command fixture](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md)
 closes that specific gap on `c294fefd`: its positive root passes normal/race,
 and all six causal executions reach the intended assertion. It approves the
@@ -169,7 +172,9 @@ does not grant signed successor adoption, nonce custody or evidence-anchor execu
 The [pure Safe evidence increment](SAFE-EXECUTION-EVIDENCE.md) has
 [scoped independent qualification](evidence/safe-execution-evidence-qualification-20260929.md)
 on `c648495f`: thirteen focused and four adjacent roots pass normal/race,
-with all twenty-six intended causal executions. It calculates exact digests,
+with all twenty-six intended causal executions. Its [separate four-root composed smoke](evidence/safe-execution-evidence-qualification-20260929.md#separate-composed-smoke)
+also passes both modes on that exact source; it predates the signed local
+preparation merge. It calculates exact digests,
 inspects supplied signature forms and classifies declared inner outcomes and
 nonce rollback. Current owner membership/threshold, contract callbacks, approved
 hash storage, canonical receipts, Safe authority, signing, custody and execution

@@ -70,12 +70,17 @@ signing exists only in the test fixture; production helpers consume supplied byt
 ## Retaining the eight completed actions
 
 Full Safe authority is necessary for an executable successor and does not by itself
-authorize adopting original receipts. A new independently approved successor
-schema must reference the original bootstrap and contract approvals, custody ID,
-exact eight sealed canonical receipts and postconditions. It must reconcile any
+authorize adopting original receipts. A new independently approved executable
+successor schema must reference the original bootstrap and contract approvals,
+custody ID, exact eight sealed canonical receipts and postconditions. It must reconcile any
 already reserved or signed ninth action and keep cumulative attempt and lifetime
 spend exposure. Budget only unfinished work plus retry margin; never replay the
 completed prefix to satisfy a new plan's action count.
+
+The separately qualified [signed local preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
+now authenticates those retained local records and additive proposed floors under
+one original-root claim. It grants no executable allowance or Safe authority;
+canonical historical reauthentication and the executable transition remain open.
 
 An executable successor must bind the actual proxy to the recorded
 `initializerOwner`. A different new Safe requires separately authorized ownership
