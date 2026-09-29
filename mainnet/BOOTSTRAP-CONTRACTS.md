@@ -37,6 +37,11 @@ records the pending-selector panic and deterministic callback correction.
 The [evidence CREATE source handoff](evidence/bootstrap-contract-evidence-source-20260928.md)
 records its provisional eight-action prefix and separate pending qualification.
 
+Evidence CREATE (index seven) is provisionally integrated with the
+[admission test correction](evidence/bootstrap-contract-evidence-admission-test-correction-20260929.md).
+All 28 normal action roots passed; race qualification and live deployment gates
+remain open.
+
 The release catalog comes from the existing generator:
 
 ```sh
