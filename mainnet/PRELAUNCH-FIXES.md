@@ -2343,9 +2343,10 @@ and required registration/refresh/logout custody stays on that owner's physical
 directory. New allocation needs explicit permission. First-upgrade legacy-key
 adoption is a separate operator assertion, not a key-to-JWT proof or permission
 to replace a lost identity. The planned independent scope is 114 selected roots
-per normal/race mode and 17 causal variants; initial fixture failures are
-retained and do not count as qualification. Public daemon fixtures stop at
-authenticated handoff, with refresh/logout tested separately, so full serving,
+per normal/race mode and 17 causal variants in both modes (34 executions);
+the sealed e32 fixture-failure receipt remains separate from child qualification.
+Public daemon fixtures stop at authenticated handoff, with refresh/logout
+tested separately, so full serving,
 processed-key and proof readiness remain open. The active no-config measurement
 validator remains a legacy registration caller under separate migration; this
 provider slice cannot claim all role startup paths are repaired. Approved live

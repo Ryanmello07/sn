@@ -76,19 +76,30 @@ PASS receipt.
 
 The original e32 capture is retained under
 `/mnt/data/sn-testnet/qualification/miner-client-registration-sol-20260929/frozen-e32`.
-Three clientauth roots initially encountered a group-writable test parent under
-umask 0002, correctly rejected by the production custody guard. Under private
-umask 077 those roots pass, while two miner assertions fail after treating each
-logical refresh as exactly one physical GET. The pinned SDK uses parallel GET
-transport; that source explains the flawed count assumption, but the failed
-streams do not report the actual counter values. The correction explicitly
-makes fixture parents private and distinguishes exact client/handoff/allocation
-identity from physical refresh attempts. It requires identical original slot
-records/key, exact authenticated identities, no additional allocation and the
-unchanged HTTP-count baseline after the typed lost-legacy refusal. It must be
-independently requalified under the ordinary environment, with original failure
-streams retained. At the child handoff, the original e32 validator race process
-was still running separately and was explicitly excluded from child evidence.
+Its sealed [anomaly receipt](/mnt/data/sn-testnet/qualification/miner-client-registration-sol-20260929/frozen-e32/SOL-ANOMALY.md)
+has SHA256 `05e57bda561145ad61000580221289c8d78db3ab3d118b43ec6ce71d3684db24`;
+its manifest has SHA256
+`829642da5a728d82d07d0ea4f5eb0190dc9140e052c375f2e1d724efba05af7b`.
+E32 is not qualified. Ordinary-umask clientauth normal passed 22/25 roots;
+three key fixtures reached the intended refusal of group-writable mode 0775.
+Private-umask 077 diagnostic runs passed clientauth 25/25 and validator 10/10
+in both modes. Miner passed 77/79 in both modes, with package failure from the
+two physical-refresh-count assumptions. The original validator race process
+finished without restart after 1232.591 seconds. No e32 causal controls ran,
+and none of these diagnostic passes are relabeled as child qualification.
+
+The pinned SDK uses parallel GET transport; the failed e32 streams did not
+report its actual counter values. The child explicitly makes fixture parents
+private and distinguishes exact client/handoff/allocation identity from physical
+refresh attempts. It requires identical original slot records/key, exact
+authenticated identities, no additional allocation and an unchanged HTTP-count
+baseline after the typed lost-legacy refusal. The ordinary-umask child normal
+stream now records three retained clients and 12 physical restart refresh GETs
+(four per client), while allocation remains three. Legacy adoption records four
+GETs, and the later lost-JWT refusal leaves that baseline unchanged. These
+observations support the fixture correction without weakening custody rejection.
+Child normal/race qualification remains pending until the independent complete
+receipt and unchanged source/module seal are available.
 
 The daemon fixtures use the actual startup and SDK HTTP path but stop at
 authenticated handoff before full serving-device construction. Refresh/logout

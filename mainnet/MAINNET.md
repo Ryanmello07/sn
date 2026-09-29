@@ -1167,7 +1167,7 @@ refresh/logout writes stay bound to the original physical custody directory.
 Independent qualification remains pending after retained fixture failures;
 the planned scope is 114 selected roots per mode, not the full miner/validator
 packages. Daemon fixtures reach authenticated handoff before serving-device
-construction, with callbacks qualified separately. The active no-config
+construction, with separate callback fixtures. The active no-config
 measurement validator still uses the legacy allocator and has separate
 migration work. API deployment, real custody/adoption decisions, processed-key
 and proof readiness, chain/contract authority and all live launch gates remain
