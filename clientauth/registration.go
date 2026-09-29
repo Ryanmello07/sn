@@ -25,8 +25,10 @@ import (
 
 const registrationRecordSchema = "urnetwork-durable-client-registration-v1"
 
-// Stable deployment and client-key ownership selects the operation. No whole
-// config hash, executable, token bytes, token timestamp or mutable policy does.
+// An operator's deployment or a provider's explicit service role, together with
+// client-key ownership, selects the operation. No whole config hash, executable,
+// token bytes, token timestamp or mutable policy does. Provider fields are
+// omitted for historical validator scopes, preserving their canonical bytes.
 type RegistrationScope struct {
 	Endpoint     string `json:"endpoint"`
 	DeploymentId string `json:"deployment_id"`
@@ -36,6 +38,8 @@ type RegistrationScope struct {
 	ValidatorId  uint64 `json:"validator_id"`
 	OperatorNoId uint64 `json:"operator_no_id"`
 	ClientKey    string `json:"client_key"`
+	ClientRole   string `json:"client_role,omitempty"`
+	ClientSlot   string `json:"client_slot,omitempty"`
 }
 
 // Application refusals require operator/configuration recovery. Keeping their
@@ -79,9 +83,9 @@ type registrationHooks struct {
 	afterBinding func() error
 }
 
-// Production callers authorize creation only for an independently known new
-// operator. A retained deployment with lost legacy credentials remains blocked
-// for new API work while its native-liability observer can continue separately.
+// Callers authorize creation only for independently known new work. Retained
+// deployments or provider slots with lost legacy credentials need recovery;
+// this flag cannot clear their original operation or identity markers.
 func LoadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, clientPath, description string, scope RegistrationScope, allowCreate bool) (string, connect.Id, error) {
 	return loadOrRegisterClientJwt(ctx, api, networkPath, clientPath, description, scope, allowCreate, registrationHooks{})
 }
@@ -97,10 +101,28 @@ func loadOrRegisterClientJwt(ctx context.Context, api *sdk.Api, networkPath, cli
 	if err != nil {
 		return "", connect.Id{}, err
 	}
-	if scope.Endpoint != endpoint || scope.DeploymentId == "" || scope.ChainId == 0 || scope.Netuid == 0 || scope.OperatorNoId == 0 || scope.ValidatorId == 0 {
+	if scope.Endpoint != endpoint {
 		return "", connect.Id{}, errors.New("registration scope differs from its configured API or deployment")
 	}
-	for _, value := range []string{scope.GenesisHash, scope.ClientKey} {
+	values := []string{scope.ClientKey}
+	if scope.ClientRole == "" {
+		if scope.ClientSlot != "" || scope.DeploymentId == "" || scope.ChainId == 0 || scope.Netuid == 0 || scope.OperatorNoId == 0 || scope.ValidatorId == 0 {
+			return "", connect.Id{}, errors.New("registration scope differs from its configured API or deployment")
+		}
+		values = append(values, scope.GenesisHash)
+	} else {
+		if scope.ClientRole != "provider-v1" ||
+			scope.DeploymentId != "" || scope.ChainId != 0 || scope.GenesisHash != "" || scope.Netuid != 0 || scope.ValidatorId != 0 || scope.OperatorNoId != 0 {
+			return "", connect.Id{}, errors.New("registration service role is unsupported or mixed with chain authority")
+		}
+		if scope.ClientSlot != "direct" {
+			slot, err := hex.DecodeString(strings.TrimPrefix(scope.ClientSlot, "proxy-sha256:"))
+			if err != nil || len(slot) != 32 || scope.ClientSlot != "proxy-sha256:"+hex.EncodeToString(slot) {
+				return "", connect.Id{}, errors.New("registration service slot is invalid")
+			}
+		}
+	}
+	for _, value := range values {
 		raw, err := hex.DecodeString(strings.TrimPrefix(value, "0x"))
 		if err != nil || len(raw) != 32 || bytes.Equal(raw, make([]byte, 32)) || value != "0x"+hex.EncodeToString(raw) {
 			return "", connect.Id{}, errors.New("registration scope has an invalid genesis or client key")

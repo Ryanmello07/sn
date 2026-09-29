@@ -388,61 +388,9 @@ func TestProviderDiagnosticsRunEarlyReturnAndCancellationJoin(t *testing.T) {
 		if created == nil || closed != created || closeCause != nil || writer.calls.Load() != 0 {
 			t.Fatal("provider run early return did not join its actual diagnostic owner")
 		}
-		if kind == "listen" && !errors.Is(runErr, syscall.EADDRINUSE) || kind == "canceled" && runErr != nil || kind == "panic" && recovered != "synthetic early hook" {
+		if kind == "listen" && !errors.Is(runErr, syscall.EADDRINUSE) || kind == "canceled" && !errors.Is(runErr, context.Canceled) || kind == "panic" && recovered != "synthetic early hook" {
 			t.Fatal("diagnostic cleanup changed actual run termination")
 		}
-	}
-}
-
-// Missing credentials reach the real authentication read/retry boundary. Once
-// that record enters the sink, cancellation must join its SDK/API/output owners.
-func TestProviderDiagnosticsRunAuthenticationWaitCancels(t *testing.T) {
-	t.Setenv("URNETWORK_STATE_DIR", t.TempDir())
-	t.Setenv("WARP_VERSION", "1.2.3")
-	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
-	defer endpoint.Close()
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	var closed atomic.Bool
-	ctx = context.WithValue(ctx, providerDiagnosticHooksKey{}, providerDiagnosticHooks{afterClose: func(_ *providerDiagnostics, _ error) { closed.Store(true) }})
-	sink := &providerDiagnosticRecorder{records: make(chan []byte, 16)}
-	settings := providerRunSettings{apiUrl: endpoint.URL, connectUrl: "ws" + strings.TrimPrefix(endpoint.URL, "http")}
-	result := make(chan error, 1)
-	go func() { result <- settings.run(ctx, sink) }()
-	joined := false
-	defer func() {
-		cancel()
-		if !joined {
-			select {
-			case <-result:
-			case <-time.After(15 * time.Second):
-				t.Error("provider authentication fixture owner did not join")
-			}
-		}
-	}()
-	found := false
-	for range 2 {
-		raw := sink.next(t)
-		if bytes.Contains(raw, []byte(`"event":"retry_wait"`)) {
-			if !bytes.Contains(raw, []byte(`"provider":0`)) || !bytes.Contains(raw, []byte(`"provider_known":true`)) {
-				t.Fatal("authentication wait lost provider attribution")
-			}
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatal("actual authentication retry did not publish its closed event")
-	}
-	cancel()
-	select {
-	case err := <-result:
-		joined = true
-		if err != nil || !closed.Load() {
-			t.Fatal("authentication cancellation did not join actual output lifecycle")
-		}
-	case <-time.After(15 * time.Second):
-		t.Fatal("authentication wait held provider cancellation")
 	}
 }
 

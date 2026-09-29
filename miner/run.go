@@ -2,6 +2,7 @@ package miner
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -10,7 +11,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	mathrand "math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -73,6 +73,7 @@ Usage:
     	[--max-memory=<mem>]
     	[-v...]
     provider provide [--port=<port>]
+		[--allow-client-registration | --adopt-legacy-provider-key]
         [--api_url=<api_url>]
         [--connect_url=<connect_url>]
         [--wallet=<coldkey_ss58> [--coldkey_seed_file=<path> | --message=<text> --signature=<hex>]]
@@ -80,6 +81,7 @@ Usage:
         [--max-memory=<mem>]
         [-v...]
     provider auth-provide ([<auth_code>] | --user_auth=<user_auth> [--password=<password>]) [-f]
+		[--allow-client-registration | --adopt-legacy-provider-key]
     	[--port=<port>]
         [--api_url=<api_url>]
         [--connect_url=<connect_url>]
@@ -135,6 +137,8 @@ Options:
     -f                               Force overwrite the JWT token store file or proxy value, if exists.
                                      By default, existing values will not be overwritten.
     --api_url=<api_url>              Specify a custom API URL to use.
+	--allow-client-registration       Explicitly permit a new durable provider client operation; never replaces retained identity.
+	--adopt-legacy-provider-key       Assert the retained legacy provider key is original; refresh only, no new client allocation.
 	--config=<path>                    Strict release-1.0 daemon/component configuration.
     --connect_url=<connect_url>      Specify a custom connect URL to use.
     <api_url>                        API URL to save (https://, or http:// only for an explicit loopback host).
@@ -443,7 +447,9 @@ func provide(opts docopt.Opts) {
 	)
 	applyProviderProcessMemory(memoryPlan)
 
-	settings := providerRunSettings{apiUrl: apiUrl, connectUrl: connectUrl, port: port, proxySettings: allProxySettings, memoryPlan: memoryPlan, testEgressDialer: testEgressDialer}
+	allowClientRegistration, _ := opts.Bool("--allow-client-registration")
+	adoptLegacyProviderKey, _ := opts.Bool("--adopt-legacy-provider-key")
+	settings := providerRunSettings{apiUrl: apiUrl, connectUrl: connectUrl, port: port, proxySettings: allProxySettings, memoryPlan: memoryPlan, testEgressDialer: testEgressDialer, allowClientRegistration: allowClientRegistration, adoptLegacyProviderKey: adoptLegacyProviderKey}
 	// Preserve the legacy zero exit on daemon completion. Unlike os.Exit, a
 	// normal return releases the signal owner and all owned daemon workers.
 	_ = settings.run(ctx, os.Stdout)
@@ -475,6 +481,18 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		return err
 	}
 	defer func() { returnErr = errors.Join(returnErr, status.close()) }()
+	if err := validateProviderRegistrationSlots(self.proxySettings); err != nil {
+		return err
+	}
+	keyPath, err := providerStatePath(".provider.key")
+	if err != nil {
+		return err
+	}
+	keyOwner, err := clientauth.OpenProviderClientKey(ctx, keyPath, clientauth.ProviderClientKeyOptions{AllowCreate: self.allowClientRegistration, AdoptLegacyKey: self.adoptLegacyProviderKey})
+	if err != nil {
+		return err
+	}
+	defer func() { returnErr = errors.Join(returnErr, keyOwner.Close()) }()
 
 	provideWithProxy := func(index uint64, proxySettings *connect.ProxySettings) (returnErr error) {
 		defer func() {
@@ -497,6 +515,14 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		networkSpace := sdk.NewNetworkSpaceWithUrls(proxyCtx, self.apiUrl, self.connectUrl, clientStrategySettings)
 		defer networkSpace.Close()
 		api := networkSpace.GetApi()
+		// Authentication refusal also joins the API before the shared key owner
+		// is released; later callback cleanup may join this same owner again.
+		defer func() {
+			returnErr = errors.Join(returnErr, api.CloseAndWait(context.Background()))
+			if hook, ok := ctx.Value(providerRegistrationHooksKey{}).(providerRegistrationHooks); ok && hook.afterApiJoined != nil {
+				hook.afterApiJoined()
+			}
+		}()
 
 		networkJwtPath, err := providerStatePath("jwt")
 		if err != nil {
@@ -507,46 +533,26 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 			panic(err)
 		}
 
-		byClientJwt, _, err := func() (string, connect.Id, error) {
-			for {
-				byClientJwt, clientId, err := clientauth.LoadOrCreateClientJwt(
-					proxyCtx,
-					api,
-					networkJwtPath,
-					clientJwtPath,
-					fmt.Sprintf("provider %s %s", runtime.GOOS, RequireVersion()),
-				)
-				if err == nil {
-					return byClientJwt, clientId, nil
-				}
-				retryDelay := time.Duration(500+mathrand.Intn(10000)) * time.Millisecond
-				output.observe(providerAuthenticationWait, index, true, err, retryDelay, nil)
-				select {
-				case <-proxyCtx.Done():
-					return "", connect.Id{}, proxyCtx.Err()
-				case <-time.After(retryDelay):
-				}
-			}
-		}()
+		seed := keyOwner.Seed()
+		byClientJwt, _, err := authenticateProvider(proxyCtx, api, networkJwtPath, clientJwtPath, seed, providerRegistrationSlot(proxySettings), self.allowClientRegistration, output, index)
 		if err != nil {
-			if proxyCtx.Err() != nil {
-				return nil
-			}
-			panic(err)
+			return err
 		}
 
 		callbacks := &providerAuthenticationCallbacks{diagnostics: output, provider: index, clientJwtPath: clientJwtPath, networkJwtPath: networkJwtPath, cancel: cancel}
-		refreshSub := api.AddJwtRefreshListener(callbacks)
+		boundRefresh := &providerBoundRefresh{original: byClientJwt, callbacks: callbacks}
+		refreshSub := api.AddJwtRefreshListener(boundRefresh)
+		integritySub := api.AddClientRefreshIntegrityListener(boundRefresh)
 		logoutSub := api.AddAuthLogoutListener(callbacks)
 		defer func() {
 			// Callbacks can cancel, but only this enclosing owner joins them.
 			returnErr = errors.Join(returnErr, api.CloseAndWait(context.Background()))
 			refreshSub.Close()
+			integritySub.Close()
 			logoutSub.Close()
 			returnErr = errors.Join(returnErr, callbacks.failure())
 		}()
 
-		seed, _ := readProviderClientKeySeed()
 		certPem, keyPem, _ := readProviderTlsCertAndKey()
 		extenderKeySeed, _ := readProviderExtenderKeySeed()
 		settings := sdk.DefaultDeviceLocalSettings()
@@ -580,7 +586,10 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		device.SetProvideControlMode(sdk.ProvideControlModeAlways)
 
 		keyMaterial := device.GetKeyMaterial()
-		persistProviderKeyMaterial(output, index, keyMaterial)
+		if !bytes.Equal(keyMaterial.GetClientKeySeed(), seed) {
+			return errors.New("provider device changed its retained registration key")
+		}
+		persistProviderAuxiliaryKeyMaterial(output, index, keyMaterial)
 		observeProviderExtenderIdentity(output, index, keyMaterial.GetExtenderKeySeed())
 		// one line per change, so the activation prints once it settles and
 		// nothing repeats while it holds (connect/EXTENDER.md F3, G3)

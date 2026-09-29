@@ -47,7 +47,7 @@ var stCoordinator = stabi.NewSTCoordinator()
 
 // readNetworkJwt loads the network jwt written by `provider auth` from
 // ~/.urnetwork/jwt — the same bootstrap credential `provider provide`
-// uses to mint its client JWT (clientauth.LoadOrCreateClientJwt).
+// uses for its durable versioned client operation (clientauth.LoadOrRegisterClientJwt).
 func readNetworkJwt() (string, error) {
 	jwtPath, err := providerStatePath("jwt")
 	if err != nil {

@@ -137,6 +137,27 @@ func (self *registrationStore) read(name string) ([]byte, error) {
 	return raw, nil
 }
 
+// A single bounded census detects old identity files before first-key creation.
+func (self *registrationStore) names(maximum int) ([]string, error) {
+	if maximum < 1 || maximum > 4096 {
+		return nil, errors.New("registration directory census bound differs")
+	}
+	if err := self.check(); err != nil {
+		return nil, err
+	}
+	if _, err := self.directory.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	names, err := self.directory.Readdirnames(maximum + 1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	if len(names) > maximum {
+		return nil, errors.New("registration directory census exceeds its bound")
+	}
+	return names, self.check()
+}
+
 // Rename publishes complete bytes; a failed directory sync remains an error
 // and never licenses a second operation or a credential before durable handoff.
 func (self *registrationStore) write(name string, raw []byte) (returnErr error) {

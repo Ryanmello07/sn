@@ -17,12 +17,14 @@ import (
 
 // Configuration is copied before workers start and is immutable for one run.
 type providerRunSettings struct {
-	apiUrl           string
-	connectUrl       string
-	port             int
-	proxySettings    []*connect.ProxySettings
-	memoryPlan       providerMemoryPlan
-	testEgressDialer *connect.DialContextSettings
+	apiUrl                  string
+	connectUrl              string
+	port                    int
+	proxySettings           []*connect.ProxySettings
+	memoryPlan              providerMemoryPlan
+	testEgressDialer        *connect.DialContextSettings
+	allowClientRegistration bool
+	adoptLegacyProviderKey  bool
 }
 
 // This owner starts exactly one Serve goroutine after listener admission. Its
