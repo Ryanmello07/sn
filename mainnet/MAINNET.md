@@ -1169,10 +1169,33 @@ causal variants are valid in both modes (34 executions). The selection covers
 114/2324 package roots; it is not full miner/validator coverage. Original e32
 fixture failures remain sealed separately. Daemon fixtures reach authenticated
 handoff before serving-device construction, with separate callback fixtures.
-The active no-config measurement validator still uses the legacy allocator and has separate
-migration work. API deployment, real custody/adoption decisions, processed-key
-and proof readiness, chain/contract authority and all live launch gates remain
+The no-config measurement validator's durable primary identity has its separate
+qualification below. API deployment, real custody/adoption decisions,
+processed-key and proof readiness, chain/contract authority and all live launch gates remain
 open; this component does not close MG-04 or PH-13.
+
+The qualified and integrated [measurement primary-client change](evidence/validator-measurement-client-registration-candidate-20260929.md)
+addresses that no-config validator path. It retains the original key and a
+distinct direct `validator-measurement-v1` scope, always uses `allowCreate=false`,
+and adopts an existing JWT or replays its exact retained operation.
+Unknown lost identity requires recovery. Registration and refresh borrow the
+original physical key directory; completed authentication releases the separate
+bootstrap lock while retaining the key owner through joined shutdown. The
+runner bypasses key regeneration and returns through cleanup instead of an
+inner process exit. The `c3fe0cf2` parent remains unqualified: its CLI fixture
+used docopt's process-exiting parser and aborted both focused validator packages.
+Test-only child `e33f64d4` preserves production bytes and uses non-exiting fixture
+parsers. Independent normal/race qualification passes all 24 focused plus 13
+adjacent roots in each mode across twelve package PASS/exit-zero streams, and all
+38 causal executions reach their intended assertions. Separate Astra and
+integration audits verify the sealed results and exact source/module graph;
+integration adds only documentation above that source. This is selected coverage.
+Existing ephemeral tunnel-client allocation, legacy release-config callers and separate
+proof/stats history ownership remain outside this primary-identity repair.
+Its local lifecycle fixture reaches seed discovery and shutdown, not live trail
+completion. API deployment, actual custody, approved chain/Safe authority,
+economic acceptance and independent monitoring remain required; MG-04 and PH-13
+stay open.
 
 The [qualified receipt-prefix recovery](evidence/receipt-prefix-qualification-20260928.md)
 now supplies the shared 128-block scan contract to both native recovery owners.

@@ -2348,11 +2348,34 @@ are valid in both modes (34 executions). This is 114/2324 package roots, not
 full miner/validator coverage. The sealed e32 fixture-failure receipt remains
 separate from child qualification. Public daemon fixtures stop at authenticated
 handoff, with refresh/logout tested separately, so full serving, processed-key
-and proof readiness remain open. The active no-config measurement
-validator remains a legacy registration caller under separate migration; this
-provider slice cannot claim all role startup paths are repaired. Approved live
+and proof readiness remain open. The no-config measurement validator's durable
+primary identity has its separate qualification below; this provider slice
+cannot claim all role startup paths are repaired. Approved live
 API deployment, actual custody, native/contract admission, economic acceptance
 and independent operational monitoring remain external gates. PH-13 stays open.
+
+**Measurement primary-client follow-up (2026-09-29; qualified and integrated).**
+The [no-config validator change](evidence/validator-measurement-client-registration-candidate-20260929.md)
+removes the legacy allocator from durable primary `.validator.jwt` startup. Its
+closed measurement/direct scope always uses `allowCreate=false`, with original
+key custody, explicit first legacy adoption or exact retained-operation replay;
+missing unowned identity stays a recovery refusal. Refresh validates the original
+identity and persists before publication. Actual API/transport/measurement users
+join before key ownership ends, and successful replay releases only the shared
+bootstrap lock. Parent `c3fe0cf2` remains unqualified after its process-exiting
+docopt CLI fixture aborted both focused validator packages; its 62-file anomaly
+receipt is preserved. Test-only parser child `e33f64d4` keeps production bytes
+unchanged. All 37 selected roots pass normally and under race detection (74
+executions, twelve package PASS/exit-zero streams), and all 38 causal executions
+reach their intended assertions. Independent audits verify the sealed receipt,
+exact source, ten local modules and eight physical roots; integration changes
+only documentation above the qualified source. No full-package coverage or live
+authority is inferred. The final-save fixture excludes an earlier periodic
+snapshot at a real worker-join barrier. Existing ephemeral
+tunnel-client allocation and separate proof/stats history recovery are unchanged;
+seed discovery and local shutdown do not establish completed trails or live
+readiness. Mainnet identity, deployment/custody, contract/Safe authority,
+native/economic outcomes and independent monitoring gates remain open.
 
 **Closure.** Inject stale generations, delayed proofs, mixed operator keys,
 skipped rounds, partial artifact uploads, backpressure and controller restarts.

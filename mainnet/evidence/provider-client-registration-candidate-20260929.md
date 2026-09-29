@@ -124,8 +124,11 @@ the [existing actual API/database result](registration-production-api-qualificat
 remains a separate prerequisite. Qualification is Linux-specific; other supported
 platforms are not newly covered.
 
-The active no-config measurement validator still calls the legacy loader and
-has a separate existing-custody-only migration in progress. Configured schema-3
+At this provider qualification, the active no-config measurement validator still
+called the legacy loader. Its durable primary identity now has a separately
+[qualified existing-custody-only migration](validator-measurement-client-registration-candidate-20260929.md);
+that later result does not expand this provider receipt or repair the unchanged
+ephemeral tunnel-client allocator. Configured schema-3
 production operator authentication has its own qualified owner; the legacy
 release and simulation callers are not migrated here. This provider component supplies no
 processed-key, traffic/proof, validator membership or serving readiness; no
