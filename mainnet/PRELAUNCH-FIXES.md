@@ -462,6 +462,15 @@ records fifty positive root executions, seven normal and three selected race cau
 controls on the corrected exact source. The original typed-reply fixture failure
 is retained separately; passing inspection never installs production authority.
 
+**RT-04 finite executable replay — qualification pending.** A separate
+[offline SDK executor and bounded process owner](RUNTIME-SEMANTIC-REPLAY.md)
+bind exact original/candidate Wasm, signed rules, evidence and executable identity.
+On-chain transition cases compare complete declared storage effects, including
+insertion/deletion, alongside return bytes. Explicit host/storage budgets and
+joined cancellation qualify only this finite execution boundary. Real approved
+source/build/state inputs, all-domain semantic proof and durable production
+selection remain P0; this candidate does not complete automatic compatibility.
+
 **P0 follow-up — Automatic compatible runtime admission (RT-04).** A new runtime
 still needs independently reviewed code/metadata and a signed revision. This
 incremental authority path is not automatic runtime compatibility. Specify and

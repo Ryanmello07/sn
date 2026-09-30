@@ -229,6 +229,14 @@ records fifty positive root executions, seven normal and three selected race cau
 controls, exact source/dependency seals and the separate original failed fixture
 attempt. This qualification supplies no semantic verifier or production selection.
 
+**Finite runtime replay candidate — qualification pending.** The separate
+[offline transition executor](RUNTIME-SEMANTIC-REPLAY.md) now checks exact old/new
+Wasm against explicit finite state cases under a signed executable/rules/evidence
+boundary and a bounded subprocess owner. It compares return bytes and full declared
+storage effects in on-chain context. This is finite fixture coverage, not complete
+economic equivalence or authenticated mainnet state. Automatic selection and fresh
+signing stay closed; no production route is installed.
+
 **P0 follow-up: automatic compatible runtime admission (RT-04).** The additive
 path still requires a new independent signed artifact review for each upgrade.
 It does not supply automatic compatibility or eliminate that live approval gate.
