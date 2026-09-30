@@ -239,6 +239,9 @@ func (self *bootstrapSuccessorCanonicalChain) currentRuntime(ctx context.Context
 // Each RPC has its own bounded retry window under caller cancellation.
 func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan bootstrapSuccessorExecutionPlan) (bootstrapSuccessorExecutionObservation, error) {
 	var result bootstrapSuccessorExecutionObservation
+	if self != nil {
+		self.admitted = false
+	}
 	if self == nil || self.provenance == nil {
 		return result, errBootstrapSuccessorSafeProvenanceUnavailable
 	}
@@ -248,7 +251,6 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 	if !self.authenticated {
 		return result, errors.New("successor canonical observation precedes historical adoption")
 	}
-	self.admitted = false
 	head, err := self.identity(ctx, plan)
 	if err != nil {
 		return result, err
@@ -280,6 +282,12 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 		if err := self.chain.read(ctx, read.method, []any{plan.Review.Relayer.Sender.Hex(), block}, read.value); err != nil {
 			return result, err
 		}
+	}
+	// History authentication can be expensive. It binds the pinned finalized
+	// snapshot before every pending observation and the final canonical,
+	// runtime and window checks, so changes during proof cannot reuse them.
+	if err := self.authenticateProvenance(ctx, plan, head); err != nil {
+		return result, err
 	}
 	// Scoped pending state cannot enumerate off-node signatures or other
 	// relayers. Independent signer cutover explicitly owns that assumption.
@@ -333,9 +341,6 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 	}
 	result.NativeNumber, result.NativeHash = latest.FinalizedNumber, common.HexToHash(latest.FinalizedHash)
 	if err := plan.admit(result); err != nil {
-		return result, err
-	}
-	if err := self.authenticateProvenance(ctx, plan, latest); err != nil {
 		return result, err
 	}
 	if err := self.checkpoint(ctx, plan); err != nil {
