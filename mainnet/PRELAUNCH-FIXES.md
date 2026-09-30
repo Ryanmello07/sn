@@ -762,12 +762,25 @@ independent Sol qualification rebuilds all thirteen server commands and passes
 three source-graph roots in normal/race modes plus vet. The four SN commands
 also compile in the author's census. Independent builder qualification remains
 pending in the separate frozen handoff; these compile results are not test passes.
-The manifest retains fresh/retained contract hashes without rewriting approved
-bytes: Coordinator and ValidatorEvidence have metadata drift associated with
-the changed imported SettlementVault source, so exact source-to-bytecode
-equality stays false. Current OCI image digest/readback, independent rebuild,
-compiler installation/config/policy qualification and release approval remain
-open; the historical v11 inventory does not attest this current composition.
+The retained-mode manifest keeps historical and compiled contract hashes:
+Coordinator and ValidatorEvidence have metadata drift associated with the changed
+imported SettlementVault source, so that selection's source-to-bytecode equality
+stays false. Explicit `contract_catalog: "fresh"` now exports exact compiler
+creation/runtime bytes for all five contracts to a separate schema-1 catalogue,
+retains the old catalogue/history and checks unchanged ABI, constructors, layout
+and semantic immutable references. Selected hashes are separate from historical
+hashes; fresh mode refuses nonexact bytecode and retained mode refuses silent
+replacement.
+
+No signed mainnet plan has been evidenced; the existing release/testnet catalogue
+does not establish a mainnet commitment. Independent qualification of fresh
+selection is the preferred path for the first unsigned mainnet plan, consumed by
+its exact file path and SHA256. Checking for externally held signed commitments
+remains a launch gate; preserve and reconcile any such commitments before
+changing selection. A metadata-equivalence exception remains a conditional
+fallback and is not selected. Current OCI image digest/readback, independent
+rebuild, compiler installation/config/policy qualification and release approval
+remain open; the historical v11 inventory does not attest this current composition.
 
 The newer server source branch `codex/mainnet-composed-hardening-20260927` at
 `b6f49bdb` includes migration 728, the operator receipt-census correction,

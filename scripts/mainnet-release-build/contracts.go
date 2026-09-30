@@ -1,7 +1,8 @@
-// Preserve retained transaction bytes beside independently rebuilt artifacts.
+// Select exact compiler bytes explicitly while preserving the historical catalogue.
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,17 +12,23 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 )
 
+// Retained, selected and compiled identities stay distinct in either mode.
 type buildContract struct {
 	Name                   string `json:"name"`
 	FoundryArtifactId      string `json:"foundry_artifact_id"`
 	FoundryArtifactSha256  string `json:"foundry_artifact_sha256"`
 	RetainedCreationSha256 string `json:"retained_creation_sha256"`
 	RetainedRuntimeSha256  string `json:"retained_runtime_sha256"`
+	SelectedCreationSha256 string `json:"selected_creation_sha256"`
+	SelectedRuntimeSha256  string `json:"selected_runtime_sha256"`
+	SelectedRuntimeHash    string `json:"selected_runtime_hash"`
+	SelectedArtifactHash   string `json:"selected_artifact_hash"`
 	RebuiltCreationSha256  string `json:"rebuilt_creation_sha256"`
 	RebuiltRuntimeSha256   string `json:"rebuilt_runtime_sha256"`
 	RetainedRuntimeHash    string `json:"retained_runtime_hash"`
@@ -32,16 +39,19 @@ type buildContract struct {
 	ExactBytes             bool   `json:"exact_bytes"`
 }
 
+// This is the existing bootstrap schema; catalogue selection adds no authority.
 type releaseContract struct {
-	Name              string `json:"name"`
-	Abi               string `json:"abi"`
-	Creation          string `json:"creation"`
-	Runtime           string `json:"runtime"`
-	RuntimeHash       string `json:"runtime_hash"`
-	ArtifactHash      string `json:"artifact_hash"`
-	StorageLayoutHash string `json:"storage_layout_hash"`
+	Name                string           `json:"name"`
+	Abi                 string           `json:"abi"`
+	Creation            string           `json:"creation"`
+	Runtime             string           `json:"runtime"`
+	RuntimeHash         string           `json:"runtime_hash"`
+	ArtifactHash        string           `json:"artifact_hash"`
+	StorageLayoutHash   string           `json:"storage_layout_hash"`
+	ImmutableReferences map[string][]int `json:"immutable_references"`
 }
 
+// The production census excludes simulator helper contracts.
 func releaseContractPaths() map[string]string {
 	return map[string]string{"ReserveSink": "STReserveSink.sol/STReserveSink.json", "SettlementVault": "STSettlementVault.sol/STSettlementVault.json", "Coordinator": "STCoordinator.sol/STCoordinator.json", "ValidatorEvidence": "STValidatorEvidence.sol/STValidatorEvidence.json", "ERC1967Proxy": "ERC1967Proxy.sol/ERC1967Proxy.json"}
 }
@@ -60,9 +70,51 @@ func hashBuildBytecode(value string, maximum int) (string, int, error) {
 	return "sha256:" + hex.EncodeToString(hash[:]), len(raw), nil
 }
 
+// Both catalogues must be unambiguous complete bootstrap envelopes.
+func readReleaseContracts(path string) ([]releaseContract, error) {
+	raw, err := readBuildInput(path, 2*1024*1024)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateBuildJson(raw); err != nil {
+		return nil, err
+	}
+	var envelope struct {
+		Schema    string            `json:"schema"`
+		Artifacts []releaseContract `json:"artifacts"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&envelope); err != nil {
+		return nil, err
+	}
+	wanted := releaseContractPaths()
+	if envelope.Schema != "urnetwork-contract-release-artifacts-v1" || len(envelope.Artifacts) != len(wanted) {
+		return nil, errors.New("contract export census differs")
+	}
+	for _, contract := range envelope.Artifacts {
+		if _, ok := wanted[contract.Name]; !ok {
+			return nil, errors.New("duplicate or unknown release contract")
+		}
+		delete(wanted, contract.Name)
+	}
+	return envelope.Artifacts, nil
+}
+
+// A fresh catalogue is a byte selection, not an ABI, constructor or layout change.
+func validateContractInterface(selected, retained releaseContract) error {
+	if selected.Name != retained.Name || selected.Abi != retained.Abi || selected.StorageLayoutHash != retained.StorageLayoutHash || !reflect.DeepEqual(selected.ImmutableReferences, retained.ImmutableReferences) {
+		return fmt.Errorf("%s fresh contract interface differs from retained catalogue", selected.Name)
+	}
+	return nil
+}
+
 // The existing generator checks source, ABI, layout, immutables and permitted
-// metadata drift before this function binds its retained bytes to fresh output.
+// metadata drift before this function binds the selected catalogue to output.
 func captureBuildContracts(config buildConfig, exportPath string) ([]buildContract, []buildArtifact, error) {
+	if config.ContractCatalog != "" && config.ContractCatalog != "retained" && config.ContractCatalog != "fresh" {
+		return nil, nil, errors.New("unknown selected contract catalogue")
+	}
 	retained, err := readBuildInput(filepath.Join(config.Workspace, "sn/sim-testnet/contracts_gen.go"), 4*1024*1024)
 	if err != nil {
 		return nil, nil, err
@@ -71,36 +123,45 @@ func captureBuildContracts(config buildConfig, exportPath string) ([]buildContra
 	if err != nil {
 		return nil, nil, err
 	}
-	raw, err := readBuildInput(exportPath, 4*1024*1024)
+	selectedConstants := constants
+	retainedContracts := map[string]releaseContract{}
+	if config.ContractCatalog == "fresh" {
+		fresh, err := readBuildInput(filepath.Join(config.Output, "inputs/contracts-fresh-binding.go"), 4*1024*1024)
+		if err != nil {
+			return nil, nil, err
+		}
+		selectedConstants, err = retainedContractConstants(fresh)
+		if err != nil {
+			return nil, nil, err
+		}
+		historical, err := readReleaseContracts(filepath.Join(config.Output, "inputs/contracts-retained.json"))
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, contract := range historical {
+			if err := validateRetainedContract(contract, constants); err != nil {
+				return nil, nil, err
+			}
+			retainedContracts[contract.Name] = contract
+		}
+	}
+	exportedContracts, err := readReleaseContracts(exportPath)
 	if err != nil {
 		return nil, nil, err
 	}
-	var envelope struct {
-		Schema    string            `json:"schema"`
-		Artifacts []releaseContract `json:"artifacts"`
-	}
-	if err := validateBuildJson(raw); err != nil {
-		return nil, nil, err
-	}
-	if err := json.Unmarshal(raw, &envelope); err != nil {
-		return nil, nil, err
-	}
 	wanted := releaseContractPaths()
-	if envelope.Schema != "urnetwork-contract-release-artifacts-v1" || len(envelope.Artifacts) != len(wanted) {
-		return nil, nil, errors.New("contract export census differs")
-	}
 	result := []buildContract{}
 	artifacts := []buildArtifact{}
-	for _, contract := range envelope.Artifacts {
-		if err := validateRetainedContract(contract, constants); err != nil {
+	for _, contract := range exportedContracts {
+		if err := validateRetainedContract(contract, selectedConstants); err != nil {
 			return nil, nil, err
 		}
-		path, ok := wanted[contract.Name]
-		if !ok {
-			return nil, nil, errors.New("duplicate or unknown release contract")
+		if config.ContractCatalog == "fresh" {
+			if err := validateContractInterface(contract, retainedContracts[contract.Name]); err != nil {
+				return nil, nil, err
+			}
 		}
-		delete(wanted, contract.Name)
-		artifact, err := retainBuildInput(config, "contract-"+contract.Name+".json", "foundry-contract", filepath.Join(config.Workspace, "sn/evm/out", path))
+		artifact, err := retainBuildInput(config, "contract-"+contract.Name+".json", "foundry-contract", filepath.Join(config.Workspace, "sn/evm/out", wanted[contract.Name]))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -120,14 +181,22 @@ func captureBuildContracts(config buildConfig, exportPath string) ([]buildContra
 		if err := json.Unmarshal(fresh, &foundry); err != nil {
 			return nil, nil, err
 		}
-		entry := buildContract{Name: contract.Name, FoundryArtifactId: artifact.Id, FoundryArtifactSha256: artifact.Sha256, RetainedRuntimeHash: contract.RuntimeHash, RetainedArtifactHash: contract.ArtifactHash, StorageLayoutHash: contract.StorageLayoutHash}
-		entry.RetainedCreationSha256, entry.CreationBytes, err = hashBuildBytecode(contract.Creation, 49152)
+		entry := buildContract{Name: contract.Name, FoundryArtifactId: artifact.Id, FoundryArtifactSha256: artifact.Sha256, RetainedRuntimeHash: constants[contract.Name+"RuntimeBytecodeHash"], RetainedArtifactHash: constants[contract.Name+"FoundryArtifactHash"], SelectedRuntimeHash: contract.RuntimeHash, SelectedArtifactHash: contract.ArtifactHash, StorageLayoutHash: contract.StorageLayoutHash}
+		entry.RetainedCreationSha256, _, err = hashBuildBytecode(constants[contract.Name+"CreationBytecode"], 49152)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%s retained creation: %w", contract.Name, err)
 		}
-		entry.RetainedRuntimeSha256, entry.RuntimeBytes, err = hashBuildBytecode(contract.Runtime, 24576)
+		entry.RetainedRuntimeSha256, _, err = hashBuildBytecode(constants[contract.Name+"RuntimeBytecode"], 24576)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%s retained runtime: %w", contract.Name, err)
+		}
+		entry.SelectedCreationSha256, entry.CreationBytes, err = hashBuildBytecode(contract.Creation, 49152)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s selected creation: %w", contract.Name, err)
+		}
+		entry.SelectedRuntimeSha256, entry.RuntimeBytes, err = hashBuildBytecode(contract.Runtime, 24576)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s selected runtime: %w", contract.Name, err)
 		}
 		entry.RebuiltCreationSha256, _, err = hashBuildBytecode(foundry.Bytecode.Object, 49152)
 		if err != nil {
@@ -137,15 +206,17 @@ func captureBuildContracts(config buildConfig, exportPath string) ([]buildContra
 		if err != nil {
 			return nil, nil, err
 		}
-		entry.ExactBytes = entry.RetainedCreationSha256 == entry.RebuiltCreationSha256 && entry.RetainedRuntimeSha256 == entry.RebuiltRuntimeSha256
+		entry.ExactBytes = entry.SelectedCreationSha256 == entry.RebuiltCreationSha256 && entry.SelectedRuntimeSha256 == entry.RebuiltRuntimeSha256
+		if config.ContractCatalog == "fresh" && !entry.ExactBytes {
+			return nil, nil, fmt.Errorf("%s fresh catalogue differs from exact compiler bytes", contract.Name)
+		}
 		result = append(result, entry)
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result, artifacts, nil
 }
 
-// An export may choose fresh bytes after a real executable change. Composition
-// must refuse that choice until a successor reviewed binding is checked in.
+// Parse either binding as data without loading its Go package or executing code.
 func retainedContractConstants(raw []byte) (map[string]string, error) {
 	file, err := parser.ParseFile(token.NewFileSet(), "retained-contracts.go", raw, 0)
 	if err != nil {
@@ -180,18 +251,25 @@ func retainedContractConstants(raw []byte) (map[string]string, error) {
 	return result, nil
 }
 
+// Each export must match the selected binding, including its declared hashes.
 func validateRetainedContract(contract releaseContract, constants map[string]string) error {
 	for suffix, actual := range map[string]string{"ABI": contract.Abi, "CreationBytecode": contract.Creation, "RuntimeBytecode": contract.Runtime, "RuntimeBytecodeHash": contract.RuntimeHash, "FoundryArtifactHash": contract.ArtifactHash, "StorageLayoutHash": contract.StorageLayoutHash} {
 		retained, ok := constants[contract.Name+suffix]
 		if !ok || retained == "" || actual != retained {
-			return fmt.Errorf("%s export differs from retained %s; a successor binding requires review", contract.Name, suffix)
+			return fmt.Errorf("%s export differs from selected binding %s", contract.Name, suffix)
 		}
 	}
 	return nil
 }
 
 // A metadata-tolerant generator success is never promoted to byte equality.
-func validateContractCensus(contracts []buildContract, artifacts map[string]buildArtifact, exact bool) error {
+func validateContractCensus(contracts []buildContract, artifacts map[string]buildArtifact, exact bool, catalog string) error {
+	if catalog == "" {
+		catalog = "retained"
+	}
+	if catalog != "retained" && catalog != "fresh" {
+		return errors.New("unknown selected contract catalogue")
+	}
 	wanted := releaseContractPaths()
 	if len(contracts) != len(wanted) {
 		return errors.New("release requires all five production contracts")
@@ -206,9 +284,15 @@ func validateContractCensus(contracts []buildContract, artifacts map[string]buil
 		if !ok || artifact.Kind != "foundry-contract" || artifact.Sha256 != contract.FoundryArtifactSha256 {
 			return errors.New("contract source artifact binding differs")
 		}
-		isExact := contract.RetainedCreationSha256 == contract.RebuiltCreationSha256 && contract.RetainedRuntimeSha256 == contract.RebuiltRuntimeSha256
-		if contract.RetainedCreationSha256 == "" || contract.RetainedRuntimeSha256 == "" || contract.RebuiltCreationSha256 == "" || contract.RebuiltRuntimeSha256 == "" || contract.ExactBytes != isExact || contract.CreationBytes <= 0 || contract.CreationBytes > 49152 || contract.RuntimeBytes <= 0 || contract.RuntimeBytes > 24576 {
+		isExact := contract.SelectedCreationSha256 == contract.RebuiltCreationSha256 && contract.SelectedRuntimeSha256 == contract.RebuiltRuntimeSha256
+		if contract.RetainedCreationSha256 == "" || contract.RetainedRuntimeSha256 == "" || contract.SelectedCreationSha256 == "" || contract.SelectedRuntimeSha256 == "" || contract.SelectedRuntimeHash == "" || contract.SelectedArtifactHash == "" || contract.RetainedRuntimeHash == "" || contract.RetainedArtifactHash == "" || contract.RebuiltCreationSha256 == "" || contract.RebuiltRuntimeSha256 == "" || contract.ExactBytes != isExact || contract.CreationBytes <= 0 || contract.CreationBytes > 49152 || contract.RuntimeBytes <= 0 || contract.RuntimeBytes > 24576 {
 			return errors.New("contract bytecode identity, equality or size differs")
+		}
+		if catalog == "fresh" && !isExact {
+			return errors.New("fresh catalogue is not exact compiler output")
+		}
+		if catalog == "retained" && (contract.SelectedCreationSha256 != contract.RetainedCreationSha256 || contract.SelectedRuntimeSha256 != contract.RetainedRuntimeSha256 || contract.SelectedRuntimeHash != contract.RetainedRuntimeHash || contract.SelectedArtifactHash != contract.RetainedArtifactHash) {
+			return errors.New("retained catalogue selection changed historical bytes")
 		}
 		allExact = allExact && isExact
 	}

@@ -81,8 +81,12 @@ func executeBuild(ctx context.Context, config buildConfig, rawConfig []byte) err
 		}
 	}
 	configHash := sha256.Sum256(rawConfig)
-	manifest := buildManifest{Schema: buildSchema, ConfigSha256: "sha256:" + hex.EncodeToString(configHash[:]), CandidateId: config.CandidateId, Platform: "linux/amd64", Version: config.Version, SourceDateEpoch: config.SourceDateEpoch, Repositories: config.Repositories, Roles: releaseRoles(), Modules: map[string][]buildModule{}, Artifacts: []buildArtifact{}, Contracts: []buildContract{}, Images: []buildImage{}, MissingImages: []string{}, Limitations: []string{"This composition does not grant release or deployment approval.", "Prepared image contexts have no OCI digest or independent rootfs/embedded-binary readback.", "A second independent build, full compiler installation attestation and arm64 qualification remain open.", "Retained contract transaction bytes are preserved; any allowed compiler metadata drift is explicitly not exact byte equality.", "Runtime secrets, deployed configuration, live chain state, signing devices and deployment target compatibility are not qualified."}}
+	manifest := buildManifest{Schema: buildSchema, ConfigSha256: "sha256:" + hex.EncodeToString(configHash[:]), CandidateId: config.CandidateId, Platform: "linux/amd64", Version: config.Version, SourceDateEpoch: config.SourceDateEpoch, Repositories: config.Repositories, Roles: releaseRoles(), Modules: map[string][]buildModule{}, Artifacts: []buildArtifact{}, Contracts: []buildContract{}, Images: []buildImage{}, MissingImages: []string{}, Limitations: []string{"This composition does not grant release or deployment approval.", "Prepared image contexts have no OCI digest or independent rootfs/embedded-binary readback.", "A second independent build, full compiler installation attestation and arm64 qualification remain open.", "The historical contract catalogue is preserved separately from explicit fresh selection; exact equality applies only to selected bytes.", "Any externally held signed mainnet commitment must be checked before selecting a catalogue for the first mainnet plan.", "Runtime secrets, deployed configuration, live chain state, signing devices and deployment target compatibility are not qualified."}}
 	manifest.ModuleQualification = map[string]moduleQualification{}
+	manifest.ContractCatalog = config.ContractCatalog
+	if manifest.ContractCatalog == "" {
+		manifest.ContractCatalog = "retained"
+	}
 	if err := writeBuildBytes(filepath.Join(config.Output, "inputs/config.json"), rawConfig); err != nil {
 		return err
 	}
@@ -214,7 +218,20 @@ func executeBuild(ctx context.Context, config buildConfig, rawConfig []byte) err
 	if err := buildCommand(ctx, config, "check-contracts", filepath.Join(config.Workspace, "sn"), config.Go.Path, "run", "-mod=readonly", "./sim-testnet/gencontracts", "--check", "evm/out", "sim-testnet/contracts_gen.go"); err != nil {
 		return err
 	}
-	if err := buildCommand(ctx, config, "export-contracts", filepath.Join(config.Workspace, "sn"), config.Go.Path, "run", "-mod=readonly", "./sim-testnet/gencontracts", "--release-json", "evm/out", "sim-testnet/contracts_gen.go", export); err != nil {
+	selectedBinding := "sim-testnet/contracts_gen.go"
+	if manifest.ContractCatalog == "fresh" {
+		// The original catalogue remains evidence. A new private file selects exact
+		// current compiler bytes for a separately reviewed unsigned first plan.
+		historical := filepath.Join(config.Output, "inputs/contracts-retained.json")
+		if err := buildCommand(ctx, config, "export-retained-contracts", filepath.Join(config.Workspace, "sn"), config.Go.Path, "run", "-mod=readonly", "./sim-testnet/gencontracts", "--release-json", "evm/out", "sim-testnet/contracts_gen.go", historical); err != nil {
+			return err
+		}
+		selectedBinding = filepath.Join(config.Output, "inputs/contracts-fresh-binding.go")
+		if err := buildCommand(ctx, config, "generate-fresh-contracts", filepath.Join(config.Workspace, "sn"), config.Go.Path, "run", "-mod=readonly", "./sim-testnet/gencontracts", "evm/out", selectedBinding); err != nil {
+			return err
+		}
+	}
+	if err := buildCommand(ctx, config, "export-contracts", filepath.Join(config.Workspace, "sn"), config.Go.Path, "run", "-mod=readonly", "./sim-testnet/gencontracts", "--release-json", "evm/out", selectedBinding, export); err != nil {
 		return err
 	}
 	contracts, contractArtifacts, err := captureBuildContracts(config, export)

@@ -15,7 +15,7 @@ selection:
 | SN | `mainnet`, `cli/miner`, `cli/validator`, `cli/snclaim` | Four executables, their build settings, hashes and command receipts. The mainnet executable also contains root-service, root-monitor, operator-monitor, owner-signing, bootstrap-chain, bootstrap-contracts, activate-validators and repair-validator. |
 | Server services | `cli/api`, `cli/taskworker`, `cli/proxy`, `cli/connect`, `cli/alt`, `cli/gossip`, `cli/mcp`, `cli/competitionworker` | Eight executables and eight binary-bearing image contexts. |
 | Server maintenance | `cli/monitor`, `cli/strecovery`, `cli/competitiondbinit`, `cli/competitionpatch`, `cli/geolite2export` | Five executables and their build receipts. |
-| Contracts | ReserveSink, SettlementVault, Coordinator, ValidatorEvidence, ERC1967Proxy | All five retained deployment artifacts beside freshly compiled Foundry artifacts; probe/drill dependencies are checked by the existing generator. |
+| Contracts | ReserveSink, SettlementVault, Coordinator, ValidatorEvidence, ERC1967Proxy | All five selected deployment artifacts beside freshly compiled Foundry artifacts and the unchanged historical catalogue; probe/drill dependencies are checked by the existing generator. |
 
 The config schema is `urnetwork-mainnet-release-build-v1`. Required fields are
 `candidate_id`, `workspace`, `output`, `version`, positive `source_date_epoch`,
@@ -29,6 +29,28 @@ first seven use their repository name as path; libraries use
 The caller must provision reviewed module/compiler dependencies before the
 offline build. The manifest retains the complete config, input hashes, tool
 version logs, compiler commands and exits.
+
+`contract_catalog` selects the contract bytes explicitly. Omission or `retained`
+keeps the checked-in `sim-testnet/contracts_gen.go` catalogue. `fresh` exports
+the exact current compiler bytes for review as the first unsigned mainnet plan's
+catalogue. Unknown values fail closed. Both modes keep the existing schema
+`urnetwork-contract-release-artifacts-v1` and select the same five contracts.
+
+Fresh mode retains `inputs/contracts_gen.go` and
+`inputs/contracts-retained.json`, generates a separate
+`inputs/contracts-fresh-binding.go`, and writes the selected
+`inputs/contracts-release.json`. All four files are hashed in the manifest.
+The generator's complete semantic check still runs against the checked-in
+catalogue before selection. Fresh capture additionally requires unchanged ABI
+(including constructors), normalized storage-layout hash and semantic immutable
+references, and exact creation/runtime equality with every Foundry artifact.
+Source files and historical output directories are never rewritten.
+
+Each contract entry records `retained_*`, `selected_*` and `rebuilt_*` hashes.
+`exact_bytes` and aggregate `source_to_bytecode_exact` compare selected bytes
+with compiled bytes. Fresh mode refuses any nonexact contract; retained mode
+refuses any selected identity that differs from the historical catalogue. The
+manifest's `contract_catalog` is always explicit, including when config omits it.
 
 The current server API mismatch was reproduced before repair: four of thirteen
 server commands compiled and nine failed. SN's four commands compiled. Server
@@ -83,7 +105,7 @@ contexts have no runnable OCI digest or embedded-binary/rootfs verification;
 `missing_images` lists all eight and `source_to_image_verified` stays false.
 Image package-archive/attestation policy and environment selection remain open.
 
-The September 30 full-source Foundry build used solc 0.8.24, Cancun, optimizer
+The September 30 retained-catalogue full-source Foundry build used solc 0.8.24, Cancun, optimizer
 200 and via IR, and completed successfully. ReserveSink, SettlementVault and
 ERC1967Proxy match retained creation/runtime bytes exactly. Coordinator and
 ValidatorEvidence retain their prior deployment bytes, while current coherent
@@ -94,18 +116,28 @@ check passes: executable and constructor bytes outside the narrowly recognized
 Solidity metadata digest, ABI, normalized storage layout and semantic immutable
 offsets match. This is not byte-for-byte source-to-deployment reproduction.
 Coordinator runtime is 24,564 bytes, twelve below the 24,576-byte deployment
-limit; retained and fresh sizes remain checked. The manifest records both fresh
-and retained hashes and cannot turn metadata tolerance into exact equality.
-An export differing from checked-in retained transaction bytes is refused.
+limit; retained and fresh sizes remain checked. The retained-mode manifest
+records both compiled and historical hashes and cannot turn metadata tolerance
+into exact equality. Fresh mode selects all five current compiler artifacts
+explicitly and records their exact equality separately from historical bytes.
 
-Reconstructing exact historical per-contract source/compiler inputs can add
-evidence for unchanged retained plan bytes without requesting another owner
-signature. That reconstruction and an independent exact-byte rebuild are not
-yet complete. A coherent fresh-bytecode successor can instead be reviewed and
-bound in a new deployment plan, but changing signed artifact/plan commitments
-requires the applicable new authorizations before submission. Neither path
-rewrites an original signed plan or transaction. This patch selects neither
-deployment change.
+No signed mainnet deployment plan has been evidenced. The checked-in catalogue
+is historical release/testnet material, not proof of an immutable mainnet
+commitment. The preferred first-plan path is explicit fresh selection, review
+and independent qualification of that catalogue, then binding its exact path
+and SHA256 in the unsigned bootstrap contract specification's `artifacts`
+reference. The
+existing loader in `mainnet/contract_artifacts.go` already consumes that schema;
+it does not require a source-code catalogue replacement.
+
+Before signing the first mainnet plan, the release owner must check for any
+externally held signed artifact, plan or transaction commitment. Absence from
+this repository is not proof that none exists. Any such commitment must remain
+unchanged and be reconciled under its actual authority before a different
+catalogue is selected. Historical source reconstruction or a separately
+approved metadata-equivalence exception remains a conditional fallback; this
+fresh path selects neither exception nor authority to change signed bytes.
+No plan is signed and no contract is deployed by the builder.
 
 `source_to_bytecode_exact` is calculated per artifact and in aggregate;
 `reproducibility_verified`, `release_complete` and `deployment_approved` remain

@@ -49,6 +49,7 @@ type buildConfig struct {
 	Output          string          `json:"output"`
 	Version         string          `json:"version"`
 	SourceDateEpoch int64           `json:"source_date_epoch"`
+	ContractCatalog string          `json:"contract_catalog,omitempty"`
 	Go              toolPin         `json:"go"`
 	Forge           toolPin         `json:"forge"`
 	Solc            toolPin         `json:"solc"`
@@ -97,6 +98,7 @@ type buildManifest struct {
 	Platform                string                         `json:"platform"`
 	Version                 string                         `json:"version"`
 	SourceDateEpoch         int64                          `json:"source_date_epoch"`
+	ContractCatalog         string                         `json:"contract_catalog"`
 	Repositories            []repositoryPin                `json:"repositories"`
 	Roles                   []buildRole                    `json:"roles"`
 	Modules                 map[string][]buildModule       `json:"effective_modules"`
@@ -291,6 +293,9 @@ func verifyBuildTool(pin toolPin) error {
 
 // Fixed role/output scope avoids accidentally narrowing to a convenient subset.
 func (self buildConfig) validate() error {
+	if self.ContractCatalog != "" && self.ContractCatalog != "retained" && self.ContractCatalog != "fresh" {
+		return errors.New("contract catalogue must be retained or fresh")
+	}
 	label := regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$`)
 	if self.Schema != buildSchema || !label.MatchString(self.CandidateId) || !label.MatchString(self.Version) || self.SourceDateEpoch <= 0 {
 		return errors.New("release build schema, identity, version or source epoch differs")
@@ -360,6 +365,9 @@ func main() {
 
 // Stable artifact ordering and a domain-separated seal exclude approval claims.
 func sealBuildManifest(manifest *buildManifest) error {
+	if manifest.ContractCatalog == "" {
+		manifest.ContractCatalog = "retained"
+	}
 	if manifest.ReleaseComplete || manifest.DeploymentApproved || manifest.ReproducibilityVerified || manifest.SourceToImageVerified {
 		return errors.New("composition cannot grant reproducibility, image, release or deployment approval")
 	}
@@ -382,7 +390,7 @@ func sealBuildManifest(manifest *buildManifest) error {
 			return fmt.Errorf("required role %s has no binary", role.Id)
 		}
 	}
-	if err := validateContractCensus(manifest.Contracts, seen, manifest.SourceToBytecodeExact); err != nil {
+	if err := validateContractCensus(manifest.Contracts, seen, manifest.SourceToBytecodeExact, manifest.ContractCatalog); err != nil {
 		return err
 	}
 	if err := validateImageCensus(manifest.Images, manifest.MissingImages, seen); err != nil {

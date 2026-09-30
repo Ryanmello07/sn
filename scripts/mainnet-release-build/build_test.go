@@ -36,7 +36,8 @@ func buildFixtureManifest() buildManifest {
 		artifact := buildArtifact{Id: "contract-" + name + ".json", Kind: "foundry-contract", Path: "inputs/" + name + ".json", Sha256: buildFixtureDigest(name), Bytes: 256}
 		manifest.Artifacts = append(manifest.Artifacts, artifact)
 		creation, runtime := buildFixtureDigest(name+"-creation"), buildFixtureDigest(name+"-runtime")
-		manifest.Contracts = append(manifest.Contracts, buildContract{Name: name, FoundryArtifactId: artifact.Id, FoundryArtifactSha256: artifact.Sha256, RetainedCreationSha256: creation, RetainedRuntimeSha256: runtime, RebuiltCreationSha256: creation, RebuiltRuntimeSha256: runtime, CreationBytes: 128, RuntimeBytes: 64, ExactBytes: true})
+		runtimeHash, artifactHash := "0x"+strings.Repeat("1", 64), "0x"+strings.Repeat("2", 64)
+		manifest.Contracts = append(manifest.Contracts, buildContract{Name: name, FoundryArtifactId: artifact.Id, FoundryArtifactSha256: artifact.Sha256, RetainedCreationSha256: creation, RetainedRuntimeSha256: runtime, SelectedCreationSha256: creation, SelectedRuntimeSha256: runtime, SelectedRuntimeHash: runtimeHash, SelectedArtifactHash: artifactHash, RetainedRuntimeHash: runtimeHash, RetainedArtifactHash: artifactHash, RebuiltCreationSha256: creation, RebuiltRuntimeSha256: runtime, CreationBytes: 128, RuntimeBytes: 64, ExactBytes: true})
 	}
 	return manifest
 }

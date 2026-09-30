@@ -1214,12 +1214,24 @@ Server `898dc8f3` aligns SDK, Connect and the SCTP fork with SN's exact reviewed
 module versions/sums; independent qualification builds all thirteen server
 commands after the original nine failures. The builder pins clean source trees,
 effective module graphs, module zip bytes, tool identities, binary build info,
-retained/fresh contract hashes, recipes and migrations. Current Coordinator and
-ValidatorEvidence compilation changes metadata due to the newer imported
-SettlementVault source; retained signed-plan bytes stay unchanged and exact
-source-to-bytecode equality remains false. Eight OCI builds/readbacks, a second
-independent build, full compiler/config/policy qualification and release approval
-remain open. Prepared contexts and successful compiles do not close MG-02.
+retained/selected/compiled contract hashes, recipes and migrations. The default
+retained catalogue keeps Coordinator and ValidatorEvidence's historical metadata
+bytes, so its exact source-to-bytecode equality remains false. Explicit
+`contract_catalog: "fresh"` selects exact creation/runtime compiler output for
+all five contracts, preserves the historical catalogue separately and refuses
+ABI, constructor, storage-layout or immutable-reference changes. The selected
+schema-1 catalogue is consumed through the bootstrap plan's exact file path and
+SHA256; the checked-in binding does not need replacement.
+
+No signed mainnet deployment plan has been evidenced. The existing catalogue
+is release/testnet history, not established mainnet signing authority. Fresh
+catalogue review and independent qualification are the preferred path for the
+first unsigned mainnet plan. Checking for externally held signed commitments
+remains a launch gate; any such plan, artifact or transaction must be preserved
+and reconciled before selection changes. A metadata-equivalence exception is
+only a conditional fallback, not selected by this path. Eight OCI builds/readbacks,
+a second independent build, full compiler/config/policy qualification and release
+approval remain open. Prepared contexts and successful compiles do not close MG-02.
 
 The [earlier composed local candidate](evidence/release-candidate-v11-20260927.md)
 locks SN `265231f9`, server `77cb401e` and Connect `c68689c4` with all local
