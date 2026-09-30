@@ -215,6 +215,16 @@ passes ten new and thirty-six adjacent roots normal/race, all twelve normal
 controls and exactly seven selected light race controls. Exact source/dependency
 evidence is sealed; the earlier canonical/readmission receipts remain unchanged.
 
+**Runtime continuity policy proposal — qualification pending.** The
+[signed compatibility envelope and inspector](RUNTIME-CONTINUITY-POLICY.md)
+bind original production-validator authority to a separate semantic verifier,
+exact future artifact, complete consumed-interface/economic scope and output
+provenance. Inspection checks the owned finalized snapshot and later continuity
+without changing the original signing view or custody. A genuine semantic
+verifier, proof replay and durable production selection remain absent; a matching
+metadata profile or signed assertion alone cannot open fresh signing. MG-04 and
+RT-04 remain open. The miner's existing original-runtime recovery is unchanged.
+
 **P0 follow-up: automatic compatible runtime admission (RT-04).** The additive
 path still requires a new independent signed artifact review for each upgrade.
 It does not supply automatic compatibility or eliminate that live approval gate.
