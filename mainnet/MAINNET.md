@@ -816,7 +816,7 @@ receipts as explicitly retained observations, not fresh chain audits; these
 
 | Identity | Custody/authority |
 | --- | --- |
-| Subnet owner coldkey | Owners report that the existing account is Ledger-derived. They keep the key on their own Ledger with the Polkadot generic app, have no Snow access, and run an owner-side signing command. Snow receives only an exact signed reply for verification, retention and submission. Verify the on-chain owner account, Ledger-derived public key, metadata digest, signature scheme and call before a live action. |
+| Subnet owner coldkey | Owners report that the existing account is Ledger-derived. They keep the key on their own Ledger with the Polkadot generic app, have no Snow access, and run the [qualified offline owner-side signing handoff](OWNER-SIGNING.md) on their own device. Snow receives only an exact signed reply for verification, retention and submission. Verify the on-chain owner account, Ledger-derived public key, metadata digest, signature scheme and call before a live action; the real SDK build and physical device are still unqualified. |
 | EVM deployer | Limited bootstrap gas/value; no ongoing governance custody. |
 | Coordinator owner | Actual 2-of-3 Safe with three distinct approved owners. |
 | Guardian | Separate limited operational authority. |

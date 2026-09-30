@@ -52,7 +52,11 @@ the signing command on their own device using the Polkadot generic app; Snow
 may import only an exact signed reply after checking the current owner,
 signature scheme, runtime metadata digest, nonce, era and approved action. The
 current sr25519-only owner-trim v1 packet is not a Ledger signing path; retain
-its original liabilities while a separately approved Ed25519 path is qualified.
+its original liabilities. The [offline Ed25519 owner command](OWNER-SIGNING.md)
+and [independent software qualification](evidence/owner-ledger-signing-qualification-20260930.md)
+are integrated, but no physical device, reviewed native SDK artifact or
+deployed runtime digest has been qualified; a separately approved v2 action
+is still required before a live owner call.
 The netuid-0 root hotkey uses a **different hardware signer** whose device/API
 is still unspecified. Each operator keeps its own EVM demand-deposit signing
 key in that operator's **secrets vault**, separate from the on-chain settlement
