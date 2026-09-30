@@ -5,13 +5,16 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"io"
 	"maps"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/urfoundation/sn/stabi"
 )
 
 // Reapproval happens before local custody exists. The two configs deliberately
@@ -24,20 +27,56 @@ func newBootstrapContractRoleFixture(t *testing.T) (*bootstrapChainFixture, evmC
 		t.Fatal(err)
 	}
 	proxy, vault := evidence.priorPlan(4), evidence.priorPlan(1)
+	// The generic EVM fixture's placeholder hash has no policy preimage.
+	// Reapprove its initializer with the real producer parent before custody.
+	policyHash, err := f.validators[0].config.Policy.Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	constructor := proxy.ProxyConstructor
+	policy := constructor.ApprovedPolicy.binding()
+	policy.PolicyHash = policyHash
+	initializer := stabi.NewSTCoordinator().PackInitialize(f.config.Netuid, constructor.Owner, constructor.Guardian,
+		common.HexToHash(constructor.SelfColdkey), vault.Address, evidence.priorPlan(0).Address, constructor.CommitmentOracle, policy)
+	for _, artifact := range evmTestRelease(t).Artifacts {
+		if artifact.Name == "ERC1967Proxy" {
+			parsed, err := abi.JSON(strings.NewReader(artifact.Abi))
+			if err != nil {
+				t.Fatal(err)
+			}
+			arguments, err := parsed.Pack("", evidence.priorPlan(2).Address, initializer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.contracts.config.Plan.Actions[4].Data = "0x" + artifact.Creation + hex.EncodeToString(arguments)
+		}
+	}
+	f.contracts.publishConfig()
+	f.config.Contracts = bootstrapRootTestWrite(t, f.config.Contracts.Path, f.contracts.config)
 	for _, validator := range f.validators {
 		validator.config.Coordinator = strings.ToLower(proxy.Address.Hex())
 		validator.config.SettlementVault = strings.ToLower(vault.Address.Hex())
-		validator.config.PolicyHash = proxy.ProxyConstructor.ApprovedPolicy.PolicyHash
 	}
 	bootstrapContractRolePublish(t, f)
+	evidence, err = selectEvmCreatePlan(t.Context(), f.preparation.Contracts, "evidence-create", f.config.Contracts.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return f, evidence
 }
 
 // Matching foreign declarations remain individually signed and pass original
-// preparation admission; only the new graph binding should reject them.
+// preparation admission. Reapproval derives both parent references from actual
+// policy contents before signing; production never repairs a supplied mismatch.
 func bootstrapContractRolePublish(t *testing.T, f *bootstrapChainFixture) {
 	t.Helper()
 	for i, validator := range f.validators {
+		policyHash, err := validator.config.Policy.Hash()
+		if err != nil {
+			t.Fatal(err)
+		}
+		validator.config.PolicyHash = common.Hash(policyHash).Hex()
+		validator.approval.Proposal.ParentPolicyHash = policyHash
 		f.config.Validators[i].Config = validator.publish(t)
 	}
 	bootstrapRootTestWrite(t, f.path, f.config)
@@ -120,10 +159,39 @@ func TestBootstrapContractRolePlanRejectsMutualVaultSubstitution(t *testing.T) {
 func TestBootstrapContractRolePlanRejectsMutualPolicySubstitution(t *testing.T) {
 	f, _ := newBootstrapContractRoleFixture(t)
 	for _, validator := range f.validators {
-		validator.config.PolicyHash = "0x" + strings.Repeat("78", 32)
+		validator.config.Policy.Settlement.ClaimTTLEpochs++
 	}
 	bootstrapContractRolePublish(t, f)
 	bootstrapContractRoleReject(t, f, "policy differs from the approved proxy initializer", "mutually signed foreign policy bypassed contract-role binding")
+}
+
+// A signature over a changed hash is not a policy preimage. The normal producer
+// loader must reject it before declaration comparison, without repairing it.
+func TestBootstrapContractRolePlanRejectsSignedPolicyHashMismatch(t *testing.T) {
+	f, _ := newBootstrapContractRoleFixture(t)
+	for i, validator := range f.validators {
+		validator.config.PolicyHash = "0x" + strings.Repeat("78", 32)
+		f.config.Validators[i].Config = validator.publish(t)
+	}
+	bootstrapRootTestWrite(t, f.path, f.config)
+	bootstrapContractRoleReject(t, f, "configured parent policy hash differs", "signed policy hash without its preimage was admitted")
+}
+
+// Re-signing a changed complete configuration cannot rewrite the independently
+// named owner-recycle parent retained inside its successor proposal.
+func TestBootstrapContractRolePlanRejectsSignedRecycleParentMismatch(t *testing.T) {
+	f, _ := newBootstrapContractRoleFixture(t)
+	for i, validator := range f.validators {
+		validator.config.Policy.Settlement.ClaimTTLEpochs++
+		var err error
+		validator.config.PolicyHash, err = validator.config.Policy.HashHex()
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.config.Validators[i].Config = validator.publish(t)
+	}
+	bootstrapRootTestWrite(t, f.path, f.config)
+	bootstrapContractRoleReject(t, f, "unchanged mainnet parent policy hash", "signed successor with a stale parent policy was admitted")
 }
 
 // Refusal produces no partially usable output and cannot prepare child custody.
