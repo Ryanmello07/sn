@@ -301,14 +301,15 @@ deployment/initialization and every authority-relevant storage/delegatecall
 mutation through finalized and scoped pending state, bound to the exact approved
 route/account/profile and signed evidence. Reports or flags must never inject
 this capability. The separate
-[readmission candidate](evidence/bootstrap-successor-readmission-qualification-20260930.md)
+[qualified readmission increment](evidence/bootstrap-successor-readmission-qualification-20260930.md)
 `cd4261a8` puts expensive proof before the final scoped pending Safe/relayer nonce
 and Safe-state admission, and clears earlier admission even when a refresh's
 checkpoint fails. Deterministic fixture barriers change actual Safe/relayer
 nonces and a later runtime during proof; a canceled refresh also cannot reuse an
-earlier counted-send admission. Its adapter normal/race and command normal runs
-pass, while remaining race, adjacent, causal and final-seal qualification is
-pending. The production history capability remains absent. Preserve read-only
+earlier counted-send admission. Both heavy roots and three selected adjacent
+roots pass normal/race; both causal controls reproduce their intended failure
+in both modes, with source/dependency evidence sealed. The production history
+capability remains absent. Preserve read-only
 historical reconciliation and test missing,
 swapped, incomplete and malicious history refusals. This is an open MG-08
 implementation gate, separate from independent build review and signer cutover.
