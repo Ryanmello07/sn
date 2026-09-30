@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/urfoundation/sn/protocol"
+	"golang.org/x/sys/unix"
 )
 
 // The fake manager is deliberately separate from real filesystem custody.
@@ -95,6 +96,12 @@ func newRepairValidatorFixture(t *testing.T) *repairValidatorFixture {
 	}
 	self := &repairValidatorFixture{t: t, directory: directory, approvalPath: filepath.Join(directory, "approval.json"), approval: repairValidatorApproval{Schema: repairValidatorSchema, Plan: plan}, publicKey: "0x" + hex.EncodeToString(public), privateKey: private, now: now, writeProgress: true}
 	self.host = &repairValidatorHost{rootUid: uint32(os.Getuid()), trustRoot: directory, machinePath: filepath.Join(directory, "machine-id"), bootPath: filepath.Join(directory, "boot-id"), cgroupRoot: filepath.Join(directory, "cgroup"), execute: self.execute, monotonic: func() (uint64, error) { return 150, nil }}
+	self.host.cgroupType = func(path string) (int64, error) {
+		if path != filepath.Join(directory, "cgroup") {
+			return 0, errors.New("synthetic cgroup root changed")
+		}
+		return unix.CGROUP2_SUPER_MAGIC, nil
+	}
 	repairValidatorTestWrite(t, unit.File.Path, unit.render(), 0644)
 	repairValidatorTestWrite(t, unit.Binary.Path, []byte("synthetic validator release\n"), 0755)
 	repairValidatorTestWrite(t, unit.Config.Path, []byte("{\"synthetic_config\":true}\n"), 0600)
@@ -118,6 +125,7 @@ func newRepairValidatorFixture(t *testing.T) *repairValidatorFixture {
 	}
 	self.progress = monitorServicesTestRecord(now, 71)
 	self.manager["Requires"] = "system.slice -.mount"
+	self.manager["Slice"] = "system.slice"
 	self.progress.InstanceId = strings.Repeat("6", 32)
 	self.progress.StartedAt = now.Format(time.RFC3339Nano)
 	self.sign()
@@ -288,7 +296,7 @@ func TestRepairValidatorSystemdGenerationFields(t *testing.T) {
 
 // Changed bytes and hidden descendant processes block the real action boundary.
 func TestRepairValidatorReleaseAndCgroupRefusal(t *testing.T) {
-	for _, field := range []string{"binary", "config", "unit", "systemctl", "child-cgroup", "process", "active", "invocation", "drop-in", "execution", "pending-job", "extra-dependency"} {
+	for _, field := range []string{"binary", "config", "unit", "systemctl", "child-cgroup", "process", "active", "invocation", "drop-in", "execution", "pending-job", "extra-dependency", "slice"} {
 		fixture := newRepairValidatorFixture(t)
 		fixture.claim()
 		plan := fixture.approval.Plan
@@ -317,10 +325,52 @@ func TestRepairValidatorReleaseAndCgroupRefusal(t *testing.T) {
 			fixture.manager["Job"] = "71"
 		case "extra-dependency":
 			fixture.manager["Requires"] += " unrelated.service"
+		case "slice":
+			fixture.manager["Slice"] = "unrelated.slice"
 		}
 		result, exit, detail := fixture.command("resume")
 		if exit == 0 || fixture.starts != 0 || result.StartConsumed {
 			t.Fatal("changed release or occupied generation consumed start", field, result, exit, detail)
+		}
+	}
+}
+
+// An absent unit directory is empty only inside the declared v2 hierarchy.
+// Prerequisite reads independently refuse an inactive mount without a start.
+func TestRepairValidatorUnifiedCgroupAndPrerequisites(t *testing.T) {
+	for _, change := range []string{"v1", "unmounted", "unavailable", "inactive-mount", "v2-removed"} {
+		fixture := newRepairValidatorFixture(t)
+		fixture.claim()
+		if err := os.RemoveAll(filepath.Join(fixture.host.cgroupRoot, "system.slice", fixture.approval.Plan.Unit.Name)); err != nil {
+			t.Fatal(err)
+		}
+		switch change {
+		case "v1":
+			fixture.host.cgroupType = func(string) (int64, error) { return unix.CGROUP_SUPER_MAGIC, nil }
+		case "unmounted":
+			fixture.host.cgroupType = func(string) (int64, error) { return 0, nil }
+		case "unavailable":
+			fixture.host.cgroupType = func(string) (int64, error) { return 0, os.ErrNotExist }
+		case "inactive-mount":
+			original := fixture.host.execute
+			fixture.host.execute = func(ctx context.Context, path string, args []string) ([]byte, error) {
+				raw, err := original(ctx, path, args)
+				if args[len(args)-1] == "-.mount" {
+					raw = bytes.Replace(raw, []byte("ActiveState=active"), []byte("ActiveState=inactive"), 1)
+				}
+				return raw, err
+			}
+		}
+		result, exit, detail := fixture.command("resume")
+		if change == "v2-removed" {
+			if exit != 0 || fixture.starts != 1 || result.Completed == nil {
+				t.Fatal("verified removed v2 group could not resume", result, exit, detail)
+			}
+		} else if exit == 0 || fixture.starts != 0 || result.StartConsumed {
+			t.Fatal("unknown cgroup filesystem or inactive prerequisite admitted start", change, result, exit, detail, fixture.starts)
+		}
+		if filesystem, err := repairValidatorCgroupType(fixture.directory); err != nil || filesystem == unix.CGROUP2_SUPER_MAGIC {
+			t.Fatal("actual ordinary filesystem was classified as cgroup v2", filesystem, err)
 		}
 	}
 }

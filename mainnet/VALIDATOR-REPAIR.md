@@ -84,6 +84,9 @@ and [slice dependencies](https://github.com/systemd/systemd/blob/v257/man/system
 Exact installed-version property formatting, unit execution, preserved stopped
 fields and dependency census require an isolated real-systemd deployment
 rehearsal; synthetic manager fixtures do not supply that evidence.
+The loaded slice must be `system.slice`, and a real `statfs` of the fixed cgroup
+root must identify cgroup v2 before any absent unit directory can mean empty.
+V1, hybrid/unmounted and unavailable hierarchies are refused.
 
 One trusted host deployment/custody owner must exclude concurrent administrative
 starts, file/unit replacement and volume changes. The journal lock excludes
@@ -137,3 +140,7 @@ existing validator signer/volume ownership, a real-systemd crash/cancellation
 rehearsal, incident ingestion and delivered alerts/on-call. Active hangs,
 root/operator service recovery, cross-host fencing, automatic uncertain-start
 resolution and monetary repairs remain explicit follow-ups.
+This first incident binding admits missing/unavailable read output only. A
+readable-but-stale progress file is still monitored but does not grant this
+repair action; admitting that failure class needs its own retained incident
+and independently reviewed policy.

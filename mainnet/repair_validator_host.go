@@ -31,6 +31,7 @@ type repairValidatorHost struct {
 	machinePath string
 	bootPath    string
 	cgroupRoot  string
+	cgroupType  func(string) (int64, error)
 	execute     func(context.Context, string, []string) ([]byte, error)
 	monotonic   func() (uint64, error)
 }
@@ -76,13 +77,23 @@ func executeRepairValidatorCommand(ctx context.Context, path string, args []stri
 
 // No environment-controlled socket, remote host or user manager is selectable.
 func newRepairValidatorHost() *repairValidatorHost {
-	return &repairValidatorHost{rootUid: 0, trustRoot: "/", machinePath: "/etc/machine-id", bootPath: "/proc/sys/kernel/random/boot_id", cgroupRoot: "/sys/fs/cgroup", execute: executeRepairValidatorCommand, monotonic: func() (uint64, error) {
+	return &repairValidatorHost{rootUid: 0, trustRoot: "/", machinePath: "/etc/machine-id", bootPath: "/proc/sys/kernel/random/boot_id", cgroupRoot: "/sys/fs/cgroup", cgroupType: repairValidatorCgroupType, execute: executeRepairValidatorCommand, monotonic: func() (uint64, error) {
 		var stamp unix.Timespec
 		if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &stamp); err != nil {
 			return 0, err
 		}
 		return uint64(stamp.Sec)*1000000 + uint64(stamp.Nsec)/1000, nil
 	}}
+}
+
+// A missing path in v1, a hybrid layout or an unmounted filesystem proves
+// nothing about a descendant process. Public selection requires genuine v2.
+func repairValidatorCgroupType(path string) (int64, error) {
+	var state unix.Statfs_t
+	if err := unix.Statfs(path, &state); err != nil {
+		return 0, err
+	}
+	return int64(state.Type), nil
 }
 
 // Every ancestor inside the trusted root must be a protected physical directory.
@@ -181,7 +192,7 @@ func (self *repairValidatorHost) read(ctx context.Context, path string, owner ui
 }
 
 // Properties are requested explicitly and duplicates/omissions are refused.
-var repairValidatorProperties = []string{"Id", "LoadState", "FragmentPath", "DropInPaths", "NeedDaemonReload", "Transient", "Type", "User", "Group", "WorkingDirectory", "Restart", "KillMode", "Delegate", "ExecStart", "ExecStartPre", "ExecStartPost", "ExecStop", "ExecStopPost", "ExecReload", "Environment", "EnvironmentFiles", "PassEnvironment", "RootDirectory", "RootImage", "Wants", "Requires", "Requisite", "BindsTo", "Conflicts", "OnFailure", "OnSuccess", "Triggers", "TriggeredBy", "PartOf", "Upholds", "Job", "ControlPID", "MainPID", "ExecMainPID", "ExecMainStartTimestampMonotonic", "ActiveState", "SubState", "InvocationID", "ControlGroup"}
+var repairValidatorProperties = []string{"Id", "LoadState", "FragmentPath", "DropInPaths", "NeedDaemonReload", "Transient", "Type", "User", "Group", "WorkingDirectory", "Restart", "KillMode", "Delegate", "Slice", "ExecStart", "ExecStartPre", "ExecStartPost", "ExecStop", "ExecStopPost", "ExecReload", "Environment", "EnvironmentFiles", "PassEnvironment", "RootDirectory", "RootImage", "Wants", "Requires", "Requisite", "BindsTo", "Conflicts", "OnFailure", "OnSuccess", "Triggers", "TriggeredBy", "PartOf", "Upholds", "Job", "ControlPID", "MainPID", "ExecMainPID", "ExecMainStartTimestampMonotonic", "ActiveState", "SubState", "InvocationID", "ControlGroup"}
 
 // A current manager snapshot is scoped to this host boot and fixed unit.
 type repairValidatorManager struct {
@@ -262,6 +273,7 @@ func (self *repairValidatorHost) inspect(ctx context.Context, plan repairValidat
 		}
 	}
 	expected := map[string]string{"Id": plan.Unit.Name, "LoadState": "loaded", "FragmentPath": plan.Unit.File.Path, "NeedDaemonReload": "no", "Transient": "no", "Type": "exec", "User": strconv.FormatUint(uint64(plan.Unit.Uid), 10), "Group": strconv.FormatUint(uint64(plan.Unit.Gid), 10), "WorkingDirectory": plan.Unit.StateDirectory, "Restart": "no", "KillMode": "control-group", "Delegate": "no", "Job": "0", "ControlPID": "0"}
+	expected["Slice"] = "system.slice"
 	for _, key := range []string{"DropInPaths", "ExecStartPre", "ExecStartPost", "ExecStop", "ExecStopPost", "ExecReload", "Environment", "EnvironmentFiles", "PassEnvironment", "RootDirectory", "RootImage", "Wants", "Requisite", "BindsTo", "Conflicts", "OnFailure", "OnSuccess", "Triggers", "TriggeredBy", "PartOf", "Upholds"} {
 		expected[key] = ""
 	}
@@ -305,6 +317,13 @@ func (self *repairValidatorHost) inspect(ctx context.Context, plan repairValidat
 // cgroup.events reports descendant population too; an empty cgroup.procs alone
 // would miss a live signer in a child group. A removed stopped group is empty.
 func (self *repairValidatorHost) stopped(ctx context.Context, plan repairValidatorPlan, manager repairValidatorManager) error {
+	if self.cgroupType == nil {
+		return errors.New("validator repair cgroup filesystem verifier is unavailable")
+	}
+	filesystem, err := self.cgroupType(self.cgroupRoot)
+	if err != nil || filesystem != unix.CGROUP2_SUPER_MAGIC {
+		return errors.New("validator repair requires a genuine unified cgroup filesystem")
+	}
 	prior := plan.Previous
 	if manager.MainPid != 0 || manager.Active != "inactive" && manager.Active != "failed" || manager.SubState != "dead" && manager.SubState != "failed" || manager.Generation.Pid != prior.Pid || manager.Generation.StartedUsec != prior.StartedUsec || manager.Generation.InvocationId != "" && manager.Generation.InvocationId != prior.InvocationId {
 		return errors.New("validator repair did not observe the approved stopped generation")
