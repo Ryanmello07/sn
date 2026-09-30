@@ -188,6 +188,18 @@ controls. Current state, the evidence anchor, complete indexing, installation
 and service activation remain unverified; all original pending phases remain.
 No live RPC, transaction or public Safe route is part of this increment.
 
+**Current bootstrap contract fields — qualification pending.** The
+[read-only current-state command](BOOTSTRAP-CONTRACT-CURRENT.md) composes exact
+original receipt admission with the original five-account bootstrap profile at
+one finalized native/EVM mapping. Exact runtime/getter/slot replies are explicitly
+owned-RPC assertions, not independently verified complete-storage proofs. The
+snapshot remains separate from later canonical continuity; ordinary advancement
+is allowed. An unset or exact expected evidence pointer is reported without
+claiming anchor history. Original zero-activity/policy requirements remain;
+complete storage, Safe authority, installation and activation remain unverified.
+Independent frozen-source qualification is pending. No public send route or
+live mainnet action is introduced.
+
 **Qualified runtime authority increment.** The
 [additive revision path](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md) at
 `3d526830` retains separately signed runtime revisions under the original
