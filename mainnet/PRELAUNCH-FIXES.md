@@ -272,6 +272,26 @@ responses are assertions. Independent build and cutover evidence explicitly
 attests external assumptions; local locks cannot establish cross-host signer
 exclusivity or the absence of off-node signatures. MG-08 remains open, without
 installation, activation or native 10/90 acceptance.
+
+**P0 follow-up — Additive canonical runtime authorization.** Retained authority
+currently freezes one successor runtime profile. A routine upgrade after that
+file is retained and before send blocks current execution; it does not release
+the exact transaction, nonce claims, counted attempts or liability. Implement a
+separately signed additive revision under the original independent approver,
+binding its predecessor authorization and new reviewed runtime artifact/codec
+evidence. Preserve every original receipt and prior runtime authorization, the
+exact signed transaction, both immutable nonce claims, cumulative counted
+attempts and maximum liabilities. This transition must neither discard an old
+authority nor renew a transaction allowance. It needs immutable publication and
+same-authority recovery at every interrupted revision boundary, with no write
+until the complete revised authority is reauthenticated. Current admission then
+selects the reviewed active runtime; historical inclusion remains reconcilable
+under independently approved inclusion and parent profiles. Independent tests
+must cover upgrade before send, upgrade around inclusion, historical recovery
+after another upgrade, interrupted revision publication, wrong approver/profile,
+and attempted counter, liability or signed-byte changes. Keep frozen `82da3d40`
+unchanged during its qualification; implement and qualify this resilience as the
+next source increment. This requirement remains part of open MG-08.
 Later successors, filesystem migration, fee replacement and independently proved
 external sends require separate approved liability-preserving transitions.
 

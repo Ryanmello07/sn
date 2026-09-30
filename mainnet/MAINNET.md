@@ -85,6 +85,21 @@ lost-reply recovery in two full local graph fixtures. RPC finality and pending
 state remain owned-node assertions; external build review and complete signer
 cutover remain independently attested assumptions, not facts proved by a local
 registry or a global transaction-pool census. No live authority is established.
+
+**P0 follow-up: additive canonical runtime authorization.** The current adapter
+retains one successor runtime profile immutably. A routine runtime upgrade after
+that authority is retained but before submission can therefore block the exact
+pending anchor, even though the original receipts and signatures remain valid.
+The next implementation must accept a separately signed additive runtime revision
+from the original independent approver, with reviewed artifact/codec evidence and
+an immutable predecessor authorization seal. It must retain every earlier runtime
+profile, original receipt, exact signed transaction, both nonce claims, counted
+attempt and full liability. A revision cannot reset custody, reduce reservations,
+change fees or re-sign the transaction. Current reads select an approved profile;
+historical inclusion remains reconcilable under its approved inclusion and parent
+profiles. Qualify interruption/restart during revision and runtime upgrades before
+send and around inclusion, including refusal of unapproved artifacts. This is
+an open MG-08 code requirement, separate from live mainnet authorization.
 The qualified [signed local successor preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
 adds a separate approval domain and fixed resumable local claim while preserving
 original receipts and additive proposed floors. Its [scoped receipt](evidence/bootstrap-successor-preparation-qualification-20260929.md)
