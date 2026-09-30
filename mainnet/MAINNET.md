@@ -1,6 +1,6 @@
 # Mainnet launch and operations plan
 
-Updated 2026-09-29. **Mainnet activation is blocked.** The read-only
+Updated 2026-09-30. **Mainnet activation is blocked.** The read-only
 [Snow/LAN RPC comparison](evidence/snow-rpc-route-20260927.json) showed that
 `http://172.28.208.185:9944` served the same **testnet** chain as
 `http://192.168.1.162:9944`: EVM chain ID **945** (`0x3b1`), rather than the
@@ -9,6 +9,11 @@ expected mainnet ID 964. During the operator's node-data move, the
 returned HTTP 502 for chain-ID reads across 21 attempts. That is an unavailable
 route, not a mainnet identity. Verify the restarted route and independently
 approve the mainnet chain identity before admitting any signer.
+
+**September 30 operator report:** Snow mainnet is still synchronizing. This is
+the current operator report, not a new verified RPC observation or a mainnet
+identity/readiness attestation. Live activation remains closed while sync,
+independent chain identity and the other production gates are unresolved.
 
 Sim-testnet is closed with known exceptions at the user's direction. The
 [original R48 report](../sim-testnet/FINAL-4.md) remains a failed provisional
@@ -875,8 +880,11 @@ Preserve the current guarantees: the coordinator owns neither custody position, 
 The [initial two-UR installation component](VALIDATOR-ACTIVATION.md) now provides
 a concrete `activate-validators` command for exact static-unit installation,
 role-group-readable runtime copies of the original signed configs, current
-bootstrap admission and durable per-unit start/recovery. **Source qualification
-is pending; no deployment was performed.** It keeps bootstrap v3 role/generation
+bootstrap admission and durable per-unit start/recovery. Its [scoped independent
+qualification](evidence/validator-activation-qualification-20260930.md) is sealed:
+88 positive root executions pass normal/race, and twelve normal plus five
+selected race controls are causal. **No deployment was performed.** It keeps
+bootstrap v3 role/generation
 and producer approvals, both current permits and original custody separate from
 process authority. Public fresh starts remain closed until a qualified current
 activation-authority adapter discharges the existing checkpoint, operator,

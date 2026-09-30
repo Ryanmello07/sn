@@ -25,7 +25,8 @@ every service event keeps `activation_ready: false`.
 The separate [two-UR installation owner](VALIDATOR-ACTIVATION.md) now supplies
 static units invoking the actual standard validator, exact runtime config
 copies, current bootstrap admission and durable per-role start/recovery. Its
-source qualification is pending, and public fresh starts stay closed because a
+scoped [source qualification](evidence/validator-activation-qualification-20260930.md)
+is sealed, and public fresh starts stay closed because a
 qualified current activation-authority adapter is absent. It does not implement
 the root role or make the standard validator accept netuid 0.
 

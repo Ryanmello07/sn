@@ -3,8 +3,8 @@
 `sn-mainnet activate-validators` supplies an actual Linux static-unit installer,
 current bootstrap admission and durable two-unit start/recovery owner. It is
 bound to the original accepted bootstrap v3 plan and both independently signed
-schema-3 UR configurations. Source qualification is pending; no unit has been
-installed or started on a deployment host.
+schema-3 UR configurations. Its [scoped independent qualification](evidence/validator-activation-qualification-20260930.md)
+is sealed; no unit has been installed or started on a deployment host.
 
 **Public fresh starts remain unavailable.** The public command constructs no
 `validatorActivationAuthority`. Signed process approval and an
@@ -26,7 +26,14 @@ new live RPC observation.
 
 `validator_activation_authority.go` defines the signed
 `urnetwork-mainnet-validator-activation-v1` envelope. Its independently supplied
-Ed25519 key is separate from both producer approval keys and every native key.
+Ed25519 key approves this process envelope; it is supplied separately rather
+than selected from producer approvals or native signing material. The verifier
+checks that supplied key and scope, not cross-role key-uniqueness policy.
+Deployment must independently establish the approver's custody and authorized
+operator role. Distinct public-key bytes alone would not prove separate control
+or seed custody; native account identifiers also do not identify a signing
+algorithm. No key loader or approval issuer is included. Approval-key custody
+and any required cross-role separation policy remain deployment gates.
 The signature covers the literal
 `urnetwork-mainnet-validator-activation-approval-v1`, a zero byte and canonical
 Go JSON of the typed envelope with `signature_ed25519` empty.
@@ -156,5 +163,9 @@ journal boundaries. No test executes a deployed validator or supplies production
 credentials. Adjacent qualification includes the actual producer progress
 publisher outside protocol state and its alias/ownership refusals, plus the real
 child-process cancellation/join boundary. This is not a full `RunRelease`
-operator/credential/deployment acceptance test. Sol medium normal/race/causal
-qualification is pending; author validation is compile/vet only.
+operator/credential/deployment acceptance test. Sol medium qualification is
+sealed: 16 focused and 28 adjacent roots pass normal/race (88 executions), and
+twelve normal plus five selected race controls are causal. Astra max performed
+implementation, compile/vet and the independent evidence audit without running
+behavioral tests. The receipt retains exact source, dependency, binary and raw
+evidence seals. It supplies no production activation approval.
