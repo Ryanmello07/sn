@@ -30,11 +30,14 @@ func subnetTestVector(data []byte, width int) []byte {
 
 // Two owner seats, two declared validators (one without permit), and two miners
 // make runtime immunity distinct from the policy's mandatory preservation.
-func newSubnetFixture(t *testing.T) (*rpcClient, *rootRpcFixture, subnetCensusPolicy) {
+func newSubnetFixture(t *testing.T, ownerOverride ...[]byte) (*rpcClient, *rootRpcFixture, subnetCensusPolicy) {
 	t.Helper()
 	client, fixture := newRootFixture(t)
 	netuidArg := []byte{25, 0}
 	owner := bytes.Repeat([]byte{0x61}, 32)
+	if len(ownerOverride) != 0 {
+		owner = bytes.Clone(ownerOverride[0])
+	}
 	fixture.set(t, "SubnetworkN", []byte{6, 0}, netuidArg)
 	fixture.set(t, "MaxAllowedUids", []byte{8, 0}, netuidArg)
 	fixture.set(t, "MinAllowedUids", []byte{2, 0}, netuidArg)
@@ -74,7 +77,7 @@ func newSubnetFixture(t *testing.T) (*rpcClient, *rootRpcFixture, subnetCensusPo
 		uidArg := binary.LittleEndian.AppendUint16(nil, uint16(index))
 		hotkey := bytes.Repeat([]byte{byte(0x41 + index)}, 32)
 		coldkey := bytes.Repeat([]byte{byte(0x61 + index)}, 32)
-		if index == 1 {
+		if index <= 1 {
 			coldkey = owner
 		}
 		block := uint64(40 + index)

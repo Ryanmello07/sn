@@ -208,6 +208,13 @@ and module graph; live eligibility and activation remain unresolved.
 
 ## Separately approved owner-trim action
 
+Owners sign on their own computer without Snow access. The
+[owner-side Ledger workflow](OWNER-SIGNING.md) adds a separately approved v2
+Ed25519/RFC78 action, portable `trim-export` request, real pinned-SDK signing
+command and exact `trim-import-reply` handoff. It preserves original v1 custody
+and keeps physical device, runtime digest and current authority qualification
+explicitly open. The v1 procedure below retains its original sr25519 contract.
+
 The trim phase retains the exact accepted v3 preparation and its five existing
 journals. It adds one fixed `owner-trim-action.json` with a permanent exclusive
 marker. `trim-plan` reads an unsigned `urnetwork-mainnet-owner-trim-execution-v1`

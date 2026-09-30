@@ -24,11 +24,12 @@ import (
 
 // Approval and native custody are deliberately different synthetic keys.
 type ownerTrimTestFixture struct {
-	config   ownerTrimExecutionConfig
-	key      string
-	approval ed25519.PrivateKey
-	pair     subkey.KeyPair
-	metadata string
+	config         ownerTrimExecutionConfig
+	key            string
+	approval       ed25519.PrivateKey
+	pair           subkey.KeyPair
+	metadata       string
+	ledgerMetadata string
 }
 
 // The historical public metadata remains independently pinned by its raw hash.
@@ -477,9 +478,9 @@ func TestOwnerTrimActualSubsetRetainsResidualsAndRejectsGenerations(t *testing.T
 }
 
 // The sixth journal is independently approved after real v3 custody preparation.
-func ownerTrimPreparedTestFixture(t *testing.T) (*bootstrapChainFixture, *ownerTrimTestFixture) {
+func ownerTrimPreparedTestFixture(t *testing.T, ownerOverride ...[]byte) (*bootstrapChainFixture, *ownerTrimTestFixture) {
 	t.Helper()
-	chain := newBootstrapChainReadinessFixture(t)
+	chain := newBootstrapChainReadinessFixture(t, ownerOverride...)
 	f := newOwnerTrimActionTestFixture(t)
 	retained, err := openBootstrapChainReadinessState(t.Context(), chain.preparation)
 	if err != nil {

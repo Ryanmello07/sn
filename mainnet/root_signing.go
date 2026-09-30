@@ -195,6 +195,12 @@ func rootSigningProfile(metadata *types.Metadata) ([]byte, error) {
 // Both native roles use the same reviewed envelope, without borrowing another
 // role's call or authority. The caller validates its own exact call separately.
 func nativeSigningProfile(metadata *types.Metadata) error {
+	return nativeSigningProfileForSignature(metadata, "Sr25519", 1)
+}
+
+// Each separately approved native codec selects one exact signature variant.
+// A supported alternative never changes a retained root or owner v1 signature.
+func nativeSigningProfileForSignature(metadata *types.Metadata, signatureVariant string, signatureIndex uint8) error {
 	if metadata == nil || metadata.Version != 14 || metadata.AsMetadataV14.Extrinsic.Version != 4 {
 		return errors.New("native signing requires the reviewed metadata14/extrinsic4 profile")
 	}
@@ -221,7 +227,7 @@ func nativeSigningProfile(metadata *types.Metadata) error {
 		shape     string
 	}{
 		{parameter: "Address", variant: "Id", index: 0, shape: "account"},
-		{parameter: "Signature", variant: "Sr25519", index: 1, shape: "signature64"},
+		{parameter: "Signature", variant: signatureVariant, index: signatureIndex, shape: "signature64"},
 	} {
 		matched := 0
 		for _, parameter := range extrinsicType.Params {

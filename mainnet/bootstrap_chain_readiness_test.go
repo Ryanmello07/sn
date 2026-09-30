@@ -21,15 +21,16 @@ import (
 
 // Align approval windows with the synthetic finalized block, then claim the
 // actual five journals. This is independent test approval, not runtime repair.
-func newBootstrapChainReadinessFixture(t *testing.T) *bootstrapChainFixture {
-	return newBootstrapChainReadinessFixtureWithCensus(t, nil, nil)
+func newBootstrapChainReadinessFixture(t *testing.T, ownerOverride ...[]byte) *bootstrapChainFixture {
+	t.Helper()
+	return newBootstrapChainReadinessFixtureWithCensus(t, nil, nil, ownerOverride...)
 }
 
 // Native activation fixtures approve their complete storage profile before
 // preparation; ordinary bootstrap fixtures retain the original census profile.
-func newBootstrapChainReadinessFixtureWithCensus(t *testing.T, configure func(*rootRpcFixture, *subnetCensusPolicy), configureApproval func(*bootstrapChainValidatorFixture)) *bootstrapChainFixture {
+func newBootstrapChainReadinessFixtureWithCensus(t *testing.T, configure func(*rootRpcFixture, *subnetCensusPolicy), configureApproval func(*bootstrapChainValidatorFixture), ownerOverride ...[]byte) *bootstrapChainFixture {
 	t.Helper()
-	f := newBootstrapChainFixtureWithCensus(t, configure)
+	f := newBootstrapChainFixtureWithCensus(t, configure, ownerOverride...)
 	for i, fixture := range f.validators {
 		fixture.approval.ValidFromNativeBlock = 100
 		fixture.approval.Production.ActivationNativeHash = bootstrapChainTestAccount(t, testFinalizedHash)

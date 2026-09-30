@@ -19,6 +19,8 @@ import (
 
 const ownerTrimActionSchema = "urnetwork-mainnet-owner-trim-action-v1"
 const ownerTrimExecutionSchema = "urnetwork-mainnet-owner-trim-execution-v1"
+const ownerTrimLedgerActionSchema = "urnetwork-mainnet-owner-trim-action-v2"
+const ownerTrimLedgerExecutionSchema = "urnetwork-mainnet-owner-trim-execution-v2"
 const ownerTrimStateFile = "owner-trim-action.json"
 
 // One action owns one coldkey nonce, era and exact call for its whole lifetime.
@@ -49,6 +51,10 @@ type ownerTrimAction struct {
 	Call                    string             `json:"call_scale"`
 	Payload                 string             `json:"payload_scale"`
 	RequestHash             string             `json:"request_hash"`
+	SignatureScheme         string             `json:"signature_scheme,omitempty"`
+	MetadataDigest          string             `json:"check_metadata_hash,omitempty"`
+	DerivationPath          string             `json:"signer_derivation_path,omitempty"`
+	LedgerMetadataHash      string             `json:"ledger_metadata_blake2b_256,omitempty"`
 }
 
 // A fresh domain-specific approval covers the exact native action and owned
@@ -64,7 +70,14 @@ type ownerTrimExecutionConfig struct {
 func (self ownerTrimExecutionConfig) signingBytes() []byte {
 	self.Signature = ""
 	raw, _ := json.Marshal(self)
-	return append([]byte(ownerTrimExecutionSchema+"\x00"), raw...)
+	return append([]byte(self.Schema+"\x00"), raw...)
+}
+
+// V1 keeps its original implicit sr25519/disabled-metadata wire contract.
+// V2 is a fresh approval domain for an Ed25519 account and RFC78 digest.
+func (self ownerTrimExecutionConfig) validSchemas() bool {
+	return self.Schema == ownerTrimExecutionSchema && self.Action.Schema == ownerTrimActionSchema ||
+		self.Schema == ownerTrimLedgerExecutionSchema && self.Action.Schema == ownerTrimLedgerActionSchema
 }
 
 // Every reopen verifies the independent approval instead of trusting a journal
@@ -73,7 +86,7 @@ func (self ownerTrimExecutionConfig) validate(approvalKey string) error {
 	if err := self.Action.validate(); err != nil {
 		return err
 	}
-	if self.Schema != ownerTrimExecutionSchema || !rootCanonicalHash(approvalKey) ||
+	if !self.validSchemas() || !rootCanonicalHash(approvalKey) ||
 		self.Route.ReadRetrySeconds < 60 || self.Route.ReadRetrySeconds > 900 || self.Route.SendTimeoutSeconds == 0 || self.Route.SendTimeoutSeconds > 60 {
 		return errors.New("owner trim requires independent action approval and bounded transport")
 	}
@@ -98,7 +111,11 @@ func prepareOwnerTrimAction(action ownerTrimAction, metadataHex string) (ownerTr
 	if err != nil || digest != action.Runtime.RuntimeMetadataHash {
 		return ownerTrimAction{}, errors.Join(errors.New("owner trim metadata differs from approved artifact"), err)
 	}
-	if err := nativeSigningProfile(metadata); err != nil {
+	variant, index := "Sr25519", uint8(1)
+	if action.Schema == ownerTrimLedgerActionSchema {
+		variant, index = "Ed25519", 0
+	}
+	if err := nativeSigningProfileForSignature(metadata, variant, index); err != nil {
 		return ownerTrimAction{}, err
 	}
 	call, err := subnetOwnerTrimCall(metadata)
@@ -118,7 +135,19 @@ func prepareOwnerTrimAction(action ownerTrimAction, metadataHex string) (ownerTr
 
 // Reconstruct the six-byte direct owner call and reviewed mortal envelope.
 func (self ownerTrimAction) encoding() ([]byte, []byte, error) {
-	if self.Schema != ownerTrimActionSchema || self.Netuid != 25 || self.Network.NativeChain == "" || self.Network.EvmChainId != mainnetEvmChainId ||
+	if self.Schema == ownerTrimActionSchema {
+		if self.SignatureScheme != "" || self.MetadataDigest != "" || self.DerivationPath != "" || self.LedgerMetadataHash != "" {
+			return nil, nil, errors.New("owner trim v1 signature and metadata mode cannot change")
+		}
+	} else if self.Schema != ownerTrimLedgerActionSchema || self.SignatureScheme != "ed25519" || !rootCanonicalHash(self.MetadataDigest) || !rootCanonicalHash(self.LedgerMetadataHash) {
+		return nil, nil, errors.New("owner trim v2 requires explicit Ed25519 and an approved RFC78 metadata digest")
+	}
+	if self.Schema == ownerTrimLedgerActionSchema {
+		if _, err := ownerLedgerDerivationPath(self.DerivationPath); err != nil {
+			return nil, nil, err
+		}
+	}
+	if self.Netuid != 25 || self.Network.NativeChain == "" || self.Network.EvmChainId != mainnetEvmChainId ||
 		self.Runtime.RuntimeSourceCommit != rootActionV1Source || self.Runtime.RuntimeVersion.SpecName == "" || self.Runtime.RuntimeVersion.SpecVersion == 0 ||
 		self.Runtime.RuntimeVersion.TransactionVersion == 0 || self.Runtime.RuntimeVersion.StateVersion != 1 ||
 		self.SelectionRule != ownerTrimSubsetRule || !planLabel(self.CustodyId) || self.MaximumUids == 0 ||
@@ -144,14 +173,22 @@ func (self ownerTrimAction) encoding() ([]byte, []byte, error) {
 	call = binary.LittleEndian.AppendUint16(call, self.MaximumUids)
 	payload := append(append([]byte(nil), call...), era...)
 	payload = append(payload, rootCompact(uint64(self.Nonce))...)
-	payload = append(payload, 0, 0)
+	mode := byte(0)
+	if self.Schema == ownerTrimLedgerActionSchema {
+		mode = 1
+	}
+	payload = append(payload, 0, mode)
 	payload = binary.LittleEndian.AppendUint32(payload, self.Runtime.RuntimeVersion.SpecVersion)
 	payload = binary.LittleEndian.AppendUint32(payload, self.Runtime.RuntimeVersion.TransactionVersion)
 	genesis, _ := hex.DecodeString(self.Network.GenesisHash[2:])
 	birth, _ := hex.DecodeString(self.BirthHash[2:])
 	payload = append(payload, genesis...)
 	payload = append(payload, birth...)
-	payload = append(payload, 0)
+	payload = append(payload, mode)
+	if mode == 1 {
+		digest, _ := hex.DecodeString(self.MetadataDigest[2:])
+		payload = append(payload, digest...)
+	}
 	return call, payload, nil
 }
 
@@ -175,25 +212,33 @@ func (self ownerTrimAction) signed(signature []byte) ([]byte, error) {
 		return nil, err
 	}
 	account, _ := hex.DecodeString(self.Coldkey[2:])
-	public, err := (sr25519.Scheme{}).FromPublicKey(account)
-	if err != nil {
-		return nil, err
-	}
 	payload, _ := hex.DecodeString(self.Payload[2:])
 	if len(payload) > 256 {
 		digest := blake2b.Sum256(payload)
 		payload = digest[:]
 	}
-	if len(signature) != 64 || !public.Verify(payload, signature) {
+	valid := false
+	variant, mode := byte(1), byte(0)
+	if self.Schema == ownerTrimLedgerActionSchema {
+		variant, mode = 0, 1
+		valid = ed25519.Verify(account, payload, signature)
+	} else {
+		public, err := (sr25519.Scheme{}).FromPublicKey(account)
+		if err != nil {
+			return nil, err
+		}
+		valid = len(signature) == 64 && public.Verify(payload, signature)
+	}
+	if !valid {
 		return nil, errors.New("owner trim signature belongs to another coldkey or action")
 	}
 	body := append([]byte{0x84, 0}, account...)
-	body = append(body, 1)
+	body = append(body, variant)
 	body = append(body, signature...)
 	era, _ := rootMortalEra(self.BirthBlock, self.Period)
 	body = append(body, era...)
 	body = append(body, rootCompact(uint64(self.Nonce))...)
-	body = append(body, 0, 0)
+	body = append(body, 0, mode)
 	call, _ := hex.DecodeString(self.Call[2:])
 	body = append(body, call...)
 	return append(rootCompact(uint64(len(body))), body...), nil
@@ -210,7 +255,11 @@ func ownerTrimSignedAction(action ownerTrimAction, raw []byte) error {
 		return errors.New("owner trim extrinsic length differs")
 	}
 	body := raw[reader.offset:]
-	if len(body) < 99 || body[0] != 0x84 || body[1] != 0 || body[34] != 1 {
+	variant := byte(1)
+	if action.Schema == ownerTrimLedgerActionSchema {
+		variant = 0
+	}
+	if len(body) < 99 || body[0] != 0x84 || body[1] != 0 || body[34] != variant {
 		return errors.New("owner trim extrinsic envelope differs")
 	}
 	expected, err := action.signed(body[35:99])
