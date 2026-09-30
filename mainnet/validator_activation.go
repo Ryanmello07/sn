@@ -28,6 +28,7 @@ type validatorActivationReadiness struct {
 	Local           bootstrapChainReadinessState        `json:"original_custody"`
 	Roles           []bootstrapChainRoleReadiness       `json:"ur_validators"`
 	Native          *validatorActivationNativeReadiness `json:"native_prerequisites,omitempty"`
+	Stake           *validatorActivationStakeReadiness  `json:"stake_capacity,omitempty"`
 }
 
 func (self validatorActivationReadiness) validate(plan validatorActivationPlan) error {
@@ -44,7 +45,12 @@ func (self validatorActivationReadiness) validate(plan validatorActivationPlan) 
 		}
 	}
 	if self.Native != nil {
-		return self.Native.validate(self)
+		if err := self.Native.validate(self); err != nil {
+			return err
+		}
+	}
+	if self.Stake != nil {
+		return self.Stake.validate(self)
 	}
 	return nil
 }
@@ -117,7 +123,7 @@ func (self validatorActivationRecord) result() validatorActivationResult {
 // Installation, admission and start are explicit distinct operations. Every
 // effect follows synced intent; all manager/RPC operations join before return.
 func advanceValidatorActivation(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, authority validatorActivationAuthority, operation string, now func() time.Time) (validatorActivationResult, error) {
-	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil || operation != "install" && operation != "admit" && operation != "start" && operation != "resume" {
+	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil || operation != "install" && operation != "admit" && operation != "admit-stake" && operation != "start" && operation != "resume" {
 		return validatorActivationResult{}, errors.New("validator activation owner or operation is unavailable")
 	}
 	record, err := store.load(ctx)
@@ -135,7 +141,7 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 				record.Status = "source-refused"
 				return record.result(), errors.New("validator activation requires both installed units before admission or recovery")
 			}
-			if !unit.StartAt.IsZero() && unit.Generation == nil && operation != "admit" {
+			if !unit.StartAt.IsZero() && unit.Generation == nil && operation != "admit" && operation != "admit-stake" {
 				record.Status = "partial"
 				return record.result(), errors.New("validator activation consumed start needs manual reconciliation; no operation was consumed")
 			}
@@ -208,8 +214,13 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 	if err := host.admit(ctx, plan, record); err != nil {
 		return finish("source-refused", err)
 	}
-	if operation == "admit" {
-		_, _, evidence, err := observeValidatorActivation(ctx, store.approval, now)
+	if operation == "admit" || operation == "admit-stake" {
+		observe := observeValidatorActivation
+		status := "admitted-process-only"
+		if operation == "admit-stake" {
+			observe, status = observeValidatorActivationWithStake, "admitted-stake-capacity"
+		}
+		_, _, evidence, err := observe(ctx, store.approval, now)
 		if err != nil {
 			return finish("source-refused", err)
 		}
@@ -219,7 +230,7 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 		}
 		record.HighWaterAt = stamp
 		record.Readiness = evidence
-		result, err := finish("admitted-process-only", nil)
+		result, err := finish(status, nil)
 		if err != nil {
 			return result, err
 		}

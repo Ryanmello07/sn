@@ -83,9 +83,12 @@ func (self validatorActivationRecord) validate(approval validatorActivationAppro
 		}
 	}
 	switch self.Status {
-	case "claimed", "operation-reserved", "installed", "admitted-process-only", "activation-authority-unavailable", "source-refused", "authority-refused", "approval-window-closed", "operation-limit", "clock-rollback", "partial", "processes-observed":
+	case "claimed", "operation-reserved", "installed", "admitted-process-only", "admitted-stake-capacity", "activation-authority-unavailable", "source-refused", "authority-refused", "approval-window-closed", "operation-limit", "clock-rollback", "partial", "processes-observed":
 	default:
 		return errors.New("validator activation disposition is unknown")
+	}
+	if self.Status == "admitted-stake-capacity" && (self.Readiness == nil || self.Readiness.Stake == nil) {
+		return errors.New("validator stake disposition lacks its bounded capacity observation")
 	}
 	if self.Status == "processes-observed" && (self.Units[0].Completed == nil || self.Units[1].Completed == nil) {
 		return errors.New("validator activation pair completion is incomplete")
