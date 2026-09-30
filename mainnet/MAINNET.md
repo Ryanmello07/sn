@@ -73,18 +73,36 @@ The first private-input fixture failures and the later ten-minute race
 harness timeout remain preserved. The exact race retry passes with an explicit
 twenty-minute package budget, without changing production deadlines.
 The concrete [canonical execution adapter](BOOTSTRAP-SUCCESSOR-EXECUTION.md#separate-canonical-authority-and-online-resume)
-is implemented on frozen source `82da3d40`; independent normal/race and causal
-qualification remains pending. Online resume requires a separate signature
-binding Safe build review, a reviewed current runtime and signer-cutover evidence.
+is implemented on corrected frozen source `a7186754`; independent normal/race and
+causal qualification of this source remains pending. Preliminary `82da3d40`
+passed all eight roots normal/race before the Safe provenance gap was identified;
+those results do not qualify the corrected source. Online resume requires a
+separate signature binding Safe build review, a reviewed current runtime,
+signer-cutover evidence and a separately signed exact Safe deployment/storage
+history statement.
 It reauthenticates all eight original receipts through the existing native/EVM
 adapter, checks scoped finalized/pending Safe and contract state, reconciles the
-exact retained transaction and permits one counted exact write. The current
+exact retained transaction and retains one-counted-write machinery. The current
 runtime may differ from the historical original runtime under that new approval.
-The eight new roots include actual pinned Safe proxy/singleton execution and
-lost-reply recovery in two full local graph fixtures. RPC finality and pending
+The ten roots include actual pinned Safe proxy/singleton execution and
+lost-reply recovery in two full local graph fixtures with an explicitly synthetic
+history capability. RPC finality and pending
 state remain owned-node assertions; external build review and complete signer
 cutover remain independently attested assumptions, not facts proved by a local
 registry or a global transaction-pool census. No live authority is established.
+
+**P0 gate: canonical Safe deployment and storage provenance.** Public `--submit`
+is unavailable and exits before custody loading or attempt reservation. A signed
+history report is necessary review input, but cannot provide the missing
+`bootstrapSuccessorSafeProvenanceAuthenticator`. Current Safe owner/module
+getters cannot exclude nonzero mapping entries unreachable from their sentinel
+lists; tests inject real orphan owner and module entries into the published code
+and demonstrate this gap. Implement and independently qualify deployment,
+initialization and complete authority-relevant storage/delegatecall history
+through finalized and scoped pending state before enabling public sends. The
+adapter must bind the exact Safe/profile, approved route and signed evidence;
+ordinary getters or a loosely labeled file cannot substitute. Read-only
+reconciliation remains available. This gate remains open under MG-08.
 
 **P0 follow-up: additive canonical runtime authorization.** The current adapter
 retains one successor runtime profile immutably. A routine runtime upgrade after

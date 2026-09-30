@@ -235,11 +235,15 @@ recovery roots together account for about 398 seconds under race. Size the whole
 qualification from measured fixture cost; preserve timed-out attempts and keep
 production transaction deadlines unchanged.
 
-The concrete canonical adapter is implemented on frozen source `82da3d40`, with
-independent qualification pending. A separate signed canonical authorization
+The concrete canonical adapter is implemented on corrected frozen source
+`a7186754`, with independent qualification pending. Preliminary `82da3d40`
+passed all eight roots normal/race before discovery of the Safe storage-provenance
+gap; preserve those results without treating them as corrected-source evidence.
+A separate signed canonical authorization
 binds the exact execution plan, pinned Safe build review, reviewed current-runtime
-profile and its evidence, and every Safe/relayer signer's cutover plus retained
-original reservations. The adapter borrows all eight original marker locks and
+profile and its evidence, every Safe/relayer signer's cutover plus retained
+original reservations, and a separately signed exact Safe deployment/storage
+history statement. The adapter borrows all eight original marker locks and
 reauthenticates the original signed bytes, receipts and postconditions through the
 existing historical native/EVM adapter. Each original receipt receives its own
 approved retry budget. Successor admission and inclusion use the separately
@@ -247,7 +251,9 @@ approved current runtime; an ordinary later runtime upgrade cannot erase a
 historical original or counted successor receipt.
 
 Online `contract-successor-execution-resume` requires the separately pinned
-canonical approval, and `--submit` permits at most one newly counted exact write.
+canonical approval. Public `--submit` is unavailable until a distinct canonical
+Safe history authenticator is implemented; it exits before custody loading or
+attempt reservation even when all independent review files are signed.
 The adapter checks actual pinned Safe proxy/singleton code and scoped
 finalized/pending authority, both nonce domains, funding, current contracts and
 the exact one-shot evidence binding. Finalized reads keep one canonical hash
@@ -256,10 +262,12 @@ head equality or restarting the snapshot. Current state RPCs retain their own
 bounded retries. Exact-hash lookup uses `eth_getTransactionByHash`; the adapter
 requires neither `txpool_content` nor `author_pendingExtrinsics`.
 
-Six new light roots cover independent authority, immutable authority recovery,
-published Safe state, scoped pending lookup and strict receipt fields. Two
+Eight light roots cover independent authority, immutable authority recovery,
+published Safe state, scoped pending lookup, strict receipt fields, signed
+provenance scope and real orphan owner/module mappings. Two
 separate heavy roots run the full original v3 graph and actual pinned Safe
-execution, including lost reply/restart, approved runtime change, renewed read
+execution under an explicitly injected synthetic history capability, including
+lost reply/restart, approved runtime change, renewed read
 deadlines, advancing canonical heads and refusal of a changed canonical hash.
 Compile-only, vet and formatting pass; no behavioral qualification claim follows
 from those author checks. Preserve separate heavy-root harness budgets and all
@@ -272,6 +280,22 @@ responses are assertions. Independent build and cutover evidence explicitly
 attests external assumptions; local locks cannot establish cross-host signer
 exclusivity or the absence of off-node signatures. MG-08 remains open, without
 installation, activation or native 10/90 acceptance.
+
+**P0 gate — Canonical Safe deployment and complete storage provenance.** The
+independent provenance statement binds the exact plan, Safe/profile, published
+proxy/singleton runtimes, deployment transaction, reviewed native snapshot and
+separately pinned history evidence. Its signature is necessary review input and
+does not implement the distinct `bootstrapSuccessorSafeProvenanceAuthenticator`.
+Safe sentinel-list getters cannot prove the absence of enabled owner/module
+mapping entries outside those lists. The real-code malicious-storage fixture
+demonstrates both kinds of orphan authority while ordinary getters remain clean.
+Before enabling public submission, implement and independently qualify canonical
+deployment/initialization and every authority-relevant storage/delegatecall
+mutation through finalized and scoped pending state, bound to the exact approved
+route/account/profile and signed evidence. Reports or flags must never inject
+this capability. Preserve read-only historical reconciliation and test missing,
+swapped, incomplete and malicious history refusals. This is an open MG-08
+implementation gate, separate from independent build review and signer cutover.
 
 **P0 follow-up — Additive canonical runtime authorization.** Retained authority
 currently freezes one successor runtime profile. A routine upgrade after that
@@ -289,7 +313,7 @@ selects the reviewed active runtime; historical inclusion remains reconcilable
 under independently approved inclusion and parent profiles. Independent tests
 must cover upgrade before send, upgrade around inclusion, historical recovery
 after another upgrade, interrupted revision publication, wrong approver/profile,
-and attempted counter, liability or signed-byte changes. Keep frozen `82da3d40`
+and attempted counter, liability or signed-byte changes. Keep frozen `a7186754`
 unchanged during its qualification; implement and qualify this resilience as the
 next source increment. This requirement remains part of open MG-08.
 Later successors, filesystem migration, fee replacement and independently proved
