@@ -908,6 +908,13 @@ rechecked before admission. It does not supply the remaining operator,
 contract, signer-custody or effective-majority authority, so public starts
 remain closed.
 
+The [qualified `admit-evidence` increment](evidence/validator-current-evidence-qualification-20260930.md)
+now reads the original deployed contract graph and both operators' signed
+activation/client-key evidence under bounded read-only RPC/API transport. It
+records a partial projection without granting start authority. Full producer
+proof history and worker health, deployment provenance, global signer custody
+and effective majority remain separate launch gates.
+
 ### Root validator on netuid 0
 
 The signer-free `root-preview` and bounded `root-monitor` commands now supply a

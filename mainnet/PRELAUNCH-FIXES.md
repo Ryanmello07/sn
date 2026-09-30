@@ -88,6 +88,14 @@ receipts and independent monitor deployment remain open.
 
 MG-03 also includes a [qualified miner claim-queue owner fix](evidence/miner-claim-queue-owner-qualification-20260929.md).
 
+It locks the physical queue directory across read, publication and joined
+shutdown so duplicate daemons or a replaced pathname cannot split signed
+outcome custody. The separately [qualified retained-byte successor](evidence/miner-claim-queue-capacity-qualification-20260929.md)
+caps each queue at 16 MiB and preserves oversized retained bytes on refusal.
+Both sources are integrated; 76 affected roots pass normal/race and all 292
+miner roots pass plain normal. The composed release still needs custody,
+restart and aggregate fleet-capacity qualification before deployment.
+
 MG-01's [September 30 read-only Snow route checks through 20:16 UTC](evidence/snow-route-observation-20260930-1914.md)
 returned HTTP 502 for both native genesis and EVM chain ID. They provide no
 new mainnet identity or sync evidence; the route remains a live launch gate.
@@ -100,13 +108,16 @@ fresh-start authority is still nil: operator proof/client-key readiness,
 contracts, global signer custody and effective-majority stake remain open.
 The original schema-3 bootstrap config cannot silently absorb a later runtime
 upgrade; a separately approved continuity and activation rollover is needed.
-It locks the physical queue directory across read, publication and joined
-shutdown so duplicate daemons or a replaced pathname cannot split signed
-outcome custody. The separately [qualified retained-byte successor](evidence/miner-claim-queue-capacity-qualification-20260929.md)
-caps each queue at 16 MiB and preserves oversized retained bytes on refusal.
-Both sources are integrated; 76 affected roots pass normal/race and all 292
-miner roots pass plain normal. The composed release still needs custody,
-restart and aggregate fleet-capacity qualification before deployment.
+
+The [qualified validator current-evidence increment](evidence/validator-current-evidence-qualification-20260930.md)
+authenticates original dual-signed operator activation and fresh nonce-bound
+client-key responses, and checks the approved five-contract graph at one
+native-header-bound EVM point. Its first frozen build exposed an EVM RPC
+allowlist mismatch; the corrected build uses the bounded EVM read profile and
+passes the formerly failing contract fixtures. The failed and corrected receipts
+are both retained. This is partial admission only: full proof-prefix/worker
+health, deployment/source provenance, global signer custody and effective
+majority remain open; public fresh start remains nil.
 
 The [MG03/R48 server source composition](evidence/operator-mg03-r48-composition-20260929.md)
 is integrated at server root `05fee56f`. Its parent full merge preserves both

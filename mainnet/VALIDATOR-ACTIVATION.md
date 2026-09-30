@@ -30,8 +30,10 @@ contracts and both operator censuses. It performs real read-only transport work
 when explicitly invoked; this implementation has made no deployment RPC or API
 calls. Its optional `production_observation` journal projection and
 `observed-operator-and-contract-evidence` disposition do not implement the
-missing current-authority capability. Independent behavioral qualification of
-this increment remains separate from the receipts above.
+missing current-authority capability. The [independent qualification](evidence/validator-current-evidence-qualification-20260930.md)
+covers the local operator/contract readers and command fences, including a
+corrected bounded EVM read profile; it does not qualify a combined live
+deployment or public fresh start.
 
 This component does not run netuid 0. The [root service](ROOT-SERVICE.md) still
 requires its own current authority and native signing-device implementation.
