@@ -40,14 +40,17 @@ func copyRootServiceConfig(config rootServiceConfig) rootServiceConfig {
 // Interrupted observations consume their attempt and preserve the last complete
 // decision. Once active, all future steps reconcile the same exact action.
 type rootServiceRecord struct {
-	Schema             string              `json:"schema"`
-	Config             rootServiceConfig   `json:"config"`
-	Phase              string              `json:"phase"`
-	Observations       uint32              `json:"observations"`
-	ObservationPending bool                `json:"observation_pending"`
-	Decision           *rootWeightDecision `json:"last_decision,omitempty"`
-	Action             rootActionRecord    `json:"action"`
-	ContentHash        string              `json:"content_hash"`
+	Schema               string              `json:"schema"`
+	Config               rootServiceConfig   `json:"config"`
+	Phase                string              `json:"phase"`
+	Observations         uint32              `json:"observations"`
+	ObservationPending   bool                `json:"observation_pending"`
+	Decision             *rootWeightDecision `json:"last_decision,omitempty"`
+	RecoveredSignature   bool                `json:"recovered_signature,omitempty"`
+	SubmissionConfigHash string              `json:"submission_config_hash,omitempty"`
+	SubmissionPrepared   bool                `json:"submission_prepared,omitempty"`
+	Action               rootActionRecord    `json:"action"`
+	ContentHash          string              `json:"content_hash"`
 }
 
 // Both approval and retained decision are revalidated under independent config.
@@ -59,7 +62,8 @@ func (self rootServiceRecord) validate(config rootServiceConfig) error {
 	claimed := self.ContentHash
 	self.ContentHash = ""
 	if self.Schema != rootServiceStateSchema || rootObjectHash(self.Config) != rootObjectHash(config) || claimed != rootObjectHash(self) ||
-		self.Observations > config.MaximumObservations || self.Action.Action.RequestHash != config.Packet.Action.RequestHash {
+		self.Observations > config.MaximumObservations || self.Action.Action.RequestHash != config.Packet.Action.RequestHash ||
+		self.SubmissionConfigHash != "" && !planSha256(self.SubmissionConfigHash) || self.SubmissionPrepared && self.SubmissionConfigHash == "" {
 		return errors.New("root service state differs from its original configuration or bounds")
 	}
 	if err := self.Action.validate(); err != nil {
@@ -77,6 +81,18 @@ func (self rootServiceRecord) validate(config rootServiceConfig) error {
 	}
 	if self.ObservationPending && self.Observations == 0 {
 		return errors.New("root service has an uncounted observation")
+	}
+	// A public native signature proves an existing liability even if no local
+	// decision ever completed. Its receipt-only recovery must not invent an
+	// intent, erase a consumed observation or create a fresh mutation allowance.
+	if self.RecoveredSignature {
+		if self.Action.Signature == "" || self.Phase != "active" && self.Phase != "complete" ||
+			(self.Phase == "complete") != (self.Action.Reconciliation != nil) ||
+			self.Decision != nil && (self.Action.LastFinalized < self.Decision.Observation.Position.FinalizedNumber ||
+				self.Action.LastFinalized == self.Decision.Observation.Position.FinalizedNumber && self.Action.LastFinalizedHash != self.Decision.Observation.Position.FinalizedHash) {
+			return errors.New("root service recovered liability lacks exact signed bytes or retained decision continuity")
+		}
+		return nil
 	}
 	switch self.Phase {
 	case "observing":
@@ -323,7 +339,8 @@ func (self *rootServiceOwner) Run(ctx context.Context, maximumSteps uint32, inte
 // outer service owns serialization. It cannot replace the approved request.
 type rootServiceActionStore struct{ owner *rootServiceOwner }
 
-// Only a durable active intent can be handed to the native action owner.
+// Only a durable active intent or recovered signed liability can reach the
+// native action owner; both preserve the original request and spent allowance.
 func (self *rootServiceActionStore) load() (rootActionRecord, error) {
 	record, err := self.owner.load()
 	if err != nil || record.Phase == "observing" {
@@ -357,6 +374,10 @@ func (self *rootServiceAdmission) authorize(ctx context.Context, action rootActi
 	}
 	if self.owner.ports.Authority == nil || self.owner.ports.Signer == nil || self.owner.ports.Submitter == nil || action.RequestHash != self.owner.config.Packet.Action.RequestHash {
 		return errors.New("root service current authority, signer or independent submitter is absent")
+	}
+	record, err := self.owner.load()
+	if err != nil || record.RecoveredSignature {
+		return errors.Join(errors.New("root service recovered liability permits receipt reconciliation only"), err)
 	}
 	return self.owner.ports.Authority.authorize(ctx, action, observation)
 }
@@ -405,8 +426,8 @@ func (self *rootServiceChain) reconcile(ctx context.Context, action rootAction, 
 	return self.owner.ports.Reconciler.reconcile(ctx, action, raw)
 }
 
-// Even direct adapter use cannot substitute another signed call. This port is
-// not constructed by the mainnet cli; a future transport must verify authority.
+// Even direct adapter use cannot substitute another signed call or broadcast a
+// receipt-only recovered liability. The public runtime has no submission port.
 func (self *rootServiceChain) submit(ctx context.Context, raw []byte) error {
 	if self.owner.ports.Submitter == nil {
 		return errRootSubmissionUnavailable
@@ -422,7 +443,7 @@ func (self *rootServiceChain) submit(ctx context.Context, raw []byte) error {
 		return err
 	}
 	record, err := self.owner.load()
-	if err != nil || record.Phase != "active" || record.Action.Phase != "pending" || record.Action.RawExtrinsic != "0x"+hex.EncodeToString(raw) {
+	if err != nil || record.RecoveredSignature || record.Phase != "active" || record.Action.Phase != "pending" || record.Action.RawExtrinsic != "0x"+hex.EncodeToString(raw) {
 		return errors.Join(errors.New("root service submission requires its exact durable broadcast intent"), err)
 	}
 	config := copyRootServiceConfig(self.owner.config)

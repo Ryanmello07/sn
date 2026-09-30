@@ -7,8 +7,12 @@ retains uncertain attempts durably, and uses the existing canonical receipt
 adapter to reconcile outcomes. This is an actual `author_submitExtrinsic`
 transport implementation, exercised only against local fixtures in qualification.
 
-It is a package-local capability, with no CLI, service activation or deployment.
-No live key or chain send was used. It does not implement current eligibility,
+Mutation remains a package-local capability, with no public submission CLI,
+service activation or deployment. The `root-service` command now prepares or
+reopens its original journal and uses only its canonical reconciliation port,
+with current authority absent. It recovers original signed bytes and retained
+attempts before considering a new weight observation; it cannot send them.
+No live key or chain send was used. This port does not implement current eligibility,
 global custody authority or a native signing device. Those independent ports and
 live approval remain required before production effects. The read-only canonical
 chain's `submit` method and the ordinary RPC method whitelist remain disabled for
@@ -53,6 +57,13 @@ no symlink traversal, process locking, strict bounded JSON and synced atomic
 replacement follow the existing custody/service storage pattern. A missing or
 malformed file never supplies a fresh allowance. A durability/integrity failure
 poisons the open owner until explicit reopen.
+
+The [executable root runtime](ROOT-SERVICE.md#executable-observation-and-recovery)
+also binds this exact submission configuration into the original service journal
+before child creation and retains completed preparation there. Interrupted
+preparation can reopen the original child, but completed child disappearance,
+including removal of both state and lock marker, cannot replenish its allowance.
+This adds no global custody or hostile-host rollback guarantee.
 
 The adapter verifies the native signature and exact approved call using the
 existing crypto/encoding implementation. It pins the first complete signed

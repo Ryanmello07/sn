@@ -106,6 +106,9 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 
 // Test observers cover real file operations and owned waits, not source verdicts.
 func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
+	if len(args) != 0 && args[0] == "root-service" {
+		return runRootServiceCommand(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "activate-validators" {
 		return runValidatorActivationCommand(ctx, args[1:], stdout, stderr, now)
 	}

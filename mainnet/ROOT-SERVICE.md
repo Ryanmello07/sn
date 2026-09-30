@@ -7,11 +7,14 @@ independent custody, current-authority and submission ports. The finite `Run`
 supervisor joins every operation before returning. This closes the missing
 decision-to-action ownership layer; it does not provide an activated validator.
 
-There is no `root-service` command, native secret loader, signing device
-transport, production mutation-authority adapter or deployment. The separate
-[owned submission adapter](ROOT-SUBMISSION.md) now implements exact-byte native
-HTTP submission and durable uncertain-send reconciliation under its own signed
-route/action approval; it is not wired to a live service.
+The `root-service` command now composes this owner, original offline custody and
+the independently [approved owned route](ROOT-SUBMISSION.md) for bounded
+observation and original-liability recovery. Its public `run` has no mutation
+authority or submission port. `activate` reports the missing capabilities and
+exits before opening a journal or contacting a route. There is still no native
+secret loader, real signing-device transport, production mutation-authority
+adapter or root deployment. Exact-byte native HTTP submission remains a separate
+package-local capability; a signed route approval cannot activate it.
 The [bootstrap local phase](BOOTSTRAP-ROOT.md) now creates and resumes this
 actual service journal alongside its custody owner. It neither runs the service
 loop nor consumes an observation/broadcast allowance. Its signature import is
@@ -30,9 +33,9 @@ is sealed, and public fresh starts stay closed because a
 qualified current activation-authority adapter is absent. It does not implement
 the root role or make the standard validator accept netuid 0.
 
-The next root executable must compose this existing `rootServiceOwner.Run`,
-`rootOfflineCustody` recovery and independently approved `rootOwnedSubmission`.
-Before exposing mutation, it still needs a production `rootActionAuthority`
+The executable now composes `rootServiceOwner.Run`, `rootOfflineCustody`
+recovery and the reconciliation port of independently approved
+`rootOwnedSubmission`. Before exposing mutation, it still needs a production `rootActionAuthority`
 that admits effective eligibility, current seat/nonce/runtime and enforceable
 fee/exposure bounds, plus global hotkey/nonce and pending-seat exclusion. It
 also needs a real protected native signing device with durable request-hash
@@ -41,8 +44,89 @@ responses. A missing public receipt is not a never-signed attestation. Route,
 service-config and action approvals are separate original authorities; none may
 be synthesized from a journal, root preview or signed process envelope. Native
 secret loading/device transport, this authority and a deployed root supervisor
-remain absent. No new root command or signing route is installed by the UR
-host component.
+remain absent. The UR host component does not install this root command or any
+native signing route.
+
+## Executable observation and recovery
+
+[root_service_command.go](root_service_command.go) dispatches
+`root-service plan|prepare|status|run|activate`. A private
+`urnetwork-mainnet-root-service-runtime-config-v1` file supplies three scoped
+inputs:
+
+- `root_config`: the exact path and SHA-256 of the original `bootstrapRootConfig`.
+  Its original pinned service file is reloaded and authenticated.
+- `root_validator`: the independently provisioned netuid-0 role, native
+  generation, action-approval key, service-approval key and pinned
+  `bootstrapChainRootApproval` file, using the existing v3 approval domain.
+- `submission_config`: the exact path and SHA-256 of the original separately
+  signed `rootSubmissionConfig`, binding the same complete service configuration.
+
+Every invocation reloads these bounded, private regular files. Inputs, journals
+and ownership markers must have distinct canonical paths. The command checks
+only this root action's original approvals and custody; it does not repeat
+unrelated validator, contract or historical bootstrap work. The runtime file
+is independently provisioned configuration, not authority inferred from state.
+
+```sh
+sn-mainnet root-service plan --config /PRIVATE/root-runtime.json
+sn-mainnet root-service prepare --config /PRIVATE/root-runtime.json \
+  --accept-runtime-sha256 sha256:REVIEWED_RUNTIME_FILE_DIGEST
+sn-mainnet root-service status --config /PRIVATE/root-runtime.json \
+  --accept-runtime-sha256 sha256:REVIEWED_RUNTIME_FILE_DIGEST
+sn-mainnet root-service run --config /PRIVATE/root-runtime.json \
+  --accept-runtime-sha256 sha256:REVIEWED_RUNTIME_FILE_DIGEST \
+  --maximum-steps 1 --interval 30s
+```
+
+`plan` returns the runtime byte hash and original approval identities without
+opening journals or a route. `prepare` requires the existing service and custody
+journals, then durably claims the exact submission configuration in the service
+journal before creating or reopening that child. It marks completion only after
+the complete child opens successfully. Repeating `prepare` resumes an interrupted
+claim or reopens completed ownership; it never resets the child. If a completed
+submission journal or marker disappears, even disappearance of both files
+cannot create a new allowance. A malformed partial child remains unresolved.
+`status` reads original retained state without chain access or allowance use.
+
+`run` first compares all retained signatures in service, custody and submission
+state. Conflicting valid signatures stop before a chain read. Any original
+issued signature is retained before a new basket observation: the command can
+recover it even if the observer is unavailable, current authority is gone, the
+target is already stored, or the mortal window has closed. The same public
+receipt is recovered into offline custody. The highest retained broadcast
+number is preserved; uncertain sends keep their original bytes and attempt
+history. An interruption between the two local writes resumes from whichever
+original copy survived. A missing receipt remains unresolved, never never-issued.
+
+The optional `recovered_signature` journal field identifies a receipt-only
+liability recovered without requiring an invented `intent` decision. Previous
+hold decisions, consumed observations and interrupted-observation markers stay
+unchanged. This branch cannot sign or broadcast, even if another embedding
+supplies mutation ports. Normal active actions retain their original lifecycle.
+New submission-preparation fields preserve one-shot child ownership. Existing
+journals without these optional fields remain readable; an older executable
+that cannot decode new fields must not be used to reopen the updated journal.
+
+After recovery, `run` invokes the real bounded supervisor. Unsigned actions may
+observe the basket and retain a decision. Pending signed actions reconcile
+canonical receipts through the approved owned route. Missing fresh-effect
+capabilities stop before any signing or broadcast reservation. There is no RPC
+override, private-key flag, device command, environment activation or retrying
+HTTP write. Approved read retries remain 60–900 seconds (300 seconds is the
+ordinary deployment choice), inside the reader's 15-minute operation deadline.
+Run diagnostics and final scalar status use bounded joined exporters; sink
+failure never controls custody progress. Every operation and store is closed
+before return.
+
+Exit 0 means the requested bounded work completed, not activation. Exit 2 is
+invalid input; exit 3 covers blocked/unresolved ownership or execution and
+finalized dispatch failure, fee overrun or runtime deviation; required finite
+output/cleanup failures use exit 1. Original journal outcomes remain authoritative.
+Every result reports `activation_ready`, `native_signing`, `network_effects` and
+`current_authority_verified` as false. `activate` always exits 3 with explicit
+effective-eligibility, device/global-hotkey-nonce, pending-seat, exposure and live
+qualification blockers. No synthetic fixture discharges these production gates.
 
 ## Approved existing-seat scope
 
@@ -211,3 +295,13 @@ cover metadata defaults, true network census and changed runtime/code/metadata,
 network/finality and canceled final rechecks. Exact qualification is retained in
 [the service owner evidence](evidence/root-service-owner-20260927.md). No live
 key, RPC, transaction, activation or deployment is used.
+
+The executable-runtime increment adds `root_service_runtime_test.go` and
+`root_service_recovery_test.go`: public activation refusal, exact original
+inputs, issued-signature recovery before an unavailable observer, recovery from
+submission alone, retained uncertain attempts, conflicting signatures,
+interrupted preparation prefixes, missing-child refusal, ambiguous signature
+retention and canceled ownership waiters. Author checks are compilation and vet
+only; independent normal/race and causal qualification must seal this increment
+before any stronger source-qualification claim. Real device/global fencing,
+effective eligibility, enforced exposure and live activation remain separate.
