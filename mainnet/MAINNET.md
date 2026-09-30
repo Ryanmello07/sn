@@ -102,7 +102,10 @@ initialization and complete authority-relevant storage/delegatecall history
 through finalized and scoped pending state before enabling public sends. The
 adapter must bind the exact Safe/profile, approved route and signed evidence;
 ordinary getters or a loosely labeled file cannot substitute. Read-only
-reconciliation remains available. This gate remains open under MG-08.
+reconciliation remains available. Expensive history authentication must precede
+the final pending Safe/relayer nonce and Safe-state admission, or trigger an
+immediate repeat of that admission before sending. Qualify state changes during
+history verification. This gate remains open under MG-08.
 
 **P0 follow-up: additive canonical runtime authorization.** The current adapter
 retains one successor runtime profile immutably. A routine runtime upgrade after

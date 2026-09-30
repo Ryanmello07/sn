@@ -293,7 +293,11 @@ Before enabling public submission, implement and independently qualify canonical
 deployment/initialization and every authority-relevant storage/delegatecall
 mutation through finalized and scoped pending state, bound to the exact approved
 route/account/profile and signed evidence. Reports or flags must never inject
-this capability. Preserve read-only historical reconciliation and test missing,
+this capability. Expensive history proof must precede the final scoped pending
+Safe/relayer nonce and Safe-state admission, or trigger immediate re-admission
+before the exact send. Prove that a nonce or authority change during history
+verification cannot reuse earlier pending observations. The current production
+capability remains absent. Preserve read-only historical reconciliation and test missing,
 swapped, incomplete and malicious history refusals. This is an open MG-08
 implementation gate, separate from independent build review and signer cutover.
 
