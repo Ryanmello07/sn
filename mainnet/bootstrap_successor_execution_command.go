@@ -1,5 +1,6 @@
-// Local commands reconstruct original custody and independently approve exact
-// execution bytes. No public command constructs an unauthenticated chain adapter.
+// Commands reconstruct original custody and independently approve exact bytes.
+// Online resume additionally requires retained canonical review authority.
+// Public submission is unavailable without a canonical Safe history capability.
 package main
 
 import (
@@ -15,7 +16,7 @@ import (
 
 // The request is signable only after actual original journals, completed local
 // preparation, pinned Safe release and both signature files are reconstructed.
-func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory, accepted, requestPath, safeRequestPath, executionRequestPath, approvalPath string) (_ bootstrapSuccessorExecutionPlan, _ *safeExecutionProfile, _ *bootstrapChainReadinessState, resultErr error) {
+func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory, accepted, requestPath, safeRequestPath, executionRequestPath, approvalPath string, additionalPaths ...string) (_ bootstrapSuccessorExecutionPlan, _ *safeExecutionProfile, _ *bootstrapChainReadinessState, resultErr error) {
 	var result bootstrapSuccessorExecutionPlan
 	var request bootstrapSuccessorExecutionRequest
 	raw, requestHash, err := readBootstrapRootFile(ctx, executionRequestPath, 16*1024)
@@ -39,8 +40,8 @@ func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory,
 	if err != nil {
 		return result, nil, nil, err
 	}
-	plan, retained, err := loadBootstrapSuccessorPreparation(ctx, configPath, directory, accepted, requestPath, approvalPath,
-		safeRequestPath, executionRequestPath, safeRequest.Archive.Path, request.SafeSignatures.Path, request.RelayerTransaction.Path)
+	inputs := append([]string{safeRequestPath, executionRequestPath, safeRequest.Archive.Path, request.SafeSignatures.Path, request.RelayerTransaction.Path}, additionalPaths...)
+	plan, retained, err := loadBootstrapSuccessorPreparation(ctx, configPath, directory, accepted, requestPath, approvalPath, inputs...)
 	if err != nil {
 		return result, nil, nil, err
 	}
@@ -49,7 +50,7 @@ func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory,
 			resultErr = errors.Join(resultErr, retained.close())
 		}
 	}()
-	for _, path := range []string{configPath, requestPath, safeRequestPath, executionRequestPath, approvalPath, safeRequest.Archive.Path, request.SafeSignatures.Path, request.RelayerTransaction.Path} {
+	for _, path := range append([]string{configPath, requestPath, approvalPath}, inputs...) {
 		if path == request.RegistryDirectory || strings.HasPrefix(path, request.RegistryDirectory+"/") {
 			return result, nil, nil, errors.New("successor execution input overlaps the nonce registry")
 		}
@@ -91,9 +92,15 @@ func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory,
 	return result, profile, retained, reader.checkpoint("execution-preview-reconstructed")
 }
 
-// Claim and resume retain signatures and conditional execution custody only.
-// Network flags are absent until a reviewed canonical adapter is implemented.
-func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, stdout, stderr io.Writer) (resultCode int) {
+// Public resume can reconcile the approved route. No production canonical
+// deployment/storage-provenance adapter exists, so public submission is disabled.
+func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return runBootstrapSuccessorExecutionCommandWithProvenance(ctx, args, stdout, stderr, nil)
+}
+
+// An explicit internal capability is a test seam, never a caller-supplied flag,
+// report or global mutable hook. Only local fixtures currently supply one.
+func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, args []string, stdout, stderr io.Writer, provenance bootstrapSuccessorSafeProvenanceAuthenticator) (resultCode int) {
 	if len(args) == 0 || args[0] != "contract-successor-execution-preview" && args[0] != "contract-successor-execution-claim" && args[0] != "contract-successor-execution-resume" {
 		fmt.Fprintln(stderr, "unknown successor execution custody command")
 		return 2
@@ -110,21 +117,36 @@ func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, s
 	approvalPath := flags.String("approval", "", "independent successor execution approval")
 	approvalHash := flags.String("approval-sha256", "", "exact approval file digest")
 	executionHash := flags.String("accept-execution-hash", "", "exact previewed execution plan hash")
+	online := flags.Bool("online", false, "authenticate original and current state on the originally approved owned route")
+	submit := flags.Bool("submit", false, "request one counted write; unavailable until canonical Safe provenance is implemented")
+	canonicalPath := flags.String("canonical-approval", "", "independent build, runtime, signer-cutover and Safe-provenance authorization")
+	canonicalHash := flags.String("canonical-approval-sha256", "", "exact canonical authorization file digest")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *configPath == "" || *directory == "" || !planSha256(*accepted) ||
 		*requestPath == "" || *safeRequestPath == "" || *executionRequestPath == "" ||
 		preview && (*approvalPath != "" || *approvalHash != "" || *executionHash != "") ||
-		!preview && (*approvalPath == "" || !planSha256(*approvalHash) || !planSha256(*executionHash)) {
-		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume also require --approval, --approval-sha256 and --accept-execution-hash")
+		!preview && (*approvalPath == "" || !planSha256(*approvalHash) || !planSha256(*executionHash)) ||
+		(*online || *submit) && args[0] != "contract-successor-execution-resume" || *submit && !*online ||
+		*online && (*canonicalPath == "" || !planSha256(*canonicalHash)) || !*online && (*canonicalPath != "" || *canonicalHash != "") {
+		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume also require --approval, --approval-sha256 and --accept-execution-hash; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; --submit requires --online")
 		return 2
 	}
-	plan, profile, retained, err := loadBootstrapSuccessorExecution(ctx, *configPath, *directory, *accepted, *requestPath, *safeRequestPath, *executionRequestPath, *approvalPath)
+	if *submit && provenance == nil {
+		fmt.Fprintln(stderr, errBootstrapSuccessorSafeProvenanceUnavailable)
+		return 2
+	}
+	var additionalPaths []string
+	if *canonicalPath != "" {
+		additionalPaths = append(additionalPaths, *canonicalPath)
+	}
+	plan, profile, retained, err := loadBootstrapSuccessorExecution(ctx, *configPath, *directory, *accepted, *requestPath, *safeRequestPath, *executionRequestPath, *approvalPath, additionalPaths...)
 	if err != nil {
 		fmt.Fprintln(stderr, "successor execution original custody or exact inputs unresolved:", err)
 		return 1
 	}
 	var owner *bootstrapSuccessorExecutionStore
+	var canonical *bootstrapSuccessorCanonicalChain
 	defer func() {
-		if err := errors.Join(owner.close(), retained.close()); err != nil {
+		if err := errors.Join(canonical.close(), owner.close(), retained.close()); err != nil {
 			fmt.Fprintln(stderr, "successor execution ownership close:", err)
 			resultCode = 1
 		}
@@ -168,7 +190,32 @@ func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, s
 		fmt.Fprintln(stderr, "successor execution custody unresolved; retain original and nonce registry files:", err)
 		return 1
 	}
-	if err := json.NewEncoder(stdout).Encode(owner.result()); err != nil {
+	result := owner.result()
+	if *online {
+		raw, hash, err := readBootstrapRootFile(ctx, *canonicalPath, 16*1024)
+		var canonicalApproval bootstrapSuccessorCanonicalApproval
+		if err == nil && hash == *canonicalHash {
+			err = decodePlanJson(raw, &canonicalApproval)
+		} else {
+			err = errors.Join(errors.New("successor canonical authorization file pin differs"), err)
+		}
+		if err == nil {
+			err = canonicalApproval.validate(ctx, plan)
+		}
+		if err != nil {
+			fmt.Fprintln(stderr, "successor independent canonical authorization:", err)
+			return 2
+		}
+		canonical, err = newBootstrapSuccessorCanonicalChainWithProvenance(ctx, owner, canonicalApproval, provenance)
+		if err == nil {
+			result, err = advanceBootstrapSuccessorExecution(ctx, owner, canonical, *submit)
+		}
+		if err != nil {
+			fmt.Fprintln(stderr, "successor canonical execution unresolved; retain signatures, authority and cumulative custody:", err)
+			return 1
+		}
+	}
+	if err := json.NewEncoder(stdout).Encode(result); err != nil {
 		fmt.Fprintln(stderr, "successor execution output failed; resume exact custody:", err)
 		return 1
 	}

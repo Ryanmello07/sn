@@ -6,8 +6,8 @@ Safe release bytes and the [pure Safe digest calculation](SAFE-EXECUTION-EVIDENC
 It produces a sealed, unsigned execution review for the one remaining evidence
 anchor. A separate [execution custody and owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md)
 now retains independently approved signatures, cumulative attempts and separate
-nonce claims. Its production canonical adapter remains unimplemented; this
-review command retains its existing offline scope.
+nonce claims. Its concrete canonical adapter awaits independent qualification;
+this review command retains its existing offline scope.
 
 ```sh
 sn-mainnet bootstrap-chain contract-successor-safe-review \

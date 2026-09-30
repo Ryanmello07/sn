@@ -122,7 +122,8 @@ completed actions leave only the anchor unfinished and do not require replay.
 A cap change needs a new independently signed successor that adopts the original
 prefix, reconciles unfinished signed nonces, and conserves cumulative attempts
 and lifetime financial exposure. The later conditional execution custody owner
-is described below; its production canonical adapter remains unimplemented.
+is described below; its concrete canonical adapter has scoped independent
+qualification.
 The [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
 passes all twelve new roots normal/race with six causal controls in both modes.
 The separate [partial adjacent battery](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
@@ -206,16 +207,16 @@ Safe owner signatures and complete outer calldata remain absent, as do
 execution approval, nonce/budget allocation and live authority. The review's native
 window is outside the Safe digest and cannot expire a signature. Canonical
 eight-receipt adoption, Safe/evidence state, signature lifetime/window enforcement,
-globally fenced relayer signer custody and a production canonical execution
-adapter must still be implemented and qualified before evidence anchoring or
-activation.
+globally fenced relayer signer custody and qualified canonical execution remain
+required before evidence anchoring or activation. The concrete adapter described
+below does not supply the external live authority by itself.
 
 The [successor execution custody and owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) now
 binds independently approved signatures and an exact outer envelope to the
 original eight-receipt adoption, cumulative attempt/financial floors and distinct
-Safe-inner/relayer-outer nonce claims. Its public commands remain offline; the
-internal one-send machine requires an authenticated adapter for every historical,
-current-state and canonical receipt decision. Its
+Safe-inner/relayer-outer nonce claims. Its qualified initial public commands are
+offline; the one-send machine requires an authenticated adapter for every
+historical, current-state and canonical receipt decision. Its
 [scoped qualification receipt](evidence/bootstrap-successor-execution-qualification-20260929.md)
 records twenty-one focused and six adjacent roots passing normal/race on
 corrected `75ea2158`, including interrupted publication, counted attempts, ambiguous send recovery,
@@ -234,13 +235,109 @@ recovery roots together account for about 398 seconds under race. Size the whole
 qualification from measured fixture cost; preserve timed-out attempts and keep
 production transaction deadlines unchanged.
 
-The missing production adapter must canonically reauthenticate every original
-receipt/postcondition, selected Safe release and finalized/pending authority,
-original unexecuted reservation, current evidence domain and exact inner outcome,
-then perform one bounded write over the approved owned route. Enforced signer
-cutover to one registry, independently approved mainnet genesis/runtime and Safe
-authority, funding, actual owner/relayer signatures and live readback remain
-separate gates. Local locks and synthetic adapters do not supply those facts.
+The concrete canonical adapter has
+[scoped independent qualification](evidence/bootstrap-successor-canonical-qualification-20260930.md)
+on corrected frozen source `a7186754`: ten focused and twenty-two adjacent roots
+pass normal/race, fourteen normal causal controls and six selected race controls
+reach their intended assertions. The thirty-four-file Sol manifest and separate
+forty-eight-file author handoff verify with matching source/module fences.
+Preliminary `82da3d40`
+passed all eight roots normal/race before discovery of the Safe storage-provenance
+gap; preserve those results without treating them as corrected-source evidence.
+A separate signed canonical authorization
+binds the exact execution plan, pinned Safe build review, reviewed current-runtime
+profile and its evidence, every Safe/relayer signer's cutover plus retained
+original reservations, and a separately signed exact Safe deployment/storage
+history statement. The adapter borrows all eight original marker locks and
+reauthenticates the original signed bytes, receipts and postconditions through the
+existing historical native/EVM adapter. Each original receipt receives its own
+approved retry budget. Successor admission and inclusion use the separately
+approved current runtime; an ordinary later runtime upgrade cannot erase a
+historical original or counted successor receipt.
+
+Online `contract-successor-execution-resume` requires the separately pinned
+canonical approval. Public `--submit` is unavailable until a distinct canonical
+Safe history authenticator is implemented; it exits before custody loading or
+attempt reservation even when all independent review files are signed.
+The adapter checks actual pinned Safe proxy/singleton code and scoped
+finalized/pending authority, both nonce domains, funding, current contracts and
+the exact one-shot evidence binding. Finalized reads keep one canonical hash
+while later heads advance; later native-window and runtime checks do not require
+head equality or restarting the snapshot. Current state RPCs retain their own
+bounded retries. Exact-hash lookup uses `eth_getTransactionByHash`; the adapter
+requires neither `txpool_content` nor `author_pendingExtrinsics`.
+
+Eight light roots cover independent authority, immutable authority recovery,
+published Safe state, scoped pending lookup, strict receipt fields, signed
+provenance scope and real orphan owner/module mappings. Two
+separate heavy roots run the full original v3 graph and actual pinned Safe
+execution under an explicitly injected synthetic history capability, including
+lost reply/restart, approved runtime change, renewed read
+deadlines, advancing canonical heads and refusal of a changed canonical hash.
+Author compile-only, vet and formatting checks pass. Sol's independent heavy
+normal packages take 51.406s and 45.496s; their separate race packages take
+349.951s and 297.814s. The adjacent race package passes in 540.635s. Explicit
+twenty-minute normal and thirty-minute heavy/adjacent race harness budgets leave
+production transaction and individual read deadlines unchanged.
+
+Enforced signer cutover to one registry, independently approved mainnet
+genesis/runtime and Safe authority, funding, actual owner/relayer signatures and
+live readback remain separate gates. The owned RPC's finality and account-pending
+responses are assertions. Independent build and cutover evidence explicitly
+attests external assumptions; local locks cannot establish cross-host signer
+exclusivity or the absence of off-node signatures. MG-08 remains open, without
+installation, activation or native 10/90 acceptance.
+
+**P0 gate — Canonical Safe deployment and complete storage provenance.** The
+independent provenance statement binds the exact plan, Safe/profile, published
+proxy/singleton runtimes, deployment transaction, reviewed native snapshot and
+separately pinned history evidence. Its signature is necessary review input and
+does not implement the distinct `bootstrapSuccessorSafeProvenanceAuthenticator`.
+Safe sentinel-list getters cannot prove the absence of enabled owner/module
+mapping entries outside those lists. The real-code malicious-storage fixture
+demonstrates both kinds of orphan authority while ordinary getters remain clean.
+Before enabling public submission, implement and independently qualify canonical
+deployment/initialization and every authority-relevant storage/delegatecall
+mutation through finalized and scoped pending state, bound to the exact approved
+route/account/profile and signed evidence. Reports or flags must never inject
+this capability. Expensive history proof must precede the final scoped pending
+Safe/relayer nonce and Safe-state admission, or trigger immediate re-admission
+before the exact send. Prove that a nonce or authority change during history
+verification cannot reuse earlier pending observations. The current production
+capability remains absent. Preserve read-only historical reconciliation and test missing,
+swapped, incomplete and malicious history refusals. This is an open MG-08
+implementation gate, separate from independent build review and signer cutover.
+
+Complete current authority and historical provenance are distinct properties.
+A complete authenticated account-storage prefix, exact proxy/singleton code and
+slot invariants could support a separately approved current-authority policy
+that excludes orphan mappings at the proved snapshot. Named-key proofs or
+sentinel lists cannot establish prefix completeness, and a current snapshot
+does not prove clean past initialization/delegatecalls or a cryptographic pending
+overlay. Such a policy needs explicit independent approval, a distinct signed
+revision preserving retained custody and liabilities, and its own qualification.
+It must not reinterpret the existing signed complete-history attestation or
+silently reopen public submission.
+
+**P0 follow-up — Additive canonical runtime authorization.** Retained authority
+currently freezes one successor runtime profile. A routine upgrade after that
+file is retained and before send blocks current execution; it does not release
+the exact transaction, nonce claims, counted attempts or liability. Implement a
+separately signed additive revision under the original independent approver,
+binding its predecessor authorization and new reviewed runtime artifact/codec
+evidence. Preserve every original receipt and prior runtime authorization, the
+exact signed transaction, both immutable nonce claims, cumulative counted
+attempts and maximum liabilities. This transition must neither discard an old
+authority nor renew a transaction allowance. It needs immutable publication and
+same-authority recovery at every interrupted revision boundary, with no write
+until the complete revised authority is reauthenticated. Current admission then
+selects the reviewed active runtime; historical inclusion remains reconcilable
+under independently approved inclusion and parent profiles. Independent tests
+must cover upgrade before send, upgrade around inclusion, historical recovery
+after another upgrade, interrupted revision publication, wrong approver/profile,
+and attempted counter, liability or signed-byte changes. Preserve the qualified
+`a7186754` source identity; implement and independently qualify this resilience
+as a subsequent source increment. This requirement remains part of open MG-08.
 Later successors, filesystem migration, fee replacement and independently proved
 external sends require separate approved liability-preserving transitions.
 

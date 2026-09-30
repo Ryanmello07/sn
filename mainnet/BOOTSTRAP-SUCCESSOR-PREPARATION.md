@@ -122,8 +122,8 @@ The separate [execution custody owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) can now
 adopt this exact record under another signed domain, retain approved signatures
 and both nonce claims, and conserve durable attempts through interrupted sends.
 Its [scoped behavioral qualification](evidence/bootstrap-successor-execution-qualification-20260929.md)
-is complete; the production canonical adapter remains unimplemented. This
-preparation command's scope and flags do not change.
+is complete; its new concrete canonical adapter awaits independent qualification.
+This preparation command's scope and flags do not change.
 
 The new record retains the original complete approval/config and receipt seals
 by reference. It never rewrites old plans or journals, signs old actions again,

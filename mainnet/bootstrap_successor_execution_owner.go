@@ -20,13 +20,14 @@ const bootstrapSuccessorExecutionEventSchema = "urnetwork-mainnet-successor-exec
 // original reservations, and exclusive signer cutover to this registry. Their
 // returned seals must identify those exact ordered original full records.
 //
-// observe must read one current finalized native/EVM point plus a complete
-// pending census. reconcile must search the exact retained transaction and
+// observe must read one current finalized native/EVM point and scoped pending
+// state under the independently accepted signer cutover. reconcile must search
+// the exact retained transaction and
 // authenticate any inclusion and binding, independently of window/attempt caps.
 // submit must perform at most one transport write of the supplied exact bytes;
 // it must not retry internally, choose a route/account, sign, or replace fees.
-// There is no production constructor yet: local commands never fabricate this
-// authority from caller-supplied observations or an offline review.
+// The production constructor requires an independent canonical authorization;
+// caller-supplied observations and the offline review cannot supply it.
 type bootstrapSuccessorExecutionChain interface {
 	authenticate(context.Context, bootstrapSuccessorExecutionPlan) ([]string, error)
 	observe(context.Context, bootstrapSuccessorExecutionPlan) (bootstrapSuccessorExecutionObservation, error)
@@ -80,15 +81,16 @@ type bootstrapSuccessorExecutionReconciliation struct {
 // Every snapshot conserves original attempts and full maximum liabilities.
 // The predecessor seal prevents reordered or spliced custody from replaying.
 type bootstrapSuccessorExecutionEvent struct {
-	Schema              string                              `json:"schema"`
-	ApprovalHash        string                              `json:"approval_hash"`
-	Sequence            uint16                              `json:"sequence"`
-	PreviousHash        string                              `json:"previous_hash"`
-	Phase               string                              `json:"phase"`
-	CumulativeAttempts  uint16                              `json:"cumulative_attempts"`
-	ReservedLifetimeWei string                              `json:"reserved_lifetime_wei"`
-	Receipt             *bootstrapSuccessorExecutionReceipt `json:"receipt,omitempty"`
-	ContentHash         string                              `json:"content_hash"`
+	Schema                 string                              `json:"schema"`
+	ApprovalHash           string                              `json:"approval_hash"`
+	Sequence               uint16                              `json:"sequence"`
+	PreviousHash           string                              `json:"previous_hash"`
+	Phase                  string                              `json:"phase"`
+	CumulativeAttempts     uint16                              `json:"cumulative_attempts"`
+	ReservedLifetimeWei    string                              `json:"reserved_lifetime_wei"`
+	Receipt                *bootstrapSuccessorExecutionReceipt `json:"receipt,omitempty"`
+	CanonicalAuthorityHash string                              `json:"canonical_authority_hash,omitempty"`
+	ContentHash            string                              `json:"content_hash"`
 }
 
 // A fresh reservation is fully determined by the prior immutable event. Even
@@ -96,7 +98,8 @@ type bootstrapSuccessorExecutionEvent struct {
 func (self *bootstrapSuccessorExecutionStore) attemptEvent() bootstrapSuccessorExecutionEvent {
 	event := bootstrapSuccessorExecutionEvent{Schema: bootstrapSuccessorExecutionEventSchema, ApprovalHash: rootObjectHash(self.approval),
 		Sequence: self.last.Sequence + 1, PreviousHash: self.last.ContentHash, Phase: "attempt-reserved",
-		CumulativeAttempts: self.last.CumulativeAttempts + 1, ReservedLifetimeWei: self.last.ReservedLifetimeWei}
+		CumulativeAttempts: self.last.CumulativeAttempts + 1, ReservedLifetimeWei: self.last.ReservedLifetimeWei,
+		CanonicalAuthorityHash: self.canonicalAuthorityHash}
 	event.ContentHash = rootObjectHash(event)
 	return event
 }
@@ -135,10 +138,13 @@ func (self bootstrapSuccessorExecutionEvent) validate(approval bootstrapSuccesso
 		return errors.New("successor execution event lost approval, seal or cumulative floors")
 	}
 	if previous == nil {
-		if self.Sequence != 0 || self.PreviousHash != self.ApprovalHash || self.Phase != "adopted" || self.Receipt != nil || self.CumulativeAttempts != budget.RetainedAttempts {
+		if self.Sequence != 0 || self.PreviousHash != self.ApprovalHash || self.Phase != "adopted" || self.Receipt != nil || self.CumulativeAttempts != budget.RetainedAttempts || self.CanonicalAuthorityHash != "" {
 			return errors.New("successor execution lacks its exact original adoption event")
 		}
 		return nil
+	}
+	if self.CanonicalAuthorityHash != "" && !planSha256(self.CanonicalAuthorityHash) || previous.CanonicalAuthorityHash != "" && self.CanonicalAuthorityHash != previous.CanonicalAuthorityHash {
+		return errors.New("successor execution event changed counted canonical authority")
 	}
 	if self.Sequence != previous.Sequence+1 || self.PreviousHash != previous.ContentHash || previous.Phase != "adopted" && previous.Phase != "attempt-reserved" {
 		return errors.New("successor execution event changed predecessor or reopened terminal custody")
@@ -283,7 +289,8 @@ func advanceBootstrapSuccessorExecution(ctx context.Context, self *bootstrapSucc
 		} else {
 			event := bootstrapSuccessorExecutionEvent{Schema: bootstrapSuccessorExecutionEventSchema, ApprovalHash: rootObjectHash(self.approval),
 				Sequence: self.last.Sequence + 1, PreviousHash: self.last.ContentHash, Phase: phase,
-				CumulativeAttempts: self.last.CumulativeAttempts, ReservedLifetimeWei: self.last.ReservedLifetimeWei, Receipt: reconciliation.Receipt}
+				CumulativeAttempts: self.last.CumulativeAttempts, ReservedLifetimeWei: self.last.ReservedLifetimeWei, Receipt: reconciliation.Receipt,
+				CanonicalAuthorityHash: self.last.CanonicalAuthorityHash}
 			event.ContentHash = rootObjectHash(event)
 			if err := self.append(event); err != nil {
 				return result, err

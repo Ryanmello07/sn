@@ -72,10 +72,58 @@ evidence manifest.
 The first private-input fixture failures and the later ten-minute race
 harness timeout remain preserved. The exact race retry passes with an explicit
 twenty-minute package budget, without changing production deadlines.
-A production canonical adapter for current Safe/evidence authority, original
-receipt reauthentication and enforced relayer signer cutover remains unimplemented.
-Public commands perform local custody only; the internal owner uses explicitly
-synthetic canonical responses in its tests.
+The concrete [canonical execution adapter](BOOTSTRAP-SUCCESSOR-EXECUTION.md#separate-canonical-authority-and-online-resume)
+has [scoped independent qualification](evidence/bootstrap-successor-canonical-qualification-20260930.md)
+on corrected frozen source `a7186754`: ten focused and twenty-two adjacent roots
+pass normal/race, fourteen normal causal controls and six selected race controls
+reach their intended assertions, and the sealed source/module fences match.
+Preliminary `82da3d40`
+passed all eight roots normal/race before the Safe provenance gap was identified;
+those results do not qualify the corrected source. Online resume requires a
+separate signature binding Safe build review, a reviewed current runtime,
+signer-cutover evidence and a separately signed exact Safe deployment/storage
+history statement.
+It reauthenticates all eight original receipts through the existing native/EVM
+adapter, checks scoped finalized/pending Safe and contract state, reconciles the
+exact retained transaction and retains one-counted-write machinery. The current
+runtime may differ from the historical original runtime under that new approval.
+The ten roots include actual pinned Safe proxy/singleton execution and
+lost-reply recovery in two full local graph fixtures with an explicitly synthetic
+history capability. RPC finality and pending
+state remain owned-node assertions; external build review and complete signer
+cutover remain independently attested assumptions, not facts proved by a local
+registry or a global transaction-pool census. No live authority is established.
+
+**P0 gate: canonical Safe deployment and storage provenance.** Public `--submit`
+is unavailable and exits before custody loading or attempt reservation. A signed
+history report is necessary review input, but cannot provide the missing
+`bootstrapSuccessorSafeProvenanceAuthenticator`. Current Safe owner/module
+getters cannot exclude nonzero mapping entries unreachable from their sentinel
+lists; tests inject real orphan owner and module entries into the published code
+and demonstrate this gap. Implement and independently qualify deployment,
+initialization and complete authority-relevant storage/delegatecall history
+through finalized and scoped pending state before enabling public sends. The
+adapter must bind the exact Safe/profile, approved route and signed evidence;
+ordinary getters or a loosely labeled file cannot substitute. Read-only
+reconciliation remains available. Expensive history authentication must precede
+the final pending Safe/relayer nonce and Safe-state admission, or trigger an
+immediate repeat of that admission before sending. Qualify state changes during
+history verification. This gate remains open under MG-08.
+
+**P0 follow-up: additive canonical runtime authorization.** The current adapter
+retains one successor runtime profile immutably. A routine runtime upgrade after
+that authority is retained but before submission can therefore block the exact
+pending anchor, even though the original receipts and signatures remain valid.
+The next implementation must accept a separately signed additive runtime revision
+from the original independent approver, with reviewed artifact/codec evidence and
+an immutable predecessor authorization seal. It must retain every earlier runtime
+profile, original receipt, exact signed transaction, both nonce claims, counted
+attempt and full liability. A revision cannot reset custody, reduce reservations,
+change fees or re-sign the transaction. Current reads select an approved profile;
+historical inclusion remains reconcilable under its approved inclusion and parent
+profiles. Qualify interruption/restart during revision and runtime upgrades before
+send and around inclusion, including refusal of unapproved artifacts. This is
+an open MG-08 code requirement, separate from live mainnet authorization.
 The qualified [signed local successor preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
 adds a separate approval domain and fixed resumable local claim while preserving
 original receipts and additive proposed floors. Its [scoped receipt](evidence/bootstrap-successor-preparation-qualification-20260929.md)
@@ -134,7 +182,9 @@ native review window cannot expire a Safe signature because it is outside the
 Safe digest. Canonical original receipt adoption, current Safe/evidence authority,
 signature lifetime and window enforcement and globally fenced relayer signer
 custody remain launch gates. The separate execution owner enforces its conditional
-state transitions in code; its production canonical adapter remains unimplemented.
+state transitions in code; its concrete canonical adapter has scoped independent
+qualification, while the production Safe history authenticator and explicitly
+approved live authority remain missing.
 No mainnet transaction,
 contract installation or validator activation is established by this increment.
 The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),

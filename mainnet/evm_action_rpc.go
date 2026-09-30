@@ -266,23 +266,22 @@ func (self *evmOwnedChain) locate(ctx context.Context, head chainIdentity, recor
 	return result, ctx.Err()
 }
 
-// Historical runtime authority is evaluated at the actual inclusion and its
-// parent, so an unrelated later upgrade does not erase an original receipt.
-func (self *evmOwnedChain) authenticateReceipt(ctx context.Context, plan evmCreatePlan, record evmActionRecord, receipt evmCreateReceipt, index uint64) (evmCreateReceipt, error) {
-	p := plan.Config.Plan
+// Native insertion, original signed bytes and transaction position are shared
+// by original contract receipts and the later exact Safe outer transaction.
+func (self *evmOwnedChain) authenticatePosition(ctx context.Context, p evmPhasePlan, record evmActionRecord, receipt evmCreateReceipt, index uint64) (chainIdentity, error) {
 	identity, err := self.client.readIdentityAt(ctx, receipt.NativeHash)
 	if err != nil {
-		return receipt, err
+		return chainIdentity{}, err
 	}
 	if err := self.continuity(ctx, p, evmActionRecord{ScanNumber: receipt.NativeNumber, ScanHash: receipt.NativeHash}, identity); err != nil {
-		return receipt, err
+		return chainIdentity{}, err
 	}
 	mapping, err := self.client.readFinalizedMappingAtIdentity(ctx, identity)
 	if err != nil {
-		return receipt, err
+		return chainIdentity{}, err
 	}
 	if mapping.EvmHeader.Hash != receipt.BlockHash || mapping.EvmHeader.Number != receipt.BlockNumber {
-		return receipt, errors.New("EVM receipt does not match exact native commitment")
+		return chainIdentity{}, errors.New("EVM receipt does not match exact native commitment")
 	}
 	genesis, _ := native.NewHashFromHexString(p.Network.GenesisHash)
 	nativeHash, _ := native.NewHashFromHexString(receipt.NativeHash)
@@ -291,19 +290,29 @@ func (self *evmOwnedChain) authenticateReceipt(ctx context.Context, plan evmCrea
 	profile := p.Runtime
 	_, err = crv4.ReadEVMCheckpointAtContext(ctx, chain, crv4.EVMCheckpointQuery{GenesisHash: genesis, NativeHash: nativeHash, NativeNumber: receipt.NativeNumber, EVMHash: evmHash, EVMNumber: receipt.BlockNumber}, crv4.RuntimeArtifactIdentity{Version: profile.RuntimeVersion, CodeHash: profile.RuntimeCodeHash, MetadataHash: profile.RuntimeMetadataHash})
 	if err != nil {
-		return receipt, err
+		return chainIdentity{}, err
 	}
 	var tx types.Transaction
 	if err := self.read(ctx, "eth_getTransactionByBlockHashAndIndex", []any{receipt.BlockHash, fmt.Sprintf("0x%x", index)}, &tx); err != nil {
-		return receipt, err
+		return chainIdentity{}, err
 	}
 	raw, err := tx.MarshalBinary()
 	if err != nil || "0x"+hex.EncodeToString(raw) != record.Signed {
-		return receipt, errors.Join(errors.New("canonical EVM position does not contain original signed bytes"), err)
+		return chainIdentity{}, errors.Join(errors.New("canonical EVM position does not contain original signed bytes"), err)
 	}
 	// Variant1's native transaction vector independently commits the position.
 	if mapping.PostLog.Variant == 1 && (index >= uint64(len(mapping.PostLog.TransactionHashes)) || mapping.PostLog.TransactionHashes[index] != record.TransactionHash) {
-		return receipt, errors.New("EVM transaction differs from native committed vector")
+		return chainIdentity{}, errors.New("EVM transaction differs from native committed vector")
+	}
+	return identity, ctx.Err()
+}
+
+// Historical runtime authority is evaluated at the actual inclusion and its
+// parent, so an unrelated later upgrade does not erase an original receipt.
+func (self *evmOwnedChain) authenticateReceipt(ctx context.Context, plan evmCreatePlan, record evmActionRecord, receipt evmCreateReceipt, index uint64) (evmCreateReceipt, error) {
+	identity, err := self.authenticatePosition(ctx, plan.Config.Plan, record, receipt, index)
+	if err != nil {
+		return receipt, err
 	}
 	block := map[string]any{"blockHash": receipt.BlockHash, "requireCanonical": true}
 	if receipt.Status == 1 {
