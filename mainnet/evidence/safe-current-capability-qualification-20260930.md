@@ -9,7 +9,11 @@ Frozen source is `95a905d46eb8d0325851ab7f63f39262708d4aae`, tree
 `62a67ba33b19b97703c3032e709aa950592572a6`, based on frozen custody source
 `3f88a9484c639e999081cf8a2b8a8f2cf14ed536`. The implementation worktree is
 `/home/by/urnetwork/sn-successor-safe-current-capability-owner-20260930`.
-Custody qualification/integration must finish first. This documentation child
+Custody qualification/integration finished first at shared commit
+`7aa87dfa02c1c794759f1e1b00dfbcd961fe100a`, tree
+`7c905e93782a6b8380e9af1bb8595f45a157b5b7`. Its
+[sealed receipt](safe-current-custody-qualification-20260930.md) is retained
+byte-for-byte. This documentation child
 must preserve every non-Markdown byte of the exact capability source and all
 earlier immutable qualification receipts.
 
@@ -117,10 +121,11 @@ claims before integration.
 
 ## Ordered integration plan
 
-1. Finish the exact `3f88a948` custody matrix, audit Sol's final manifest and all
-   raw streams, update its pending MAINNET/PRELAUNCH note to exact results, and
-   verify that its documentation child changes only Markdown. Integrate and push
-   that exact qualified custody source first, using a non-force update.
+1. Completed: the exact `3f88a948` custody matrix and independent raw/source audit
+   are sealed. Its MAINNET/PRELAUNCH note records 78 positive executions, eight
+   normal and five selected race causal controls. Shared commit `7aa87dfa`
+   integrates that exact non-Markdown source with documentation, and was pushed
+   non-force with clean matching shared HEAD/origin. Earlier receipts are intact.
 2. After Sol seals this exact `95a905d4` capability source, audit its complete raw
    positives and selected controls independently, including source/modules/local
    dependencies and static/supplemental handoffs. A failed or noncausal case
