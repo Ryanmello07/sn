@@ -12,7 +12,7 @@ has SHA256 `1706c101364c7390e4b6bce1bb1984ece57f9b7416efd7d08772383186c4dc89`
 and domain-separated content hash
 `sha256:254ade3e2dd642659f5332f682c3e5cb9fefd0e6b449f24db7cc76d6bc837627`.
 Its config selects `contract_catalog="fresh"`; all five selected creation/runtime
-pairs exactly match the retained Foundry compiler artifacts, making
+pairs exactly match the rebuilt Foundry compiler artifacts, making
 `source_to_bytecode_exact=true`. All 170 declared artifact paths passed hash and
 length readback. The seventeen-role census matches candidate-c.
 
