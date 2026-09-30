@@ -9,8 +9,10 @@ is sealed; no unit has been installed or started on a deployment host.
 The native prerequisite reader now makes additional executable progress toward
 current authority. `admit` and every injected fresh-start path authenticate the
 original producer runtime at the current census and at the independently signed
-activation checkpoint. The new increment is awaiting independent qualification;
-the earlier receipt above covers installation/process ownership only.
+activation checkpoint. The [independent native-admission qualification](evidence/validator-native-admission-qualification-20260930.md)
+passes its focused and adjacent normal/race suites. The earlier receipt above
+covers installation/process ownership; neither receipt authorizes a public
+fresh start.
 
 **Public fresh starts remain unavailable.** The public command constructs no
 `validatorActivationAuthority`. Signed process approval and an

@@ -893,6 +893,14 @@ contract, custody and majority-stake blockers. A systemd acknowledgement or
 progress file does not prove weights or the 10/90 outcome. The root signing
 service remains a distinct open implementation/deployment gate.
 
+The [qualified native prerequisite reader](evidence/validator-native-admission-qualification-20260930.md)
+now authenticates the original signed runtime at both current and activation
+checkpoint hashes, exact native epoch and drain facts, current generation,
+owner, activity and explicit Recycle. Its canonical anchors and sample age are
+rechecked before admission. It does not supply the remaining operator,
+contract, signer-custody or effective-majority authority, so public starts
+remain closed.
+
 ### Root validator on netuid 0
 
 The signer-free `root-preview` and bounded `root-monitor` commands now supply a

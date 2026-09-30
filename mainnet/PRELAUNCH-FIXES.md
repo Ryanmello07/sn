@@ -83,6 +83,15 @@ receipts and independent monitor deployment remain open.
 | MG-10 / P0 — Qualification, rollout and actual acceptance | Release/operations owner; PH-16 and every affected gate | **Planned:** no accepted composed mainnet release. | Before activation, complete production-path causal regressions, affected normal/race suites and a controlled upgrade/outage/restart/repair rehearsal; retain failed and reused scopes. After bounded activation, observe at least three complete native emission intervals and one full 50,400-block UR settlement/claim cycle before declaring program acceptance. Record pending live evidence as pending. |
 
 MG-03 also includes a [qualified miner claim-queue owner fix](evidence/miner-claim-queue-owner-qualification-20260929.md).
+
+MG-08 now also has an [independently qualified native prerequisite reader](evidence/validator-native-admission-qualification-20260930.md)
+for both UR validators. It checks the original signed runtime at the current
+and activation-checkpoint hashes, native epoch/drain facts, owner and generation,
+activity, explicit Recycle, canonical anchors and sample age. The public
+fresh-start authority is still nil: operator proof/client-key readiness,
+contracts, global signer custody and effective-majority stake remain open.
+The original schema-3 bootstrap config cannot silently absorb a later runtime
+upgrade; a separately approved continuity and activation rollover is needed.
 It locks the physical queue directory across read, publication and joined
 shutdown so duplicate daemons or a replaced pathname cannot split signed
 outcome custody. The separately [qualified retained-byte successor](evidence/miner-claim-queue-capacity-qualification-20260929.md)
