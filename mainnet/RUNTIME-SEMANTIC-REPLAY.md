@@ -1,8 +1,10 @@
 # Finite offline runtime transition replay
 
-This candidate adds executable evidence checking on the path toward RT-04.
-Independent behavioral qualification is pending. It does not establish complete
-semantic equivalence, install automatic runtime selection or authorize signing.
+This increment adds executable evidence checking on the path toward RT-04.
+[Independent qualification](evidence/runtime-semantic-replay-qualification-20260930.md)
+passes 67 positive executions, eight normal causal controls and four selected Go
+race controls. Rust execution is qualified normally only. It does not establish
+complete semantic equivalence, install automatic runtime selection or authorize signing.
 
 `ReplayProductionRuntimeContinuityContext` authenticates the original schema-3
 authority, independently signed continuity policy and separate verifier certificate.

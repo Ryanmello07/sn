@@ -229,13 +229,16 @@ records fifty positive root executions, seven normal and three selected race cau
 controls, exact source/dependency seals and the separate original failed fixture
 attempt. This qualification supplies no semantic verifier or production selection.
 
-**Finite runtime replay candidate — qualification pending.** The separate
+**Finite runtime replay — execution boundary qualified.** The separate
 [offline transition executor](RUNTIME-SEMANTIC-REPLAY.md) now checks exact old/new
 Wasm against explicit finite state cases under a signed executable/rules/evidence
 boundary and a bounded subprocess owner. It compares return bytes and full declared
 storage effects in on-chain context. This is finite fixture coverage, not complete
 economic equivalence or authenticated mainnet state. Automatic selection and fresh
-signing stay closed; no production route is installed.
+signing stay closed; no production route is installed. The
+[sealed qualification](evidence/runtime-semantic-replay-qualification-20260930.md)
+records 48 Go positive executions normal/race, 19 Rust tests normally, eight normal
+and four selected Go race causal controls, with exact source/build/dependency seals.
 
 **P0 follow-up: automatic compatible runtime admission (RT-04).** The additive
 path still requires a new independent signed artifact review for each upgrade.
