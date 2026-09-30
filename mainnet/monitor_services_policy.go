@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"regexp"
@@ -25,6 +26,7 @@ const maxMonitorValidatorRoles = 8
 type monitorServicesPolicy struct {
 	Schema     string                   `json:"schema"`
 	Validators []monitorValidatorPolicy `json:"validators"`
+	Operators  []monitorOperatorPolicy  `json:"operators,omitempty"`
 }
 
 // The full current source is exact. A retained intent may still name its older
@@ -58,8 +60,8 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return nil, errors.New("service policy contains trailing JSON")
 	}
-	if policy.Schema != monitorServicesSchema || len(policy.Validators) == 0 || len(policy.Validators) > maxMonitorValidatorRoles {
-		return nil, errors.New("service policy requires one through eight explicit validator roles")
+	if policy.Schema != monitorServicesSchema || len(policy.Validators)+len(policy.Operators) == 0 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators {
+		return nil, errors.New("service policy requires bounded explicit validator or operator roles")
 	}
 	paths := map[string]bool{}
 	addPath := func(path string) error {
@@ -111,6 +113,29 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 			}
 		}
 	}
+
+	operatorSources := map[string]bool{}
+	for _, operator := range policy.Operators {
+		if err := operator.validate(expected); err != nil {
+			return nil, err
+		}
+		if roles[operator.Role] {
+			return nil, errors.New("service roles must be unique bounded names")
+		}
+		roles[operator.Role] = true
+		source := operator.ExpectedSource
+		key := source.Database + "\x00" + source.DeploymentKey() + "\x00" + fmt.Sprint(source.OperatorId)
+		if operatorSources[key] {
+			return nil, errors.New("operator census repeats a source role")
+		}
+		operatorSources[key] = true
+		for _, path := range monitorOperatorInputPaths(operator, checkpointPath, metricsPath) {
+			if err := addPath(path); err != nil {
+				return nil, err
+			}
+		}
+	}
+	slices.SortFunc(policy.Operators, func(a, b monitorOperatorPolicy) int { return strings.Compare(a.Role, b.Role) })
 	slices.SortFunc(policy.Validators, func(a, b monitorValidatorPolicy) int { return strings.Compare(a.Role, b.Role) })
 	return &policy, nil
 }

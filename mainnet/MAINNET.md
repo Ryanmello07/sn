@@ -1616,6 +1616,16 @@ supplies identity/finality observations and an optional read-only
 [`--services` consumer](SERVICE-MONITOR.md) for independently configured
 validator roles.
 
+The [operator journal monitor increment](OPERATOR-MONITOR.md) now has an
+isolated production reader/consumer candidate, pending independent qualification.
+It observes actual read-only PostgreSQL transaction/attempt and settlement-mirror
+projections through the existing monitor owners, retaining domain incidents
+across outage/restart. Fresh DB access and empty pending counts do not establish
+chain success. Independent RPC, provider/client-key readiness, full liabilities,
+root-validator progress, protocol deadlines and repair authority remain unknown.
+Deployment, dedicated read-only credentials, query-load qualification and alert
+delivery remain open MG-07/PH-28 gates.
+
 The [read incident continuity increment](READ-INCIDENTS.md) preserves stable
 per-role outage IDs, first/latest failures, successful-read recovery evidence and
 recurrence through checkpoint restart. Read recovery does not establish service

@@ -62,7 +62,7 @@ func waitMonitorService(ctx context.Context, role string, duration time.Duration
 func runMonitorServices(ctx context.Context, client *rpcClient, expected identityExpectation, policy *monitorServicesPolicy, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators), now)
+	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators)+len(policy.Operators), now)
 	if err != nil {
 		return 3
 	}
@@ -73,6 +73,14 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	}()
 	diagnostic := output.errors.Writer("diagnostic")
 	var workers []*monitorValidatorWorker
+	var operators []*monitorOperatorWorker
+	defer func() {
+		for _, worker := range operators {
+			if err := errors.Join(worker.metrics.close(), worker.checkpoint.owner.close()); err != nil {
+				result = 3
+			}
+		}
+	}()
 	defer func() {
 		var cleanupErr error
 		for _, worker := range workers {
@@ -130,9 +138,18 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 			metrics.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(validator.Role, "metrics", file) }
 		}
 	}
+
+	for _, operator := range policy.Operators {
+		worker, err := openMonitorOperatorWorker(ctx, operator, expected, checkpointPath, metricsPath, hooks)
+		if err != nil {
+			fmt.Fprintln(diagnostic, "monitor operator admission:", err)
+			return 3
+		}
+		operators = append(operators, worker)
+	}
 	// The channel holds every terminal result even during cancellation. Every
 	// launched worker sends once and is consumed before output owners close.
-	results := make(chan int, len(workers)+1)
+	results := make(chan int, len(workers)+len(operators)+1)
 	go func() {
 		backoff := time.Second
 		for ctx.Err() == nil {
@@ -153,7 +170,12 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		writer := output.events.Writer(fmt.Sprintf("validator%d", index))
 		go func() { results <- worker.run(ctx, interval, writer, diagnostic, now, hooks) }()
 	}
-	for remaining := len(workers) + 1; remaining > 0; remaining-- {
+
+	for index, worker := range operators {
+		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+index))
+		go func() { results <- worker.run(ctx, interval, stallAfter, writer, diagnostic, now, hooks) }()
+	}
+	for remaining := len(workers) + len(operators) + 1; remaining > 0; remaining-- {
 		exit := <-results
 		if exit != 0 {
 			result = max(result, exit)
