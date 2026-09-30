@@ -823,7 +823,7 @@ receipts as explicitly retained observations, not fresh chain audits; these
 | Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. |
 | Root validator coldkey/hotkey | Root stake custody and root service signing through a separate hardware signer; its device and host API remain unspecified. The owners' Ledger cannot substitute for this key. |
 | UR validator hotkey and stake coldkey | UR scoring; may be the reviewed reserve target when explicitly selected. |
-| Operator demand deposit signer | Each operator keeps its own EVM signing key in its own secrets vault. The coordinator binds that address to its `noId` and deposit hotkey for the active epoch. Owner Ledger and the SN bootstrap never load operator deposit keys; this secrets vault is distinct from the on-chain settlement vault. |
+| Operator demand deposit signer | Each operator keeps its own EVM signing key in its own secrets vault. The coordinator binds that address to its `noId` and deposit hotkey for the active epoch. Owner Ledger and the SN bootstrap never load operator deposit keys; this secrets vault is distinct from the on-chain settlement vault. The [qualified worker custody check](evidence/operator-deposit-custody-qualification-20260930.md) still needs real wallet and coordinator verification. |
 | Vault mapped coldkey | Immutable tail-pool and escrow custody. No human holds its private key. |
 | Reserve mapped coldkey | Permanent reserve stake under the immutable sink. |
 
