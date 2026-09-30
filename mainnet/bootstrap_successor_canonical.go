@@ -14,20 +14,22 @@ import (
 // Calls are serial while owner and all original marker locks remain held.
 // No private key, endpoint discovery or automatic write retry exists here.
 type bootstrapSuccessorCanonicalChain struct {
-	owner             *bootstrapSuccessorExecutionStore
-	chain             *evmOwnedChain
-	approval          bootstrapSuccessorCanonicalApproval
-	provenance        bootstrapSuccessorSafeProvenanceAuthenticator
-	plans             []evmCreatePlan
-	records           []evmActionRecord
-	locks             []*os.File
-	planHash          string
-	authenticated     bool
-	admittedSequence  uint16
-	admitted          bool
-	submittedSequence uint16
-	submitted         bool
-	closed            bool
+	owner               *bootstrapSuccessorExecutionStore
+	chain               *evmOwnedChain
+	approval            bootstrapSuccessorCanonicalApproval
+	runtimeProfiles     []rootReceiptProfile
+	runtimeRevisionHash string
+	provenance          bootstrapSuccessorSafeProvenanceAuthenticator
+	plans               []evmCreatePlan
+	records             []evmActionRecord
+	locks               []*os.File
+	planHash            string
+	authenticated       bool
+	admittedSequence    uint16
+	admitted            bool
+	submittedSequence   uint16
+	submitted           bool
+	closed              bool
 }
 
 // Construction reopens exact original source inputs, holds every historical
@@ -38,7 +40,7 @@ func newBootstrapSuccessorCanonicalChain(ctx context.Context, owner *bootstrapSu
 
 // Only an explicitly supplied canonical-history capability can admit writes.
 // The public constructor deliberately has no production provenance implementation.
-func newBootstrapSuccessorCanonicalChainWithProvenance(ctx context.Context, owner *bootstrapSuccessorExecutionStore, approval bootstrapSuccessorCanonicalApproval, provenance bootstrapSuccessorSafeProvenanceAuthenticator) (_ *bootstrapSuccessorCanonicalChain, resultErr error) {
+func newBootstrapSuccessorCanonicalChainWithProvenance(ctx context.Context, owner *bootstrapSuccessorExecutionStore, approval bootstrapSuccessorCanonicalApproval, provenance bootstrapSuccessorSafeProvenanceAuthenticator, revisions ...bootstrapSuccessorRuntimeApproval) (_ *bootstrapSuccessorCanonicalChain, resultErr error) {
 	if ctx == nil || owner == nil || owner.closed {
 		return nil, errors.New("successor canonical adapter requires retained execution ownership")
 	}
@@ -90,6 +92,12 @@ func newBootstrapSuccessorCanonicalChainWithProvenance(ctx context.Context, owne
 	if err := owner.retainCanonicalAuthority(ctx, approval); err != nil {
 		return nil, err
 	}
+	for _, revision := range revisions {
+		if err := owner.retainRuntimeRevision(ctx, revision); err != nil {
+			return nil, err
+		}
+	}
+	self.runtimeProfiles, self.runtimeRevisionHash = owner.runtimeProfiles(), owner.runtimeHistory.hash()
 	self.chain, err = newEvmOwnedChain(plans[0].Config)
 	if err != nil {
 		return nil, err
@@ -123,6 +131,9 @@ func (self *bootstrapSuccessorCanonicalChain) checkpoint(ctx context.Context, pl
 	}
 	if err := errors.Join(ctx.Err(), self.owner.checkpoint("canonical-adapter-checkpoint"), self.approval.validate(ctx, plan)); err != nil {
 		return err
+	}
+	if self.runtimeRevisionHash != self.owner.runtimeHistory.hash() {
+		return errors.New("successor canonical adapter runtime authority changed during ownership")
 	}
 	raw, err := self.owner.local.read(bootstrapSuccessorCanonicalFile)
 	expected, encodeErr := json.Marshal(self.approval)
@@ -174,7 +185,8 @@ func (self *bootstrapSuccessorCanonicalChain) submit(ctx context.Context, plan b
 		return err
 	}
 	if !self.authenticated || !self.admitted || self.owner.last.Phase != "attempt-reserved" || self.admittedSequence != self.owner.last.Sequence ||
-		self.owner.last.CanonicalAuthorityHash != rootObjectHash(self.approval) || self.submitted && self.submittedSequence == self.owner.last.Sequence {
+		self.owner.last.CanonicalAuthorityHash != rootObjectHash(self.approval) || self.owner.last.RuntimeRevisionHash != self.runtimeRevisionHash ||
+		self.owner.runtimeHistory.pendingHash != "" || self.submitted && self.submittedSequence == self.owner.last.Sequence {
 		return errors.New("successor canonical write lacks a newly counted admitted authority")
 	}
 	retained, err := rootReceiptHex(plan.SignedRelayer, 128*1024)

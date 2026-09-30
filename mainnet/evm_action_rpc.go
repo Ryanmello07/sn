@@ -269,6 +269,13 @@ func (self *evmOwnedChain) locate(ctx context.Context, head chainIdentity, recor
 // Native insertion, original signed bytes and transaction position are shared
 // by original contract receipts and the later exact Safe outer transaction.
 func (self *evmOwnedChain) authenticatePosition(ctx context.Context, p evmPhasePlan, record evmActionRecord, receipt evmCreateReceipt, index uint64) (chainIdentity, error) {
+	return self.authenticatePositionWithRuntimeHistory(ctx, p, record, receipt, index, nil)
+}
+
+// Original receipts retain their single immutable profile. Successor history
+// selects only the inclusion and parent artifacts from its independent journal;
+// CRv4 then authenticates the full version/code/metadata tuple at both hashes.
+func (self *evmOwnedChain) authenticatePositionWithRuntimeHistory(ctx context.Context, p evmPhasePlan, record evmActionRecord, receipt evmCreateReceipt, index uint64, profiles []rootReceiptProfile) (chainIdentity, error) {
 	identity, err := self.client.readIdentityAt(ctx, receipt.NativeHash)
 	if err != nil {
 		return chainIdentity{}, err
@@ -288,7 +295,18 @@ func (self *evmOwnedChain) authenticatePosition(ctx context.Context, p evmPhaseP
 	evmHash, _ := native.NewHashFromHexString(receipt.BlockHash)
 	chain := &crv4.Chain{API: &gsrpc.SubstrateAPI{Client: &evmNativeReadClient{client: self.client}}, GenesisHash: genesis}
 	profile := p.Runtime
-	_, err = crv4.ReadEVMCheckpointAtContext(ctx, chain, crv4.EVMCheckpointQuery{GenesisHash: genesis, NativeHash: nativeHash, NativeNumber: receipt.NativeNumber, EVMHash: evmHash, EVMNumber: receipt.BlockNumber}, crv4.RuntimeArtifactIdentity{Version: profile.RuntimeVersion, CodeHash: profile.RuntimeCodeHash, MetadataHash: profile.RuntimeMetadataHash})
+	artifacts := []crv4.RuntimeArtifactIdentity{{Version: profile.RuntimeVersion, CodeHash: profile.RuntimeCodeHash, MetadataHash: profile.RuntimeMetadataHash}}
+	if profiles != nil {
+		parent, err := self.client.readIdentityAt(ctx, mapping.NativeHeader.ParentHash)
+		if err != nil || parent.FinalizedNumber+1 != identity.FinalizedNumber || parent.GenesisHash != identity.GenesisHash || parent.EvmChainId != identity.EvmChainId || parent.NativeChain != identity.NativeChain {
+			return chainIdentity{}, errors.Join(errors.New("successor historical runtime parent identity differs"), err)
+		}
+		artifacts, err = bootstrapSuccessorRuntimeArtifactPair(profiles, identity.runtimeVersion, parent.runtimeVersion)
+		if err != nil {
+			return chainIdentity{}, err
+		}
+	}
+	_, err = crv4.ReadEVMCheckpointAtContext(ctx, chain, crv4.EVMCheckpointQuery{GenesisHash: genesis, NativeHash: nativeHash, NativeNumber: receipt.NativeNumber, EVMHash: evmHash, EVMNumber: receipt.BlockNumber}, artifacts...)
 	if err != nil {
 		return chainIdentity{}, err
 	}

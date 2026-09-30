@@ -153,7 +153,7 @@ func (self *bootstrapSuccessorCanonicalChain) locateReceipt(ctx context.Context,
 }
 
 // Reconciliation precedes current expiry/runtime checks. The separately signed
-// successor runtime applies at inclusion and parent; later upgrades are immaterial.
+// retained artifact pair applies at inclusion and parent; later upgrades are immaterial.
 func (self *bootstrapSuccessorCanonicalChain) reconcile(ctx context.Context, plan bootstrapSuccessorExecutionPlan) (bootstrapSuccessorExecutionReconciliation, error) {
 	var result bootstrapSuccessorExecutionReconciliation
 	if err := self.checkpoint(ctx, plan); err != nil {
@@ -190,9 +190,8 @@ func (self *bootstrapSuccessorCanonicalChain) reconcile(ctx context.Context, pla
 		return result, err
 	}
 	phase := self.plans[0].Config.Plan
-	phase.Runtime = self.approval.Authorization.CurrentRuntime
-	identity, err := self.chain.authenticatePosition(ctx, phase,
-		evmActionRecord{Signed: plan.SignedRelayer, TransactionHash: plan.TransactionHash.Hex()}, located, uint64(receipt.TransactionIndex))
+	identity, err := self.chain.authenticatePositionWithRuntimeHistory(ctx, phase,
+		evmActionRecord{Signed: plan.SignedRelayer, TransactionHash: plan.TransactionHash.Hex()}, located, uint64(receipt.TransactionIndex), self.runtimeProfiles)
 	if err != nil {
 		return result, err
 	}

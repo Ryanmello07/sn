@@ -222,15 +222,18 @@ func (self *bootstrapSuccessorCanonicalChain) identity(ctx context.Context, plan
 	return head, nil
 }
 
-// Current runtime authority belongs to the independently signed successor
-// profile. Historical originals continue to use their own approved artifacts.
+// Current runtime must match a complete independently retained artifact.
+// Historical originals continue to use their own immutable approved artifacts.
 func (self *bootstrapSuccessorCanonicalChain) currentRuntime(ctx context.Context, head chainIdentity) error {
 	runtime, err := self.chain.client.readRuntimeSnapshotAtIdentity(ctx, head)
-	profile := self.approval.Authorization.CurrentRuntime
-	if err != nil || runtime.Version != profile.RuntimeVersion || runtime.CodeHash != profile.RuntimeCodeHash || runtime.MetadataHash != profile.RuntimeMetadataHash {
-		return errors.Join(errors.New("successor canonical current runtime differs from its independent successor approval"), err)
+	if err == nil {
+		for _, profile := range self.runtimeProfiles {
+			if runtime.Version == profile.RuntimeVersion && runtime.CodeHash == profile.RuntimeCodeHash && runtime.MetadataHash == profile.RuntimeMetadataHash {
+				return nil
+			}
+		}
 	}
-	return nil
+	return errors.Join(errors.New("successor canonical current runtime differs from its independent successor approval"), err)
 }
 
 // Finalized reads keep one canonical hash while ordinary head advancement is
@@ -250,6 +253,9 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 	}
 	if !self.authenticated {
 		return result, errors.New("successor canonical observation precedes historical adoption")
+	}
+	if self.owner.runtimeHistory.pendingHash != "" {
+		return result, errors.New("successor canonical admission has an incomplete runtime revision")
 	}
 	head, err := self.identity(ctx, plan)
 	if err != nil {
