@@ -18,12 +18,14 @@ live approval remain required before production effects. The read-only canonical
 chain's `submit` method and the ordinary RPC method whitelist remain disabled for
 writes; constructing an observer cannot construct this capability.
 
-Root native custody is selected as a non-exportable Ledger hardware key. This
-submission port never loads a seed or private-key file and cannot command that
-device. The exact model/app, transport, native-payload support and durable
-request-hash signing/recovery behavior require separate verification before an
-issuing adapter exists. Original-byte reconciliation remains available without
-making those missing capabilities appear approved.
+The root key is held by a separate hardware signer with model/API/transport
+still unspecified. The Ledger with Polkadot Substrate app belongs to subnet-owner
+setup custody; each operator's demand-deposit vault wallet is separate again.
+This submission port loads no seed or private-key file and commands none of
+those devices. Exact native-payload support and durable request-hash
+signing/recovery require separate verification before a root issuing adapter
+exists. Physical confirmation may be required; no unattended behavior is
+assumed. Original-byte reconciliation remains available while these gates stay open.
 
 ## Independent action and route approval
 

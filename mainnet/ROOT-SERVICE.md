@@ -47,17 +47,23 @@ secret loading/device transport, this authority and a deployed root supervisor
 remain absent. The UR host component does not install this root command or any
 native signing route.
 
-The selected custody direction is a **Ledger hardware signer**, with the root
-private key remaining inside the device. No seed export or local private-key
-file is authorized. The exact Ledger model, installed app, host transport and
-support for this pinned Bittensor sr25519 signing payload are still unverified;
-this selection does not supply a production adapter. A future adapter must fit
-`rootActionSigner`: `signOnce` admits only the exact original request hash and
-action, while `recoverSignature` only retrieves already issued bytes. Device
-and surrounding custody controls must durably provide request idempotency,
-global hotkey/nonce and pending-seat exclusion, and authenticated never-issued
-responses. A disconnected device, missing host receipt, generic app response or
-operator confirmation is not proof that a signature was never issued.
+The root `SetRootWeights` key is in a **separate hardware signer** whose model,
+API and host transport remain unspecified. The Ledger with Polkadot Substrate
+app holds subnet-owner setup keys; it is not the selected root signer. Each
+operator's demand-deposit wallet is held in that operator's own vault and is
+another distinct role. None of these identities can substitute for the root
+hotkey in the original approved packet. This command loads no native secret.
+
+A future root-device adapter must fit `rootActionSigner`: `signOnce` admits
+only the exact original request hash and action, while `recoverSignature` only
+retrieves already issued bytes. Device and surrounding custody controls must
+durably provide request idempotency, global hotkey/nonce and pending-seat
+exclusion, and authenticated never-issued responses. If physical confirmation
+is required, the request must remain finite and durable while waiting. Canceling
+or losing the device response leaves the same unresolved signing request; it
+cannot authorize a second signature. A disconnected device, missing host
+receipt, generic app response or operator confirmation is not proof that a
+signature was never issued. No unattended signing behavior is assumed.
 
 ## Executable observation and recovery
 
