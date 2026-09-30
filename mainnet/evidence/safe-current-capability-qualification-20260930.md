@@ -119,6 +119,31 @@ result is claimed for unselected race mutations. The final independent manifest,
 raw stream hashes and complete author read-only audit must replace pending
 claims before integration.
 
+### Prospective control-oracle corrections awaiting fresh evidence
+
+The original normal `final_pending_order` and `final_runtime_code` mutations
+reached the existing fixture's earlier reservation assertion, rather than their
+sealed command-exit assertion. Both original attempts remain **UNRESOLVED** under
+their original oracles. Moving readmission early or removing the last code-hash
+check permits the first observation to consume a durable attempt; the independent
+second observation still refuses the changed nonce or runtime artifact. Command
+exit therefore stays one. The fixture correctly detects reservation before fresh
+admission at line 304; the handoff incorrectly expected the line-301 assertion.
+
+Two additive corrections change only those expected assertions. Source, tests,
+mutation patches, selectors and the mode matrix remain unchanged; their existing
+compile/vet evidence still applies. The correction seals are
+`/tmp/safe-current-capability-control-correction-01-20260930/SHA256SUMS`, SHA-256
+`23de71558b121fc6b971bad09294e190e0ac6862b36a40c68ec1e7e627082369`, and
+`/tmp/safe-current-capability-control-correction-02-20260930/SHA256SUMS`, SHA-256
+`d6b955947e214a56aefb139057363da1f04fc18ce49050550c1001183f98cb0f`.
+Fresh ordering normal/race and final-code normal reproductions are pending.
+Original raw streams and result ledgers must remain intact in the final seal;
+they cannot be retrospectively relabeled causal. A completed matrix would record
+eight logical normal and five selected race controls plus these two unresolved
+original invocations. These mutations test admission before reservation, without
+claiming that either mutation defeats the independent second observation.
+
 ## Ordered integration plan
 
 1. Completed: the exact `3f88a948` custody matrix and independent raw/source audit
