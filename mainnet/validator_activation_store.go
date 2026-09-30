@@ -27,16 +27,17 @@ type validatorActivationUnitState struct {
 }
 
 type validatorActivationRecord struct {
-	Schema           string                                `json:"schema"`
-	Approval         validatorActivationApproval           `json:"approval"`
-	PublicKey        string                                `json:"independent_public_key"`
-	HighWaterAt      time.Time                             `json:"high_water_at"`
-	Operations       uint32                                `json:"operations"`
-	Units            [2]validatorActivationUnitState       `json:"units"`
-	Readiness        *validatorActivationReadiness         `json:"last_readiness,omitempty"`
-	ProofCheckpoints []*validatorActivationProofCheckpoint `json:"completed_proof_checkpoints,omitempty"`
-	Status           string                                `json:"status"`
-	ContentHash      string                                `json:"content_hash"`
+	Schema               string                                    `json:"schema"`
+	Approval             validatorActivationApproval               `json:"approval"`
+	PublicKey            string                                    `json:"independent_public_key"`
+	HighWaterAt          time.Time                                 `json:"high_water_at"`
+	Operations           uint32                                    `json:"operations"`
+	Units                [2]validatorActivationUnitState           `json:"units"`
+	Readiness            *validatorActivationReadiness             `json:"last_readiness,omitempty"`
+	ProofCheckpoints     []*validatorActivationProofCheckpoint     `json:"completed_proof_checkpoints,omitempty"`
+	CommittedCheckpoints []*validatorActivationCommittedCheckpoint `json:"completed_committed_checkpoints,omitempty"`
+	Status               string                                    `json:"status"`
+	ContentHash          string                                    `json:"content_hash"`
 }
 
 // Only one synchronous invocation may hold this process lock. All external
@@ -68,6 +69,14 @@ func (self validatorActivationRecord) validate(approval validatorActivationAppro
 			return errors.New("validator completed proof checkpoint differs")
 		}
 	}
+	if len(self.CommittedCheckpoints) != 0 && len(self.CommittedCheckpoints) != 2 {
+		return errors.New("validator committed checkpoint census differs")
+	}
+	for i, checkpoint := range self.CommittedCheckpoints {
+		if checkpoint != nil && (checkpoint.ObservedAt.After(self.HighWaterAt) || checkpoint.validate(approval.Plan, i) != nil) {
+			return errors.New("validator completed committed checkpoint differs")
+		}
+	}
 	for _, unit := range self.Units {
 		if unit.Installed && !unit.InstallIntent || unit.InstallIntent && self.Operations == 0 || unit.StartAt.IsZero() != (unit.StartMonotonicUsec == 0) ||
 			!unit.StartAt.IsZero() && (!unit.Installed || unit.Readiness == nil || unit.StartAt.After(self.HighWaterAt)) || unit.StartAt.IsZero() && (unit.Readiness != nil || unit.Generation != nil || unit.Completed != nil) {
@@ -92,7 +101,7 @@ func (self validatorActivationRecord) validate(approval validatorActivationAppro
 		}
 	}
 	switch self.Status {
-	case "claimed", "operation-reserved", "installed", "admitted-process-only", "observed-operator-and-contract-evidence", "admitted-stake-capacity", "observed-approved-prefix-and-worker-health", "activation-authority-unavailable", "source-refused", "authority-refused", "approval-window-closed", "operation-limit", "clock-rollback", "partial", "processes-observed":
+	case "claimed", "operation-reserved", "installed", "admitted-process-only", "observed-operator-and-contract-evidence", "admitted-stake-capacity", "observed-approved-prefix-and-worker-health", "observed-committed-prefix-and-worker-health", "activation-authority-unavailable", "source-refused", "authority-refused", "approval-window-closed", "operation-limit", "clock-rollback", "partial", "processes-observed":
 	default:
 		return errors.New("validator activation disposition is unknown")
 	}
@@ -102,16 +111,26 @@ func (self validatorActivationRecord) validate(approval validatorActivationAppro
 	if self.Status == "admitted-stake-capacity" && (self.Readiness == nil || self.Readiness.Stake == nil) {
 		return errors.New("validator stake disposition lacks its bounded capacity observation")
 	}
-	if self.Status == "observed-approved-prefix-and-worker-health" && (self.Readiness == nil || self.Readiness.Health == nil) {
+	if (self.Status == "observed-approved-prefix-and-worker-health" || self.Status == "observed-committed-prefix-and-worker-health") && (self.Readiness == nil || self.Readiness.Health == nil) {
 		return errors.New("validator health disposition lacks its bounded observation")
 	}
-	if self.Status == "observed-approved-prefix-and-worker-health" {
+	if self.Status == "observed-approved-prefix-and-worker-health" || self.Status == "observed-committed-prefix-and-worker-health" {
 		if len(self.ProofCheckpoints) != 2 {
 			return errors.New("validator health disposition lost its completed proof checkpoints")
 		}
 		for i, checkpoint := range self.ProofCheckpoints {
 			if checkpoint == nil || rootObjectHash(*checkpoint) != rootObjectHash(self.Readiness.Health.Proofs[i]) {
 				return errors.New("validator health completed checkpoint differs from its published observation")
+			}
+		}
+	}
+	if self.Status == "observed-committed-prefix-and-worker-health" {
+		if self.Readiness.Health.Committed == nil || len(self.CommittedCheckpoints) != 2 {
+			return errors.New("validator committed disposition lost its completed checkpoints")
+		}
+		for i, checkpoint := range self.CommittedCheckpoints {
+			if checkpoint == nil || rootObjectHash(*checkpoint) != rootObjectHash(self.Readiness.Health.Committed[i]) {
+				return errors.New("validator committed checkpoint differs from its published observation")
 			}
 		}
 	}

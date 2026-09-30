@@ -37,11 +37,12 @@ type validatorActivationWorkerHealth struct {
 // This bounded projection is observational only. Original activation blockers,
 // signer custody, current mutable prefixes and public start remain closed.
 type validatorActivationHealthReadiness struct {
-	Schema      string                                `json:"schema"`
-	Proofs      [2]validatorActivationProofCheckpoint `json:"approved_prefixes"`
-	Workers     [2]validatorActivationWorkerHealth    `json:"workers"`
-	OpenGates   []string                              `json:"open_gates"`
-	ContentHash string                                `json:"content_hash"`
+	Schema      string                                     `json:"schema"`
+	Proofs      [2]validatorActivationProofCheckpoint      `json:"approved_prefixes"`
+	Workers     [2]validatorActivationWorkerHealth         `json:"workers"`
+	Committed   *[2]validatorActivationCommittedCheckpoint `json:"committed_prefixes,omitempty"`
+	OpenGates   []string                                   `json:"open_gates"`
+	ContentHash string                                     `json:"content_hash"`
 }
 
 // Fixed unresolved domains cannot be removed by a healthy heartbeat or a
@@ -75,8 +76,12 @@ func (self validatorActivationProofCheckpoint) validate(plan validatorActivation
 func (self validatorActivationHealthReadiness) validate(plan validatorActivationPlan, readiness validatorActivationReadiness) error {
 	hash := self.ContentHash
 	self.ContentHash = ""
+	gates := validatorActivationHealthOpenGates()
+	if self.Committed != nil {
+		gates = validatorActivationCommittedOpenGates()
+	}
 	if self.Schema != validatorActivationHealthSchema || !planSha256(hash) || hash != rootObjectHash(self) || readiness.Production == nil || readiness.Stake == nil ||
-		!slices.Equal(self.OpenGates, validatorActivationHealthOpenGates()) {
+		!slices.Equal(self.OpenGates, gates) {
 		return errors.New("validator health observation lacks its complete qualified composition")
 	}
 	for i, checkpoint := range self.Proofs {
@@ -91,6 +96,22 @@ func (self validatorActivationHealthReadiness) validate(plan validatorActivation
 		for j, prefix := range checkpoint.Proof.Prefixes {
 			if prefix.NoId != observed.Operators[j].NoId || prefix.ActivationHash != observed.Operators[j].ActivationHash || prefix.Epoch > observed.SettlementEpoch {
 				return errors.New("validator historical prefix belongs to another current operator domain")
+			}
+		}
+		if self.Committed != nil {
+			current := self.Committed[i]
+			if err := current.validate(plan, i); err != nil {
+				return err
+			}
+			if current.ObservedAt.Before(checkpoint.ObservedAt) || current.Proof.ApprovedPrefixHash != checkpoint.Proof.ContentHash || current.Proof.Native != observed.Native ||
+				current.Proof.EvmBlock != observed.EvmBlock || current.Proof.EvmHash != observed.EvmHash || current.Proof.ClientDomainHash != checkpoint.Proof.ClientDomainHash || current.Proof.PolicyHash != checkpoint.Proof.PolicyHash {
+				return errors.New("validator committed checkpoint differs from its approved current observation")
+			}
+			for j, prefix := range current.Proof.Prefixes {
+				original := checkpoint.Proof.Prefixes[j]
+				if prefix.NoId != original.NoId || prefix.ActivationHash != original.ActivationHash || prefix.HistoryHash != original.HistoryHash || prefix.LastSequence < original.LastSequence || prefix.Epoch < original.Epoch || prefix.Epoch > observed.SettlementEpoch || prefix.Generation < original.Generation {
+					return errors.New("validator committed checkpoint does not extend its original operator")
+				}
 			}
 		}
 		worker := self.Workers[i]
@@ -116,6 +137,12 @@ func (self validatorActivationHealthReadiness) validate(plan validatorActivation
 // The original operation allowance and route deadline bound all stages. Each
 // completed role is synced before observing the next, without issuing effects.
 func observeValidatorActivationHealth(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, record *validatorActivationRecord, now func() time.Time) (*validatorActivationReadiness, error) {
+	return observeValidatorActivationHealthScope(ctx, store, host, record, now, false)
+}
+
+// The additional scope authenticates service-owned committed histories. The
+// existing health-only command retains its original observation and limits.
+func observeValidatorActivationHealthScope(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, record *validatorActivationRecord, now func() time.Time, committed bool) (*validatorActivationReadiness, error) {
 	plan := store.approval.Plan
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(plan.Route.ReadRetrySeconds)*time.Second)
 	defer cancel()
@@ -133,6 +160,10 @@ func observeValidatorActivationHealth(ctx context.Context, store *validatorActiv
 		return nil, err
 	}
 	health := &validatorActivationHealthReadiness{Schema: validatorActivationHealthSchema, OpenGates: validatorActivationHealthOpenGates()}
+	if committed {
+		health.Committed = &[2]validatorActivationCommittedCheckpoint{}
+		health.OpenGates = validatorActivationCommittedOpenGates()
+	}
 	for i := range plan.Units {
 		file := preparation.Plan.Config.Validators[i].Config
 		raw, err := readBootstrapChainInput(ctx, file, 2*1024*1024)
@@ -148,6 +179,13 @@ func observeValidatorActivationHealth(ctx context.Context, store *validatorActiv
 			return nil, err
 		}
 		health.Proofs[i] = checkpoint
+		if committed {
+			current, err := observeValidatorActivationCommitted(ctx, store, record, i, file, raw, result.Production.Validators[i], *proof, now)
+			if err != nil {
+				return nil, err
+			}
+			health.Committed[i] = *current
+		}
 		var previous *validatorActivationWorkerHealth
 		if record.Readiness != nil && record.Readiness.Health != nil {
 			previous = &record.Readiness.Health.Workers[i]

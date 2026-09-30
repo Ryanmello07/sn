@@ -26,8 +26,8 @@ func runValidatorActivationCommandWithHost(ctx context.Context, args []string, s
 		return 2
 	}
 	operation := args[0]
-	if operation != "claim" && operation != "install" && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" && operation != "admit-health" && operation != "start" && operation != "resume" && operation != "status" {
-		fmt.Fprintln(stderr, "validator activation requires claim|install|admit|admit-evidence|admit-stake|admit-health|start|resume|status")
+	if operation != "claim" && operation != "install" && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" && operation != "admit-health" && operation != "admit-committed" && operation != "start" && operation != "resume" && operation != "status" {
+		fmt.Fprintln(stderr, "validator activation requires claim|install|admit|admit-evidence|admit-stake|admit-health|admit-committed|start|resume|status")
 		return 2
 	}
 	flags := flag.NewFlagSet("activate-validators "+operation, flag.ContinueOnError)

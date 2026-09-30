@@ -61,3 +61,70 @@ Passing this command is not launch authorization.
 Qualification uses synthetic signed fixtures, actual local HTTP/RPC transports,
 protected files and deterministic deadline/cancellation transitions. No physical
 device, deployed mainnet contract, live operator or production service was used.
+
+## Service-owned committed prefixes
+
+`sn-mainnet activate-validators admit-committed` accepts the same original
+approval arguments and composes every `admit-health` stage with a bounded
+observation of each role's **committed** current protocol history. The expected
+UID comes only from that role's originally signed unit. The config's protocol
+`state_dir` is distinct from the unit's operational `StateDirectory` and progress
+file; substituting one for the other refuses.
+
+The protocol root must already exist, be private, physical and service-owned.
+Every ancestor must be protected against group/other writes and owned by root
+or that service. The new read-only scope reads only `measurements/inputs` and
+`settlement-closures-v2`; it cannot create either namespace, repair permissions,
+change ownership, open a signing key or acquire a producer ledger. Both complete
+namespace censuses stay held through capture, replay, historical source reads
+and actual closes. Symlinks, extra hard links, unknown files, replacement,
+removal, later publication and mixed close/cancellation failures refuse. An
+absent suffix is observed under its retained existing parent; it never replaces
+the independently pinned explicit activation origin.
+
+The actual current cuts select content-addressed record and proof streams from
+both original operator origins. Both copies must authenticate. The existing
+archive verifier reconstructs complete signed record ancestry, lifetime trails,
+generations, ordinary cuts, terminal transitions and EMA state in fresh private
+scratch under the activation journal's host custody directory. It then observes
+the original activation and every committed historical native/EVM boundary.
+No journal header, imported ready projection or service self-report can supply
+that verdict. Source controls are capped at 16 MiB, tape content at 48 MiB,
+combined unique retained content at 64 MiB and source identities at 8192. Each
+physical namespace has an 8192-entry census cap; all files including recognized
+temporary names consume the 16 MiB history bound. Existing signed replay/disk
+limits remain in force. Oversized history refuses this bounded mode.
+
+Pure remote transport failures retain captured immutable chunks and completed
+mathematical replay within the invocation. Remote attempts retain the existing
+60/300 second retry policy, subject to the unchanged original route deadline
+and sample-age limit. Local ownership/census changes are integrity refusals and
+are not retried as absent state. The isolated scratch is removed after its
+actual replay owners close, without deleting any producer or custody input.
+
+Completed current observations are synced separately in
+`completed_committed_checkpoints`. They bind the exact approved checkpoint,
+service UID, current native/EVM and client-key domains, complete captured-source
+census, and both replayed operator cursors. A later role failure retains the
+completed earlier role. Re-observation proves every retained prior prefix is
+an actual replayed ancestor; it cannot shorten history or reset observation,
+generation or protocol clocks. Original approved checkpoints remain separate.
+
+This closes the **committed control-prefix** subgate only. It does not inspect
+unsealed ledger tails, unfinished trails or steering-intent liability, and the
+standard progress format still provides no per-operator live-worker attestation.
+The result explicitly retains `UNSEALED_LEDGER_AND_INTENT_STATE_UNVERIFIED`,
+`PER_OPERATOR_LIVE_WORKER_UNVERIFIED`, `GLOBAL_SIGNER_CUSTODY_UNVERIFIED`,
+`APPLIED_WEIGHTS_INFLUENCE_UNVERIFIED` and
+`SIGNED_LAUNCH_AUTHORITY_UNAVAILABLE`. MG-08 therefore remains incomplete until
+the actual running generation supplies attributable worker evidence and the
+unsealed/intent scope has an independently authenticated boundary. Public starts
+remain closed. Owners continue signing on their own devices without Snow
+access; each operator's demand-deposit wallet remains in its separate vault.
+
+Deployment qualification must supply the original signed service UIDs and
+protected protocol paths, reachable original replicas, and canonical historical
+RPC sources. Synthetic qualification additionally runs one dedicated fixture
+as root to prove a genuinely different service UID is readable without changing
+the ordinary producer's current-user policy. That test only chowns its own
+temporary fixture. No live deployment or worker-health closure is claimed.

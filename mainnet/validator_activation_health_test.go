@@ -298,7 +298,8 @@ func TestValidatorActivationHealthCompositionRejectsForgedReadyProjection(t *tes
 
 // A complete synthetic retained projection is accepted structurally, then
 // individually rehashed substitutions prove that hashes alone grant no scope.
-func TestValidatorActivationHealthProjectionPinsBothRolesAndOpenGates(t *testing.T) {
+func validatorActivationHealthTestReadiness(t *testing.T) (*validatorActivationStakeFixture, validatorActivationReadiness) {
+	t.Helper()
 	f := newValidatorActivationStakeFixture(t, nil)
 	f.activation.installed()
 	result, code, detail := f.activation.command(t.Context(), "admit-stake", nil)
@@ -338,6 +339,14 @@ func TestValidatorActivationHealthProjectionPinsBothRolesAndOpenGates(t *testing
 	if err := readiness.validate(f.activation.approval.Plan); err != nil {
 		t.Fatal("complete retained structure refused", err)
 	}
+	return f, readiness
+}
+
+// Every rehashed source substitution must still satisfy the exact current
+// composition; this fixture confers no real deployment or start authority.
+func TestValidatorActivationHealthProjectionPinsBothRolesAndOpenGates(t *testing.T) {
+	f, readiness := validatorActivationHealthTestReadiness(t)
+	digest := "sha256:" + strings.Repeat("7", 64)
 	for _, fault := range []string{"operator", "activation", "native", "evm", "client-domain", "config-file", "current-prefix", "source-check", "open-gate", "worker-current", "worker-domain"} {
 		raw, _ := json.Marshal(readiness)
 		var changed validatorActivationReadiness

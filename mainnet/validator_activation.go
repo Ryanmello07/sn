@@ -128,17 +128,18 @@ func observeValidatorActivationWithProduction(ctx context.Context, approval vali
 }
 
 type validatorActivationResult struct {
-	Schema             string                                `json:"schema"`
-	PlanHash           string                                `json:"bootstrap_plan_hash"`
-	Status             string                                `json:"status"`
-	Operations         uint32                                `json:"operations"`
-	Units              [2]validatorActivationUnitState       `json:"units"`
-	Readiness          *validatorActivationReadiness         `json:"readiness,omitempty"`
-	ProofCheckpoints   []*validatorActivationProofCheckpoint `json:"completed_proof_checkpoints,omitempty"`
-	ActivationReady    bool                                  `json:"activation_ready"`
-	RootServiceActive  bool                                  `json:"root_service_active"`
-	ChainSuccessProven bool                                  `json:"chain_success_proven"`
-	Disposition        string                                `json:"operator_disposition"`
+	Schema               string                                    `json:"schema"`
+	PlanHash             string                                    `json:"bootstrap_plan_hash"`
+	Status               string                                    `json:"status"`
+	Operations           uint32                                    `json:"operations"`
+	Units                [2]validatorActivationUnitState           `json:"units"`
+	Readiness            *validatorActivationReadiness             `json:"readiness,omitempty"`
+	ProofCheckpoints     []*validatorActivationProofCheckpoint     `json:"completed_proof_checkpoints,omitempty"`
+	CommittedCheckpoints []*validatorActivationCommittedCheckpoint `json:"completed_committed_checkpoints,omitempty"`
+	ActivationReady      bool                                      `json:"activation_ready"`
+	RootServiceActive    bool                                      `json:"root_service_active"`
+	ChainSuccessProven   bool                                      `json:"chain_success_proven"`
+	Disposition          string                                    `json:"operator_disposition"`
 }
 
 func (self validatorActivationRecord) result() validatorActivationResult {
@@ -149,13 +150,13 @@ func (self validatorActivationRecord) result() validatorActivationResult {
 		}
 	}
 	return validatorActivationResult{Schema: validatorActivationSchema, PlanHash: self.Approval.Plan.PlanHash, Status: self.Status, Operations: self.Operations,
-		Units: self.Units, Readiness: self.Readiness, ProofCheckpoints: self.ProofCheckpoints, Disposition: disposition}
+		Units: self.Units, Readiness: self.Readiness, ProofCheckpoints: self.ProofCheckpoints, CommittedCheckpoints: self.CommittedCheckpoints, Disposition: disposition}
 }
 
 // Installation, admission and start are explicit distinct operations. Every
 // effect follows synced intent; all manager/RPC operations join before return.
 func advanceValidatorActivation(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, authority validatorActivationAuthority, operation string, now func() time.Time) (validatorActivationResult, error) {
-	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil || operation != "install" && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" && operation != "admit-health" && operation != "start" && operation != "resume" {
+	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil || operation != "install" && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" && operation != "admit-health" && operation != "admit-committed" && operation != "start" && operation != "resume" {
 		return validatorActivationResult{}, errors.New("validator activation owner or operation is unavailable")
 	}
 	record, err := store.load(ctx)
@@ -173,7 +174,7 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 				record.Status = "source-refused"
 				return record.result(), errors.New("validator activation requires both installed units before admission or recovery")
 			}
-			if !unit.StartAt.IsZero() && unit.Generation == nil && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" && operation != "admit-health" {
+			if !unit.StartAt.IsZero() && unit.Generation == nil && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" && operation != "admit-health" && operation != "admit-committed" {
 				record.Status = "partial"
 				return record.result(), errors.New("validator activation consumed start needs manual reconciliation; no operation was consumed")
 			}
@@ -246,9 +247,11 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 	if err := host.admit(ctx, plan, record); err != nil {
 		return finish("source-refused", err)
 	}
-	if operation == "admit" || operation == "admit-evidence" || operation == "admit-stake" || operation == "admit-health" {
+	if operation == "admit" || operation == "admit-evidence" || operation == "admit-stake" || operation == "admit-health" || operation == "admit-committed" {
 		var evidence *validatorActivationReadiness
-		if operation == "admit-health" {
+		if operation == "admit-committed" {
+			evidence, err = observeValidatorActivationHealthScope(ctx, store, host, &record, now, true)
+		} else if operation == "admit-health" {
 			evidence, err = observeValidatorActivationHealth(ctx, store, host, &record, now)
 		} else if operation == "admit-stake" {
 			_, _, evidence, err = observeValidatorActivationWithStake(ctx, store.approval, now)
@@ -269,6 +272,8 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 			status = "observed-operator-and-contract-evidence"
 		} else if operation == "admit-stake" {
 			status = "admitted-stake-capacity"
+		} else if operation == "admit-committed" {
+			status = "observed-committed-prefix-and-worker-health"
 		} else if operation == "admit-health" {
 			status = "observed-approved-prefix-and-worker-health"
 		}

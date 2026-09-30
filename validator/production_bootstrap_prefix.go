@@ -68,36 +68,8 @@ func ObserveProductionBootstrapPrefix(ctx context.Context, path string, raw []by
 			result = nil
 		}
 	}()
-	inspection, err := InspectProductionBootstrapConfig(ctx, path, raw)
+	cfg, err := loadProductionBootstrapPrefixConfig(ctx, path, raw, observed)
 	if err != nil {
-		return nil, err
-	}
-	approval := inspection.Approval
-	if observed.ConfigHash != fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) || observed.DeploymentId != inspection.DeploymentId || observed.ValidatorId != inspection.ValidatorId ||
-		approval.Production == nil || !slices.Contains(approval.Production.ValidatorHotkeys, observed.Native.Hotkey) || observed.Native.Hash == ([32]byte{}) ||
-		observed.Native.Block < approval.ValidFromNativeBlock || observed.Native.Block > approval.ValidThroughNativeBlock ||
-		observed.Native.Epoch < approval.FirstNativeEpoch || observed.Native.Epoch > approval.Production.ValidThroughNativeEpoch || observed.EvmBlock == 0 {
-		return nil, errors.New("bootstrap prefix differs from its original config or current native scope")
-	}
-	if _, err := canonicalAttemptHex32("prefix current EVM hash", observed.EvmHash, false); err != nil {
-		return nil, err
-	}
-	cfg, err := decodeReleaseConfigDocument(path, raw)
-	if err != nil {
-		return nil, err
-	}
-	cfg.Coordinator, cfg.SettlementVault = strings.ToLower(cfg.Coordinator), strings.ToLower(cfg.SettlementVault)
-	approvalRaw, err := ReadReleaseEvidenceV2File(ctx, inspection.ApprovalReference, maximumOwnerRecycleApprovalBytes)
-	if err != nil {
-		return nil, err
-	}
-	if err := loadOwnerRecycleProductionConfigBytes(cfg, approvalRaw); err != nil {
-		return nil, err
-	}
-	if err := loadReleaseProductionRuntimeHistoryBytes(cfg, nil); err != nil {
-		return nil, err
-	}
-	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	inputs, err := readProductionBootstrapPrefixInputs(ctx, cfg, observed)
@@ -135,6 +107,44 @@ func ObserveProductionBootstrapPrefix(ctx context.Context, path string, raw []by
 	result.HistoricalSources = true
 	result.ContentHash = productionBootstrapPrefixHash(*result)
 	return result, nil
+}
+
+// Both approved and committed prefix readers load exactly the independently
+// approved public configuration. This never calls the producer/key loader.
+func loadProductionBootstrapPrefixConfig(ctx context.Context, path string, raw []byte, observed ProductionBootstrapObservation) (*ReleaseConfig, error) {
+	inspection, err := InspectProductionBootstrapConfig(ctx, path, raw)
+	if err != nil {
+		return nil, err
+	}
+	approval := inspection.Approval
+	if observed.ConfigHash != fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) || observed.DeploymentId != inspection.DeploymentId || observed.ValidatorId != inspection.ValidatorId ||
+		approval.Production == nil || !slices.Contains(approval.Production.ValidatorHotkeys, observed.Native.Hotkey) || observed.Native.Hash == ([32]byte{}) ||
+		observed.Native.Block < approval.ValidFromNativeBlock || observed.Native.Block > approval.ValidThroughNativeBlock ||
+		observed.Native.Epoch < approval.FirstNativeEpoch || observed.Native.Epoch > approval.Production.ValidThroughNativeEpoch || observed.EvmBlock == 0 {
+		return nil, errors.New("bootstrap prefix differs from its original config or current native scope")
+	}
+	if _, err := canonicalAttemptHex32("prefix current EVM hash", observed.EvmHash, false); err != nil {
+		return nil, err
+	}
+	cfg, err := decodeReleaseConfigDocument(path, raw)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Coordinator, cfg.SettlementVault = strings.ToLower(cfg.Coordinator), strings.ToLower(cfg.SettlementVault)
+	approvalRaw, err := ReadReleaseEvidenceV2File(ctx, inspection.ApprovalReference, maximumOwnerRecycleApprovalBytes)
+	if err != nil {
+		return nil, err
+	}
+	if err := loadOwnerRecycleProductionConfigBytes(cfg, approvalRaw); err != nil {
+		return nil, err
+	}
+	if err := loadReleaseProductionRuntimeHistoryBytes(cfg, nil); err != nil {
+		return nil, err
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 // Both complete operator histories and every signature are pinned before the
