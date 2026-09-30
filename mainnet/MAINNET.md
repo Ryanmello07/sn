@@ -131,6 +131,13 @@ execution, native hooks, clean deployment and pending authority remain unproven;
 the report keeps every history/send verdict false. This evidence layer does not
 implement the missing provenance authenticator or change the public-submit gate.
 
+The [qualified native trace increment](evidence/safe-history-native-trace-qualification-20260930.md)
+adds bounded SDK block traces and authenticated parent runtime code proofs to
+that retained census, with canonical closing checks. It marks SDK-filtered
+ClearPrefix/root events and missing rollback or inner/reverted EVM execution as
+unproven. The complete-history authenticator and public submit gate remain
+open; no live node trace was qualified.
+
 **Qualified read-only Safe current-authority proposal.** The separate
 [current-storage proof](SAFE-CURRENT-AUTHORITY-PROPOSAL.md) at `aa9f715b`
 authenticates every storage word under the exact Safe's native account prefix,

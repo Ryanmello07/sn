@@ -309,6 +309,12 @@ control. It accepts unrelated traffic but does not prove internal/reverted
 actions, native hook effects, clean initialization
 or complete Safe history. Public submission and MG-08 remain open gates; the
 unchanged signed history policy cannot be discharged by these raw archives alone.
+The [qualified native trace increment](evidence/safe-history-native-trace-qualification-20260930.md)
+adds bounded block traces, parent runtime code proofs, retry/cancellation and
+canonical closing checks without changing original custody. The SDK's filtered
+keyless events and missing rollback/inner EVM boundaries keep complete Safe
+history unproven and public successor submission closed. A qualified node
+extension or independent full replay is still needed before that action.
 The adapter checks actual pinned Safe proxy/singleton code and scoped
 finalized/pending authority, both nonce domains, funding, current contracts and
 the exact one-shot evidence binding. Finalized reads keep one canonical hash
