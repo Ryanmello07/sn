@@ -58,9 +58,11 @@ or output failure returns one. Exit zero means only that the reported current
 bootstrap fields matched. Admission refusal emits no partial report. No consumer
 may treat this report alone as service or transaction authority.
 
-Behavioral qualification is pending. Astra max owns implementation, deterministic
-fixtures, compile-only checks and vet; Sol medium runs the frozen-source positive,
-adjacent and causal matrix. Fixtures use real pinned contract bytecode and synthetic
-local authority. No live RPC or mainnet action is claimed. Complete storage/history,
-anchor/role evidence, service activation, live chain identity and the independent
-Safe policy/public-route gates remain open.
+The `2b87b133` [qualification receipt](evidence/bootstrap-contract-current-qualification-20260930.md)
+records three focused and sixteen adjacent roots passing normal/race, six normal
+causal controls and exactly two selected light race controls. Astra max authored
+implementation, deterministic fixtures and patches and performed formatting,
+compile-only and vet checks; Sol medium ran every behavioral test. Fixtures use
+real pinned bytecode and synthetic local authority. No live RPC or mainnet action
+is claimed. Complete storage/history, anchor/role evidence, service activation,
+live chain identity and the independent Safe policy/public-route gates remain open.

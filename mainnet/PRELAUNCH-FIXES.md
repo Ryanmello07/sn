@@ -404,16 +404,19 @@ controls and exactly three selected light race controls were causal. The sealed
 raw results and source/dependency fences. Current installation, complete indexing,
 evidence anchor and activation remain explicitly unverified.
 
-**Current bootstrap contract fields — qualification pending.** The bounded
-[five-account current-state increment](BOOTSTRAP-CONTRACT-CURRENT.md) compares
-the original proxy implementation/owner/policy, reserve/vault links and evidence
-domain at one fixed finalized mapping after original receipt admission. It lists
-the exact checked getters/slots and labels their results owned-RPC assertions;
-it does not establish complete storage, absent hidden mappings or historical
-governance authority. Later-head continuity preserves the original observation block.
-The original zero-activity profile remains strict, and an observed expected
-evidence pointer grants no anchor-history or Safe claim. Behavioral qualification
-is pending; no installation, activation, public-route or live-action gate closes.
+**Current bootstrap contract fields — scoped qualification complete.** The
+[five-account current-state increment](BOOTSTRAP-CONTRACT-CURRENT.md) checks the
+original proxy implementation/owner/policy, reserve/vault links and evidence
+domain at one finalized mapping after original receipt admission. It lists exact
+getters/slots and labels their results owned-RPC assertions. Later-head continuity
+preserves the observation block. Sol qualified frozen `2b87b133`: three focused
+and sixteen adjacent roots passed normal/race (38 positive executions), all six
+normal controls and exactly two selected light race controls were causal. The
+sealed [receipt](evidence/bootstrap-contract-current-qualification-20260930.md)
+retains raw results and source/dependency fences. Original zero-activity/policy
+requirements remain strict. Complete storage, absent hidden mappings, governance
+history and the evidence anchor remain unverified; no installation, activation,
+public-route or live-action gate closes.
 
 **P0 follow-up — Canonical installation-to-service admission.** Wire the verified
 contract-role relationship into a separately qualified activation boundary that
