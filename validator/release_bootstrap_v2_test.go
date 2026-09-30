@@ -509,8 +509,9 @@ func TestReleaseBootstrapV2HistoricalUIDSurvivesCurrentReregistration(t *testing
 	fixture := newReleaseBootstrapV2TestFixture(t)
 	current := newReleaseNativeValidatorUIDTestFixture(t, 2, fixture.providers[0].authority.Expected.Hotkey)
 	current.ctx = t.Context()
-	current.block = types.Hash{3}
 	current.blockNumber = 101
+	current.header, current.block = releaseReceiptTestHeader(t, current.block, current.blockNumber)
+	requireReleaseStartupNativeHeader(t, current, current.blockNumber, current.block)
 	currentObservation, err := current.read()
 	if err != nil {
 		t.Fatalf("actual current registration: %v", err)

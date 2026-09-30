@@ -173,8 +173,7 @@ func newDepositAuditPublicationV2TestFixtureWithBounds(t *testing.T, mode string
 	key := self.base.hotkey.PublicKey()
 	chain.views[fmt.Sprintf("%x", data)] = releaseDecisionV2TestView{method: "getHotkey", data: bytes.Clone(key[:])}
 	native := self.base.startup.nativeFixture
-	native.blockNumber = block
-	self.base.startup.nativeEpoch[native.block.Hex()] = block - 99
+	self.base.startup.selectNativePoint(self.base.startup.nativePoint(t, block-99))
 	self.wrapNativeHttp(t)
 	for index := range runtime.runtimes {
 		original, err := url.Parse(runtime.origins[index])
@@ -355,6 +354,8 @@ func (self *depositAuditPublicationV2TestFixture) wrapNativeHttp(t *testing.T) {
 		response := map[string]any{"jsonrpc": "2.0", "id": call.Id}
 		if err != nil {
 			response["error"] = map[string]any{"code": -32000, "message": err.Error()}
+		} else if header, ok := result.(*types.Header); ok {
+			response["result"] = releaseReceiptTestHeaderWire(*header)
 		} else {
 			response["result"] = result
 		}

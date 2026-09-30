@@ -36,6 +36,7 @@ func newReleaseDecisionV2NativeTestFixture(t *testing.T, decision *releaseDecisi
 	t.Helper()
 	fixture := newReleaseNativeValidatorUIDTestFixture(t, 2, chainBatchHotkey(2))
 	fixture.blockNumber = decision.query.boundary.EVMBlock
+	fixture.header, fixture.block = releaseReceiptTestHeader(t, fixture.block, fixture.blockNumber)
 	original := fixture.chain.API.Client
 	var encoded json.RawMessage
 	if err := original.CallContext(fixture.ctx, &encoded, "state_getMetadata", fixture.block.Hex()); err != nil {
@@ -91,6 +92,7 @@ func TestReleaseEvidenceV2DecisionJoinsActualNativeStakeAndPinnedEVM(t *testing.
 	t.Parallel()
 	fixture := newReleaseDecisionV2TestFixture(t)
 	native := newReleaseDecisionV2NativeTestFixture(t, fixture)
+	requireReleaseStartupNativeHeader(t, native, native.blockNumber, native.block)
 	metadata, runtime := native.chain.Meta, native.chain.Runtime
 	observed, schedule, err := readReleaseDecisionV2Context(t.Context(), fixture.chain, native.chain, fixture.query, releaseDecisionV2TestSchedule(native), native.expected)
 	if err != nil || observed == nil || schedule.SubnetEpochIndex != 1 || schedule.Stake.Identity.UID != 2 || schedule.Stake.TotalStakeRao != native.total || len(observed.hotkeyUIDs) != 3 {
