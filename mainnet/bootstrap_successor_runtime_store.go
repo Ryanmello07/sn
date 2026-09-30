@@ -153,6 +153,14 @@ func (self *bootstrapSuccessorExecutionStore) retainRuntimeRevision(ctx context.
 	if self.pending != "" {
 		return errors.New("successor runtime revision cannot change an interrupted execution outcome")
 	}
+	if self.safeCurrentHistory.pendingHash != "" {
+		return errors.New("successor runtime revision cannot change an interrupted current-policy revision")
+	}
+	for _, revision := range self.safeCurrentHistory.approvals {
+		if approval.Authorization.RuntimeEvidence.Path == revision.Authorization.Proposal.Authorization.ReviewEvidence.Path {
+			return errors.New("successor runtime revision reuses retained current-policy review evidence")
+		}
+	}
 	if err := approval.extends(*self.canonicalAuthority, self.runtimeHistory.approvals); err != nil {
 		return err
 	}

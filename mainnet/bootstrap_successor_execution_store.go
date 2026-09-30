@@ -27,6 +27,7 @@ type bootstrapSuccessorExecutionStore struct {
 	canonicalAuthorityHash string
 	canonicalAuthority     *bootstrapSuccessorCanonicalApproval
 	runtimeHistory         bootstrapSuccessorRuntimeHistory
+	safeCurrentHistory     bootstrapSuccessorSafeCurrentHistory
 }
 
 // Global within the approved physical registry, these keys deliberately use
@@ -225,6 +226,10 @@ func (self *bootstrapSuccessorExecutionStore) loadEvents() error {
 	if err != nil {
 		return err
 	}
+	self.safeCurrentHistory, err = self.readSafeCurrentHistory(self.local.ctx, names, allowed)
+	if err != nil {
+		return err
+	}
 	for sequence := uint16(0); sequence < 32; sequence++ {
 		name := bootstrapSuccessorExecutionEventName(sequence)
 		raw, err := self.local.read(name + ".intent")
@@ -245,8 +250,8 @@ func (self *bootstrapSuccessorExecutionStore) loadEvents() error {
 				}
 			}
 			if self.pending == "attempt-reserved" {
-				if self.runtimeHistory.pendingHash != "" {
-					return errors.New("successor partial attempt overlaps incomplete runtime authority")
+				if self.runtimeHistory.pendingHash != "" || self.safeCurrentHistory.pendingHash != "" {
+					return errors.New("successor partial attempt overlaps incomplete runtime or current-policy authority")
 				}
 				event := self.attemptEvent()
 				if err := event.validate(self.approval, self.profile, &self.last); err != nil {
@@ -283,6 +288,9 @@ func (self *bootstrapSuccessorExecutionStore) loadEvents() error {
 		if err := self.runtimeHistory.validateEvent(event, previous); err != nil {
 			return err
 		}
+		if err := self.safeCurrentHistory.validateEvent(event, previous, self.runtimeHistory); err != nil {
+			return err
+		}
 		if err := self.publishEvent(event); err != nil {
 			return err
 		}
@@ -315,6 +323,12 @@ func (self *bootstrapSuccessorExecutionStore) append(event bootstrapSuccessorExe
 	if event.RuntimeRevisionHash != self.runtimeHistory.hash() || event.Phase == "attempt-reserved" && self.runtimeHistory.pendingHash != "" {
 		return errors.New("successor execution transition lacks complete current runtime authority")
 	}
+	if err := self.safeCurrentHistory.validateEvent(event, &self.last, self.runtimeHistory); err != nil {
+		return err
+	}
+	if event.Phase == "attempt-reserved" && (event.SafeCurrentRevisionHash != self.safeCurrentHistory.hash() || self.safeCurrentHistory.pendingHash != "") {
+		return errors.New("successor execution transition lacks complete current-policy authority")
+	}
 	if self.pending != "" && self.pending != event.Phase {
 		return errors.New("successor execution pending outcome cannot be replaced by another transition")
 	}
@@ -331,7 +345,7 @@ func (self *bootstrapSuccessorExecutionStore) append(event bootstrapSuccessorExe
 		return errors.Join(err, self.close())
 	}
 	self.last, self.pending = copied, ""
-	return self.checkpointRuntimeHistory()
+	return errors.Join(self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory())
 }
 
 // Check original preparation, both directories and durable nonce claims again
@@ -349,7 +363,7 @@ func (self *bootstrapSuccessorExecutionStore) checkpoint(stage string) error {
 			return errors.Join(errors.New("successor execution nonce custody changed"), err)
 		}
 	}
-	return self.checkpointRuntimeHistory()
+	return errors.Join(self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory())
 }
 
 // Release registry, then the borrowed original directory. Original preparation

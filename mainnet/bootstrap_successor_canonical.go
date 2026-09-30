@@ -178,6 +178,9 @@ func (self *bootstrapSuccessorCanonicalChain) authenticate(ctx context.Context, 
 // One write requires this exact owner's newly counted attempt and a successful
 // admission after that reservation. Uncertain HTTP replies never cause retries.
 func (self *bootstrapSuccessorCanonicalChain) submit(ctx context.Context, plan bootstrapSuccessorExecutionPlan, signed []byte) error {
+	if self != nil && self.owner != nil && (self.owner.safeCurrentHistory.hash() != "" || self.owner.safeCurrentHistory.pendingHash != "") {
+		return errBootstrapSuccessorSafeCurrentCapabilityUnavailable
+	}
 	if self == nil || self.provenance == nil {
 		return errBootstrapSuccessorSafeProvenanceUnavailable
 	}

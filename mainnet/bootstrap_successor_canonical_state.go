@@ -245,6 +245,9 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 	if self != nil {
 		self.admitted = false
 	}
+	if self != nil && self.owner != nil && (self.owner.safeCurrentHistory.hash() != "" || self.owner.safeCurrentHistory.pendingHash != "") {
+		return result, errBootstrapSuccessorSafeCurrentCapabilityUnavailable
+	}
 	if self == nil || self.provenance == nil {
 		return result, errBootstrapSuccessorSafeProvenanceUnavailable
 	}

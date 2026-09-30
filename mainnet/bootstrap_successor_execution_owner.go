@@ -81,17 +81,18 @@ type bootstrapSuccessorExecutionReconciliation struct {
 // Every snapshot conserves original attempts and full maximum liabilities.
 // The predecessor seal prevents reordered or spliced custody from replaying.
 type bootstrapSuccessorExecutionEvent struct {
-	Schema                 string                              `json:"schema"`
-	ApprovalHash           string                              `json:"approval_hash"`
-	Sequence               uint16                              `json:"sequence"`
-	PreviousHash           string                              `json:"previous_hash"`
-	Phase                  string                              `json:"phase"`
-	CumulativeAttempts     uint16                              `json:"cumulative_attempts"`
-	ReservedLifetimeWei    string                              `json:"reserved_lifetime_wei"`
-	Receipt                *bootstrapSuccessorExecutionReceipt `json:"receipt,omitempty"`
-	CanonicalAuthorityHash string                              `json:"canonical_authority_hash,omitempty"`
-	RuntimeRevisionHash    string                              `json:"runtime_revision_hash,omitempty"`
-	ContentHash            string                              `json:"content_hash"`
+	Schema                  string                              `json:"schema"`
+	ApprovalHash            string                              `json:"approval_hash"`
+	Sequence                uint16                              `json:"sequence"`
+	PreviousHash            string                              `json:"previous_hash"`
+	Phase                   string                              `json:"phase"`
+	CumulativeAttempts      uint16                              `json:"cumulative_attempts"`
+	ReservedLifetimeWei     string                              `json:"reserved_lifetime_wei"`
+	Receipt                 *bootstrapSuccessorExecutionReceipt `json:"receipt,omitempty"`
+	CanonicalAuthorityHash  string                              `json:"canonical_authority_hash,omitempty"`
+	RuntimeRevisionHash     string                              `json:"runtime_revision_hash,omitempty"`
+	SafeCurrentRevisionHash string                              `json:"safe_current_revision_hash,omitempty"`
+	ContentHash             string                              `json:"content_hash"`
 }
 
 // A fresh reservation is fully determined by the prior immutable event. Even
@@ -100,7 +101,7 @@ func (self *bootstrapSuccessorExecutionStore) attemptEvent() bootstrapSuccessorE
 	event := bootstrapSuccessorExecutionEvent{Schema: bootstrapSuccessorExecutionEventSchema, ApprovalHash: rootObjectHash(self.approval),
 		Sequence: self.last.Sequence + 1, PreviousHash: self.last.ContentHash, Phase: "attempt-reserved",
 		CumulativeAttempts: self.last.CumulativeAttempts + 1, ReservedLifetimeWei: self.last.ReservedLifetimeWei,
-		CanonicalAuthorityHash: self.canonicalAuthorityHash, RuntimeRevisionHash: self.runtimeHistory.hash()}
+		CanonicalAuthorityHash: self.canonicalAuthorityHash, RuntimeRevisionHash: self.runtimeHistory.hash(), SafeCurrentRevisionHash: self.safeCurrentHistory.hash()}
 	event.ContentHash = rootObjectHash(event)
 	return event
 }
@@ -139,7 +140,7 @@ func (self bootstrapSuccessorExecutionEvent) validate(approval bootstrapSuccesso
 		return errors.New("successor execution event lost approval, seal or cumulative floors")
 	}
 	if previous == nil {
-		if self.Sequence != 0 || self.PreviousHash != self.ApprovalHash || self.Phase != "adopted" || self.Receipt != nil || self.CumulativeAttempts != budget.RetainedAttempts || self.CanonicalAuthorityHash != "" || self.RuntimeRevisionHash != "" {
+		if self.Sequence != 0 || self.PreviousHash != self.ApprovalHash || self.Phase != "adopted" || self.Receipt != nil || self.CumulativeAttempts != budget.RetainedAttempts || self.CanonicalAuthorityHash != "" || self.RuntimeRevisionHash != "" || self.SafeCurrentRevisionHash != "" {
 			return errors.New("successor execution lacks its exact original adoption event")
 		}
 		return nil
@@ -149,6 +150,9 @@ func (self bootstrapSuccessorExecutionEvent) validate(approval bootstrapSuccesso
 	}
 	if self.RuntimeRevisionHash != "" && (!planSha256(self.RuntimeRevisionHash) || self.CanonicalAuthorityHash == "") {
 		return errors.New("successor execution event has unscoped runtime revision authority")
+	}
+	if self.SafeCurrentRevisionHash != "" && (!planSha256(self.SafeCurrentRevisionHash) || self.CanonicalAuthorityHash == "") {
+		return errors.New("successor execution event has unscoped current-policy authority")
 	}
 	if self.Sequence != previous.Sequence+1 || self.PreviousHash != previous.ContentHash || previous.Phase != "adopted" && previous.Phase != "attempt-reserved" {
 		return errors.New("successor execution event changed predecessor or reopened terminal custody")
@@ -217,19 +221,22 @@ func (self bootstrapSuccessorExecutionPlan) admit(observation bootstrapSuccessor
 // Retained completion is reported only after fresh canonical reconciliation.
 // No behavior in this machine upgrades an offline claim into live authority.
 type bootstrapSuccessorExecutionResult struct {
-	PlanHash                  string `json:"execution_plan_hash"`
-	Status                    string `json:"status"`
-	CumulativeAttempts        uint16 `json:"cumulative_attempts"`
-	ReservedLifetimeWei       string `json:"reserved_lifetime_wei"`
-	ExecutionApprovalVerified bool   `json:"execution_approval_verified"`
-	LocalCustodyComplete      bool   `json:"local_custody_complete"`
-	CanonicalAdoptionVerified bool   `json:"canonical_adoption_verified"`
-	SubmissionAttempted       bool   `json:"submission_attempted"`
-	InstallationComplete      bool   `json:"installation_complete"`
-	ActivationReady           bool   `json:"activation_ready"`
-	RuntimeRevisionHash       string `json:"runtime_revision_hash,omitempty"`
-	RuntimeRevisionCount      int    `json:"runtime_revision_count,omitempty"`
-	RuntimeRevisionPending    bool   `json:"runtime_revision_pending,omitempty"`
+	PlanHash                   string `json:"execution_plan_hash"`
+	Status                     string `json:"status"`
+	CumulativeAttempts         uint16 `json:"cumulative_attempts"`
+	ReservedLifetimeWei        string `json:"reserved_lifetime_wei"`
+	ExecutionApprovalVerified  bool   `json:"execution_approval_verified"`
+	LocalCustodyComplete       bool   `json:"local_custody_complete"`
+	CanonicalAdoptionVerified  bool   `json:"canonical_adoption_verified"`
+	SubmissionAttempted        bool   `json:"submission_attempted"`
+	InstallationComplete       bool   `json:"installation_complete"`
+	ActivationReady            bool   `json:"activation_ready"`
+	RuntimeRevisionHash        string `json:"runtime_revision_hash,omitempty"`
+	RuntimeRevisionCount       int    `json:"runtime_revision_count,omitempty"`
+	RuntimeRevisionPending     bool   `json:"runtime_revision_pending,omitempty"`
+	SafeCurrentRevisionHash    string `json:"safe_current_revision_hash,omitempty"`
+	SafeCurrentRevisionCount   int    `json:"safe_current_revision_count,omitempty"`
+	SafeCurrentRevisionPending bool   `json:"safe_current_revision_pending,omitempty"`
 }
 
 // Adapters receive independent copies so their nested slices cannot mutate the
@@ -245,7 +252,8 @@ func (self *bootstrapSuccessorExecutionStore) planCopy() bootstrapSuccessorExecu
 func (self *bootstrapSuccessorExecutionStore) result() bootstrapSuccessorExecutionResult {
 	return bootstrapSuccessorExecutionResult{PlanHash: self.approval.Plan.hash(), Status: "execution-custody-retained-canonical-adapter-required",
 		CumulativeAttempts: self.last.CumulativeAttempts, ReservedLifetimeWei: self.last.ReservedLifetimeWei, ExecutionApprovalVerified: true, LocalCustodyComplete: true,
-		RuntimeRevisionHash: self.runtimeHistory.hash(), RuntimeRevisionCount: len(self.runtimeHistory.approvals), RuntimeRevisionPending: self.runtimeHistory.pendingHash != ""}
+		RuntimeRevisionHash: self.runtimeHistory.hash(), RuntimeRevisionCount: len(self.runtimeHistory.approvals), RuntimeRevisionPending: self.runtimeHistory.pendingHash != "",
+		SafeCurrentRevisionHash: self.safeCurrentHistory.hash(), SafeCurrentRevisionCount: len(self.safeCurrentHistory.approvals), SafeCurrentRevisionPending: self.safeCurrentHistory.pendingHash != ""}
 }
 
 // One invocation performs at most one send. Any unavailable read, pending
@@ -298,7 +306,7 @@ func advanceBootstrapSuccessorExecution(ctx context.Context, self *bootstrapSucc
 			event := bootstrapSuccessorExecutionEvent{Schema: bootstrapSuccessorExecutionEventSchema, ApprovalHash: rootObjectHash(self.approval),
 				Sequence: self.last.Sequence + 1, PreviousHash: self.last.ContentHash, Phase: phase,
 				CumulativeAttempts: self.last.CumulativeAttempts, ReservedLifetimeWei: self.last.ReservedLifetimeWei, Receipt: reconciliation.Receipt,
-				CanonicalAuthorityHash: self.last.CanonicalAuthorityHash, RuntimeRevisionHash: self.runtimeHistory.hash()}
+				CanonicalAuthorityHash: self.last.CanonicalAuthorityHash, RuntimeRevisionHash: self.runtimeHistory.hash(), SafeCurrentRevisionHash: self.last.SafeCurrentRevisionHash}
 			event.ContentHash = rootObjectHash(event)
 			if err := self.append(event); err != nil {
 				return result, err
@@ -322,6 +330,12 @@ func advanceBootstrapSuccessorExecution(ctx context.Context, self *bootstrapSucc
 	}
 	if self.runtimeHistory.pendingHash != "" {
 		return result, errors.New("successor execution cannot send with an incomplete runtime revision")
+	}
+	if self.safeCurrentHistory.pendingHash != "" {
+		return result, errors.New("successor execution cannot send with an incomplete current-policy revision")
+	}
+	if self.safeCurrentHistory.hash() != "" {
+		return result, errBootstrapSuccessorSafeCurrentCapabilityUnavailable
 	}
 	observation, err := chain.observe(ctx, self.planCopy())
 	if err != nil {
