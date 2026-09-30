@@ -487,6 +487,10 @@ func TestRepairValidatorPublicationAmbiguityAndReopen(t *testing.T) {
 func TestRepairValidatorPostSyncAuthorityRecheck(t *testing.T) {
 	for _, change := range []string{"expiry", "incident-age", "rollback", "cancellation"} {
 		fixture := newRepairValidatorFixture(t)
+		if change == "expiry" {
+			fixture.approval.Plan.ExpiresAt = fixture.now.Add(10 * time.Second)
+			fixture.sign()
+		}
 		fixture.claim()
 		store, err := openRepairValidatorStore(t.Context(), fixture.approval, fixture.publicKey, false, fixture.now)
 		if err != nil {
