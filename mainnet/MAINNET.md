@@ -930,6 +930,13 @@ current mutable proof namespace, live per-operator worker attestation and
 global signer custody as explicit gates; a missing heartbeat is not treated
 as corrupted proof history.
 
+The [qualified `admit-committed` continuation](evidence/validator-committed-prefix-qualification-20260930.md)
+also replays the service UID's current committed control history from both
+original operator origins and preserves each completed checkpoint. This is a
+read-only subgate. Unsealed ledger/intent state, live worker attestation,
+global signer custody, applied weights influence and signed launch authority
+remain mandatory before public start.
+
 ### Root validator on netuid 0
 
 The signer-free `root-preview` and bounded `root-monitor` commands now supply a

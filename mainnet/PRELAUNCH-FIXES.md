@@ -99,8 +99,9 @@ Both sources are integrated; 76 affected roots pass normal/race and all 292
 miner roots pass plain normal. The composed release still needs custody,
 restart and aggregate fleet-capacity qualification before deployment.
 
-MG-01's [September 30 read-only Snow route checks through 22:13 UTC](evidence/snow-route-observation-20260930-1914.md)
-returned HTTP 502 for both native genesis and EVM chain ID. They provide no
+MG-01's [September 30 read-only Snow route checks through 23:30 UTC](evidence/snow-route-observation-20260930-1914.md)
+returned HTTP 502 for both native genesis and EVM chain ID in the earlier
+probes, and for native genesis alone in the later probes. They provide no
 new mainnet identity or sync evidence; the route remains a live launch gate.
 
 MG-08 now also has an [independently qualified native prerequisite reader](evidence/validator-native-admission-qualification-20260930.md)
@@ -111,6 +112,15 @@ fresh-start authority is still nil: operator proof/client-key readiness,
 contracts, global signer custody and effective-majority stake remain open.
 The original schema-3 bootstrap config cannot silently absorb a later runtime
 upgrade; a separately approved continuity and activation rollover is needed.
+
+The [qualified `admit-committed` increment](evidence/validator-committed-prefix-qualification-20260930.md)
+reads each standard validator's service-owned committed control history against
+both original operator origins and retains completed checkpoints. Its inherited
+startup fixture failures were repaired in tests without changing production
+bytes; the original failed receipt remains preserved. This closes only the
+committed-control-prefix subgate. Unsealed ledger/intent state, live worker
+attestation, signer custody, applied weights influence and launch authority
+remain open; neither validator is authorized to start publicly.
 
 The [qualified validator current-evidence increment](evidence/validator-current-evidence-qualification-20260930.md)
 authenticates original dual-signed operator activation and fresh nonce-bound
