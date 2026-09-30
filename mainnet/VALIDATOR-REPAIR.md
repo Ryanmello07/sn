@@ -111,6 +111,11 @@ exact release/manager re-admission and a durable receipt for the new
 InvocationID/PID/monotonic start; that start cannot predate the consumed monotonic
 boundary. Later invocations can reconcile only this acknowledged generation.
 
+Immediately after the reservation sync, the controller rechecks expiry, clock
+continuity, cancellation and the age of the exact admitted incident sample.
+A slow disk cannot extend either authority window. Refusal at this boundary
+keeps the start consumed without issuing the command or refunding its allowance.
+
 A crash or command error after consumption but before that receipt is
 `uncertain-consumed-start`. The output explicitly requires manual host
 reconciliation and forbids automatic retry, journal deletion or a replacement

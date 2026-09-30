@@ -482,6 +482,50 @@ func TestRepairValidatorPublicationAmbiguityAndReopen(t *testing.T) {
 	}
 }
 
+// A positive barrier inside the real directory sync advances each authority
+// clock independently. A spent reservation may refuse, never refund or start.
+func TestRepairValidatorPostSyncAuthorityRecheck(t *testing.T) {
+	for _, change := range []string{"expiry", "incident-age", "rollback", "cancellation"} {
+		fixture := newRepairValidatorFixture(t)
+		fixture.claim()
+		store, err := openRepairValidatorStore(t.Context(), fixture.approval, fixture.publicKey, false, fixture.now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		writes := 0
+		store.syncDirectory = func(file *os.File) error {
+			err := file.Sync()
+			writes++
+			if writes == 2 {
+				switch change {
+				case "expiry":
+					fixture.now = fixture.approval.Plan.ExpiresAt
+				case "incident-age":
+					fixture.now = fixture.now.Add(time.Duration(fixture.approval.Plan.MaximumSampleAgeSeconds+1) * time.Second)
+				case "rollback":
+					fixture.now = fixture.now.Add(-time.Second)
+				case "cancellation":
+					cancel()
+				}
+			}
+			return err
+		}
+		result, err := resumeRepairValidator(ctx, store, fixture.host, func() time.Time { return fixture.now })
+		cancel()
+		if err == nil || fixture.starts != 0 || !result.StartConsumed || result.Status != "uncertain-consumed-start" || result.Generation != nil {
+			t.Fatal("post-sync authority change crossed start boundary", change, result, err, fixture.starts)
+		}
+		if err := store.close(); err != nil {
+			t.Fatal(err)
+		}
+		result, exit, detail := fixture.command("resume")
+		if exit == 0 || fixture.starts != 0 || !result.StartConsumed || result.Status != "uncertain-consumed-start" {
+			t.Fatal("post-sync refusal refunded start allowance", change, result, exit, detail, fixture.starts)
+		}
+	}
+}
+
 // Permanent marker and process ownership prevent implicit reset of a liability.
 func TestRepairValidatorStoreOwnershipAndMissingState(t *testing.T) {
 	fixture := newRepairValidatorFixture(t)

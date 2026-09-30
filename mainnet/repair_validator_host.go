@@ -354,22 +354,22 @@ func (self *repairValidatorHost) stopped(ctx context.Context, plan repairValidat
 
 // The current monitor must retain the same open episode and prior producer;
 // neither a fresh file nor an arbitrary HTTP success grants service authority.
-func (self *repairValidatorHost) incident(ctx context.Context, plan repairValidatorPlan, now time.Time) error {
+func (self *repairValidatorHost) incident(ctx context.Context, plan repairValidatorPlan, now time.Time) (time.Time, error) {
 	raw, err := self.read(ctx, plan.MonitorCheckpoint, plan.MonitorUid, maxMonitorServiceCheckpointBytes, true)
 	if err != nil {
-		return err
+		return time.Time{}, err
 	}
 	var current monitorServiceCheckpointRecord
 	if err := decodePlanJson(raw, &current); err != nil {
-		return err
+		return time.Time{}, err
 	}
 	if err := plan.incident(current); err != nil {
-		return err
+		return time.Time{}, err
 	}
 	if current.State.Record.InstanceId != plan.Original.State.Record.InstanceId || current.State.SampleAt.Before(plan.Original.State.SampleAt) || current.State.SampleAt.After(now) || now.Sub(current.State.SampleAt) > time.Duration(plan.MaximumSampleAgeSeconds)*time.Second || !current.State.ClockFaultAt.IsZero() {
-		return errors.New("validator repair incident is stale or changed")
+		return time.Time{}, errors.New("validator repair incident is stale or changed")
 	}
-	return nil
+	return current.State.SampleAt, nil
 }
 
 // A finite acknowledged command is the only concrete process mutation. No

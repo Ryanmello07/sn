@@ -87,7 +87,8 @@ func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, hos
 			return finish("generation-changed", err)
 		}
 		stamp = now()
-		if err := host.incident(ctx, plan, stamp); err != nil {
+		incidentAt, err := host.incident(ctx, plan, stamp)
+		if err != nil {
 			return finish("source-refused", err)
 		}
 		// Expensive reads precede this final clock/authority check. The private
@@ -104,9 +105,13 @@ func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, hos
 		if err := store.save(record); err != nil {
 			return record.result(), err
 		}
-		if err := ctx.Err(); err != nil {
-			return finish("uncertain-consumed-start", err)
+		// fsync is not an instantaneous boundary. Expiry and this retained
+		// incident's age must still admit the effect after durable consumption.
+		actionAt := now()
+		if actionAt.Before(record.HighWaterAt) || actionAt.Before(plan.ValidFrom) || !actionAt.Before(plan.ExpiresAt) || actionAt.Sub(incidentAt) > time.Duration(plan.MaximumSampleAgeSeconds)*time.Second || ctx.Err() != nil {
+			return finish("uncertain-consumed-start", errors.Join(errors.New("validator repair authority window closed during durable reservation"), ctx.Err()))
 		}
+		record.HighWaterAt = actionAt
 		if err := host.start(ctx, plan); err != nil {
 			return finish("uncertain-consumed-start", err)
 		}

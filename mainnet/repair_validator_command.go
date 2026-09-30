@@ -63,7 +63,7 @@ func runRepairValidatorCommandWithHost(ctx context.Context, args []string, stdou
 			err = host.stopped(ctx, plan, manager)
 		}
 		if err == nil {
-			err = host.incident(ctx, plan, now())
+			_, err = host.incident(ctx, plan, now())
 		}
 		if err != nil {
 			fmt.Fprintln(stderr, "validator repair claim refused:", err)
