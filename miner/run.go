@@ -330,13 +330,14 @@ func auth(opts docopt.Opts) {
 		// auth_code
 		authCode, _ := opts.String("<auth_code>")
 		if authCode == "" {
-			fmt.Print("Enter auth code: ")
-			authCodeBytes, err := term.ReadPassword(int(syscall.Stdin))
+			stdin := int(syscall.Stdin)
+			var err error
+			authCode, err = readAuthCode(os.Stdin, os.Stdout, term.IsTerminal(stdin), func() ([]byte, error) {
+				return term.ReadPassword(stdin)
+			})
 			if err != nil {
 				panic(err)
 			}
-			authCode = strings.TrimSpace(string(authCodeBytes))
-			fmt.Printf("\n")
 		}
 
 		authCodeLogin := &sdk.AuthCodeLoginArgs{
