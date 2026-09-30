@@ -24,15 +24,16 @@ import (
 // A fixture retains command inputs so the command implementation reconstructs
 // the same physical root, approvals, markers and exact signed transaction.
 type bootstrapSuccessorCanonicalFixture struct {
-	t            *testing.T
-	original     *bootstrapChainFixture
-	key          ed25519.PrivateKey
-	profile      *safeExecutionProfile
-	approval     bootstrapSuccessorExecutionApproval
-	canonical    bootstrapSuccessorCanonicalApproval
-	canonicalRef planFileReference
-	paths        []string
-	approvalArgs []string
+	t               *testing.T
+	original        *bootstrapChainFixture
+	key             ed25519.PrivateKey
+	profile         *safeExecutionProfile
+	approval        bootstrapSuccessorExecutionApproval
+	canonical       bootstrapSuccessorCanonicalApproval
+	canonicalRef    planFileReference
+	paths           []string
+	approvalArgs    []string
+	afterProvenance func()
 }
 
 // The original public v3 setup runs once per heavy root. Admission and receipt
@@ -238,6 +239,11 @@ func (self *bootstrapSuccessorCanonicalFixture) authenticate(ctx context.Context
 	if chain == nil || chain.client.url != self.original.contracts.server.URL || plan.hash() != self.approval.Plan.hash() ||
 		provenance.Provenance.Safe != plan.Review.Transaction.Safe || head.GenesisHash != self.original.config.Network.GenesisHash || head.FinalizedNumber < provenance.Provenance.ThroughNativeNumber {
 		return errors.New("synthetic canonical provenance fixture scope differs")
+	}
+	// The synchronous barrier changes authority while authentication is in
+	// progress, without a sleep or a concurrent production-state mutation.
+	if self.afterProvenance != nil {
+		self.afterProvenance()
 	}
 	return ctx.Err()
 }

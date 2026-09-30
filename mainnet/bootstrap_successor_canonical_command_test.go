@@ -5,7 +5,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -309,6 +311,61 @@ func TestBootstrapSuccessorCanonicalAdapterBoundaries(t *testing.T) {
 	if result, err := adapter.reconcile(t.Context(), plan); err != nil || result.Status != "absent" {
 		t.Fatal("canonical exact unused hash was not absent", result, err)
 	}
+	retainedEvent := rootObjectHash(owner.last)
+	for _, c := range []struct {
+		name       string
+		diagnostic string
+	}{
+		{name: "Safe nonce", diagnostic: "successor canonical Safe pending authority or nonce differs"},
+		{name: "relayer nonce", diagnostic: "successor execution current Safe authority, independent nonces, evidence state or native window differs"},
+		{name: "current runtime", diagnostic: "successor canonical current runtime differs from its independent successor approval"},
+	} {
+		reached := false
+		f.afterProvenance = func() {
+			reached = true
+			chain.stateLock.Lock()
+			defer chain.stateLock.Unlock()
+			switch c.name {
+			case "Safe nonce":
+				chain.state.SetState(plan.Review.Transaction.Safe, common.HexToHash("0x5"), common.HexToHash("0x12"))
+			case "relayer nonce":
+				chain.state.SetNonce(plan.Review.Relayer.Sender, 43, tracing.NonceChangeUnspecified)
+			case "current runtime":
+				chain.advanceEmpty()
+				laterHash := chain.hashes[chain.head]
+				chain.override = func(method string, params []any, result any) any {
+					result = baseOverride(method, params, result)
+					if method == "state_getRuntimeVersion" && params[0] == laterHash {
+						version := f.canonical.Authorization.CurrentRuntime.RuntimeVersion
+						version.SpecVersion++
+						return version
+					}
+					return result
+				}
+			}
+		}
+		_, observationErr := adapter.observe(t.Context(), plan)
+		f.afterProvenance = nil
+		func() {
+			chain.stateLock.Lock()
+			defer chain.stateLock.Unlock()
+			chain.state.SetState(plan.Review.Transaction.Safe, common.HexToHash("0x5"), common.HexToHash("0x11"))
+			chain.state.SetNonce(plan.Review.Relayer.Sender, 42, tracing.NonceChangeUnspecified)
+			if len(chain.writes) != 8 {
+				t.Fatal("canonical provenance refresh wrote a transaction", c.name, len(chain.writes))
+			}
+		}()
+		setFault(nil)
+		if !reached {
+			t.Fatal("canonical provenance mutation barrier was not reached", c.name, observationErr)
+		}
+		if observationErr == nil || !strings.Contains(observationErr.Error(), c.diagnostic) || adapter.admitted {
+			t.Fatal("canonical admission reused pending state from before provenance", c.name, observationErr)
+		}
+		if rootObjectHash(owner.last) != retainedEvent {
+			t.Fatal("canonical provenance refresh changed retained attempt custody", c.name)
+		}
+	}
 	if _, err := adapter.observe(t.Context(), plan); err != nil {
 		t.Fatal(err)
 	}
@@ -317,6 +374,17 @@ func TestBootstrapSuccessorCanonicalAdapterBoundaries(t *testing.T) {
 	}
 	if err := adapter.submit(t.Context(), plan, common.FromHex(plan.SignedRelayer)); err == nil {
 		t.Fatal("canonical submit reused admission from before reservation")
+	}
+	if _, err := adapter.observe(t.Context(), plan); err != nil {
+		t.Fatal(err)
+	}
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := adapter.observe(canceled, plan); !errors.Is(err, context.Canceled) {
+		t.Fatal("canonical canceled refresh did not report cancellation", err)
+	}
+	if err := adapter.submit(t.Context(), plan, common.FromHex(plan.SignedRelayer)); err == nil {
+		t.Fatal("failed canonical refresh reused earlier send admission")
 	}
 	if _, err := adapter.observe(t.Context(), plan); err != nil {
 		t.Fatal(err)
