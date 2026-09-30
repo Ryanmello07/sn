@@ -73,7 +73,9 @@ func newProductionContinuityPolicyTestFixture(t *testing.T) *productionContinuit
 				return err
 			}
 		}
-		assign := func(value any) error { return setValidatorRuntimeIdentityTestResult(target, value) }
+		// Preserve the transport's decoding for typed hashes and headers as well
+		// as raw replies; original production admission uses both result forms.
+		assign := func(value any) error { return setReleaseHistoricalTestResult(target, value) }
 		switch method {
 		case "chain_getFinalizedHead":
 			return assign(self.hashes[self.head].Hex())
@@ -363,7 +365,7 @@ func TestProductionRuntimeContinuityChecksActualArtifactAndInterfaces(t *testing
 		case "api":
 			f.fault = func(_ context.Context, target any, method string, _ ...any) (bool, error) {
 				if method == "state_getRuntimeVersion" {
-					return true, setValidatorRuntimeIdentityTestResult(target, f.candidate.Version)
+					return true, setReleaseHistoricalTestResult(target, f.candidate.Version)
 				}
 				return false, nil
 			}
@@ -394,10 +396,10 @@ func TestProductionRuntimeContinuityRefusesChangedSnapshotAndCancellation(t *tes
 			if fault == "header" && method == "chain_getHeader" {
 				changed := f.headers[f.hashes[150]]
 				changed.StateRoot[0] ^= 1
-				return true, setValidatorRuntimeIdentityTestResult(target, releaseReceiptTestHeaderWire(changed))
+				return true, setReleaseHistoricalTestResult(target, releaseReceiptTestHeaderWire(changed))
 			}
 			if fault == "reorg" && armed && method == "chain_getBlockHash" && args[0] == uint64(150) {
-				return true, setValidatorRuntimeIdentityTestResult(target, (types.Hash{0x42}).Hex())
+				return true, setReleaseHistoricalTestResult(target, (types.Hash{0x42}).Hex())
 			}
 			return false, nil
 		}
