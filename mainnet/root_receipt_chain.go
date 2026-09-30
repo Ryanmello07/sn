@@ -259,9 +259,18 @@ func (self *rootCanonicalChain) body(ctx context.Context, hash string, header ro
 	if _, err := reply.Block.Header.authenticate(hash); err != nil {
 		return nil, err
 	}
-	body := make([][]byte, 0, len(*reply.Block.Extrinsics))
+	return authenticateRootReceiptBody(header, *reply.Block.Extrinsics)
+}
+
+// The same complete ordered-trie check serves archive reads and retained
+// witnesses. It authenticates bytes without interpreting runtime call semantics.
+func authenticateRootReceiptBody(header rootReceiptHeader, extrinsics []string) ([][]byte, error) {
+	if extrinsics == nil || len(extrinsics) > rootBodyCountLimit {
+		return nil, errors.New("root block body is missing or exceeds count bound")
+	}
+	body := make([][]byte, 0, len(extrinsics))
 	total := 0
-	for _, encoded := range *reply.Block.Extrinsics {
+	for _, encoded := range extrinsics {
 		raw, err := rootReceiptHex(encoded, rootBodyBytesLimit)
 		if err != nil {
 			return nil, err

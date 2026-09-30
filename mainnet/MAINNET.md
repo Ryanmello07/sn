@@ -114,6 +114,15 @@ normal/race; both causal controls reproduce their intended failure in both
 modes, with exact source/dependency evidence sealed. This does not supply the
 missing history authenticator. MG-08 remains open.
 
+The separate [bounded Safe archive census](SAFE-HISTORY-CAPTURE.md) candidate
+adds an actual read-only capture command and private durable witnesses. It
+reuses the native ordered-trie and qualified server receipt decoder, accepts
+unrelated traffic, and retains exact direct calls and committed logs over a
+pinned interval. Independent qualification is pending. Complete internal/reverted
+execution, native hooks, clean deployment and pending authority remain unproven;
+the report keeps every history/send verdict false. This evidence layer does not
+implement the missing provenance authenticator or change the public-submit gate.
+
 **Qualified read-only Safe current-authority proposal.** The separate
 [current-storage proof](SAFE-CURRENT-AUTHORITY-PROPOSAL.md) at `aa9f715b`
 authenticates every storage word under the exact Safe's native account prefix,

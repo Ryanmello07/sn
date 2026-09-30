@@ -7,6 +7,10 @@ uses a concrete canonical adapter and separately signed build, current-runtime,
 signer-cutover and Safe deployment/storage-provenance authority. **Public
 submission is unavailable until a distinct canonical Safe history authenticator
 is implemented and qualified. No live execution or mainnet authority is claimed.**
+The separate [archive capture command](SAFE-HISTORY-CAPTURE.md), with independent
+qualification pending, supplies complete bounded raw witnesses and explicit
+unresolved internal-execution/history verdicts. It is not the required history
+authenticator and leaves this public gate unchanged.
 The corrected adapter's [scoped independent qualification](evidence/bootstrap-successor-canonical-qualification-20260930.md)
 passes ten focused and twenty-two adjacent roots normal/race, fourteen normal
 causal controls and six selected race controls on frozen `a7186754`.

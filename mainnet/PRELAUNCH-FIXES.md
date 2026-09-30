@@ -259,6 +259,13 @@ Online `contract-successor-execution-resume` requires the separately pinned
 canonical approval. Public `--submit` is unavailable until a distinct canonical
 Safe history authenticator is implemented; it exits before custody loading or
 attempt reservation even when all independent review files are signed.
+The [bounded archive census](SAFE-HISTORY-CAPTURE.md) candidate now supplies a
+real read-only command with private create-only witness retention, complete
+native-body/EVM transaction/receipt commitment checks and later-head continuity.
+Its independent qualification is pending. It accepts unrelated traffic but does
+not prove internal/reverted actions, native hook effects, clean initialization
+or complete Safe history. Public submission and MG-08 remain open gates; the
+unchanged signed history policy cannot be discharged by these raw archives alone.
 The adapter checks actual pinned Safe proxy/singleton code and scoped
 finalized/pending authority, both nonce domains, funding, current contracts and
 the exact one-shot evidence binding. Finalized reads keep one canonical hash
