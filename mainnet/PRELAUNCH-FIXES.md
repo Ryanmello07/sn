@@ -329,7 +329,7 @@ complete pending overlay. The reviewed native RPC exposes neither a pending
 proof root nor an atomic multi-read token; final known-word/code rechecks retain
 that explicit limitation and cannot authorize a send.
 
-**Current-policy custody — qualification pending.** The separate `3f88a948`
+**Current-policy custody — scoped qualification complete.** The separate `3f88a948`
 [custody increment](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CUSTODY.md) implements an
 immutable independently signed acceptance journal under the existing exclusive
 owner, exact counted/outcome references and partial-publication recovery. Both
@@ -338,8 +338,10 @@ interrupted terminal events constrain authority import; incomplete policy stages
 block reservations and cross-imports. Original history statements, runtime
 predecessors, receipts, signed bytes, nonces, attempts and liabilities remain
 retained. Its [qualification note](evidence/safe-current-custody-qualification-20260930.md)
-is pending the complete independent positive/control matrix and sealed evidence.
-This local custody slice cannot enable public policy import or submission.
+records eight new and thirty-one adjacent roots passing normal/race, all eight
+normal and exactly five selected race controls causal, and the sealed exact
+source/module/local-dependency evidence. This local custody slice cannot enable
+public policy import or submission.
 
 **P0 follow-up — Concrete current-policy production capability and approval.**
 Connect the qualified native proof to a distinct production authenticator

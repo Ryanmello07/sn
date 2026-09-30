@@ -3,7 +3,10 @@
 This increment implements the durable local custody boundary for the separately
 signed [current-authority proposal](SAFE-CURRENT-AUTHORITY-PROPOSAL.md). It does
 not install a current-policy submission capability, expose a public policy import
-flag, or enable public `--submit`. Behavioral qualification is pending.
+flag, or enable public `--submit`. Its
+[scoped qualification](evidence/safe-current-custody-qualification-20260930.md)
+passes eight new and thirty-one adjacent roots normal/race, eight normal and
+exactly five selected race causal controls, with source/dependency evidence sealed.
 
 The immutable execution and original canonical authorization remain the base.
 The original complete-history statement and its evidence remain retained and

@@ -128,7 +128,7 @@ signed policy proposal, with no history claim, custody import or public-send
 capability. Existing native RPC cannot prove a complete pending overlay; the
 final scoped recheck reports that limitation explicitly.
 
-**Current-policy custody increment — qualification pending.** Frozen source
+**Qualified current-policy custody increment.** Frozen source
 `3f88a948` adds the [separate signed acceptance journal](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CUSTODY.md),
 exact counted/outcome references and partial-publication recovery under the
 original exclusive owner. Later policy or runtime approvals cannot rewrite an
@@ -136,8 +136,9 @@ earlier counted outcome, reset attempts, release nonce claims or reduce maximum
 liabilities. The original history statement remains retained and no historical
 truth is inferred from the current-only proof. The
 [qualification note](evidence/safe-current-custody-qualification-20260930.md)
-will record the final independent matrix and seal; passing focused streams alone
-do not qualify integration. This slice installs no public policy-import flag or
+records eight new and thirty-one adjacent roots passing normal/race, all eight
+normal and exactly five selected race controls causal, and sealed exact
+source/dependency evidence. This slice installs no public policy-import flag or
 production capability. A separate concrete native capability, explicit policy
 approval and a qualified release route remain required before public submission
 can open. All expensive proof work must precede final scoped pending admission.
