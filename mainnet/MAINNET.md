@@ -872,6 +872,18 @@ Preserve the current guarantees: the coordinator owns neither custody position, 
 
 ## Running both validators
 
+The [initial two-UR installation component](VALIDATOR-ACTIVATION.md) now provides
+a concrete `activate-validators` command for exact static-unit installation,
+role-group-readable runtime copies of the original signed configs, current
+bootstrap admission and durable per-unit start/recovery. **Source qualification
+is pending; no deployment was performed.** It keeps bootstrap v3 role/generation
+and producer approvals, both current permits and original custody separate from
+process authority. Public fresh starts remain closed until a qualified current
+activation-authority adapter discharges the existing checkpoint, operator,
+contract, custody and majority-stake blockers. A systemd acknowledgement or
+progress file does not prove weights or the 10/90 outcome. The root signing
+service remains a distinct open implementation/deployment gate.
+
 ### Root validator on netuid 0
 
 The signer-free `root-preview` and bounded `root-monitor` commands now supply a

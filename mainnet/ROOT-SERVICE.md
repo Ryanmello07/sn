@@ -20,6 +20,29 @@ The canonical chain's existing `submit` method remains disabled. A successful
 decision, adapter return or supervisor completion is never activation authority;
 every service event keeps `activation_ready: false`.
 
+## Actual deployment boundary
+
+The separate [two-UR installation owner](VALIDATOR-ACTIVATION.md) now supplies
+static units invoking the actual standard validator, exact runtime config
+copies, current bootstrap admission and durable per-role start/recovery. Its
+source qualification is pending, and public fresh starts stay closed because a
+qualified current activation-authority adapter is absent. It does not implement
+the root role or make the standard validator accept netuid 0.
+
+The next root executable must compose this existing `rootServiceOwner.Run`,
+`rootOfflineCustody` recovery and independently approved `rootOwnedSubmission`.
+Before exposing mutation, it still needs a production `rootActionAuthority`
+that admits effective eligibility, current seat/nonce/runtime and enforceable
+fee/exposure bounds, plus global hotkey/nonce and pending-seat exclusion. It
+also needs a real protected native signing device with durable request-hash
+idempotency, exact issued-signature recovery and authenticated never-issued
+responses. A missing public receipt is not a never-signed attestation. Route,
+service-config and action approvals are separate original authorities; none may
+be synthesized from a journal, root preview or signed process envelope. Native
+secret loading/device transport, this authority and a deployed root supervisor
+remain absent. No new root command or signing route is installed by the UR
+host component.
+
 ## Approved existing-seat scope
 
 The independently provisioned `rootServiceConfig` contains a verified

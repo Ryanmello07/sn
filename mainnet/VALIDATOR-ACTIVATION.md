@@ -1,0 +1,160 @@
+# Initial standard-validator installation and process ownership
+
+`sn-mainnet activate-validators` supplies an actual Linux static-unit installer,
+current bootstrap admission and durable two-unit start/recovery owner. It is
+bound to the original accepted bootstrap v3 plan and both independently signed
+schema-3 UR configurations. Source qualification is pending; no unit has been
+installed or started on a deployment host.
+
+**Public fresh starts remain unavailable.** The public command constructs no
+`validatorActivationAuthority`. Signed process approval and an
+`observed-prerequisites` readiness result do not discharge the readiness report's
+activation blockers. A future production adapter must independently admit the
+exact epoch/checkpoint authority, operator health and proof/client-key domains,
+deployed contracts, native signer/global custody exclusion and majority stake.
+There is no flag, imported readiness file or environment switch that replaces
+that adapter. The concrete systemd start transport and its durable owner are
+exercisable only through the explicitly injected test authority today.
+
+This component does not run netuid 0. The [root service](ROOT-SERVICE.md) still
+requires its own current authority and native signing-device implementation.
+Neither UR process counts as the root role. Chain identity and deployment also
+remain open while Snow is reported syncing/preparing; this increment makes no
+new live RPC observation.
+
+## Independent scope
+
+`validator_activation_authority.go` defines the signed
+`urnetwork-mainnet-validator-activation-v1` envelope. Its independently supplied
+Ed25519 key is separate from both producer approval keys and every native key.
+The signature covers the literal
+`urnetwork-mainnet-validator-activation-approval-v1`, a zero byte and canonical
+Go JSON of the typed envelope with `signature_ed25519` empty.
+
+The complete plan binds:
+
+- The original bootstrap config pathname and byte SHA-256, accepted v3 plan
+  hash, netuid 25, the distinct majority/secondary roles and their approved
+  producer config hashes. The original bootstrap admission still verifies
+  hotkeys, native registration generations, independent producer approvals,
+  operator configuration and separate custody namespaces.
+- One exact standard-validator binary, fixed `sn-mainnet-validator-majority.service`
+  and `sn-mainnet-validator-secondary.service` files, runtime config destinations,
+  operational working/progress directories, UID/GID and progress source per role.
+- Host machine/boot identity, the pinned systemctl binary, already-active mount
+  requirements, one explicit owned IP RPC route (optional HTTPS SPKI), private
+  activation journal path, a window of at most 24 hours, 1–128 operations,
+  1–60-second manager calls and 1–600-second observation age.
+- Explicit permission to install static units and to request production
+  `validator run`. This request is necessary but is insufficient for a fresh
+  start without the distinct current-authority implementation.
+
+Readiness uses the existing complete finalized bootstrap census and retained
+original custody. Both UR generations, activity, permits and signed native
+windows must match. The bounded journal retains each role, original custody
+seals, exact finalized block and full-readiness digest. These are owned-RPC
+assertions, not independently verified finality/storage proofs. All activation
+blockers remain visible. Observation age begins before the read, so a slow read
+cannot label old facts as newly fresh.
+
+## Concrete deployment files
+
+The host custodian must preprovision the service accounts, protected release and
+runtime-config directories, separate private operational directories, original
+bootstrap custody and signed inputs. The command neither creates accounts nor
+changes existing custody permissions.
+
+Original bootstrap source configs remain private. Installation creates a
+separate runtime config with **identical approved bytes and SHA-256**, owned by
+root and mode **0440** with the exact service GID. The real production config
+parser is run at that destination before admission; its complete inspection
+must equal the original source inspection. Relative-path reinterpretation is
+therefore refused. The copy has a different pathname and cannot replace a
+missing or changed original source on restart.
+
+The runtime config's physical parents must be traversable by the service and
+protected from service writes. Referenced public approvals/evidence and protected
+credentials retain their separately approved paths and custody; installation
+copies none of them. Their production availability belongs to the still-open
+current-authority/producer-startup gate. The working/progress directory must be
+outside **both** validators' protocol, credential and evidence namespaces,
+matching the actual producer progress publisher's path rule.
+
+Installation uses temporary files, file sync, descriptor-relative
+`RENAME_NOREPLACE` and directory sync. It never overwrites an existing config or
+unit. An exact existing file can reconcile an interrupted installation; a
+truncated or different file requires explicit operator disposition. The unit
+profile is the existing qualified repair profile: `Type=exec`, numeric user/group,
+absolute `validator run --config=... --progress-file=...`, `Restart=no`,
+`KillMode=control-group`, no delegation, shell, environment files or hooks.
+
+`install` performs a pinned, bounded `systemctl daemon-reload`, then verifies
+both loaded units and their dependencies. It does not enable, start, stop or
+restart them. Daemon reload is a real host effect and can run systemd's host
+configuration machinery; the separately authorized deployment custodian owns
+that host-wide boundary. No dynamic Warp unit is accepted.
+
+## Operations and recovery
+
+Every invocation supplies the same exact approval bytes and independent key:
+
+```text
+sn-mainnet activate-validators claim|install|admit|resume|status \
+  --approval /absolute/activation-approval.json \
+  --accept-approval-hash sha256:APPROVED_FILE_DIGEST \
+  --independent-public-key 0xINDEPENDENT_APPROVAL_KEY
+```
+
+`claim` retains original authority in a private one-shot journal without network
+or manager calls. `install` publishes the exact runtime configs/units and reloads
+the manager. `admit` performs real loaded-unit and finalized bootstrap checks,
+reporting `admitted-process-only`, never activation ready. `status` returns
+retained observations. `resume` only reconciles already consumed starts and
+cannot issue a fresh start.
+
+The explicit `start --execute-approved-starts` form is implemented but remains
+blocked in the public command until the qualified current-authority route is
+installed. That refusal, and a purely local missing-installation refusal, do
+not consume an operation allowance. Real bounded operations consume and sync an
+operation before external work; retries cannot replenish the signed cap.
+
+For each authorized fresh start, the owner re-reads current readiness and
+independent authority, checks exact loaded release/config/unit properties and a
+genuinely empty unified cgroup (including descendants), then syncs the consumed
+start before the actual pinned `systemctl --job-mode=fail start`. It repeats
+cancellation, clock, expiry and observation-age checks after that sync. Refusal
+then retains the consumed start; it never refunds the allowance.
+
+Each unit has one lifetime initial-start allowance. The exact acknowledged
+systemd invocation/PID/monotonic start and fresh exact-source progress file form
+its process postcondition. A first unit may complete while the second remains
+unstarted or unresolved; both records survive restart separately. A lost start
+acknowledgement is **uncertain consumed start**, even if a matching-looking
+process exists afterwards. Manual host reconciliation is required, and no
+automatic invocation adoption or replacement start is supplied. A retained
+acknowledgement can resume its progress checks after expiry. Completion never
+proves current health, weights, root participation or a 10/90 native outcome.
+
+Cancellation joins each manager/RPC operation and releases the process journal
+lock. Ambiguous synced publication poisons the current owner until reopen;
+missing state, a different marker or changed original input cannot become a new
+claim. All original root/contract journals and signed liabilities remain intact.
+
+## Host and qualification limits
+
+The host custodian must exclude concurrent privileged deployment edits and
+administrative starts under one deployment lock. Pinning files and loaded
+properties is not an atomic exclusion against another privileged actor. Local
+markers do not provide hostile-host rollback resistance or cross-host hotkey
+fencing. Changing a boot, unit generation or signed envelope requires explicit
+retained-liability disposition, not deleting the journal.
+
+Deterministic tests use real private files, existing independently signed
+bootstrap fixtures and local finalized HTTP responses. A synthetic system manager
+and explicitly test-only current authority exercise the exact command and
+journal boundaries. No test executes a deployed validator or supplies production
+credentials. Adjacent qualification includes the actual producer progress
+publisher outside protocol state and its alias/ownership refusals, plus the real
+child-process cancellation/join boundary. This is not a full `RunRelease`
+operator/credential/deployment acceptance test. Sol medium normal/race/causal
+qualification is pending; author validation is compile/vet only.
