@@ -14,15 +14,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 )
 
 // Adapter pins are synthetic; an injected test adapter never opens these files.
 func ownerSigningTestDeviceConfig(t *testing.T) ownerSigningDeviceConfig {
 	t.Helper()
-	directory := t.TempDir()
+	directory := ownerSigningTestDirectory(t)
 	return ownerSigningDeviceConfig{StatePath: filepath.Join(directory, "owner-signing.json"), PythonPath: "/synthetic-tools/python3",
 		HelperPath: "/synthetic-tools/owner_ledger_adapter.py", HelperHash: rootObjectHash("synthetic helper"),
 		BackendPath: "/synthetic-tools/bittensor_core.so", BackendHash: rootObjectHash("synthetic SDK artifact"), AppVersion: [3]uint16{100, 0, 5}}
@@ -173,21 +175,117 @@ func TestOwnerSigningDeviceExclusiveCustodyAcrossConcurrentCommands(t *testing.T
 	_, request, _ := ownerSigningTestRequest(t)
 	config := ownerSigningTestDeviceConfig(t)
 	adapter := &ownerSigningDeviceTestAdapter{request: request, entered: make(chan struct{}), release: make(chan struct{})}
-	completed := make(chan error, 1)
+	ctx, cancel := context.WithCancel(t.Context())
+	completed := make(chan struct{})
+	var signErr error
 	go func() {
-		_, err := signOwnerRequest(t.Context(), config, request, adapter.invoke)
-		completed <- err
+		_, signErr = signOwnerRequest(ctx, config, request, adapter.invoke)
+		close(completed)
 	}()
-	<-adapter.entered
-	if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err == nil || adapter.signs.Load() != 1 {
-		t.Error("second local command reached the device")
+	t.Cleanup(func() {
+		cancel()
+		<-completed
+	})
+	select {
+	case <-adapter.entered:
+	case <-completed:
+		t.Fatal("first owner command failed before the device barrier", signErr)
+	case <-ctx.Done():
+		t.Fatal("first owner command canceled before the device barrier", ctx.Err())
+	}
+	if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err == nil || !strings.Contains(err.Error(), "owner device request already has a local owner") || adapter.signs.Load() != 1 {
+		t.Error("second local command did not observe the active exclusive owner", err)
 	}
 	close(adapter.release)
-	if err := <-completed; err != nil {
-		t.Fatal(err)
+	<-completed
+	if signErr != nil {
+		t.Fatal(signErr)
 	}
 	if adapter.signs.Load() != 1 || adapter.prepares.Load() != 1 {
 		t.Fatal("exclusive owner allowed duplicate adapter operations")
+	}
+}
+
+// Cancellation occurs only after the durable intent and device-entry barrier.
+// Completion is joined before fixture cleanup; restart cannot issue again.
+func TestOwnerSigningDeviceCancellationPreservesUnknownIssuance(t *testing.T) {
+	_, request, _ := ownerSigningTestRequest(t)
+	config := ownerSigningTestDeviceConfig(t)
+	adapter := &ownerSigningDeviceTestAdapter{request: request, entered: make(chan struct{}), release: make(chan struct{})}
+	ctx, cancel := context.WithCancel(t.Context())
+	completed := make(chan struct{})
+	var signErr error
+	go func() {
+		_, signErr = signOwnerRequest(ctx, config, request, adapter.invoke)
+		close(completed)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-completed
+	})
+	select {
+	case <-adapter.entered:
+	case <-completed:
+		t.Fatal("first owner command failed before the device barrier", signErr)
+	case <-ctx.Done():
+		t.Fatal("first owner command canceled before the device barrier", ctx.Err())
+	}
+	cancel()
+	<-completed
+	if !errors.Is(signErr, context.Canceled) || adapter.signs.Load() != 1 {
+		t.Fatal("device cancellation did not preserve the original issued attempt", signErr)
+	}
+	if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err == nil || adapter.signs.Load() != 1 || adapter.prepares.Load() != 1 {
+		t.Fatal("canceled device operation was reissued", err)
+	}
+	if _, err := os.Stat(config.StatePath + ".ledger-response"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("canceled fixture synthesized a device response", err)
+	}
+}
+
+// Umask is process-global, so each ambient mask runs in an isolated copy of the
+// test binary. Real signing custody must work under permissive owner defaults.
+func TestOwnerSigningDeviceFixturePermissionsIndependentOfUmask(t *testing.T) {
+	const variable = "UR_TEST_OWNER_SIGNING_FIXTURE_UMASK"
+	if encoded := os.Getenv(variable); encoded != "" {
+		mask, err := strconv.ParseUint(encoded, 8, 9)
+		if err != nil {
+			t.Fatal(err)
+		}
+		original := syscall.Umask(int(mask))
+		defer syscall.Umask(original)
+		_, request, _ := ownerSigningTestRequest(t)
+		config := ownerSigningTestDeviceConfig(t)
+		info, err := os.Stat(filepath.Dir(config.StatePath))
+		if err != nil || info.Mode().Perm() != 0700 {
+			t.Fatal("owner fixture inherited ambient directory permissions", encoded, info, err)
+		}
+		adapter := &ownerSigningDeviceTestAdapter{request: request}
+		reply, err := signOwnerRequest(t.Context(), config, request, adapter.invoke)
+		if err != nil || adapter.signs.Load() != 1 || adapter.prepares.Load() != 1 {
+			t.Fatal("private owner fixture could not sign under ambient umask", encoded, err)
+		}
+		if _, err := reply.validate(request); err != nil {
+			t.Fatal(err)
+		}
+		for _, suffix := range []string{"", ".lock", ".ledger-response"} {
+			info, err := os.Stat(config.StatePath + suffix)
+			if err != nil || info.Mode().Perm() != 0600 {
+				t.Fatal("owner custody file permissions changed under ambient umask", encoded, suffix, info, err)
+			}
+		}
+		return
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mask := range []string{"0000", "0002", "0022", "0077"} {
+		command := exec.CommandContext(t.Context(), executable, "-test.run=^TestOwnerSigningDeviceFixturePermissionsIndependentOfUmask$", "-test.count=1")
+		command.Env = append(os.Environ(), variable+"="+mask)
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("owner fixture with umask %s: %v\n%s", mask, err, output)
+		}
 	}
 }
 
@@ -214,7 +312,7 @@ func TestOwnerSigningDevicePublicCommandUsesPortableRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	config := ownerSigningTestDeviceConfig(t)
-	requestPath := filepath.Join(t.TempDir(), "request.json")
+	requestPath := filepath.Join(ownerSigningTestDirectory(t), "request.json")
 	bootstrapRootTestWrite(t, requestPath, request)
 	args := []string{"sign", "--request", requestPath, "--accept-request-hash", trust.RequestHash, "--trim-approval-key", trust.ApprovalKey,
 		"--owner-account-id", trust.Owner, "--expected-genesis", trust.Genesis, "--owner-state", config.StatePath,

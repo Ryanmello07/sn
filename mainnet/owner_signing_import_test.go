@@ -50,7 +50,7 @@ func TestOwnerSigningImportPreservesOriginalCustodyAndRecovery(t *testing.T) {
 	chain, f, configPath, metadataPath, request, trust := ownerSigningPreparedFixture(t)
 	original := chain.journals(t)
 	reads := chain.census.count("state_getStorage")
-	ownerDirectory := t.TempDir()
+	ownerDirectory := ownerSigningTestDirectory(t)
 	requestPath := filepath.Join(ownerDirectory, "portable-request.json")
 	bootstrapRootTestWrite(t, requestPath, request)
 	responsePath := filepath.Join(ownerDirectory, "emulated-response.hex")
@@ -133,12 +133,12 @@ func TestOwnerSigningReplyCannotResolveUnknownSigningCustody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requestRef := bootstrapRootTestWrite(t, filepath.Join(t.TempDir(), "request.json"), request)
+	requestRef := bootstrapRootTestWrite(t, filepath.Join(ownerSigningTestDirectory(t), "request.json"), request)
 	reply, err := newOwnerSigningReply(request, ed25519.Sign(ownerSigningTestKey(), ownerSigningBytes(f.config.Action)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	replyRef := bootstrapRootTestWrite(t, filepath.Join(t.TempDir(), "reply.json"), reply)
+	replyRef := bootstrapRootTestWrite(t, filepath.Join(ownerSigningTestDirectory(t), "reply.json"), reply)
 	var stdout, stderr bytes.Buffer
 	if code := chain.command(t.Context(), "trim-import-reply", &stdout, &stderr, "--trim-config", configPath, "--trim-approval-key", f.key,
 		"--request", requestRef.Path, "--accept-request-hash", trust.RequestHash, "--reply", replyRef.Path, "--reply-sha256", replyRef.Sha256); code != 3 {
@@ -202,8 +202,8 @@ func TestOwnerSigningV1PortableReplyImport(t *testing.T) {
 	if err != nil || reply.SignatureScheme != "sr25519" {
 		t.Fatal("legacy owner portable reply lost original scheme", err)
 	}
-	requestRef := bootstrapRootTestWrite(t, filepath.Join(t.TempDir(), "request.json"), request)
-	replyRef := bootstrapRootTestWrite(t, filepath.Join(t.TempDir(), "reply.json"), reply)
+	requestRef := bootstrapRootTestWrite(t, filepath.Join(ownerSigningTestDirectory(t), "request.json"), request)
+	replyRef := bootstrapRootTestWrite(t, filepath.Join(ownerSigningTestDirectory(t), "reply.json"), reply)
 	var stdout, stderr bytes.Buffer
 	if code := chain.command(t.Context(), "trim-import-reply", &stdout, &stderr, "--trim-config", configRef.Path, "--trim-approval-key", f.key,
 		"--request", requestRef.Path, "--accept-request-hash", request.ContentHash, "--reply", replyRef.Path, "--reply-sha256", replyRef.Sha256); code != 0 {

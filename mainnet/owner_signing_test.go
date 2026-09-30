@@ -21,6 +21,17 @@ import (
 	"github.com/urfoundation/sn/crv4"
 )
 
+// Go's numbered TempDir children inherit the process umask. Every owner file
+// fixture explicitly establishes the same private directory contract as users.
+func ownerSigningTestDirectory(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return directory
+}
+
 // This publicly reproducible seed is strictly a synthetic test signer.
 func ownerSigningTestKey() ed25519.PrivateKey {
 	seed := sha256.Sum256([]byte("synthetic offline owner Ed25519 fixture only"))
@@ -342,7 +353,7 @@ func TestOwnerSigningCommandWorksWithoutHostCustody(t *testing.T) {
 	if err := os.RemoveAll(filepath.Dir(f.config.Action.StatePath)); err != nil {
 		t.Fatal(err)
 	}
-	directory := t.TempDir()
+	directory := ownerSigningTestDirectory(t)
 	requestPath := filepath.Join(directory, "portable-owner-request.json")
 	bootstrapRootTestWrite(t, requestPath, request)
 	if raw, diagnostic, code := ownerSigningTestCommand(t, "inspect", requestPath, trust); code != 0 || !bytes.Contains(raw, []byte(`"device_qualified":false`)) || !bytes.Contains(raw, []byte("sudo_trim_to_max_allowed_uids")) {
@@ -383,7 +394,7 @@ func TestOwnerSigningCommandWorksWithoutHostCustody(t *testing.T) {
 // altered proof files before producing any protocol bytes.
 func TestOwnerSigningLedgerPlanCommandPinsProofAndRefusesDeviceFlags(t *testing.T) {
 	_, request, trust := ownerSigningTestRequest(t)
-	directory := t.TempDir()
+	directory := ownerSigningTestDirectory(t)
 	requestPath := filepath.Join(directory, "request.json")
 	bootstrapRootTestWrite(t, requestPath, request)
 	proof := []byte("synthetic bounded proof bytes, not an RFC78 proof")
