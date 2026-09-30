@@ -114,11 +114,14 @@ normal/race; both causal controls reproduce their intended failure in both
 modes, with exact source/dependency evidence sealed. This does not supply the
 missing history authenticator. MG-08 remains open.
 
-The separate [bounded Safe archive census](SAFE-HISTORY-CAPTURE.md) candidate
-adds an actual read-only capture command and private durable witnesses. It
-reuses the native ordered-trie and qualified server receipt decoder, accepts
-unrelated traffic, and retains exact direct calls and committed logs over a
-pinned interval. Independent qualification is pending. Complete internal/reverted
+The separate [bounded Safe archive census](SAFE-HISTORY-CAPTURE.md) has
+[sealed offline qualification](evidence/safe-history-census-qualification-20260930.md)
+on paired SN `36fea176` and server `d21492c3`: 68 positive root executions pass
+normal/race; ten normal controls and five selected race controls are causal,
+including a distinct normal published-Safe fixture-oracle control. Its actual
+read-only command retains private durable witnesses, reuses the native
+ordered-trie and server receipt decoder, accepts unrelated traffic, and retains
+exact direct calls and committed logs over a pinned interval. Complete internal/reverted
 execution, native hooks, clean deployment and pending authority remain unproven;
 the report keeps every history/send verdict false. This evidence layer does not
 implement the missing provenance authenticator or change the public-submit gate.
@@ -2146,8 +2149,9 @@ restarting unrelated bodies already in progress.
 ## Open inputs before an executable mainnet plan
 
 Snow VPN `172.28.208.185:9944` is the intended mainnet route, but the node
-operator reports it is still being prepared; the latest read-only inspection
-returned HTTP 502 while the preceding one returned testnet chain ID 945. Reinspect it after cutover, and do not
+operator reports it is still syncing/preparing. The latest retained read-only
+inspection returned HTTP 502 while the preceding one returned testnet chain ID
+945; the archive qualification adds no live observation. Reinspect after cutover, and do not
 construct or sign mainnet actions until it serves the approved mainnet identity.
 Obtain an independently approved mainnet genesis/runtime identity and complete
 SN25 census. Compose and qualify the production source/dependency release with

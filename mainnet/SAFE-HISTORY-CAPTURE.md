@@ -13,9 +13,11 @@ This is an evidence input for the missing history authenticator. It does **not**
 implement `bootstrapSuccessorSafeProvenanceAuthenticator`, discharge the signed
 complete-history policy, or enable successor submission. Original receipts,
 authority, signed bytes, nonce claims, counted attempts and liabilities are not
-opened or changed. Independent behavioral qualification is pending for this
-candidate; compile/vet results and exact source fences are recorded in its
-author handoff.
+opened or changed. [Independent offline qualification](evidence/safe-history-census-qualification-20260930.md)
+is sealed on paired SN `36fea176` and server `d21492c3`: 68 positive root
+executions pass normal/race, ten normal controls and five selected race controls
+are causal, with exact source/dependency and raw-evidence fences. One normal
+control explicitly checks the published-Safe fixture oracle.
 
 ## Capture and retention
 
