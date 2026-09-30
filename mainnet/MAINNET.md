@@ -918,8 +918,11 @@ select an intent, never signing authority. The [owned-RPC submission adapter](RO
 now sends exact signed bytes under separate action/route approval, retains
 uncertain numbered attempts and reconciles canonical outcomes before another
 approved send. Its local composition with offline custody and the service owner
-is qualified. Production live authority, globally fenced native custody and a
-signing device remain absent; there is no signing command or active root service. A signed root
+is qualified. The [bounded root-service command](evidence/root-service-runtime-qualification-20260930.md)
+now composes original input admission, observation and issued-signature recovery,
+with a closed public activation gate. Production live authority, globally fenced
+native custody and a qualified separate hardware signer remain absent; there is
+no live root signing command or active root service. A signed root
 call does not bind registration generation, so pending-action seat changes need
 custody exclusion or separately authenticated incident reconciliation. The
 accumulate-in-place strategy needs no heartbeat transaction. Changing that

@@ -894,8 +894,12 @@ authorize effects. The separate [owned-RPC submission adapter](ROOT-SUBMISSION.m
 now authenticates its own action/route approval, retains numbered uncertain sends
 and reconciles exact original bytes before any later approved attempt. The
 composed offline-custody/service/HTTP/receipt path passes deterministic local
-qualification. Production live authority, globally fenced native custody, a
-signing device and CLI/service activation remain absent. Native fee
+qualification. The [qualified bounded root-service command](evidence/root-service-runtime-qualification-20260930.md)
+now admits original input and recovers issued signatures without another
+signing or broadcast allowance: 12 focused and 100 adjacent roots pass
+normal/race; five normal and two race controls are causal. Production live
+authority, globally fenced native custody, a separate hardware signing device
+and activation remain absent. Native fee
 quotes are not atomic caps; source/policy hashes are not on-chain runtime locks.
 Do not activate signing from a read-only-ready sample or invent a heartbeat for
 the accumulation strategy. Mainnet identity, existing seat, complete eligibility,
