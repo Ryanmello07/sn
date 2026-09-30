@@ -14,7 +14,7 @@ import (
 const bootstrapSuccessorCanonicalSchema = "urnetwork-mainnet-successor-canonical-authorization-v1"
 const bootstrapSuccessorCanonicalDomain = "urnetwork-mainnet-successor-canonical-authorization-approval-v1"
 const bootstrapSuccessorCanonicalFile = bootstrapSuccessorExecutionPrefix + ".canonical-authorization"
-const bootstrapSuccessorCanonicalPolicy = "reviewed-safe-build-and-current-runtime;all-safe-and-relayer-signers-fenced-to-retained-registry;no-other-live-safe-signatures-or-relayer-transactions;original-unexecuted-reservations-retained;owned-rpc-finality-and-account-pending-state-assertions"
+const bootstrapSuccessorCanonicalPolicy = "reviewed-safe-build-and-current-runtime;independently-signed-safe-deployment-and-complete-storage-provenance;canonical-provenance-authenticator-required-for-send;all-safe-and-relayer-signers-fenced-to-retained-registry;no-other-live-safe-signatures-or-relayer-transactions;original-unexecuted-reservations-retained;owned-rpc-finality-and-account-pending-state-assertions"
 
 // Evidence files are external review inputs, not automatically proved build
 // reproducibility or cross-host key exclusivity. The original independent key
@@ -26,6 +26,7 @@ type bootstrapSuccessorCanonicalAuthorization struct {
 	CurrentRuntime    rootReceiptProfile `json:"current_runtime"`
 	RuntimeEvidence   planFileReference  `json:"current_runtime_evidence"`
 	CutoverEvidence   planFileReference  `json:"signer_cutover_evidence"`
+	SafeProvenance    planFileReference  `json:"safe_deployment_provenance"`
 	Policy            string             `json:"accepted_policy"`
 }
 
@@ -43,6 +44,8 @@ func (self bootstrapSuccessorCanonicalAuthorization) signingBytes() ([]byte, err
 		!bootstrapRootAbsolutePath(self.SafeBuildEvidence.Path) || !planSha256(self.SafeBuildEvidence.Sha256) ||
 		!bootstrapRootAbsolutePath(self.RuntimeEvidence.Path) || !planSha256(self.RuntimeEvidence.Sha256) ||
 		!bootstrapRootAbsolutePath(self.CutoverEvidence.Path) || !planSha256(self.CutoverEvidence.Sha256) ||
+		!bootstrapRootAbsolutePath(self.SafeProvenance.Path) || !planSha256(self.SafeProvenance.Sha256) ||
+		self.SafeProvenance.Path == self.SafeBuildEvidence.Path || self.SafeProvenance.Path == self.RuntimeEvidence.Path || self.SafeProvenance.Path == self.CutoverEvidence.Path ||
 		self.SafeBuildEvidence.Path == self.CutoverEvidence.Path || self.RuntimeEvidence.Path == self.SafeBuildEvidence.Path || self.RuntimeEvidence.Path == self.CutoverEvidence.Path ||
 		profile.RuntimeSourceCommit != frontierMappingSourceCommit || profile.RuntimeVersion.SpecName == "" || profile.RuntimeVersion.SpecVersion == 0 ||
 		!rootCanonicalHash(profile.RuntimeCodeHash) || !rootCanonicalHash(profile.RuntimeMetadataHash) {
@@ -64,7 +67,7 @@ func (self bootstrapSuccessorCanonicalApproval) validate(ctx context.Context, pl
 	if err != nil || keyErr != nil || signatureErr != nil || !ed25519.Verify(key, message, signature) {
 		return errors.Join(errors.New("successor canonical authorization signature differs"), err, keyErr, signatureErr)
 	}
-	for _, reference := range []planFileReference{self.Authorization.SafeBuildEvidence, self.Authorization.RuntimeEvidence, self.Authorization.CutoverEvidence} {
+	for _, reference := range []planFileReference{self.Authorization.SafeBuildEvidence, self.Authorization.RuntimeEvidence, self.Authorization.CutoverEvidence, self.Authorization.SafeProvenance} {
 		for _, directory := range []string{plan.Review.Preparation.Approval.Plan.Proposal.OriginalRunDirectory, plan.Request.RegistryDirectory} {
 			if reference.Path == directory || strings.HasPrefix(reference.Path, directory+"/") {
 				return errors.New("successor canonical evidence overlaps retained execution custody")
@@ -75,7 +78,8 @@ func (self bootstrapSuccessorCanonicalApproval) validate(ctx context.Context, pl
 			return errors.Join(errors.New("successor canonical evidence is absent or changed"), err)
 		}
 	}
-	return ctx.Err()
+	_, err = self.readProvenance(ctx, plan)
+	return errors.Join(err, ctx.Err())
 }
 
 // The first production attempt permanently binds its independent authority.

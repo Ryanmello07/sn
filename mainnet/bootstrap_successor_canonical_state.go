@@ -41,8 +41,8 @@ func (self *bootstrapSuccessorCanonicalChain) code(ctx context.Context, address 
 	return raw, nil
 }
 
-// The pinned published ABI supplies only encoding. Current authority comes
-// from exact runtime/storage and independently authenticated block selectors.
+// The pinned published ABI supplies only encoding. These bounded current-state
+// observations cannot establish complete deployment/storage provenance.
 func (self *bootstrapSuccessorCanonicalChain) safeCall(ctx context.Context, plan bootstrapSuccessorExecutionPlan, block any, maximum int, name string, args ...any) ([]any, error) {
 	profile := self.owner.profile
 	input, err := profile.contractAbi.Pack(name, args...)
@@ -70,7 +70,8 @@ func (self *bootstrapSuccessorCanonicalChain) safeCall(ctx context.Context, plan
 
 // Both pinned releases share slots zero through five and the guard/fallback
 // namespaces. The module-guard namespace is additionally required empty for
-// the older release; no active module or fallback handler is admitted.
+// the older release. Empty sentinel lists cannot exclude unreachable enabled
+// owner/module entries; separate complete provenance is mandatory for admission.
 func (self *bootstrapSuccessorCanonicalChain) safeState(ctx context.Context, plan bootstrapSuccessorExecutionPlan, block any) (bootstrapSuccessorExecutionObservation, error) {
 	var result bootstrapSuccessorExecutionObservation
 	proxy, err := self.code(ctx, plan.Review.Transaction.Safe, block)
@@ -238,6 +239,9 @@ func (self *bootstrapSuccessorCanonicalChain) currentRuntime(ctx context.Context
 // Each RPC has its own bounded retry window under caller cancellation.
 func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan bootstrapSuccessorExecutionPlan) (bootstrapSuccessorExecutionObservation, error) {
 	var result bootstrapSuccessorExecutionObservation
+	if self == nil || self.provenance == nil {
+		return result, errBootstrapSuccessorSafeProvenanceUnavailable
+	}
 	if err := self.checkpoint(ctx, plan); err != nil {
 		return result, err
 	}
@@ -329,6 +333,9 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 	}
 	result.NativeNumber, result.NativeHash = latest.FinalizedNumber, common.HexToHash(latest.FinalizedHash)
 	if err := plan.admit(result); err != nil {
+		return result, err
+	}
+	if err := self.authenticateProvenance(ctx, plan, latest); err != nil {
 		return result, err
 	}
 	if err := self.checkpoint(ctx, plan); err != nil {

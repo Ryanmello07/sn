@@ -1,5 +1,6 @@
 // Commands reconstruct original custody and independently approve exact bytes.
-// Online resume additionally requires retained canonical build/cutover authority.
+// Online resume additionally requires retained canonical review authority.
+// Public submission is unavailable without a canonical Safe history capability.
 package main
 
 import (
@@ -91,9 +92,15 @@ func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory,
 	return result, profile, retained, reader.checkpoint("execution-preview-reconstructed")
 }
 
-// Only resume can observe the independently approved route. Submission needs
-// both explicit flags and the separately signed canonical build/cutover scope.
-func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, stdout, stderr io.Writer) (resultCode int) {
+// Public resume can reconcile the approved route. No production canonical
+// deployment/storage-provenance adapter exists, so public submission is disabled.
+func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return runBootstrapSuccessorExecutionCommandWithProvenance(ctx, args, stdout, stderr, nil)
+}
+
+// An explicit internal capability is a test seam, never a caller-supplied flag,
+// report or global mutable hook. Only local fixtures currently supply one.
+func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, args []string, stdout, stderr io.Writer, provenance bootstrapSuccessorSafeProvenanceAuthenticator) (resultCode int) {
 	if len(args) == 0 || args[0] != "contract-successor-execution-preview" && args[0] != "contract-successor-execution-claim" && args[0] != "contract-successor-execution-resume" {
 		fmt.Fprintln(stderr, "unknown successor execution custody command")
 		return 2
@@ -111,8 +118,8 @@ func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, s
 	approvalHash := flags.String("approval-sha256", "", "exact approval file digest")
 	executionHash := flags.String("accept-execution-hash", "", "exact previewed execution plan hash")
 	online := flags.Bool("online", false, "authenticate original and current state on the originally approved owned route")
-	submit := flags.Bool("submit", false, "permit one durably counted exact signed transaction write")
-	canonicalPath := flags.String("canonical-approval", "", "independent canonical build and signer-cutover authorization")
+	submit := flags.Bool("submit", false, "request one counted write; unavailable until canonical Safe provenance is implemented")
+	canonicalPath := flags.String("canonical-approval", "", "independent build, runtime, signer-cutover and Safe-provenance authorization")
 	canonicalHash := flags.String("canonical-approval-sha256", "", "exact canonical authorization file digest")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *configPath == "" || *directory == "" || !planSha256(*accepted) ||
 		*requestPath == "" || *safeRequestPath == "" || *executionRequestPath == "" ||
@@ -121,6 +128,10 @@ func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, s
 		(*online || *submit) && args[0] != "contract-successor-execution-resume" || *submit && !*online ||
 		*online && (*canonicalPath == "" || !planSha256(*canonicalHash)) || !*online && (*canonicalPath != "" || *canonicalHash != "") {
 		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume also require --approval, --approval-sha256 and --accept-execution-hash; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; --submit requires --online")
+		return 2
+	}
+	if *submit && provenance == nil {
+		fmt.Fprintln(stderr, errBootstrapSuccessorSafeProvenanceUnavailable)
 		return 2
 	}
 	var additionalPaths []string
@@ -195,7 +206,7 @@ func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, s
 			fmt.Fprintln(stderr, "successor independent canonical authorization:", err)
 			return 2
 		}
-		canonical, err = newBootstrapSuccessorCanonicalChain(ctx, owner, canonicalApproval)
+		canonical, err = newBootstrapSuccessorCanonicalChainWithProvenance(ctx, owner, canonicalApproval, provenance)
 		if err == nil {
 			result, err = advanceBootstrapSuccessorExecution(ctx, owner, canonical, *submit)
 		}

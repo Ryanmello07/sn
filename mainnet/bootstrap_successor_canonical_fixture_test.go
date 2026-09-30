@@ -4,9 +4,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"math/big"
 	"path/filepath"
 	"testing"
@@ -19,8 +21,8 @@ import (
 	"github.com/urfoundation/sn/crv4"
 )
 
-// A fixture retains command inputs so public resume reconstructs the same
-// physical root, approvals, original markers and exact signed transaction.
+// A fixture retains command inputs so the command implementation reconstructs
+// the same physical root, approvals, markers and exact signed transaction.
 type bootstrapSuccessorCanonicalFixture struct {
 	t            *testing.T
 	original     *bootstrapChainFixture
@@ -189,15 +191,55 @@ func newBootstrapSuccessorCanonicalFixture(t *testing.T) *bootstrapSuccessorCano
 // independent key to explicit build review and scoped signer inventory.
 func bootstrapSuccessorCanonicalTestApproval(t *testing.T, plan bootstrapSuccessorExecutionPlan, key ed25519.PrivateKey, profile rootReceiptProfile) bootstrapSuccessorCanonicalApproval {
 	t.Helper()
+	provenance := bootstrapSuccessorCanonicalTestProvenance(t, plan, key)
 	authority := bootstrapSuccessorCanonicalAuthorization{Schema: bootstrapSuccessorCanonicalSchema, ExecutionPlanHash: plan.hash(), Policy: bootstrapSuccessorCanonicalPolicy,
 		SafeBuildEvidence: bootstrapSuccessorExecutionTestRaw(t, "synthetic-safe-build.txt", []byte("synthetic independent build review")),
 		CurrentRuntime:    profile, RuntimeEvidence: bootstrapSuccessorExecutionTestRaw(t, "synthetic-current-runtime.txt", []byte("synthetic independent current runtime artifact and codec review")),
-		CutoverEvidence: bootstrapSuccessorExecutionTestRaw(t, "synthetic-cutover.txt", []byte("synthetic all-signers registry cutover and complete outstanding-signature inventory"))}
+		CutoverEvidence: bootstrapSuccessorExecutionTestRaw(t, "synthetic-cutover.txt", []byte("synthetic all-signers registry cutover and complete outstanding-signature inventory")),
+		SafeProvenance:  bootstrapRootTestWrite(t, filepath.Join(bootstrapSuccessorExecutionTestDirectory(t), "synthetic-safe-provenance.json"), provenance)}
 	message, err := authority.signingBytes()
 	if err != nil {
 		t.Fatal(err)
 	}
 	return bootstrapSuccessorCanonicalApproval{Authorization: authority, Signature: hex.EncodeToString(ed25519.Sign(key, message))}
+}
+
+// The fixture review statement is separately signed and pinned. It is still
+// insufficient for public submission, which has no provenance authenticator.
+func bootstrapSuccessorCanonicalTestProvenance(t *testing.T, plan bootstrapSuccessorExecutionPlan, key ed25519.PrivateKey) bootstrapSuccessorSafeProvenanceApproval {
+	t.Helper()
+	p := bootstrapSuccessorSafeProvenance{Schema: bootstrapSuccessorSafeProvenanceSchema, ExecutionPlanHash: plan.hash(), Safe: plan.Review.Transaction.Safe,
+		Version: plan.Review.Request.Version, Variant: plan.Review.Request.Variant, Singleton: plan.Request.Singleton,
+		ThroughNativeNumber: plan.Review.Request.StartNativeNumber, ThroughNativeHash: common.HexToHash(plan.Review.Request.StartNativeHash),
+		DeploymentTransactionHash: crypto.Keccak256Hash([]byte("synthetic reviewed Safe deployment")), Policy: bootstrapSuccessorSafeProvenancePolicy,
+		HistoryEvidence: bootstrapSuccessorExecutionTestRaw(t, "synthetic-safe-history.txt", []byte("synthetic complete clean initialization, delegatecall and storage history"))}
+	pin, err := loadSafeReleasePin(p.Version, p.Variant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, artifact := range pin.Artifacts {
+		if artifact.Name == "SafeProxy" {
+			p.SafeProxyRuntimeHash = common.HexToHash(artifact.RuntimeKeccak256)
+		} else if artifact.Name == p.Variant {
+			p.SingletonRuntimeHash = common.HexToHash(artifact.RuntimeKeccak256)
+		}
+	}
+	message, err := p.signingBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bootstrapSuccessorSafeProvenanceApproval{Provenance: p, Signature: hex.EncodeToString(ed25519.Sign(key, message))}
+}
+
+// This explicitly synthetic capability models the fixture's controlled setup
+// and history. It is never reachable from public dispatch, a file or a flag and
+// is not claimed to authenticate an arbitrary deployed Safe's storage history.
+func (self *bootstrapSuccessorCanonicalFixture) authenticate(ctx context.Context, plan bootstrapSuccessorExecutionPlan, provenance bootstrapSuccessorSafeProvenanceApproval, chain *evmOwnedChain, head chainIdentity) error {
+	if chain == nil || chain.client.url != self.original.contracts.server.URL || plan.hash() != self.approval.Plan.hash() ||
+		provenance.Provenance.Safe != plan.Review.Transaction.Safe || head.GenesisHash != self.original.config.Network.GenesisHash || head.FinalizedNumber < provenance.Provenance.ThroughNativeNumber {
+		return errors.New("synthetic canonical provenance fixture scope differs")
+	}
+	return ctx.Err()
 }
 
 // Lightweight authority roots use a synthetic reviewed profile without claiming
@@ -208,10 +250,18 @@ func bootstrapSuccessorCanonicalTestRuntime() rootReceiptProfile {
 		RuntimeCodeHash: crypto.Keccak256Hash([]byte("synthetic-runtime-code")).Hex(), RuntimeMetadataHash: crypto.Keccak256Hash([]byte("synthetic-runtime-metadata")).Hex()}
 }
 
-// Only the existing public command dispatch can execute this helper's options.
+// Resume uses the command implementation with this fixture's explicit synthetic
+// history capability. Other commands continue through public dispatch.
 func (self *bootstrapSuccessorCanonicalFixture) invoke(command string, stdout *bytes.Buffer, extra ...string) (int, string) {
 	var stderr bytes.Buffer
-	code := self.original.command(self.t.Context(), command, stdout, &stderr, append(append([]string{}, self.paths...), extra...)...)
+	var code int
+	if command == "contract-successor-execution-resume" {
+		args := []string{command, "--config", self.original.path, "--run-dir", self.original.config.RunDirectory, "--accept-plan-hash", self.original.preparation.Plan.ContentHash}
+		args = append(append(args, self.paths...), extra...)
+		code = runBootstrapSuccessorExecutionCommandWithProvenance(self.t.Context(), args, stdout, &stderr, self)
+	} else {
+		code = self.original.command(self.t.Context(), command, stdout, &stderr, append(append([]string{}, self.paths...), extra...)...)
+	}
 	return code, stderr.String()
 }
 
@@ -239,7 +289,7 @@ func (self *bootstrapSuccessorCanonicalFixture) open() (*bootstrapSuccessorExecu
 		self.t.Fatal(err)
 	}
 	self.t.Cleanup(func() { owner.close() })
-	adapter, err := newBootstrapSuccessorCanonicalChain(self.t.Context(), owner, self.canonical)
+	adapter, err := newBootstrapSuccessorCanonicalChainWithProvenance(self.t.Context(), owner, self.canonical, self)
 	if err != nil {
 		self.t.Fatal(err)
 	}

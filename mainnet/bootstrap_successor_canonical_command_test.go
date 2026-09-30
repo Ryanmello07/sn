@@ -1,5 +1,6 @@
-// The heavy roots exercise the real command, durable owner, canonical adapter,
-// local Frontier mapping, published Safe and reviewed coordinator together.
+// The heavy roots exercise the command implementation, durable owner, canonical
+// adapter, local Frontier mapping, published Safe and reviewed coordinator with
+// a separately injected synthetic history capability. Public writes stay gated.
 package main
 
 import (
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -19,12 +21,22 @@ import (
 	"github.com/urfoundation/sn/stabi"
 )
 
-// A lost reply follows real inner execution. Reopening the public command must
-// authenticate that inclusion and binding without another transaction write.
+// A lost reply follows real inner execution under the fixture's history
+// capability. Reopening must reconcile it without another transaction write.
 func TestBootstrapSuccessorCanonicalCommandExecutesAndRecovers(t *testing.T) {
 	f := newBootstrapSuccessorCanonicalFixture(t)
 	chain := f.original.contracts
 	original := bootstrapSuccessorPreparationTestFiles(t, f.original.config.RunDirectory)
+	var publicOutput, publicError bytes.Buffer
+	publicArgs := []string{"contract-successor-execution-resume", "--config", f.original.path, "--run-dir", f.original.config.RunDirectory, "--accept-plan-hash", f.original.preparation.Plan.ContentHash}
+	publicArgs = append(append(publicArgs, f.paths...), f.approvalArgs...)
+	publicArgs = append(publicArgs, "--online", "--submit", "--canonical-approval", f.canonicalRef.Path, "--canonical-approval-sha256", f.canonicalRef.Sha256)
+	if code := runBootstrapSuccessorExecutionCommand(t.Context(), publicArgs, &publicOutput, &publicError); code != 2 || publicOutput.Len() != 0 || !strings.Contains(publicError.String(), errBootstrapSuccessorSafeProvenanceUnavailable.Error()) {
+		t.Fatal("complete signed review unlocked public submission", code, publicError.String())
+	}
+	if _, err := os.Stat(filepath.Join(f.original.config.RunDirectory, bootstrapSuccessorCanonicalFile)); !os.IsNotExist(err) {
+		t.Fatal("public provenance refusal mutated canonical custody", err)
+	}
 	func() { chain.stateLock.Lock(); defer chain.stateLock.Unlock(); chain.loseReply = true }()
 	var stdout bytes.Buffer
 	if code, diagnostic := f.online(&stdout, true); code != 1 || stdout.Len() != 0 {

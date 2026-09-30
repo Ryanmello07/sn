@@ -17,6 +17,7 @@ type bootstrapSuccessorCanonicalChain struct {
 	owner             *bootstrapSuccessorExecutionStore
 	chain             *evmOwnedChain
 	approval          bootstrapSuccessorCanonicalApproval
+	provenance        bootstrapSuccessorSafeProvenanceAuthenticator
 	plans             []evmCreatePlan
 	records           []evmActionRecord
 	locks             []*os.File
@@ -32,6 +33,12 @@ type bootstrapSuccessorCanonicalChain struct {
 // Construction reopens exact original source inputs, holds every historical
 // marker and retains the independent canonical authorization before networking.
 func newBootstrapSuccessorCanonicalChain(ctx context.Context, owner *bootstrapSuccessorExecutionStore, approval bootstrapSuccessorCanonicalApproval) (_ *bootstrapSuccessorCanonicalChain, resultErr error) {
+	return newBootstrapSuccessorCanonicalChainWithProvenance(ctx, owner, approval, nil)
+}
+
+// Only an explicitly supplied canonical-history capability can admit writes.
+// The public constructor deliberately has no production provenance implementation.
+func newBootstrapSuccessorCanonicalChainWithProvenance(ctx context.Context, owner *bootstrapSuccessorExecutionStore, approval bootstrapSuccessorCanonicalApproval, provenance bootstrapSuccessorSafeProvenanceAuthenticator) (_ *bootstrapSuccessorCanonicalChain, resultErr error) {
 	if ctx == nil || owner == nil || owner.closed {
 		return nil, errors.New("successor canonical adapter requires retained execution ownership")
 	}
@@ -47,7 +54,7 @@ func newBootstrapSuccessorCanonicalChain(ctx context.Context, owner *bootstrapSu
 	if err != nil || len(plans) != 8 {
 		return nil, errors.Join(errors.New("successor canonical adapter requires all eight original projections"), err)
 	}
-	self := &bootstrapSuccessorCanonicalChain{owner: owner, approval: approval, planHash: plan.hash()}
+	self := &bootstrapSuccessorCanonicalChain{owner: owner, approval: approval, provenance: provenance, planHash: plan.hash()}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, self.close())
@@ -160,6 +167,9 @@ func (self *bootstrapSuccessorCanonicalChain) authenticate(ctx context.Context, 
 // One write requires this exact owner's newly counted attempt and a successful
 // admission after that reservation. Uncertain HTTP replies never cause retries.
 func (self *bootstrapSuccessorCanonicalChain) submit(ctx context.Context, plan bootstrapSuccessorExecutionPlan, signed []byte) error {
+	if self == nil || self.provenance == nil {
+		return errBootstrapSuccessorSafeProvenanceUnavailable
+	}
 	if err := self.checkpoint(ctx, plan); err != nil {
 		return err
 	}

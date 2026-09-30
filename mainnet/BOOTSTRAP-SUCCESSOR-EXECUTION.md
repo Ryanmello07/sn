@@ -3,9 +3,11 @@
 The successor has a separate signed execution domain, durable adoption and
 nonce ownership, and a one-send execution state machine. Public commands can
 preview, claim and recover that custody offline. Online resume additionally
-uses a concrete canonical adapter and separately signed build, current-runtime
-and signer-cutover authority. **Independent qualification of this adapter remains
-pending. No live execution or mainnet authority is claimed.**
+uses a concrete canonical adapter and separately signed build, current-runtime,
+signer-cutover and Safe deployment/storage-provenance authority. **Public
+submission is unavailable until a distinct canonical Safe history authenticator
+is implemented and qualified. Independent qualification of this corrected adapter
+remains pending. No live execution or mainnet authority is claimed.**
 The earlier [custody qualification](evidence/bootstrap-successor-execution-qualification-20260929.md)
 passes twenty-one focused and six adjacent roots normal/race, with ten causal
 control pairs. All tests use offline custody and explicitly synthetic canonical
@@ -91,6 +93,7 @@ new authorization object, in this field order:
 | `current_runtime` | Independently reviewed `runtime_source_commit`, `runtime_version`, `runtime_code_hash` and `runtime_metadata_hash` for successor admission and inclusion. |
 | `current_runtime_evidence` | Separate private `path` and `sha256` of current-runtime artifact and supported-codec review. |
 | `signer_cutover_evidence` | Separate private `path` and `sha256` of every Safe and relayer signer's cutover, outstanding-signature inventory and retained original reservations. |
+| `safe_deployment_provenance` | Separate private `path` and `sha256` of the independently signed exact Safe deployment and complete storage-history statement described below. |
 | `accepted_policy` | Exact `bootstrapSuccessorCanonicalPolicy` string in `bootstrap_successor_canonical_authority.go`. |
 
 The current runtime may differ from the original eight-action runtime. Its
@@ -104,16 +107,39 @@ Signing bytes are the ASCII domain
 `urnetwork-mainnet-successor-canonical-authorization-approval-v1`, NUL, then compact
 Go JSON of that authorization object. The imported envelope is
 `{"authorization":EXACT_AUTHORIZATION_OBJECT,"signature_ed25519":"128_LOWERCASE_HEX"}`.
-All three evidence files must be nonempty, private, separately pinned and outside
+All four evidence files must be nonempty, private, separately pinned and outside
 the original custody and nonce-registry directories. The adapter rereads them;
 their content remains an explicit independent attestation, not an automated
 source-to-build proof or a distributed signer lock.
+
+The additional provenance envelope contains `provenance` and
+`signature_ed25519`. The statement uses schema
+`urnetwork-mainnet-successor-safe-provenance-v1` and binds the exact execution
+plan hash, Safe address, version, variant, singleton address, published proxy and
+singleton runtime hashes, deployment transaction hash, reviewed native snapshot
+number/hash, separately pinned private `history_evidence`, and the exact
+`bootstrapSuccessorSafeProvenancePolicy` string. The original independent key
+signs domain `urnetwork-mainnet-successor-safe-provenance-approval-v1`, NUL, then
+compact Go JSON of the complete statement. Neither another Safe's signed report
+nor an execution/canonical signature can replace it.
+
+That signed statement is necessary review input; it does not prove deployment or
+complete storage history. Safe owner and module getters follow sentinel lists,
+while signature/module authorization also accepts nonzero mapping entries that
+may be unreachable from those lists. Clean-looking getters cannot exclude
+authority left by initialization or delegatecall storage writes. The distinct
+`bootstrapSuccessorSafeProvenanceAuthenticator` must authenticate deployment,
+initialization and every authority-relevant storage mutation through the current
+finalized and scoped pending state, including unreachable entries. No production
+implementation exists, and files or command flags cannot supply this capability.
 
 Add `--online --canonical-approval /private/canonical-approval.json
 --canonical-approval-sha256 sha256:CANONICAL_APPROVAL_DIGEST` to the exact
 `contract-successor-execution-resume` command. Without `--submit`, online resume
 authenticates the original receipts and reconciles the retained transaction.
-Add `--submit` to permit one durably counted write if every admission succeeds.
+Public `--submit` currently returns exit 2 with the missing-provenance-capability
+diagnostic before loading custody or reserving an attempt, even when all review
+files are present and signed.
 Preview and claim remain offline; neither accepts these online flags. The route,
 account, fees, signatures and transaction bytes always come from retained signed
 inputs.
@@ -205,11 +231,15 @@ the potentially live inner signature fenced. Installation never implies native
 economy activation, either UR validator or the root role. Local resume reports
 canonical authority unresolved even for a retained terminal event.
 
-Eight new test roots cover canonical authorization, authority recovery, actual
-pinned Safe getters, exact pending lookup, strict receipt parsing and two full
-public-v3/native/EVM fixtures. Those heavy fixtures execute the reviewed Safe
+Ten new test roots cover canonical authorization, authority recovery, signed
+provenance scope, real orphan owner/module mappings, actual pinned Safe getters,
+exact pending lookup, strict receipt parsing and two full local v3/native/EVM
+fixtures. Those heavy fixtures explicitly inject a synthetic history capability
+into the internal command implementation and execute the reviewed Safe
 proxy/singleton and coordinator, including an uncertain send and restart. They
-require independent normal/race and causal qualification before merge.
+do not enable public submission or qualify an arbitrary deployed Safe's history.
+The corrected source requires independent normal/race and causal qualification
+before merge.
 
 Live mainnet genesis/runtime, actual Safe/custody selection, independent build
 and runtime review, signer cutover, owner/relayer signatures and funding remain
