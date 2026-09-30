@@ -2,7 +2,9 @@
 
 This is a concrete RT-04 proposal and read-only validator verification path.
 It does **not** complete automatic compatible-upgrade admission or authorize a
-new production runtime. Qualification of this increment is pending.
+new production runtime. The [scoped independent qualification](evidence/runtime-continuity-policy-qualification-20260930.md)
+passes fifty positive root executions and seven normal/three selected race causal
+controls. This qualifies the proposal and inspection boundary only.
 
 The standard validator reaches `authenticateOwnerRecycleProductionRuntimeAtContext`
 through startup, preparation and the current-runtime gate. Its independently
