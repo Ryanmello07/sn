@@ -743,6 +743,21 @@ pending; the receipt distinguishes the tested dependencies from the future
 release and retains one missing causal-wrapper exit. This is a source-only
 correction; no mainnet configuration or deployment changed.
 
+The September 30 [current production release builder](RELEASE-BUILD.md) preserves
+seventeen commands, five production contracts and eight image contexts. The
+original complete census found nine server build failures caused by stale local
+SDK/Connect overrides; server `898dc8f3` fixes the exact module graph, and
+independent Sol qualification rebuilds all thirteen server commands and passes
+three source-graph roots in normal/race modes plus vet. The four SN commands
+also compile in the author's census. Independent builder qualification remains
+pending in the separate frozen handoff; these compile results are not test passes.
+The manifest retains fresh/retained contract hashes without rewriting approved
+bytes: Coordinator and ValidatorEvidence have metadata drift associated with
+the changed imported SettlementVault source, so exact source-to-bytecode
+equality stays false. Current OCI image digest/readback, independent rebuild,
+compiler installation/config/policy qualification and release approval remain
+open; the historical v11 inventory does not attest this current composition.
+
 The newer server source branch `codex/mainnet-composed-hardening-20260927` at
 `b6f49bdb` includes migration 728, the operator receipt-census correction,
 atomic payer admission and checked settlement arithmetic on the v11 server

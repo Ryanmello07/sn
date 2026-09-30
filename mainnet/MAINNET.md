@@ -1201,6 +1201,19 @@ prove a build or image, inspect a deployed migration state, or approve a release
 Ignored Solidity libraries and compiler identities are explicit dependency and
 toolchain inputs; they are not included by the Go source lock alone.
 
+The [current release builder](RELEASE-BUILD.md) composes all seventeen selected
+SN/server commands, all five production contracts and eight image contexts.
+Server `898dc8f3` aligns SDK, Connect and the SCTP fork with SN's exact reviewed
+module versions/sums; independent qualification builds all thirteen server
+commands after the original nine failures. The builder pins clean source trees,
+effective module graphs, module zip bytes, tool identities, binary build info,
+retained/fresh contract hashes, recipes and migrations. Current Coordinator and
+ValidatorEvidence compilation changes metadata due to the newer imported
+SettlementVault source; retained signed-plan bytes stay unchanged and exact
+source-to-bytecode equality remains false. Eight OCI builds/readbacks, a second
+independent build, full compiler/config/policy qualification and release approval
+remain open. Prepared contexts and successful compiles do not close MG-02.
+
 The [earlier composed local candidate](evidence/release-candidate-v11-20260927.md)
 locks SN `265231f9`, server `77cb401e` and Connect `c68689c4` with all local
 Go replacements. Its [partial actual-file inventory](evidence/release-inventory-candidate-v11-20260927.json)
