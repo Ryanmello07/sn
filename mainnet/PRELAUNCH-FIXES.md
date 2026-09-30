@@ -46,6 +46,20 @@ for deployment. For example, an explicitly amd64-only release does not require
 an arm64 execution pass. This narrows qualification scope without weakening
 custody, economic, recovery or runtime checks for the deployed roles.
 
+**September 30 custody decisions.** The subnet owners report that SN25's
+existing owner account is Ledger-derived. They have no Snow access and will run
+the signing command on their own device using the Polkadot generic app; Snow
+may import only an exact signed reply after checking the current owner,
+signature scheme, runtime metadata digest, nonce, era and approved action. The
+current sr25519-only owner-trim v1 packet is not a Ledger signing path; retain
+its original liabilities while a separately approved Ed25519 path is qualified.
+The netuid-0 root hotkey uses a **different hardware signer** whose device/API
+is still unspecified. Each operator keeps its own EVM demand-deposit signing
+key in that operator's **secrets vault**, separate from the on-chain settlement
+vault and from owner/root custody. Verify both operator `depositSigner`
+bindings and deposit hotkeys against the current coordinator version before a
+new funded attempt; do not infer deployment or funding from this decision.
+
 | Gate / priority | Owner and linked items | Current state | Next action and completion evidence |
 | --- | --- | --- | --- |
 | MG-01 / P0 — Mainnet identity | Node operator; RT-01/02, PH-04/14/18/19 | **Blocked:** the operator confirms Snow VPN `172.28.208.185:9944` is the intended mainnet route and reaffirmed on **September 30** that Snow mainnet is still synchronizing; this is an operator report, not verified chain identity/readiness, and no new live observation is claimed. The [same-block finalized observation](evidence/finalized-snapshot-snow-20260927.json) independently reproduces code/metadata, native header and linked EVM header hashes at one native finalized hash, but observed testnet EVM ID **945** and testnet genesis. The [September 28 13:42–13:47 UTC retry and 14:17/14:48/15:18/15:48/16:17/17:18/17:48/18:18/18:48/19:18/19:48/20:18/20:48/21:18/21:48/22:17/22:47/23:16/23:45 UTC samples](evidence/snow-route-observation-20260928-0115.md#follow-up-recheck) returned HTTP 502; they supply no new chain identity. Raw bytes remain unapproved evidence. | Wait for route cutover, independently approve mainnet genesis and repeat the same-block observation with expected EVM ID 964 and node/source identity. Qualify raw bytes against reviewed source-to-Wasm and execution interfaces; reject the route while it reports testnet or is unavailable. |

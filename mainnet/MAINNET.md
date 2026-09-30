@@ -816,13 +816,14 @@ receipts as explicitly retained observations, not fresh chain audits; these
 
 | Identity | Custody/authority |
 | --- | --- |
-| Subnet owner coldkey | Native subnet administration; offline or explicitly qualified native multisig/proxy. |
+| Subnet owner coldkey | Owners report that the existing account is Ledger-derived. They keep the key on their own Ledger with the Polkadot generic app, have no Snow access, and run an owner-side signing command. Snow receives only an exact signed reply for verification, retention and submission. Verify the on-chain owner account, Ledger-derived public key, metadata digest, signature scheme and call before a live action. |
 | EVM deployer | Limited bootstrap gas/value; no ongoing governance custody. |
 | Coordinator owner | Actual 2-of-3 Safe with three distinct approved owners. |
 | Guardian | Separate limited operational authority. |
 | Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. |
-| Root validator coldkey/hotkey | Root stake custody and root service signing; separate from UR scoring by default. |
+| Root validator coldkey/hotkey | Root stake custody and root service signing through a separate hardware signer; its device and host API remain unspecified. The owners' Ledger cannot substitute for this key. |
 | UR validator hotkey and stake coldkey | UR scoring; may be the reviewed reserve target when explicitly selected. |
+| Operator demand deposit signer | Each operator keeps its own EVM signing key in its own secrets vault. The coordinator binds that address to its `noId` and deposit hotkey for the active epoch. Owner Ledger and the SN bootstrap never load operator deposit keys; this secrets vault is distinct from the on-chain settlement vault. |
 | Vault mapped coldkey | Immutable tail-pool and escrow custody. No human holds its private key. |
 | Reserve mapped coldkey | Permanent reserve stake under the immutable sink. |
 
