@@ -175,16 +175,18 @@ records 40 positive executions (eight focused and twelve adjacent roots, each
 normal/race) and three causal controls in both modes. The earlier `43dcd01f`
 fixture failure remains separate evidence.
 
-**Original contract receipt admission — qualification pending.** The separate
-[read-only receipt command](BOOTSTRAP-CONTRACT-RECEIPTS.md) checks all eight exact
-retained native/EVM inclusions and historical postconditions through the original
-owned route, with independent per-receipt budgets and final canonical continuity.
-It admits a signed EVM scan floor only when it cannot omit the original deployment
-prefix. Normal finalized-head advancement is allowed. Current state, the evidence
-anchor, complete indexing, installation and service activation remain unverified;
-all original pending phases remain. Formatting, compile-only and vet checks pass;
-Sol's frozen-source behavioral qualification is pending. No live RPC, transaction
-or public Safe route is part of this increment.
+**Original contract receipt admission — scoped qualification complete.** The
+[read-only receipt command](BOOTSTRAP-CONTRACT-RECEIPTS.md) reauthenticates all eight
+exact original native/EVM inclusions and historical postconditions, with separate
+per-receipt budgets and final canonical continuity. Its signed EVM scan-floor
+check excludes omission of the original deployment prefix; normal finalized-head
+advancement is allowed. The `c6b31fdb`
+[qualification receipt](evidence/bootstrap-contract-receipts-qualification-20260930.md)
+records five focused and sixteen adjacent roots passing normal/race (42 positive
+executions), five normal causal controls and exactly three selected light race
+controls. Current state, the evidence anchor, complete indexing, installation
+and service activation remain unverified; all original pending phases remain.
+No live RPC, transaction or public Safe route is part of this increment.
 
 **Qualified runtime authority increment.** The
 [additive revision path](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md) at

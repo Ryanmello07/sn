@@ -24,7 +24,7 @@ bounded read budget under caller cancellation. The initial finalized head is a
 canonical ancestry snapshot; it is not the block at which historical contract
 storage was read. Normal head advancement is allowed. At the end, the original
 approved start, the snapshot and every original inclusion must remain canonical,
-and the complete local custody and signed declarations are reread.
+and the eight original action records and signed declarations are reread.
 
 `deployment_scan_floors_verified` means each signed, nonzero EVM scan floor is no
 later than the earliest original EVM inclusion. It prevents omitting this
@@ -42,9 +42,11 @@ historical checks passed, two means invalid input or unresolved local custody,
 and one means unresolved online admission or output failure. Refusal emits no
 partial report.
 
-Independent behavioral qualification is pending. Astra max authored the change
-and ran formatting, compile-only and vet checks. Sol medium will run the frozen
-source's focused and adjacent roots and causal controls. All fixtures use
-synthetic local authority and pinned bytecode; no live chain evidence is claimed.
+The `c6b31fdb` [qualification receipt](evidence/bootstrap-contract-receipts-qualification-20260930.md)
+records five focused and sixteen adjacent roots passing normal/race, five normal
+causal controls and exactly three selected light race controls. Astra max authored
+the change and ran formatting, compile-only and vet checks; Sol medium ran all
+behavioral qualification. Fixtures use synthetic local authority and pinned
+bytecode; no live chain evidence is claimed.
 Current contract/role checks, the anchored evidence journal, service admission,
 live chain identity, and the separate Safe policy/public-route gates remain open.
