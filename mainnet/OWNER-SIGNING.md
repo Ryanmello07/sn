@@ -15,9 +15,10 @@ not implement another subnet-owner action or EVM contract signing. The root
 selected here. Operator demand-deposit wallets remain separate vault-held keys.
 
 This increment supplies a real pinned-SDK adapter and deterministic hardware
-boundary fixtures. It does **not** establish a qualified physical device,
-firmware, native SDK build artifact or deployed runtime. See the open gates
-below before treating its output as launch evidence.
+boundary fixtures. A concrete Linux SDK build and its separate behavioral
+qualification procedure are recorded in [OWNER-LEDGER-SDK.md](OWNER-LEDGER-SDK.md).
+These do **not** establish a qualified physical device, firmware or deployed
+runtime. See the open gates below before treating output as launch evidence.
 
 ## Exact native contract
 
@@ -100,11 +101,12 @@ package name or version alone does not prove that commit. The upstream
 [Python extension manifest](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/sdk/bittensor-core-py/pyproject.toml)
 uses Maturin and Python's stable ABI; its
 [Cargo features](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/sdk/bittensor-core-py/Cargo.toml)
-enable Ledger support by default. A release builder can produce the wheel from
-that verified checkout with `maturin build --release --locked` in
-`sdk/bittensor-core-py`. Build-tool, dependency-lock, platform and artifact
-provenance require their own qualification; that command has not been executed
-as part of this increment.
+enable Ledger support by default. The retained Linux build uses locked offline
+Maturin release builds of that verified checkout. Exact source, lock, toolchain,
+artifact pins and platform/reproducibility limits are in
+[OWNER-LEDGER-SDK.md](OWNER-LEDGER-SDK.md). Its ELF requires GLIBC 2.38 and is not
+a macOS or Windows bundle. Use only the separately qualified artifact and Python
+runtime for the owner's actual platform.
 
 Transfer the reviewed native extension file and its independently authenticated
 SHA256 pin to the owner. The adapter loads that explicit file, not an arbitrary
@@ -216,9 +218,9 @@ requires a different `<Bytes>`-wrapped message and is not a substitute for this
 native extrinsic. No conclusion is based on generic app marketing.
 
 Launch qualification still requires the owner's actual device/firmware/app and
-existing key/path match, independently built native extension and upstream
-RFC78 fixture results, and both approved metadata artifacts against the actual
-runtime. In particular, Subtensor's
+existing key/path match, independently authenticated native extension and
+passing native RFC78/adapter qualification for the owner's platform, and both
+approved metadata artifacts against the actual runtime. In particular, Subtensor's
 [runtime build](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/runtime/build.rs)
 bakes the TAO/9-decimal RFC78 digest only when its metadata-hash feature is
 enabled. Merely finding the signed extension in metadata does not establish
