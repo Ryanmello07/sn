@@ -138,13 +138,13 @@ truth is inferred from the current-only proof. The
 [qualification note](evidence/safe-current-custody-qualification-20260930.md)
 records eight new and thirty-one adjacent roots passing normal/race, all eight
 normal and exactly five selected race controls causal, and sealed exact
-source/dependency evidence. This slice installs no public policy-import flag or
-production capability. A separate concrete native capability, explicit policy
-approval and a qualified release route remain required before public submission
-can open. All expensive proof work must precede final scoped pending admission.
+source/dependency evidence. That custody increment installed no public import
+flag or production capability; the separately qualified native capability below
+adds read-only import and the internal proof path. Explicit policy approval and
+a qualified public release route remain required before submission can open.
 
-**Native current-policy capability — qualification pending.** The separate
-`95a905d4` [capability candidate](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md)
+**Qualified native current-policy capability.** The separate
+`95a905d4` [capability](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md)
 connects independently signed current-policy custody to the concrete native
 complete-prefix verifier. Public online resume can import pinned acceptance
 files for local custody and historical reconciliation. Public `--submit` still
@@ -154,9 +154,13 @@ signatures, keeps proof work before final scoped pending checks, and preserves
 one exact counted send. Its proof block/hash/root remains separate from any
 later admission-window head. The
 [qualification note](evidence/safe-current-capability-qualification-20260930.md)
-is pending independent normal/race positives, causal controls and the final
-source/dependency seal. No policy approval or public-send activation is claimed;
-the original signed history statement remains retained and unproven.
+records two new and thirty-five adjacent roots passing normal/race, all eight
+normal and exactly five selected race controls causal, and the sealed exact
+source/dependency evidence. Two original control-oracle mismatches remain
+unresolved in the receipt, with fresh corrected reproductions retained separately.
+No policy approval or public-send activation is claimed; the original signed
+history statement remains retained and unproven. Complete pending storage and
+independent finality are not established by the owned RPC observations.
 
 **Qualified runtime authority increment.** The
 [additive revision path](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md) at

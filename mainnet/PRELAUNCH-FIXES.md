@@ -340,21 +340,21 @@ predecessors, receipts, signed bytes, nonces, attempts and liabilities remain
 retained. Its [qualification note](evidence/safe-current-custody-qualification-20260930.md)
 records eight new and thirty-one adjacent roots passing normal/race, all eight
 normal and exactly five selected race controls causal, and the sealed exact
-source/module/local-dependency evidence. This local custody slice cannot enable
-public policy import or submission.
+source/module/local-dependency evidence. That isolated custody increment did not
+enable public policy import or submission; read-only import is supplied by the
+separately qualified capability below.
 
-**P0 follow-up — Concrete current-policy production capability and approval.**
-Connect the qualified native proof to a distinct production authenticator
-selected only by complete independent acceptance and an installed release route.
-Complete expensive proof work before final scoped pending re-admission and the
-one retained exact-byte send. Preserve the exact proof snapshot separately from
-any later admission-window head. Prepare and independently qualify that concrete
-path before asking the user to approve the alternative current-only boundary.
-Public submission remains closed until explicit policy approval and a qualified
-capability route are installed. It must not reinterpret the existing signed
-complete-history attestation or claim current proof establishes historical truth.
+**P0 follow-up — Current-policy approval and public release route.** The concrete
+native proof path is independently qualified below. Public submission remains
+closed until the user explicitly approves its current-only boundary and a
+separately qualified release change installs the route. Installation must require
+the complete independently signed proposal and acceptance, retain expensive proof
+before final scoped pending re-admission, preserve the exact proof snapshot
+separately from a later admission head, and keep the one retained exact-byte send.
+The current-only policy must not reinterpret the existing signed complete-history
+attestation or claim current proof establishes historical truth.
 
-**Native current-policy capability candidate — qualification pending.** Frozen
+**Native current-policy capability — scoped qualification complete.** Frozen
 `95a905d4` [implements the distinct native route](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md)
 on the signed custody journal. Public acceptance-file import only retains local
 authority; public `--submit` remains closed because no production route is
@@ -365,9 +365,13 @@ nonce, funding and exact transaction identity after expensive proof/artifact wor
 It preserves the original proof snapshot separately from the final admission
 head and repeats complete observation after durable reservation. Its
 [qualification note](evidence/safe-current-capability-qualification-20260930.md)
-requires independent normal/race positives and eight normal/five selected race
-causal controls before integration. The candidate does not prove historical
-initialization/delegatecalls, independent finality or complete pending storage.
+records two new and thirty-five adjacent roots passing normal/race, eight normal
+and exactly five selected race controls causal, and sealed source/module/local
+dependency evidence. Two original normal oracle mismatches remain unresolved;
+fresh reproductions under the corrected assertions are sealed separately without
+changing source, tests or mutation patches. The capability does not prove
+historical initialization/delegatecalls, independent finality or complete pending
+storage.
 Explicit approval of those current-only assumptions and a separately qualified
 release-route installation remain open P0 gates. No mainnet action is authorized
 by local qualification.

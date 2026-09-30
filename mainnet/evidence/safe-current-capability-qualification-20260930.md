@@ -1,9 +1,10 @@
 # Safe current-policy native capability qualification
 
-**Qualification pending.** This isolated note records the required matrix and
-integration boundary. Independent behavioral results, causal controls and the
-final evidence seal remain pending. Compile/vet success does not establish
-behavioral qualification or approve the policy. Public submission remains closed.
+**Scoped qualification complete.** Exact frozen source passes 74 positive root
+executions in normal/race modes, eight normal and five selected race causal
+controls. Two original normal oracle mismatches remain unresolved and retained;
+fresh corrected reproductions are sealed separately. Source, tests and mutation
+patches are unchanged. Policy approval and public submission remain closed.
 
 Frozen source is `95a905d46eb8d0325851ab7f63f39262708d4aae`, tree
 `62a67ba33b19b97703c3032e709aa950592572a6`, based on frozen custody source
@@ -13,9 +14,8 @@ Custody qualification/integration finished first at shared commit
 `7aa87dfa02c1c794759f1e1b00dfbcd961fe100a`, tree
 `7c905e93782a6b8380e9af1bb8595f45a157b5b7`. Its
 [sealed receipt](safe-current-custody-qualification-20260930.md) is retained
-byte-for-byte. This documentation child
-must preserve every non-Markdown byte of the exact capability source and all
-earlier immutable qualification receipts.
+byte-for-byte. This documentation composition preserves every non-Markdown byte
+of the exact capability source and all earlier immutable qualification receipts.
 
 ## Concrete scope and remaining policy gates
 
@@ -89,37 +89,56 @@ It verifies clean exact commits/trees, changed-file hashes, Go module graph,
 all six local replacement commits/trees, SDK oracle and both handoff seals.
 It is a source audit, not behavioral evidence.
 
-## Independent matrix awaiting final seal
+## Sealed independent results
 
-Required positives are one new light route root and one new full-graph command
-root, thirty-four adjacent light roots and one existing canonical adapter heavy
-root, each normal and race: 74 root executions when complete. The light and
-heavy groups have separate bounded harness limits; production retry windows
-are unchanged. Environment is `GOMAXPROCS=2 GOPROXY=off`, `-p 1 -count=1 -v`.
-Every selected top-level root needs exact RUN/PASS census and package PASS,
-without a skip, failure, panic, timeout, build or race confounder.
+One new light route root, one new full-graph command root, thirty-four adjacent
+light roots and one existing canonical adapter heavy root pass normal and race:
+74 positive root executions. Every top-level root has exact RUN/PASS census and
+package PASS, without a skip, failure, panic, timeout, build or race confounder.
+Separate bounded light/heavy harness limits leave production retry windows
+unchanged. Environment is `GOMAXPROCS=2 GOPROXY=off`, `-p 1 -count=1 -v`.
+
+Independent evidence is
+`/home/by/urnetwork/temp/safe-current-capability-validation-95a905d4`. Its
+`manifest.json` hashes to
+`18ab4279f5a54afd76b0858cc0db434e62f778b546c846f790924c7aa0160225`;
+the 36-file `SHA256SUMS` hashes to
+`704924c42279e2eed5209870f3d6c897c779d757aa260c45eb18002fcd09a463`.
+The separate read-only author audit is
+`/tmp/safe-current-capability-final-seal-audit.json`, SHA-256
+`33be649b27e37e377a091b9cd77edf4052a07834591b456c875b8ab43f498807`.
+It verifies all raw streams and result ledgers, both original unresolved attempts,
+original/corrected handoff seals, exact clean source/tree, changed-file hashes,
+Go module graph, all six local replacement commits/trees and the unchanged SDK
+proof oracle. No behavioral tests were run by the author.
+
+| Positive group | Roots per mode | Normal package | Race package |
+| --- | ---: | --- | --- |
+| `capability-light` | 1 | PASS 1.176s | PASS 5.852s |
+| `capability-heavy-command` | 1 | PASS 81.840s | PASS 577.724s |
+| `adjacent-authority-light` | 34 | PASS 50.642s | PASS 266.351s |
+| `adjacent-canonical-adapter` | 1 | PASS 47.830s | PASS 309.662s |
 
 | Control | Barrier | Normal | Race |
 | --- | --- | --- | --- |
-| `uninstalled_route_gate` | A signed acceptance cannot install a public route. | Pending | Pending |
-| `runtime_policy_scope` | Later runtimes require a later current-policy acceptance. | Pending | Pending |
-| `separate_history_gate` | Current proof cannot impersonate complete history. | Pending | Pending |
-| `original_custody_ready` | Capability selection cannot infer original adapter custody. | Pending | Pending |
-| `orphan_prefix_authority` | Full proof refuses actual hidden owner/module storage. | Pending | Not selected |
-| `final_pending_order` | Expensive work precedes the last pending admission. | Pending | Pending |
-| `proof_head_identity` | An advancing head cannot relabel the proven snapshot. | Pending | Not selected |
-| `final_runtime_code` | Same-version changed runtime bytes still refuse. | Pending | Not selected |
+| `uninstalled_route_gate` | A signed acceptance cannot install a public route. | Causal | Causal |
+| `runtime_policy_scope` | Later runtimes require a later current-policy acceptance. | Causal | Causal |
+| `separate_history_gate` | Current proof cannot impersonate complete history. | Causal | Causal |
+| `original_custody_ready` | Capability selection cannot infer original adapter custody. | Causal | Causal |
+| `orphan_prefix_authority` | Full proof refuses actual hidden owner/module storage. | Causal | Not selected |
+| `final_pending_order` | Expensive work precedes the last pending admission. | Causal | Causal |
+| `proof_head_identity` | An advancing head cannot relabel the proven snapshot. | Causal | Not selected |
+| `final_runtime_code` | Same-version changed runtime bytes still refuse. | Causal | Not selected |
 
-Exactly eight normal and five selected race mutations are required. Each must
-reach its exact named assertion, selected root/package FAIL and process exit one,
-with no unrelated build, panic, timeout or race failure. Four light mutations and
-the heavy ordering mutation run under race. The three other heavy mutations are
-normal-only; the complete positive heavy fixture supplies race coverage. No
-result is claimed for unselected race mutations. The final independent manifest,
-raw stream hashes and complete author read-only audit must replace pending
-claims before integration.
+Exactly eight logical normal and five selected race controls are causal. Each
+accepted execution reaches its exact named assertion, selected root/package FAIL
+and exit one, with no unrelated build, panic, timeout or race failure. Four light
+mutations and the heavy ordering mutation run under race. Three other heavy
+mutations are normal-only; the complete positive heavy fixture supplies race
+coverage. No result is claimed for unselected race mutations. The final manifest
+binds accepted results and both original unresolved attempts separately.
 
-### Prospective control-oracle corrections awaiting fresh evidence
+### Prospective control-oracle corrections and retained original attempts
 
 The original normal `final_pending_order` and `final_runtime_code` mutations
 reached the existing fixture's earlier reservation assertion, rather than their
@@ -137,34 +156,24 @@ compile/vet evidence still applies. The correction seals are
 `23de71558b121fc6b971bad09294e190e0ac6862b36a40c68ec1e7e627082369`, and
 `/tmp/safe-current-capability-control-correction-02-20260930/SHA256SUMS`, SHA-256
 `d6b955947e214a56aefb139057363da1f04fc18ce49050550c1001183f98cb0f`.
-Fresh ordering normal/race and final-code normal reproductions are pending.
-Original raw streams and result ledgers must remain intact in the final seal;
-they cannot be retrospectively relabeled causal. A completed matrix would record
-eight logical normal and five selected race controls plus these two unresolved
-original invocations. These mutations test admission before reservation, without
+Fresh ordering normal/race and final-code normal reproductions are all causal.
+Original raw streams and result ledgers remain intact and are not retrospectively
+relabeled causal. The completed matrix records eight logical normal and five
+selected race controls plus these two unresolved original invocations: fifteen
+control invocations in total. These mutations test admission before reservation, without
 claiming that either mutation defeats the independent second observation.
 
-## Ordered integration plan
+## Integration boundary
 
-1. Completed: the exact `3f88a948` custody matrix and independent raw/source audit
-   are sealed. Its MAINNET/PRELAUNCH note records 78 positive executions, eight
-   normal and five selected race causal controls. Shared commit `7aa87dfa`
-   integrates that exact non-Markdown source with documentation, and was pushed
-   non-force with clean matching shared HEAD/origin. Earlier receipts are intact.
-2. After Sol seals this exact `95a905d4` capability source, audit its complete raw
-   positives and selected controls independently, including source/modules/local
-   dependencies and static/supplemental handoffs. A failed or noncausal case
-   remains unresolved; any reported root cause belongs to Astra for a separate
-   corrected candidate and new qualification.
-3. Compose the capability documentation child with the integrated custody docs,
-   preserving that earlier qualification receipt byte-for-byte. Replace every
-   pending capability result with its exact sealed result and update MAINNET and
-   PRELAUNCH consistently. Verify all non-Markdown bytes against `95a905d4`, the
-   unchanged SDK oracle/module files, and every earlier immutable receipt.
-4. Require a clean shared branch and verify the exact source/documentation diff.
-   Integrate the qualified composition and push non-force; verify shared HEAD,
-   origin and the source fence afterward. A changed shared base is reconciled
-   without discarding source or rewriting evidence.
+Custody qualification and integration finished first at shared commit `7aa87dfa`,
+with its exact non-Markdown source, sealed receipt and earlier evidence retained.
+This capability composition preserves every non-Markdown byte of `95a905d4`, the
+unchanged SDK oracle and module files, and all earlier qualification receipts.
+Integration requires a clean shared branch, exact source/documentation diff and
+non-force push; the final shared commit/tree is reported separately.
 
-Neither integration installs the public submit route, approves the current-only
-policy, proves original history or permits a mainnet transaction.
+Integration does not install the public submit route, approve the current-only
+policy, prove original history or permit a mainnet transaction. Explicit policy
+approval and qualified public-route installation remain P0 gates. Owned-RPC
+finality and non-atomic pending checks retain their stated assumptions; automatic
+compatible runtime admission remains separate from signed additive revisions.

@@ -76,8 +76,13 @@ code changes; mutation during the second proof after durable reservation; one
 exact lost-reply Safe execution; and later public read-only receipt recovery with
 the original custody, policy references, nonce claims and liabilities intact.
 
-Pending: independent positive normal/race runs, causal controls and adjacent
-regressions for this exact source, then a separately sealed qualification note.
+The [sealed qualification note](evidence/safe-current-capability-qualification-20260930.md)
+records two new and thirty-five adjacent roots passing normal/race (74 root
+executions), eight normal and exactly five selected race controls causal, and
+the exact source/dependency fence. Two original control-oracle mismatches remain
+unresolved and preserved; fresh corrected reproductions use identical source,
+tests and mutation patches. The complete heavy fixture supplies race coverage
+for the three heavy mutations selected only in normal mode.
 Public route installation and explicit approval of the narrower policy remain
 separate open gates. Automatic runtime compatibility also remains a P0: retained
 additive revisions are an incremental signed-authority path, not automatic
