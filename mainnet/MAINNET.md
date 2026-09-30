@@ -114,6 +114,24 @@ normal/race; both causal controls reproduce their intended failure in both
 modes, with exact source/dependency evidence sealed. This does not supply the
 missing history authenticator. MG-08 remains open.
 
+**Qualified read-only Safe current-authority proposal.** The separate
+[current-storage proof](SAFE-CURRENT-AUTHORITY-PROPOSAL.md) at `aa9f715b`
+authenticates every storage word under the exact Safe's native account prefix,
+the reviewed runtime and published proxy/singleton code plus native metadata at
+one canonical finalized snapshot. Missing intersecting branches, orphan owner or
+module mappings and any extra storage refuse admission. The
+[qualification note](evidence/safe-current-storage-qualification-20260930.md)
+records eleven new and ten adjacent roots passing normal/race, all ten normal
+and exactly five selected race controls causal, with source/dependency evidence
+sealed. This is read-only evidence and a distinct
+signed policy proposal, with no history claim, custody import or public-send
+capability. Existing native RPC cannot prove a complete pending overlay; the
+final scoped recheck reports that limitation explicitly. The next isolated
+implementation must retain an immutable independently signed policy revision,
+bind counted/outcome events and select a qualified production capability without
+rewriting the original history statement. Explicit policy approval and a
+qualified capability route remain required before public submission can open.
+
 **Qualified runtime authority increment.** The
 [additive revision path](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md) at
 `3d526830` retains separately signed runtime revisions under the original

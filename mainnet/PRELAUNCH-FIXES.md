@@ -315,15 +315,32 @@ swapped, incomplete and malicious history refusals. This is an open MG-08
 implementation gate, separate from independent build review and signer cutover.
 
 Complete current authority and historical provenance are distinct properties.
-A complete authenticated account-storage prefix, exact proxy/singleton code and
-slot invariants could support a separately approved current-authority policy
-that excludes orphan mappings at the proved snapshot. Named-key proofs or
-sentinel lists cannot establish prefix completeness, and a current snapshot
-does not prove clean past initialization/delegatecalls or a cryptographic pending
-overlay. Such a policy needs explicit independent approval, a distinct signed
-revision preserving retained custody and liabilities, and its own qualification.
-It must not reinterpret the existing signed complete-history attestation or
-silently reopen public submission.
+The separate `aa9f715b` [current-authority proposal](SAFE-CURRENT-AUTHORITY-PROPOSAL.md)
+implements a complete native account-storage-prefix verifier, exact runtime and
+published proxy/singleton code/metadata binding, and strict Safe storage layout.
+It rejects omitted intersecting branches, genuine orphan owner/module mappings
+and all extra words. It preserves one canonical finalized hash as later heads
+advance. The [qualification note](evidence/safe-current-storage-qualification-20260930.md)
+records eleven new and ten adjacent roots passing normal/race, all ten normal
+and exactly five selected race controls causal, with the complete source/module
+and local-dependency evidence sealed. This supplies read-only observations only.
+A current snapshot does not prove clean past initialization/delegatecalls or a
+complete pending overlay. The reviewed native RPC exposes neither a pending
+proof root nor an atomic multi-read token; final known-word/code rechecks retain
+that explicit limitation and cannot authorize a send.
+
+**P0 follow-up — Proposed current-policy custody and production capability.**
+Implement an immutable independently signed policy-revision journal under the
+existing exclusive owner, exact counted/outcome references, partial-publication
+recovery, and a distinct production authenticator selected only by the reviewed
+signature/capability route. Preserve original history statements, all runtime
+predecessors, receipts, exact signed bytes, nonces, attempts and liabilities.
+Complete expensive proof work before final pending re-admission and direct
+exact-byte submission. Prepare and independently qualify that concrete path
+before asking the user to approve the alternative current-only boundary. Public
+submission remains closed until explicit policy approval and a qualified
+capability route are installed. It must not reinterpret the existing signed
+complete-history attestation or claim current proof establishes historical truth.
 
 **Additive canonical runtime authority — scoped qualification complete.** The
 `3d526830` [runtime revision increment](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md)

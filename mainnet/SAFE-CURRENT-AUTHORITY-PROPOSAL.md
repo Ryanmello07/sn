@@ -5,8 +5,10 @@ Safe account and the code that interprets it. It is a **policy proposal and
 read-only observation capability**. It neither satisfies the retained
 complete-history attestation nor enables public successor submission. Activation
 requires explicit approval of a different policy, a qualified production
-authenticator, and custody integration. Independent behavioral qualification of
-this slice is pending.
+authenticator, and custody integration. [Independent scoped qualification](evidence/safe-current-storage-qualification-20260930.md)
+passes all eleven new and ten adjacent roots normal/race, all ten normal controls
+and exactly five selected race controls, with exact source/dependency evidence
+sealed. That result does not approve the proposed policy or activate submission.
 
 ## What can be proved with the existing native RPC
 
@@ -162,7 +164,7 @@ by the one authorized exact-byte send. Work inserted after pending admission
 must trigger renewed admission. These ordering and attempt-budget constraints
 already exist in the qualified successor path and must be preserved.
 
-## Qualification plan
+## Scoped qualification
 
 Eleven new top-level roots cover the independent SDK vectors and encoder
 commitments, all four published Safe variants, genuine orphan owner/module
@@ -179,8 +181,9 @@ independent test encoder must reproduce all nine layout-one SDK roots before its
 proof mutations can qualify. Actual published Safe bytecode supplies owner/module
 authorization and storage layout behavior.
 
-Astra owns implementation, compile-only checks and vet. Sol medium must run the
-frozen new roots normal/race plus relevant existing Safe/provenance/readmission
-regressions and sealed causal controls. No live RPC, real key, signing operation
-or transaction is involved. A passing result qualifies only the explicit
+Astra max owns implementation, debugging, compile-only checks and vet. Sol medium
+ran the frozen new roots and ten existing Safe/provenance regressions normal/race,
+plus all ten normal and five selected race causal controls. The exact matrix and
+sealed evidence are in the qualification note. No live RPC, real key, signing
+operation or transaction was involved. The result qualifies only the explicit
 read-only fact and proposal boundary above; it does not approve a policy change.
