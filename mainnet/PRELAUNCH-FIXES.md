@@ -122,7 +122,7 @@ completed actions leave only the anchor unfinished and do not require replay.
 A cap change needs a new independently signed successor that adopts the original
 prefix, reconciles unfinished signed nonces, and conserves cumulative attempts
 and lifetime financial exposure. The later conditional execution custody owner
-is described below; its new concrete canonical adapter awaits independent
+is described below; its concrete canonical adapter has scoped independent
 qualification.
 The [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
 passes all twelve new roots normal/race with six causal controls in both modes.
@@ -235,8 +235,13 @@ recovery roots together account for about 398 seconds under race. Size the whole
 qualification from measured fixture cost; preserve timed-out attempts and keep
 production transaction deadlines unchanged.
 
-The concrete canonical adapter is implemented on corrected frozen source
-`a7186754`, with independent qualification pending. Preliminary `82da3d40`
+The concrete canonical adapter has
+[scoped independent qualification](evidence/bootstrap-successor-canonical-qualification-20260930.md)
+on corrected frozen source `a7186754`: ten focused and twenty-two adjacent roots
+pass normal/race, fourteen normal causal controls and six selected race controls
+reach their intended assertions. The thirty-four-file Sol manifest and separate
+forty-eight-file author handoff verify with matching source/module fences.
+Preliminary `82da3d40`
 passed all eight roots normal/race before discovery of the Safe storage-provenance
 gap; preserve those results without treating them as corrected-source evidence.
 A separate signed canonical authorization
@@ -269,9 +274,11 @@ separate heavy roots run the full original v3 graph and actual pinned Safe
 execution under an explicitly injected synthetic history capability, including
 lost reply/restart, approved runtime change, renewed read
 deadlines, advancing canonical heads and refusal of a changed canonical hash.
-Compile-only, vet and formatting pass; no behavioral qualification claim follows
-from those author checks. Preserve separate heavy-root harness budgets and all
-normal/race/control logs before updating this pending status.
+Author compile-only, vet and formatting checks pass. Sol's independent heavy
+normal packages take 51.406s and 45.496s; their separate race packages take
+349.951s and 297.814s. The adjacent race package passes in 540.635s. Explicit
+twenty-minute normal and thirty-minute heavy/adjacent race harness budgets leave
+production transaction and individual read deadlines unchanged.
 
 Enforced signer cutover to one registry, independently approved mainnet
 genesis/runtime and Safe authority, funding, actual owner/relayer signatures and
@@ -301,6 +308,17 @@ capability remains absent. Preserve read-only historical reconciliation and test
 swapped, incomplete and malicious history refusals. This is an open MG-08
 implementation gate, separate from independent build review and signer cutover.
 
+Complete current authority and historical provenance are distinct properties.
+A complete authenticated account-storage prefix, exact proxy/singleton code and
+slot invariants could support a separately approved current-authority policy
+that excludes orphan mappings at the proved snapshot. Named-key proofs or
+sentinel lists cannot establish prefix completeness, and a current snapshot
+does not prove clean past initialization/delegatecalls or a cryptographic pending
+overlay. Such a policy needs explicit independent approval, a distinct signed
+revision preserving retained custody and liabilities, and its own qualification.
+It must not reinterpret the existing signed complete-history attestation or
+silently reopen public submission.
+
 **P0 follow-up — Additive canonical runtime authorization.** Retained authority
 currently freezes one successor runtime profile. A routine upgrade after that
 file is retained and before send blocks current execution; it does not release
@@ -317,9 +335,9 @@ selects the reviewed active runtime; historical inclusion remains reconcilable
 under independently approved inclusion and parent profiles. Independent tests
 must cover upgrade before send, upgrade around inclusion, historical recovery
 after another upgrade, interrupted revision publication, wrong approver/profile,
-and attempted counter, liability or signed-byte changes. Keep frozen `a7186754`
-unchanged during its qualification; implement and qualify this resilience as the
-next source increment. This requirement remains part of open MG-08.
+and attempted counter, liability or signed-byte changes. Preserve the qualified
+`a7186754` source identity; implement and independently qualify this resilience
+as a subsequent source increment. This requirement remains part of open MG-08.
 Later successors, filesystem migration, fee replacement and independently proved
 external sends require separate approved liability-preserving transitions.
 

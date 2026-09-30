@@ -6,8 +6,10 @@ preview, claim and recover that custody offline. Online resume additionally
 uses a concrete canonical adapter and separately signed build, current-runtime,
 signer-cutover and Safe deployment/storage-provenance authority. **Public
 submission is unavailable until a distinct canonical Safe history authenticator
-is implemented and qualified. Independent qualification of this corrected adapter
-remains pending. No live execution or mainnet authority is claimed.**
+is implemented and qualified. No live execution or mainnet authority is claimed.**
+The corrected adapter's [scoped independent qualification](evidence/bootstrap-successor-canonical-qualification-20260930.md)
+passes ten focused and twenty-two adjacent roots normal/race, fourteen normal
+causal controls and six selected race controls on frozen `a7186754`.
 The earlier [custody qualification](evidence/bootstrap-successor-execution-qualification-20260929.md)
 passes twenty-one focused and six adjacent roots normal/race, with ten causal
 control pairs. All tests use offline custody and explicitly synthetic canonical
@@ -238,8 +240,8 @@ fixtures. Those heavy fixtures explicitly inject a synthetic history capability
 into the internal command implementation and execute the reviewed Safe
 proxy/singleton and coordinator, including an uncertain send and restart. They
 do not enable public submission or qualify an arbitrary deployed Safe's history.
-The corrected source requires independent normal/race and causal qualification
-before merge.
+Their sealed normal/race and causal evidence is recorded in the
+[canonical qualification receipt](evidence/bootstrap-successor-canonical-qualification-20260930.md).
 
 Live mainnet genesis/runtime, actual Safe/custody selection, independent build
 and runtime review, signer cutover, owner/relayer signatures and funding remain

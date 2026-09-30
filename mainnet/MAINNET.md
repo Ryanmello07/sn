@@ -73,8 +73,11 @@ The first private-input fixture failures and the later ten-minute race
 harness timeout remain preserved. The exact race retry passes with an explicit
 twenty-minute package budget, without changing production deadlines.
 The concrete [canonical execution adapter](BOOTSTRAP-SUCCESSOR-EXECUTION.md#separate-canonical-authority-and-online-resume)
-is implemented on corrected frozen source `a7186754`; independent normal/race and
-causal qualification of this source remains pending. Preliminary `82da3d40`
+has [scoped independent qualification](evidence/bootstrap-successor-canonical-qualification-20260930.md)
+on corrected frozen source `a7186754`: ten focused and twenty-two adjacent roots
+pass normal/race, fourteen normal causal controls and six selected race controls
+reach their intended assertions, and the sealed source/module fences match.
+Preliminary `82da3d40`
 passed all eight roots normal/race before the Safe provenance gap was identified;
 those results do not qualify the corrected source. Online resume requires a
 separate signature binding Safe build review, a reviewed current runtime,
@@ -179,8 +182,9 @@ native review window cannot expire a Safe signature because it is outside the
 Safe digest. Canonical original receipt adoption, current Safe/evidence authority,
 signature lifetime and window enforcement and globally fenced relayer signer
 custody remain launch gates. The separate execution owner enforces its conditional
-state transitions in code; its new concrete canonical adapter awaits independent
-qualification and explicitly approved live authority.
+state transitions in code; its concrete canonical adapter has scoped independent
+qualification, while the production Safe history authenticator and explicitly
+approved live authority remain missing.
 No mainnet transaction,
 contract installation or validator activation is established by this increment.
 The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),
