@@ -19,6 +19,9 @@ import (
 
 // Validate build metadata without starting the resulting application.
 func validateBuildInfo(info *debug.BuildInfo, role buildRole, repo repositoryPin) error {
+	if info == nil {
+		return errors.New("readable binary build info required")
+	}
 	settings := map[string]string{}
 	for _, setting := range info.Settings {
 		if _, ok := settings[setting.Key]; ok {
@@ -79,6 +82,7 @@ func executeBuild(ctx context.Context, config buildConfig, rawConfig []byte) err
 	}
 	configHash := sha256.Sum256(rawConfig)
 	manifest := buildManifest{Schema: buildSchema, ConfigSha256: "sha256:" + hex.EncodeToString(configHash[:]), CandidateId: config.CandidateId, Platform: "linux/amd64", Version: config.Version, SourceDateEpoch: config.SourceDateEpoch, Repositories: config.Repositories, Roles: releaseRoles(), Modules: map[string][]buildModule{}, Artifacts: []buildArtifact{}, Contracts: []buildContract{}, Images: []buildImage{}, MissingImages: []string{}, Limitations: []string{"This composition does not grant release or deployment approval.", "Prepared image contexts have no OCI digest or independent rootfs/embedded-binary readback.", "A second independent build, full compiler installation attestation and arm64 qualification remain open.", "Retained contract transaction bytes are preserved; any allowed compiler metadata drift is explicitly not exact byte equality.", "Runtime secrets, deployed configuration, live chain state, signing devices and deployment target compatibility are not qualified."}}
+	manifest.ModuleQualification = map[string]moduleQualification{}
 	if err := writeBuildBytes(filepath.Join(config.Output, "inputs/config.json"), rawConfig); err != nil {
 		return err
 	}
@@ -101,6 +105,7 @@ func executeBuild(ctx context.Context, config buildConfig, rawConfig []byte) err
 			return err
 		}
 		manifest.Modules[name] = modules
+		manifest.ModuleQualification[name] = countBuildModuleQualification(modules)
 		if err := writeBuildJson(filepath.Join(config.Output, "inputs", name+"-effective-modules.json"), modules); err != nil {
 			return err
 		}
@@ -184,6 +189,9 @@ func executeBuild(ctx context.Context, config buildConfig, rawConfig []byte) err
 			return err
 		}
 		if err := validateBuildInfo(info, role, repositories[role.Repository]); err != nil {
+			return err
+		}
+		if err := validateLinkedBuildModules(info, manifest.Modules[role.Repository]); err != nil {
 			return err
 		}
 		if err := writeBuildJson(filepath.Join(config.Output, "inputs", role.Id+"-buildinfo.json"), info); err != nil {

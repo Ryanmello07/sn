@@ -52,6 +52,18 @@ match the selected source revision, clean state, package and Linux/amd64 target.
 Source identities, module graphs, tool hashes and output bytes are rechecked
 before the final domain-separated manifest seal.
 
+The first builder invocation is retained as a failed attempt: Go's lazy module
+graph includes unused tool dependencies without `GoMod`/`GoModSum` fields. The
+complete follow-up census found 634 SN nodes and 644 server nodes. Both graphs
+have 347 nodes missing go.mod metadata (346 entirely lazy plus one unused cached
+body); another fourteen SN and twenty-five server nodes have metadata without a
+source body. The successor retains every node, explicit unqualified fields and
+these counts. Every dependency actually linked into any of the seventeen
+executables must have authenticated materialized source, matching identity and
+body/go.mod sums; a graph-only node cannot qualify. Local build-info versions
+use `(devel)`, normalized only for an exact pinned Git repository. The original
+failed exit and its config are not replaced by the successor capture.
+
 The [independent server qualification](/mnt/data/sn-testnet/mainnet-release-composition-sol-20260930/evidence/RESULT.md)
 reproduced all thirteen current server builds and all three source-graph roots
 in normal and race modes, with vet. Its SHA256SUMS digest is

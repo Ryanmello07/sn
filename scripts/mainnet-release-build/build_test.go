@@ -387,3 +387,89 @@ func TestReleaseBuildRejectsDuplicateArtifactsAndEscapingPaths(t *testing.T) {
 		}
 	}
 }
+
+// Lazy tool-only graph nodes remain visible without becoming linked provenance.
+func TestReleaseBuildRetainsLazyAndPartiallyMaterializedGraphNodes(t *testing.T) {
+	for _, module := range []goModule{{Path: "modules.example/lazy", Version: "v1.0.0"}, {Path: "modules.example/cached-body", Version: "v1.0.0", Dir: "/synthetic/cache", Sum: "h1:synthetic"}, {Path: "modules.example/metadata-only", Version: "v1.0.0", GoMod: "/synthetic/go.mod", GoModSum: "h1:synthetic"}} {
+		if len(moduleMissingProvenance(module)) == 0 {
+			t.Fatalf("incomplete graph node claimed provenance: %+v", module)
+		}
+	}
+	complete := goModule{Path: "modules.example/linked", Version: "v1.0.0", Dir: "/synthetic/cache", GoMod: "/synthetic/go.mod", Sum: "h1:body", GoModSum: "h1:mod"}
+	if missing := moduleMissingProvenance(complete); len(missing) != 0 {
+		t.Fatalf("complete linked metadata rejected: %v", missing)
+	}
+	counts := countBuildModuleQualification([]buildModule{{Path: "modules.example/lazy", GraphOnly: true}, {Path: "modules.example/cached-body", GraphOnly: true, Sum: "h1:body"}, {Path: "modules.example/metadata-only", GraphOnly: true, GoModSha256: buildFixtureDigest("go.mod"), GoModSum: "h1:mod"}, {Path: "modules.example/linked"}})
+	if counts.GraphNodes != 4 || counts.UnqualifiedGraphNodes != 3 || counts.MissingGoModMetadata != 2 || counts.GoModOnly != 1 {
+		t.Fatalf("graph-only missing-field counts differ: %+v", counts)
+	}
+}
+
+func buildFixtureLinkedModule() (buildModule, *debug.Module) {
+	module := buildModule{Path: "modules.example/linked", Version: "v1.2.3", EffectivePath: "modules.example/linked", EffectiveVersion: "v1.2.3", Sum: "h1:synthetic-body", GoModSum: "h1:synthetic-module", Directory: "/synthetic/source", GoModSha256: buildFixtureDigest("synthetic go.mod")}
+	dependency := &debug.Module{Path: module.Path, Version: module.Version, Sum: module.Sum}
+	return module, dependency
+}
+
+func TestReleaseBuildLazyGraphNodeCannotBecomeLinkedEvidence(t *testing.T) {
+	module, dependency := buildFixtureLinkedModule()
+	lazy := buildModule{Path: "modules.example/lazy", Version: "v1.0.0", EffectivePath: "modules.example/lazy", EffectiveVersion: "v1.0.0", GraphOnly: true}
+	info := &debug.BuildInfo{Deps: []*debug.Module{dependency}}
+	modules := []buildModule{module, lazy}
+	if err := validateLinkedBuildModules(info, modules); err != nil {
+		t.Fatalf("unused lazy graph node rejected a complete binary: %v", err)
+	}
+	info.Deps = append(info.Deps, &debug.Module{Path: lazy.Path, Version: lazy.Version})
+	if err := validateLinkedBuildModules(info, modules); err == nil {
+		t.Fatal("lazy graph identity was promoted to linked-module provenance")
+	}
+}
+
+func TestReleaseBuildLinkedRemoteModulesRequireBodyAndGoModAuthentication(t *testing.T) {
+	for _, field := range []string{"body-sum", "go-mod-sum", "go-mod-file", "directory", "lazy", "version", "wrong-body"} {
+		module, dependency := buildFixtureLinkedModule()
+		switch field {
+		case "body-sum":
+			module.Sum = ""
+		case "go-mod-sum":
+			module.GoModSum = ""
+		case "go-mod-file":
+			module.GoModSha256 = ""
+		case "directory":
+			module.Directory = ""
+		case "lazy":
+			module.GraphOnly = true
+		case "version":
+			dependency.Version = "(devel)"
+		case "wrong-body":
+			dependency.Sum = "h1:different-body"
+		}
+		if err := validateLinkedBuildModules(&debug.BuildInfo{Deps: []*debug.Module{dependency}}, []buildModule{module}); err == nil {
+			t.Fatalf("linked remote %s absence/change was accepted", field)
+		}
+	}
+	if err := validateLinkedBuildModules(nil, nil); err == nil {
+		t.Fatal("accepted unreadable build info")
+	}
+	if err := validateBuildInfo(nil, buildRole{}, repositoryPin{}); err == nil {
+		t.Fatal("binary source validation accepted unreadable build info")
+	}
+}
+
+func TestReleaseBuildLocalDevelVersionRequiresPinnedRepository(t *testing.T) {
+	module := buildModule{Path: "modules.example/local", Version: "v0.0.0", EffectivePath: "../synthetic-local", Directory: "/synthetic/local", GoModSha256: buildFixtureDigest("local module"), Repository: "synthetic-local", Commit: strings.Repeat("a", 40)}
+	dependency := &debug.Module{Path: module.Path, Version: module.Version, Replace: &debug.Module{Path: module.EffectivePath, Version: "(devel)"}}
+	info := &debug.BuildInfo{Deps: []*debug.Module{dependency}}
+	if err := validateLinkedBuildModules(info, []buildModule{module}); err != nil {
+		t.Fatalf("pinned local '(devel)' version was not normalized: %v", err)
+	}
+	module.Repository = ""
+	if err := validateLinkedBuildModules(info, []buildModule{module}); err == nil {
+		t.Fatal("unowned local '(devel)' source was accepted")
+	}
+	module.Repository = "synthetic-local"
+	module.Commit = ""
+	if err := validateLinkedBuildModules(info, []buildModule{module}); err == nil {
+		t.Fatal("unpinned local '(devel)' source was accepted")
+	}
+}

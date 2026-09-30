@@ -91,26 +91,27 @@ type buildArtifact struct {
 
 // Approval remains separate even when every selected output is built.
 type buildManifest struct {
-	Schema                  string                   `json:"schema"`
-	ConfigSha256            string                   `json:"config_sha256"`
-	CandidateId             string                   `json:"candidate_id"`
-	Platform                string                   `json:"platform"`
-	Version                 string                   `json:"version"`
-	SourceDateEpoch         int64                    `json:"source_date_epoch"`
-	Repositories            []repositoryPin          `json:"repositories"`
-	Roles                   []buildRole              `json:"roles"`
-	Modules                 map[string][]buildModule `json:"effective_modules"`
-	Artifacts               []buildArtifact          `json:"artifacts"`
-	Contracts               []buildContract          `json:"contracts"`
-	Images                  []buildImage             `json:"images"`
-	MissingImages           []string                 `json:"missing_images"`
-	SourceToBytecodeExact   bool                     `json:"source_to_bytecode_exact"`
-	SourceToImageVerified   bool                     `json:"source_to_image_verified"`
-	ReproducibilityVerified bool                     `json:"reproducibility_verified"`
-	ReleaseComplete         bool                     `json:"release_complete"`
-	DeploymentApproved      bool                     `json:"deployment_approved"`
-	Limitations             []string                 `json:"limitations"`
-	ContentHash             string                   `json:"content_hash"`
+	Schema                  string                         `json:"schema"`
+	ConfigSha256            string                         `json:"config_sha256"`
+	CandidateId             string                         `json:"candidate_id"`
+	Platform                string                         `json:"platform"`
+	Version                 string                         `json:"version"`
+	SourceDateEpoch         int64                          `json:"source_date_epoch"`
+	Repositories            []repositoryPin                `json:"repositories"`
+	Roles                   []buildRole                    `json:"roles"`
+	Modules                 map[string][]buildModule       `json:"effective_modules"`
+	ModuleQualification     map[string]moduleQualification `json:"module_qualification"`
+	Artifacts               []buildArtifact                `json:"artifacts"`
+	Contracts               []buildContract                `json:"contracts"`
+	Images                  []buildImage                   `json:"images"`
+	MissingImages           []string                       `json:"missing_images"`
+	SourceToBytecodeExact   bool                           `json:"source_to_bytecode_exact"`
+	SourceToImageVerified   bool                           `json:"source_to_image_verified"`
+	ReproducibilityVerified bool                           `json:"reproducibility_verified"`
+	ReleaseComplete         bool                           `json:"release_complete"`
+	DeploymentApproved      bool                           `json:"deployment_approved"`
+	Limitations             []string                       `json:"limitations"`
+	ContentHash             string                         `json:"content_hash"`
 }
 
 // One bounded buffer prevents a compiler error stream consuming all disk.

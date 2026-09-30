@@ -11,24 +11,116 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 )
 
 // Both declared and effective identities survive replacements in the manifest.
 type buildModule struct {
-	Path             string `json:"path"`
-	Version          string `json:"version"`
-	EffectivePath    string `json:"effective_path"`
-	EffectiveVersion string `json:"effective_version"`
-	Sum              string `json:"sum"`
-	GoModSum         string `json:"go_mod_sum"`
-	Directory        string `json:"directory"`
-	Repository       string `json:"repository,omitempty"`
-	Commit           string `json:"commit,omitempty"`
-	GoModSha256      string `json:"go_mod_sha256"`
-	ZipPath          string `json:"zip_path,omitempty"`
-	ZipSha256        string `json:"zip_sha256,omitempty"`
+	Path              string   `json:"path"`
+	Version           string   `json:"version"`
+	EffectivePath     string   `json:"effective_path"`
+	EffectiveVersion  string   `json:"effective_version"`
+	Sum               string   `json:"sum"`
+	GoModSum          string   `json:"go_mod_sum"`
+	Directory         string   `json:"directory"`
+	Repository        string   `json:"repository,omitempty"`
+	Commit            string   `json:"commit,omitempty"`
+	GoModSha256       string   `json:"go_mod_sha256"`
+	ZipPath           string   `json:"zip_path,omitempty"`
+	ZipSha256         string   `json:"zip_sha256,omitempty"`
+	GraphOnly         bool     `json:"graph_only_unqualified"`
+	UnqualifiedFields []string `json:"unqualified_fields"`
+}
+
+type moduleQualification struct {
+	GraphNodes            int `json:"graph_nodes"`
+	UnqualifiedGraphNodes int `json:"unqualified_graph_nodes"`
+	MissingGoModMetadata  int `json:"missing_go_mod_metadata"`
+	GoModOnly             int `json:"go_mod_metadata_without_source_body"`
+}
+
+// Lazy graph nodes need not have downloaded bodies or metadata. Retain their
+// identity and missing fields, but never admit them as linked binary evidence.
+func moduleMissingProvenance(module goModule) []string {
+	missing := []string{}
+	if module.GoMod == "" {
+		missing = append(missing, "go_mod_file")
+	}
+	if module.Dir == "" {
+		missing = append(missing, "source_directory")
+	}
+	if module.Version != "" {
+		if !strings.HasPrefix(module.GoModSum, "h1:") {
+			missing = append(missing, "go_mod_sum")
+		}
+		if !strings.HasPrefix(module.Sum, "h1:") {
+			missing = append(missing, "module_sum")
+		}
+	}
+	return missing
+}
+
+func countBuildModuleQualification(modules []buildModule) moduleQualification {
+	result := moduleQualification{GraphNodes: len(modules)}
+	for _, module := range modules {
+		if !module.GraphOnly {
+			continue
+		}
+		result.UnqualifiedGraphNodes++
+		if module.GoModSha256 == "" || module.GoModSum == "" {
+			result.MissingGoModMetadata++
+		} else {
+			result.GoModOnly++
+		}
+	}
+	return result
+}
+
+// Build info identifies actual linked modules independently of the lazy graph.
+// A local '(devel)' version is accepted only with exact pinned Git ownership.
+func validateLinkedBuildModules(info *debug.BuildInfo, modules []buildModule) error {
+	if info == nil {
+		return errors.New("readable binary build info required")
+	}
+	byPath := map[string]buildModule{}
+	for _, module := range modules {
+		if _, exists := byPath[module.Path]; exists {
+			return errors.New("duplicate captured module identity")
+		}
+		byPath[module.Path] = module
+	}
+	seen := map[string]bool{}
+	for _, dependency := range info.Deps {
+		if dependency == nil || seen[dependency.Path] {
+			return errors.New("nil or duplicate binary module")
+		}
+		seen[dependency.Path] = true
+		module, ok := byPath[dependency.Path]
+		if !ok || module.GraphOnly || module.GoModSha256 == "" || module.Directory == "" {
+			return fmt.Errorf("linked module %s lacks authenticated materialized provenance", dependency.Path)
+		}
+		effective := dependency
+		if dependency.Replace != nil {
+			effective = dependency.Replace
+		}
+		version := effective.Version
+		if module.EffectiveVersion == "" {
+			if module.Repository == "" || module.Commit == "" {
+				return errors.New("linked local module has no pinned repository")
+			}
+			if version == "(devel)" {
+				version = ""
+			}
+		} else if !strings.HasPrefix(module.Sum, "h1:") || !strings.HasPrefix(module.GoModSum, "h1:") || effective.Sum != module.Sum {
+			return fmt.Errorf("linked remote module %s lacks matching body/go.mod sums", dependency.Path)
+		}
+		if dependency.Version != module.Version || effective.Path != module.EffectivePath || version != module.EffectiveVersion {
+			return fmt.Errorf("linked module %s identity differs from resolved graph", dependency.Path)
+		}
+	}
+	return nil
 }
 
 // Go's JSON stream is decoded as objects, never flattened into shell text.
@@ -151,24 +243,29 @@ func captureBuildModules(ctx context.Context, config buildConfig, repository str
 		if entry.Directory == "" {
 			entry.Directory = effective.Dir
 		}
-		if effective.GoMod == "" {
-			return nil, fmt.Errorf("%s has no retained go.mod", module.Path)
+		entry.UnqualifiedFields = moduleMissingProvenance(effective)
+		entry.GraphOnly = len(entry.UnqualifiedFields) != 0
+		if effective.GoMod != "" {
+			mod, err := buildFile(effective.GoMod)
+			if err != nil {
+				return nil, err
+			}
+			entry.GoModSha256 = mod.Sha256
 		}
-		mod, err := buildFile(effective.GoMod)
-		if err != nil {
-			return nil, err
-		}
-		entry.GoModSha256 = mod.Sha256
 		if effective.Version == "" {
+			if entry.GraphOnly {
+				return nil, fmt.Errorf("local module %s lacks source metadata", module.Path)
+			}
 			repo, err := buildModuleRepository(ctx, config, entry.Directory)
 			if err != nil {
 				return nil, err
 			}
 			entry.Repository, entry.Commit = repo.Name, repo.Commit
-		} else if !strings.HasPrefix(entry.GoModSum, "h1:") {
-			return nil, fmt.Errorf("%s has no module checksum", module.Path)
 		}
 		if module.Path == "github.com/urnetwork/sdk" || module.Path == "github.com/urnetwork/connect" || module.Path == "github.com/pion/sctp" {
+			if entry.GraphOnly {
+				return nil, fmt.Errorf("required API module %s lacks materialized provenance", module.Path)
+			}
 			entry.ZipPath = filepath.Join(strings.TrimSpace(string(moduleCache)), "cache/download", effective.Path, "@v", effective.Version+".zip")
 			zip, err := buildFile(entry.ZipPath)
 			if err != nil {
