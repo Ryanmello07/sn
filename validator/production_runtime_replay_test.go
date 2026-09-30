@@ -57,13 +57,15 @@ func productionRuntimeReplayTestProcess() {
 		_, _ = os.Stdout.Write([]byte("{"))
 		os.Exit(0)
 	}
-	report := ProductionRuntimeReplayReport{Schema: productionRuntimeReplaySchema, JobSha256: sha256.Sum256(raw), RulesSha256: job.RulesSha256,
+	report := ProductionRuntimeReplayReport{Schema: productionRuntimeReplaySchema, JobSha256: sha256.Sum256(raw), RulesSha256: job.RulesSha256, CasesSha256: job.CasesSha256,
 		SdkRevision: productionRuntimeReplaySdk, Cases: 1, Steps: 1, OutputsSha256: [32]byte{0x18}, FiniteReplayOnly: true}
 	switch mode {
 	case "wrong-job":
 		report.JobSha256[0]++
 	case "overclaim":
 		report.CompleteSemanticEquivalence = true
+	case "rules-overclaim":
+		report.SemanticRulesVerified = true
 	case "selection":
 		report.ProductionSelection = true
 	case "wrong-count":
@@ -104,7 +106,6 @@ func newProductionRuntimeReplayTestFixture(t *testing.T, mode string) *productio
 	if err != nil {
 		t.Fatal(err)
 	}
-	authority.policy.SemanticRulesSha256 = sha256.Sum256(cases)
 	authority.signPolicy(t)
 	artifact := func(identity crv4.RuntimeArtifactIdentity) productionRuntimeReplayArtifact {
 		value := productionRuntimeReplayArtifact{WasmHex: "0x00"}
@@ -123,7 +124,7 @@ func newProductionRuntimeReplayTestFixture(t *testing.T, mode string) *productio
 	}
 	self := &productionRuntimeReplayTestFixture{authority: authority, executable: executable, job: productionRuntimeReplayJob{
 		Schema: productionRuntimeReplaySchema, PolicySha256: sha256.Sum256(authority.policyRaw),
-		SourceBuildEvidenceSha256: authority.result.Request.SourceBuildEvidenceHash, RulesSha256: authority.policy.SemanticRulesSha256,
+		SourceBuildEvidenceSha256: authority.result.Request.SourceBuildEvidenceHash, RulesSha256: authority.policy.SemanticRulesSha256, CasesSha256: sha256.Sum256(cases),
 		Base: artifact(authority.policy.BaseArtifact), Candidate: artifact(authority.candidate), CasesJson: string(cases)}}
 	self.signEvidence(t)
 	return self
@@ -154,7 +155,8 @@ func TestProductionRuntimeReplayRetainsFiniteCustody(t *testing.T) {
 	if err != nil || report == nil {
 		t.Fatal("signed finite replay refused", err)
 	}
-	if report.JobSha256 != sha256.Sum256(fixture.raw) || !report.FiniteReplayOnly || report.CompleteSemanticEquivalence || report.ProductionSelection {
+	if report.JobSha256 != sha256.Sum256(fixture.raw) || !report.FiniteReplayOnly || report.SemanticRulesVerified || report.CompleteSemanticEquivalence || report.ProductionSelection ||
+		report.RulesSha256 != fixture.authority.policy.SemanticRulesSha256 || report.CasesSha256 != sha256.Sum256([]byte(fixture.job.CasesJson)) || report.CasesSha256 == report.RulesSha256 {
 		t.Fatal("finite replay overclaimed production authority", report)
 	}
 	if fixture.authority.calls != 0 || !bytes.Equal(original, fixture.authority.owner.cfg.ownerRecycleProduction.encoded) {
@@ -163,7 +165,7 @@ func TestProductionRuntimeReplayRetainsFiniteCustody(t *testing.T) {
 }
 
 func TestProductionRuntimeReplayRequiresIndependentEvidence(t *testing.T) {
-	for _, fault := range []string{"signature", "evidence", "policy", "source", "rules"} {
+	for _, fault := range []string{"signature", "evidence", "policy", "source", "rules", "cases"} {
 		fixture := newProductionRuntimeReplayTestFixture(t, "clean")
 		switch fault {
 		case "signature":
@@ -177,6 +179,9 @@ func TestProductionRuntimeReplayRequiresIndependentEvidence(t *testing.T) {
 			fixture.job.SourceBuildEvidenceSha256[0]++
 			fixture.signEvidence(t)
 		case "rules":
+			fixture.job.RulesSha256[0]++
+			fixture.signEvidence(t)
+		case "cases":
 			fixture.job.CasesJson += " "
 			fixture.signEvidence(t)
 		}
@@ -213,7 +218,7 @@ func TestProductionRuntimeReplayRequiresExactExecutable(t *testing.T) {
 }
 
 func TestProductionRuntimeReplayRefusesPartialOrOverclaimedResults(t *testing.T) {
-	for _, mode := range []string{"failure", "overflow", "malformed", "wrong-job", "overclaim", "selection", "wrong-count"} {
+	for _, mode := range []string{"failure", "overflow", "malformed", "wrong-job", "overclaim", "rules-overclaim", "selection", "wrong-count"} {
 		fixture := newProductionRuntimeReplayTestFixture(t, mode)
 		if report, err := fixture.replay(context.Background()); err == nil || report != nil {
 			t.Fatal("incomplete or overclaimed replay result accepted", mode, err)
@@ -278,5 +283,11 @@ func TestProductionRuntimeReplayExpiredDeadlineStopsBeforeExecution(t *testing.T
 	defer cancel()
 	if report, err := ReplayProductionRuntimeContinuityContext(ctx, nil, nil, nil, nil, "absent"); report != nil || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("expired replay deadline reached authority or process", err)
+	}
+}
+
+func TestProductionRuntimeReplayMissingContextRefusesBeforeExecution(t *testing.T) {
+	if report, err := ReplayProductionRuntimeContinuityContext(nil, nil, nil, nil, nil, "absent"); report != nil || err == nil || !strings.Contains(err.Error(), "context is absent") {
+		t.Fatal("missing replay context reached authority or process", err)
 	}
 }

@@ -61,7 +61,8 @@ pub struct ReplayCase {
     pub steps: Vec<ReplayStep>,
 }
 
-/// This exact JSON string is hashed as rules before its inner structure is decoded.
+/// Exact cases have their own digest. Semantic rules remain an independently
+/// approved external identity; this finite executor does not verify their scope.
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReplayJob {
@@ -69,6 +70,7 @@ pub struct ReplayJob {
     pub policy_sha256: [u8; 32],
     pub source_build_evidence_sha256: [u8; 32],
     pub rules_sha256: [u8; 32],
+    pub cases_sha256: [u8; 32],
     pub base: ReplayArtifact,
     pub candidate: ReplayArtifact,
     pub cases_json: String,
@@ -81,11 +83,13 @@ pub struct ReplayReport {
     pub schema: String,
     pub job_sha256: [u8; 32],
     pub rules_sha256: [u8; 32],
+    pub cases_sha256: [u8; 32],
     pub sdk_revision: String,
     pub cases: usize,
     pub steps: usize,
     pub outputs_sha256: [u8; 32],
     pub finite_replay_only: bool,
+    pub semantic_rules_verified: bool,
     pub complete_semantic_equivalence: bool,
     pub production_selection: bool,
 }
@@ -288,7 +292,8 @@ pub fn replay_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
     if job.schema != REPLAY_SCHEMA
         || job.policy_sha256 == [0; 32]
         || job.source_build_evidence_sha256 == [0; 32]
-        || sha2_256(job.cases_json.as_bytes()) != job.rules_sha256
+        || job.rules_sha256 == [0; 32]
+        || sha2_256(job.cases_json.as_bytes()) != job.cases_sha256
     {
         return Err(ProbeError::new(
             "replay policy, source or exact rules binding differs",
@@ -423,11 +428,13 @@ pub fn replay_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
         schema: REPLAY_SCHEMA.to_owned(),
         job_sha256: sha2_256(raw),
         rules_sha256: job.rules_sha256,
+        cases_sha256: job.cases_sha256,
         sdk_revision: POLKADOT_SDK_REVISION.to_owned(),
         cases: cases.len(),
         steps,
         outputs_sha256: digests[0],
         finite_replay_only: true,
+        semantic_rules_verified: false,
         complete_semantic_equivalence: false,
         production_selection: false,
     })

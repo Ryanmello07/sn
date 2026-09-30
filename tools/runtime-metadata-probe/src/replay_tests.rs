@@ -98,7 +98,8 @@ fn job(body: &str, initial: Vec<ReplayEntry>, expected: Vec<ReplayEntry>) -> Rep
         schema: REPLAY_SCHEMA.to_owned(),
         policy_sha256: [1; 32],
         source_build_evidence_sha256: [2; 32],
-        rules_sha256: sha2_256(cases_json.as_bytes()),
+        rules_sha256: [3; 32],
+        cases_sha256: sha2_256(cases_json.as_bytes()),
         base: artifact(11, "", body),
         candidate: artifact(12, "", body),
         cases_json,
@@ -120,9 +121,12 @@ fn replay_compares_insertions_and_deletions_for_both_artifacts() {
             .unwrap();
     assert_eq!(report.job_sha256, sha2_256(&raw));
     assert_eq!(report.rules_sha256, job.rules_sha256);
+    assert_eq!(report.cases_sha256, sha2_256(job.cases_json.as_bytes()));
+    assert_ne!(report.cases_sha256, report.rules_sha256);
     assert_eq!((report.cases, report.steps), (1, 1));
     assert!(
         report.finite_replay_only
+            && !report.semantic_rules_verified
             && !report.complete_semantic_equivalence
             && !report.production_selection
     );
@@ -164,7 +168,7 @@ fn replay_retains_state_between_steps_and_balances_transactions() {
     second.expected_state.clear();
     cases[0].steps.push(second);
     job.cases_json = serde_json::to_string(&cases).unwrap();
-    job.rules_sha256 = sha2_256(job.cases_json.as_bytes());
+    job.cases_sha256 = sha2_256(job.cases_json.as_bytes());
     let report: ReplayReport =
         serde_json::from_slice(&run(&job).expect("ordered commit and rollback replay refused"))
             .unwrap();

@@ -7,7 +7,7 @@ semantic equivalence, install automatic runtime selection or authorize signing.
 `ReplayProductionRuntimeContinuityContext` authenticates the original schema-3
 authority, independently signed continuity policy and separate verifier certificate.
 The certificate's evidence hash must identify the exact replay job. That job binds
-the policy bytes, source/build evidence reference, approved rules and exact original
+the policy bytes, source/build evidence reference, approved rules identity and exact original
 and candidate artifact identities. No network connection or private signing key is
 used. Original config, approvals, pending signed bytes and historical custody remain
 unchanged.
@@ -29,9 +29,17 @@ invoke storage hosts.
 Each supplied case starts from an explicit complete top-level fixture map plus the
 executing artifact as immutable `:code`. Steps retain state within that case. Both
 modules must match every declared return byte and the complete resulting map,
-including insertions and deletions. The report binds the exact job/rules and compared
-outputs; it reports finite coverage and keeps complete-equivalence/selection false.
+including insertions and deletions. The report binds the exact job, rules reference,
+separate case-data digest and compared outputs; it reports finite coverage and keeps
+semantic-rules-verified, complete-equivalence and selection false.
 Fixture state is not authenticated mainnet state and no universal proof is inferred.
+
+`rules_sha256` retains the independently approved semantic rules identity from the
+policy. `cases_sha256` hashes the exact `cases_json` bytes as a separate input bound
+by the signed evidence. Case data is not the semantic rules. This finite executor
+does not consume or prove implementation/coverage of those external rules; it only
+executes its fixed comparison procedure on the supplied cases. A certificate's
+all-domain assertion remains an authenticated assertion rather than a proven fact.
 
 The host subset supports get/read/set/clear/exists/next-key and balanced storage
 transactions. It refuses invoked offchain, child-storage, prefix, append/root,

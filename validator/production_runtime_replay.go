@@ -48,6 +48,7 @@ type productionRuntimeReplayJob struct {
 	PolicySha256              [32]byte                        `json:"policy_sha256"`
 	SourceBuildEvidenceSha256 [32]byte                        `json:"source_build_evidence_sha256"`
 	RulesSha256               [32]byte                        `json:"rules_sha256"`
+	CasesSha256               [32]byte                        `json:"cases_sha256"`
 	Base                      productionRuntimeReplayArtifact `json:"base"`
 	Candidate                 productionRuntimeReplayArtifact `json:"candidate"`
 	CasesJson                 string                          `json:"cases_json"`
@@ -59,11 +60,13 @@ type ProductionRuntimeReplayReport struct {
 	Schema                      string   `json:"schema"`
 	JobSha256                   [32]byte `json:"job_sha256"`
 	RulesSha256                 [32]byte `json:"rules_sha256"`
+	CasesSha256                 [32]byte `json:"cases_sha256"`
 	SdkRevision                 string   `json:"sdk_revision"`
 	Cases                       uint32   `json:"cases"`
 	Steps                       uint32   `json:"steps"`
 	OutputsSha256               [32]byte `json:"outputs_sha256"`
 	FiniteReplayOnly            bool     `json:"finite_replay_only"`
+	SemanticRulesVerified       bool     `json:"semantic_rules_verified"`
 	CompleteSemanticEquivalence bool     `json:"complete_semantic_equivalence"`
 	ProductionSelection         bool     `json:"production_selection"`
 }
@@ -107,6 +110,9 @@ func decodeProductionRuntimeReplay(raw []byte, value any) error {
 // mutable caller pathname cannot replace the checked bytes. A two-minute budget
 // includes copying, child execution and pipe ownership; caller cancellation wins.
 func ReplayProductionRuntimeContinuityContext(ctx context.Context, cfg *ReleaseConfig, policyRaw, certificateRaw, replayRaw []byte, executable string) (*ProductionRuntimeReplayReport, error) {
+	if ctx == nil {
+		return nil, errors.New("runtime replay context is absent")
+	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
@@ -123,7 +129,7 @@ func ReplayProductionRuntimeContinuityContext(ctx context.Context, cfg *ReleaseC
 	}
 	if sha256.Sum256(replayRaw) != result.EvidenceSha256 || job.Schema != productionRuntimeReplaySchema ||
 		job.PolicySha256 != sha256.Sum256(policyRaw) || job.SourceBuildEvidenceSha256 != result.Request.SourceBuildEvidenceHash ||
-		job.RulesSha256 != policy.SemanticRulesSha256 || sha256.Sum256([]byte(job.CasesJson)) != job.RulesSha256 {
+		job.RulesSha256 != policy.SemanticRulesSha256 || sha256.Sum256([]byte(job.CasesJson)) != job.CasesSha256 {
 		return nil, errors.New("runtime replay signed evidence or rules differs")
 	}
 	var cases []struct {
@@ -215,9 +221,9 @@ func ReplayProductionRuntimeContinuityContext(ctx context.Context, cfg *ReleaseC
 	if err := decodeProductionRuntimeReplay(stdout.buffer.Bytes(), &report); err != nil {
 		return nil, err
 	}
-	if report.Schema != productionRuntimeReplaySchema || report.JobSha256 != sha256.Sum256(replayRaw) || report.RulesSha256 != job.RulesSha256 ||
+	if report.Schema != productionRuntimeReplaySchema || report.JobSha256 != sha256.Sum256(replayRaw) || report.RulesSha256 != job.RulesSha256 || report.CasesSha256 != job.CasesSha256 ||
 		report.SdkRevision != productionRuntimeReplaySdk || report.Cases != uint32(len(cases)) || report.Steps != steps ||
-		report.OutputsSha256 == ([32]byte{}) || !report.FiniteReplayOnly || report.CompleteSemanticEquivalence || report.ProductionSelection {
+		report.OutputsSha256 == ([32]byte{}) || !report.FiniteReplayOnly || report.SemanticRulesVerified || report.CompleteSemanticEquivalence || report.ProductionSelection {
 		return nil, errors.New("runtime replay result identity or finite scope differs")
 	}
 	if _, _, err := verifyProductionRuntimeContinuity(cfg, policyRaw, certificateRaw); err != nil {
