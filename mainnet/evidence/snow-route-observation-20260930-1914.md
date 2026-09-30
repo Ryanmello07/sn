@@ -10,3 +10,8 @@ identity was observed. This does not establish the route's backend, its sync
 state, or its mainnet readiness. The operator separately reports that the
 mainnet node is still synchronizing. No signer, transaction or deployment was
 used.
+
+Follow-up read-only probes at approximately **19:41 UTC** and **20:16 UTC**
+repeated both methods against the same VPN route with the same seven-second
+client limit. Each returned HTTP 502. Neither follow-up supplied chain identity
+or sync evidence.

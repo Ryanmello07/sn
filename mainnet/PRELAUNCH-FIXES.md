@@ -88,8 +88,8 @@ receipts and independent monitor deployment remain open.
 
 MG-03 also includes a [qualified miner claim-queue owner fix](evidence/miner-claim-queue-owner-qualification-20260929.md).
 
-MG-01's [September 30 19:14 UTC read-only Snow route check](evidence/snow-route-observation-20260930-1914.md)
-returned HTTP 502 for both native genesis and EVM chain ID. It provides no
+MG-01's [September 30 read-only Snow route checks through 20:16 UTC](evidence/snow-route-observation-20260930-1914.md)
+returned HTTP 502 for both native genesis and EVM chain ID. They provide no
 new mainnet identity or sync evidence; the route remains a live launch gate.
 
 MG-08 now also has an [independently qualified native prerequisite reader](evidence/validator-native-admission-qualification-20260930.md)
