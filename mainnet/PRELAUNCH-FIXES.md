@@ -122,7 +122,8 @@ completed actions leave only the anchor unfinished and do not require replay.
 A cap change needs a new independently signed successor that adopts the original
 prefix, reconciles unfinished signed nonces, and conserves cumulative attempts
 and lifetime financial exposure. The later conditional execution custody owner
-is described below; its production canonical adapter remains unimplemented.
+is described below; its new concrete canonical adapter awaits independent
+qualification.
 The [focused qualification](evidence/bootstrap-contract-prerequisites-focused-qualification-20260929.md)
 passes all twelve new roots normal/race with six causal controls in both modes.
 The separate [partial adjacent battery](evidence/bootstrap-contract-successor-full-v3-qualification-20260929.md#separate-composed-smoke-and-partial-adjacent-coverage)
@@ -206,16 +207,16 @@ Safe owner signatures and complete outer calldata remain absent, as do
 execution approval, nonce/budget allocation and live authority. The review's native
 window is outside the Safe digest and cannot expire a signature. Canonical
 eight-receipt adoption, Safe/evidence state, signature lifetime/window enforcement,
-globally fenced relayer signer custody and a production canonical execution
-adapter must still be implemented and qualified before evidence anchoring or
-activation.
+globally fenced relayer signer custody and qualified canonical execution remain
+required before evidence anchoring or activation. The concrete adapter described
+below does not supply the external live authority by itself.
 
 The [successor execution custody and owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) now
 binds independently approved signatures and an exact outer envelope to the
 original eight-receipt adoption, cumulative attempt/financial floors and distinct
-Safe-inner/relayer-outer nonce claims. Its public commands remain offline; the
-internal one-send machine requires an authenticated adapter for every historical,
-current-state and canonical receipt decision. Its
+Safe-inner/relayer-outer nonce claims. Its qualified initial public commands are
+offline; the one-send machine requires an authenticated adapter for every
+historical, current-state and canonical receipt decision. Its
 [scoped qualification receipt](evidence/bootstrap-successor-execution-qualification-20260929.md)
 records twenty-one focused and six adjacent roots passing normal/race on
 corrected `75ea2158`, including interrupted publication, counted attempts, ambiguous send recovery,
@@ -234,13 +235,43 @@ recovery roots together account for about 398 seconds under race. Size the whole
 qualification from measured fixture cost; preserve timed-out attempts and keep
 production transaction deadlines unchanged.
 
-The missing production adapter must canonically reauthenticate every original
-receipt/postcondition, selected Safe release and finalized/pending authority,
-original unexecuted reservation, current evidence domain and exact inner outcome,
-then perform one bounded write over the approved owned route. Enforced signer
-cutover to one registry, independently approved mainnet genesis/runtime and Safe
-authority, funding, actual owner/relayer signatures and live readback remain
-separate gates. Local locks and synthetic adapters do not supply those facts.
+The concrete canonical adapter is implemented on frozen source `82da3d40`, with
+independent qualification pending. A separate signed canonical authorization
+binds the exact execution plan, pinned Safe build review, reviewed current-runtime
+profile and its evidence, and every Safe/relayer signer's cutover plus retained
+original reservations. The adapter borrows all eight original marker locks and
+reauthenticates the original signed bytes, receipts and postconditions through the
+existing historical native/EVM adapter. Each original receipt receives its own
+approved retry budget. Successor admission and inclusion use the separately
+approved current runtime; an ordinary later runtime upgrade cannot erase a
+historical original or counted successor receipt.
+
+Online `contract-successor-execution-resume` requires the separately pinned
+canonical approval, and `--submit` permits at most one newly counted exact write.
+The adapter checks actual pinned Safe proxy/singleton code and scoped
+finalized/pending authority, both nonce domains, funding, current contracts and
+the exact one-shot evidence binding. Finalized reads keep one canonical hash
+while later heads advance; later native-window and runtime checks do not require
+head equality or restarting the snapshot. Current state RPCs retain their own
+bounded retries. Exact-hash lookup uses `eth_getTransactionByHash`; the adapter
+requires neither `txpool_content` nor `author_pendingExtrinsics`.
+
+Six new light roots cover independent authority, immutable authority recovery,
+published Safe state, scoped pending lookup and strict receipt fields. Two
+separate heavy roots run the full original v3 graph and actual pinned Safe
+execution, including lost reply/restart, approved runtime change, renewed read
+deadlines, advancing canonical heads and refusal of a changed canonical hash.
+Compile-only, vet and formatting pass; no behavioral qualification claim follows
+from those author checks. Preserve separate heavy-root harness budgets and all
+normal/race/control logs before updating this pending status.
+
+Enforced signer cutover to one registry, independently approved mainnet
+genesis/runtime and Safe authority, funding, actual owner/relayer signatures and
+live readback remain separate gates. The owned RPC's finality and account-pending
+responses are assertions. Independent build and cutover evidence explicitly
+attests external assumptions; local locks cannot establish cross-host signer
+exclusivity or the absence of off-node signatures. MG-08 remains open, without
+installation, activation or native 10/90 acceptance.
 Later successors, filesystem migration, fee replacement and independently proved
 external sends require separate approved liability-preserving transitions.
 

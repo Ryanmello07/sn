@@ -72,10 +72,19 @@ evidence manifest.
 The first private-input fixture failures and the later ten-minute race
 harness timeout remain preserved. The exact race retry passes with an explicit
 twenty-minute package budget, without changing production deadlines.
-A production canonical adapter for current Safe/evidence authority, original
-receipt reauthentication and enforced relayer signer cutover remains unimplemented.
-Public commands perform local custody only; the internal owner uses explicitly
-synthetic canonical responses in its tests.
+The concrete [canonical execution adapter](BOOTSTRAP-SUCCESSOR-EXECUTION.md#separate-canonical-authority-and-online-resume)
+is implemented on frozen source `82da3d40`; independent normal/race and causal
+qualification remains pending. Online resume requires a separate signature
+binding Safe build review, a reviewed current runtime and signer-cutover evidence.
+It reauthenticates all eight original receipts through the existing native/EVM
+adapter, checks scoped finalized/pending Safe and contract state, reconciles the
+exact retained transaction and permits one counted exact write. The current
+runtime may differ from the historical original runtime under that new approval.
+The eight new roots include actual pinned Safe proxy/singleton execution and
+lost-reply recovery in two full local graph fixtures. RPC finality and pending
+state remain owned-node assertions; external build review and complete signer
+cutover remain independently attested assumptions, not facts proved by a local
+registry or a global transaction-pool census. No live authority is established.
 The qualified [signed local successor preparation](BOOTSTRAP-SUCCESSOR-PREPARATION.md)
 adds a separate approval domain and fixed resumable local claim while preserving
 original receipts and additive proposed floors. Its [scoped receipt](evidence/bootstrap-successor-preparation-qualification-20260929.md)
@@ -134,7 +143,8 @@ native review window cannot expire a Safe signature because it is outside the
 Safe digest. Canonical original receipt adoption, current Safe/evidence authority,
 signature lifetime and window enforcement and globally fenced relayer signer
 custody remain launch gates. The separate execution owner enforces its conditional
-state transitions in code; its production canonical adapter remains unimplemented.
+state transitions in code; its new concrete canonical adapter awaits independent
+qualification and explicitly approved live authority.
 No mainnet transaction,
 contract installation or validator activation is established by this increment.
 The [qualified owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md),
