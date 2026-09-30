@@ -121,13 +121,16 @@ func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, ar
 	submit := flags.Bool("submit", false, "request one counted write; unavailable until canonical Safe provenance is implemented")
 	canonicalPath := flags.String("canonical-approval", "", "independent build, runtime, signer-cutover and Safe-provenance authorization")
 	canonicalHash := flags.String("canonical-approval-sha256", "", "exact canonical authorization file digest")
+	runtimePath := flags.String("runtime-revision", "", "one additive independently signed runtime revision for exact online resume")
+	runtimeHash := flags.String("runtime-revision-sha256", "", "exact additive runtime revision file digest")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *configPath == "" || *directory == "" || !planSha256(*accepted) ||
 		*requestPath == "" || *safeRequestPath == "" || *executionRequestPath == "" ||
 		preview && (*approvalPath != "" || *approvalHash != "" || *executionHash != "") ||
 		!preview && (*approvalPath == "" || !planSha256(*approvalHash) || !planSha256(*executionHash)) ||
 		(*online || *submit) && args[0] != "contract-successor-execution-resume" || *submit && !*online ||
-		*online && (*canonicalPath == "" || !planSha256(*canonicalHash)) || !*online && (*canonicalPath != "" || *canonicalHash != "") {
-		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume also require --approval, --approval-sha256 and --accept-execution-hash; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; --submit requires --online")
+		*online && (*canonicalPath == "" || !planSha256(*canonicalHash)) || !*online && (*canonicalPath != "" || *canonicalHash != "") ||
+		(*runtimePath != "" || *runtimeHash != "") && (!*online || *runtimePath == "" || !planSha256(*runtimeHash)) {
+		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume also require --approval, --approval-sha256 and --accept-execution-hash; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; optional --runtime-revision and --runtime-revision-sha256 require --online; --submit requires --online")
 		return 2
 	}
 	if *submit && provenance == nil {
@@ -137,6 +140,9 @@ func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, ar
 	var additionalPaths []string
 	if *canonicalPath != "" {
 		additionalPaths = append(additionalPaths, *canonicalPath)
+	}
+	if *runtimePath != "" {
+		additionalPaths = append(additionalPaths, *runtimePath)
 	}
 	plan, profile, retained, err := loadBootstrapSuccessorExecution(ctx, *configPath, *directory, *accepted, *requestPath, *safeRequestPath, *executionRequestPath, *approvalPath, additionalPaths...)
 	if err != nil {
@@ -206,7 +212,25 @@ func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, ar
 			fmt.Fprintln(stderr, "successor independent canonical authorization:", err)
 			return 2
 		}
-		canonical, err = newBootstrapSuccessorCanonicalChainWithProvenance(ctx, owner, canonicalApproval, provenance)
+		var revisions []bootstrapSuccessorRuntimeApproval
+		if *runtimePath != "" {
+			raw, hash, err := readBootstrapRootFile(ctx, *runtimePath, maximumBootstrapSuccessorRuntimeBytes)
+			var revision bootstrapSuccessorRuntimeApproval
+			if err == nil && hash == *runtimeHash {
+				err = decodePlanJson(raw, &revision)
+			} else {
+				err = errors.Join(errors.New("successor runtime revision file pin differs"), err)
+			}
+			if err == nil {
+				err = revision.validate(ctx, plan, canonicalApproval)
+			}
+			if err != nil {
+				fmt.Fprintln(stderr, "successor independent runtime revision:", err)
+				return 2
+			}
+			revisions = append(revisions, revision)
+		}
+		canonical, err = newBootstrapSuccessorCanonicalChainWithProvenance(ctx, owner, canonicalApproval, provenance, revisions...)
 		if err == nil {
 			result, err = advanceBootstrapSuccessorExecution(ctx, owner, canonical, *submit)
 		}

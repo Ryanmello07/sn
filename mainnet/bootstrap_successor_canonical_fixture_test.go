@@ -284,6 +284,14 @@ func (self *bootstrapSuccessorCanonicalFixture) online(stdout *bytes.Buffer, sub
 // the concrete constructor adds eight historical contract marker locks.
 func (self *bootstrapSuccessorCanonicalFixture) open() (*bootstrapSuccessorExecutionStore, *bootstrapSuccessorCanonicalChain) {
 	self.t.Helper()
+	owner, adapter, _ := self.openRuntimeRevisions()
+	return owner, adapter
+}
+
+// Revision tests reopen the genuine fixture with additional independent
+// artifacts and explicitly close all original marker locks before a restart.
+func (self *bootstrapSuccessorCanonicalFixture) openRuntimeRevisions(revisions ...bootstrapSuccessorRuntimeApproval) (*bootstrapSuccessorExecutionStore, *bootstrapSuccessorCanonicalChain, func()) {
+	self.t.Helper()
 	plan, profile, retained, err := loadBootstrapSuccessorExecution(self.t.Context(), self.original.path, self.original.config.RunDirectory,
 		self.original.preparation.Plan.ContentHash, self.paths[1], self.paths[3], self.paths[5], self.approvalArgs[1], self.canonicalRef.Path)
 	if err != nil {
@@ -295,12 +303,16 @@ func (self *bootstrapSuccessorCanonicalFixture) open() (*bootstrapSuccessorExecu
 		self.t.Fatal(err)
 	}
 	self.t.Cleanup(func() { owner.close() })
-	adapter, err := newBootstrapSuccessorCanonicalChainWithProvenance(self.t.Context(), owner, self.canonical, self)
+	adapter, err := newBootstrapSuccessorCanonicalChainWithProvenance(self.t.Context(), owner, self.canonical, self, revisions...)
 	if err != nil {
 		self.t.Fatal(err)
 	}
 	self.t.Cleanup(func() { adapter.close() })
-	return owner, adapter
+	return owner, adapter, func() {
+		if err := errors.Join(adapter.close(), owner.close(), retained.close()); err != nil {
+			self.t.Fatal(err)
+		}
+	}
 }
 
 // Lightweight getter tests share only the reviewed Safe oracle and local RPC

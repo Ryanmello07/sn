@@ -113,5 +113,6 @@ func (self *bootstrapSuccessorExecutionStore) retainCanonicalAuthority(ctx conte
 		return err
 	}
 	self.canonicalAuthorityHash = hash
+	self.canonicalAuthority = &approval
 	return self.checkpoint("canonical-authority-retained")
 }

@@ -90,6 +90,7 @@ type bootstrapSuccessorExecutionEvent struct {
 	ReservedLifetimeWei    string                              `json:"reserved_lifetime_wei"`
 	Receipt                *bootstrapSuccessorExecutionReceipt `json:"receipt,omitempty"`
 	CanonicalAuthorityHash string                              `json:"canonical_authority_hash,omitempty"`
+	RuntimeRevisionHash    string                              `json:"runtime_revision_hash,omitempty"`
 	ContentHash            string                              `json:"content_hash"`
 }
 
@@ -99,7 +100,7 @@ func (self *bootstrapSuccessorExecutionStore) attemptEvent() bootstrapSuccessorE
 	event := bootstrapSuccessorExecutionEvent{Schema: bootstrapSuccessorExecutionEventSchema, ApprovalHash: rootObjectHash(self.approval),
 		Sequence: self.last.Sequence + 1, PreviousHash: self.last.ContentHash, Phase: "attempt-reserved",
 		CumulativeAttempts: self.last.CumulativeAttempts + 1, ReservedLifetimeWei: self.last.ReservedLifetimeWei,
-		CanonicalAuthorityHash: self.canonicalAuthorityHash}
+		CanonicalAuthorityHash: self.canonicalAuthorityHash, RuntimeRevisionHash: self.runtimeHistory.hash()}
 	event.ContentHash = rootObjectHash(event)
 	return event
 }
@@ -138,13 +139,16 @@ func (self bootstrapSuccessorExecutionEvent) validate(approval bootstrapSuccesso
 		return errors.New("successor execution event lost approval, seal or cumulative floors")
 	}
 	if previous == nil {
-		if self.Sequence != 0 || self.PreviousHash != self.ApprovalHash || self.Phase != "adopted" || self.Receipt != nil || self.CumulativeAttempts != budget.RetainedAttempts || self.CanonicalAuthorityHash != "" {
+		if self.Sequence != 0 || self.PreviousHash != self.ApprovalHash || self.Phase != "adopted" || self.Receipt != nil || self.CumulativeAttempts != budget.RetainedAttempts || self.CanonicalAuthorityHash != "" || self.RuntimeRevisionHash != "" {
 			return errors.New("successor execution lacks its exact original adoption event")
 		}
 		return nil
 	}
 	if self.CanonicalAuthorityHash != "" && !planSha256(self.CanonicalAuthorityHash) || previous.CanonicalAuthorityHash != "" && self.CanonicalAuthorityHash != previous.CanonicalAuthorityHash {
 		return errors.New("successor execution event changed counted canonical authority")
+	}
+	if self.RuntimeRevisionHash != "" && (!planSha256(self.RuntimeRevisionHash) || self.CanonicalAuthorityHash == "") {
+		return errors.New("successor execution event has unscoped runtime revision authority")
 	}
 	if self.Sequence != previous.Sequence+1 || self.PreviousHash != previous.ContentHash || previous.Phase != "adopted" && previous.Phase != "attempt-reserved" {
 		return errors.New("successor execution event changed predecessor or reopened terminal custody")
@@ -223,6 +227,9 @@ type bootstrapSuccessorExecutionResult struct {
 	SubmissionAttempted       bool   `json:"submission_attempted"`
 	InstallationComplete      bool   `json:"installation_complete"`
 	ActivationReady           bool   `json:"activation_ready"`
+	RuntimeRevisionHash       string `json:"runtime_revision_hash,omitempty"`
+	RuntimeRevisionCount      int    `json:"runtime_revision_count,omitempty"`
+	RuntimeRevisionPending    bool   `json:"runtime_revision_pending,omitempty"`
 }
 
 // Adapters receive independent copies so their nested slices cannot mutate the
@@ -237,7 +244,8 @@ func (self *bootstrapSuccessorExecutionStore) planCopy() bootstrapSuccessorExecu
 // Local status cannot infer canonical success from a retained terminal record.
 func (self *bootstrapSuccessorExecutionStore) result() bootstrapSuccessorExecutionResult {
 	return bootstrapSuccessorExecutionResult{PlanHash: self.approval.Plan.hash(), Status: "execution-custody-retained-canonical-adapter-required",
-		CumulativeAttempts: self.last.CumulativeAttempts, ReservedLifetimeWei: self.last.ReservedLifetimeWei, ExecutionApprovalVerified: true, LocalCustodyComplete: true}
+		CumulativeAttempts: self.last.CumulativeAttempts, ReservedLifetimeWei: self.last.ReservedLifetimeWei, ExecutionApprovalVerified: true, LocalCustodyComplete: true,
+		RuntimeRevisionHash: self.runtimeHistory.hash(), RuntimeRevisionCount: len(self.runtimeHistory.approvals), RuntimeRevisionPending: self.runtimeHistory.pendingHash != ""}
 }
 
 // One invocation performs at most one send. Any unavailable read, pending
@@ -290,7 +298,7 @@ func advanceBootstrapSuccessorExecution(ctx context.Context, self *bootstrapSucc
 			event := bootstrapSuccessorExecutionEvent{Schema: bootstrapSuccessorExecutionEventSchema, ApprovalHash: rootObjectHash(self.approval),
 				Sequence: self.last.Sequence + 1, PreviousHash: self.last.ContentHash, Phase: phase,
 				CumulativeAttempts: self.last.CumulativeAttempts, ReservedLifetimeWei: self.last.ReservedLifetimeWei, Receipt: reconciliation.Receipt,
-				CanonicalAuthorityHash: self.last.CanonicalAuthorityHash}
+				CanonicalAuthorityHash: self.last.CanonicalAuthorityHash, RuntimeRevisionHash: self.runtimeHistory.hash()}
 			event.ContentHash = rootObjectHash(event)
 			if err := self.append(event); err != nil {
 				return result, err
@@ -311,6 +319,9 @@ func advanceBootstrapSuccessorExecution(ctx context.Context, self *bootstrapSucc
 	result.Status = "signature-retained-" + reconciliation.Status
 	if !submit || reconciliation.Status == "pending" {
 		return result, nil
+	}
+	if self.runtimeHistory.pendingHash != "" {
+		return result, errors.New("successor execution cannot send with an incomplete runtime revision")
 	}
 	observation, err := chain.observe(ctx, self.planCopy())
 	if err != nil {
