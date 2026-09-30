@@ -39,7 +39,10 @@ authority; future activation must consume independently revalidated installation
 and role evidence. Public Safe current-policy submission remains closed pending
 the separate policy approval and qualified release route.
 
-Qualification is pending. Astra max owns implementation, debugging and fixes,
-formatting, compile-only checks and vet. Sol medium owns behavioral normal/race
-qualification and causal controls. No live RPC, real signer or mainnet action is
-part of this increment.
+The corrected `f4470d0d` [qualification receipt](evidence/bootstrap-contract-role-qualification-20260930.md)
+records eight focused and twelve adjacent roots passing normally and under race
+detection, plus all three causal controls in both modes. The original `43dcd01f`
+fixture setup failure remains separate evidence. Astra max owns implementation,
+debugging, fixes, formatting, compile-only checks and vet; Sol medium owns
+behavioral qualification. No live RPC, real signer or mainnet action is part of
+this increment.

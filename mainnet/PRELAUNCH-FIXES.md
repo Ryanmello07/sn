@@ -376,14 +376,19 @@ Explicit approval of those current-only assumptions and a separately qualified
 release-route installation remain open P0 gates. No mainnet action is authorized
 by local qualification.
 
-**Contract-role declaration admission — qualification pending.** The separate
+**Contract-role declaration admission — scoped qualification complete.** The separate
 [offline contract-role plan](BOOTSTRAP-CONTRACT-ROLES.md) addresses a cross-component
 gap: two signed UR configs can agree with each other while targeting a foreign
 vault/coordinator or the implementation instead of the approved proxy. The new
 admission reconstructs the eight approved projections, binds both configs to the
 exact proxy/vault/initial policy identifier and retains the evidence domain.
 It preserves original v1/v2/v3 custody and does not grant live readiness. Sol
-normal/race positives and causal controls remain pending.
+qualified corrected source `f4470d0d`: eight focused and twelve adjacent roots
+passed normal/race (40 positive executions), and all three causal controls
+reached their assigned assertions in both modes. The
+[receipt](evidence/bootstrap-contract-role-qualification-20260930.md) retains
+the original `43dcd01f` fixture failure separately; production guards were
+unchanged by the fixture correction.
 
 **P0 follow-up — Canonical installation-to-service admission.** Wire the verified
 contract-role relationship into a separately qualified activation boundary that
