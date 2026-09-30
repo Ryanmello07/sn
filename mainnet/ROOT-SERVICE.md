@@ -47,6 +47,18 @@ secret loading/device transport, this authority and a deployed root supervisor
 remain absent. The UR host component does not install this root command or any
 native signing route.
 
+The selected custody direction is a **Ledger hardware signer**, with the root
+private key remaining inside the device. No seed export or local private-key
+file is authorized. The exact Ledger model, installed app, host transport and
+support for this pinned Bittensor sr25519 signing payload are still unverified;
+this selection does not supply a production adapter. A future adapter must fit
+`rootActionSigner`: `signOnce` admits only the exact original request hash and
+action, while `recoverSignature` only retrieves already issued bytes. Device
+and surrounding custody controls must durably provide request idempotency,
+global hotkey/nonce and pending-seat exclusion, and authenticated never-issued
+responses. A disconnected device, missing host receipt, generic app response or
+operator confirmation is not proof that a signature was never issued.
+
 ## Executable observation and recovery
 
 [root_service_command.go](root_service_command.go) dispatches

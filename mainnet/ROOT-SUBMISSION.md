@@ -18,6 +18,13 @@ live approval remain required before production effects. The read-only canonical
 chain's `submit` method and the ordinary RPC method whitelist remain disabled for
 writes; constructing an observer cannot construct this capability.
 
+Root native custody is selected as a non-exportable Ledger hardware key. This
+submission port never loads a seed or private-key file and cannot command that
+device. The exact model/app, transport, native-payload support and durable
+request-hash signing/recovery behavior require separate verification before an
+issuing adapter exists. Original-byte reconciliation remains available without
+making those missing capabilities appear approved.
+
 ## Independent action and route approval
 
 `rootSubmissionConfig` contains the independently provisioned service config and
