@@ -278,7 +278,7 @@ func TestMonitorServicesPolicyBoundsAndStrictWire(t *testing.T) {
 	for _, size := range []int{0, maxMonitorValidatorRoles + 1} {
 		fixture.policy.Validators = make([]monitorValidatorPolicy, size)
 		fixture.writePolicy(t)
-		if _, err := loadMonitorServices(t.Context(), fixture.policyPath, monitorTestExpectation(), fixture.checkpointPath, fixture.metricsPath); err == nil || !strings.Contains(err.Error(), "one through eight") {
+		if _, err := loadMonitorServices(t.Context(), fixture.policyPath, monitorTestExpectation(), fixture.checkpointPath, fixture.metricsPath); !errors.Is(err, errMonitorServicesCensus) {
 			t.Fatal("policy census escaped its explicit bound", size, err)
 		}
 	}

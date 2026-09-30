@@ -403,3 +403,42 @@ func TestMonitorOperatorCredentialFenceAndPublicationAmbiguity(t *testing.T) {
 		t.Fatal("publication command did not join", exit)
 	}
 }
+
+// The role census has separate explicit bounds; unrelated malformed-role errors
+// cannot masquerade as coverage of an empty or over-capacity deployment policy.
+func TestMonitorOperatorPolicyBoundsCoverCombinedAndOperatorOnlyCensus(t *testing.T) {
+	fixture := newMonitorServicesFixture(t, "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta")
+	validators := append([]monitorValidatorPolicy(nil), fixture.policy.Validators...)
+	var operators []monitorOperatorPolicy
+	for index, role := range []string{"operator-a", "operator-b", "operator-c", "operator-d", "operator-e"} {
+		policy := monitorOperatorTestPolicy()
+		policy.Role = role
+		policy.ExpectedSource.OperatorId = uint64(index + 1)
+		policy.DatabaseFile = filepath.Join(fixture.directory, role+".url")
+		operators = append(operators, policy)
+	}
+	for _, candidate := range []struct {
+		validators int
+		operators  int
+		admitted   bool
+	}{
+		{validators: 0, operators: 1, admitted: true}, {validators: 0, operators: 4, admitted: true},
+		{validators: 8, operators: 4, admitted: true}, {validators: 8, operators: 0, admitted: true},
+		{validators: 0, operators: 0, admitted: false}, {validators: 0, operators: 5, admitted: false},
+		{validators: 8, operators: 5, admitted: false}, {validators: 9, operators: 1, admitted: false},
+	} {
+		fixture.policy.Validators = append([]monitorValidatorPolicy(nil), validators[:min(candidate.validators, len(validators))]...)
+		if candidate.validators > len(validators) {
+			fixture.policy.Validators = append(fixture.policy.Validators, validators[0])
+		}
+		fixture.policy.Operators = append([]monitorOperatorPolicy(nil), operators[:candidate.operators]...)
+		fixture.writePolicy(t)
+		actual, err := loadMonitorServices(t.Context(), fixture.policyPath, monitorTestExpectation(), fixture.checkpointPath, fixture.metricsPath)
+		if candidate.admitted && (err != nil || actual == nil || len(actual.Validators) != candidate.validators || len(actual.Operators) != candidate.operators) {
+			t.Fatal("bounded operator/validator census refused", candidate, err)
+		}
+		if !candidate.admitted && (actual != nil || !errors.Is(err, errMonitorServicesCensus)) {
+			t.Fatal("unbounded or empty role census passed admission", candidate, err)
+		}
+	}
+}

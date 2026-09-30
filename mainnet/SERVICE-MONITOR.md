@@ -9,7 +9,9 @@ reads. A blocked role read or ordinary publication error cannot stop its peers.
 The observer never opens an intent store, acquires a signing owner, performs a
 repair, or treats producer reports as independent on-chain acceptance.
 
-The strict policy is at most 16 KiB and contains one through eight roles. Supply
+The strict policy is at most 16 KiB. Validator-only policies contain one through
+eight roles. The optional [operator journal extension](OPERATOR-MONITOR.md)
+allows at most eight validators and four operators, with at least one total role. Supply
 the expected source from the approved deployment configuration, independently
 of the candidate file. All six identity fields must match exactly. The chain
 id and genesis must also match the command's explicit chain expectation.

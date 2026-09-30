@@ -21,6 +21,9 @@ const monitorServicesSchema = "urnetwork-mainnet-monitor-services-v1"
 const maxMonitorServicesBytes = 16 * 1024
 const maxMonitorValidatorRoles = 8
 
+// Callers distinguish an exhausted role census from unrelated source or wire faults.
+var errMonitorServicesCensus = errors.New("service policy requires at least one role, at most eight validators and at most four operators")
+
 // Roles are fixed by the local expected census, with no candidate-supplied
 // label values. Each role has independent source, checkpoint and metric owners.
 type monitorServicesPolicy struct {
@@ -60,8 +63,11 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return nil, errors.New("service policy contains trailing JSON")
 	}
-	if policy.Schema != monitorServicesSchema || len(policy.Validators)+len(policy.Operators) == 0 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators {
-		return nil, errors.New("service policy requires bounded explicit validator or operator roles")
+	if policy.Schema != monitorServicesSchema {
+		return nil, errors.New("service policy schema is unknown")
+	}
+	if len(policy.Validators)+len(policy.Operators) == 0 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators {
+		return nil, errMonitorServicesCensus
 	}
 	paths := map[string]bool{}
 	addPath := func(path string) error {
