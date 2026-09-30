@@ -19,6 +19,9 @@ type bootstrapSuccessorCanonicalChain struct {
 	approval            bootstrapSuccessorCanonicalApproval
 	runtimeProfiles     []rootReceiptProfile
 	runtimeRevisionHash string
+	currentRevisionHash string
+	currentPolicy       *bootstrapSuccessorSafeCurrentCapability
+	currentProof        *safeCurrentStorageObservation
 	provenance          bootstrapSuccessorSafeProvenanceAuthenticator
 	plans               []evmCreatePlan
 	records             []evmActionRecord
@@ -41,8 +44,17 @@ func newBootstrapSuccessorCanonicalChain(ctx context.Context, owner *bootstrapSu
 // Only an explicitly supplied canonical-history capability can admit writes.
 // The public constructor deliberately has no production provenance implementation.
 func newBootstrapSuccessorCanonicalChainWithProvenance(ctx context.Context, owner *bootstrapSuccessorExecutionStore, approval bootstrapSuccessorCanonicalApproval, provenance bootstrapSuccessorSafeProvenanceAuthenticator, revisions ...bootstrapSuccessorRuntimeApproval) (_ *bootstrapSuccessorCanonicalChain, resultErr error) {
+	return newBootstrapSuccessorCanonicalChainWithAuthorities(ctx, owner, approval, provenance, 0, nil, revisions...)
+}
+
+// The public constructor installs no current-policy route. A separately
+// qualified release may explicitly select the concrete native capability.
+func newBootstrapSuccessorCanonicalChainWithAuthorities(ctx context.Context, owner *bootstrapSuccessorExecutionStore, approval bootstrapSuccessorCanonicalApproval, provenance bootstrapSuccessorSafeProvenanceAuthenticator, route bootstrapSuccessorSafeCurrentRoute, current []bootstrapSuccessorSafeCurrentRevisionApproval, revisions ...bootstrapSuccessorRuntimeApproval) (_ *bootstrapSuccessorCanonicalChain, resultErr error) {
 	if ctx == nil || owner == nil || owner.closed {
 		return nil, errors.New("successor canonical adapter requires retained execution ownership")
+	}
+	if route != 0 && route != bootstrapSuccessorSafeCurrentNativeRoute || provenance != nil && (route != 0 || len(current) != 0 || owner.safeCurrentHistory.hash() != "") {
+		return nil, errors.New("successor canonical adapter cannot mix history and current-policy capabilities")
 	}
 	plan := owner.planCopy()
 	preparationPlan := plan.Review.Preparation.Approval.Plan
@@ -97,9 +109,18 @@ func newBootstrapSuccessorCanonicalChainWithProvenance(ctx context.Context, owne
 			return nil, err
 		}
 	}
+	for _, revision := range current {
+		if err := owner.retainSafeCurrentRevision(ctx, revision); err != nil {
+			return nil, err
+		}
+	}
 	self.runtimeProfiles, self.runtimeRevisionHash = owner.runtimeProfiles(), owner.runtimeHistory.hash()
+	self.currentRevisionHash = owner.safeCurrentHistory.hash()
 	self.chain, err = newEvmOwnedChain(plans[0].Config)
 	if err != nil {
+		return nil, err
+	}
+	if err := self.selectCurrentPolicy(ctx, route); err != nil {
 		return nil, err
 	}
 	return self, self.checkpoint(ctx, plan)
@@ -134,6 +155,9 @@ func (self *bootstrapSuccessorCanonicalChain) checkpoint(ctx context.Context, pl
 	}
 	if self.runtimeRevisionHash != self.owner.runtimeHistory.hash() {
 		return errors.New("successor canonical adapter runtime authority changed during ownership")
+	}
+	if self.currentRevisionHash != self.owner.safeCurrentHistory.hash() {
+		return errors.New("successor canonical adapter current-policy authority changed during ownership")
 	}
 	raw, err := self.owner.local.read(bootstrapSuccessorCanonicalFile)
 	expected, encodeErr := json.Marshal(self.approval)
@@ -179,9 +203,11 @@ func (self *bootstrapSuccessorCanonicalChain) authenticate(ctx context.Context, 
 // admission after that reservation. Uncertain HTTP replies never cause retries.
 func (self *bootstrapSuccessorCanonicalChain) submit(ctx context.Context, plan bootstrapSuccessorExecutionPlan, signed []byte) error {
 	if self != nil && self.owner != nil && (self.owner.safeCurrentHistory.hash() != "" || self.owner.safeCurrentHistory.pendingHash != "") {
-		return errBootstrapSuccessorSafeCurrentCapabilityUnavailable
+		if err := self.currentPolicyReady(ctx, plan, self.owner.safeCurrentHistory.hash()); err != nil {
+			return err
+		}
 	}
-	if self == nil || self.provenance == nil {
+	if self == nil || self.provenance == nil && self.currentPolicy == nil {
 		return errBootstrapSuccessorSafeProvenanceUnavailable
 	}
 	if err := self.checkpoint(ctx, plan); err != nil {
@@ -189,6 +215,7 @@ func (self *bootstrapSuccessorCanonicalChain) submit(ctx context.Context, plan b
 	}
 	if !self.authenticated || !self.admitted || self.owner.last.Phase != "attempt-reserved" || self.admittedSequence != self.owner.last.Sequence ||
 		self.owner.last.CanonicalAuthorityHash != rootObjectHash(self.approval) || self.owner.last.RuntimeRevisionHash != self.runtimeRevisionHash ||
+		self.owner.last.SafeCurrentRevisionHash != self.currentRevisionHash || self.owner.safeCurrentHistory.pendingHash != "" ||
 		self.owner.runtimeHistory.pendingHash != "" || self.submitted && self.submittedSequence == self.owner.last.Sequence {
 		return errors.New("successor canonical write lacks a newly counted admitted authority")
 	}

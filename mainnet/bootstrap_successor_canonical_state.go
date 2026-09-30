@@ -244,11 +244,14 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 	var result bootstrapSuccessorExecutionObservation
 	if self != nil {
 		self.admitted = false
+		self.currentProof = nil
 	}
 	if self != nil && self.owner != nil && (self.owner.safeCurrentHistory.hash() != "" || self.owner.safeCurrentHistory.pendingHash != "") {
-		return result, errBootstrapSuccessorSafeCurrentCapabilityUnavailable
+		if err := self.currentPolicyReady(ctx, plan, self.owner.safeCurrentHistory.hash()); err != nil {
+			return result, err
+		}
 	}
-	if self == nil || self.provenance == nil {
+	if self == nil || self.provenance == nil && self.currentPolicy == nil {
 		return result, errBootstrapSuccessorSafeProvenanceUnavailable
 	}
 	if err := self.checkpoint(ctx, plan); err != nil {
@@ -295,7 +298,7 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 	// History authentication can be expensive. It binds the pinned finalized
 	// snapshot before every pending observation and the final canonical,
 	// runtime and window checks, so changes during proof cannot reuse them.
-	if err := self.authenticateProvenance(ctx, plan, head); err != nil {
+	if err := self.authenticateSafeAuthority(ctx, plan, head); err != nil {
 		return result, err
 	}
 	// Scoped pending state cannot enumerate off-node signatures or other
@@ -349,6 +352,9 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 		return result, errors.New("successor canonical runtime changed at the pinned finalized hash")
 	}
 	result.NativeNumber, result.NativeHash = latest.FinalizedNumber, common.HexToHash(latest.FinalizedHash)
+	if err := self.readmitCurrentPolicy(ctx, plan, safeHash, &result); err != nil {
+		return result, err
+	}
 	if err := plan.admit(result); err != nil {
 		return result, err
 	}

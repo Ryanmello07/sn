@@ -58,6 +58,10 @@ type bootstrapSuccessorExecutionObservation struct {
 	CoordinatorEvidence  common.Address
 	EvidenceRuntimeHash  string
 	EvidenceGetterHash   string
+	// NativeNumber/Hash describe the latest admission window. These separate
+	// observations retain the older exact proof root and its pending binding.
+	SafeCurrentProof   *safeCurrentStorageObservation
+	SafeCurrentPending *safeCurrentPendingObservation
 }
 
 // Inclusion contains the full Safe log witness and independently read exact
@@ -335,7 +339,13 @@ func advanceBootstrapSuccessorExecution(ctx context.Context, self *bootstrapSucc
 		return result, errors.New("successor execution cannot send with an incomplete current-policy revision")
 	}
 	if self.safeCurrentHistory.hash() != "" {
-		return result, errBootstrapSuccessorSafeCurrentCapabilityUnavailable
+		current, ok := chain.(bootstrapSuccessorSafeCurrentExecutionChain)
+		if !ok {
+			return result, errBootstrapSuccessorSafeCurrentCapabilityUnavailable
+		}
+		if err := current.currentPolicyReady(ctx, self.planCopy(), self.safeCurrentHistory.hash()); err != nil {
+			return result, err
+		}
 	}
 	observation, err := chain.observe(ctx, self.planCopy())
 	if err != nil {

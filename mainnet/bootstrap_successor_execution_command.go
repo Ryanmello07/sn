@@ -101,6 +101,12 @@ func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, s
 // An explicit internal capability is a test seam, never a caller-supplied flag,
 // report or global mutable hook. Only local fixtures currently supply one.
 func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, args []string, stdout, stderr io.Writer, provenance bootstrapSuccessorSafeProvenanceAuthenticator) (resultCode int) {
+	return runBootstrapSuccessorExecutionCommandWithAuthorities(ctx, args, stdout, stderr, provenance, 0)
+}
+
+// Internal route installation is deliberately absent from public construction.
+// Signed policy import is available for read-only custody and reconciliation.
+func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, args []string, stdout, stderr io.Writer, provenance bootstrapSuccessorSafeProvenanceAuthenticator, route bootstrapSuccessorSafeCurrentRoute) (resultCode int) {
 	if len(args) == 0 || args[0] != "contract-successor-execution-preview" && args[0] != "contract-successor-execution-claim" && args[0] != "contract-successor-execution-resume" {
 		fmt.Fprintln(stderr, "unknown successor execution custody command")
 		return 2
@@ -123,17 +129,20 @@ func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, ar
 	canonicalHash := flags.String("canonical-approval-sha256", "", "exact canonical authorization file digest")
 	runtimePath := flags.String("runtime-revision", "", "one additive independently signed runtime revision for exact online resume")
 	runtimeHash := flags.String("runtime-revision-sha256", "", "exact additive runtime revision file digest")
+	currentPath := flags.String("safe-current-revision", "", "one independently signed current-policy custody revision; does not enable public submission")
+	currentHash := flags.String("safe-current-revision-sha256", "", "exact signed current-policy revision file digest")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *configPath == "" || *directory == "" || !planSha256(*accepted) ||
 		*requestPath == "" || *safeRequestPath == "" || *executionRequestPath == "" ||
 		preview && (*approvalPath != "" || *approvalHash != "" || *executionHash != "") ||
 		!preview && (*approvalPath == "" || !planSha256(*approvalHash) || !planSha256(*executionHash)) ||
 		(*online || *submit) && args[0] != "contract-successor-execution-resume" || *submit && !*online ||
 		*online && (*canonicalPath == "" || !planSha256(*canonicalHash)) || !*online && (*canonicalPath != "" || *canonicalHash != "") ||
-		(*runtimePath != "" || *runtimeHash != "") && (!*online || *runtimePath == "" || !planSha256(*runtimeHash)) {
-		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume also require --approval, --approval-sha256 and --accept-execution-hash; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; optional --runtime-revision and --runtime-revision-sha256 require --online; --submit requires --online")
+		(*runtimePath != "" || *runtimeHash != "") && (!*online || *runtimePath == "" || !planSha256(*runtimeHash)) ||
+		(*currentPath != "" || *currentHash != "") && (!*online || *currentPath == "" || !planSha256(*currentHash)) {
+		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume also require --approval, --approval-sha256 and --accept-execution-hash; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; optional runtime/current-policy revision files and their SHA-256 pins require --online; --submit requires --online and an installed capability")
 		return 2
 	}
-	if *submit && provenance == nil {
+	if *submit && provenance == nil && route != bootstrapSuccessorSafeCurrentNativeRoute {
 		fmt.Fprintln(stderr, errBootstrapSuccessorSafeProvenanceUnavailable)
 		return 2
 	}
@@ -143,6 +152,9 @@ func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, ar
 	}
 	if *runtimePath != "" {
 		additionalPaths = append(additionalPaths, *runtimePath)
+	}
+	if *currentPath != "" {
+		additionalPaths = append(additionalPaths, *currentPath)
 	}
 	plan, profile, retained, err := loadBootstrapSuccessorExecution(ctx, *configPath, *directory, *accepted, *requestPath, *safeRequestPath, *executionRequestPath, *approvalPath, additionalPaths...)
 	if err != nil {
@@ -230,7 +242,22 @@ func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, ar
 			}
 			revisions = append(revisions, revision)
 		}
-		canonical, err = newBootstrapSuccessorCanonicalChainWithProvenance(ctx, owner, canonicalApproval, provenance, revisions...)
+		var current []bootstrapSuccessorSafeCurrentRevisionApproval
+		if *currentPath != "" {
+			raw, hash, err := readBootstrapRootFile(ctx, *currentPath, maximumBootstrapSuccessorSafeCurrentRevisionBytes)
+			var revision bootstrapSuccessorSafeCurrentRevisionApproval
+			if err == nil && hash == *currentHash {
+				err = decodePlanJson(raw, &revision)
+			} else {
+				err = errors.Join(errors.New("successor current-policy revision file pin differs"), err)
+			}
+			if err != nil {
+				fmt.Fprintln(stderr, "successor independent current-policy revision:", err)
+				return 2
+			}
+			current = append(current, revision)
+		}
+		canonical, err = newBootstrapSuccessorCanonicalChainWithAuthorities(ctx, owner, canonicalApproval, provenance, route, current, revisions...)
 		if err == nil {
 			result, err = advanceBootstrapSuccessorExecution(ctx, owner, canonical, *submit)
 		}

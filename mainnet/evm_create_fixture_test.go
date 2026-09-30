@@ -181,6 +181,7 @@ type evmCreateFixture struct {
 	gasFailure       bool
 	callIntrinsicGas bool
 	override         func(string, []any, any) any
+	nativeProof      func([]any) any
 	history          *evmCreateHistory
 }
 
@@ -503,6 +504,12 @@ func (self *evmCreateFixture) serve(writer http.ResponseWriter, request *http.Re
 		result = self.config.Plan.Runtime.RuntimeVersion
 	case "state_getMetadata":
 		result = "0x" + hex.EncodeToString(self.metadata)
+	case "state_getReadProof":
+		if self.nativeProof == nil {
+			http.Error(writer, "native proof fixture is absent", 400)
+			return
+		}
+		result = self.nativeProof(call.Params)
 	case "state_getStorageHash":
 		digest := blake2b.Sum256(self.code)
 		result = "0x" + hex.EncodeToString(digest[:])
