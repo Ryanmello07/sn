@@ -2,7 +2,7 @@
 
 `monitor --services` can now observe the existing operator PostgreSQL journals
 alongside its independent chain and validator workers. This is a production
-read path under MG-07/PH-28, with qualification pending. It does not load `st.yml`,
+read path under MG-07/PH-28, with [offline source qualification](evidence/operator-monitor-qualification-20260930.md). It does not load `st.yml`,
 a signing key, a nonce owner, or an application database pool. No write, repair,
 submission, or service activation capability is installed.
 
@@ -136,6 +136,8 @@ provider/client-key proof domains, full settlement/liabilities, pending native
 work and actual deadline reconciliation remain launch gates. Root validator
 progress and same-finalized-block independent RPC comparison remain separate.
 
-Offline qualification will use real disposable PostgreSQL and the production
-reader/consumer with synthetic reduced-column tables. It does not rehearse the
-full production migration chain or establish any live database/chain identity.
+Offline qualification passed 62 Go root executions in normal/race modes, four
+alert fixtures, and nine normal plus five selected race causal controls. It used
+real disposable PostgreSQL and the production reader/consumer with synthetic
+reduced-column tables. It does not rehearse the full production migration chain
+or establish any live database/chain identity.

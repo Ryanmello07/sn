@@ -1616,8 +1616,10 @@ supplies identity/finality observations and an optional read-only
 [`--services` consumer](SERVICE-MONITOR.md) for independently configured
 validator roles.
 
-The [operator journal monitor increment](OPERATOR-MONITOR.md) now has an
-isolated production reader/consumer candidate, pending independent qualification.
+The [operator journal monitor increment](OPERATOR-MONITOR.md) has an
+[offline-qualified production reader/consumer](evidence/operator-monitor-qualification-20260930.md):
+62 Go root executions passed normal/race, four alert fixtures passed, and nine
+normal plus five selected race controls were causal.
 It observes actual read-only PostgreSQL transaction/attempt and settlement-mirror
 projections through the existing monitor owners, retaining domain incidents
 across outage/restart. Fresh DB access and empty pending counts do not establish
