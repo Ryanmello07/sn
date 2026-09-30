@@ -30,6 +30,7 @@ type validatorActivationReadiness struct {
 	Native          *validatorActivationNativeReadiness     `json:"native_prerequisites,omitempty"`
 	Production      *validatorActivationProductionReadiness `json:"production_observation,omitempty"`
 	Stake           *validatorActivationStakeReadiness      `json:"stake_capacity,omitempty"`
+	Health          *validatorActivationHealthReadiness     `json:"proof_health,omitempty"`
 }
 
 func (self validatorActivationReadiness) validate(plan validatorActivationPlan) error {
@@ -56,7 +57,12 @@ func (self validatorActivationReadiness) validate(plan validatorActivationPlan) 
 		}
 	}
 	if self.Stake != nil {
-		return self.Stake.validate(self)
+		if err := self.Stake.validate(self); err != nil {
+			return err
+		}
+	}
+	if self.Health != nil {
+		return self.Health.validate(plan, self)
 	}
 	return nil
 }
@@ -122,16 +128,17 @@ func observeValidatorActivationWithProduction(ctx context.Context, approval vali
 }
 
 type validatorActivationResult struct {
-	Schema             string                          `json:"schema"`
-	PlanHash           string                          `json:"bootstrap_plan_hash"`
-	Status             string                          `json:"status"`
-	Operations         uint32                          `json:"operations"`
-	Units              [2]validatorActivationUnitState `json:"units"`
-	Readiness          *validatorActivationReadiness   `json:"readiness,omitempty"`
-	ActivationReady    bool                            `json:"activation_ready"`
-	RootServiceActive  bool                            `json:"root_service_active"`
-	ChainSuccessProven bool                            `json:"chain_success_proven"`
-	Disposition        string                          `json:"operator_disposition"`
+	Schema             string                                `json:"schema"`
+	PlanHash           string                                `json:"bootstrap_plan_hash"`
+	Status             string                                `json:"status"`
+	Operations         uint32                                `json:"operations"`
+	Units              [2]validatorActivationUnitState       `json:"units"`
+	Readiness          *validatorActivationReadiness         `json:"readiness,omitempty"`
+	ProofCheckpoints   []*validatorActivationProofCheckpoint `json:"completed_proof_checkpoints,omitempty"`
+	ActivationReady    bool                                  `json:"activation_ready"`
+	RootServiceActive  bool                                  `json:"root_service_active"`
+	ChainSuccessProven bool                                  `json:"chain_success_proven"`
+	Disposition        string                                `json:"operator_disposition"`
 }
 
 func (self validatorActivationRecord) result() validatorActivationResult {
@@ -142,13 +149,13 @@ func (self validatorActivationRecord) result() validatorActivationResult {
 		}
 	}
 	return validatorActivationResult{Schema: validatorActivationSchema, PlanHash: self.Approval.Plan.PlanHash, Status: self.Status, Operations: self.Operations,
-		Units: self.Units, Readiness: self.Readiness, Disposition: disposition}
+		Units: self.Units, Readiness: self.Readiness, ProofCheckpoints: self.ProofCheckpoints, Disposition: disposition}
 }
 
 // Installation, admission and start are explicit distinct operations. Every
 // effect follows synced intent; all manager/RPC operations join before return.
 func advanceValidatorActivation(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, authority validatorActivationAuthority, operation string, now func() time.Time) (validatorActivationResult, error) {
-	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil || operation != "install" && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" && operation != "start" && operation != "resume" {
+	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil || operation != "install" && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" && operation != "admit-health" && operation != "start" && operation != "resume" {
 		return validatorActivationResult{}, errors.New("validator activation owner or operation is unavailable")
 	}
 	record, err := store.load(ctx)
@@ -166,7 +173,7 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 				record.Status = "source-refused"
 				return record.result(), errors.New("validator activation requires both installed units before admission or recovery")
 			}
-			if !unit.StartAt.IsZero() && unit.Generation == nil && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" {
+			if !unit.StartAt.IsZero() && unit.Generation == nil && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" && operation != "admit-health" {
 				record.Status = "partial"
 				return record.result(), errors.New("validator activation consumed start needs manual reconciliation; no operation was consumed")
 			}
@@ -239,9 +246,11 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 	if err := host.admit(ctx, plan, record); err != nil {
 		return finish("source-refused", err)
 	}
-	if operation == "admit" || operation == "admit-evidence" || operation == "admit-stake" {
+	if operation == "admit" || operation == "admit-evidence" || operation == "admit-stake" || operation == "admit-health" {
 		var evidence *validatorActivationReadiness
-		if operation == "admit-stake" {
+		if operation == "admit-health" {
+			evidence, err = observeValidatorActivationHealth(ctx, store, host, &record, now)
+		} else if operation == "admit-stake" {
 			_, _, evidence, err = observeValidatorActivationWithStake(ctx, store.approval, now)
 		} else {
 			_, _, evidence, err = observeValidatorActivationWithProduction(ctx, store.approval, now, operation == "admit-evidence")
@@ -260,6 +269,8 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 			status = "observed-operator-and-contract-evidence"
 		} else if operation == "admit-stake" {
 			status = "admitted-stake-capacity"
+		} else if operation == "admit-health" {
+			status = "observed-approved-prefix-and-worker-health"
 		}
 		result, err := finish(status, nil)
 		if err != nil {
