@@ -34,10 +34,19 @@ type bootstrapChainFixture struct {
 // The test builds a common synthetic runtime/domain from actual census readers,
 // then independently reapproves the exact child scopes and private state paths.
 func newBootstrapChainFixture(t *testing.T) *bootstrapChainFixture {
+	return newBootstrapChainFixtureWithCensus(t, nil)
+}
+
+// A selected fixture profile is fixed before any independently signed input or
+// retained journal exists; no test rewrites original custody to add authority.
+func newBootstrapChainFixtureWithCensus(t *testing.T, configure func(*rootRpcFixture, *subnetCensusPolicy)) *bootstrapChainFixture {
 	t.Helper()
 	client, census, policy := newSubnetFixture(t)
 	policy.RuntimeVersion.SpecName, policy.RuntimeVersion.TransactionVersion = "node-subtensor", 1
 	census.version = policy.RuntimeVersion
+	if configure != nil {
+		configure(census, &policy)
+	}
 	root := newBootstrapRootFixture(t)
 	contracts := newEvmCreateFixture(t)
 	network := planNetwork{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId}

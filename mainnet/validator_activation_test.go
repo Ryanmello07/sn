@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/validator"
 	"golang.org/x/sys/unix"
@@ -52,8 +54,29 @@ func (self *validatorActivationFixture) authorizeActivation(ctx context.Context,
 }
 
 func newValidatorActivationFixture(t *testing.T) *validatorActivationFixture {
+	return newValidatorActivationFixtureWithNativeMetadata(t, nil)
+}
+
+// Metadata changes precede independent approval and custody, so codec denial
+// tests exercise an approved artifact without mutating a retained plan.
+func newValidatorActivationFixtureWithNativeMetadata(t *testing.T, mutate func(*types.Metadata)) *validatorActivationFixture {
+	return newValidatorActivationFixtureWithNativeScope(t, mutate, nil)
+}
+
+// All signed native restrictions are fixed before original bootstrap claim.
+func newValidatorActivationFixtureWithNativeScope(t *testing.T, mutate func(*types.Metadata), configureApproval func(*bootstrapChainValidatorFixture)) *validatorActivationFixture {
 	t.Helper()
-	chain := newBootstrapChainReadinessFixture(t)
+	chain := newBootstrapChainReadinessFixtureWithCensus(t, func(census *rootRpcFixture, policy *subnetCensusPolicy) {
+		metadata, encoded, hash := economicEmissionTestMetadata(t, mutate)
+		census.metadata, census.metadataHex, census.policy.RuntimeMetadataHash = metadata, encoded, hash
+		policy.RuntimeMetadataHash = hash
+		arg := []byte{25, 0}
+		census.set(t, "MechanismCountCurrent", []byte{1}, arg)
+		census.set(t, "SubnetEpochIndex", binary.LittleEndian.AppendUint64(nil, 20), arg)
+		census.set(t, "PendingServerEmission", make([]byte, 8), arg)
+		census.set(t, "LastUpdate", subnetTestVector(make([]byte, 6*8), 8), arg)
+		census.set(t, "RecycleOrBurn", []byte{1}, arg)
+	}, configureApproval)
 	directory := filepath.Dir(chain.path)
 	hostRoot := filepath.Dir(directory)
 	if err := os.Chmod(hostRoot, 0755); err != nil {

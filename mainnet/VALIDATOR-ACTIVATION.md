@@ -6,11 +6,18 @@ bound to the original accepted bootstrap v3 plan and both independently signed
 schema-3 UR configurations. Its [scoped independent qualification](evidence/validator-activation-qualification-20260930.md)
 is sealed; no unit has been installed or started on a deployment host.
 
+The native prerequisite reader now makes additional executable progress toward
+current authority. `admit` and every injected fresh-start path authenticate the
+original producer runtime at the current census and at the independently signed
+activation checkpoint. The new increment is awaiting independent qualification;
+the earlier receipt above covers installation/process ownership only.
+
 **Public fresh starts remain unavailable.** The public command constructs no
 `validatorActivationAuthority`. Signed process approval and an
 `observed-prerequisites` readiness result do not discharge the readiness report's
-activation blockers. A future production adapter must independently admit the
-exact epoch/checkpoint authority, operator health and proof/client-key domains,
+activation blockers. A future production adapter must consume the new exact
+native epoch/checkpoint observation and independently admit operator health and
+proof/client-key domains,
 deployed contracts, native signer/global custody exclusion and majority stake.
 There is no flag, imported readiness file or environment switch that replaces
 that adapter. The concrete systemd start transport and its durable owner are
@@ -61,8 +68,47 @@ original custody. Both UR generations, activity, permits and signed native
 windows must match. The bounded journal retains each role, original custody
 seals, exact finalized block and full-readiness digest. These are owned-RPC
 assertions, not independently verified finality/storage proofs. All activation
-blockers remain visible. Observation age begins before the read, so a slow read
+blockers remain explicit. Observation age begins before the read, so a slow read
 cannot label old facts as newly fresh.
+
+The new `native_prerequisites` projection checks the signed native epoch window,
+the complete header/runtime at the signed activation block/hash, zero
+`PendingServerEmission` and the original first native epoch at that checkpoint,
+the same subnet generation/owner, one mechanism and explicit Recycle at both
+boundaries. Current `LastUpdate` must cover the complete census; each role uses
+the later of registration and last update under the originally signed age bound.
+Current blocks may accumulate pending emissions and advance within the signed
+epoch window. No post-start economic outcome is required to obtain these facts.
+
+Both canonical anchors are checked again after all storage. Reads share one
+finite signed route budget of 60–900 seconds, with existing transient retries
+at the identical key/hash. The retained projection seals the complete raw-read
+digest without duplicating full census vectors in both unit records.
+Only the native epoch and signed checkpoint blockers are discharged in that
+projection. `admitted-process-only`, `activation_ready: false` and the remaining
+operator/contract/custody/majority blockers keep their meaning.
+
+Read-only admission now also checks sample age and clock continuity before and
+after its durable publication.
+Its read permission may outlive the signed start window, but an expired sample
+cannot be retained as newly admitted. Older records without this optional native
+projection remain readable for their original consumed-start recovery; a fresh
+start always makes a new complete observation.
+
+This initial-bootstrap path accepts only the original schema-3 configs, whose
+inspection explicitly excludes runtime-approval and production-authority
+histories. Their single exact runtime tuple must therefore cover both blocks.
+A later runtime upgrade requires separately approved producer continuity and a
+bootstrap/activation rollover that preserves existing liabilities; changing
+the original config or interpreting a newer spec version as compatible is not
+authorized. This reader adds no compiled spec-version allowlist.
+
+There is still no qualified production signer-custody handoff. The current
+validator process loads a local hotkey seed and checks its identity; that is not
+global exclusion of another signer. Its operator authentication belongs to the
+running producer's credential and worker lifecycle. This command does not open
+those credentials or treat config declarations, local files, separate public-key
+bytes, or this native observation as substitutes for that missing authority.
 
 ## Concrete deployment files
 

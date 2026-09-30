@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -19,13 +20,14 @@ type validatorActivationAuthority interface {
 // Only a bounded projection is retained; EvidenceHash commits the full current
 // owned-RPC read. This is an assertion, not independent finality/storage proof.
 type validatorActivationReadiness struct {
-	ObservedAt      time.Time                     `json:"observed_at"`
-	PlanHash        string                        `json:"bootstrap_plan_hash"`
-	EvidenceHash    string                        `json:"readiness_hash"`
-	FinalizedNumber uint64                        `json:"finalized_number"`
-	FinalizedHash   string                        `json:"finalized_hash"`
-	Local           bootstrapChainReadinessState  `json:"original_custody"`
-	Roles           []bootstrapChainRoleReadiness `json:"ur_validators"`
+	ObservedAt      time.Time                           `json:"observed_at"`
+	PlanHash        string                              `json:"bootstrap_plan_hash"`
+	EvidenceHash    string                              `json:"readiness_hash"`
+	FinalizedNumber uint64                              `json:"finalized_number"`
+	FinalizedHash   string                              `json:"finalized_hash"`
+	Local           bootstrapChainReadinessState        `json:"original_custody"`
+	Roles           []bootstrapChainRoleReadiness       `json:"ur_validators"`
+	Native          *validatorActivationNativeReadiness `json:"native_prerequisites,omitempty"`
 }
 
 func (self validatorActivationReadiness) validate(plan validatorActivationPlan) error {
@@ -41,6 +43,9 @@ func (self validatorActivationReadiness) validate(plan validatorActivationPlan) 
 			return errors.New("validator activation readiness role prerequisites differ")
 		}
 	}
+	if self.Native != nil {
+		return self.Native.validate(self)
+	}
 	return nil
 }
 
@@ -48,6 +53,8 @@ func (self validatorActivationReadiness) validate(plan validatorActivationPlan) 
 // can authorize a start. The independently signed preparation is reloaded too.
 func observeValidatorActivation(ctx context.Context, approval validatorActivationApproval, now func() time.Time) (bootstrapChainPreparation, bootstrapChainReadiness, *validatorActivationReadiness, error) {
 	startedAt := now()
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(approval.Plan.Route.ReadRetrySeconds)*time.Second)
+	defer cancel()
 	preparation, err := loadValidatorActivationPreparation(ctx, approval)
 	if err != nil {
 		return preparation, bootstrapChainReadiness{}, nil, err
@@ -65,7 +72,21 @@ func observeValidatorActivation(ctx context.Context, approval validatorActivatio
 	readiness.ContentHash = rootObjectHash(readiness)
 	identity := readiness.Census.Observation.Identity
 	result := &validatorActivationReadiness{ObservedAt: startedAt, PlanHash: readiness.PlanHash, EvidenceHash: readiness.ContentHash,
-		FinalizedNumber: identity.FinalizedNumber, FinalizedHash: identity.FinalizedHash, Local: *readiness.LocalPreparation, Roles: readiness.UrValidators}
+		FinalizedNumber: identity.FinalizedNumber, FinalizedHash: identity.FinalizedHash, Local: *readiness.LocalPreparation, Roles: slices.Clone(readiness.UrValidators)}
+	if err := result.validate(approval.Plan); err != nil {
+		return preparation, readiness, nil, err
+	}
+	result.Native, err = client.observeValidatorActivationNative(ctx, preparation, readiness)
+	if err != nil {
+		return preparation, readiness, nil, err
+	}
+	for i := range result.Roles {
+		role := &result.Roles[i]
+		role.ApprovedCheckpointHash, role.ObservedCheckpointHash = result.Native.ActivationHash, result.Native.ActivationHash
+		role.ActivationBlockers = slices.DeleteFunc(slices.Clone(role.ActivationBlockers), func(blocker string) bool {
+			return blocker == "NATIVE_EPOCH_APPROVAL_WINDOW_UNVERIFIED" || blocker == "SIGNED_ACTIVATION_CHECKPOINT_UNVERIFIED"
+		})
+	}
 	return preparation, readiness, result, errors.Join(result.validate(approval.Plan), ctx.Err())
 }
 
@@ -192,8 +213,20 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 		if err != nil {
 			return finish("source-refused", err)
 		}
+		stamp = now()
+		if err := validatorActivationObservationWindow(ctx, plan, record.HighWaterAt, stamp, evidence); err != nil {
+			return finish("source-refused", err)
+		}
+		record.HighWaterAt = stamp
 		record.Readiness = evidence
-		return finish("admitted-process-only", nil)
+		result, err := finish("admitted-process-only", nil)
+		if err != nil {
+			return result, err
+		}
+		if err := validatorActivationObservationWindow(ctx, plan, record.HighWaterAt, now(), evidence); err != nil {
+			return finish("source-refused", err)
+		}
+		return result, nil
 	}
 	for i := range record.Units {
 		unit, profile := &record.Units[i], plan.hostPlan(i)
@@ -277,9 +310,24 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 // Synced intent can be slow. Cancellation, rollback, expiry and read age are
 // rechecked after sync; refusal never refunds a consumed allowance.
 func validatorActivationWindow(ctx context.Context, plan validatorActivationPlan, highWater, now time.Time, evidence *validatorActivationReadiness) error {
-	if now.IsZero() || now.Before(highWater) || now.Before(plan.ValidFrom) || !now.Before(plan.ExpiresAt) ||
-		evidence != nil && (now.Before(evidence.ObservedAt) || now.Sub(evidence.ObservedAt) > time.Duration(plan.MaximumSampleAgeSeconds)*time.Second) || ctx.Err() != nil {
+	if err := validatorActivationObservationWindow(ctx, plan, highWater, now, evidence); err != nil {
+		return err
+	}
+	if now.Before(plan.ValidFrom) || !now.Before(plan.ExpiresAt) {
 		return errors.Join(errors.New("validator activation authority window or current observation expired"), ctx.Err())
+	}
+	return nil
+}
+
+// Read-only admission may outlive the effect window, but never labels an old
+// read as current or moves the retained observation clock backwards.
+func validatorActivationObservationWindow(ctx context.Context, plan validatorActivationPlan, highWater, now time.Time, evidence *validatorActivationReadiness) error {
+	if ctx == nil {
+		return errors.New("validator activation observation context is absent")
+	}
+	if now.IsZero() || now.Before(highWater) ||
+		evidence != nil && (now.Before(evidence.ObservedAt) || now.Sub(evidence.ObservedAt) > time.Duration(plan.MaximumSampleAgeSeconds)*time.Second) || ctx.Err() != nil {
+		return errors.Join(errors.New("validator activation clock or current observation expired"), ctx.Err())
 	}
 	return nil
 }
