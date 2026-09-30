@@ -27,3 +27,7 @@ Further `chain_getBlockHash(0)` read-only probes at approximately **22:20**,
 150-byte response body and SHA-256 as above. Each used an eight-second client
 limit. These responses add no chain identity or synchronization evidence; the
 EVM method was not repeated in these probes.
+
+At approximately **23:40 UTC**, both `chain_getBlockHash(0)` and `eth_chainId`
+were retried with eight-second client limits. Each returned HTTP 502 with the
+same 150-byte nginx response and SHA-256. Neither method returned chain data.
