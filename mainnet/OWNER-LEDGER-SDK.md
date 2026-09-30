@@ -3,8 +3,9 @@
 This candidate supplies a concrete Linux build of the exact SDK used by
 [OWNER-SIGNING.md](OWNER-SIGNING.md). It does not qualify a physical Ledger,
 firmware, the owner's existing key/path, or either deployed runtime metadata
-artifact. Native adapter behavior must be qualified separately using the frozen
-tests below. Building the extension is not a behavioral test result.
+artifact. The [scoped independent result](evidence/owner-ledger-native-sdk-qualification-20260930.md)
+now covers actual native loading and the synthetic device boundary; building
+the extension alone was not a behavioral test result.
 
 ## Source and artifact identity
 

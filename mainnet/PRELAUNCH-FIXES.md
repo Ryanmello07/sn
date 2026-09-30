@@ -54,9 +54,10 @@ signature scheme, runtime metadata digest, nonce, era and approved action. The
 current sr25519-only owner-trim v1 packet is not a Ledger signing path; retain
 its original liabilities. The [offline Ed25519 owner command](OWNER-SIGNING.md)
 and [independent software qualification](evidence/owner-ledger-signing-qualification-20260930.md)
-are integrated, but no physical device, reviewed native SDK artifact or
-deployed runtime digest has been qualified; a separately approved v2 action
-is still required before a live owner call.
+are integrated. A [pinned Linux native SDK artifact](evidence/owner-ledger-native-sdk-qualification-20260930.md)
+has actual-extension and synthetic-device qualification; the owners' platform,
+physical device and deployed runtime digest remain unqualified. A separately
+approved v2 action is still required before a live owner call.
 The netuid-0 root hotkey uses a **different hardware signer** whose device/API
 is still unspecified. Each operator keeps its own EVM demand-deposit signing
 key in that operator's **secrets vault**, separate from the on-chain settlement
@@ -96,7 +97,7 @@ Both sources are integrated; 76 affected roots pass normal/race and all 292
 miner roots pass plain normal. The composed release still needs custody,
 restart and aggregate fleet-capacity qualification before deployment.
 
-MG-01's [September 30 read-only Snow route checks through 21:25 UTC](evidence/snow-route-observation-20260930-1914.md)
+MG-01's [September 30 read-only Snow route checks through 21:55 UTC](evidence/snow-route-observation-20260930-1914.md)
 returned HTTP 502 for both native genesis and EVM chain ID. They provide no
 new mainnet identity or sync evidence; the route remains a live launch gate.
 
@@ -127,6 +128,15 @@ activity rule. Independent frozen and merged suites pass, including a causal
 pre-mask denominator control. A capacity lower bound is not applied-weight
 influence or live effective majority; public starts and that outcome remain
 open with producer health and signer custody.
+
+The [qualified validator proof-health increment](evidence/validator-proof-health-qualification-20260930.md)
+replays both roles' original pinned operator activation prefixes and retains
+completed proof checkpoints if a later read fails. It reports standard process
+progress separately from proof integrity: missing/stale progress is a warning,
+while wrong ownership, source/generation or contradictory proof bytes refuse.
+The service-UID ownership guard remains intact. Current mutable-prefix and
+per-operator live-worker completeness, global signer custody, applied influence
+and signed launch authority still block public start.
 
 The [MG03/R48 server source composition](evidence/operator-mg03-r48-composition-20260929.md)
 is integrated at server root `05fee56f`. Its parent full merge preserves both

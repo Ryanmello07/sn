@@ -823,7 +823,7 @@ receipts as explicitly retained observations, not fresh chain audits; these
 
 | Identity | Custody/authority |
 | --- | --- |
-| Subnet owner coldkey | Owners report that the existing account is Ledger-derived. They keep the key on their own Ledger with the Polkadot generic app, have no Snow access, and run the [qualified offline owner-side signing handoff](OWNER-SIGNING.md) on their own device. Snow receives only an exact signed reply for verification, retention and submission. Verify the on-chain owner account, Ledger-derived public key, metadata digest, signature scheme and call before a live action; the real SDK build and physical device are still unqualified. |
+| Subnet owner coldkey | Owners report that the existing account is Ledger-derived. They keep the key on their own Ledger with the Polkadot generic app, have no Snow access, and run the [qualified offline owner-side signing handoff](OWNER-SIGNING.md) on their own device. Snow receives only an exact signed reply for verification, retention and submission. A [pinned Linux SDK artifact](evidence/owner-ledger-native-sdk-qualification-20260930.md) has synthetic-device qualification; the owners' actual platform, physical device, on-chain account, metadata digest and live call still need verification. |
 | EVM deployer | Limited bootstrap gas/value; no ongoing governance custody. |
 | Coordinator owner | Actual 2-of-3 Safe with three distinct approved owners. |
 | Guardian | Separate limited operational authority. |
@@ -921,6 +921,14 @@ conservative capacity lower bound under the pinned runtime's threshold,
 normalization, permit and activity rules. It reports capacity and current
 activity separately. It cannot prove applied weight influence or grant public
 start authority; actual majority behavior must be observed after launch.
+
+The [qualified `admit-health` increment](evidence/validator-proof-health-qualification-20260930.md)
+replays each role's original pinned operator activation prefix and records
+protected standard-validator progress as a separate health signal. Completed
+proof checkpoints remain durable across a later read failure. It leaves the
+current mutable proof namespace, live per-operator worker attestation and
+global signer custody as explicit gates; a missing heartbeat is not treated
+as corrupted proof history.
 
 ### Root validator on netuid 0
 
