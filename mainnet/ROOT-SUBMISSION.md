@@ -26,6 +26,10 @@ those devices. Exact native-payload support and durable request-hash
 signing/recovery require separate verification before a root issuing adapter
 exists. Physical confirmation may be required; no unattended behavior is
 assumed. Original-byte reconciliation remains available while these gates stay open.
+Subnet owners do not access Snow: owner signing runs on their own Ledger host,
+and signed public output is handed off for import/reconciliation. This root
+submission port does not require their device to be attached to Snow and does
+not consume their private keys or replace root-hotkey approval with owner approval.
 
 ## Independent action and route approval
 

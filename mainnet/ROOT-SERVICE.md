@@ -54,6 +54,15 @@ operator's demand-deposit wallet is held in that operator's own vault and is
 another distinct role. None of these identities can substitute for the root
 hotkey in the original approved packet. This command loads no native secret.
 
+Subnet owners have no Snow access. Their Ledger signing command must run on
+their own host/device, with the signed public output delivered for Snow-side
+import and reconciliation. No owner Ledger attachment or owner key loader on
+Snow is assumed. The paths below name Snow-side copies of public, independently
+approved artifacts provisioned by its operator; the owners do not need to read
+or write those paths. This root command implements neither the separate owner
+signing command nor an owner signature's conversion into root authority. Its
+native receipt checks remain bound to the original root hotkey and action.
+
 A future root-device adapter must fit `rootActionSigner`: `signOnce` admits
 only the exact original request hash and action, while `recoverSignature` only
 retrieves already issued bytes. Device and surrounding custody controls must
