@@ -14,5 +14,6 @@ used.
 Follow-up read-only probes at approximately **19:41 UTC** and **20:16 UTC**
 repeated both methods against the same VPN route with the same seven-second
 client limit. Each returned HTTP 502. A third follow-up at approximately
-**20:50 UTC** also returned HTTP 502 for both methods. No follow-up supplied chain identity
+**20:50 UTC** also returned HTTP 502 for both methods. A fourth at approximately
+**21:25 UTC** again returned HTTP 502 for both methods. No follow-up supplied chain identity
 or sync evidence.

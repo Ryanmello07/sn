@@ -96,7 +96,7 @@ Both sources are integrated; 76 affected roots pass normal/race and all 292
 miner roots pass plain normal. The composed release still needs custody,
 restart and aggregate fleet-capacity qualification before deployment.
 
-MG-01's [September 30 read-only Snow route checks through 20:50 UTC](evidence/snow-route-observation-20260930-1914.md)
+MG-01's [September 30 read-only Snow route checks through 21:25 UTC](evidence/snow-route-observation-20260930-1914.md)
 returned HTTP 502 for both native genesis and EVM chain ID. They provide no
 new mainnet identity or sync evidence; the route remains a live launch gate.
 
