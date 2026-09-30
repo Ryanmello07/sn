@@ -1613,9 +1613,13 @@ expiring fixed-unit/release/host/generation envelope. It can consume one durable
 start only after the approved prior generation is stopped and its descendant
 cgroup is empty, then retains the acknowledged invocation and exact-source
 progress postcondition. An unacknowledged consumed start is explicitly uncertain
-and cannot retry automatically. Qualification is pending. No unit is installed,
-no live start has run, and active hangs, root/operator services, initial
-activation, independent RPC, delivered alerts and monetary repair remain open.
+and cannot retry automatically. [Offline qualification](evidence/validator-repair-qualification-20260930.md)
+is sealed for exact source `af570cdc`: 52 positive normal/race executions passed;
+twelve normal and seven selected race controls were causal. Admission includes
+the genuine cgroup-v2 filesystem and post-sync authority/sample-age rechecks.
+This increment installed no unit and issued no live start. Active hangs,
+root/operator services, initial activation, independent RPC, delivered alerts
+and monetary repair remain open.
 The host deployment owner must exclude concurrent privileged service or file
 changes; the local journal lock does not provide that exclusion by itself.
 
@@ -1636,7 +1640,9 @@ It observes actual read-only PostgreSQL transaction/attempt and settlement-mirro
 projections through the existing monitor owners, retaining domain incidents
 across outage/restart. Fresh DB access and empty pending counts do not establish
 chain success. Independent RPC, provider/client-key readiness, full liabilities,
-root-validator progress, protocol deadlines and repair authority remain unknown.
+root-validator progress and protocol deadlines remain unknown. The separate
+stopped-validator capability requires its own independently approved envelope;
+monitor observations alone grant no repair authority.
 Deployment, dedicated read-only credentials, query-load qualification and alert
 delivery remain open MG-07/PH-28 gates.
 

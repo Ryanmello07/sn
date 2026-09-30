@@ -6,8 +6,10 @@ authorized local service capability. `resume` can issue one blocking
 It never stops an active validator. Initial installation and activation, active
 hang repair, dynamic Warp workers, operator/root services, protocol signing,
 spending, transaction replacement and public Safe submission remain outside this
-capability. Source qualification is pending; no unit has been installed or
-restarted by this increment. MG-07/PH-28 remains open.
+capability. [Offline source qualification](evidence/validator-repair-qualification-20260930.md)
+is sealed: 52 positive executions passed normal/race; twelve normal and seven
+selected race controls were causal. No unit has been installed or restarted by
+this increment. MG-07/PH-28 remains open.
 
 The existing Warp supervisor polls release/configuration versions, so restarting
 that unit would not preserve a fixed release. This profile instead invokes the
