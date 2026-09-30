@@ -28,7 +28,7 @@ func writeSafeHistoryCapture(ctx context.Context, path string, envelope safeHist
 		return err
 	}
 	checked, err := sealSafeHistoryCapture(envelope.Capture)
-	if err != nil || checked.ContentHash != envelope.ContentHash || !envelope.Capture.ByteCommitmentsVerified || envelope.Capture.Schema != safeHistoryCensusSchema {
+	if err != nil || checked.ContentHash != envelope.ContentHash || !envelope.Capture.ByteCommitmentsVerified {
 		return errors.Join(errors.New("Safe archive output seal differs"), err)
 	}
 	raw, err := json.Marshal(envelope)

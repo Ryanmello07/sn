@@ -605,8 +605,22 @@ under the originally approved historical runtime. Inclusion under an unapproved
 execution/parent runtime remains unresolved and needs separately qualified
 authority migration, not a fresh journal or an inferred compatibility waiver.
 
-The remaining graph is the separately authorized Safe `fixValidatorEvidence` call. The
-last action needs exact Safe digest/signature/nonce ownership and the outer
-relayer's distinct nonce/fee reservation. Both the Safe inner success and the
-canonical coordinator getter must agree; outer EVM status 1 is insufficient.
-Do not treat the existing `Deploy.s.sol` sequence as complete evidence anchoring.
+The remaining graph is the separately authorized Safe `fixValidatorEvidence`
+call. The [successor execution owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) already
+adopts the eight original actions, retains their cumulative spend, and owns the
+exact Safe digest/signatures/nonce plus the outer relayer's distinct nonce and
+fee reservation. It has durable attempt intent, restart recovery, bounded reads,
+canonical inner-success receipt checks and independent coordinator/evidence
+readback. It cannot be added as a ninth send under the original eight-attempt
+approval, and the existing `Deploy.s.sol` sequence does not install the anchor.
+
+Public successor submission remains closed because the production complete Safe
+history authenticator is absent. The configured owner and a successful outer
+receipt cannot replace that capability. The optional
+[native archive trace capture](SAFE-HISTORY-CAPTURE.md#optional-keyed-native-traces-and-parent-runtime-proofs)
+adds actual SDK keyed traces and authenticated parent runtime bytes to the
+existing full block census. Its explicit prefix-deletion, rollback, root and
+inner-EVM completeness fields remain false: these archive APIs cannot prove the
+unchanged full-history policy. A qualified node trace extension or independent
+complete replay is still required. No current-storage-only policy, signature,
+approval budget, original journal or public send authority changes here.

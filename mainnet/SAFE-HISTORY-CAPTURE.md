@@ -59,8 +59,8 @@ Reads use `system_chain`, `eth_chainId`, `chain_getFinalizedHead`,
 `debug_getRawBlock`, and `debug_getRawReceipts`. Raw reads require the exact EVM
 block hash with `requireCanonical=true`. Unsupported/null raw capabilities
 produce exit4; wrong network produces exit3, invalid input exit2, and other
-failures exit1. Exit0 certifies only the described census checks. No tracing,
-transaction-pool, signing, or send method is admitted.
+failures exit1. Exit0 certifies only the described census checks. The default
+mode admits no tracing, transaction-pool, signing, or send method.
 
 Each RPC receives its own 60–900 second retry window under caller cancellation.
 Native bodies are limited to 65,536 extrinsics and 10MiB decoded bytes. EVM
@@ -106,3 +106,79 @@ Wasm semantic replay worker does not implement the required full host surface
 or EVM internal tracing. A narrower fresh-Safe invariant or current-storage
 policy would require a distinct independent policy approval and qualification;
 neither is silently substituted. Public `--submit` remains closed.
+
+## Optional keyed native traces and parent runtime proofs
+
+Adding `--native-storage-trace` to the same command captures the real pinned
+SDK's `state_traceBlock` response for every block in the exact census interval.
+The enriched output uses the separate schema
+`urnetwork-mainnet-safe-archive-census-native-trace-v1`; omitting the flag keeps
+the existing census schema and encoded fields unchanged. Private create-only
+publication, original finality observations, and all false execution/history/
+submission verdicts remain in force. An incomplete trace interval is never
+published as success.
+
+For each selected native hash, the command supplies these exact arguments:
+
+```text
+state_traceBlock(nativeHash, "state", exactStoragePrefixes, "")
+```
+
+The comma-separated unprefixed hexadecimal prefixes cover `:code`,
+`:extrinsic_index`, and this Safe's native `EVM.AccountCodes`,
+`EVM.AccountCodesMetadata`, and `EVM.AccountStorages`. Both hash echoes, all
+filter echoes, explicit vectors, and every returned event's canonical key and
+requested prefix are checked. Spans and the SDK's string-valued event data are
+retained without interpreting a native `Put` as a committed Safe mutation.
+
+The command separately fetches each block's actual parent header and
+`state_getReadProof(["0x3a636f6465"], parentHash)`. The existing raw native trie
+verifier proves the complete nonempty `:code` value against that parent's
+self-authenticated state root. Every parent header, proof blob, derived Blake2
+code hash and byte count is retained. A runtime upgrade in the selected block
+cannot substitute its child-state runtime for the execution parent's bytes.
+This is a point proof of stored bytes; source/build provenance, full parent
+state, node runtime overrides, and execution of those bytes remain unproven.
+
+The trace read is limited to 16 MiB, 65,536 events and 16,384 spans. Each parent
+proof retains the existing 4,096-node, 10 MiB decoded proof and 8 MiB runtime
+limits. Traces and parent proofs share an additional 64 MiB encoded witness
+budget across the interval; large ranges must be captured as smaller explicit
+chunks. Each read gets its own bounded retry window under caller cancellation.
+After all trace/proof work, the command rechecks the original finalized heads,
+each selected native block and the interval endpoint. Healthy head advancement
+does not relabel old proofs. Unsupported/disabled methods, null evidence and SDK
+`traceError` variants produce exit 4; corrupt or oversized evidence produces
+exit 1. The collector never changes node RPC settings.
+
+The source boundary is concrete in pinned SDK
+`cacb4310f20c7cac83eb3ccd8ed5a5ad4212608a`:
+
+- `substrate/client/tracing/src/block/mod.rs` replays `execute_block` at the
+  parent, but `event_values_filter` discards events without a `key`, even for an
+  empty key filter. Native `ClearPrefix` and `StorageRoot` events therefore do
+  not survive this RPC's event filter.
+- `substrate/primitives/state-machine/src/ext.rs` does not trace native
+  transaction start/commit/rollback boundaries. Observed keyed writes cannot
+  reconstruct their final disposition.
+- `substrate/client/tracing/src/lib.rs` exports only string-valued event fields;
+  typed boolean and integer fields are not a complete event-value witness.
+- The API supplies no complete internal/reverted EVM call or delegatecall trace.
+  Its documentation also requires a node permitting this otherwise disabled
+  method, and tracing support for runtime spans. Neither availability nor an
+  empty successful response proves coverage.
+
+Accordingly, `complete_parent_state_verified`,
+`clear_prefix_coverage_verified`, `rollback_coverage_verified`,
+`storage_root_coverage_verified`, `inner_evm_coverage_verified`, and
+`trace_completeness_verified` are always false, and the sealer rejects attempts
+to turn them true. Complete Safe history still requires a qualified node trace
+extension or independently verified full replay covering these omissions and
+the unchanged complete-history approval policy. This reader does not implement
+the successor provenance interface or open public submission.
+
+The native extension is authored with deterministic synthetic archive, proof,
+filter, cancellation, advancing-head/reorg and public-command regressions.
+Behavioral qualification is separate: Astra max owns implementation and
+compile/vet; Sol medium runs the frozen candidate's normal/race and causal
+checks. No live RPC, private signer or transaction is part of this increment.

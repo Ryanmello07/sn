@@ -28,6 +28,7 @@ func runSafeHistoryCaptureCommand(ctx context.Context, args []string, stdout, st
 	through := flags.Uint64("through-number", 0, "last native block number, inclusive")
 	throughHash := flags.String("through-hash", "", "exact last native block hash")
 	retry := flags.Duration("retry-window", 300*time.Second, "transient retry window for each read, under caller cancellation")
+	nativeTrace := flags.Bool("native-storage-trace", false, "retain bounded keyed native replay traces and parent runtime proofs; does not prove complete history")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 || ctx == nil || *rpcUrl == "" || !bootstrapRootAbsolutePath(*output) || *chain == "" ||
 		!rootCanonicalHash(*genesis) || *chainId != mainnetEvmChainId || *retry < time.Minute || *retry > 15*time.Minute {
 		fmt.Fprintln(stderr, "safe-history-capture requires an owned archive route, explicit mainnet identity, exact interval, and a 60s to 15m per-read retry window")
@@ -44,7 +45,13 @@ func runSafeHistoryCaptureCommand(ctx context.Context, args []string, stdout, st
 		return 2
 	}
 	defer client.httpClient.CloseIdleConnections()
-	capture, err := client.captureSafeHistory(ctx, identityExpectation{NativeChain: *chain, GenesisHash: *genesis, EvmChainId: *chainId}, scope)
+	expected := identityExpectation{NativeChain: *chain, GenesisHash: *genesis, EvmChainId: *chainId}
+	var capture safeHistoryCapture
+	if *nativeTrace {
+		capture, err = client.captureSafeHistoryNative(ctx, expected, scope)
+	} else {
+		capture, err = client.captureSafeHistory(ctx, expected, scope)
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, "Safe archive census:", err)
 		if errors.Is(err, errRpcIdentityMismatch) {

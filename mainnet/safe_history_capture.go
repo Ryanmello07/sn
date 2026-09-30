@@ -20,24 +20,25 @@ var errSafeHistoryArchiveUnavailable = errors.New("Safe archive census requires 
 // The proof boundary is explicit in every successful report, including empty
 // Safe projections. Finality is an owned-RPC assertion; only bytes are proven.
 type safeHistoryCapture struct {
-	Schema                    string              `json:"schema"`
-	CodecSourceCommit         string              `json:"codec_source_commit"`
-	FinalityAuthority         string              `json:"finality_authority"`
-	NativeChain               string              `json:"native_chain"`
-	GenesisHash               string              `json:"genesis_hash"`
-	EvmChainId                uint64              `json:"evm_chain_id"`
-	Scope                     safeHistoryScope    `json:"scope"`
-	InitialFinalized          safeHistoryBoundary `json:"initial_finalized"`
-	LaterFinalized            safeHistoryBoundary `json:"later_finalized"`
-	Blocks                    []safeHistoryBlock  `json:"blocks"`
-	ByteCommitmentsVerified   bool                `json:"byte_commitments_verified"`
-	RuntimeSourceProven       bool                `json:"runtime_source_proven"`
-	NativeExecutionVerified   bool                `json:"native_execution_verified"`
-	InternalExecutionVerified bool                `json:"internal_execution_verified"`
-	DeploymentHistoryVerified bool                `json:"deployment_history_verified"`
-	CompletePendingVerified   bool                `json:"complete_pending_verified"`
-	SendAuthorized            bool                `json:"send_authorized"`
-	Unresolved                []string            `json:"unresolved"`
+	Schema                    string                    `json:"schema"`
+	CodecSourceCommit         string                    `json:"codec_source_commit"`
+	FinalityAuthority         string                    `json:"finality_authority"`
+	NativeChain               string                    `json:"native_chain"`
+	GenesisHash               string                    `json:"genesis_hash"`
+	EvmChainId                uint64                    `json:"evm_chain_id"`
+	Scope                     safeHistoryScope          `json:"scope"`
+	InitialFinalized          safeHistoryBoundary       `json:"initial_finalized"`
+	LaterFinalized            safeHistoryBoundary       `json:"later_finalized"`
+	Blocks                    []safeHistoryBlock        `json:"blocks"`
+	ByteCommitmentsVerified   bool                      `json:"byte_commitments_verified"`
+	RuntimeSourceProven       bool                      `json:"runtime_source_proven"`
+	NativeExecutionVerified   bool                      `json:"native_execution_verified"`
+	InternalExecutionVerified bool                      `json:"internal_execution_verified"`
+	DeploymentHistoryVerified bool                      `json:"deployment_history_verified"`
+	CompletePendingVerified   bool                      `json:"complete_pending_verified"`
+	SendAuthorized            bool                      `json:"send_authorized"`
+	Unresolved                []string                  `json:"unresolved"`
+	NativeTrace               *safeHistoryNativeCapture `json:"native_trace,omitempty"`
 }
 
 // This is a content digest, not a signature or provenance-policy approval.
@@ -245,19 +246,39 @@ func sealSafeHistoryCapture(capture safeHistoryCapture) (safeHistoryCaptureEnvel
 	if err := capture.Scope.validate(); err != nil {
 		return safeHistoryCaptureEnvelope{}, err
 	}
-	if capture.Schema != safeHistoryCensusSchema || !capture.ByteCommitmentsVerified || capture.FinalityAuthority != "owned-rpc-assertion" ||
+	if capture.Schema != safeHistoryCensusSchema && capture.Schema != safeHistoryNativeCaptureSchema || !capture.ByteCommitmentsVerified || capture.FinalityAuthority != "owned-rpc-assertion" ||
 		capture.RuntimeSourceProven || capture.NativeExecutionVerified || capture.InternalExecutionVerified || capture.DeploymentHistoryVerified || capture.CompletePendingVerified || capture.SendAuthorized ||
 		len(capture.Blocks) != int(capture.Scope.Through.Number-capture.Scope.From.Number+1) {
 		return safeHistoryCaptureEnvelope{}, errors.New("Safe archive census cannot seal a history, execution or send authority claim")
+	}
+	if capture.Schema == safeHistoryCensusSchema && capture.NativeTrace != nil || capture.Schema == safeHistoryNativeCaptureSchema && capture.NativeTrace == nil {
+		return safeHistoryCaptureEnvelope{}, errors.New("Safe archive native trace schema differs from retained evidence")
+	}
+	if native := capture.NativeTrace; native != nil {
+		if native.Schema != safeHistoryNativeSchema || native.SdkSource != safeCurrentStorageSdk || native.TraceAuthority != "owned-rpc-replay-assertion" ||
+			!native.ParentRuntimeBytesVerified || !native.KeyedTraceScopeMatched || native.CompleteParentStateVerified || native.ClearPrefixCoverageVerified ||
+			native.RollbackCoverageVerified || native.StorageRootCoverageVerified || native.InnerEvmCoverageVerified || native.TraceCompletenessVerified || len(native.Blocks) != len(capture.Blocks) {
+			return safeHistoryCaptureEnvelope{}, errors.New("Safe archive native trace cannot seal complete storage, execution or history coverage")
+		}
+		for i, block := range native.Blocks {
+			if block.Native != capture.Blocks[i].Witness.Native || block.ParentRuntime.Witness.At != capture.Blocks[i].Witness.NativeHeader.ParentHash ||
+				!rootCanonicalHash(block.ParentRuntime.CodeHash) || block.ParentRuntime.Bytes <= 0 || block.ParentRuntime.Bytes > maximumRuntimeSnapshotCodeBytes {
+				return safeHistoryCaptureEnvelope{}, errors.New("Safe archive native trace interval or runtime evidence differs")
+			}
+		}
 	}
 	raw, err := json.Marshal(capture)
 	if err != nil {
 		return safeHistoryCaptureEnvelope{}, err
 	}
 	// Projections may repeat at most the committed EVM inputs/logs once.
-	if len(raw) > 2*maximumSafeHistoryEncodedBytes+strecovery.MaximumReceiptBlockCensusEncodedBytes {
+	maximum := 2*maximumSafeHistoryEncodedBytes + strecovery.MaximumReceiptBlockCensusEncodedBytes
+	if capture.NativeTrace != nil {
+		maximum += maximumSafeHistoryNativeEncodedBytes
+	}
+	if len(raw) > maximum {
 		return safeHistoryCaptureEnvelope{}, errors.New("Safe archive report exceeds sealed output bound")
 	}
-	digest := sha256.Sum256(append([]byte(safeHistoryCensusSchema+"\x00"), raw...))
+	digest := sha256.Sum256(append([]byte(capture.Schema+"\x00"), raw...))
 	return safeHistoryCaptureEnvelope{Capture: capture, ContentHash: "sha256:" + hex.EncodeToString(digest[:])}, nil
 }
