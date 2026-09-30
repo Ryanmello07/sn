@@ -20,14 +20,15 @@ type validatorActivationAuthority interface {
 // Only a bounded projection is retained; EvidenceHash commits the full current
 // owned-RPC read. This is an assertion, not independent finality/storage proof.
 type validatorActivationReadiness struct {
-	ObservedAt      time.Time                           `json:"observed_at"`
-	PlanHash        string                              `json:"bootstrap_plan_hash"`
-	EvidenceHash    string                              `json:"readiness_hash"`
-	FinalizedNumber uint64                              `json:"finalized_number"`
-	FinalizedHash   string                              `json:"finalized_hash"`
-	Local           bootstrapChainReadinessState        `json:"original_custody"`
-	Roles           []bootstrapChainRoleReadiness       `json:"ur_validators"`
-	Native          *validatorActivationNativeReadiness `json:"native_prerequisites,omitempty"`
+	ObservedAt      time.Time                               `json:"observed_at"`
+	PlanHash        string                                  `json:"bootstrap_plan_hash"`
+	EvidenceHash    string                                  `json:"readiness_hash"`
+	FinalizedNumber uint64                                  `json:"finalized_number"`
+	FinalizedHash   string                                  `json:"finalized_hash"`
+	Local           bootstrapChainReadinessState            `json:"original_custody"`
+	Roles           []bootstrapChainRoleReadiness           `json:"ur_validators"`
+	Native          *validatorActivationNativeReadiness     `json:"native_prerequisites,omitempty"`
+	Production      *validatorActivationProductionReadiness `json:"production_observation,omitempty"`
 }
 
 func (self validatorActivationReadiness) validate(plan validatorActivationPlan) error {
@@ -44,7 +45,12 @@ func (self validatorActivationReadiness) validate(plan validatorActivationPlan) 
 		}
 	}
 	if self.Native != nil {
-		return self.Native.validate(self)
+		if err := self.Native.validate(self); err != nil {
+			return err
+		}
+	}
+	if self.Production != nil {
+		return self.Production.validate(plan, self)
 	}
 	return nil
 }
@@ -52,12 +58,25 @@ func (self validatorActivationReadiness) validate(plan validatorActivationPlan) 
 // This always executes the qualified current observer; no imported ready file
 // can authorize a start. The independently signed preparation is reloaded too.
 func observeValidatorActivation(ctx context.Context, approval validatorActivationApproval, now func() time.Time) (bootstrapChainPreparation, bootstrapChainReadiness, *validatorActivationReadiness, error) {
+	return observeValidatorActivationWithProduction(ctx, approval, now, false)
+}
+
+// Production evidence is an explicit read-only extension of ordinary admission.
+// It never replaces the separate unavailable current start-authority capability.
+func observeValidatorActivationWithProduction(ctx context.Context, approval validatorActivationApproval, now func() time.Time, production bool) (bootstrapChainPreparation, bootstrapChainReadiness, *validatorActivationReadiness, error) {
 	startedAt := now()
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(approval.Plan.Route.ReadRetrySeconds)*time.Second)
 	defer cancel()
 	preparation, err := loadValidatorActivationPreparation(ctx, approval)
 	if err != nil {
 		return preparation, bootstrapChainReadiness{}, nil, err
+	}
+	var contractPlans []evmCreatePlan
+	if production {
+		contractPlans, err = validatorActivationContractPlans(ctx, preparation)
+		if err != nil {
+			return preparation, bootstrapChainReadiness{}, nil, err
+		}
 	}
 	client, err := newOwnedSubmissionClient(approval.Plan.Route)
 	if err != nil {
@@ -86,6 +105,12 @@ func observeValidatorActivation(ctx context.Context, approval validatorActivatio
 		role.ActivationBlockers = slices.DeleteFunc(slices.Clone(role.ActivationBlockers), func(blocker string) bool {
 			return blocker == "NATIVE_EPOCH_APPROVAL_WINDOW_UNVERIFIED" || blocker == "SIGNED_ACTIVATION_CHECKPOINT_UNVERIFIED"
 		})
+	}
+	if production {
+		result.Production, err = client.observeValidatorActivationProduction(ctx, preparation, contractPlans, readiness, result)
+		if err != nil {
+			return preparation, readiness, nil, err
+		}
 	}
 	return preparation, readiness, result, errors.Join(result.validate(approval.Plan), ctx.Err())
 }
@@ -117,7 +142,7 @@ func (self validatorActivationRecord) result() validatorActivationResult {
 // Installation, admission and start are explicit distinct operations. Every
 // effect follows synced intent; all manager/RPC operations join before return.
 func advanceValidatorActivation(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, authority validatorActivationAuthority, operation string, now func() time.Time) (validatorActivationResult, error) {
-	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil || operation != "install" && operation != "admit" && operation != "start" && operation != "resume" {
+	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil || operation != "install" && operation != "admit" && operation != "admit-evidence" && operation != "start" && operation != "resume" {
 		return validatorActivationResult{}, errors.New("validator activation owner or operation is unavailable")
 	}
 	record, err := store.load(ctx)
@@ -135,7 +160,7 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 				record.Status = "source-refused"
 				return record.result(), errors.New("validator activation requires both installed units before admission or recovery")
 			}
-			if !unit.StartAt.IsZero() && unit.Generation == nil && operation != "admit" {
+			if !unit.StartAt.IsZero() && unit.Generation == nil && operation != "admit" && operation != "admit-evidence" {
 				record.Status = "partial"
 				return record.result(), errors.New("validator activation consumed start needs manual reconciliation; no operation was consumed")
 			}
@@ -208,8 +233,8 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 	if err := host.admit(ctx, plan, record); err != nil {
 		return finish("source-refused", err)
 	}
-	if operation == "admit" {
-		_, _, evidence, err := observeValidatorActivation(ctx, store.approval, now)
+	if operation == "admit" || operation == "admit-evidence" {
+		_, _, evidence, err := observeValidatorActivationWithProduction(ctx, store.approval, now, operation == "admit-evidence")
 		if err != nil {
 			return finish("source-refused", err)
 		}
@@ -219,7 +244,11 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 		}
 		record.HighWaterAt = stamp
 		record.Readiness = evidence
-		result, err := finish("admitted-process-only", nil)
+		status := "admitted-process-only"
+		if operation == "admit-evidence" {
+			status = "observed-operator-and-contract-evidence"
+		}
+		result, err := finish(status, nil)
 		if err != nil {
 			return result, err
 		}

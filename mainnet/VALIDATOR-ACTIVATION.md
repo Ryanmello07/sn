@@ -25,6 +25,14 @@ There is no flag, imported readiness file or environment switch that replaces
 that adapter. The concrete systemd start transport and its durable owner are
 exercisable only through the explicitly injected test authority today.
 
+`admit-evidence` adds a bounded current observation of the original deployed
+contracts and both operator censuses. It performs real read-only transport work
+when explicitly invoked; this implementation has made no deployment RPC or API
+calls. Its optional `production_observation` journal projection and
+`observed-operator-and-contract-evidence` disposition do not implement the
+missing current-authority capability. Independent behavioral qualification of
+this increment remains separate from the receipts above.
+
 This component does not run netuid 0. The [root service](ROOT-SERVICE.md) still
 requires its own current authority and native signing-device implementation.
 Neither UR process counts as the root role. Chain identity and deployment also
@@ -97,6 +105,54 @@ cannot be retained as newly admitted. Older records without this optional native
 projection remain readable for their original consumed-start recovery; a fresh
 start always makes a new complete observation.
 
+The explicit `admit-evidence` operation first requires the complete original
+approved contract profile. It authenticates the native-header Frontier mapping
+and exact EVM header, then compares five deployed executable byte strings with
+the approved implementation, proxy, reserve, vault and evidence artifacts. At
+that same canonical hash it checks their stable domain getters, owner/guardian/
+oracle and pause state, implementation/admin/beacon/initializer slots, the
+reserve recorder, packed vault coordinator/escrow flag and evidence anchor.
+Constructor accounting counters and operator count are not current zero
+invariants. The initial single-policy profile remains required, with exact
+approved economic/cadence fields and a nonzero effective block no later than
+the observed EVM point; that bound does not prove the historical creation block. These reads
+provide exact deployment observations, not source-to-bytecode provenance,
+complete Safe history, independently proved consensus finality or storage proofs.
+
+Each original independently signed schema-3 config supplies its exact operator
+API/RPC routes and content-addressed activation context, activation payload and
+both VPK/hotkey signatures. The observer verifies the dual signatures and exact
+published activation record/companion domain. It then reads only an existing
+private client JWT, requests a fresh nonce-bound client-key observation and
+verifies its canonical complete registration history against actual historical
+on-chain operator roots. The signed reply must echo the independently selected
+client, hotkey, native point and mapped EVM point; the current registered key
+must equal the activation VPK. A wrapper publisher or configured artifact
+signer cannot substitute for that root authority. Both operator censuses use
+the same mapped EVM point, even if the finalized head advances during the read.
+
+This narrow evidence proves endpoint/client-key responsiveness and public
+activation signature/publication consistency. It does not read signing seeds,
+network JWTs or proof histories; register or refresh credentials; run proof or
+producer workers; sign; submit; or start services. Historical native activation
+eligibility, full proof-prefix/EMA/history replay and actual worker lifecycle
+remain unverified. The broad production-health, deployed-contract provenance,
+signer/global-custody and effective-majority blockers therefore remain explicit,
+and `activation_ready` remains false.
+
+Bounds are fixed at 16 operators per validator, 64 KiB per public context,
+16 KiB per existing client credential and 256 KiB per client-key response,
+with the protocol's existing registration-count limit. All public inputs for
+one validator are authenticated before its first network call. Each validator
+observation is clamped to two minutes inside the original signed route deadline;
+the original observation-age and finite operation limits also apply. The
+observer owns its finite HTTP/RPC transports and retains only public value
+projections, exact response digests and request nonces, never credentials. Failure or
+cancellation discards the complete new projection. Numeric EVM canonical
+lookups, the native/EVM mapping and original native activation checkpoint are
+rechecked after the final response; retained digests never authorize reuse as
+fresh evidence. Old journals remain readable for original recovery.
+
 This initial-bootstrap path accepts only the original schema-3 configs, whose
 inspection explicitly excludes runtime-approval and production-authority
 histories. Their single exact runtime tuple must therefore cover both blocks.
@@ -154,7 +210,7 @@ that host-wide boundary. No dynamic Warp unit is accepted.
 Every invocation supplies the same exact approval bytes and independent key:
 
 ```text
-sn-mainnet activate-validators claim|install|admit|resume|status \
+sn-mainnet activate-validators claim|install|admit|admit-evidence|resume|status \
   --approval /absolute/activation-approval.json \
   --accept-approval-hash sha256:APPROVED_FILE_DIGEST \
   --independent-public-key 0xINDEPENDENT_APPROVAL_KEY
@@ -166,6 +222,11 @@ the manager. `admit` performs real loaded-unit and finalized bootstrap checks,
 reporting `admitted-process-only`, never activation ready. `status` returns
 retained observations. `resume` only reconciles already consumed starts and
 cannot issue a fresh start.
+
+`admit-evidence` performs those same host/native checks plus the bounded
+contract/operator observation above. It consumes one original operation,
+preserves both lifetime start allowances and requires the existing approved
+client credentials and public activation files to be provisioned already.
 
 The explicit `start --execute-approved-starts` form is implemented but remains
 blocked in the public command until the qualified current-authority route is
