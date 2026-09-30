@@ -18,3 +18,6 @@ client limit. Each returned HTTP 502. A third follow-up at approximately
 **21:25 UTC** again returned HTTP 502 for both methods. A fifth at approximately
 **21:55 UTC** returned the same HTTP 502 for both methods. No follow-up supplied chain identity
 or sync evidence.
+
+At approximately **22:13 UTC**, a further `chain_getBlockHash(0)` read-only
+probe again returned HTTP 502. The EVM method was not repeated in that probe.
