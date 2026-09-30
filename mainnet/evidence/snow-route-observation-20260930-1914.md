@@ -21,3 +21,9 @@ or sync evidence.
 
 At approximately **22:13 UTC**, a further `chain_getBlockHash(0)` read-only
 probe again returned HTTP 502. The EVM method was not repeated in that probe.
+
+Further `chain_getBlockHash(0)` read-only probes at approximately **22:20**,
+**22:45**, **23:11** and **23:30 UTC** each returned HTTP 502 with the same
+150-byte response body and SHA-256 as above. Each used an eight-second client
+limit. These responses add no chain identity or synchronization evidence; the
+EVM method was not repeated in these probes.
