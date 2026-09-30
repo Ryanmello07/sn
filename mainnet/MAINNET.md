@@ -105,10 +105,14 @@ initialization and complete authority-relevant storage/delegatecall history
 through finalized and scoped pending state before enabling public sends. The
 adapter must bind the exact Safe/profile, approved route and signed evidence;
 ordinary getters or a loosely labeled file cannot substitute. Read-only
-reconciliation remains available. Expensive history authentication must precede
-the final pending Safe/relayer nonce and Safe-state admission, or trigger an
-immediate repeat of that admission before sending. Qualify state changes during
-history verification. This gate remains open under MG-08.
+reconciliation remains available. The separate
+[readmission candidate](evidence/bootstrap-successor-readmission-qualification-20260930.md)
+`cd4261a8` moves expensive history authentication before final pending
+Safe/relayer nonce and Safe-state admission, and invalidates earlier admission
+when a refresh fails. Its adapter root passes normal/race and command root
+passes normal; remaining race, adjacent, causal and final-seal qualification is
+pending. This does not supply the missing history authenticator. MG-08 remains
+open.
 
 **P0 follow-up: additive canonical runtime authorization.** The current adapter
 retains one successor runtime profile immutably. A routine runtime upgrade after

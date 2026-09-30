@@ -217,6 +217,13 @@ does not wait for head equality. Each of the eight original receipt operations
 gets its own approved retry budget, and direct current-state RPC reads receive
 separate bounded retries under caller cancellation.
 
+The separate [readmission candidate](evidence/bootstrap-successor-readmission-qualification-20260930.md)
+at `cd4261a8` moves expensive history verification before pending observations
+and the final canonical/runtime/window checks. Every new observation invalidates
+earlier admission, including a refresh canceled at its initial checkpoint.
+Independent qualification of that increment remains pending; the production
+history capability and public submission remain unavailable.
+
 `eth_getTransactionByHash` looks up only the exact retained hash. A null response
 is an owned-node assertion of that hash's absence. Confirmed/pending relayer
 nonces and Safe storage cover this execution's account state. No
