@@ -31,3 +31,7 @@ EVM method was not repeated in these probes.
 At approximately **23:40 UTC**, both `chain_getBlockHash(0)` and `eth_chainId`
 were retried with eight-second client limits. Each returned HTTP 502 with the
 same 150-byte nginx response and SHA-256. Neither method returned chain data.
+
+The same two read-only methods at approximately **23:50 UTC** again returned
+HTTP 502 with the identical response body and SHA-256. Mainnet identity and
+sync state remain unobserved.
