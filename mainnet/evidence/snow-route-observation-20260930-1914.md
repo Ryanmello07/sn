@@ -1,0 +1,12 @@
+# Snow VPN RPC read-only observation — 2026-09-30 19:14 UTC
+
+Two read-only JSON-RPC POSTs to `http://172.28.208.185:9944` were made with
+`curl --max-time 7` from the SN workspace. `chain_getBlockHash(0)` and
+`eth_chainId` each returned **HTTP 502** with the same 150-byte nginx HTML
+body (SHA-256
+`61b30d408583991fd69f3dec694e154cb652471e663328ad9c8482c9021ab5db`).
+No JSON-RPC value, genesis hash, EVM chain ID, finalized block or runtime
+identity was observed. This does not establish the route's backend, its sync
+state, or its mainnet readiness. The operator separately reports that the
+mainnet node is still synchronizing. No signer, transaction or deployment was
+used.
