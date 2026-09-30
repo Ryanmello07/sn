@@ -65,6 +65,11 @@ func newValidatorActivationFixtureWithNativeMetadata(t *testing.T, mutate func(*
 
 // All signed native restrictions are fixed before original bootstrap claim.
 func newValidatorActivationFixtureWithNativeScope(t *testing.T, mutate func(*types.Metadata), configureApproval func(*bootstrapChainValidatorFixture)) *validatorActivationFixture {
+	return newValidatorActivationFixtureWithNativeCensus(t, mutate, configureApproval, nil)
+}
+
+// A further native profile is selected before approval and permanent custody.
+func newValidatorActivationFixtureWithNativeCensus(t *testing.T, mutate func(*types.Metadata), configureApproval func(*bootstrapChainValidatorFixture), configureCensus func(*rootRpcFixture, *subnetCensusPolicy)) *validatorActivationFixture {
 	t.Helper()
 	chain := newBootstrapChainReadinessFixtureWithCensus(t, func(census *rootRpcFixture, policy *subnetCensusPolicy) {
 		metadata, encoded, hash := economicEmissionTestMetadata(t, mutate)
@@ -76,6 +81,9 @@ func newValidatorActivationFixtureWithNativeScope(t *testing.T, mutate func(*typ
 		census.set(t, "PendingServerEmission", make([]byte, 8), arg)
 		census.set(t, "LastUpdate", subnetTestVector(make([]byte, 6*8), 8), arg)
 		census.set(t, "RecycleOrBurn", []byte{1}, arg)
+		if configureCensus != nil {
+			configureCensus(census, policy)
+		}
 	}, configureApproval)
 	directory := filepath.Dir(chain.path)
 	hostRoot := filepath.Dir(directory)

@@ -53,6 +53,12 @@ func (self ValidatorStakeObservation) MeetsNonSelfStakeAndPermit() bool {
 // The API's Validators field is deliberately unused: it applies strict >
 // and omits the registered subnet-owner exception used by actual submission.
 func ReadValidatorStakeAtContext(ctx context.Context, chain *Chain, query ValidatorIdentityQuery, allowed ...RuntimeArtifactIdentity) (ValidatorStakeObservation, error) {
+	return readValidatorStakeAtContext(ctx, chain, query, nil, allowed...)
+}
+
+// The optional census destination is owned by the full-census reader. Ordinary
+// per-validator callers retain their comparable result and allocation profile.
+func readValidatorStakeAtContext(ctx context.Context, chain *Chain, query ValidatorIdentityQuery, census *[]ValidatorStakeCensusEntry, allowed ...RuntimeArtifactIdentity) (ValidatorStakeObservation, error) {
 	empty := ValidatorStakeObservation{}
 	identity, err := readValidatorIdentityWithRuntimeAtContext(ctx, chain, query, func(artifact AuthenticatedRuntimeArtifact) error {
 		return validateValidatorReadRuntimeAtContext(ctx, chain, artifact, validatorStakeRuntimePurpose)
@@ -142,7 +148,7 @@ func ReadValidatorStakeAtContext(ctx context.Context, chain *Chain, query Valida
 	if err := chain.API.Client.CallContext(ctx, &raw, "state_call", validatorStakeRuntimeMethod, "0x"+hex.EncodeToString(input), query.BlockHash.Hex()); err != nil {
 		return empty, fmt.Errorf("validator stake runtime call: %w", err)
 	}
-	observation.TotalStakeRao, err = decodeValidatorStakeMetagraph(raw, identity)
+	observation.TotalStakeRao, err = decodeValidatorStakeMetagraphWithCensus(raw, identity, census)
 	if err != nil {
 		return empty, err
 	}
@@ -163,6 +169,12 @@ func ReadValidatorStakeAtContext(ctx context.Context, chain *Chain, query Valida
 // vector length and every compact stake. The selected UID cannot hide malformed
 // peers. Only its stake survives; no per-UID slice is allocated from the wire.
 func decodeValidatorStakeMetagraph(raw json.RawMessage, identity ValidatorIdentityObservation) (uint64, error) {
+	return decodeValidatorStakeMetagraphWithCensus(raw, identity, nil)
+}
+
+// A census is retained only on explicit request and only after complete wire
+// validation. The single-validator path still allocates no per-UID projection.
+func decodeValidatorStakeMetagraphWithCensus(raw json.RawMessage, identity ValidatorIdentityObservation, census *[]ValidatorStakeCensusEntry) (uint64, error) {
 	if identity.Netuid == 0 || identity.SubnetUIDs == 0 || identity.UID >= identity.SubnetUIDs {
 		return 0, errors.New("validator stake metagraph identity census is invalid")
 	}
@@ -201,6 +213,10 @@ func decodeValidatorStakeMetagraph(raw json.RawMessage, identity ValidatorIdenti
 		return 0, errors.New("validator stake metagraph netuid differs from the selected subnet")
 	}
 	var stake uint64
+	var entries []ValidatorStakeCensusEntry
+	if census != nil {
+		entries = make([]ValidatorStakeCensusEntry, int(identity.SubnetUIDs))
+	}
 	for index := 1; index <= 76; index++ {
 		if offset >= len(data) {
 			return 0, errors.New("validator stake metagraph options are truncated")
@@ -233,6 +249,9 @@ func decodeValidatorStakeMetagraph(raw json.RawMessage, identity ValidatorIdenti
 			if !bytes.Equal(data[selectedOffset:selectedOffset+32], identity.Hotkey[:]) {
 				return 0, errors.New("validator stake metagraph selected hotkey differs from storage")
 			}
+			for uid := range entries {
+				copy(entries[uid].Hotkey[:], data[offset+uid*32:offset+(uid+1)*32])
+			}
 			offset += width
 		case 57:
 			width := int(identity.SubnetUIDs)
@@ -247,6 +266,9 @@ func decodeValidatorStakeMetagraph(raw json.RawMessage, identity ValidatorIdenti
 			if (data[offset+int(identity.UID)] == 1) != identity.ValidatorPermit {
 				return 0, errors.New("validator stake metagraph selected permit differs from storage")
 			}
+			for uid := range entries {
+				entries[uid].ValidatorPermit = data[offset+uid] == 1
+			}
 			offset += width
 		case 69:
 			for uid := uint16(0); uid < identity.SubnetUIDs; uid++ {
@@ -257,11 +279,17 @@ func decodeValidatorStakeMetagraph(raw json.RawMessage, identity ValidatorIdenti
 				if uid == identity.UID {
 					stake = value
 				}
+				if entries != nil {
+					entries[uid].TotalStakeFloorRao = value
+				}
 			}
 		}
 	}
 	if offset != len(data) {
 		return 0, errors.New("validator stake metagraph has trailing bytes")
+	}
+	if census != nil {
+		*census = entries
 	}
 	return stake, nil
 }
