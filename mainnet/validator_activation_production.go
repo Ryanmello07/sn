@@ -137,7 +137,7 @@ func (self *rpcClient) observeValidatorActivationContracts(ctx context.Context, 
 	for _, index := range []int{2, 4, 5, 6, 7} {
 		plan := plans[index]
 		var encoded string
-		if err := self.call(ctx, "eth_getCode", []any{plan.Address.Hex(), block}, &encoded); err != nil {
+		if err := self.callEvmRead(ctx, "eth_getCode", []any{plan.Address.Hex(), block}, &encoded); err != nil {
 			return nil, err
 		}
 		code, err := rootReceiptHex(encoded, 64*1024)
@@ -146,7 +146,7 @@ func (self *rpcClient) observeValidatorActivationContracts(ctx context.Context, 
 		}
 		getters, storage := validatorActivationContractViews(plan, index, plans[7].Address)
 		for _, getter := range getters {
-			if err := self.call(ctx, "eth_call", []any{map[string]any{"to": plan.Address.Hex(), "data": getter.Data}, block}, &encoded); err != nil {
+			if err := self.callEvmRead(ctx, "eth_call", []any{map[string]any{"to": plan.Address.Hex(), "data": getter.Data}, block}, &encoded); err != nil {
 				return nil, err
 			}
 			if encoded != getter.Expected {
@@ -154,7 +154,7 @@ func (self *rpcClient) observeValidatorActivationContracts(ctx context.Context, 
 			}
 		}
 		for _, word := range storage {
-			if err := self.call(ctx, "eth_getStorageAt", []any{plan.Address.Hex(), word.Slot, block}, &encoded); err != nil {
+			if err := self.callEvmRead(ctx, "eth_getStorageAt", []any{plan.Address.Hex(), word.Slot, block}, &encoded); err != nil {
 				return nil, err
 			}
 			if encoded != word.Expected {
@@ -166,7 +166,7 @@ func (self *rpcClient) observeValidatorActivationContracts(ctx context.Context, 
 			// economic/cadence field must retain the independently approved bytes.
 			binding := stabi.NewSTCoordinator()
 			data := "0x" + hex.EncodeToString(binding.PackPolicyByIndex(big.NewInt(0)))
-			if err := self.call(ctx, "eth_call", []any{map[string]any{"to": plan.Address.Hex(), "data": data}, block}, &encoded); err != nil {
+			if err := self.callEvmRead(ctx, "eth_call", []any{map[string]any{"to": plan.Address.Hex(), "data": data}, block}, &encoded); err != nil {
 				return nil, err
 			}
 			raw, err := rootReceiptHex(encoded, 1024)

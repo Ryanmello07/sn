@@ -71,6 +71,12 @@ func newEvmOwnedChain(config evmPhaseConfig) (*evmOwnedChain, error) {
 
 // Only explicit EVM observations reach this additional bounded read profile.
 func (self *evmOwnedChain) read(ctx context.Context, method string, params []any, result any) error {
+	return self.client.callEvmRead(ctx, method, params, result)
+}
+
+// Contract recovery and validator observations share the same bounded methods
+// on their existing owned route. The ordinary native profile stays unchanged.
+func (self *rpcClient) callEvmRead(ctx context.Context, method string, params []any, result any) error {
 	allowAbsent := false
 	switch method {
 	case "eth_getTransactionReceipt":
@@ -79,7 +85,7 @@ func (self *evmOwnedChain) read(ctx context.Context, method string, params []any
 	default:
 		return errors.New("method is outside the contract EVM read profile")
 	}
-	return self.client.callAdmittedRead(ctx, method, params, result, allowAbsent, maxRpcReplyBytes)
+	return self.callAdmittedRead(ctx, method, params, result, allowAbsent, maxRpcReplyBytes)
 }
 
 // Every quantity is canonical and width checked; missing fields never become

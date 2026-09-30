@@ -68,6 +68,11 @@ func newValidatorActivationContractFixture(t *testing.T) (*evmCreateFixture, *rp
 // the same native-header-authenticated EVM point, without sending anything.
 func TestValidatorActivationProductionContractsObserveExecutedGraph(t *testing.T) {
 	f, client, plans, mapping := newValidatorActivationContractFixture(t)
+	transport := &bootstrapContractCurrentTransport{base: client.httpClient.Transport}
+	client.httpClient.Transport = transport
+	// The borrowed transport remains owned by the fixture client; retain its
+	// concrete close hook because the tracing wrapper exposes only RoundTrip.
+	t.Cleanup(func() { client.httpClient.Transport = transport.base })
 	f.stateLock.Lock()
 	writes := len(f.writes)
 	before := maps.Clone(f.counts)
@@ -78,13 +83,33 @@ func TestValidatorActivationProductionContractsObserveExecutedGraph(t *testing.T
 	}
 	f.stateLock.Lock()
 	changed := len(f.writes) != writes || f.counts["eth_sendRawTransaction"] != before["eth_sendRawTransaction"]
+	counts := maps.Clone(f.counts)
 	f.stateLock.Unlock()
 	if changed {
 		t.Fatal("contract observation submitted a transaction")
 	}
+	expectedCounts := map[string]int{"eth_getCode": 5, "eth_call": 1, "eth_getStorageAt": 0}
 	for i, index := range []int{2, 4, 5, 6, 7} {
+		getters, storage := validatorActivationContractViews(plans[index], index, plans[7].Address)
+		expectedCounts["eth_call"] += len(getters)
+		expectedCounts["eth_getStorageAt"] += len(storage)
 		if got[i].Address != plans[index].Address || !rootCanonicalHash(got[i].RuntimeHash) || !planSha256(got[i].GettersHash) || !planSha256(got[i].StorageHash) {
 			t.Fatal("contract observation lost exact source", got[i])
+		}
+	}
+	for method, expected := range expectedCounts {
+		if counts[method]-before[method] != expected {
+			t.Fatal("contract read profile omitted or repeated a method", method, counts[method]-before[method], expected)
+		}
+	}
+	transport.stateLock.Lock()
+	defer transport.stateLock.Unlock()
+	if len(transport.blocks) != expectedCounts["eth_getCode"]+expectedCounts["eth_call"]+expectedCounts["eth_getStorageAt"] {
+		t.Fatal("contract read bypassed the owned HTTP transport")
+	}
+	for i, block := range transport.blocks {
+		if !reflect.DeepEqual(block, map[string]any{"blockHash": mapping.EvmHeader.Hash, "requireCanonical": true}) || transport.deadlines[i].IsZero() {
+			t.Fatal("contract read lost its canonical selector or finite deadline", block, transport.deadlines[i])
 		}
 	}
 }
