@@ -132,6 +132,21 @@ bind counted/outcome events and select a qualified production capability without
 rewriting the original history statement. Explicit policy approval and a
 qualified capability route remain required before public submission can open.
 
+**Native current-policy capability — qualification pending.** The separate
+`95a905d4` [capability candidate](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md)
+connects independently signed current-policy custody to the concrete native
+complete-prefix verifier. Public online resume can import pinned acceptance
+files for local custody and historical reconciliation. Public `--submit` still
+has no installed route, and a signature or input flag cannot install one.
+An internal route requires the complete retained runtime tip and both policy
+signatures, keeps proof work before final scoped pending checks, and preserves
+one exact counted send. Its proof block/hash/root remains separate from any
+later admission-window head. The
+[qualification note](evidence/safe-current-capability-qualification-20260930.md)
+is pending independent normal/race positives, causal controls and the final
+source/dependency seal. No policy approval or public-send activation is claimed;
+the original signed history statement remains retained and unproven.
+
 **Qualified runtime authority increment.** The
 [additive revision path](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md) at
 `3d526830` retains separately signed runtime revisions under the original

@@ -342,6 +342,24 @@ submission remains closed until explicit policy approval and a qualified
 capability route are installed. It must not reinterpret the existing signed
 complete-history attestation or claim current proof establishes historical truth.
 
+**Native current-policy capability candidate — qualification pending.** Frozen
+`95a905d4` [implements the distinct native route](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md)
+on the signed custody journal. Public acceptance-file import only retains local
+authority; public `--submit` remains closed because no production route is
+installed. The internal route requires both independent signatures and the exact
+completed runtime tip, refuses mixing with the history capability, proves the
+complete finalized Safe prefix, then rechecks scoped pending Safe/relayer state,
+nonce, funding and exact transaction identity after expensive proof/artifact work.
+It preserves the original proof snapshot separately from the final admission
+head and repeats complete observation after durable reservation. Its
+[qualification note](evidence/safe-current-capability-qualification-20260930.md)
+requires independent normal/race positives and eight normal/five selected race
+causal controls before integration. The candidate does not prove historical
+initialization/delegatecalls, independent finality or complete pending storage.
+Explicit approval of those current-only assumptions and a separately qualified
+release-route installation remain open P0 gates. No mainnet action is authorized
+by local qualification.
+
 **Additive canonical runtime authority — scoped qualification complete.** The
 `3d526830` [runtime revision increment](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md)
 implements independently signed artifact additions while retaining the immutable
