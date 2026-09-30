@@ -96,7 +96,7 @@ Both sources are integrated; 76 affected roots pass normal/race and all 292
 miner roots pass plain normal. The composed release still needs custody,
 restart and aggregate fleet-capacity qualification before deployment.
 
-MG-01's [September 30 read-only Snow route checks through 20:16 UTC](evidence/snow-route-observation-20260930-1914.md)
+MG-01's [September 30 read-only Snow route checks through 20:50 UTC](evidence/snow-route-observation-20260930-1914.md)
 returned HTTP 502 for both native genesis and EVM chain ID. They provide no
 new mainnet identity or sync evidence; the route remains a live launch gate.
 
@@ -118,6 +118,15 @@ passes the formerly failing contract fixtures. The failed and corrected receipts
 are both retained. This is partial admission only: full proof-prefix/worker
 health, deployment/source provenance, global signer custody and effective
 majority remain open; public fresh start remains nil.
+
+The [qualified stake-capacity admission](evidence/validator-stake-capacity-qualification-20260930.md)
+adds an original-plan `admit-stake` observation for both UR validators.
+Its complete census conservatively bounds weighted-stake floors through the
+pinned runtime's threshold, owner exception, quantization and factor×tempo
+activity rule. Independent frozen and merged suites pass, including a causal
+pre-mask denominator control. A capacity lower bound is not applied-weight
+influence or live effective majority; public starts and that outcome remain
+open with producer health and signer custody.
 
 The [MG03/R48 server source composition](evidence/operator-mg03-r48-composition-20260929.md)
 is integrated at server root `05fee56f`. Its parent full merge preserves both

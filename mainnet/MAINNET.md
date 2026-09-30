@@ -915,6 +915,13 @@ records a partial projection without granting start authority. Full producer
 proof history and worker health, deployment provenance, global signer custody
 and effective majority remain separate launch gates.
 
+The [qualified `admit-stake` command](evidence/validator-stake-capacity-qualification-20260930.md)
+observes the original roles' complete native stake census and computes a
+conservative capacity lower bound under the pinned runtime's threshold,
+normalization, permit and activity rules. It reports capacity and current
+activity separately. It cannot prove applied weight influence or grant public
+start authority; actual majority behavior must be observed after launch.
+
 ### Root validator on netuid 0
 
 The signer-free `root-preview` and bounded `root-monitor` commands now supply a
