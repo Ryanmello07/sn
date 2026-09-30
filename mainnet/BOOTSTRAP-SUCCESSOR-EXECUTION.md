@@ -149,9 +149,9 @@ inputs.
 The immutable `contract-successor-execution.canonical-authorization` file binds
 the authority before networking. Counted events retain its seal across restart.
 A missing or changed counted authority cannot be recreated from another input.
-The base authorization stays immutable. Qualification of the
-[runtime revision candidate](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md) is currently
-pending: online resume can import one independently signed additive artifact with
+The base authorization stays immutable. The
+[qualified runtime revision path](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md)
+lets online resume import one independently signed additive artifact with
 `--runtime-revision` and `--runtime-revision-sha256`, preserving every prior
 authorization, counted attempt, nonce claim and signed byte. This adds an explicit
 review path; automatic runtime compatibility remains a separate P0. It supplies

@@ -325,7 +325,7 @@ revision preserving retained custody and liabilities, and its own qualification.
 It must not reinterpret the existing signed complete-history attestation or
 silently reopen public submission.
 
-**Additive canonical runtime candidate — qualification pending.** The separate
+**Additive canonical runtime authority — scoped qualification complete.** The
 `3d526830` [runtime revision increment](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md)
 implements independently signed artifact additions while retaining the immutable
 base, predecessor chain, original receipts, exact signed transaction, both nonce
@@ -336,9 +336,11 @@ are monotonic while omitted references preserve old v1 bytes and seals. Historic
 reads pass only their independently approved inclusion/parent pair to CRv4, with
 no ten-profile lifecycle cap. The full local fixture retains twelve revisions.
 The [qualification note](evidence/bootstrap-successor-runtime-qualification-20260930.md)
-records partial results and the sealed 12-normal/7-selected-race control plan;
-final behavioral and dependency evidence is pending. Earlier `a7186754` and
-`cd4261a8` receipts remain immutable and scoped to their own source.
+records ten new and thirty-six adjacent roots passing normal/race, twelve normal
+and exactly seven selected light race controls causal, and the final sealed
+source/dependency evidence. The CRv4 top-level census correction preserves its
+original passing raw streams and false-failure harness ledger. Earlier `a7186754`
+and `cd4261a8` receipts remain immutable and scoped to their own source.
 
 **P0 follow-up — Automatic compatible runtime admission (RT-04).** A new runtime
 still needs independently reviewed code/metadata and a signed revision. This

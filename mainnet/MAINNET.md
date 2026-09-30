@@ -114,8 +114,8 @@ normal/race; both causal controls reproduce their intended failure in both
 modes, with exact source/dependency evidence sealed. This does not supply the
 missing history authenticator. MG-08 remains open.
 
-**Runtime authority increment; qualification pending.** The
-[additive revision candidate](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md) at
+**Qualified runtime authority increment.** The
+[additive revision path](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md) at
 `3d526830` retains separately signed runtime revisions under the original
 independent key and immutable base authorization. Each revision binds reviewed
 artifact/codec evidence and its exact predecessor. Original receipts, signed
@@ -123,7 +123,9 @@ transaction bytes, both nonce claims, counted attempts and full liabilities stay
 intact. Current admission matches approved complete artifacts; historical reads
 select the inclusion/parent pair from the full history, including more than ten
 retained profiles. [Independent qualification](evidence/bootstrap-successor-runtime-qualification-20260930.md)
-is in progress; the source remains isolated until its complete evidence is sealed.
+passes ten new and thirty-six adjacent roots normal/race, all twelve normal
+controls and exactly seven selected light race controls. Exact source/dependency
+evidence is sealed; the earlier canonical/readmission receipts remain unchanged.
 
 **P0 follow-up: automatic compatible runtime admission (RT-04).** The additive
 path still requires a new independent signed artifact review for each upgrade.

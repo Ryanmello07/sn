@@ -1,7 +1,9 @@
 # Additive successor runtime authority
 
 This increment retains independently signed runtime revisions for one exact
-successor execution. Behavioral qualification is pending. Public `--submit`
+successor execution. [Scoped qualification](evidence/bootstrap-successor-runtime-qualification-20260930.md)
+passes ten new and thirty-six adjacent roots normal/race, twelve normal controls
+and seven selected light race controls. Public `--submit`
 remains unavailable: no production Safe deployment and complete storage-history
 authenticator exists, and a runtime revision cannot supply that capability.
 
