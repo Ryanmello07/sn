@@ -102,8 +102,8 @@ The current runtime may differ from the original eight-action runtime. Its
 source commit identifies the supported reviewed Frontier codec, while its
 version/code/metadata tuple identifies the separately reviewed artifact. A node
 cannot approve its own runtime. Original receipts still use their original
-runtime authority; successor inclusion uses the new profile at inclusion and
-parent, so a later upgrade does not erase a counted historical outcome.
+runtime authority; successor inclusion uses independently retained profiles at
+inclusion and parent, so a later upgrade does not erase a counted historical outcome.
 
 Signing bytes are the ASCII domain
 `urnetwork-mainnet-successor-canonical-authorization-approval-v1`, NUL, then compact
@@ -149,9 +149,13 @@ inputs.
 The immutable `contract-successor-execution.canonical-authorization` file binds
 the authority before networking. Counted events retain its seal across restart.
 A missing or changed counted authority cannot be recreated from another input.
-Changing the authorization after retention, including adding another runtime,
-needs a separately designed custody-preserving migration; this command cannot
-discard authority or renew attempts.
+The base authorization stays immutable. Qualification of the
+[runtime revision candidate](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md) is currently
+pending: online resume can import one independently signed additive artifact with
+`--runtime-revision` and `--runtime-revision-sha256`, preserving every prior
+authorization, counted attempt, nonce claim and signed byte. This adds an explicit
+review path; automatic runtime compatibility remains a separate P0. It supplies
+neither a genuine Safe history authenticator nor public submission authority.
 
 ## Durable ownership and recovery
 

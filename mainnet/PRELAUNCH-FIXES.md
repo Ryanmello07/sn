@@ -325,25 +325,30 @@ revision preserving retained custody and liabilities, and its own qualification.
 It must not reinterpret the existing signed complete-history attestation or
 silently reopen public submission.
 
-**P0 follow-up — Additive canonical runtime authorization.** Retained authority
-currently freezes one successor runtime profile. A routine upgrade after that
-file is retained and before send blocks current execution; it does not release
-the exact transaction, nonce claims, counted attempts or liability. Implement a
-separately signed additive revision under the original independent approver,
-binding its predecessor authorization and new reviewed runtime artifact/codec
-evidence. Preserve every original receipt and prior runtime authorization, the
-exact signed transaction, both immutable nonce claims, cumulative counted
-attempts and maximum liabilities. This transition must neither discard an old
-authority nor renew a transaction allowance. It needs immutable publication and
-same-authority recovery at every interrupted revision boundary, with no write
-until the complete revised authority is reauthenticated. Current admission then
-selects the reviewed active runtime; historical inclusion remains reconcilable
-under independently approved inclusion and parent profiles. Independent tests
-must cover upgrade before send, upgrade around inclusion, historical recovery
-after another upgrade, interrupted revision publication, wrong approver/profile,
-and attempted counter, liability or signed-byte changes. Preserve the qualified
-`a7186754` source identity; implement and independently qualify this resilience
-as a subsequent source increment. This requirement remains part of open MG-08.
+**Additive canonical runtime candidate — qualification pending.** The separate
+`3d526830` [runtime revision increment](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md)
+implements independently signed artifact additions while retaining the immutable
+base, predecessor chain, original receipts, exact signed transaction, both nonce
+claims, counted attempts and full liabilities. Hash-bound partial stages cannot
+switch approvals; interrupted counted reservations remain consumed, and pending
+terminal intents must finish before importing new authority. New event references
+are monotonic while omitted references preserve old v1 bytes and seals. Historical
+reads pass only their independently approved inclusion/parent pair to CRv4, with
+no ten-profile lifecycle cap. The full local fixture retains twelve revisions.
+The [qualification note](evidence/bootstrap-successor-runtime-qualification-20260930.md)
+records partial results and the sealed 12-normal/7-selected-race control plan;
+final behavioral and dependency evidence is pending. Earlier `a7186754` and
+`cd4261a8` receipts remain immutable and scoped to their own source.
+
+**P0 follow-up — Automatic compatible runtime admission (RT-04).** A new runtime
+still needs independently reviewed code/metadata and a signed revision. This
+incremental authority path is not automatic runtime compatibility. Specify and
+independently qualify a separately approved compatible-change policy and verifier
+before claiming unattended routine upgrades. Preserve the complete historical
+authority chain and all original custody, with no node self-approval or
+provisional-runtime fallback. Same-version changed artifacts and unsupported
+codecs remain closed explicit gates. Genuine Safe history authentication and the
+public-submit gate remain unchanged; MG-08 stays open.
 Later successors, filesystem migration, fee replacement and independently proved
 external sends require separate approved liability-preserving transitions.
 
