@@ -390,6 +390,17 @@ reached their assigned assertions in both modes. The
 the original `43dcd01f` fixture failure separately; production guards were
 unchanged by the fixture correction.
 
+**Original contract receipt admission — qualification pending.** The bounded
+[read-only historical increment](BOOTSTRAP-CONTRACT-RECEIPTS.md) borrows the exact
+original preparation and eight completed action records, reauthenticates their
+canonical native/EVM receipts and historical postconditions, and checks each
+signed EVM scan floor against the earliest original inclusion. Initial snapshot
+and final checked-through head remain separate; ordinary head advancement is
+accepted while changed original inclusions fail. Original custody, attempts and
+pending phases remain unchanged. Compile-only and vet pass; Sol's independent
+focused, adjacent and causal qualification remains pending. Current installation,
+complete indexing, evidence anchor and activation are explicitly unverified.
+
 **P0 follow-up — Canonical installation-to-service admission.** Wire the verified
 contract-role relationship into a separately qualified activation boundary that
 authenticates the original CREATE and anchor receipts, validates each declared
