@@ -1607,6 +1607,18 @@ There is no automatic rollback of a finalized UID removal, registration burn or 
 
 ## Continuous monitoring and repair
 
+The [stopped-validator repair increment](VALIDATOR-REPAIR.md) adds a concrete
+`repair-validator claim|resume|status` path under an independently signed,
+expiring fixed-unit/release/host/generation envelope. It can consume one durable
+start only after the approved prior generation is stopped and its descendant
+cgroup is empty, then retains the acknowledged invocation and exact-source
+progress postcondition. An unacknowledged consumed start is explicitly uncertain
+and cannot retry automatically. Qualification is pending. No unit is installed,
+no live start has run, and active hangs, root/operator services, initial
+activation, independent RPC, delivered alerts and monetary repair remain open.
+The host deployment owner must exclude concurrent privileged service or file
+changes; the local journal lock does not provide that exclusion by itself.
+
 Mainnet operation needs three separate owners: an independent read-only monitor,
 service supervisors, and a bounded repair controller. The monitor observes and
 reports; supervisors recover an approved process generation; the controller

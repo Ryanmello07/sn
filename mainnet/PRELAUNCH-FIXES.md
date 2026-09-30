@@ -2855,6 +2855,15 @@ to attribute a recurrence without guessing from the error class alone.
 
 ### PH-28 — Continuous monitoring and authorized repair
 
+The [one-shot stopped-validator capability](VALIDATOR-REPAIR.md) now has a
+concrete fixed systemctl action, independently signed expiry/release/unit/boot
+and generation authority, existing incident binding, permanent one-start custody
+and generation/source postconditions. Qualification is pending. Crashes before
+durable start acknowledgement remain explicitly consumed and uncertain; no
+automatic repeat can restore the allowance. Deployment and trusted exclusive
+host service control, actual systemd rehearsal, alert delivery, active hangs,
+operator/root roles, initial activation and monetary repairs remain open.
+
 **Production change.** Implement the [mainnet operating model](MAINNET.md#continuous-monitoring-and-repair)
 as three separate owners: a signer-free finalized-chain monitor, bounded service
 supervisors, and a repair controller that consumes an approved action envelope.
