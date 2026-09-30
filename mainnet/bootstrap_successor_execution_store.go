@@ -16,14 +16,15 @@ import (
 // serial owner's lifetime. The root reader is exclusively locked before the
 // registry; no method is safe for concurrent calls on this owner.
 type bootstrapSuccessorExecutionStore struct {
-	approval bootstrapSuccessorExecutionApproval
-	profile  *safeExecutionProfile
-	reader   *bootstrapSuccessorPreparationStore
-	local    *bootstrapSuccessorExecutionDirectory
-	registry *bootstrapSuccessorExecutionDirectory
-	last     bootstrapSuccessorExecutionEvent
-	pending  string
-	closed   bool
+	approval               bootstrapSuccessorExecutionApproval
+	profile                *safeExecutionProfile
+	reader                 *bootstrapSuccessorPreparationStore
+	local                  *bootstrapSuccessorExecutionDirectory
+	registry               *bootstrapSuccessorExecutionDirectory
+	last                   bootstrapSuccessorExecutionEvent
+	pending                string
+	closed                 bool
+	canonicalAuthorityHash string
 }
 
 // Global within the approved physical registry, these keys deliberately use
@@ -203,7 +204,20 @@ func (self *bootstrapSuccessorExecutionStore) loadEvents() error {
 	if err != nil {
 		return err
 	}
-	allowed := map[string]bool{bootstrapSuccessorExecutionPrefix + ".claim": true, bootstrapSuccessorExecutionPrefix + ".ready": true}
+	if raw, err := self.local.read(bootstrapSuccessorCanonicalFile); err == nil {
+		var authority bootstrapSuccessorCanonicalApproval
+		if err := decodePlanJson(raw, &authority); err != nil {
+			return err
+		}
+		if err := authority.validate(self.local.ctx, self.planCopy()); err != nil {
+			return err
+		}
+		self.canonicalAuthorityHash = rootObjectHash(authority)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	allowed := map[string]bool{bootstrapSuccessorExecutionPrefix + ".claim": true, bootstrapSuccessorExecutionPrefix + ".ready": true,
+		bootstrapSuccessorCanonicalFile: true, self.local.stageName(bootstrapSuccessorCanonicalFile, "canonical-authority"): true}
 	for sequence := uint16(0); sequence < 32; sequence++ {
 		name := bootstrapSuccessorExecutionEventName(sequence)
 		raw, err := self.local.read(name + ".intent")
@@ -252,6 +266,9 @@ func (self *bootstrapSuccessorExecutionStore) loadEvents() error {
 		}
 		if err := event.validate(self.approval, self.profile, previous); err != nil {
 			return err
+		}
+		if event.CanonicalAuthorityHash != "" && event.CanonicalAuthorityHash != self.canonicalAuthorityHash {
+			return errors.New("successor counted event lost its canonical authorization")
 		}
 		if err := self.publishEvent(event); err != nil {
 			return err

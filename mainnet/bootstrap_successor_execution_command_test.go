@@ -161,7 +161,7 @@ func TestBootstrapSuccessorExecutionCommandReconstructsAndRetainsV3Custody(t *te
 	for _, extra := range [][]string{{"--online"}, {"--submit"}, {"--rpc", "https://synthetic.example"}, {"--signer", approvalRef.Path}} {
 		stdout.Reset()
 		if code, _ := invoke("contract-successor-execution-resume", &stdout, append(args, extra...)...); code != 2 || stdout.Len() != 0 {
-			t.Fatal("offline execution custody exposed a production adapter", extra, code)
+			t.Fatal("execution custody bypassed explicit canonical authorization", extra, code)
 		}
 	}
 	path := filepath.Join(f.config.RunDirectory, bootstrapContractStateFile(7))

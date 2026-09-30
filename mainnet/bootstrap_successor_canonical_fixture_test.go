@@ -1,0 +1,271 @@
+// Production adapter fixtures execute the original graph and the published
+// Safe in one local EVM. Every identity, signature and authority is synthetic.
+package main
+
+import (
+	"bytes"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/hex"
+	"math/big"
+	"path/filepath"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm/runtime"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/urfoundation/sn/crv4"
+)
+
+// A fixture retains command inputs so public resume reconstructs the same
+// physical root, approvals, original markers and exact signed transaction.
+type bootstrapSuccessorCanonicalFixture struct {
+	t            *testing.T
+	original     *bootstrapChainFixture
+	key          ed25519.PrivateKey
+	profile      *safeExecutionProfile
+	approval     bootstrapSuccessorExecutionApproval
+	canonical    bootstrapSuccessorCanonicalApproval
+	canonicalRef planFileReference
+	paths        []string
+	approvalArgs []string
+}
+
+// The original public v3 setup runs once per heavy root. Admission and receipt
+// faults then share that history, without process-global fixtures or caching.
+func newBootstrapSuccessorCanonicalFixture(t *testing.T) *bootstrapSuccessorCanonicalFixture {
+	t.Helper()
+	f := newBootstrapSuccessorCommandFixture(t)
+	bootstrapSuccessorCommandTestComplete(t, f)
+	request := bootstrapSuccessorTestRequest(f.contracts.config, f.preparation.Plan.ContentHash)
+	relayer, err := crypto.ToECDSA(crypto.Keccak256([]byte("synthetic canonical successor relayer")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.IntendedRelayer, request.IntendedRelayerNonce = crypto.PubkeyToAddress(relayer.PublicKey), 42
+	request.IntendedSafeNonce, request.AdditionalMaximumWei = "17", "10000000"
+	requestPath := filepath.Join(filepath.Dir(f.path), "synthetic-canonical-original-request.json")
+	bootstrapRootTestWrite(t, requestPath, request)
+	var stdout, stderr bytes.Buffer
+	if code := f.command(t.Context(), "contract-successor-preview", &stdout, &stderr, "--request", requestPath); code != 0 {
+		t.Fatal("canonical preparation preview", code, stderr.String())
+	}
+	var preview bootstrapSuccessorPreparationPreview
+	if err := decodePlanJson(stdout.Bytes(), &preview); err != nil {
+		t.Fatal(err)
+	}
+	seed := sha256.Sum256([]byte("synthetic contract independent approval"))
+	key := ed25519.NewKeyFromSeed(seed[:])
+	preparationApproval := bootstrapSuccessorPreparationTestSign(t, preview.Plan, key)
+	preparationRef := bootstrapRootTestWrite(t, filepath.Join(filepath.Dir(f.path), "synthetic-canonical-preparation-approval.json"), preparationApproval)
+	stdout.Reset()
+	stderr.Reset()
+	if code := f.command(t.Context(), "contract-successor-prepare", &stdout, &stderr, "--request", requestPath, "--approval", preparationRef.Path,
+		"--approval-sha256", preparationRef.Sha256, "--accept-successor-hash", preview.PlanHash); code != 0 {
+		t.Fatal("canonical preparation claim", code, stderr.String())
+	}
+	pin, archivePath, members := safeReleaseTestInputs(t, "1.4.1", "Safe")
+	oracle := newSafeExecutionFixture(t, "1.4.1", "Safe")
+	_, singletonArtifact, proxyArtifact := safeExecutionOracleArtifacts(t, pin, "Safe", members)
+	singleton := common.BytesToAddress(crypto.Keccak256([]byte("synthetic canonical singleton")))
+	func() {
+		f.contracts.stateLock.Lock()
+		defer f.contracts.stateLock.Unlock()
+		f.contracts.state.SetCode(request.IntendedOwnerSafe, common.FromHex(proxyArtifact.Runtime), tracing.CodeChangeUnspecified)
+		f.contracts.state.SetCode(singleton, common.FromHex(singletonArtifact.Runtime), tracing.CodeChangeUnspecified)
+		f.contracts.state.SetState(request.IntendedOwnerSafe, common.Hash{}, common.BytesToHash(singleton[:]))
+		setup, err := oracle.oracleAbi.Pack("setup", oracle.owners, big.NewInt(2), common.Address{}, []byte{}, common.Address{}, common.Address{}, big.NewInt(0), common.Address{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		vm := f.contracts.vm
+		vm.GasLimit = 5_000_000
+		if _, _, err := runtime.Call(request.IntendedOwnerSafe, setup, &vm); err != nil {
+			t.Fatal("canonical Safe setup", err)
+		}
+		f.contracts.state.SetState(request.IntendedOwnerSafe, common.BigToHash(big.NewInt(5)), common.BigToHash(big.NewInt(17)))
+		f.contracts.state.SetNonce(request.IntendedRelayer, request.IntendedRelayerNonce, tracing.NonceChangeUnspecified)
+		f.contracts.advanceEmpty()
+	}()
+	last := preview.Plan.Proposal.AdoptedActions[7].Receipt
+	safeRequest := bootstrapSuccessorSafeRequest{Schema: bootstrapSuccessorSafeRequestSchema, PreparationPlanHash: preview.PlanHash,
+		PreparationRecordHash: bootstrapSuccessorSafeTestRecord(preparationApproval).ContentHash,
+		Version:               "1.4.1", Variant: "Safe", Archive: planFileReference{Path: archivePath, Sha256: pin.ArchiveSha256}, RelayerGas: 500000,
+		RelayerFeeCapWei: "10", RelayerTipCapWei: "1", StartNativeNumber: last.NativeNumber, StartNativeHash: last.NativeHash, ValidThroughNative: last.NativeNumber + 100}
+	safePath := filepath.Join(filepath.Dir(f.path), "synthetic-canonical-safe-request.json")
+	bootstrapRootTestWrite(t, safePath, safeRequest)
+	stdout.Reset()
+	stderr.Reset()
+	if code := f.command(t.Context(), "contract-successor-safe-review", &stdout, &stderr, "--request", requestPath, "--safe-request", safePath); code != 3 {
+		t.Fatal("canonical Safe review", code, stderr.String())
+	}
+	var review bootstrapSuccessorSafeReview
+	if err := decodePlanJson(stdout.Bytes(), &review); err != nil {
+		t.Fatal(err)
+	}
+	var signatures []byte
+	for _, owner := range oracle.keys[:2] {
+		raw, err := crypto.Sign(review.Transaction.Digest[:], owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw[64] += 27
+		signatures = append(signatures, raw...)
+	}
+	executionRequest := bootstrapSuccessorExecutionRequest{Schema: bootstrapSuccessorExecutionRequestSchema, SafeReviewHash: review.ContentHash,
+		RegistryDirectory: bootstrapSuccessorExecutionTestDirectory(t), Owners: oracle.owners, Singleton: singleton,
+		SafeSignatures: bootstrapSuccessorExecutionTestRaw(t, "synthetic-canonical-safe-signatures.bin", signatures)}
+	draft := bootstrapSuccessorExecutionPlan{Review: review, Request: executionRequest, SafeSignatures: "0x" + hex.EncodeToString(signatures)}
+	outer, err := draft.outer(oracle.profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsigned, err := outer.unsigned()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := types.SignTx(unsigned, types.LatestSignerForChainID(big.NewInt(mainnetEvmChainId)), relayer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signed, err := tx.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	executionRequest.RelayerTransaction = bootstrapSuccessorExecutionTestRaw(t, "synthetic-canonical-relayer.bin", signed)
+	executionPath := filepath.Join(filepath.Dir(f.path), "synthetic-canonical-execution-request.json")
+	bootstrapRootTestWrite(t, executionPath, executionRequest)
+	self := &bootstrapSuccessorCanonicalFixture{t: t, original: f, key: key, profile: oracle.profile,
+		paths: []string{"--request", requestPath, "--safe-request", safePath, "--execution-request", executionPath}}
+	stdout.Reset()
+	if code, diagnostic := self.invoke("contract-successor-execution-preview", &stdout); code != 0 {
+		t.Fatal("canonical execution preview", code, diagnostic)
+	}
+	var executionPreview struct {
+		Schema       string                          `json:"schema"`
+		Plan         bootstrapSuccessorExecutionPlan `json:"plan"`
+		PlanHash     string                          `json:"execution_plan_hash"`
+		SigningBytes string                          `json:"execution_signing_bytes"`
+	}
+	if err := decodePlanJson(stdout.Bytes(), &executionPreview); err != nil {
+		t.Fatal(err)
+	}
+	self.approval = bootstrapSuccessorExecutionTestSign(t, executionPreview.Plan, key, self.profile)
+	approvalRef := bootstrapRootTestWrite(t, filepath.Join(filepath.Dir(f.path), "synthetic-canonical-execution-approval.json"), self.approval)
+	self.approvalArgs = []string{"--approval", approvalRef.Path, "--approval-sha256", approvalRef.Sha256, "--accept-execution-hash", executionPreview.PlanHash}
+	stdout.Reset()
+	if code, diagnostic := self.invoke("contract-successor-execution-claim", &stdout, self.approvalArgs...); code != 0 {
+		t.Fatal("canonical execution claim", code, diagnostic)
+	}
+	currentRuntime := f.contracts.config.Plan.Runtime
+	currentRuntime.RuntimeVersion.SpecVersion++
+	self.canonical = bootstrapSuccessorCanonicalTestApproval(t, executionPreview.Plan, key, currentRuntime)
+	self.canonicalRef = bootstrapRootTestWrite(t, filepath.Join(filepath.Dir(f.path), "synthetic-canonical-authorization.json"), self.canonical)
+	func() {
+		f.contracts.stateLock.Lock()
+		defer f.contracts.stateLock.Unlock()
+		upgradeNative, originalOverride := f.contracts.head, f.contracts.override
+		f.contracts.override = func(method string, params []any, result any) any {
+			result = originalOverride(method, params, result)
+			if method == "state_getRuntimeVersion" {
+				for number, hash := range f.contracts.hashes {
+					if number >= upgradeNative && hash == params[0] {
+						return currentRuntime.RuntimeVersion
+					}
+				}
+			}
+			return result
+		}
+		f.contracts.tx, f.contracts.raw, f.contracts.receipt = tx, signed, nil
+		f.contracts.vm.Origin, f.contracts.vm.GasLimit = request.IntendedRelayer, tx.Gas()
+		f.contracts.callIntrinsicGas = true
+	}()
+	return self
+}
+
+// Separate private evidence files and a new signature domain bind the original
+// independent key to explicit build review and scoped signer inventory.
+func bootstrapSuccessorCanonicalTestApproval(t *testing.T, plan bootstrapSuccessorExecutionPlan, key ed25519.PrivateKey, profile rootReceiptProfile) bootstrapSuccessorCanonicalApproval {
+	t.Helper()
+	authority := bootstrapSuccessorCanonicalAuthorization{Schema: bootstrapSuccessorCanonicalSchema, ExecutionPlanHash: plan.hash(), Policy: bootstrapSuccessorCanonicalPolicy,
+		SafeBuildEvidence: bootstrapSuccessorExecutionTestRaw(t, "synthetic-safe-build.txt", []byte("synthetic independent build review")),
+		CurrentRuntime:    profile, RuntimeEvidence: bootstrapSuccessorExecutionTestRaw(t, "synthetic-current-runtime.txt", []byte("synthetic independent current runtime artifact and codec review")),
+		CutoverEvidence: bootstrapSuccessorExecutionTestRaw(t, "synthetic-cutover.txt", []byte("synthetic all-signers registry cutover and complete outstanding-signature inventory"))}
+	message, err := authority.signingBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bootstrapSuccessorCanonicalApproval{Authorization: authority, Signature: hex.EncodeToString(ed25519.Sign(key, message))}
+}
+
+// Lightweight authority roots use a synthetic reviewed profile without claiming
+// a chain observation. The full fixture signs its distinct post-bootstrap runtime.
+func bootstrapSuccessorCanonicalTestRuntime() rootReceiptProfile {
+	return rootReceiptProfile{RuntimeSourceCommit: frontierMappingSourceCommit,
+		RuntimeVersion:  crv4.RuntimeVersionIdentity{SpecName: "synthetic-canonical-runtime", SpecVersion: 1, TransactionVersion: 1, StateVersion: 1},
+		RuntimeCodeHash: crypto.Keccak256Hash([]byte("synthetic-runtime-code")).Hex(), RuntimeMetadataHash: crypto.Keccak256Hash([]byte("synthetic-runtime-metadata")).Hex()}
+}
+
+// Only the existing public command dispatch can execute this helper's options.
+func (self *bootstrapSuccessorCanonicalFixture) invoke(command string, stdout *bytes.Buffer, extra ...string) (int, string) {
+	var stderr bytes.Buffer
+	code := self.original.command(self.t.Context(), command, stdout, &stderr, append(append([]string{}, self.paths...), extra...)...)
+	return code, stderr.String()
+}
+
+// Reads and submits require the same explicitly pinned canonical approval.
+func (self *bootstrapSuccessorCanonicalFixture) online(stdout *bytes.Buffer, submit bool) (int, string) {
+	args := append(append([]string{}, self.approvalArgs...), "--online", "--canonical-approval", self.canonicalRef.Path, "--canonical-approval-sha256", self.canonicalRef.Sha256)
+	if submit {
+		args = append(args, "--submit")
+	}
+	return self.invoke("contract-successor-execution-resume", stdout, args...)
+}
+
+// Public input reconstruction keeps all five original preparation locks held;
+// the concrete constructor adds eight historical contract marker locks.
+func (self *bootstrapSuccessorCanonicalFixture) open() (*bootstrapSuccessorExecutionStore, *bootstrapSuccessorCanonicalChain) {
+	self.t.Helper()
+	plan, profile, retained, err := loadBootstrapSuccessorExecution(self.t.Context(), self.original.path, self.original.config.RunDirectory,
+		self.original.preparation.Plan.ContentHash, self.paths[1], self.paths[3], self.paths[5], self.approvalArgs[1], self.canonicalRef.Path)
+	if err != nil {
+		self.t.Fatal(err)
+	}
+	self.t.Cleanup(func() { retained.close() })
+	owner, err := openBootstrapSuccessorExecutionStore(self.t.Context(), plan, self.approval, profile, false, nil)
+	if err != nil {
+		self.t.Fatal(err)
+	}
+	self.t.Cleanup(func() { owner.close() })
+	adapter, err := newBootstrapSuccessorCanonicalChain(self.t.Context(), owner, self.canonical)
+	if err != nil {
+		self.t.Fatal(err)
+	}
+	self.t.Cleanup(func() { adapter.close() })
+	return owner, adapter
+}
+
+// Lightweight getter tests share only the reviewed Safe oracle and local RPC
+// engine; they intentionally do not claim original-v3 custody authentication.
+func bootstrapSuccessorCanonicalSafeFixture(t *testing.T) (*bootstrapSuccessorCanonicalChain, *bootstrapSuccessorExecutionFixture, *evmCreateFixture) {
+	t.Helper()
+	model := newBootstrapSuccessorExecutionFixture(t)
+	chain := newEvmCreateFixture(t)
+	chain.state, chain.vm = model.oracle.state, model.oracle.vm
+	chain.vm.State = chain.state
+	chain.vm.ChainConfig.ChainID = big.NewInt(mainnetEvmChainId)
+	chain.history = &evmCreateHistory{}
+	owned, err := newEvmOwnedChain(chain.config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { owned.client.httpClient.CloseIdleConnections() })
+	adapter := &bootstrapSuccessorCanonicalChain{chain: owned, owner: &bootstrapSuccessorExecutionStore{profile: model.profile}}
+	// The oracle exposes its proxy at this plan's exact synthetic address.
+	model.approval.Plan.Review.Transaction.Safe = model.oracle.transaction.Safe
+	tx := model.approval.Plan.transaction()
+	model.approval.Plan.Review.Transaction.Digest = model.oracle.oracleDigest(tx)
+	return adapter, model, chain
+}

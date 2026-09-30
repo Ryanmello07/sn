@@ -554,6 +554,21 @@ func (self *evmCreateFixture) serve(writer http.ResponseWriter, request *http.Re
 		if self.history != nil && call.Params[1] == "0x0" {
 			result = self.history.transactions[call.Params[0].(string)]
 		}
+	case "eth_getTransactionByHash":
+		if self.history != nil {
+			for _, transaction := range self.history.transactions {
+				if transaction.Hash().Hex() == call.Params[0] {
+					result = transaction
+				}
+			}
+		}
+		if self.tx != nil && self.tx.Hash().Hex() == call.Params[0] {
+			for _, raw := range self.writes {
+				if bytes.Equal(raw, self.raw) {
+					result = self.tx
+				}
+			}
+		}
 	case "eth_getTransactionCount":
 		result = fmt.Sprintf("0x%x", self.state.GetNonce(self.config.Plan.Actions[0].Sender))
 		if self.history != nil {
