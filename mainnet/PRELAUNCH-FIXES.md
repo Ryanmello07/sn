@@ -329,16 +329,28 @@ complete pending overlay. The reviewed native RPC exposes neither a pending
 proof root nor an atomic multi-read token; final known-word/code rechecks retain
 that explicit limitation and cannot authorize a send.
 
-**P0 follow-up — Proposed current-policy custody and production capability.**
-Implement an immutable independently signed policy-revision journal under the
-existing exclusive owner, exact counted/outcome references, partial-publication
-recovery, and a distinct production authenticator selected only by the reviewed
-signature/capability route. Preserve original history statements, all runtime
-predecessors, receipts, exact signed bytes, nonces, attempts and liabilities.
-Complete expensive proof work before final pending re-admission and direct
-exact-byte submission. Prepare and independently qualify that concrete path
-before asking the user to approve the alternative current-only boundary. Public
-submission remains closed until explicit policy approval and a qualified
+**Current-policy custody — scoped qualification complete.** The separate `3f88a948`
+[custody increment](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CUSTODY.md) implements an
+immutable independently signed acceptance journal under the existing exclusive
+owner, exact counted/outcome references and partial-publication recovery. Both
+proposal and acceptance signatures are required. Runtime-prefix order and
+interrupted terminal events constrain authority import; incomplete policy stages
+block reservations and cross-imports. Original history statements, runtime
+predecessors, receipts, signed bytes, nonces, attempts and liabilities remain
+retained. Its [qualification note](evidence/safe-current-custody-qualification-20260930.md)
+records eight new and thirty-one adjacent roots passing normal/race, all eight
+normal and exactly five selected race controls causal, and the sealed exact
+source/module/local-dependency evidence. This local custody slice cannot enable
+public policy import or submission.
+
+**P0 follow-up — Concrete current-policy production capability and approval.**
+Connect the qualified native proof to a distinct production authenticator
+selected only by complete independent acceptance and an installed release route.
+Complete expensive proof work before final scoped pending re-admission and the
+one retained exact-byte send. Preserve the exact proof snapshot separately from
+any later admission-window head. Prepare and independently qualify that concrete
+path before asking the user to approve the alternative current-only boundary.
+Public submission remains closed until explicit policy approval and a qualified
 capability route are installed. It must not reinterpret the existing signed
 complete-history attestation or claim current proof establishes historical truth.
 
