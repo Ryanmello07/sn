@@ -376,6 +376,24 @@ Explicit approval of those current-only assumptions and a separately qualified
 release-route installation remain open P0 gates. No mainnet action is authorized
 by local qualification.
 
+**Contract-role declaration admission — qualification pending.** The separate
+[offline contract-role plan](BOOTSTRAP-CONTRACT-ROLES.md) addresses a cross-component
+gap: two signed UR configs can agree with each other while targeting a foreign
+vault/coordinator or the implementation instead of the approved proxy. The new
+admission reconstructs the eight approved projections, binds both configs to the
+exact proxy/vault/initial policy identifier and retains the evidence domain.
+It preserves original v1/v2/v3 custody and does not grant live readiness. Sol
+normal/race positives and causal controls remain pending.
+
+**P0 follow-up — Canonical installation-to-service admission.** Wire the verified
+contract-role relationship into a separately qualified activation boundary that
+authenticates the original CREATE and anchor receipts, validates each declared
+deployment scan floor against actual history, rechecks current code/getters and
+the anchored evidence journal, and admits both UR roles/operators plus the
+separate root service. A declaration-only report is not production authority.
+Safe current-policy approval/public-route installation and live chain identity
+remain independent gates; this increment authorizes no mainnet action.
+
 **Additive canonical runtime authority — scoped qualification complete.** The
 `3d526830` [runtime revision increment](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md)
 implements independently signed artifact additions while retaining the immutable

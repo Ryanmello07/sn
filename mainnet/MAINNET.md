@@ -162,6 +162,16 @@ No policy approval or public-send activation is claimed; the original signed
 history statement remains retained and unproven. Complete pending storage and
 independent finality are not established by the owned RPC observations.
 
+**Contract-to-validator declaration admission — qualification pending.** The
+separate signer-free [contract-role plan](BOOTSTRAP-CONTRACT-ROLES.md) binds both
+signed UR configs to the approved coordinator proxy, vault and initial policy
+identifier, with the evidence journal's exact immutable domain. Pairwise config
+agreement cannot substitute for this deployment binding. The original preparation
+and recovery scope stay unchanged. Canonical installation, the evidence anchor,
+deployment scan floors, current state and service activation remain open; this
+offline check does not advance a durable chain phase or install a public send
+route. Independent behavioral qualification is pending.
+
 **Qualified runtime authority increment.** The
 [additive revision path](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md) at
 `3d526830` retains separately signed runtime revisions under the original
