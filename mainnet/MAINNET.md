@@ -1223,6 +1223,13 @@ ABI, constructor, storage-layout or immutable-reference changes. The selected
 schema-1 catalogue is consumed through the bootstrap plan's exact file path and
 SHA256; the checked-in binding does not need replacement.
 
+The [fresh-catalogue qualification](evidence/fresh-contract-catalogue-build-20260930.md)
+now records a complete local candidate: all seventeen binaries built, all ten
+contract creation/runtime pairs exact, and all five deployment interfaces
+unchanged. Independent Sol qualification passes the 31 builder roots normal/race,
+vet, causal controls and complete artifact readback. The receipt pins the selected
+catalogue separately from the unchanged historical files.
+
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
 catalogue review and independent qualification are the preferred path for the

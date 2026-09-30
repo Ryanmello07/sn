@@ -760,8 +760,13 @@ original complete census found nine server build failures caused by stale local
 SDK/Connect overrides; server `898dc8f3` fixes the exact module graph, and
 independent Sol qualification rebuilds all thirteen server commands and passes
 three source-graph roots in normal/race modes plus vet. The four SN commands
-also compile in the author's census. Independent builder qualification remains
-pending in the separate frozen handoff; these compile results are not test passes.
+also compile in the author's census. The subsequent
+[fresh-catalogue qualification](evidence/fresh-contract-catalogue-build-20260930.md)
+records all seventeen binaries built in one sealed candidate, ten exact contract
+byte pairs and unchanged deployment interfaces. Independent Sol qualification
+passes all 31 builder roots normal/race, vet, four causal controls and all 170
+artifact readbacks. Executable compile results remain separate from application
+behavioral qualification.
 The retained-mode manifest keeps historical and compiled contract hashes:
 Coordinator and ValidatorEvidence have metadata drift associated with the changed
 imported SettlementVault source, so that selection's source-to-bytecode equality

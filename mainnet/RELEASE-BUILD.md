@@ -92,8 +92,11 @@ in normal and race modes, with vet. Its SHA256SUMS digest is
 `16f069e0a8c62785a1e54c6a206454b6c2c9f4ff5e9d4d61daa2a0ab32f1aed8`.
 That receipt covers server `898dc8f3`, not this builder or an approved composed
 release. The author's corrected seventeen-command census is separate compile
-evidence. Independent builder qualification and the first sealed builder output
-are recorded in the release handoff; no behavioral-test pass is inferred here.
+evidence. The subsequent [fresh-catalogue qualification](evidence/fresh-contract-catalogue-build-20260930.md)
+records all 31 builder roots passing normal/race, vet, independent causal controls
+and a complete sealed output with ten exact contract byte pairs. That receipt
+qualifies the builder and local composition; it does not infer application
+behavioral qualification from successful executable compilation.
 
 Every image context retains its production Dockerfile verbatim and a fresh copy
 of the selected binary, with both copies' hashes joined to the binary manifest.
