@@ -336,8 +336,25 @@ func main() {
 	flags := flag.NewFlagSet("mainnet-release-build", flag.ContinueOnError)
 	configPath := flags.String("config", "", "exact release build config")
 	imageConfigPath := flags.String("image-config", "", "offline scratch-image supplement config")
-	if err := flags.Parse(os.Args[1:]); err != nil || flags.NArg() != 0 || (*configPath == "") == (*imageConfigPath == "") {
+	packageImageConfigPath := flags.String("package-image-config", "", "offline seven-service image supplement config")
+	if err := flags.Parse(os.Args[1:]); err != nil || flags.NArg() != 0 {
 		os.Exit(2)
+	}
+	selected := 0
+	for _, path := range []string{*configPath, *imageConfigPath, *packageImageConfigPath} {
+		if path != "" {
+			selected++
+		}
+	}
+	if selected != 1 {
+		os.Exit(2)
+	}
+	if *packageImageConfigPath != "" {
+		if err := executePackageImageConfig(ctx, *packageImageConfigPath); err != nil {
+			fmt.Fprintln(os.Stderr, "release package image build:", err)
+			os.Exit(1)
+		}
+		return
 	}
 	if *imageConfigPath != "" {
 		if err := executeImageConfig(ctx, *imageConfigPath); err != nil {

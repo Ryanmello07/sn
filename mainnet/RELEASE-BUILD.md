@@ -141,11 +141,71 @@ The supplement can mark only that image's `source_to_image_verified` true. Its
 aggregate `source_to_image_verified`, `reproducibility_verified`,
 `release_complete` and `deployment_approved` stay false, and `missing_images`
 contains the other seven roles. Those production Dockerfiles use remote `ADD`
-and an Ubuntu base: `--network=none` fences `RUN`, not source fetching. Their
-offline source closure and current OCI readback are not yet qualified. This
-bounded scratch implementation does not rewrite those recipes or infer their
-qualification from a cached base. Runtime behavior, attestations, independent
+and an Ubuntu base: `--network=none` fences `RUN`, not source fetching. The
+scratch mode cannot build them. Runtime behavior, attestations, independent
 builder reproduction and arm64 remain open.
+
+`go run -mod=readonly ./scripts/mainnet-release-build --package-image-config /absolute/package-image-config.json`
+adds a separate bounded supplement for all seven Ubuntu service recipes. Its
+schema is `urnetwork-mainnet-package-image-build-v1`. The required
+`candidate_manifest`, `output`, `buildx` and `docker_socket` fields follow the
+scratch config. `base_layout` names a physical local OCI layout directory;
+`packages` maps all forty IDs from the exact retained
+`runtime-packages.lock.json` to local `path` and `sha256` pins. Missing,
+modified or aliased inputs fail without a download or package-resolution fallback.
+The base layout and output must be disjoint, and each attempt needs a new output.
+
+The base is independently authenticated from the original production
+multi-platform index digest through its unique Linux/amd64 descriptor, config
+and compressed layer. Only that selected chain and the original index blob are
+copied into a private local OCI layout. Other architectures and base attestations
+are not claimed. The builder admits only the seven exact reviewed production
+Dockerfile hashes and the exact package-lock hash. It retains every original
+recipe and mechanically replaces its two pinned `FROM` locations with the
+`offline-ubuntu` named OCI context and each literal checksum-pinned remote `ADD`
+with a verified local `COPY --chmod=0600`. Package installation, application
+binary paths, command arguments, environment, stop signal and credential symlink
+instructions remain byte-for-byte unchanged. All forty package payloads remain
+in the build-stage input census; only the selected architecture is installed.
+The shared server source recipes are never edited.
+
+The fixed build invocation uses the private local OCI context, fresh local
+package and binary copies, the original source epoch, timestamp rewriting,
+no cache, network-none build steps and the same remote-source DENY policy.
+Every copied source is rehashed before each image invocation and before sealing.
+SBOM and provenance collectors remain disabled. This closes the selected source
+graph; it does not attest daemon-wide network isolation. The original pinned
+Ubuntu base may already be cached, but cache presence alone is not accepted as
+proof of its identity or as the offline boundary.
+
+OCI readback authenticates every descriptor, compressed layer and complete
+uncompressed diff ID. The output must have the exact original base layer plus
+installation, executable and credential-link layers, one Linux/amd64 platform
+and the exact reviewed runtime config. A bounded logical rootfs reader handles
+directories, regular files, symlinks, existing-target hardlinks and OCI
+whiteouts without filesystem extraction. It rejects path traversal, duplicate
+paths within a layer, writes through link parents, unsupported inode types,
+extended metadata other than decoded PAX path/linkpath, malformed archive tails,
+external descriptors and decompression/count limits. Directory type replacement
+and later changes to hardlink targets are refused rather than approximated.
+It verifies the final
+root-owned mode-0755 executable against the parent's bytes, all selected package
+versions and installed states, the linker cache, CA bundle, OpenSSL, proxy's curl,
+and the credential symlink. Build-only package payloads and the two removed
+volatile files must be absent. A sorted content/inode census binds the entire
+logical final rootfs, while builder metadata must independently match the platform
+and config digests.
+
+The new receipt retains original and localized recipes, local base closure,
+package copies, input pins, command logs/exits and all seven OCI archives and
+readbacks. The parent remains unchanged. Per-image verification can become true
+only after readback; aggregate source-to-image, reproducibility, release completion
+and deployment approval remain false. `missing_images` contains the scratch
+worker because this supplement does not merge the earlier scratch receipt.
+Successful local construction does not qualify application runtime behavior,
+production configuration, vulnerability or attestation policy, arm64, a durable
+input archive and restore process, or an independent builder. No image is loaded,
+run, tagged, pushed or deployed by this mode.
 
 The September 30 retained-catalogue full-source Foundry build used solc 0.8.24, Cancun, optimizer
 200 and via IR, and completed successfully. ReserveSink, SettlementVault and

@@ -1,5 +1,5 @@
 // A separate receipt adds one offline scratch image to an immutable composition.
-// Seven package-bearing recipes remain blocked until their remote inputs close.
+// Package-bearing recipes use the separate pinned local-input supplement.
 package main
 
 import (
