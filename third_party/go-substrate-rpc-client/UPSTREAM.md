@@ -1,4 +1,4 @@
-# Substrate RPC transport and metadata decoder corrections
+# Substrate RPC transport, response and metadata decoder corrections
 
 This local module preserves the runtime Go sources, module manifests, README,
 and license files from `github.com/centrifuge/go-substrate-rpc-client/v4`
@@ -12,9 +12,10 @@ The upstream module occupies about 5.5 MiB on disk. This import omits upstream
 `*_test.go`, testdata, automation, and development files; its 212 imported files
 occupy about 4.5 MiB with the local tests. `UPSTREAM.sha256` records the original
 bytes of every imported file. The owned runtime changes are in
-`gethrpc/client.go`, `gethrpc/handler.go`, `scale/codec.go`, `scale/limits.go` and
-`types/metadataV14.go`; `UPSTREAM.patch` records them, including the new limits
-file. Reversing that patch
+`gethrpc/client.go`, `gethrpc/handler.go`, `gethrpc/http.go`,
+`gethrpc/http_response.go`, `gethrpc/subscription.go`, `scale/codec.go`,
+`scale/limits.go` and `types/metadataV14.go`; `UPSTREAM.patch` records them,
+including the new admission files. Reversing that patch
 in a temporary copy makes every entry in `UPSTREAM.sha256` match. The root
 Apache 2.0 license and the gethrpc LGPLv3 `COPYING`, `COPYING.LESSER`, and `AUTHORS`
 files are retained without changes.
@@ -41,17 +42,24 @@ does not inherit a dependency's replacements.
 Run the owned transport tests from the SN module root:
 
 ```sh
-go test -mod=readonly -vet=off -count=1 github.com/centrifuge/go-substrate-rpc-client/v4/gethrpc
-go test -mod=readonly -vet=off -race -count=1 github.com/centrifuge/go-substrate-rpc-client/v4/gethrpc
+go test -mod=readonly -count=1 github.com/centrifuge/go-substrate-rpc-client/v4/gethrpc
+go test -mod=readonly -race -count=1 github.com/centrifuge/go-substrate-rpc-client/v4/gethrpc
+go vet -mod=readonly github.com/centrifuge/go-substrate-rpc-client/v4/gethrpc
 go test -mod=readonly -count=1 ./crv4 ./miner
 go test -mod=readonly -race -count=1 ./crv4 ./miner
 ```
 
-Only the dependency package commands disable vet: upstream's unused server-side
-`Notifier.send` already converts its numeric subscription ID to a one-rune
-string, which vet rejects. That unrelated behavior is unchanged. Upstream's
-original gethrpc tests also reference removed subscription APIs and do not
-compile. The owned tests force dispatch ordering for calls, batches,
+Default vet is enabled. The inherited server-side `Notifier.send` rune conversion
+and numeric `Subscription.MarshalJSON` response disagreed with each other and
+the client string-ID reader. Both now emit one canonical decimal string, while
+unsubscribe decoding still accepts legacy numeric uint32 inputs and refuses
+malformed/null owners without mutation. A paired local codec exercises the real
+client handshake, buffered/live notification writers and unsubscribe owner for
+zero, ASCII-range and maximum uint32 IDs. Generic server subscription routing
+remains disabled as in the imported fork. The module stays at Go 1.21; owned
+tests use compatible explicit contexts. Upstream's original gethrpc tests
+reference removed subscription APIs and do not compile. The owned tests force
+dispatch ordering for calls, batches,
 subscriptions, write errors, cancellation, shutdown, and both reconnect orders.
 SN's `TestSubmitRawReturnsDisconnectBeforeWriteCompletion` exercises the public
 production submission path and fails deterministically if this replacement is
@@ -72,7 +80,7 @@ SN's central `crv4.DecodeRuntimeMetadata` selects the bounded decoder after an
 collection count is bounded by the raw input length, with 64 MiB requested
 storage, 2,097,152 decoded values and depth 64 as independent finite limits.
 Full input consumption and exact raw hashing remain required. This does not
-authenticate metadata or bound the earlier HTTP JSON-RPC response buffering.
+authenticate metadata or independently bound earlier HTTP response buffering.
 The generic metadata API still supports its existing v4 and v7–v14 variants;
 the separately pinned native SDK owns the existing v15 signing-metadata path.
 
@@ -86,3 +94,20 @@ go test -mod=readonly -race -count=1 github.com/centrifuge/go-substrate-rpc-clie
 The [qualification receipt](../../mainnet/evidence/runtime-metadata-bounds-20261001.md)
 also covers shared CRV4 and self-sealed discovery inputs, valid runtime470,
 independently pinned owner/root metadata and the offline SDK-v15 controls.
+
+The [shared HTTP admission receipt](../../mainnet/evidence/http-rpc-response-bounds-20261001.md)
+covers ordinary calls, notifications and batches before JSON decoding. Each
+physical response is capped at 32 MiB + 64 KiB + 2 bytes after automatic HTTP
+decompression, preserving the native 16 MiB events allowance on the hex wire.
+An aggregate batch has the same cap; a caller must split larger read batches
+before sending. Content-Length can reject early, but streamed/chunked bodies
+still receive a limit plus one probe. Every body is closed exactly once before
+publication; non-success status bodies are never read or copied to diagnostics.
+Trailing JSON, late read/close/cancellation errors, foreign single IDs and
+missing/duplicate/foreign/excess batch IDs refuse the complete response without
+partial publication. Notifications do not acquire a response-channel owner.
+
+Configured CRV4 allowlisted metadata reads and mainnet discovery already had
+separate finite admission. This shared boundary closes direct/unmarked native
+transport paths without granting them retry authority. It does not bound
+separate EVM clients, aggregate concurrent allocations or whole-process RSS.

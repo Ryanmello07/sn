@@ -287,12 +287,25 @@ runtime470 plus the separate pinned SDK-v15 owner path remain compatible.
 The frozen SN `689938d6` release predates this owned-fork change; selecting it
 requires a fresh exact-source release and qualification.
 
-**Open RPC transport resource hardening:** the HTTP JSON-RPC client can buffer
-an arbitrarily large response string before metadata reaches this decoder.
-Bounded HTTP response admission remains a separate implementation and test gate;
-the existing WebSocket frame limit does not prove an HTTP bound. The decoder's
-requested-storage/work budgets are not a whole-process memory limit or a sandbox
-for arbitrary custom decoders. No transport capacity qualification is inferred.
+**Shared native HTTP response admission implemented:**
+[source `58852c47`](evidence/http-rpc-response-bounds-20261001.md) closes the owned
+GSRPC transport bypass for unmarked submissions, unknown methods, direct clients
+and batches. Configured CRV4 metadata reads were already marked and physically
+bounded; mainnet discovery's separate RPC client also already used finite
+per-call reads. The shared transport now admits at most 32 MiB + 64 KiB + 2
+decompressed JSON body bytes, preserving one 16 MiB native events field after
+hex expansion. The same finite aggregate cap applies to batches; owners must
+split larger read batches before issuing them. Status bodies are closed without
+reading, and complete body/framing, close, cancellation and response-ID checks
+precede publication. No write retry is introduced. The adjacent server
+subscription response/notification decimal-ID mismatch is corrected with a
+local real-codec handshake and legacy numeric unsubscribe compatibility.
+
+This qualifies the owned native transport paths, not every HTTP client.
+Separate EVM/go-ethereum transports, aggregate process/concurrency memory and
+host capacity need their own limits and qualification. The decoder's budgets
+remain requested-storage/work limits, not a custom-code sandbox. Selecting
+these owned-fork changes requires a fresh exact-source release beyond `689938d6`.
 
 MG-01/MG-06 have a later [read-only public-entrypoint fallback](evidence/public-entrypoint-fallback-20261001.md): the archive route timed out, while the official mainnet entrypoint returned matching genesis/EVM/runtime identity at finalized block 9,187,206 and another absent `RecycleOrBurn[25]` value. The fallback is unapproved observation only; it neither retargets signed work nor provides archive history. Preserve the failed archive transcript and obtain separately approved route authority before any endpoint switch for execution.
 
