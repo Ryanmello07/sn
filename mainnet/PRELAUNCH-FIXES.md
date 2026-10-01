@@ -20,6 +20,12 @@ activation/operator receipts; a release selecting `720e7c61` needs its own sourc
 migration/config inventory and rebuilt image/source joins. This review executes
 no tests and does not approve release or deployment.
 
+The [11:24 UTC read-only route check](evidence/public-route-check-20261001-1124.md)
+reproduces the earlier mainnet genesis, EVM 964 and runtime 470 at finalized
+block 9,187,604 through the public entrypoint. Snow's VPN route still answered
+HTTP 502 for three identity methods. Neither observation supplies independent
+identity/runtime approval or changes the selected release source.
+
 **October 1 original-authority contract anchor (MG-08):** the
 [installation producer](BOOTSTRAP-CHAIN.md#original-authority-evidence-anchor-and-installation-readback)
 requires the exact coordinator binding event within the retained Safe execution,
