@@ -351,8 +351,8 @@ recovery. The [shared onchain correction](evidence/shared-evm-finality-closure-2
 at `222e45a8` also closes finalized and canonical receipt witnesses for the
 shared send path; transient errors, missing blocks and regressed finality stay
 pending within the original deadline. MG-04/PH-04 stay open. The
-[selected successor release](evidence/release-bab49e1c-servera3e2-20261001.md)
-packages these corrections at exact SN `bab49e1c` / server `a3e2e668`; independent
+[bootstrap finality baseline](evidence/release-28ebfced-serverac86-20261001.md)
+packages these corrections at exact SN `28ebfced` / server `ac86855d`; independent
 release qualification and live acceptance remain separate gates.
 
 The later [bootstrap finality correction](evidence/bootstrap-finality-qualification-20261001.md)
@@ -363,9 +363,9 @@ a regressed frontier or replaced witness refuses new evidence. The separate
 `41f053ab` successor closes the refreshed EVM admission pass after account and
 contract reads, before it can publish send readiness. Refusals retain the original
 signatures and nonces without consuming an attempt; recovery sends the same
-transaction once. Use these exact source corrections in the next composed build:
-the selected `bab49e1c`/`a3e2e668` release
-cannot attest them. The linked evidence distinguishes exact source qualifications,
+transaction once. The [bootstrap finality baseline](evidence/release-28ebfced-serverac86-20261001.md)
+packages these exact source corrections at SN `28ebfced` / server `ac86855d`.
+The linked evidence distinguishes exact source qualifications,
 fixture corrections and disjoint passing race continuations from the preserved
 package timeouts. Owned-RPC assertions do not close independent chain/runtime
 authority or live activation gates.
@@ -1555,7 +1555,7 @@ predecessor releases retain their original bytes and separate scope. Independent
 compiler/build reproduction, production policy/configuration, migration/restore,
 rollout, publication identity and release approval remain open.
 
-The [selected metadata/HTTP successor](evidence/release-bab49e1c-servera3e2-20261001.md)
+The [earlier metadata/HTTP successor](evidence/release-bab49e1c-servera3e2-20261001.md)
 now packages metadata-decoder `b9ee4c91`, shared HTTP/subscription `58852c47`
 and direct EVM HTTP `0dea3f26` at frozen SN `bab49e1c`, paired with server
 `a3e2e668` and unchanged Connect/SDK pins. Two sequential source builds and
@@ -1571,6 +1571,25 @@ nodes. Independent provenance/build reproduction, actual role behavior,
 production configuration/policy, rollout, published identity and release
 approval remain open. Earlier receipts retain their original scope, and later
 reporting/authority documentation does not change this frozen binary source.
+
+The [bootstrap finality baseline](evidence/release-28ebfced-serverac86-20261001.md)
+binds exact SN `28ebfced` / server `ac86855d`, including native observation
+closure, refreshed EVM send admission and the selected-grant locking change.
+Connect/SDK pins remain unchanged. Two sequential fresh-cache builds match all
+seventeen executables and ten bytecode outputs; both complete eight-image
+aggregates verify 342 artifacts with identical platform/configuration/archive
+bytes. All 95 builder/source-graph and thirteen sampler roots pass normal/race
+and their packages pass vet. The repeated 61-file inventory retains twelve
+migration inputs and 751 source catalogue entries without applying migrations.
+Sixteen original component records retain their exact source and failure scopes.
+Independent readback passes both source candidates and both eight-image sets;
+its primary receipt and separate B-image addendum preserve their distinct scope.
+Local builds and artifact readback do not close independent compiler/build
+reproduction, composed service/database behavior, production policy, migration,
+rollout, published identity or release/deployment approval. Later source changes
+require a separate exact release; reporting commits do not change these pins.
+This baseline is **superseded for launch** by the later original-authority EVM
+custody successor; a new exact-source build and qualification are required.
 
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
