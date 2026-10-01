@@ -1332,6 +1332,16 @@ custody/validator/settlement state, deliver alerts,
 or execute repairs. Those are MG-07 and related production gates. An identity
 snapshot hash proves the captured bytes, not operator approval or node truth.
 
+The [shared metadata decoder](evidence/runtime-metadata-bounds-20261001.md) now
+admits at most 8 MiB of raw metadata before hex allocation, refuses collection
+counts larger than their input, and shares finite storage/work/depth budgets
+across nested SCALE decoders and the v14 derived lookup map. Self-sealed discovery
+input and unapproved RPC bytes receive this guard; they remain unapproved.
+Independent owner/root metadata pins still precede decoding. Valid runtime470
+metadata and the separately pinned SDK-v15 owner path retain their existing
+semantics. HTTP response buffering before this boundary remains an open resource
+hardening gate; the local decoding budget does not bound the whole process.
+
 The [pure plan foundation](PLAN.md) consumes one `finalized-snapshot`, a source
 lock and release inputs by exact hashes. `plan --outline` exposes the unbound
 dependency graph while approved mainnet identity is unavailable;
@@ -1503,6 +1513,11 @@ eight-file omission. The 61-file unsigned inventory repeats exactly and records
 predecessor releases retain their original bytes and separate scope. Independent
 compiler/build reproduction, production policy/configuration, migration/restore,
 rollout, publication identity and release approval remain open.
+
+The later metadata-decoder source `b9ee4c91` changes the owned SCALE dependency
+and is outside that frozen `689938d6` release. Selecting this hardening requires
+a fresh exact-source build, dependency inventory and image qualification;
+the earlier reproducibility and image receipts retain their original scope.
 
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh

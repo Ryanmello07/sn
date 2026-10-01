@@ -268,14 +268,25 @@ and custody qualification, an actual approved transition and finalized Recycle
 state, followed by native 10/90 outcome evidence, remain required. This source
 needs a successor release; the SN `6c801a25` / server `720e7c61` baseline retains its scope.
 
-**Open decoder resource hardening:** unsigned subnet-discovery snapshots still
-check a caller-supplied self-consistent metadata hash before SCALE decoding.
-That hash and the 8 MiB input limit do not bound a forged compact vector's
-allocation. The new native metadata helper protects independently pinned bytes
-in owner/root preparation and native receipts; it does not close this distinct
-unapproved-snapshot decoder gap. Add a bounded metadata decoder and deterministic
-malformed/self-consistent snapshot tests before treating that discovery input
-path as resource-qualified.
+**Decoder resource admission implemented:** the shared
+[`DecodeRuntimeMetadata` boundary](evidence/runtime-metadata-bounds-20261001.md)
+at source `b9ee4c91` bounds encoded input before allocating raw bytes, collection
+counts before backing allocation, and aggregate storage, recursive work and
+depth across copied SCALE decoders. The v14 lookup-map copy uses the same budget.
+Self-hashed, sealed discovery snapshots and direct RPC metadata receive the same
+guard; a self-consistent hash still grants no runtime authority. Truncated
+compact/option input returns an error without panic or fabricated `None`.
+Independently pinned owner/root paths retain hash-first admission, and valid
+runtime470 plus the separate pinned SDK-v15 owner path remain compatible.
+The frozen SN `689938d6` release predates this owned-fork change; selecting it
+requires a fresh exact-source release and qualification.
+
+**Open RPC transport resource hardening:** the HTTP JSON-RPC client can buffer
+an arbitrarily large response string before metadata reaches this decoder.
+Bounded HTTP response admission remains a separate implementation and test gate;
+the existing WebSocket frame limit does not prove an HTTP bound. The decoder's
+requested-storage/work budgets are not a whole-process memory limit or a sandbox
+for arbitrary custom decoders. No transport capacity qualification is inferred.
 
 MG-01/MG-06 have a later [read-only public-entrypoint fallback](evidence/public-entrypoint-fallback-20261001.md): the archive route timed out, while the official mainnet entrypoint returned matching genesis/EVM/runtime identity at finalized block 9,187,206 and another absent `RecycleOrBurn[25]` value. The fallback is unapproved observation only; it neither retargets signed work nor provides archive history. Preserve the failed archive transcript and obtain separately approved route authority before any endpoint switch for execution.
 
