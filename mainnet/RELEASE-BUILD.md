@@ -94,6 +94,16 @@ receipts and complete local source-to-image aggregate. No historical
 attestation is inherited; independent reproducibility and release/deployment
 approval remain separate gates.
 
+The [selected successor release](evidence/release-233ea2be-server942-20261001.md)
+binds SN `233ea2be` / server `94229abb`, including passive-root host, owner
+recycle transition and schema 751. Two fresh-cache builds match all seventeen
+executables and five selected contract bytecode pairs; both complete
+eight-image aggregates pass, with identical platform/configuration/archive
+bytes. Its own source lock and repeated unsigned 56-file inventory preserve
+the exact source identity. All 89 builder normal/race roots and vet pass.
+This local repeat does not grant independent reproducibility or approval;
+later reporting commits and predecessor attestations remain separate.
+
 Both main modules resolve independently. The builder records their effective
 module graphs, exact module/go.mod sums, local module Git ownership and module
 file hashes. It retains the three API-bearing module zip files and SHA256
