@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const bootstrapSuccessorExecutionEventSchema = "urnetwork-mainnet-successor-execution-event-v1"
@@ -129,6 +130,26 @@ func (self bootstrapSuccessorExecutionReceipt) phase(plan bootstrapSuccessorExec
 	if outcome.Outcome != "safe-inner-success" || self.CoordinatorEvidence != plan.Review.Preparation.Approval.Plan.Proposal.Anchor.Evidence ||
 		self.EvidenceRuntimeHash != evidence.RuntimeHash || self.EvidenceGetterHash != evidence.GetterHash || !rootCanonicalHash(evidence.RuntimeHash) || !planSha256(evidence.GetterHash) {
 		return "", errors.New("successor canonical inner success lacks the exact coordinator/evidence domain binding")
+	}
+	// The getter alone can describe a different binding operation. Require the
+	// one-shot event in this exact transaction before its Safe success outcome.
+	anchor := plan.Review.Preparation.Approval.Plan.Proposal.Anchor
+	eventId := crypto.Keccak256Hash([]byte("ValidatorEvidenceFixed(address)"))
+	matched, succeeded := false, false
+	for _, log := range self.Receipt.Logs {
+		if log.Address == plan.Review.Transaction.Safe && len(log.Topics) == 2 && log.Topics[0] == profile.contractAbi.Events["ExecutionSuccess"].ID && log.Topics[1] == outcome.Digest {
+			succeeded = true
+		}
+		if log.Address != anchor.Coordinator || len(log.Topics) == 0 || log.Topics[0] != eventId {
+			continue
+		}
+		if matched || succeeded || len(log.Topics) != 2 || log.Topics[1] != common.BytesToHash(anchor.Evidence[:]) || len(log.Data) != 0 {
+			return "", errors.New("successor evidence anchor event differs from the exact one-shot binding")
+		}
+		matched = true
+	}
+	if !matched {
+		return "", errors.New("successor evidence anchor event is absent from the exact Safe execution")
 	}
 	return "installed", nil
 }
