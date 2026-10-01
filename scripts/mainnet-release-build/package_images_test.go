@@ -159,7 +159,7 @@ func TestPackageRecipeLocalizesOnlyPinnedSources(t *testing.T) {
 
 // A parent pin cannot widen the independently reviewed recipe allowlist.
 func TestPackageRecipeRejectsExpandedGraph(t *testing.T) {
-	raw := []byte("FROM synthetic.example/base\n")
+	raw := []byte("FROM synthetic.example/base AS runtime-packages\nFROM synthetic.example/base\nRUN --network=none echo unreviewed-command\n")
 	if _, err := localizePackageRecipe(raw, packageRecipeDigests()["api"], "synthetic.example/base", nil, ""); err == nil {
 		t.Fatal("accepted unreviewed recipe")
 	}
