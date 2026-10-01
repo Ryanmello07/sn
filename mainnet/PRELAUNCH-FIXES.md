@@ -6,6 +6,20 @@ acceptance**. There is no R49 requirement or instruction to resume it. Mainnet
 hardening may proceed; launch readiness must be established on the selected
 production release. No mainnet deployment or spend is authorized by this tracker.
 
+**October 1 server successor integration gate (MG-02/MG-05/MG-08):** the
+[static `720e7c61` review](evidence/server-720e-integration-review-20261001.md)
+requires migration **750** before the new server binaries, including with
+subscriber enforcement disabled. Keep `subscriber_quality_policy_version`
+absent/`0` and the v2 candidate classifier/MMDB outside active launch inputs
+unless the actual SN Quality/force-minimum picker proves fresh miner-trail
+progress for both operators under that policy. New strict enforcement also
+filters fallback and named providers; legacy or unclassified miners can lose
+all seed eligibility. Separate composed-source normal/race/vet, schema/readiness
+and cohort qualification remains required. Preserve the exact `0b8e758d`
+activation/operator receipts; a release selecting `720e7c61` needs its own source,
+migration/config inventory and rebuilt image/source joins. This review executes
+no tests and does not approve release or deployment.
+
 **October 1 original-authority contract anchor (MG-08):** the
 [installation producer](BOOTSTRAP-CHAIN.md#original-authority-evidence-anchor-and-installation-readback)
 requires the exact coordinator binding event within the retained Safe execution,
