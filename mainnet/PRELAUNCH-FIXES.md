@@ -1,10 +1,30 @@
 # Mainnet prelaunch fixes
 
-Updated 2026-09-30. This is the production gate tracker for UR mainnet
+Updated 2026-10-01. This is the production gate tracker for UR mainnet
 SN25 (netuid 25). Sim-testnet is **closed with known exceptions, without final
 acceptance**. There is no R49 requirement or instruction to resume it. Mainnet
 hardening may proceed; launch readiness must be established on the selected
 production release. No mainnet deployment or spend is authorized by this tracker.
+
+**October 1 current-runtime root scope (MG-01/MG-04/MG-08):** the
+[runtime470 review](../docs/spec/runtime-470-audit.md) binds the official immutable
+source/release to the observed code and executed metadata. The full local rebuild
+differs only in 22 hash-table seed constants in one Wasmi function; exact source
+reproducibility failed and requires an explicit independently reviewed exception
+for the exact official artifact. Runtime470 has removed
+`set_root_weights` and its old enable/cap storage; the historical v3 root service
+is not a launch-capable weight writer on that artifact. The additive
+[v4 passive root service](ROOT-PASSIVE-SERVICE.md) selects
+`passive_accumulate_in_place`, retains both independently approved UR roles,
+and observes one separately approved existing netuid-0 identity under a finite
+policy and independent full-config signature. It requires no heartbeat write,
+root native signature, nonce or spend budget. Existing signed v3 actions and
+custody remain unchanged; verify any externally held commitment before choosing
+the first new plan. Native Sr25519/owner Ed25519 wire shapes pass current metadata
+checks; native ECDSA signing remains unqualified by the 64-byte adapter. Real
+root registration/stake, independently approved genesis/runtime/checkpoint,
+qualified mapping, actual service installation/monitoring and complete UR
+production admission remain open. No transaction or live deployment is implied.
 
 ## Closed testnet evidence and remaining lessons
 

@@ -528,7 +528,7 @@ Current source changes matter to this design:
 | Subject | Source-backed observation | Bootstrap consequence |
 | --- | --- | --- |
 | Subnet emission allocation | The inspected `get_shares` uses price EMA, a `1 - MinerBurned` adjustment, then an emission gate. A flow-based helper also exists but is not the selected `get_shares` path. [Source][subtensor-shares] | Do not assume an older Taoflow formula or a root-validator vote controls our subnet's allocation. Attest the actual runtime path. |
-| Root weights | Root Reborn uses a validator's root weights for its own dividend basket. This differs from historical global subnet-allocation voting. [Official guide][root-reborn] | Implement root operation separately from UR miner scoring; do not send UR UID weights to netuid 0. |
+| Current root strategy | Runtime470 has removed `set_root_weights`. Dividends accumulate where earned; optional coldkey/proxy basket trades change holdings. [Current guide][root-reborn-470], [removal migration][root-removal-470] | Select the separately approved [passive root service](ROOT-PASSIVE-SERVICE.md) in a fresh v4 plan alongside both UR validators. Retain legacy signed actions and their recovery history. |
 | Miner collateral | Registration collateral can survive deregistration; later earnings can affect release and capture. [Official collateral guide, pinned source][collateral-guide] | A UID reset is not a balance, lock, or stake reset. Pool capture must distinguish emission, locked collateral, and principal. |
 | Native versus signed limits | The local whitepaper records runtime-dependent weight-limit behavior and requires a signed policy cap. [Local specification](../WHITEPAPER.md#15-concrete-parameters) | Observe runtime getters and enforce the signed cap independently. Do not assume a successful setter changed native enforcement. |
 
@@ -547,7 +547,8 @@ The word “root” identifies three different things here: the Substrate `Root`
 | Register a UR hotkey and acquire stake | Its coldkey or a proven permitted proxy/contract origin | Registration, burn, collateral, pool price, capacity and eligibility are independent checks. |
 | Register the root-validator hotkey | Its coldkey through the root registration path | Does not confer administrative authority. The native call's burn-price limitation needs special handling below. |
 | Submit UR consensus weights | The registered UR validator hotkey | Correct permit/eligibility, stake, activity, mechanism and CRv4 timing are required. |
-| Manage a root dividend basket | The registered root-validator hotkey | Root-specific stake, enablement, diversity, concentration and timing constraints apply. |
+| Observe the root dividend basket | Read-only access plus independently approved existing identity, runtime and finite observation policy | The selected passive service has no transaction authority; current seat, ownership, stake, delegation and runtime must match. |
+| Trade a root dividend basket | Its coldkey or explicitly authorized current `BasketTrading` proxy | Current price/budget/liquidity/concentration checks apply; no basket-trading adapter is admitted by this passive strategy. [Current source][root-basket-470] |
 | Deploy EVM contracts | Dedicated EVM deployment signer | Exact nonce, creation bytecode, constructor data, gas and value envelopes. |
 | Govern the coordinator | Approved EVM 2-of-3 Safe | Safe authorization does not authorize native subnet-owner calls. |
 | Pause permitted coordinator actions | Configured guardian under contract rules | Cannot claw back reserve principal, rewrite earned claims or pause valid vault claims. |
@@ -603,8 +604,9 @@ anyone, bypass immunity or minimum capacity, force the other validators' votes,
 or grant chain-Root authority. Reobserve finalized emissions and rerun the
 complete protected-identity plan before each proposed trim; never assume a
 submitted weight row has already changed the chain's trim ordering. The
-netuid-0 root validator's weights serve its distinct root basket role, not
-SN25 miner deregistration. [Subnet weight setter][subtensor-weights]
+netuid-0 role observes its distinct dividend basket; runtime470 has no root
+weight setter. [Current root strategy](ROOT-PASSIVE-SERVICE.md),
+[subnet weight setter][subtensor-weights]
 
 Deletion of a registration does not delete historical events, refund registration cost, erase coldkey assets, or extinguish collateral and claims. Historical UR bindings continue to use their original block-specific mapping. Invalidate or renew only future bindings that reference displaced UID generations; preserve proof and claim history.
 
@@ -953,14 +955,23 @@ remain open.
 
 ### Root validator on netuid 0
 
-The signer-free `root-preview` and bounded `root-monitor` commands now supply a
-separate [root observation policy and service seam](ROOT-VALIDATOR.md). They bind
-independently approved mainnet genesis/full runtime/code/metadata to an exact
-finalized seat, stake, delegation and strategy census; ID 945 is rejected before
-root storage. Their `ready` status means only read-only observation policy
-readiness, and `activation_ready` remains false. Registration, bounded signing,
-effective custom-weight eligibility and complete basket custody remain gates.
-The [existing-seat action owner](ROOT-ACTION.md) now provides an offline-qualified
+The [runtime470 source/artifact review](../docs/spec/runtime-470-audit.md) and
+[passive root service](ROOT-PASSIVE-SERVICE.md) define the current launch path:
+fresh bootstrap schema v4, two independently approved UR production configs,
+and a separately approved existing netuid-0 role using
+`passive_accumulate_in_place`. Its exact policy binds genesis/full runtime,
+source/code/metadata, hotkey/coldkey, seat generation, minimum stake, delegate
+take, existing delegation, route, private checkpoint and finite observation
+window/cadence. The real bounded `root-passive-service` command reuses the root
+monitor after verifying the independent config signature and completed original
+preparation. It has no native signing/submission path or heartbeat transaction.
+Its `ready` result is observation readiness and `activation_ready` stays false.
+Service installation, actual current seat/stake and independent runtime authority
+remain launch gates. The current runtime has no `set_root_weights`; no root
+weight action is required for this chosen strategy. [Removal][root-removal-470]
+
+Retain the historical v3 `explicit_root_weights` action/custody capabilities and
+their signed bytes without conversion. The [existing-seat action owner](ROOT-ACTION.md) provides an offline-qualified
 mortal root basket encoder, durable one-request signing/nonce ownership and
 receipt/expiry recovery. Its read-only chain adapter reconstructs canonical
 native inclusion and receipt evidence from the approved owned RPC, with exact
@@ -980,16 +991,16 @@ is qualified. The [bounded root-service command](evidence/root-service-runtime-q
 now composes original input admission, observation and issued-signature recovery,
 with a closed public activation gate. Production live authority, globally fenced
 native custody and a qualified separate hardware signer remain absent; there is
-no live root signing command or active root service. A signed root
+no live root signing command supplied by that legacy path. A signed root
 call does not bind registration generation, so pending-action seat changes need
 custody exclusion or separately authenticated incident reconciliation. The
-accumulate-in-place strategy needs no heartbeat transaction. Changing that
-strategy, signing fees and distributed custody fencing require separate approval
+legacy action must be reconciled under its original runtime authority. Changing
+strategy, signing fees and distributed custody fencing requires separate approval
 and qualification; a local reserve is not a native maximum-fee argument.
 The current [UR validator config](../validator/config.go) rejects netuid 0 and is
 not a root-validator implementation.
 
-For an existing root seat, verify hotkey/coldkey ownership, current membership and registration generation, stake, immunity, delegate take, children/parents, basket configuration and accrued rights before adoption. For a new seat, the inspected runtime uses burn-priced root registration without a prior-stake admission condition; a full root network prunes a lowest-staked eligible seat. Registration alone does not provide enough stake to retain a seat or submit basket weights. [Root registration implementation][subtensor-root]
+For an existing root seat, verify hotkey/coldkey ownership, current membership and registration generation, stake, immunity, delegate take, children/parents, basket configuration and accrued rights before adoption. For a new seat, the inspected runtime uses burn-priced root registration without a prior-stake admission condition; a full root network prunes a lowest-staked eligible seat. Registration alone does not establish sufficient stake to retain a seat. [Current root registration implementation][subtensor-root-470]
 
 One specific budget gap must not be hidden: native `root_register(hotkey)` has no maximum-burn argument, while `register_limit` rejects netuid 0. A fresh quote is not an atomic price ceiling. The inspected Neuron precompile also exposes `rootRegister(bytes32)` without a limit. [Native call definitions][subtensor-dispatches], [registration limits][subtensor-registration], [Neuron interface][neuron-interface]
 
@@ -1001,11 +1012,11 @@ The future adapter therefore needs one of these explicit admission paths:
 
 Without a proven bounded path or retained seat, full automatic bootstrap is `ROOT_REGISTRATION_CAPABILITY_BLOCKED`. This is a concrete implementation requirement, not permission to omit the requested root validator.
 
-Root registration can automatically delegate child weight to every existing subnet owner unless the identity opts out first. The proposed root policy explicitly disables automatic parent delegation before registration, then permits only a separately selected UR delegation if required. For a fresh hotkey, first establish its approved coldkey association through the supported `try_associate_hotkey` path: the opt-out call already requires that ownership. Verify the resulting child/parent maps, including pending changes. Existing roots with custom weights require an explicit preservation/reset decision; omitting a new write must not be mistaken for clearing old weights. [Root delegation dispatch notes][subtensor-dispatches]
+Root registration can automatically delegate child weight to every existing subnet owner unless the identity opts out first. The current passive policy observes existing automatic, current and pending delegation without changing it. A new registration or opt-out needs its own explicit plan, coldkey association and current dispatch review. Historical root weight vectors were removed by the runtime migration; preserve old signed actions and reconcile any outstanding liability instead of inventing a reset transaction. [Current dispatch definitions][subtensor-dispatches-470], [removal migration][root-removal-470]
 
-Default the draft basket policy to **accumulate in place with no custom weight vector**. This is a real operating strategy, not simulated validation or a claim to control subnet issuance. Setting custom root weights turns on basket allocation behavior and must be separately plan-bound. The inspected call checks root membership, minimum stake, enablement, timing, distinct existing destinations, diversity and concentration. Read their live values; do not hardcode a 64-seat network, an 8-destination floor or a 1/16 cap. [Root weight implementation][subtensor-weights], [basket behavior][root-reborn]
+Select **accumulate in place with no custom weight vector** for the new unsigned launch plan. Dividends are held where earned and no periodic write is required. Optional basket trades are a different coldkey/proxy capability and are not implemented by the passive service. The new observer explicitly rejects metadata that restores the retired root weight call/gates. [Current basket behavior][root-reborn-470]
 
-Stake the root seat from its own explicit TAO allowance, retain fees/ED, and observe the actual retention margin. Stake or basket top-ups, re-registration, claims, take changes and weight changes are bounded planned actions, not an unlimited watchdog loop. The service monitors finality, seat ownership, stake rank, delegation, basket state and runtime identity. Claiming root yield and unstaking principal are distinct operations with runtime-dependent windows; neither is enabled automatically by “run a root validator.”
+Stake the root seat from its own explicit TAO allowance, retain fees/ED, and observe the actual retention margin. Stake or basket top-ups, re-registration, claims, take changes and basket trades require separate bounded plans. The passive service monitors finality, seat ownership, stake rank, delegation, basket state and runtime identity. Claiming root yield and unstaking principal are distinct operations with runtime-dependent windows; neither is enabled automatically by “run a root validator.”
 
 ### UR subnet validator
 
@@ -2307,5 +2318,10 @@ report; the closed testnet effort is not relabeled as a pass.
 [subtensor-epoch]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/epoch/run_epoch.rs
 [neuron-interface]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/precompiles/src/solidity/neuron.sol#L206
 [root-reborn]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/docs/guides/root-reborn.mdx
+[root-reborn-470]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/docs/guides/root-reborn.mdx
+[root-removal-470]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/migrations/migrate_remove_root_weights.rs
+[root-basket-470]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/staking/basket_trade.rs
+[subtensor-root-470]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/coinbase/root.rs
+[subtensor-dispatches-470]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/macros/dispatches.rs
 [collateral-guide]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/docs/guides/mining/collateral.mdx
 [max-uids]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/docs/hyperparameters/max-allowed-uids.mdx
