@@ -191,10 +191,8 @@ func TestReconcileClaimEntryUsesFinalizedLeafClaimed(t *testing.T) {
 		switch request.Method {
 		case "eth_chainId":
 			result = "0x3b1"
-		case "chain_getFinalizedHead":
-			result = "0x" + fmt.Sprintf("%064x", 9)
-		case "chain_getHeader":
-			result = map[string]any{"number": "0x10"}
+		case "eth_getBlockByNumber":
+			result = map[string]any{"number": "0x10", "hash": common.Hash{9}.Hex()}
 		case "eth_call":
 			ethCalls++
 			if ethCalls%2 == 1 {

@@ -227,10 +227,8 @@ func TestClaimArtifactRootMismatchRemainsDistinctCorrectnessFailure(t *testing.T
 		switch call.Method {
 		case "eth_chainId":
 			result = "0x3b1"
-		case "chain_getFinalizedHead":
-			result = common.HexToHash("0x42").Hex()
-		case "chain_getHeader":
-			result = map[string]any{"number": "0xc"}
+		case "eth_getBlockByNumber":
+			result = map[string]any{"number": "0xc", "hash": common.Hash{0x42}.Hex()}
 		case "eth_call":
 			result = "0x" + strings.Repeat("00", 32*7)
 		default:
@@ -270,10 +268,8 @@ func TestSignedClaimConsumedNonceRetainsExactLiability(t *testing.T) {
 			result = "0x3b1"
 		case "eth_getTransactionReceipt":
 			result = nil
-		case "chain_getFinalizedHead":
-			result = common.HexToHash("0x42").Hex()
-		case "chain_getHeader":
-			result = map[string]any{"number": "0xc"}
+		case "eth_getBlockByNumber":
+			result = map[string]any{"number": "0xc", "hash": common.Hash{0x42}.Hex()}
 		case "eth_getTransactionCount":
 			result = "0x18"
 		case "eth_call":
@@ -329,10 +325,8 @@ func TestSignedClaimPrunedAPIReplaysExactBytesAfterFinalizedPreflight(t *testing
 				result = "0x3b1"
 			case "eth_getTransactionReceipt":
 				result = nil
-			case "chain_getFinalizedHead":
-				result = common.HexToHash("0x42").Hex()
-			case "chain_getHeader":
-				result = map[string]any{"number": "0xc"}
+			case "eth_getBlockByNumber":
+				result = map[string]any{"number": "0xc", "hash": common.Hash{0x42}.Hex()}
 			case "eth_getTransactionCount":
 				result = "0x17"
 			case "eth_call":
