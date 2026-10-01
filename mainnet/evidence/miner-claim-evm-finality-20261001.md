@@ -70,11 +70,12 @@ fresh-submit/queue path. The report is
 
 ## Remaining gates
 
-The generic shared `miner/onchain/eth.go` `waitFinalized` helper still reads one
-finalized tag and then the canonical receipt block. Other callers lack this
-claim owner's additional closing bracket. That shared finality-tag regression
-case requires a separate causal follow-up before claiming all EVM submission
-paths covered. This increment does not change that helper or fleet recovery.
+At this claim source, the generic shared `miner/onchain/eth.go` `waitFinalized`
+helper still read one finalized tag and then the canonical receipt block.
+The separately qualified [shared successor at `222e45a8`](shared-evm-finality-closure-20261001.md)
+adds the closing bracket and transient/missing-evidence retries. This claim
+receipt is not relabeled as covering that later helper source or all independent
+EVM recovery paths.
 
 Complete semantic runtime approval, both deployed validator roles, controlled
 live upgrade/restart acceptance and native state/finality proof verification

@@ -347,8 +347,10 @@ Local qualification supplies no automatic runtime approval or live acceptance.
 The [claim EVM finality correction](evidence/miner-claim-evm-finality-20261001.md)
 at `6dcb94a1` replaces the native/EVM clock comparison with exact EVM state and
 closing finality checks, including fresh receipt publication and original-byte
-recovery. The shared onchain submitter's other callers still require the
-analogous finalized-tag closing check. MG-04/PH-04 stay open, and a fresh exact
+recovery. The [shared onchain correction](evidence/shared-evm-finality-closure-20261001.md)
+at `222e45a8` also closes finalized and canonical receipt witnesses for the
+shared send path; transient errors, missing blocks and regressed finality stay
+pending within the original deadline. MG-04/PH-04 stay open, and a fresh exact
 successor release is required beyond the frozen SN `233ea2be` artifacts.
 
 **Runtime continuity policy proposal — inspection boundary qualified.** The
