@@ -43,3 +43,7 @@ chain identity or synchronization evidence.
 At approximately **00:20 UTC on October 1**, both methods still returned HTTP
 502 with the same 150-byte response and SHA-256. No route cutover or mainnet
 identity was observed.
+
+At approximately **00:40 UTC on October 1**, both native genesis and EVM
+chain-ID reads again returned HTTP 502 with the same 150-byte body and SHA-256.
+Mainnet chain identity remains unobserved.
