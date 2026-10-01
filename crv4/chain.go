@@ -1177,9 +1177,11 @@ func (c *Chain) SubmitRawAndWatchFinalized(ctx context.Context, encoded string) 
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case err, ok := <-sub.Err():
-			if ok && err != nil {
-				return nil, fmt.Errorf("crv4: watch %s: %w", txHash.Hex(), err)
+			if !ok || err == nil {
+				// Local shutdown ends observation without proving a chain outcome.
+				return nil, fmt.Errorf("crv4: watch %s closed before finality", txHash.Hex())
 			}
+			return nil, fmt.Errorf("crv4: watch %s: %w", txHash.Hex(), err)
 		case status, ok := <-statuses:
 			if !ok {
 				return nil, fmt.Errorf("crv4: watch %s closed before finality", txHash.Hex())
