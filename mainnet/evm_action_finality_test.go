@@ -53,12 +53,12 @@ func TestEvmCreateRefreshFinalityRefusesLateContradictions(t *testing.T) {
 				case fault == "replaced-native" && method == "chain_getBlockHash" && args[0] == float64(101):
 					return testGenesisHash
 				case fault == "replaced-evm" && method == "eth_getBlockByNumber" && args[0] == "0x26":
-					copy := map[string]any{}
+					responseKVs := map[string]any{}
 					for key, value := range result.(map[string]any) {
-						copy[key] = value
+						responseKVs[key] = value
 					}
-					copy["hash"] = testGenesisHash
-					return copy
+					responseKVs["hash"] = testGenesisHash
+					return responseKVs
 				case fault == "missing-head" && method == "chain_getFinalizedHead":
 					return nil
 				}
