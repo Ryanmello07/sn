@@ -337,17 +337,25 @@ func main() {
 	configPath := flags.String("config", "", "exact release build config")
 	imageConfigPath := flags.String("image-config", "", "offline scratch-image supplement config")
 	packageImageConfigPath := flags.String("package-image-config", "", "offline seven-service image supplement config")
+	aggregateImageConfigPath := flags.String("aggregate-image-config", "", "offline verification and aggregation of pinned image receipts")
 	if err := flags.Parse(os.Args[1:]); err != nil || flags.NArg() != 0 {
 		os.Exit(2)
 	}
 	selected := 0
-	for _, path := range []string{*configPath, *imageConfigPath, *packageImageConfigPath} {
+	for _, path := range []string{*configPath, *imageConfigPath, *packageImageConfigPath, *aggregateImageConfigPath} {
 		if path != "" {
 			selected++
 		}
 	}
 	if selected != 1 {
 		os.Exit(2)
+	}
+	if *aggregateImageConfigPath != "" {
+		if err := executeImageAggregateConfig(ctx, *aggregateImageConfigPath); err != nil {
+			fmt.Fprintln(os.Stderr, "release image aggregation:", err)
+			os.Exit(1)
+		}
+		return
 	}
 	if *packageImageConfigPath != "" {
 		if err := executePackageImageConfig(ctx, *packageImageConfigPath); err != nil {

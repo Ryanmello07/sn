@@ -825,6 +825,15 @@ sources. Sol independently rebuilt all seven remaining images byte-identically,
 verified their OCI/rootfs/binary content and passed 73 focused roots normally
 and with race detection, vet and five causal controls. Aggregate release and
 deployment flags remain false.
+The [offline image aggregation](evidence/release-image-aggregate-qualification-20261001.md)
+now verifies one original source manifest plus both supplements and emits a
+separate complete eight-image attestation. It rehashes all 337 artifacts of the
+current SN `2d53e6f2` / server `ecbf3aad` candidate, checks binary source/module
+metadata, and replays all OCI/rootfs and source-input joins. Only local
+`source_to_image_verified` becomes true; the original three receipts are
+unchanged. Reproducibility, release completion and deployment approval stay
+false. This closes the receipt-composition gap, while MG-02 remains open for
+the independent builder, archive/restore, runtime/configuration and policy gates.
 The retained-mode manifest keeps historical and compiled contract hashes:
 Coordinator and ValidatorEvidence have metadata drift associated with the changed
 imported SettlementVault source, so that selection's source-to-bytecode equality

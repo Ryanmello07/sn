@@ -1267,6 +1267,16 @@ archives and passed complete OCI readback. This qualifies a local image build,
 not a published or deployed release; aggregate release and deployment flags
 remain false.
 
+The [offline aggregation command](RELEASE-BUILD.md) can now verify those separate
+receipts against one exact original source manifest and emit a sealed eight-image
+attestation. Its [current-candidate qualification](evidence/release-image-aggregate-qualification-20261001.md)
+binds SN `2d53e6f2` and server `ecbf3aad`, rehashes all 337 input artifacts and
+replays the OCI/rootfs checks against their exact parent binaries and recipes.
+Only the aggregate's local `source_to_image_verified` advances; original evidence
+is unchanged and reproducibility, release completion and deployment approval
+remain false. This operation needs no Docker service and performs no build,
+publication or application execution.
+
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
 catalogue review and independent qualification are the preferred path for the

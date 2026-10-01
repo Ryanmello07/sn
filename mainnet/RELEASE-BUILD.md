@@ -207,6 +207,39 @@ production configuration, vulnerability or attestation policy, arm64, a durable
 input archive and restore process, or an independent builder. No image is loaded,
 run, tagged, pushed or deployed by this mode.
 
+`go run -mod=readonly ./scripts/mainnet-release-build --aggregate-image-config /absolute/aggregate-config.json`
+verifies and combines those original receipts without building anything. Its
+schema is `urnetwork-mainnet-image-aggregate-v1`; the config contains a pinned
+`candidate_manifest`, exactly two pinned `supplements` (each a `path` and full
+file `sha256`), and a fresh `output` directory disjoint from every input directory.
+One supplement must use the scratch schema and one the seven-service schema.
+There are no tool, socket, network, signing or approval configuration fields.
+
+The aggregate reader authenticates the parent and supplement file hashes and
+their original domain-separated content seals, then requires the same candidate,
+parent file hash and parent content hash throughout. It rehashes every inventoried
+artifact, including non-image binaries, contracts and logs; checks all seventeen
+binaries' source/module build information against the original parent; and
+replays each OCI/rootfs inspection against the parent's binary. It also verifies
+the retained base, package lock and payloads, exact localized recipes, fixed
+build command/environment, successful exits and builder metadata. Physical paths
+cannot contain symlinks. Duplicate or missing image coverage, stale seals,
+mixed parents, changed bytes, ambiguous JSON and unsupported claims fail closed.
+Every original receipt and artifact is checked again before the result is sealed.
+
+The new `image-aggregate.json` retains the original source identities, eight
+source/binary/recipe/archive/platform joins, all three input file/content pins,
+and hashes of verbatim metadata copies in its own `inputs/` directory. Only its
+`source_to_image_verified` becomes true and `missing_images` becomes empty.
+The original manifest and supplements remain unchanged, with their original
+partial-coverage flags. The aggregate always leaves `reproducibility_verified`,
+`release_complete` and `deployment_approved` false. It is a local integrity
+attestation, not a signature or authorization. It neither rebuilds nor copies
+large artifacts, so the three pinned input directories must remain available
+for later re-verification. A failed attempt cannot overwrite an earlier output.
+The [aggregation qualification](evidence/release-image-aggregate-qualification-20261001.md)
+records the current candidate's complete local linkage and the remaining gates.
+
 The September 30 retained-catalogue full-source Foundry build used solc 0.8.24, Cancun, optimizer
 200 and via IR, and completed successfully. ReserveSink, SettlementVault and
 ERC1967Proxy match retained creation/runtime bytes exactly. Coordinator and
