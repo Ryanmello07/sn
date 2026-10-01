@@ -27,9 +27,14 @@ control shows that an old-shape UPSERT can leave a newer positive
 `arin_quality_verified` value in place after changing the location; the
 strict v2 guard expression still considers the row eligible when the other
 flags remain favorable. Keep v2 and the candidate MMDB inactive at launch.
-Before future v2 enablement, drain old writers and re-attest rows or qualify
-a fail-closed mixed-update correction. The full live provider join and
-production schema rollout remain unverified.
+That receipt does not qualify the full live provider join or a production rollout.
+The separate [schema-751 correction](evidence/server-schema751-write-guard-20261001.md)
+at server `a464bb3e` binds each attestation to a fresh write token and atomically
+revokes pre-751 positives. Author qualification passes 27 normal/race roots,
+vet, the real live guard/cache/rollup checks and two expected-failing controls.
+It is outside the pinned server-720 release. Independent review, a successor
+release, migration lock-duration qualification, fleet/lookup coverage and real
+miner-trail/load canaries remain required before future v2 enablement.
 
 The [11:24 UTC read-only route check](evidence/public-route-check-20261001-1124.md)
 reproduces the earlier mainnet genesis, EVM 964 and runtime 470 at finalized

@@ -73,6 +73,17 @@ contract/operator/activation qualifications remain scoped to server `0b8e758d`
 until the separately recorded compatibility gate passes. This review does not
 change live policy, rebuild artifacts or approve deployment.
 
+The [schema-751 mixed-writer successor](evidence/server-schema751-write-guard-20261001.md),
+server `a464bb3e`, adds a per-write token/trigger and revokes existing unbound
+positives. Its author qualification passes 27 selected roots normal/race and
+vet, including the full live guard and warm-cache/rollup behavior; removing the
+trigger fails both causal model controls. This correction is absent from the
+pinned server-720 release. Keep v2 off while independent review, successor
+source/image qualification, schema-751 lock-duration checks, complete writer/API
+rollout, lookup coverage and both operators' actual miner-trail/load canaries
+remain open. Readiness permits an older binary on the newer schema and does not
+establish that policy readiness.
+
 [mainnet/main.go](main.go) implements signer-free
 `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`,
 `monitor`, `subnet-discover`, `subnet-preview`, `owner-trim-plan`, `owner-trim-recheck`,
