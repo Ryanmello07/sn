@@ -1,3 +1,5 @@
+// Claim admission fixtures join their queue and ticket cleanup before reading
+// final ownership, so worker completion also proves cancellation has settled.
 package miner
 
 import (
@@ -5,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
@@ -168,10 +171,13 @@ func TestClaimQueueDiscoveryAdvancesWhileAnotherMemberOwnsNonce(t *testing.T) {
 	claimTestAcquire(t, admission, "held", true, 10)
 	queue := &ClaimQueue{LastDiscovered: 10, Entries: map[string]*ClaimQueueEntry{"10": {Epoch: 10, Status: "pending"}}}
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	epochs := make(chan int64)
 	saved := make(chan int64)
-	done := make(chan error, 1)
+	cleanupStarted := make(chan struct{})
+	cleanupRelease := make(chan struct{})
+	releaseCleanup := sync.OnceFunc(func() { close(cleanupRelease) })
+	done := make(chan struct{})
+	var runErr error
 	hooks := claimPollTestHooks(t, time.Now())
 	hooks.latestEpoch = admission.observeEpoch
 	hooks.begin = func(ctx context.Context, candidates []claimPollCandidate) (int, context.Context, func(), error) {
@@ -187,9 +193,15 @@ func TestClaimQueueDiscoveryAdvancesWhileAnotherMemberOwnsNonce(t *testing.T) {
 		return nil
 	}
 	go func() {
-		defer admission.forget("waiting")
-		done <- runClaimQueue(ctx, queue, 2, epochs, nil, func() <-chan struct{} { return admission.ready("waiting") }, hooks)
+		defer close(done)
+		defer func() {
+			close(cleanupStarted)
+			<-cleanupRelease
+			admission.forget("waiting")
+		}()
+		runErr = runClaimQueue(ctx, queue, 2, epochs, nil, func() <-chan struct{} { return admission.ready("waiting") }, hooks)
 	}()
+	t.Cleanup(func() { cancel(); releaseCleanup(); <-done })
 	for _, epoch := range []int64{12, 14} {
 		epochs <- epoch
 		if got := <-saved; got != epoch-1 {
@@ -197,8 +209,22 @@ func TestClaimQueueDiscoveryAdvancesWhileAnotherMemberOwnsNonce(t *testing.T) {
 		}
 	}
 	cancel()
-	if err := <-done; err != nil {
-		t.Fatal(err)
+	// Hold ticket cleanup after the queue returns. An early completion signal
+	// is now observable regardless of which goroutine the scheduler runs next.
+	<-cleanupStarted
+	completedBeforeCleanup := false
+	select {
+	case <-done:
+		completedBeforeCleanup = true
+	default:
+	}
+	releaseCleanup()
+	<-done
+	if completedBeforeCleanup {
+		t.Fatal("queue fixture completed before admission cleanup")
+	}
+	if runErr != nil {
+		t.Fatal(runErr)
 	}
 	if admission.owner != "held" || admission.ready("waiting") != nil {
 		t.Fatal("waiting cancellation released owner or retained a ticket")
@@ -338,19 +364,25 @@ func TestClaimQueueReadyTicketBypassesBlockedEpochRead(t *testing.T) {
 	}
 	hooks.reconcile = func(context.Context, *ClaimQueueEntry) (string, error) { return "no-claim", nil }
 	hooks.save = func(*ClaimQueue) error { processed <- struct{}{}; return nil }
-	done := make(chan error, 1)
+	done := make(chan struct{})
+	var runErr error
 	go func() {
+		defer close(done)
 		defer admission.forget("waiting")
-		done <- runClaimQueue(ctx, queue, 2, epochs, nil, func() <-chan struct{} { return admission.ready("waiting") }, hooks)
+		runErr = runClaimQueue(ctx, queue, 2, epochs, nil, func() <-chan struct{} { return admission.ready("waiting") }, hooks)
 	}()
 	<-waiting
 	admission.release("held")
 	<-processed
 	cancel()
-	if err := <-done; err != nil {
-		t.Fatal(err)
+	<-done
+	if runErr != nil {
+		t.Fatal(runErr)
 	}
 	<-readDone
+	if admission.owner != "" || admission.ready("waiting") != nil {
+		t.Fatal("ready queue cancellation retained admission state")
+	}
 	if queue.Entries["10"].Status != "no-claim" || queue.Entries["10"].Attempts != 0 {
 		t.Fatalf("ready operation changed claim accounting: %+v", queue.Entries["10"])
 	}
