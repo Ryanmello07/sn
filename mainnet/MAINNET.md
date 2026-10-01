@@ -1809,8 +1809,8 @@ and cannot retry automatically. [Offline qualification](evidence/validator-repai
 is sealed for exact source `af570cdc`: 52 positive normal/race executions passed;
 twelve normal and seven selected race controls were causal. Admission includes
 the genuine cgroup-v2 filesystem and post-sync authority/sample-age rechecks.
-This increment installed no unit and issued no live start. Active hangs,
-root/operator services, initial activation, independent RPC, delivered alerts
+This increment installed no unit and issued no live start. Production active-hang
+rehearsal, root/operator services, initial activation, independent RPC, delivered alerts
 and monetary repair remain open.
 The host deployment owner must exclude concurrent privileged service or file
 changes; the local journal lock does not provide that exclusion by itself.
@@ -1833,8 +1833,20 @@ source loss and policy edits, and requires a later actual outcome for recovery.
 Its [source qualification](evidence/steering-liveness-qualification-20261001.md)
 includes command/producer boundaries, compatible v3 repair custody and independent
 expected-host alert fixtures. No live service was changed. Approved production
-budgets, delivered alerts and active-hang stop/join/restart authority remain open;
-the existing repair controller still refuses active generations.
+budgets and delivered alerts remain open; the stopped-repair controller still
+refuses active generations.
+
+The separate [active steering-hang repair](ACTIVE-VALIDATOR-REPAIR.md) adds an
+independently signed exact incident/role/release/host/generation capability.
+It retains one stop and one start, a finite descendant-cgroup join, permanent
+generation custody across alternate envelopes, and the complete original
+checkpoint. Current recovered/unknown steering or policy/identity drift refuses
+stop, including after durable reservation. Unacknowledged starts remain manual;
+completion requires an actual new steering outcome. Its
+[source receipt](evidence/active-validator-repair-qualification-20261001.md)
+does not grant a production envelope or activation. Real-systemd stop behavior,
+exclusive host/signer custody, anti-rollback policy and on-call rehearsal remain
+P0 gates. No live service was changed.
 
 The [operator journal monitor increment](OPERATOR-MONITOR.md) has an
 [offline-qualified production reader/consumer](evidence/operator-monitor-qualification-20260930.md):

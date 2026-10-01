@@ -209,6 +209,11 @@ that host-wide boundary. No dynamic Warp unit is accepted.
 
 ## Operations and recovery
 
+Start and generation-reconciliation steps share the installed-unit control lock
+with [stopped repair](VALIDATOR-REPAIR.md) and
+[active steering-hang repair](ACTIVE-VALIDATOR-REPAIR.md). That local exclusion
+does not supply activation authority or replace independent host/signer custody.
+
 Every invocation supplies the same exact approval bytes and independent key:
 
 ```text

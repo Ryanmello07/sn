@@ -108,6 +108,14 @@ func (self repairValidatorPlan) incident(record monitorServiceCheckpointRecord) 
 
 // Every limit is finite, signed and specific to this one stopped generation.
 func (self repairValidatorPlan) validate() error {
+	if err := self.validateProfile(); err != nil {
+		return err
+	}
+	return self.incident(self.Original)
+}
+
+// Shared fixed-unit admission does not select an incident or grant an action.
+func (self repairValidatorPlan) validateProfile() error {
 	u := self.Unit
 	if !monitorRolePattern.MatchString(self.Role) || u.Name != "sn-mainnet-validator-"+self.Role+".service" || filepath.Base(u.File.Path) != u.Name || filepath.Dir(u.ProgressFile) != u.StateDirectory || u.Uid == 0 || u.Gid == 0 || self.Source.ChainId != mainnetEvmChainId || self.Source.Netuid == 0 || !repairValidatorHex(self.MachineId, 16) || len(self.BootId) != 36 || self.BootId[8] != '-' || self.BootId[13] != '-' || self.BootId[18] != '-' || self.BootId[23] != '-' || !repairValidatorHex(strings.ReplaceAll(self.BootId, "-", ""), 16) || !repairValidatorHex(self.Previous.InvocationId, 16) || self.Previous.Pid <= 1 || self.Previous.StartedUsec == 0 || !validMonitorReadDigest(self.IncidentId) {
 		return errors.New("validator repair host, role or prior generation is incomplete")
@@ -137,7 +145,7 @@ func (self repairValidatorPlan) validate() error {
 		}
 		previous = mount
 	}
-	return self.incident(self.Original)
+	return nil
 }
 
 // Domain separation prevents another signed release/config from granting starts.

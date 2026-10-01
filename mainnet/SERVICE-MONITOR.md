@@ -165,6 +165,9 @@ or authorize stopping/restarting a process. The [repair controller](VALIDATOR-RE
 still requires its independently signed stopped-generation availability incident;
 a readable steering stall cannot substitute. Active-hang intervention still
 needs a separately approved stop/join/custody policy and real-host rehearsal.
+The [active repair interface](ACTIVE-VALIDATOR-REPAIR.md) now implements that
+separate one-generation signed envelope and bounded custody; it cannot obtain
+authority from this diagnostic or its alert.
 
 Deploy v4 consumers before writing v4 checkpoints. The loader accepts v1–v3 with
 their original unknown liveness history; existing independently signed v3 repair

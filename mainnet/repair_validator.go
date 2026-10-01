@@ -43,7 +43,7 @@ func repairValidatorRunning(plan repairValidatorPlan, manager repairValidatorMan
 
 // This step performs at most one actual start, with no detached worker. A
 // consumed unacknowledged start remains uncertain even if a new process exists.
-func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, host *repairValidatorHost, now func() time.Time) (repairValidatorResult, error) {
+func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, host *repairValidatorHost, now func() time.Time) (result repairValidatorResult, resultErr error) {
 	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil {
 		return repairValidatorResult{}, errors.New("validator repair resume owner is unavailable")
 	}
@@ -62,6 +62,16 @@ func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, hos
 		return finish("uncertain-consumed-start", nil)
 	}
 	plan := store.approval.Plan
+	control, err := host.control(ctx, plan.Unit)
+	if err != nil {
+		return finish("source-refused", err)
+	}
+	defer func() { resultErr = errors.Join(resultErr, control.close()) }()
+	if record.StartAt.IsZero() {
+		if err := host.refuseActiveClaim(plan); err != nil {
+			return finish("source-refused", err)
+		}
+	}
 	stamp := now()
 	if stamp.IsZero() || stamp.Before(record.HighWaterAt) {
 		return finish("clock-rollback", errors.New("validator repair clock moved backwards"))
@@ -112,6 +122,9 @@ func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, hos
 			return finish("uncertain-consumed-start", errors.Join(errors.New("validator repair authority window closed during durable reservation"), ctx.Err()))
 		}
 		record.HighWaterAt = actionAt
+		if err := control.validate(); err != nil {
+			return finish("uncertain-consumed-start", err)
+		}
 		if err := host.start(ctx, plan); err != nil {
 			return finish("uncertain-consumed-start", err)
 		}
