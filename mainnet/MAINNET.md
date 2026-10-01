@@ -60,6 +60,10 @@ system remain production work.
 [static review and qualification gate](evidence/server-720e-integration-review-20261001.md)
 requires migration **750** before those binaries take traffic, plus an exact
 SN/server compatibility receipt and successor release/source-image inventory.
+The [independent disposable-schema check](evidence/server-schema750-qualification-20261001.md)
+passes the selected 749-to-750 readiness, default-off, seed-picker, normal/race
+and vet scopes. It also proves a mixed-writer v2 activation blocker: an old
+UPSERT can retain a prior positive quality attestation after changing a row.
 Keep the launch `provider.yml` subscriber policy absent/`0` and the v2 candidate
 classifier/MMDB out of active inputs unless both operators' actual miner cohorts
 prove fresh trails through the SN Quality/force-minimum seed picker. Under v2,

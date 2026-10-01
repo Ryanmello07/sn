@@ -20,6 +20,17 @@ activation/operator receipts; a release selecting `720e7c61` needs its own sourc
 migration/config inventory and rebuilt image/source joins. This review executes
 no tests and does not approve release or deployment.
 
+The [independent schema 750 qualification](evidence/server-schema750-qualification-20261001.md)
+now passes the selected migration/readiness, default-off, seed-picker,
+normal/race and vet checks on disposable services. Its causal mixed-writer
+control shows that an old-shape UPSERT can leave a newer positive
+`arin_quality_verified` value in place after changing the location; the
+strict v2 guard expression still considers the row eligible when the other
+flags remain favorable. Keep v2 and the candidate MMDB inactive at launch.
+Before future v2 enablement, drain old writers and re-attest rows or qualify
+a fail-closed mixed-update correction. The full live provider join and
+production schema rollout remain unverified.
+
 The [11:24 UTC read-only route check](evidence/public-route-check-20261001-1124.md)
 reproduces the earlier mainnet genesis, EVM 964 and runtime 470 at finalized
 block 9,187,604 through the public entrypoint. Snow's VPN route still answered
