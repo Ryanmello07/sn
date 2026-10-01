@@ -1,4 +1,4 @@
-# Substrate RPC transport correction
+# Substrate RPC transport and metadata decoder corrections
 
 This local module preserves the runtime Go sources, module manifests, README,
 and license files from `github.com/centrifuge/go-substrate-rpc-client/v4`
@@ -11,8 +11,10 @@ sum `h1:eOBL15BXZnM4LODDmAgjOJ9Y1eehk6ABRIrEkHxmKs4=` and go.mod sum
 The upstream module occupies about 5.5 MiB on disk. This import omits upstream
 `*_test.go`, testdata, automation, and development files; its 212 imported files
 occupy about 4.5 MiB with the local tests. `UPSTREAM.sha256` records the original
-bytes of every imported file. Only `gethrpc/client.go` and `gethrpc/handler.go`
-change at runtime; `UPSTREAM.patch` records those changes. Reversing that patch
+bytes of every imported file. The owned runtime changes are in
+`gethrpc/client.go`, `gethrpc/handler.go`, `scale/codec.go`, `scale/limits.go` and
+`types/metadataV14.go`; `UPSTREAM.patch` records them, including the new limits
+file. Reversing that patch
 in a temporary copy makes every entry in `UPSTREAM.sha256` match. The root
 Apache 2.0 license and the gethrpc LGPLv3 `COPYING`, `COPYING.LESSER`, and `AUTHORS`
 files are retained without changes.
@@ -54,3 +56,33 @@ subscriptions, write errors, cancellation, shutdown, and both reconnect orders.
 SN's `TestSubmitRawReturnsDisconnectBeforeWriteCompletion` exercises the public
 production submission path and fails deterministically if this replacement is
 removed. Existing miner recovery fixtures still drop acknowledgments immediately.
+
+The opt-in SCALE decoder owns finite collection, requested-allocation, work and
+depth budgets. All value copies share one pointer-owned budget; a resource
+failure is sticky. Reflected backing allocations, string copies, compact
+integer temporaries and the v14 derived lookup map reserve capacity before
+allocation. Custom decoders must explicitly reserve other derived allocations;
+this is not a sandbox or an exact process-memory bound. Existing unbounded
+callers keep their decoding policy, while malformed compact lengths and absent
+option discriminants now return their read errors. Oversized compact lengths
+cannot truncate through `Uint64`, and custom fixed arrays use array holders.
+
+SN's central `crv4.DecodeRuntimeMetadata` selects the bounded decoder after an
+8 MiB raw-size check on the encoded string, before hex allocation. Each metadata
+collection count is bounded by the raw input length, with 64 MiB requested
+storage, 2,097,152 decoded values and depth 64 as independent finite limits.
+Full input consumption and exact raw hashing remain required. This does not
+authenticate metadata or bound the earlier HTTP JSON-RPC response buffering.
+The generic metadata API still supports its existing v4 and v7–v14 variants;
+the separately pinned native SDK owns the existing v15 signing-metadata path.
+
+Owned decoder tests, run from the SN module root:
+
+```sh
+go test -mod=readonly -count=1 github.com/centrifuge/go-substrate-rpc-client/v4/scale github.com/centrifuge/go-substrate-rpc-client/v4/types
+go test -mod=readonly -race -count=1 github.com/centrifuge/go-substrate-rpc-client/v4/scale github.com/centrifuge/go-substrate-rpc-client/v4/types
+```
+
+The [qualification receipt](../../mainnet/evidence/runtime-metadata-bounds-20261001.md)
+also covers shared CRV4 and self-sealed discovery inputs, valid runtime470,
+independently pinned owner/root metadata and the offline SDK-v15 controls.
