@@ -54,8 +54,8 @@ PASS and no skipped roots or race reports. The two supplemental roots repeat a
 subset of the fourteen; their counts are not additive. Both omission controls
 failed at the intended assertion in normal and race modes, with no skipped
 roots or race reports. A pre-freeze diagnostic is retained but excluded from
-these counts. This is selected-root author qualification, not full-package or
-independent qualification.
+these counts. This table describes selected-root author qualification, not
+full-package coverage. Independent qualification is recorded below.
 
 The raw evidence directory is
 `/mnt/data/sn-testnet/mainnet-installation-policy-clock-astra-20261001`.
@@ -92,8 +92,24 @@ Only the two focused current-clock and public-readback roots were therefore
 rerun normally and with race detection using a separate read-only physical
 server `94229abb` worktree. That supplement retains both exact linked test
 executables, their build IDs/module metadata, and matching before/after source
-and module fences. It does not claim a fresh fourteen-root run. Independent
-qualification remains separate.
+and module fences. It does not claim a fresh fourteen-root run.
+
+## Independent source review
+
+Sol-medium review used immutable exports of the exact SN `50780465` and server
+`94229abb` trees. All 14 independently selected roots passed normally. Under
+race detection, 14 distinct roots passed across retained primary and separate
+production streams; the primary wrapper reached its 20-minute harness deadline
+after ten passing roots, with no failed root, and is retained as a failed
+wrapper rather than counted as a package pass. Focused clock and supplemental
+production race packages exited zero. Vet passed. Removing installation caller
+wiring or the exact clock comparison caused the intended regression assertions
+to fail in both normal and race modes. The independent
+[receipt](/mnt/data/sn-testnet/qualification/installation-policy-clock-sol-independent-20261001/summary.json)
+is SHA-256
+`c2c68da752710fa62f11bd2e026a085d3459cb82c553fe3f8937e2551c4abafc`;
+the [review](/mnt/data/sn-testnet/qualification/installation-policy-clock-sol-independent-20261001/review.txt)
+retains the scope and limits. No patch-specific blocking defect was found.
 
 Current getter replies remain owned-RPC assertions at the authenticated mapping.
 This increment does not add complete current contract storage or execution
