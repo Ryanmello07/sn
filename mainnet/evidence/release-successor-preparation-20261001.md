@@ -1,5 +1,9 @@
 # Successor release preparation, 2026-10-01
 
+This preparatory snapshot is followed by the
+[selected successor release](release-233ea2be-server942-20261001.md).
+The pending-source state below records the earlier preparation only.
+
 The provisional graph selects clean SN
 `7ee916cc2243db2ac8dc6b4d9b2b3d74df6fe4c3`
 (tree `ac36b4903c139cba71f96491523289e069b465f1`) and server

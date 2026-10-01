@@ -1450,13 +1450,18 @@ Independent reproduction, actual configuration/policy, rollout and release
 approval remain open.
 
 The [successor preparation](evidence/release-successor-preparation-20261001.md)
-checks clean SN `7ee916cc` / server `94229abb`, including passive-root host
-and schema 751, with unchanged Connect/SDK pins. Both offline module graphs
-and all 89 builder normal/race roots plus vet pass; 40 package payloads and
-the local base blobs are rechecked. Its 751-entry migration source inventory
-does not apply a migration. Final source/image qualification is held until
-the owner recycle-mode transition merges; no successor release seal or
-approval is claimed by this preparation.
+retains the pre-owner graph without relabeling its original scope. The
+[selected successor release](evidence/release-233ea2be-server942-20261001.md)
+now binds SN `233ea2be` / server `94229abb`, including passive-root host,
+owner recycle-mode transition and schema-751 mixed-writer source. Two fresh
+source builds match all seventeen executables and ten contract bytecode
+outputs; both eight-image aggregates pass, and every OCI platform manifest,
+configuration and archive matches. All 89 builder roots pass normal/race and
+vet. The unsigned 56-file inventory repeats exactly and retains 751 migration
+source entries without applying them. Connect/SDK pins remain unchanged.
+Later reporting commit `7c5d964f` is distinct from the actual build source.
+Independent reproduction, production policy/configuration, migration/restore,
+rollout, publication identity and release approval remain open.
 
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
