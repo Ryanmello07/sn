@@ -931,7 +931,7 @@ receipts as explicitly retained observations, not fresh chain audits; these
 | Coordinator owner | Actual 2-of-3 Safe with three distinct approved owners. |
 | Guardian | Separate limited operational authority. |
 | Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. |
-| Root validator coldkey/hotkey | Root stake custody and root service signing through a separate hardware signer; its device and host API remain unspecified. The owners' Ledger cannot substitute for this key. |
+| Root validator coldkey/hotkey | Existing root identity and stake custody. The current passive observer takes public identity and independent config/host approvals, without a native signing key. Registration, stake or basket actions need separate authority and the appropriate custody device; the owners' Ledger does not substitute for that key. |
 | UR validator hotkey and stake coldkey | UR scoring; may be the reviewed reserve target when explicitly selected. |
 | Operator demand deposit signer | Each operator keeps its own EVM signing key in its own secrets vault. The coordinator binds that address to its `noId` and deposit hotkey for the active epoch. Owner Ledger and the SN bootstrap never load operator deposit keys; this secrets vault is distinct from the on-chain settlement vault. The [qualified worker custody check](evidence/operator-deposit-custody-qualification-20260930.md) still needs real wallet and coordinator verification. |
 | Vault mapped coldkey | Immutable tail-pool and escrow custody. No human holds its private key. |
@@ -1061,8 +1061,15 @@ window/cadence. The real bounded `root-passive-service` command reuses the root
 monitor after verifying the independent config signature and completed original
 preparation. It has no native signing/submission path or heartbeat transaction.
 Its `ready` result is observation readiness and `activation_ready` stays false.
-Service installation, actual current seat/stake and independent runtime authority
-remain launch gates. The current runtime has no `set_root_weights`; no root
+The separately signed [`activate-root-passive` host owner](ROOT-PASSIVE-SERVICE.md#independently-approved-static-host-owner)
+now provides exact sandboxed static installation and one durable process start,
+with invocation recovery and a dedicated writable checkpoint directory. It keeps
+the original v4 private approvals unchanged and consumes no UR start allowance.
+Historical status and manager liveness do not prove continuing observer health.
+Its [qualification](evidence/passive-root-host-20261001.md) supplies no live host
+approval or deployment; actual current seat/stake, independent runtime authority,
+the exact host signature/acceptance and live monitor evidence remain launch gates.
+The earlier SN `6c801a25` release excludes this source successor. The current runtime has no `set_root_weights`; no root
 weight action is required for this chosen strategy. [Removal][root-removal-470]
 
 Retain the historical v3 `explicit_root_weights` action/custody capabilities and
