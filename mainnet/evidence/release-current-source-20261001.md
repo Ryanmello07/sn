@@ -41,9 +41,20 @@ its `SHA256SUMS-FINAL` has SHA256
 `31381ec8a960b7a86c21f5595e28fce92e035ebf3e157119f6169459950c5c31`
 and all listed entries verify.
 
+The later [offline aggregation qualification](release-image-aggregate-qualification-20261001.md)
+replayed all 337 parent and supplement artifacts and all eight OCI readbacks
+against these immutable inputs. Its separate
+`/mnt/data/sn-testnet/mainnet-release-aggregate-astra-20261001/aggregate/image-aggregate.json`
+has SHA256 `1ae673a859d00232f420e8cb18ede08f142c2d24a2d3e5bc14575cdd5e6abdb3`
+and content seal
+`sha256:fabe268ca92b7c49197186d568273ba0edff2d69c8ddb157146bd435e9895620`.
+It has eight images, no missing images, and local
+`source_to_image_verified=true`; its remaining aggregate approval and
+reproducibility flags are false.
+
 This is an offline local composition, with no image publication, signing,
-chain transaction, deployment, or launch approval. The source manifest and
-both image receipts retain false `source_to_image_verified`,
+chain transaction, deployment, or launch approval. The original source manifest
+and both partial image receipts retain false `source_to_image_verified`,
 `reproducibility_verified`, `release_complete`, and `deployment_approved`
 aggregate flags. They establish their stated local checks, not every
 production release or rollout gate.
