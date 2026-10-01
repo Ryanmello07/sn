@@ -214,15 +214,31 @@ Actual independent production
 v2 acceptance, signer cutover, live authority and installation remain open MG-08
 gates. No risk policy was accepted and no live transaction was sent in this work.
 
+**Original-authority contract installation readback.** The
+[anchor/readback producer](BOOTSTRAP-CHAIN.md#original-authority-evidence-anchor-and-installation-readback)
+joins all eight original receipts, the exact counted Safe anchor and its binding
+event to complete five-contract and Safe storage proofs at anchor inclusion.
+Its stable installation identity preserves the original approvals, terminal
+journal and receipt across later observations. A separate current snapshot proves
+complete Safe storage and the existing executable/domain views without treating
+normal accounting or a later observed Safe nonce as new transaction authority.
+The typed producer lets service admission share its selected finalized boundary;
+a JSON report cannot authorize a service. Readback makes no network write but
+can finish the original local terminal journal after interruption. Current-only
+v2 policy selection/signature, signer custody, live installation and service
+activation remain external gates. Complete history is not inferred from current
+storage. See the [scoped evidence](evidence/contract-installation-anchor-20261001.md).
+
 **Contract-to-validator declaration admission — scoped qualification complete.** The
 separate signer-free [contract-role plan](BOOTSTRAP-CONTRACT-ROLES.md) binds both
 signed UR configs to the approved coordinator proxy, vault and initial policy
 identifier, with the evidence journal's exact immutable domain. Pairwise config
 agreement cannot substitute for this deployment binding. The original preparation
-and recovery scope stay unchanged. Canonical installation, the evidence anchor,
-deployment scan floors, current state and service activation remain open; this
-offline check does not advance a durable chain phase or install a public send
-route. The corrected `f4470d0d` [qualification receipt](evidence/bootstrap-contract-role-qualification-20260930.md)
+and recovery scope stay unchanged. This earlier declaration check alone does not
+verify canonical installation, the evidence anchor, deployment scan floors,
+current state or service activation. It does not advance a durable chain phase
+or install a public send route. The corrected `f4470d0d`
+[qualification receipt](evidence/bootstrap-contract-role-qualification-20260930.md)
 records 40 positive executions (eight focused and twelve adjacent roots, each
 normal/race) and three causal controls in both modes. The earlier `43dcd01f`
 fixture failure remains separate evidence.
