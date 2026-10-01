@@ -14,6 +14,13 @@ const rootPassiveStrategy = "passive_accumulate_in_place"
 const bootstrapRootPassiveConfigSchema = "urnetwork-mainnet-bootstrap-root-config-v2"
 const bootstrapRootPassivePlanSchema = "urnetwork-mainnet-bootstrap-root-passive-plan-v2"
 const bootstrapRootPassivePhase = "prepare-passive-root-observation"
+const rootPassiveCheckpointDirectory = "root-passive-observation"
+
+// Existing approvals retain their flat checkpoint. Fresh static hosting uses
+// one dedicated child so the process cannot write any preparation journal.
+func rootPassiveCheckpointWithin(path, directory string) bool {
+	return filepath.Dir(path) == directory || filepath.Dir(path) == filepath.Join(directory, rootPassiveCheckpointDirectory)
+}
 
 // The signed configuration pins its own route, checkpoint and finite cadence.
 // Repeated runs spend no native allowance; checkpoint locking joins each owner.
@@ -77,7 +84,7 @@ func (self bootstrapRootPlan) validatePassive() error {
 	}
 	seen := map[string]bool{}
 	for _, path := range []string{filepath.Join(self.RunDirectory, bootstrapRootProgressFile), self.PassiveService.CheckpointPath} {
-		if filepath.Dir(path) != self.RunDirectory || seen[path] || seen[path+".lock"] {
+		if !rootPassiveCheckpointWithin(path, self.RunDirectory) || seen[path] || seen[path+".lock"] {
 			return errors.New("passive root checkpoint overlaps preparation or leaves its private directory")
 		}
 		seen[path], seen[path+".lock"] = true, true

@@ -216,6 +216,12 @@ func (self *repairValidatorHost) command(ctx context.Context, plan repairValidat
 // A canonical on-disk unit is insufficient if systemd has stale or overridden
 // configuration. Check the manager's resolved execution and dependency profile.
 func (self *repairValidatorHost) inspect(ctx context.Context, plan repairValidatorPlan) (repairValidatorManager, error) {
+	return self.inspectCommand(ctx, plan, "run --config="+plan.Unit.Config.Path+" --progress-file="+plan.Unit.ProgressFile, nil)
+}
+
+// Independently approved static profiles share the physical host and manager
+// checks. Callers supply a fixed argument grammar, never command-line input.
+func (self *repairValidatorHost) inspectCommand(ctx context.Context, plan repairValidatorPlan, arguments string, extra map[string]string) (repairValidatorManager, error) {
 	var result repairValidatorManager
 	for _, reference := range []planFileReference{plan.Unit.File, plan.Unit.Binary, plan.Unit.Config, plan.Systemctl} {
 		limit := int64(16 * 1024 * 1024)
@@ -252,7 +258,17 @@ func (self *repairValidatorHost) inspect(ctx context.Context, plan repairValidat
 	if !ok || stateStat.Uid != plan.Unit.Uid || stateStat.Gid != plan.Unit.Gid || !state.IsDir() || state.Mode().Perm()&0077 != 0 {
 		return result, errors.New("validator repair state directory owner differs")
 	}
-	raw, err := self.command(ctx, plan, "--system", "--no-pager", "show", "--all", "--property="+strings.Join(repairValidatorProperties, ","), "--", plan.Unit.Name)
+	properties := slices.Clone(repairValidatorProperties)
+	for key := range extra {
+		if slices.Contains(properties, key) {
+			return result, errors.New("static unit profile duplicates a manager property")
+		}
+		properties = append(properties, key)
+	}
+	if len(extra) != 0 {
+		slices.Sort(properties)
+	}
+	raw, err := self.command(ctx, plan, "--system", "--no-pager", "show", "--all", "--property="+strings.Join(properties, ","), "--", plan.Unit.Name)
 	if err != nil || len(raw) > 32*1024 {
 		return result, errors.Join(errors.New("validator repair manager snapshot unavailable"), err)
 	}
@@ -264,16 +280,19 @@ func (self *repairValidatorHost) inspect(ctx context.Context, plan repairValidat
 		}
 		values[key] = value
 	}
-	if len(values) != len(repairValidatorProperties) {
+	if len(values) != len(properties) {
 		return result, errors.New("validator repair manager snapshot is incomplete")
 	}
-	for _, key := range repairValidatorProperties {
+	for _, key := range properties {
 		if _, exists := values[key]; !exists {
 			return result, errors.New("validator repair manager property is missing")
 		}
 	}
 	expected := map[string]string{"Id": plan.Unit.Name, "LoadState": "loaded", "FragmentPath": plan.Unit.File.Path, "NeedDaemonReload": "no", "Transient": "no", "Type": "exec", "User": strconv.FormatUint(uint64(plan.Unit.Uid), 10), "Group": strconv.FormatUint(uint64(plan.Unit.Gid), 10), "WorkingDirectory": plan.Unit.StateDirectory, "Restart": "no", "KillMode": "control-group", "Delegate": "no", "Job": "0", "ControlPID": "0"}
 	expected["Slice"] = "system.slice"
+	for key, value := range extra {
+		expected[key] = value
+	}
 	for _, key := range []string{"DropInPaths", "ExecStartPre", "ExecStartPost", "ExecStop", "ExecStopPost", "ExecReload", "Environment", "EnvironmentFiles", "PassEnvironment", "RootDirectory", "RootImage", "Wants", "Requisite", "BindsTo", "Conflicts", "OnFailure", "OnSuccess", "Triggers", "TriggeredBy", "PartOf", "Upholds"} {
 		expected[key] = ""
 	}
@@ -300,7 +319,7 @@ func (self *repairValidatorHost) inspect(ctx context.Context, plan repairValidat
 			return result, errors.New("validator repair prerequisite is not already active")
 		}
 	}
-	expectedStart := "{ path=" + plan.Unit.Binary.Path + " ; argv[]=" + plan.Unit.Binary.Path + " run --config=" + plan.Unit.Config.Path + " --progress-file=" + plan.Unit.ProgressFile + " ; ignore_errors=no ;"
+	expectedStart := "{ path=" + plan.Unit.Binary.Path + " ; argv[]=" + plan.Unit.Binary.Path + " " + arguments + " ; ignore_errors=no ;"
 	if !strings.HasPrefix(values["ExecStart"], expectedStart) || strings.Count(values["ExecStart"], "{") != 1 || strings.Count(values["ExecStart"], "}") != 1 || !strings.HasSuffix(values["ExecStart"], " }") {
 		return result, errors.New("validator repair loaded execution differs")
 	}

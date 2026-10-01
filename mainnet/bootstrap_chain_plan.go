@@ -181,7 +181,8 @@ func (self bootstrapChainPreparation) validate() error {
 	}
 	seen := map[string]bool{}
 	for _, path := range self.protectedPaths() {
-		if !bootstrapRootAbsolutePath(path) || filepath.Dir(path) != c.RunDirectory || seen[path] || seen[path+".lock"] {
+		passiveCheckpoint := root.PassiveService != nil && path == root.PassiveService.CheckpointPath && rootPassiveCheckpointWithin(path, c.RunDirectory)
+		if !bootstrapRootAbsolutePath(path) || filepath.Dir(path) != c.RunDirectory && !passiveCheckpoint || seen[path] || seen[path+".lock"] {
 			return errors.New("bootstrap chain journals or markers overlap or leave the approved run directory")
 		}
 		seen[path], seen[path+".lock"] = true, true
