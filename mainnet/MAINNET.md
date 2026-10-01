@@ -334,6 +334,20 @@ passes ten new and thirty-six adjacent roots normal/race, all twelve normal
 controls and exactly seven selected light race controls. Exact source/dependency
 evidence is sealed; the earlier canonical/readmission receipts remain unchanged.
 
+**Current native-header authority correction.** The
+[first implementation](evidence/current-native-header-authority-20261001.md)
+authenticates producer and fleet headers. Its
+[adjacent successor](evidence/current-native-header-adjacent-authority-20261001.md)
+at SN `30354d78` also closes upload and independently signed observation-window
+substitution, startup/activation evidence, applied-row journals and shared
+native receipt/state readers, including the separate historical finality witness.
+Complete header coordinates and closing canonical
+checks preserve original signed windows and signing/execution/post-state roles.
+Local qualification supplies no automatic runtime approval or live acceptance.
+The miner claim daemon's native/EVM clock comparison remains a separately
+identified recovery blocker. MG-04/PH-04 stay open, and a fresh exact successor
+release is required beyond the frozen SN `233ea2be` artifacts.
+
 **Runtime continuity policy proposal — inspection boundary qualified.** The
 [signed compatibility envelope and inspector](RUNTIME-CONTINUITY-POLICY.md)
 bind original production-validator authority to a separate semantic verifier,
