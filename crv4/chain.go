@@ -647,7 +647,9 @@ func FinalizedHeadContext(ctx context.Context, chain *Chain) (types.Hash, error)
 }
 
 // HeaderAtContext reads one caller-selected header without allowing a GSRPC
-// convenience method to replace the release operation's context.
+// convenience method to replace the release operation's context. This SDK
+// projection does not authenticate commitment bytes; authority/evidence readers
+// use ReceiptHeaderAtContext or CanonicalHeaderAtContext instead.
 func (self *Chain) HeaderAtContext(ctx context.Context, blockHash types.Hash) (*types.Header, error) {
 	if ctx == nil || self == nil || self.API == nil || self.API.Client == nil || blockHash == (types.Hash{}) {
 		return nil, errors.New("crv4: header context is unavailable")
@@ -933,7 +935,7 @@ func (c *Chain) WeightsAtFinalizedContext(ctx context.Context, netuid, validator
 	if err != nil {
 		return nil, 0, types.Hash{}, fmt.Errorf("crv4: finalized head: %w", err)
 	}
-	header, err := c.HeaderAtContext(ctx, hash)
+	number, _, err := c.CanonicalHeaderAtContext(ctx, hash)
 	if err != nil {
 		return nil, 0, types.Hash{}, fmt.Errorf("crv4: finalized header: %w", err)
 	}
@@ -941,7 +943,10 @@ func (c *Chain) WeightsAtFinalizedContext(ctx context.Context, netuid, validator
 	if err != nil {
 		return nil, 0, types.Hash{}, err
 	}
-	return row, uint64(header.Number), hash, nil
+	if err := c.CheckCanonicalBlockAtContext(ctx, hash, number); err != nil {
+		return nil, 0, types.Hash{}, err
+	}
+	return row, number, hash, nil
 }
 
 // WeightsVersionKey reads SubtensorModule.WeightsVersionKey(netuid); the
@@ -993,7 +998,7 @@ func (c *Chain) EpochScheduleStateAt(netuid uint16, blockHash types.Hash) (*Epoc
 // EpochScheduleStateAtContext reads every schedule input at one exact block
 // while retaining the release operation's cancellation boundary.
 func (c *Chain) EpochScheduleStateAtContext(ctx context.Context, netuid uint16, blockHash types.Hash) (*EpochScheduleState, error) {
-	header, err := c.HeaderAtContext(ctx, blockHash)
+	number, _, err := c.CanonicalHeaderAtContext(ctx, blockHash)
 	if err != nil {
 		return nil, fmt.Errorf("crv4: header: %w", err)
 	}
@@ -1019,13 +1024,16 @@ func (c *Chain) EpochScheduleStateAtContext(ctx context.Context, netuid uint16, 
 		return nil, err
 	}
 
+	if err := c.CheckCanonicalBlockAtContext(ctx, blockHash, number); err != nil {
+		return nil, err
+	}
 	return &EpochScheduleState{
 		LastEpochBlock:      uint64(lastEpochBlock),
 		PendingEpochAt:      uint64(pendingEpochAt),
 		SubnetEpochIndex:    uint64(subnetEpochIndex),
 		Tempo:               uint16(tempo),
 		BlocksSinceLastStep: uint64(blocksSince),
-		CurrentBlock:        uint64(header.Number),
+		CurrentBlock:        number,
 	}, nil
 }
 
@@ -1064,12 +1072,18 @@ func (c *Chain) FinalizedAccountNonceContext(ctx context.Context, publicKey [32]
 	if err != nil {
 		return 0, types.Hash{}, 0, err
 	}
-	header, err := c.HeaderAtContext(ctx, finalized)
+	number, _, err := c.CanonicalHeaderAtContext(ctx, finalized)
 	if err != nil {
 		return 0, types.Hash{}, 0, err
 	}
 	nonce, err := c.AccountNonceAtContext(ctx, publicKey, finalized)
-	return nonce, finalized, uint64(header.Number), err
+	if err == nil {
+		err = c.CheckCanonicalBlockAtContext(ctx, finalized, number)
+	}
+	if err != nil {
+		return 0, types.Hash{}, 0, err
+	}
+	return nonce, finalized, number, nil
 }
 
 // AccountNonceAt reads the canonical account nonce from a caller-selected
@@ -1188,14 +1202,14 @@ func (c *Chain) SubmitRawAndWatchFinalized(ctx context.Context, encoded string) 
 			}
 			switch {
 			case status.IsFinalized:
-				var header types.Header
-				if err := c.API.Client.CallContext(ctx, &header, "chain_getHeader", status.AsFinalized.Hex()); err != nil {
-					return nil, fmt.Errorf("crv4: finalized header %s: %w", status.AsFinalized.Hex(), err)
-				}
-				if err := c.VerifyFinalizedExtrinsicContext(ctx, status.AsFinalized, txHash); err != nil {
+				receipt, err := c.verifyFinalizedExtrinsicContext(ctx, status.AsFinalized, txHash)
+				if err != nil {
 					return nil, err
 				}
-				return &FinalizedExtrinsic{ExtrinsicHash: txHash, BlockHash: status.AsFinalized, BlockNumber: uint64(header.Number)}, nil
+				if err := c.CheckCanonicalBlockAtContext(ctx, status.AsFinalized, receipt.number); err != nil {
+					return nil, err
+				}
+				return &FinalizedExtrinsic{ExtrinsicHash: txHash, BlockHash: status.AsFinalized, BlockNumber: receipt.number}, nil
 			case status.IsDropped, status.IsInvalid, status.IsUsurped, status.IsFinalityTimeout, status.IsRetracted:
 				return nil, fmt.Errorf("crv4: extrinsic %s failed before finality: %+v", txHash.Hex(), status)
 			}

@@ -814,18 +814,14 @@ func (self *ReleaseSteerer) checkApplicationV2(ctx context.Context, snapshot *Re
 	if err != nil {
 		return err
 	}
-	header, err := self.native.HeaderAtContext(ctx, hash)
+	block, _, err := self.native.CanonicalHeaderAtContext(ctx, hash)
 	if err != nil {
 		return fmt.Errorf("read applied-weight finalized header at %s: %w", hash.Hex(), err)
-	}
-	if header == nil {
-		return fmt.Errorf("applied-weight finalized header at %s is unavailable", hash.Hex())
 	}
 	row, err := self.native.WeightsAtContext(ctx, self.cfg.Netuid, uid, hash)
 	if err != nil {
 		return err
 	}
-	block := uint64(header.Number)
 	if block < current.RevealBlock {
 		return nil
 	}
@@ -846,6 +842,9 @@ func (self *ReleaseSteerer) checkApplicationV2(ctx context.Context, snapshot *Re
 		if got[targetUid] != value {
 			return nil
 		}
+	}
+	if err := self.native.CheckCanonicalBlockAtContext(ctx, hash, block); err != nil {
+		return err
 	}
 	return self.intents.markAppliedV2(ctx, current.VectorHash, block, hash.Hex())
 }

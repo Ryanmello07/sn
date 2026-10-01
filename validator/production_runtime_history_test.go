@@ -131,11 +131,7 @@ func installProductionRuntimeStakeTest(t *testing.T, fixture *productionRuntimeT
 		// Match a real JSON transport, including the capture reader's bounded
 		// custom destination; the original fixture owns typed header/hash reads.
 		if method == "chain_getHeader" {
-			var header types.Header
-			if err := original(ctx, &header, method, args...); err != nil {
-				return err
-			}
-			return setReleaseHistoricalTestResult(result, header)
+			return original(ctx, result, method, args...)
 		}
 		if method == "chain_getBlockHash" {
 			var hash types.Hash

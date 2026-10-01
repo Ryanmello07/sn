@@ -161,8 +161,7 @@ func (self *mainnetRuntimeTestFixture) callContext(ctx context.Context, result a
 		} else if override, ok := self.canonicalHashKVs[number]; ok {
 			value = override
 		}
-		*result.(*types.Hash) = value
-		return nil
+		return setReleaseHistoricalTestResult(result, value.Hex())
 	}
 	if len(args) == 0 {
 		return fmt.Errorf("unexpected observation Rpc %s", method)

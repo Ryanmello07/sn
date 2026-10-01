@@ -43,6 +43,8 @@ type accountNonceTestFixture struct {
 func newAccountNonceTestFixture(t *testing.T, ctx context.Context, storage any) *accountNonceTestFixture {
 	t.Helper()
 	fixture := &accountNonceTestFixture{ctx: ctx, publicKey: [32]byte{31}, blockHash: types.Hash{32}, storage: storage}
+	header, hash := receiptTestHeader(t, types.Hash{32}, 42, nil, 1)
+	fixture.blockHash = hash
 	metadata := releaseContextStorageMetadata()
 	key, err := types.CreateStorageKey(metadata, "System", "Account", fixture.publicKey[:])
 	if err != nil {
@@ -63,8 +65,16 @@ func newAccountNonceTestFixture(t *testing.T, ctx context.Context, storage any) 
 			if len(args) != 1 || args[0] != fixture.blockHash.Hex() {
 				return fmt.Errorf("header did not retain exact finalized hash: %v", args)
 			}
-			*(result.(*types.Header)) = types.Header{Number: types.BlockNumber(42)}
-			return nil
+			if target, ok := result.(*types.Header); ok {
+				*target = header
+				return nil
+			}
+			return setRuntimeIdentityTestResult(result, receiptTestHeaderWire(header))
+		case "chain_getBlockHash":
+			if len(args) != 1 || args[0] != uint64(42) {
+				return fmt.Errorf("canonical account height changed: %v", args)
+			}
+			return setRuntimeIdentityTestResult(result, fixture.blockHash.Hex())
 		case "state_getStorage":
 			if len(args) != 2 || args[0] != key.Hex() || args[1] != fixture.blockHash.Hex() {
 				return fmt.Errorf("account did not retain exact storage key and hash: %v", args)
@@ -109,7 +119,7 @@ func TestAccountNonceWrappersDecodeReviewedSubtensorRow(t *testing.T) {
 			if blockHash != fixture.blockHash || blockNumber != 42 {
 				t.Errorf("finalized account returned wrong checkpoint: %s/%d", blockHash.Hex(), blockNumber)
 			}
-			expectedCalls = []string{"chain_getFinalizedHead", "chain_getHeader", "state_getStorage"}
+			expectedCalls = []string{"chain_getFinalizedHead", "chain_getHeader", "chain_getBlockHash", "state_getStorage", "chain_getBlockHash"}
 		} else {
 			nonce, err = fixture.chain.AccountNonceAt(fixture.publicKey, fixture.blockHash)
 		}
@@ -129,7 +139,7 @@ func TestFinalizedAccountNonceContextDecodesReviewedSubtensorRow(t *testing.T) {
 	if err != nil || nonce != 23 || blockHash != fixture.blockHash || blockNumber != 42 {
 		t.Fatalf("nonce=%d checkpoint=%s/%d error=%v", nonce, blockHash.Hex(), blockNumber, err)
 	}
-	if !reflect.DeepEqual(fixture.calls, []string{"chain_getFinalizedHead", "chain_getHeader", "state_getStorage"}) {
+	if !reflect.DeepEqual(fixture.calls, []string{"chain_getFinalizedHead", "chain_getHeader", "chain_getBlockHash", "state_getStorage", "chain_getBlockHash"}) {
 		t.Fatalf("unexpected finalized account calls: %v", fixture.calls)
 	}
 }

@@ -297,14 +297,14 @@ func (self *releaseActivationSetup) prepare(ctx context.Context) (*ReleaseActiva
 	if err != nil {
 		return nil, err
 	}
-	nativeHeader, err := self.native.HeaderAtContext(ctx, nativeHash)
+	nativeNumber, _, err := self.native.CanonicalHeaderAtContext(ctx, nativeHash)
 	if err != nil {
 		return nil, err
 	}
 	prepared := &ReleaseActivationSetupPreparedV2{
 		Schema: ReleaseActivationSetupPreparedSchemaV2, DeploymentID: self.cfg.DeploymentID, ValidatorID: self.cfg.ValidatorID, Netuid: self.cfg.Netuid,
 		PolicyHash: attemptHex32(self.deployment.PolicyHash), Epoch: epoch, Journal: journal.Hex(), RuntimeHash: attemptHex32(runtimeHash),
-		Native: ReleaseActivationSetupHeadV2{Number: uint64(nativeHeader.Number), Hash: nativeHash.Hex()},
+		Native: ReleaseActivationSetupHeadV2{Number: nativeNumber, Hash: nativeHash.Hex()},
 		EVM:    ReleaseActivationSetupHeadV2{Number: block, Hash: common.Hash(hash).Hex()},
 	}
 	observation, err := self.nativeObservationAt(ctx, prepared.Native.Number, nativeHash)
@@ -326,6 +326,9 @@ func (self *releaseActivationSetup) prepare(ctx context.Context) (*ReleaseActiva
 	}
 	if canonical != hash {
 		return nil, errors.New("activation preparation EVM snapshot changed during reads")
+	}
+	if err := self.native.CheckCanonicalBlockAtContext(ctx, nativeHash, nativeNumber); err != nil {
+		return nil, err
 	}
 	return prepared, nil
 }

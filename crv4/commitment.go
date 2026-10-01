@@ -244,8 +244,8 @@ func (c *Chain) FleetCommitmentAtContext(ctx context.Context, netuid uint16, hot
 }
 
 // Source receipts already authenticated their complete header and body. Their
-// nonzero height avoids a duplicate legacy SDK decode of runtime-update digests;
-// ordinary commitment callers retain their existing header observation below.
+// nonzero height avoids a duplicate full-header read; ordinary commitment
+// callers authenticate their header below. Both close the canonical witness.
 func (self *Chain) fleetCommitmentAtContext(ctx context.Context, netuid uint16, hotkey [32]byte, blockHash types.Hash, receiptNumber uint64) (*FinalizedCommitment, error) {
 	if ctx == nil || self == nil || self.API == nil || self.API.Client == nil || self.Meta == nil ||
 		netuid == 0 || hotkey == ([32]byte{}) || blockHash == (types.Hash{}) {
@@ -286,14 +286,17 @@ func (self *Chain) fleetCommitmentAtContext(ctx context.Context, netuid uint16, 
 		return nil, fmt.Errorf("crv4: commitment registration block %d differs from LastCommitment %d", registrationBlock, commitmentBlock)
 	}
 	if receiptNumber == 0 {
-		var header types.Header
-		if err := self.API.Client.CallContext(ctx, &header, "chain_getHeader", blockHash.Hex()); err != nil {
+		number, _, err := self.ReceiptHeaderAtContext(ctx, blockHash)
+		if err != nil {
 			return nil, fmt.Errorf("crv4: finalized commitment header: %w", err)
 		}
-		if header.Number == 0 {
+		if number == 0 {
 			return nil, fmt.Errorf("crv4: finalized commitment header has zero block number")
 		}
-		receiptNumber = uint64(header.Number)
+		receiptNumber = number
+	}
+	if err := self.CheckCanonicalBlockAtContext(ctx, blockHash, receiptNumber); err != nil {
+		return nil, err
 	}
 	return &FinalizedCommitment{Hash: commitmentHash, CommitmentBlock: uint64(commitmentBlock), FinalizedAt: receiptNumber, FinalizedHash: blockHash}, nil
 }
