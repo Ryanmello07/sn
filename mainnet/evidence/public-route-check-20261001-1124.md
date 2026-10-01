@@ -29,6 +29,16 @@ Raw evidence is retained at
 | `snapshot.json` | `df344a35672f81de2fc97ed0aaca993c462ac26e9a73df5deae3b748e2779253` |
 | `route-check.json` | `c1fad92efd7015b48490bbfa3995a69add2ba2379b5fb920e062421b58836592` |
 
+At 11:40 UTC, `state_getStorage` at the same finalized hash for the reviewed
+`RecycleOrBurn[25]` key
+`0x658faa385070e074c85bf6b568cf055530823bc1353bfe6cb262413a5bd7a0231900`
+returned `null`. Under the [reviewed metadata fallback](recycle-mode-observation-20261001.md),
+that means **Burn** at this pinned block. The raw
+`recycle-storage.json` has SHA-256
+`584267c6150324736a6ac521c29c0d1192cf7a0bf3422c3752cb9fff1ef93661`.
+This is still an unapproved observation, and the owner must select and verify
+Recycle before the requested 90% recycling can operate.
+
 This check involved no signing, transaction submission, or service change.
 The public route remains an observation input; launch still requires separate
 mainnet identity/runtime approval and a current-source release.
