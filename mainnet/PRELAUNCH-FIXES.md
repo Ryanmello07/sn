@@ -160,6 +160,8 @@ receipts and independent monitor deployment remain open.
 
 MG-06 has a [pinned read-only recycle-mode observation](evidence/recycle-mode-observation-20261001.md): `RecycleOrBurn[25]` was absent at Rao archive finalized block 9,186,298, which the reviewed metadata interprets as the default `Burn`. This is not a current-state assertion or activation approval. The owner transition and finalized `Recycle` readback remain required before the 90% recycle policy can operate.
 
+MG-02/MG-10 have a [broad normal receipt for the exact Safe-integrated release code](evidence/release-source-broad-normal-20261001.md): all 16 disjoint `./mainnet` partitions passed, with 1,019 test roots passing and six intentional skips. The tested SN commit differs from the frozen release source only in Markdown; its integrated server pin is exact. Focused Safe normal/race and builder normal/race qualifications remain separate. This local source result does not approve the release or prove live rollout behavior.
+
 MG-09 has a concrete [build-host storage observation](evidence/build-host-scratch-migration-20260930.md): the root volume reached 100% with 4.1 GiB available during release preparation. Two inactive, verified scratch trees were moved to `/mnt/data` while their original paths remained readable through symlinks, leaving about 54 GiB free on `/`. Continue placing qualification scratch and caches on `/mnt/data`; this cleanup does not close production capacity, retention, restore, or full-volume tests.
 
 MG-03 also includes a [qualified miner claim-queue owner fix](evidence/miner-claim-queue-owner-qualification-20260929.md).
