@@ -1,5 +1,6 @@
 // Prepare every selected image from exact binary and source recipe bytes.
-// OCI construction, rootfs readback and reproducibility remain a separate gate.
+// OCI construction uses a separate bounded scratch supplement; the prepared
+// context manifest itself never claims image verification or reproducibility.
 package main
 
 import (

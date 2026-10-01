@@ -162,9 +162,14 @@ func buildEnvironment(output string) []string {
 
 // Logs and command records are retained before execution; no command is a shell.
 func buildCommand(ctx context.Context, config buildConfig, id, dir, tool string, args ...string) error {
+	return runBuildCommand(ctx, config.Output, id, dir, tool, buildEnvironment(config.Output), args...)
+}
+
+// Each executor supplies its own closed environment and shares bounded receipts.
+func runBuildCommand(ctx context.Context, output, id, dir, tool string, environment []string, args ...string) error {
 	commandCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
-	logPath := filepath.Join(config.Output, "logs", id+".log")
+	logPath := filepath.Join(output, "logs", id+".log")
 	file, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
@@ -175,12 +180,12 @@ func buildCommand(ctx context.Context, config buildConfig, id, dir, tool string,
 		Tool      string   `json:"tool"`
 		Arguments []string `json:"arguments"`
 	}{Directory: dir, Tool: tool, Arguments: args}
-	if err := writeBuildJson(filepath.Join(config.Output, "logs", id+".command.json"), record); err != nil {
+	if err := writeBuildJson(filepath.Join(output, "logs", id+".command.json"), record); err != nil {
 		return err
 	}
 	command := exec.CommandContext(commandCtx, tool, args...)
 	command.Dir = dir
-	command.Env = buildEnvironment(config.Output)
+	command.Env = environment
 	command.WaitDelay = 2 * time.Second
 	writer := &buildLog{file: file, remaining: 16 * 1024 * 1024}
 	command.Stdout = writer
@@ -194,7 +199,7 @@ func buildCommand(ctx context.Context, config buildConfig, id, dir, tool string,
 			code = exit.ExitCode()
 		}
 	}
-	if saveErr := os.WriteFile(filepath.Join(config.Output, "logs", id+".exit"), []byte(fmt.Sprintln(code)), 0600); saveErr != nil {
+	if saveErr := os.WriteFile(filepath.Join(output, "logs", id+".exit"), []byte(fmt.Sprintln(code)), 0600); saveErr != nil {
 		return errors.Join(err, saveErr)
 	}
 	if err != nil {
@@ -330,8 +335,16 @@ func main() {
 	defer cancel()
 	flags := flag.NewFlagSet("mainnet-release-build", flag.ContinueOnError)
 	configPath := flags.String("config", "", "exact release build config")
-	if err := flags.Parse(os.Args[1:]); err != nil || flags.NArg() != 0 || *configPath == "" {
+	imageConfigPath := flags.String("image-config", "", "offline scratch-image supplement config")
+	if err := flags.Parse(os.Args[1:]); err != nil || flags.NArg() != 0 || (*configPath == "") == (*imageConfigPath == "") {
 		os.Exit(2)
+	}
+	if *imageConfigPath != "" {
+		if err := executeImageConfig(ctx, *imageConfigPath); err != nil {
+			fmt.Fprintln(os.Stderr, "release image build:", err)
+			os.Exit(1)
+		}
+		return
 	}
 	raw, err := readBuildInput(*configPath, 1024*1024)
 	if err != nil {
@@ -341,7 +354,7 @@ func main() {
 	var config buildConfig
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
-	err = validateBuildJson(raw)
+	err = validateBuildJsonKeys(raw, true)
 	if err == nil {
 		err = decoder.Decode(&config)
 	}
@@ -408,6 +421,12 @@ func sealBuildManifest(manifest *buildManifest) error {
 
 // Configuration duplicates are ambiguous even if their final decoded value fits.
 func validateBuildJson(raw []byte) error {
+	return validateBuildJsonKeys(raw, false)
+}
+
+// Owned configuration structs also reject case aliases accepted by encoding/json.
+// Contract metadata maps retain their case-sensitive key semantics.
+func validateBuildJsonKeys(raw []byte, rejectCaseAliases bool) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	var visit func(int) error
 	visit = func(depth int) error {
@@ -433,6 +452,9 @@ func validateBuildJson(raw []byte) error {
 					return err
 				}
 				name, ok := key.(string)
+				if rejectCaseAliases {
+					name = strings.ToLower(strings.ToUpper(name))
+				}
 				if !ok || keys[name] {
 					return errors.New("duplicate JSON member")
 				}

@@ -103,10 +103,49 @@ of the selected binary, with both copies' hashes joined to the binary manifest.
 The package lock, all eight original image Makefiles, and database/signal
 migration source files are retained. Proposed local build arguments use a
 fixed source epoch and timestamp rewriting for all eight services, including
-the scratch competition worker. The builder does not invoke Docker. These
-contexts have no runnable OCI digest or embedded-binary/rootfs verification;
+the scratch competition worker. The source-composition `--config` mode does not
+invoke Docker. Its contexts have no runnable OCI digest or embedded-binary/rootfs verification;
 `missing_images` lists all eight and `source_to_image_verified` stays false.
 Image package-archive/attestation policy and environment selection remain open.
+
+`go run -mod=readonly ./scripts/mainnet-release-build --image-config /absolute/image-config.json`
+adds a separate, bounded scratch-image supplement to a frozen composition. It
+requires schema `urnetwork-mainnet-scratch-image-build-v1`, `candidate_manifest`
+(`path`, full file `sha256`), a new disjoint `output` directory, a pinned `buildx`
+executable (`path`, `sha256`) and a physical local `docker_socket` path. The
+original manifest and its domain-separated seal are checked without rewriting
+them. All eight selected binaries, Dockerfiles and context copies are rehashed.
+
+This mode admits only the exact existing competition-worker scratch Dockerfile.
+It copies its two inputs into the new output and uses internally constructed
+arguments, a private empty Docker configuration, the local default builder,
+`--no-cache`, `--network=none`, the original epoch, timestamp rewriting and a
+remote-source DENY policy. SBOM and provenance collectors are explicitly disabled
+to avoid additional image resolution; their policy gates remain open. The
+offline boundary is the fixed scratch/COPY source graph and source policy, not
+an attestation of daemon-wide network isolation. No application runs, no image
+is loaded or tagged, and no image is pushed or deployed.
+
+The OCI archive is verified as data without extraction. The reader checks every
+referenced blob's SHA256 and length, one Linux/amd64 platform manifest, its exact
+runtime configuration, one compressed layer and its full uncompressed diff ID.
+The rootfs must contain exactly one root-owned mode-0755 regular file at
+`/competitionworker`, equal in length and SHA256 to the parent's binary. Links,
+whiteouts, duplicate or extra paths, ambiguous JSON and oversized decompression
+fail closed. Builder metadata must independently agree with the read-back
+platform/config digests. Input, executable and archive hashes are rechecked
+before writing the new domain-separated `image-receipt.json`; failed output and
+command exits are retained and cannot be overwritten by a retry.
+
+The supplement can mark only that image's `source_to_image_verified` true. Its
+aggregate `source_to_image_verified`, `reproducibility_verified`,
+`release_complete` and `deployment_approved` stay false, and `missing_images`
+contains the other seven roles. Those production Dockerfiles use remote `ADD`
+and an Ubuntu base: `--network=none` fences `RUN`, not source fetching. Their
+offline source closure and current OCI readback are not yet qualified. This
+bounded scratch implementation does not rewrite those recipes or infer their
+qualification from a cached base. Runtime behavior, attestations, independent
+builder reproduction and arm64 remain open.
 
 The September 30 retained-catalogue full-source Foundry build used solc 0.8.24, Cancun, optimizer
 200 and via IR, and completed successfully. ReserveSink, SettlementVault and
