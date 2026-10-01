@@ -88,12 +88,14 @@ Increasing `maximum_attempts` in place cannot solve this: every original marker
 and record binds the exact signed config, and every descendant binds its complete
 predecessor record. Even a separately signed changed config cannot adopt those
 records. Values above eight are also outside the original schema. The actual
-structural gap is an independently approved successor owner that can adopt a
-completed prefix while conserving original liabilities. No successor executor
-or approval is synthesized here. The report binds its requirements to the
-original contract plan/config and the validated retained action seals.
+requirement is an independently approved successor owner that can adopt a
+completed prefix while conserving original liabilities. The separate
+[successor execution owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md) implements that
+adoption; these prerequisite reports synthesize no executor or approval. The
+report binds its requirements to the original contract plan/config and the
+validated retained action seals.
 
-The required successor code path must use a new domain/schema and separate
+The successor code path uses a new domain/schema and separate
 durable claim, with an independent signature covering:
 
 1. The original plan/config hashes, custody ID and directory, every adopted
@@ -145,6 +147,13 @@ in both modes. The separate [successful full-v3 public-command fixture](evidence
 passes normal/race and all six causal executions on `c294fefd`, retaining its
 original five preparation journals and eight executed contract actions.
 This proposal does not create executable authority.
+
+The execution owner additionally rechecks its exact live claim, ready marker,
+counted intent/record prefix and interrupted outcome before a send or completion
+report. [Deterministic regressions](evidence/bootstrap-successor-live-custody-20261001.md)
+cover changed or missing custody after reservation. Original approvals and
+journals remain unchanged; public Safe submission, installation and activation
+remain separate unresolved gates.
 
 ## Read-only current prerequisites
 
