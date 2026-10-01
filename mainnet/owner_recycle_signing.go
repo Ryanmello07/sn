@@ -5,8 +5,6 @@ package main
 import (
 	"encoding/hex"
 	"errors"
-
-	"github.com/urfoundation/sn/crv4"
 )
 
 const ownerRecycleRequestSchema = "urnetwork-mainnet-owner-recycle-signing-request-v1"
@@ -27,7 +25,7 @@ func prepareOwnerRecyclePlan(input ownerRecyclePlanInput) (ownerRecycleConfig, e
 	if err != nil {
 		return ownerRecycleConfig{}, err
 	}
-	metadata, _, err := crv4.DecodeRuntimeMetadata(input.Metadata)
+	metadata, _, err := nativePinnedMetadata(input.Metadata, action.Policy.RuntimeMetadataHash)
 	if err != nil {
 		return ownerRecycleConfig{}, err
 	}

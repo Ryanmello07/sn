@@ -12,7 +12,6 @@ import (
 	"math"
 	"path/filepath"
 
-	"github.com/urfoundation/sn/crv4"
 	"github.com/vedhavyas/go-subkey/v2/sr25519"
 	"golang.org/x/crypto/blake2b"
 )
@@ -94,7 +93,7 @@ func prepareOwnerRecycleAction(action ownerRecycleAction, metadataHex string) (o
 	if len(metadataHex) > 2+2*maxMetadataRpcReplyBytes {
 		return ownerRecycleAction{}, errors.New("recycle metadata exceeds bound")
 	}
-	metadata, digest, err := crv4.DecodeRuntimeMetadata(metadataHex)
+	metadata, digest, err := nativePinnedMetadata(metadataHex, action.Policy.RuntimeMetadataHash)
 	if err != nil || digest != action.Policy.RuntimeMetadataHash {
 		return ownerRecycleAction{}, errors.Join(errors.New("recycle metadata differs from independent pin"), err)
 	}

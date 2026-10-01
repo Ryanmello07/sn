@@ -30,6 +30,18 @@ type rootReceiptRuntime struct {
 	metadata *types.Metadata
 }
 
+var errNativeMetadataPin = errors.New("native metadata differs from independently approved bounded canonical bytes")
+
+// Untrusted SCALE lengths must never reach the decoder before authenticating
+// the exact independently reviewed bytes. The hex allocation is bounded first.
+func nativePinnedMetadata(encoded, expected string) (*types.Metadata, string, error) {
+	raw, err := rootReceiptHex(encoded, maxMetadataRpcReplyBytes)
+	if err != nil || !rootCanonicalHash(expected) || rootExtrinsicHash(raw) != expected {
+		return nil, "", errNativeMetadataPin
+	}
+	return crv4.DecodeRuntimeMetadata(encoded)
+}
+
 // System storage keys must be selected from one exact pallet and item schema.
 func rootSystemEntry(metadata *types.Metadata, name string) (types.StorageEntryMetadataV14, error) {
 	var result types.StorageEntryMetadataV14
@@ -146,7 +158,7 @@ func (self *rootCanonicalChain) nativeRuntimeAt(ctx context.Context, block strin
 		if err := self.client.call(ctx, "state_getMetadata", []any{block}, &encoded); err != nil {
 			return rootReceiptRuntime{}, err
 		}
-		metadata, digest, err := crv4.DecodeRuntimeMetadata(encoded)
+		metadata, digest, err := nativePinnedMetadata(encoded, profile.RuntimeMetadataHash)
 		if err != nil || digest != profile.RuntimeMetadataHash {
 			return rootReceiptRuntime{}, errors.Join(errors.New("root receipt metadata differs from independent artifact"), err)
 		}

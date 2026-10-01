@@ -303,7 +303,7 @@ func prepareRootAction(action rootAction, metadataHex string) (rootAction, error
 	if len(metadataHex) > 2+2*maxMetadataRpcReplyBytes {
 		return rootAction{}, errors.New("root action metadata exceeds its resource bound")
 	}
-	metadata, digest, err := crv4.DecodeRuntimeMetadata(metadataHex)
+	metadata, digest, err := nativePinnedMetadata(metadataHex, action.Scope.RuntimeMetadataHash)
 	if err != nil || digest != action.Scope.RuntimeMetadataHash {
 		return rootAction{}, errors.Join(errors.New("root action metadata differs from approved bytes"), err)
 	}

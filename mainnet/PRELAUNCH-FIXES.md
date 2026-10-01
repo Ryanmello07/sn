@@ -232,6 +232,15 @@ and custody qualification, an actual approved transition and finalized Recycle
 state, followed by native 10/90 outcome evidence, remain required. This source
 needs a successor release; the SN `6c801a25` / server `720e7c61` baseline retains its scope.
 
+**Open decoder resource hardening:** unsigned subnet-discovery snapshots still
+check a caller-supplied self-consistent metadata hash before SCALE decoding.
+That hash and the 8 MiB input limit do not bound a forged compact vector's
+allocation. The new native metadata helper protects independently pinned bytes
+in owner/root preparation and native receipts; it does not close this distinct
+unapproved-snapshot decoder gap. Add a bounded metadata decoder and deterministic
+malformed/self-consistent snapshot tests before treating that discovery input
+path as resource-qualified.
+
 MG-01/MG-06 have a later [read-only public-entrypoint fallback](evidence/public-entrypoint-fallback-20261001.md): the archive route timed out, while the official mainnet entrypoint returned matching genesis/EVM/runtime identity at finalized block 9,187,206 and another absent `RecycleOrBurn[25]` value. The fallback is unapproved observation only; it neither retargets signed work nor provides archive history. Preserve the failed archive transcript and obtain separately approved route authority before any endpoint switch for execution.
 
 MG-02/MG-10 have a [broad normal receipt for the exact Safe-integrated release code](evidence/release-source-broad-normal-20261001.md): all 16 disjoint `./mainnet` partitions passed, with 1,019 test roots passing and six intentional skips. The tested SN commit differs from the frozen release source only in Markdown; its integrated server pin is exact. Focused Safe normal/race and builder normal/race qualifications remain separate. This local source result does not approve the release or prove live rollout behavior.

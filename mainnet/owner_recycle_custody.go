@@ -6,8 +6,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-
-	"github.com/urfoundation/sn/crv4"
 )
 
 const ownerRecycleRecordSchema = "urnetwork-mainnet-owner-recycle-state-v1"
@@ -50,7 +48,7 @@ func ownerRecyclePhase(request ownerRecycleSigningRequest, evidence ownerRecycle
 		if evidence.Readback == nil {
 			return "finalized-readback-pending"
 		}
-		metadata, _, err := crv4.DecodeRuntimeMetadata(request.Metadata)
+		metadata, _, err := nativePinnedMetadata(request.Metadata, a.Policy.RuntimeMetadataHash)
 		if err != nil {
 			return "finalized-readback-pending"
 		}

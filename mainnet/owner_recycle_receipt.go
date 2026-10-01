@@ -9,8 +9,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"time"
-
-	"github.com/urfoundation/sn/crv4"
 )
 
 // No submission method is installed. The owned route is an explicit trust
@@ -68,7 +66,7 @@ func (self ownerRecycleReconciliation) validate(request ownerRecycleSigningReque
 			if self.ReadbackIssue != "" || self.Readback.FinalizedNumber != receipt.BlockNumber || self.Readback.FinalizedHash != receipt.BlockHash || self.Readback.Owner != a.Owner {
 				return errors.New("recycle readback is not the exact inclusion block")
 			}
-			metadata, _, err := crv4.DecodeRuntimeMetadata(request.Metadata)
+			metadata, _, err := nativePinnedMetadata(request.Metadata, a.Policy.RuntimeMetadataHash)
 			if err != nil {
 				return err
 			}

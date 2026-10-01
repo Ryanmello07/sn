@@ -176,6 +176,14 @@ post-rename export/import failures, local exclusion and missing-state refusal,
 public CLI round trips, Ledger response framing, complete canonical expiry,
 foreign nonce, exact receipt/readback gaps and immutable recovery continuations.
 
+Exact independent metadata hashes are checked on bounded canonical bytes before
+SCALE decoding in recycle, trim and historical root preparation and native
+receipt reads. This prevents an unapproved truncated/forged vector from reaching
+the decoder's allocation path. The approved root/economic observers already
+performed that check. The distinct unsigned discovery-snapshot decoder accepts
+self-consistent observation hashes; bounding malformed SCALE allocations there
+remains a separate hardening item, not authority supplied by this transition.
+
 Author evidence is retained under
 `/mnt/data/sn-testnet/astra-owner-recycle-20261001/`. It includes the exact full
 official 470 metadata qualification, ordinary/race/vet logs and a causal
