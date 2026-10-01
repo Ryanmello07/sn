@@ -202,7 +202,7 @@ func TestWaitFinalizedClosingCancellationPublishesNoSuccess(t *testing.T) {
 }
 
 func TestWaitFinalizedMalformedClosingTagRefusesImmediately(t *testing.T) {
-	for _, malformed := range []any{nil, map[string]any{}, map[string]any{"number": "0x5f", "hash": "0x01"}} {
+	for _, malformed := range []any{map[string]any{}, map[string]any{"number": "0x5f", "hash": "0x01"}} {
 		client, api := finalityClosureTestClient(t, func(_ context.Context, selector string, ordinal int) (any, error) {
 			if selector == "finalized" && ordinal == 2 {
 				return malformed, nil
@@ -212,6 +212,40 @@ func TestWaitFinalizedMalformedClosingTagRefusesImmediately(t *testing.T) {
 		err := waitFinalized(t.Context(), client, finalityClosureTestReceipt())
 		if err == nil || strings.Contains(err.Error(), "reorged") || api.count("finalized") != 2 {
 			t.Fatalf("malformed closing tag became success or reorg: reply=%v error=%v", malformed, err)
+		}
+	}
+}
+
+func TestWaitFinalizedMissingWitnessCanRecover(t *testing.T) {
+	for _, phase := range []string{"opening", "inclusion", "closing"} {
+		client, api := finalityClosureTestClient(t, func(_ context.Context, selector string, ordinal int) (any, error) {
+			if phase == "opening" && selector == "finalized" && ordinal == 1 || phase == "inclusion" && selector == "0x5a" && ordinal == 1 || phase == "closing" && selector == "finalized" && ordinal == 2 {
+				return nil, nil
+			}
+			return finalityClosureTestBlock(selector, 95), nil
+		})
+		if err := waitFinalized(t.Context(), client, finalityClosureTestReceipt()); err != nil || api.count("finalized") < 3 {
+			t.Fatalf("temporarily missing %s witness did not recover through closing checks: %v", phase, err)
+		}
+	}
+}
+
+func TestWaitFinalizedMissingWitnessStaysPendingUntilCancellation(t *testing.T) {
+	for _, selector := range []string{"finalized", "0x5a"} {
+		ctx, cancel := context.WithCancel(t.Context())
+		client, api := finalityClosureTestClient(t, func(_ context.Context, current string, ordinal int) (any, error) {
+			if current == selector {
+				if ordinal == 2 {
+					cancel() // two absent reads prove a pending attempt retried
+				}
+				return nil, nil
+			}
+			return finalityClosureTestBlock(current, 95), nil
+		})
+		err := waitFinalized(ctx, client, finalityClosureTestReceipt())
+		cancel()
+		if !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "do not retry") || strings.Contains(err.Error(), "reorged") || api.count(selector) != 2 {
+			t.Fatalf("missing %s witness fabricated finality/reorg: %v", selector, err)
 		}
 	}
 }

@@ -339,7 +339,7 @@ func waitFinalized(ctx context.Context, client *ethclient.Client, receipt *types
 			var transport net.Error
 			var remote rpc.Error
 			var httpError rpc.HTTPError
-			retry := errors.As(err, &transport) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+			retry := errors.As(err, &transport) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, ethereum.NotFound)
 			if errors.As(err, &remote) {
 				code := remote.ErrorCode()
 				retry = code == -32603 || code >= -32099 && code <= -32000

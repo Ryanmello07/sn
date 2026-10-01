@@ -104,7 +104,7 @@ func TestWaitFinalizedRejectsSyntheticHashReorg(t *testing.T) {
 func TestWaitFinalizedRejectsMalformedCanonicalBlock(t *testing.T) {
 	hash := common.HexToHash("0x10")
 	finalized := syntheticBlockIdentityFixture(t, 12, common.HexToHash("0x12"))
-	for _, canonical := range []any{nil, map[string]any{"number": "0xb", "hash": hash.Hex()}, map[string]any{"number": "0xa", "hash": common.Hash{}.Hex()}} {
+	for _, canonical := range []any{map[string]any{"number": "0xb", "hash": hash.Hex()}, map[string]any{"number": "0xa", "hash": common.Hash{}.Hex()}} {
 		client := blockIdentityTestClient(t, func(selector string) any {
 			if selector == "finalized" {
 				return finalized
