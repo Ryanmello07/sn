@@ -1342,6 +1342,17 @@ Safe-submission implementation; a release of that source needs a fresh exact
 source/image build. Same-host repeatability does not establish independent
 reproducibility or authorize a deployment.
 
+The [frozen Safe-source release](evidence/release-safe-source-20261001.md)
+then binds exact SN `095a2208` / server `0b8e758d`, including the Safe and
+permission corrections. It builds all seventeen commands and five fresh
+contracts twice and supplies eight new OCI images with a complete local
+source-to-image aggregate. All eight platform manifests and OCI archives also
+match on repeat. Its 55-file inventory repeats exactly, while
+production policy and published/deployed image identity remain absent. The
+frozen source commit is distinct from later reporting commits; independent
+reproducibility, actual service/configuration/policy qualification and release
+approval remain open.
+
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
 catalogue review and independent qualification are the preferred path for the
@@ -2407,6 +2418,10 @@ deployment approval is implied. The later
 [pre-Safe baseline](evidence/release-pre-safe-baseline-and-modes-20261001.md)
 does establish local 17-binary/five-contract/eight-image coverage for SN
 `1806b3b3` / server `0b8e758d`; it does not cover the later public Safe source.
+The separate [Safe-source release](evidence/release-safe-source-20261001.md)
+builds and verifies its own complete local composition at SN `095a2208` /
+server `0b8e758d`, preserving the same remaining independent and production
+approval gates.
 Obtain
 an independently approved mainnet genesis/runtime identity and complete
 SN25 census. Qualify the production source/dependency release with

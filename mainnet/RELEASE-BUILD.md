@@ -75,8 +75,12 @@ and keeps source-to-image provenance and release approval false. The later
 [pre-Safe baseline](evidence/release-pre-safe-baseline-and-modes-20261001.md)
 binds SN `1806b3b3` / server `0b8e758d`, repeats all seventeen executable and ten
 contract bytecode outputs, and verifies its own eight-image aggregate after
-the permission repair. The subsequent Safe-submission source still needs a
-fresh exact release; no historical attestation is inherited.
+the permission repair. The subsequent
+[frozen Safe-source release](evidence/release-safe-source-20261001.md) binds SN
+`095a2208` / server `0b8e758d` with its own repeated source builds, fresh OCI
+receipts and complete local source-to-image aggregate. No historical
+attestation is inherited; independent reproducibility and release/deployment
+approval remain separate gates.
 
 Both main modules resolve independently. The builder records their effective
 module graphs, exact module/go.mod sums, local module Git ownership and module
