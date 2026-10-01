@@ -410,3 +410,70 @@ func TestAdjacentHeaderRecycleActivationRejectsLateRootSubstitution(t *testing.T
 		t.Fatalf("activation retained late substituted root after two validators: reads=%d/%d %+v %v", reads, lastHeader, got, err)
 	}
 }
+
+// The historical target can stay canonical while its separate finality witness
+// changes during runtime authentication. Neither cold nor warm state may bind.
+func TestAdjacentHeaderProductionHistoricalRejectsClosingFinalitySwitch(t *testing.T) {
+	for _, warm := range []bool{false, true} {
+		fixture := newProductionRuntimeTestFixture(t, true)
+		native := fixture.rpc.native
+		if warm {
+			if err := authenticatePinnedNativeRuntimeAtContext(t.Context(), native, fixture.cfg, mainnetRuntimeTestBlock(150)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		client := native.API.Client.(*validatorRuntimeIdentityTestClient)
+		original := client.callContext
+		changed := false
+		client.callContext = func(ctx context.Context, result any, method string, args ...any) error {
+			if method == "state_getStorageHash" && args[len(args)-1] == mainnetRuntimeTestBlock(100).Hex() {
+				fixture.rpc.canonicalHashKVs[150] = types.Hash{0xee}
+				changed = true
+			}
+			return original(ctx, result, method, args...)
+		}
+		priorMeta, priorRuntime := native.Meta, native.Runtime
+		err := authenticateHistoricalNativeRuntimeAtContext(t.Context(), native, fixture.cfg, mainnetRuntimeTestBlock(100))
+		if !changed || err == nil || !strings.Contains(err.Error(), "not canonical") {
+			t.Fatalf("historical production bound replaced finality witness warm=%t changed=%t: %v", warm, changed, err)
+		}
+		if native.Meta != priorMeta || native.Runtime != priorRuntime {
+			t.Fatal("failed historical finality check replaced prior runtime authority")
+		}
+	}
+}
+
+// Stable finality still permits the original read-only historical view; a
+// cancellation at its closing witness leaves the prior view entirely intact.
+func TestAdjacentHeaderProductionHistoricalFinalityClosurePreservesPurpose(t *testing.T) {
+	for _, canceled := range []bool{false, true} {
+		fixture := newProductionRuntimeTestFixture(t, true)
+		native := fixture.rpc.native
+		client := native.API.Client.(*validatorRuntimeIdentityTestClient)
+		original := client.callContext
+		ctx, cancel := context.WithCancel(t.Context())
+		reads := 0
+		client.callContext = func(ctx context.Context, result any, method string, args ...any) error {
+			if method == "chain_getBlockHash" && args[0] == uint64(150) {
+				reads++
+				if canceled && reads == 2 {
+					cancel()
+				}
+			}
+			return original(ctx, result, method, args...)
+		}
+		priorMeta, priorRuntime := native.Meta, native.Runtime
+		err := authenticateHistoricalNativeRuntimeAtContext(ctx, native, fixture.cfg, mainnetRuntimeTestBlock(100))
+		cancel()
+		if reads != 2 {
+			t.Fatalf("historical finality witness was not closed: %d %v", reads, err)
+		}
+		if canceled {
+			if !errors.Is(err, context.Canceled) || native.Meta != priorMeta || native.Runtime != priorRuntime {
+				t.Fatalf("canceled finality closure changed authority: %v", err)
+			}
+		} else if err != nil || validateReleaseNativeSigningRuntime(native, fixture.cfg) == nil {
+			t.Fatalf("stable historical view failed or gained current signing: %v", err)
+		}
+	}
+}

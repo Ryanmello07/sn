@@ -141,6 +141,11 @@ func authenticateOwnerRecycleProductionArtifactAtContext(ctx context.Context, na
 	if err := checkCanonical(block, number); err != nil {
 		return empty, 0, err
 	}
+	if block != finalized {
+		if err := checkCanonical(finalized, finalizedNumber); err != nil {
+			return empty, 0, err
+		}
+	}
 	artifact.GenesisHash = genesis
 	return artifact, number, nil
 }
