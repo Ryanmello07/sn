@@ -38,6 +38,7 @@ type finalizedMappingFixture struct {
 	evmHeader         *types.Header
 	evmHash           string
 	rawEvmHeader      string
+	renderedEvmBlock  any
 	transactionHashes []string
 	runtimeCode       []byte
 	runtimeMetadata   []byte
@@ -224,6 +225,14 @@ func (self *finalizedMappingFixture) roundTrip(request *http.Request) (*http.Res
 			return nil, errors.New("canonical EVM lookup did not use the raw EVM height")
 		}
 		result = map[string]any{"hash": self.evmHash, "number": "0x25", "transactions": self.transactionHashes, "timestamp": "0x6553f100", "baseFeePerGas": "0x1"}
+	case "eth_getBlockByHash":
+		if len(call.Params) != 2 || call.Params[0] != self.evmHash || call.Params[1] != false {
+			return nil, errors.New("public EVM header was not selected by exact digest hash")
+		}
+		result = self.renderedEvmBlock
+		if result == nil {
+			result = mappingFixtureRpcError{code: -32601}
+		}
 	default:
 		return nil, fmt.Errorf("unexpected or mutating RPC method %s", call.Method)
 	}
@@ -327,14 +336,18 @@ func TestFinalizedMappingRejectsUnsupportedAndMalformedDigests(t *testing.T) {
 	}
 }
 
-// No unavailable or unsupported raw-header response may fall back to rendered
-// JSON, a native-number guess, or a fabricated empty successful header.
-func TestFinalizedMappingUnavailableRawHeaderHasNoFallback(t *testing.T) {
+// If neither exact header representation is available, no guessed height or
+// empty header may become evidence. Null raw reads do not attempt a fallback.
+func TestFinalizedMappingUnavailableHeadersHaveNoGuessedFallback(t *testing.T) {
 	for _, reply := range []any{nil, mappingFixtureRpcError{code: -32601}, mappingFixtureRpcError{code: -32602}} {
 		client, fixture := newFinalizedMappingFixture(t, 1, 0)
 		fixture.fault = func(method string, _ []any, _ int) (any, bool) { return reply, method == "debug_getRawHeader" }
 		mapping, err := client.readFinalizedMapping(context.Background(), nil)
-		if !errors.Is(err, errFinalizedMappingUnavailable) || mapping.Schema != "" || fixture.counts["debug_getRawHeader"] != 1 || fixture.counts["eth_getBlockByNumber"] != 0 {
+		wantPublicReads := 1
+		if reply == nil {
+			wantPublicReads = 0
+		}
+		if !errors.Is(err, errFinalizedMappingUnavailable) || mapping.Schema != "" || fixture.counts["debug_getRawHeader"] != 1 || fixture.counts["eth_getBlockByNumber"] != 0 || fixture.counts["eth_getBlockByHash"] != wantPublicReads {
 			t.Errorf("unavailable raw header became evidence: schema=%q counts=%v err=%v", mapping.Schema, fixture.counts, err)
 		}
 	}

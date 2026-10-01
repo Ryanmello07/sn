@@ -11,10 +11,16 @@ sn-mainnet finalized-snapshot --rpc http://rpc.example:9944
 The command selects `chain_getFinalizedHead` exactly once. Shared readers then
 receive that in-memory identity and pin every native artifact/header read to
 its exact hash. Runtime artifacts are read first. The mapping follows the
-Frontier digest to exact raw EVM RLP and performs its final native, network and
+Frontier digest to exact EVM RLP and performs its final native, network and
 EVM canonical rechecks after both components have been collected. Advancing
 the finalized tip does not discard still-canonical evidence at the selected
 older hash.
+
+The mapping reader prefers `debug_getRawHeader`. An explicitly unsupported raw
+method/selector can use the bounded, hash-checked public header recovery in
+[finalized mapping](FINALIZED-MAPPING.md). It retains the exact same RLP and
+final canonical checks; runtime artifacts and both header commitments still
+belong to the single selected native hash.
 
 The new JSON has `finalized_hash` and `finalized_number` at the top level, along
 with complete `runtime` and `mapping` records. It retains code/metadata bytes,

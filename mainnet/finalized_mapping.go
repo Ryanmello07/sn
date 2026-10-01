@@ -132,8 +132,8 @@ func finalizedFrontierPostLog(header rootReceiptHeader) (frontierPostLog, error)
 	return result, nil
 }
 
-// The stored Frontier header has fifteen RLP fields. Hash exact raw bytes
-// before decoding; rendered RPC timestamp/baseFee fields are not this header.
+// The stored Frontier header has fifteen RLP fields. Hash exact bytes before
+// decoding, including bytes recovered from the reviewed public projection.
 func authenticateMappedEvmHeader(encoded, expectedHash string) (mappedEvmHeader, error) {
 	raw, normalized, err := decodeRuntimeSnapshotHex("raw EVM header", encoded, maximumMappingHeaderBytes)
 	if err != nil {
@@ -160,12 +160,12 @@ func authenticateMappedEvmHeader(encoded, expectedHash string) (mappedEvmHeader,
 	return mappedEvmHeader{Hash: expectedHash, Number: header.Number.Uint64(), HeaderRlp: normalized, Format: "frontier-legacy-rlp15"}, nil
 }
 
-// Only this verifier admits the two additional signer-free RPC methods. Null
+// Only this verifier admits these additional signer-free RPC methods. Null
 // is a precise unavailable mapping, not an empty successful header. Existing
 // read profiles cannot invoke these methods through their ordinary whitelist.
 func (self *rpcClient) callFinalizedMappingRead(ctx context.Context, method string, params []any, result any) error {
 	switch method {
-	case "debug_getRawHeader", "eth_getBlockByNumber":
+	case "debug_getRawHeader", "eth_getBlockByHash", "eth_getBlockByNumber":
 	default:
 		return errors.New("RPC method is outside the finalized mapping read profile")
 	}
@@ -174,7 +174,7 @@ func (self *rpcClient) callFinalizedMappingRead(ctx context.Context, method stri
 	if err != nil {
 		var rpcErr *rpcCallError
 		if errors.As(err, &rpcErr) && (rpcErr.code == -32601 || rpcErr.code == -32602) {
-			return fmt.Errorf("%w: required %s capability is unsupported: %v", errFinalizedMappingUnavailable, method, err)
+			return fmt.Errorf("%w: required %s capability is unsupported: %w", errFinalizedMappingUnavailable, method, err)
 		}
 		return err
 	}
@@ -242,11 +242,7 @@ func (self *rpcClient) readFinalizedMappingAtIdentity(ctx context.Context, ident
 	if err != nil {
 		return finalizedMapping{}, err
 	}
-	var rawHeader string
-	if err := self.callFinalizedMappingRead(sampleCtx, "debug_getRawHeader", []any{map[string]any{"blockHash": postLog.BlockHash, "requireCanonical": true}}, &rawHeader); err != nil {
-		return finalizedMapping{}, err
-	}
-	evmHeader, err := authenticateMappedEvmHeader(rawHeader, postLog.BlockHash)
+	evmHeader, err := self.readMappedEvmHeader(sampleCtx, postLog.BlockHash)
 	if err != nil {
 		return finalizedMapping{}, err
 	}
@@ -325,7 +321,7 @@ func sealFinalizedMapping(mapping finalizedMapping) (finalizedMappingEnvelope, e
 	return finalizedMappingEnvelope{Mapping: mapping, ContentHash: "sha256:" + hex.EncodeToString(digest[:])}, nil
 }
 
-// Missing codec/raw-header capabilities produce exit4 with no partial proof;
+// Missing codec/header capabilities produce exit4 with no partial proof;
 // expected network mismatches produce exit3. Neither success mode approves it.
 func runFinalizedMappingCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("finalized-mapping", flag.ContinueOnError)

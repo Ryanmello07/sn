@@ -62,6 +62,12 @@ produce exit4; wrong network produces exit3, invalid input exit2, and other
 failures exit1. Exit0 certifies only the described census checks. The default
 mode admits no tracing, transaction-pool, signing, or send method.
 
+The bounded public header fallback in [finalized mapping](FINALIZED-MAPPING.md)
+does not supply this archive's complete block and receipt witnesses. This
+capture keeps all three raw-method requirements and its explicit exit4 when
+they are unavailable; a successful public finalized snapshot does not establish
+archive census or complete Safe history capability.
+
 Each RPC receives its own 60–900 second retry window under caller cancellation.
 Native bodies are limited to 65,536 extrinsics and 10MiB decoded bytes. EVM
 vectors retain the collector's 2,048-transaction, RLP15, transaction types 0–2

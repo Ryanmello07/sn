@@ -239,17 +239,19 @@ func TestSafeHistoryCaptureBoundsCapabilitiesAndNoWriteRoute(t *testing.T) {
 	if client.callSafeHistoryRead(t.Context(), "eth_sendRawTransaction", testGenesisHash, &result) == nil || client.call(t.Context(), "debug_getRawBlock", nil, &result) == nil {
 		t.Fatal("archive read capability escaped its narrow method boundary")
 	}
-	for _, unavailable := range []any{nil, mappingFixtureRpcError{code: -32601}, mappingFixtureRpcError{code: -32602}} {
-		client, fixture := newSafeHistoryFixture(t)
-		fixture.fault = func(_ *http.Request, method string, _ int, result any) (any, error) {
-			if method == "debug_getRawReceipts" {
-				return unavailable, nil
+	for _, required := range []string{"debug_getRawHeader", "debug_getRawBlock", "debug_getRawReceipts"} {
+		for _, unavailable := range []any{nil, mappingFixtureRpcError{code: -32601}, mappingFixtureRpcError{code: -32602}} {
+			client, fixture := newSafeHistoryFixture(t)
+			fixture.fault = func(_ *http.Request, method string, _ int, result any) (any, error) {
+				if method == required {
+					return unavailable, nil
+				}
+				return result, nil
 			}
-			return result, nil
-		}
-		capture, err := client.captureSafeHistory(t.Context(), fixture.expected, fixture.scope)
-		if !errors.Is(err, errSafeHistoryArchiveUnavailable) || capture.Schema != "" {
-			t.Fatalf("unavailable raw receipts became empty successful history: %v", err)
+			capture, err := client.captureSafeHistory(t.Context(), fixture.expected, fixture.scope)
+			if !errors.Is(err, errSafeHistoryArchiveUnavailable) || capture.Schema != "" || fixture.counts["eth_getBlockByHash"] != 0 {
+				t.Fatalf("unavailable %s became successful history: %v", required, err)
+			}
 		}
 	}
 }

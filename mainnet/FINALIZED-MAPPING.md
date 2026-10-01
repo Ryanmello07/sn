@@ -30,6 +30,8 @@ read policy. Cancellation or error publishes no partial proof.
    `{"blockHash":"<digest EVM hash>","requireCanonical":true}`. Require exact
    Keccak-256 of the retained RLP to equal the digest's block hash, then decode
    the reviewed fifteen-field Frontier header and obtain its own EVM number.
+   Only an unsupported method/selector (`-32601`/`-32602`) permits the bounded
+   public reconstruction below. Null or corrupt raw evidence does not.
 4. Query `eth_getBlockByNumber(<decoded EVM number>, false)` and require the
    same EVM hash/number. Variant1 also requires the complete ordered transaction
    hash vector to agree with the native commitment. Recheck native genesis,
@@ -42,11 +44,31 @@ read policy. Cancellation or error publishes no partial proof.
 No native-height lookup selects an EVM candidate. The deterministic fixture
 uses native height 100 and EVM height 37 to enforce that distinction.
 
-The raw EVM header is essential: Frontier's JSON rendering divides its stored
-millisecond timestamp by 1000 and supplies a runtime-derived `baseFeePerGas`.
-Hashing that rendered JSON as an ordinary Ethereum header can produce a
-different hash. The verifier does not attempt to reconstruct lost timestamp
-precision, drop fields until a hash matches, or fall back from missing raw RLP.
+Exact EVM header bytes remain essential. When the raw method or object selector
+is unsupported, the verifier requests
+`eth_getBlockByHash(<digest EVM hash>, false)`. The reviewed Frontier renderer
+divides its stored millisecond timestamp by 1000, omits the pallet's zero
+`mix_hash`, and adds runtime-derived `baseFeePerGas` outside the stored header.
+The verifier reconstructs only that fixed fifteen-field profile, trying at
+most 1,000 millisecond remainders within the displayed second. The complete
+candidate RLP must hash to the native digest commitment; the RPC's `hash` echo
+alone is insufficient. The same native/network and twice-repeated canonical
+EVM number/hash/vector checks then apply.
+
+Every displayed serialized field is required, including `miner`, `nonce` and
+empty `extraData`; missing or null values are never defaulted. Omitted
+`mixHash` is the one reviewed exception and supplies only zero. An explicit
+`mixHash` is used verbatim, and an optional `author` must equal `miner`.
+`baseFeePerGas` is always an external annotation in this profile, never a
+conditional header-layout choice. Unknown fields and non-null later-fork
+header extensions are refused. There is no timestamp-unit guess, native-height
+selection, alternate header layout or nonzero omitted-field search. Overflow,
+malformed values and a failure to reproduce the exact commitment stop capture.
+
+The recovered RLP uses the existing `frontier-legacy-rlp15` format and unchanged
+envelope schemas. Independent consumers replay its bytes exactly as they do a
+raw response. Recovery proves those bytes against the digest; it adds no runtime
+source, consensus, execution or signing authority.
 
 ## Exact reviewed source
 
@@ -58,7 +80,8 @@ Codec reference: Subtensor commit
   uniqueness.
 - [Ethereum pallet](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/vendor/frontier/frame/ethereum/src/lib.rs):
   `on_finalize` calls `store_block`, which stores the Ethereum block and emits
-  its corresponding post-log.
+  its corresponding post-log. The stored partial header fixes `mix_hash` to
+  zero and uses the millisecond timestamp directly.
 - [Raw debug RPC](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/vendor/frontier/client/rpc/src/debug.rs):
   `raw_header` returns the stored header's `rlp_bytes()`.
 - [Ethereum JSON renderer](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/vendor/frontier/client/rpc/src/eth/mod.rs):
@@ -71,19 +94,27 @@ approval remain separate mainnet launch gates.
 
 ## Availability and limits
 
-The mapping-specific read profile alone permits `debug_getRawHeader` and
-`eth_getBlockByNumber`. Neither method is added to ordinary identity/storage
-reader admission. Mutation methods remain refused. RPC replies are bounded to
-1 MiB, raw RLP to 64 KiB, and transaction hashes to 2048 with the existing tighter
-64 KiB-per-digest limit. Retained native headers keep their existing count/byte
-bounds.
+The mapping-specific read profile alone permits `debug_getRawHeader`,
+`eth_getBlockByHash` and `eth_getBlockByNumber`. None is added to ordinary
+identity/storage reader admission. Mutation methods remain refused. RPC replies
+are bounded to 1 MiB, exact RLP to 64 KiB, and native transaction-hash vectors to
+2048 with the existing tighter 64 KiB-per-digest limit. Public recovery checks
+cancellation during its bounded timestamp search. Retained native headers keep
+their existing count/byte bounds.
 
 Exit 0 means a complete unapproved observation; exit 2 is invalid arguments;
 exit 3 is an independently supplied network mismatch; exit 4 means the mapping
-is unavailable because the required raw-header capability, post-log profile
-or canonical block is missing. Other integrity/read failures exit 1. There is
-no JSON-header or guessed-number fallback when the raw method is absent,
-rejects the object selector, or returns null.
+is unavailable because both header capabilities, required projection fields,
+the reviewed post-log/header profile or the canonical block are missing.
+Other integrity/read failures, including a public projection that cannot
+reproduce its native-committed hash, exit 1. The public fallback requires an
+explicit unsupported raw method/selector; null raw replies, malformed bytes,
+unrelated RPC errors and transport failures retain their original refusal.
+
+This header-only fallback applies to `finalized-mapping` and its composed
+`finalized-snapshot` reader. [Safe archive capture](SAFE-HISTORY-CAPTURE.md)
+continues to require raw header, complete block and receipt capabilities; a
+public block header cannot replace those body and receipt witnesses.
 
 The native finalized selection and canonical EVM lookup are still assertions
 of the owned RPC. The proof authenticates the two linked header commitments;
