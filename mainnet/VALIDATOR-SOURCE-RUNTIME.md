@@ -27,10 +27,13 @@ unavailable archive state and conflicting canonical evidence remain errors.
 Native capture explicitly retains the parent's metadata even when cached.
 
 The receipt path accepts a complete `RuntimeEnvironmentUpdated` digest without
-asking the older SDK to decode it again for commitment readback. Other native
-readers still use that SDK for their current-head header; the digest regression
-observes the upgrade receipt from the following finalized block. This change
-does not qualify all current-head consumers or automatic runtime approval.
+asking the older SDK to decode it again for commitment readback. The
+[current-admission correction](evidence/current-native-header-authority-20261001.md)
+also authenticates complete headers before current or historical signed-runtime
+window selection. The source-receipt regression observes an upgrade from the
+following finalized block; separate current-admission regressions observe the
+upgrade block itself. Other native consumers and automatic runtime approval
+still require their own qualification.
 
 Deterministic local regressions are selected by
 `^TestProductionSourceReceipt`. They cover ordinary and digest-bearing upgrade

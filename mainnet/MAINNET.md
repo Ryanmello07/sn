@@ -334,6 +334,19 @@ passes ten new and thirty-six adjacent roots normal/race, all twelve normal
 controls and exactly seven selected light race controls. Exact source/dependency
 evidence is sealed; the earlier canonical/readmission receipts remain unchanged.
 
+**Current native-header authority correction.** The
+[frozen implementation and qualification record](evidence/current-native-header-authority-20261001.md)
+at SN `889f5c29` closes an RPC header-number substitution that could move a
+production-validator block into a signed runtime window. Current/historical
+runtime selection, shared native registration/stake admission and mainnet fleet
+authority now authenticate the complete committed header; canonical closing
+checks prevent a changed read from publishing a bound view. Approved update
+digests and original signing/execution/post-state distinctions remain supported.
+Author qualification passes the same 198 top-level roots normally and under
+race, all ten intended causal controls and four-package vet. No automatic runtime
+approval, live chain authority or deployment acceptance follows. This source requires a
+successor release beyond the frozen SN `233ea2be` artifacts.
+
 **Runtime continuity policy proposal — inspection boundary qualified.** The
 [signed compatibility envelope and inspector](RUNTIME-CONTINUITY-POLICY.md)
 bind original production-validator authority to a separate semantic verifier,
