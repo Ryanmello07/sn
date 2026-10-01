@@ -5,13 +5,15 @@ Author qualification on 2026-10-01 binds server
 `720e7c61182983dd2cd6de667787bb5b52f4d8a4`. The isolated branch is
 `codex/astra-arin-mixed-writer-fail-closed-20261001` at
 `/home/by/urnetwork/temp/astra-arin-mixed-writer-20261001/server`.
-The worktree is clean. No merge, push, image rebuild, production migration,
-active classifier change or v2 policy activation is included.
+The source branch was merged into server `main` at `94229abb`; the exact tested
+source is the first parent-side topic commit `a464bb3e`. No image rebuild,
+production migration, active classifier change or v2 policy activation is
+included.
 
 This is a separate successor to the server-720 release. Its evidence cannot be
 attached to the unchanged 720 binary/image as if the correction were present.
-Independent review and a successor composed-source/image qualification remain
-required. Keep launch `subscriber_quality_policy_version` absent/`0` and the v2
+Independent source qualification passed; a successor composed-source/image
+qualification remains required. Keep launch `subscriber_quality_policy_version` absent/`0` and the v2
 candidate classifier/MMDB outside active inputs.
 
 ## Cause and correction
@@ -63,6 +65,19 @@ test. Final successful runs use a fresh fixture covering all documentation
 ranges and a precise selector. The server source needed no change for this
 fixture correction. Query-plan timing is a local observation, not production
 capacity or migration-lock qualification.
+
+Independent qualification of the exact server `a464bb3e` tree passed 11
+selected top-level roots (18 pass events including subtests) across the root,
+model and router packages in normal and race modes, with no failures or skips;
+`go vet` exited 0. Removing only the trigger in a test overlay made both
+mixed-writer roots fail at the intended stale-attestation assertions in normal
+and race modes. Disposable PostgreSQL and Redis were removed and verified
+absent. The sealed independent receipt is
+`/mnt/data/sn-testnet/sol-server751-independent-20261001/receipt.json`
+(SHA-256 `a69645f0a59606c88d3a571c21c5d2523de45b4dcf1e42c79c845667019b4fff`);
+its `SHA256SUMS` is
+`f785cd77445eecd43e07ecb6721eabd89b39a0e14530f5d2d04a855229dee06e`
+and all entries verify.
 
 ## Rollout boundary
 

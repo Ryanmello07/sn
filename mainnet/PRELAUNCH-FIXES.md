@@ -32,7 +32,8 @@ The separate [schema-751 correction](evidence/server-schema751-write-guard-20261
 at server `a464bb3e` binds each attestation to a fresh write token and atomically
 revokes pre-751 positives. Author qualification passes 27 normal/race roots,
 vet, the real live guard/cache/rollup checks and two expected-failing controls.
-It is outside the pinned server-720 release. Independent review, a successor
+It is outside the pinned server-720 release. Independent normal/race/vet and
+trigger-omission controls passed; a successor
 release, migration lock-duration qualification, fleet/lookup coverage and real
 miner-trail/load canaries remain required before future v2 enablement.
 
