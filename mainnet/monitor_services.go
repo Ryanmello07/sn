@@ -24,15 +24,16 @@ type monitorServiceHooks struct {
 
 // Role events contain bounded operational evidence and a closed export outcome.
 type monitorServiceEvent struct {
-	Schema         string                            `json:"schema"`
-	Role           string                            `json:"role"`
-	ObservedAt     string                            `json:"observed_at"`
-	Status         string                            `json:"status"`
-	Severity       string                            `json:"severity,omitempty"`
-	Publication    string                            `json:"publication"`
-	State          *monitorValidatorState            `json:"state"`
-	Diagnostics    *monitorDiagnosticObservation     `json:"diagnostics,omitempty"`
-	NativeDeadline *monitorNativeDeadlineObservation `json:"native_deadline,omitempty"`
+	Schema           string                              `json:"schema"`
+	Role             string                              `json:"role"`
+	ObservedAt       string                              `json:"observed_at"`
+	Status           string                              `json:"status"`
+	Severity         string                              `json:"severity,omitempty"`
+	Publication      string                              `json:"publication"`
+	State            *monitorValidatorState              `json:"state"`
+	Diagnostics      *monitorDiagnosticObservation       `json:"diagnostics,omitempty"`
+	NativeDeadline   *monitorNativeDeadlineObservation   `json:"native_deadline,omitempty"`
+	SteeringLiveness *monitorSteeringLivenessObservation `json:"steering_liveness,omitempty"`
 }
 
 // Every domain owns its output files and all retries until the parent joins it.
@@ -210,6 +211,10 @@ func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Durat
 			return 3
 		}
 		self.state.retainNativeDeadline(self.policy, sampledAt)
+		if err := self.state.retainSteeringLiveness(self.policy); err != nil {
+			fmt.Fprintln(stderr, "monitor service steering liveness:", err)
+			return 3
+		}
 		checkpointErr := self.checkpoint.save(self.state)
 		if checkpointErr != nil {
 			publication = "retrying"
@@ -235,6 +240,10 @@ func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Durat
 		if self.policy.NativeDeadline != nil || self.state.NativeDeadline != nil {
 			deadline := self.state.nativeDeadline(self.policy, sampledAt)
 			event.NativeDeadline = &deadline
+		}
+		if self.policy.SteeringLiveness != nil || self.state.SteeringLiveness != nil {
+			steering := self.state.steeringLiveness(self.policy)
+			event.SteeringLiveness = &steering
 		}
 		event.Diagnostics = observation
 		if terminal {

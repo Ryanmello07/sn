@@ -35,10 +35,11 @@ type monitorServicesPolicy struct {
 // The full current source is exact. A retained intent may still name its older
 // original config; no observer grants approval to either configuration.
 type monitorValidatorPolicy struct {
-	Role           string                           `json:"role"`
-	ProgressFile   string                           `json:"progress_file"`
-	ExpectedSource protocol.ValidatorProgressSource `json:"expected_source"`
-	NativeDeadline *monitorNativeDeadlinePolicy     `json:"native_deadline,omitempty"`
+	Role             string                           `json:"role"`
+	ProgressFile     string                           `json:"progress_file"`
+	ExpectedSource   protocol.ValidatorProgressSource `json:"expected_source"`
+	NativeDeadline   *monitorNativeDeadlinePolicy     `json:"native_deadline,omitempty"`
+	SteeringLiveness *monitorSteeringLivenessPolicy   `json:"steering_liveness,omitempty"`
 }
 
 // A role label cannot contain arbitrary paths, hashes, error text or quoting.
@@ -91,6 +92,9 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 	roles := map[string]bool{}
 	sources := map[protocol.ValidatorProgressSource]bool{}
 	for _, validator := range policy.Validators {
+		if err := validator.SteeringLiveness.validate(); err != nil {
+			return nil, err
+		}
 		if err := validator.NativeDeadline.validate(); err != nil {
 			return nil, err
 		}

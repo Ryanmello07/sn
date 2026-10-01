@@ -146,3 +146,11 @@ This first incident binding admits missing/unavailable read output only. A
 readable-but-stale progress file is still monitored but does not grant this
 repair action; admitting that failure class needs its own retained incident
 and independently reviewed policy.
+
+The [steering responsiveness monitor](SERVICE-MONITOR.md#steering-responsiveness)
+now retains a separate stale/missing loop-outcome incident even while the
+independent publisher remains fresh. That diagnostic grants no stop or restart
+permission. This controller accepts compatible v4 monitor checkpoints and
+preserves independently signed v3 envelopes; its admitted failure class and
+required stopped/empty generation remain unchanged. Active-hang recovery still
+requires separately reviewed stop/join and global custody authority.

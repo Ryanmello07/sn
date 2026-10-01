@@ -485,6 +485,7 @@ func TestMonitorReadIncidentCommandSaturatesCountsAndRefusesSequenceExhaustion(t
 func TestMonitorReadIncidentCommandHistoryFitsExistingBudgets(t *testing.T) {
 	fixture := newMonitorServicesFixture(t, "alpha")
 	fixture.enableNativeDeadline(t)
+	fixture.policy.Validators[0].SteeringLiveness = &monitorSteeringLivenessPolicy{WarningAfterSeconds: 120, CriticalAfterSeconds: 300}
 	value := monitorDeadlineTestRecord(fixture.clock.now(), 1, 201, 9)
 	value.Source.DeploymentId = strings.Repeat("\x00", 256)
 	value.Source.ValidatorId, value.Source.Netuid = math.MaxUint64, math.MaxUint16
@@ -500,6 +501,21 @@ func TestMonitorReadIncidentCommandHistoryFitsExistingBudgets(t *testing.T) {
 	run := fixture.start(t, url, monitorServiceHooks{})
 	if event := run.next(t); event.State.NativeDeadline == nil {
 		t.Fatal("fixture omitted the independent native incident")
+	}
+	fixture.clock.seconds.Add(300)
+	value.HeartbeatAt, value.Publisher.LastSuccessAt = fixture.clock.now().Format(time.RFC3339Nano), fixture.clock.now().Format(time.RFC3339Nano)
+	monitorServicesTestWrite(t, policy.ProgressFile, value)
+	run.again(t, "alpha")
+	if event := run.next(t); !event.State.SteeringLiveness.unresolved() {
+		t.Fatal("fixture omitted the independent steering incident", event)
+	}
+	fixture.clock.seconds.Add(1)
+	value.HeartbeatAt, value.Publisher.LastSuccessAt = fixture.clock.now().Format(time.RFC3339Nano), fixture.clock.now().Format(time.RFC3339Nano)
+	value.Steering.ObservedAt, value.Steering.LastSuccessAt = value.HeartbeatAt, value.HeartbeatAt
+	monitorServicesTestWrite(t, policy.ProgressFile, value)
+	run.again(t, "alpha")
+	if event := run.next(t); event.State.SteeringLiveness.LastIncident.Recovery == nil {
+		t.Fatal("fixture omitted the real steering recovery")
 	}
 	path, metricsPath := monitorValidatorPaths(fixture.checkpointPath, fixture.metricsPath, policy.Role)
 	var firstId string

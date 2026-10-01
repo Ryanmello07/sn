@@ -182,6 +182,7 @@ func renderMonitorValidatorMetrics(policy monitorValidatorPolicy, state *monitor
 	}
 	raw := appendMonitorReadIncidentMetrics([]byte(output.String()), policy.Role, state.ReadIncidents)
 	raw = appendMonitorProducerDiagnostics(raw, policy.Role, state)
+	raw = appendMonitorSteeringLivenessMetrics(raw, policy, state)
 	if len(raw) > 32*1024 {
 		return nil, errors.New("validator metrics exceed their bound")
 	}

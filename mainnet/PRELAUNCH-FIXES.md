@@ -695,6 +695,18 @@ records all 82 affected roots and six causal controls passing their required
 normal/race outcomes at integrated SN `1bb311fc`. Complete incident retention,
 compatible rollout and actual alert delivery remain open.
 
+The MG-07 [steering responsiveness increment](SERVICE-MONITOR.md#steering-responsiveness)
+closes the fresh-publisher/blocked-loop detection gap with explicit per-role
+margins, a distinct durable incident and critical alert. Detection requires a
+previously observed responsive steering instance; fresh read/receipt/reveal waits
+do not imply a hang or protocol success. Restart, source loss, publisher restart
+and policy removal preserve unresolved incidents until a real later loop outcome.
+The [qualification receipt](evidence/steering-liveness-qualification-20261001.md)
+retains source tests and controls. Checkpoint v4 preserves legacy history and
+independently signed v3 stopped-validator repair scope. Production SLO approval,
+deployment/alert delivery and active-hang stop/join/custody authority remain P0
+gates; this diagnostic performs no service mutation or signing.
+
 The MG-03 [qualified bounded native finality capture](evidence/operator-native-finality-capture-qualification-20260929.md)
 is integrated at server `5ff7bf02`. Its retained request/byte reservations,
 partial native headers/certificates and offline completed replay preserve the
