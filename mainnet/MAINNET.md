@@ -335,17 +335,18 @@ controls and exactly seven selected light race controls. Exact source/dependency
 evidence is sealed; the earlier canonical/readmission receipts remain unchanged.
 
 **Current native-header authority correction.** The
-[frozen implementation and qualification record](evidence/current-native-header-authority-20261001.md)
-at SN `889f5c29` closes an RPC header-number substitution that could move a
-production-validator block into a signed runtime window. Current/historical
-runtime selection, shared native registration/stake admission and mainnet fleet
-authority now authenticate the complete committed header; canonical closing
-checks prevent a changed read from publishing a bound view. Approved update
-digests and original signing/execution/post-state distinctions remain supported.
-Author qualification passes the same 198 top-level roots normally and under
-race, all ten intended causal controls and four-package vet. No automatic runtime
-approval, live chain authority or deployment acceptance follows. This source requires a
-successor release beyond the frozen SN `233ea2be` artifacts.
+[first implementation](evidence/current-native-header-authority-20261001.md)
+authenticates producer and fleet headers. Its
+[adjacent successor](evidence/current-native-header-adjacent-authority-20261001.md)
+at SN `30354d78` also closes upload and independently signed observation-window
+substitution, startup/activation evidence, applied-row journals and shared
+native receipt/state readers, including the separate historical finality witness.
+Complete header coordinates and closing canonical
+checks preserve original signed windows and signing/execution/post-state roles.
+Local qualification supplies no automatic runtime approval or live acceptance.
+The miner claim daemon's native/EVM clock comparison remains a separately
+identified recovery blocker. MG-04/PH-04 stay open, and a fresh exact successor
+release is required beyond the frozen SN `233ea2be` artifacts.
 
 **Runtime continuity policy proposal — inspection boundary qualified.** The
 [signed compatibility envelope and inspector](RUNTIME-CONTINUITY-POLICY.md)

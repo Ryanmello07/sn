@@ -28,12 +28,13 @@ Native capture explicitly retains the parent's metadata even when cached.
 
 The receipt path accepts a complete `RuntimeEnvironmentUpdated` digest without
 asking the older SDK to decode it again for commitment readback. The
-[current-admission correction](evidence/current-native-header-authority-20261001.md)
-also authenticates complete headers before current or historical signed-runtime
-window selection. The source-receipt regression observes an upgrade from the
+[current-admission correction and adjacent audit](evidence/current-native-header-adjacent-authority-20261001.md)
+also authenticate complete headers before producer, upload and independently
+signed current or historical runtime-window selection, and before retaining
+stake, activation, application or receipt coordinates. The source-receipt regression observes an upgrade from the
 following finalized block; separate current-admission regressions observe the
-upgrade block itself. Other native consumers and automatic runtime approval
-still require their own qualification.
+upgrade block itself. The claim daemon's separate native/EVM clock comparison and automatic runtime
+approval still require their own correction and qualification.
 
 Deterministic local regressions are selected by
 `^TestProductionSourceReceipt`. They cover ordinary and digest-bearing upgrade
