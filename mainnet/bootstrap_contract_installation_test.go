@@ -212,6 +212,25 @@ func TestBootstrapContractInstallationPublicReadbackRecoversExactAnchor(t *testi
 	if code != 0 || later.InstallationIdentityHash != identityHash || later.CurrentSafeNonce != "19" || later.CompleteSafeHistory || later.ActivationReady {
 		t.Fatal("later read-only nonce changed original anchor authority", code, diagnostic)
 	}
+	// Original anchor proofs stay exact while a later implementation could
+	// rewrite the clock and restore the reviewed code. A past block alone is
+	// insufficient: current readback must retain the original proxy inclusion.
+	clockSlot := common.BigToHash(new(big.Int).Add(new(big.Int).SetBytes(crypto.Keccak256(common.LeftPadBytes([]byte{6}, 32))), big.NewInt(1)))
+	proxy := plan.Review.Transaction.To
+	chain.stateLock.Lock()
+	originalClock := chain.state.GetState(proxy, clockSlot)
+	changedClock := originalClock
+	binary.BigEndian.PutUint64(changedClock[16:24], binary.BigEndian.Uint64(originalClock[16:24])+1)
+	chain.state.SetState(proxy, clockSlot, changedClock)
+	chain.stateLock.Unlock()
+	seal(true)
+	if code, changed, diagnostic := invoke(args); code != 1 || changed.InstallationComplete || !strings.Contains(diagnostic, "current policy clock differs from original proxy inclusion") {
+		t.Fatal("readback admitted rewritten current policy clock after exact anchor", code, diagnostic)
+	}
+	chain.stateLock.Lock()
+	chain.state.SetState(proxy, clockSlot, originalClock)
+	chain.stateLock.Unlock()
+	seal(true)
 	for name, raw := range original {
 		if retained, err := os.ReadFile(filepath.Join(f.original.config.RunDirectory, name)); err != nil || string(retained) != raw {
 			t.Fatal("changed original custody", name, err)
