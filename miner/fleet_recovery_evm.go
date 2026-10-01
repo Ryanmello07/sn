@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/urfoundation/sn/crv4"
+	"github.com/urfoundation/sn/evmrpc"
 	"github.com/urfoundation/sn/miner/onchain"
 	"github.com/urfoundation/sn/protocol"
 )
@@ -39,7 +40,7 @@ func fleetRecoveryEvmNative(client *ethclient.Client, authority *fleetMainnetRun
 func fleetRecoveryDialEvm(ctx context.Context, endpoints []string, authority *fleetMainnetRuntimeAuthority) (*ethclient.Client, string, error) {
 	var errs []error
 	for _, endpoint := range endpoints {
-		client, err := ethclient.DialContext(ctx, endpoint)
+		client, err := evmrpc.DialContext(ctx, endpoint)
 		if err != nil {
 			errs = append(errs, err)
 			continue

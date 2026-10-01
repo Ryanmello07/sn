@@ -18,6 +18,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
+
+	"github.com/urfoundation/sn/evmrpc"
 )
 
 const (
@@ -46,7 +48,7 @@ func dialFirst(ctx context.Context, urls []string) (*ethclient.Client, *big.Int,
 func dialOne(ctx context.Context, url string) (*ethclient.Client, *big.Int, error) {
 	dctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
-	client, err := ethclient.DialContext(dctx, url)
+	client, err := evmrpc.DialContext(dctx, url)
 	if err != nil {
 		return nil, nil, err
 	}
