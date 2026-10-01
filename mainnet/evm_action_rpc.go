@@ -596,6 +596,15 @@ func (self *evmOwnedChain) admitCurrent(ctx context.Context, plan evmCreatePlan,
 	if available.Cmp(cost) < 0 {
 		return result, errors.New("EVM balance cannot cover original maximum liability")
 	}
+	// The refreshed pass is returned directly by reconcile. Close its original
+	// native/EVM mapping after every dependent account and contract read.
+	confirmedMapping, err := self.client.readFinalizedMappingAtIdentity(ctx, head)
+	if err != nil {
+		return result, err
+	}
+	if rootObjectHash(confirmedMapping) != rootObjectHash(mapping) {
+		return result, fmt.Errorf("%w: EVM current admission mapping changed during observation", errRpcIntegrity)
+	}
 	result.Status = "exact-original-transaction-admitted"
 	result.SendReady = true
 	return result, ctx.Err()
