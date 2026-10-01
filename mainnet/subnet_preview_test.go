@@ -109,7 +109,7 @@ func TestSubnetPreviewCompleteCensusNeverAuthorizesReset(t *testing.T) {
 	if preview.Seats[3].ValidatorPermit || preview.Seats[3].Disposition != "preserve" || !preview.Seats[0].OwnerImmune || preview.Seats[1].OwnerImmune || !preview.Seats[1].OwnerRecognized || preview.Seats[5].Active {
 		t.Fatalf("roles, activity or owner immunity collapsed: %+v", preview.Seats)
 	}
-	if preview.Trim.Removed[0].Uid != 4 || preview.Trim.Removed[1].Uid != 5 || len(preview.Trim.Survivors) != 4 || fixture.count("state_getKeysPaged") != 8 || fixture.count("chain_getFinalizedHead") != 1 {
+	if preview.Trim.Removed[0].Uid != 4 || preview.Trim.Removed[1].Uid != 5 || len(preview.Trim.Survivors) != 4 || fixture.count("state_getKeysPaged") != 8 || fixture.count("chain_getFinalizedHead") != 4 {
 		t.Fatalf("incomplete mappings or terminal pages: %+v", preview.Trim)
 	}
 	sealed, err := sealSubnetPreview(preview)
@@ -587,7 +587,7 @@ func TestSubnetPreviewRetriesTransientPageAtSameFinalizedHash(t *testing.T) {
 		return fixture.roundTrip(request)
 	})
 	preview, err := client.readSubnetPreview(t.Context(), policy, "policy")
-	if err != nil || !preview.CensusComplete || attempts != 2 || fixture.count("chain_getFinalizedHead") != 1 {
+	if err != nil || !preview.CensusComplete || attempts != 2 || fixture.count("chain_getFinalizedHead") != 4 {
 		t.Fatalf("page retry changed identity or lost census: attempts=%d %+v %v", attempts, preview, err)
 	}
 }

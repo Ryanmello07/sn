@@ -18,22 +18,21 @@ import (
 // Advancing the latest finalized selection after artifacts are read must not
 // replace the old hash passed to mapping or discard still-canonical old bytes.
 func TestFinalizedSnapshotPinsHeadAcrossAdvancement(t *testing.T) {
-	client, fixture := newFinalizedMappingFixture(t, 1, 1)
+	f := newIdentityFinalityFixture(t)
+	f.head = 100
+	client, fixture := f.client, f.mapping
 	advanced := false
-	fixture.fault = func(method string, _ []any, _ int) (any, bool) {
+	f.after = func(method string, _ []any) {
 		if method == "state_getMetadata" {
 			advanced = true
+			f.head = 150
 		}
-		if method == "chain_getFinalizedHead" && advanced {
-			return testFinalizedHash, true
-		}
-		return nil, false
 	}
 	snapshot, err := client.readFinalizedSnapshot(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !advanced || fixture.counts["chain_getFinalizedHead"] != 1 || snapshot.FinalizedHash != fixture.nativeHash || snapshot.FinalizedNumber != 100 ||
+	if !advanced || f.counts["chain_getFinalizedHead"] != 5 || snapshot.FinalizedHash != fixture.nativeHash || snapshot.FinalizedNumber != 100 ||
 		snapshot.Runtime.Identity != snapshot.Mapping.Identity || snapshot.Mapping.Identity.FinalizedHash != fixture.nativeHash ||
 		snapshot.Runtime.CodeHex != "0x"+hex.EncodeToString(fixture.runtimeCode) || snapshot.Runtime.MetadataHex != "0x"+hex.EncodeToString(fixture.runtimeMetadata) ||
 		snapshot.Mapping.EvmHeader.HeaderRlp != fixture.rawEvmHeader || snapshot.Mapping.EvmHeader.Number != 37 {
@@ -103,7 +102,7 @@ func TestFinalizedSnapshotPinnedReadersRejectForeignOrImportedIdentity(t *testin
 			t.Errorf("invalid mapping identity admitted: %v", err)
 		}
 	}
-	if fixture.counts["chain_getFinalizedHead"] != 1 || fixture.counts["state_getStorage"] != 0 || fixture.counts["debug_getRawHeader"] != 0 {
+	if fixture.counts["chain_getFinalizedHead"] != 2 || fixture.counts["state_getStorage"] != 0 || fixture.counts["debug_getRawHeader"] != 0 {
 		t.Fatalf("invalid pinned identity caused RPC reads: %v", fixture.counts)
 	}
 }

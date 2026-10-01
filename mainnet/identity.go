@@ -43,6 +43,9 @@ type chainIdentity struct {
 	// Preserve the complete live tuple for artifact cross-reads without changing
 	// the existing observation schema. It is never reconstructed as authority.
 	runtimeVersion crv4.RuntimeVersionIdentity
+	// The original finality witness is independent of a historical selection.
+	// Like the runtime tuple, it is live evidence and never imported from JSON.
+	finalityWitness nativeFinalityPoint
 }
 
 // identityEnvelope binds the observation bytes without treating them as approval.
@@ -287,6 +290,7 @@ func (self *rpcClient) readIdentityAt(ctx context.Context, blockHash string) (ch
 	if err != nil {
 		return chainIdentity{}, fmt.Errorf("%w: finalized header: %v", errRpcIntegrity, err)
 	}
+	finalized := nativeFinalityPoint{Number: identity.FinalizedNumber, Hash: identity.FinalizedHash}
 	if blockHash != "" && blockHash != identity.FinalizedHash {
 		var finalizedByNumber string
 		if err := self.call(sampleCtx, "chain_getBlockHash", []any{identity.FinalizedNumber}, &finalizedByNumber); err != nil {
@@ -322,13 +326,10 @@ func (self *rpcClient) readIdentityAt(ctx context.Context, blockHash string) (ch
 	if !validHash(identity.GenesisHash) || !validHash(identity.FinalizedHash) || identity.NativeChain == "" || identity.NodeVersion == "" || identity.RuntimeSpec == 0 {
 		return chainIdentity{}, fmt.Errorf("%w: identity is incomplete", errRpcIntegrity)
 	}
-	var byNumberHash string
-	if err := self.call(sampleCtx, "chain_getBlockHash", []any{identity.FinalizedNumber}, &byNumberHash); err != nil {
+	if err := self.closeNativeFinality(sampleCtx, finalized, nativeFinalityPoint{Number: identity.FinalizedNumber, Hash: identity.FinalizedHash}); err != nil {
 		return chainIdentity{}, err
 	}
-	if !validHash(byNumberHash) || !strings.EqualFold(byNumberHash, identity.FinalizedHash) {
-		return chainIdentity{}, fmt.Errorf("%w: finalized header number does not resolve to its announced hash", errRpcIntegrity)
-	}
+	identity.finalityWitness = finalized
 	identity.ObservedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	return identity, nil
 }

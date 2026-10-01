@@ -198,6 +198,9 @@ func (self *rpcClient) readSubnetPreviewAt(ctx context.Context, policy subnetCen
 	if !validHash(confirmedHash) || !strings.EqualFold(confirmedHash, identity.FinalizedHash) {
 		return subnetPreview{}, fmt.Errorf("%w: finalized block changed during subnet census", errRpcIntegrity)
 	}
+	if err := self.closeSnapshotFinality(sampleCtx, identity); err != nil {
+		return subnetPreview{}, err
+	}
 	if err := sampleCtx.Err(); err != nil {
 		return subnetPreview{}, err
 	}

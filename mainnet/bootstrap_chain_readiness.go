@@ -193,6 +193,9 @@ func (self *rpcClient) observeBootstrapChainReadiness(ctx context.Context, prepa
 	if !strings.EqualFold(confirmed, preview.Identity.FinalizedHash) {
 		return result, fmt.Errorf("%w: finalized block changed during bootstrap readiness", errRpcIntegrity)
 	}
+	if err := self.closeSnapshotFinality(sampleCtx, preview.Identity); err != nil {
+		return result, err
+	}
 	if err := sampleCtx.Err(); err != nil {
 		return result, err
 	}

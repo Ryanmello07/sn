@@ -235,6 +235,9 @@ func (self *rpcClient) observeValidatorActivationNative(ctx context.Context, pre
 		if !strings.EqualFold(confirmed, anchor.FinalizedHash) {
 			return nil, fmt.Errorf("%w: validator activation native anchor changed during observation", errRpcIntegrity)
 		}
+		if err := self.closeSnapshotFinality(ctx, anchor); err != nil {
+			return nil, err
+		}
 	}
 	result.EvidenceHash = rootObjectHash(struct {
 		PlanHash   string                          `json:"bootstrap_plan_hash"`

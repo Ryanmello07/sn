@@ -349,10 +349,11 @@ func TestValidatorActivationInitialScopeRejectsRuntimeUpgrade(t *testing.T) {
 	}
 }
 
-// Both closing canonical barriers occur after the final prerequisite read.
-// Neither a stale successful census nor the first barrier survives the second.
+// Each anchor closes its explicit canonical check, current finalized head and
+// original finality witness after the final prerequisite read. A contradiction
+// at any of the six checks must discard all native prerequisite evidence.
 func TestValidatorActivationNativeClosingAnchorsDiscardPartialEvidence(t *testing.T) {
-	for _, barrier := range []int{1, 2} {
+	for barrier := 1; barrier <= 6; barrier++ {
 		f := newValidatorActivationFixture(t)
 		readiness := validatorActivationNativeTestReadiness(t, f)
 		key := f.chain.census.set(t, "PendingServerEmission", make([]byte, 8), []byte{25, 0})
@@ -370,7 +371,7 @@ func TestValidatorActivationNativeClosingAnchorsDiscardPartialEvidence(t *testin
 			return response, nil
 		})
 		got, err := f.chain.client.observeValidatorActivationNative(t.Context(), f.chain.preparation, readiness)
-		if got != nil || !errors.Is(err, errRpcIntegrity) || anchors != barrier || !strings.Contains(err.Error(), "anchor changed") {
+		if got != nil || !errors.Is(err, errRpcIntegrity) || anchors != barrier {
 			t.Fatal("closing canonical fork published native prerequisites", barrier, got, err, anchors)
 		}
 	}

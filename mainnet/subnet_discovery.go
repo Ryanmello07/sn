@@ -171,6 +171,9 @@ func (self *rpcClient) readSubnetDiscovery(ctx context.Context, snapshot runtime
 	if chainId, err := parseHexNumber(chainHex); err != nil || chainId != identity.EvmChainId {
 		return subnetDiscovery{}, fmt.Errorf("%w: discovery closing EVM identity differs", errRpcIntegrity)
 	}
+	if err := self.closeSnapshotFinality(sampleCtx, identity); err != nil {
+		return subnetDiscovery{}, err
+	}
 	return subnetDiscovery{
 		Schema: subnetDiscoverySchema, Admission: "unapproved_observation", SnapshotFileHash: snapshotFileHash, FinalityAuthority: "rpc-assertion", Identity: identity,
 		RuntimeVersion: snapshot.Version, RuntimeCodeHash: snapshot.CodeHash, RuntimeMetadataHash: snapshot.MetadataHash, CodecSourceCommit: rootPassiveSource,

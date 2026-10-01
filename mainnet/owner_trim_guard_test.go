@@ -196,7 +196,7 @@ func TestOwnerTrimGuardRechecksExactPartialPlanWithoutExecutionAuthority(t *test
 		t.Fatalf("partial recheck acquired authority or lost residuals: %+v %v", result, err)
 	}
 	_, counts := fixture.counts()
-	if counts["chain_getFinalizedHead"] != 3 || counts["chain_getBlockHash:100"] != 3 || counts["chain_getBlockHash:101"] != 4 {
+	if counts["chain_getFinalizedHead"] != 9 || counts["chain_getBlockHash:100"] != 5 || counts["chain_getBlockHash:101"] != 15 {
 		t.Fatalf("baseline/current/final checks missing: %v", counts)
 	}
 }
@@ -311,11 +311,11 @@ func TestOwnerTrimGuardRejectsStaleForkedAndChangedRuntimeEvidence(t *testing.T)
 			client, fixture, policy, policyHash, plan := newOwnerTrimGuardFixture(t, false)
 			switch change {
 			case "latest":
-				fixture.faultMethod, fixture.faultCount = "chain_getFinalizedHead", 3
+				fixture.faultMethod, fixture.faultCount = "chain_getFinalizedHead", 9
 			case "old-canonical":
-				fixture.faultMethod, fixture.faultCount = "chain_getBlockHash:100", 3
+				fixture.faultMethod, fixture.faultCount = "chain_getBlockHash:100", 5
 			case "current-canonical":
-				fixture.faultMethod, fixture.faultCount = "chain_getBlockHash:101", 4
+				fixture.faultMethod, fixture.faultCount = "chain_getBlockHash:101", 15
 			case "metadata":
 				fixture.after.metadataHex = "0x00"
 			case "code":

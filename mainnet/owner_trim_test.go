@@ -36,7 +36,7 @@ func TestOwnerTrimRanksAllSafeCapacitiesWithoutResetAuthority(t *testing.T) {
 		t.Fatalf("incorrect ranking or authority: %+v", plan)
 	}
 	if !reflect.DeepEqual(plan.Best.ExpectedRemoved, preview.Trim.Removed) || !reflect.DeepEqual(plan.Best.Survivors, preview.Trim.Survivors) ||
-		!reflect.DeepEqual(plan.Census.Observation.RootRegistrations, preview.RootRegistrations) || len(preview.RootRegistrations) != 2 || fixture.count("chain_getFinalizedHead") != 1 {
+		!reflect.DeepEqual(plan.Census.Observation.RootRegistrations, preview.RootRegistrations) || len(preview.RootRegistrations) != 2 || fixture.count("chain_getFinalizedHead") != 4 {
 		t.Fatal("mapping changed generations, root membership or finalized sample")
 	}
 	call, err := hex.DecodeString(plan.Best.UnsignedCallHex[2:])
@@ -403,7 +403,7 @@ func TestOwnerTrimCommandPublishesOnlyUnsignedReviewEvidence(t *testing.T) {
 	code := runMain(t.Context(), []string{"owner-trim-plan", "--rpc", server.URL, "--policy", path}, &stdout, &stderr)
 	var plan ownerTrimPlan
 	if code != 0 || json.Unmarshal(stdout.Bytes(), &plan) != nil || plan.Best == nil ||
-		plan.ResetReady || plan.ApplyAuthority || plan.FullResetCompleted || fixture.count("chain_getFinalizedHead") != 1 {
+		plan.ResetReady || plan.ApplyAuthority || plan.FullResetCompleted || fixture.count("chain_getFinalizedHead") != 4 {
 		t.Fatalf("CLI lost evidence or became an apply path: %d %s %s", code, stdout.String(), stderr.String())
 	}
 	digest := sha256.Sum256(raw)

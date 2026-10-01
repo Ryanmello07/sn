@@ -338,6 +338,9 @@ func (self *rpcClient) observeValidatorActivationStake(ctx context.Context, prep
 			return nil, errors.New("validator stake native anchor changed during observation")
 		}
 	}
+	if err := self.closeSnapshotFinality(ctx, identity); err != nil {
+		return nil, err
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
