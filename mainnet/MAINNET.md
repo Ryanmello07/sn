@@ -1342,6 +1342,12 @@ metadata and the separately pinned SDK-v15 owner path retain their existing
 semantics. HTTP response buffering before this boundary remains an open resource
 hardening gate; the local decoding budget does not bound the whole process.
 
+The [public cross-endpoint readback](evidence/public-cross-endpoint-20261001.md)
+compares Rao archive and the public entrypoint at one pinned finalized block.
+Their genesis, header, runtime version, metadata and `:code` digests match, but
+this remains RPC corroboration; independent finality, source and operator
+approval are required before signing or activation.
+
 The [pure plan foundation](PLAN.md) consumes one `finalized-snapshot`, a source
 lock and release inputs by exact hashes. `plan --outline` exposes the unbound
 dependency graph while approved mainnet identity is unavailable;

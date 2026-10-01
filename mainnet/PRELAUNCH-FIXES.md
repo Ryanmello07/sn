@@ -252,6 +252,12 @@ at block 9,188,367 with the same genesis, chain ID and runtime-470 artifact
 hashes. It is still one endpoint's unapproved assertion; independent identity,
 source/Wasm and finality approval remain open.
 
+The [later two-endpoint pinned readback](evidence/public-cross-endpoint-20261001.md)
+at block 9,189,666 returns byte-identical normalized genesis, native header,
+runtime version, metadata and `:code` hashes from Rao archive and the public
+entrypoint. This is corroboration across RPC routes, not independent GRANDPA,
+source/Wasm, custody or operator approval; MG-01 remains open.
+
 MG-06 has a [pinned read-only recycle-mode observation](evidence/recycle-mode-observation-20261001.md): `RecycleOrBurn[25]` was absent at Rao archive finalized block 9,186,298, which the reviewed metadata interprets as the default `Burn`. The [later public readback](evidence/public-route-check-20261001-1124.md) also finds the key absent at block 9,187,604. Neither observation is independent state approval. The owner transition and finalized `Recycle` readback remain required before the 90% recycle policy can operate.
 
 The [offline owner recycle transition](OWNER-RECYCLE-TRANSITION.md) resolves the
