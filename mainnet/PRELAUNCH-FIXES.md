@@ -219,6 +219,11 @@ receipts and independent monitor deployment remain open.
 | MG-09 / P1 — Sustained resource and storage capacity | Service/storage owner; PH-08/09/20/23/26 | **Planned:** bounded simulator mechanisms exist; production sizing and restoration receipts are missing. | Measure backlog, bytes, memory, RPC work and queue fairness with the proposed fleet and retention. Bind finite capacity with reviewed margin; prove missing/full-volume behavior, backup restore, multi-gigabyte log drainage and foreground deadline headroom. Required before unattended operation. |
 | MG-10 / P0 — Qualification, rollout and actual acceptance | Release/operations owner; PH-16 and every affected gate | **Planned:** no accepted composed mainnet release. | Before activation, complete production-path causal regressions, affected normal/race suites and a controlled upgrade/outage/restart/repair rehearsal; retain failed and reused scopes. After bounded activation, observe at least three complete native emission intervals and one full 50,400-block UR settlement/claim cycle before declaring program acceptance. Record pending live evidence as pending. |
 
+MG-01 has a [later read-only public snapshot](evidence/public-route-check-20261001-1356.md)
+at block 9,188,367 with the same genesis, chain ID and runtime-470 artifact
+hashes. It is still one endpoint's unapproved assertion; independent identity,
+source/Wasm and finality approval remain open.
+
 MG-06 has a [pinned read-only recycle-mode observation](evidence/recycle-mode-observation-20261001.md): `RecycleOrBurn[25]` was absent at Rao archive finalized block 9,186,298, which the reviewed metadata interprets as the default `Burn`. The [later public readback](evidence/public-route-check-20261001-1124.md) also finds the key absent at block 9,187,604. Neither observation is independent state approval. The owner transition and finalized `Recycle` readback remain required before the 90% recycle policy can operate.
 
 The [offline owner recycle transition](OWNER-RECYCLE-TRANSITION.md) resolves the
