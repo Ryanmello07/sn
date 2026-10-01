@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 )
 
@@ -25,7 +24,7 @@ type bootstrapSuccessorCanonicalChain struct {
 	provenance          bootstrapSuccessorSafeProvenanceAuthenticator
 	plans               []evmCreatePlan
 	records             []evmActionRecord
-	locks               []*os.File
+	locks               []*bootstrapContractReadinessMarker
 	planHash            string
 	authenticated       bool
 	admittedSequence    uint16
@@ -135,7 +134,7 @@ func (self *bootstrapSuccessorCanonicalChain) close() error {
 	self.closed = true
 	var result error
 	for i := len(self.locks) - 1; i >= 0; i-- {
-		result = errors.Join(result, self.locks[i].Close())
+		result = errors.Join(result, self.locks[i].close())
 	}
 	self.locks = nil
 	if self.chain != nil {
@@ -164,7 +163,13 @@ func (self *bootstrapSuccessorCanonicalChain) checkpoint(ctx context.Context, pl
 	if err != nil || encodeErr != nil || !bytes.Equal(raw, expected) || self.owner.canonicalAuthorityHash != rootObjectHash(self.approval) {
 		return errors.Join(errors.New("successor canonical retained authorization differs"), err, encodeErr)
 	}
+	if len(self.locks) != len(self.records) {
+		return errors.New("successor canonical original marker custody is incomplete")
+	}
 	for i, record := range self.records {
+		if err := self.locks[i].checkpoint(); err != nil {
+			return err
+		}
 		raw, err := self.owner.local.read(bootstrapContractStateFile(i))
 		var current evmActionRecord
 		if err == nil {

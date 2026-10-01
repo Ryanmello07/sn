@@ -23,6 +23,21 @@ the current operator report, not a new verified RPC observation or a mainnet
 identity/readiness attestation. Live activation remains closed while sync,
 independent chain identity and the other production gates are unresolved.
 
+The [original contract custody correction](evidence/original-evm-custody-qualification-20261001.md)
+closes a local ownership gap in the first eight contract actions and their
+receipt/installation readers. A file lock protects its opened inode, so matching
+bytes at a replaced pathname do not preserve ownership. The owner now retains
+the physical directory, original marker and exact journal through reconciliation,
+counted publication, send and completion; shared readers retain the same marker
+identity through their final observations. Missing completed custody stops the
+operation and must not be reconstructed from an in-memory record. Ordinary
+interrupted unsigned claims and exact-byte receipt recovery keep their original
+scope. Source `cb9f3aa2` and reader successor `1922981d` require a release after
+the SN `28ebfced` / server `ac86855d` baseline; `4e6b4a7e` separately restores the
+original approval/predecessor diagnostic. The separate root/trim stores,
+five-marker readiness cohort, cross-host custody and live acceptance remain
+unqualified by this correction.
+
 The [two-UR current-admission route](VALIDATOR-CURRENT-ADMISSION.md) has
 [scoped qualification](evidence/validator-current-admission-qualification-20261001.md)
 for separately signed initial starts at frozen SN `b8dc332a` with server

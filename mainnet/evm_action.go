@@ -386,6 +386,21 @@ func (self *evmCreateOwner) retain(record *evmActionRecord) error {
 	return nil
 }
 
+// Network reads and durable callbacks may outlive a local custody fault. Every
+// send and report still needs its exact current and original predecessor files.
+func (self *evmCreateOwner) checkpointCustody(record evmActionRecord, prior []evmActionRecord) error {
+	stores := append(append([]evmActionStorage(nil), self.priorStores...), self.store)
+	records := append(append([]evmActionRecord(nil), prior...), record)
+	for i, store := range stores {
+		retained, err := store.load()
+		if err != nil || rootObjectHash(retained) != rootObjectHash(records[i]) {
+			self.failed = errors.Join(errors.New("EVM original action custody changed"), err)
+			return self.failed
+		}
+	}
+	return nil
+}
+
 // Offline mode only retains public bytes. Online mode reconciles first; submit
 // additionally requires exact current admission and an unused finite attempt.
 func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, submit bool) (evmCreateResult, error) {
@@ -466,6 +481,9 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 		if record.Receipt != nil && (observation.Receipt == nil || *record.Receipt != *observation.Receipt) {
 			return result, errors.New("EVM canonical receipt changed after retention")
 		}
+		if err := self.checkpointCustody(record, prior); err != nil {
+			return result, err
+		}
 		record.ScanNumber, record.ScanHash = observation.ScanNumber, observation.ScanHash
 		record.Receipt = observation.Receipt
 		if err := self.retain(&record); err != nil {
@@ -479,8 +497,14 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 				if err := ctx.Err(); err != nil {
 					return result, err
 				}
+				if err := self.checkpointCustody(record, prior); err != nil {
+					return result, err
+				}
 				record.Attempts++
 				if err := self.retain(&record); err != nil {
+					return result, err
+				}
+				if err := self.checkpointCustody(record, prior); err != nil {
 					return result, err
 				}
 				// The attempt is uncertain before entering the transport, even if
@@ -491,6 +515,9 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 				status = "submitted-awaiting-canonical-receipt"
 			}
 		}
+	}
+	if err := self.checkpointCustody(record, prior); err != nil {
+		return result, err
 	}
 	result = self.result(record, status)
 	if online && result.Receipt != nil {
