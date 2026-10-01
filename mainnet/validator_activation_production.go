@@ -129,6 +129,13 @@ func validatorActivationContractViews(plan evmCreatePlan, index int, evidence co
 // One fixed canonical selector follows exact native-header authentication.
 // Runtime equality precedes getters, with bounded canonical hex at every read.
 func (self *rpcClient) observeValidatorActivationContracts(ctx context.Context, plans []evmCreatePlan, mapping finalizedMapping) ([]validatorActivationContractObservation, error) {
+	return self.observeValidatorActivationContractsWithPolicyBlock(ctx, plans, mapping, 0)
+}
+
+// Evidence-only observation has no authenticated original receipt. Installation
+// supplies its exact proxy inclusion so a rewritten initial clock cannot pass
+// merely because it still lies in the past. Normal accounting stays mutable.
+func (self *rpcClient) observeValidatorActivationContractsWithPolicyBlock(ctx context.Context, plans []evmCreatePlan, mapping finalizedMapping, initialPolicyBlock uint64) ([]validatorActivationContractObservation, error) {
 	if len(plans) != 8 || mapping.EvmHeader.Number == 0 || !rootCanonicalHash(mapping.EvmHeader.Hash) {
 		return nil, errors.New("validator contract observation lacks its complete mapped scope")
 	}
@@ -176,6 +183,9 @@ func (self *rpcClient) observeValidatorActivationContracts(ctx context.Context, 
 			observed, err := binding.UnpackPolicyByIndex(raw)
 			if err != nil || observed.EffectiveEpoch != 0 || observed.EffectiveBlock == 0 || observed.EffectiveBlock > mapping.EvmHeader.Number {
 				return nil, errors.Join(errors.New("validator initial policy effective clock differs"), err)
+			}
+			if initialPolicyBlock != 0 && observed.EffectiveBlock != initialPolicyBlock {
+				return nil, errors.New("installation current policy clock differs from original proxy inclusion")
 			}
 			expected := plan.ProxyConstructor.ApprovedPolicy.binding()
 			expected.EffectiveEpoch, expected.EffectiveBlock = 0, observed.EffectiveBlock
