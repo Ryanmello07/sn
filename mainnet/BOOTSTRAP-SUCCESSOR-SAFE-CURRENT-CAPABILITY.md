@@ -105,6 +105,11 @@ separately accepted policy, not a replacement complete-history attestation.
 The October 1 public v2 increment has deterministic synthetic author checks and
 separate independent review. The [public-route qualification receipt](evidence/safe-current-public-qualification-20261001.md)
 records its exact source, tests, controls and remaining production gates.
+All 68 author-selected roots pass normal/race, all three causal control pairs reach
+their intended assertions, and vet passes. Independent static review finds no
+blocker; its 14 focused roots pass normal/race and vet on the separately retained
+server graph. These results supply source qualification without production policy
+acceptance or a live send.
 
 The deterministic fixture uses the published Safe proxy/singleton, original
 eight-action local graph, independent native trie witness and synthetic signed

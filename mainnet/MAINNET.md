@@ -207,7 +207,10 @@ The route uses the existing complete finalized prefix proof and repeated final
 readmission, preserves the original exact signed bytes/nonce/attempt/liability,
 and leaves historical read-only reconciliation available after interruption.
 The [qualification receipt](evidence/safe-current-public-qualification-20261001.md)
-records the scoped synthetic checks and source pins. Actual independent production
+records 68 author roots passing normal/race, three causal control pairs and vet;
+independent review passes 14 focused roots normal/race and vet on its separately
+pinned server graph. The exact source and 79-file evidence manifest are sealed.
+Actual independent production
 v2 acceptance, signer cutover, live authority and installation remain open MG-08
 gates. No risk policy was accepted and no live transaction was sent in this work.
 

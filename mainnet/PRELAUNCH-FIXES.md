@@ -583,7 +583,10 @@ runtime drift and mixed history capabilities refuse. Timeout and restart retain
 the same signed bytes, nonce claims, counted attempts and maximum liability;
 historical outcomes keep their original policy even after later imports.
 The [qualification receipt](evidence/safe-current-public-qualification-20261001.md)
-records exact synthetic tests and remaining gates. This implementation supplies
+seals frozen `f3141591`: all 68 author-selected roots pass normal/race, three causal
+control pairs reproduce their intended failures, and vet passes. Independent
+review passes all 14 focused roots normal/race and vet with no blocker on its
+separately pinned server graph. The 79-file manifest verifies. This implementation supplies
 no production acceptance, signer or live transaction; MG-08 remains blocked for
 actual authority, installation and activation.
 
