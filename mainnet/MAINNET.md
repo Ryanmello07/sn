@@ -767,6 +767,16 @@ fenced. Original pending receipts can still be reconciled. An admitted 10/90 wei
 proposal until independent validators and finalized native allocation prove
 the economic result.
 
+Policy rollover must retain the previous epoch's signed payout and its actual
+coordinator policy/window. The [operator epoch-policy correction](evidence/operator-policy-custody-qualification-20261001.md)
+allows successor deposit sizing after restart without the original policy file:
+it authenticates the current deployment, reads immutable historical `policyAt`
+at that canonical hash and verifies both finalized boundaries. Fresh payout
+issuance refuses a configuration that does not match the requested epoch.
+Local two-operator migration, processed registration, fresh proof and deposit
+tests do not establish live readiness. Preserve exact old signature bytes and
+complete both operators' future-boundary cutover before activation.
+
 Settlement admission also requires the compatible server custody reader and
 migrations through 728. The [retained timestamp correction](PRELAUNCH-FIXES.md)
 prevents historical terminal NULL close times from disappearing out of every
