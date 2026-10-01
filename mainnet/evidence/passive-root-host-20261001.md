@@ -40,6 +40,17 @@ logs `initial` through `fourth` retain failed fixture/implementation diagnostics
 `fifth.normal.jsonl` is an initial positive run before the final source freeze.
 They do not replace the terminal gates above.
 
+Independent qualification on the exact final SN `cbd7f535` tree and server
+`720e7c61` tree passed 20/20 selected roots in normal and race modes, with zero
+failures or skips, and `go vet` exited 0. The selection includes all 13 new
+passive-host roots and seven adjacent UR installation/recovery roots. Static
+review found no custody, start, or sandbox blocker. The sealed receipt is
+`/mnt/data/sn-testnet/sol-passive-root-host-independent-20261001/receipt.json`
+(SHA-256 `75b9d8bcda1bad2f7661242fc7d121527afc8ff070aa86b20379106ddbead183`);
+its `SHA256SUMS` is
+`6fe117b0a25d6dbe85f0ad5b1ac19280cd125b59e2ba72ba8194e84d23237f82`
+and all entries verify. This is source qualification, not a live service start.
+
 The tests use real signed synthetic v4 inputs, private files and durable stores,
 plus the actual passive RPC reader against local synthetic finalized state.
 Only the manager transport and host filesystem root are fixture ports. The
