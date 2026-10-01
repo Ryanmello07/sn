@@ -13,6 +13,9 @@ import (
 const bootstrapSuccessorSafeCurrentRevisionSchema = "urnetwork-mainnet-successor-safe-current-revision-v1"
 const bootstrapSuccessorSafeCurrentRevisionDomain = "urnetwork-mainnet-successor-safe-current-revision-approval-v1"
 const bootstrapSuccessorSafeCurrentRevisionPolicy = "accept-separately-signed-current-only-safe-policy-and-its-owned-finality-nonatomic-pending-and-signer-cutover-assumptions;retain-original-history-statement-without-claiming-history-proven;immutable-predecessors-execution-receipts-signed-bytes-nonces-counted-attempts-window-fees-and-liabilities;complete-proof-before-final-scoped-pending-readmission;no-public-submission-without-separately-installed-qualified-current-policy-capability-route"
+const bootstrapSuccessorSafeCurrentPublicRevisionSchema = "urnetwork-mainnet-successor-safe-current-revision-v2"
+const bootstrapSuccessorSafeCurrentPublicRevisionDomain = "urnetwork-mainnet-successor-safe-current-revision-approval-v2"
+const bootstrapSuccessorSafeCurrentPublicRevisionPolicy = "explicitly-accept-separately-signed-current-only-safe-policy-for-bounded-public-submission-on-original-owned-route;accept-owned-rpc-finality-nonatomic-scoped-pending-assertions-and-exclusive-all-signer-relayer-cutover-with-no-other-live-signatures-or-transactions;no-complete-deployment-delegatecall-history-or-complete-pending-storage-proof-and-no-exclusion-of-between-read-changes;retain-original-history-statement-without-claiming-history-proven;immutable-predecessors-execution-receipts-exact-signed-bytes-nonces-counted-attempts-window-fees-and-liabilities;complete-finalized-storage-proof-before-final-scoped-pending-readmission-before-and-after-counted-reservation;one-exact-write-per-invocation-no-automatic-retry;require-exact-accepted-revision-opt-in-and-complete-current-runtime-authority"
 const maximumBootstrapSuccessorSafeCurrentRevisionBytes = 32 * 1024
 
 var errBootstrapSuccessorSafeCurrentCapabilityUnavailable = errors.New("successor current-policy submission is unavailable until a separately qualified production capability route is installed")
@@ -35,14 +38,26 @@ type bootstrapSuccessorSafeCurrentRevisionApproval struct {
 
 // A review signature alone cannot stand in for this separate policy acceptance.
 func (self bootstrapSuccessorSafeCurrentRevisionAuthorization) signingBytes() ([]byte, error) {
-	if self.Schema != bootstrapSuccessorSafeCurrentRevisionSchema || self.Sequence == 0 || !planSha256(self.PreviousHash) || self.Policy != bootstrapSuccessorSafeCurrentRevisionPolicy {
+	domain := bootstrapSuccessorSafeCurrentRevisionDomain
+	if self.permitsPublicSubmission() {
+		domain = bootstrapSuccessorSafeCurrentPublicRevisionDomain
+	} else if self.Schema != bootstrapSuccessorSafeCurrentRevisionSchema || self.Policy != bootstrapSuccessorSafeCurrentRevisionPolicy {
+		return nil, errors.New("successor current-policy revision has an unknown acceptance version or policy")
+	}
+	if self.Sequence == 0 || !planSha256(self.PreviousHash) {
 		return nil, errors.New("successor current-policy revision lacks explicit acceptance and predecessor")
 	}
 	if _, err := self.Proposal.Authorization.signingBytes(); err != nil {
 		return nil, err
 	}
 	raw, err := json.Marshal(self)
-	return append([]byte(bootstrapSuccessorSafeCurrentRevisionDomain+"\x00"), raw...), err
+	return append([]byte(domain+"\x00"), raw...), err
+}
+
+// The legacy acceptance remains read-only publicly. This discriminator grants
+// nothing without validation of both signatures, exact custody and caller opt-in.
+func (self bootstrapSuccessorSafeCurrentRevisionAuthorization) permitsPublicSubmission() bool {
+	return self.Schema == bootstrapSuccessorSafeCurrentPublicRevisionSchema && self.Policy == bootstrapSuccessorSafeCurrentPublicRevisionPolicy
 }
 
 // A retained proposal refers to the exact completed runtime prefix it reviewed.

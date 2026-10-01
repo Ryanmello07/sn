@@ -61,8 +61,8 @@ func (self bootstrapSuccessorSafeCurrentPolicyAuthorization) signingBytes() ([]b
 }
 
 // All retained runtime predecessors and original attestations remain required.
-// This function only derives observation scope; there is no journal import,
-// counted-event reference, authenticator interface or public flag for this policy.
+// This function only derives observation scope. Separate acceptance, custody
+// and capability checks decide whether that scope can admit an exact send.
 func (self bootstrapSuccessorSafeCurrentPolicyApproval) validate(ctx context.Context, plan bootstrapSuccessorExecutionPlan, base bootstrapSuccessorCanonicalApproval, history bootstrapSuccessorRuntimeHistory) (safeCurrentStorageScope, error) {
 	var scope safeCurrentStorageScope
 	p := self.Authorization

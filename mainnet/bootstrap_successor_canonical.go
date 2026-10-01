@@ -47,13 +47,13 @@ func newBootstrapSuccessorCanonicalChainWithProvenance(ctx context.Context, owne
 	return newBootstrapSuccessorCanonicalChainWithAuthorities(ctx, owner, approval, provenance, 0, nil, revisions...)
 }
 
-// The public constructor installs no current-policy route. A separately
-// qualified release may explicitly select the concrete native capability.
+// The two policy routes remain distinct. Public current-only selection requires
+// the v2 acceptance; the command separately checks its exact caller opt-in.
 func newBootstrapSuccessorCanonicalChainWithAuthorities(ctx context.Context, owner *bootstrapSuccessorExecutionStore, approval bootstrapSuccessorCanonicalApproval, provenance bootstrapSuccessorSafeProvenanceAuthenticator, route bootstrapSuccessorSafeCurrentRoute, current []bootstrapSuccessorSafeCurrentRevisionApproval, revisions ...bootstrapSuccessorRuntimeApproval) (_ *bootstrapSuccessorCanonicalChain, resultErr error) {
 	if ctx == nil || owner == nil || owner.closed {
 		return nil, errors.New("successor canonical adapter requires retained execution ownership")
 	}
-	if route != 0 && route != bootstrapSuccessorSafeCurrentNativeRoute || provenance != nil && (route != 0 || len(current) != 0 || owner.safeCurrentHistory.hash() != "") {
+	if route != 0 && route != bootstrapSuccessorSafeCurrentNativeRoute && route != bootstrapSuccessorSafeCurrentPublicRoute || provenance != nil && (route != 0 || len(current) != 0 || owner.safeCurrentHistory.hash() != "") {
 		return nil, errors.New("successor canonical adapter cannot mix history and current-policy capabilities")
 	}
 	plan := owner.planCopy()

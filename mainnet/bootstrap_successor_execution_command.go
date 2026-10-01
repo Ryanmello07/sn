@@ -1,6 +1,7 @@
 // Commands reconstruct original custody and independently approve exact bytes.
 // Online resume additionally requires retained canonical review authority.
-// Public submission is unavailable without a canonical Safe history capability.
+// Public current-only submission additionally requires a v2 policy acceptance
+// and the exact retained acceptance hash. No complete-history claim is inferred.
 package main
 
 import (
@@ -92,8 +93,8 @@ func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory,
 	return result, profile, retained, reader.checkpoint("execution-preview-reconstructed")
 }
 
-// Public resume can reconcile the approved route. No production canonical
-// deployment/storage-provenance adapter exists, so public submission is disabled.
+// Public resume defaults to reconciliation. Explicit v2 current-only acceptance
+// can enable the separate bounded native route, without claiming full history.
 func runBootstrapSuccessorExecutionCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return runBootstrapSuccessorExecutionCommandWithProvenance(ctx, args, stdout, stderr, nil)
 }
@@ -104,8 +105,8 @@ func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, ar
 	return runBootstrapSuccessorExecutionCommandWithAuthorities(ctx, args, stdout, stderr, provenance, 0)
 }
 
-// Internal route installation is deliberately absent from public construction.
-// Signed policy import is available for read-only custody and reconciliation.
+// Independent acceptance and caller opt-in are separate gates. Legacy acceptance
+// and a review proposal alone cannot select the public current-only route.
 func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, args []string, stdout, stderr io.Writer, provenance bootstrapSuccessorSafeProvenanceAuthenticator, route bootstrapSuccessorSafeCurrentRoute) (resultCode int) {
 	if len(args) == 0 || args[0] != "contract-successor-execution-preview" && args[0] != "contract-successor-execution-claim" && args[0] != "contract-successor-execution-resume" {
 		fmt.Fprintln(stderr, "unknown successor execution custody command")
@@ -124,13 +125,14 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 	approvalHash := flags.String("approval-sha256", "", "exact approval file digest")
 	executionHash := flags.String("accept-execution-hash", "", "exact previewed execution plan hash")
 	online := flags.Bool("online", false, "authenticate original and current state on the originally approved owned route")
-	submit := flags.Bool("submit", false, "request one counted write; unavailable until canonical Safe provenance is implemented")
+	submit := flags.Bool("submit", false, "request one counted exact write with independently accepted authority")
 	canonicalPath := flags.String("canonical-approval", "", "independent build, runtime, signer-cutover and Safe-provenance authorization")
 	canonicalHash := flags.String("canonical-approval-sha256", "", "exact canonical authorization file digest")
 	runtimePath := flags.String("runtime-revision", "", "one additive independently signed runtime revision for exact online resume")
 	runtimeHash := flags.String("runtime-revision-sha256", "", "exact additive runtime revision file digest")
-	currentPath := flags.String("safe-current-revision", "", "one independently signed current-policy custody revision; does not enable public submission")
+	currentPath := flags.String("safe-current-revision", "", "one independently signed current-policy custody revision; import alone does not enable submission")
 	currentHash := flags.String("safe-current-revision-sha256", "", "exact signed current-policy revision file digest")
+	acceptedCurrent := flags.String("accept-safe-current-policy", "", "exact retained v2 acceptance object hash; opts into bounded public current-only submission")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *configPath == "" || *directory == "" || !planSha256(*accepted) ||
 		*requestPath == "" || *safeRequestPath == "" || *executionRequestPath == "" ||
 		preview && (*approvalPath != "" || *approvalHash != "" || *executionHash != "") ||
@@ -138,11 +140,15 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 		(*online || *submit) && args[0] != "contract-successor-execution-resume" || *submit && !*online ||
 		*online && (*canonicalPath == "" || !planSha256(*canonicalHash)) || !*online && (*canonicalPath != "" || *canonicalHash != "") ||
 		(*runtimePath != "" || *runtimeHash != "") && (!*online || *runtimePath == "" || !planSha256(*runtimeHash)) ||
-		(*currentPath != "" || *currentHash != "") && (!*online || *currentPath == "" || !planSha256(*currentHash)) {
-		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume also require --approval, --approval-sha256 and --accept-execution-hash; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; optional runtime/current-policy revision files and their SHA-256 pins require --online; --submit requires --online and an installed capability")
+		(*currentPath != "" || *currentHash != "") && (!*online || *currentPath == "" || !planSha256(*currentHash)) ||
+		*acceptedCurrent != "" && (!*submit || !planSha256(*acceptedCurrent) || provenance != nil || route != 0) {
+		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume also require --approval, --approval-sha256 and --accept-execution-hash; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; optional runtime/current-policy revision files and their SHA-256 pins require --online; --submit requires --online and an installed capability; public current-only submission requires --accept-safe-current-policy with the exact retained v2 acceptance object hash")
 		return 2
 	}
-	if *submit && provenance == nil && route != bootstrapSuccessorSafeCurrentNativeRoute {
+	if *acceptedCurrent != "" {
+		route = bootstrapSuccessorSafeCurrentPublicRoute
+	}
+	if *submit && provenance == nil && route != bootstrapSuccessorSafeCurrentNativeRoute && (route != bootstrapSuccessorSafeCurrentPublicRoute || *acceptedCurrent == "") {
 		fmt.Fprintln(stderr, errBootstrapSuccessorSafeProvenanceUnavailable)
 		return 2
 	}
@@ -258,6 +264,9 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 			current = append(current, revision)
 		}
 		canonical, err = newBootstrapSuccessorCanonicalChainWithAuthorities(ctx, owner, canonicalApproval, provenance, route, current, revisions...)
+		if err == nil && route == bootstrapSuccessorSafeCurrentPublicRoute && owner.safeCurrentHistory.hash() != *acceptedCurrent {
+			err = errors.New("successor public current-policy opt-in differs from the exact retained acceptance")
+		}
 		if err == nil {
 			result, err = advanceBootstrapSuccessorExecution(ctx, owner, canonical, *submit)
 		}

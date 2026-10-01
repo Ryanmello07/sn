@@ -9,15 +9,17 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Route installation is an internal release decision, never a public flag or
-// value inferred from a signed review file. Public construction supplies zero.
+// The internal qualification route retains legacy behavior. Public selection
+// requires a distinct v2 acceptance and an exact revision opt-in at the command.
 type bootstrapSuccessorSafeCurrentRoute uint8
 
 const bootstrapSuccessorSafeCurrentNativeRoute bootstrapSuccessorSafeCurrentRoute = 1
+const bootstrapSuccessorSafeCurrentPublicRoute bootstrapSuccessorSafeCurrentRoute = 2
 
 // One adapter owns the immutable scope selected from its retained acceptance.
 type bootstrapSuccessorSafeCurrentCapability struct {
 	revisionHash string
+	route        bootstrapSuccessorSafeCurrentRoute
 	scope        safeCurrentStorageScope
 }
 
@@ -34,18 +36,22 @@ func (self *bootstrapSuccessorCanonicalChain) selectCurrentPolicy(ctx context.Co
 		return errBootstrapSuccessorSafeCurrentCapabilityUnavailable
 	}
 	self.currentPolicy = nil
+	self.currentProof, self.admitted = nil, false
 	if route == 0 {
 		return nil
 	}
-	if route != bootstrapSuccessorSafeCurrentNativeRoute || self.provenance != nil || self.owner.safeCurrentHistory.pendingHash != "" || self.owner.runtimeHistory.pendingHash != "" || len(self.owner.safeCurrentHistory.approvals) == 0 {
+	if route != bootstrapSuccessorSafeCurrentNativeRoute && route != bootstrapSuccessorSafeCurrentPublicRoute || self.provenance != nil || self.owner.safeCurrentHistory.pendingHash != "" || self.owner.runtimeHistory.pendingHash != "" || len(self.owner.safeCurrentHistory.approvals) == 0 {
 		return errBootstrapSuccessorSafeCurrentCapabilityUnavailable
 	}
 	approval := self.owner.safeCurrentHistory.approvals[len(self.owner.safeCurrentHistory.approvals)-1]
+	if route == bootstrapSuccessorSafeCurrentPublicRoute && !approval.Authorization.permitsPublicSubmission() {
+		return errors.New("successor public current-policy submission requires a separately signed v2 acceptance")
+	}
 	scope, err := approval.validate(ctx, self.owner.planCopy(), self.approval, self.owner.runtimeHistory)
 	if err != nil || approval.Authorization.Proposal.Authorization.RuntimeRevisionHash != self.runtimeRevisionHash {
 		return errors.Join(errors.New("successor current-policy capability lacks exact complete runtime authority"), err)
 	}
-	self.currentPolicy = &bootstrapSuccessorSafeCurrentCapability{revisionHash: rootObjectHash(approval), scope: scope}
+	self.currentPolicy = &bootstrapSuccessorSafeCurrentCapability{revisionHash: rootObjectHash(approval), route: route, scope: scope}
 	return nil
 }
 
@@ -60,6 +66,10 @@ func (self *bootstrapSuccessorCanonicalChain) currentPolicyReady(ctx context.Con
 		return err
 	}
 	approval := self.owner.safeCurrentHistory.approvals[len(self.owner.safeCurrentHistory.approvals)-1]
+	if self.currentPolicy.route != bootstrapSuccessorSafeCurrentNativeRoute && self.currentPolicy.route != bootstrapSuccessorSafeCurrentPublicRoute ||
+		self.currentPolicy.route == bootstrapSuccessorSafeCurrentPublicRoute && !approval.Authorization.permitsPublicSubmission() {
+		return errBootstrapSuccessorSafeCurrentCapabilityUnavailable
+	}
 	if approval.Authorization.Proposal.Authorization.RuntimeRevisionHash != self.runtimeRevisionHash {
 		return errors.New("successor current-policy capability predates retained runtime authority")
 	}

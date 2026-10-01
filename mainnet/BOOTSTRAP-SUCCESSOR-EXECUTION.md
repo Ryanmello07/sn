@@ -4,9 +4,11 @@ The successor has a separate signed execution domain, durable adoption and
 nonce ownership, and a one-send execution state machine. Public commands can
 preview, claim and recover that custody offline. Online resume additionally
 uses a concrete canonical adapter and separately signed build, current-runtime,
-signer-cutover and Safe deployment/storage-provenance authority. **Public
-submission is unavailable until a distinct canonical Safe history authenticator
-is implemented and qualified. No live execution or mainnet authority is claimed.**
+signer-cutover and Safe deployment/storage-provenance authority. The original
+complete-history submission route remains unavailable until its distinct history
+authenticator is implemented and qualified. A separate [current-only route](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md)
+requires a new independently signed v2 risk-policy acceptance and an exact revision
+hash opt-in. No live execution or mainnet authority is claimed.
 The separate [archive capture command](SAFE-HISTORY-CAPTURE.md) has
 [sealed paired-source qualification](evidence/safe-history-census-qualification-20260930.md):
 68 positive normal/race root executions and ten normal/five selected race causal
@@ -145,9 +147,11 @@ Add `--online --canonical-approval /private/canonical-approval.json
 --canonical-approval-sha256 sha256:CANONICAL_APPROVAL_DIGEST` to the exact
 `contract-successor-execution-resume` command. Without `--submit`, online resume
 authenticates the original receipts and reconciles the retained transaction.
-Public `--submit` currently returns exit 2 with the missing-provenance-capability
-diagnostic before loading custody or reserving an attempt, even when all review
-files are present and signed.
+Public `--submit` without the separate v2 current-policy opt-in returns exit 2 with
+the missing-provenance-capability diagnostic before loading custody or reserving
+an attempt, even when all original review files are present and signed. The
+[v2 route](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md#explicit-public-v2-acceptance)
+does not implement or infer complete-history authority.
 Preview and claim remain offline; neither accepts these online flags. The route,
 account, fees, signatures and transaction bytes always come from retained signed
 inputs.
