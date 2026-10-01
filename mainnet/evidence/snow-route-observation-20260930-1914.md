@@ -39,3 +39,7 @@ sync state remain unobserved.
 At approximately **00:00 UTC on October 1**, both methods again returned HTTP
 502 with the identical 150-byte response and SHA-256. This still supplies no
 chain identity or synchronization evidence.
+
+At approximately **00:20 UTC on October 1**, both methods still returned HTTP
+502 with the same 150-byte response and SHA-256. No route cutover or mainnet
+identity was observed.
