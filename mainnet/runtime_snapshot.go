@@ -78,7 +78,7 @@ func (self *rpcClient) readRuntimeSnapshot(ctx context.Context, expected *identi
 }
 
 // Reuses one in-memory identity already authenticated by this route. This
-// helper never samples a new finalized head or imports identity-file authority.
+// helper never changes the selected block or imports identity-file authority.
 func (self *rpcClient) readRuntimeSnapshotAtIdentity(ctx context.Context, identity chainIdentity) (result runtimeSnapshot, resultErr error) {
 	if ctx == nil {
 		return runtimeSnapshot{}, errors.New("runtime snapshot context is unavailable")
@@ -157,6 +157,9 @@ func (self *rpcClient) readRuntimeSnapshotAtIdentity(ctx context.Context, identi
 	evmChainId, err := parseHexNumber(evmChainHex)
 	if err != nil || evmChainId != identity.EvmChainId || nativeChain != identity.NativeChain {
 		return runtimeSnapshot{}, fmt.Errorf("%w: runtime snapshot network identity changed: %v", errRpcIntegrity, err)
+	}
+	if err := self.closeSnapshotFinality(sampleCtx, identity); err != nil {
+		return runtimeSnapshot{}, err
 	}
 	return runtimeSnapshot{
 		Schema: runtimeSnapshotSchema, Admission: "unapproved_observation", Identity: identity,

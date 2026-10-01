@@ -118,8 +118,8 @@ func TestBootstrapChainReadinessCommandPreservesCustodyAndNoAuthority(t *testing
 			t.Fatal("readiness altered an original marker, signature or allowance")
 		}
 	}
-	if f.census.count("chain_getFinalizedHead") != 3 {
-		t.Fatal("readiness did not use exactly one finalized census per invocation")
+	if f.census.count("chain_getFinalizedHead") != 14 {
+		t.Fatal("readiness did not retain one census and close finality at each dependent boundary")
 	}
 }
 
@@ -215,7 +215,7 @@ func TestBootstrapChainReadinessRejectsConflictingRootCheckpoint(t *testing.T) {
 		response, err := original.RoundTrip(request)
 		if err == nil && call.Method == "chain_getBlockHash" && string(call.Params[0]) == "100" {
 			finalizedQueries++
-			if finalizedQueries == 3 {
+			if finalizedQueries == 8 {
 				response.Body.Close()
 				response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","id":1,"result":"0x` + strings.Repeat("e", 64) + `"}`))
 			}
@@ -255,7 +255,7 @@ func TestBootstrapChainReadinessReorgNeverPublishesPartialEligibility(t *testing
 				response, err := transport.RoundTrip(request)
 				if err == nil && call.Method == "chain_getBlockHash" && string(call.Params[0]) == "100" {
 					queries++
-					if queries == 4 {
+					if queries == 9 {
 						response.Body.Close()
 						response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","id":1,"result":"0x` + strings.Repeat("e", 64) + `"}`))
 					}

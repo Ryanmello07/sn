@@ -270,8 +270,8 @@ func TestIdentityReadUsesOneSampleBudget(t *testing.T) {
 	if _, err := client.readIdentity(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(deadlines) != 8 {
-		t.Fatalf("expected eight identity calls, got %d", len(deadlines))
+	if len(deadlines) != 11 {
+		t.Fatalf("expected identity plus closing finality calls, got %d", len(deadlines))
 	}
 	for _, deadline := range deadlines[1:] {
 		if !deadline.Equal(deadlines[0]) {

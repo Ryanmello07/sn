@@ -134,7 +134,7 @@ func TestSubnetDiscoveryCommandRuntime470ExportsUnapprovedMembership(t *testing.
 	if !discovery.MembershipComplete || discovery.ResetReady || discovery.ApplyAuthority || discovery.RuntimeSourceProven || discovery.Admission != "unapproved_observation" ||
 		discovery.FinalityAuthority != "rpc-assertion" || discovery.SubnetGeneration != 3 || discovery.SubnetRegistrationBlock != 10 || discovery.MinimumUids != 2 || discovery.MaximumUids != 8 ||
 		len(discovery.Seats) != 6 || len(discovery.RootRegistrations) != 2 || len(discovery.Blockers) != 4 || discovery.Seats[0].EmissionAlphaRao != "100" || !discovery.Seats[2].ValidatorPermit || discovery.Seats[3].ValidatorPermit ||
-		fixture.count("state_getKeysPaged") != 8 || fixture.count("state_queryStorageAt") != 4 || fixture.count("chain_getFinalizedHead") != 1 || len(discovery.Storage) == 0 {
+		fixture.count("state_getKeysPaged") != 8 || fixture.count("state_queryStorageAt") != 4 || fixture.count("chain_getFinalizedHead") != 4 || len(discovery.Storage) == 0 {
 		t.Fatalf("discovery omitted membership evidence or claimed authority: %+v", discovery)
 	}
 	for _, seat := range discovery.Seats {

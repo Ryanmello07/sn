@@ -698,7 +698,7 @@ func TestRootPreviewRetriesTransientStorageWithoutChangingBlock(t *testing.T) {
 		return fixture.roundTrip(request)
 	})
 	preview, err := client.readRootPreview(context.Background(), fixture.policy, "policy")
-	if err != nil || !preview.ReadOnlyReady || failedCount < 2 || fixture.count("chain_getFinalizedHead") != 1 {
+	if err != nil || !preview.ReadOnlyReady || failedCount < 2 || fixture.count("chain_getFinalizedHead") != 4 {
 		t.Fatalf("storage retry restarted/lost sample: ready=%v err=%v failed-count=%d", preview.ReadOnlyReady, err, failedCount)
 	}
 }

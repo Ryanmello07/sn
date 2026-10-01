@@ -236,6 +236,9 @@ func (self *rpcClient) readRecycleMode(ctx context.Context, policy recyclePolicy
 	if !validHash(confirmedHash) || !strings.EqualFold(confirmedHash, identity.FinalizedHash) {
 		return observation, fmt.Errorf("%w: finalized block changed during mode read", errRpcIntegrity)
 	}
+	if err := self.closeSnapshotFinality(sampleCtx, identity); err != nil {
+		return observation, err
+	}
 	mode := "Burn"
 	if effective[0] == 1 {
 		mode = "Recycle"

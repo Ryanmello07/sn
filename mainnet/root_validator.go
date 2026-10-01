@@ -196,6 +196,9 @@ func (self *rpcClient) readApprovedRuntimeAt(ctx context.Context, expected ident
 	if err != nil {
 		return identity, nil, fmt.Errorf("%w: root metadata decode: %v", errRpcIntegrity, err)
 	}
+	if err := self.closeSnapshotFinality(ctx, identity); err != nil {
+		return chainIdentity{}, nil, err
+	}
 	return identity, metadata, nil
 }
 
@@ -530,6 +533,9 @@ func (self *rpcClient) readRootPreviewAt(ctx context.Context, policy rootValidat
 	}
 	if !validHash(confirmedHash) || !strings.EqualFold(confirmedHash, identity.FinalizedHash) {
 		return rootPreview{}, fmt.Errorf("%w: root finalized block changed during census", errRpcIntegrity)
+	}
+	if err := self.closeSnapshotFinality(sampleCtx, identity); err != nil {
+		return rootPreview{}, err
 	}
 	if err := sampleCtx.Err(); err != nil {
 		return rootPreview{}, err
