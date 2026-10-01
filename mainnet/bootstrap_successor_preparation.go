@@ -222,7 +222,7 @@ func loadBootstrapSuccessorPreparation(ctx context.Context, configPath, runDirec
 	if err != nil || observed != root {
 		return plan, nil, errors.Join(errors.New("successor physical root changed during original custody inspection"), err)
 	}
-	return plan, retained, errors.Join(ctx.Err(), plan.validate())
+	return plan, retained, errors.Join(retained.checkpoint(ctx), plan.validate())
 }
 
 // The fixed destination and its staged namespace cannot borrow any original

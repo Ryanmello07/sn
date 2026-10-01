@@ -90,7 +90,7 @@ func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory,
 	if err != nil {
 		return result, nil, nil, err
 	}
-	return result, profile, retained, reader.checkpoint("execution-preview-reconstructed")
+	return result, profile, retained, errors.Join(reader.checkpoint("execution-preview-reconstructed"), retained.checkpoint(ctx))
 }
 
 // Public resume defaults to reconciliation. Explicit v2 current-only acceptance
@@ -184,6 +184,7 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 	}()
 	if preview {
 		message, err := plan.signingBytes(profile)
+		err = errors.Join(err, retained.checkpoint(ctx))
 		if err == nil {
 			err = json.NewEncoder(stdout).Encode(struct {
 				Schema       string                          `json:"schema"`
@@ -215,6 +216,10 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 	if err != nil {
 		fmt.Fprintln(stderr, "successor independent execution approval:", err)
 		return 2
+	}
+	if err := retained.checkpoint(ctx); err != nil {
+		fmt.Fprintln(stderr, "successor execution original custody changed:", err)
+		return 1
 	}
 	owner, err = openBootstrapSuccessorExecutionStore(ctx, plan, approval, profile, args[0] == "contract-successor-execution-claim", nil)
 	if err != nil {
@@ -270,6 +275,10 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 			}
 			current = append(current, revision)
 		}
+		if err := retained.checkpoint(ctx); err != nil {
+			fmt.Fprintln(stderr, "successor canonical original custody changed:", err)
+			return 1
+		}
 		canonical, err = newBootstrapSuccessorCanonicalChainWithAuthorities(ctx, owner, canonicalApproval, provenance, route, current, revisions...)
 		if err == nil && route == bootstrapSuccessorSafeCurrentPublicRoute && owner.safeCurrentHistory.hash() != *acceptedCurrent {
 			err = errors.New("successor public current-policy opt-in differs from the exact retained acceptance")
@@ -278,6 +287,7 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 			if readback {
 				var installation bootstrapContractInstallation
 				installation, err = inspectBootstrapContractInstallation(ctx, owner, canonical)
+				err = errors.Join(err, retained.checkpoint(ctx))
 				if err == nil {
 					if err := json.NewEncoder(stdout).Encode(installation); err != nil {
 						fmt.Fprintln(stderr, "successor installation readback output:", err)
@@ -293,6 +303,10 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 			fmt.Fprintln(stderr, "successor canonical execution unresolved; retain signatures, authority and cumulative custody:", err)
 			return 1
 		}
+	}
+	if err := retained.checkpoint(ctx); err != nil {
+		fmt.Fprintln(stderr, "successor execution original custody changed:", err)
+		return 1
 	}
 	if err := json.NewEncoder(stdout).Encode(result); err != nil {
 		fmt.Fprintln(stderr, "successor execution output failed; resume exact custody:", err)

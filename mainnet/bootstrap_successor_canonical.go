@@ -25,6 +25,7 @@ type bootstrapSuccessorCanonicalChain struct {
 	plans               []evmCreatePlan
 	records             []evmActionRecord
 	locks               []*bootstrapContractReadinessMarker
+	retained            *bootstrapChainReadinessState
 	planHash            string
 	authenticated       bool
 	admittedSequence    uint16
@@ -73,6 +74,13 @@ func newBootstrapSuccessorCanonicalChainWithAuthorities(ctx context.Context, own
 			resultErr = errors.Join(resultErr, self.close())
 		}
 	}()
+	self.retained, err = openBootstrapChainReadinessState(ctx, preparation)
+	if err != nil {
+		return nil, err
+	}
+	if rootObjectHash(self.retained) != rootObjectHash(preparationPlan.Proposal.LocalPreparation) {
+		return nil, errors.New("successor canonical original preparation custody differs from approved adoption")
+	}
 	for i, original := range plans {
 		projection := copyEvmCreatePlan(original)
 		projection.Prerequisites = append([]evmActionRecord(nil), self.records...)
@@ -137,6 +145,7 @@ func (self *bootstrapSuccessorCanonicalChain) close() error {
 		result = errors.Join(result, self.locks[i].close())
 	}
 	self.locks = nil
+	result = errors.Join(result, self.retained.close())
 	if self.chain != nil {
 		self.chain.client.httpClient.CloseIdleConnections()
 	}
@@ -149,7 +158,7 @@ func (self *bootstrapSuccessorCanonicalChain) checkpoint(ctx context.Context, pl
 	if ctx == nil || self == nil || self.closed || self.owner == nil || self.owner.closed || self.chain == nil || plan.hash() != self.planHash || len(self.records) != 8 || len(self.plans) != 8 {
 		return errors.New("successor canonical adapter scope or lifetime differs")
 	}
-	if err := errors.Join(ctx.Err(), self.owner.checkpoint("canonical-adapter-checkpoint"), self.approval.validate(ctx, plan)); err != nil {
+	if err := errors.Join(self.retained.checkpoint(ctx), self.owner.checkpoint("canonical-adapter-checkpoint"), self.approval.validate(ctx, plan)); err != nil {
 		return err
 	}
 	if self.runtimeRevisionHash != self.owner.runtimeHistory.hash() {
@@ -179,7 +188,7 @@ func (self *bootstrapSuccessorCanonicalChain) checkpoint(ctx context.Context, pl
 			return errors.Join(errors.New("successor canonical original custody changed during ownership"), err)
 		}
 	}
-	return nil
+	return self.retained.checkpoint(ctx)
 }
 
 // All eight canonical receipts and postconditions are reauthenticated through

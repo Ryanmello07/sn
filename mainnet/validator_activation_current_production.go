@@ -79,11 +79,17 @@ func newValidatorActivationCurrentAuthority(ctx context.Context, activation vali
 	if owner.canonicalAuthority == nil || owner.canonicalAuthorityHash != rootObjectHash(canonical) || owner.safeCurrentHistory.hash() != p.AcceptedSafePolicy || owner.safeCurrentHistory.pendingHash != "" || owner.runtimeHistory.pendingHash != "" {
 		return nil, errors.New("validator current admission requires exact already retained canonical and current-only policy authority")
 	}
+	if err := retained.checkpoint(ctx); err != nil {
+		return nil, err
+	}
 	chain, err = newBootstrapSuccessorCanonicalChainWithAuthorities(ctx, owner, canonical, nil, bootstrapSuccessorSafeCurrentPublicRoute, nil)
 	if err != nil {
 		return nil, err
 	}
 	self := &validatorActivationCurrentAuthority{retained: validatorActivationCurrentRetained{Approval: approved, PublicKey: key, Reference: reference}, close: close}
+	self.custody = func(ctx context.Context) error {
+		return errors.Join(retained.checkpoint(ctx), chain.checkpoint(ctx, owner.planCopy()))
+	}
 	self.observe = func(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, record *validatorActivationRecord, now func() time.Time, pending int) (*validatorActivationReadiness, error) {
 		return observeValidatorActivationHealthPending(ctx, store, host, record, now, true, pending)
 	}
@@ -120,5 +126,5 @@ func newValidatorActivationCurrentAuthority(ctx context.Context, activation vali
 			EvmNumber: mapping.EvmHeader.Number, EvmHash: mapping.EvmHeader.Hash, EarliestOriginalEvmBlock: earliest,
 			DeclaredScanFloors: [2]uint64{declaration.Validators[0].DeclaredDeployBlock, declaration.Validators[1].DeclaredDeployBlock}}, nil
 	}
-	return self, ctx.Err()
+	return self, self.custody(ctx)
 }

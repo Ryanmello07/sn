@@ -169,6 +169,9 @@ func (self *ownerTrimStore) load() (ownerTrimRecord, error) {
 	if self.lock == nil || self.failed != nil {
 		return record, errors.Join(errors.New("owner trim store must reopen"), self.failed)
 	}
+	if err := self.retained.checkpoint(context.Background()); err != nil {
+		return record, err
+	}
 	raw, _, err := readBootstrapRootFile(context.Background(), self.config.Action.StatePath, ownerTrimStoreLimit)
 	if err != nil {
 		return record, err
@@ -176,7 +179,7 @@ func (self *ownerTrimStore) load() (ownerTrimRecord, error) {
 	if err := decodePlanJson(raw, &record); err != nil {
 		return record, err
 	}
-	return record, record.validate(self.config, self.key)
+	return record, errors.Join(record.validate(self.config, self.key), self.retained.checkpoint(context.Background()))
 }
 
 // Full file sync, atomic rename and directory sync precede every side effect.
@@ -189,6 +192,9 @@ func (self *ownerTrimStore) save(record ownerTrimRecord) (resultErr error) {
 			self.failed = resultErr
 		}
 	}()
+	if err := self.retained.checkpoint(context.Background()); err != nil {
+		return err
+	}
 	if err := record.validate(self.config, self.key); err != nil {
 		return err
 	}
@@ -220,7 +226,7 @@ func (self *ownerTrimStore) save(record ownerTrimRecord) (resultErr error) {
 	if err := os.Rename(file.Name(), path); err != nil {
 		return err
 	}
-	return self.syncParent()
+	return errors.Join(self.syncParent(), self.retained.checkpoint(context.Background()))
 }
 
 // The scoped hook exercises the real post-rename durability boundary.

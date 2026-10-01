@@ -136,6 +136,7 @@ func (self *rpcClient) observeBootstrapChainReadiness(ctx context.Context, prepa
 	}
 	result.LocalPreparation = retained
 	defer func() {
+		resultErr = errors.Join(resultErr, retained.checkpoint(sampleCtx))
 		if err := retained.close(); err != nil {
 			resultErr = errors.Join(resultErr, err)
 		}
@@ -196,7 +197,7 @@ func (self *rpcClient) observeBootstrapChainReadiness(ctx context.Context, prepa
 	if err := self.closeSnapshotFinality(sampleCtx, preview.Identity); err != nil {
 		return result, err
 	}
-	if err := sampleCtx.Err(); err != nil {
+	if err := retained.checkpoint(sampleCtx); err != nil {
 		return result, err
 	}
 	envelope, err := sealSubnetPreview(preview)

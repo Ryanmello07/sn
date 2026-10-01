@@ -217,7 +217,7 @@ func runBootstrapChainContractCommand(ctx context.Context, args []string, stdout
 		} else {
 			result.LocalPreparation = retained
 			err = inspectBootstrapContractCustody(ctx, plans, &result)
-			err = errors.Join(err, retained.close())
+			err = errors.Join(err, retained.checkpoint(ctx), retained.close())
 		}
 		if err != nil {
 			result.Status, result.CustodyInspectionComplete, result.RemainingOriginalAttempts = "unresolved", false, nil

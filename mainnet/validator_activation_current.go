@@ -48,6 +48,7 @@ type validatorActivationCurrentAuthority struct {
 	retained     validatorActivationCurrentRetained
 	observe      func(context.Context, *validatorActivationStore, *validatorActivationHost, *validatorActivationRecord, func() time.Time, int) (*validatorActivationReadiness, error)
 	installation func(context.Context, *validatorActivationReadiness) (validatorActivationInstallationObservation, error)
+	custody      func(context.Context) error
 	close        func() error
 }
 
@@ -64,6 +65,11 @@ func (self *validatorActivationCurrentAuthority) checkpoint(ctx context.Context,
 	}
 	if err := errors.Join(store.validateOwner(), self.retained.Approval.window(ctx, record.HighWaterAt, now)); err != nil {
 		return err
+	}
+	if self.custody != nil {
+		if err := self.custody(ctx); err != nil {
+			return err
+		}
 	}
 	retainedRecord, err := store.load(ctx)
 	record.ContentHash, retainedRecord.ContentHash = "", ""
@@ -86,6 +92,9 @@ func (self *validatorActivationCurrentAuthority) checkpoint(ctx context.Context,
 		if err != nil || len(raw) == 0 || hash != file.Sha256 {
 			return errors.Join(errors.New("validator current admission source was lost or changed"), err)
 		}
+	}
+	if self.custody != nil {
+		return self.custody(ctx)
 	}
 	return ctx.Err()
 }

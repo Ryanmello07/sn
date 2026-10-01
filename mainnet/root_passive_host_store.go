@@ -37,6 +37,21 @@ type rootPassiveHostStore struct {
 	*repairValidatorFileOwner
 	approval rootPassiveHostApproval
 	key      string
+	custody  *bootstrapChainReadinessState
+}
+
+// The host journal cannot authorize an effect after original preparation loses
+// its borrowed physical markers, even when their replacement bytes match.
+func (self *rootPassiveHostStore) validateOwner() error {
+	if err := self.custody.checkpoint(context.Background()); err != nil {
+		return err
+	}
+	return self.repairValidatorFileOwner.validateOwner()
+}
+
+// The host store owns the borrowed preparation until its own effects finish.
+func (self *rootPassiveHostStore) close() error {
+	return errors.Join(self.repairValidatorFileOwner.close(), self.custody.close())
 }
 
 func (self rootPassiveHostRecord) validate(approval rootPassiveHostApproval, key string) error {
@@ -71,20 +86,23 @@ func (self rootPassiveHostRecord) validate(approval rootPassiveHostApproval, key
 	return nil
 }
 
-func openRootPassiveHostStore(ctx context.Context, approval rootPassiveHostApproval, key string, create bool, now time.Time, custody bootstrapChainReadinessState, policyHash string) (*rootPassiveHostStore, error) {
+func openRootPassiveHostStore(ctx context.Context, approval rootPassiveHostApproval, key string, create bool, now time.Time, custody *bootstrapChainReadinessState, policyHash string) (*rootPassiveHostStore, error) {
 	if now.IsZero() {
 		return nil, errors.New("passive host clock unavailable")
 	}
 	if err := approval.validate(key); err != nil {
 		return nil, err
 	}
+	if err := custody.checkpoint(ctx); err != nil {
+		return nil, err
+	}
 	owner, err := openRepairValidatorFileOwner(ctx, approval.Plan.StatePath, rootObjectHash(approval)+" "+key+"\n", create)
 	if err != nil {
 		return nil, err
 	}
-	self := &rootPassiveHostStore{repairValidatorFileOwner: owner, approval: approval, key: key}
+	self := &rootPassiveHostStore{repairValidatorFileOwner: owner, approval: approval, key: key, custody: custody}
 	if create {
-		err = self.save(rootPassiveHostRecord{Schema: rootPassiveHostSchema, Approval: approval, PublicKey: key, Custody: custody, PolicyHash: policyHash, HighWaterAt: now, Status: "claimed"})
+		err = self.save(rootPassiveHostRecord{Schema: rootPassiveHostSchema, Approval: approval, PublicKey: key, Custody: *custody, PolicyHash: policyHash, HighWaterAt: now, Status: "claimed"})
 	} else {
 		var record rootPassiveHostRecord
 		record, err = self.load(ctx)
@@ -114,7 +132,7 @@ func (self *rootPassiveHostStore) load(ctx context.Context) (rootPassiveHostReco
 		return record, err
 	}
 	self.expectedHash = monitorReadDigest(raw)
-	return record, nil
+	return record, self.validateOwner()
 }
 
 func (self *rootPassiveHostStore) save(record rootPassiveHostRecord) error {
@@ -136,5 +154,5 @@ func (self *rootPassiveHostStore) save(record rootPassiveHostRecord) error {
 		return self.poisoned
 	}
 	self.expectedHash = monitorReadDigest(raw)
-	return nil
+	return self.validateOwner()
 }

@@ -134,6 +134,10 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 			fmt.Fprintln(stderr, "trim plan metadata/action:", err)
 			return 2
 		}
+		if err := retained.checkpoint(ctx); err != nil {
+			fmt.Fprintln(stderr, "trim plan original custody changed:", err)
+			return 3
+		}
 		if err := encoder.Encode(config); err != nil {
 			fmt.Fprintln(stderr, "trim plan output:", err)
 			return 1

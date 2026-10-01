@@ -70,7 +70,7 @@ func runBootstrapSuccessorSafeReviewCommand(ctx context.Context, args []string, 
 	}
 	result, err := buildBootstrapSuccessorSafeReview(ctx, plan, record, request, planFileReference{Path: *safeRequestPath, Sha256: requestHash}, rawArchive)
 	if err == nil {
-		err = reader.checkpoint("review-ready")
+		err = errors.Join(reader.checkpoint("review-ready"), retained.checkpoint(ctx))
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, "successor Safe review remains unresolved:", err)

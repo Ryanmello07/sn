@@ -83,6 +83,7 @@ func runBootstrapSuccessorPreparationCommand(ctx context.Context, args []string,
 	}()
 	if preview {
 		signingBytes, err := plan.signingBytes()
+		err = errors.Join(err, retained.checkpoint(ctx))
 		if err == nil {
 			err = json.NewEncoder(stdout).Encode(bootstrapSuccessorPreparationPreview{Schema: "urnetwork-mainnet-successor-preparation-preview-v1",
 				Plan: plan, PlanHash: plan.hash(), SigningBytes: "0x" + hex.EncodeToString(signingBytes)})
@@ -111,6 +112,10 @@ func runBootstrapSuccessorPreparationCommand(ctx context.Context, args []string,
 		fmt.Fprintln(stderr, "successor preparation independent approval:", err)
 		return 2
 	}
+	if err := retained.checkpoint(ctx); err != nil {
+		fmt.Fprintln(stderr, "successor preparation original custody changed:", err)
+		return 1
+	}
 	store, err = openBootstrapSuccessorPreparationStore(ctx, plan, approval, command == "contract-successor-prepare", nil)
 	if err != nil {
 		fmt.Fprintln(stderr, "successor preparation local custody unresolved; preserve its fixed files:", err)
@@ -122,6 +127,10 @@ func runBootstrapSuccessorPreparationCommand(ctx context.Context, args []string,
 		PlanHash: plan.hash(), ApprovalHash: rootObjectHash(approval), RecordHash: record.ContentHash, PhysicalRoot: plan.Root,
 		ProposedBudget: plan.Proposal.Budget, RetainedOriginalActions: uint8(len(plan.Proposal.AdoptedActions)),
 		PreparationApprovalVerified: true, LocalPreparationComplete: true}
+	if err := retained.checkpoint(ctx); err != nil {
+		fmt.Fprintln(stderr, "successor preparation original custody changed:", err)
+		return 1
+	}
 	if err := json.NewEncoder(stdout).Encode(result); err != nil {
 		fmt.Fprintln(stderr, "successor preparation output failed; resume retained local custody:", err)
 		return 1

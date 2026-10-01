@@ -239,7 +239,7 @@ func runBootstrapContractSuccessorCommand(ctx context.Context, args []string, st
 		return 1
 	}
 	proposal, inspectErr := inspectBootstrapContractSuccessor(ctx, preparation.Contracts, preparation.Plan.Config.Contracts.Path, request, requestHash)
-	err = errors.Join(inspectErr, retained.close())
+	err = errors.Join(inspectErr, retained.checkpoint(ctx), retained.close())
 	if err != nil {
 		fmt.Fprintln(stderr, "contract successor original progress unresolved; preserve original journals:", err)
 		return 1

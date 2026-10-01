@@ -5,9 +5,6 @@ package main
 import (
 	"context"
 	"errors"
-	"io"
-	"os"
-	"syscall"
 )
 
 // These seals identify the actual validated children, including original signed
@@ -21,7 +18,58 @@ type bootstrapChainReadinessState struct {
 	ContractTransactionHash string `json:"contract_transaction_hash,omitempty"`
 	RootExtrinsicHash       string `json:"root_extrinsic_hash,omitempty"`
 	RootStrategy            string `json:"root_strategy,omitempty"`
-	locks                   []*os.File
+	locks                   []*bootstrapContractReadinessMarker
+	journals                []bootstrapReadinessJournal
+	failed                  error
+	closed                  bool
+}
+
+// Original journals are immutable while their markers are borrowed. Their
+// exact bytes include signed intent, counters and any original completion.
+type bootstrapReadinessJournal struct {
+	path   string
+	digest string
+	limit  int
+}
+
+// A canceled read remains retryable. Observed custody loss poisons this owner,
+// even if another actor restores the original inode or bytes afterward.
+func (self *bootstrapChainReadinessState) checkpoint(ctx context.Context) error {
+	if self == nil || self.closed || len(self.locks) == 0 || len(self.locks) != len(self.journals) {
+		return errors.New("bootstrap readiness original custody is absent or closed")
+	}
+	if self.failed != nil {
+		return self.failed
+	}
+	if ctx == nil {
+		return errors.New("bootstrap readiness context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	fail := func(err error) error {
+		self.failed = errors.Join(errRpcIntegrity, errors.New("bootstrap readiness original custody changed; retain original intent and reconcile custody"), err)
+		return self.failed
+	}
+	for i, journal := range self.journals {
+		if err := self.locks[i].checkpoint(); err != nil {
+			return fail(err)
+		}
+		_, digest, err := readBootstrapRootFile(ctx, journal.path, journal.limit)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		if err != nil || digest != journal.digest {
+			return fail(errors.Join(errors.New("bootstrap readiness completed original journal changed or disappeared"), err))
+		}
+	}
+	// The last journal read must not hide a changed earlier marker.
+	for _, lock := range self.locks {
+		if err := lock.checkpoint(); err != nil {
+			return fail(err)
+		}
+	}
+	return ctx.Err()
 }
 
 // Legacy observations require real custody. Passive observations identify the
@@ -38,9 +86,13 @@ func (self bootstrapChainReadinessState) validRootSeals() bool {
 
 // Release only locks opened by this read. No retained marker is removed.
 func (self *bootstrapChainReadinessState) close() error {
+	if self == nil || self.closed {
+		return nil
+	}
+	self.closed = true
 	var result error
 	for i := len(self.locks) - 1; i >= 0; i-- {
-		result = errors.Join(result, self.locks[i].Close())
+		result = errors.Join(result, self.locks[i].close())
 	}
 	self.locks = nil
 	return result
@@ -80,23 +132,11 @@ func openBootstrapChainReadinessState(ctx context.Context, preparation bootstrap
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		fd, err := syscall.Open(path+".lock", syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+		lock, err := openBootstrapContractReadinessMarker(path, markers[i])
 		if err != nil {
-			return nil, err
+			return nil, errors.Join(errors.New("bootstrap readiness requires complete original markers without an active custody owner"), err)
 		}
-		lock := os.NewFile(uintptr(fd), path+".lock")
 		self.locks = append(self.locks, lock)
-		info, err := lock.Stat()
-		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-			return nil, errors.Join(errors.New("bootstrap readiness requires private regular retained markers"), err)
-		}
-		if err := syscall.Flock(fd, syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
-			return nil, errors.Join(errors.New("bootstrap readiness conflicts with an active custody owner"), err)
-		}
-		raw, err := io.ReadAll(io.LimitReader(lock, int64(len(markers[i])+1)))
-		if err != nil || string(raw) != markers[i] {
-			return nil, errors.Join(errors.New("bootstrap readiness marker is incomplete or belongs to another accepted preparation"), err)
-		}
 	}
 	var chain bootstrapChainRecord
 	var contracts evmActionRecord
@@ -109,40 +149,50 @@ func openBootstrapChainReadinessState(ctx context.Context, preparation bootstrap
 		destinations = destinations[:3]
 	}
 	for i, destination := range destinations {
-		raw, _, err := readBootstrapRootFile(ctx, paths[i], limits[i])
-		if err != nil {
+		raw, digest, err := readBootstrapRootFile(ctx, paths[i], limits[i])
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
+		}
+		if err != nil {
+			return nil, errors.Join(errRpcIntegrity, errors.New("bootstrap readiness completed original journal is unavailable"), err)
 		}
 		if err := decodePlanJson(raw, destination); err != nil {
-			return nil, err
+			return nil, errors.Join(errRpcIntegrity, err)
 		}
+		self.journals = append(self.journals, bootstrapReadinessJournal{path: paths[i], digest: digest, limit: limits[i]})
 	}
 	if preparation.Root.PassiveService != nil {
 		if err := errors.Join(chain.validate(preparation.Plan), contracts.validate(preparation.Contracts.Config), root.validate(preparation.Root)); err != nil {
-			return nil, err
+			return nil, errors.Join(errRpcIntegrity, err)
 		}
-		if chain.Phase != "prepared" || root.Phase != "passive-service-retained" || chain.RootExtrinsicHash != "" ||
+		if chain.Phase != "prepared" || root.Phase != "passive-service-retained" {
+			return nil, errors.New("bootstrap readiness preparation is incomplete; resume its original owner")
+		}
+		if chain.RootExtrinsicHash != "" ||
 			chain.ContractTransactionHash != "" && chain.ContractTransactionHash != contracts.TransactionHash {
-			return nil, errors.New("passive readiness requires complete preparation without native root liabilities")
+			return nil, errors.Join(errRpcIntegrity, errors.New("passive readiness requires complete preparation without native root liabilities"))
 		}
 		self.PreparationHash, self.ContractsHash, self.RootProgressHash = chain.ContentHash, contracts.ContentHash, root.ContentHash
 		self.RootServiceHash, self.ContractTransactionHash = preparation.Root.serviceHash(), contracts.TransactionHash
 		self.RootStrategy = rootPassiveStrategy
-		return self, ctx.Err()
+		return self, self.checkpoint(ctx)
 	}
 	if err := errors.Join(chain.validate(preparation.Plan), contracts.validate(preparation.Contracts.Config), root.validate(preparation.Root),
 		custody.validate(service.CustodyTrust), retainedService.validate(service)); err != nil {
-		return nil, err
+		return nil, errors.Join(errRpcIntegrity, err)
 	}
-	if chain.Phase != "prepared" || root.Phase != "service-retained" && root.Phase != "signature-retained" || custody.Packet.ContentHash != service.Packet.ContentHash ||
+	if chain.Phase != "prepared" || root.Phase != "service-retained" && root.Phase != "signature-retained" {
+		return nil, errors.New("bootstrap readiness preparation is incomplete; resume its original owner")
+	}
+	if custody.Packet.ContentHash != service.Packet.ContentHash ||
 		chain.ContractTransactionHash != "" && chain.ContractTransactionHash != contracts.TransactionHash ||
 		chain.RootExtrinsicHash != "" && chain.RootExtrinsicHash != custody.ExtrinsicHash ||
 		root.SignatureHash != "" && root.SignatureHash != custody.ExtrinsicHash ||
 		retainedService.Action.Signature != "" && custody.Signature != "" && retainedService.Action.Signature != custody.Signature {
-		return nil, errors.New("bootstrap readiness requires complete original custody and consistent retained signature lineage")
+		return nil, errors.Join(errRpcIntegrity, errors.New("bootstrap readiness requires complete original custody and consistent retained signature lineage"))
 	}
 	self.PreparationHash, self.ContractsHash, self.RootProgressHash = chain.ContentHash, contracts.ContentHash, root.ContentHash
 	self.RootCustodyHash, self.RootServiceHash = custody.ContentHash, retainedService.ContentHash
 	self.ContractTransactionHash, self.RootExtrinsicHash = contracts.TransactionHash, custody.ExtrinsicHash
-	return self, ctx.Err()
+	return self, self.checkpoint(ctx)
 }

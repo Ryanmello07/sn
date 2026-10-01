@@ -221,8 +221,8 @@ func (self *rootPassiveHostFixture) store() *rootPassiveHostStore {
 	if err != nil {
 		self.t.Fatal(err)
 	}
-	defer custody.close()
-	store, err := openRootPassiveHostStore(self.t.Context(), self.approval, self.key, false, self.now, *custody, rootObjectHash(self.chain.root.plan.PassiveService.Policy))
+	self.t.Cleanup(func() { custody.close() })
+	store, err := openRootPassiveHostStore(self.t.Context(), self.approval, self.key, false, self.now, custody, rootObjectHash(self.chain.root.plan.PassiveService.Policy))
 	if err != nil {
 		self.t.Fatal(err)
 	}

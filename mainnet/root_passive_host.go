@@ -164,7 +164,19 @@ func (self rootPassiveHostRecord) result() rootPassiveHostResult {
 	return rootPassiveHostResult{Schema: rootPassiveHostSchema, Status: self.Status, RecordHash: self.ContentHash, Installed: self.Installed, StartConsumed: !self.StartAt.IsZero(), Generation: self.Generation, Observation: self.Observation, Disposition: disposition}
 }
 
+// A failed custody check cannot publish an unsaved installation or invocation
+// acknowledgment. The consumed-start flag remains conservative and unchanged.
+func (self *rootPassiveHostResult) refuseCustody(err error) {
+	if errors.Is(err, errRpcIntegrity) {
+		self.Status = "original-custody-integrity-failure"
+		self.RecordHash, self.Installed, self.CurrentProcessRunning = "", false, false
+		self.Generation, self.Observation = nil, nil
+		self.Disposition = "Original preparation custody changed. Preserve original approvals, signed intent and the host journal, including every consumed start, and reconcile custody before another operation."
+	}
+}
+
 func advanceRootPassiveHost(ctx context.Context, store *rootPassiveHostStore, host *rootPassiveHost, preparation bootstrapChainPreparation, operation string, now func() time.Time) (result rootPassiveHostResult, resultErr error) {
+	defer func() { result.refuseCustody(resultErr) }()
 	record, err := store.load(ctx)
 	if err != nil {
 		return result, err
@@ -217,7 +229,7 @@ func advanceRootPassiveHost(ctx context.Context, store *rootPassiveHostStore, ho
 		if err := rootPassiveHostWindow(ctx, p, record.HighWaterAt, now(), nil); err != nil {
 			return finish("approval-window-closed", err)
 		}
-		if err := control.validate(); err != nil {
+		if err := errors.Join(store.validateOwner(), control.validate()); err != nil {
 			return finish("source-refused", err)
 		}
 		if err := host.files.installFile(ctx, p.Unit, p.render(), 0644, host.gid); err != nil {
@@ -310,6 +322,9 @@ func advanceRootPassiveHost(ctx context.Context, store *rootPassiveHostStore, ho
 	if err != nil || monotonic == 0 {
 		return finish("source-refused", errors.Join(errors.New("passive host monotonic clock unavailable"), err))
 	}
+	if err := store.validateOwner(); err != nil {
+		return record.result(), err
+	}
 	record.StartAt = now()
 	record.HighWaterAt = record.StartAt
 	record.StartMonotonicUsec = monotonic
@@ -330,7 +345,7 @@ func advanceRootPassiveHost(ctx context.Context, store *rootPassiveHostStore, ho
 	if err != nil {
 		return finish("uncertain-consumed-start", err)
 	}
-	if err := rootPassiveHostWindow(ctx, p, record.HighWaterAt, now(), record.StartObservation); err != nil {
+	if err := errors.Join(store.validateOwner(), control.validate(), rootPassiveHostWindow(ctx, p, record.HighWaterAt, now(), record.StartObservation)); err != nil {
 		return finish("uncertain-consumed-start", err)
 	}
 	if err := h.start(ctx, host.profile(p)); err != nil {

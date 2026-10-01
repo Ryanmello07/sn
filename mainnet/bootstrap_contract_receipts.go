@@ -190,6 +190,9 @@ func (self *bootstrapContractReceiptScope) checkpoint(ctx context.Context) error
 	if ctx == nil || self == nil || self.closed || self.chain == nil || len(self.records) != 8 || len(self.plans) != 8 || len(self.locks) != 8 {
 		return errors.New("contract receipt scope is absent or closed")
 	}
+	if err := self.retained.checkpoint(ctx); err != nil {
+		return err
+	}
 	declaration, err := loadBootstrapContractRolePlan(ctx, self.preparation.Plan.ConfigPath)
 	if err != nil || declaration.ContentHash != self.declaration.ContentHash {
 		return errors.Join(errors.New("contract receipt signed declarations changed during admission"), err)
@@ -207,7 +210,7 @@ func (self *bootstrapContractReceiptScope) checkpoint(ctx context.Context) error
 			return errors.Join(errors.New("contract receipt original custody changed during admission"), err)
 		}
 	}
-	return ctx.Err()
+	return self.retained.checkpoint(ctx)
 }
 
 // A later head need not equal the snapshot. Every exact retained inclusion and

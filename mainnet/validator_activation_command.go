@@ -20,7 +20,7 @@ func runValidatorActivationCommand(ctx context.Context, args []string, stdout, s
 
 // Tests may supply a synthetic owner. Public callers can select only the fixed
 // production adapter, with exact independently signed current-policy acceptance.
-func runValidatorActivationCommandWithHost(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, host *validatorActivationHost, authority validatorActivationAuthority) int {
+func runValidatorActivationCommandWithHost(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, host *validatorActivationHost, authority validatorActivationAuthority) (resultCode int) {
 	if ctx == nil || ctx.Err() != nil || now == nil || host == nil || host.host == nil || runtime.GOOS != "linux" || uint32(os.Geteuid()) != host.host.rootUid || len(args) == 0 {
 		fmt.Fprintln(stderr, "validator activation requires joined Linux host custody and an explicit operation")
 		return 2
@@ -68,6 +68,13 @@ func runValidatorActivationCommandWithHost(ctx context.Context, args []string, s
 		fmt.Fprintln(stderr, err)
 		return 3
 	}
+	var custody *bootstrapChainReadinessState
+	defer func() {
+		if err := custody.close(); err != nil {
+			fmt.Fprintln(stderr, err)
+			resultCode = 3
+		}
+	}()
 	if operation == "claim" {
 		if err := validatorActivationWindow(ctx, approval.Plan, approval.Plan.ValidFrom, now(), nil); err != nil {
 			fmt.Fprintln(stderr, err)
@@ -75,11 +82,7 @@ func runValidatorActivationCommandWithHost(ctx context.Context, args []string, s
 		}
 		retained, err := loadValidatorActivationPreparation(ctx, approval)
 		if err == nil {
-			var custody *bootstrapChainReadinessState
 			custody, err = openBootstrapChainReadinessState(ctx, retained)
-			if err == nil {
-				err = custody.close()
-			}
 		}
 		if err != nil {
 			fmt.Fprintln(stderr, "validator activation requires retained original custody:", err)
@@ -118,6 +121,12 @@ func runValidatorActivationCommandWithHost(ctx context.Context, args []string, s
 		err = errors.Join(err, current.close())
 	}
 	err = errors.Join(err, store.close())
+	if custody != nil {
+		if custodyErr := custody.checkpoint(ctx); custodyErr != nil {
+			fmt.Fprintln(stderr, errors.Join(err, custodyErr))
+			return 3
+		}
+	}
 	if result.Schema != "" {
 		err = errors.Join(err, json.NewEncoder(stdout).Encode(result))
 	}

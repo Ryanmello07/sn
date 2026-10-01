@@ -79,7 +79,7 @@ func runRootPassiveHostCommandWithHost(ctx context.Context, args []string, stdou
 			return 3
 		}
 	}
-	store, err := openRootPassiveHostStore(ctx, approval, *key, operation == "claim", now(), *custody, rootObjectHash(preparation.Root.PassiveService.Policy))
+	store, err := openRootPassiveHostStore(ctx, approval, *key, operation == "claim", now(), custody, rootObjectHash(preparation.Root.PassiveService.Policy))
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 3
@@ -92,7 +92,11 @@ func runRootPassiveHostCommandWithHost(ctx context.Context, args []string, stdou
 	} else {
 		result, err = advanceRootPassiveHost(ctx, store, host, preparation, operation, now)
 	}
-	err = errors.Join(err, store.close())
+	err = errors.Join(err, store.validateOwner(), store.close())
+	result.refuseCustody(err)
+	if err != nil {
+		result.CurrentProcessRunning = false
+	}
 	if result.Schema != "" {
 		err = errors.Join(err, json.NewEncoder(stdout).Encode(result))
 	}

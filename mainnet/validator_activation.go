@@ -394,7 +394,7 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 				return finish("partial", err)
 			}
 			if current != nil {
-				if err := current.retained.Approval.window(ctx, record.HighWaterAt, now()); err != nil {
+				if err := errors.Join(current.checkpoint(ctx, store, record, now()), current.retained.Approval.window(ctx, record.HighWaterAt, now())); err != nil {
 					unit.Status = "uncertain-consumed-start"
 					return finish("partial", err)
 				}
@@ -407,6 +407,12 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 			if err != nil || !repairValidatorRunning(profile, manager, manager.Generation) || manager.Generation.StartedUsec < monotonic {
 				unit.Status = "uncertain-consumed-start"
 				return finish("partial", errors.Join(errors.New("validator activation start lacks an attributable invocation"), err))
+			}
+			if current != nil {
+				if err := current.checkpoint(ctx, store, record, now()); err != nil {
+					unit.Status = "uncertain-consumed-start"
+					return finish("partial", err)
+				}
 			}
 			generation := manager.Generation
 			unit.Generation, unit.Status = &generation, "waiting-progress"
