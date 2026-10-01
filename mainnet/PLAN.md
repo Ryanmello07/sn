@@ -8,7 +8,7 @@ services. Its hash must never be accepted as executable authority. The separate
 plan/apply/resume` with its own schema, exact approved packet and durable owners;
 it does not execute this review graph or complete the chain bootstrap.
 
-Before the owned mainnet route and independent genesis approval are available:
+Before an exact observation and separately declared target identity are available:
 
 ```sh
 sn-mainnet plan --outline > bootstrap-outline.json
@@ -16,9 +16,10 @@ sn-mainnet plan --outline > bootstrap-outline.json
 
 The outline has `status: unbound_outline`, no bound network or block, no content
 seal and all requirements marked `missing`. It keeps the work visible without
-relabeling the current Snow testnet EVM945 observation as mainnet evidence.
+relabeling the historical Snow testnet EVM945 observation as mainnet evidence.
 
-After obtaining the actual independently approved mainnet identity:
+For an exact bound review, supply the intended mainnet identity separately
+from the snapshot:
 
 ```sh
 sn-mainnet plan --config /secure/ur-mainnet/plan-config.json > blocked-plan.json
@@ -53,6 +54,13 @@ runtime/mapping files cannot be substituted. The source lock is the existing
 `source-lock` JSON. The config's network is separately supplied, never copied
 or defaulted by the planner from either file. EVM945 and mismatching genesis
 are refused. The plan remains blocked even when the expected identity matches.
+A declared review target is not independent network approval: `owned-rpc` and
+`runtime-authority` remain missing unless separate review evidence is supplied,
+and supplied files still remain unvalidated. The
+[October 1 unsigned preparation](evidence/public-unsigned-preparation-20261001.md)
+uses the previously declared mainnet target and a fresh Rao archive capture
+without inventing approval. Signing and execution still require independent
+network/runtime/source authority and all separate phase gates.
 
 The release-input JSON binds both internal seals and all runtime artifacts:
 
