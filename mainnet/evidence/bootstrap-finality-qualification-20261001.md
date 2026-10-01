@@ -144,7 +144,9 @@ consensus or storage proofs, independently approved current chain/runtime
 authority, external signer/host custody, live restart/upgrade acceptance, applied
 10/90 economics or service activation.
 
-The selected release at SN `bab49e1c` / server `a3e2e668` predates both production
-corrections and the server `64cde171` source. A new exact composed build,
-source/image inventory, independent release qualification and deployment approval
-remain required. No live signing, submission, deployment or service start occurred.
+The earlier release at SN `bab49e1c` / server `a3e2e668` predates both production
+corrections and the server `64cde171` source. The
+[composed baseline](release-28ebfced-serverac86-20261001.md) now binds
+SN `28ebfced` / server `ac86855d` with matching local source/image repeats.
+Independent release qualification and deployment approval remain required.
+No live signing, submission, deployment or service start occurred.
