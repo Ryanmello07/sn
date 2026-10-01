@@ -204,7 +204,7 @@ func inspectBootstrapContractInstallationAt(ctx context.Context, owner *bootstra
 	if err != nil {
 		return result, err
 	}
-	currentContracts, err := chain.chain.client.observeValidatorActivationContracts(ctx, chain.plans, mapping)
+	currentContracts, err := chain.chain.client.observeBootstrapContractInstallationContracts(ctx, chain.plans, chain.records, mapping)
 	if err != nil {
 		return result, err
 	}
@@ -248,4 +248,14 @@ func inspectBootstrapContractInstallationAt(ctx context.Context, owner *bootstra
 		InstallationComplete: true}
 	result.ContentHash = rootObjectHash(result)
 	return result, nil
+}
+
+// Only the reauthenticated original proxy receipt fixes epoch zero. Neither the
+// constructor's placeholder, anchor block nor a later observed clock can renew it.
+func (self *rpcClient) observeBootstrapContractInstallationContracts(ctx context.Context, plans []evmCreatePlan, records []evmActionRecord, mapping finalizedMapping) ([]validatorActivationContractObservation, error) {
+	if len(plans) != 8 || len(records) != 8 || records[4].Receipt == nil || records[4].Receipt.BlockNumber == 0 ||
+		records[4].Receipt.ContractAddress != plans[4].Address.Hex() || records[4].Receipt.BlockNumber > mapping.EvmHeader.Number {
+		return nil, errors.New("installation current policy lacks its original proxy inclusion")
+	}
+	return self.observeValidatorActivationContractsWithPolicyBlock(ctx, plans, mapping, records[4].Receipt.BlockNumber)
 }

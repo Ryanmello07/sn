@@ -194,6 +194,12 @@ canonical/ancestry and live custody check closes the readback. The typed
 to select this same boundary for its other checks; a JSON report is not a
 capability or a replacement for fresh producer execution.
 
+The current initial-policy effective block must still equal the original proxy
+CREATE receipt's exact EVM block. Head advancement and later Safe activity cannot
+reset that epoch clock. The [clock qualification](evidence/installation-policy-clock-qualification-20261001.md)
+covers changed getter replies and actual storage rewritten after the anchor;
+these current field reads retain their owned-RPC trust boundary.
+
 The `urnetwork-mainnet-bootstrap-contract-installation-v1` result includes a
 stable `installation_identity_hash` over original preparation/contract/execution
 authority, eight original custody seals and the exact terminal event/receipt.
