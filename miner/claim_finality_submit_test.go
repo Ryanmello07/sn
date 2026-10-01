@@ -3,6 +3,7 @@ package miner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -13,12 +14,21 @@ import (
 // owner must independently close its actual receipt before persisting success.
 func TestClaimClockFreshSubmitClosesFinalityBeforePublication(t *testing.T) {
 	for _, regress := range []bool{false, true} {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
 		fixture := newClaimClockTestRPC(t, func(fixture *claimClockTestRPC) {
 			fixture.finalized = 95
 			fixture.entry = &ClaimQueueEntry{Epoch: 70, Status: "submitting", Attempts: 1}
+			tags := 0
 			fixture.reply = func(_ context.Context, method string, params []json.RawMessage, result any) (any, error) {
 				if regress && method == "eth_getBlockByNumber" && string(params[0]) == `"0x5a"` {
 					fixture.finalized = 70
+				}
+				if method == "eth_getBlockByNumber" && string(params[0]) == `"finalized"` {
+					tags++
+					if regress && tags == 3 {
+						cancel()
+					}
 				}
 				return result, nil
 			}
@@ -26,9 +36,9 @@ func TestClaimClockFreshSubmitClosesFinalityBeforePublication(t *testing.T) {
 		store := newClaimQueueTestStore(t, fixture.cfg.StateDir)
 		queue := &ClaimQueue{Schema: "urnetwork-provider-claim-queue-v1", LastDiscovered: 70, Entries: map[string]*ClaimQueueEntry{"70": fixture.entry}}
 		admission := &claimAdmission{}
-		err := submitClaimDirect(t.Context(), fixture.cfg, fakeClaimAPI{result: fixture.claim}, fixture.entry, store, queue, admission)
+		err := submitClaimDirect(ctx, fixture.cfg, fakeClaimAPI{result: fixture.claim}, fixture.entry, store, queue, admission)
 		if regress {
-			if err == nil || fixture.entry.FinalizedBlock != 0 || !strings.Contains(err.Error(), "not finalized") {
+			if err == nil || fixture.entry.FinalizedBlock != 0 || !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "not finalized") {
 				t.Fatalf("fresh claim published finality95→70 receipt90: entry=%+v error=%v", fixture.entry, err)
 			}
 		} else if err != nil || fixture.entry.FinalizedBlock != 90 || fixture.entry.ReceiptLogsHash == "" {

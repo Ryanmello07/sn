@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"net"
 	"strings"
 	"time"
 
@@ -266,28 +268,88 @@ func waitMined(ctx context.Context, client *ethclient.Client, txHash common.Hash
 	}
 }
 
-// waitFinalized waits for the standard finalized tag to cover the receipt and
-// then re-reads the inclusion height to prove the receipt's block is canonical.
+// waitFinalized closes both the canonical receipt and the actual finalized
+// frontier. Transient reads retry within the original deadline; only a decoded
+// mismatched identity is evidence that the original block changed.
 // A timeout is deliberately ambiguous and callers must not blindly retry the
 // same intent/nonce.
 func waitFinalized(ctx context.Context, client *ethclient.Client, receipt *types.Receipt) error {
 	if receipt == nil || receipt.BlockNumber == nil || !receipt.BlockNumber.IsUint64() || receipt.BlockNumber.Sign() <= 0 || receipt.BlockHash == (common.Hash{}) {
 		return errors.New("cannot finalize an incomplete receipt")
 	}
-	if client == nil {
+	if ctx == nil || client == nil {
 		return errors.New("EVM finality reader is unavailable")
 	}
 	for {
-		head, err := ReadEVMBlockIdentity(ctx, client, big.NewInt(int64(rpc.FinalizedBlockNumber)))
-		if err == nil && head.Number >= receipt.BlockNumber.Uint64() {
+		ready, err := func() (bool, error) {
+			head, err := ReadEVMBlockIdentity(ctx, client, big.NewInt(int64(rpc.FinalizedBlockNumber)))
+			if err != nil {
+				return false, fmt.Errorf("read finalized EVM head: %w", err)
+			}
+			if head.Number < receipt.BlockNumber.Uint64() {
+				return false, nil
+			}
 			canonical, canonicalErr := ReadEVMBlockIdentity(ctx, client, receipt.BlockNumber)
 			if canonicalErr != nil {
-				return fmt.Errorf("read canonical inclusion block %s: %w", receipt.BlockNumber, canonicalErr)
+				return false, fmt.Errorf("read canonical inclusion block %s: %w", receipt.BlockNumber, canonicalErr)
 			}
 			if canonical.Hash != receipt.BlockHash {
-				return fmt.Errorf("tx inclusion block %s was reorged: receipt %s canonical %s", receipt.BlockNumber, receipt.BlockHash, canonical.Hash)
+				return false, fmt.Errorf("tx inclusion block %s was reorged: receipt %s canonical %s", receipt.BlockNumber, receipt.BlockHash, canonical.Hash)
 			}
+			closing, err := ReadEVMBlockIdentity(ctx, client, big.NewInt(int64(rpc.FinalizedBlockNumber)))
+			if err != nil {
+				return false, fmt.Errorf("read closing finalized EVM head: %w", err)
+			}
+			if closing.Number < head.Number {
+				// A stale frontier supplies no finality, but is not a proven
+				// canonical replacement. Keep the original receipt pending.
+				return false, nil
+			}
+			// Advancing finality may have a different hash. Both its canonical
+			// identity and the original witness must still agree with the Rpc.
+			witnesses := []EVMBlockIdentity{closing}
+			if closing != head {
+				witnesses = append(witnesses, head)
+			}
+			for _, witness := range witnesses {
+				observed, err := ReadEVMBlockIdentity(ctx, client, new(big.Int).SetUint64(witness.Number))
+				if err != nil {
+					return false, fmt.Errorf("read canonical finalized witness %d: %w", witness.Number, err)
+				}
+				if observed != witness {
+					return false, fmt.Errorf("finalized EVM witness %d is not canonical at its original hash", witness.Number)
+				}
+			}
+			canonical, err = ReadEVMBlockIdentity(ctx, client, receipt.BlockNumber)
+			if err != nil {
+				return false, fmt.Errorf("read closing canonical inclusion block %s: %w", receipt.BlockNumber, err)
+			}
+			if canonical.Hash != receipt.BlockHash {
+				return false, fmt.Errorf("tx inclusion block %s was reorged during finality observation", receipt.BlockNumber)
+			}
+			return true, nil
+		}()
+		if ctx.Err() != nil {
+			return fmt.Errorf("tx %s mined but finality was not observed: %w (do not retry without checking its nonce and chain state)", receipt.TxHash, ctx.Err())
+		}
+		if ready {
 			return nil
+		}
+		if err != nil {
+			var transport net.Error
+			var remote rpc.Error
+			var httpError rpc.HTTPError
+			retry := errors.As(err, &transport) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+			if errors.As(err, &remote) {
+				code := remote.ErrorCode()
+				retry = code == -32603 || code >= -32099 && code <= -32000
+			}
+			if errors.As(err, &httpError) {
+				retry = httpError.StatusCode == 429 || httpError.StatusCode >= 500
+			}
+			if !retry {
+				return err
+			}
 		}
 		select {
 		case <-ctx.Done():

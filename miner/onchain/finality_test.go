@@ -69,7 +69,7 @@ func TestWaitFinalizedChecksCanonicalReceiptBlock(t *testing.T) {
 	var selectors []string
 	client := blockIdentityTestClient(t, func(selector string) any {
 		selectors = append(selectors, selector)
-		if selector == "finalized" {
+		if selector == "finalized" || selector == "0xc" {
 			return finalized
 		}
 		return canonical
@@ -78,7 +78,7 @@ func TestWaitFinalizedChecksCanonicalReceiptBlock(t *testing.T) {
 	if err := waitFinalized(context.Background(), client, receipt); err != nil {
 		t.Fatal(err)
 	}
-	if len(selectors) != 2 || selectors[0] != "finalized" || selectors[1] != "0xa" {
+	if strings.Join(selectors, ",") != "finalized,0xa,finalized,0xc,0xa" {
 		t.Fatalf("finality selectors = %v", selectors)
 	}
 }
