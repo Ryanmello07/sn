@@ -123,6 +123,14 @@ committed-control-prefix subgate. Unsealed ledger/intent state, live worker
 attestation, signer custody, applied weights influence and launch authority
 remain open; neither validator is authorized to start publicly.
 
+The [independently qualified unsealed inventory](evidence/validator-unsealed-inventory-qualification-20261001.md)
+extends that read-only observation to the actual signed ledger tails,
+unfinished trails, import receipts and protected empty intent boundary.
+Selected normal/race and privileged UID tests pass, and seven causal guards
+refuse their intended mutations. Nonempty intent graphs and historical chain
+binding of tails are still explicit gates; this increment does not authorize
+either validator to start.
+
 The [qualified validator current-evidence increment](evidence/validator-current-evidence-qualification-20260930.md)
 authenticates original dual-signed operator activation and fresh nonce-bound
 client-key responses, and checks the approved five-contract graph at one

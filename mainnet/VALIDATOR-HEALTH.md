@@ -110,9 +110,14 @@ completed earlier role. Re-observation proves every retained prior prefix is
 an actual replayed ancestor; it cannot shorten history or reset observation,
 generation or protocol clocks. Original approved checkpoints remain separate.
 
-This closes the **committed control-prefix** subgate only. It does not inspect
-unsealed ledger tails, unfinished trails or steering-intent liability, and the
-standard progress format still provides no per-operator live-worker attestation.
+This closes the **committed control-prefix** subgate. The later
+[bounded unsealed inventory](evidence/validator-unsealed-inventory-qualification-20261001.md)
+also snapshots the actual signed ledger tails, unfinished trails, original
+nonlegacy import receipts and an absent or canonically empty intent boundary
+under service-UID custody. It retains that liability separately from committed
+history. Nonempty intent graphs and complete historical chain binding of tails
+remain unverified; the standard progress format still provides no per-operator
+live-worker attestation.
 The result explicitly retains `UNSEALED_LEDGER_AND_INTENT_STATE_UNVERIFIED`,
 `PER_OPERATOR_LIVE_WORKER_UNVERIFIED`, `GLOBAL_SIGNER_CUSTODY_UNVERIFIED`,
 `APPLIED_WEIGHTS_INFLUENCE_UNVERIFIED` and

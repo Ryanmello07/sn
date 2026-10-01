@@ -937,6 +937,12 @@ read-only subgate. Unsealed ledger/intent state, live worker attestation,
 global signer custody, applied weights influence and signed launch authority
 remain mandatory before public start.
 
+The [qualified bounded unsealed inventory](evidence/validator-unsealed-inventory-qualification-20261001.md)
+adds service-owned signed ledger tails, unfinished trails and the empty intent
+boundary to durable read-only custody. It does not yet authenticate nonempty
+intent graphs or every tail's historical chain boundary, so those launch gates
+remain open.
+
 ### Root validator on netuid 0
 
 The signer-free `root-preview` and bounded `root-monitor` commands now supply a
