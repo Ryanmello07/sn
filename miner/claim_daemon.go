@@ -18,7 +18,6 @@ import (
 	"syscall"
 	"time"
 
-	substrateTypes "github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -456,34 +455,6 @@ func claimCalldata(claim *sdk.SnPoolClaimResult) (common.Address, []byte, error)
 	return common.HexToAddress(vault), calldata, nil
 }
 
-// Native header numbers retain their Substrate wire grammar. Ethereum quantity
-// admission must not reinterpret a native finality checkpoint as another domain.
-func finalizedNumber(ctx context.Context, client *ethclient.Client) (uint64, error) {
-	if ctx == nil || client == nil {
-		return 0, errors.New("native finalized header reader is unavailable")
-	}
-	var hash common.Hash
-	if err := client.Client().CallContext(ctx, &hash, "chain_getFinalizedHead"); err != nil {
-		return 0, err
-	}
-	if hash == (common.Hash{}) {
-		return 0, errors.New("native finalized head is empty")
-	}
-	var header struct {
-		Number *substrateTypes.BlockNumber `json:"number"`
-	}
-	if err := client.Client().CallContext(ctx, &header, "chain_getHeader", hash.Hex()); err != nil {
-		return 0, err
-	}
-	if header.Number == nil {
-		return 0, errors.New("native finalized header number is absent")
-	}
-	if err := ctx.Err(); err != nil {
-		return 0, err
-	}
-	return uint64(*header.Number), nil
-}
-
 func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *sdk.SnPoolClaimResult) (bool, error) {
 	if claim == nil {
 		return false, errors.New("claim response is nil")
@@ -529,7 +500,7 @@ func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *s
 			failures = append(failures, fmt.Errorf("%s: chain id %v, want %d: %v", endpoint, chainID, claim.ChainId, idErr))
 			continue
 		}
-		finalized, finalErr := finalizedNumber(ctx, client)
+		finalized, finalErr := claimFinalizedEVM(ctx, client)
 		if finalErr != nil {
 			client.Close()
 			failures = append(failures, fmt.Errorf("%s: finalized head: %w", endpoint, finalErr))
@@ -537,7 +508,7 @@ func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *s
 		}
 		address := common.HexToAddress(vault)
 		entitlementData := stSettlementVault.PackEntitlement(epoch, noID)
-		entitlementOut, entitlementErr := client.CallContract(ctx, ethereum.CallMsg{To: &address, Data: entitlementData}, new(big.Int).SetUint64(finalized))
+		entitlementOut, entitlementErr := client.CallContract(ctx, ethereum.CallMsg{To: &address, Data: entitlementData}, new(big.Int).SetUint64(finalized.Number))
 		if entitlementErr != nil {
 			client.Close()
 			failures = append(failures, fmt.Errorf("%s: entitlement: %w", endpoint, entitlementErr))
@@ -550,11 +521,19 @@ func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *s
 			continue
 		}
 		if entitlement.PayoutRoot != advertisedRoot {
+			if err := closeClaimFinalizedEVM(ctx, client, finalized); err != nil {
+				client.Close()
+				failures = append(failures, err)
+				continue
+			}
 			client.Close()
 			failures = append(failures, &claimArtifactRootMismatchError{epoch: claim.Epoch, advertised: advertisedRoot, finalized: entitlement.PayoutRoot})
 			continue
 		}
-		out, callErr := client.CallContract(ctx, ethereum.CallMsg{To: &address, Data: data}, new(big.Int).SetUint64(finalized))
+		out, callErr := client.CallContract(ctx, ethereum.CallMsg{To: &address, Data: data}, new(big.Int).SetUint64(finalized.Number))
+		if callErr == nil {
+			callErr = closeClaimFinalizedEVM(ctx, client, finalized)
+		}
 		client.Close()
 		if callErr != nil {
 			failures = append(failures, fmt.Errorf("%s: leafClaimed: %w", endpoint, callErr))
@@ -586,29 +565,39 @@ func rebroadcastSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *typ
 			failures = append(failures, fmt.Errorf("%s chain identity mismatch", endpoint))
 			continue
 		}
-		finalized, finalErr := finalizedNumber(ctx, client)
+		finalized, finalErr := claimFinalizedEVM(ctx, client)
 		if finalErr != nil {
 			client.Close()
 			failures = append(failures, finalErr)
 			continue
 		}
-		nonce, nonceErr := client.NonceAt(ctx, from, new(big.Int).SetUint64(finalized))
+		nonce, nonceErr := client.NonceAt(ctx, from, new(big.Int).SetUint64(finalized.Number))
 		if nonceErr != nil {
 			client.Close()
 			failures = append(failures, nonceErr)
 			continue
 		}
 		if nonce > tx.Nonce() {
+			if err := closeClaimFinalizedEVM(ctx, client, finalized); err != nil {
+				client.Close()
+				failures = append(failures, err)
+				continue
+			}
 			client.Close()
 			return true, nil
 		}
 		// The vault checks the saved epoch, proof and claim status at the
 		// finalized head. A now-invalid intent remains a signed liability;
 		// it is never converted into a new transaction or erased.
-		_, preflightErr := client.CallContract(ctx, ethereum.CallMsg{From: from, To: tx.To(), Gas: tx.Gas(), GasPrice: tx.GasPrice(), Value: tx.Value(), Data: tx.Data()}, new(big.Int).SetUint64(finalized))
+		_, preflightErr := client.CallContract(ctx, ethereum.CallMsg{From: from, To: tx.To(), Gas: tx.Gas(), GasPrice: tx.GasPrice(), Value: tx.Value(), Data: tx.Data()}, new(big.Int).SetUint64(finalized.Number))
 		if preflightErr != nil {
 			client.Close()
 			failures = append(failures, fmt.Errorf("finalized exact-claim preflight: %w", preflightErr))
+			continue
+		}
+		if err := closeClaimFinalizedEVM(ctx, client, finalized); err != nil {
+			client.Close()
+			failures = append(failures, err)
 			continue
 		}
 		sendErr := client.SendTransaction(ctx, tx)
@@ -755,10 +744,17 @@ func submitClaimDirect(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI
 	if err != nil {
 		return err
 	}
-	if err := verifySignedClaimReceipt(tx, intent, from, receipt); err != nil {
+	reconciled, err := finalizedClaimReceipt(ctx, cfg, entry.TxHash, tx.ChainId())
+	if err != nil {
 		return err
 	}
-	return recordFinalizedClaimReceipt(entry, receipt)
+	if receipt == nil || receipt.BlockNumber == nil || receipt.TxHash != reconciled.TxHash || receipt.BlockHash != reconciled.BlockHash || receipt.BlockNumber.Cmp(reconciled.BlockNumber) != 0 || receipt.TransactionIndex != reconciled.TransactionIndex {
+		return errors.New("claim finality reconciliation changed the original receipt identity")
+	}
+	if err := verifySignedClaimReceipt(tx, intent, from, reconciled); err != nil {
+		return err
+	}
+	return recordFinalizedClaimReceipt(entry, reconciled)
 }
 
 // recordFinalizedClaimReceipt binds a successful queue entry to the exact
@@ -823,8 +819,8 @@ func finalizedClaimReceipt(ctx context.Context, cfg *ClaimDaemonConfig, txHash s
 			failures = append(failures, errors.New("claim receipt has an incomplete or mismatched identity"))
 			continue
 		}
-		finalized, finalErr := finalizedNumber(ctx, client)
-		if finalErr != nil || finalized < receipt.BlockNumber.Uint64() {
+		finalized, finalErr := claimFinalizedEVM(ctx, client)
+		if finalErr != nil || finalized.Number < receipt.BlockNumber.Uint64() {
 			client.Close()
 			if finalErr != nil {
 				failures = append(failures, finalErr)
@@ -834,14 +830,28 @@ func finalizedClaimReceipt(ctx context.Context, cfg *ClaimDaemonConfig, txHash s
 			continue
 		}
 		block, blockErr := onchain.ReadEVMBlockIdentity(ctx, client, receipt.BlockNumber)
-		client.Close()
 		if blockErr != nil {
+			client.Close()
 			failures = append(failures, blockErr)
 			continue
 		}
 		if block.Hash != receipt.BlockHash {
+			client.Close()
 			return nil, fmt.Errorf("claim transaction %s receipt is not canonical", txHash)
 		}
+		// Close both inclusion and the separate finalized witness. A later
+		// head may advance, but neither original coordinate may be replaced.
+		if err := checkClaimEVMCanonical(ctx, client, block); err != nil {
+			client.Close()
+			failures = append(failures, err)
+			continue
+		}
+		if err := closeClaimFinalizedEVM(ctx, client, finalized); err != nil {
+			client.Close()
+			failures = append(failures, err)
+			continue
+		}
+		client.Close()
 		return receipt, nil
 	}
 	if len(failures) == 0 {

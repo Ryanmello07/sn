@@ -3,7 +3,6 @@ package miner
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -11,9 +10,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 // Each test owns its transport; no global client override affects other work.
@@ -132,78 +128,6 @@ func TestEthRpcRejectsAmbiguousOrMalformedResults(t *testing.T) {
 		})}
 		if value, err := ethRpcHexResultWithClient(t.Context(), client, "http://rpc.example", "eth_chainId", []any{}); value != "" || err == nil {
 			t.Fatalf("ambiguous result admitted: response=%s value=%q error=%v", raw, value, err)
-		}
-	}
-}
-
-// Native finality uses the same exact hash for the subsequent header read.
-func nativeFinalizedRpcClient(t *testing.T, head any, header any, headerReads *atomic.Int64) *ethclient.Client {
-	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		var call struct {
-			Id     json.RawMessage   `json:"id"`
-			Method string            `json:"method"`
-			Params []json.RawMessage `json:"params"`
-		}
-		if err := json.NewDecoder(request.Body).Decode(&call); err != nil {
-			t.Error(err)
-			return
-		}
-		result := head
-		if call.Method == "chain_getHeader" {
-			headerReads.Add(1)
-			var hash string
-			if len(call.Params) != 1 || json.Unmarshal(call.Params[0], &hash) != nil || hash != head {
-				t.Errorf("native read changed its finalized hash: %s", call.Params)
-			}
-			result = header
-		} else if call.Method != "chain_getFinalizedHead" {
-			t.Errorf("unexpected native read %s", call.Method)
-		}
-		_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": call.Id, "result": result})
-	}))
-	t.Cleanup(server.Close)
-	client, err := ethclient.Dial(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
-	return client
-}
-
-// Ethereum's canonical quantity rule must not reject the Substrate decoder's
-// established padded or bare hexadecimal header numbers.
-func TestNativeFinalizedHeaderRetainsNativeNumberGrammar(t *testing.T) {
-	for _, number := range []string{"0x10", "0x0010", "10"} {
-		var reads atomic.Int64
-		client := nativeFinalizedRpcClient(t, common.Hash{7}.Hex(), map[string]any{"number": number}, &reads)
-		value, err := finalizedNumber(t.Context(), client)
-		if err != nil || value != 16 || reads.Load() != 1 {
-			t.Fatalf("native header inherited EVM quantity grammar: number=%s value=%d reads=%d error=%v", number, value, reads.Load(), err)
-		}
-	}
-}
-
-// An absent finalized hash must not become a latest-header request.
-func TestNativeFinalizedHeaderRejectsMissingHash(t *testing.T) {
-	for _, head := range []any{nil, "", "0x01", common.Hash{}.Hex()} {
-		var reads atomic.Int64
-		client := nativeFinalizedRpcClient(t, head, map[string]any{"number": "0x10"}, &reads)
-		value, err := finalizedNumber(t.Context(), client)
-		if err == nil || value != 0 || reads.Load() != 0 {
-			t.Fatalf("missing native hash admitted a header: head=%v value=%d reads=%d error=%v", head, value, reads.Load(), err)
-		}
-	}
-}
-
-// Malformed or absent native headers cannot fabricate a finalized height.
-func TestNativeFinalizedHeaderRejectsMissingOrOverflowedNumber(t *testing.T) {
-	for _, header := range []any{nil, map[string]any{}, map[string]any{"number": nil}, map[string]any{"number": "0x100000000"}, map[string]any{"number": "not-hex"}} {
-		var reads atomic.Int64
-		client := nativeFinalizedRpcClient(t, common.Hash{7}.Hex(), header, &reads)
-		value, err := finalizedNumber(t.Context(), client)
-		if err == nil || value != 0 || reads.Load() != 1 {
-			t.Fatalf("missing native number admitted: header=%v value=%d reads=%d error=%v", header, value, reads.Load(), err)
 		}
 	}
 }

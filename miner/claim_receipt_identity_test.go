@@ -34,15 +34,16 @@ func claimReceiptIdentityTestRPC(t *testing.T, receipt *types.Receipt, canonical
 			result = "0x3b1"
 		case "eth_getTransactionReceipt":
 			result = receipt
-		case "chain_getFinalizedHead":
-			result = common.HexToHash("0x42").Hex()
-		case "chain_getHeader":
-			result = map[string]any{"number": "0xc"}
 		case "eth_getBlockByNumber":
-			if len(call.Params) != 2 || string(call.Params[0]) != `"0xa"` || string(call.Params[1]) != "false" {
+			if len(call.Params) != 2 || string(call.Params[1]) != "false" {
 				t.Errorf("canonical block parameters = %s", call.Params)
+			} else if string(call.Params[0]) == `"finalized"` || string(call.Params[0]) == `"0xc"` {
+				result = map[string]any{"number": "0xc", "hash": common.Hash{0x42}.Hex()}
+			} else if string(call.Params[0]) == `"0xa"` {
+				result = canonical
+			} else {
+				t.Errorf("unexpected canonical selector = %s", call.Params)
 			}
-			result = canonical
 		default:
 			t.Errorf("unexpected claim receipt method %s", call.Method)
 		}
