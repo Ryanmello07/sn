@@ -45,6 +45,29 @@ func validateBuildInfo(info *debug.BuildInfo, role buildRole, repo repositoryPin
 	return nil
 }
 
+// Migration catalogs span both the signal entry point and its separately named
+// implementations. Keep exact relative paths; fixtures never enter the release.
+func buildMigrationInputs(workspace string) (map[string]string, error) {
+	inputPathKVs := map[string]string{}
+	for _, pattern := range []string{"server/db_migration*.go", "server/monitor/*migration*.go"} {
+		matches, err := filepath.Glob(filepath.Join(workspace, pattern))
+		if err != nil {
+			return nil, err
+		}
+		for _, path := range matches {
+			if strings.HasSuffix(path, "_test.go") {
+				continue
+			}
+			relative, err := filepath.Rel(workspace, path)
+			if err != nil {
+				return nil, err
+			}
+			inputPathKVs[strings.ReplaceAll(filepath.ToSlash(relative), "/", "-")] = relative
+		}
+	}
+	return inputPathKVs, nil
+}
+
 // No overwrite, implicit repository discovery, compiler download or network
 // application is available. Failure retains logs and never emits a sealed result.
 func executeBuild(ctx context.Context, config buildConfig, rawConfig []byte) error {
@@ -145,20 +168,12 @@ func executeBuild(ctx context.Context, config buildConfig, rawConfig []byte) err
 			}
 		}
 	}
-	for _, pattern := range []string{"server/db_migration*.go", "server/monitor/signal_migrations*.go"} {
-		matches, err := filepath.Glob(filepath.Join(config.Workspace, pattern))
-		if err != nil {
-			return err
-		}
-		for _, path := range matches {
-			if !strings.HasSuffix(path, "_test.go") {
-				relative, err := filepath.Rel(config.Workspace, path)
-				if err != nil {
-					return err
-				}
-				inputs[strings.ReplaceAll(filepath.ToSlash(relative), "/", "-")] = relative
-			}
-		}
+	migrationInputPathKVs, err := buildMigrationInputs(config.Workspace)
+	if err != nil {
+		return err
+	}
+	for id, path := range migrationInputPathKVs {
+		inputs[id] = path
 	}
 	for _, role := range manifest.Roles {
 		if role.Image {
