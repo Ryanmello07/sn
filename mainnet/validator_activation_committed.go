@@ -14,7 +14,8 @@ import (
 )
 
 // Earlier completed roles remain durable when a later source is unavailable.
-// This checkpoint covers committed cuts, never unsealed work or live workers.
+// Committed cuts and the separately scoped unsealed inventory remain distinct.
+// Neither is a live worker or complete steering-intent attestation.
 type validatorActivationCommittedCheckpoint struct {
 	ObservedAt time.Time                                         `json:"observed_at"`
 	Proof      validator.ProductionBootstrapCommittedObservation `json:"proof"`
@@ -41,6 +42,11 @@ func (self validatorActivationCommittedCheckpoint) validate(plan validatorActiva
 		if prefix.NoId == 0 || i > 0 && prefix.NoId <= p.Prefixes[i-1].NoId || !rootCanonicalHash(prefix.ActivationHash) || !planSha256(prefix.HistoryHash) || !planSha256(prefix.PriorEmaHash) || prefix.Generation == 0 ||
 			prefix.LastSequence == 0 && prefix.Root != "0x"+strings.Repeat("0", 64) || prefix.LastSequence > 0 && !rootCanonicalHash(prefix.Root) {
 			return errors.New("validator committed checkpoint operator scope differs")
+		}
+	}
+	if p.Unsealed != nil {
+		if err := p.Unsealed.Validate(p.Prefixes); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -108,6 +114,17 @@ func retainValidatorActivationCommittedCheckpoint(ctx context.Context, store *va
 			old := prior.Proof.Prefixes[i]
 			if prefix.NoId != old.NoId || prefix.ActivationHash != old.ActivationHash || prefix.HistoryHash != old.HistoryHash || prefix.LastSequence < old.LastSequence || prefix.Generation < old.Generation || prefix.Epoch < old.Epoch || prefix.LastSequence == old.LastSequence && prefix.Root != old.Root || prefix.Epoch == old.Epoch && prefix.PriorEmaHash != old.PriorEmaHash {
 				return errors.New("validator committed operator checkpoint regressed")
+			}
+		}
+		if prior.Proof.Unsealed != nil {
+			if p.Unsealed == nil || prior.Proof.Unsealed.IntentFilePresent && (!p.Unsealed.IntentFilePresent || p.Unsealed.IntentFileHash != prior.Proof.Unsealed.IntentFileHash) {
+				return errors.New("validator committed checkpoint discarded retained unsealed liability")
+			}
+			for i, ledger := range p.Unsealed.Ledgers {
+				old := prior.Proof.Unsealed.Ledgers[i]
+				if ledger.NoId != old.NoId || ledger.Head.LastSequence < old.Head.LastSequence || ledger.Head.RecordBytes < old.Head.RecordBytes || ledger.Head.TrailCount < old.Head.TrailCount || ledger.Head.LastSequence == old.Head.LastSequence && (ledger.Head != old.Head || ledger.PendingTrails != old.PendingTrails || ledger.PendingHash != old.PendingHash) {
+					return errors.New("validator unsealed ledger checkpoint regressed")
+				}
 			}
 		}
 	} else if p.PreviousHash != "" {

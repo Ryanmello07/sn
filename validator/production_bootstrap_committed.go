@@ -24,28 +24,30 @@ const productionBootstrapCommittedMaximumControl = 16 * 1024 * 1024
 const productionBootstrapCommittedMaximumObjects = 8192
 
 // This is a closed census of committed controls and their real proof tapes.
-// It makes no claim about unsealed ledger tails, intents or worker liveness.
+// The separate unsealed inventory retains liabilities without promoting them
+// to canonical historical proofs, intent graph authority or worker liveness.
 type ProductionBootstrapCommittedObservation struct {
-	Schema             string                              `json:"schema"`
-	ConfigHash         string                              `json:"config_hash"`
-	PolicyHash         string                              `json:"policy_hash"`
-	ClientDomainHash   string                              `json:"client_domain_hash"`
-	ServiceUid         uint32                              `json:"service_uid"`
-	Native             ProductionBootstrapNativePoint      `json:"native"`
-	EvmBlock           uint64                              `json:"evm_block"`
-	EvmHash            string                              `json:"evm_hash"`
-	ApprovedPrefixHash string                              `json:"approved_prefix_hash"`
-	PreviousHash       string                              `json:"previous_checkpoint_hash,omitempty"`
-	CensusHash         string                              `json:"source_census_hash"`
-	SourceCount        uint64                              `json:"source_count"`
-	Prefixes           []ProductionBootstrapOperatorPrefix `json:"prefixes"`
-	HistoricalSources  bool                                `json:"historical_sources_authenticated"`
-	ContentHash        string                              `json:"content_hash"`
+	Schema             string                                  `json:"schema"`
+	ConfigHash         string                                  `json:"config_hash"`
+	PolicyHash         string                                  `json:"policy_hash"`
+	ClientDomainHash   string                                  `json:"client_domain_hash"`
+	ServiceUid         uint32                                  `json:"service_uid"`
+	Native             ProductionBootstrapNativePoint          `json:"native"`
+	EvmBlock           uint64                                  `json:"evm_block"`
+	EvmHash            string                                  `json:"evm_hash"`
+	ApprovedPrefixHash string                                  `json:"approved_prefix_hash"`
+	PreviousHash       string                                  `json:"previous_checkpoint_hash,omitempty"`
+	CensusHash         string                                  `json:"source_census_hash"`
+	SourceCount        uint64                                  `json:"source_count"`
+	Prefixes           []ProductionBootstrapOperatorPrefix     `json:"prefixes"`
+	HistoricalSources  bool                                    `json:"historical_sources_authenticated"`
+	Unsealed           *ProductionBootstrapUnsealedObservation `json:"unsealed_inventory,omitempty"`
+	ContentHash        string                                  `json:"content_hash"`
 }
 
 // Borrows the exact approved config and current operator observation. The
 // mainnet caller obtains serviceUid from its original signed unit and scratch
-// from separate host custody. Only the fixed two history namespaces are read.
+// from separate host custody. Fixed history, ledger and intent names are read.
 // All source owners and real closes succeed before any projection escapes.
 func ObserveProductionBootstrapCommittedPrefix(ctx context.Context, path string, raw []byte, observed ProductionBootstrapObservation, approved ProductionBootstrapPrefixObservation, previous *ProductionBootstrapCommittedObservation, serviceUid uint32, scratch string) (result *ProductionBootstrapCommittedObservation, resultErr error) {
 	if ctx == nil || serviceUid == 0 {
@@ -66,8 +68,14 @@ func ObserveProductionBootstrapCommittedPrefix(ctx context.Context, path string,
 	if scratch == cfg.StateDir || strings.HasPrefix(scratch, cfg.StateDir+string(filepath.Separator)) || strings.HasPrefix(cfg.StateDir, scratch+string(filepath.Separator)) {
 		return nil, errors.New("committed prefix scratch overlaps producer state")
 	}
-	if err := checkProductionBootstrapStatePath(ctx, cfg.StateDir, serviceUid); err != nil {
-		return nil, err
+	paths := []string{cfg.StateDir}
+	for _, operator := range cfg.Operators {
+		paths = append(paths, operator.StateDir)
+	}
+	for _, path := range paths {
+		if err := checkProductionBootstrapStatePath(ctx, path, serviceUid); err != nil {
+			return nil, err
+		}
 	}
 	// Existing immutable readers retain both namespace descriptors and their
 	// complete census through all replay and historical reads. No chmod/chown.
@@ -78,7 +86,10 @@ func ObserveProductionBootstrapCommittedPrefix(ctx context.Context, path string,
 		return nil, err
 	}
 	defer func() {
-		resultErr = errors.Join(resultErr, history.close(), checkProductionBootstrapStatePath(context.WithoutCancel(ctx), cfg.StateDir, serviceUid))
+		resultErr = errors.Join(resultErr, history.close())
+		for _, path := range paths {
+			resultErr = errors.Join(resultErr, checkProductionBootstrapStatePath(context.WithoutCancel(ctx), path, serviceUid))
+		}
 		if resultErr != nil {
 			result = nil
 		}
@@ -101,6 +112,17 @@ func ObserveProductionBootstrapCommittedPrefix(ctx context.Context, path string,
 	if err != nil {
 		return nil, err
 	}
+	unsealed, liabilityOwner, err := readProductionBootstrapUnsealed(ctx, cfg, archive, result, previous, scratch, serviceUid, releaseMeasurementInputV2ReadHooks{})
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		resultErr = errors.Join(resultErr, liabilityOwner.close())
+		if resultErr != nil {
+			result = nil
+		}
+	}()
+	result.Unsealed = unsealed
 	// Pure transport retries keep the same completed replay, source bytes and
 	// held directory census. No timeout can freshen or discard a checkpoint.
 	err = retryProductionBootstrapPrefixRead(ctx, func(attempt context.Context) error {
@@ -123,7 +145,7 @@ func ObserveProductionBootstrapCommittedPrefix(ctx context.Context, path string,
 	if err != nil {
 		return nil, err
 	}
-	if err := history.check(); err != nil {
+	if err := errors.Join(history.check(), liabilityOwner.check()); err != nil {
 		return nil, err
 	}
 	result.HistoricalSources = true
