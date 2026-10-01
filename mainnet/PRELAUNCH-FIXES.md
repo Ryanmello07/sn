@@ -6,6 +6,24 @@ acceptance**. There is no R49 requirement or instruction to resume it. Mainnet
 hardening may proceed; launch readiness must be established on the selected
 production release. No mainnet deployment or spend is authorized by this tracker.
 
+**October 1 bootstrap finality closure (MG-04/MG-08/PH-04):** the
+[native observation and refreshed EVM admission corrections](evidence/bootstrap-finality-qualification-20261001.md)
+retain the authenticated opening finalized witness across historical selection
+and close finality after dependent runtime, census, readiness and admission reads.
+Canonical membership alone cannot preserve eligibility after finality regresses.
+The adjacent second EVM admission pass now closes its selected native/EVM mapping
+after account/contract reads and before send readiness. Late contradictions keep
+the original signed custody and consume no attempt; healthy advancement preserves
+the same transaction. Source `98df8b5f`, fixture successor `1d5ebe55`, and EVM
+successor `41f053ab` have separate exact evidence scopes. All 166 native and 52
+EVM selected normal roots pass; their race coverage combines disjoint 155+11 and
+45+7 collections, preserving both initial package timeouts as failed invocations.
+Vet and causal controls are complete; independent normal/race qualifications
+remain separately scoped. The receipts also preserve earlier fixture failures.
+The selected SN `bab49e1c` / server `a3e2e668` release predates these corrections. A fresh
+composed source/image release, independent current authority and live acceptance
+remain open.
+
 **October 1 installation clock continuity (MG-08):** the
 [qualified contract readback correction](evidence/installation-policy-clock-qualification-20261001.md)
 now binds the current coordinator epoch-zero effective block to the original

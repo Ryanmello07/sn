@@ -355,6 +355,21 @@ pending within the original deadline. MG-04/PH-04 stay open. The
 packages these corrections at exact SN `bab49e1c` / server `a3e2e668`; independent
 release qualification and live acceptance remain separate gates.
 
+The later [bootstrap finality correction](evidence/bootstrap-finality-qualification-20261001.md)
+at `98df8b5f` retains the original finalized witness through historical identity
+selection and closes dependent runtime, census, root, readiness and validator
+admission reads. Ordinary finality advancement preserves the selected snapshot;
+a regressed frontier or replaced witness refuses new evidence. The separate
+`41f053ab` successor closes the refreshed EVM admission pass after account and
+contract reads, before it can publish send readiness. Refusals retain the original
+signatures and nonces without consuming an attempt; recovery sends the same
+transaction once. Use these exact source corrections in the next composed build:
+the selected `bab49e1c`/`a3e2e668` release
+cannot attest them. The linked evidence distinguishes exact source qualifications,
+fixture corrections and disjoint passing race continuations from the preserved
+package timeouts. Owned-RPC assertions do not close independent chain/runtime
+authority or live activation gates.
+
 **Runtime continuity policy proposal — inspection boundary qualified.** The
 [signed compatibility envelope and inspector](RUNTIME-CONTINUITY-POLICY.md)
 bind original production-validator authority to a separate semantic verifier,
