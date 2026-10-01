@@ -184,13 +184,36 @@ performed that check. The distinct unsigned discovery-snapshot decoder accepts
 self-consistent observation hashes; bounding malformed SCALE allocations there
 remains a separate hardening item, not authority supplied by this transition.
 
-Author evidence is retained under
-`/mnt/data/sn-testnet/astra-owner-recycle-20261001/`. It includes the exact full
-official 470 metadata qualification, ordinary/race/vet logs and a causal
-readback-conflict counterfactual. Independent qualification remains separate.
-The SN `6c801a25` / server `720e7c61` release cannot cover this source; selecting it
-requires a successor release. No live owner signature, transaction or service
-was used to qualify this implementation.
+Qualification is sealed for SN `b38802668396bd6c8da40a425d97dc0c9450972b`, tree
+`893a78524dc60921bf2f5543e7e8a47e309cc2a8`, merged at `233ea2be` with unchanged Go
+source and module files. Both runs used server `a464bb3e`, whose tree matches
+server main `94229abb`, and the full retained official runtime 470 metadata.
+
+- [Author receipt](/mnt/data/sn-testnet/astra-owner-recycle-20261001/receipt.json),
+  SHA-256 `50a5c4c0536e799328de7c1f8550f76da234cbecf99408b08ca0b332962bcaa0`:
+  **29 selected roots passed normal and race**, zero skips; `go vet ./mainnet`
+  passed. Its verified [39-file manifest](/mnt/data/sn-testnet/astra-owner-recycle-20261001/SHA256SUMS)
+  has SHA-256 `6c0a9f28ee7330c5890fd6d2887379469d5c30e420f3e34dcf9e25051fd4e26b`.
+- [Independent Sol receipt](/mnt/data/sn-testnet/sol-owner-recycle-independent-20261001/receipt.json),
+  SHA-256 `d0bfb9e2dd844c564b04aa7a46d387586b1a368121fa790044aafe97ed3c6f17`:
+  **24 selected roots passed normal and race**, zero skips; `go vet ./mainnet`
+  passed. Its verified [24-file manifest](/mnt/data/sn-testnet/sol-owner-recycle-independent-20261001/SHA256SUMS)
+  has SHA-256 `5d0920a0975776fc1a936cbac978744c18ff83c336e465ba81e92d12b92d0eef`.
+
+The author controls remove the inclusion-state gate or restore decode-before-pin;
+each produces its intended failure in normal and race runs. Sol inspected the
+metadata control but did not rerun it. Earlier broader tests, their retained
+10-minute race timeout and completed recovery have separate source scopes; they
+do not establish a full-suite pass on `b3880266`.
+
+These receipts qualify the offline source and synthetic custody/recovery paths.
+No live signing, submission or service effects were exercised.
+They do not qualify a physical Ledger, metadata proof, global owner-key exclusion,
+source-to-Wasm exception, live signing/submission, service rollout, current Recycle
+state or the native 10/90 outcome. `activation_ready` remains false and the
+discovery decoder resource gap above remains open. The SN `6c801a25` / server
+`720e7c61` release retains its original scope; this source needs a separately
+qualified successor release.
 
 [setter]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/admin-utils/src/lib.rs#L1572-L1605
 [origin]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/utils/misc.rs#L10-L109

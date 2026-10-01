@@ -810,6 +810,10 @@ at finalized block 9,187,604; actual owner/device approval, transition and Recyc
 readback remain open. A successful mode transition alone never establishes the
 10% provider allocation or economic activation, and this source requires a
 successor to the retained SN `6c801a25` / server `720e7c61` release baseline.
+The implementation is merged at `233ea2be`; [sealed qualification](OWNER-RECYCLE-TRANSITION.md#qualification-scope)
+records 29 author and 24 independent Sol roots passing normal/race, zero skips,
+and mainnet vet passing on the exact `b3880266` source. This is offline source
+qualification; the live and economic gates above remain open.
 
 Release 1.0 explicitly rejected owner-directed burning as its head/tail steering strategy. The selected owner-recycle launch policy must therefore be encoded as an explicit economic-policy successor, with its activation and accounting independently verified. Preserve the independent-validator objective and signed weight caps: do not raise a cap, create arbitrary owner recipients, or displace validators merely to force a 90% weight destination. [Whitepaper, head/tail decision](../WHITEPAPER.md#138-headtail-split-θ-in-one-mechanism-chosen-not-two-mechanisms-not-owner-burn)
 

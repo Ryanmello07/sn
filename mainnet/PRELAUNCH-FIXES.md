@@ -227,6 +227,9 @@ subnet owner or Root, with per-subnet hyperparameter 24 rate limiting for the
 owner and the admin window for either origin. Separate approval, exact native
 Sr25519/Ed25519 request bytes, bounded inert Ledger framing, durable public
 signature custody and canonical receipt/inclusion-block readback are implemented.
+Merged source `233ea2be` has [sealed offline qualification](OWNER-RECYCLE-TRANSITION.md#qualification-scope)
+at `b3880266`: 29 author and 24 independent Sol roots pass normal/race with zero
+skips, and both mainnet vet runs pass. This qualifies the selected offline paths.
 No signing, broadcast or service command is installed. Independent runtime/device
 and custody qualification, an actual approved transition and finalized Recycle
 state, followed by native 10/90 outcome evidence, remain required. This source
