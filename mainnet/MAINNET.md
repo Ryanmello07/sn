@@ -351,8 +351,8 @@ recovery. The [shared onchain correction](evidence/shared-evm-finality-closure-2
 at `222e45a8` also closes finalized and canonical receipt witnesses for the
 shared send path; transient errors, missing blocks and regressed finality stay
 pending within the original deadline. MG-04/PH-04 stay open. The
-[selected successor release](evidence/release-689938d6-server6c39-20261001.md)
-packages these corrections at exact SN `689938d6` / server `6c39d307`; independent
+[selected successor release](evidence/release-bab49e1c-servera3e2-20261001.md)
+packages these corrections at exact SN `bab49e1c` / server `a3e2e668`; independent
 release qualification and live acceptance remain separate gates.
 
 **Runtime continuity policy proposal — inspection boundary qualified.** The
@@ -1525,7 +1525,7 @@ Later reporting commit `7c5d964f` is distinct from the actual build source.
 Independent reproduction, production policy/configuration, migration/restore,
 rollout, publication identity and release approval remain open.
 
-The [selected finality/migration successor](evidence/release-689938d6-server6c39-20261001.md)
+The [historical finality/migration successor](evidence/release-689938d6-server6c39-20261001.md)
 binds exact SN `689938d6` / server `6c39d307`, with the same effective Connect/SDK
 pins. It includes complete-header authority, claim/shared EVM finality,
 installation clock continuity, historical native capture and monitor changes.
@@ -1540,11 +1540,22 @@ predecessor releases retain their original bytes and separate scope. Independent
 compiler/build reproduction, production policy/configuration, migration/restore,
 rollout, publication identity and release approval remain open.
 
-The later metadata-decoder source `b9ee4c91`, shared HTTP/subscription successor
-`58852c47` and direct EVM HTTP successor `0dea3f26` change source outside that frozen
-`689938d6` release. Selecting this hardening requires
-a fresh exact-source build, dependency inventory and image qualification;
-the earlier reproducibility and image receipts retain their original scope.
+The [selected metadata/HTTP successor](evidence/release-bab49e1c-servera3e2-20261001.md)
+now packages metadata-decoder `b9ee4c91`, shared HTTP/subscription `58852c47`
+and direct EVM HTTP `0dea3f26` at frozen SN `bab49e1c`, paired with server
+`a3e2e668` and unchanged Connect/SDK pins. Two sequential source builds and
+separate initially empty image stores match all seventeen executables, ten
+bytecode outputs and eight OCI platform/configuration/archive identities.
+Both complete local source-to-image aggregates verify 342 input artifacts.
+All 95 builder/source-graph and thirteen server sampler roots pass normal/race,
+and their packages pass vet. The optional server sampler stays off without
+explicit bounded configuration. Its 61-file inventory repeats exactly, with
+twelve migration inputs and 751 catalogue entries retained but not applied.
+Full module-body qualification is incomplete for 363 SN and 372 server graph
+nodes. Independent provenance/build reproduction, actual role behavior,
+production configuration/policy, rollout, published identity and release
+approval remain open. Earlier receipts retain their original scope, and later
+reporting/authority documentation does not change this frozen binary source.
 
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
