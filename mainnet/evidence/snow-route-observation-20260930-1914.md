@@ -35,3 +35,7 @@ same 150-byte nginx response and SHA-256. Neither method returned chain data.
 The same two read-only methods at approximately **23:50 UTC** again returned
 HTTP 502 with the identical response body and SHA-256. Mainnet identity and
 sync state remain unobserved.
+
+At approximately **00:00 UTC on October 1**, both methods again returned HTTP
+502 with the identical 150-byte response and SHA-256. This still supplies no
+chain identity or synchronization evidence.
