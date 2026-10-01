@@ -1348,8 +1348,19 @@ bytes, including a full 16 MiB events field after hex expansion. Batches share
 that aggregate ceiling and must be split by the read owner if larger. Error
 statuses are closed without reading their bodies; complete framing, physical
 release, cancellation and exact response IDs precede any result publication.
-The change grants no retry authority to submissions. Separate EVM transports
-and aggregate process/host capacity remain outside this local bound.
+The change grants no retry authority to submissions.
+
+The [direct EVM HTTP successor](evidence/evm-http-response-admission-20261001.md)
+adds the same finite aggregate allowance to all seven direct miner and `stctl`
+dial sites. Its shared `evmrpc` owner bounds both encoded and expanded gzip bytes,
+validates complete response framing/IDs and closes the physical body before
+geth can publish results or drain a successful prefix. Error-status bodies are
+discarded without reading; their text cannot acknowledge a signed transaction.
+Read status retries remain with the existing finality owner, while redirects
+cannot replay signed POSTs. Original signed recovery history and exact replay
+authority remain unchanged. Validator, mainnet custom RPC and server receipt
+collection already use separate bounds; WebSocket/IPC, aggregate process memory
+and host capacity are not newly qualified by this change.
 
 The [public cross-endpoint readback](evidence/public-cross-endpoint-20261001.md)
 compares Rao archive and the public entrypoint at one pinned finalized block.
@@ -1529,8 +1540,8 @@ predecessor releases retain their original bytes and separate scope. Independent
 compiler/build reproduction, production policy/configuration, migration/restore,
 rollout, publication identity and release approval remain open.
 
-The later metadata-decoder source `b9ee4c91` and shared HTTP/subscription successor
-`58852c47` change the owned Substrate dependency and are outside that frozen
+The later metadata-decoder source `b9ee4c91`, shared HTTP/subscription successor
+`58852c47` and direct EVM HTTP successor `0dea3f26` change source outside that frozen
 `689938d6` release. Selecting this hardening requires
 a fresh exact-source build, dependency inventory and image qualification;
 the earlier reproducibility and image receipts retain their original scope.
