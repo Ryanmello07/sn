@@ -278,6 +278,12 @@ runtime version, metadata and `:code` hashes from Rao archive and the public
 entrypoint. This is corroboration across RPC routes, not independent GRANDPA,
 source/Wasm, custody or operator approval; MG-01 remains open.
 
+The [21:43 UTC dual-route recheck](evidence/public-dual-route-recheck-20261001.md)
+again observes the same mainnet genesis, EVM ID 964, runtime 470 and `:code`
+hash at finalized block 9,190,703 on both public routes. Rao's v471 release is
+still proposed; neither public route supplies independent finality or approval.
+MG-01 remains open for activation.
+
 MG-06 has a [pinned read-only recycle-mode observation](evidence/recycle-mode-observation-20261001.md): `RecycleOrBurn[25]` was absent at Rao archive finalized block 9,186,298, which the reviewed metadata interprets as the default `Burn`. The [later public readback](evidence/public-route-check-20261001-1124.md) also finds the key absent at block 9,187,604. Neither observation is independent state approval. The owner transition and finalized `Recycle` readback remain required before the 90% recycle policy can operate.
 
 The [offline owner recycle transition](OWNER-RECYCLE-TRANSITION.md) resolves the
