@@ -68,8 +68,17 @@ passes complete readback. The qualification audit names the terminal commands,
 root census, raw streams and causal assertions. Earlier diagnostic runs and
 the intermediate `a8e7885d` are not the final successor qualification.
 
-Independent qualification is a separate gate and is not asserted by the
-author receipt.
+Independent Sol qualification on exact `222e45a8` and server `6c39d307` also
+passes: 52 representative committed roots in normal mode, 53 roots under race
+including its separate 12-case control matrix, and build/vet for both packages.
+The matrix covers regressed and advancing finality, transient and null replies
+at all three read positions, persistent missing evidence, cancellation and
+actual inclusion replacement. Its archived physical source/module graph is
+unchanged after the tests. The separate report is
+`/mnt/data/sn-testnet/sol-shared-evm-finality-222e45a8/report.txt`, SHA-256
+`b6a912a3a9835f36800e9afd7faf314ccfe4f60a68d43e08a947f1d23bdca2a7`.
+The earlier independent baseline and intermediate `a8e7885d` null controls
+remain expected failures, not qualifications of those predecessors.
 
 ## Remaining launch gates
 
