@@ -3,13 +3,14 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 const evmActionStateSchema = "urnetwork-mainnet-evm-action-state-v1"
@@ -119,6 +120,11 @@ type evmActionStore struct {
 	predecessorHash string
 	path            string
 	lock            *os.File
+	directory       *os.File
+	root            bootstrapSuccessorRootIdentity
+	marker          string
+	complete        bool
+	retainedHash    string
 	syncDirectory   func(*os.File) error
 }
 
@@ -274,6 +280,22 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 		marker = rootObjectHash(struct{ ConfigHash, ActionId, PredecessorHash string }{ConfigHash: rootObjectHash(config), ActionId: config.Plan.Actions[actionIndex].Id, PredecessorHash: predecessorHash}) + "\n"
 	}
 	path := filepath.Join(config.Plan.RunDirectory, name)
+	root, err := bootstrapSuccessorPhysicalRoot(config.Plan.RunDirectory)
+	if err != nil {
+		return nil, err
+	}
+	directoryFd, err := unix.Open(config.Plan.RunDirectory, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	store := &evmActionStore{config: copyEvmPhaseConfig(config), actionIndex: actionIndex, predecessorHash: predecessorHash, path: path,
+		directory: os.NewFile(uintptr(directoryFd), config.Plan.RunDirectory), root: root}
+	success := false
+	defer func() {
+		if !success {
+			store.close()
+		}
+	}()
 	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
 	if create {
 		for _, name := range []string{path, path + ".lock"} {
@@ -283,30 +305,27 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 		}
 		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := syscall.Open(path+".lock", flags, 0600)
+	fd, err := unix.Openat(directoryFd, name+".lock", flags, 0600)
 	if err != nil {
 		return nil, err
 	}
-	store := &evmActionStore{config: copyEvmPhaseConfig(config), actionIndex: actionIndex, predecessorHash: predecessorHash, path: path, lock: os.NewFile(uintptr(fd), path+".lock")}
-	success := false
-	defer func() {
-		if !success {
-			store.close()
-		}
-	}()
-	info, err := store.lock.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	store.lock = os.NewFile(uintptr(fd), path+".lock")
+	if err := bootstrapSuccessorPrivateRegular(store.lock); err != nil {
 		return nil, errors.Join(errors.New("EVM marker is not a private regular file"), err)
 	}
 	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("EVM journal already has an owner"), err)
 	}
 	if create {
+		if err := store.checkpoint(); err != nil {
+			return nil, err
+		}
 		written, err := store.lock.WriteString(marker)
 		if written != len(marker) && err == nil {
 			err = io.ErrShortWrite
 		}
-		if err := errors.Join(err, store.lock.Sync(), store.syncParent()); err != nil {
+		store.marker = marker
+		if err := errors.Join(err, store.lock.Sync(), store.syncParent(), store.checkpoint()); err != nil {
 			return nil, err
 		}
 		if claimHook != nil {
@@ -320,6 +339,7 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 			return nil, err
 		}
 		if string(raw) == marker+bootstrapRootClaimComplete {
+			store.marker, store.complete = string(raw), true
 			if _, err := store.load(); err != nil {
 				return nil, err
 			}
@@ -329,6 +349,7 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 		if string(raw) != marker {
 			return nil, errors.New("EVM marker differs from independent phase approval")
 		}
+		store.marker = marker
 	}
 	record, err := store.load()
 	if errors.Is(err, os.ErrNotExist) {
@@ -345,11 +366,15 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 			return nil, err
 		}
 	}
+	if _, err := store.load(); err != nil {
+		return nil, err
+	}
 	written, err := store.lock.WriteAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
 	if written != len(bootstrapRootClaimComplete) && err == nil {
 		err = io.ErrShortWrite
 	}
-	if err := errors.Join(err, store.lock.Sync()); err != nil {
+	store.marker, store.complete = marker+bootstrapRootClaimComplete, true
+	if err := errors.Join(err, store.lock.Sync(), store.checkpoint()); err != nil {
 		return nil, err
 	}
 	success = true
@@ -358,21 +383,23 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 
 // Idempotent close releases the fence and disables all future reads and writes.
 func (self *evmActionStore) close() error {
-	if self == nil || self.lock == nil {
+	if self == nil {
 		return nil
 	}
-	err := self.lock.Close()
-	self.lock = nil
-	return err
+	var resultErr error
+	for _, file := range []*os.File{self.lock, self.directory} {
+		if file != nil {
+			resultErr = errors.Join(resultErr, file.Close())
+		}
+	}
+	self.lock, self.directory = nil, nil
+	return resultErr
 }
 
 // A malformed or missing completed journal is never reconstructed from a plan.
 func (self *evmActionStore) load() (evmActionRecord, error) {
 	var record evmActionRecord
-	if self.lock == nil {
-		return record, errors.New("EVM journal is closed")
-	}
-	raw, _, err := readBootstrapRootFile(context.Background(), self.path, 512*1024)
+	raw, err := self.readRecord()
 	if err != nil {
 		return record, err
 	}
@@ -382,58 +409,39 @@ func (self *evmActionStore) load() (evmActionRecord, error) {
 	if record.PredecessorHash != self.predecessorHash {
 		return record, errors.New("EVM journal reserve custody changed")
 	}
-	return record, record.validateForAction(self.config, self.actionIndex)
+	if err := record.validateForAction(self.config, self.actionIndex); err != nil {
+		return record, err
+	}
+	if self.retainedHash != "" && record.ContentHash != self.retainedHash {
+		return record, errors.New("EVM retained journal changed during ownership")
+	}
+	self.retainedHash = record.ContentHash
+	return record, nil
 }
 
 // Atomic rename is followed by directory sync before acknowledging custody.
 func (self *evmActionStore) save(record evmActionRecord) error {
-	if self.lock == nil {
-		return errors.New("EVM journal is closed")
-	}
 	if record.PredecessorHash != self.predecessorHash {
 		return errors.New("EVM publication changes reserve custody")
 	}
 	if err := record.validateForAction(self.config, self.actionIndex); err != nil {
 		return err
 	}
-	if info, err := os.Lstat(self.path); err == nil {
-		if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-			return errors.New("EVM journal destination is not a private regular file")
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
 	raw, err := json.Marshal(record)
 	if err != nil || len(raw) > 512*1024 {
 		return errors.Join(errors.New("EVM journal exceeds its bound"), err)
 	}
-	file, err := os.CreateTemp(self.config.Plan.RunDirectory, ".sn-mainnet-evm-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	written, err := file.Write(append(raw, '\n'))
-	if written != len(raw)+1 && err == nil {
-		err = io.ErrShortWrite
-	}
-	if err := errors.Join(err, file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(file.Name(), self.path); err != nil {
-		return err
-	}
-	return self.syncParent()
+	return self.publishRecord(record, append(raw, '\n'))
 }
 
 // Scoped fault injection exposes the durability boundary without time sleeps.
 func (self *evmActionStore) syncParent() error {
-	directory, err := os.Open(self.config.Plan.RunDirectory)
-	if err != nil {
-		return err
+	if self.directory == nil {
+		return errors.New("EVM journal directory is closed")
 	}
 	syncDirectory := self.syncDirectory
 	if syncDirectory == nil {
 		syncDirectory = (*os.File).Sync
 	}
-	return errors.Join(syncDirectory(directory), directory.Close())
+	return syncDirectory(self.directory)
 }
