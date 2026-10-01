@@ -169,6 +169,40 @@ func TestProductionBootstrapUnsealedIntentBoundary(t *testing.T) {
 	}
 }
 
+// Canonical encoding cannot turn occupied current or historical intent slots
+// into the supported empty boundary. Refusal precedes ledger copy/replay.
+func TestProductionBootstrapUnsealedRejectsCanonicalNonemptyIntent(t *testing.T) {
+	f, archive, current := productionBootstrapUnsealedTestFixture(t)
+	for _, file := range []steeringIntentFile{
+		{Schema: steeringIntentSchema, Current: &SteeringIntent{Schema: steeringIntentSchema, Status: "pending"}},
+		{Schema: steeringIntentSchema, Current: &SteeringIntent{Schema: steeringIntentSchema, Status: "applied"}},
+		{Schema: steeringIntentSchema, History: []SteeringIntent{{Schema: steeringIntentSchema, Status: "failed"}}},
+	} {
+		raw, err := marshalAttemptSettlementV2JSON(t.Context(), &file, f.options.Config.EvidenceV2.Bounds.IntentFileLimit(), true, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(f.options.Config.StateDir, "steering-intents.json"), raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		before, err := os.ReadDir(f.options.ScratchRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, owner, err := readProductionBootstrapUnsealed(t.Context(), f.options.Config, archive, current, nil, f.options.ScratchRoot, uint32(os.Geteuid()), releaseMeasurementInputV2ReadHooks{})
+		if owner != nil {
+			_ = owner.close()
+		}
+		if err == nil || got != nil || owner != nil || !strings.Contains(err.Error(), "nonempty or noncanonical steering intent liability") {
+			t.Fatal("canonical occupied intent escaped the empty-boundary guard", err)
+		}
+		after, err := os.ReadDir(f.options.ScratchRoot)
+		if err != nil || len(after) != len(before) {
+			t.Fatal("occupied intent reached ledger copying before refusal", err)
+		}
+	}
+}
+
 // Removing even an empty retained intent file cannot reset its durable
 // observed boundary to a pristine, never-observed state.
 func TestProductionBootstrapUnsealedIntentCannotDisappear(t *testing.T) {
@@ -415,15 +449,10 @@ func TestProductionBootstrapUnsealedSameBytesReplacement(t *testing.T) {
 	}
 }
 
-// Root provisions only this fixture; admission must read a genuinely foreign
-// service uid without chown, permissions repair or opening the source ledger.
-func TestProductionBootstrapUnsealedForeignUidReadOnly(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip("requires isolated root-owned fixture provisioning")
-	}
-	f, archive, current := productionBootstrapUnsealedTestFixture(t)
-	productionBootstrapUnsealedTestPending(t, f, 0)
-	const uid = uint32(65534)
+// Root provisions only synthetic fixture namespaces after their writer joins.
+// No production state or ancestor permission is changed by these tests.
+func productionBootstrapUnsealedTestChown(t *testing.T, f releaseArchiveV2TestFixture, uid uint32) []string {
+	t.Helper()
 	if err := f.startup.disk.close(); err != nil {
 		t.Fatal(err)
 	}
@@ -441,6 +470,19 @@ func TestProductionBootstrapUnsealedForeignUidReadOnly(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	return paths
+}
+
+// Root provisions only this fixture; admission must read a genuinely foreign
+// service uid without chown, permissions repair or opening the source ledger.
+func TestProductionBootstrapUnsealedForeignUidReadOnly(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("requires isolated root-owned fixture provisioning")
+	}
+	f, archive, current := productionBootstrapUnsealedTestFixture(t)
+	productionBootstrapUnsealedTestPending(t, f, 0)
+	const uid = uint32(65534)
+	paths := productionBootstrapUnsealedTestChown(t, f, uid)
 	got, owner, err := readProductionBootstrapUnsealed(t.Context(), f.options.Config, archive, current, nil, f.options.ScratchRoot, uid, releaseMeasurementInputV2ReadHooks{})
 	if err != nil {
 		t.Fatal(err)
@@ -461,6 +503,56 @@ func TestProductionBootstrapUnsealedForeignUidReadOnly(t *testing.T) {
 		}
 		if err := directory.close(); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+// A correct foreign service parent does not authorize an individual root-owned
+// intent/import leaf. Root's ability to read it must not bypass leaf custody.
+func TestProductionBootstrapUnsealedRejectsForeignUidLeaf(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("requires isolated root-owned fixture provisioning")
+	}
+	f, archive, current := productionBootstrapUnsealedTestFixture(t)
+	intentPath := filepath.Join(f.options.Config.StateDir, "steering-intents.json")
+	raw, err := marshalAttemptSettlementV2JSON(t.Context(), &steeringIntentFile{Schema: steeringIntentSchema}, f.options.Config.EvidenceV2.Bounds.IntentFileLimit(), true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(intentPath, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const uid = uint32(65534)
+	productionBootstrapUnsealedTestChown(t, f, uid)
+	if _, owner, err := readProductionBootstrapUnsealed(t.Context(), f.options.Config, archive, current, nil, f.options.ScratchRoot, uid, releaseMeasurementInputV2ReadHooks{}); err != nil {
+		t.Fatal("positive foreign-owner boundary", err)
+	} else if err := owner.close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{intentPath, filepath.Join(f.options.Config.Operators[0].StateDir, attemptLedgerImportName), filepath.Join(f.options.Config.Operators[0].StateDir, attemptLedgerReadyName)} {
+		if err := os.Chown(path, 0, -1); err != nil {
+			t.Fatal(err)
+		}
+		got, owner, readErr := readProductionBootstrapUnsealed(t.Context(), f.options.Config, archive, current, nil, f.options.ScratchRoot, uid, releaseMeasurementInputV2ReadHooks{})
+		if owner != nil {
+			_ = owner.close()
+		}
+		directory, err := openAttemptPrivateDirectory(filepath.Dir(path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		state, err := directory.stat(filepath.Base(path))
+		if err := errors.Join(err, directory.close()); err != nil {
+			t.Fatal(err)
+		}
+		if state.uid != 0 {
+			t.Fatal("read-only admission repaired the wrong leaf owner")
+		}
+		if err := os.Chown(path, int(uid), -1); err != nil {
+			t.Fatal(err)
+		}
+		if readErr == nil || got != nil || owner != nil || !strings.Contains(readErr.Error(), "unsealed source ownership") {
+			t.Fatal("foreign service directory hid an individual wrong-owner leaf", filepath.Base(path), readErr)
 		}
 	}
 }
