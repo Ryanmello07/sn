@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -334,13 +335,14 @@ func TestEvmHttpGzipWireBoundIncludesHeaders(t *testing.T) {
 
 // The explicit channel records the body read before the caller cancels.
 type httpTestBlockedBody struct {
-	ctx     context.Context
-	entered chan struct{}
-	closes  atomic.Int32
+	ctx         context.Context
+	entered     chan struct{}
+	enteredOnce sync.Once
+	closes      atomic.Int32
 }
 
 func (self *httpTestBlockedBody) Read([]byte) (int, error) {
-	close(self.entered)
+	self.enteredOnce.Do(func() { close(self.entered) })
 	<-self.ctx.Done()
 	return 0, self.ctx.Err()
 }

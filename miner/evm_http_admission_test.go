@@ -61,12 +61,12 @@ func TestEvmHttpMinerDialPathsRefuseOversizedIdentity(t *testing.T) {
 		}
 		server.Close()
 		if err == nil || calls.Load() != 1 {
-			t.Fatalf("%s advanced beyond an oversized chain identity: calls=%d error=%v", owner, calls.Load(), err)
+			t.Errorf("%s advanced beyond an oversized chain identity: calls=%d error=%v", owner, calls.Load(), err)
 		}
 		// Replay's existing identity diagnostic intentionally hides its cause;
 		// the other paths retain the bound either by wrapping or formatting it.
 		if owner != "claim-replay" && !strings.Contains(err.Error(), evmrpc.ErrResponseLimit.Error()) {
-			t.Fatalf("%s bypassed physical response admission: %v", owner, err)
+			t.Errorf("%s bypassed physical response admission: %v", owner, err)
 		}
 	}
 }
