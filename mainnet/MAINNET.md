@@ -2680,6 +2680,10 @@ future failover; it still returned HTTP 502 at the latest retained check.
 The [later dual-route recheck](evidence/public-dual-route-recheck-20261001.md)
 at block 9,190,703 confirms both public routes still report runtime 470, the
 same mainnet genesis/EVM ID and `:code` hash while v471 remains proposed.
+The [23:05 UTC pinned readback](evidence/public-dual-route-recheck-20261001-2305.md)
+again matches both routes at block 9,191,112, while their separately sampled
+current heads differ. The shared exact-block observation does not supply
+independent chain or runtime authority.
 This is read-only RPC corroboration, not independent finality or activation
 authority.
 Do not retarget signed action bytes. The
