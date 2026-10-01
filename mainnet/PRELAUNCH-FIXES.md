@@ -651,14 +651,20 @@ requirements remain strict. Complete storage, absent hidden mappings, governance
 history and the evidence anchor remain unverified; no installation, activation,
 public-route or live-action gate closes.
 
-**P0 follow-up — Canonical installation-to-service admission.** Wire the verified
-contract-role relationship into a separately qualified activation boundary that
-authenticates the original CREATE and anchor receipts, validates each declared
-deployment scan floor against actual history, rechecks current code/getters and
-the anchored evidence journal, and admits both UR roles/operators plus the
-separate root service. A declaration-only report is not production authority.
-Safe current-policy approval/public-route installation and live chain identity
-remain independent gates; this increment authorizes no mainnet action.
+**P0 — Canonical installation-to-service admission, implementation awaiting
+combined qualification.** The [separate current-admission route](VALIDATOR-CURRENT-ADMISSION.md)
+binds both UR services to original CREATE/link and anchor receipts, actual EVM
+scan floors, current executable/domain views and one shared native/EVM snapshot.
+It composes native eligibility, conservative majority stake capacity, both
+operator/client-key/proof domains and complete empty-tail ledgers. A separate
+signed exact-policy envelope and lifetime custodian attestation are mandatory;
+declarations, process approvals and old observations cannot select public starts.
+Per-unit permanent claims and post-sync readmission preserve one initial start
+across alternate envelopes, partial-pair progress and lost acknowledgements.
+Current-only finality/governance assumptions and external signer/host exclusion
+remain explicit acceptance inputs. Applied weights/10/90, actual signed live
+inputs, systemd rehearsal, and separate root-service admission remain open. No
+approval, mainnet transaction or live service action is supplied by this work.
 
 **Additive canonical runtime authority — scoped qualification complete.** The
 `3d526830` [runtime revision increment](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md)

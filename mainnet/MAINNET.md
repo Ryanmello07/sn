@@ -23,6 +23,18 @@ the current operator report, not a new verified RPC observation or a mainnet
 identity/readiness attestation. Live activation remains closed while sync,
 independent chain identity and the other production gates are unresolved.
 
+The [two-UR current-admission route](VALIDATOR-CURRENT-ADMISSION.md) now has an
+implementation for separately signed initial starts, pending combined source
+qualification. It freshly binds original CREATE/anchor custody and EVM scan
+floors to native eligibility, strict majority stake capacity, current contract
+views and both operator/key/proof domains. Exact independent current-policy and
+lifetime signer/host-custody acceptance are required. Empty authenticated local
+tails are the initial scope; unfinished intents require separate recovery.
+Permanent per-unit claims, post-sync rechecks and responsive generation evidence
+preserve one-start semantics. Actual approvals, live admission/systemd rehearsal,
+root-service authority and applied 10/90 evidence remain unresolved. No unit or
+signer was activated by implementation or tests.
+
 Sim-testnet is closed with known exceptions at the user's direction. The
 [original R48 report](../sim-testnet/FINAL-4.md) remains a failed provisional
 attempt with **zero completed acceptance epochs**. Its later retained resume

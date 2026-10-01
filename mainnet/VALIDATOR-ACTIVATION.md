@@ -14,23 +14,21 @@ passes its focused and adjacent normal/race suites. The earlier receipt above
 covers installation/process ownership; neither receipt authorizes a public
 fresh start.
 
-**Public fresh starts remain unavailable.** The public command constructs no
-`validatorActivationAuthority`. Signed process approval and an
-`observed-prerequisites` readiness result do not discharge the readiness report's
-activation blockers. A future production adapter must consume the new exact
-native epoch/checkpoint observation and independently admit operator health and
-proof/client-key domains,
-deployed contracts, native signer/global custody exclusion and majority stake.
-There is no flag, imported readiness file or environment switch that replaces
-that adapter. The concrete systemd start transport and its durable owner are
-exercisable only through the explicitly injected test authority today.
+**Public fresh starts require separate current acceptance.** The
+[current-admission adapter](VALIDATOR-CURRENT-ADMISSION.md) now reconstructs exact
+original installation/anchor custody, both scan floors, native eligibility,
+operator/key/proof and conservative majority-capacity evidence. It requires a
+separately signed, explicitly selected policy and lifetime custody attestation.
+Original process approval and earlier `admit-*` reports remain insufficient.
+Initial scope requires fully imported empty local tails and an empty intent
+graph. Implementation supplies no acceptance or live start.
 
 `admit-evidence` adds a bounded current observation of the original deployed
 contracts and both operator censuses. It performs real read-only transport work
 when explicitly invoked; this implementation has made no deployment RPC or API
 calls. Its optional `production_observation` journal projection and
-`observed-operator-and-contract-evidence` disposition do not implement the
-missing current-authority capability. The [independent qualification](evidence/validator-current-evidence-qualification-20260930.md)
+`observed-operator-and-contract-evidence` disposition do not select the separate
+current-authority capability. The [independent qualification](evidence/validator-current-evidence-qualification-20260930.md)
 covers the local operator/contract readers and command fences, including a
 corrected bounded EVM read profile; it does not qualify a combined live
 deployment or public fresh start.
@@ -236,8 +234,8 @@ preserves both lifetime start allowances and requires the existing approved
 client credentials and public activation files to be provisioned already.
 
 The explicit `start --execute-approved-starts` form is implemented but remains
-blocked in the public command until the qualified current-authority route is
-installed. That refusal, and a purely local missing-installation refusal, do
+blocked without exact [current-policy acceptance](VALIDATOR-CURRENT-ADMISSION.md).
+That refusal, and a purely local missing-installation refusal, do
 not consume an operation allowance. Real bounded operations consume and sync an
 operation before external work; retries cannot replenish the signed cap.
 
