@@ -70,8 +70,17 @@ records newer observed Connect/SDK main heads separately; they are not consumed
 or implicitly qualified. The earlier full candidate and eight-image aggregate
 bind SN `2d53e6f2` / server `ecbf3aad`. Preserve those exact source claims; they
 do not prove a successor binary or image built from the later server custody
-and SN validator changes. The current preparation inventory is deliberately
-partial and keeps source-to-image provenance and release approval false.
+and SN validator changes. That preparation inventory is deliberately partial
+and keeps source-to-image provenance and release approval false. The later
+[pre-Safe baseline](evidence/release-pre-safe-baseline-and-modes-20261001.md)
+binds SN `1806b3b3` / server `0b8e758d`, repeats all seventeen executable and ten
+contract bytecode outputs, and verifies its own eight-image aggregate after
+the permission repair. The subsequent
+[frozen Safe-source release](evidence/release-safe-source-20261001.md) binds SN
+`095a2208` / server `0b8e758d` with its own repeated source builds, fresh OCI
+receipts and complete local source-to-image aggregate. No historical
+attestation is inherited; independent reproducibility and release/deployment
+approval remain separate gates.
 
 Both main modules resolve independently. The builder records their effective
 module graphs, exact module/go.mod sums, local module Git ownership and module
@@ -83,6 +92,15 @@ automatic toolchain/module downloads. Binary build info must independently
 match the selected source revision, clean state, package and Linux/amd64 target.
 Source identities, module graphs, tool hashes and output bytes are rechecked
 before the final domain-separated manifest seal.
+
+Artifact copies set their declared permissions through the owned output
+descriptor after private exclusive creation. Executable image inputs retain
+`0755` and private inputs retain `0600` even under a restrictive build-host
+umask; copying does not change the source file. The strict OCI readback still
+requires the exact executable mode. The
+[pre-Safe baseline and causal repair](evidence/release-pre-safe-baseline-and-modes-20261001.md)
+retain the refused `0700` export, separate fixed outputs and exact source
+boundaries. Historical output directories must not be repaired in place.
 
 The first builder invocation is retained as a failed attempt: Go's lazy module
 graph includes unused tool dependencies without `GoMod`/`GoModSum` fields. The

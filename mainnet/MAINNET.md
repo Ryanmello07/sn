@@ -1325,9 +1325,33 @@ The later [unsigned preparation](evidence/public-unsigned-preparation-20261001.m
 locks SN `de0823ce` and server `0b8e758d`, including the newer validator and
 operator custody changes. Its source lock and partial inventory retain the
 actual reviewed Connect/SDK module pins separately from observed newer main
-heads. It does not inherit the older aggregate's image provenance. Complete
-composition and source-to-image verification for these successor sources
-remain pending, with release completion and deployment approval false.
+heads. It does not inherit the older aggregate's image provenance. That bundle
+does not supply its own complete source/image composition, and keeps release
+completion and deployment approval false.
+
+The [pre-Safe baseline and permission repair](evidence/release-pre-safe-baseline-and-modes-20261001.md)
+subsequently build SN `1806b3b3` / server `0b8e758d` twice with empty compiler
+caches: all seventeen executable hashes and ten contract creation/runtime
+outputs match. The API image attempt correctly rejects a `0700` executable
+created under the build host's private umask. The qualified builder correction
+preserves exact requested permissions without weakening OCI verification or
+changing retained outputs. All eight corrected OCI exports and their separate
+337-artifact aggregate now pass, establishing local source-to-image coverage
+for this exact baseline. This baseline predates the later public
+Safe-submission implementation; a release of that source needs a fresh exact
+source/image build. Same-host repeatability does not establish independent
+reproducibility or authorize a deployment.
+
+The [frozen Safe-source release](evidence/release-safe-source-20261001.md)
+then binds exact SN `095a2208` / server `0b8e758d`, including the Safe and
+permission corrections. It builds all seventeen commands and five fresh
+contracts twice and supplies eight new OCI images with a complete local
+source-to-image aggregate. All eight platform manifests and OCI archives also
+match on repeat. Its 55-file inventory repeats exactly, while
+production policy and published/deployed image identity remain absent. The
+frozen source commit is distinct from later reporting commits; independent
+reproducibility, actual service/configuration/policy qualification and release
+approval remain open.
 
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
@@ -2390,7 +2414,15 @@ Do not retarget signed action bytes. The
 passes its 17-binary, five-contract and 170-hash audit; eight fresh OCI image
 readbacks pass as separate supplements for SN `2d53e6f2` / server `ecbf3aad`.
 Those images do not establish provenance for the successor sources. No
-deployment approval is implied. Obtain
+deployment approval is implied. The later
+[pre-Safe baseline](evidence/release-pre-safe-baseline-and-modes-20261001.md)
+does establish local 17-binary/five-contract/eight-image coverage for SN
+`1806b3b3` / server `0b8e758d`; it does not cover the later public Safe source.
+The separate [Safe-source release](evidence/release-safe-source-20261001.md)
+builds and verifies its own complete local composition at SN `095a2208` /
+server `0b8e758d`, preserving the same remaining independent and production
+approval gates.
+Obtain
 an independently approved mainnet genesis/runtime identity and complete
 SN25 census. Qualify the production source/dependency release with
 the retained R48/R46 lessons, then implement the bootstrap mutation paths and
