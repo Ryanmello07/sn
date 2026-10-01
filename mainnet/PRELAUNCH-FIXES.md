@@ -665,8 +665,8 @@ requirements remain strict. Complete storage, absent hidden mappings, governance
 history and the evidence anchor remain unverified; no installation, activation,
 public-route or live-action gate closes.
 
-**P0 — Canonical installation-to-service admission, implementation awaiting
-combined qualification.** The [separate current-admission route](VALIDATOR-CURRENT-ADMISSION.md)
+**P0 — Canonical installation-to-service admission, bounded code qualified;
+live gate open.** The [separate current-admission route](VALIDATOR-CURRENT-ADMISSION.md)
 binds both UR services to original CREATE/link and anchor receipts, actual EVM
 scan floors, current executable/domain views and one shared native/EVM snapshot.
 It composes native eligibility, conservative majority stake capacity, both
@@ -679,6 +679,13 @@ Current-only finality/governance assumptions and external signer/host exclusion
 remain explicit acceptance inputs. Applied weights/10/90, actual signed live
 inputs, systemd rehearsal, and separate root-service admission remain open. No
 approval, mainnet transaction or live service action is supplied by this work.
+The [sealed receipt](evidence/validator-current-admission-qualification-20261001.md)
+pins SN `b8dc332a` and server `0b8e758d`: author 47 normal/all 12 new race roots,
+independent mainnet 24 normal/all 12 new race and producer 12 normal/race roots,
+vet and two causal omission pairs passed. The deliberately interrupted author
+adjacent race stream remains an incomplete diagnostic. A separate server
+`720e7c61` bounded compatibility receipt does not approve schema 750 or
+subscriber-v2 rollout.
 
 **Additive canonical runtime authority — scoped qualification complete.** The
 `3d526830` [runtime revision increment](BOOTSTRAP-SUCCESSOR-RUNTIME-REVISIONS.md)
