@@ -2322,6 +2322,19 @@ package exit zero; all 21 causal controls discriminate in both modes. This is
 interpretation, live
 authority and custody remain absent, and actual fees stay null.
 
+The [bounded historical native capture increment](evidence/operator-historical-native-capture-20261001.md)
+at server `8a47dfe3` now produces those witnesses from exact-hash read-only RPC,
+reusing durable partial evidence and lifetime request/byte budgets. Parent/child
+selection comes from freshly replayed original proofs; ambiguous mappings,
+wrong proof blocks and unproven values refuse private witness publication.
+Completed capture and the new verification command replay offline. Author
+qualification passes all 173 non-database recovery/CLI roots per normal/race
+mode, vet, and seven causal controls in both modes; the three database census
+roots remain unrun. Actual fees and every authority/spending flag remain absent.
+Independent review, runtime interpretation/debit-refund attribution, production
+archive capability, service adoption, successor release and live custody remain
+open. The selected SN233/server942 release predates this source.
+
 The independent monitor confirms the repair's postcondition at finalized state.
 Only then close the incident, retaining its history and action receipts. A local
 repair success with missing chain evidence stays pending. Recovery cannot erase

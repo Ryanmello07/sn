@@ -6,6 +6,18 @@ acceptance**. There is no R49 requirement or instruction to resume it. Mainnet
 hardening may proceed; launch readiness must be established on the selected
 production release. No mainnet deployment or spend is authorized by this tracker.
 
+**October 1 historical native proof capture (MG-03/PF-03):** server `8a47dfe3`
+adds a [bounded producer and offline replay command](evidence/operator-historical-native-capture-20261001.md)
+for selected receipt parent/child raw storage witnesses. Exact native selection
+comes from original receipt/finality proofs; durable request/byte reservations
+and completed raw results survive interruption. Author qualification passes
+173 non-database recovery/CLI roots per normal/race mode, vet and seven causal
+controls in both modes. The three database census roots remain unrun. This
+source follows the selected server942 release. Independent review, runtime
+decoding and debit/refund attribution, production archive capability, service
+adoption, successor release and live custody remain open; actual fees stay null
+and no authority or spending flags become true.
+
 **October 1 server successor integration gate (MG-02/MG-05/MG-08):** the
 [static `720e7c61` review](evidence/server-720e-integration-review-20261001.md)
 requires migration **750** before the new server binaries, including with
