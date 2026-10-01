@@ -25,7 +25,8 @@ type buildImage struct {
 	SourceToImageVerified bool     `json:"source_to_image_verified"`
 }
 
-// Copy with an independent output hash; a source changing mid-copy cannot bind.
+// Copy with exact declared permissions and an independent output hash. Creation
+// remains private; the descriptor fixes the final mode independently of umask.
 func copyBuildFile(source, target string, mode os.FileMode) (buildArtifact, error) {
 	expected, err := buildFile(source)
 	if err != nil {
@@ -36,11 +37,14 @@ func copyBuildFile(source, target string, mode os.FileMode) (buildArtifact, erro
 		return buildArtifact{}, err
 	}
 	defer input.Close()
-	output, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	output, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return buildArtifact{}, err
 	}
 	n, copyErr := io.Copy(output, io.LimitReader(input, maximumBuildFileBytes+1))
+	if copyErr == nil {
+		copyErr = output.Chmod(mode)
+	}
 	if err := errors.Join(copyErr, output.Sync(), output.Close()); err != nil {
 		return buildArtifact{}, err
 	}
