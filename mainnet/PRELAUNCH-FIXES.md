@@ -26,6 +26,24 @@ root registration/stake, independently approved genesis/runtime/checkpoint,
 qualified mapping, actual service installation/monitoring and complete UR
 production admission remain open. No transaction or live deployment is implied.
 
+**October 1 current-runtime census discovery (MG-01/MG-08):** the separate
+[`subnet-discover` route](SUBNET-CENSUS.md) consumes a sealed but unapproved
+runtime/finalized snapshot, rechecks its exact runtime and retained canonical
+block, then collects bounded SN25/root forward/reverse membership and observed
+owner/generation. Its [qualification](evidence/runtime470-subnet-discovery-20261001.md)
+exercises v470's exact official metadata outside the repository and an
+identity-free protocol projection with synthetic state in committed tests.
+This resolves the initial discovery dependency on a pre-existing approved
+owner/generation policy without manufacturing one: every seat remains
+unclassified, membership completeness excludes custody/roles, and reset/apply
+authority remains false. Independent network/runtime/source, protected-role,
+removal and custody approvals, the complete launch census and trim execution
+remain open. MG-01 and MG-08 are not closed by this increment.
+The exact-key batch path completed the retained public snapshot with 256 SN25
+and 64 root registrations in 13.231 seconds, after two 15-minute per-key
+attempts failed under HTTP 429. Final affected coverage is 69 roots normal/race,
+exact full-metadata tests normal/race, and six causal controls in each mode.
+
 The [October 1 read-only public finalized snapshot](evidence/public-finalized-snapshot-20261001.md)
 closes the operational raw-header-method gap for the selected Rao archive:
 the reconstructed Frontier header matched the native digest at finalized block

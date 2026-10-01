@@ -5,6 +5,56 @@ excluded netuid-0 membership baseline. It compares an explicit removal scope
 with the reviewed source's owner-trim selection at that finalized block.
 It never authorizes or executes a reset. `reset_ready` is always false.
 
+Before an independently approved owner/generation/role policy exists, use the
+separate signer-free `subnet-discover` command:
+
+```sh
+go run ./mainnet subnet-discover \
+  --rpc https://rpc.example \
+  --snapshot /secure/unapproved-finalized-snapshot.json \
+  --retry-window 15m
+```
+
+It accepts an existing `runtime-snapshot` or combined `finalized-snapshot`
+envelope with EVM ID 964 and the complete runtime 470 tuple. It checks the file
+seal and retained code/metadata bytes, authenticates the same historical native
+header through the selected route, and matches the retained runtime pins before
+reading state. The v470 codec is tied to the reviewed source
+`923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d`; supplied artifact pins remain
+observations, not proof of that source or an approved runtime.
+
+The distinct `urnetwork-mainnet-subnet-discovery-v1` output retains complete
+SN25 and excluded root forward/reverse membership maps, recorded owner and
+registration generations, capacities, registration flags, activity, permits,
+aggregate subnet alpha emissions (`emission_alpha_rao`) and raw storage evidence.
+The existing 4096-seat bound, eight-worker limit, terminal empty pages and one
+total 60-second to 15-minute deadline apply. Discovery fetches registration
+values in sequential `state_queryStorageAt` batches of at most 128 exact keys,
+requiring one matching-block change set with each key exactly once. Missing,
+extra, duplicate or stale values fail closed; explicit null still passes through
+the normal metadata default/optional and SCALE checks. Prepared values are
+consumed once. Approved-policy previews retain their per-key transport.
+Transient reads honor bounded HTTP/JSON retry hints without extending the
+sample deadline. Final native/network/code checks
+must still agree after all storage reads. Failures emit no partial artifact.
+
+`membership_complete` covers these UID maps only. Every seat remains
+`unclassified`; no immunity, custody, role or removal judgment is inferred.
+`admission=unapproved_observation`, `finality_authority=rpc-assertion`,
+`runtime_source_proven=false`, `reset_ready=false` and `apply_authority=false`
+remain explicit. Exit zero means this observation completed. The file cannot
+serve as `--policy` for `subnet-preview` or `owner-trim-plan`. Independent
+genesis/runtime, owner/generation, protected-role and removal approvals, plus
+custody/stake/lock/claim/history review, still precede any executable plan.
+
+The [current-runtime qualification](evidence/runtime470-subnet-discovery-20261001.md)
+keeps exact public metadata/live RPC evidence outside the repository and uses
+an identity-free protocol projection with synthetic state in committed tests.
+The retained public snapshot completed with 256 SN25 and 64 excluded root
+registrations in 13.231 seconds after two per-key attempts exhausted their
+15-minute windows under HTTP 429. This is operational discovery evidence at that
+block; it does not close the independent approval or full launch-census gates.
+
 ```sh
 go run ./mainnet subnet-preview \
   --rpc https://rpc.example \
@@ -20,7 +70,7 @@ approved values for all of these inputs:
 | --- | --- |
 | `netuid`, chain name, genesis and EVM chain ID | SN25 on the independently approved mainnet; EVM chain ID must be 964. A route name or observed endpoint cannot supply approval. |
 | `runtime_version`, `runtime_code_hash`, `runtime_metadata_hash` | Complete exact runtime identity and artifact hashes at the sampled finalized block. No runtime version number is accepted as mainnet authority. |
-| `runtime_source_commit`, `storage_profile` | Source `67dcf7f791dc495064c293f080a0702cb433e51e` and `subtensor-subnet-census-67dcf7f-v1`. Another source needs a separately reviewed profile. The supplied source assertion does not establish its source-to-Wasm build provenance. |
+| `runtime_source_commit`, `storage_profile` | Historical source `67dcf7f791dc495064c293f080a0702cb433e51e` or reviewed v470 source `923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d`, with the unchanged compatible wire profile `subtensor-subnet-census-67dcf7f-v1`. Other sources require separate review. The supplied source assertion does not establish its source-to-Wasm build provenance. |
 | `subnet_owner_coldkey_account_id` | Approved owner AccountId32, encoded as nonzero `0x` plus 64 hex digits. |
 | `subnet_registration_block`, `subnet_generation` | Explicit current subnet incarnation, including a zero counter when that is the reviewed value. |
 | `trim_maximum_uids` | Explicit capacity to preview, compared with live minimum/maximum and requested identities. |

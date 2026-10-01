@@ -63,6 +63,7 @@ type rpcClient struct {
 	url         string
 	httpClient  *http.Client
 	retryWindow time.Duration
+	retryWait   func(context.Context, time.Duration) error
 }
 
 // newRpcClient rejects credential-bearing and non-HTTP routes before any request.
@@ -161,6 +162,7 @@ func (self *rpcClient) callAdmittedRead(ctx context.Context, method string, para
 	}
 	var lastErr error
 	for attempt := 0; ; attempt++ {
+		delay := min(time.Duration(attempt+1)*500*time.Millisecond, 5*time.Second)
 		attemptCtx, attemptCancel := context.WithTimeout(operationCtx, min(self.retryWindow, 60*time.Second))
 		request, requestErr := http.NewRequestWithContext(attemptCtx, http.MethodPost, self.url, bytes.NewReader(requestBody))
 		if requestErr != nil {
@@ -221,6 +223,8 @@ func (self *rpcClient) callAdmittedRead(ctx context.Context, method string, para
 				return fmt.Errorf("%s: HTTP %d", method, response.StatusCode)
 			} else {
 				requestErr = fmt.Errorf("HTTP %d", response.StatusCode)
+				deadline, _ := operationCtx.Deadline()
+				delay = rpcReadRetryDelay(response.Header, body, delay, time.Now(), deadline)
 			}
 		}
 		attemptCancel()
@@ -228,14 +232,12 @@ func (self *rpcClient) callAdmittedRead(ctx context.Context, method string, para
 		if operationCtx.Err() != nil {
 			return fmt.Errorf("%s: retry window exhausted: %w", method, errors.Join(operationCtx.Err(), lastErr))
 		}
-		delay := time.Duration(attempt+1) * 500 * time.Millisecond
-		if delay > 5*time.Second {
-			delay = 5 * time.Second
+		wait := self.retryWait
+		if wait == nil {
+			wait = waitRpcReadRetry
 		}
-		select {
-		case <-operationCtx.Done():
-			return fmt.Errorf("%s: retry window exhausted: %w", method, errors.Join(operationCtx.Err(), lastErr))
-		case <-time.After(delay):
+		if err := wait(operationCtx, delay); err != nil || operationCtx.Err() != nil {
+			return fmt.Errorf("%s: retry window exhausted: %w", method, errors.Join(operationCtx.Err(), err, lastErr))
 		}
 	}
 }

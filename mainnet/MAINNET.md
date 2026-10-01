@@ -41,7 +41,7 @@ SN/server/SDK/Connect/config revisions. Some shared and simulator fixes exist;
 the complete mutating bootstrap, root-validator service and operational repair
 system remain production work. [mainnet/main.go](main.go) implements signer-free
 `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`,
-`monitor`, `subnet-preview`, `owner-trim-plan`, `owner-trim-recheck`,
+`monitor`, `subnet-discover`, `subnet-preview`, `owner-trim-plan`, `owner-trim-recheck`,
 `owner-trim-reconcile`, `owner-trim-qualify`, `root-preview`, `root-monitor`,
 `check-recycle-mode`, `economic-reference`, offline `source-lock`,
 [local `release-inventory`](RELEASE-INVENTORY.md), and the
@@ -575,6 +575,19 @@ trim selection. It does not yet collect collateral, stake, claims, commitments,
 EVM associations or every mechanism-specific weight. Even an exact candidate
 set keeps `reset_ready=false`: the trim call cannot bind hotkey generations at
 execution, and the source-selected owner cooldown is not a metadata constant.
+The separate runtime 470 `subnet-discover` command reads a retained unapproved
+runtime/finalized snapshot without inventing an approved owner or generation
+policy. Its [current-runtime qualification](evidence/runtime470-subnet-discovery-20261001.md)
+checks exact official metadata and synthetic state; the output records complete
+SN25/root UID membership, observed owner/generation and raw storage while every
+seat stays unclassified. `membership_complete` does not mean a complete custody
+or reset census. Runtime/source, role and removal approval remain independent,
+and its distinct artifact cannot be consumed as a trim policy or execution plan.
+The retained public snapshot completed with 256 SN25 and 64 root registrations
+in 13.231 seconds using exact-key batches, after per-key reads exhausted their
+15-minute windows under HTTP 429. The owner/hotkey details remain restricted;
+this membership observation does not close the current custody/role census or
+independent approval gates.
 The separate signer-free `owner-trim-plan` command ranks bounded owner
 capacities against that authenticated census, predicts removed generations and
 survivor UID mapping, and names each old miner that would remain. Its
@@ -1203,6 +1216,7 @@ designs:
 | `finalized-snapshot` | Existing signer-free same-block capture of runtime code/metadata and native/EVM mapping; its output remains unapproved observation. |
 | `monitor` | Extend the existing read-only identity/finality loop with durable checkpoints, independent comparisons, complete domain health and existing-stack alert delivery. |
 | `subnet-preview` | Existing signer-free finalized SN25/root UID census and owner-trim candidate comparison; full custody and execution-time reset authority remain open. |
+| `subnet-discover` | Signer-free runtime 470 membership/owner/generation discovery from a retained unapproved runtime or combined finalized snapshot; leaves every seat unclassified and supplies no trim policy or apply authority. |
 | `root-preview` / `root-monitor` | Existing signer-free finalized root seat and strategy census; an offline [existing-seat action core](ROOT-ACTION.md) exists, but production signing and activation remain separate work. |
 | `check-recycle-mode` | Existing signer-free finalized storage-mode precondition; extend with an approved mainnet artifact and operational readback at activation/recovery. |
 | `economic-reference` | Existing signer-free cumulative integer 10%/90% reference from caller-supplied native intervals; actual chain reconciliation remains a separate gate. |

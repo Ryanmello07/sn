@@ -263,6 +263,10 @@ type rootStorageReader struct {
 	block     string
 	stateLock sync.Mutex
 	valueKVs  map[string]rootStorageValue
+	// Discovery alone stages bounded exact-key replies, consumed once so later
+	// overlapping reads still compare independent observations at the same hash.
+	batchRegistrations bool
+	preparedKVs        map[string]*string
 }
 
 // A query never substitutes latest state or another route after a failed read.
@@ -287,8 +291,16 @@ func (self *rootStorageReader) read(ctx context.Context, name string, args ...[]
 		return rootStorageValue{}, err
 	}
 	var raw *string
-	if err := self.client.callWithStorageAbsence(ctx, "state_getStorage", []any{key.Hex(), self.block}, &raw, true); err != nil {
-		return rootStorageValue{}, fmt.Errorf("root %s: %w", name, err)
+	self.stateLock.Lock()
+	raw, prepared := self.preparedKVs[key.Hex()]
+	if prepared {
+		delete(self.preparedKVs, key.Hex())
+	}
+	self.stateLock.Unlock()
+	if !prepared {
+		if err := self.client.callWithStorageAbsence(ctx, "state_getStorage", []any{key.Hex(), self.block}, &raw, true); err != nil {
+			return rootStorageValue{}, fmt.Errorf("root %s: %w", name, err)
+		}
 	}
 	value := rootStorageValue{Name: name, Key: key.Hex(), RawStorage: raw, ValueSource: "absent-optional"}
 	if raw != nil {
