@@ -369,10 +369,18 @@ func RuntimeCodeHashAt(chain *Chain, blockHash types.Hash) (string, error) {
 	return RuntimeCodeHashAtContext(context.Background(), chain, blockHash)
 }
 
-// DecodeRuntimeMetadata returns decoded metadata plus BLAKE2b-256 of the exact
-// SCALE bytes in one authoritative state_getMetadata result. It never hashes a
-// re-encoding.
+const maximumRuntimeMetadataBytes = 8 * 1024 * 1024
+
+// Input admission failed before allocating a decoded byte buffer.
+var ErrRuntimeMetadataInputLimit = errors.New("runtime metadata input exceeds byte limit")
+
+// DecodeRuntimeMetadata bounds untrusted input, allocations and recursive work
+// before publishing metadata plus BLAKE2b-256 of the exact bytes. A self-consistent
+// hash grants no runtime authority. It never hashes a re-encoding.
 func DecodeRuntimeMetadata(encoded string) (*types.Metadata, string, error) {
+	if len(encoded) > 2+2*maximumRuntimeMetadataBytes {
+		return nil, "", ErrRuntimeMetadataInputLimit
+	}
 	if len(encoded) <= 2 || !strings.HasPrefix(encoded, "0x") || len(encoded)%2 != 0 {
 		return nil, "", errors.New("runtime metadata is not canonical even-length 0x hex")
 	}
@@ -382,7 +390,16 @@ func DecodeRuntimeMetadata(encoded string) (*types.Metadata, string, error) {
 	}
 	metadata := new(types.Metadata)
 	reader := bytes.NewReader(raw)
-	if err := scale.NewDecoder(reader).Decode(metadata); err != nil {
+	// Every metadata collection member consumes at least one wire byte. Bind
+	// its count to this input as well as independent total storage/work limits.
+	decoder, err := scale.NewDecoderWithLimits(reader, scale.DecoderLimits{
+		MaxCollectionElements: uint64(len(raw)), MaxAllocationBytes: 64 * 1024 * 1024,
+		MaxDecodedValues: 2 * 1024 * 1024, MaxDepth: 64,
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	if err := decoder.Decode(metadata); err != nil {
 		return nil, "", fmt.Errorf("decode runtime metadata SCALE: %w", err)
 	}
 	if reader.Len() != 0 {

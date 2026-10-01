@@ -66,10 +66,12 @@ func (pe Encoder) PushByte(b byte) error {
 // A typical usage is storing the length of a collection.
 // Definition of compact encoding:
 // 0b00 00 00 00 / 00 00 00 00 / 00 00 00 00 / 00 00 00 00
-//   xx xx xx 00															(0 ... 2**6 - 1)		(u8)
-//   yL yL yL 01 / yH yH yH yL												(2**6 ... 2**14 - 1)	(u8, u16)  low LH high
-//   zL zL zL 10 / zM zM zM zL / zM zM zM zM / zH zH zH zM					(2**14 ... 2**30 - 1)	(u16, u32)  low LMMH high
-//   nn nn nn 11 [ / zz zz zz zz ]{4 + n}									(2**30 ... 2**536 - 1)	(u32, u64, u128, U256, U512, U520) straight LE-encoded
+//
+//	xx xx xx 00															(0 ... 2**6 - 1)		(u8)
+//	yL yL yL 01 / yH yH yH yL												(2**6 ... 2**14 - 1)	(u8, u16)  low LH high
+//	zL zL zL 10 / zM zM zM zL / zM zM zM zM / zH zH zH zM					(2**14 ... 2**30 - 1)	(u16, u32)  low LMMH high
+//	nn nn nn 11 [ / zz zz zz zz ]{4 + n}									(2**30 ... 2**536 - 1)	(u32, u64, u128, U256, U512, U520) straight LE-encoded
+//
 // Rust implementation: see impl<'a> Encode for CompactRef<'a, u64>
 func (pe Encoder) EncodeUintCompact(v big.Int) error {
 	if v.Sign() == -1 {
@@ -283,6 +285,7 @@ func (pe Encoder) EncodeOption(hasValue bool, value interface{}) error {
 // Decoder is a wraper around a Reader that allows decoding data items from a stream.
 type Decoder struct {
 	reader io.Reader
+	budget *decodeBudget
 }
 
 func NewDecoder(reader io.Reader) *Decoder {
@@ -291,6 +294,9 @@ func NewDecoder(reader io.Reader) *Decoder {
 
 // Read reads bytes from a stream into a buffer
 func (pd Decoder) Read(bytes []byte) error {
+	if pd.budget != nil && pd.budget.err != nil {
+		return pd.budget.err
+	}
 	c, err := pd.reader.Read(bytes)
 	if err != nil {
 		return err
@@ -322,11 +328,23 @@ func (pd Decoder) Decode(target interface{}) error {
 	if val.IsNil() {
 		return errors.New("Target is a nil pointer")
 	}
-	return pd.DecodeIntoReflectValue(val.Elem())
+	if err := pd.DecodeIntoReflectValue(val.Elem()); err != nil {
+		return err
+	}
+	if pd.budget != nil {
+		return pd.budget.err
+	}
+	return nil
 }
 
 // DecodeIntoReflectValue populates a writable reflect.Value from the stream
 func (pd Decoder) DecodeIntoReflectValue(target reflect.Value) error {
+	if pd.budget != nil {
+		if err := pd.budget.enter(); err != nil {
+			return err
+		}
+		defer func() { pd.budget.depth-- }()
+	}
 	t := target.Type()
 	if !target.CanSet() {
 		return fmt.Errorf("Unsettable value %v", t)
@@ -336,8 +354,17 @@ func (pd Decoder) DecodeIntoReflectValue(target reflect.Value) error {
 	decodeable := reflect.TypeOf((*Decodeable)(nil)).Elem()
 	ptrType := reflect.PtrTo(t)
 	if ptrType.Implements(decodeable) {
+		if err := pd.ReserveAllocation(1, uint64(t.Size())); err != nil {
+			return err
+		}
 		var holder reflect.Value
-		if t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
+		if t.Kind() == reflect.Slice {
+			if err := pd.admitCollection(uint64(target.Len())); err != nil {
+				return err
+			}
+			if err := pd.ReserveAllocation(uint64(target.Len()), uint64(t.Elem().Size())); err != nil {
+				return err
+			}
 			slice := reflect.MakeSlice(t, target.Len(), target.Len())
 			holder = reflect.New(t)
 			holder.Elem().Set(slice)
@@ -385,6 +412,9 @@ func (pd Decoder) DecodeIntoReflectValue(target reflect.Value) error {
 	case reflect.Float32:
 		fallthrough
 	case reflect.Float64:
+		if err := pd.ReserveAllocation(1, uint64(t.Size())); err != nil {
+			return err
+		}
 		intHolder := reflect.New(t)
 		intPointer := intHolder.Interface()
 		err := binary.Read(pd.reader, binary.LittleEndian, intPointer)
@@ -422,17 +452,26 @@ func (pd Decoder) DecodeIntoReflectValue(target reflect.Value) error {
 
 	// Slices: first compact-encode length, then each item individually
 	case reflect.Slice:
-		codedLen64, _ := pd.DecodeUintCompact()
-		if codedLen64.Uint64() > math.MaxUint32 {
+		codedLen64, err := pd.DecodeUintCompact()
+		if err != nil {
+			return err
+		}
+		if !codedLen64.IsUint64() || codedLen64.Uint64() > math.MaxUint32 {
 			return errors.New("Encoded array length is higher than allowed by the protocol (32-bit unsigned integer)")
 		}
 		if codedLen64.Uint64() > uint64(maxInt) {
 			return errors.New("Encoded array length is higher than allowed by the platform")
 		}
 		codedLen := int(codedLen64.Uint64())
+		if err := pd.admitCollection(uint64(codedLen)); err != nil {
+			return err
+		}
 		targetLen := target.Len()
 		if codedLen != targetLen {
 			if int(codedLen) > target.Cap() {
+				if err := pd.ReserveAllocation(uint64(codedLen), uint64(t.Elem().Size())); err != nil {
+					return err
+				}
 				newSlice := reflect.MakeSlice(t, int(codedLen), int(codedLen))
 				target.Set(newSlice)
 			} else {
@@ -453,6 +492,9 @@ func (pd Decoder) DecodeIntoReflectValue(target reflect.Value) error {
 		if err != nil {
 			return err
 		}
+		if err := pd.ReserveAllocation(uint64(len(b)), 1); err != nil {
+			return err
+		}
 		target.SetString(string(b))
 
 	case reflect.Struct:
@@ -465,7 +507,7 @@ func (pd Decoder) DecodeIntoReflectValue(target reflect.Value) error {
 			err := pd.DecodeIntoReflectValue(target.Field(i))
 			if err != nil {
 				return fmt.Errorf("type %s does not support Decodeable interface and could not be "+
-					"decoded field by field, error: %v", ptrType, err)
+					"decoded field by field, error: %w", ptrType, err)
 			}
 		}
 
@@ -492,6 +534,11 @@ func (pd Decoder) DecodeIntoReflectValue(target reflect.Value) error {
 
 // DecodeUintCompact decodes a compact-encoded integer. See EncodeUintCompact method.
 func (pd Decoder) DecodeUintCompact() (*big.Int, error) {
+	// Compact integers have at most 67 payload bytes. Include the temporary
+	// buffer, big integer and backing words in the bounded storage reservation.
+	if err := pd.ReserveAllocation(1, 256); err != nil {
+		return nil, err
+	}
 	b, err := pd.ReadOneByte()
 
 	if err != nil {
@@ -555,7 +602,10 @@ func Reverse(b []byte) {
 
 // DecodeOption decodes a optionally available value into a boolean presence field and a value.
 func (pd Decoder) DecodeOption(hasValue *bool, valuePointer interface{}) error {
-	b, _ := pd.ReadOneByte()
+	b, err := pd.ReadOneByte()
+	if err != nil {
+		return err
+	}
 	switch b {
 	case 0:
 		*hasValue = false

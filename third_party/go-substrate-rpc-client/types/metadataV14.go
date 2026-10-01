@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"reflect"
 	"strings"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/scale"
@@ -49,6 +50,11 @@ func (m *MetadataV14) Decode(decoder scale.Decoder) error {
 		return err
 	}
 
+	// The lookup duplicates each admitted type and allocates map storage. Its
+	// bound shares the same owner as the wire collections, before any map copy.
+	if err := decoder.ReserveAllocation(uint64(len(m.Lookup.Types))+1, uint64(reflect.TypeOf(PortableTypeV14{}).Size())+128); err != nil {
+		return err
+	}
 	m.EfficientLookup = m.Lookup.toMap()
 
 	err = decoder.Decode(&m.Pallets)
