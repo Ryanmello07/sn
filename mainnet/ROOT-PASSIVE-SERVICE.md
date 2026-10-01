@@ -104,3 +104,103 @@ mainnet economic outcomes remain independent launch gates.
 
 [migration]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/migrations/migrate_remove_root_weights.rs
 [root-reborn]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/docs/guides/root-reborn.mdx
+
+## Independently approved static host owner
+
+`activate-root-passive` owns one initial passive process start on one approved
+Linux host/boot. Its [qualification](evidence/passive-root-host-20261001.md)
+binds original v4 preparation, both UR config inspections, exact passive runtime
+bytes, the independent passive config signature, and a separate signed host
+approval. It does not consume either UR process allowance. No production unit
+was installed or started during qualification.
+
+Fresh host approvals must select
+`<bootstrap-run-directory>/root-passive-observation/<checkpoint-name>` in the
+signed passive service config. Provision this dedicated directory as root-owned,
+group `0`, mode `0700`; its only permitted files are the selected checkpoint
+and its `.lock`. Existing flat checkpoint approvals keep their original meaning
+and can still run through `root-passive-service`; their shared preparation
+directory is unsuitable for this sandbox. A new checkpoint path requires new
+exact service/config and host approvals. Never rewrite a retained signed plan.
+
+Original configs, approvals and preparation records stay private and root-owned.
+The static process uses `User=0` and `Group=0` to read those exact inputs, with
+no runtime copies or changed permissions. Its fixed unit has an empty capability
+set, `NoNewPrivileges=yes`, `ProtectSystem=strict`, private devices, protected
+kernel/control-group settings and one `ReadWritePaths` entry: the dedicated
+checkpoint directory. The controller rejects authority/custody aliases, symlinks,
+hard links and unrelated checkpoint files. It verifies the loaded manager's
+sandbox, exact command, empty hooks/environment, dependencies and cgroup.
+The Linux host and system manager remain trusted; these checks do not attest
+host integrity independently. See the [systemd 255 execution specification][systemd-exec].
+
+The independently supplied Ed25519 public key verifies schema
+`urnetwork-mainnet-root-passive-host-v1`. Sign the literal domain
+`urnetwork-mainnet-root-passive-host-approval-v1`, a NUL byte, and canonical Go
+JSON of the complete envelope with `signature_ed25519` empty. The signed `plan`
+contains:
+
+| Field | Exact approved value |
+| --- | --- |
+| `bootstrap_config`, `bootstrap_plan_hash` | Original v4 file reference and preparation content hash |
+| `runtime_config`, `root_plan_hash` | Exact private invocation file reference and passive child hash |
+| `unit_file` | `/etc/systemd/system/sn-mainnet-root-passive.service` and hash of the fixed rendered unit |
+| `mainnet_binary`, `systemctl` | Protected absolute file paths and exact binary hashes |
+| `machine_id`, `boot_id` | Current selected host and boot; a reboot does not renew authority |
+| `checkpoint_directory` | The dedicated private child described above |
+| `required_mounts` | Sorted, unique mount-unit names; every mount and `system.slice` must already be active without jobs |
+| `state_path` | Separate permanent private host journal, outside worker-writable state |
+| `valid_from`, `expires_at` | Explicit start/install window of at most 24 hours |
+| `maximum_operations` | 1–128 counted install, admission, start and recovery operations |
+| `command_timeout_seconds` | 1–60 seconds per joined manager command |
+| `maximum_sample_age_seconds` | 1–600 seconds for the current pre-start policy observation |
+| `install_static_unit`, `authorize_one_passive_start` | Both explicitly `true` |
+
+The exact renderer is `rootPassiveHostPlan.render` in
+[root_passive_host_authority.go](root_passive_host_authority.go). The sole command
+is `mainnet root-passive-service run --config=<runtime path>
+--accept-runtime-sha256=<exact digest>`, with `Restart=no` and no install target.
+There is no enable, restart, stop, native signer or transaction operation.
+
+Every operation requires `--approval`, `--accept-approval-hash` and the independent
+`--independent-public-key`. The sequence is:
+
+1. `claim` retains the complete signed envelope, approver key and original
+   preparation seals under a permanent marker. It neither repairs preparation
+   nor opens a start allowance when a marker already exists.
+2. `install` records intent, creates only the exact unit without overwriting
+   another file, reloads the system manager, and proves the loaded profile and
+   unused stopped generation. A crash after publication can reconcile those
+   same bytes on a later `install`.
+3. `admit` performs a fresh finalized read of the approved root policy. It
+   records read-only prerequisites and never starts a process.
+4. `start --execute-approved-start` repeats fresh policy/host admission, durably
+   consumes the single start, rechecks custody/window/source, issues one bounded
+   start, and retains the exact acknowledged invocation ID, PID and monotonic
+   start time. Missing acknowledgment remains consumed even when a process exists.
+5. `resume` observes only that retained invocation, including its stopped finite
+   completion. Repeated recovery spends the same operation allowance and never
+   starts another process. A changed boot/generation or uncertain start requires
+   explicit external reconciliation with all original records retained.
+6. `status` reads historical journal facts only; `current_process_running` stays
+   false. Successful current `start`/`resume` may report manager liveness, while
+   `root_service_ready`, `activation_ready`, native signing and network submission
+   remain false. Inspect real monitor observations/checkpoint age and alerts
+   separately to establish ongoing health.
+
+Expiry and exhausted operation allowance close this host owner; `status` remains
+historical. The finite service still owns its original signed sample/block
+window. A new run or policy needs independently reviewed successor authority and
+explicit disposition of the prior invocation; removing state or changing paths
+is not recovery.
+
+Mainnet remains gated on independently approved runtime/source provenance and
+its recorded reproducibility exception, an actual existing root seat and stake,
+the fresh v4 passive configuration/signature, this exact independent host
+signature and acceptance, the qualified successor binary, protected host paths,
+owned RPC access and observed live service health. Both UR current-admission
+approvals, original contract anchor/history, signer exclusion and operator
+readiness retain their separate gates. The release fenced at SN `6c801a25` does
+not include this later host implementation and must not be relabeled as covering it.
+
+[systemd-exec]: https://github.com/systemd/systemd/blob/v255/man/systemd.exec.xml
