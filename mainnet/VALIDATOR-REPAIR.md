@@ -152,5 +152,9 @@ now retains a separate stale/missing loop-outcome incident even while the
 independent publisher remains fresh. That diagnostic grants no stop or restart
 permission. This controller accepts compatible v4 monitor checkpoints and
 preserves independently signed v3 envelopes; its admitted failure class and
-required stopped/empty generation remain unchanged. Active-hang recovery still
-requires separately reviewed stop/join and global custody authority.
+required stopped/empty generation remain unchanged. The separate
+[active steering-hang capability](ACTIVE-VALIDATOR-REPAIR.md) requires its own
+independent stop/join/start signature and permanent generation claim. Both paths
+share an installed-unit control lock; this stopped-repair controller refuses a
+generation already claimed by active repair, even after that owner exits.
+Production approval, deployment custody and real-systemd rehearsal remain open.
