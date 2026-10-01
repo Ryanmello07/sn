@@ -15,8 +15,8 @@ Author and independent normal/race tests exercise current getter and storage
 mutation, with causal omission controls; the independent broad race wrapper's
 resource timeout and the author's moved-checkout fence remain explicit in the
 receipt. The historical SN233/server942 release predates this correction;
-the [selected successor](evidence/release-689938d6-server6c39-20261001.md) packages
-it from exact SN `689938d6` / server `6c39d307`. Complete current contract/Safe
+the [selected successor](evidence/release-bab49e1c-servera3e2-20261001.md) packages
+it from exact SN `bab49e1c` / server `a3e2e668`. Complete current contract/Safe
 history, signer custody, approved production policy, live installation and
 independent release qualification remain open.
 
@@ -239,7 +239,7 @@ receipts and independent monitor deployment remain open.
 | Gate / priority | Owner and linked items | Current state | Next action and completion evidence |
 | --- | --- | --- | --- |
 | MG-01 / P0 — Mainnet identity | Node operator; RT-01/02, PH-04/14/18/19 | **Open for activation:** the [current unsigned preparation](evidence/public-unsigned-preparation-20261001.md) retains the Rao archive's combined native/EVM observation at block 9,186,298, Bittensor/EVM964 and the unchanged exact runtime470 code/metadata hashes. Its ten-action plan is fully blocked, with network/runtime authority missing. The [qualified public-header fallback](evidence/public-header-fallback-20261001.md) succeeds while an exact-hash raw-method probe still returns `-32601`; independent genesis/runtime/source approval remains pending. Snow VPN remains a future failover and last returned HTTP 502. The earlier [Snow/testnet comparison](evidence/finalized-snapshot-snow-20260927.json) remains historical evidence, not a current mainnet route. | Review the exact unsigned bundle, independently approve genesis/runtime/source identity, and repeat finalized checks before signing. Apply finite public-RPC concurrency; do not silently retarget signed bytes or treat the declared review target as approval. |
-| MG-02 / P0 — Reproducible production release | Release owner; RL-01, PH-06/16 | **In progress:** the [selected successor release](evidence/release-689938d6-server6c39-20261001.md) binds exact SN `689938d6` / server `6c39d307`, including complete-header and finality corrections, installation clock continuity, historical native capture and the corrected twelve-file migration input census. Connect `e1b5d77b` / SDK `5d37be38` stay pinned. Two sequential fresh-cache builds match all 17 binaries and ten contract bytecode outputs; both eight-image aggregates verify 342 artifacts each, with identical platform/configuration/archive bytes. All 95 builder/source-graph roots pass normal/race and vet. Its unsigned 61-file inventory repeats exactly and records 751 catalogue entries without applying them. The incomplete e4 candidate and earlier releases keep separate receipts. Independent builder, arm64, archive/restore, attestation/SBOM/scanner, actual service/configuration/policy qualification and approval remain open. | Independently reproduce and qualify the exact selected release, actual configuration, policy, migrations and role behavior, then approve one immutable manifest. Preserve predecessor receipts and failed attempts; later reporting commits do not replace the frozen binary/image source. Local hashes and platform digests are not deployment authorization. |
+| MG-02 / P0 — Reproducible production release | Release owner; RL-01, PH-06/16 | **In progress:** the [selected metadata/HTTP successor](evidence/release-bab49e1c-servera3e2-20261001.md) binds exact SN `bab49e1c` / server `a3e2e668`, including bounded metadata/native HTTP/EVM HTTP admission and the server contract-metadata/default-off sampler changes. Connect `e1b5d77b` / SDK `5d37be38` stay pinned. Two sequential fresh-cache builds match all 17 binaries and ten contract bytecode outputs; both eight-image aggregates verify 342 input artifacts, with identical platform/configuration/archive bytes. All 95 builder/source-graph and thirteen sampler roots pass normal/race; their packages pass vet. Its unsigned 61-file inventory repeats exactly, retaining twelve migration inputs and 751 catalogue entries without applying them. Full module-body qualification remains incomplete for 363 SN and 372 server graph nodes. Predecessor receipts retain their scope. Independent builder/provenance, arm64, restore, attestation/SBOM/scanner, actual service/configuration/policy qualification and approval remain open. | Independently reproduce and qualify the exact selected release, actual configuration, policy, migrations and role behavior, then approve one immutable manifest. Preserve predecessor receipts and failed attempts; later reporting commits do not replace the frozen binary/image source. Local hashes and platform digests are not deployment authorization. |
 | MG-03 / P0 — Durable recovery and complete evidence | Transaction/recovery owner; PF-01/03/04, PH-01/02/05/07/17/21/24/25/26 | **In progress:** the [mainnet miner fleet](../miner/FLEET-MAINNET-RUNTIME.md) now persists signed register/publish/bind/revoke intents and reconciles their original canonical outcomes before any identical-byte retry; affected miner/onchain/chain normal, race and vet pass. The [operator receipt-census fix](evidence/operator-recovery-census-20260927.md) preserves signed candidates after an inconclusive read; 19 affected test roots pass normal/race, with package vet and formatting checks. A [qualified status-independent signature census](evidence/operator-signature-census-qualification-20260928.md) preserves original, replacement and cancellation bytes across selected operator databases and evidence stores with private create-only restoration. The [conditional offline receipt/fee join](evidence/operator-receipt-fee-qualification-20260928.md) retains missing/conflicting candidates and counts observed gas once per resolved nonce. The [qualified receipt commitment verifier](evidence/operator-receipt-commitments-qualification-20260929.md), integrated at server `fbe0c039`, now authenticates exact signed transaction/receipt bytes, status, cumulative-gas differences and raw-header ancestry relative to a supplied EVM boundary; all 52 affected roots pass normal/race. The [qualified bounded collector](evidence/operator-receipt-collector-qualification-20260929.md) is integrated at server `b7c8c743`; all 71 recovery/CLI roots pass normal/race and five causal controls pass. The [qualified native finality proof](evidence/operator-native-finality-proof-qualification-20260929.md), integrated at `44636e5e`, verifies weighted GRANDPA certificates, scheduled authority handoffs and the exact native/EVM commitment relative to a pinned checkpoint; all 89 roots pass normal/race and five causal controls pass. Checkpoint/genesis/runtime authority remains unapproved and actual fees remain null. The [pinned-runtime fee dependency review](https://github.com/urnetwork/server/blob/cfcbfcbaa13b4f4d298acfeca761a7252c18ddee/strecovery/ACTUAL-FEE-DEPENDENCIES.md), integrated as documentation at `cfcbfcba`, keeps generic phase-bound balance events and block deltas unqualified for gas attribution; failed/partial refunds require exact runtime evidence. Bounded native-state proofs and runtime-qualified debit/refund attribution remain separate from checkpoint approval. The [qualified bounded native finality capture](evidence/operator-native-finality-capture-qualification-20260929.md), integrated at server `5ff7bf02`, preserves the exact collection through durable native proof capture; all 112 affected roots pass normal/race and seven causal controls discriminate in both modes. Independent checkpoint admission, owned-node capability, account nonce and native debit/refund proofs, service adoption, historical approval correction, journal retention and cross-host custody remain open. | Migrate the retained-evidence model into every production owner; reconcile every original/replacement/cancellation signature and historical approval. Crash/restart and cold/warm-cache qualification must preserve finalized work, custody, failed evidence and single ownership without repeated spend. |
 | MG-04 / P0 — Runtime and native continuity | Chain/validator owner; RT-01 through RT-08, PH-03/04/10/18/19/22 | **In progress:** the [standard validator production path](OWNER-RECYCLE-PRODUCTION.md) uses separately signed schema-3 authority, an exact block/purpose-bound producer interface and original authority through startup, preparation, recovery and archive readers. Bounded content-addressed complete config/approval history now preserves signed sidecars, the original drain and proof progress across compatible independently approved renewals and source-file loss. Old configs remain read-only. The [qualified source-receipt correction](evidence/validator-source-runtime-qualification-20260929.md) separates original signing, parent execution and post-state views across an approved upgrade; 103 selected roots pass normal/race. [Downstream upload admission](VALIDATOR-UPLOAD-RUNTIME.md) projects exact runtime windows from those bundles without retaining producer authority. The [miner fleet mainnet gate](../miner/FLEET-MAINNET-RUNTIME.md) retains exact-artifact and uncertain-send recovery for its four mutations. [Complete-header authority and its adjacent correction](evidence/current-native-header-adjacent-authority-20261001.md) reject substituted coordinates across producer/upload/observation windows and retained receipt/application evidence; approved update digests and original recovery retain their signed windows. The [claim EVM finality correction](evidence/miner-claim-evm-finality-20261001.md) closes state, replay, receipt recovery and fresh publication using the EVM clock while retaining exact signed custody. The [shared onchain successor](evidence/shared-evm-finality-closure-20261001.md) closes finalized/canonical receipt witnesses and keeps transient or absent evidence pending within the original deadline. The shared nonce reader requires the exact reviewed 56-byte Subtensor account layout. The [signed continuity policy and inspector](RUNTIME-CONTINUITY-POLICY.md) have scoped independent qualification; [finite offline replay](RUNTIME-SEMANTIC-REPLAY.md) checks exact supplied artifact/state cases. Complete semantic proof and automatic production selection remain absent. No live mainnet authority or deployment is supplied. | Complete remaining consumers, both validator roles, automatic compatible-upgrade and missed-boundary qualification. Arbitrary policy/key/custody changes require separate transitions. Preserve original pending bytes and finalized work; no backdated native success. |
 | MG-05 / P0 — Policy and identity rollover | Server/validator owner; PF-02/05, PH-07/13/27 | **In progress:** server policy-domain rollover and retained resume remain evidenced above; the v651→v724 migration-monitor namespace bug is corrected. The [qualified MG03/R48 composition](evidence/operator-mg03-r48-composition-20260929.md) is integrated at server `05fee56f`, preserving both original histories and exact signed approvals through registration replay, policy rollover and deletion. The [operator epoch-policy correction](evidence/operator-policy-custody-qualification-20261001.md) authenticates retained payout policy/window independently of the current configuration and composes both operators' populated migration, processed registration, restart and fresh proof reads. Live operator cutover and readiness remain open. | Migrate both operators before APIs, retain old signed histories, activate all validator/operator evidence domains and authenticate persistent peer-key transitions. Prove production processed-key readiness and fresh proof progress through a future policy boundary; retain prior-epoch payout policy authority for successor deposit sizing. |
@@ -286,8 +286,9 @@ guard; a self-consistent hash still grants no runtime authority. Truncated
 compact/option input returns an error without panic or fabricated `None`.
 Independently pinned owner/root paths retain hash-first admission, and valid
 runtime470 plus the separate pinned SDK-v15 owner path remain compatible.
-The frozen SN `689938d6` release predates this owned-fork change; selecting it
-requires a fresh exact-source release and qualification.
+The historical SN `689938d6` release predates this owned-fork change. The
+[selected SN `bab49e1c` successor](evidence/release-bab49e1c-servera3e2-20261001.md)
+now packages it; full release qualification and approval remain open.
 
 **Shared native HTTP response admission implemented:**
 [source `58852c47`](evidence/http-rpc-response-bounds-20261001.md) closes the owned
@@ -322,8 +323,10 @@ does not modify or requalify those owners. WebSocket and IPC retain their existi
 transport semantics. Aggregate process/concurrency memory and host capacity
 remain open; no universal HTTP-client or whole-process bound is claimed. The
 decoder's budgets remain requested-storage/work limits, not a custom-code
-sandbox. Selecting this source requires a fresh exact-source release beyond
-`689938d6`; the live read-only compatibility probe remains unapproved observation.
+sandbox. The [selected successor](evidence/release-bab49e1c-servera3e2-20261001.md)
+packages these changes at exact SN `bab49e1c` / server `a3e2e668`; the live
+read-only compatibility probe remains unapproved observation and full release
+qualification remains open.
 
 MG-01/MG-06 have a later [read-only public-entrypoint fallback](evidence/public-entrypoint-fallback-20261001.md): the archive route timed out, while the official mainnet entrypoint returned matching genesis/EVM/runtime identity at finalized block 9,187,206 and another absent `RecycleOrBurn[25]` value. The fallback is unapproved observation only; it neither retargets signed work nor provides archive history. Preserve the failed archive transcript and obtain separately approved route authority before any endpoint switch for execution.
 
@@ -1149,8 +1152,8 @@ retains 20 migration source files with 751 catalogue entries. All 89 builder
 normal/race roots and vet pass. Later documentation is not the binary source;
 independent reproduction, live policy, migration and deployment remain gates.
 
-The [selected finality/migration successor](evidence/release-689938d6-server6c39-20261001.md)
-now binds exact SN `689938d6` / server `6c39d307`. Its two sequential source
+The [historical finality/migration successor](evidence/release-689938d6-server6c39-20261001.md)
+binds exact SN `689938d6` / server `6c39d307`. Its two sequential source
 builds match all seventeen binaries and ten contract bytecode outputs, retain
 175 artifacts each, and include all twelve current migration implementations
 and catalogs. Both complete eight-image aggregates verify 342 artifacts each,
@@ -1161,6 +1164,20 @@ normal/race roots, vet and actual-source migration controls pass. The earlier
 e4 attempt omitted eight required inputs and was superseded without repairing
 its outputs. Independent compiler/build reproduction, live policy, migration
 and deployment remain gates.
+
+The [selected metadata/HTTP successor](evidence/release-bab49e1c-servera3e2-20261001.md)
+now binds exact SN `bab49e1c` / server `a3e2e668`. Its two sequential builds
+and separate empty image stores reproduce all seventeen executables, ten
+bytecode outputs and eight OCI platform/configuration/archive identities.
+Both complete aggregates verify 342 original parent/supplement artifacts.
+The repeated 61-file inventory totals 807,538,809 bytes and retains the same
+twelve migration inputs and 751 source catalogue entries. All 95 builder/source-graph
+and thirteen server sampler roots pass normal/race, with both sets of packages
+passing vet. The sampler remains off by default. Full module-body qualification
+is absent for 363 SN and 372 server graph nodes; local compilation is not full
+provenance. Original component receipts keep their source/server scope, and
+independent build, actual service/configuration/policy, migration/restore,
+publication and deployment approval remain open.
 
 The retained-mode manifest keeps historical and compiled contract hashes:
 Coordinator and ValidatorEvidence have metadata drift associated with the changed
@@ -2806,10 +2823,10 @@ The [shared onchain successor](evidence/shared-evm-finality-closure-20261001.md)
 at `222e45a8` closes that send helper's canonical/finalized witnesses and retries
 transient or absent evidence under the original deadline. Both deployed
 validator roles, automatic semantic successor proof and live upgrade acceptance
-remain open. The [selected successor release](evidence/release-689938d6-server6c39-20261001.md)
-packages this later source at exact SN `689938d6`; SN `233ea2be` images retain
-their earlier scope. Local construction does not supply independent release
-qualification or live acceptance.
+remain open. The [selected successor release](evidence/release-bab49e1c-servera3e2-20261001.md)
+packages this later source at exact SN `bab49e1c`; the SN `689938d6` and
+`233ea2be` images retain their earlier scope. Local construction does not supply
+independent release qualification or live acceptance.
 
 **Production change.** Deliver RT-01 through RT-08 across miner, operator, both
 validator roles and bootstrap. Construct and sign from one immutable runtime
