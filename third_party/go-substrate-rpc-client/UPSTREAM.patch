@@ -1,0 +1,84 @@
+--- a/gethrpc/client.go
++++ b/gethrpc/client.go
+@@ -143,8 +143,13 @@
+ 			}
+ 		}
+ 		return nil, ctx.Err()
+-	case resp := <-op.resp:
+-		return resp, op.err
++	case resp, ok := <-op.resp:
++		if !ok {
++			// Closing resp publishes the terminal error. Buffered batch replies
++			// can arrive before that write and must not read it concurrently.
++			return nil, op.err
++		}
++		return resp, nil
+ 	}
+ }
+ 
+@@ -543,11 +548,13 @@
+ 		reqInitLock = c.reqInit // nil while the send lock is held
+ 		conn        = c.newClientConn(codec)
+ 		reading     = true
++		readErr     error
+ 	)
+ 	defer func() {
+ 		close(c.closing)
++		// A stopped reader can still own the exempt in-flight send.
++		conn.close(ErrClientQuit, nil)
+ 		if reading {
+-			conn.close(ErrClientQuit, nil)
+ 			c.drainRead()
+ 		}
+ 		close(c.didClose)
+@@ -573,6 +580,7 @@
+ 			conn.handler.log.Debug("RPC connection read error", "err", err)
+ 			conn.close(err, lastOp)
+ 			reading = false
++			readErr = err
+ 
+ 		// Reconnect:
+ 		case newcodec := <-c.reconnected:
+@@ -586,8 +594,12 @@
+ 				conn.close(errClientReconnected, lastOp)
+ 				c.drainRead()
+ 			}
++			if lastOp != nil {
++				conn.handler.removeRequestOp(lastOp)
++			}
+ 			go c.read(newcodec)
+ 			reading = true
++			readErr = nil
+ 			conn = c.newClientConn(newcodec)
+ 			// Re-register the in-flight request on the new handler
+ 			// because that's where it will be sent.
+@@ -605,6 +617,10 @@
+ 				// Remove response handlers for the last send. When the read loop
+ 				// goes down, it will signal all other current operations.
+ 				conn.handler.removeRequestOp(lastOp)
++			} else if !reading {
++				// The accepted write did not reconnect after the reader failed.
++				// Deliver that uncertain outcome instead of losing its waiter.
++				conn.handler.cancelAllRequests(readErr, nil)
+ 			}
+ 			// Let the next request in.
+ 			reqInitLock = c.reqInit
+--- a/gethrpc/handler.go
++++ b/gethrpc/handler.go
+@@ -173,11 +173,13 @@
+ // cancelAllRequests unblocks and removes pending requests and active subscriptions.
+ func (h *handler) cancelAllRequests(err error, inflightReq *requestOp) {
+ 	didClose := make(map[*requestOp]bool)
+-	if inflightReq != nil {
+-		didClose[inflightReq] = true
+-	}
+ 
+ 	for id, op := range h.respWait {
++		// Retain the send owner until it completes or transfers on reconnect.
++		// A read failure can precede successful write completion.
++		if op == inflightReq {
++			continue
++		}
+ 		// Remove the op so that later calls will not close op.resp again.
+ 		delete(h.respWait, id)
+ 

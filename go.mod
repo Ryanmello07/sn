@@ -219,6 +219,10 @@ replace github.com/urnetwork/glog => ../glog
 
 replace github.com/urnetwork/goidenticons => ../goidenticons
 
+// Retain pending RPC replies when a disconnect precedes write completion.
+// The local source and its upstream provenance are tracked in this repository.
+replace github.com/centrifuge/go-substrate-rpc-client/v4 => ./third_party/go-substrate-rpc-client
+
 // The substrate RPC client still imports the archived npipe module, whose
 // generated Windows syscalls only support 386 and amd64. Keep its narrow API
 // behind an arm64-capable go-winio adapter until the upstream import is fixed.
