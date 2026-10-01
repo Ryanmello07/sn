@@ -25,6 +25,12 @@ also succeeded, SHA256
 at finalized block 9,184,596. It retained exact runtime code and metadata
 bytes with their declared hashes and `unapproved_observation` status. These
 two captures selected different finalized blocks and are not joined.
+The observed spec 470 is newer than the repository's highest reviewed runtime
+entry, spec 467. Its observed code hash is
+`0x5675b684d69a07f6f224c2ba9cabef719804911fba40fbe1a2295198c9cb7c47`;
+metadata hash is
+`0x8b1c467c05efc33e2a8f546bd63ca263d24fc11e89284c072ee7b18e58b4cb34`.
+This observation does not approve a new runtime or its consumed operations.
 
 The stricter `finalized-snapshot` command returned exit 4 with no output:
 `debug_getRawHeader` is not exposed (`-32601 Method not found`). The [error
