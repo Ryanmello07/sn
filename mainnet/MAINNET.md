@@ -2643,6 +2643,11 @@ SN `de0823ce` / server `0b8e758d`. Its separately declared network target is a
 review input, with independent network/runtime authority still missing. Snow VPN
 `172.28.208.185:9944` is a
 future failover; it still returned HTTP 502 at the latest retained check.
+The [later dual-route recheck](evidence/public-dual-route-recheck-20261001.md)
+at block 9,190,703 confirms both public routes still report runtime 470, the
+same mainnet genesis/EVM ID and `:code` hash while v471 remains proposed.
+This is read-only RPC corroboration, not independent finality or activation
+authority.
 Do not retarget signed action bytes. The
 [earlier frozen offline composition](evidence/release-current-source-20261001.md)
 passes its 17-binary, five-contract and 170-hash audit; eight fresh OCI image
