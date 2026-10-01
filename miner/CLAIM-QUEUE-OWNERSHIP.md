@@ -29,6 +29,13 @@ in-memory crash rule still converts `submitting` with retained transaction
 identity to `uncertain`, retaining the exact hash and raw transaction. A closed
 store cannot read or publish state; restart requires a new successful lock.
 
+[Claim finality](../mainnet/evidence/miner-claim-evm-finality-20261001.md) uses the
+EVM finalized identity for EVM state and receipt heights. Each consequential
+observation closes its original canonical hash and the actual finalized tag;
+a native header number supplies no EVM finality. Fresh publication reconciles
+the original receipt after submission. Missing or regressed finality preserves
+the signed queue entry and nonce floor for exact-byte recovery.
+
 Retained reads and publications admit at most **16 MiB per queue**, including
 the JSON writer's indentation and final newline. Startup checks the opened
 file's size before allocation, then reads at most the limit plus one byte so

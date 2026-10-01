@@ -344,9 +344,12 @@ native receipt/state readers, including the separate historical finality witness
 Complete header coordinates and closing canonical
 checks preserve original signed windows and signing/execution/post-state roles.
 Local qualification supplies no automatic runtime approval or live acceptance.
-The miner claim daemon's native/EVM clock comparison remains a separately
-identified recovery blocker. MG-04/PH-04 stay open, and a fresh exact successor
-release is required beyond the frozen SN `233ea2be` artifacts.
+The [claim EVM finality correction](evidence/miner-claim-evm-finality-20261001.md)
+at `6dcb94a1` replaces the native/EVM clock comparison with exact EVM state and
+closing finality checks, including fresh receipt publication and original-byte
+recovery. The shared onchain submitter's other callers still require the
+analogous finalized-tag closing check. MG-04/PH-04 stay open, and a fresh exact
+successor release is required beyond the frozen SN `233ea2be` artifacts.
 
 **Runtime continuity policy proposal — inspection boundary qualified.** The
 [signed compatibility envelope and inspector](RUNTIME-CONTINUITY-POLICY.md)

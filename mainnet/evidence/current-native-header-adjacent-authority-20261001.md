@@ -99,7 +99,7 @@ setup. These are not substituted for the final positive package outcomes.
 Qualification uses generated approvals, local private histories and synthetic
 Rpc transports. It supplies no live source/runtime approval or service acceptance.
 
-## Open claim-recovery and release gates
+## Claim-recovery follow-up and release gates
 
 A separate static audit found `miner/claim_daemon.go:461` reading only the native
 finalized header number. Callers around lines 532 and 589 use that number for EVM
@@ -107,7 +107,10 @@ contract calls; line 826 compares it with an EVM receipt number. With native
 finality 100 and EVM finality 70, a receipt at EVM 90 can satisfy that numeric
 comparison without an authenticated native/EVM mapping. This is a concrete
 source-level defect requiring its own causal recovery tests and correction;
-no live exploit or claim outcome was tested here. MG-04/PH-04 remain open.
+no live exploit or claim outcome was tested here. The separately qualified
+[claim successor at `6dcb94a1`](miner-claim-evm-finality-20261001.md) now corrects
+those paths and fresh claim publication. Its shared onchain helper's other
+callers remain an explicit follow-up; MG-04/PH-04 remain open.
 
 Generic external consumers of the compatibility `HeaderAtContext` projection,
 automatic semantic successor approval, both deployed validator roles, current
@@ -120,6 +123,11 @@ The code is later than release source SN `233ea2be` / server `94229abb`. A fresh
 exact composed source/image release and independent release/deployment approval
 are required. Earlier reproducibility and image attestations cannot be inherited.
 Server main subsequently advanced to `6c39d307`; this author graph remains pinned
-to `24ac67d4`, so compatibility with that later server and its successor release
-must be qualified separately.
+to `24ac67d4`. A separate narrow independent compatibility gate for unchanged
+SN `30354d78` / server `6c39d307` passes eight normal roots, four race roots,
+three-package build and vet. Its report is
+`/mnt/data/sn-testnet/sol-runtime-header-server-main-6c39/report.txt`, SHA256
+`63538723b3590f467fe2deab68a1acd4521b4825dd3335e50a83a98e206c0377`.
+That gate supplies source compatibility evidence, not qualification of new
+server monitoring behavior or a successor image/release attestation.
 No live signing, chain submission, service start or publication occurred.
