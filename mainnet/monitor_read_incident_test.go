@@ -532,9 +532,12 @@ func TestMonitorReadIncidentCommandHistoryFitsExistingBudgets(t *testing.T) {
 		run.again(t, "alpha")
 		event := run.next(t)
 		history := monitorReadTestHistory(t, event)
-		checkpointRaw, _ := monitorReadTestCheckpoint(t, path)
+		checkpointRaw, checkpointRecord := monitorReadTestCheckpoint(t, path)
 		eventRaw, err := json.Marshal(event)
 		if err != nil || len(checkpointRaw) > 16*1024 || len(eventRaw)+1 > diagnostics.MaximumRecordBytes ||
+			event.Publication != "published" || checkpointRecord.State.ReadIncidents.Incidents != episode ||
+			checkpointRecord.State.SteeringLiveness == nil || checkpointRecord.State.SteeringLiveness.LastIncident == nil ||
+			checkpointRecord.State.SteeringLiveness.LastIncident.Recovery == nil ||
 			history.Incidents != episode || history.FailedReads != episode || history.FirstIncident.Id != firstId ||
 			event.Status != "native-window-missed" || event.State.NativeDeadline == nil {
 			t.Fatal("bounded read history lost continuity or cleared a native incident", episode, len(checkpointRaw), len(eventRaw), err)

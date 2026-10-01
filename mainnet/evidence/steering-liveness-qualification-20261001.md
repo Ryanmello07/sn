@@ -6,8 +6,11 @@ signing, broadcast or live service/RPC observation. MG-07 remains open for
 approved production budgets, deployment, delivered alerts and active-hang
 stop/join/custody authority.
 
-The isolated branch `fix/mainnet-validator-progress-20261001` is based on SN
-`46efd24c1d434147b686a7d113539c669805748a`. Exact source hashes, dependency modfile,
+The implementation is frozen at `40eaee2c79071c070dc47da317ba210020bdeaeb` on
+`fix/mainnet-validator-progress-20261001`, based on SN
+`46efd24c1d434147b686a7d113539c669805748a`. A subsequent test-only assertion
+strengthens the maximum-size publication check without changing production code.
+Exact source hashes, dependency modfile,
 selections, raw results and controls are retained under restricted directory
 `/mnt/data/sn-testnet/mainnet-steering-liveness-20261001/`. The external modfile
 changes only relative sibling replacements to their absolute workspace paths;
@@ -66,16 +69,24 @@ recovery, unknown startup, warning and an absent independently expected host.
 The existing worst-case escaped deployment identity, maximum diagnostic
 counters, retained native incident and 25 read-outage cycles now also retain a
 steering episode and recovery within the unchanged 16 KiB checkpoint/event and
-32 KiB textfile limits.
+32 KiB textfile limits. The strengthened bound assertion additionally requires
+acknowledged publication and the current episode/recovery in the actual saved
+checkpoint. Its final separate normal/race package passes are 1.015 s/3.330 s
+(`bounds-normal.jsonl`, `bounds-race.jsonl`); final vet also passes.
 
 ## Causal controls and retained development evidence
 
-Five isolated Go overlays exercise the regression boundaries: suppress elapsed
-loop age, accept recovery from before detection, drop liveness on checkpoint
-publication, remove the stopped-generation check, and bypass explicit budget
-admission. Their normal/race assertion receipts are being sealed separately
-before final handoff; no successful control outcome is inferred from positive
-tests. Overlay files never modify the working source or issue a live command.
+All five isolated Go overlays fail at their intended assertion in both normal
+and race modes: suppress elapsed loop age, accept recovery from before detection,
+drop liveness on checkpoint publication, remove the stopped-generation check,
+and bypass explicit budget admission. All ten have selected root/package FAIL
+and exit 1, with no compile failure, timeout, panic or race report. The exact
+mutations, invocations and assertion logs are in `controls/`, with
+`control-results.json` and `control-run.log`. Overlay files never modify the
+working source or issue a live command. `qualification.json` independently
+audits the final root census, package completion, controls, source/dependency
+hashes and explicit no-signing/no-service-mutation scope; `SHA256SUMS` seals
+the retained evidence files and excludes temporary compiler output.
 
 Earlier failures remain retained: the first focused run omitted the synthetic
 native-chain expectation in one checkpoint fixture; the next used the wrong Go
