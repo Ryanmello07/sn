@@ -60,7 +60,7 @@ func TestEvmReadProfileKeepsMethodsScoped(t *testing.T) {
 			t.Fatal("scoped EVM read did not reach the owned transport exactly once", method, err, string(result), count.Load()-before)
 		}
 	}
-	for _, method := range []string{"eth_sendRawTransaction", "eth_sendTransaction", "author_submitExtrinsic", "eth_sign", "personal_sign", "eth_subscribe", "state_subscribeStorage", "system_chain", "debug_getRawHeader", "eth_getBlockByNumber", "synthetic_unknown"} {
+	for _, method := range []string{"eth_sendRawTransaction", "eth_sendTransaction", "author_submitExtrinsic", "eth_sign", "personal_sign", "eth_subscribe", "state_subscribeStorage", "system_chain", "debug_getRawHeader", "eth_getBlockByHash", "eth_getBlockByNumber", "synthetic_unknown"} {
 		before := count.Load()
 		var result json.RawMessage
 		if err := client.callEvmRead(t.Context(), method, []any{}, &result); err == nil || count.Load() != before {

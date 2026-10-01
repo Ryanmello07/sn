@@ -533,9 +533,13 @@ func (self *evmCreateFixture) serve(writer http.ResponseWriter, request *http.Re
 			return
 		}
 		result = self.rawHeaders[selector["blockHash"].(string)]
-	case "eth_getBlockByNumber":
+	case "eth_getBlockByNumber", "eth_getBlockByHash":
+		if len(call.Params) != 2 || call.Params[1] != false {
+			http.Error(writer, "unexpected EVM block selector", 400)
+			return
+		}
 		for hash, header := range self.evmHeaders {
-			if fmt.Sprintf("0x%x", header.Number) == call.Params[0] {
+			if call.Method == "eth_getBlockByNumber" && fmt.Sprintf("0x%x", header.Number) == call.Params[0] || call.Method == "eth_getBlockByHash" && hash == call.Params[0] {
 				hashes := []string{}
 				if self.receipt != nil && hash == self.receipt["blockHash"] {
 					hashes = append(hashes, self.tx.Hash().Hex())
@@ -546,7 +550,10 @@ func (self *evmCreateFixture) serve(writer http.ResponseWriter, request *http.Re
 						hashes = append(hashes, transaction.Hash().Hex())
 					}
 				}
-				result = map[string]any{"hash": hash, "number": call.Params[0], "transactions": hashes}
+				result = map[string]any{"hash": hash, "number": fmt.Sprintf("0x%x", header.Number), "transactions": hashes}
+				if call.Method == "eth_getBlockByHash" {
+					result = mappingTestPublicBlock(self.t, header, hashes)
+				}
 			}
 		}
 	case "eth_getTransactionReceipt":

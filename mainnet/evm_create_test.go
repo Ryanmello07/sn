@@ -689,8 +689,8 @@ func TestEvmCreateHealthyHeadAdvancePreservesPreparedTransaction(t *testing.T) {
 	}
 }
 
-// Actual HTTP unavailability during the mapping read is not a successful-value
-// mismatch. Removing that outage resumes the original receipt and signature.
+// Missing raw and public capabilities are not successful-value mismatches.
+// Removing that outage resumes the original receipt and signature.
 func TestEvmCreateUnavailableMappingRemainsResumable(t *testing.T) {
 	f := newEvmCreateFixture(t)
 	f.prepareSigned()
@@ -698,14 +698,24 @@ func TestEvmCreateUnavailableMappingRemainsResumable(t *testing.T) {
 		t.Fatal(diagnostic)
 	}
 	f.override = func(method string, args []any, result any) any {
-		if method == "debug_getRawHeader" {
+		if method == "debug_getRawHeader" || method == "eth_getBlockByHash" {
 			return mappingFixtureRpcError{code: -32601}
 		}
 		return result
 	}
+	path := filepath.Join(f.config.Plan.RunDirectory, evmCreateStateFile)
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicReads := f.counts["eth_getBlockByHash"]
 	_, code, diagnostic := f.command("resume", "--online", "--submit")
-	if code != 1 || !strings.Contains(diagnostic, "mapping is unavailable") || strings.Contains(diagnostic, "does not match exact native commitment") || len(f.writes) != 1 {
+	if code != 1 || !strings.Contains(diagnostic, "mapping is unavailable") || strings.Contains(diagnostic, "does not match exact native commitment") || len(f.writes) != 1 || f.counts["eth_getBlockByHash"] != publicReads+1 {
 		t.Fatalf("unavailable read became contradictory evidence: %d %s", code, diagnostic)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("unavailable mapping changed original custody: %v", err)
 	}
 	f.override = nil
 	result, code, diagnostic := f.command("resume", "--online", "--submit")
@@ -743,13 +753,13 @@ func TestEvmCreateScanCheckpointSurvivesLaterReadFailure(t *testing.T) {
 		t.Fatalf("complete chunk not retained: %+v %v", before, err)
 	}
 	f.override = func(method string, args []any, result any) any {
-		if method == "debug_getRawHeader" {
+		if method == "debug_getRawHeader" || method == "eth_getBlockByHash" {
 			return mappingFixtureRpcError{code: -32601}
 		}
 		return result
 	}
-	if _, code, _ := f.command("resume", "--online"); code != 1 {
-		t.Fatal("historical outage acknowledged")
+	if _, code, diagnostic := f.command("resume", "--online"); code != 1 || !strings.Contains(diagnostic, "mapping is unavailable") {
+		t.Fatalf("historical outage acknowledged or misclassified: %d %s", code, diagnostic)
 	}
 	store, err = openEvmActionStore(f.config, false, nil)
 	if err != nil {

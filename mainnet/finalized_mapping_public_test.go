@@ -351,6 +351,25 @@ func TestFinalizedMappingPublicHeaderAvailabilityAndAdmission(t *testing.T) {
 	}
 }
 
+// An HTTP rejection is distinct from an unsupported JSON-RPC capability. A
+// public fallback must preserve that refusal and emit no partial mapping.
+func TestFinalizedMappingPublicHeaderHttpFailureStaysDistinct(t *testing.T) {
+	client, fixture := newPublicFinalizedMappingFixture(t, 1, 1)
+	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		response, err := fixture.roundTrip(request)
+		if err == nil && fixture.counts["eth_getBlockByHash"] != 0 {
+			response.Body.Close()
+			response.StatusCode = http.StatusBadRequest
+			response.Body = io.NopCloser(strings.NewReader("synthetic invalid request"))
+		}
+		return response, err
+	})
+	mapping, err := client.readFinalizedMapping(t.Context(), nil)
+	if err == nil || errors.Is(err, errFinalizedMappingUnavailable) || !strings.Contains(err.Error(), "eth_getBlockByHash: HTTP 400") || mapping.Schema != "" || fixture.counts["debug_getRawHeader"] != 1 || fixture.counts["eth_getBlockByHash"] != 1 || fixture.counts["eth_getBlockByNumber"] != 0 {
+		t.Fatalf("public HTTP failure became capability absence or partial evidence: schema=%s calls=%v err=%v", mapping.Schema, fixture.counts, err)
+	}
+}
+
 // Cancellation at the public read boundary returns neither a reconstructed
 // header nor a partial combined observation, irrespective of valid reply bytes.
 func TestFinalizedSnapshotPublicHeaderCancellation(t *testing.T) {
