@@ -308,7 +308,7 @@ func TestFinalizedSnapshotPublicHeaderKeepsCanonicalRechecks(t *testing.T) {
 			if method == "debug_getRawHeader" {
 				return mappingFixtureRpcError{code: -32601}, true
 			}
-			if changed == "native" && method == "chain_getBlockHash" && count > 2 && params[0] == float64(100) {
+			if changed == "native" && method == "chain_getBlockHash" && fixture.counts["eth_getBlockByHash"] == 1 && params[0] == float64(100) {
 				return testGenesisHash, true
 			}
 			if method == "eth_getBlockByNumber" && count == 2 {
