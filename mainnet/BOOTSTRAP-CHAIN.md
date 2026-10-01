@@ -156,6 +156,57 @@ journals remain unchanged. The separate [public current-only Safe route](BOOTSTR
 requires a newly signed v2 risk-policy acceptance and an exact revision opt-in;
 actual policy acceptance, installation and activation remain unresolved gates.
 
+### Original-authority evidence anchor and installation readback
+
+`contract-successor-execution-readback` uses the same original config, custody,
+successor request, Safe request, signed execution approval and canonical approval
+flags as online successor resume. It requires `--online` and refuses `--submit`.
+For the public current-only route it additionally requires the exact retained,
+independently signed v2 `--accept-safe-current-policy` hash. The choice of that
+risk policy and its actual approval remain external gates. No report or flag
+supplies a signature, new nonce, custody fence or service-start authority.
+
+This command makes network reads only. It may finish the original counted
+terminal journal locally after an interrupted reply/publication. Original eight
+CREATE/link records, signatures, attempts, reservations and successor approval
+stay unchanged. An anchor receipt must contain the exact coordinator
+`ValidatorEvidenceFixed` event before the matching Safe `ExecutionSuccess`,
+with the retained evidence address, digest and transaction identity. A current
+getter or outer status alone cannot complete the action.
+
+Readback reauthenticates every original receipt and the anchor's native/EVM
+inclusion. At the first anchor inclusion it proves the complete native storage
+prefixes and exact code/metadata for all five installed accounts, plus the Safe's
+complete storage with its exact incremented nonce. The finite initial profile
+requires the reviewed layouts and initial policy height; unknown mapping entries,
+previous service accounting, changed evidence domain and incomplete proofs refuse.
+Consequently installation must precede operator/service population, including
+within the anchor's EVM block. The original terminal event's retained runtime
+authority prefix selects the historical interpretation; later approvals cannot
+backdate a different runtime into that event.
+
+At one current finalized mapping it also verifies the complete Safe storage and
+the existing five-account executable/domain views. Normal later accounting is
+permitted by those explicit current views. A later Safe nonce is an authenticated
+observation, never approval of that intervening operation or another send. A final
+canonical/ancestry and live custody check closes the readback. The typed
+`inspectBootstrapContractInstallationAt` producer allows later service admission
+to select this same boundary for its other checks; a JSON report is not a
+capability or a replacement for fresh producer execution.
+
+The `urnetwork-mainnet-bootstrap-contract-installation-v1` result includes a
+stable `installation_identity_hash` over original preparation/contract/execution
+authority, eight original custody seals and the exact terminal event/receipt.
+The identity's `anchor_event_hash` is the terminal **local journal** event seal;
+the exact EVM binding log is authenticated inside `anchor_receipt`, not named by
+that field.
+Its separate `content_hash` binds the moving observation snapshot and selected
+current authority. Complete Safe history remains false under current-only v2;
+complete contract execution history, complete pending state, activation and
+network-effects flags remain false. Native finality still trusts the signed
+owned route. No live installation, public policy acceptance or deployment is
+established by the [local qualification](evidence/contract-installation-anchor-20261001.md).
+
 ## Read-only current prerequisites
 
 After local preparation, run:
