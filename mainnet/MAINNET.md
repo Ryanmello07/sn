@@ -1,6 +1,12 @@
 # Mainnet launch and operations plan
 
-Updated 2026-09-30. **Mainnet activation is blocked.** The read-only
+Updated 2026-10-01. **Mainnet activation is blocked.** At the user's direction,
+preparation now uses the [Rao Foundation public archive RPC](evidence/public-archive-switch-20261001.md)
+until Snow finishes synchronizing. The archive returned mainnet genesis and
+EVM ID 964 and supports the tested historical runtime read. Its public method
+profile lacks `debug_getRawHeader`, so the strict combined native/EVM snapshot
+still needs a qualified fallback or the synced Snow route. No transaction has
+been sent through either route. The earlier read-only
 [Snow/LAN RPC comparison](evidence/snow-rpc-route-20260927.json) showed that
 `http://172.28.208.185:9944` served the same **testnet** chain as
 `http://192.168.1.162:9944`: EVM chain ID **945** (`0x3b1`), rather than the
@@ -356,7 +362,7 @@ mainnet transaction, deployment, UID removal or validator activation.
 
 | Prerequisite | Current disposition and next result required |
 | --- | --- |
-| Owned mainnet RPC and independent identity authority | The [10:51 UTC read-only inspection](evidence/snow-route-inspect-20260927-1051.json) observed testnet ID 945 at Snow `:9944`; the [September 28 13:42–13:47 UTC retry](evidence/snow-route-observation-20260928-0115.md#follow-up-recheck) returned HTTP 502 across 21 chain-ID requests. Reinspect after cutover and obtain separately approved genesis, expected EVM ID 964, native/EVM finalized mapping, code/metadata and node/source identity. An operator-approved mainnet genesis is still outstanding. |
+| Interim public mainnet RPC and independent identity authority | The [October 1 public archive capture](evidence/public-archive-switch-20261001.md) observed mainnet genesis, EVM ID 964 and runtime spec 470, and retained a runtime snapshot. The strict combined native/EVM mapping remains unavailable because `debug_getRawHeader` is absent; independent genesis/runtime/source approval is outstanding. Snow remains an unsynced future failover. Pin the public archive for read-only discovery and unsigned plans, then qualify an exact mapping path and current finalized census before signing. |
 | Immutable qualified release | Compose the actual SN/server/SDK/Connect/config and contract artifacts, including selected branch fixes and migration order; qualify their real interfaces and publish an approved manifest. Historical R48 builds do not qualify later per-user deposit or zero-price changes. |
 | Exact mainnet census and authority | Read SN25 membership, roles, custody, immutable contracts and locks at one finalized snapshot; resolve reset feasibility and all protected identities before making an executable plan. |
 | Economic and custody decisions | The user selected **owner-recycle for the remaining 90%**. Implement and qualify that path and the 10% native-miner target on the actual runtime; finalize mainnet policy, tolerance, keys/Safe, root-registration protection and spend/count/expiry ceilings. Recycled value is not reserve custody. No testnet allowance carries over. |
@@ -2260,12 +2266,13 @@ restarting unrelated bodies already in progress.
 
 ## Open inputs before an executable mainnet plan
 
-Snow VPN `172.28.208.185:9944` is the intended mainnet route, but the node
-operator reports it is still syncing/preparing. The latest retained read-only
-inspection returned HTTP 502 while the preceding one returned testnet chain ID
-945; the archive qualification adds no live observation. Reinspect after cutover, and do not
-construct or sign mainnet actions until it serves the approved mainnet identity.
-Obtain an independently approved mainnet genesis/runtime identity and complete
+Use `https://archive.chain.opentensor.ai` as the interim mainnet RPC for
+read-only discovery and unsigned plans. The [October 1 observation](evidence/public-archive-switch-20261001.md)
+reports mainnet genesis/EVM ID 964 and runtime spec 470, but the strict native/EVM
+mapping lacks a public raw-header method. Snow VPN `172.28.208.185:9944` is a
+future failover; it still returned HTTP 502 at the latest retained check.
+Do not retarget signed action bytes. Obtain an independently approved mainnet
+genesis/runtime identity and complete
 SN25 census. Compose and qualify the production source/dependency release with
 the retained R48/R46 lessons, then implement the bootstrap mutation paths and
 separate root-validator service. Resolve the actual reset capability and implement the selected 90% owner-recycle

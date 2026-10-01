@@ -43,3 +43,9 @@ a GRANDPA/storage proof, source-to-Wasm attestation, independently approved
 runtime identity or permission to sign. Canonical rechecks are not an atomic
 consensus transaction; a coherently false RPC requires stronger independent
 proofs to detect.
+
+The [October 1 public archive switch](evidence/public-archive-switch-20261001.md)
+allows `inspect` and `runtime-snapshot`, but this combined command currently
+returns exit 4 there because `debug_getRawHeader` is unavailable. Keep that
+capability gap visible; do not substitute an unlinked EVM JSON block as the
+combined proof.

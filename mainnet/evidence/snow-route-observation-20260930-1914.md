@@ -51,3 +51,7 @@ Mainnet chain identity remains unobserved.
 At approximately **00:58 UTC on October 1**, both methods returned HTTP 502
 with the same 150-byte response and SHA-256. The mainnet chain remains
 unidentified from this route.
+
+At approximately **01:18 UTC on October 1**, both identity methods again
+returned HTTP 502 with the same 150-byte response and SHA-256. No mainnet
+genesis or EVM chain ID was observed.
