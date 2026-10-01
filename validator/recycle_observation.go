@@ -112,19 +112,19 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 	if err != nil {
 		return nil, err
 	}
-	header, err := native.HeaderAtContext(ctx, finalized)
+	finalizedNumber, _, err := native.CanonicalHeaderAtContext(ctx, finalized)
 	if err != nil {
 		return nil, err
 	}
-	finalizedNumber := uint64(header.Number)
+	finalityHash := finalized
+	number := finalizedNumber
 	if requested != (types.Hash{}) {
 		finalized = requested
-		header, err = native.HeaderAtContext(ctx, finalized)
+		number, _, err = native.ReceiptHeaderAtContext(ctx, finalized)
 		if err != nil {
 			return nil, err
 		}
 	}
-	number := uint64(header.Number)
 	if number > finalizedNumber {
 		return nil, errors.New("owner-recycle census is newer than the current finalized head")
 	}
@@ -318,6 +318,9 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 		return nil, err
 	}
 	if err := checkCanonical(); err != nil {
+		return nil, err
+	}
+	if err := native.CheckCanonicalBlockAtContext(ctx, finalityHash, finalizedNumber); err != nil {
 		return nil, err
 	}
 	proposalHash, err := approval.Proposal.Hash(cfg.Policy)

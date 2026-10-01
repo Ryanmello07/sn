@@ -79,12 +79,12 @@ func readReleaseNativeValidatorAtBlockContext(ctx context.Context, chain *crv4.C
 		genesis == (types.Hash{}) || chain.GenesisHash != genesis || netuid == 0 || hotkey == ([32]byte{}) || uint32(uid) >= releaseNativeValidatorMaximumUIDs {
 		return empty, errors.New("native validator exact-block identity is incomplete")
 	}
-	header, err := chain.HeaderAtContext(ctx, finalized)
+	number, _, err := chain.ReceiptHeaderAtContext(ctx, finalized)
 	if err != nil {
 		return empty, err
 	}
 	observation, err := crv4.ReadValidatorStakeAtContext(ctx, chain, crv4.ValidatorIdentityQuery{
-		GenesisHash: genesis, BlockHash: finalized, BlockNumber: uint64(header.Number),
+		GenesisHash: genesis, BlockHash: finalized, BlockNumber: number,
 		Netuid: netuid, UID: uid, MaximumSubnetUIDs: releaseNativeValidatorMaximumUIDs,
 	}, expected)
 	if err != nil {

@@ -177,7 +177,7 @@ func CaptureReleaseNativeSourceV2(ctx context.Context, native *crv4.Chain, cfg *
 		seen[hash] = true
 		var authenticated crv4.AuthenticatedRuntimeArtifact
 		if isOwnerRecycleProductionConfig(cfg) {
-			authenticated, _, err = authenticateOwnerRecycleProductionArtifactWithHeadersAtContext(ctx, owned, cfg, types.Hash(blockHash), true, true)
+			authenticated, _, err = authenticateOwnerRecycleProductionArtifactAtContext(ctx, owned, cfg, types.Hash(blockHash), true)
 		} else {
 			authenticated, err = crv4.AuthenticateRuntimeArtifactAtContext(ctx, owned, types.Hash(blockHash), HistoricalReleaseRuntimeArtifacts(releaseRuntimeIdentityV2(cfg))...)
 		}

@@ -260,7 +260,8 @@ func TestOwnerRecycleMeasurementReplaysOriginalBlockAfterHeadAdvances(t *testing
 	if err := os.Remove(fixture.admission.cfg.OwnerRecycleApproval.Approval.Path); err != nil {
 		t.Fatal(err)
 	}
-	fixture.admission.headHash, fixture.admission.headNumber = types.Hash(recycleTestId(1200)), 150
+	_, fixture.admission.headHash = releaseReceiptTestHeader(t, types.Hash(recycleTestId(1200)), 150)
+	fixture.admission.headNumber = 150
 	reobserved, err := ObserveOwnerRecycleMeasurementAuthority(t.Context(), fixture.admission.cfg, fixture.admission.chain, fixture.authority.expected)
 	if err != nil {
 		t.Fatal(err)

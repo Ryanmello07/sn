@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -81,7 +80,11 @@ func newProductionRuntimeTestFixture(t *testing.T, historical bool) *productionR
 				return err
 			}
 			index := 0
-			if binary.LittleEndian.Uint64(hash[:8]) > 100 {
+			number, err := mainnetRuntimeTestNumber(hash)
+			if err != nil {
+				return err
+			}
+			if number > 100 {
 				index = 1
 			}
 			version := rpc.versions[index]

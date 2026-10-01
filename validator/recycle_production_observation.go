@@ -125,11 +125,11 @@ func observeOwnerRecycleProductionEligibility(ctx context.Context, cfg *ReleaseC
 	if err := authenticateHistoricalNativeRuntimeAtContext(ctx, &view, cfg, activationHash); err != nil {
 		return nil, err
 	}
-	header, err := view.HeaderAtContext(ctx, activationHash)
+	activationNumber, _, err := view.CanonicalHeaderAtContext(ctx, activationHash)
 	if err != nil {
 		return nil, fmt.Errorf("read owner-recycle activation header: %w", err)
 	}
-	if header == nil || uint64(header.Number) != result.ActivationBlock || result.ActivationBlock > authority.expected.NativeSnapshotBlock {
+	if activationNumber != result.ActivationBlock || result.ActivationBlock > authority.expected.NativeSnapshotBlock {
 		return nil, errors.New("owner-recycle activation is not its signed earlier finalized block")
 	}
 	allowed, err := releaseHistoricalRuntimeArtifactsAt(cfg, result.ActivationBlock)
@@ -162,6 +162,12 @@ func observeOwnerRecycleProductionEligibility(ctx context.Context, cfg *ReleaseC
 	}
 	if result.PendingServerEmission != 0 || result.ActivationNativeEpoch != approval.FirstNativeEpoch {
 		return nil, errors.New("owner-recycle activation has pre-activation pending miner emissions or a different first native epoch")
+	}
+	if err := view.CheckCanonicalBlockAtContext(ctx, activationHash, activationNumber); err != nil {
+		return nil, err
+	}
+	if err := view.CheckCanonicalBlockAtContext(ctx, block, authority.expected.NativeSnapshotBlock); err != nil {
+		return nil, err
 	}
 	return result, ctx.Err()
 }

@@ -79,22 +79,21 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 	if err != nil {
 		return empty, nil, err
 	}
-	finalizedHeader, err := native.HeaderAtContext(ctx, finalized)
+	finalizedNumber, _, err := native.ReceiptHeaderAtContext(ctx, finalized)
 	if err != nil {
 		return empty, nil, err
 	}
 	if block == (types.Hash{}) {
 		block = finalized
 	}
-	header := finalizedHeader
+	number := finalizedNumber
 	if block != finalized {
-		header, err = native.HeaderAtContext(ctx, block)
+		number, _, err = native.ReceiptHeaderAtContext(ctx, block)
 		if err != nil {
 			return empty, nil, err
 		}
 	}
-	number := uint64(header.Number)
-	if number == 0 || number > uint64(finalizedHeader.Number) {
+	if number == 0 || number > finalizedNumber {
 		return empty, nil, errors.New("mainnet runtime observation block is not finalized")
 	}
 	var selected *releaseMainnetRuntimeApproval
@@ -118,7 +117,7 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 		}
 		return ctx.Err()
 	}
-	if err := checkCanonical(finalized, uint64(finalizedHeader.Number)); err != nil {
+	if err := checkCanonical(finalized, finalizedNumber); err != nil {
 		return empty, nil, err
 	}
 	if err := checkCanonical(block, number); err != nil {
@@ -133,6 +132,11 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 	}
 	if err := checkCanonical(block, number); err != nil {
 		return empty, nil, err
+	}
+	if block != finalized {
+		if err := checkCanonical(finalized, finalizedNumber); err != nil {
+			return empty, nil, err
+		}
 	}
 	artifact.GenesisHash = genesis
 	return artifact, &MainnetRuntimeObservation{

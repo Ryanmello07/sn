@@ -213,6 +213,9 @@ func newRecycleAdmissionFixture(t *testing.T, mutate func(*types.Metadata)) *rec
 			if args[0] == uint64(0) {
 				return assign(target, types.Hash(proposal.Runtime.GenesisHash))
 			}
+			if fixture.headHash != (types.Hash{}) && args[0] == fixture.headNumber {
+				return assign(target, fixture.headHash)
+			}
 			if args[0] == uint64(100) {
 				if fixture.canonical != (types.Hash{}) {
 					return assign(target, fixture.canonical)
@@ -222,7 +225,8 @@ func newRecycleAdmissionFixture(t *testing.T, mutate func(*types.Metadata)) *rec
 			return errors.New("synthetic canonical query height changed")
 		case "chain_getHeader":
 			if fixture.headHash != (types.Hash{}) && len(args) == 1 && args[0] == fixture.headHash.Hex() {
-				return assign(target, types.Header{Number: types.BlockNumber(fixture.headNumber)})
+				header, _ := releaseReceiptTestHeader(t, types.Hash(recycleTestId(1200)), fixture.headNumber)
+				return assign(target, releaseReceiptTestHeaderWire(header))
 			}
 			if len(args) != 1 || args[0] != fixture.finalized.Hex() {
 				return errors.New("synthetic header lost finalized hash")

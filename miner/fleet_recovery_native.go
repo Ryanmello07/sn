@@ -159,12 +159,12 @@ func fleetRecoverableNative(opts docopt.Opts, manifest *protocol.FleetManifest, 
 	if err != nil {
 		return err
 	}
-	header, err := chain.HeaderAtContext(ctx, start)
+	number, _, err := chain.ReceiptHeaderAtContext(ctx, start)
 	if err != nil {
 		return err
 	}
 	prepare := func(result snchain.SubmitResult) error {
-		record = fleetRecoveryPrepared(intent, authority, start, uint64(header.Number))
+		record = fleetRecoveryPrepared(intent, authority, start, number)
 		record.NativeSigner, record.Nonce, record.Raw, record.TxHash = key.PublicKey(), uint64(result.Nonce), append([]byte(nil), result.Raw...), result.ExtrinsicHash.Hex()
 		return store.put(record, signer)
 	}

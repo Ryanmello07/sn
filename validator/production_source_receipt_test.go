@@ -75,9 +75,9 @@ func installProductionSourceReceiptTest(t *testing.T, continuation *productionCo
 	finalizedHash := receiptHash
 	var finalizedWire any = headerWire
 	if upgradeDigest {
-		// Observe the upgrade receipt from the next finalized block. Other
-		// native readers still use the sdk for their finalized-head number;
-		// the receipt itself must retain its actual digest8 and parent.
+		// Observe the upgrade receipt from the next finalized block to keep
+		// original execution and later post-state authority distinct. The
+		// receipt itself must retain its actual digest8 and parent.
 		production.head = 102
 		finalizedHeader, hash := releaseReceiptTestHeader(t, receiptHash, 102)
 		finalizedHash, finalizedWire = hash, releaseReceiptTestHeaderWire(finalizedHeader)
@@ -185,11 +185,11 @@ func TestProductionSourceReceiptRequiresSeparateAuthenticatedViews(t *testing.T)
 	if err := authenticateProductionSourceRuntimeAtContext(t.Context(), &native, fixture.production.cfg, parent); err != nil {
 		t.Fatal(err)
 	}
-	execution, _, err := authenticateOwnerRecycleProductionArtifactWithHeadersAtContext(t.Context(), &native, fixture.current, parent, true, true)
+	execution, _, err := authenticateOwnerRecycleProductionArtifactAtContext(t.Context(), &native, fixture.current, parent, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	postState, _, err := authenticateOwnerRecycleProductionArtifactWithHeadersAtContext(t.Context(), &native, fixture.current, fixture.receipt.BlockHash, true, true)
+	postState, _, err := authenticateOwnerRecycleProductionArtifactAtContext(t.Context(), &native, fixture.current, fixture.receipt.BlockHash, true)
 	if err != nil {
 		t.Fatal(err)
 	}

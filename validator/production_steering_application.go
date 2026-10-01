@@ -63,6 +63,9 @@ func (self *ReleaseSteerer) observeProductionApplicationV2(ctx context.Context, 
 			return err
 		}
 		row, err = native.WeightsAtContext(readCtx, self.cfg.Netuid, observed.Stake.Identity.UID, hash)
+		if err == nil {
+			err = native.CheckCanonicalBlockAtContext(readCtx, hash, number)
+		}
 		return err
 	})
 	if err != nil {

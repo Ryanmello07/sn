@@ -227,7 +227,11 @@ func TestValidatorUploadProductionRuntimeRetainsRenewedAuthorityWindow(t *testin
 			if err != nil {
 				return err
 			}
-			if binary.LittleEndian.Uint64(hash[:8]) >= 102 {
+			number, err := mainnetRuntimeTestNumber(hash)
+			if err != nil {
+				return err
+			}
+			if number >= 102 {
 				if method == "state_getStorageHash" {
 					return setReleaseHistoricalTestResult(result, current.RuntimeCodeHash)
 				}

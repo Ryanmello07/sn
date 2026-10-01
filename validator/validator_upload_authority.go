@@ -102,14 +102,14 @@ func ValidatorUploadNativeObserverContext(ctx context.Context, native *crv4.Chai
 	if err != nil {
 		return result, err
 	}
-	header, err := native.HeaderAtContext(ctx, hash)
+	number, _, err := native.CanonicalHeaderAtContext(ctx, hash)
 	if err != nil {
 		return result, err
 	}
-	if header == nil || header.Number == 0 {
+	if number == 0 {
 		return result, errors.New("validator staging finalized native header is absent")
 	}
-	allowed, err := deployment.runtimeArtifactsAt(uint64(header.Number), false)
+	allowed, err := deployment.runtimeArtifactsAt(number, false)
 	if err != nil {
 		return result, err
 	}
@@ -139,14 +139,10 @@ func ValidatorUploadNativeObserverContext(ctx context.Context, native *crv4.Chai
 	if timestamp == 0 || timestamp > math.MaxInt64 {
 		return result, errors.New("validator staging native timestamp exceeds its bound")
 	}
-	var canonical string
-	if err := native.API.Client.CallContext(ctx, &canonical, "chain_getBlockHash", uint64(header.Number)); err != nil {
+	if err := native.CheckCanonicalBlockAtContext(ctx, hash, number); err != nil {
 		return result, err
 	}
-	if canonical != hash.Hex() {
-		return result, errors.New("validator staging native finalized hash changed")
-	}
-	return ValidatorUploadNativeObserver{Number: uint64(header.Number), Hash: hash, TimestampMillis: timestamp}, nil
+	return ValidatorUploadNativeObserver{Number: number, Hash: hash, TimestampMillis: timestamp}, nil
 }
 
 // Reads one complete finalized header through the bounded real RPC transport.

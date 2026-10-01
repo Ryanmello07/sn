@@ -1,3 +1,5 @@
+// Native admission binds one complete finalized header and its approved
+// artifact before a caller may use the resulting read or signing view.
 package chain
 
 import (
@@ -18,9 +20,9 @@ type FinalizedRuntime struct {
 	Artifact crv4.AuthenticatedRuntimeArtifact
 }
 
-// AuthenticateFinalizedRuntimeContext reads the canonical finalized head,
-// authenticates the complete runtime identity there against the caller's
-// allowed artifacts (crv4/runtime_identity.go), and returns a bound view of
+// AuthenticateFinalizedRuntimeContext authenticates every finalized header
+// field, checks its canonical height around the complete runtime read against
+// the caller's allowed artifacts, and returns a bound view of
 // the chain whose metadata and signing versions come from that artifact. The
 // shared connection is never mutated, so concurrent readers keep their view.
 func AuthenticateFinalizedRuntimeContext(ctx context.Context, chain *crv4.Chain, allowed ...crv4.RuntimeArtifactIdentity) (*crv4.Chain, FinalizedRuntime, error) {
@@ -31,8 +33,21 @@ func AuthenticateFinalizedRuntimeContext(ctx context.Context, chain *crv4.Chain,
 	if err != nil {
 		return nil, FinalizedRuntime{}, err
 	}
-	header, err := chain.HeaderAtContext(ctx, finalized)
+	number, _, err := chain.ReceiptHeaderAtContext(ctx, finalized)
 	if err != nil {
+		return nil, FinalizedRuntime{}, err
+	}
+	checkCanonical := func() error {
+		var canonical types.Hash
+		if err := chain.API.Client.CallContext(ctx, &canonical, "chain_getBlockHash", number); err != nil {
+			return err
+		}
+		if canonical != finalized {
+			return errors.New("finalized runtime header is not canonical at its authenticated height")
+		}
+		return ctx.Err()
+	}
+	if err := checkCanonical(); err != nil {
 		return nil, FinalizedRuntime{}, err
 	}
 	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, chain, finalized, allowed...)
@@ -42,11 +57,14 @@ func AuthenticateFinalizedRuntimeContext(ctx context.Context, chain *crv4.Chain,
 	if artifact.CompatibilityProfile != "" && !chain.RuntimeArtifactCompatible(artifact) {
 		return nil, FinalizedRuntime{}, errors.New("finalized runtime compatibility lacks explicit authority")
 	}
+	if err := checkCanonical(); err != nil {
+		return nil, FinalizedRuntime{}, err
+	}
 	bound := *chain
 	if err := bound.BindRuntimeArtifact(artifact); err != nil {
 		return nil, FinalizedRuntime{}, err
 	}
-	return &bound, FinalizedRuntime{Hash: finalized, Number: uint64(header.Number), Artifact: artifact}, nil
+	return &bound, FinalizedRuntime{Hash: finalized, Number: number, Artifact: artifact}, nil
 }
 
 // RequireSameRuntime refuses to sign under one artifact and broadcast under

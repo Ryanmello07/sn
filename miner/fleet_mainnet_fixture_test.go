@@ -56,6 +56,7 @@ type fleetMainnetTestFixture struct {
 	finalizedNumber       uint64
 	nativeBlocks          map[uint64]types.Hash
 	nativeHeaders         map[uint64]types.Header
+	nativeHeaderOverrides map[uint64]any
 	nativeBodyOverrides   map[uint64]any
 	nativeBodyReads       map[uint64]int
 	nativeRuntimeUpdateAt uint64
@@ -240,6 +241,9 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 			for number, hash := range self.nativeBlocks {
 				if str(0) == hash.Hex() {
 					result = self.nativeHeaderWireWithLock(number)
+					if override, ok := self.nativeHeaderOverrides[number]; ok {
+						result = override
+					}
 				}
 			}
 		case "chain_getBlock":
