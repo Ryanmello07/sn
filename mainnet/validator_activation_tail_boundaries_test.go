@@ -96,6 +96,7 @@ func TestValidatorActivationTailBoundariesRejectRetainedRegression(t *testing.T)
 		switch fault {
 		case "scope":
 			inventory.Ledgers[0].TailBoundaryProof = nil
+			inventory.Ledgers[1].TailBoundaryProof = nil
 		case "count":
 			proof.Boundaries[0].Records++
 		case "empty":
