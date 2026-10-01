@@ -16,14 +16,16 @@ import (
 // Each role retains its own installed bytes, consumed start and postcondition.
 // A first role's completion cannot be mistaken for completion of the pair.
 type validatorActivationUnitState struct {
-	InstallIntent      bool                          `json:"install_intent"`
-	Installed          bool                          `json:"installed"`
-	StartAt            time.Time                     `json:"start_consumed_at"`
-	StartMonotonicUsec uint64                        `json:"start_consumed_monotonic_usec"`
-	Readiness          *validatorActivationReadiness `json:"start_readiness,omitempty"`
-	Generation         *repairValidatorGeneration    `json:"acknowledged_generation,omitempty"`
-	Completed          *repairValidatorPostcondition `json:"process_postcondition,omitempty"`
-	Status             string                        `json:"status"`
+	InstallIntent          bool                          `json:"install_intent"`
+	Installed              bool                          `json:"installed"`
+	StartAt                time.Time                     `json:"start_consumed_at"`
+	StartMonotonicUsec     uint64                        `json:"start_consumed_monotonic_usec"`
+	Readiness              *validatorActivationReadiness `json:"start_readiness,omitempty"`
+	Generation             *repairValidatorGeneration    `json:"acknowledged_generation,omitempty"`
+	Completed              *repairValidatorPostcondition `json:"process_postcondition,omitempty"`
+	Status                 string                        `json:"status"`
+	CurrentAuthorityHash   string                        `json:"current_authority_hash,omitempty"`
+	RecheckedReadinessHash string                        `json:"rechecked_readiness_hash,omitempty"`
 }
 
 type validatorActivationRecord struct {
@@ -36,6 +38,7 @@ type validatorActivationRecord struct {
 	Readiness            *validatorActivationReadiness             `json:"last_readiness,omitempty"`
 	ProofCheckpoints     []*validatorActivationProofCheckpoint     `json:"completed_proof_checkpoints,omitempty"`
 	CommittedCheckpoints []*validatorActivationCommittedCheckpoint `json:"completed_committed_checkpoints,omitempty"`
+	CurrentAuthority     *validatorActivationCurrentRetained       `json:"current_authority,omitempty"`
 	Status               string                                    `json:"status"`
 	ContentHash          string                                    `json:"content_hash"`
 }
@@ -61,6 +64,21 @@ func (self validatorActivationRecord) validate(approval validatorActivationAppro
 	if self.Readiness != nil && self.Readiness.validate(approval.Plan) != nil {
 		return errors.New("validator activation retained readiness differs")
 	}
+	if self.CurrentAuthority != nil {
+		retained := self.CurrentAuthority
+		if retained.Approval.validateApproval(approval, publicKey, retained.PublicKey) != nil || !repairValidatorPath(retained.Reference.Path) || !planSha256(retained.Reference.Sha256) {
+			return errors.New("validator activation lost retained current authority")
+		}
+	}
+	validateCurrent := func(readiness *validatorActivationReadiness) error {
+		if readiness != nil && readiness.Current != nil && (self.CurrentAuthority == nil || readiness.Current.validate(approval.Plan, *readiness, *self.CurrentAuthority) != nil) {
+			return errors.New("validator activation current projection lost independent authority")
+		}
+		return nil
+	}
+	if err := validateCurrent(self.Readiness); err != nil {
+		return err
+	}
 	if len(self.ProofCheckpoints) != 0 && len(self.ProofCheckpoints) != 2 {
 		return errors.New("validator proof checkpoint census differs")
 	}
@@ -78,6 +96,15 @@ func (self validatorActivationRecord) validate(approval validatorActivationAppro
 		}
 	}
 	for _, unit := range self.Units {
+		if err := validateCurrent(unit.Readiness); err != nil {
+			return err
+		}
+		if unit.CurrentAuthorityHash != "" && (self.CurrentAuthority == nil || unit.StartAt.IsZero() || unit.Readiness == nil || unit.Readiness.Current == nil || unit.CurrentAuthorityHash != rootObjectHash(self.CurrentAuthority.Approval)) ||
+			unit.Readiness != nil && unit.Readiness.Current != nil && unit.CurrentAuthorityHash == "" ||
+			unit.RecheckedReadinessHash != "" && (unit.CurrentAuthorityHash == "" || !planSha256(unit.RecheckedReadinessHash)) ||
+			unit.CurrentAuthorityHash != "" && unit.Generation != nil && unit.RecheckedReadinessHash == "" {
+			return errors.New("validator activation current start lost its independent or counted admission")
+		}
 		if unit.Installed && !unit.InstallIntent || unit.InstallIntent && self.Operations == 0 || unit.StartAt.IsZero() != (unit.StartMonotonicUsec == 0) ||
 			!unit.StartAt.IsZero() && (!unit.Installed || unit.Readiness == nil || unit.StartAt.After(self.HighWaterAt)) || unit.StartAt.IsZero() && (unit.Readiness != nil || unit.Generation != nil || unit.Completed != nil) {
 			return errors.New("validator activation journal lost its installation or consumed start")
@@ -101,12 +128,15 @@ func (self validatorActivationRecord) validate(approval validatorActivationAppro
 		}
 	}
 	switch self.Status {
-	case "claimed", "operation-reserved", "installed", "admitted-process-only", "observed-operator-and-contract-evidence", "admitted-stake-capacity", "observed-approved-prefix-and-worker-health", "observed-committed-prefix-and-worker-health", "activation-authority-unavailable", "source-refused", "authority-refused", "approval-window-closed", "operation-limit", "clock-rollback", "partial", "processes-observed":
+	case "claimed", "operation-reserved", "installed", "admitted-process-only", "observed-operator-and-contract-evidence", "admitted-stake-capacity", "observed-approved-prefix-and-worker-health", "observed-committed-prefix-and-worker-health", "admitted-current-authority", "activation-authority-unavailable", "source-refused", "authority-refused", "approval-window-closed", "operation-limit", "clock-rollback", "partial", "processes-observed":
 	default:
 		return errors.New("validator activation disposition is unknown")
 	}
 	if self.Status == "observed-operator-and-contract-evidence" && (self.Readiness == nil || self.Readiness.Production == nil) {
 		return errors.New("validator activation production disposition lacks its complete observation")
+	}
+	if self.Status == "admitted-current-authority" && (self.CurrentAuthority == nil || self.Readiness == nil || self.Readiness.Current == nil) {
+		return errors.New("validator activation current disposition lacks complete authority")
 	}
 	if self.Status == "admitted-stake-capacity" && (self.Readiness == nil || self.Readiness.Stake == nil) {
 		return errors.New("validator stake disposition lacks its bounded capacity observation")
@@ -225,7 +255,7 @@ func (self *validatorActivationStore) load(ctx context.Context) (validatorActiva
 	if err := self.validateOwner(); err != nil {
 		return record, err
 	}
-	raw, err := readMonitorServiceFile(ctx, self.path, 64*1024, true, monitorServiceReadHooks{})
+	raw, err := readMonitorServiceFile(ctx, self.path, 128*1024, true, monitorServiceReadHooks{})
 	if err != nil {
 		return record, err
 	}
@@ -246,7 +276,7 @@ func (self *validatorActivationStore) save(record validatorActivationRecord) err
 		return err
 	}
 	raw, err := json.Marshal(record)
-	if err != nil || len(raw) > 64*1024 {
+	if err != nil || len(raw) > 128*1024 {
 		return errors.New("validator activation journal exceeds its bound")
 	}
 	if err := publishMonitorFile(self.path, append(raw, '\n'), 0600, self.syncDirectory); err != nil {

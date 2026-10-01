@@ -143,6 +143,12 @@ func observeValidatorActivationHealth(ctx context.Context, store *validatorActiv
 // The additional scope authenticates service-owned committed histories. The
 // existing health-only command retains its original observation and limits.
 func observeValidatorActivationHealthScope(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, record *validatorActivationRecord, now func() time.Time, committed bool) (*validatorActivationReadiness, error) {
+	return observeValidatorActivationHealthPending(ctx, store, host, record, now, committed, -1)
+}
+
+// A consumed but not yet issued start is read as stopped only by its synchronous
+// current-authority owner. Checkpoint writes always preserve the consumed record.
+func observeValidatorActivationHealthPending(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, record *validatorActivationRecord, now func() time.Time, committed bool, pending int) (*validatorActivationReadiness, error) {
 	plan := store.approval.Plan
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(plan.Route.ReadRetrySeconds)*time.Second)
 	defer cancel()
@@ -190,7 +196,7 @@ func observeValidatorActivationHealthScope(ctx context.Context, store *validator
 		if record.Readiness != nil && record.Readiness.Health != nil {
 			previous = &record.Readiness.Health.Workers[i]
 		}
-		health.Workers[i], err = host.observeValidatorActivationWorker(ctx, plan, record.Units[i], i, previous, now())
+		health.Workers[i], err = host.observeValidatorActivationWorker(ctx, plan, validatorActivationPreStartRecord(*record, pending).Units[i], i, previous, now())
 		if err != nil {
 			return nil, err
 		}
@@ -204,7 +210,7 @@ func observeValidatorActivationHealthScope(ctx context.Context, store *validator
 	if mapping.EvmHeader.Number != result.Production.EvmBlock || mapping.EvmHeader.Hash != result.Production.EvmHash {
 		return nil, errors.New("validator health current mapping changed")
 	}
-	if err := host.admit(ctx, plan, *record); err != nil {
+	if err := host.admit(ctx, plan, validatorActivationPreStartRecord(*record, pending)); err != nil {
 		return nil, err
 	}
 	health.ContentHash = rootObjectHash(*health)
