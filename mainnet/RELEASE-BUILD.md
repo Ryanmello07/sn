@@ -94,7 +94,7 @@ receipts and complete local source-to-image aggregate. No historical
 attestation is inherited; independent reproducibility and release/deployment
 approval remain separate gates.
 
-The [selected successor release](evidence/release-233ea2be-server942-20261001.md)
+The [historical successor release](evidence/release-233ea2be-server942-20261001.md)
 binds SN `233ea2be` / server `94229abb`, including passive-root host, owner
 recycle transition and schema 751. Two fresh-cache builds match all seventeen
 executables and five selected contract bytecode pairs; both complete
@@ -103,6 +103,20 @@ bytes. Its own source lock and repeated unsigned 56-file inventory preserve
 the exact source identity. All 89 builder normal/race roots and vet pass.
 This local repeat does not grant independent reproducibility or approval;
 later reporting commits and predecessor attestations remain separate.
+
+The [selected finality/migration successor](evidence/release-689938d6-server6c39-20261001.md)
+binds SN `689938d6` / server `6c39d307`, preserving the effective dependency pins.
+Two sequential builds with initially empty Go caches match all seventeen
+executables and ten contract bytecode outputs. Each retains 175 artifacts,
+including all twelve current migration implementations/catalogs. Both
+eight-image aggregates verify 342 parent/supplement artifacts each, and all
+platform/configuration/archive bytes match across separate initially empty
+image stores. The 61-file unsigned inventory repeats exactly. All 95
+builder/source-graph roots pass normal/race,
+both packages pass vet, and the builder compiles. The superseded e4 attempt
+retains its eight-input omission and interrupted repeats without qualification
+being inherited. Independent reproducibility and release/deployment approval
+remain false.
 
 Both main modules resolve independently. The builder records their effective
 module graphs, exact module/go.mod sums, local module Git ownership and module
