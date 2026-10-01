@@ -81,6 +81,11 @@ func (self *rootStorageReader) subnetRegistrations(ctx context.Context, netuid u
 	for _, key := range keys {
 		keyKVs[key] = true
 	}
+	if self.batchRegistrations {
+		if err := self.prepareSubnetRegistrations(ctx, netuid, count, keyKVs); err != nil {
+			return nil, 0, err
+		}
+	}
 	registrations := make([]subnetRegistration, count)
 	err = rootReadParallel(ctx, count, func(readCtx context.Context, index int) error {
 		uidArg := binary.LittleEndian.AppendUint16(nil, uint16(index))

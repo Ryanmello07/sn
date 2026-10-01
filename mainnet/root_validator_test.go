@@ -196,6 +196,20 @@ func (self *rootRpcFixture) roundTrip(request *http.Request) (*http.Response, er
 		if value, ok := self.storageKVs[key]; ok {
 			result = value
 		}
+	case "state_queryStorageAt":
+		var keys []string
+		if len(call.Params) != 2 || json.Unmarshal(call.Params[0], &keys) != nil || len(keys) == 0 || len(keys) > subnetDiscoveryStorageBatchKeys {
+			return nil, errors.New("unbounded discovery storage batch")
+		}
+		changes := make([][]any, len(keys))
+		for index, key := range keys {
+			var value any
+			if raw, exists := self.storageKVs[key]; exists {
+				value = raw
+			}
+			changes[index] = []any{key, value}
+		}
+		result = []any{map[string]any{"block": testFinalizedHash, "changes": changes}}
 	case "state_getKeysPaged":
 		var prefix string
 		var start *string
