@@ -18,29 +18,71 @@ func bootstrapContractStateFile(index int) string {
 	return []string{evmCreateStateFile, evmVaultCreateStateFile, evmCoordinatorCreateStateFile, evmEscrowRegisterStateFile, evmProxyCreateStateFile, evmReserveLinkStateFile, evmVaultLinkStateFile, evmEvidenceCreateStateFile}[index]
 }
 
+// The descriptor, its named inode and the private physical parent must remain
+// the same while a read-only owner borrows original action custody.
+type bootstrapContractReadinessMarker struct {
+	file     *os.File
+	path     string
+	root     bootstrapSuccessorRootIdentity
+	expected string
+}
+
+// A replaced marker with identical contents is still a different local lock.
+func (self *bootstrapContractReadinessMarker) checkpoint() error {
+	if self == nil || self.file == nil {
+		return errors.New("contract readiness marker is closed")
+	}
+	root, err := bootstrapSuccessorPhysicalRoot(filepath.Dir(self.path))
+	if err != nil || root != self.root {
+		return errors.Join(errors.New("contract readiness original physical directory changed"), err)
+	}
+	if err := bootstrapSuccessorPrivateRegular(self.file); err != nil {
+		return err
+	}
+	opened, openErr := self.file.Stat()
+	named, nameErr := os.Lstat(self.path)
+	if openErr != nil || nameErr != nil || !os.SameFile(opened, named) || opened.Size() != int64(len(self.expected)) {
+		return errors.Join(errors.New("contract readiness original marker custody changed"), openErr, nameErr)
+	}
+	raw, err := io.ReadAll(io.NewSectionReader(self.file, 0, int64(len(self.expected))+1))
+	if err != nil || string(raw) != self.expected {
+		return errors.Join(errors.New("contract readiness original marker bytes changed"), err)
+	}
+	return nil
+}
+
+// Shared ownership releases only its descriptor, never a retained marker.
+func (self *bootstrapContractReadinessMarker) close() error {
+	if self == nil || self.file == nil {
+		return nil
+	}
+	err := self.file.Close()
+	self.file = nil
+	return err
+}
+
 // A marker must already be complete, private and regular. Shared ownership
 // cannot recover an interrupted claim or advance its original action.
-func openBootstrapContractReadinessMarker(path, expected string) (_ *os.File, resultErr error) {
+func openBootstrapContractReadinessMarker(path, expected string) (_ *bootstrapContractReadinessMarker, resultErr error) {
+	root, err := bootstrapSuccessorPhysicalRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
 	fd, err := syscall.Open(path+".lock", syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
-	lock := os.NewFile(uintptr(fd), path+".lock")
+	lock := &bootstrapContractReadinessMarker{file: os.NewFile(uintptr(fd), path+".lock"), path: path + ".lock", root: root, expected: expected}
 	defer func() {
 		if resultErr != nil {
-			resultErr = errors.Join(resultErr, lock.Close())
+			resultErr = errors.Join(resultErr, lock.close())
 		}
 	}()
-	info, err := lock.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return nil, errors.Join(errors.New("contract readiness requires a private regular retained marker"), err)
-	}
 	if err := syscall.Flock(fd, syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("contract readiness conflicts with an active custody owner"), err)
 	}
-	raw, err := io.ReadAll(io.LimitReader(lock, int64(len(expected)+1)))
-	if err != nil || string(raw) != expected {
-		return nil, errors.Join(errors.New("contract readiness marker is incomplete or belongs to another original approval or predecessor"), err)
+	if err := lock.checkpoint(); err != nil {
+		return nil, err
 	}
 	return lock, nil
 }
@@ -51,10 +93,10 @@ func inspectBootstrapContractCustody(ctx context.Context, plans []evmCreatePlan,
 	if ctx == nil || result == nil || len(plans) == 0 || len(plans) > 8 || len(result.Actions) != 9 {
 		return errors.New("contract custody inspection lacks its approved projections")
 	}
-	locks := []*os.File{}
+	locks := []*bootstrapContractReadinessMarker{}
 	defer func() {
 		for i := len(locks) - 1; i >= 0; i-- {
-			resultErr = errors.Join(resultErr, locks[i].Close())
+			resultErr = errors.Join(resultErr, locks[i].close())
 		}
 		if resultErr != nil {
 			result.Status, result.CustodyInspectionComplete, result.RemainingOriginalAttempts = "unresolved", false, nil
@@ -135,6 +177,19 @@ func inspectBootstrapContractCustody(ctx context.Context, plans []evmCreatePlan,
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	for i, lock := range locks {
+		if err := lock.checkpoint(); err != nil {
+			return err
+		}
+		raw, _, err := readBootstrapRootFile(ctx, filepath.Join(config.Plan.RunDirectory, bootstrapContractStateFile(i)), 512*1024)
+		var current evmActionRecord
+		if err == nil {
+			err = decodePlanJson(raw, &current)
+		}
+		if err != nil || rootObjectHash(current) != rootObjectHash(records[i]) {
+			return errors.Join(errors.New("contract readiness original journal changed during inspection"), err)
+		}
 	}
 	remaining := uint16(config.Plan.MaximumAttempts) - result.RetainedAttempts
 	result.Status, result.CustodyInspectionComplete, result.RemainingOriginalAttempts = "blocked", true, &remaining

@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 )
 
@@ -64,7 +63,7 @@ type bootstrapContractReceiptScope struct {
 	retained    *bootstrapChainReadinessState
 	plans       []evmCreatePlan
 	records     []evmActionRecord
-	locks       []*os.File
+	locks       []*bootstrapContractReadinessMarker
 	chain       *evmOwnedChain
 	closed      bool
 }
@@ -151,7 +150,7 @@ func (self *bootstrapContractReceiptScope) close() error {
 	self.closed = true
 	var result error
 	for i := len(self.locks) - 1; i >= 0; i-- {
-		result = errors.Join(result, self.locks[i].Close())
+		result = errors.Join(result, self.locks[i].close())
 	}
 	if self.retained != nil {
 		result = errors.Join(result, self.retained.close())
@@ -188,7 +187,7 @@ func bootstrapContractReceiptScanFloor(validators []bootstrapContractValidatorBi
 // Reread sealed source and full original records around networking. Shared
 // locks exclude cooperating writers; observed external replacements still fail.
 func (self *bootstrapContractReceiptScope) checkpoint(ctx context.Context) error {
-	if ctx == nil || self == nil || self.closed || self.chain == nil || len(self.records) != 8 || len(self.plans) != 8 {
+	if ctx == nil || self == nil || self.closed || self.chain == nil || len(self.records) != 8 || len(self.plans) != 8 || len(self.locks) != 8 {
 		return errors.New("contract receipt scope is absent or closed")
 	}
 	declaration, err := loadBootstrapContractRolePlan(ctx, self.preparation.Plan.ConfigPath)
@@ -196,6 +195,9 @@ func (self *bootstrapContractReceiptScope) checkpoint(ctx context.Context) error
 		return errors.Join(errors.New("contract receipt signed declarations changed during admission"), err)
 	}
 	for i, record := range self.records {
+		if err := self.locks[i].checkpoint(); err != nil {
+			return err
+		}
 		raw, _, err := readBootstrapRootFile(ctx, filepath.Join(self.preparation.Plan.Config.RunDirectory, bootstrapContractStateFile(i)), 512*1024)
 		var current evmActionRecord
 		if err == nil {
