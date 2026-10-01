@@ -356,6 +356,17 @@ Ten isolated causal controls each reach their intended assertion in normal/race,
 and the forty-five-file evidence manifest verifies. This does not close MG-08 or
 broaden earlier package coverage.
 
+The [live execution-custody follow-up](evidence/bootstrap-successor-live-custody-20261001.md)
+closes an in-process gap: an owner could send after losing a counted intent, or
+report installation after losing its terminal record, while using its cached
+event. Read-only checkpoints now authenticate the complete intent/record prefix,
+claim/ready markers and interrupted outcome bytes before send/result admission.
+All 55 affected roots pass normal/race with package PASS, all three checkpoint
+bypass controls fail at the intended assertions in both modes, and vet passes.
+The original eight-action custody, exact signatures, cumulative attempts and
+financial reservations stay unchanged. Public submission and current-only policy
+approval remain closed gates; this correction supplies no live authority.
+
 The initial twenty fixture failures remain preserved: private binary files had
 shared temporary parent directories. The test-only correction explicitly uses
 `0700` parents; production readers remain strict. The first corrected race run

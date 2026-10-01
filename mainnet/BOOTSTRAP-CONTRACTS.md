@@ -220,7 +220,7 @@ authority on reopen. Each prepared vault and implementation must be a zero-value
 CREATE by the reserve deployer at exactly the next nonce. Later executors and any full-installation
 attempt policy remain separate unfinished work.
 
-For the seven executable actions, this candidate conservatively counts all
+For the eight executable actions, this candidate conservatively counts all
 their submission attempts together against the original `maximum_attempts`.
 Child resume cannot renew any predecessor's spent allowance. The existing limit of
 eight remains unchanged; this is not an implemented nine-action send policy.
@@ -579,11 +579,15 @@ The offline [chain contract prerequisite phase](BOOTSTRAP-CHAIN.md#offline-contr
 now exposes the complete approved prefix and eight-attempt/nine-action mismatch
 before signing. It can inspect all retained action receipts without opening RPC
 or changing original custody. A shorter approval and missing Safe anchor do not
-force replay: a future independently signed successor must adopt completed
+force replay: the separately signed successor must adopt completed
 receipts, reconcile unfinished signed nonces, and reserve only unfinished sends
 plus an approved retry margin while conserving cumulative attempts and lifetime
-financial exposure. That successor adoption path remains unimplemented; changing
-the original signed cap cannot reinterpret its retained journals.
+financial exposure. The [successor execution owner](BOOTSTRAP-SUCCESSOR-EXECUTION.md)
+implements that exact adoption and cumulative custody, including
+[live journal checks](evidence/bootstrap-successor-live-custody-20261001.md)
+before sends and completion reports. Changing the original signed cap cannot
+reinterpret its retained journals. Public submission remains closed by the Safe
+authority gate described below.
 
 The local flock is not a distributed deployer-key fence. Signed hashes attest
 externally reviewed evidence; this command does not independently prove the

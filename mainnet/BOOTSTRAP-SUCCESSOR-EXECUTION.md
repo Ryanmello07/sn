@@ -194,6 +194,16 @@ finish it. A complete intent recovers its missing final record. Missing complete
 adoption or nonce custody, changed bytes, unknown stages, sequence gaps, links,
 extra hardlinks and nonprivate files refuse recovery. No files are deleted.
 
+Live checkpoints also reread the execution claim and ready marker, walk every
+exact intent/record pair back from the owner's retained seal to original adoption,
+and reject unexpected event or stage files. An interrupted terminal stage keeps
+its exact observed byte hash during ownership. Missing or changed custody stops
+the owner before a send or installation result; a healthy chain observation cannot
+substitute for the counted journal. These checks are read-only. Exact intent
+recovery remains an explicit reopen operation and never renews an attempt.
+The [custody regression evidence](evidence/bootstrap-successor-live-custody-20261001.md)
+records the pre-fix send/result failures and scoped validation.
+
 Copied or replaced root/registry inodes cannot inherit the approval. These are
 cooperating local-filesystem fences, not cross-host, unerasable or anti-rollback
 custody. Signer enforcement of the single approved registry remains a production
@@ -218,7 +228,7 @@ relayer confirmed/pending nonces, funding, coordinator owner and unbound evidenc
 slot must match. Evidence runtime and immutable getter digest must equal the
 adopted original CREATE receipt. Funding also preserves original unexecuted
 reservations belonging to the same relayer. After durably reserving an attempt,
-the owner repeats current-state admission and checks retained physical/nonce
+the owner repeats current-state admission and checks retained execution/nonce
 custody before at most one exact transport write. Every ambiguous outcome keeps
 the same signatures, counters and financial liability. A pinned finalized hash
 keeps the snapshot consistent while later heads advance normally; canonical

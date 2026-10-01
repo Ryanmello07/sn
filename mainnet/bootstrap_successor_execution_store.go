@@ -23,6 +23,7 @@ type bootstrapSuccessorExecutionStore struct {
 	registry               *bootstrapSuccessorExecutionDirectory
 	last                   bootstrapSuccessorExecutionEvent
 	pending                string
+	pendingOutcomeHash     string
 	closed                 bool
 	canonicalAuthorityHash string
 	canonicalAuthority     *bootstrapSuccessorCanonicalApproval
@@ -245,6 +246,11 @@ func (self *bootstrapSuccessorExecutionStore) loadEvents() error {
 							return errors.New("successor execution has conflicting partial event intents")
 						}
 						self.pending = phase
+						partial, err := self.local.read(stage)
+						if err != nil {
+							return err
+						}
+						self.pendingOutcomeHash = safeReleaseHash(partial)
 						allowed[stage] = true
 					}
 				}
@@ -260,7 +266,7 @@ func (self *bootstrapSuccessorExecutionStore) loadEvents() error {
 				if err := self.publishEvent(event); err != nil {
 					return err
 				}
-				self.last, self.pending = event, ""
+				self.last, self.pending, self.pendingOutcomeHash = event, "", ""
 			}
 			break
 		}
@@ -344,8 +350,8 @@ func (self *bootstrapSuccessorExecutionStore) append(event bootstrapSuccessorExe
 	if err := self.publishEvent(copied); err != nil {
 		return errors.Join(err, self.close())
 	}
-	self.last, self.pending = copied, ""
-	return errors.Join(self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory())
+	self.last, self.pending, self.pendingOutcomeHash = copied, "", ""
+	return errors.Join(self.checkpointExecutionHistory(), self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory())
 }
 
 // Check original preparation, both directories and durable nonce claims again
@@ -363,7 +369,7 @@ func (self *bootstrapSuccessorExecutionStore) checkpoint(stage string) error {
 			return errors.Join(errors.New("successor execution nonce custody changed"), err)
 		}
 	}
-	return errors.Join(self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory())
+	return errors.Join(self.checkpointExecutionHistory(), self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory())
 }
 
 // Release registry, then the borrowed original directory. Original preparation
