@@ -372,3 +372,221 @@ index 00000000..f7dc0a19
 +	}
 +	return nil
 +}
+diff --git a/gethrpc/http.go b/gethrpc/http.go
+index 2c0cb5ed..dd7953a2 100644
+--- a/gethrpc/http.go
++++ b/gethrpc/http.go
+@@ -127,46 +127,59 @@ func DialHTTP(endpoint string) (*Client, error) {
+ 
+ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
+ 	hc := c.writeConn.(*httpConn)
+-	respBody, err := hc.doRequest(ctx, msg)
+-	if respBody != nil {
+-		defer respBody.Close()
+-	}
+-
++	body, err := hc.doRequest(ctx, msg)
+ 	if err != nil {
+-		if respBody != nil {
+-			buf := new(bytes.Buffer)
+-			if _, err2 := buf.ReadFrom(respBody); err2 == nil {
+-				return fmt.Errorf("%v %v", err, buf.String())
+-			}
+-		}
+ 		return err
+ 	}
++	// Notifications have no response channel. Their bounded HTTP completion
++	// must not block publishing a reply that no caller can receive.
++	if len(op.ids) == 0 {
++		return nil
++	}
+ 	var respmsg jsonrpcMessage
+-	if err := json.NewDecoder(respBody).Decode(&respmsg); err != nil {
++	if err := json.Unmarshal(body, &respmsg); err != nil {
+ 		return err
+ 	}
++	if !respmsg.isResponse() || !bytes.Equal(respmsg.ID, op.ids[0]) {
++		return errors.New("HTTP RPC response does not match request")
++	}
+ 	op.resp <- &respmsg
+ 	return nil
+ }
+ 
+ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonrpcMessage) error {
+ 	hc := c.writeConn.(*httpConn)
+-	respBody, err := hc.doRequest(ctx, msgs)
++	body, err := hc.doRequest(ctx, msgs)
+ 	if err != nil {
+ 		return err
+ 	}
+-	defer respBody.Close()
+ 	var respmsgs []jsonrpcMessage
+-	if err := json.NewDecoder(respBody).Decode(&respmsgs); err != nil {
++	if err := json.Unmarshal(body, &respmsgs); err != nil {
+ 		return err
+ 	}
++	// Validate the complete batch before publishing any result. Extra replies
++	// cannot fill the caller-sized channel, and foreign ids cannot reach its
++	// unchecked element lookup. Missing and duplicate replies are framing errors.
++	if len(respmsgs) != len(op.ids) {
++		return errors.New("HTTP RPC batch response count differs from request")
++	}
++	pending := make(map[string]bool, len(op.ids))
++	for _, id := range op.ids {
++		pending[string(id)] = true
++	}
++	for _, response := range respmsgs {
++		if !response.isResponse() || !pending[string(response.ID)] {
++			return errors.New("HTTP RPC batch response does not match request")
++		}
++		delete(pending, string(response.ID))
++	}
+ 	for i := 0; i < len(respmsgs); i++ {
+ 		op.resp <- &respmsgs[i]
+ 	}
+ 	return nil
+ }
+ 
+-func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadCloser, error) {
++func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) ([]byte, error) {
+ 	body, err := json.Marshal(msg)
+ 	if err != nil {
+ 		return nil, err
+@@ -179,10 +192,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+-		return resp.Body, errors.New(resp.Status)
+-	}
+-	return resp.Body, nil
++	return readHttpResponse(ctx, resp, maximumHttpResponseBytes)
+ }
+ 
+ // httpServerConn turns a HTTP connection into a Conn.
+diff --git a/gethrpc/http_response.go b/gethrpc/http_response.go
+new file mode 100644
+index 00000000..1967949c
+--- /dev/null
++++ b/gethrpc/http_response.go
+@@ -0,0 +1,54 @@
++// HTTP response admission is shared by ordinary calls, notifications and
++// batches, independently of a caller's higher-level native read/retry policy.
++package rpc
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"io"
++	"net/http"
++)
++
++// Preserve the native event ceiling: 16 MiB raw bytes use twice that on the
++// JSON hex wire, plus 0x and a finite envelope. Metadata's 8 MiB raw ceiling
++// and the existing bounded native read adapter fit within this response bound.
++// The cap covers an aggregate batch response too; it never scales with batch
++// cardinality. An owner must split larger read batches before issuing them.
++const maximumHttpResponseBytes int64 = (32 * 1024 * 1024) + (64 * 1024) + 2
++
++// This is local response admission, never proof of a transient RPC failure.
++var ErrHttpResponseLimit = errors.New("HTTP RPC response exceeds byte limit")
++
++// Own and close the physical body exactly once before any JSON result can be
++// published. Read at most one byte beyond the ceiling, including automatic
++// HTTP decompression and unknown/chunked lengths. A valid prefix cannot hide
++// a late body, close or cancellation failure. Status errors do not read bodies.
++func readHttpResponse(ctx context.Context, response *http.Response, maximumBytes int64) (body []byte, err error) {
++	if response == nil || response.Body == nil {
++		return nil, errors.New("HTTP RPC response has no body")
++	}
++	defer func() {
++		err = errors.Join(err, response.Body.Close(), ctx.Err())
++		if err != nil {
++			body = nil
++		}
++	}()
++	if maximumBytes <= 0 || maximumBytes > maximumHttpResponseBytes {
++		return nil, errors.New("invalid HTTP RPC response byte limit")
++	}
++	if err := ctx.Err(); err != nil {
++		return nil, err
++	}
++	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
++		return nil, fmt.Errorf("HTTP RPC status %d", response.StatusCode)
++	}
++	if response.ContentLength > maximumBytes {
++		return nil, ErrHttpResponseLimit
++	}
++	body, err = io.ReadAll(io.LimitReader(response.Body, maximumBytes+1))
++	if int64(len(body)) > maximumBytes {
++		err = errors.Join(err, ErrHttpResponseLimit)
++	}
++	return body, err
++}
+diff --git a/gethrpc/subscription.go b/gethrpc/subscription.go
+index d972244d..3a313311 100644
+--- a/gethrpc/subscription.go
++++ b/gethrpc/subscription.go
+@@ -26,6 +26,7 @@ import (
+ 	"errors"
+ 	"math/rand"
+ 	"reflect"
++	"strconv"
+ 	"sync"
+ 	"time"
+ )
+@@ -42,6 +43,35 @@ var globalGen = randomIDGenerator()
+ // ID defines a pseudo random number that is used to identify RPC subscriptions.
+ type ID uint32
+ 
++// Subscription replies and notifications use canonical decimal strings.
++// Preserve legacy numeric unsubscribe input while admitting that same string;
++// malformed, null and out-of-range input cannot change the selected owner.
++func (self *ID) UnmarshalJSON(raw []byte) error {
++	var value uint32
++	if len(raw) > 0 && raw[0] == '"' {
++		var text string
++		if err := json.Unmarshal(raw, &text); err != nil {
++			return err
++		}
++		parsed, err := strconv.ParseUint(text, 10, 32)
++		if err != nil || strconv.FormatUint(parsed, 10) != text {
++			return errors.New("invalid decimal subscription id")
++		}
++		value = uint32(parsed)
++	} else {
++		var number *uint32
++		if err := json.Unmarshal(raw, &number); err != nil {
++			return err
++		}
++		if number == nil {
++			return errors.New("null subscription id")
++		}
++		value = *number
++	}
++	*self = ID(value)
++	return nil
++}
++
+ // NewID returns a new, random ID.
+ func NewID() ID {
+ 	return globalGen()
+@@ -168,7 +198,7 @@ func (n *Notifier) activate() error {
+ }
+ 
+ func (n *Notifier) send(sub *Subscription, data json.RawMessage) error {
+-	params, _ := json.Marshal(&subscriptionResult{ID: string(sub.ID), Result: data})
++	params, _ := json.Marshal(&subscriptionResult{ID: strconv.FormatUint(uint64(sub.ID), 10), Result: data})
+ 	ctx := context.Background()
+ 	return n.h.conn.Write(ctx, &jsonrpcMessage{
+ 		Version: vsn,
+@@ -195,7 +225,7 @@ func (s *Subscription) Err() <-chan error {
+ 
+ // MarshalJSON marshals a subscription as its ID.
+ func (s *Subscription) MarshalJSON() ([]byte, error) {
+-	return json.Marshal(s.ID)
++	return json.Marshal(strconv.FormatUint(uint64(s.ID), 10))
+ }
+ 
+ // ClientSubscription is a subscription established through the Client's Subscribe or

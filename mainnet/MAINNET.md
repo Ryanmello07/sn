@@ -1339,8 +1339,17 @@ across nested SCALE decoders and the v14 derived lookup map. Self-sealed discove
 input and unapproved RPC bytes receive this guard; they remain unapproved.
 Independent owner/root metadata pins still precede decoding. Valid runtime470
 metadata and the separately pinned SDK-v15 owner path retain their existing
-semantics. HTTP response buffering before this boundary remains an open resource
-hardening gate; the local decoding budget does not bound the whole process.
+semantics. The [shared native HTTP transport](evidence/http-rpc-response-bounds-20261001.md)
+now bounds direct/unmarked responses and batches before JSON decoding. Configured
+CRV4 metadata and mainnet discovery already had their own physical/per-call
+bounds; the uncovered submission, unknown-method and direct-client paths now
+receive the shared cap too. It permits 32 MiB + 64 KiB + 2 decompressed JSON body
+bytes, including a full 16 MiB events field after hex expansion. Batches share
+that aggregate ceiling and must be split by the read owner if larger. Error
+statuses are closed without reading their bodies; complete framing, physical
+release, cancellation and exact response IDs precede any result publication.
+The change grants no retry authority to submissions. Separate EVM transports
+and aggregate process/host capacity remain outside this local bound.
 
 The [public cross-endpoint readback](evidence/public-cross-endpoint-20261001.md)
 compares Rao archive and the public entrypoint at one pinned finalized block.
@@ -1520,8 +1529,9 @@ predecessor releases retain their original bytes and separate scope. Independent
 compiler/build reproduction, production policy/configuration, migration/restore,
 rollout, publication identity and release approval remain open.
 
-The later metadata-decoder source `b9ee4c91` changes the owned SCALE dependency
-and is outside that frozen `689938d6` release. Selecting this hardening requires
+The later metadata-decoder source `b9ee4c91` and shared HTTP/subscription successor
+`58852c47` change the owned Substrate dependency and are outside that frozen
+`689938d6` release. Selecting this hardening requires
 a fresh exact-source build, dependency inventory and image qualification;
 the earlier reproducibility and image receipts retain their original scope.
 

@@ -127,23 +127,21 @@ func DialHTTP(endpoint string) (*Client, error) {
 
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
 	hc := c.writeConn.(*httpConn)
-	respBody, err := hc.doRequest(ctx, msg)
-	if respBody != nil {
-		defer respBody.Close()
-	}
-
+	body, err := hc.doRequest(ctx, msg)
 	if err != nil {
-		if respBody != nil {
-			buf := new(bytes.Buffer)
-			if _, err2 := buf.ReadFrom(respBody); err2 == nil {
-				return fmt.Errorf("%v %v", err, buf.String())
-			}
-		}
 		return err
+	}
+	// Notifications have no response channel. Their bounded HTTP completion
+	// must not block publishing a reply that no caller can receive.
+	if len(op.ids) == 0 {
+		return nil
 	}
 	var respmsg jsonrpcMessage
-	if err := json.NewDecoder(respBody).Decode(&respmsg); err != nil {
+	if err := json.Unmarshal(body, &respmsg); err != nil {
 		return err
+	}
+	if !respmsg.isResponse() || !bytes.Equal(respmsg.ID, op.ids[0]) {
+		return errors.New("HTTP RPC response does not match request")
 	}
 	op.resp <- &respmsg
 	return nil
@@ -151,14 +149,29 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) e
 
 func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonrpcMessage) error {
 	hc := c.writeConn.(*httpConn)
-	respBody, err := hc.doRequest(ctx, msgs)
+	body, err := hc.doRequest(ctx, msgs)
 	if err != nil {
 		return err
 	}
-	defer respBody.Close()
 	var respmsgs []jsonrpcMessage
-	if err := json.NewDecoder(respBody).Decode(&respmsgs); err != nil {
+	if err := json.Unmarshal(body, &respmsgs); err != nil {
 		return err
+	}
+	// Validate the complete batch before publishing any result. Extra replies
+	// cannot fill the caller-sized channel, and foreign ids cannot reach its
+	// unchecked element lookup. Missing and duplicate replies are framing errors.
+	if len(respmsgs) != len(op.ids) {
+		return errors.New("HTTP RPC batch response count differs from request")
+	}
+	pending := make(map[string]bool, len(op.ids))
+	for _, id := range op.ids {
+		pending[string(id)] = true
+	}
+	for _, response := range respmsgs {
+		if !response.isResponse() || !pending[string(response.ID)] {
+			return errors.New("HTTP RPC batch response does not match request")
+		}
+		delete(pending, string(response.ID))
 	}
 	for i := 0; i < len(respmsgs); i++ {
 		op.resp <- &respmsgs[i]
@@ -166,7 +179,7 @@ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonr
 	return nil
 }
 
-func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadCloser, error) {
+func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) ([]byte, error) {
 	body, err := json.Marshal(msg)
 	if err != nil {
 		return nil, err
@@ -179,10 +192,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return resp.Body, errors.New(resp.Status)
-	}
-	return resp.Body, nil
+	return readHttpResponse(ctx, resp, maximumHttpResponseBytes)
 }
 
 // httpServerConn turns a HTTP connection into a Conn.
