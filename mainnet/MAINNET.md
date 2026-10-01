@@ -1247,8 +1247,12 @@ catalogue separately from the unchanged historical files.
 The [bounded scratch-image qualification](evidence/scratch-image-qualification-20261001.md)
 builds and independently reads back the exact `server-competitionworker`
 Linux/amd64 image from this candidate. A separate Sol build reproduced its OCI
-archive bytes. Seven image recipes still have remote inputs, and aggregate
-release, reproducibility, source-to-image and deployment flags remain false.
+archive bytes. The [seven-service offline image qualification](evidence/seven-service-image-qualification-20261001.md)
+now supplies pinned local Ubuntu OCI and package inputs for the remaining seven
+unchanged production recipes. Its independent rebuild produced byte-identical
+archives and passed complete OCI readback. This qualifies a local image build,
+not a published or deployed release; aggregate release and deployment flags
+remain false.
 
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
@@ -1256,9 +1260,10 @@ catalogue review and independent qualification are the preferred path for the
 first unsigned mainnet plan. Checking for externally held signed commitments
 remains a launch gate; any such plan, artifact or transaction must be preserved
 and reconciled before selection changes. A metadata-equivalence exception is
-only a conditional fallback, not selected by this path. Eight OCI builds/readbacks,
-a second independent build, full compiler/config/policy qualification and release
-approval remain open. Prepared contexts and successful compiles do not close MG-02.
+only a conditional fallback, not selected by this path. The local eight-image
+build/readback and independent reproduction are complete for the frozen candidate.
+Full compiler/config/policy qualification and release approval remain open, as
+do published-image identity and running-image readback.
 
 The [earlier composed local candidate](evidence/release-candidate-v11-20260927.md)
 locks SN `265231f9`, server `77cb401e` and Connect `c68689c4` with all local
