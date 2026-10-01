@@ -138,9 +138,9 @@ type goModule struct {
 // Known API provenance closes both the SDK and adjacent transport/fork mismatch.
 func validateReleaseModule(module goModule) error {
 	pins := map[string][4]string{
-		"github.com/urnetwork/sdk":     {"github.com/urnetwork/sdk", "v0.0.0-20260928100458-516521fb16da", "h1:Ril9zZkx+sln3O0SWxRPODCYoYwS9tYEvStdRokoKPk=", "h1:IuPYnLZ5j1SP+gm3O4a4SxbOT4U/CPKEqONI1iLO5yk="},
-		"github.com/urnetwork/connect": {"github.com/urnetwork/connect", "v0.0.0-20260928101830-b163f9dd9ac3", "h1:g9tfAoQqU8l8/12DHOTZo/gU9np8lJe2ugasiZQT33M=", "h1:A88Ceqd8zbfpUB4+1pTsT1G3kiS9kgB22ZuljBZVw4k="},
-		"github.com/pion/sctp":         {"github.com/urnetwork/connect/sctp", "v0.0.0-20260928101830-b163f9dd9ac3", "h1:7QPR3ipqowcAZrU4abPpo7jtpDtJX7n6hqCMQxgNFsE=", "h1:7KFmTwLcoYgJs/Z+99nJvsWL0qDpuyloSI0RbAqlrz0="},
+		"github.com/urnetwork/sdk":     {"github.com/urnetwork/sdk", "v0.0.0-20261001021058-5d37be3876e5", "h1:PYuzGCWhMRuCnZS9qoSeMvwSZk9NQzX861Ir5xFFpHA=", "h1:IuPYnLZ5j1SP+gm3O4a4SxbOT4U/CPKEqONI1iLO5yk="},
+		"github.com/urnetwork/connect": {"github.com/urnetwork/connect", "v0.0.0-20261001021459-e1b5d77b5029", "h1:jcnGC6MmKNn2x6HU6RfYHM24V2//K6myMw9ajM0MQsg=", "h1:A88Ceqd8zbfpUB4+1pTsT1G3kiS9kgB22ZuljBZVw4k="},
+		"github.com/pion/sctp":         {"github.com/urnetwork/connect/sctp", "v0.0.0-20261001021459-e1b5d77b5029", "h1:GfovpOIWKd6TjkYsWLkMNE/zKEoGNC/5NfrPRCI+50A=", "h1:7KFmTwLcoYgJs/Z+99nJvsWL0qDpuyloSI0RbAqlrz0="},
 	}
 	if expected, ok := pins[module.Path]; ok {
 		if module.Replace == nil || module.Replace.Path != expected[0] || module.Replace.Version != expected[1] || module.Replace.Sum != expected[2] || module.Replace.GoModSum != expected[3] {
@@ -148,6 +148,22 @@ func validateReleaseModule(module goModule) error {
 		}
 	}
 	return nil
+}
+
+// Both main modules must compile the corrected transport tracked inside SN.
+// A stock remote module or a different local checkout cannot stand in for it.
+func validateReleaseRpcFork(config buildConfig, module buildModule) error {
+	if module.Path != "github.com/centrifuge/go-substrate-rpc-client/v4" {
+		return nil
+	}
+	for _, repo := range config.Repositories {
+		if repo.Name == "sn" && repo.Commit != "" && module.Repository == repo.Name && module.Commit == repo.Commit &&
+			module.Directory == filepath.Join(config.Workspace, repo.Path, "third_party/go-substrate-rpc-client") &&
+			module.EffectiveVersion == "" && !module.GraphOnly && module.GoModSha256 != "" {
+			return nil
+		}
+	}
+	return errors.New("substrate RPC module must resolve to the reviewed fork in the pinned SN repository")
 }
 
 // All roots must be exact physical Git directories with unchanged tracked state.
@@ -262,6 +278,9 @@ func captureBuildModules(ctx context.Context, config buildConfig, repository str
 			}
 			entry.Repository, entry.Commit = repo.Name, repo.Commit
 		}
+		if err := validateReleaseRpcFork(config, entry); err != nil {
+			return nil, err
+		}
 		if module.Path == "github.com/urnetwork/sdk" || module.Path == "github.com/urnetwork/connect" || module.Path == "github.com/pion/sctp" {
 			if entry.GraphOnly {
 				return nil, fmt.Errorf("required API module %s lacks materialized provenance", module.Path)
@@ -278,7 +297,7 @@ func captureBuildModules(ctx context.Context, config buildConfig, repository str
 	if len(result) == 4096 {
 		return nil, errors.New("module census exceeds 4096")
 	}
-	for _, path := range []string{"github.com/urnetwork/sdk", "github.com/urnetwork/connect", "github.com/pion/sctp"} {
+	for _, path := range []string{"github.com/urnetwork/sdk", "github.com/urnetwork/connect", "github.com/pion/sctp", "github.com/centrifuge/go-substrate-rpc-client/v4"} {
 		if !seen[path] {
 			return nil, fmt.Errorf("required release module %s is absent", path)
 		}

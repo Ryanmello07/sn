@@ -15,6 +15,7 @@ import (
 type sourceModule struct {
 	Path    string
 	Version string
+	Dir     string
 	Replace *sourceModule
 }
 
@@ -43,7 +44,7 @@ func resolvedSourceModule(t *testing.T, modulePath string) sourceModule {
 // The registration and refresh API used by SN must not depend on ../sdk HEAD.
 func TestClientauthSourceGraphPinsSdkWithoutSiblingOverride(t *testing.T) {
 	module := resolvedSourceModule(t, "github.com/urnetwork/sdk")
-	if module.Path != "github.com/urnetwork/sdk" || module.Replace == nil || module.Replace.Path != "github.com/urnetwork/sdk" || module.Replace.Version != "v0.0.0-20260928100458-516521fb16da" {
+	if module.Path != "github.com/urnetwork/sdk" || module.Replace == nil || module.Replace.Path != "github.com/urnetwork/sdk" || module.Replace.Version != "v0.0.0-20261001021058-5d37be3876e5" {
 		t.Fatalf("clientauth SDK resolved outside the reviewed registration source: %+v replacement=%+v", module, module.Replace)
 	}
 }
@@ -52,7 +53,7 @@ func TestClientauthSourceGraphPinsSdkWithoutSiblingOverride(t *testing.T) {
 // require the matching Connect source, even when an older sibling is clean.
 func TestClientauthSourceGraphPinsConnectWithoutSiblingOverride(t *testing.T) {
 	module := resolvedSourceModule(t, "github.com/urnetwork/connect")
-	if module.Path != "github.com/urnetwork/connect" || module.Replace == nil || module.Replace.Path != "github.com/urnetwork/connect" || module.Replace.Version != "v0.0.0-20260928101830-b163f9dd9ac3" {
+	if module.Path != "github.com/urnetwork/connect" || module.Replace == nil || module.Replace.Path != "github.com/urnetwork/connect" || module.Replace.Version != "v0.0.0-20261001021459-e1b5d77b5029" {
 		t.Fatalf("clientauth Connect resolved outside the reviewed transport source: %+v replacement=%+v", module, module.Replace)
 	}
 }
@@ -61,7 +62,19 @@ func TestClientauthSourceGraphPinsConnectWithoutSiblingOverride(t *testing.T) {
 // the effective SCTP source at that same commit, without a mutable local path.
 func TestClientauthSourceGraphPinsReviewedSctpFork(t *testing.T) {
 	module := resolvedSourceModule(t, "github.com/pion/sctp")
-	if module.Path != "github.com/pion/sctp" || module.Replace == nil || module.Replace.Path != "github.com/urnetwork/connect/sctp" || module.Replace.Version != "v0.0.0-20260928101830-b163f9dd9ac3" {
+	if module.Path != "github.com/pion/sctp" || module.Replace == nil || module.Replace.Path != "github.com/urnetwork/connect/sctp" || module.Replace.Version != "v0.0.0-20261001021459-e1b5d77b5029" {
 		t.Fatalf("clientauth SCTP resolved outside the reviewed Connect fork: %+v replacement=%+v", module, module.Replace)
+	}
+}
+
+// The fixed substrate transport is tracked within SN, never a sibling checkout.
+func TestSourceGraphPinsNestedRpcFork(t *testing.T) {
+	module := resolvedSourceModule(t, "github.com/centrifuge/go-substrate-rpc-client/v4")
+	directory, err := filepath.Abs(filepath.Join("..", "..", "third_party/go-substrate-rpc-client"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if module.Replace == nil || module.Replace.Path != "./third_party/go-substrate-rpc-client" || module.Replace.Version != "" || module.Replace.Dir != directory {
+		t.Fatalf("substrate RPC resolved outside the tracked fork: %+v replacement=%+v", module, module.Replace)
 	}
 }

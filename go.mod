@@ -199,12 +199,12 @@ require (
 // Client authentication requires this reviewed SDK/Connect pair. Versioned
 // replacements also cover the v0.0.0 placeholders required by sibling modules;
 // a clean but older ../sdk or ../connect must not select different source.
-replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20260928101830-b163f9dd9ac3
+replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20261001021459-e1b5d77b5029
 
-replace github.com/urnetwork/sdk => github.com/urnetwork/sdk v0.0.0-20260928100458-516521fb16da
+replace github.com/urnetwork/sdk => github.com/urnetwork/sdk v0.0.0-20261001021058-5d37be3876e5
 
 // A dependency's replaces are ignored, so pin Connect's SCTP fork here too.
-replace github.com/pion/sctp => github.com/urnetwork/connect/sctp v0.0.0-20260928101830-b163f9dd9ac3
+replace github.com/pion/sctp => github.com/urnetwork/connect/sctp v0.0.0-20261001021459-e1b5d77b5029
 
 replace github.com/urnetwork/server => ../server
 
