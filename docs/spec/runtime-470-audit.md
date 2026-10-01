@@ -79,8 +79,11 @@ artifact-identity review independently of build reproducibility. GitHub's commit
 verification is recorded as its assertion; no detached release-asset signature
 or independently trusted local GPG key verification is claimed. A final runtime
 approver must explicitly accept the documented reproducibility exception and
-exact official artifact. The rebuilt artifact must not replace the official
-artifact in an approval or deployment.
+exact official artifact. On 2026-10-01 the subnet owner approved the exact
+observed v470 artifact and this one-function reproducibility exception **for
+launch planning only**. This decision does not approve the mainnet genesis,
+finality checkpoint, signing, deployment, or activation. The rebuilt artifact
+must not replace the official artifact in an approval or deployment.
 
 The changed seed can change Wasmi hash-table layout, iteration and resource
 behavior. This review does not prove universal semantic equivalence of arbitrary
