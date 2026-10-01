@@ -46,7 +46,7 @@ func (self *bootstrapContractReadinessMarker) checkpoint() error {
 	}
 	raw, err := io.ReadAll(io.NewSectionReader(self.file, 0, int64(len(self.expected))+1))
 	if err != nil || string(raw) != self.expected {
-		return errors.Join(errors.New("contract readiness original marker bytes changed"), err)
+		return errors.Join(errors.New("contract readiness marker is incomplete or belongs to another original approval or predecessor"), err)
 	}
 	return nil
 }
