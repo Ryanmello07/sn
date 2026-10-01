@@ -26,6 +26,20 @@ root registration/stake, independently approved genesis/runtime/checkpoint,
 qualified mapping, actual service installation/monitoring and complete UR
 production admission remain open. No transaction or live deployment is implied.
 
+The [October 1 read-only public finalized snapshot](evidence/public-finalized-snapshot-20261001.md)
+closes the operational raw-header-method gap for the selected Rao archive:
+the reconstructed Frontier header matched the native digest at finalized block
+9,185,377. It retains `unapproved_observation` and does not close independent
+runtime-source admission or authorize signing. The currently integrated SN
+source is `2d53e6f2`; server is `ecbf3aad`, with immutable Connect `e1b5d77b`
+and SDK `5d37be38` pins in the server release graph. The
+[fresh exact-source composition](evidence/release-current-source-20261001.md)
+has passed for 17 binaries, five selected contracts and eight image contexts;
+all eight local OCI image builds/readbacks and their independent archive audit
+also passed as separate supplements. The earlier
+image candidate is superseded. Local builds are not a published or approved
+production release.
+
 ## Closed testnet evidence and remaining lessons
 
 Keep the original result, later recovery, and code qualification distinct:

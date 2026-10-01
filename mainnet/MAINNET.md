@@ -4,8 +4,10 @@ Updated 2026-10-01. **Mainnet activation is blocked.** At the user's direction,
 preparation now uses the [Rao Foundation public archive RPC](evidence/public-archive-switch-20261001.md)
 until Snow finishes synchronizing. The archive returned mainnet genesis and
 EVM ID 964 and supports the tested historical runtime read. Its public method
-profile lacks `debug_getRawHeader`, so the strict combined native/EVM snapshot
-still needs a qualified fallback or the synced Snow route. No transaction has
+profile lacks `debug_getRawHeader`; the qualified exact-header fallback now
+passes a [live combined native/EVM finalized snapshot](evidence/public-finalized-snapshot-20261001.md).
+Independent identity and
+runtime-source approval remain open. No transaction has
 been sent through either route. The earlier read-only
 [Snow/LAN RPC comparison](evidence/snow-rpc-route-20260927.json) showed that
 `http://172.28.208.185:9944` served the same **testnet** chain as
@@ -362,7 +364,7 @@ mainnet transaction, deployment, UID removal or validator activation.
 
 | Prerequisite | Current disposition and next result required |
 | --- | --- |
-| Interim public mainnet RPC and independent identity authority | The [October 1 public archive capture](evidence/public-archive-switch-20261001.md) observed mainnet genesis, EVM ID 964 and runtime spec 470, and retained a runtime snapshot. The strict combined native/EVM mapping remains unavailable because `debug_getRawHeader` is absent; independent genesis/runtime/source approval is outstanding. Snow remains an unsynced future failover. Pin the public archive for read-only discovery and unsigned plans, then qualify an exact mapping path and current finalized census before signing. |
+| Interim public mainnet RPC and independent identity authority | The [October 1 public archive capture](evidence/public-archive-switch-20261001.md) observed mainnet genesis, EVM ID 964 and runtime spec 470. The [qualified exact-header fallback](evidence/public-header-fallback-20261001.md) passed a [live combined native/EVM finalized snapshot](evidence/public-finalized-snapshot-20261001.md) without `debug_getRawHeader`. Independent genesis/runtime/source approval and a current complete SN25 census remain outstanding. Snow remains an unsynced future failover. Pin the public archive for read-only discovery and unsigned plans; recheck finalized identity before signing. |
 | Immutable qualified release | Compose the actual SN/server/SDK/Connect/config and contract artifacts, including selected branch fixes and migration order; qualify their real interfaces and publish an approved manifest. Historical R48 builds do not qualify later per-user deposit or zero-price changes. |
 | Exact mainnet census and authority | Read SN25 membership, roles, custody, immutable contracts and locks at one finalized snapshot; resolve reset feasibility and all protected identities before making an executable plan. |
 | Economic and custody decisions | The user selected **owner-recycle for the remaining 90%**. Implement and qualify that path and the 10% native-miner target on the actual runtime; finalize mainnet policy, tolerance, keys/Safe, root-registration protection and spend/count/expiry ceilings. Recycled value is not reserve custody. No testnet allowance carries over. |
@@ -2289,12 +2291,16 @@ read-only discovery and unsigned plans. The [October 1 observation](evidence/pub
 reports mainnet genesis/EVM ID 964 and runtime spec 470, but the strict native/EVM
 mapping initially lacked a public raw-header method. The
 [qualified public fallback](evidence/public-header-fallback-20261001.md) now
-passes a live read-only exact-hash finalized snapshot on that archive. Snow VPN
+passes a [live read-only exact-hash finalized snapshot](evidence/public-finalized-snapshot-20261001.md)
+on that archive. Snow VPN
 `172.28.208.185:9944` is a
 future failover; it still returned HTTP 502 at the latest retained check.
-Do not retarget signed action bytes. Obtain an independently approved mainnet
-genesis/runtime identity and complete
-SN25 census. Compose and qualify the production source/dependency release with
+Do not retarget signed action bytes. The
+[current-source offline composition](evidence/release-current-source-20261001.md)
+passes its 17-binary, five-contract and 170-hash audit; eight fresh OCI image
+readbacks pass as separate supplements. No deployment approval is implied. Obtain
+an independently approved mainnet genesis/runtime identity and complete
+SN25 census. Qualify the production source/dependency release with
 the retained R48/R46 lessons, then implement the bootstrap mutation paths and
 separate root-validator service. Resolve the actual reset capability and implement the selected 90% owner-recycle
 policy with the observed 10% native allocation and runtime tolerance, root custody and
