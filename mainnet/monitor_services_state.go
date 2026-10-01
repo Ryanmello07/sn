@@ -29,6 +29,7 @@ type monitorValidatorState struct {
 	PublicationLastSuccessAt time.Time                     `json:"publication_last_success_at"`
 	NativeDeadline           *monitorNativeDeadlineHistory `json:"native_deadline,omitempty"`
 	ReadIncidents            *monitorReadIncidentHistory   `json:"read_incidents,omitempty"`
+	SteeringLiveness         *monitorSteeringHistory       `json:"steering_liveness,omitempty"`
 	readCurrent              bool
 }
 
@@ -38,6 +39,7 @@ var monitorServiceStatusCodes = map[string]int{
 	"invalid": 4, "identity": 5, "clock": 6, "stale": 7,
 	"publisher": 8, "unknown": 9, "intent-failed": 10, "changed": 11,
 	"native-deadline": 12, "native-window-missed": 13,
+	"steering-stalled": 14,
 }
 
 // Times are parsed only after the strict producer decoder validated the wire.
@@ -91,6 +93,17 @@ func (self *monitorValidatorState) observe(startedAt, now time.Time, value *prot
 		self.HighWaterAt = now
 	}
 	if value != nil {
+		if self.SteeringLiveness != nil && self.SteeringLiveness.Baseline != nil {
+			baseline := self.SteeringLiveness.Baseline
+			if baseline.InstanceId == value.InstanceId && baseline.StartedAt != value.StartedAt {
+				code = "invalid"
+			}
+			if baseline.InstanceId == value.InstanceId && value.Steering != nil && value.Steering.Outcome != "starting" {
+				if before := monitorProgressTime(baseline.Steering.ObservedAt); before.After(monitorProgressTime(value.Steering.ObservedAt)) {
+					code, self.ClockFaultAt = "clock", before
+				}
+			}
+		}
 		self.CandidateHeartbeatAt = monitorProgressTime(value.HeartbeatAt)
 		if maximum := monitorProgressMaximumTime(value); maximum.After(now.Add(monitorServiceClockAllowance)) {
 			code, self.ClockFaultAt = "clock", maximum
@@ -165,8 +178,18 @@ func (self *monitorValidatorState) condition(now time.Time, policy monitorValida
 	if deadline.Status == "critical" || deadline.Status == "missed-window" {
 		return "native-deadline", "critical"
 	}
+	steering := self.steeringLiveness(policy)
+	if self.SteeringLiveness.unresolved() || steering.Status == "stalled" {
+		return "steering-stalled", "critical"
+	}
 	if deadline.Status == "warning" {
 		return "native-deadline", "warning"
+	}
+	if steering.Status == "warning" {
+		return "steering-stalled", "warning"
+	}
+	if policy.SteeringLiveness != nil && status == "observed" && steering.Status != "responsive" {
+		return "unknown", ""
 	}
 	return status, severity
 }

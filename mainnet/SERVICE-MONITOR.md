@@ -104,9 +104,78 @@ records all 82 affected normal/race roots and six causal controls in both modes.
 The v3 checkpoint still needs compatible rollback and log consumers; live
 deployment remains pending.
 
+## Steering responsiveness
+
+An independent progress publisher can continue refreshing `heartbeat_at` while
+the standard validator's steering owner is blocked inside a call. The optional
+per-validator `steering_liveness` policy detects this separately:
+
+```json
+"steering_liveness": {
+  "warning_after_seconds": 120,
+  "critical_after_seconds": 300
+}
+```
+
+These are synthetic example margins, not an approved production SLO. Explicitly
+choose `90 <= warning < critical <= 86400` seconds from the maximum admitted
+steering operation, poll interval, sample interval and workload qualification.
+There is no enabled default and these seconds never become a native deadline.
+
+The signal arms only after an exact-source, freshly acknowledged publication
+contains a real steering outcome from the current producer instance, observed
+within 90 seconds. The producer updates `steering.observed_at` after its actual
+loop call returns. A fresh `read_wait`, `receipt_transport_wait`, `epoch_wait`
+or `reveal_wait` demonstrates responsiveness even when no protocol work succeeds.
+Unchanged intent age, native block or settlement cursor alone cannot open a
+steering incident. A first startup, old restored outcome or replacement instance
+without its own returned outcome is explicitly unknown.
+
+After this baseline, a fresh publisher with a stale or missing steering outcome
+warns at the explicit first margin and opens a distinct critical incident at the
+second. Repeated reads, `starting` reports from that same instance, and other
+domain progress cannot advance the retained outcome time. A changed start time
+or regressed outcome for an armed same instance is refused as integrity/clock
+evidence. Read outages and unconfirmed publication remain separate: they cannot
+create a new steering-stall finding without fresh source evidence.
+
+Checkpoint v4 retains the last responsive baseline, first detection time,
+incident count and latest episode's ID, original margins, failure and recovery
+cuts. An open episode survives monitor restart, missing files, new publisher
+heartbeats, policy edits/removal and clock incidents. Recovery requires a fresh
+actual steering outcome strictly after the detection cut. It resolves only loop
+responsiveness; a returned failed read can recover that signal while native,
+intent, settlement and read incidents keep their own meanings. Earlier complete
+episodes require external event retention. Removing policy prevents new findings
+and recovery; it does not acknowledge an existing episode.
+
+The `steering_liveness` event projection and twelve
+`sn_mainnet_validator_steering_liveness_*{role}` gauges expose enabled/current
+state, last outcome, explicit margins, retained baseline, incident count,
+unresolved state and detection/recovery times. Status codes are 0 disabled,
+1 unavailable, 2 unknown, 3 responsive, 4 warning, 5 stalled and 6 incoherent.
+Service status 14 is steering-stalled. The dedicated critical alert follows the
+retained unresolved gauge even during a later source outage. Keep the independent
+expected-host/role roster and missing/stale sample alerts: local liveness metrics
+cannot report their own absent host or stopped monitor.
+
+This is bounded local diagnostic evidence. It does not independently attest to
+an active systemd generation, diagnose a deadlock's cause, prove chain failure,
+or authorize stopping/restarting a process. The [repair controller](VALIDATOR-REPAIR.md)
+still requires its independently signed stopped-generation availability incident;
+a readable steering stall cannot substitute. Active-hang intervention still
+needs a separately approved stop/join/custody policy and real-host rehearsal.
+
+Deploy v4 consumers before writing v4 checkpoints. The loader accepts v1–v3 with
+their original unknown liveness history; existing independently signed v3 repair
+envelopes retain their exact stopped-only scope. Old strict consumers cannot read
+v4, so rollback must retain a compatible consumer and the original journals.
+The [qualification receipt](evidence/steering-liveness-qualification-20261001.md)
+records deterministic source evidence, not deployment or delivered alerts.
+
 ## Publication and independent telemetry
 
-Per-role checkpoints are at most 16 KiB; textfiles contain 74 fixed role gauges within
+Per-role checkpoints are at most 16 KiB; textfiles contain 86 fixed role gauges within
 32 KiB. The only new metric label is the independently configured `role`.
 Config/deployment identifiers, paths, vector hashes and raw errors are never
 labels. JSON events use `urnetwork-mainnet-validator-event-v1` and preserve the
@@ -138,7 +207,8 @@ Every gauge begins with `sn_mainnet_validator_`:
 Status codes are 0 starting, 1 observed, 2 missing, 3 unavailable, 4 invalid,
 5 identity mismatch, 6 clock incident, 7 stale heartbeat, 8 producer publication
 uncertainty, 9 unknown domain, 10 failed intent, 11 source changed during read,
-12 native deadline risk and 13 unresolved reported native window miss.
+12 native deadline risk, 13 unresolved reported native window miss and
+14 steering responsiveness warning/stall.
 Severity is 0 none, 1 warning, 2 critical. Publication codes are 0 starting,
 1 previously published, 2 retrying. Intent codes are 0 absent, 1 pending,
 2 finalized, 3 applied, 4 failed. Steering codes are 0 starting, 1 working,

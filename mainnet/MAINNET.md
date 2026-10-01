@@ -1806,6 +1806,18 @@ supplies identity/finality observations and an optional read-only
 [`--services` consumer](SERVICE-MONITOR.md) for independently configured
 validator roles.
 
+The [steering responsiveness increment](SERVICE-MONITOR.md#steering-responsiveness)
+adds explicit per-role loop-outcome budgets and persistent critical incidents
+for an observed steering loop that stops returning while its publisher remains
+fresh. A returned read/reveal/epoch wait remains responsive; startup without a
+baseline stays unknown. Checkpoint v4 retains the exact episode through restart,
+source loss and policy edits, and requires a later actual outcome for recovery.
+Its [source qualification](evidence/steering-liveness-qualification-20261001.md)
+includes command/producer boundaries, compatible v3 repair custody and independent
+expected-host alert fixtures. No live service was changed. Approved production
+budgets, delivered alerts and active-hang stop/join/restart authority remain open;
+the existing repair controller still refuses active generations.
+
 The [operator journal monitor increment](OPERATOR-MONITOR.md) has an
 [offline-qualified production reader/consumer](evidence/operator-monitor-qualification-20260930.md):
 62 Go root executions passed normal/race, four alert fixtures passed, and nine

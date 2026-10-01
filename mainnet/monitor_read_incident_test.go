@@ -485,6 +485,7 @@ func TestMonitorReadIncidentCommandSaturatesCountsAndRefusesSequenceExhaustion(t
 func TestMonitorReadIncidentCommandHistoryFitsExistingBudgets(t *testing.T) {
 	fixture := newMonitorServicesFixture(t, "alpha")
 	fixture.enableNativeDeadline(t)
+	fixture.policy.Validators[0].SteeringLiveness = &monitorSteeringLivenessPolicy{WarningAfterSeconds: 120, CriticalAfterSeconds: 300}
 	value := monitorDeadlineTestRecord(fixture.clock.now(), 1, 201, 9)
 	value.Source.DeploymentId = strings.Repeat("\x00", 256)
 	value.Source.ValidatorId, value.Source.Netuid = math.MaxUint64, math.MaxUint16
@@ -501,6 +502,21 @@ func TestMonitorReadIncidentCommandHistoryFitsExistingBudgets(t *testing.T) {
 	if event := run.next(t); event.State.NativeDeadline == nil {
 		t.Fatal("fixture omitted the independent native incident")
 	}
+	fixture.clock.seconds.Add(300)
+	value.HeartbeatAt, value.Publisher.LastSuccessAt = fixture.clock.now().Format(time.RFC3339Nano), fixture.clock.now().Format(time.RFC3339Nano)
+	monitorServicesTestWrite(t, policy.ProgressFile, value)
+	run.again(t, "alpha")
+	if event := run.next(t); !event.State.SteeringLiveness.unresolved() {
+		t.Fatal("fixture omitted the independent steering incident", event)
+	}
+	fixture.clock.seconds.Add(1)
+	value.HeartbeatAt, value.Publisher.LastSuccessAt = fixture.clock.now().Format(time.RFC3339Nano), fixture.clock.now().Format(time.RFC3339Nano)
+	value.Steering.ObservedAt, value.Steering.LastSuccessAt = value.HeartbeatAt, value.HeartbeatAt
+	monitorServicesTestWrite(t, policy.ProgressFile, value)
+	run.again(t, "alpha")
+	if event := run.next(t); event.State.SteeringLiveness.LastIncident.Recovery == nil {
+		t.Fatal("fixture omitted the real steering recovery")
+	}
 	path, metricsPath := monitorValidatorPaths(fixture.checkpointPath, fixture.metricsPath, policy.Role)
 	var firstId string
 	for episode := uint64(1); episode <= 25; episode++ {
@@ -516,9 +532,12 @@ func TestMonitorReadIncidentCommandHistoryFitsExistingBudgets(t *testing.T) {
 		run.again(t, "alpha")
 		event := run.next(t)
 		history := monitorReadTestHistory(t, event)
-		checkpointRaw, _ := monitorReadTestCheckpoint(t, path)
+		checkpointRaw, checkpointRecord := monitorReadTestCheckpoint(t, path)
 		eventRaw, err := json.Marshal(event)
 		if err != nil || len(checkpointRaw) > 16*1024 || len(eventRaw)+1 > diagnostics.MaximumRecordBytes ||
+			event.Publication != "published" || checkpointRecord.State.ReadIncidents.Incidents != episode ||
+			checkpointRecord.State.SteeringLiveness == nil || checkpointRecord.State.SteeringLiveness.LastIncident == nil ||
+			checkpointRecord.State.SteeringLiveness.LastIncident.Recovery == nil ||
 			history.Incidents != episode || history.FailedReads != episode || history.FirstIncident.Id != firstId ||
 			event.Status != "native-window-missed" || event.State.NativeDeadline == nil {
 			t.Fatal("bounded read history lost continuity or cleared a native incident", episode, len(checkpointRaw), len(eventRaw), err)

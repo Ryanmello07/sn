@@ -95,7 +95,8 @@ func (self repairValidatorUnit) render() []byte {
 func (self repairValidatorPlan) incident(record monitorServiceCheckpointRecord) error {
 	policy := monitorValidatorPolicy{Role: self.Role, ProgressFile: self.Unit.ProgressFile, ExpectedSource: self.Source}
 	hash, err := hashMonitorServiceCheckpoint(record)
-	if err != nil || record.Schema != monitorServiceCheckpointSchema || record.Role != self.Role || record.Expected != self.Source || hash != record.ContentHash || validateMonitorValidatorState(record.State) != nil {
+	previousSchema := record.Schema == "urnetwork-mainnet-validator-checkpoint-v3" && record.State.SteeringLiveness == nil
+	if err != nil || record.Schema != monitorServiceCheckpointSchema && !previousSchema || record.Role != self.Role || record.Expected != self.Source || hash != record.ContentHash || validateMonitorValidatorState(record.State) != nil || record.State.SteeringLiveness.validate(policy, record.State.HighWaterAt) != nil {
 		return errors.New("validator repair incident checkpoint differs")
 	}
 	history, previous := record.State.ReadIncidents, record.State.Record
