@@ -1230,6 +1230,12 @@ unchanged. Independent Sol qualification passes the 31 builder roots normal/race
 vet, causal controls and complete artifact readback. The receipt pins the selected
 catalogue separately from the unchanged historical files.
 
+The [bounded scratch-image qualification](evidence/scratch-image-qualification-20261001.md)
+builds and independently reads back the exact `server-competitionworker`
+Linux/amd64 image from this candidate. A separate Sol build reproduced its OCI
+archive bytes. Seven image recipes still have remote inputs, and aggregate
+release, reproducibility, source-to-image and deployment flags remain false.
+
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
 catalogue review and independent qualification are the preferred path for the

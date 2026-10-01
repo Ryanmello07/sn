@@ -767,6 +767,13 @@ byte pairs and unchanged deployment interfaces. Independent Sol qualification
 passes all 31 builder roots normal/race, vet, four causal controls and all 170
 artifact readbacks. Executable compile results remain separate from application
 behavioral qualification.
+The [bounded scratch-image qualification](evidence/scratch-image-qualification-20261001.md)
+adds a repeatable Linux/amd64 OCI build and independent binary readback for
+`server-competitionworker` from that exact candidate. Both author and Sol
+independently produced the same archive; 51 builder roots pass normal/race.
+The other seven image recipes still require offline closure of their Ubuntu
+base and remote `ADD` inputs. Aggregate release and deployment flags remain
+false.
 The retained-mode manifest keeps historical and compiled contract hashes:
 Coordinator and ValidatorEvidence have metadata drift associated with the changed
 imported SettlementVault source, so that selection's source-to-bytecode equality
