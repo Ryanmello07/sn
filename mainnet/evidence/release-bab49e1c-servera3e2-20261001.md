@@ -99,6 +99,15 @@ supplements, aggregates, retained artifacts, comparison, inventories, exact
 source/tool checks, component receipts and daemon shutdown records; compiler
 caches and mutable scratch are excluded.
 
+A separate read-only verifier checked the sealed A/B source graphs, 175 artifacts
+per candidate, embedded VCS identities in all seventeen binaries, ten raw
+bytecode outputs, twelve migration copies and the eight-image OCI readback.
+Its independent receipt at
+`/mnt/data/sn-testnet/sol-mainnet-http-release-independent-20261001/receipt.json`
+has SHA-256 `c5b7d1b49093936efe7fc227ea9946ee407885cec840d920cc8ffc18ec31d8ec`.
+This is an independent artifact check using the same host and toolchain, not
+independent compiler or dependency provenance.
+
 Later reporting commits do not change the frozen binary source. The owner's
 separate acceptance of the exact official v470 artifact and documented
 reproducibility exception is for launch planning only; it grants no release,
