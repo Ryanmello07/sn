@@ -1034,6 +1034,14 @@ retry passes unchanged provenance checks. Independent release qualification,
 live migration and policy remain gates. Later passive-root host, owner
 recycle-mode transition and mixed-writer/migration-751 source selections need
 a successor build.
+The [successor preparation](evidence/release-successor-preparation-20261001.md)
+now checks exact SN `7ee916cc` / server `94229abb`, unchanged Connect/SDK
+pins, both offline module graphs, all 89 builder normal/race roots and vet.
+Ten clean physical clones, 40 package payloads and the local base blobs are
+ready; the retained migration source inventory counts 751. Final selection,
+17-binary/five-contract builds and eight-image joins remain held until the
+owner recycle-mode transition merges. This preparation grants no release,
+migration, signing or deployment authority.
 The retained-mode manifest keeps historical and compiled contract hashes:
 Coordinator and ValidatorEvidence have metadata drift associated with the changed
 imported SettlementVault source, so that selection's source-to-bytecode equality

@@ -1434,6 +1434,15 @@ this baseline does not attest them.
 Independent reproduction, actual configuration/policy, rollout and release
 approval remain open.
 
+The [successor preparation](evidence/release-successor-preparation-20261001.md)
+checks clean SN `7ee916cc` / server `94229abb`, including passive-root host
+and schema 751, with unchanged Connect/SDK pins. Both offline module graphs
+and all 89 builder normal/race roots plus vet pass; 40 package payloads and
+the local base blobs are rechecked. Its 751-entry migration source inventory
+does not apply a migration. Final source/image qualification is held until
+the owner recycle-mode transition merges; no successor release seal or
+approval is claimed by this preparation.
+
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
 catalogue review and independent qualification are the preferred path for the
