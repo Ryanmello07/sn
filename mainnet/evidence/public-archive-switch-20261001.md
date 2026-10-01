@@ -40,6 +40,13 @@ Native/EVM header linkage and any historical capture requiring that raw debug
 method remain open until an exact independently qualified public-RPC fallback
 or a capable synced Snow route exists. No mutating bootstrap action has run.
 
+The subsequent [public header fallback qualification](public-header-fallback-20261001.md)
+closes this specific combined finalized-snapshot read on the public archive. It
+reconstructs only the reviewed Frontier RLP15 header and accepts it only when
+its Keccak hash equals the native committed EVM digest. The independent live
+read-only snapshot succeeded. This does not add the raw-history methods needed
+by the Safe history collector or approve runtime 470 for transactions.
+
 The [advertised method catalogue](public-archive-methods-20261001.json)
 includes `author_submitExtrinsic`, `eth_sendRawTransaction`,
 `eth_getBlockByHash` and `state_getReadProof`, but omits

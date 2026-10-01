@@ -2276,7 +2276,10 @@ restarting unrelated bodies already in progress.
 Use `https://archive.chain.opentensor.ai` as the interim mainnet RPC for
 read-only discovery and unsigned plans. The [October 1 observation](evidence/public-archive-switch-20261001.md)
 reports mainnet genesis/EVM ID 964 and runtime spec 470, but the strict native/EVM
-mapping lacks a public raw-header method. Snow VPN `172.28.208.185:9944` is a
+mapping initially lacked a public raw-header method. The
+[qualified public fallback](evidence/public-header-fallback-20261001.md) now
+passes a live read-only exact-hash finalized snapshot on that archive. Snow VPN
+`172.28.208.185:9944` is a
 future failover; it still returned HTTP 502 at the latest retained check.
 Do not retarget signed action bytes. Obtain an independently approved mainnet
 genesis/runtime identity and complete
