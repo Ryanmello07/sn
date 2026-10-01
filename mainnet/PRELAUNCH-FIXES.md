@@ -221,6 +221,26 @@ receipts and independent monitor deployment remain open.
 
 MG-06 has a [pinned read-only recycle-mode observation](evidence/recycle-mode-observation-20261001.md): `RecycleOrBurn[25]` was absent at Rao archive finalized block 9,186,298, which the reviewed metadata interprets as the default `Burn`. The [later public readback](evidence/public-route-check-20261001-1124.md) also finds the key absent at block 9,187,604. Neither observation is independent state approval. The owner transition and finalized `Recycle` readback remain required before the 90% recycle policy can operate.
 
+The [offline owner recycle transition](OWNER-RECYCLE-TRANSITION.md) resolves the
+MG-06 authority question at pinned runtime 470: AdminUtils call 80 accepts the
+subnet owner or Root, with per-subnet hyperparameter 24 rate limiting for the
+owner and the admin window for either origin. Separate approval, exact native
+Sr25519/Ed25519 request bytes, bounded inert Ledger framing, durable public
+signature custody and canonical receipt/inclusion-block readback are implemented.
+No signing, broadcast or service command is installed. Independent runtime/device
+and custody qualification, an actual approved transition and finalized Recycle
+state, followed by native 10/90 outcome evidence, remain required. This source
+needs a successor release; the SN `6c801a25` / server `720e7c61` baseline retains its scope.
+
+**Open decoder resource hardening:** unsigned subnet-discovery snapshots still
+check a caller-supplied self-consistent metadata hash before SCALE decoding.
+That hash and the 8 MiB input limit do not bound a forged compact vector's
+allocation. The new native metadata helper protects independently pinned bytes
+in owner/root preparation and native receipts; it does not close this distinct
+unapproved-snapshot decoder gap. Add a bounded metadata decoder and deterministic
+malformed/self-consistent snapshot tests before treating that discovery input
+path as resource-qualified.
+
 MG-01/MG-06 have a later [read-only public-entrypoint fallback](evidence/public-entrypoint-fallback-20261001.md): the archive route timed out, while the official mainnet entrypoint returned matching genesis/EVM/runtime identity at finalized block 9,187,206 and another absent `RecycleOrBurn[25]` value. The fallback is unapproved observation only; it neither retargets signed work nor provides archive history. Preserve the failed archive transcript and obtain separately approved route authority before any endpoint switch for execution.
 
 MG-02/MG-10 have a [broad normal receipt for the exact Safe-integrated release code](evidence/release-source-broad-normal-20261001.md): all 16 disjoint `./mainnet` partitions passed, with 1,019 test roots passing and six intentional skips. The tested SN commit differs from the frozen release source only in Markdown; its integrated server pin is exact. Focused Safe normal/race and builder normal/race qualifications remain separate. This local source result does not approve the release or prove live rollout behavior.

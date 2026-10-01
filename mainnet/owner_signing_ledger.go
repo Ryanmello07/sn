@@ -44,10 +44,16 @@ func newOwnerLedgerTranscript(request ownerSigningRequest, metadataProof []byte)
 		return ownerLedgerTranscript{}, errors.New("Ledger generic app cannot sign the retained sr25519/disabled-metadata owner v1 action")
 	}
 	payload, _ := hex.DecodeString(action.Payload[2:])
+	return ownerLedgerTranscriptForPayload(request.ContentHash, action.Coldkey, action.DerivationPath, action.MetadataDigest, payload, metadataProof)
+}
+
+// Shared wire construction carries no call authority. Each caller validates its
+// own approved action and metadata before creating an inert device transcript.
+func ownerLedgerTranscriptForPayload(requestHash, owner, derivationPath, metadataDigest string, payload, metadataProof []byte) (ownerLedgerTranscript, error) {
 	if len(metadataProof) == 0 || len(payload)+len(metadataProof) > ownerLedgerPayloadLimit {
 		return ownerLedgerTranscript{}, errors.New("Ledger payload and shortened metadata require a nonempty proof and at most 16 KiB combined")
 	}
-	path, err := ownerLedgerDerivationPath(action.DerivationPath)
+	path, err := ownerLedgerDerivationPath(derivationPath)
 	if err != nil {
 		return ownerLedgerTranscript{}, err
 	}
@@ -56,8 +62,8 @@ func newOwnerLedgerTranscript(request ownerSigningRequest, metadataProof []byte)
 		encodedPath = binary.LittleEndian.AppendUint32(encodedPath, index)
 	}
 	proofHash := sha256.Sum256(metadataProof)
-	result := ownerLedgerTranscript{Schema: ownerLedgerTranscriptSchema, RequestHash: request.ContentHash, AppSource: ownerLedgerAppSource,
-		DerivationPath: action.DerivationPath, ExpectedPublicKey: action.Coldkey, MetadataDigest: action.MetadataDigest,
+	result := ownerLedgerTranscript{Schema: ownerLedgerTranscriptSchema, RequestHash: requestHash, AppSource: ownerLedgerAppSource,
+		DerivationPath: derivationPath, ExpectedPublicKey: owner, MetadataDigest: metadataDigest,
 		MetadataProofSha256: "sha256:" + hex.EncodeToString(proofHash[:]), SignatureResponse: "00 || ed25519_signature_64_bytes; APDU status 9000 excluded"}
 	// SS58 prefix 42 is the inspected Subtensor display prefix; identity remains
 	// the independently pinned raw AccountId32, never a derived replacement.

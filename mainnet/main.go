@@ -178,10 +178,14 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && (args[0] == "check-recycle-mode" || args[0] == "economic-reference") {
 		return runEconomicCommand(ctx, args, stdout, stderr)
 	}
+	if len(args) != 0 && args[0] == "owner-recycle" {
+		return runOwnerRecycleCommand(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "observe-native-miner-emission" {
 		return runEconomicEmissionCommand(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "inspect" && args[0] != "monitor" {
+		fmt.Fprintln(stderr, "owner recycle offline custody: sn-mainnet owner-recycle observe|plan|reserve|export|inspect-request|ledger-plan|import|status|reconcile [explicit policy, approval, original action and request pins]")
 		fmt.Fprintln(stderr, "offline owner handoff: sn-mainnet owner-signing inspect|sign|reply|verify|ledger-plan --request FILE --accept-request-hash HASH --trim-approval-key HEX --owner-account-id HEX --expected-genesis HEX [owner-local device custody, public response or proof flags]")
 		fmt.Fprintln(stderr, "offline artifacts: sn-mainnet safe-release-verify --version 1.4.1|1.5.0 --variant Safe|SafeL2 --archive ABSOLUTE_FILE")
 		fmt.Fprintln(stderr, "offline successor preparation: bootstrap-chain contract-successor-preview|contract-successor-prepare|contract-successor-resume --config FILE --run-dir DIR --accept-plan-hash HASH --request FILE [exact preparation approval flags]")

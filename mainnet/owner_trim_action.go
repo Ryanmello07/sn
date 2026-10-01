@@ -12,7 +12,6 @@ import (
 	"math"
 	"path/filepath"
 
-	"github.com/urfoundation/sn/crv4"
 	"github.com/vedhavyas/go-subkey/v2/sr25519"
 	"golang.org/x/crypto/blake2b"
 )
@@ -107,7 +106,7 @@ func prepareOwnerTrimAction(action ownerTrimAction, metadataHex string) (ownerTr
 	if len(metadataHex) > 2+2*maxMetadataRpcReplyBytes {
 		return ownerTrimAction{}, errors.New("owner trim metadata exceeds bound")
 	}
-	metadata, digest, err := crv4.DecodeRuntimeMetadata(metadataHex)
+	metadata, digest, err := nativePinnedMetadata(metadataHex, action.Runtime.RuntimeMetadataHash)
 	if err != nil || digest != action.Runtime.RuntimeMetadataHash {
 		return ownerTrimAction{}, errors.Join(errors.New("owner trim metadata differs from approved artifact"), err)
 	}
