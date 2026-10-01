@@ -41,7 +41,7 @@ func (self bootstrapSuccessorRuntimeAuthorization) signingBytes() ([]byte, error
 	if self.Schema != bootstrapSuccessorRuntimeSchema || !planSha256(self.ExecutionPlanHash) || !planSha256(self.CanonicalAuthorityHash) ||
 		self.Sequence == 0 || !planSha256(self.PreviousHash) || self.Policy != bootstrapSuccessorRuntimePolicy ||
 		!bootstrapRootAbsolutePath(self.RuntimeEvidence.Path) || !planSha256(self.RuntimeEvidence.Sha256) ||
-		profile.RuntimeSourceCommit != frontierMappingSourceCommit || profile.RuntimeVersion.SpecName == "" || profile.RuntimeVersion.SpecVersion == 0 ||
+		!mainnetRuntimeCodecSource(profile.RuntimeSourceCommit) || profile.RuntimeVersion.SpecName == "" || profile.RuntimeVersion.SpecVersion == 0 ||
 		!rootCanonicalHash(profile.RuntimeCodeHash) || !rootCanonicalHash(profile.RuntimeMetadataHash) {
 		return nil, errors.New("successor runtime revision lacks exact additive artifact authority")
 	}

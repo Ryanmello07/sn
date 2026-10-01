@@ -139,10 +139,10 @@ func loadValidatorActivationPreparation(ctx context.Context, approval validatorA
 		return preparation, err
 	}
 	c := preparation.Plan.Config
-	if c.Schema != bootstrapChainConfigSchema || c.Netuid != 25 || preparation.Plan.ContentHash != p.PlanHash || preparation.Plan.ConfigSha256 != p.Preparation.Sha256 {
+	if !bootstrapChainHasRootRole(c.Schema) || c.Netuid != 25 || preparation.Plan.ContentHash != p.PlanHash || preparation.Plan.ConfigSha256 != p.Preparation.Sha256 {
 		return preparation, errors.New("validator activation differs from original signed v3 bootstrap admission")
 	}
-	protected := preparation.childPaths()
+	protected := preparation.protectedPaths()
 	for _, inspection := range preparation.Plan.ValidatorInspections {
 		protected = append(protected, inspection.DeclaredPaths...)
 		protected = append(protected, inspection.ApprovalReference.Path)

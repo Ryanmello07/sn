@@ -11,6 +11,7 @@ import (
 )
 
 const bootstrapChainRootApprovalSchema = "urnetwork-mainnet-root-service-approval-v1"
+const bootstrapChainRootPassiveApprovalSchema = "urnetwork-mainnet-root-passive-service-approval-v2"
 const maximumBootstrapChainRootApprovalBytes = 16 * 1024
 
 // Both approval keys come from the independent preparation input. The action
@@ -29,9 +30,17 @@ type bootstrapChainRootValidator struct {
 	Approval                planFileReference    `json:"approval"`
 }
 
-// This role can select only the existing explicit-weight root service. It
-// cannot count as either UR validator or change the service implementation.
+// Each strategy selects its exact implementation and independent approval
+// domain. The root role cannot count as either UR validator.
 func (self bootstrapChainRootValidator) validate() error {
+	if self.Strategy == rootPassiveStrategy {
+		if self.Role != "bittensor-root-validator" || self.Netuid == nil || *self.Netuid != 0 || self.Implementation != "sn/mainnet/root-passive-service" ||
+			!rootCanonicalHash(self.Hotkey) || !rootCanonicalHash(self.Coldkey) || self.Seat == nil || self.Seat.RegistrationBlock == 0 ||
+			self.ActionApprovalPublicKey != "" || !rootCanonicalHash(self.ApprovalPublicKey) || !bootstrapRootAbsolutePath(self.Approval.Path) || !planSha256(self.Approval.Sha256) {
+			return errors.New("passive root role requires exact observation identity and service approver without native-action authority")
+		}
+		return nil
+	}
 	if self.Role != "bittensor-root-validator" || self.Netuid == nil || *self.Netuid != 0 || self.Implementation != "sn/mainnet/root-service" ||
 		!rootCanonicalHash(self.Hotkey) || !rootCanonicalHash(self.Coldkey) || self.Seat == nil || self.Seat.RegistrationBlock == 0 ||
 		self.Strategy != "explicit_root_weights" || !rootCanonicalHash(self.ActionApprovalPublicKey) || !rootCanonicalHash(self.ApprovalPublicKey) ||
@@ -57,7 +66,7 @@ type bootstrapChainRootApproval struct {
 func (self bootstrapChainRootApproval) signingBytes() ([]byte, error) {
 	self.Signature = ""
 	raw, err := json.Marshal(self)
-	return append([]byte(bootstrapChainRootApprovalSchema+"\x00"), raw...), err
+	return append([]byte(self.Schema+"\x00"), raw...), err
 }
 
 // The accepted parent plan retains the complete reviewable child configuration
@@ -78,11 +87,15 @@ func (self bootstrapChainRootInspection) validate(config bootstrapChainConfig, r
 		return err
 	}
 	root, approval := self.Plan, self.Approval
-	scope := root.Service.Packet.Action.Scope
+	scope := root.identityScope()
+	passive := config.Schema == bootstrapChainConfigSchemaV4
+	if passive != (root.PassiveService != nil) || passive != (role.Strategy == rootPassiveStrategy) {
+		return errors.New("bootstrap chain schema cannot convert legacy root action authority to passive observation")
+	}
 	if root.ContentHash != rootPlanHash || root.ConfigPath != config.Root.Path || root.ConfigSha256 != config.Root.Sha256 ||
 		root.DeploymentId != config.DeploymentId || root.Network != config.Network || root.RunDirectory != config.RunDirectory ||
 		scope.Role != role.Role || scope.Netuid != *role.Netuid || scope.Hotkey != role.Hotkey || scope.Coldkey != role.Coldkey ||
-		scope.Seat != *role.Seat || scope.Strategy != role.Strategy || root.Service.CustodyTrust.ApprovalPublicKey != role.ActionApprovalPublicKey {
+		scope.Seat != *role.Seat || scope.Strategy != role.Strategy || !passive && root.Service.CustodyTrust.ApprovalPublicKey != role.ActionApprovalPublicKey {
 		return errors.New("bootstrap chain root service differs from its independent role, action approver or child scope")
 	}
 	for _, validator := range config.Validators {
@@ -90,8 +103,12 @@ func (self bootstrapChainRootInspection) validate(config bootstrapChainConfig, r
 			return errors.New("bootstrap chain root role cannot count as a UR validator")
 		}
 	}
-	if approval.Schema != bootstrapChainRootApprovalSchema || approval.DeploymentId != config.DeploymentId || approval.RootPlanHash != root.ContentHash ||
-		approval.ServiceConfigHash != rootObjectHash(root.Service) {
+	approvalSchema := bootstrapChainRootApprovalSchema
+	if passive {
+		approvalSchema = bootstrapChainRootPassiveApprovalSchema
+	}
+	if approval.Schema != approvalSchema || approval.DeploymentId != config.DeploymentId || approval.RootPlanHash != root.ContentHash ||
+		approval.ServiceConfigHash != root.serviceHash() {
 		return errors.New("bootstrap chain root config approval differs from the complete service configuration or deployment")
 	}
 	key, _ := hex.DecodeString(role.ApprovalPublicKey[2:])

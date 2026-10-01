@@ -121,6 +121,20 @@ func (self *bootstrapRootOwner) advance(ctx context.Context, receipt *rootOfflin
 	if err != nil {
 		return bootstrapRootResult{}, err
 	}
+	if self.plan.PassiveService != nil {
+		if receipt != nil {
+			return bootstrapRootResult{}, errors.New("passive root observation cannot import a native signature")
+		}
+		if record.Phase == "claimed" {
+			record.Phase = "passive-service-retained"
+			if err := self.persist(record); err != nil {
+				return bootstrapRootResult{}, err
+			}
+		}
+		return bootstrapRootResult{Schema: "urnetwork-mainnet-bootstrap-root-result-v2", PlanHash: self.plan.ContentHash,
+			Phase: bootstrapRootPassivePhase, LocalCustodyComplete: true, SignatureStatus: "not-applicable-passive-observation",
+			NextPhase: "run-approved-passive-root-service", ChainPhasesPending: true, ServicePhase: record.Phase}, ctx.Err()
+	}
 	createCustody, err := bootstrapRootCreateChild(self.plan.Service.CustodyTrust.StatePath, record.Phase != "claimed")
 	if err != nil {
 		return bootstrapRootResult{}, err

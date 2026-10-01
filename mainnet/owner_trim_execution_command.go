@@ -51,7 +51,7 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 		return 2
 	}
 	preparation, err := loadBootstrapChainPreparation(ctx, *configPath)
-	if err != nil || preparation.Plan.Config.Schema != bootstrapChainConfigSchema || preparation.Plan.ContentHash != *accepted || preparation.Plan.Config.RunDirectory != *runDir {
+	if err != nil || !bootstrapChainHasRootRole(preparation.Plan.Config.Schema) || preparation.Plan.ContentHash != *accepted || preparation.Plan.Config.RunDirectory != *runDir {
 		fmt.Fprintln(stderr, "trim phase original v3 preparation differs:", err)
 		return 3
 	}

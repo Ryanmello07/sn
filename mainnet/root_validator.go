@@ -23,6 +23,9 @@ const rootPolicySchema = "urnetwork-mainnet-root-observer-policy-v1"
 const rootPreviewSchema = "urnetwork-mainnet-root-preview-v1"
 const rootStorageProfileName = "subtensor-root-read-only-v1"
 const rootProfileSource = "67dcf7f791dc495064c293f080a0702cb433e51e"
+const rootPassivePolicySchema = "urnetwork-mainnet-root-observer-policy-v2"
+const rootPassiveStorageProfile = "subtensor-root-passive-read-only-v2"
+const rootPassiveSource = "923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d"
 
 // Adopting a UID requires the exact hotkey registration generation, not a slot.
 type rootSeatExpectation struct {
@@ -52,11 +55,14 @@ type rootValidatorPolicy struct {
 	ExpectedDelegateTake *uint16                     `json:"expected_delegate_take_u16"`
 	BasketStrategy       string                      `json:"basket_strategy"`
 	DelegationStrategy   string                      `json:"delegation_strategy"`
+	ValidFromBlock       uint64                      `json:"valid_from_native_block,omitempty"`
+	ValidThroughBlock    uint64                      `json:"valid_through_native_block,omitempty"`
 }
 
 // Rejects missing role, policy or runtime authority before any RPC request.
 func (self rootValidatorPolicy) validate() error {
-	if self.Schema != rootPolicySchema || self.Role != "bittensor-root-validator" || self.Netuid != 0 || self.EvmChainId != mainnetEvmChainId || strings.TrimSpace(self.NativeChain) == "" {
+	passive := self.Schema == rootPassivePolicySchema
+	if self.Schema != rootPolicySchema && !passive || self.Role != "bittensor-root-validator" || self.Netuid != 0 || self.EvmChainId != mainnetEvmChainId || strings.TrimSpace(self.NativeChain) == "" {
 		return errors.New("root policy requires its exact schema, separate root role, netuid 0 and mainnet EVM chain ID 964")
 	}
 	for _, digest := range []string{self.GenesisHash, self.RuntimeCodeHash, self.RuntimeMetadataHash, self.Hotkey, self.Coldkey} {
@@ -64,7 +70,8 @@ func (self rootValidatorPolicy) validate() error {
 			return errors.New("root policy requires approved nonzero genesis, runtime artifacts and AccountId32 identities")
 		}
 	}
-	if self.StorageProfile != rootStorageProfileName || self.RuntimeSourceCommit != rootProfileSource {
+	if !passive && (self.StorageProfile != rootStorageProfileName || self.RuntimeSourceCommit != rootProfileSource) ||
+		passive && (self.StorageProfile != rootPassiveStorageProfile || self.RuntimeSourceCommit != rootPassiveSource || self.ExpectedSeat == nil || self.ExpectedSeat.RegistrationBlock == 0) {
 		return errors.New("root observation source/storage profile is unreviewed; add and qualify a profile before interpreting another runtime source")
 	}
 	if strings.TrimSpace(self.RuntimeVersion.SpecName) == "" || self.RuntimeVersion.SpecVersion == 0 || self.RuntimeVersion.TransactionVersion == 0 || self.RuntimeVersion.StateVersion == 0 {
@@ -74,8 +81,11 @@ func (self rootValidatorPolicy) validate() error {
 	if err != nil || minimum == 0 || strconv.FormatUint(minimum, 10) != self.MinimumStakeRao || self.ExpectedDelegateTake == nil {
 		return errors.New("root policy requires canonical positive minimum stake and explicit delegate take")
 	}
-	if self.BasketStrategy != "accumulate_in_place" || self.DelegationStrategy != "none" {
-		return errors.New("root observer v1 supports only explicit accumulate_in_place and no existing/pending delegation; custom strategies need separate qualification")
+	if self.BasketStrategy != "accumulate_in_place" || !passive && self.DelegationStrategy != "none" || passive && self.DelegationStrategy != "observe_existing" {
+		return errors.New("root observation requires accumulate_in_place with its schema's exact delegation policy")
+	}
+	if passive && (self.ValidFromBlock == 0 || self.ValidThroughBlock < self.ValidFromBlock) || !passive && (self.ValidFromBlock != 0 || self.ValidThroughBlock != 0) {
+		return errors.New("root observation window does not match its approved strategy")
 	}
 	return nil
 }
@@ -192,17 +202,28 @@ func (self *rpcClient) readApprovedRuntimeAt(ctx context.Context, expected ident
 // All independent reads share one deadline and bounded workers. A sample is
 // published only after complete census and canonical-block rechecks succeed.
 func (self *rpcClient) readRootPreview(ctx context.Context, policy rootValidatorPolicy, policyHash string) (rootPreview, error) {
+	return self.readRootPreviewAt(ctx, policy, policyHash, "")
+}
+
+// Composed readiness uses the already selected finalized hash for both roles.
+// The empty hash retains independent monitor sampling at its current head.
+func (self *rpcClient) readRootPreviewAt(ctx context.Context, policy rootValidatorPolicy, policyHash, blockHash string) (rootPreview, error) {
 	preview := rootPreview{}
 	if err := policy.validate(); err != nil {
 		return preview, err
 	}
 	sampleCtx, cancel := context.WithTimeout(ctx, self.retryWindow)
 	defer cancel()
-	identity, metadata, err := self.rootRuntime(sampleCtx, policy)
+	identity, metadata, err := self.readApprovedRuntimeAt(sampleCtx, identityExpectation{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId}, policy.RuntimeVersion, policy.RuntimeCodeHash, policy.RuntimeMetadataHash, blockHash)
 	if err != nil {
 		return preview, err
 	}
-	entries, err := rootStorageProfile(metadata)
+	passive := policy.Schema == rootPassivePolicySchema
+	profile := rootStorageProfile
+	if passive {
+		profile = rootPassiveStorageMetadata
+	}
+	entries, err := profile(metadata)
 	if err != nil {
 		return preview, fmt.Errorf("%w: %v", errRpcIntegrity, err)
 	}
@@ -217,6 +238,14 @@ func (self *rpcClient) readRootPreview(ctx context.Context, policy rootValidator
 		Seats: []rootSeat{}, NetworkIds: []uint16{}, Blockers: []string{}, WeightEligibility: "not-qualified-for-custom-weight-submission",
 		BasketStrategy: policy.BasketStrategy, DelegationStrategy: policy.DelegationStrategy,
 		ActivationBlockers: []string{"ROOT_AUTHORITY_CUSTODY_SUBMISSION_ADAPTERS_NOT_IMPLEMENTED", "ROOT_REGISTRATION_CAPABILITY_BLOCKED_UNLESS_APPROVED_EXISTING_SEAT", "ROOT_STAKING_CLAIM_AND_TAKE_ACTION_CAPS_NOT_IMPLEMENTED", "ROOT_CUSTOM_WEIGHT_ELIGIBILITY_AND_RUNTIME_PROFILE_NOT_QUALIFIED_FOR_MAINNET", "ROOT_BASKET_NAV_AND_ALL_STAKER_RIGHTS_NOT_AUDITED", "ROOT_RETIRED_NETWORK_DELEGATION_HISTORY_NOT_AUDITED", "SOURCE_TO_WASM_PROVENANCE_REQUIRES_INDEPENDENT_REVIEW", "UR_VALIDATOR_READINESS_IS_A_SEPARATE_ROLE"},
+	}
+	if passive {
+		preview.Schema = "urnetwork-mainnet-root-preview-v2"
+		preview.WeightEligibility = "retired-no-root-weight-call"
+		preview.ActivationBlockers = []string{"PASSIVE_ROOT_OBSERVATION_HAS_NO_TRANSACTION_AUTHORITY", "ROOT_BASKET_NAV_AND_ALL_STAKER_RIGHTS_NOT_AUDITED", "ROOT_RETIRED_NETWORK_DELEGATION_HISTORY_NOT_AUDITED", "SOURCE_TO_WASM_PROVENANCE_REQUIRES_INDEPENDENT_REVIEW", "UR_VALIDATOR_READINESS_IS_A_SEPARATE_ROLE"}
+		if identity.FinalizedNumber < policy.ValidFromBlock || identity.FinalizedNumber > policy.ValidThroughBlock {
+			preview.Blockers = append(preview.Blockers, "SIGNED_ROOT_OBSERVATION_WINDOW_CLOSED")
+		}
 	}
 	rootExists, err := read("NetworksAdded", rootArg)
 	if err != nil {
@@ -354,13 +383,15 @@ func (self *rpcClient) readRootPreview(ctx context.Context, policy rootValidator
 		if selected.stake < minimum {
 			preview.Blockers = append(preview.Blockers, "ROOT_STAKE_BELOW_POLICY_MINIMUM")
 		}
-		weights, err := read("Weights", rootArg, binary.LittleEndian.AppendUint16(nil, uid))
-		if err != nil {
-			return rootPreview{}, err
-		}
-		_, weightsCount, _ := rootVector(weights.data, 4, 0)
-		if weightsCount != 0 {
-			preview.Blockers = append(preview.Blockers, "ROOT_EXISTING_CUSTOM_WEIGHTS_REQUIRE_EXPLICIT_TRANSITION")
+		if !passive {
+			weights, err := read("Weights", rootArg, binary.LittleEndian.AppendUint16(nil, uid))
+			if err != nil {
+				return rootPreview{}, err
+			}
+			_, weightsCount, _ := rootVector(weights.data, 4, 0)
+			if weightsCount != 0 {
+				preview.Blockers = append(preview.Blockers, "ROOT_EXISTING_CUSTOM_WEIGHTS_REQUIRE_EXPLICIT_TRANSITION")
+			}
 		}
 	}
 	var lowest *rootSeat
@@ -401,7 +432,7 @@ func (self *rpcClient) readRootPreview(ctx context.Context, policy rootValidator
 	if err != nil {
 		return rootPreview{}, err
 	}
-	if auto.data[0] != 0 {
+	if auto.data[0] != 0 && !passive {
 		preview.Blockers = append(preview.Blockers, "ROOT_AUTOMATIC_DELEGATION_ENABLED")
 	}
 	for _, scalar := range []struct {
@@ -412,6 +443,9 @@ func (self *rpcClient) readRootPreview(ctx context.Context, policy rootValidator
 		{name: "WeightsSetRateLimit", args: [][]byte{rootArg}}, {name: "RootStakeUnlockInterval"}, {name: "BasketShares", args: [][]byte{hotkey}},
 		{name: "BasketRate", args: [][]byte{hotkey}}, {name: "BasketClaimed", args: [][]byte{hotkey, coldkey}}, {name: "LastUpdate", args: [][]byte{rootArg}},
 	} {
+		if passive && rootRetiredWeightStorage(scalar.name) {
+			continue
+		}
 		value, err := read(scalar.name, scalar.args...)
 		if err != nil {
 			return rootPreview{}, err
@@ -485,7 +519,7 @@ func (self *rpcClient) readRootPreview(ctx context.Context, policy rootValidator
 		return rootPreview{}, err
 	}
 	for _, present := range delegationPresent {
-		if present {
+		if present && !passive {
 			preview.Blockers = append(preview.Blockers, "ROOT_EXISTING_OR_PENDING_DELEGATION_REQUIRES_EXPLICIT_TRANSITION")
 			break
 		}

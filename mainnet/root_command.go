@@ -42,6 +42,12 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 // Long-lived diagnostics have a separate owner even before flag admission.
 // Finite preview output retains its original complete snapshot and I/O contract.
 func runRootCommandWithMonitorHooks(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
+	return runRootCommandWithPolicy(ctx, args, stdout, stderr, now, hooks, nil, "")
+}
+
+// A signed passive-service config supplies the already authenticated policy in
+// memory, so an intervening pathname edit cannot replace the approved bytes.
+func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks, approvedPolicy *rootValidatorPolicy, approvedHash string) (result int) {
 	command := args[0]
 	monitoring := command == "root-monitor"
 	if monitoring {
@@ -84,7 +90,15 @@ func runRootCommandWithMonitorHooks(ctx context.Context, args []string, stdout, 
 		return 2
 	}
 	var policy rootValidatorPolicy
-	policyHash, err := readEconomicInput(*policyPath, &policy)
+	policyHash, err := "", error(nil)
+	if approvedPolicy == nil {
+		policyHash, err = readEconomicInput(*policyPath, &policy)
+	} else {
+		policy, policyHash = copyRootPassivePolicy(*approvedPolicy), approvedHash
+		if !planSha256(policyHash) || policyHash != rootObjectHash(policy) || policy.Schema != rootPassivePolicySchema {
+			err = errors.New("passive service policy identity changed")
+		}
+	}
 	if err == nil {
 		err = policy.validate()
 	}

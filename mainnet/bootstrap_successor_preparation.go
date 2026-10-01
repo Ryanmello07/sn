@@ -100,10 +100,13 @@ func (self bootstrapSuccessorPreparationPlan) validate() error {
 		retainedAttempts += uint16(action.Attempts)
 	}
 	for _, seal := range []string{p.OriginalConfigHash, p.Request.BootstrapPlanHash, p.Request.OriginalContractPlanHash,
-		p.LocalPreparation.PreparationHash, p.LocalPreparation.ContractsHash, p.LocalPreparation.RootProgressHash, p.LocalPreparation.RootCustodyHash, p.LocalPreparation.RootServiceHash} {
+		p.LocalPreparation.PreparationHash, p.LocalPreparation.ContractsHash} {
 		if !planSha256(seal) {
 			return errors.New("successor preparation lacks complete original custody seals")
 		}
+	}
+	if !p.LocalPreparation.validRootSeals() {
+		return errors.New("successor preparation lacks complete original root seals")
 	}
 	budget := p.Budget
 	original, originalErr := evmWei(budget.OriginalMaximumWei)
@@ -174,7 +177,7 @@ func loadBootstrapSuccessorPreparation(ctx context.Context, configPath, runDirec
 	if err != nil {
 		return plan, nil, err
 	}
-	if preparation.Plan.Config.Schema != bootstrapChainConfigSchema || accepted != preparation.Plan.ContentHash || runDirectory != preparation.Plan.Config.RunDirectory {
+	if !bootstrapChainHasRootRole(preparation.Plan.Config.Schema) || accepted != preparation.Plan.ContentHash || runDirectory != preparation.Plan.Config.RunDirectory {
 		return plan, nil, errors.New("successor preparation requires exact original accepted v3 custody")
 	}
 	raw, requestHash, err := readBootstrapRootFile(ctx, requestPath, 16*1024)
@@ -229,7 +232,7 @@ func validateBootstrapSuccessorPreparationPaths(preparation bootstrapChainPrepar
 		return err
 	}
 	c := preparation.Plan.Config
-	paths := append([]string(nil), preparation.childPaths()...)
+	paths := append([]string(nil), preparation.protectedPaths()...)
 	for i := 1; i < len(plans); i++ {
 		paths = append(paths, filepath.Join(c.RunDirectory, bootstrapContractStateFile(i)))
 	}

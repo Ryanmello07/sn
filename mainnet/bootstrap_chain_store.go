@@ -71,7 +71,7 @@ func openBootstrapChainStore(preparation bootstrapChainPreparation, create bool,
 	path := filepath.Join(preparation.Plan.Config.RunDirectory, bootstrapChainStateFile)
 	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
 	if create {
-		for _, path := range preparation.childPaths() {
+		for _, path := range preparation.protectedPaths() {
 			for _, candidate := range []string{path, path + ".lock"} {
 				if _, err := os.Lstat(candidate); !errors.Is(err, os.ErrNotExist) {
 					return nil, errors.Join(errors.New("bootstrap chain apply requires unused journals; retain existing custody for resume"), err)
@@ -128,7 +128,7 @@ func openBootstrapChainStore(preparation bootstrapChainPreparation, create bool,
 			return nil, errors.New("bootstrap chain marker differs from the accepted plan")
 		}
 	}
-	for _, path := range preparation.childPaths()[1:] {
+	for _, path := range preparation.protectedPaths()[1:] {
 		for _, candidate := range []string{path, path + ".lock"} {
 			if _, err := os.Lstat(candidate); !errors.Is(err, os.ErrNotExist) {
 				return nil, errors.Join(errors.New("bootstrap chain interrupted claim has child state; recovery refused"), err)

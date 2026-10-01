@@ -148,7 +148,7 @@ func (self ownerTrimAction) encoding() ([]byte, []byte, error) {
 		}
 	}
 	if self.Netuid != 25 || self.Network.NativeChain == "" || self.Network.EvmChainId != mainnetEvmChainId ||
-		self.Runtime.RuntimeSourceCommit != rootActionV1Source || self.Runtime.RuntimeVersion.SpecName == "" || self.Runtime.RuntimeVersion.SpecVersion == 0 ||
+		!mainnetRuntimeCodecSource(self.Runtime.RuntimeSourceCommit) || self.Runtime.RuntimeVersion.SpecName == "" || self.Runtime.RuntimeVersion.SpecVersion == 0 ||
 		self.Runtime.RuntimeVersion.TransactionVersion == 0 || self.Runtime.RuntimeVersion.StateVersion != 1 ||
 		self.SelectionRule != ownerTrimSubsetRule || !planLabel(self.CustodyId) || self.MaximumUids == 0 ||
 		self.Nonce == math.MaxUint32 || self.BirthBlock < self.SubnetRegistrationBlock || self.FeeReserveRao == 0 || self.MaxBroadcasts == 0 || self.MaxBroadcasts > 8 ||

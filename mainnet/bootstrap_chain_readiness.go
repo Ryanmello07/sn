@@ -41,6 +41,7 @@ type bootstrapChainReadiness struct {
 	ObservationComplete      bool                          `json:"observation_complete"`
 	LocalPreparation         *bootstrapChainReadinessState `json:"local_preparation,omitempty"`
 	Census                   *subnetPreviewEnvelope        `json:"census,omitempty"`
+	PassiveRoot              *rootPreviewEnvelope          `json:"passive_root,omitempty"`
 	UrValidators             []bootstrapChainRoleReadiness `json:"ur_validators"`
 	RootValidator            bootstrapChainRoleReadiness   `json:"root_validator"`
 	Blockers                 []string                      `json:"observation_blockers"`
@@ -74,14 +75,21 @@ func newBootstrapChainReadiness(preparation bootstrapChainPreparation) bootstrap
 		ApprovedCheckpointHash: action.BirthHash,
 		ObservationBlockers:    []string{"CURRENT_FINALIZED_OBSERVATION_UNRESOLVED"},
 		ActivationBlockers:     []string{"ROOT_EFFECTIVE_STAKE_AND_ELIGIBILITY_UNVERIFIED", "ROOT_NONCE_AND_WEIGHT_PREREQUISITES_UNVERIFIED", "ROOT_CURRENT_AUTHORITY_AND_GLOBAL_CUSTODY_FENCE_UNVERIFIED", "ROOT_SERVICE_ACTIVATION_PENDING"}}
+	if preparation.Root.PassiveService != nil {
+		policy := preparation.Root.PassiveService.Policy
+		result.RootValidator.Expected.RegistrationBlock = &policy.ExpectedSeat.RegistrationBlock
+		result.RootValidator.ApprovedFromBlock, result.RootValidator.ApprovedThroughBlock = policy.ValidFromBlock, policy.ValidThroughBlock
+		result.RootValidator.ApprovedCheckpointHash = ""
+		result.RootValidator.ActivationBlockers = []string{"PASSIVE_ROOT_OBSERVER_INSTALLATION_AND_MONITORING_UNVERIFIED", "PASSIVE_ROOT_OBSERVATION_HAS_NO_TRANSACTION_AUTHORITY"}
+	}
 	return result
 }
 
 // Input approval failures precede output; observation failures emit a sealed
 // unresolved result. The route is observation-only and never approves submission.
 func runBootstrapChainReadiness(ctx context.Context, preparation bootstrapChainPreparation, rpcUrl string, retryWindow time.Duration, stdout, stderr io.Writer) int {
-	if preparation.Plan.Config.Schema != bootstrapChainConfigSchema {
-		fmt.Fprintln(stderr, "bootstrap readiness requires accepted v3 scope; v1/v2 remain resumable at their original scope")
+	if !bootstrapChainHasRootRole(preparation.Plan.Config.Schema) {
+		fmt.Fprintln(stderr, "bootstrap readiness requires accepted v3/v4 scope; v1/v2 remain resumable at their original scope")
 		return 3
 	}
 	client, err := newRpcClient(rpcUrl, retryWindow)
@@ -112,8 +120,8 @@ func runBootstrapChainReadiness(ctx context.Context, preparation bootstrapChainP
 // One deadline and one finalized census cover both subnet roles and root. No
 // historical trim census substitutes for current registration or approval time.
 func (self *rpcClient) observeBootstrapChainReadiness(ctx context.Context, preparation bootstrapChainPreparation) (result bootstrapChainReadiness, resultErr error) {
-	if err := preparation.validate(); err != nil || preparation.Plan.Config.Schema != bootstrapChainConfigSchema {
-		return result, errors.Join(errors.New("bootstrap readiness requires complete accepted v3 preparation"), err)
+	if err := preparation.validate(); err != nil || !bootstrapChainHasRootRole(preparation.Plan.Config.Schema) {
+		return result, errors.Join(errors.New("bootstrap readiness requires complete accepted v3/v4 preparation"), err)
 	}
 	result = newBootstrapChainReadiness(preparation)
 	if ctx == nil {
@@ -157,7 +165,18 @@ func (self *rpcClient) observeBootstrapChainReadiness(ctx context.Context, prepa
 	action := preparation.Root.Service.Packet.Action
 	anchorMatches := false
 	var anchor string
-	if action.BirthBlock <= preview.Identity.FinalizedNumber {
+	if preparation.Root.PassiveService != nil {
+		policy := preparation.Root.PassiveService.Policy
+		passive, err := self.readRootPreviewAt(sampleCtx, policy, rootObjectHash(policy), preview.Identity.FinalizedHash)
+		if err != nil {
+			return result, err
+		}
+		envelope, err := sealRootPreview(passive)
+		if err != nil {
+			return result, err
+		}
+		result.PassiveRoot, anchorMatches = &envelope, true
+	} else if action.BirthBlock <= preview.Identity.FinalizedNumber {
 		if err := self.call(sampleCtx, "chain_getBlockHash", []any{action.BirthBlock}, &anchor); err != nil {
 			return result, err
 		}
@@ -230,7 +249,7 @@ func (self *rpcClient) observeBootstrapChainReadiness(ctx context.Context, prepa
 	}
 	if root.Observed == nil {
 		root.ObservationBlockers = append(root.ObservationBlockers, "APPROVED_ROOT_REGISTRATION_ABSENT")
-	} else if root.Observed.Coldkey != root.Expected.Coldkey || root.Observed.RegistrationBlock != *root.Expected.RegistrationBlock || root.Observed.Uid != action.Scope.Seat.Uid {
+	} else if root.Observed.Coldkey != root.Expected.Coldkey || root.Observed.RegistrationBlock != *root.Expected.RegistrationBlock || root.Observed.Uid != preparation.Plan.Config.RootValidator.Seat.Uid {
 		root.ObservationBlockers = append(root.ObservationBlockers, "APPROVED_ROOT_SEAT_GENERATION_DIFFERS")
 	}
 	if preview.Identity.FinalizedNumber < root.ApprovedFromBlock || preview.Identity.FinalizedNumber > root.ApprovedThroughBlock {
@@ -238,6 +257,9 @@ func (self *rpcClient) observeBootstrapChainReadiness(ctx context.Context, prepa
 	}
 	if !anchorMatches {
 		root.ObservationBlockers = append(root.ObservationBlockers, "SIGNED_ROOT_CHECKPOINT_UNCONFIRMED")
+	}
+	if result.PassiveRoot != nil {
+		root.ObservationBlockers = append(root.ObservationBlockers, result.PassiveRoot.Observation.Blockers...)
 	}
 	result.Status = "observed-prerequisites"
 	if len(result.Blockers) != 0 || len(root.ObservationBlockers) != 0 || slices.ContainsFunc(result.UrValidators, func(role bootstrapChainRoleReadiness) bool { return len(role.ObservationBlockers) != 0 }) {

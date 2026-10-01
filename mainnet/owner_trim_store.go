@@ -72,7 +72,7 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 	}
 	// The new fixed journal must also be disjoint from every original input and
 	// role custody namespace; the original v3 paths themselves are unchanged.
-	for _, path := range append(preparation.childPaths(), preparation.Plan.ConfigPath, preparation.Plan.Config.OwnerTrimPolicy.Path, preparation.Plan.Config.OwnerTrimPlan.Path,
+	for _, path := range append(preparation.protectedPaths(), preparation.Plan.ConfigPath, preparation.Plan.Config.OwnerTrimPolicy.Path, preparation.Plan.Config.OwnerTrimPlan.Path,
 		preparation.Plan.Config.Contracts.Path, preparation.Plan.Config.Root.Path, preparation.Plan.Config.Validators[0].Config.Path,
 		preparation.Plan.Config.Validators[1].Config.Path, preparation.Plan.Config.RootValidator.Approval.Path,
 		preparation.Root.ServiceInput.Path, preparation.Contracts.Config.Plan.Artifacts.Path) {

@@ -196,7 +196,7 @@ func runBootstrapContractSuccessorCommand(ctx context.Context, args []string, st
 		fmt.Fprintln(stderr, "contract successor original inputs:", err)
 		return 2
 	}
-	if preparation.Plan.Config.Schema != bootstrapChainConfigSchema || *accepted != preparation.Plan.ContentHash || *runDirectory != preparation.Plan.Config.RunDirectory {
+	if !bootstrapChainHasRootRole(preparation.Plan.Config.Schema) || *accepted != preparation.Plan.ContentHash || *runDirectory != preparation.Plan.Config.RunDirectory {
 		fmt.Fprintln(stderr, "contract successor requires the exact original accepted v3 preparation")
 		return 3
 	}
@@ -220,7 +220,7 @@ func runBootstrapContractSuccessorCommand(ctx context.Context, args []string, st
 		fmt.Fprintln(stderr, "contract successor original graph:", err)
 		return 2
 	}
-	for _, path := range preparation.childPaths() {
+	for _, path := range preparation.protectedPaths() {
 		if *requestPath == path || *requestPath == path+".lock" {
 			fmt.Fprintln(stderr, "contract successor request aliases original custody")
 			return 2

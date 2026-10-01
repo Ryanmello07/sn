@@ -17,6 +17,7 @@ import (
 
 const ownerRecycleProposalSchema = "urnetwork-owner-recycle-proposal-v1"
 const ownerRecycleSourceCommit = "67dcf7f791dc495064c293f080a0702cb433e51e"
+const ownerRecycleSourceCommit470 = "923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d"
 
 // Bounds preview work to the whole u16 uid domain. OwnedHotkeys can span more
 // than one subnet; this is a planner resource limit, not a runtime storage cap.
@@ -61,7 +62,8 @@ func (self OwnerRecycleProposal) Validate(parent protocol.Policy) error {
 	if self.ProviderShare != (protocol.Rational{Numerator: 1, Denominator: 10}) || self.Remainder != "recognized_owner_recycle" || self.OwnerAllocation != "equal_unmasked_registered" {
 		return errors.New("owner-recycle supports exactly the reviewed 10/90 proposal and equal owner allocation")
 	}
-	if self.Runtime.GenesisHash == ([32]byte{}) || self.Runtime.CodeHash == ([32]byte{}) || self.Runtime.MetadataHash == ([32]byte{}) || self.Runtime.Netuid != 25 || self.Runtime.SourceCommit != ownerRecycleSourceCommit {
+	if self.Runtime.GenesisHash == ([32]byte{}) || self.Runtime.CodeHash == ([32]byte{}) || self.Runtime.MetadataHash == ([32]byte{}) || self.Runtime.Netuid != 25 ||
+		self.Runtime.SourceCommit != ownerRecycleSourceCommit && self.Runtime.SourceCommit != ownerRecycleSourceCommit470 {
 		return errors.New("owner-recycle requires nonzero network/artifact pins, netuid 25 and the exact reviewed source profile")
 	}
 	version := self.Runtime.Version

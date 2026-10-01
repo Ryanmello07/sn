@@ -102,7 +102,7 @@ func safeCurrentMappingSlot(address common.Address, slot byte) common.Hash {
 // additional words, including approved hashes, signed messages and old baggage.
 func (self safeCurrentStorageScope) validate() error {
 	if self.Safe == (common.Address{}) || self.Singleton == (common.Address{}) || self.Safe == self.Singleton || len(self.Owners) != 3 ||
-		self.Runtime.RuntimeSourceCommit != frontierMappingSourceCommit || self.Runtime.RuntimeVersion.SpecName == "" || self.Runtime.RuntimeVersion.SpecVersion == 0 || self.Runtime.RuntimeVersion.StateVersion > 1 ||
+		!mainnetRuntimeCodecSource(self.Runtime.RuntimeSourceCommit) || self.Runtime.RuntimeVersion.SpecName == "" || self.Runtime.RuntimeVersion.SpecVersion == 0 || self.Runtime.RuntimeVersion.StateVersion > 1 ||
 		!rootCanonicalHash(self.Runtime.RuntimeCodeHash) || !rootCanonicalHash(self.Runtime.RuntimeMetadataHash) {
 		return errors.New("Safe current storage scope lacks exact account or runtime authority")
 	}

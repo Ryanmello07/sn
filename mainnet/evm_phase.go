@@ -155,7 +155,7 @@ func (self evmPhaseConfig) validateStructure() error {
 		return errors.New("contract phase lacks exact identity, scope or finite bounds")
 	}
 	profile := p.Runtime
-	if profile.RuntimeSourceCommit != frontierMappingSourceCommit || profile.RuntimeVersion.SpecName == "" || profile.RuntimeVersion.SpecVersion == 0 || !rootCanonicalHash(profile.RuntimeCodeHash) || !rootCanonicalHash(profile.RuntimeMetadataHash) {
+	if !mainnetRuntimeCodecSource(profile.RuntimeSourceCommit) || profile.RuntimeVersion.SpecName == "" || profile.RuntimeVersion.SpecVersion == 0 || !rootCanonicalHash(profile.RuntimeCodeHash) || !rootCanonicalHash(profile.RuntimeMetadataHash) {
 		return errors.New("contract phase runtime/source approval is incomplete")
 	}
 	if p.Route.ReadRetrySeconds < 60 || p.Route.ReadRetrySeconds > 900 || p.Route.SendTimeoutSeconds == 0 || p.Route.SendTimeoutSeconds > 60 {

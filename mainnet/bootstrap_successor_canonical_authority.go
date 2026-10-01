@@ -47,7 +47,7 @@ func (self bootstrapSuccessorCanonicalAuthorization) signingBytes() ([]byte, err
 		!bootstrapRootAbsolutePath(self.SafeProvenance.Path) || !planSha256(self.SafeProvenance.Sha256) ||
 		self.SafeProvenance.Path == self.SafeBuildEvidence.Path || self.SafeProvenance.Path == self.RuntimeEvidence.Path || self.SafeProvenance.Path == self.CutoverEvidence.Path ||
 		self.SafeBuildEvidence.Path == self.CutoverEvidence.Path || self.RuntimeEvidence.Path == self.SafeBuildEvidence.Path || self.RuntimeEvidence.Path == self.CutoverEvidence.Path ||
-		profile.RuntimeSourceCommit != frontierMappingSourceCommit || profile.RuntimeVersion.SpecName == "" || profile.RuntimeVersion.SpecVersion == 0 ||
+		!mainnetRuntimeCodecSource(profile.RuntimeSourceCommit) || profile.RuntimeVersion.SpecName == "" || profile.RuntimeVersion.SpecVersion == 0 ||
 		!rootCanonicalHash(profile.RuntimeCodeHash) || !rootCanonicalHash(profile.RuntimeMetadataHash) {
 		return nil, errors.New("successor canonical authorization lacks exact external review and cutover scope")
 	}

@@ -50,6 +50,10 @@ func runBootstrapRootCommand(ctx context.Context, args []string, stdout, stderr 
 		fmt.Fprintln(stderr, "bootstrap accepted plan or run directory differs; no journal opened")
 		return 3
 	}
+	if plan.PassiveService != nil && *signaturePath != "" {
+		fmt.Fprintln(stderr, "passive root preparation cannot import native signatures")
+		return 3
+	}
 	var receipt *rootOfflineSignature
 	if *signaturePath != "" {
 		raw, digest, err := readBootstrapRootFile(ctx, *signaturePath, 16*1024)

@@ -32,6 +32,12 @@ func (self bootstrapRootRecord) validate(plan bootstrapRootPlan) error {
 	if self.Schema != bootstrapRootStateSchema || self.PlanHash != plan.ContentHash || claimed != rootObjectHash(self) {
 		return errors.New("bootstrap root progress differs from the independently accepted plan")
 	}
+	if plan.PassiveService != nil {
+		if self.SignatureHash != "" || self.Phase != "claimed" && self.Phase != "passive-service-retained" {
+			return errors.New("passive root progress cannot retain a native signature or legacy custody phase")
+		}
+		return nil
+	}
 	switch self.Phase {
 	case "claimed", "custody-retained", "service-retained":
 		if self.SignatureHash != "" {
@@ -77,7 +83,7 @@ func openBootstrapRootStoreWithClaimHook(plan bootstrapRootPlan, create bool, cl
 	path := filepath.Join(plan.RunDirectory, bootstrapRootProgressFile)
 	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
 	if create {
-		for _, candidate := range []string{path, plan.Service.CustodyTrust.StatePath, plan.Service.Packet.Action.Scope.StatePath} {
+		for _, candidate := range append([]string{path}, plan.custodyChildPaths()...) {
 			for _, value := range []string{candidate, candidate + ".lock"} {
 				if _, err := os.Lstat(value); !errors.Is(err, os.ErrNotExist) {
 					return nil, errors.Join(errors.New("bootstrap root apply requires unused journal paths; retain existing owners for resume"), err)
@@ -148,7 +154,7 @@ func openBootstrapRootStoreWithClaimHook(plan bootstrapRootPlan, create bool, cl
 // marker is synced before a caller can open any child, so later record loss
 // cannot be interpreted as an unused allowance.
 func (self *bootstrapRootStore) finishInitialClaim(claimHook func(string) error) error {
-	for _, path := range []string{self.plan.Service.CustodyTrust.StatePath, self.plan.Service.Packet.Action.Scope.StatePath} {
+	for _, path := range self.plan.custodyChildPaths() {
 		for _, candidate := range []string{path, path + ".lock"} {
 			if _, err := os.Lstat(candidate); !errors.Is(err, os.ErrNotExist) {
 				return errors.Join(errors.New("bootstrap root interrupted claim has child state; recovery refused"), err)

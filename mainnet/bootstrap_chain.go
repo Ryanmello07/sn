@@ -125,9 +125,13 @@ func advanceBootstrapChain(ctx context.Context, store *bootstrapChainStore, boun
 	if preparation.Plan.Config.Schema != bootstrapChainConfigSchemaV1 {
 		result.UrValidatorsStatus = "two-signed-production-configs-verified-live-admission-pending"
 		result.UrValidatorConfigsVerified = true
-		if preparation.Plan.Config.Schema == bootstrapChainConfigSchema {
+		if bootstrapChainHasRootRole(preparation.Plan.Config.Schema) {
 			result.RootValidatorStatus = "signed-root-service-config-verified-live-authority-pending"
 			result.RootValidatorConfigVerified = true
+			if preparation.Root.PassiveService != nil {
+				result.Schema = "urnetwork-mainnet-bootstrap-chain-result-v4"
+				result.RootValidatorStatus = "signed-passive-root-service-config-verified-observation-pending"
+			}
 		} else {
 			result.Schema = "urnetwork-mainnet-bootstrap-chain-result-v2"
 		}

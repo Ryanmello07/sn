@@ -20,7 +20,20 @@ type bootstrapChainReadinessState struct {
 	RootServiceHash         string `json:"root_service_hash"`
 	ContractTransactionHash string `json:"contract_transaction_hash,omitempty"`
 	RootExtrinsicHash       string `json:"root_extrinsic_hash,omitempty"`
+	RootStrategy            string `json:"root_strategy,omitempty"`
 	locks                   []*os.File
+}
+
+// Legacy observations require real custody. Passive observations identify the
+// different strategy explicitly and cannot claim any native root liability.
+func (self bootstrapChainReadinessState) validRootSeals() bool {
+	if !planSha256(self.RootProgressHash) || !planSha256(self.RootServiceHash) {
+		return false
+	}
+	if self.RootStrategy == rootPassiveStrategy {
+		return self.RootCustodyHash == "" && self.RootExtrinsicHash == ""
+	}
+	return self.RootStrategy == "" && planSha256(self.RootCustodyHash)
 }
 
 // Release only locks opened by this read. No retained marker is removed.
@@ -42,8 +55,8 @@ func openBootstrapChainReadinessState(ctx context.Context, preparation bootstrap
 	if err := errors.Join(ctx.Err(), preparation.validate(), bootstrapRootDirectory(preparation.Plan.Config.RunDirectory)); err != nil {
 		return nil, err
 	}
-	if preparation.Plan.Config.Schema != bootstrapChainConfigSchema {
-		return nil, errors.New("bootstrap readiness requires the original accepted v3 preparation; older custody cannot acquire new role scope")
+	if !bootstrapChainHasRootRole(preparation.Plan.Config.Schema) {
+		return nil, errors.New("bootstrap readiness requires the original accepted v3/v4 preparation; older custody cannot acquire new role scope")
 	}
 	self := &bootstrapChainReadinessState{}
 	defer func() {
@@ -58,6 +71,9 @@ func openBootstrapChainReadinessState(ctx context.Context, preparation bootstrap
 		preparation.Root.ContentHash + "\n" + bootstrapRootClaimComplete,
 		rootObjectHash(service.CustodyTrust) + "\n" + service.Packet.ContentHash + "\n",
 		rootObjectHash(service) + "\n",
+	}
+	if preparation.Root.PassiveService != nil {
+		markers = markers[:3]
 	}
 	paths := preparation.childPaths()
 	for i, path := range paths {
@@ -88,7 +104,11 @@ func openBootstrapChainReadinessState(ctx context.Context, preparation bootstrap
 	var custody rootOfflineCustodyRecord
 	var retainedService rootServiceRecord
 	limits := []int{rootServiceStoreLimit, 512 * 1024, 16 * 1024, rootOfflineStoreLimit, rootServiceStoreLimit}
-	for i, destination := range []any{&chain, &contracts, &root, &custody, &retainedService} {
+	destinations := []any{&chain, &contracts, &root, &custody, &retainedService}
+	if preparation.Root.PassiveService != nil {
+		destinations = destinations[:3]
+	}
+	for i, destination := range destinations {
 		raw, _, err := readBootstrapRootFile(ctx, paths[i], limits[i])
 		if err != nil {
 			return nil, err
@@ -96,6 +116,19 @@ func openBootstrapChainReadinessState(ctx context.Context, preparation bootstrap
 		if err := decodePlanJson(raw, destination); err != nil {
 			return nil, err
 		}
+	}
+	if preparation.Root.PassiveService != nil {
+		if err := errors.Join(chain.validate(preparation.Plan), contracts.validate(preparation.Contracts.Config), root.validate(preparation.Root)); err != nil {
+			return nil, err
+		}
+		if chain.Phase != "prepared" || root.Phase != "passive-service-retained" || chain.RootExtrinsicHash != "" ||
+			chain.ContractTransactionHash != "" && chain.ContractTransactionHash != contracts.TransactionHash {
+			return nil, errors.New("passive readiness requires complete preparation without native root liabilities")
+		}
+		self.PreparationHash, self.ContractsHash, self.RootProgressHash = chain.ContentHash, contracts.ContentHash, root.ContentHash
+		self.RootServiceHash, self.ContractTransactionHash = preparation.Root.serviceHash(), contracts.TransactionHash
+		self.RootStrategy = rootPassiveStrategy
+		return self, ctx.Err()
 	}
 	if err := errors.Join(chain.validate(preparation.Plan), contracts.validate(preparation.Contracts.Config), root.validate(preparation.Root),
 		custody.validate(service.CustodyTrust), retainedService.validate(service)); err != nil {

@@ -61,7 +61,7 @@ func (self subnetCensusPolicy) validate() error {
 			return errors.New("subnet census requires independently approved nonzero genesis, runtime artifacts and owner AccountId32")
 		}
 	}
-	if self.StorageProfile != subnetStorageProfileName || self.RuntimeSourceCommit != rootProfileSource {
+	if self.StorageProfile != subnetStorageProfileName || !mainnetRuntimeCodecSource(self.RuntimeSourceCommit) {
 		return errors.New("subnet census source/storage profile is not reviewed")
 	}
 	if strings.TrimSpace(self.RuntimeVersion.SpecName) == "" || self.RuntimeVersion.SpecVersion == 0 || self.RuntimeVersion.TransactionVersion == 0 || self.RuntimeVersion.StateVersion == 0 {

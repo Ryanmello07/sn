@@ -33,18 +33,19 @@ type bootstrapRootConfig struct {
 // The whole signed packet is reviewable before local mutation. Its native
 // nonce, era and spend limits remain owned by the existing service/custody pair.
 type bootstrapRootPlan struct {
-	Schema         string            `json:"schema"`
-	Phase          string            `json:"phase"`
-	DeploymentId   string            `json:"deployment_id"`
-	Network        planNetwork       `json:"network"`
-	RunDirectory   string            `json:"run_directory"`
-	ConfigPath     string            `json:"config_path"`
-	ConfigSha256   string            `json:"config_sha256"`
-	ServiceInput   planFileReference `json:"service_input"`
-	Service        rootServiceConfig `json:"service"`
-	NetworkEffects bool              `json:"network_effects"`
-	NativeSigning  bool              `json:"native_signing"`
-	ContentHash    string            `json:"content_hash"`
+	Schema         string                    `json:"schema"`
+	Phase          string                    `json:"phase"`
+	DeploymentId   string                    `json:"deployment_id"`
+	Network        planNetwork               `json:"network"`
+	RunDirectory   string                    `json:"run_directory"`
+	ConfigPath     string                    `json:"config_path"`
+	ConfigSha256   string                    `json:"config_sha256"`
+	ServiceInput   planFileReference         `json:"service_input"`
+	Service        rootServiceConfig         `json:"service"`
+	PassiveService *rootPassiveServiceConfig `json:"passive_service,omitempty"`
+	NetworkEffects bool                      `json:"network_effects"`
+	NativeSigning  bool                      `json:"native_signing"`
+	ContentHash    string                    `json:"content_hash"`
 }
 
 // The local phase has its own domain; a blocked review graph's hash is never
@@ -52,19 +53,30 @@ type bootstrapRootPlan struct {
 func bootstrapRootPlanHash(plan bootstrapRootPlan) string {
 	plan.ContentHash = ""
 	raw, _ := json.Marshal(plan)
-	digest := sha256.Sum256(append([]byte(bootstrapRootPlanSchema+"\x00"), raw...))
+	digest := sha256.Sum256(append([]byte(plan.Schema+"\x00"), raw...))
 	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 // Public action vectors are copied before the plan becomes an owner's input.
 func copyBootstrapRootPlan(plan bootstrapRootPlan) bootstrapRootPlan {
 	plan.Service = copyRootServiceConfig(plan.Service)
+	if plan.PassiveService != nil {
+		copy := *plan.PassiveService
+		copy.Policy = copyRootPassivePolicy(copy.Policy)
+		plan.PassiveService = &copy
+	}
 	return plan
 }
 
 // Every mutable destination is a distinct direct child of the approved private
 // run directory. Input files cannot alias journals or their ownership markers.
 func (self bootstrapRootPlan) validate() error {
+	if self.Schema == bootstrapRootPassivePlanSchema {
+		return self.validatePassive()
+	}
+	if self.PassiveService != nil {
+		return errors.New("legacy root custody cannot acquire passive service authority")
+	}
 	if self.Schema != bootstrapRootPlanSchema || self.Phase != bootstrapRootPhase || !planLabel(self.DeploymentId) ||
 		self.NetworkEffects || self.NativeSigning || !planSha256(self.ConfigSha256) || !planSha256(self.ServiceInput.Sha256) ||
 		!bootstrapRootAbsolutePath(self.RunDirectory) || self.ContentHash != bootstrapRootPlanHash(self) {
@@ -166,7 +178,7 @@ func decodeBootstrapRootPlan(ctx context.Context, path string, raw []byte, diges
 	if err := decodePlanJson(raw, &config); err != nil {
 		return bootstrapRootPlan{}, err
 	}
-	if config.Schema != bootstrapRootConfigSchema || !planSha256(config.RootService.Sha256) {
+	if config.Schema != bootstrapRootConfigSchema && config.Schema != bootstrapRootPassiveConfigSchema || !planSha256(config.RootService.Sha256) {
 		return bootstrapRootPlan{}, errors.New("bootstrap root config schema or service content pin is invalid")
 	}
 	if err := bootstrapRootDirectory(config.RunDirectory); err != nil {
@@ -175,6 +187,16 @@ func decodeBootstrapRootPlan(ctx context.Context, path string, raw []byte, diges
 	serviceRaw, serviceHash, err := readBootstrapRootFile(ctx, config.RootService.Path, rootServiceStoreLimit)
 	if err != nil || serviceHash != config.RootService.Sha256 {
 		return bootstrapRootPlan{}, errors.Join(errors.New("bootstrap root service differs from its exact input pin"), err)
+	}
+	if config.Schema == bootstrapRootPassiveConfigSchema {
+		var service rootPassiveServiceConfig
+		if err := decodePlanJson(serviceRaw, &service); err != nil {
+			return bootstrapRootPlan{}, err
+		}
+		plan := bootstrapRootPlan{Schema: bootstrapRootPassivePlanSchema, Phase: bootstrapRootPassivePhase, DeploymentId: config.DeploymentId,
+			Network: config.Network, RunDirectory: config.RunDirectory, ConfigPath: path, ConfigSha256: digest, ServiceInput: config.RootService, PassiveService: &service}
+		plan.ContentHash = bootstrapRootPlanHash(plan)
+		return plan, errors.Join(plan.validate(), ctx.Err())
 	}
 	var service rootServiceConfig
 	if err := decodePlanJson(serviceRaw, &service); err != nil {

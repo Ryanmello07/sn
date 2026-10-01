@@ -41,7 +41,7 @@ func newRootCanonicalChain(client *rpcClient, expected identityExpectation, prof
 	seen := map[string]bool{}
 	for _, profile := range profiles {
 		version := profile.RuntimeVersion
-		if profile.RuntimeSourceCommit != rootActionV1Source || version.SpecName == "" || version.SpecVersion == 0 || version.TransactionVersion == 0 || version.StateVersion != 1 || !rootCanonicalHash(profile.RuntimeCodeHash) || !rootCanonicalHash(profile.RuntimeMetadataHash) {
+		if !mainnetRuntimeCodecSource(profile.RuntimeSourceCommit) || version.SpecName == "" || version.SpecVersion == 0 || version.TransactionVersion == 0 || version.StateVersion != 1 || !rootCanonicalHash(profile.RuntimeCodeHash) || !rootCanonicalHash(profile.RuntimeMetadataHash) {
 			return nil, errors.New("root receipt artifact lacks the reviewed runtime/system-version profile")
 		}
 		key := rootObjectHash(struct {

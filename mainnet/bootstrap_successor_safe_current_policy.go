@@ -49,7 +49,7 @@ func (self bootstrapSuccessorSafeCurrentPolicyAuthorization) signingBytes() ([]b
 		!bootstrapRootAbsolutePath(self.ReviewEvidence.Path) || !planSha256(self.ReviewEvidence.Sha256) ||
 		self.Safe == (common.Address{}) || self.Singleton == (common.Address{}) || self.Safe == self.Singleton ||
 		self.SafeProxyRuntimeHash == (common.Hash{}) || self.SingletonRuntimeHash == (common.Hash{}) ||
-		self.Runtime.RuntimeSourceCommit != frontierMappingSourceCommit || self.Runtime.RuntimeVersion.SpecName == "" || self.Runtime.RuntimeVersion.SpecVersion == 0 ||
+		!mainnetRuntimeCodecSource(self.Runtime.RuntimeSourceCommit) || self.Runtime.RuntimeVersion.SpecName == "" || self.Runtime.RuntimeVersion.SpecVersion == 0 ||
 		!rootCanonicalHash(self.Runtime.RuntimeCodeHash) || !rootCanonicalHash(self.Runtime.RuntimeMetadataHash) {
 		return nil, errors.New("Safe current policy proposal lacks complete explicit scope")
 	}

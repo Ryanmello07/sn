@@ -127,7 +127,7 @@ func prepareBootstrapContractReadiness(ctx context.Context, reserve evmCreatePla
 // namespace. This admission is separate from unchanged v1/v2/v3 plan hashes.
 func validateBootstrapContractReadinessPaths(preparation bootstrapChainPreparation, plans []evmCreatePlan) error {
 	seen := map[string]bool{}
-	paths := append([]string(nil), preparation.childPaths()...)
+	paths := append([]string(nil), preparation.protectedPaths()...)
 	for i := 1; i < len(plans); i++ {
 		paths = append(paths, filepath.Join(preparation.Plan.Config.RunDirectory, bootstrapContractStateFile(i)))
 	}
@@ -191,7 +191,7 @@ func runBootstrapChainContractCommand(ctx context.Context, args []string, stdout
 		fmt.Fprintln(stderr, "contract readiness preparation inputs:", err)
 		return 2
 	}
-	if preparation.Plan.Config.Schema != bootstrapChainConfigSchema {
+	if !bootstrapChainHasRootRole(preparation.Plan.Config.Schema) {
 		fmt.Fprintln(stderr, "contract readiness requires accepted v3 scope; original v1/v2 custody remains resumable")
 		return 3
 	}

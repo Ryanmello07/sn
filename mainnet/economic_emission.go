@@ -40,7 +40,7 @@ type economicEmissionPolicy struct {
 func (self economicEmissionPolicy) validate() error {
 	version := self.Runtime.RuntimeVersion
 	if self.Schema != economicEmissionPolicySchema || self.Network.NativeChain == "" || self.Network.EvmChainId != mainnetEvmChainId ||
-		!rootCanonicalHash(self.Network.GenesisHash) || self.Netuid != 25 || self.Runtime.RuntimeSourceCommit != rootProfileSource ||
+		!rootCanonicalHash(self.Network.GenesisHash) || self.Netuid != 25 || !mainnetRuntimeCodecSource(self.Runtime.RuntimeSourceCommit) ||
 		version.SpecName == "" || version.SpecVersion == 0 || version.TransactionVersion == 0 || version.StateVersion != 1 ||
 		!rootCanonicalHash(self.Runtime.RuntimeCodeHash) || !rootCanonicalHash(self.Runtime.RuntimeMetadataHash) {
 		return errors.New("native miner observation requires exact independent mainnet identity and reviewed runtime artifacts")

@@ -60,7 +60,7 @@ func loadBootstrapContractRolePlan(ctx context.Context, path string) (bootstrapC
 	if err != nil {
 		return result, err
 	}
-	if preparation.Plan.Config.Schema != bootstrapChainConfigSchema || len(preparation.Contracts.Config.Plan.Actions) < 8 {
+	if !bootstrapChainHasRootRole(preparation.Plan.Config.Schema) || len(preparation.Contracts.Config.Plan.Actions) < 8 {
 		return result, errors.New("contract-role admission requires original v3 scope and the complete evidence CREATE graph")
 	}
 	evidence, err := selectEvmCreatePlan(ctx, preparation.Contracts, "evidence-create", preparation.Plan.Config.Contracts.Path)

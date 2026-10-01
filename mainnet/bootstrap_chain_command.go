@@ -66,7 +66,7 @@ func runBootstrapChainCommand(ctx context.Context, args []string, stdout, stderr
 	if command == "readiness" {
 		return runBootstrapChainReadiness(ctx, preparation, rpcUrl, retryWindow, stdout, stderr)
 	}
-	if command == "apply" && preparation.Plan.Config.Schema != bootstrapChainConfigSchema {
+	if command == "apply" && !bootstrapChainHasRootRole(preparation.Plan.Config.Schema) {
 		fmt.Fprintln(stderr, "bootstrap chain new preparation requires v3 UR and root config inspections; existing v1/v2 custody remains resumable at its original scope")
 		return 3
 	}

@@ -35,7 +35,7 @@ type validatorActivationReadiness struct {
 
 func (self validatorActivationReadiness) validate(plan validatorActivationPlan) error {
 	if self.ObservedAt.IsZero() || self.PlanHash != plan.PlanHash || !planSha256(self.EvidenceHash) || !rootCanonicalHash(self.FinalizedHash) || len(self.Roles) != 2 ||
-		!planSha256(self.Local.PreparationHash) || !planSha256(self.Local.ContractsHash) || !planSha256(self.Local.RootProgressHash) || !planSha256(self.Local.RootCustodyHash) || !planSha256(self.Local.RootServiceHash) {
+		!planSha256(self.Local.PreparationHash) || !planSha256(self.Local.ContractsHash) || !self.Local.validRootSeals() {
 		return errors.New("validator activation readiness lacks original custody or exact observation")
 	}
 	for i, role := range self.Roles {

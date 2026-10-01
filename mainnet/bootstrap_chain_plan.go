@@ -23,6 +23,8 @@ const bootstrapChainConfigSchemaV2 = "urnetwork-mainnet-bootstrap-chain-config-v
 const bootstrapChainPlanSchemaV2 = "urnetwork-mainnet-bootstrap-chain-preparation-v2"
 const bootstrapChainConfigSchema = "urnetwork-mainnet-bootstrap-chain-config-v3"
 const bootstrapChainPlanSchema = "urnetwork-mainnet-bootstrap-chain-preparation-v3"
+const bootstrapChainConfigSchemaV4 = "urnetwork-mainnet-bootstrap-chain-config-v4"
+const bootstrapChainPlanSchemaV4 = "urnetwork-mainnet-bootstrap-chain-preparation-v4"
 const bootstrapChainStateFile = "bootstrap-chain.json"
 const maximumBootstrapChainPlanBytes = 512 * 1024
 
@@ -99,6 +101,8 @@ func bootstrapChainPlanSchemaForConfig(schema string) string {
 		return bootstrapChainPlanSchemaV2
 	case bootstrapChainConfigSchema:
 		return bootstrapChainPlanSchema
+	case bootstrapChainConfigSchemaV4:
+		return bootstrapChainPlanSchemaV4
 	default:
 		return ""
 	}
@@ -149,7 +153,7 @@ func (self bootstrapChainPlan) validate() error {
 			return err
 		}
 	}
-	if c.Schema == bootstrapChainConfigSchema {
+	if bootstrapChainHasRootRole(c.Schema) {
 		if self.RootInspection == nil {
 			return errors.New("bootstrap chain requires a verified root config inspection")
 		}
@@ -168,12 +172,15 @@ func (self bootstrapChainPreparation) validate() error {
 		return err
 	}
 	c, contract, root := self.Plan.Config, self.Contracts.Config.Plan, self.Root
+	if (c.Schema == bootstrapChainConfigSchemaV4) != (root.PassiveService != nil) {
+		return errors.New("bootstrap chain schema cannot convert legacy custody to passive observation")
+	}
 	if c.DeploymentId != contract.DeploymentId || c.DeploymentId != root.DeploymentId || c.Network != contract.Network || c.Network != root.Network ||
 		c.RunDirectory != contract.RunDirectory || c.RunDirectory != root.RunDirectory || self.Plan.ContractPlanHash != contract.hash() || self.Plan.RootPlanHash != root.ContentHash {
 		return errors.New("bootstrap chain child deployment, network, run directory or approved plan differs")
 	}
 	seen := map[string]bool{}
-	for _, path := range self.childPaths() {
+	for _, path := range self.protectedPaths() {
 		if !bootstrapRootAbsolutePath(path) || filepath.Dir(path) != c.RunDirectory || seen[path] || seen[path+".lock"] {
 			return errors.New("bootstrap chain journals or markers overlap or leave the approved run directory")
 		}
@@ -185,7 +192,7 @@ func (self bootstrapChainPreparation) validate() error {
 		}
 		seen[path] = true
 	}
-	if c.Schema == bootstrapChainConfigSchema {
+	if bootstrapChainHasRootRole(c.Schema) {
 		if rootObjectHash(self.Plan.RootInspection.Plan) != rootObjectHash(root) {
 			return errors.New("bootstrap chain root inspection differs from the actual custody child")
 		}
@@ -204,7 +211,23 @@ func (self bootstrapChainPreparation) validate() error {
 // The chain journal is included so initial claim and input separation share the
 // exact same bounded destination set as the actual child owner construction.
 func (self bootstrapChainPreparation) childPaths() []string {
-	return []string{filepath.Join(self.Plan.Config.RunDirectory, bootstrapChainStateFile), filepath.Join(self.Contracts.Config.Plan.RunDirectory, evmCreateStateFile), filepath.Join(self.Root.RunDirectory, bootstrapRootProgressFile), self.Root.Service.CustodyTrust.StatePath, self.Root.Service.Packet.Action.Scope.StatePath}
+	return append([]string{filepath.Join(self.Plan.Config.RunDirectory, bootstrapChainStateFile), filepath.Join(self.Contracts.Config.Plan.RunDirectory, evmCreateStateFile), filepath.Join(self.Root.RunDirectory, bootstrapRootProgressFile)}, self.Root.custodyChildPaths()...)
+}
+
+// Passive observation has no custody child, but its checkpoint must remain
+// disjoint from every bootstrap input, journal, device and execution owner.
+func (self bootstrapChainPreparation) protectedPaths() []string {
+	paths := self.childPaths()
+	if self.Root.PassiveService != nil {
+		paths = append(paths, self.Root.PassiveService.CheckpointPath)
+	}
+	return paths
+}
+
+// Both explicit schemas authenticate separate UR and root service roles. Older
+// retained plans cannot gain this authority by adding fields or changing names.
+func bootstrapChainHasRootRole(schema string) bool {
+	return schema == bootstrapChainConfigSchema || schema == bootstrapChainConfigSchemaV4
 }
 
 // Every bounded read checks the exact file bytes before its sole decode. No
@@ -235,7 +258,7 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 	if bootstrapChainPlanSchemaForConfig(config.Schema) == "" || len(config.Validators) != 2 {
 		return result, errors.New("bootstrap chain config requires its schema and exactly two UR roles")
 	}
-	if config.Schema != bootstrapChainConfigSchema && config.RootValidator != nil {
+	if !bootstrapChainHasRootRole(config.Schema) && config.RootValidator != nil {
 		return result, errors.New("bootstrap chain v1/v2 cannot acquire root config inspection authority")
 	}
 	if err := bootstrapRootDirectory(config.RunDirectory); err != nil {
@@ -295,13 +318,13 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 		return result, err
 	}
 	var rootInspection *bootstrapChainRootInspection
-	if config.Schema == bootstrapChainConfigSchema {
+	if bootstrapChainHasRootRole(config.Schema) {
 		rootInspection, err = loadBootstrapChainRootInspection(ctx, config, result.Root)
 		if err != nil {
 			return result, err
 		}
 	}
-	scope := result.Root.Service.Packet.Action.Scope
+	scope := result.Root.identityScope()
 	if config.Network != (planNetwork{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId}) ||
 		contracts.Plan.Runtime.RuntimeSourceCommit != policy.RuntimeSourceCommit || contracts.Plan.Runtime.RuntimeVersion != policy.RuntimeVersion ||
 		contracts.Plan.Runtime.RuntimeCodeHash != policy.RuntimeCodeHash || contracts.Plan.Runtime.RuntimeMetadataHash != policy.RuntimeMetadataHash ||

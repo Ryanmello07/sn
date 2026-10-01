@@ -231,7 +231,7 @@ func (self *rpcClient) observeValidatorActivationStake(ctx context.Context, prep
 	}
 	approval := preparation.Plan.ValidatorInspections[0].Approval
 	pin := approval.Proposal.Runtime
-	if pin.SourceCommit != rootProfileSource {
+	if !mainnetRuntimeCodecSource(pin.SourceCommit) {
 		return nil, errors.New("validator stake normalization source profile is unreviewed")
 	}
 	census := readiness.Census.Observation

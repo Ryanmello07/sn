@@ -109,6 +109,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && args[0] == "root-service" {
 		return runRootServiceCommand(ctx, args[1:], stdout, stderr)
 	}
+	if len(args) != 0 && args[0] == "root-passive-service" {
+		return runRootPassiveServiceCommand(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "owner-signing" {
 		return runOwnerSigningCommand(ctx, args[1:], stdout, stderr)
 	}
