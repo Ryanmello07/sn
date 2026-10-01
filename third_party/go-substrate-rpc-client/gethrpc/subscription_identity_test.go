@@ -14,7 +14,7 @@ import (
 // fails at the identity assertion rather than waiting for a dropped notification.
 func TestSubscriptionNotifierUsesDecimalOwner(t *testing.T) {
 	codec := newDisconnectTestCodec(t)
-	handler := newHandler(t.Context(), codec, func() ID { return 65 }, new(serviceRegistry))
+	handler := newHandler(context.Background(), codec, func() ID { return 65 }, new(serviceRegistry))
 	defer handler.close(ErrClientQuit, nil)
 	notifier := &Notifier{h: handler, namespace: "state", notificationMethodSuffix: "_synthetic"}
 	subscription := notifier.CreateSubscription()
@@ -38,7 +38,7 @@ func TestSubscriptionNotifierUsesDecimalOwner(t *testing.T) {
 func TestSubscriptionDecimalIdentityHandshakeAndNotifications(t *testing.T) {
 	for _, id := range []ID{0, 65, ^ID(0)} {
 		func() {
-			ctx, cancel := context.WithCancel(t.Context())
+			ctx, cancel := context.WithCancel(context.Background())
 			serverSide, clientSide := net.Pipe()
 			serverCodec := NewJSONCodec(serverSide)
 			client := initClient(NewJSONCodec(clientSide), randomIDGenerator(), new(serviceRegistry))

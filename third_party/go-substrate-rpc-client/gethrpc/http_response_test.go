@@ -83,9 +83,9 @@ func TestHttpResponseDeclaredLimitBeforeRead(t *testing.T) {
 		result := "unchanged"
 		var err error
 		if batch {
-			err = client.BatchCallContext(t.Context(), []BatchElem{{Method: "synthetic_read", Result: &result}})
+			err = client.BatchCallContext(context.Background(), []BatchElem{{Method: "synthetic_read", Result: &result}})
 		} else {
-			err = client.CallContext(t.Context(), &result, "synthetic_read")
+			err = client.CallContext(context.Background(), &result, "synthetic_read")
 		}
 		if !errors.Is(err, ErrHttpResponseLimit) || body.readBytes != 0 || body.closes != 1 || calls != 1 || result != "unchanged" {
 			t.Fatalf("declared size reached parsing: batch=%t calls=%d bytes=%d closes=%d result=%q err=%v", batch, calls, body.readBytes, body.closes, result, err)
@@ -99,7 +99,7 @@ func TestHttpResponseUnknownLengthStopsAtProbe(t *testing.T) {
 		return &http.Response{StatusCode: 200, ContentLength: -1, Body: body}
 	})
 	result := "unchanged"
-	err := client.CallContext(t.Context(), &result, "state_getMetadata")
+	err := client.CallContext(context.Background(), &result, "state_getMetadata")
 	if !errors.Is(err, ErrHttpResponseLimit) || int64(body.readBytes) != maximumHttpResponseBytes+1 || body.closes != 1 || result != "unchanged" {
 		t.Fatalf("stream escaped admission: bytes=%d closes=%d result=%q err=%v", body.readBytes, body.closes, result, err)
 	}
@@ -108,7 +108,7 @@ func TestHttpResponseUnknownLengthStopsAtProbe(t *testing.T) {
 func TestHttpResponseExactByteBoundary(t *testing.T) {
 	for _, size := range []int{64, 65} {
 		body := &httpResponseTestBody{reader: strings.NewReader(strings.Repeat("x", size))}
-		raw, err := readHttpResponse(t.Context(), &http.Response{StatusCode: 200, ContentLength: -1, Body: body}, 64)
+		raw, err := readHttpResponse(context.Background(), &http.Response{StatusCode: 200, ContentLength: -1, Body: body}, 64)
 		if body.closes != 1 || body.readBytes != size || size == 64 && (err != nil || len(raw) != 64) || size == 65 && (!errors.Is(err, ErrHttpResponseLimit) || raw != nil) {
 			t.Fatalf("exact byte boundary changed: size=%d bytes=%d closes=%d len=%d err=%v", size, body.readBytes, body.closes, len(raw), err)
 		}
@@ -124,9 +124,9 @@ func TestHttpResponseStatusDoesNotReadOrLeakBody(t *testing.T) {
 		var result string
 		var err error
 		if batch {
-			err = client.BatchCallContext(t.Context(), []BatchElem{{Method: "synthetic_read", Result: &result}})
+			err = client.BatchCallContext(context.Background(), []BatchElem{{Method: "synthetic_read", Result: &result}})
 		} else {
-			err = client.CallContext(t.Context(), &result, "synthetic_read")
+			err = client.CallContext(context.Background(), &result, "synthetic_read")
 		}
 		if err == nil || !strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "synthetic-private-response") || body.readBytes != 0 || body.closes != 1 {
 			t.Fatalf("status body acquired authority/storage: batch=%t bytes=%d closes=%d err=%v", batch, body.readBytes, body.closes, err)
@@ -149,7 +149,7 @@ func (self *httpResponseLateError) Read(value []byte) (int, error) {
 
 func TestHttpResponseCompletePrefixCannotHideLateFailure(t *testing.T) {
 	for _, cause := range []string{"tail", "read", "close", "cancel-close"} {
-		ctx, cancel := context.WithCancel(t.Context())
+		ctx, cancel := context.WithCancel(context.Background())
 		sentinel := errors.New("synthetic body ownership failure")
 		body := &httpResponseTestBody{reader: strings.NewReader(`{"jsonrpc":"2.0","id":1,"result":"accepted"}`)}
 		switch cause {
@@ -188,7 +188,7 @@ func TestHttpResponseBatchRejectsForeignDuplicateAndMissing(t *testing.T) {
 		op := &requestOp{ids: []json.RawMessage{json.RawMessage("1"), json.RawMessage("2")}, resp: make(chan *jsonrpcMessage, 3)}
 		// Spare channel capacity makes the old excess-response defect observable
 		// without hanging the test. Admission must publish zero partial replies.
-		err := client.sendBatchHTTP(t.Context(), op, []*jsonrpcMessage{{Version: vsn, ID: op.ids[0], Method: "one"}, {Version: vsn, ID: op.ids[1], Method: "two"}})
+		err := client.sendBatchHTTP(context.Background(), op, []*jsonrpcMessage{{Version: vsn, ID: op.ids[0], Method: "one"}, {Version: vsn, ID: op.ids[1], Method: "two"}})
 		if err == nil || len(op.resp) != 0 || body.closes != 1 {
 			t.Fatalf("invalid batch partially published: replies=%d closes=%d err=%v", len(op.resp), body.closes, err)
 		}
@@ -202,7 +202,7 @@ func TestHttpResponseBatchPreservesReorderingAndRpcError(t *testing.T) {
 	})
 	var first, second string
 	batch := []BatchElem{{Method: "one", Result: &first}, {Method: "two", Result: &second}}
-	if err := client.BatchCallContext(t.Context(), batch); err != nil || first != "one" || batch[0].Error != nil || batch[1].Error == nil || body.closes != 1 {
+	if err := client.BatchCallContext(context.Background(), batch); err != nil || first != "one" || batch[0].Error != nil || batch[1].Error == nil || body.closes != 1 {
 		t.Fatalf("valid batch changed: first=%q batch=%+v closes=%d err=%v", first, batch, body.closes, err)
 	}
 	var rpcError Error
@@ -218,7 +218,7 @@ func TestHttpResponseNotificationHasNoReplyOwner(t *testing.T) {
 			return &http.Response{StatusCode: 200, ContentLength: -1, Body: body}
 		})
 		op := &requestOp{resp: make(chan *jsonrpcMessage, 1)}
-		if err := client.sendHTTP(t.Context(), op, &jsonrpcMessage{Version: vsn, Method: "synthetic_notice"}); err != nil || len(op.resp) != 0 || body.closes != 1 {
+		if err := client.sendHTTP(context.Background(), op, &jsonrpcMessage{Version: vsn, Method: "synthetic_notice"}); err != nil || len(op.resp) != 0 || body.closes != 1 {
 			t.Fatalf("notification acquired reply owner: replies=%d closes=%d err=%v", len(op.resp), body.closes, err)
 		}
 	}
@@ -230,7 +230,7 @@ func TestHttpResponseRejectsSingleForeignIdentity(t *testing.T) {
 		return &http.Response{StatusCode: 200, ContentLength: -1, Body: body}
 	})
 	result := "unchanged"
-	if err := client.CallContext(t.Context(), &result, "synthetic_read"); err == nil || result != "unchanged" || body.closes != 1 {
+	if err := client.CallContext(context.Background(), &result, "synthetic_read"); err == nil || result != "unchanged" || body.closes != 1 {
 		t.Fatalf("foreign response published: result=%q closes=%d err=%v", result, body.closes, err)
 	}
 }
@@ -245,7 +245,7 @@ func TestHttpResponsePreservesLargeNativeEvents(t *testing.T) {
 		return &http.Response{StatusCode: 200, ContentLength: -1, Body: body}
 	})
 	var result string
-	if err := client.CallContext(t.Context(), &result, "state_getStorage", "0x0102"); err != nil || len(result) != payloadBytes || body.closes != 1 {
+	if err := client.CallContext(context.Background(), &result, "state_getStorage", "0x0102"); err != nil || len(result) != payloadBytes || body.closes != 1 {
 		t.Fatalf("valid event allowance narrowed: len=%d closes=%d err=%v", len(result), body.closes, err)
 	}
 }
@@ -266,7 +266,7 @@ func TestHttpResponseLargeBatchHasAggregateCeiling(t *testing.T) {
 	})
 	first, second := "unchanged", "unchanged"
 	batch := []BatchElem{{Method: "state_getStorage", Result: &first}, {Method: "state_getStorage", Result: &second}}
-	err := client.BatchCallContext(t.Context(), batch)
+	err := client.BatchCallContext(context.Background(), batch)
 	if !errors.Is(err, ErrHttpResponseLimit) || int64(body.readBytes) != maximumHttpResponseBytes+1 || body.closes != 1 || first != "unchanged" || second != "unchanged" {
 		t.Fatalf("large batch escaped aggregate admission: bytes=%d closes=%d first=%d second=%d err=%v", body.readBytes, body.closes, len(first), len(second), err)
 	}
@@ -296,7 +296,7 @@ func TestHttpResponseGzipLimitUsesExpandedBytes(t *testing.T) {
 	}
 	defer client.Close()
 	var result string
-	if err := client.CallContext(t.Context(), &result, "state_getMetadata"); !errors.Is(err, ErrHttpResponseLimit) || result != "" {
+	if err := client.CallContext(context.Background(), &result, "state_getMetadata"); !errors.Is(err, ErrHttpResponseLimit) || result != "" {
 		t.Fatalf("compressed length bypassed decoded-body bound: compressed=%d result=%q err=%v", compressed.Len(), result, err)
 	}
 }
@@ -317,7 +317,7 @@ func TestHttpResponseCancellationOwnsBodyRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { var result string; done <- client.CallContext(ctx, &result, "synthetic_read") }()
