@@ -34,6 +34,12 @@ Native/EVM header linkage and any historical capture requiring that raw debug
 method remain open until an exact independently qualified public-RPC fallback
 or a capable synced Snow route exists. No mutating bootstrap action has run.
 
+The [advertised method catalogue](public-archive-methods-20261001.json)
+includes `author_submitExtrinsic`, `eth_sendRawTransaction`,
+`eth_getBlockByHash` and `state_getReadProof`, but omits
+`debug_getRawHeader`. Advertisement is not a successful submission or proof
+that the method will accept this launch's payloads.
+
 Use `https://archive.chain.opentensor.ai` for current read-only identity,
 historical prerequisites, unsigned planning and later explicitly approved
 submissions that its method profile supports. The URL must be pinned into each
