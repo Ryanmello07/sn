@@ -122,7 +122,11 @@ still needs fresh admission under the same acceptance. This grants no stop,
 restart, root-service or transaction authority. `activation_ready`,
 `root_service_active` and `chain_success_proven` remain false.
 
-Combined source qualification, signed custody/launch approvals, live installation
+The [sealed qualification](evidence/validator-current-admission-qualification-20261001.md)
+pins combined SN `b8dc332a` and server `0b8e758d`; separately bounded server
+`720e7c61` compatibility keeps its own graph and scope. Tests use synthetic
+identities, fake manager transport, real journals/files, and separately exercised
+concrete chain/proof readers. Signed custody/launch approvals, live installation
 and producer evidence, root-service admission and actual systemd/mainnet rehearsal
-remain separate gates. Tests use synthetic identities, fake manager transport,
-real journals/files, and separately exercised concrete chain/proof readers.
+remain separate gates. Schema 750 and subscriber-v2 rollout are not approved by
+either receipt.
