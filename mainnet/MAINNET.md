@@ -350,8 +350,10 @@ closing finality checks, including fresh receipt publication and original-byte
 recovery. The [shared onchain correction](evidence/shared-evm-finality-closure-20261001.md)
 at `222e45a8` also closes finalized and canonical receipt witnesses for the
 shared send path; transient errors, missing blocks and regressed finality stay
-pending within the original deadline. MG-04/PH-04 stay open, and a fresh exact
-successor release is required beyond the frozen SN `233ea2be` artifacts.
+pending within the original deadline. MG-04/PH-04 stay open. The
+[selected successor release](evidence/release-689938d6-server6c39-20261001.md)
+packages these corrections at exact SN `689938d6` / server `6c39d307`; independent
+release qualification and live acceptance remain separate gates.
 
 **Runtime continuity policy proposal — inspection boundary qualified.** The
 [signed compatibility envelope and inspector](RUNTIME-CONTINUITY-POLICY.md)
@@ -1475,8 +1477,8 @@ approval remain open.
 
 The [successor preparation](evidence/release-successor-preparation-20261001.md)
 retains the pre-owner graph without relabeling its original scope. The
-[selected successor release](evidence/release-233ea2be-server942-20261001.md)
-now binds SN `233ea2be` / server `94229abb`, including passive-root host,
+[historical successor release](evidence/release-233ea2be-server942-20261001.md)
+binds SN `233ea2be` / server `94229abb`, including passive-root host,
 owner recycle-mode transition and schema-751 mixed-writer source. Two fresh
 source builds match all seventeen executables and ten contract bytecode
 outputs; both eight-image aggregates pass, and every OCI platform manifest,
@@ -1485,6 +1487,21 @@ vet. The unsigned 56-file inventory repeats exactly and retains 751 migration
 source entries without applying them. Connect/SDK pins remain unchanged.
 Later reporting commit `7c5d964f` is distinct from the actual build source.
 Independent reproduction, production policy/configuration, migration/restore,
+rollout, publication identity and release approval remain open.
+
+The [selected finality/migration successor](evidence/release-689938d6-server6c39-20261001.md)
+binds exact SN `689938d6` / server `6c39d307`, with the same effective Connect/SDK
+pins. It includes complete-header authority, claim/shared EVM finality,
+installation clock continuity, historical native capture and monitor changes.
+Two sequential fresh-cache builds match all seventeen executables and ten
+contract bytecode outputs. Each retains 175 artifacts, including all twelve
+current migration source inputs. Both eight-image aggregates verify
+342 artifacts each, with identical platform/configuration/archive bytes. All 95
+builder/source-graph roots pass normal/race and vet; a causal old-selector control proves the earlier
+eight-file omission. The 61-file unsigned inventory repeats exactly and records
+751 catalogue entries without applying them. The superseded e4 attempt and all
+predecessor releases retain their original bytes and separate scope. Independent
+compiler/build reproduction, production policy/configuration, migration/restore,
 rollout, publication identity and release approval remain open.
 
 No signed mainnet deployment plan has been evidenced. The existing catalogue
