@@ -800,6 +800,17 @@ The existing implementation withholds owner-directed incentive in both burn and 
 
 The inspected runtime defaults `RecycleOrBurn` to **Burn**. Its `AdminUtils.sudo_set_recycle_or_burn(netuid, Recycle)` call accepts the subnet owner or chain root, subject to the runtime's owner rate limit and admin window; the EVM alpha precompile exposes `setRecycleOrBurn(uint16,uint8)` with mode `1` for recycle. These are alternatives for one reviewed operation, not two changes to submit. The bootstrap must read the exact runtime metadata and current finalized storage, select the authorized route, set recycle if needed, and verify the finalized `RecycleOrBurn[25] == Recycle` value before activating any owner-directed 90% weight proposal. A pending call, a failed call, or the default Burn value is not recycle. Recheck the mode at every activation/recovery boundary and alert on drift. [Admin setter][subtensor-admin], [default storage][subtensor-storage], [EVM precompile][subtensor-alpha-precompile]
 
+The [runtime 470 owner transition](OWNER-RECYCLE-TRANSITION.md) now supplies a
+separate offline approval/action domain, exact direct-owner call 80, immutable
+native/Ledger request and public signature custody, and bounded canonical
+receipt/readback recovery. Its planner checks the complete original era against
+the per-subnet hyperparameter 24 rate limit and state-based admin window. The
+public path neither signs nor broadcasts. Absent/default Burn was still observed
+at finalized block 9,187,604; actual owner/device approval, transition and Recycle
+readback remain open. A successful mode transition alone never establishes the
+10% provider allocation or economic activation, and this source requires a
+successor to the retained SN `6c801a25` / server `720e7c61` release baseline.
+
 Release 1.0 explicitly rejected owner-directed burning as its head/tail steering strategy. The selected owner-recycle launch policy must therefore be encoded as an explicit economic-policy successor, with its activation and accounting independently verified. Preserve the independent-validator objective and signed weight caps: do not raise a cap, create arbitrary owner recipients, or displace validators merely to force a 90% weight destination. [Whitepaper, head/tail decision](../WHITEPAPER.md#138-headtail-split-θ-in-one-mechanism-chosen-not-two-mechanisms-not-owner-burn)
 
 A weight proposal is not an enforceable payout fraction. Independent validator weights, Yuma clipping, bonds, activity, permits, normalization and u16 rounding affect final incentive. For either owner-withholding path, qualify the complete runtime outcome against the admitted validator set and review adjacent/adversarial weight states. The draft assurance mode is `observed-native-target`: demonstrate the actual 10% allocation within `Q(k)`, disclose sensitivity to other validators, and monitor subsequent deviation. It does not promise that other validators can never change the outcome. If a stronger `enforced-cap` mode is selected, prove that ceiling under all admitted conditions or report `EMISSION_CAP_UNENFORCEABLE`; an after-the-fact monitor is not enforcement. Halting our validator does not revoke other validators' weights or stop already queued native emission. [Consensus implementation][subtensor-epoch]
