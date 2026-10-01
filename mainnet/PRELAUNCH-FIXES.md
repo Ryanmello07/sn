@@ -44,6 +44,14 @@ and 64 root registrations in 13.231 seconds, after two 15-minute per-key
 attempts failed under HTTP 429. Final affected coverage is 69 roots normal/race,
 exact full-metadata tests normal/race, and six causal controls in each mode.
 
+The [public EVM mapping fixture correction](evidence/evm-public-mapping-fixture-20261001.md)
+restores meaningful outage and fallback coverage after adding the public header
+route. Forty-two selected roots pass normal/race and three causal controls;
+production bytes are unchanged. The unpartitioned 964-root `./mainnet` baseline
+exceeded its 20/30-minute package limits, so a full-package verdict remains
+unproven until its roots are qualified in complete disjoint partitions or with
+a measured larger deadline.
+
 The [October 1 read-only public finalized snapshot](evidence/public-finalized-snapshot-20261001.md)
 closes the operational raw-header-method gap for the selected Rao archive:
 the reconstructed Frontier header matched the native digest at finalized block
