@@ -24,8 +24,8 @@ const productionBootstrapCommittedMaximumControl = 16 * 1024 * 1024
 const productionBootstrapCommittedMaximumObjects = 8192
 
 // This is a closed census of committed controls and their real proof tapes.
-// The separate unsealed inventory retains liabilities without promoting them
-// to canonical historical proofs, intent graph authority or worker liveness.
+// The separate unsealed inventory retains liabilities and canonical tail
+// boundaries without supplying intent graph authority or worker liveness.
 type ProductionBootstrapCommittedObservation struct {
 	Schema             string                                  `json:"schema"`
 	ConfigHash         string                                  `json:"config_hash"`
@@ -125,7 +125,8 @@ func ObserveProductionBootstrapCommittedPrefix(ctx context.Context, path string,
 	result.Unsealed = unsealed
 	// Pure transport retries keep the same completed replay, source bytes and
 	// held directory census. No timeout can freshen or discard a checkpoint.
-	err = retryProductionBootstrapPrefixRead(ctx, func(attempt context.Context) error {
+	err = retryProductionBootstrapPrefixRead(ctx, func(attempt context.Context) (attemptErr error) {
+		defer func() { attemptErr = errors.Join(attemptErr, history.check(), liabilityOwner.check()) }()
 		chain, err := DialReleaseChainContext(attempt, cfg.RPC, common.HexToAddress(cfg.Coordinator))
 		if err != nil {
 			return err
@@ -139,7 +140,10 @@ func ObserveProductionBootstrapCommittedPrefix(ctx context.Context, path string,
 		if err := authenticateProductionBootstrapPrefix(attempt, cfg, archive.inputs, chain, native, releaseRuntimeIdentityV2(cfg)); err != nil {
 			return err
 		}
-		_, err = archive.ObserveSources(attempt, chain, native)
+		if _, err := archive.ObserveSources(attempt, chain, native); err != nil {
+			return err
+		}
+		result.Unsealed, err = liabilityOwner.authenticateTailBoundaries(attempt, archive, unsealed, chain)
 		return err
 	}, releaseHttpGetRetryHooks{})
 	if err != nil {

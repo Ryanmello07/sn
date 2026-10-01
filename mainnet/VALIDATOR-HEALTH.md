@@ -115,9 +115,9 @@ This closes the **committed control-prefix** subgate. The later
 also snapshots the actual signed ledger tails, unfinished trails, original
 nonlegacy import receipts and an absent or canonically empty intent boundary
 under service-UID custody. It retains that liability separately from committed
-history. Nonempty intent graphs and complete historical chain binding of tails
-remain unverified; the standard progress format still provides no per-operator
-live-worker attestation.
+history. The bounded extension below authenticates every signed tail boundary;
+nonempty intent graphs remain unverified. The standard progress format still
+provides no per-operator live-worker attestation.
 The result explicitly retains `UNSEALED_LEDGER_AND_INTENT_STATE_UNVERIFIED`,
 `PER_OPERATOR_LIVE_WORKER_UNVERIFIED`, `GLOBAL_SIGNER_CUSTODY_UNVERIFIED`,
 `APPLIED_WEIGHTS_INFLUENCE_UNVERIFIED` and
@@ -133,3 +133,37 @@ RPC sources. Synthetic qualification additionally runs one dedicated fixture
 as root to prove a genuinely different service UID is readable without changing
 the ordinary producer's current-user policy. That test only chowns its own
 temporary fixture. No live deployment or worker-health closure is claimed.
+
+## Canonical unsealed tail boundaries
+
+`admit-committed` now derives a complete boundary census from the actual verified
+records strictly after each replayed committed cut. Up to 256 distinct EVM
+boundaries per operator are supported; repeated records share a boundary read
+only within that same operator. Exceeding the bound refuses the observation.
+Canonical hash-pinned historical reads authenticate each boundary's finalized
+block identity, settlement epoch, approved policy window and operator
+eligibility through the existing production reader. Neither an original signed
+record nor its current-head ceiling supplies those historical facts.
+
+Each ledger's optional `tail_boundary_proof` contains the ordered boundaries and
+exact record counts. It is published only after every boundary for both
+operators succeeds. An empty tail receives an explicit empty proof. Older
+inventory checkpoints retain their exact original bytes and narrower scope;
+later observations cannot discard a retained proof or alter the census under
+an unchanged committed cut and ledger head. A new committed cut may consume
+previously unsealed records without erasing their retained prior checkpoint.
+
+The same protected service-owned source files and directories remain held
+through the reads and actual closes. Every remote attempt joins local custody
+checks before retry classification. Pure transport failures retain completed
+signed replay and use the unchanged 60/300 second retry owner, bounded by the
+original route deadline; cancellation and mixed local/integrity failures stop.
+A later role failure preserves an earlier completed role's durable checkpoint.
+
+This closes the bounded canonical **tail-boundary** subcase only. It does not
+authenticate a nonempty pending/applied/current/history intent graph, historical
+provider bindings inside individual records, independent live workers, global
+signer custody or applied weights influence. The existing unsealed/intent and
+launch gates remain open, and public `start` remains unavailable. Qualification
+uses synthetic signed ledgers and local RPC transports; it supplies no deployed
+mainnet or live-chain evidence.

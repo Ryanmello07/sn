@@ -2,7 +2,8 @@
 
 // Unsealed inventory reads the service's real ledger bytes into separate
 // custody scratch. It never opens a producer database or a private signing key.
-// Signed records are liability, not canonical historical boundary authority.
+// Signed records remain liability until their distinct tail boundaries are
+// independently authenticated by the canonical historical chain reader.
 package validator
 
 import (
@@ -31,11 +32,12 @@ const productionBootstrapUnsealedMaximumBytes = 64 * 1024 * 1024
 // The existing committed proof supplies the operator, generation and epoch.
 // PendingHash commits the exact final checkpoints of every unfinished trail.
 type ProductionBootstrapUnsealedLedger struct {
-	NoId            uint64            `json:"no_id"`
-	Head            AttemptLedgerHead `json:"head"`
-	UnsealedRecords uint64            `json:"unsealed_records"`
-	PendingTrails   uint64            `json:"pending_trails"`
-	PendingHash     string            `json:"pending_hash"`
+	NoId              uint64                                    `json:"no_id"`
+	Head              AttemptLedgerHead                         `json:"head"`
+	UnsealedRecords   uint64                                    `json:"unsealed_records"`
+	PendingTrails     uint64                                    `json:"pending_trails"`
+	PendingHash       string                                    `json:"pending_hash"`
+	TailBoundaryProof *ProductionBootstrapUnsealedBoundaryProof `json:"tail_boundary_proof,omitempty"`
 }
 
 // Only existing, fully imported disk ledgers and an absent or canonically
@@ -57,6 +59,9 @@ type ProductionBootstrapUnsealedObservation struct {
 func (self ProductionBootstrapUnsealedObservation) Validate(prefixes []ProductionBootstrapOperatorPrefix) error {
 	if self.Schema != ProductionBootstrapUnsealedSchema || len(prefixes) != 2 || len(self.Ledgers) != 2 || self.SourceCount < 5 || self.SourceCount > productionBootstrapCommittedMaximumObjects || self.SourceBytes == 0 || self.SourceBytes > productionBootstrapUnsealedMaximumBytes {
 		return errors.New("unsealed inventory lacks its bounded complete scope")
+	}
+	if (self.Ledgers[0].TailBoundaryProof == nil) != (self.Ledgers[1].TailBoundaryProof == nil) {
+		return errors.New("unsealed inventory has only partial tail boundary authority")
 	}
 	if _, err := parseReleaseContentHash(self.CensusHash); err != nil {
 		return err
@@ -84,6 +89,11 @@ func (self ProductionBootstrapUnsealedObservation) Validate(prefixes []Productio
 		if ledger.PendingTrails == 0 && ledger.PendingHash != ReleaseMeasurementContentHash(nil) {
 			return errors.New("unsealed inventory changed its empty pending census")
 		}
+		if ledger.TailBoundaryProof != nil {
+			if err := ledger.TailBoundaryProof.validate(prefix, ledger.UnsealedRecords); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -91,13 +101,17 @@ func (self ProductionBootstrapUnsealedObservation) Validate(prefixes []Productio
 // All local sources stay held through remote history authentication and real
 // closes. Local changes are integrity refusals, never transport retries.
 type productionBootstrapUnsealedOwner struct {
-	ctx         context.Context
-	uid         uint32
-	remaining   uint64
-	sources     []ReleaseEvidenceV2ArchiveSource
-	files       []*releaseMeasurementInputV2Owner
-	directories []*releaseEvidenceV2HistoryDirectory
-	hooks       releaseMeasurementInputV2ReadHooks
+	ctx           context.Context
+	uid           uint32
+	remaining     uint64
+	sources       []ReleaseEvidenceV2ArchiveSource
+	files         []*releaseMeasurementInputV2Owner
+	directories   []*releaseEvidenceV2HistoryDirectory
+	hooks         releaseMeasurementInputV2ReadHooks
+	tails         []productionBootstrapUnsealedTail
+	inventoryHash string
+	closed        bool
+	closeErr      error
 }
 
 // Fixed callers select every name. Both successful absence and occupied files
@@ -136,6 +150,9 @@ func (self *productionBootstrapUnsealedOwner) read(path, name string, maximum ui
 
 // Check every acquired owner even when another has already failed.
 func (self *productionBootstrapUnsealedOwner) check() error {
+	if self == nil || self.closed {
+		return errors.New("unsealed source owner is closed")
+	}
 	var err error
 	for _, file := range self.files {
 		err = errors.Join(err, file.check())
@@ -148,6 +165,10 @@ func (self *productionBootstrapUnsealedOwner) check() error {
 
 // Actual close failures join cancellation; no partial inventory can escape.
 func (self *productionBootstrapUnsealedOwner) close() error {
+	if self.closed {
+		return self.closeErr
+	}
+	self.closed = true
 	var err error
 	for _, file := range self.files {
 		err = errors.Join(err, file.finish())
@@ -171,7 +192,8 @@ func (self *productionBootstrapUnsealedOwner) close() error {
 		final.ctx = context.WithoutCancel(self.ctx)
 		err = errors.Join(err, final.close())
 	}
-	return errors.Join(err, self.ctx.Err())
+	self.closeErr = errors.Join(err, self.ctx.Err())
+	return self.closeErr
 }
 
 // The archive has already authenticated committed ancestry. Only its original
@@ -266,57 +288,60 @@ func readProductionBootstrapUnsealed(ctx context.Context, cfg *ReleaseConfig, ar
 		if previous != nil && previous.Unsealed != nil {
 			prior = &previous.Unsealed.Ledgers[i]
 		}
-		ledger, err := replayProductionBootstrapUnsealed(ctx, copyRoot, cfg.EvidenceV2.Bounds.Disk, initial.Identity, strings.ToLower(cfg.Coordinator), archive.history.keys[operator.NoID], archive.history.current[operator.NoID], current, prefix, prior)
+		ledger, boundaries, err := replayProductionBootstrapUnsealed(ctx, copyRoot, cfg.EvidenceV2.Bounds.Disk, initial.Identity, strings.ToLower(cfg.Coordinator), archive.history.keys[operator.NoID], archive.history.current[operator.NoID], current, prefix, prior)
 		if err != nil {
 			return nil, nil, err
 		}
 		result.Ledgers = append(result.Ledgers, ledger)
+		owned.tails = append(owned.tails, productionBootstrapUnsealedTail{prefix: prefix, ledger: ledger, boundaries: boundaries})
 	}
 	result.CensusHash, result.SourceCount, result.SourceBytes = productionBootstrapPrefixHash(owned.sources), uint64(len(owned.sources)), productionBootstrapUnsealedMaximumBytes-owned.remaining
+	owned.inventoryHash = productionBootstrapPrefixHash(*result)
 	return result, owned, errors.Join(result.Validate(current.Prefixes), owned.check())
 }
 
 // The strict storage reader never repairs CURRENT or initializes missing
 // metadata. Its exclusive database is the detached scratch copy only.
-func replayProductionBootstrapUnsealed(ctx context.Context, path string, limits AttemptLedgerDiskLimits, identity AttemptLedgerIdentity, coordinator string, keys map[byte]ed25519.PublicKey, cursor releaseEvidenceV2StartupCursor, current *ProductionBootstrapCommittedObservation, prefix ProductionBootstrapOperatorPrefix, previous *ProductionBootstrapUnsealedLedger) (result ProductionBootstrapUnsealedLedger, resultErr error) {
+func replayProductionBootstrapUnsealed(ctx context.Context, path string, limits AttemptLedgerDiskLimits, identity AttemptLedgerIdentity, coordinator string, keys map[byte]ed25519.PublicKey, cursor releaseEvidenceV2StartupCursor, current *ProductionBootstrapCommittedObservation, prefix ProductionBootstrapOperatorPrefix, previous *ProductionBootstrapUnsealedLedger) (result ProductionBootstrapUnsealedLedger, resultBoundaries []ProductionBootstrapUnsealedBoundary, resultErr error) {
 	defer func() {
 		resultErr = errors.Join(resultErr, ctx.Err())
 		if resultErr != nil {
 			result = ProductionBootstrapUnsealedLedger{}
+			resultBoundaries = nil
 		}
 	}()
 	vpk, err := canonicalAttemptHex32("unsealed original vpk", identity.ValidatorVPK, false)
 	if err != nil {
-		return result, err
+		return result, nil, err
 	}
 	bounds := attemptRecordStoreBounds{MaxRecordBytes: limits.MaxRecordBytes, MaxRecordCount: limits.MaxRecordCount, MaxTrailCount: limits.MaxTrailCount, MaxRawRecordBytes: limits.MaxRawRecordBytes, MaxStorageBytes: min(limits.MaxStorageBytes, uint64(productionBootstrapUnsealedMaximumBytes)), MaxStorageFiles: min(limits.MaxStorageFiles, uint64(productionBootstrapCommittedMaximumObjects))}
 	store := &attemptRecordStore{identity: attemptRecordStoreIdentity{Schema: attemptStoreSchema, Identity: identity, Coordinator: coordinator}, vpk: vpk[:], bounds: bounds}
 	disk, err := openAttemptRecordStoreStorage(path, bounds, attemptRecordStoreHooks{}, store.latchFault)
 	if err != nil {
-		return result, err
+		return result, nil, err
 	}
 	store.disk = disk
 	defer func() { resultErr = errors.Join(resultErr, disk.Close()) }()
 	if _, err := disk.List(storage.TypeAll); err != nil {
-		return result, err
+		return result, nil, err
 	}
 	db, err := leveldb.Open(disk, &opt.Options{ReadOnly: true, ErrorIfMissing: true, Strict: opt.StrictAll, BlockCacheCapacity: 8 * 1024 * 1024, OpenFilesCacheCapacity: 64})
 	if err != nil {
-		return result, err
+		return result, nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
 	store.db = db
 	raw, err := db.Get([]byte("identity"), nil)
 	var storedIdentity attemptRecordStoreIdentity
 	if err != nil || attemptStoreDecode(raw, &storedIdentity) != nil || storedIdentity != store.identity {
-		return result, errors.Join(errors.New("unsealed ledger original identity is absent or changed"), err)
+		return result, nil, errors.Join(errors.New("unsealed ledger original identity is absent or changed"), err)
 	}
 	raw, err = db.Get([]byte("head"), nil)
 	if err != nil || attemptStoreDecode(raw, &store.head) != nil {
-		return result, errors.Join(errors.New("unsealed ledger lifetime head is absent or changed"), err)
+		return result, nil, errors.Join(errors.New("unsealed ledger lifetime head is absent or changed"), err)
 	}
 	if err := store.verifyContents(ctx); err != nil {
-		return result, err
+		return result, nil, err
 	}
 	match := func(sequence uint64, root string) error {
 		if sequence > store.head.LastSequence || sequence == 0 && root != zeroAttemptHash() {
@@ -331,29 +356,35 @@ func replayProductionBootstrapUnsealed(ctx context.Context, path string, limits 
 		return nil
 	}
 	if err := match(prefix.LastSequence, prefix.Root); err != nil {
-		return result, err
+		return result, nil, err
 	}
 	if previous != nil {
 		if previous.NoId != prefix.NoId || previous.Head.RecordBytes > store.head.RecordBytes || previous.Head.TrailCount > store.head.TrailCount || previous.Head.LastSequence == store.head.LastSequence && previous.Head != store.head {
-			return result, errors.New("unsealed ledger retained lifetime counters regressed")
+			return result, nil, errors.New("unsealed ledger retained lifetime counters regressed")
 		}
 		if err := match(previous.Head.LastSequence, previous.Head.Root); err != nil {
-			return result, err
+			return result, nil, err
 		}
 	}
+	census := &productionBootstrapUnsealedBoundaryCensus{}
 	for sequence := uint64(1); sequence <= store.head.LastSequence; sequence++ {
 		if err := ctx.Err(); err != nil {
-			return result, err
+			return result, nil, err
 		}
 		record, err := store.readRecord(sequence)
 		if err != nil {
-			return result, err
+			return result, nil, err
 		}
 		if err := verifyAttemptRecord(&record, identity, vpk[:], keys, true); err != nil {
-			return result, err
+			return result, nil, err
 		}
 		if !releaseBlockAtOrBefore(record.Boundary.EVMBlock, record.Boundary.EVMBlockHash, current.EvmBlock, current.EvmHash) || sequence > prefix.LastSequence && (record.Boundary.SettlementEpoch != cursor.epoch || !releaseBlockAtOrBefore(cursor.lastBoundary.EVMBlock, cursor.lastBoundary.EVMBlockHash, record.Boundary.EVMBlock, record.Boundary.EVMBlockHash)) {
-			return result, errors.New("unsealed signed record exceeds its replayed epoch or current boundary")
+			return result, nil, errors.New("unsealed signed record exceeds its replayed epoch or current boundary")
+		}
+		if sequence > prefix.LastSequence {
+			if err := census.add(record.Boundary); err != nil {
+				return result, nil, err
+			}
 		}
 	}
 	result = ProductionBootstrapUnsealedLedger{NoId: identity.NoID, Head: store.head, UnsealedRecords: store.head.LastSequence - prefix.LastSequence}
@@ -362,22 +393,22 @@ func replayProductionBootstrapUnsealed(ctx context.Context, path string, limits 
 	defer iterator.Release()
 	for iterator.Next() {
 		if err := ctx.Err(); err != nil {
-			return result, err
+			return result, nil, err
 		}
 		var trail attemptRecordStoreTrail
 		if err := attemptStoreDecode(iterator.Value(), &trail); err != nil {
-			return result, err
+			return result, nil, err
 		}
 		if !trail.Terminal {
 			if trail.LastSequence <= prefix.LastSequence {
-				return result, errors.New("unsealed unfinished trail precedes the complete committed cut")
+				return result, nil, errors.New("unsealed unfinished trail precedes the complete committed cut")
 			}
 			result.PendingTrails++
 			if err := json.NewEncoder(digest).Encode(trail); err != nil {
-				return result, err
+				return result, nil, err
 			}
 		}
 	}
 	result.PendingHash = fmt.Sprintf("sha256:%x", digest.Sum(nil))
-	return result, iterator.Error()
+	return result, census.sorted(), iterator.Error()
 }

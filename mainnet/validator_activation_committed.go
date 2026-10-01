@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -47,6 +48,15 @@ func (self validatorActivationCommittedCheckpoint) validate(plan validatorActiva
 	if p.Unsealed != nil {
 		if err := p.Unsealed.Validate(p.Prefixes); err != nil {
 			return err
+		}
+		for _, ledger := range p.Unsealed.Ledgers {
+			if ledger.TailBoundaryProof != nil {
+				for _, member := range ledger.TailBoundaryProof.Boundaries {
+					if member.Boundary.EVMBlock > p.EvmBlock || member.Boundary.EVMBlock == p.EvmBlock && member.Boundary.EVMBlockHash != p.EvmHash {
+						return errors.New("validator unsealed tail boundary exceeds its observed chain point")
+					}
+				}
+			}
 		}
 	}
 	return nil
@@ -124,6 +134,9 @@ func retainValidatorActivationCommittedCheckpoint(ctx context.Context, store *va
 				old := prior.Proof.Unsealed.Ledgers[i]
 				if ledger.NoId != old.NoId || ledger.Head.LastSequence < old.Head.LastSequence || ledger.Head.RecordBytes < old.Head.RecordBytes || ledger.Head.TrailCount < old.Head.TrailCount || ledger.Head.LastSequence == old.Head.LastSequence && (ledger.Head != old.Head || ledger.PendingTrails != old.PendingTrails || ledger.PendingHash != old.PendingHash) {
 					return errors.New("validator unsealed ledger checkpoint regressed")
+				}
+				if old.TailBoundaryProof != nil && (ledger.TailBoundaryProof == nil || ledger.Head == old.Head && p.Prefixes[i].LastSequence == prior.Proof.Prefixes[i].LastSequence && !reflect.DeepEqual(ledger.TailBoundaryProof, old.TailBoundaryProof)) {
+					return errors.New("validator unsealed tail boundary checkpoint regressed")
 				}
 			}
 		}

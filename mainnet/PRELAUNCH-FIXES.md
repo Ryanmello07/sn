@@ -127,9 +127,15 @@ The [independently qualified unsealed inventory](evidence/validator-unsealed-inv
 extends that read-only observation to the actual signed ledger tails,
 unfinished trails, import receipts and protected empty intent boundary.
 Selected normal/race and privileged UID tests pass, and seven causal guards
-refuse their intended mutations. Nonempty intent graphs and historical chain
-binding of tails are still explicit gates; this increment does not authorize
-either validator to start.
+refuse their intended mutations. The subsequent
+[bounded tail-boundary implementation](VALIDATOR-HEALTH.md#canonical-unsealed-tail-boundaries)
+derives every distinct boundary from signed tail replay and authenticates its
+canonical finalized hash, epoch, policy window and operator eligibility. Its
+new optional checkpoint scope preserves the earlier inventory's original
+authority and retains explicit refusals for nonempty intent graphs. Independent
+qualification of this extension is pending; historical provider bindings, live
+workers and the remaining launch gates stay open. Neither validator is
+authorized to start.
 
 The [qualified validator current-evidence increment](evidence/validator-current-evidence-qualification-20260930.md)
 authenticates original dual-signed operator activation and fresh nonce-bound
