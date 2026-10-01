@@ -1403,14 +1403,27 @@ frozen source commit is distinct from later reporting commits; independent
 reproducibility, actual service/configuration/policy qualification and release
 approval remain open.
 
+The [current-admission packaging baseline](evidence/release-6c801a25-server720-20261001.md)
+now binds exact SN `6c801a25` / server `720e7c61`, retaining the same
+Connect/SDK dependency pins. Its two fresh-cache builds match all seventeen
+executables and ten contract bytecode outputs; eight OCI images have a complete
+local source-to-image aggregate. All 89 builder roots pass normal/race and
+vet. Its source migration inventory records 750, without applying it. Any
+launch selecting later passive-root host, owner recycle-mode transition or
+mixed-writer/migration-751 changes requires a successor source/image build;
+this baseline does not attest them.
+Independent reproduction, actual configuration/policy, rollout and release
+approval remain open.
+
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
 catalogue review and independent qualification are the preferred path for the
 first unsigned mainnet plan. Checking for externally held signed commitments
 remains a launch gate; any such plan, artifact or transaction must be preserved
 and reconciled before selection changes. A metadata-equivalence exception is
-only a conditional fallback, not selected by this path. The local eight-image
-build/readback and independent reproduction are complete for the frozen candidate.
+only a conditional fallback, not selected by this path. Earlier independent
+image reproduction remains scoped to SN `2d53e6f2` / server `ecbf3aad`; the
+later source releases keep their separate independent-builder gate.
 Full compiler/config/policy qualification and release approval remain open, as
 do published-image identity and running-image readback.
 

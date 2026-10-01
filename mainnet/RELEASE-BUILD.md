@@ -7,6 +7,18 @@ an image or deploys. The output directory must be new and outside the source
 workspace. Keep scratch, compiler caches and output on a capacity-checked build
 volume, such as `/mnt/data`; do not consume the small system volume implicitly.
 
+For the pinned Go 1.26.6 toolchain, use physical clones with regular `.git`
+directories. Its VCS discovery omits stamps for linked worktrees whose `.git`
+is a file, even with `-buildvcs=true`; the release verifier correctly refuses
+the resulting executable. Preserve that failed attempt and build the same
+commits in a fresh output directory after correcting the checkout layout.
+Do not disable embedded VCS checks. Keep Docker/containerd build storage on
+the capacity-checked volume as well as the exported OCI files. With the
+containerd image store, `--data-root` alone is insufficient: explicitly select
+a separate containerd socket, root/state directories and namespaces, and verify
+the daemon's actual selected socket before building. Do not reconfigure or prune
+an existing daemon to make room for a release build.
+
 This is the current role census, rather than the historical v11 seven-binary
 selection:
 
