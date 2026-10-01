@@ -69,9 +69,12 @@ URL fetch. This prevents unrelated files from silently changing a release's
 scope, but it also means **the operator must enumerate the complete scope**.
 Different IDs/categories cannot count the same resolved path or hardlinked
 file more than once; parent-directory symlink aliases are checked as well.
-For server migration identity, include the relevant `db_migrations*.go` and
-`monitor/signal_migrations*.go` catalog/implementation set and actual deployment
-manifest. One file cannot stand for the entire deployed migration state.
+For server migration identity, include the relevant `db_migration*.go` and
+`monitor/*migration*.go` catalog/implementation set, excluding `*_test.go`, and
+the actual deployment manifest. The monitor set includes `signal_migrations.go`,
+the `migration_*.go` implementations and the `migrations_*.go` catalogs; renaming
+a catalog must not drop it from the release inputs. One file cannot stand for
+the entire deployed migration state.
 
 Every file is streamed and hashed twice, including a final exact-byte recheck.
 Both passes refuse symlinks at the final path component, special files, empty
