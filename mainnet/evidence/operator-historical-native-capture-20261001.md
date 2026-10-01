@@ -5,8 +5,9 @@ Server candidate `8a47dfe301095bb35803debe2bcd54149f4368f5`, tree
 storage capture on integrated server `94229abb`. It is committed on
 `fix/operator-historical-native-capture-20261001` in
 [/home/by/urnetwork/temp/astra-operator-native-capture-20261001/server](/home/by/urnetwork/temp/astra-operator-native-capture-20261001/server).
-This is author source qualification. Independent review, release composition
-and deployment are not established by this receipt. The selected
+The source is merged into server `main` at `24ac67d4`, after an unrelated
+monitoring-document update. Independent source review has passed; release
+composition and deployment are not established. The selected
 [SN233/server942 release](release-233ea2be-server942-20261001.md) predates this
 source and cannot attest its new commands or binaries.
 
@@ -67,7 +68,18 @@ and no selected root is skipped. The three unchanged PostgreSQL census roots
 remain unrun; this is not full-package database coverage. `go vet` passes both
 packages, module graphs match byte-for-byte, and source remains clean.
 
-Seven single-regression controls compile and reach the intended assertion,
+Independent qualification on clean exports of the exact server `8a47dfe3`
+and companion SN `b13fe38f` trees passed all 173 selected roots in normal and
+race modes, with zero skips/failures, and vet passed. Three independently
+selected causal controls removed proof-block equality, trie verification or
+retained budget enforcement; each failed at the intended assertion in both
+modes. The independent [review](/mnt/data/sn-testnet/qualification/operator-native-capture-sol-independent-20261001/review.md)
+and [receipt](/mnt/data/sn-testnet/qualification/operator-native-capture-sol-independent-20261001/summary.json)
+retain exact commands, graph and logs; receipt SHA-256 is
+`1e3f3a3e5e4bf2132756ac1d2f94ec94ad0164cb778795f893db743d94136fd9`.
+This remains source qualification, not production endpoint admission.
+
+Seven single-regression author controls compile and reach the intended assertion,
 root/package FAIL and exit one in **both normal and race modes**:
 
 | Removed or weakened behavior | Observed causal failure |

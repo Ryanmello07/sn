@@ -2331,7 +2331,8 @@ Completed capture and the new verification command replay offline. Author
 qualification passes all 173 non-database recovery/CLI roots per normal/race
 mode, vet, and seven causal controls in both modes; the three database census
 roots remain unrun. Actual fees and every authority/spending flag remain absent.
-Independent review, runtime interpretation/debit-refund attribution, production
+Independent 173-root normal/race/vet review and three causal controls pass;
+runtime interpretation/debit-refund attribution, production
 archive capability, service adoption, successor release and live custody remain
 open. The selected SN233/server942 release predates this source.
 

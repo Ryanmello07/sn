@@ -13,7 +13,9 @@ comes from original receipt/finality proofs; durable request/byte reservations
 and completed raw results survive interruption. Author qualification passes
 173 non-database recovery/CLI roots per normal/race mode, vet and seven causal
 controls in both modes. The three database census roots remain unrun. This
-source follows the selected server942 release. Independent review, runtime
+source is merged into server `main` at `24ac67d4` but follows the selected
+server942 release. Independent 173-root normal/race/vet review and three causal
+controls pass; runtime
 decoding and debit/refund attribution, production archive capability, service
 adoption, successor release and live custody remain open; actual fees stay null
 and no authority or spending flags become true.
