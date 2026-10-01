@@ -38,13 +38,21 @@ type repairValidatorPostcondition struct {
 
 // Serial use is joined before close. Any ambiguous write poisons this owner.
 type repairValidatorStore struct {
+	*repairValidatorFileOwner
+	approval  repairValidatorApproval
+	publicKey string
+}
+
+// Both independently scoped repair journals share physical custody only.
+// The marker and last read bytes are rechecked before each authoritative access.
+type repairValidatorFileOwner struct {
 	path          string
-	approval      repairValidatorApproval
-	publicKey     string
 	lock          *os.File
 	directoryInfo os.FileInfo
 	poisoned      error
 	syncDirectory func(*os.File) error
+	marker        string
+	expectedHash  string
 }
 
 // The original signed request and independent key survive every reopen.
@@ -83,7 +91,28 @@ func openRepairValidatorStore(ctx context.Context, approval repairValidatorAppro
 	if err := approval.validate(publicKey); err != nil {
 		return nil, err
 	}
-	path := approval.Plan.StatePath
+	owner, err := openRepairValidatorFileOwner(ctx, approval.Plan.StatePath, rootObjectHash(approval)+" "+publicKey+"\n", create)
+	if err != nil {
+		return nil, err
+	}
+	self := &repairValidatorStore{repairValidatorFileOwner: owner, approval: approval, publicKey: publicKey}
+	if create {
+		err = self.save(repairValidatorRecord{Schema: repairValidatorSchema, Approval: approval, PublicKey: publicKey, HighWaterAt: now, Status: "claimed"})
+	} else {
+		_, err = self.load(ctx)
+	}
+	if err != nil {
+		return nil, errors.Join(err, self.close())
+	}
+	return self, nil
+}
+
+// The exact signed pathname is immutable authority. An existing marker with
+// missing state cannot create another budget, regardless of the journal schema.
+func openRepairValidatorFileOwner(ctx context.Context, path, marker string, create bool) (*repairValidatorFileOwner, error) {
+	if ctx == nil || ctx.Err() != nil {
+		return nil, errors.New("validator repair file owner context unavailable")
+	}
 	directory := filepath.Dir(path)
 	resolved, err := filepath.EvalSymlinks(directory)
 	info, statErr := os.Lstat(directory)
@@ -101,7 +130,7 @@ func openRepairValidatorStore(ctx context.Context, approval repairValidatorAppro
 	if err != nil {
 		return nil, err
 	}
-	self := &repairValidatorStore{path: path, approval: approval, publicKey: publicKey, lock: os.NewFile(uintptr(fd), path+".lock"), directoryInfo: info}
+	self := &repairValidatorFileOwner{path: path, lock: os.NewFile(uintptr(fd), path+".lock"), directoryInfo: info}
 	success := false
 	defer func() {
 		if !success {
@@ -114,13 +143,9 @@ func openRepairValidatorStore(ctx context.Context, approval repairValidatorAppro
 	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, errors.New("validator repair already has a process owner")
 	}
-	marker := rootObjectHash(approval) + " " + publicKey + "\n"
 	if create {
 		_, writeErr := self.lock.WriteString(marker)
 		if err := errors.Join(writeErr, self.lock.Sync()); err != nil {
-			return nil, err
-		}
-		if err := self.save(repairValidatorRecord{Schema: repairValidatorSchema, Approval: approval, PublicKey: publicKey, HighWaterAt: now, Status: "claimed"}); err != nil {
 			return nil, err
 		}
 	} else {
@@ -128,16 +153,14 @@ func openRepairValidatorStore(ctx context.Context, approval repairValidatorAppro
 		if err != nil || string(raw) != marker {
 			return nil, errors.New("validator repair marker is incomplete or belongs to another approval")
 		}
-		if _, err := self.load(ctx); err != nil {
-			return nil, err
-		}
 	}
+	self.marker = marker
 	success = true
 	return self, nil
 }
 
 // Parent and marker identity are rechecked before every authoritative access.
-func (self *repairValidatorStore) validateOwner() error {
+func (self *repairValidatorFileOwner) validateOwner() error {
 	if self == nil || self.lock == nil {
 		return errors.New("validator repair store is closed")
 	}
@@ -149,6 +172,19 @@ func (self *repairValidatorStore) validateOwner() error {
 	named, nameErr := os.Lstat(self.path + ".lock")
 	if err != nil || openErr != nil || nameErr != nil || !parent.IsDir() || parent.Mode().Perm()&0077 != 0 || !os.SameFile(parent, self.directoryInfo) || !named.Mode().IsRegular() || named.Mode().Perm()&0077 != 0 || !os.SameFile(opened, named) {
 		return errors.New("validator repair physical owner changed")
+	}
+	if self.marker != "" {
+		raw := make([]byte, len(self.marker)+1)
+		n, err := self.lock.ReadAt(raw, 0)
+		if err != nil && !errors.Is(err, io.EOF) || string(raw[:n]) != self.marker {
+			return errors.New("validator repair marker content changed")
+		}
+	}
+	if self.expectedHash != "" {
+		raw, err := readMonitorServiceFile(context.Background(), self.path, 64*1024, true, monitorServiceReadHooks{})
+		if err != nil || monitorReadDigest(raw) != self.expectedHash {
+			return errors.Join(errors.New("validator repair retained journal changed"), err)
+		}
 	}
 	return nil
 }
@@ -166,7 +202,11 @@ func (self *repairValidatorStore) load(ctx context.Context) (repairValidatorReco
 	if err := decodePlanJson(raw, &record); err != nil {
 		return record, err
 	}
-	return record, record.validate(self.approval, self.publicKey)
+	if err := record.validate(self.approval, self.publicKey); err != nil {
+		return record, err
+	}
+	self.expectedHash = monitorReadDigest(raw)
+	return record, nil
 }
 
 // This existing atomic/fsync primitive may fail after rename; stop and reopen.
@@ -183,15 +223,17 @@ func (self *repairValidatorStore) save(record repairValidatorRecord) error {
 	if err != nil || len(raw) > 64*1024 {
 		return errors.New("validator repair journal exceeds its bound")
 	}
-	if err := publishMonitorFile(self.path, append(raw, '\n'), 0600, self.syncDirectory); err != nil {
+	raw = append(raw, '\n')
+	if err := publishMonitorFile(self.path, raw, 0600, self.syncDirectory); err != nil {
 		self.poisoned = errors.Join(errors.New("validator repair publication is ambiguous; reopen required"), err)
 		return self.poisoned
 	}
+	self.expectedHash = monitorReadDigest(raw)
 	return nil
 }
 
 // No lifetime marker or incident evidence is deleted during shutdown.
-func (self *repairValidatorStore) close() error {
+func (self *repairValidatorFileOwner) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}

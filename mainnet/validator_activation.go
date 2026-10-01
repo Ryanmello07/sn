@@ -155,7 +155,7 @@ func (self validatorActivationRecord) result() validatorActivationResult {
 
 // Installation, admission and start are explicit distinct operations. Every
 // effect follows synced intent; all manager/RPC operations join before return.
-func advanceValidatorActivation(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, authority validatorActivationAuthority, operation string, now func() time.Time) (validatorActivationResult, error) {
+func advanceValidatorActivation(ctx context.Context, store *validatorActivationStore, host *validatorActivationHost, authority validatorActivationAuthority, operation string, now func() time.Time) (result validatorActivationResult, resultErr error) {
 	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil || operation != "install" && operation != "admit" && operation != "admit-evidence" && operation != "admit-stake" && operation != "admit-health" && operation != "admit-committed" && operation != "start" && operation != "resume" {
 		return validatorActivationResult{}, errors.New("validator activation owner or operation is unavailable")
 	}
@@ -288,6 +288,11 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 	}
 	for i := range record.Units {
 		unit, profile := &record.Units[i], plan.hostPlan(i)
+		control, err := host.host.control(ctx, profile.Unit)
+		if err != nil {
+			return finish("source-refused", err)
+		}
+		defer func() { resultErr = errors.Join(resultErr, control.close()) }()
 		if !unit.StartAt.IsZero() && unit.Generation == nil {
 			unit.Status = "uncertain-consumed-start"
 			return finish("partial", errors.New("validator activation consumed start has no attributable acknowledgement"))
@@ -322,6 +327,10 @@ func advanceValidatorActivation(ctx context.Context, store *validatorActivationS
 				return record.result(), err
 			}
 			if err := validatorActivationWindow(ctx, plan, record.HighWaterAt, now(), evidence); err != nil {
+				unit.Status = "uncertain-consumed-start"
+				return finish("partial", err)
+			}
+			if err := control.validate(); err != nil {
 				unit.Status = "uncertain-consumed-start"
 				return finish("partial", err)
 			}

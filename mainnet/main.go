@@ -124,6 +124,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && args[0] == "repair-validator" {
 		return runRepairValidatorCommand(ctx, args[1:], stdout, stderr, now)
 	}
+	if len(args) != 0 && args[0] == "repair-active-validator" {
+		return runRepairActiveValidatorCommand(ctx, args[1:], stdout, stderr, now)
+	}
 	if len(args) != 0 && args[0] == "safe-release-verify" {
 		return runSafeReleaseVerify(ctx, args[1:], stdout, stderr)
 	}
