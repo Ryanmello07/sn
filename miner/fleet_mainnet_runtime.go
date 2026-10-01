@@ -127,8 +127,9 @@ func (self *fleetMainnetRuntimeAuthority) artifactIdentity() crv4.RuntimeArtifac
 	return crv4.RuntimeArtifactIdentity{Version: self.RuntimeVersion, CodeHash: self.RuntimeCodeHash, MetadataHash: self.RuntimeMetadataHash}
 }
 
-// Every selected block checks fresh genesis/name plus the exact runtime tuple.
-// A connection carrying testnet compatibility is inadmissible in production.
+// Every selected block checks fresh genesis/name, its complete committed
+// header and canonical height around the exact runtime read. A connection
+// carrying testnet compatibility is inadmissible in production.
 func (self *fleetMainnetRuntimeAuthority) authenticateAt(ctx context.Context, chain *crv4.Chain, block types.Hash) (crv4.AuthenticatedRuntimeArtifact, error) {
 	if self == nil {
 		return authenticateFleetRuntimeAtContext(ctx, chain, block)
@@ -151,12 +152,32 @@ func (self *fleetMainnetRuntimeAuthority) authenticateAt(ctx context.Context, ch
 	if genesis != expected || nativeChain != self.NativeChain {
 		return crv4.AuthenticatedRuntimeArtifact{}, errors.New("mainnet runtime authority fresh network identity differs")
 	}
+	number, _, err := chain.ReceiptHeaderAtContext(ctx, block)
+	if err != nil {
+		return crv4.AuthenticatedRuntimeArtifact{}, err
+	}
+	checkCanonical := func() error {
+		var canonical types.Hash
+		if err := chain.API.Client.CallContext(ctx, &canonical, "chain_getBlockHash", number); err != nil {
+			return err
+		}
+		if canonical != block {
+			return errors.New("mainnet runtime authority header is not canonical at its authenticated height")
+		}
+		return ctx.Err()
+	}
+	if err := checkCanonical(); err != nil {
+		return crv4.AuthenticatedRuntimeArtifact{}, err
+	}
 	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, chain, block, self.artifactIdentity())
 	if err != nil {
 		return artifact, err
 	}
 	if artifact.CompatibilityProfile != "" || artifact.Version != self.RuntimeVersion || artifact.CodeHash != self.RuntimeCodeHash || artifact.MetadataHash != self.RuntimeMetadataHash || artifact.Metadata == nil {
 		return crv4.AuthenticatedRuntimeArtifact{}, errors.New("mainnet runtime authority exact artifact differs")
+	}
+	if err := checkCanonical(); err != nil {
+		return crv4.AuthenticatedRuntimeArtifact{}, err
 	}
 	artifact.GenesisHash = genesis
 	return artifact, ctx.Err()

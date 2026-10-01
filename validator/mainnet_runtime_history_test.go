@@ -5,7 +5,6 @@ package validator
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,7 +17,9 @@ import (
 
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"github.com/urfoundation/sn/crv4"
+	"golang.org/x/crypto/blake2b"
 )
 
 // Mutable transport responses are guarded only while scripted calls execute.
@@ -105,12 +106,33 @@ func mainnetRuntimeTestWriteBytes(t *testing.T, path string, raw []byte) Release
 	return ReleaseEvidenceV2File{Path: path, Bytes: uint64(len(raw)), SHA256: attemptHex32(sha256.Sum256(raw))}
 }
 
-// The synthetic block hash encodes its height and cannot alias genesis.
+// Each synthetic block commits every header field. Heights are observations
+// authenticated by that commitment, never values encoded into fake block hashes.
 func mainnetRuntimeTestBlock(number uint64) types.Hash {
-	var hash types.Hash
-	binary.LittleEndian.PutUint64(hash[:8], number)
-	hash[31] = 0xdd
-	return hash
+	header := mainnetRuntimeTestHeader(number)
+	raw, err := codec.Encode(header)
+	if err != nil {
+		panic(err)
+	}
+	return types.Hash(blake2b.Sum256(raw))
+}
+
+// This isolated runtime fixture needs complete headers but makes no ancestry
+// claim. Receipt fixtures separately construct each actual parent chain.
+func mainnetRuntimeTestHeader(number uint64) types.Header {
+	return types.Header{ParentHash: types.Hash{0x92}, Number: types.BlockNumber(number),
+		StateRoot: types.Hash{0x93}, ExtrinsicsRoot: types.Hash{0x94}, Digest: types.Digest{}}
+}
+
+// The finite transcript admits only its generated heights; unexpected hash
+// requests fail instead of borrowing another block's runtime response.
+func mainnetRuntimeTestNumber(hash types.Hash) (uint64, error) {
+	for number := uint64(0); number <= 512; number++ {
+		if mainnetRuntimeTestBlock(number) == hash {
+			return number, nil
+		}
+	}
+	return 0, fmt.Errorf("unknown synthetic runtime block %s", hash.Hex())
 }
 
 // Only read methods required by identity observation are implemented.
@@ -149,15 +171,17 @@ func (self *mainnetRuntimeTestFixture) callContext(ctx context.Context, result a
 	if err != nil {
 		return err
 	}
-	number := binary.LittleEndian.Uint64(hash[:8])
+	number, err := mainnetRuntimeTestNumber(hash)
+	if err != nil {
+		return err
+	}
 	index := 0
 	if number > 100 {
 		index = 1
 	}
 	switch method {
 	case "chain_getHeader":
-		*result.(*types.Header) = types.Header{Number: types.BlockNumber(number)}
-		return nil
+		return setReleaseHistoricalTestResult(result, releaseReceiptTestHeaderWire(mainnetRuntimeTestHeader(number)))
 	case "state_getRuntimeVersion":
 		return setValidatorRuntimeIdentityTestResult(result, self.versions[index])
 	case "state_getStorageHash":

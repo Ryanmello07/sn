@@ -15,7 +15,7 @@ import (
 // Complete headers keep an upgrade digest from stranding retained work. This
 // generic bind grants historical reading only and never producer authority.
 func authenticateProductionSourceRuntimeAtContext(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, block types.Hash) error {
-	artifact, _, err := authenticateOwnerRecycleProductionArtifactWithHeadersAtContext(ctx, native, cfg, block, true, true)
+	artifact, _, err := authenticateOwnerRecycleProductionArtifactAtContext(ctx, native, cfg, block, true)
 	if err != nil {
 		return err
 	}
@@ -36,14 +36,14 @@ func authenticateProductionFinalizedSourceContext(ctx context.Context, native *c
 	if number != receipt.BlockNumber {
 		return errors.New("production source receipt height differs from its authenticated header")
 	}
-	execution, executionNumber, err := authenticateOwnerRecycleProductionArtifactWithHeadersAtContext(ctx, native, cfg, parent, true, true)
+	execution, executionNumber, err := authenticateOwnerRecycleProductionArtifactAtContext(ctx, native, cfg, parent, true)
 	if err != nil {
 		return err
 	}
 	if executionNumber+1 != number {
 		return errors.New("production source receipt parent height differs from its execution boundary")
 	}
-	postState, _, err := authenticateOwnerRecycleProductionArtifactWithHeadersAtContext(ctx, native, cfg, receipt.BlockHash, true, true)
+	postState, _, err := authenticateOwnerRecycleProductionArtifactAtContext(ctx, native, cfg, receipt.BlockHash, true)
 	if err != nil {
 		return err
 	}

@@ -43,16 +43,10 @@ func authenticateOwnerRecycleProductionRuntimeAtContext(ctx context.Context, nat
 	return nil
 }
 
-// Historical authority is a finite list of original exact artifacts. This
-// helper returns authenticated evidence; only the caller selects its bind purpose.
+// Complete committed headers select signed runtime windows for both current
+// and historical reads. Only the caller selects the authenticated bind purpose;
+// an earlier approved artifact never becomes current signing authority.
 func authenticateOwnerRecycleProductionArtifactAtContext(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, block types.Hash, historical bool) (crv4.AuthenticatedRuntimeArtifact, uint64, error) {
-	return authenticateOwnerRecycleProductionArtifactWithHeadersAtContext(ctx, native, cfg, block, historical, false)
-}
-
-// Receipt callers authenticate complete raw headers, including runtime-update
-// digests unsupported by the older convenience header decoder. The ordinary
-// runtime path retains its existing header surface until separately qualified.
-func authenticateOwnerRecycleProductionArtifactWithHeadersAtContext(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, block types.Hash, historical, completeHeaders bool) (crv4.AuthenticatedRuntimeArtifact, uint64, error) {
 	empty := crv4.AuthenticatedRuntimeArtifact{}
 	if err := validateReleaseProductionRuntimeHistory(cfg); err != nil {
 		return empty, 0, err
@@ -100,15 +94,8 @@ func authenticateOwnerRecycleProductionArtifactWithHeadersAtContext(ctx context.
 		return empty, 0, err
 	}
 	headerNumber := func(hash types.Hash) (uint64, error) {
-		if completeHeaders {
-			number, _, err := native.ReceiptHeaderAtContext(ctx, hash)
-			return number, err
-		}
-		header, err := native.HeaderAtContext(ctx, hash)
-		if err != nil {
-			return 0, err
-		}
-		return uint64(header.Number), nil
+		number, _, err := native.ReceiptHeaderAtContext(ctx, hash)
+		return number, err
 	}
 	finalizedNumber, err := headerNumber(finalized)
 	if err != nil {

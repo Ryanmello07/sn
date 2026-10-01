@@ -80,11 +80,11 @@ func (self *fleetMainnetRuntimeAuthority) admitEvm(ctx context.Context, client *
 		return err
 	}
 	if number != nil {
-		header, err := chain.HeaderAtContext(ctx, block)
+		height, _, err := chain.ReceiptHeaderAtContext(ctx, block)
 		if err != nil {
 			return err
 		}
-		if uint64(header.Number) != number.Uint64() {
+		if height != number.Uint64() {
 			return errors.New("mainnet receipt native height changed")
 		}
 	}

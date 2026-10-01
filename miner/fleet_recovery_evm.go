@@ -136,7 +136,7 @@ func fleetRecoverableEvm(opts docopt.Opts, manifest *protocol.FleetManifest, aut
 	if err != nil {
 		return err
 	}
-	header, err := chain.HeaderAtContext(ctx, start)
+	number, _, err := chain.ReceiptHeaderAtContext(ctx, start)
 	if err != nil {
 		return err
 	}
@@ -188,7 +188,7 @@ func fleetRecoverableEvm(opts docopt.Opts, manifest *protocol.FleetManifest, aut
 		if err := tx.UnmarshalBinary(raw); err != nil {
 			return err
 		}
-		record = fleetRecoveryPrepared(intent, authority, start, uint64(header.Number))
+		record = fleetRecoveryPrepared(intent, authority, start, number)
 		record.EvmSigner, record.Nonce, record.Raw, record.TxHash = crypto.PubkeyToAddress(key.PublicKey), tx.Nonce(), append([]byte(nil), raw...), hash.Hex()
 		return store.put(record, signer)
 	}, BeforeBroadcast: func(common.Hash) error {
