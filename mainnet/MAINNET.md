@@ -51,7 +51,22 @@ The original bootstrap design was based on SN
 qualification must use an explicit composed release, including compatible
 SN/server/SDK/Connect/config revisions. Some shared and simulator fixes exist;
 the complete mutating bootstrap, root-validator service and operational repair
-system remain production work. [mainnet/main.go](main.go) implements signer-free
+system remain production work.
+
+**Server `720e7c61` is a separate integration candidate.** The
+[static review and qualification gate](evidence/server-720e-integration-review-20261001.md)
+requires migration **750** before those binaries take traffic, plus an exact
+SN/server compatibility receipt and successor release/source-image inventory.
+Keep the launch `provider.yml` subscriber policy absent/`0` and the v2 candidate
+classifier/MMDB out of active inputs unless both operators' actual miner cohorts
+prove fresh trails through the SN Quality/force-minimum seed picker. Under v2,
+unknown or legacy connection facts are excluded even from fallback and named
+selection; service health alone cannot prove trail progress. The existing
+contract/operator/activation qualifications remain scoped to server `0b8e758d`
+until the separately recorded compatibility gate passes. This review does not
+change live policy, rebuild artifacts or approve deployment.
+
+[mainnet/main.go](main.go) implements signer-free
 `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`,
 `monitor`, `subnet-discover`, `subnet-preview`, `owner-trim-plan`, `owner-trim-recheck`,
 `owner-trim-reconcile`, `owner-trim-qualify`, `root-preview`, `root-monitor`,
