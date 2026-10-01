@@ -52,16 +52,26 @@ with compiled bytes. Fresh mode refuses any nonexact contract; retained mode
 refuses any selected identity that differs from the historical catalogue. The
 manifest's `contract_catalog` is always explicit, including when config omits it.
 
-The current server API mismatch was reproduced before repair: four of thirteen
-server commands compiled and nine failed. SN's four commands compiled. Server
-`898dc8f3b211d1e2fca1b0a0c970f7673b36fd7b` replaces stale sibling SDK/Connect
-overrides with the same reviewed replacements already selected by SN:
+The September 30 server API mismatch was reproduced before repair: four of
+thirteen server commands compiled and nine failed. SN's four commands compiled.
+Server `898dc8f3b211d1e2fca1b0a0c970f7673b36fd7b` first replaced stale sibling
+SDK/Connect overrides. The October 1 source capture at SN `de0823ce` and server
+`0b8e758d` confirms the following effective replacements in both module graphs
+and in the builder's admission checks:
 
 | Module | Effective immutable version |
 | --- | --- |
-| SDK | `v0.0.0-20260928100458-516521fb16da` |
-| Connect | `v0.0.0-20260928101830-b163f9dd9ac3` |
-| `github.com/pion/sctp` | `github.com/urnetwork/connect/sctp v0.0.0-20260928101830-b163f9dd9ac3` |
+| SDK | `v0.0.0-20261001021058-5d37be3876e5` |
+| Connect | `v0.0.0-20261001021459-e1b5d77b5029` |
+| `github.com/pion/sctp` | `github.com/urnetwork/connect/sctp v0.0.0-20261001021459-e1b5d77b5029` |
+
+The [current unsigned preparation](evidence/public-unsigned-preparation-20261001.md)
+records newer observed Connect/SDK main heads separately; they are not consumed
+or implicitly qualified. The earlier full candidate and eight-image aggregate
+bind SN `2d53e6f2` / server `ecbf3aad`. Preserve those exact source claims; they
+do not prove a successor binary or image built from the later server custody
+and SN validator changes. The current preparation inventory is deliberately
+partial and keeps source-to-image provenance and release approval false.
 
 Both main modules resolve independently. The builder records their effective
 module graphs, exact module/go.mod sums, local module Git ownership and module

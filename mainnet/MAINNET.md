@@ -1293,13 +1293,21 @@ remain false.
 
 The [offline aggregation command](RELEASE-BUILD.md) can now verify those separate
 receipts against one exact original source manifest and emit a sealed eight-image
-attestation. Its [current-candidate qualification](evidence/release-image-aggregate-qualification-20261001.md)
+attestation. Its [frozen-candidate qualification](evidence/release-image-aggregate-qualification-20261001.md)
 binds SN `2d53e6f2` and server `ecbf3aad`, rehashes all 337 input artifacts and
 replays the OCI/rootfs checks against their exact parent binaries and recipes.
 Only the aggregate's local `source_to_image_verified` advances; original evidence
 is unchanged and reproducibility, release completion and deployment approval
 remain false. This operation needs no Docker service and performs no build,
 publication or application execution.
+
+The later [unsigned preparation](evidence/public-unsigned-preparation-20261001.md)
+locks SN `de0823ce` and server `0b8e758d`, including the newer validator and
+operator custody changes. Its source lock and partial inventory retain the
+actual reviewed Connect/SDK module pins separately from observed newer main
+heads. It does not inherit the older aggregate's image provenance. Complete
+composition and source-to-image verification for these successor sources
+remain pending, with release completion and deployment approval false.
 
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
@@ -2338,13 +2346,19 @@ reports mainnet genesis/EVM ID 964 and runtime spec 470, but the strict native/E
 mapping initially lacked a public raw-header method. The
 [qualified public fallback](evidence/public-header-fallback-20261001.md) now
 passes a [live read-only exact-hash finalized snapshot](evidence/public-finalized-snapshot-20261001.md)
-on that archive. Snow VPN
+on that archive. The [current unsigned preparation](evidence/public-unsigned-preparation-20261001.md)
+rechecks one combined observation at block 9,186,298 and retains the exact
+runtime470 hashes, source lock, release input and ten-action blocked plan for
+SN `de0823ce` / server `0b8e758d`. Its separately declared network target is a
+review input, with independent network/runtime authority still missing. Snow VPN
 `172.28.208.185:9944` is a
 future failover; it still returned HTTP 502 at the latest retained check.
 Do not retarget signed action bytes. The
-[current-source offline composition](evidence/release-current-source-20261001.md)
+[earlier frozen offline composition](evidence/release-current-source-20261001.md)
 passes its 17-binary, five-contract and 170-hash audit; eight fresh OCI image
-readbacks pass as separate supplements. No deployment approval is implied. Obtain
+readbacks pass as separate supplements for SN `2d53e6f2` / server `ecbf3aad`.
+Those images do not establish provenance for the successor sources. No
+deployment approval is implied. Obtain
 an independently approved mainnet genesis/runtime identity and complete
 SN25 census. Qualify the production source/dependency release with
 the retained R48/R46 lessons, then implement the bootstrap mutation paths and

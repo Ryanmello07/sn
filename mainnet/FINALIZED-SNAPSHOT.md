@@ -51,7 +51,11 @@ consensus transaction; a coherently false RPC requires stronger independent
 proofs to detect.
 
 The [October 1 public archive switch](evidence/public-archive-switch-20261001.md)
-allows `inspect` and `runtime-snapshot`, but this combined command currently
-returns exit 4 there because `debug_getRawHeader` is unavailable. Keep that
-capability gap visible; do not substitute an unlinked EVM JSON block as the
-combined proof.
+initially exposed the missing raw-header method. The qualified public fallback
+now completes this command on the selected Rao archive. The
+[current unsigned preparation](evidence/public-unsigned-preparation-20261001.md)
+retains another successful single-hash runtime/native/EVM capture at block
+9,186,298 and an exact-hash probe showing `debug_getRawHeader` still returns
+method-not-found. The combined record contains authenticated recovered RLP,
+not just an unlinked EVM JSON block. Runtime-source approval and independent
+network/finality authority remain unresolved.
