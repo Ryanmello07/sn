@@ -152,8 +152,9 @@ The execution owner additionally rechecks its exact live claim, ready marker,
 counted intent/record prefix and interrupted outcome before a send or completion
 report. [Deterministic regressions](evidence/bootstrap-successor-live-custody-20261001.md)
 cover changed or missing custody after reservation. Original approvals and
-journals remain unchanged; public Safe submission, installation and activation
-remain separate unresolved gates.
+journals remain unchanged. The separate [public current-only Safe route](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md)
+requires a newly signed v2 risk-policy acceptance and an exact revision opt-in;
+actual policy acceptance, installation and activation remain unresolved gates.
 
 ## Read-only current prerequisites
 

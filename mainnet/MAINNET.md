@@ -107,15 +107,17 @@ state remain owned-node assertions; external build review and complete signer
 cutover remain independently attested assumptions, not facts proved by a local
 registry or a global transaction-pool census. No live authority is established.
 
-**P0 gate: canonical Safe deployment and storage provenance.** Public `--submit`
-is unavailable and exits before custody loading or attempt reservation. A signed
+**P0 gate: canonical Safe deployment and storage provenance.** The original
+complete-history submission route remains unavailable. Without the separate v2
+current-only opt-in below, public `--submit` exits before custody loading or attempt
+reservation. A signed
 history report is necessary review input, but cannot provide the missing
 `bootstrapSuccessorSafeProvenanceAuthenticator`. Current Safe owner/module
 getters cannot exclude nonzero mapping entries unreachable from their sentinel
 lists; tests inject real orphan owner and module entries into the published code
 and demonstrate this gap. Implement and independently qualify deployment,
 initialization and complete authority-relevant storage/delegatecall history
-through finalized and scoped pending state before enabling public sends. The
+through finalized and scoped pending state before enabling complete-history sends. The
 adapter must bind the exact Safe/profile, approved route and signed evidence;
 ordinary getters or a loosely labeled file cannot substitute. Read-only
 reconciliation remains available. The separate
@@ -172,15 +174,15 @@ records eight new and thirty-one adjacent roots passing normal/race, all eight
 normal and exactly five selected race controls causal, and sealed exact
 source/dependency evidence. That custody increment installed no public import
 flag or production capability; the separately qualified native capability below
-adds read-only import and the internal proof path. Explicit policy approval and
-a qualified public release route remain required before submission can open.
+adds read-only import and the internal proof path. The later public v2 route below
+requires an explicit new independent risk-policy acceptance.
 
 **Qualified native current-policy capability.** The separate
 `95a905d4` [capability](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md)
 connects independently signed current-policy custody to the concrete native
 complete-prefix verifier. Public online resume can import pinned acceptance
-files for local custody and historical reconciliation. Public `--submit` still
-has no installed route, and a signature or input flag cannot install one.
+files for local custody and historical reconciliation. That September 30 source
+kept public submission closed; its v1 acceptance remains public read-only.
 An internal route requires the complete retained runtime tip and both policy
 signatures, keeps proof work before final scoped pending checks, and preserves
 one exact counted send. Its proof block/hash/root remains separate from any
@@ -193,6 +195,21 @@ unresolved in the receipt, with fresh corrected reproductions retained separatel
 No policy approval or public-send activation is claimed; the original signed
 history statement remains retained and unproven. Complete pending storage and
 independent finality are not established by the owned RPC observations.
+
+**Public current-only Safe route, October 1.** The [v2 acceptance interface](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md#explicit-public-v2-acceptance)
+adds a separate signature domain and exact `--accept-safe-current-policy` opt-in.
+The latest independent acceptance must expressly allow bounded public submission
+and accept owned-RPC finality, non-atomic scoped pending checks, signer cutover,
+absent complete history/pending proof and changes between reads. V1 cannot be
+upgraded by a flag. Both signatures, original custody and the complete runtime tip
+remain required; wrong or absent acceptance refuses before reservation or send.
+The route uses the existing complete finalized prefix proof and repeated final
+readmission, preserves the original exact signed bytes/nonce/attempt/liability,
+and leaves historical read-only reconciliation available after interruption.
+The [qualification receipt](evidence/safe-current-public-qualification-20261001.md)
+records the scoped synthetic checks and source pins. Actual independent production
+v2 acceptance, signer cutover, live authority and installation remain open MG-08
+gates. No risk policy was accepted and no live transaction was sent in this work.
 
 **Contract-to-validator declaration admission — scoped qualification complete.** The
 separate signer-free [contract-role plan](BOOTSTRAP-CONTRACT-ROLES.md) binds both

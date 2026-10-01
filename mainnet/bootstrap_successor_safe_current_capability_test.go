@@ -1,5 +1,5 @@
 // The concrete production capability uses real native proofs in the full local
-// Safe graph. Public construction still has no installed current-policy route.
+// Safe graph. Public v2 opt-in and internal legacy qualification stay distinct.
 package main
 
 import (
@@ -104,6 +104,19 @@ func TestBootstrapSuccessorSafeCurrentCapabilityRequiresInstalledRoute(t *testin
 // import, hidden-authority refusal, proof-time mutation, one lost-reply send and
 // later receipt recovery. The old synthetic history capability is never supplied.
 func TestBootstrapSuccessorSafeCurrentCapabilityCommandPreservesExactSend(t *testing.T) {
+	bootstrapSuccessorSafeCurrentTestCommandPreservesExactSend(t, false)
+}
+
+// The public entrypoint uses the same native proofs and exact custody, with a
+// separately signed v2 acceptance and explicit hash opt-in on each attempted send.
+func TestBootstrapSuccessorSafeCurrentPublicCommandPreservesExactSend(t *testing.T) {
+	bootstrapSuccessorSafeCurrentTestCommandPreservesExactSend(t, true)
+}
+
+// Both routes must reach real proof/readmission boundaries, preserve a consumed
+// reservation after refusal, and reconcile a lost reply without replacing bytes.
+func bootstrapSuccessorSafeCurrentTestCommandPreservesExactSend(t *testing.T, public bool) {
+	t.Helper()
 	f := newBootstrapSuccessorCanonicalFixture(t)
 	chain, plan := f.original.contracts, f.approval.Plan
 	root := f.original.config.RunDirectory
@@ -111,6 +124,9 @@ func TestBootstrapSuccessorSafeCurrentCapabilityCommandPreservesExactSend(t *tes
 	nonces := bootstrapSuccessorPreparationTestFiles(t, plan.Request.RegistryDirectory)
 	model := &bootstrapSuccessorExecutionFixture{t: t, approval: f.approval, key: f.key}
 	revision := bootstrapSuccessorSafeCurrentTestNext(t, model, f.canonical, bootstrapSuccessorRuntimeHistory{}, nil)
+	if public {
+		revision = bootstrapSuccessorSafeCurrentTestPublicAcceptance(t, revision, f.key)
+	}
 	reference := bootstrapRootTestWrite(t, filepath.Join(bootstrapSuccessorExecutionTestDirectory(t), "synthetic-current-policy-acceptance.json"), revision)
 	var witness safeCurrentStorageWitness
 	var proof *safeCurrentProofFixture
@@ -186,7 +202,15 @@ func TestBootstrapSuccessorSafeCurrentCapabilityCommandPreservesExactSend(t *tes
 		if submit {
 			input = append(input, "--submit")
 		}
-		code := runBootstrapSuccessorExecutionCommandWithAuthorities(t.Context(), input, &stdout, &stderr, nil, route)
+		var code int
+		if public || route == 0 {
+			if route == bootstrapSuccessorSafeCurrentNativeRoute && submit {
+				input = append(input, "--accept-safe-current-policy", rootObjectHash(revision))
+			}
+			code = runBootstrapSuccessorExecutionCommand(t.Context(), input, &stdout, &stderr)
+		} else {
+			code = runBootstrapSuccessorExecutionCommandWithAuthorities(t.Context(), input, &stdout, &stderr, nil, route)
+		}
 		var result bootstrapSuccessorExecutionResult
 		if stdout.Len() != 0 {
 			if err := decodePlanJson(stdout.Bytes(), &result); err != nil {
@@ -201,6 +225,21 @@ func TestBootstrapSuccessorSafeCurrentCapabilityCommandPreservesExactSend(t *tes
 	if _, err := os.Stat(filepath.Join(root, bootstrapSuccessorSafeCurrentName(1))); !os.IsNotExist(err) {
 		t.Fatal("public capability refusal changed policy custody", err)
 	}
+	if public {
+		withoutAcceptance := append(slices.Clone(args[:len(args)-4]), "--accept-safe-current-policy", rootObjectHash(revision))
+		if code, _, diagnostic := invoke(0, true, withoutAcceptance); code != 1 || !strings.Contains(diagnostic, errBootstrapSuccessorSafeCurrentCapabilityUnavailable.Error()) {
+			t.Fatal("public opt-in alone enabled current-policy submission", code, diagnostic)
+		}
+		for _, fault := range []string{"read-only", "invalid hash"} {
+			hash := rootObjectHash(revision)
+			if fault == "invalid hash" {
+				hash = "synthetic-invalid-acceptance-hash"
+			}
+			if code, _, diagnostic := invoke(0, fault != "read-only", append(slices.Clone(args), "--accept-safe-current-policy", hash)); code != 2 {
+				t.Fatal("public current-policy opt-in accepted an invalid invocation", fault, code, diagnostic)
+			}
+		}
+	}
 	for _, fault := range []string{"missing digest", "wrong digest"} {
 		changed := slices.Clone(args)
 		if fault == "missing digest" {
@@ -214,6 +253,31 @@ func TestBootstrapSuccessorSafeCurrentCapabilityCommandPreservesExactSend(t *tes
 	}
 	if code, result, diagnostic := invoke(0, false, args); code != 0 || result.SafeCurrentRevisionHash != rootObjectHash(revision) || result.SafeCurrentRevisionCount != 1 || result.CumulativeAttempts != 8 || result.SubmissionAttempted {
 		t.Fatal("public read-only current-policy import failed", code, result, diagnostic)
+	}
+	if !public {
+		legacyOptIn := append(slices.Clone(args), "--accept-safe-current-policy", rootObjectHash(revision))
+		if code, _, diagnostic := invoke(0, true, legacyOptIn); code != 1 || !strings.Contains(diagnostic, "separately signed v2 acceptance") {
+			t.Fatal("public opt-in upgraded legacy current-policy acceptance", code, diagnostic)
+		}
+	}
+	if public {
+		wrong := append(slices.Clone(args), "--accept-safe-current-policy", rootObjectHash("synthetic different accepted revision"))
+		if code, _, diagnostic := invoke(0, true, wrong); code != 1 || !strings.Contains(diagnostic, "opt-in differs from the exact retained acceptance") {
+			t.Fatal("public current-policy submission ignored the accepted revision", code, diagnostic)
+		}
+		if _, err := os.Stat(filepath.Join(root, bootstrapSuccessorExecutionEventName(1)+".json")); !os.IsNotExist(err) {
+			t.Fatal("public acceptance refusal consumed a counted attempt", err)
+		}
+		func() {
+			chain.stateLock.Lock()
+			defer chain.stateLock.Unlock()
+			if len(chain.writes) != 8 || proofCalls != 0 {
+				t.Fatal("public acceptance refusal reached network admission or a write")
+			}
+		}()
+		// Recovery needs the immutable retained acceptance, not a replaceable
+		// import file. Every following send still supplies its exact object hash.
+		args = args[:len(args)-4]
 	}
 	func() {
 		loaded, profile, retained, err := loadBootstrapSuccessorExecution(t.Context(), f.original.path, root,

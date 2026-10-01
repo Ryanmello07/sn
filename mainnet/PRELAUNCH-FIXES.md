@@ -491,7 +491,7 @@ does not implement the distinct `bootstrapSuccessorSafeProvenanceAuthenticator`.
 Safe sentinel-list getters cannot prove the absence of enabled owner/module
 mapping entries outside those lists. The real-code malicious-storage fixture
 demonstrates both kinds of orphan authority while ordinary getters remain clean.
-Before enabling public submission, implement and independently qualify canonical
+Before enabling the original complete-history submission route, implement and independently qualify canonical
 deployment/initialization and every authority-relevant storage/delegatecall
 mutation through finalized and scoped pending state, bound to the exact approved
 route/account/profile and signed evidence. Reports or flags must never inject
@@ -539,10 +539,10 @@ source/module/local-dependency evidence. That isolated custody increment did not
 enable public policy import or submission; read-only import is supplied by the
 separately qualified capability below.
 
-**P0 follow-up — Current-policy approval and public release route.** The concrete
-native proof path is independently qualified below. Public submission remains
-closed until the user explicitly approves its current-only boundary and a
-separately qualified release change installs the route. Installation must require
+**Current-policy approval and public release route.** The concrete native proof
+path is independently qualified below. The October 1 v2 interface adds a separate
+public route while actual production risk-policy acceptance remains a P0 gate.
+The route requires
 the complete independently signed proposal and acceptance, retain expensive proof
 before final scoped pending re-admission, preserve the exact proof snapshot
 separately from a later admission head, and keep the one retained exact-byte send.
@@ -551,9 +551,9 @@ attestation or claim current proof establishes historical truth.
 
 **Native current-policy capability — scoped qualification complete.** Frozen
 `95a905d4` [implements the distinct native route](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md)
-on the signed custody journal. Public acceptance-file import only retains local
-authority; public `--submit` remains closed because no production route is
-installed. The internal route requires both independent signatures and the exact
+on the signed custody journal. That September 30 source kept public acceptance-file
+import read-only and public submission closed. Its internal route requires both
+independent signatures and the exact
 completed runtime tip, refuses mixing with the history capability, proves the
 complete finalized Safe prefix, then rechecks scoped pending Safe/relayer state,
 nonce, funding and exact transaction identity after expensive proof/artifact work.
@@ -567,9 +567,25 @@ fresh reproductions under the corrected assertions are sealed separately without
 changing source, tests or mutation patches. The capability does not prove
 historical initialization/delegatecalls, independent finality or complete pending
 storage.
-Explicit approval of those current-only assumptions and a separately qualified
-release-route installation remain open P0 gates. No mainnet action is authorized
-by local qualification.
+Explicit production acceptance of those current-only assumptions remains an open
+P0 gate. No mainnet action is authorized by local qualification.
+
+**Public current-only acceptance v2, October 1.** The separate
+[public route](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md#explicit-public-v2-acceptance)
+requires the original independent reviewer's new v2 signature and an exact
+`--accept-safe-current-policy` acceptance object hash on every submit invocation.
+V1 and proposal signatures cannot grant that authority. The signed policy names
+owned-RPC finality, non-atomic pending assertions, exclusive signer/relayer cutover,
+absent complete history/pending proof and between-read changes. Exact original
+custody, complete runtime authority, native prefix proof and final scoped
+readmission remain mandatory. Missing/wrong acceptance, incomplete publication,
+runtime drift and mixed history capabilities refuse. Timeout and restart retain
+the same signed bytes, nonce claims, counted attempts and maximum liability;
+historical outcomes keep their original policy even after later imports.
+The [qualification receipt](evidence/safe-current-public-qualification-20261001.md)
+records exact synthetic tests and remaining gates. This implementation supplies
+no production acceptance, signer or live transaction; MG-08 remains blocked for
+actual authority, installation and activation.
 
 **Contract-role declaration admission — scoped qualification complete.** The separate
 [offline contract-role plan](BOOTSTRAP-CONTRACT-ROLES.md) addresses a cross-component
