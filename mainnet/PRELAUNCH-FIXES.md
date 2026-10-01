@@ -99,8 +99,10 @@ complete execution history or activation. MG-08 remains blocked for activation.
 [runtime470 review](../docs/spec/runtime-470-audit.md) binds the official immutable
 source/release to the observed code and executed metadata. The full local rebuild
 differs only in 22 hash-table seed constants in one Wasmi function; exact source
-reproducibility failed and requires an explicit independently reviewed exception
-for the exact official artifact. Runtime470 has removed
+reproducibility failed. On 2026-10-01 the subnet owner approved the exact
+observed v470 artifact and its documented one-function reproducibility
+exception for **launch planning only**. Independent genesis/finality authority,
+live signing, deployment and activation remain unapproved. Runtime470 has removed
 `set_root_weights` and its old enable/cap storage; the historical v3 root service
 is not a launch-capable weight writer on that artifact. The additive
 [v4 passive root service](ROOT-PASSIVE-SERVICE.md) selects
