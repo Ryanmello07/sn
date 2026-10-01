@@ -6,6 +6,22 @@ acceptance**. There is no R49 requirement or instruction to resume it. Mainnet
 hardening may proceed; launch readiness must be established on the selected
 production release. No mainnet deployment or spend is authorized by this tracker.
 
+**October 1 original contract custody continuity (MG-03/MG-08):** the
+[writer and borrowed-reader correction](evidence/original-evm-custody-qualification-20261001.md)
+retains the physical marker, directory and exact journal through all eight
+original actions and their receipt/installation readback. An identical-byte
+replacement of a lock pathname can admit another owner; deletion of a completed
+journal is lost custody. Neither permits recreation, another send or a ready
+installation. Source `cb9f3aa2` fixes the eight writers; separate `1922981d`
+fixes their shared readers, including the installation proof consumed by
+validator admission. Diagnostic successor `4e6b4a7e` preserves the original
+approval/predecessor mismatch explanation. Deterministic pre-fix tests demonstrate
+the five writer failures and two false-readiness failures. The receipt records
+exact normal, race, causal and independent scopes. Older root/trim stores and the separate
+five-marker bootstrap readiness cohort remain explicit follow-ups. The
+SN `28ebfced` / server `ac86855d` release baseline predates these corrections;
+a successor artifact qualification, live custody and acceptance remain open.
+
 **October 1 bootstrap finality closure (MG-04/MG-08/PH-04):** the
 [native observation and refreshed EVM admission corrections](evidence/bootstrap-finality-qualification-20261001.md)
 retain the authenticated opening finalized witness across historical selection
