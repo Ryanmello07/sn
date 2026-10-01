@@ -128,12 +128,12 @@ extends that read-only observation to the actual signed ledger tails,
 unfinished trails, import receipts and protected empty intent boundary.
 Selected normal/race and privileged UID tests pass, and seven causal guards
 refuse their intended mutations. The subsequent
-[bounded tail-boundary implementation](VALIDATOR-HEALTH.md#canonical-unsealed-tail-boundaries)
+[qualified bounded tail-boundary implementation](evidence/validator-tail-boundary-qualification-20261001.md)
 derives every distinct boundary from signed tail replay and authenticates its
 canonical finalized hash, epoch, policy window and operator eligibility. Its
 new optional checkpoint scope preserves the earlier inventory's original
 authority and retains explicit refusals for nonempty intent graphs. Independent
-qualification of this extension is pending; historical provider bindings, live
+qualification of this extension passed; historical provider bindings, live
 workers and the remaining launch gates stay open. Neither validator is
 authorized to start.
 

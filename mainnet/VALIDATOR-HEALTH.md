@@ -136,6 +136,9 @@ temporary fixture. No live deployment or worker-health closure is claimed.
 
 ## Canonical unsealed tail boundaries
 
+The [independent qualification](evidence/validator-tail-boundary-qualification-20261001.md)
+covers the frozen implementation and test-only causal-control successor.
+
 `admit-committed` now derives a complete boundary census from the actual verified
 records strictly after each replayed committed cut. Up to 256 distinct EVM
 boundaries per operator are supported; repeated records share a boundary read

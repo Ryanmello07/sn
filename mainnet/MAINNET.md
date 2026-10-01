@@ -945,8 +945,10 @@ remain mandatory before public start.
 
 The [qualified bounded unsealed inventory](evidence/validator-unsealed-inventory-qualification-20261001.md)
 adds service-owned signed ledger tails, unfinished trails and the empty intent
-boundary to durable read-only custody. It does not yet authenticate nonempty
-intent graphs or every tail's historical chain boundary, so those launch gates
+boundary to durable read-only custody. The [qualified canonical tail-boundary
+extension](evidence/validator-tail-boundary-qualification-20261001.md) also
+authenticates every signed tail's bounded EVM epoch/policy/eligibility boundary.
+Nonempty intent graphs, historical provider bindings and the other launch gates
 remain open.
 
 ### Root validator on netuid 0
