@@ -112,3 +112,7 @@ Later reporting commits do not change the frozen binary source. The owner's
 separate acceptance of the exact official v470 artifact and documented
 reproducibility exception is for launch planning only; it grants no release,
 deployment, finality-checkpoint or signing authority to this bundle.
+
+Server `main` subsequently advanced to `64cde171` with internal-prober grant
+locking changes. This release remains pinned to `a3e2e668`; selecting the later
+server code for deployment requires its own exact-source build and qualification.
