@@ -268,6 +268,11 @@ Its stable installation identity preserves the original approvals, terminal
 journal and receipt across later observations. A separate current snapshot proves
 complete Safe storage and the existing executable/domain views without treating
 normal accounting or a later observed Safe nonce as new transaction authority.
+The [installation clock correction](evidence/installation-policy-clock-qualification-20261001.md)
+also requires the current epoch-zero policy block to equal the original proxy
+CREATE receipt's EVM inclusion block; a later observed policy clock cannot
+renew that original authority. Author and independent source tests pass within
+the receipt's stated graph and harness limits.
 The typed producer lets service admission share its selected finalized boundary;
 a JSON report cannot authorize a service. Readback makes no network write but
 can finish the original local terminal journal after interruption. Current-only

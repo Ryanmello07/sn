@@ -6,6 +6,18 @@ acceptance**. There is no R49 requirement or instruction to resume it. Mainnet
 hardening may proceed; launch readiness must be established on the selected
 production release. No mainnet deployment or spend is authorized by this tracker.
 
+**October 1 installation clock continuity (MG-08):** the
+[qualified contract readback correction](evidence/installation-policy-clock-qualification-20261001.md)
+now binds the current coordinator epoch-zero effective block to the original
+authenticated proxy CREATE receipt's EVM inclusion block. A later nonzero clock
+can no longer renew the initial policy after an implementation restoration.
+Author and independent normal/race tests exercise current getter and storage
+mutation, with causal omission controls; the independent broad race wrapper's
+resource timeout and the author's moved-checkout fence remain explicit in the
+receipt. The selected SN233/server942 release predates this correction.
+Complete current contract/Safe history, signer custody, approved production
+policy, live installation and a rebuilt release remain open.
+
 **October 1 historical native proof capture (MG-03/PF-03):** server `8a47dfe3`
 adds a [bounded producer and offline replay command](evidence/operator-historical-native-capture-20261001.md)
 for selected receipt parent/child raw storage witnesses. Exact native selection
