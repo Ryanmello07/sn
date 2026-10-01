@@ -301,11 +301,27 @@ precede publication. No write retry is introduced. The adjacent server
 subscription response/notification decimal-ID mismatch is corrected with a
 local real-codec handshake and legacy numeric unsubscribe compatibility.
 
-This qualifies the owned native transport paths, not every HTTP client.
-Separate EVM/go-ethereum transports, aggregate process/concurrency memory and
-host capacity need their own limits and qualification. The decoder's budgets
-remain requested-storage/work limits, not a custom-code sandbox. Selecting
-these owned-fork changes requires a fresh exact-source release beyond `689938d6`.
+**Direct miner and operator-CLI EVM HTTP admission implemented:**
+[source `0dea3f26`](evidence/evm-http-response-admission-20261001.md) routes all
+seven direct miner/fleet/claim/submit and `stctl` dial sites through the shared
+`evmrpc` owner. Each response and aggregate batch has a 32 MiB + 64 KiB + 2 byte
+ceiling on both wire and expanded gzip bytes. Complete framing, unique response
+IDs and physical close precede result publication. Non-success HTTP bodies are
+never read or retained, so status text cannot masquerade as an acknowledged
+transaction. Typed status retry rules remain with the existing read owner;
+signed POSTs cannot follow redirects, and this transport grants no replay.
+Original signed claim bytes survive refusal and remain eligible only for their
+existing authenticated reconciliation/replay path.
+
+Validator's 4 MiB EVM transport and mainnet's finite custom RPC profiles already
+had separate bounds. The server's operator receipt collector separately limits
+each response to 16 MiB, a collection to 128 MiB and 32,768 requests. This change
+does not modify or requalify those owners. WebSocket and IPC retain their existing
+transport semantics. Aggregate process/concurrency memory and host capacity
+remain open; no universal HTTP-client or whole-process bound is claimed. The
+decoder's budgets remain requested-storage/work limits, not a custom-code
+sandbox. Selecting this source requires a fresh exact-source release beyond
+`689938d6`; the live read-only compatibility probe remains unapproved observation.
 
 MG-01/MG-06 have a later [read-only public-entrypoint fallback](evidence/public-entrypoint-fallback-20261001.md): the archive route timed out, while the official mainnet entrypoint returned matching genesis/EVM/runtime identity at finalized block 9,187,206 and another absent `RecycleOrBurn[25]` value. The fallback is unapproved observation only; it neither retargets signed work nor provides archive history. Preserve the failed archive transcript and obtain separately approved route authority before any endpoint switch for execution.
 

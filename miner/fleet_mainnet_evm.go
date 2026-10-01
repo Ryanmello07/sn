@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/urfoundation/sn/crv4"
+	"github.com/urfoundation/sn/evmrpc"
 	"github.com/urfoundation/sn/protocol"
 )
 
@@ -105,7 +106,7 @@ func (self *fleetMainnetRuntimeAuthority) evmAdmission() func(context.Context, *
 func (self *fleetMainnetRuntimeAuthority) dialEvm(ctx context.Context, endpoints []string) (*ethclient.Client, string, error) {
 	var errs []error
 	for _, endpoint := range endpoints {
-		client, err := ethclient.DialContext(ctx, endpoint)
+		client, err := evmrpc.DialContext(ctx, endpoint)
 		if err != nil {
 			errs = append(errs, err)
 			continue

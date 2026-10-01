@@ -22,11 +22,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/urnetwork/connect"
 	"github.com/urnetwork/sdk"
 	"gopkg.in/yaml.v3"
 
+	"github.com/urfoundation/sn/evmrpc"
 	"github.com/urfoundation/sn/merkle"
 	"github.com/urfoundation/sn/miner/onchain"
 )
@@ -489,7 +489,7 @@ func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *s
 	copy(advertisedRoot[:], claim.PayoutRoot)
 	var failures []error
 	for _, endpoint := range cfg.RPC {
-		client, dialErr := ethclient.DialContext(ctx, endpoint)
+		client, dialErr := evmrpc.DialContext(ctx, endpoint)
 		if dialErr != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", endpoint, dialErr))
 			continue
@@ -554,7 +554,7 @@ func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *s
 func rebroadcastSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *types.Transaction, from common.Address) (bool, error) {
 	var failures []error
 	for _, endpoint := range cfg.RPC {
-		client, dialErr := ethclient.DialContext(ctx, endpoint)
+		client, dialErr := evmrpc.DialContext(ctx, endpoint)
 		if dialErr != nil {
 			failures = append(failures, dialErr)
 			continue
@@ -797,7 +797,7 @@ func finalizedClaimReceipt(ctx context.Context, cfg *ClaimDaemonConfig, txHash s
 	hash := common.BytesToHash(raw)
 	var failures []error
 	for _, endpoint := range cfg.RPC {
-		client, dialErr := ethclient.DialContext(ctx, endpoint)
+		client, dialErr := evmrpc.DialContext(ctx, endpoint)
 		if dialErr != nil {
 			failures = append(failures, dialErr)
 			continue
