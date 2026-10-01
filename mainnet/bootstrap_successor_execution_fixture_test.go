@@ -214,9 +214,12 @@ func (self *bootstrapSuccessorExecutionFixture) receipt() *bootstrapSuccessorExe
 	p := self.approval.Plan
 	block := crypto.Keccak256Hash([]byte("synthetic canonical successor block"))
 	log := &types.Log{Address: p.Review.Transaction.Safe, Topics: []common.Hash{self.oracle.oracleAbi.Events["ExecutionSuccess"].ID, p.Review.Transaction.Digest},
-		Data: make([]byte, 32), BlockNumber: 119, TxHash: p.TransactionHash, BlockHash: block}
+		Data: make([]byte, 32), BlockNumber: 119, TxHash: p.TransactionHash, BlockHash: block, Index: 1}
+	anchor := p.Review.Preparation.Approval.Plan.Proposal.Anchor
+	binding := &types.Log{Address: anchor.Coordinator, Topics: []common.Hash{crypto.Keccak256Hash([]byte("ValidatorEvidenceFixed(address)")), common.BytesToHash(anchor.Evidence[:])},
+		BlockNumber: 119, TxHash: p.TransactionHash, BlockHash: block}
 	return &bootstrapSuccessorExecutionReceipt{NativeNumber: 119, NativeHash: block,
-		Receipt:             safeExecutionReceipt{TransactionHash: p.TransactionHash, BlockHash: block, BlockNumber: 119, To: p.Review.Transaction.Safe, Status: 1, Logs: []*types.Log{log}},
+		Receipt:             safeExecutionReceipt{TransactionHash: p.TransactionHash, BlockHash: block, BlockNumber: 119, To: p.Review.Transaction.Safe, Status: 1, Logs: []*types.Log{binding, log}},
 		CoordinatorEvidence: p.Review.Preparation.Approval.Plan.Proposal.Anchor.Evidence,
 		EvidenceRuntimeHash: self.observation.EvidenceRuntimeHash, EvidenceGetterHash: self.observation.EvidenceGetterHash}
 }

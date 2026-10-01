@@ -108,13 +108,20 @@ func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, ar
 // Independent acceptance and caller opt-in are separate gates. Legacy acceptance
 // and a review proposal alone cannot select the public current-only route.
 func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, args []string, stdout, stderr io.Writer, provenance bootstrapSuccessorSafeProvenanceAuthenticator, route bootstrapSuccessorSafeCurrentRoute) (resultCode int) {
-	if len(args) == 0 || args[0] != "contract-successor-execution-preview" && args[0] != "contract-successor-execution-claim" && args[0] != "contract-successor-execution-resume" {
+	if len(args) == 0 || args[0] != "contract-successor-execution-preview" && args[0] != "contract-successor-execution-claim" && args[0] != "contract-successor-execution-resume" && args[0] != "contract-successor-execution-readback" {
 		fmt.Fprintln(stderr, "unknown successor execution custody command")
 		return 2
 	}
 	preview := args[0] == "contract-successor-execution-preview"
+	readback := args[0] == "contract-successor-execution-readback"
 	flags := flag.NewFlagSet("bootstrap-chain "+args[0], flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	if readback {
+		flags.Usage = func() {
+			fmt.Fprintln(stderr, "Installation readback performs network reads only; it may recover the exact retained terminal journal locally. It never submits or authorizes service start.")
+			flags.PrintDefaults()
+		}
+	}
 	configPath := flags.String("config", "", "original private v3 preparation config")
 	directory := flags.String("run-dir", "", "original signed physical custody directory")
 	accepted := flags.String("accept-plan-hash", "", "original accepted v3 preparation hash")
@@ -137,11 +144,11 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 		*requestPath == "" || *safeRequestPath == "" || *executionRequestPath == "" ||
 		preview && (*approvalPath != "" || *approvalHash != "" || *executionHash != "") ||
 		!preview && (*approvalPath == "" || !planSha256(*approvalHash) || !planSha256(*executionHash)) ||
-		(*online || *submit) && args[0] != "contract-successor-execution-resume" || *submit && !*online ||
+		(*online || *submit) && args[0] != "contract-successor-execution-resume" && !readback || *submit && !*online || readback && (!*online || *submit) ||
 		*online && (*canonicalPath == "" || !planSha256(*canonicalHash)) || !*online && (*canonicalPath != "" || *canonicalHash != "") ||
 		(*runtimePath != "" || *runtimeHash != "") && (!*online || *runtimePath == "" || !planSha256(*runtimeHash)) ||
 		(*currentPath != "" || *currentHash != "") && (!*online || *currentPath == "" || !planSha256(*currentHash)) ||
-		*acceptedCurrent != "" && (!*submit || !planSha256(*acceptedCurrent) || provenance != nil || route != 0) {
+		*acceptedCurrent != "" && (!*submit && !readback || !planSha256(*acceptedCurrent) || provenance != nil || route != 0) {
 		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume also require --approval, --approval-sha256 and --accept-execution-hash; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; optional runtime/current-policy revision files and their SHA-256 pins require --online; --submit requires --online and an installed capability; public current-only submission requires --accept-safe-current-policy with the exact retained v2 acceptance object hash")
 		return 2
 	}
@@ -268,7 +275,19 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 			err = errors.New("successor public current-policy opt-in differs from the exact retained acceptance")
 		}
 		if err == nil {
-			result, err = advanceBootstrapSuccessorExecution(ctx, owner, canonical, *submit)
+			if readback {
+				var installation bootstrapContractInstallation
+				installation, err = inspectBootstrapContractInstallation(ctx, owner, canonical)
+				if err == nil {
+					if err := json.NewEncoder(stdout).Encode(installation); err != nil {
+						fmt.Fprintln(stderr, "successor installation readback output:", err)
+						return 1
+					}
+					return 0
+				}
+			} else {
+				result, err = advanceBootstrapSuccessorExecution(ctx, owner, canonical, *submit)
+			}
 		}
 		if err != nil {
 			fmt.Fprintln(stderr, "successor canonical execution unresolved; retain signatures, authority and cumulative custody:", err)
