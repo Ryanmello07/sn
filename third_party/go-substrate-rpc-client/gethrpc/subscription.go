@@ -26,6 +26,7 @@ import (
 	"errors"
 	"math/rand"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -41,6 +42,35 @@ var globalGen = randomIDGenerator()
 
 // ID defines a pseudo random number that is used to identify RPC subscriptions.
 type ID uint32
+
+// Subscription replies and notifications use canonical decimal strings.
+// Preserve legacy numeric unsubscribe input while admitting that same string;
+// malformed, null and out-of-range input cannot change the selected owner.
+func (self *ID) UnmarshalJSON(raw []byte) error {
+	var value uint32
+	if len(raw) > 0 && raw[0] == '"' {
+		var text string
+		if err := json.Unmarshal(raw, &text); err != nil {
+			return err
+		}
+		parsed, err := strconv.ParseUint(text, 10, 32)
+		if err != nil || strconv.FormatUint(parsed, 10) != text {
+			return errors.New("invalid decimal subscription id")
+		}
+		value = uint32(parsed)
+	} else {
+		var number *uint32
+		if err := json.Unmarshal(raw, &number); err != nil {
+			return err
+		}
+		if number == nil {
+			return errors.New("null subscription id")
+		}
+		value = *number
+	}
+	*self = ID(value)
+	return nil
+}
 
 // NewID returns a new, random ID.
 func NewID() ID {
@@ -168,7 +198,7 @@ func (n *Notifier) activate() error {
 }
 
 func (n *Notifier) send(sub *Subscription, data json.RawMessage) error {
-	params, _ := json.Marshal(&subscriptionResult{ID: string(sub.ID), Result: data})
+	params, _ := json.Marshal(&subscriptionResult{ID: strconv.FormatUint(uint64(sub.ID), 10), Result: data})
 	ctx := context.Background()
 	return n.h.conn.Write(ctx, &jsonrpcMessage{
 		Version: vsn,
@@ -195,7 +225,7 @@ func (s *Subscription) Err() <-chan error {
 
 // MarshalJSON marshals a subscription as its ID.
 func (s *Subscription) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.ID)
+	return json.Marshal(strconv.FormatUint(uint64(s.ID), 10))
 }
 
 // ClientSubscription is a subscription established through the Client's Subscribe or
