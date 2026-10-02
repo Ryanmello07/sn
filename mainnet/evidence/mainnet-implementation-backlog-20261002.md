@@ -11,6 +11,17 @@ remains separate from later intake and the full backlog. Startup
 `c3707376` preserves healthy miners after a later transient admission failure.
 Callback quarantine and provider observation are separate successor work.
 
+Later integration: callback source `36648203` and private-fixture test-only
+source `28c970db` are now merged and pushed on main `ba55e0f6`.
+[Exact qualification](provider-callback-qualification-20261002.md) retains
+40 author / 12 independent selected callback roots per mode and seven fixture
+roots per mode under both umasks. Provider observation remains separate work.
+Current server `cebf154f` cannot compile against its declared published Connect
+`6443417d` because that version lacks `durablevolume`; the compatible published
+`e0d75562` successor preserves the peer and upstream callbacks, but requires
+actual consumer-graph qualification. Do not repeat the original component
+suites or infer release authority from these integration updates.
+
 The new immutable-member source `8d37e7a5` passed 16 core normal controls, then
 completed all 20 adjacent normal controls with 14 passes and six failures.
 Four positive fixture maps incorrectly include a legitimately mutable census
