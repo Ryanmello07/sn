@@ -51,7 +51,11 @@ and CLI selected tests all passed. This failure does not establish a weighting
 defect or a successful weighting check. The separate test-only correction
 `6a63892b` replaces the invalid non-NULL `"open"` fixture outcome with production's
 NULL active state and checks that terminal cancellation becomes immutable;
-independent behavior qualification is pending. Preserve the initial private
+its [targeted independent test passes normally and with race detection](evidence/payout-transition-fixture-qualification-20261002.json).
+That one-test scope reaches the actual SN usage reader and proves equal
+paid/free bytes, active/canceled exclusion and no new USDC plan for those
+post-cutoff rows. It does not relabel either failed 25-test batch as a pass or
+qualify the pending financial successor. Preserve the initial private
 PostgreSQL setup failure separately from these actual test results.
 
 ## Current preparation state — October 2
