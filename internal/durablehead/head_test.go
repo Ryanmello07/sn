@@ -7,7 +7,9 @@ package durablehead
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +23,63 @@ import (
 )
 
 var testSpec = Spec{Kind: "synthetic-history", Name: "history.json", MaximumBytes: 4096, LockName: "history.lock", AuxiliaryNames: []string{"history.lock"}}
+
+// Many production role files share one directory. Each already preprovisioned
+// lock owns its own xattr capacity; unrelated heads must not exhaust the parent.
+func TestSnapshotHeadManyOwnersShareDirectory(t *testing.T) {
+	self := newFixture(t)
+	for index := 0; index < 16; index++ {
+		name := fmt.Sprintf("role-%02d.json", index)
+		lockName := name + ".lock"
+		durablefixture.ProvisionSnapshot(t, self.root, "synthetic-many-roles", name, 4096, lockName, map[string][]byte{lockName: nil})
+		lock, err := os.OpenFile(filepath.Join(self.root, lockName), os.O_RDWR, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		owner, err := Open(self.volume.Context, self.directory, lock, Spec{Kind: "synthetic-many-roles", Name: name, MaximumBytes: 4096, LockName: lockName, AuxiliaryNames: []string{lockName}})
+		if err != nil {
+			lock.Close()
+			t.Fatal(err)
+		}
+		if err := owner.Publish([]byte("exact-role-custody"), nil); err != nil {
+			owner.Close()
+			lock.Close()
+			t.Fatalf("role%d: %v", index, err)
+		}
+		if err := errors.Join(owner.Close(), lock.Close()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := self.owner.Publish([]byte("original-owner-still-live"), nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Old declarations never enroll a different attribute host or schema silently.
+func TestSnapshotHeadLegacyDeclarationRequiresExplicitRebind(t *testing.T) {
+	self := newFixture(t)
+	checkpoint := self.owner.checkpoint
+	if err := self.close(); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint.Schema = "urnetwork-durable-snapshot-head-v1"
+	raw, err := json.Marshal(checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(self.root, testSpec.LockName)
+	if err := unix.Setxattr(path, Attribute(testSpec.Kind, testSpec.Name), raw, unix.XATTR_REPLACE); err != nil {
+		t.Fatal(err)
+	}
+	if err := self.open(false); !errors.Is(err, durablevolume.ErrIdentity) {
+		t.Fatal("legacy enrollment upgraded implicitly", err)
+	}
+	actual := make([]byte, 4096)
+	n, err := unix.Getxattr(path, Attribute(testSpec.Kind, testSpec.Name), actual)
+	if err != nil || !bytes.Equal(actual[:n], raw) {
+		t.Fatal("refusal rewrote provisioning authority", err)
+	}
+}
 
 type fixture struct {
 	root      string
@@ -115,13 +174,13 @@ func TestSnapshotHeadRequiresProvisionedAuthorityAndRetainedMember(t *testing.T)
 	if err := os.Rename(path+".retained", path); err != nil {
 		t.Fatal(err)
 	}
-	if err := unix.Removexattr(self.root, Attribute(testSpec.Kind, testSpec.Name)); err != nil {
+	if err := unix.Removexattr(filepath.Join(self.root, testSpec.LockName), Attribute(testSpec.Kind, testSpec.Name)); err != nil {
 		t.Fatal(err)
 	}
 	if err := self.open(false); !errors.Is(err, durablevolume.ErrIdentity) {
 		t.Fatal("absent authority enrolled", err)
 	}
-	if _, err := unix.Getxattr(self.root, Attribute(testSpec.Kind, testSpec.Name), nil); !errors.Is(err, unix.ENODATA) {
+	if _, err := unix.Getxattr(filepath.Join(self.root, testSpec.LockName), Attribute(testSpec.Kind, testSpec.Name), nil); !errors.Is(err, unix.ENODATA) {
 		t.Fatal("checkpoint recreated", err)
 	}
 }

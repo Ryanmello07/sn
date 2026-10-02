@@ -230,7 +230,7 @@ func (self *Owner) readCheckpoint() ([]byte, error) {
 		return nil, observation(err, false)
 	}
 	raw := make([]byte, 4096)
-	n, err := unix.Fgetxattr(int(self.directory.File().Fd()), Attribute(self.spec.Kind, self.spec.Name), raw)
+	n, err := unix.Fgetxattr(int(self.attributeFile().Fd()), Attribute(self.spec.Kind, self.spec.Name), raw)
 	if err != nil {
 		if errors.Is(err, unix.ENODATA) || errors.Is(err, unix.ERANGE) {
 			return nil, self.retain(identity(errors.New("snapshot checkpoint is absent or oversized"), err))
@@ -238,6 +238,15 @@ func (self *Owner) readCheckpoint() ([]byte, error) {
 		return nil, observation(err, false)
 	}
 	return raw[:n], self.admit(false)
+}
+
+// Independent file-lock owners do not share one directory's finite xattr area.
+// The auxiliary checkpoint binds the exact lock inode; no absent-file fallback.
+func (self *Owner) attributeFile() *os.File {
+	if self.spec.LockName != "" {
+		return self.lock
+	}
+	return self.directory.File()
 }
 
 func (self *Owner) validateCheckpoint() error {
@@ -567,14 +576,34 @@ func (self *Owner) writeCheckpoint(next Checkpoint, boundary string) error {
 	if err != nil || len(raw) > 4096 {
 		return errors.Join(errors.New("snapshot checkpoint exceeds capacity"), err)
 	}
-	if err := unix.Fsetxattr(int(self.directory.File().Fd()), Attribute(self.spec.Kind, self.spec.Name), raw, unix.XATTR_REPLACE); err != nil {
+	if err := unix.Fsetxattr(int(self.attributeFile().Fd()), Attribute(self.spec.Kind, self.spec.Name), raw, unix.XATTR_REPLACE); err != nil {
 		return errors.Join(ErrUncertain, observation(err, false))
+	}
+	if self.spec.LockName != "" {
+		// Our xattr update legitimately changes ctime, but cannot authorize a
+		// simultaneous change of marker bytes, permissions or named inode.
+		before := self.knownKVs[self.spec.LockName]
+		after, err := self.sameNamed(self.lock, self.spec.LockName, nil)
+		if err != nil {
+			return errors.Join(ErrUncertain, err)
+		}
+		compared := after
+		compared.Ctim = before.Ctim
+		if !sameStat(compared, before) {
+			return errors.Join(ErrUncertain, identity(errors.New("snapshot marker changed during checkpoint update")))
+		}
+		self.knownKVs[self.spec.LockName] = after
 	}
 	if err := self.boundary(boundary + "-written"); err != nil {
 		return errors.Join(ErrUncertain, err)
 	}
-	if err := self.directory.File().Sync(); err != nil {
+	if err := self.attributeFile().Sync(); err != nil {
 		return errors.Join(ErrUncertain, err)
+	}
+	if self.spec.LockName != "" {
+		if err := self.directory.File().Sync(); err != nil {
+			return errors.Join(ErrUncertain, err)
+		}
 	}
 	if err := self.boundary(boundary + "-synced"); err != nil {
 		return errors.Join(ErrUncertain, err)

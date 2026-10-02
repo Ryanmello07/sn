@@ -11,7 +11,7 @@ import (
 	"os"
 )
 
-const Schema = "urnetwork-durable-snapshot-head-v1"
+const Schema = "urnetwork-durable-snapshot-head-v2"
 
 // Actual publication may have completed. Join the old owner before attempting
 // one bounded reconciliation of the retained pending bytes.
@@ -28,7 +28,8 @@ type Spec struct {
 	AuxiliaryNames []string
 }
 
-// Each kind/name has a distinct, bounded external authority on its directory.
+// Each kind/name has a distinct bounded external authority. A file-lock owner
+// keeps it on that preprovisioned lock; a directory-flock owner uses its directory.
 func Attribute(kind, name string) string {
 	digest := sha256.Sum256([]byte(kind + "\x00" + name))
 	return "user.urnetwork.snapshot." + hex.EncodeToString(digest[:])

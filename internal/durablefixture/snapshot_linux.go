@@ -44,7 +44,7 @@ func ProvisionSnapshot(t testing.TB, path, kind, name string, maximum int64, loc
 		LockName       string      `json:"lock_name"`
 		Auxiliaries    []auxiliary `json:"auxiliaries"`
 		Committed      member      `json:"committed"`
-	}{Schema: "urnetwork-durable-snapshot-head-v1", Kind: kind, Name: name, MaximumBytes: maximum, DirectoryInode: stat.Ino, LockName: lockName}
+	}{Schema: "urnetwork-durable-snapshot-head-v2", Kind: kind, Name: name, MaximumBytes: maximum, DirectoryInode: stat.Ino, LockName: lockName}
 	names := make([]string, 0, len(auxiliaries))
 	for name := range auxiliaries {
 		names = append(names, name)
@@ -78,7 +78,22 @@ func ProvisionSnapshot(t testing.TB, path, kind, name string, maximum int64, loc
 	}
 	digest := sha256.Sum256([]byte(kind + "\x00" + name))
 	attribute := "user.urnetwork.snapshot." + hex.EncodeToString(digest[:])
-	if err := syscall.Setxattr(path, attribute, raw, 1); err != nil {
+	attributePath := path
+	if lockName != "" {
+		attributePath = filepath.Join(path, lockName)
+	}
+	if err := syscall.Setxattr(attributePath, attribute, raw, 1); err != nil {
+		t.Fatal(err)
+	}
+	attributeFile, err := os.Open(attributePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := attributeFile.Sync(); err != nil {
+		attributeFile.Close()
+		t.Fatal(err)
+	}
+	if err := attributeFile.Close(); err != nil {
 		t.Fatal(err)
 	}
 	directory, err := os.Open(path)
