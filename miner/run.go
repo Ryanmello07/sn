@@ -99,6 +99,7 @@ Usage:
         [--api_url=<api_url>]
         [-v...]
     provider claim-daemon --config=<path>
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
     provider fleet manifest --manifest=<path>
         [-v...]
@@ -106,20 +107,25 @@ Usage:
         [--burn_limit_rao=<n>] [--fee_limit_rao=<n>] [--apply | --dry-run]
         [--provisional-runtime-compatibility=<profile> --runtime-observation-dir=<path>]
         [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
     provider fleet publish --manifest=<path> --substrate=<ws_url>... --hotkey_seed_file=<path>
         [--provisional-runtime-compatibility=<profile> --runtime-observation-dir=<path>]
         [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
     provider fleet bind --manifest=<path> --client_id=<hex> --client_seed_file=<path> --hotkey_seed_file=<path> --valid_from_epoch=<e> --valid_to_epoch=<e> --rpc=<rpc_url>... --relayer_key_file=<path> [--dry-run]
         [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
     provider fleet status --manifest=<path> --client_id=<hex> --substrate=<ws_url>... --rpc=<rpc_url>...
         [--provisional-runtime-compatibility=<profile> --runtime-observation-dir=<path>]
         [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
     provider fleet revoke --manifest=<path> --client_id=<hex> --client_seed_file=<path> --effective_epoch=<e> --rpc=<rpc_url>... --relayer_key_file=<path> [--dry-run]
         [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
     provider proxy auth add [<key>] <proxy_user> <proxy_password> [-f]
     provider proxy auth remove [<key>] [--all]
@@ -130,6 +136,8 @@ Usage:
     provider choose_network --show
 
 Options:
+    --durable-volumes=<path>          Exact external storage declaration; fleet writes require the owner-local schema.
+    --durable-volumes-sha256=<hash>   Reviewed sha256: digest; claim daemons require the daemon-volume schema.
     -h --help                        Show this help and exit.
     --version                        Show version.
     -v...                            Enable verbose mode. -v implies verbose level 1,
@@ -239,7 +247,7 @@ func Run(args []string) {
 	} else if claim_, _ := opts.Bool("claim"); claim_ {
 		claim(opts)
 	} else if claimDaemon, _ := opts.Bool("claim-daemon"); claimDaemon {
-		if err := runClaimDaemon(fleetOpt(opts, "--config")); err != nil {
+		if err := runClaimDaemon(minerStorageContext(context.Background(), opts), fleetOpt(opts, "--config")); err != nil {
 			panic(err)
 		}
 	} else if fleet_, _ := opts.Bool("fleet"); fleet_ {

@@ -85,7 +85,9 @@ func TestMonitorOutputBlockedSinkPreservesRoleFilesAndShutdown(t *testing.T) {
 		}
 	}}
 	done := make(chan int, 1)
-	go func() { done <- runMainWithMonitorHooks(ctx, fixture.args(url), sink, sink, fixture.clock.now, hooks) }()
+	go func() {
+		done <- runMonitorStorageTestWithHooks(t, ctx, fixture.args(url), sink, sink, fixture.clock.now, hooks)
+	}()
 	seen := map[string]bool{}
 	for len(seen) < 2 {
 		seen[<-sampled] = true
@@ -140,7 +142,7 @@ func TestMonitorOutputEarlyAdmissionStillJoinsBlockedSink(t *testing.T) {
 		<-sink.entered
 		return nil
 	}}
-	if exit := runMainWithMonitorHooks(t.Context(), fixture.args("http://rpc.example"), sink, sink, fixture.clock.now, hooks); exit != 3 || !closed {
+	if exit := runMonitorStorageTestWithHooks(t, t.Context(), fixture.args("http://rpc.example"), sink, sink, fixture.clock.now, hooks); exit != 3 || !closed {
 		t.Fatal("early failure leaked admitted owners", exit, closed)
 	}
 	<-sink.entered

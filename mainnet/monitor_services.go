@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"github.com/urfoundation/sn/internal/durablehead"
 )
 
 // Hooks observe real reads, real durability, and owned waits. None can supply
@@ -18,6 +20,8 @@ type monitorServiceHooks struct {
 	read          func(string) monitorServiceReadHooks
 	syncDirectory func(role, kind string, file *os.File) error
 	afterClose    func(role, kind string, file *os.File) error
+	afterWorker   func(role string, exit int)
+	afterResult   func(context.Context, int)
 	afterEvent    func(context.Context, string)
 	wait          func(context.Context, string, time.Duration) bool
 }
@@ -42,6 +46,40 @@ type monitorValidatorWorker struct {
 	checkpoint *monitorServiceCheckpoint
 	metrics    *monitorMetricsStore
 	state      *monitorValidatorState
+	storage    monitorStorageRecovery
+}
+
+// A terminal role releases its own descriptors before reporting completion.
+// Parent cleanup remains idempotent and also covers partially admitted roles.
+func closeMonitorServiceOwners(role string, metrics *monitorMetricsStore, checkpoint *monitorCheckpointStore, hooks monitorServiceHooks) error {
+	var metricsFile, checkpointFile *os.File
+	if metrics != nil {
+		metricsFile = metrics.lock
+	}
+	if checkpoint != nil {
+		checkpointFile = checkpoint.lock
+	}
+	var result error
+	for _, owner := range []struct {
+		kind  string
+		file  *os.File
+		close func() error
+	}{
+		{kind: "metrics", file: metricsFile, close: metrics.close},
+		{kind: "checkpoint", file: checkpointFile, close: checkpoint.close},
+	} {
+		if owner.file == nil {
+			continue
+		}
+		err := owner.close()
+		if hooks.afterClose != nil {
+			err = errors.Join(err, hooks.afterClose(role, owner.kind, owner.file))
+		}
+		if err != nil {
+			result = errors.Join(result, fmt.Errorf("%s %s close: %w", role, owner.kind, err))
+		}
+	}
+	return result
 }
 
 // Cancellation interrupts waits. Physical regular-file operations are bounded
@@ -59,7 +97,7 @@ func waitMonitorService(ctx context.Context, role string, duration time.Duration
 }
 
 // Existing chain ownership stays separate. Ordinary output failures retry only
-// that domain; terminal configuration or integrity failures stop and join all.
+// that domain; runtime integrity failures stop only the affected domain.
 func runMonitorServices(ctx context.Context, client *rpcClient, expected identityExpectation, policy *monitorServicesPolicy, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -76,38 +114,12 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	var workers []*monitorValidatorWorker
 	var operators []*monitorOperatorWorker
 	defer func() {
-		for _, worker := range operators {
-			if err := errors.Join(worker.metrics.close(), worker.checkpoint.owner.close()); err != nil {
-				result = 3
-			}
-		}
-	}()
-	defer func() {
 		var cleanupErr error
+		for _, worker := range operators {
+			cleanupErr = errors.Join(cleanupErr, closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks))
+		}
 		for _, worker := range workers {
-			var metricsFile *os.File
-			if worker.metrics != nil {
-				metricsFile = worker.metrics.lock
-			}
-			for _, owner := range []struct {
-				kind  string
-				file  *os.File
-				close func() error
-			}{
-				{kind: "metrics", file: metricsFile, close: worker.metrics.close},
-				{kind: "checkpoint", file: worker.checkpoint.owner.lock, close: worker.checkpoint.owner.close},
-			} {
-				if owner.file == nil {
-					continue
-				}
-				err := owner.close()
-				if hooks.afterClose != nil {
-					err = errors.Join(err, hooks.afterClose(worker.policy.Role, owner.kind, owner.file))
-				}
-				if err != nil {
-					cleanupErr = errors.Join(cleanupErr, fmt.Errorf("%s %s close: %w", worker.policy.Role, owner.kind, err))
-				}
-			}
+			cleanupErr = errors.Join(cleanupErr, closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks))
 		}
 		if cleanupErr != nil {
 			fmt.Fprintln(diagnostic, "monitor service cleanup:", cleanupErr)
@@ -116,14 +128,14 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	}()
 	for _, validator := range policy.Validators {
 		checkpointFile, metricsFile := monitorValidatorPaths(checkpointPath, metricsPath, validator.Role)
-		checkpoint, err := openMonitorServiceCheckpoint(checkpointFile, expected, validator)
+		checkpoint, err := openMonitorServiceCheckpoint(checkpointFile, expected, validator, ctx)
 		if err != nil {
 			fmt.Fprintln(diagnostic, "monitor service checkpoint admission:", err)
 			return 3
 		}
 		worker := &monitorValidatorWorker{policy: validator, checkpoint: checkpoint}
 		workers = append(workers, worker)
-		metrics, err := openMonitorMetrics(metricsFile)
+		metrics, err := openMonitorMetrics(metricsFile, ctx)
 		if err != nil {
 			fmt.Fprintln(diagnostic, "monitor service metrics admission:", err)
 			return 3
@@ -169,21 +181,43 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	}()
 	for index, worker := range workers {
 		writer := output.events.Writer(fmt.Sprintf("validator%d", index))
-		go func() { results <- worker.run(ctx, interval, writer, diagnostic, now, hooks) }()
+		go func() {
+			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
+			if err := closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks); err != nil {
+				fmt.Fprintln(diagnostic, "monitor service cleanup:", err)
+				exit = 3
+			}
+			if hooks.afterWorker != nil {
+				hooks.afterWorker(worker.policy.Role, exit)
+			}
+			results <- exit
+		}()
 	}
 
 	for index, worker := range operators {
 		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+index))
-		go func() { results <- worker.run(ctx, interval, stallAfter, writer, diagnostic, now, hooks) }()
+		go func() {
+			exit := worker.run(ctx, interval, stallAfter, writer, diagnostic, now, hooks)
+			if err := closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks); err != nil {
+				fmt.Fprintln(diagnostic, "monitor operator cleanup:", err)
+				exit = 3
+			}
+			if hooks.afterWorker != nil {
+				hooks.afterWorker(worker.policy.Role, exit)
+			}
+			results <- exit
+		}()
 	}
 	for remaining := len(workers) + len(operators) + 1; remaining > 0; remaining-- {
 		exit := <-results
 		if exit != 0 {
 			result = max(result, exit)
 		}
-		// A domain only returns for cancellation or a terminal fault. Ordinary
-		// unavailable reads/publications stay inside their own bounded retry.
-		cancel()
+		if hooks.afterResult != nil {
+			hooks.afterResult(ctx, exit)
+		}
+		// A failed domain stays visibly stopped while unrelated chain/service
+		// owners continue. Parent cancellation still joins every live worker.
 	}
 	return result
 }
@@ -250,10 +284,44 @@ func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Durat
 			event.Publication, event.Severity = "ownership-error", "critical"
 		}
 		if err := encoder.Encode(event); err != nil {
+			if ctx.Err() != nil {
+				return 0
+			}
 			return 3
 		}
 		if terminal {
 			return 3
+		}
+		if errors.Is(checkpointErr, durablehead.ErrUncertain) {
+			prior := self.checkpoint
+			err := self.storage.resume(ctx, self.policy.Role, func() error {
+				file := prior.owner.lock
+				err := prior.owner.close()
+				if hooks.afterClose != nil {
+					err = errors.Join(err, hooks.afterClose(self.policy.Role, "checkpoint", file))
+				}
+				return err
+			}, func() error {
+				next, err := openMonitorServiceCheckpoint(prior.owner.path, prior.owner.expected, self.policy, ctx)
+				if err != nil {
+					return err
+				}
+				state, err := next.load(ctx)
+				if err != nil {
+					return errors.Join(err, next.owner.close())
+				}
+				next.owner.syncDirectory = prior.owner.syncDirectory
+				self.checkpoint, self.state = next, state
+				return nil
+			}, hooks)
+			if err != nil {
+				if ctx.Err() != nil {
+					return 0
+				}
+				fmt.Fprintln(stderr, "monitor service storage continuation:", err)
+				return 3
+			}
+			continue
 		}
 		delay := interval
 		if combined != nil {

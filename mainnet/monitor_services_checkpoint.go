@@ -36,8 +36,8 @@ type monitorServiceCheckpoint struct {
 }
 
 // Reuse the existing owner acquisition; source decoding belongs to this schema.
-func openMonitorServiceCheckpoint(path string, expected identityExpectation, policy monitorValidatorPolicy) (*monitorServiceCheckpoint, error) {
-	owner, err := openMonitorCheckpoint(path, expected)
+func openMonitorServiceCheckpoint(path string, expected identityExpectation, policy monitorValidatorPolicy, contexts ...context.Context) (*monitorServiceCheckpoint, error) {
+	owner, err := openMonitorCheckpoint(path, expected, contexts...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,10 +71,12 @@ func (self *monitorServiceCheckpoint) load(ctx context.Context) (*monitorValidat
 	if err := self.validateOwner(); err != nil {
 		return nil, err
 	}
-	raw, err := readMonitorServiceFile(ctx, self.owner.path, maxMonitorServiceCheckpointBytes, true, monitorServiceReadHooks{})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	raw, err := self.owner.directory.read(filepath.Base(self.owner.path), maxMonitorServiceCheckpointBytes, true)
 	if err != nil {
-		var readErr *monitorServiceReadError
-		if errors.As(err, &readErr) && readErr.code == "missing" {
+		if monitorCheckpointAbsent(err) {
 			return &monitorValidatorState{ReadStatus: "starting"}, nil
 		}
 		return nil, err
@@ -148,6 +150,15 @@ func validateMonitorValidatorState(state monitorValidatorState) error {
 
 // Check the same physical parent and lock before every read or write.
 func (self *monitorServiceCheckpoint) validateOwner() error {
+	if self == nil || self.owner == nil {
+		return errors.New("service checkpoint owner is absent")
+	}
+	if err := self.owner.requireOwner(); err != nil {
+		return err
+	}
+	if self.owner.directory.head != nil {
+		return nil
+	}
 	if self == nil || self.owner == nil || self.owner.lock == nil {
 		return &monitorOutputOwnershipError{reason: "service checkpoint owner is closed"}
 	}
@@ -159,11 +170,14 @@ func (self *monitorServiceCheckpoint) validateOwner() error {
 		return &monitorOutputOwnershipError{reason: "service checkpoint directory changed"}
 	}
 	owned, ownedErr := self.owner.lock.Stat()
-	named, nameErr := os.Lstat(self.owner.path + ".lock")
-	if ownedErr != nil || nameErr != nil || !named.Mode().IsRegular() || named.Mode().Perm()&0077 != 0 || !os.SameFile(owned, named) {
+	named, nameErr := self.owner.directory.stat(filepath.Base(self.owner.path) + ".lock")
+	if err := errors.Join(ownedErr, nameErr); err != nil {
+		return monitorNamedObservation(err)
+	}
+	if !named.Mode().IsRegular() || named.Mode().Perm()&0077 != 0 || !os.SameFile(owned, named) {
 		return &monitorOutputOwnershipError{reason: "service checkpoint lock changed"}
 	}
-	info, err = os.Lstat(self.owner.path)
+	info, err = self.owner.directory.stat(filepath.Base(self.owner.path))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -208,5 +222,5 @@ func (self *monitorServiceCheckpoint) save(state *monitorValidatorState) error {
 	if err != nil || len(raw)+1 > maxMonitorServiceCheckpointBytes {
 		return errors.New("service checkpoint exceeds its bound")
 	}
-	return publishMonitorFile(self.owner.path, append(raw, '\n'), 0600, self.owner.syncDirectory)
+	return errors.Join(self.owner.directory.publish(filepath.Base(self.owner.path), append(raw, '\n'), 0600, self.owner.syncDirectory), self.validateOwner())
 }

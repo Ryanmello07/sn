@@ -27,10 +27,10 @@ func fleetRecoveryReceiptTestPending(t *testing.T, update bool) (*fleetMainnetTe
 	}
 	fixture.stateLock.Unlock()
 	fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, false)}
-	if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("uncertain original send reported success")
 	}
-	record := fleetRecoveryTestRecord(t)
+	record := fleetRecoveryTestRecord(t, fixture)
 	if record.Stage != "may_have_sent" || record.ScanNumber != 0 {
 		t.Fatal("uncertain original bytes were not retained before receipt recovery")
 	}
@@ -41,7 +41,7 @@ func fleetRecoveryReceiptTestPending(t *testing.T, update bool) (*fleetMainnetTe
 // This only shortens the scan range; all RPC/body/signature/fsync work is real.
 func fleetRecoveryReceiptTestRange(t *testing.T, fixture *fleetMainnetTestFixture, maxBlocks uint64) error {
 	t.Helper()
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,8 +82,8 @@ func TestFleetRecoveryNativeTruncatedBodyNeverAdvancesCheckpoint(t *testing.T) {
 	fixture.nativeBodyOverrides[102] = map[string]any{"block": map[string]any{"header": fixture.nativeHeaderWireWithLock(102), "extrinsics": []string{}}}
 	fixture.stateLock.Unlock()
 	for attempt := 0; attempt < 2; attempt++ {
-		err := fleetPublish(fixture.opts, fixture.manifest)
-		retained := fleetRecoveryTestRecord(t)
+		err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest)
+		retained := fleetRecoveryTestRecord(t, fixture)
 		if retained.ScanNumber != original.ScanNumber || retained.ScanHash != original.ScanHash || retained.Stage != original.Stage || retained.TxHash != original.TxHash || !bytes.Equal(retained.Raw, original.Raw) {
 			t.Fatal("truncated body advanced or replaced the original durable attempt")
 		}
@@ -98,10 +98,10 @@ func TestFleetRecoveryNativeTruncatedBodyNeverAdvancesCheckpoint(t *testing.T) {
 	if reads101 != 2 || reads102 != 2 {
 		t.Fatalf("restart skipped unproved body evidence: %d / %d", reads101, reads102)
 	}
-	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	retained := fleetRecoveryTestRecord(t)
+	retained := fleetRecoveryTestRecord(t, fixture)
 	if retained.Stage != "finalized" || retained.NativeReceipt == nil || retained.NativeReceipt.BlockNumber != 102 || !bytes.Equal(retained.Raw, original.Raw) || fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("system_accountNextIndex") != 1 {
 		t.Fatal("restored complete body did not recover the original inclusion")
 	}
@@ -134,10 +134,10 @@ func TestFleetRecoveryNativeIncompleteBodyNeverAdvancesPastEvidence(t *testing.T
 			wantScan = 101
 		}
 		for attempt := 0; attempt < 2; attempt++ {
-			if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+			if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 				t.Fatalf("%s incomplete evidence became a receipt", fault)
 			}
-			retained := fleetRecoveryTestRecord(t)
+			retained := fleetRecoveryTestRecord(t, fixture)
 			if retained.ScanNumber != wantScan || retained.Stage != original.Stage || !bytes.Equal(retained.Raw, original.Raw) {
 				t.Fatalf("%s changed the complete prefix boundary: got %d, want %d", fault, retained.ScanNumber, wantScan)
 			}
@@ -155,17 +155,17 @@ func TestFleetRecoveryNativeRuntimeUpdateDigestPreservesProgress(t *testing.T) {
 	if err := fleetRecoveryReceiptTestRange(t, fixture, 1); err == nil || !strings.Contains(err.Error(), "checkpointed through 101") {
 		t.Fatalf("runtime-update header rejected canonical prefix: %v", err)
 	}
-	checkpoint := fleetRecoveryTestRecord(t)
+	checkpoint := fleetRecoveryTestRecord(t, fixture)
 	if checkpoint.ScanProof != fleetRecoveryNativeScanProof || checkpoint.ScanNumber != 101 || checkpoint.ScanHash != fixture.nativeBlocks[101] {
 		t.Fatal("complete update-block absence did not acquire its semantic proof")
 	}
-	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
 	fixture.stateLock.Lock()
 	reads101 := fixture.nativeBodyReads[101]
 	fixture.stateLock.Unlock()
-	retained := fleetRecoveryTestRecord(t)
+	retained := fleetRecoveryTestRecord(t, fixture)
 	if reads101 != 1 || retained.Stage != "finalized" || !bytes.Equal(retained.Raw, original.Raw) || fixture.count("author_submitAndWatchExtrinsic") != 1 {
 		t.Fatal("qualified prefix was reread, lost or used to replace signed bytes")
 	}
@@ -179,7 +179,7 @@ func TestFleetRecoveryNativeLegacyScanProofMigratesOnce(t *testing.T) {
 	fixture.finalizedNumber = 104
 	fixture.stateLock.Unlock()
 	signer := fleetRecoverySigner{native: fleetRecoveryReceiptTestKey(t, fixture)}
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestFleetRecoveryNativeLegacyScanProofMigratesOnce(t *testing.T) {
 	if err := fleetRecoveryReceiptTestRange(t, fixture, 1); err == nil || !strings.Contains(err.Error(), "checkpointed through 101") {
 		t.Fatalf("legacy absence was reused instead of re-authenticated: %v", err)
 	}
-	checkpoint := fleetRecoveryTestRecord(t)
+	checkpoint := fleetRecoveryTestRecord(t, fixture)
 	if checkpoint.ScanNumber != 101 || checkpoint.ScanProof != fleetRecoveryNativeScanProof || !bytes.Equal(checkpoint.Raw, original.Raw) {
 		t.Fatal("legacy proof migration did not retain exact original bytes")
 	}
@@ -219,10 +219,10 @@ func TestFleetRecoveryNativeLegacyScanProofMigratesOnce(t *testing.T) {
 			t.Fatalf("%s changed qualified original scan proof", fault)
 		}
 	}
-	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	retained := fleetRecoveryTestRecord(t)
+	retained := fleetRecoveryTestRecord(t, fixture)
 	if retained.Stage != "finalized" || retained.NativeReceipt == nil || retained.NativeReceipt.BlockNumber != 102 || fixture.count("author_submitAndWatchExtrinsic") != 1 || !bytes.Equal(retained.Raw, original.Raw) {
 		t.Fatal("migrated prefix stranded or replaced the original receipt")
 	}

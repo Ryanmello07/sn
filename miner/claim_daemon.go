@@ -22,7 +22,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/urfoundation/sn/internal/durablehead"
+	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect"
+	"github.com/urnetwork/connect/durablevolume"
 	"github.com/urnetwork/sdk"
 	"gopkg.in/yaml.v3"
 
@@ -133,13 +137,25 @@ type ClaimQueue struct {
 type claimQueueStore struct {
 	path      string
 	directory *os.File
+	guard     *durablepath.Directory
+	head      *durablehead.Owner
+	ctx       context.Context
+	afterSync func(*os.File) error // observes real file and directory syncs
+	uncertain bool
 	savedHash [sha256.Size]byte
 	saved     bool
 }
 
 // Resolve aliases once, then retain a directory descriptor and its process
 // lock. The queue itself is replaced atomically and cannot serve as the lock.
-func newClaimQueueStore(stateDir string) (*claimQueueStore, error) {
+func newClaimQueueStore(stateDir string, contexts ...context.Context) (*claimQueueStore, error) {
+	if len(contexts) != 1 {
+		return nil, errors.New("claim queue requires one explicit durable-volume context")
+	}
+	ctx := contexts[0]
+	if err := durablepath.Require(ctx); err != nil {
+		return nil, err
+	}
 	if err := claimQueuePlatformSupported(); err != nil {
 		return nil, err
 	}
@@ -147,16 +163,27 @@ func newClaimQueueStore(stateDir string) (*claimQueueStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(physical, 0o700); err != nil {
-		return nil, err
-	}
-	directory, err := claimQueueOpenDirectory(physical)
+	guard, err := durablepath.Open(ctx, physical, durablevolume.ReadWrite, false)
 	if err != nil {
 		return nil, err
 	}
-	store := &claimQueueStore{path: filepath.Join(physical, "claim-queue.json"), directory: directory}
+	store := &claimQueueStore{path: filepath.Join(physical, "claim-queue.json"), directory: guard.File(), guard: guard, ctx: ctx}
+	fail := func(err error) (*claimQueueStore, error) { return nil, errors.Join(err, store.close()) }
+	if err := claimQueueLockDirectory(store.directory); err != nil {
+		return fail(err)
+	}
+	spec := durablehead.Spec{Kind: "provider-claim-queue", Name: "claim-queue.json", MaximumBytes: maximumClaimQueueBytes}
+	store.head, err = durablehead.Open(ctx, guard, store.directory, spec)
+	// The opener has no live worker. Keep its original lock during one exact
+	// pending-byte reconciliation; missing/partial history is never rebuilt.
+	if errors.Is(err, durablehead.ErrUncertain) {
+		store.head, err = durablehead.Reconcile(ctx, guard, store.directory, spec)
+	}
+	if err != nil {
+		return fail(err)
+	}
 	if err := store.requireOwner(); err != nil {
-		return nil, errors.Join(err, store.close())
+		return fail(err)
 	}
 	return store, nil
 }
@@ -167,26 +194,41 @@ func (self *claimQueueStore) close() error {
 	if self == nil || self.directory == nil {
 		return nil
 	}
-	directory := self.directory
-	self.directory, self.saved = nil, false
-	return directory.Close()
+	guard := self.guard
+	self.directory, self.guard, self.saved = nil, nil, false
+	err := self.head.Close()
+	self.head = nil
+	return errors.Join(err, guard.Close())
 }
 
-// Directory replacement cannot redirect a retained owner into another queue.
-// All actual I/O also uses this descriptor so a later path race cannot redirect it.
+// Reads retain identity without imposing unused write reserve. Missing named
+// bytes remain custody loss even when every other file under the root is intact.
 func (self *claimQueueStore) requireOwner() error {
-	if self == nil || self.directory == nil {
-		return errors.New("claim queue store has no directory owner")
+	if self == nil || self.head == nil || self.directory == nil {
+		return errors.New("claim queue store has no durable owner")
 	}
-	opened, openErr := self.directory.Stat()
-	named, nameErr := os.Lstat(filepath.Dir(self.path))
-	if err := errors.Join(openErr, nameErr, claimQueuePrivateDirectory(self.directory)); err != nil {
-		return fmt.Errorf("claim queue directory ownership: %w", err)
+	if self.uncertain {
+		return durablehead.ErrUncertain
 	}
-	if !named.IsDir() || !os.SameFile(opened, named) {
-		return errors.New("claim queue directory was replaced after ownership admission")
+	return self.head.Check()
+}
+
+// The current request, owned checkpoint and write reserve separately gate
+// signing/publication. Cached byte equality never bypasses this boundary.
+func (self *claimQueueStore) requireWrite(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("claim queue request context is absent")
 	}
-	return nil
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if self == nil || self.head == nil || self.directory == nil {
+		return errors.New("claim queue store has no durable owner")
+	}
+	if self.uncertain {
+		return durablehead.ErrUncertain
+	}
+	return errors.Join(self.head.CheckWrite(), ctx.Err())
 }
 
 // Startup reads only from the held physical namespace, before any network
@@ -195,11 +237,11 @@ func (self *claimQueueStore) load() (*ClaimQueue, error) {
 	if err := self.requireOwner(); err != nil {
 		return nil, err
 	}
-	b, _, err := claimQueueReadFile(self.directory, filepath.Base(self.path), claimQueueReadHooks{})
-	if ownerErr := self.requireOwner(); ownerErr != nil {
-		return nil, errors.Join(err, ownerErr)
+	b, present, err := self.head.Read()
+	if err != nil {
+		return nil, err
 	}
-	if errors.Is(err, os.ErrNotExist) {
+	if !present {
 		return &ClaimQueue{Schema: "urnetwork-provider-claim-queue-v1", LastDiscovered: -1, Entries: map[string]*ClaimQueueEntry{}}, nil
 	}
 	if err != nil {
@@ -232,10 +274,13 @@ func (self *claimQueueStore) load() (*ClaimQueue, error) {
 	return &q, nil
 }
 
-// Compare the current durable bytes, not a process-local cache: unchanged
-// discovery polls need no rename/fsync, and removed files must be recreated.
+// Compare acknowledged bytes only after physical head admission. Lost or
+// replaced files cannot be recreated from the daemon's process-local cache.
 func (self *claimQueueStore) save(q *ClaimQueue) error {
-	if err := self.requireOwner(); err != nil {
+	if self == nil {
+		return errors.New("claim queue store is absent")
+	}
+	if err := self.requireWrite(self.ctx); err != nil {
 		return err
 	}
 	b, err := json.MarshalIndent(q, "", "  ")
@@ -248,23 +293,22 @@ func (self *claimQueueStore) save(q *ClaimQueue) error {
 	}
 	hash := sha256.Sum256(b)
 	if self.saved && self.savedHash == hash {
-		prior, mode, readErr := claimQueueReadFile(self.directory, filepath.Base(self.path), claimQueueReadHooks{})
-		if readErr == nil && mode.Perm() == 0o600 && bytes.Equal(prior, b) {
-			return self.requireOwner()
+		prior, present, err := self.head.Read()
+		if err != nil {
+			return err
 		}
-		self.saved = false
-		if readErr != nil && !errors.Is(readErr, os.ErrNotExist) && !errors.Is(readErr, errClaimQueueUnsafeFile) {
-			return readErr
+		if present && bytes.Equal(prior, b) {
+			return self.requireWrite(self.ctx)
 		}
 	}
-	// A failed rename or directory sync must not make the next identical
-	// attempt skip the durability boundary merely because bytes are visible.
 	self.saved = false
-	if err := claimQueuePublish(self.directory, filepath.Base(self.path), b); err != nil {
+	if err := self.head.Publish(b, self.afterSync); err != nil {
+		self.uncertain = errors.Is(err, durablehead.ErrUncertain)
 		return err
 	}
-	if err := self.requireOwner(); err != nil {
-		return err
+	if err := self.requireWrite(self.ctx); err != nil {
+		self.uncertain = true
+		return errors.Join(durablehead.ErrUncertain, err)
 	}
 	self.savedHash, self.saved = hash, true
 	return nil
@@ -551,7 +595,10 @@ func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *s
 
 // The caller already authenticated the exact signed transaction. Replaying
 // those bytes needs finalized chain authority, not a retained historical API.
-func rebroadcastSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *types.Transaction, from common.Address) (bool, error) {
+func rebroadcastSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *types.Transaction, from common.Address, store *claimQueueStore) (bool, error) {
+	if err := store.requireSigned(ctx, tx); err != nil {
+		return false, err
+	}
 	var failures []error
 	for _, endpoint := range cfg.RPC {
 		client, dialErr := evmrpc.DialContext(ctx, endpoint)
@@ -600,6 +647,10 @@ func rebroadcastSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *typ
 			failures = append(failures, err)
 			continue
 		}
+		if err := store.requireSigned(ctx, tx); err != nil {
+			client.Close()
+			return false, err
+		}
 		sendErr := client.SendTransaction(ctx, tx)
 		client.Close()
 		if sendErr == nil || knownClaimTransaction(sendErr) {
@@ -646,12 +697,15 @@ type claimAPI interface {
 
 // The daemon calls reconciliation and submission inside one shared admission.
 // Its finite context also bounds every multi-call finalized observation.
-func reconcileClaimEntry(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI, entry *ClaimQueueEntry) (string, error) {
+func reconcileClaimEntry(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI, entry *ClaimQueueEntry, store *claimQueueStore) (string, error) {
+	if err := store.requireOwner(); err != nil {
+		return "", err
+	}
 	if entry == nil || cfg == nil {
 		return "", errors.New("claim reconciliation is unavailable")
 	}
 	if entry.TxHash != "" || entry.RawTxHex != "" {
-		return reconcileSignedClaim(ctx, cfg, entry)
+		return reconcileSignedClaim(ctx, cfg, entry, store)
 	}
 	if api == nil {
 		return "", errors.New("claim API is unavailable")
@@ -687,6 +741,9 @@ func reconcileClaimEntry(ctx context.Context, cfg *ClaimDaemonConfig, api claimA
 // Admission already covers reconciliation through finality. Never wait for
 // another nonce lock after recording the durable submitting state.
 func submitClaimDirect(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI, entry *ClaimQueueEntry, store *claimQueueStore, queue *ClaimQueue, admission *claimAdmission) error {
+	if err := store.requireWrite(ctx); err != nil {
+		return err
+	}
 	claim, err := api.SnPoolClaimSyncWithContext(ctx, &sdk.SnPoolClaimArgs{Epoch: entry.Epoch})
 	if err != nil {
 		return err
@@ -707,6 +764,9 @@ func submitClaimDirect(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI
 	if claim.ChainId < 0 {
 		return fmt.Errorf("negative claim chain id %d", claim.ChainId)
 	}
+	if err := store.requireWrite(ctx); err != nil {
+		return err
+	}
 	key, err := onchain.LoadKeyFile(cfg.KeyFile)
 	if err != nil {
 		return err
@@ -717,6 +777,12 @@ func submitClaimDirect(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI
 	receipt, err := onchain.SubmitWithHooks(ctx, onchain.SubmitParams{
 		Contract: vault, Rpcs: cfg.RPC, Key: key, Calldata: calldata, NonceFloor: admission.nonceMinimum(),
 		ChainID: new(big.Int).SetUint64(uint64(claim.ChainId)),
+		RuntimeAdmission: func(request context.Context, _ *ethclient.Client, number *big.Int) error {
+			if number != nil {
+				return errors.Join(request.Err(), store.requireOwner())
+			}
+			return store.requireWrite(request)
+		},
 	}, onchain.SubmitHooks{
 		Prepared: func(hash common.Hash, raw []byte) error {
 			priorHash, priorRaw := entry.TxHash, entry.RawTxHex
@@ -724,10 +790,26 @@ func submitClaimDirect(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI
 			entry.RawTxHex = "0x" + hex.EncodeToString(raw)
 			entry.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 			if saveErr := store.save(queue); saveErr != nil {
+				// An uncertain checkpoint may already contain these exact
+				// signed bytes. Preserve their nonce floor before this worker
+				// releases the shared relayer, even before joined reconciliation.
+				if errors.Is(saveErr, durablehead.ErrUncertain) {
+					saveErr = errors.Join(saveErr, admission.rememberSigned(cfg, entry))
+				}
 				entry.TxHash, entry.RawTxHex = priorHash, priorRaw
 				return saveErr
 			}
 			return admission.rememberSigned(cfg, entry)
+		},
+		BeforeBroadcast: func(hash common.Hash) error {
+			tx, _, _, err := authenticateSignedClaim(cfg, entry)
+			if err != nil {
+				return err
+			}
+			if tx.Hash() != hash {
+				return errors.New("claim handoff differs from retained prepared bytes")
+			}
+			return store.requireSigned(ctx, tx)
 		},
 		Broadcast: func(hash common.Hash) error {
 			if !strings.EqualFold(entry.TxHash, hash.Hex()) {
@@ -879,16 +961,21 @@ func runClaimDaemonWithAdmission(ctx context.Context, configPath string, admissi
 	if ctx == nil || admission == nil {
 		return errors.New("claim daemon context or admission is unavailable")
 	}
+	if err := durablepath.Require(ctx); err != nil {
+		return err
+	}
 	cfg, err := LoadClaimDaemonConfig(configPath)
 	if err != nil {
 		return err
 	}
-	store, err := newClaimQueueStore(cfg.StateDir)
+	store, err := newClaimQueueStore(cfg.StateDir, ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { runErr = errors.Join(runErr, store.close()) }()
-	return runClaimDaemonWithStore(ctx, cfg, store, admission, initialDelay, onReady)
+	return runClaimOwner(ctx, cfg, store, claimOwnerHooks{run: func(owner *claimQueueStore) error {
+		return runClaimDaemonWithStore(ctx, cfg, owner, admission, initialDelay, onReady)
+	}})
 }
 
 // The caller retains the queue owner until this function has joined all local
@@ -944,7 +1031,7 @@ func runClaimDaemonWithStore(ctx context.Context, cfg *ClaimDaemonConfig, store 
 			return beginClaimOperation(ctx, admission, cfg.StateDir, candidates)
 		},
 		reconcile: func(ctx context.Context, entry *ClaimQueueEntry) (string, error) {
-			return reconcileClaimEntry(ctx, cfg, api, entry)
+			return reconcileClaimEntry(ctx, cfg, api, entry, store)
 		},
 		submit: func(ctx context.Context, entry *ClaimQueueEntry) error {
 			return submitClaimDirect(ctx, cfg, api, entry, store, queue, admission)
@@ -958,8 +1045,42 @@ func RunClaimDaemon(ctx context.Context, configPath string) error {
 	return runClaimDaemonWithAdmission(ctx, configPath, &claimAdmission{}, 0, nil)
 }
 
-func runClaimDaemon(configPath string) error {
-	event := connect.NewEventWithContext(context.Background())
+func runClaimDaemon(ctx context.Context, configPath string) error {
+	event := connect.NewEventWithContext(ctx)
 	event.SetOnSignals(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	return RunClaimDaemon(event.Ctx(), configPath)
+}
+
+// A physical writer alone cannot authorize unrelated transaction bytes. The
+// exact original signed RLP and hash must still exist in the acknowledged queue.
+func (self *claimQueueStore) requireSigned(ctx context.Context, tx *types.Transaction) error {
+	if err := self.requireWrite(ctx); err != nil {
+		return err
+	}
+	if tx == nil {
+		return errors.New("claim signed transaction is absent")
+	}
+	raw, err := tx.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	queue, err := self.load()
+	if err != nil {
+		return err
+	}
+	matched := false
+	for _, entry := range queue.Entries {
+		if entry == nil || !strings.EqualFold(entry.TxHash, tx.Hash().Hex()) {
+			continue
+		}
+		retained, err := hex.DecodeString(strings.TrimPrefix(entry.RawTxHex, "0x"))
+		if err == nil && bytes.Equal(retained, raw) {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return errors.New("claim exact signed transaction is absent from acknowledged custody")
+	}
+	return self.requireWrite(ctx)
 }

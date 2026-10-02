@@ -10,9 +10,11 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/urfoundation/sn/internal/durablehead"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urnetwork/server/stmonitor"
 )
@@ -283,6 +285,7 @@ func (self *monitorOperatorHistory) observe(policy monitorOperatorPolicy, domain
 type monitorOperatorWorker struct {
 	policy     monitorOperatorPolicy
 	checkpoint *monitorServiceCheckpoint
+	storage    monitorStorageRecovery
 	metrics    *monitorMetricsStore
 	state      *monitorOperatorState
 }
@@ -299,10 +302,12 @@ func (self *monitorOperatorWorker) load(ctx context.Context) error {
 	if err := self.checkpoint.validateOwner(); err != nil {
 		return err
 	}
-	raw, err := readMonitorServiceFile(ctx, self.checkpoint.owner.path, 32*1024, true, monitorServiceReadHooks{})
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	raw, err := self.checkpoint.owner.directory.read(filepath.Base(self.checkpoint.owner.path), 32*1024, true)
 	if err != nil {
-		var readErr *monitorServiceReadError
-		if errors.As(err, &readErr) && readErr.code == "missing" {
+		if monitorCheckpointAbsent(err) {
 			self.state = &monitorOperatorState{ReadStatus: "starting"}
 			return nil
 		}
@@ -400,7 +405,7 @@ func (self *monitorOperatorWorker) save() error {
 	if err != nil || len(raw)+1 > 32*1024 {
 		return errors.New("operator checkpoint exceeds its bound")
 	}
-	return publishMonitorFile(self.checkpoint.owner.path, append(raw, '\n'), 0600, self.checkpoint.owner.syncDirectory)
+	return errors.Join(self.checkpoint.owner.directory.publish(filepath.Base(self.checkpoint.owner.path), append(raw, '\n'), 0600, self.checkpoint.owner.syncDirectory), self.checkpoint.validateOwner())
 }
 
 // Reading a protected credential file never loads the operator's broad vault.
@@ -559,11 +564,48 @@ func (self *monitorOperatorWorker) run(ctx context.Context, interval, stallAfter
 			Diagnostics               *monitorDiagnosticObservation `json:"diagnostics,omitempty"`
 			Conditions                [4]monitorOperatorCondition   `json:"conditions"`
 		}{Schema: "urnetwork-mainnet-operator-event-v1", Role: self.policy.Role, Publication: publication, State: self.state, Diagnostics: diagnostic, Conditions: self.state.conditions(sampledAt, self.policy, stallAfter)}
+		if terminal {
+			event.Publication = "ownership-error"
+		}
 		if err := encoder.Encode(event); err != nil {
+			if ctx.Err() != nil {
+				return 0
+			}
 			return 3
 		}
 		if terminal {
 			return 3
+		}
+		if errors.Is(checkpointErr, durablehead.ErrUncertain) {
+			prior := self.checkpoint
+			err := self.storage.resume(ctx, self.policy.Role, func() error {
+				file := prior.owner.lock
+				err := prior.owner.close()
+				if hooks.afterClose != nil {
+					err = errors.Join(err, hooks.afterClose(self.policy.Role, "checkpoint", file))
+				}
+				return err
+			}, func() error {
+				next, err := openMonitorServiceCheckpoint(prior.owner.path, prior.owner.expected, prior.policy, ctx)
+				if err != nil {
+					return err
+				}
+				loaded := &monitorOperatorWorker{policy: self.policy, checkpoint: next}
+				if err := loaded.load(ctx); err != nil {
+					return errors.Join(err, next.owner.close())
+				}
+				next.owner.syncDirectory = prior.owner.syncDirectory
+				self.checkpoint, self.state = next, loaded.state
+				return nil
+			}, hooks)
+			if err != nil {
+				if ctx.Err() != nil {
+					return 0
+				}
+				fmt.Fprintln(stderr, "monitor operator storage continuation:", err)
+				return 3
+			}
+			continue
 		}
 		delay := interval
 		if combined != nil {
@@ -583,12 +625,12 @@ func (self *monitorOperatorWorker) run(ctx context.Context, interval, stallAfter
 // connection starts until every role's files have been admitted successfully.
 func openMonitorOperatorWorker(ctx context.Context, policy monitorOperatorPolicy, expected identityExpectation, checkpointPath, metricsPath string, hooks monitorServiceHooks) (*monitorOperatorWorker, error) {
 	checkpointPath, metricsPath = monitorOperatorPaths(checkpointPath, metricsPath, policy.Role)
-	checkpoint, err := openMonitorServiceCheckpoint(checkpointPath, expected, monitorValidatorPolicy{})
+	checkpoint, err := openMonitorServiceCheckpoint(checkpointPath, expected, monitorValidatorPolicy{}, ctx)
 	if err != nil {
 		return nil, err
 	}
 	worker := &monitorOperatorWorker{policy: policy, checkpoint: checkpoint}
-	metrics, err := openMonitorMetrics(metricsPath)
+	metrics, err := openMonitorMetrics(metricsPath, ctx)
 	if err != nil {
 		return nil, errors.Join(err, checkpoint.owner.close())
 	}

@@ -21,7 +21,7 @@ func TestFleetRecoveryPublishCommandDoesNotSignAgain(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, false)}
 	for i := 0; i < 2; i++ {
-		if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+		if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -35,7 +35,7 @@ func TestFleetRecoveryBindCommandDoesNotSignAgain(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	fixture.opts["--dry-run"] = false
 	for i := 0; i < 2; i++ {
-		if err := fleetBind(fixture.opts, fixture.manifest); err != nil {
+		if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -49,7 +49,7 @@ func TestFleetRecoveryRevokeCommandDoesNotSignAgain(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	fixture.opts["--dry-run"] = false
 	for i := 0; i < 2; i++ {
-		if err := fleetRevoke(fixture.opts, fixture.manifest); err != nil {
+		if err := fleetRevoke(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -66,17 +66,17 @@ func TestFleetRecoveryPublishAcceptedWithoutAcknowledgment(t *testing.T) {
 	fixture.stateLock.Lock()
 	fixture.nativeDropAck = true
 	fixture.stateLock.Unlock()
-	if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("lost acknowledgment reported success")
 	}
-	original := fleetRecoveryTestRecord(t)
+	original := fleetRecoveryTestRecord(t, fixture)
 	if original.Stage != "may_have_sent" {
 		t.Fatal("uncertain transaction not retained")
 	}
-	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	recovered := fleetRecoveryTestRecord(t)
+	recovered := fleetRecoveryTestRecord(t, fixture)
 	if recovered.Stage != "finalized" || recovered.TxHash != original.TxHash || !bytes.Equal(recovered.Raw, original.Raw) || fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("system_accountNextIndex") != 1 {
 		t.Fatal("restart replaced the accepted publication")
 	}
@@ -91,16 +91,16 @@ func TestFleetRecoveryRegisterAcceptedWithoutAcknowledgment(t *testing.T) {
 	fixture.stateLock.Lock()
 	fixture.nativeDropAck = true
 	fixture.stateLock.Unlock()
-	if err := fleetRegister(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetRegister(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("lost acknowledgment reported success")
 	}
-	original := fleetRecoveryTestRecord(t)
+	original := fleetRecoveryTestRecord(t, fixture)
 	fixture.opts["--burn_limit_rao"] = "999"
 	fixture.opts["--fee_limit_rao"] = "999"
-	if err := fleetRegister(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetRegister(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	recovered := fleetRecoveryTestRecord(t)
+	recovered := fleetRecoveryTestRecord(t, fixture)
 	if recovered.Stage != "finalized" || recovered.NativeReceipt == nil || !strings.Contains(recovered.Outcome, "uid 7") || recovered.TxHash != original.TxHash || fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("payment_queryInfo") != 1 {
 		t.Fatal("registration recovery lost original receipt/economics")
 	}
@@ -112,7 +112,7 @@ func TestFleetRecoveryPublishPreparedRestartReplaysExactBytes(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, false)}
 	record, signer := fleetRecoveryTestPrepared(t, fixture)
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestFleetRecoveryPublishPreparedRestartReplaysExactBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	store.close()
-	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
 	fixture.stateLock.Lock()
@@ -138,7 +138,7 @@ func TestFleetRecoveryNativeMalformedAccountNeverReplays(t *testing.T) {
 		fixture := newFleetMainnetTestFixture(t)
 		fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, false)}
 		record, signer := fleetRecoveryTestPrepared(t, fixture)
-		store, err := openFleetRecoveryStore()
+		store, err := openFleetRecoveryStore(fixture.durable.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -157,10 +157,10 @@ func TestFleetRecoveryNativeMalformedAccountNeverReplays(t *testing.T) {
 		fixture.stateLock.Lock()
 		fixture.storage[key.Hex()] = codec.HexEncodeToString(make([]byte, length))
 		fixture.stateLock.Unlock()
-		if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+		if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Errorf("account length %d authorized replay", length)
 		}
-		retained := fleetRecoveryTestRecord(t)
+		retained := fleetRecoveryTestRecord(t, fixture)
 		if retained.Stage != "prepared" || retained.TxHash != record.TxHash || !bytes.Equal(retained.Raw, record.Raw) || fixture.count("author_submitAndWatchExtrinsic") != 0 || fixture.count("system_accountNextIndex") != 0 {
 			t.Errorf("account length %d advanced the retained transaction", length)
 		}
@@ -175,7 +175,7 @@ func TestFleetRecoveryNativeHistoricalReceiptAfterCurrentUpgrade(t *testing.T) {
 	fixture.stateLock.Lock()
 	fixture.nativeDropAck = true
 	fixture.stateLock.Unlock()
-	if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("lost acknowledgment reported success")
 	}
 	fixture.stateLock.Lock()
@@ -185,10 +185,10 @@ func TestFleetRecoveryNativeHistoricalReceiptAfterCurrentUpgrade(t *testing.T) {
 	fixture.version.SpecVersion++
 	fixture.finalizedNumber = 103
 	fixture.stateLock.Unlock()
-	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	if fleetRecoveryTestRecord(t).Stage != "finalized" || fixture.count("author_submitAndWatchExtrinsic") != 1 {
+	if fleetRecoveryTestRecord(t, fixture).Stage != "finalized" || fixture.count("author_submitAndWatchExtrinsic") != 1 {
 		t.Fatal("current upgrade prevented original historical recovery")
 	}
 }
@@ -202,18 +202,18 @@ func TestFleetRecoveryNativeMissingHistoryOrConsumedNonceNeverResigns(t *testing
 		fixture.stateLock.Lock()
 		fixture.nativeDropAck = true
 		fixture.stateLock.Unlock()
-		if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+		if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Fatal("lost acknowledgment reported success")
 		}
-		original := fleetRecoveryTestRecord(t)
+		original := fleetRecoveryTestRecord(t, fixture)
 		fixture.stateLock.Lock()
 		fixture.nativeBlockMissing = missing
 		fixture.nativeBroadcast = false
 		fixture.stateLock.Unlock()
-		if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+		if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Fatal("unresolved history authorized replacement")
 		}
-		retained := fleetRecoveryTestRecord(t)
+		retained := fleetRecoveryTestRecord(t, fixture)
 		if retained.TxHash != original.TxHash || !bytes.Equal(retained.Raw, original.Raw) || retained.Stage == "finalized" || fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("system_accountNextIndex") != 1 {
 			t.Fatal("unresolved native liability replaced")
 		}
@@ -238,20 +238,20 @@ func TestFleetRecoveryEvmAcceptedWithoutAcknowledgment(t *testing.T) {
 		if action == "revoke" {
 			command = fleetRevoke
 		}
-		if err := command(fixture.opts, fixture.manifest); err == nil {
+		if err := command(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Fatal("uncertain send reported success")
 		}
-		original := fleetRecoveryTestRecord(t)
+		original := fleetRecoveryTestRecord(t, fixture)
 		if err := os.Remove(fleetOpt(fixture.opts, "--client_seed_file")); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Remove(fleetOpt(fixture.opts, "--hotkey_seed_file")); err != nil {
 			t.Fatal(err)
 		}
-		if err := command(fixture.opts, fixture.manifest); err != nil {
+		if err := command(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 			t.Fatal(err)
 		}
-		retained := fleetRecoveryTestRecord(t)
+		retained := fleetRecoveryTestRecord(t, fixture)
 		if retained.Stage != "finalized" || retained.Mapping == nil || retained.Mapping.Query.NativeNumber != 102 || retained.TxHash != original.TxHash || !bytes.Equal(retained.Raw, original.Raw) || fixture.count("eth_sendRawTransaction") != 1 || fixture.count("eth_gasPrice") != 1 {
 			t.Fatalf("%s restart replaced original signed intent", action)
 		}
@@ -271,7 +271,7 @@ func TestFleetRecoveryEvmHistoricalReceiptAfterCurrentUpgrade(t *testing.T) {
 		return nil
 	}
 	fixture.stateLock.Unlock()
-	if err := fleetBind(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("uncertain send reported success")
 	}
 	fixture.stateLock.Lock()
@@ -281,10 +281,10 @@ func TestFleetRecoveryEvmHistoricalReceiptAfterCurrentUpgrade(t *testing.T) {
 	fixture.version.SpecVersion++
 	fixture.finalizedNumber = 103
 	fixture.stateLock.Unlock()
-	if err := fleetBind(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	if fleetRecoveryTestRecord(t).Stage != "finalized" || fixture.count("eth_sendRawTransaction") != 1 {
+	if fleetRecoveryTestRecord(t, fixture).Stage != "finalized" || fixture.count("eth_sendRawTransaction") != 1 {
 		t.Fatal("historical original transaction was not recovered")
 	}
 }
@@ -312,18 +312,18 @@ func TestFleetRecoveryUpgradeAtReceiptRetainsOriginalAuthority(t *testing.T) {
 			}
 		}
 		fixture.stateLock.Unlock()
-		if err := command(fixture.opts, fixture.manifest); err == nil {
+		if err := command(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Fatal("upgraded receipt inherited original approval")
 		}
-		original := fleetRecoveryTestRecord(t)
+		original := fleetRecoveryTestRecord(t, fixture)
 		fixture.stateLock.Lock()
 		fixture.authority.RuntimeVersion = fixture.version
 		fixture.stateLock.Unlock()
 		fixture.writeAuthority(t)
-		if err := command(fixture.opts, fixture.manifest); err == nil {
+		if err := command(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Fatal("new approval rewrote original signed authority")
 		}
-		retained := fleetRecoveryTestRecord(t)
+		retained := fleetRecoveryTestRecord(t, fixture)
 		if retained.Stage == "finalized" || retained.AuthoritySha256 != original.AuthoritySha256 || retained.TxHash != original.TxHash || !bytes.Equal(retained.Raw, original.Raw) || fixture.count(sendMethod) != 1 {
 			t.Fatalf("%s replaced original uncertain transaction", action)
 		}
@@ -339,14 +339,14 @@ func TestFleetRecoveryEvmRequiresFirstNativeInsertion(t *testing.T) {
 		fixture.stateLock.Lock()
 		fixture.missingMapping, fixture.mappingAtParent = !parent, parent
 		fixture.stateLock.Unlock()
-		if err := fleetBind(fixture.opts, fixture.manifest); err == nil {
+		if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Fatal("unproved native/EVM mapping accepted")
 		}
-		original := fleetRecoveryTestRecord(t)
-		if err := fleetBind(fixture.opts, fixture.manifest); err == nil {
+		original := fleetRecoveryTestRecord(t, fixture)
+		if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Fatal("restart ignored missing mapping")
 		}
-		if retained := fleetRecoveryTestRecord(t); retained.Stage == "finalized" || retained.TxHash != original.TxHash || fixture.count("eth_sendRawTransaction") != 1 {
+		if retained := fleetRecoveryTestRecord(t, fixture); retained.Stage == "finalized" || retained.TxHash != original.TxHash || fixture.count("eth_sendRawTransaction") != 1 {
 			t.Fatal("missing mapping erased uncertain transaction")
 		}
 	}
@@ -365,16 +365,16 @@ func TestFleetRecoveryEvmConsumedNonceWithoutReceipt(t *testing.T) {
 		return nil
 	}
 	fixture.stateLock.Unlock()
-	if err := fleetRevoke(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetRevoke(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("uncertain send reported success")
 	}
 	fixture.stateLock.Lock()
 	fixture.evmReceipt = nil
 	fixture.stateLock.Unlock()
-	if err := fleetRevoke(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "nonce is not available") {
+	if err := fleetRevoke(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "nonce is not available") {
 		t.Fatalf("consumed nonce: %v", err)
 	}
-	if fixture.count("eth_sendRawTransaction") != 1 || fixture.count("eth_gasPrice") != 1 || fleetRecoveryTestRecord(t).Stage == "finalized" {
+	if fixture.count("eth_sendRawTransaction") != 1 || fixture.count("eth_gasPrice") != 1 || fleetRecoveryTestRecord(t, fixture).Stage == "finalized" {
 		t.Fatal("consumed nonce authorized replacement")
 	}
 }
@@ -382,13 +382,13 @@ func TestFleetRecoveryEvmConsumedNonceWithoutReceipt(t *testing.T) {
 // Actual command entry honors exclusive custody before touching missing keys.
 func TestFleetRecoveryCommandRejectsSecondOwnerBeforeSigning(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.close()
 	fixture.opts["--hotkey_seed_file"] = "missing-synthetic.seed"
-	if err := fleetPublish(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "exclusive owner") {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "exclusive owner") {
 		t.Fatalf("second command owner: %v", err)
 	}
 	if fixture.count("state_getRuntimeVersion") != 0 {
@@ -425,7 +425,7 @@ func TestFleetRecoveryActualSendHasDurableSignedRecord(t *testing.T) {
 			seen = true
 		}
 		fixture.stateLock.Unlock()
-		if err := command(fixture.opts, fixture.manifest); err != nil {
+		if err := command(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 			t.Fatal(err)
 		}
 		fixture.stateLock.Lock()
@@ -445,10 +445,10 @@ func TestFleetRecoveryEvmDifferentHeightRequiresAuthenticatedMapping(t *testing.
 	fixture.stateLock.Lock()
 	fixture.evmBlockNumber = 101
 	fixture.stateLock.Unlock()
-	if err := fleetBind(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	record := fleetRecoveryTestRecord(t)
+	record := fleetRecoveryTestRecord(t, fixture)
 	if record.Mapping == nil || record.Mapping.Query.NativeNumber != 102 || record.Mapping.Query.EVMNumber != 101 {
 		t.Fatal("numerical height assumption replaced native mapping")
 	}
@@ -472,10 +472,10 @@ func TestFleetRecoveryEvmPreparedRestartReplaysExactBytes(t *testing.T) {
 		}
 	}
 	fixture.stateLock.Unlock()
-	if err := fleetBind(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("prepared/broadcast upgrade admitted")
 	}
-	original := fleetRecoveryTestRecord(t)
+	original := fleetRecoveryTestRecord(t, fixture)
 	if original.Stage != "prepared" || fixture.count("eth_sendRawTransaction") != 0 {
 		t.Fatal("prepared failure lost exact unsent transaction")
 	}
@@ -483,10 +483,10 @@ func TestFleetRecoveryEvmPreparedRestartReplaysExactBytes(t *testing.T) {
 	fixture.hook = nil
 	fixture.version = fixture.authority.RuntimeVersion
 	fixture.stateLock.Unlock()
-	if err := fleetBind(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	recovered := fleetRecoveryTestRecord(t)
+	recovered := fleetRecoveryTestRecord(t, fixture)
 	if recovered.Stage != "finalized" || !bytes.Equal(recovered.Raw, original.Raw) || fixture.count("eth_sendRawTransaction") != 1 || fixture.count("eth_gasPrice") != 1 {
 		t.Fatal("prepared EVM replay signed a replacement")
 	}
@@ -517,13 +517,13 @@ func TestFleetRecoveryEvmMalformedOutcomeNeverCompletes(t *testing.T) {
 			}
 		}
 		fixture.stateLock.Unlock()
-		if err := fleetBind(fixture.opts, fixture.manifest); err == nil {
+		if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Fatalf("%s accepted", kind)
 		}
-		if err := fleetBind(fixture.opts, fixture.manifest); err == nil {
+		if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Fatalf("%s accepted on restart", kind)
 		}
-		if fleetRecoveryTestRecord(t).Stage == "finalized" || fixture.count("eth_sendRawTransaction") != 1 {
+		if fleetRecoveryTestRecord(t, fixture).Stage == "finalized" || fixture.count("eth_sendRawTransaction") != 1 {
 			t.Fatalf("%s caused replacement or false completion", kind)
 		}
 	}
@@ -537,10 +537,10 @@ func TestFleetRecoveryNativeScanResumesDurableCanonicalProgress(t *testing.T) {
 	fixture.stateLock.Lock()
 	fixture.nativeDropAck = true
 	fixture.stateLock.Unlock()
-	if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("uncertain send reported success")
 	}
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,14 +567,14 @@ func TestFleetRecoveryNativeScanResumesDurableCanonicalProgress(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "checkpointed through 101") {
 		t.Fatalf("finite range: %v", err)
 	}
-	checkpoint := fleetRecoveryTestRecord(t)
+	checkpoint := fleetRecoveryTestRecord(t, fixture)
 	if checkpoint.ScanNumber != 101 || checkpoint.ScanHash != fixture.nativeBlocks[101] || checkpoint.Stage == "finalized" {
 		t.Fatal("archive cursor not durable")
 	}
-	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	if fleetRecoveryTestRecord(t).Stage != "finalized" || fixture.count("author_submitAndWatchExtrinsic") != 1 {
+	if fleetRecoveryTestRecord(t, fixture).Stage != "finalized" || fixture.count("author_submitAndWatchExtrinsic") != 1 {
 		t.Fatal("resumed scan resent the original transaction")
 	}
 }
@@ -585,15 +585,15 @@ func TestFleetRecoveryNativeFinalizedFailureNeverResigns(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	fixture.nativeDispatchFailure = true
 	fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, false)}
-	if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("dispatch failure reported success")
 	}
 	for i := 0; i < 2; i++ {
-		if err := fleetPublish(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "finalized with failure") {
+		if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "finalized with failure") {
 			t.Fatalf("terminal failure lost: %v", err)
 		}
 	}
-	record := fleetRecoveryTestRecord(t)
+	record := fleetRecoveryTestRecord(t, fixture)
 	if record.Stage != "finalized" || record.Succeeded || record.NativeReceipt == nil || fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("system_accountNextIndex") != 1 {
 		t.Fatal("failed native operation was replaced")
 	}
@@ -612,15 +612,15 @@ func TestFleetRecoveryEvmFinalizedFailureNeverResigns(t *testing.T) {
 		}
 	}
 	fixture.stateLock.Unlock()
-	if err := fleetRevoke(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetRevoke(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("reverted EVM transaction reported success")
 	}
 	for i := 0; i < 2; i++ {
-		if err := fleetRevoke(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "finalized with failure") {
+		if err := fleetRevoke(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "finalized with failure") {
 			t.Fatalf("terminal EVM failure lost: %v", err)
 		}
 	}
-	record := fleetRecoveryTestRecord(t)
+	record := fleetRecoveryTestRecord(t, fixture)
 	if record.Stage != "finalized" || record.Succeeded || record.Mapping == nil || record.EvmReceipt == nil || fixture.count("eth_sendRawTransaction") != 1 || fixture.count("eth_gasPrice") != 1 {
 		t.Fatal("reverted EVM operation was replaced")
 	}

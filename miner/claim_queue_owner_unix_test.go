@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
 )
 
@@ -18,7 +19,7 @@ func TestClaimQueueOwnerRejectsFifoBeforeReading(t *testing.T) {
 	if err := unix.Mkfifo(store.path, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.load(); !errors.Is(err, errClaimQueueUnsafeFile) {
+	if _, err := store.load(); !errors.Is(err, durablevolume.ErrIdentity) {
 		t.Fatalf("non-regular queue supplied custody: %v", err)
 	}
 }

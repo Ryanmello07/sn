@@ -10,12 +10,14 @@ import (
 	"errors"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/urfoundation/sn/diagnostics"
+	"github.com/urfoundation/sn/internal/durablefixture"
 )
 
 // Decode the actual bounded checkpoint without using the production loader.
@@ -45,6 +47,33 @@ func monitorReadTestWriteCheckpoint(t testing.TB, path string, record monitorSer
 		t.Fatal(err)
 	}
 	if err := publishMonitorFile(path, raw, 0600, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Near-limit retained fixtures publish through the same physical custody head
+// as the command. They change semantic history without bypassing storage proof.
+func monitorReadTestPublishGuardedCheckpoint(t testing.TB, fixture *monitorServicesFixture, policy monitorValidatorPolicy, path string, record monitorServiceCheckpointRecord) {
+	t.Helper()
+	volume := durablefixture.New(t, t.Context(), fixture.directory)
+	owner, err := openMonitorServiceCheckpoint(path, identityExpectation{NativeChain: "fixture-mainnet", GenesisHash: testGenesisHash, EvmChainId: 964}, policy, volume.Context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := owner.owner.close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	record.ContentHash, err = hashMonitorServiceCheckpoint(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.owner.directory.publish(filepath.Base(path), raw, 0600, nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -446,7 +475,7 @@ func TestMonitorReadIncidentCommandSaturatesCountsAndRefusesSequenceExhaustion(t
 	_, record := monitorReadTestCheckpoint(t, path)
 	history := record.State.ReadIncidents
 	history.FailedReads, history.FirstIncident.FailedReads, history.LastIncident.FailedReads = math.MaxUint64, math.MaxUint64, math.MaxUint64
-	monitorReadTestWriteCheckpoint(t, path, record)
+	monitorReadTestPublishGuardedCheckpoint(t, fixture, policy, path, record)
 	restarted := fixture.start(t, url, monitorServiceHooks{})
 	event := restarted.next(t)
 	if continued := monitorReadTestHistory(t, event); continued.FailedReads != math.MaxUint64 || continued.LastIncident.FailedReads != math.MaxUint64 || continued.Incidents != 1 {
@@ -467,12 +496,21 @@ func TestMonitorReadIncidentCommandSaturatesCountsAndRefusesSequenceExhaustion(t
 	}
 	history.LastIncident.Recovery.IncidentId, history.LastIncident.Recovery.Sequence = history.LastIncident.Id, math.MaxUint64
 	history.LastRecovery = history.LastIncident.Recovery
-	monitorReadTestWriteCheckpoint(t, path, record)
+	monitorReadTestPublishGuardedCheckpoint(t, fixture, policy, path, record)
 	before, _ := monitorReadTestCheckpoint(t, path)
 	if err := os.Remove(policy.ProgressFile); err != nil {
 		t.Fatal(err)
 	}
-	exhausted := fixture.start(t, url, monitorServiceHooks{})
+	terminal := make(chan int, 1)
+	exhausted := fixture.start(t, url, monitorServiceHooks{afterWorker: func(role string, exit int) {
+		if role == "alpha" {
+			terminal <- exit
+		}
+	}})
+	if exit := <-terminal; exit != 3 {
+		t.Fatal("exhausted role did not stop", exit)
+	}
+	exhausted.cancel()
 	<-exhausted.done
 	after, _ := monitorReadTestCheckpoint(t, path)
 	if exhausted.exit != 3 || !strings.Contains(exhausted.stderr.String(), "sequence is exhausted") || !bytes.Equal(before, after) {

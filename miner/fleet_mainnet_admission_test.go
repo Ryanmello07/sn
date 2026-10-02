@@ -18,12 +18,12 @@ func TestFleetMainnetCommandsRequireAuthorityBeforeSideEffects(t *testing.T) {
 	manifest := &protocol.FleetManifest{ChainID: 964, Netuid: 25, Coordinator: [20]byte{1}}
 	for _, command := range []struct {
 		name string
-		run  func(docopt.Opts, *protocol.FleetManifest) error
+		run  func(context.Context, docopt.Opts, *protocol.FleetManifest) error
 	}{
 		{name: "register", run: fleetRegister}, {name: "publish", run: fleetPublish},
 		{name: "bind", run: fleetBind}, {name: "status", run: fleetStatus}, {name: "revoke", run: fleetRevoke},
 	} {
-		err := command.run(docopt.Opts{}, manifest)
+		err := command.run(t.Context(), docopt.Opts{}, manifest)
 		if err == nil || !strings.Contains(err.Error(), "mainnet runtime authority") {
 			t.Errorf("%s reached another operation before refusing missing mainnet runtime authority: %v", command.name, err)
 		}
@@ -112,7 +112,7 @@ func TestFleetMainnetCliRetainsIndependentAuthorityFlags(t *testing.T) {
 // native fee quote; a testnet release pin cannot satisfy this synthetic tuple.
 func TestFleetMainnetRegisterCommandSignsApprovedRuntime(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
-	if err := fleetRegister(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetRegister(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
 	if fixture.count("payment_queryInfo") != 1 || fixture.count("author_submitAndWatchExtrinsic") != 0 {
@@ -129,7 +129,7 @@ func TestFleetMainnetRegisterCommandSignsApprovedRuntime(t *testing.T) {
 // The binding handler authenticates its actual target before consent and preflight.
 func TestFleetMainnetBindCommandRequiresActualEvmRuntime(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
-	if err := fleetBind(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
 	if fixture.count("eth_call") != 1 || fixture.count("eth_estimateGas") != 1 || fixture.count("eth_sendRawTransaction") != 0 || fixture.count("state_getStorageHash") < 2 {
@@ -140,7 +140,7 @@ func TestFleetMainnetBindCommandRequiresActualEvmRuntime(t *testing.T) {
 // The revocation handler verifies a finalized digest against its local domain.
 func TestFleetMainnetRevokeCommandChecksLocalSigningDomain(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
-	if err := fleetRevoke(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetRevoke(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
 	if fixture.count("eth_call") != 2 || fixture.count("eth_estimateGas") != 1 || fixture.count("eth_sendRawTransaction") != 0 {
@@ -151,7 +151,7 @@ func TestFleetMainnetRevokeCommandChecksLocalSigningDomain(t *testing.T) {
 // Both sides of status require runtime authority on their own connections.
 func TestFleetMainnetStatusCommandReadsApprovedNativeAndEvmState(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
-	if err := fleetStatus(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetStatus(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
 	if fixture.count("state_getStorage") != 2 || fixture.count("eth_call") != 1 || fixture.count("state_getStorageHash") < 4 {
@@ -166,7 +166,7 @@ func TestFleetMainnetBindRejectsWrongActualEvmGenesisBeforeKeys(t *testing.T) {
 	fixture.stateLock.Lock()
 	fixture.genesis[0]++
 	fixture.stateLock.Unlock()
-	if err := fleetBind(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "fresh network identity differs") {
+	if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "fresh network identity differs") {
 		t.Fatalf("wrong EVM native genesis was not refused before client seed: %v", err)
 	}
 	if fixture.count("eth_call") != 0 || fixture.count("eth_sendRawTransaction") != 0 {
@@ -178,11 +178,12 @@ func TestFleetMainnetBindRejectsWrongActualEvmGenesisBeforeKeys(t *testing.T) {
 func TestFleetMainnetEvmChainMismatchNeverFallsBack(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	alternate := newFleetMainnetTestFixture(t)
+	t.Setenv("URNETWORK_STATE_DIR", fixture.durable.Roots[0])
 	fixture.opts["--rpc"] = []string{fixture.server.URL, alternate.server.URL}
 	fixture.stateLock.Lock()
 	fixture.evmChainId = 945
 	fixture.stateLock.Unlock()
-	if err := fleetBind(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "chain id differs") {
+	if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "chain id differs") {
 		t.Fatalf("wrong EVM chain admitted: %v", err)
 	}
 	if alternate.count("eth_chainId") != 0 || fixture.count("eth_call") != 0 {
@@ -201,7 +202,7 @@ func TestFleetMainnetEvmUpgradeBeforeSigningDoesNotSend(t *testing.T) {
 		}
 	}
 	fixture.stateLock.Unlock()
-	if err := fleetBind(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "runtime admission before EVM signing") {
+	if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "runtime admission before EVM signing") {
 		t.Fatalf("upgrade before signing: %v", err)
 	}
 	if fixture.count("eth_sendRawTransaction") != 0 {
@@ -220,7 +221,7 @@ func TestFleetMainnetEvmUpgradeAtReceiptNeverRebroadcasts(t *testing.T) {
 		}
 	}
 	fixture.stateLock.Unlock()
-	if err := fleetBind(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "runtime admission at EVM receipt") {
+	if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "runtime admission at EVM receipt") {
 		t.Fatalf("included runtime drift: %v", err)
 	}
 	if fixture.count("eth_sendRawTransaction") != 1 || fixture.count("eth_getTransactionReceipt") != 1 {

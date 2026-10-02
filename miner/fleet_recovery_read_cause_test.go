@@ -59,10 +59,10 @@ func TestFleetRecoveryEvmReadFailuresPreserveOriginalWork(t *testing.T) {
 			return nil
 		}
 		fixture.stateLock.Unlock()
-		if err := fleetBind(fixture.opts, fixture.manifest); err == nil {
+		if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 			t.Fatal("uncertain original send reported success")
 		}
-		original := fleetRecoveryTestRecord(t)
+		original := fleetRecoveryTestRecord(t, fixture)
 		if original.Stage != "may_have_sent" || fixture.count("eth_sendRawTransaction") != 1 {
 			t.Fatal("original pending signature was not durably retained")
 		}
@@ -94,7 +94,7 @@ func TestFleetRecoveryEvmReadFailuresPreserveOriginalWork(t *testing.T) {
 			return 0
 		}
 		fixture.stateLock.Unlock()
-		err := fleetBind(fixture.opts, fixture.manifest)
+		err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest)
 		fixture.stateLock.Lock()
 		failureCount := failures
 		fixture.responseStatus = nil
@@ -103,14 +103,14 @@ func TestFleetRecoveryEvmReadFailuresPreserveOriginalWork(t *testing.T) {
 		if failureCount == 0 || !fleetRecoveryOnlyHttpStatus(err, http.StatusServiceUnavailable) {
 			t.Fatalf("%s fleet read failure became an independent identity/finality/nonce contradiction: %v", selected, err)
 		}
-		retained := fleetRecoveryTestRecord(t)
+		retained := fleetRecoveryTestRecord(t, fixture)
 		if retained.Stage != original.Stage || retained.TxHash != original.TxHash || retained.Nonce != original.Nonce || !bytes.Equal(retained.Raw, original.Raw) || fixture.count("eth_sendRawTransaction") != 1 || fixture.count("eth_gasPrice") != 1 {
 			t.Fatalf("%s read failure advanced or replaced the durable original", selected)
 		}
-		if err := fleetBind(fixture.opts, fixture.manifest); err != nil {
+		if err := fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 			t.Fatalf("%s read recovery did not finish the original transaction: %v", selected, err)
 		}
-		retained = fleetRecoveryTestRecord(t)
+		retained = fleetRecoveryTestRecord(t, fixture)
 		if retained.Stage != "finalized" || retained.Mapping == nil || retained.TxHash != original.TxHash || !bytes.Equal(retained.Raw, original.Raw) || fixture.count("eth_sendRawTransaction") != 1 || fixture.count("eth_gasPrice") != 1 {
 			t.Fatalf("%s recovered command replaced original signed work", selected)
 		}
