@@ -564,6 +564,9 @@ func (self *monitorOperatorWorker) run(ctx context.Context, interval, stallAfter
 			Diagnostics               *monitorDiagnosticObservation `json:"diagnostics,omitempty"`
 			Conditions                [4]monitorOperatorCondition   `json:"conditions"`
 		}{Schema: "urnetwork-mainnet-operator-event-v1", Role: self.policy.Role, Publication: publication, State: self.state, Diagnostics: diagnostic, Conditions: self.state.conditions(sampledAt, self.policy, stallAfter)}
+		if terminal {
+			event.Publication = "ownership-error"
+		}
 		if err := encoder.Encode(event); err != nil {
 			if ctx.Err() != nil {
 				return 0
