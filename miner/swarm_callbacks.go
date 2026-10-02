@@ -33,3 +33,31 @@ func swarmMemberJwtRefreshListener(path string, failed func(error)) clientauth.J
 		}
 	})
 }
+
+// All joined causes must belong to the local persistence boundary. A hard
+// authentication or unknown cause never becomes local because another cause is.
+func swarmMemberStorageFailure(err error) bool {
+	if err == nil || errors.Is(err, errSwarmAuthenticationRejected) {
+		return false
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		found := false
+		for _, cause := range joined.Unwrap() {
+			if cause == nil {
+				continue
+			}
+			found = true
+			if !swarmMemberStorageFailure(cause) {
+				return false
+			}
+		}
+		return found
+	}
+	if _, ok := err.(*swarmMemberStorageError); ok {
+		return true
+	}
+	if cause := errors.Unwrap(err); cause != nil {
+		return swarmMemberStorageFailure(cause)
+	}
+	return false
+}

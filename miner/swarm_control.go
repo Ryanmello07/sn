@@ -214,8 +214,9 @@ func (self *ProviderSwarm) finishMemberOperationWithLock(id string, operation *p
 	close(operation.done)
 }
 
-// A callback can reject only its own generation. During startup its error is
-// returned to the control caller; a published member failure ends the swarm.
+// A callback can reject only its own generation. Local persistence failure
+// quarantines that member through an owned join outside the callback. Hard
+// authentication and unknown published-member failures retain terminal policy.
 func (self *ProviderSwarm) memberFailed(id string, generation *providerSwarmMemberOperation, err error) {
 	if err == nil {
 		return
@@ -236,6 +237,18 @@ func (self *ProviderSwarm) memberFailed(id string, generation *providerSwarmMemb
 	}
 	delete(self.running, id)
 	self.failures[id] = err.Error()
+	if swarmMemberStorageFailure(err) {
+		operation := &providerSwarmMemberOperation{done: make(chan struct{})}
+		self.memberOperations[id] = operation
+		self.operationWaitGroup.Add(1)
+		instance := self.instances[id]
+		delete(self.memberGenerations, id)
+		self.stateLock.Unlock()
+		// SDK callbacks may be in the tree that instance.close joins. The
+		// owner keeps the slot stopping until that whole generation leaves.
+		go self.stopMemberOperation(id, operation, generation, instance)
+		return
+	}
 	terminalErrors := self.terminalErrors
 	cancel := self.runCancel
 	self.stateLock.Unlock()
