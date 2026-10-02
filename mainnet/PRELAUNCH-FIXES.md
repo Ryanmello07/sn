@@ -6,6 +6,22 @@ acceptance**. There is no R49 requirement or instruction to resume it. Mainnet
 hardening may proceed; launch readiness must be established on the selected
 production release. No mainnet deployment or spend is authorized by this tracker.
 
+**October 2 contract installation admission (MG-02/MG-08):** the
+[qualified source correction](evidence/contract-installation-admission-qualification-20261002.md)
+at `ebf69b9` closes two pre-send defects. The first reserve CREATE now checks its
+pending balance against all remaining same-sender value/gas reservations. Proxy
+and descendant review require distinct deployer, owner, guardian and oracle
+addresses under both signed review and unsigned preview. Exact unchanged-source
+controls reproduce an underfunded synthetic send and all 48 invalid role
+admissions. Author qualification passes 35 normal/35 race roots and vet, with
+both causal roots failing as intended in each mode; independent qualification
+passes fourteen normal/race roots and vet and reproduces both baseline failures.
+Scopes overlap and do not establish full-package or release qualification.
+Original signed intent, custody, nonce/attempt bounds and separate Safe approval
+are unchanged. The `3d1e2ecf` release excludes this correction. Compose it with
+the later owner-custody successors in a new exact release; live authority,
+accepted production policy, installation and activation remain blocked.
+
 **October 2 bootstrap readiness custody continuity (MG-03/MG-08):** the
 [separate original-preparation correction](evidence/bootstrap-readiness-custody-qualification-20261001.md)
 at `3d1e2ecf` retains the five original markers, the passive three-marker subset
