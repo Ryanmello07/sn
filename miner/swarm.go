@@ -431,13 +431,9 @@ func startSwarmMember(ctx context.Context, member ProviderSwarmMember, failed fu
 	networkSpace := sdk.NewNetworkSpaceWithUrls(memberCtx, member.APIURL, member.ConnectURL, strategySettings)
 	api := networkSpace.GetApi()
 	clientJWTPath := filepath.Join(member.StateDir, ".provider.jwt")
-	refreshSub := api.AddJwtRefreshListener(clientauth.JwtRefreshListenerFunc(func(jwt string) {
-		if err := clientauth.WriteToken(clientJWTPath, jwt); err != nil {
-			failed(fmt.Errorf("persist refreshed client JWT: %w", err))
-		}
-	}))
+	refreshSub := api.AddJwtRefreshListener(swarmMemberJwtRefreshListener(clientJWTPath, failed))
 	logoutSub := api.AddAuthLogoutListener(clientauth.AuthLogoutListenerFunc(func() {
-		failed(errors.New("provider authentication was rejected"))
+		failed(errSwarmAuthenticationRejected)
 	}))
 	deviceSettings := swarmMemberDeviceSettings(
 		member, sdk.NewDeviceLocalKeyMaterial(seed, certificatePEM, keyPEM), dialSettings)
