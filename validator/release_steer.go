@@ -169,7 +169,14 @@ func commonHashBytes(value string) []byte {
 // native getter even though legacy storage metadata still exists.
 func releaseSubmitOptions(cfg *ReleaseConfig) crv4.SubmitOptions {
 	maxWeightLimit := cfg.Policy.Steering.MaxWeightLimitU16
-	return crv4.SubmitOptions{VersionKey: cfg.VersionKey, MaxWeightLimit: &maxWeightLimit}
+	options := crv4.SubmitOptions{VersionKey: cfg.VersionKey, MaxWeightLimit: &maxWeightLimit}
+	if isOwnerRecycleProductionConfig(cfg) {
+		options.RequireProductionRuntime = true
+		if approved, err := ownerRecycleProductionApproval(cfg); err == nil {
+			options.EpochScheduleProfile = approved.Approval.Production.EpochScheduleProfile
+		}
+	}
+	return options
 }
 
 type releaseHeadMember struct {

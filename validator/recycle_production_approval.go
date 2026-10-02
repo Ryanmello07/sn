@@ -21,6 +21,7 @@ const ownerRecycleProductionScope = "urnetwork-owner-recycle-production-v1"
 type OwnerRecycleProductionApproval struct {
 	Schema                  string     `json:"schema"`
 	RuntimeCapability       string     `json:"runtime_capability"`
+	EpochScheduleProfile    string     `json:"epoch_schedule_profile,omitempty"`
 	ValidatorHotkeys        [][32]byte `json:"validator_hotkeys"`
 	MaximumLastUpdateAge    uint64     `json:"maximum_last_update_age"`
 	ValidThroughNativeEpoch uint64     `json:"valid_through_native_epoch"`
@@ -101,6 +102,9 @@ func validateOwnerRecycleProductionApproval(cfg *ReleaseConfig, approval *OwnerR
 		p.ValidThroughNativeEpoch < approval.FirstNativeEpoch || len(p.ValidatorHotkeys) < cfg.Policy.Safety.MinimumLiveValidatorCount ||
 		len(p.ValidatorHotkeys) > maximumOwnerRecycleApprovedHotkeys {
 		return errors.New("owner-recycle production approval lacks its exact purpose, finite epoch window or validator census")
+	}
+	if err := crv4.ValidateEpochScheduleProfile(p.EpochScheduleProfile); err != nil {
+		return err
 	}
 	if ownerRecycleActivationBlock(approval) > approval.ValidFromNativeBlock ||
 		ownerRecycleActivationBlock(approval) < approval.ValidFromNativeBlock && len(cfg.ProductionAuthorityHistory) == 0 {

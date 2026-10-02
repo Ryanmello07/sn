@@ -239,6 +239,7 @@ func validateProductionAuthorityContinuity(original, current *ReleaseConfig) err
 	}
 	a, b := prior.Approval, approved.Approval
 	if a.ValidatorHotkey != b.ValidatorHotkey || a.NativeChain != b.NativeChain || a.SubnetOwner != b.SubnetOwner ||
+		a.Production.EpochScheduleProfile != b.Production.EpochScheduleProfile ||
 		a.ValidFromNativeBlock > b.ValidFromNativeBlock || a.FirstNativeEpoch != b.FirstNativeEpoch ||
 		a.Production.ActivationNativeHash != b.Production.ActivationNativeHash || ownerRecycleActivationBlock(&a) != ownerRecycleActivationBlock(&b) {
 		return errors.New("production authority continuity changes the original signer or economic activation")

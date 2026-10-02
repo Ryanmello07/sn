@@ -153,6 +153,7 @@ func sealOwnerRecycleProductionIntent(ctx context.Context, stage *ownerRecyclePr
 	}
 	approval, err := ownerRecycleProductionApproval(&stage.authority.config)
 	if err != nil || stage.authority.config.ownerRecycleProduction.historicalOnly || approval.Approval.ValidatorHotkey != hotkey.PublicKey() || prepared.HotkeyHex != releaseHex32(hotkey.PublicKey()) ||
+		prepared.EpochScheduleProfile != crv4.TempoDriftEpochScheduleProfile || prepared.EpochScheduleProfile != approval.Approval.Production.EpochScheduleProfile ||
 		prepared.SourceCommitment == nil || prepared.SourceCommitment.Hash != releaseHex32(stage.sourceHash) || prepared.SubnetEpoch != stage.proof.Decision.SubnetEpoch || !slices.Equal(prepared.UIDs, stage.proof.Row.Uids) ||
 		!slices.Equal(prepared.Values, stage.proof.Row.Values) {
 		return nil, errors.Join(errors.New("owner-recycle production signer, native epoch or prepared row differs"), err)
@@ -202,6 +203,7 @@ func verifyOwnerRecycleProductionIntent(ctx context.Context, cfg *ReleaseConfig,
 	sidecar := intent.OwnerRecycle
 	encoded, err := ownerRecycleProductionProofBytes(ctx, &sidecar.Proof, cfg.EvidenceV2.Bounds.MaxControlBytes)
 	if err != nil || !bytes.Equal(encoded, stage.encoded) || sidecar.Hotkey != releaseHex32(approval.Approval.ValidatorHotkey) ||
+		intent.Prepared.EpochScheduleProfile != approval.Approval.Production.EpochScheduleProfile ||
 		sidecar.Hotkey != intent.Prepared.HotkeyHex || sidecar.PreparedExtrinsicHash != intent.Prepared.ExtrinsicHash ||
 		sidecar.ProviderEnvelopeHash != intent.MeasurementEnvelopeHash || sidecar.Proof.ProviderMeasurementHash != ReleaseMeasurementContentHash(measurement) ||
 		sidecar.Proof.Decision != releaseMeasurementV2Decision(artifact) ||

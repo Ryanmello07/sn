@@ -137,7 +137,8 @@ func newOwnerRecycleProductionTestFixtureWithInputs(t *testing.T, create func(*t
 	hotkeys := [][32]byte{hotkey.PublicKey(), registrations[6].Hotkey}
 	slices.SortFunc(hotkeys, func(a, b [32]byte) int { return bytes.Compare(a[:], b[:]) })
 	admission.approval.Production = &OwnerRecycleProductionApproval{Schema: ownerRecycleProductionScope,
-		RuntimeCapability: crv4.ValidatorProducerRuntimeProfile, ValidatorHotkeys: hotkeys, MaximumLastUpdateAge: 50,
+		EpochScheduleProfile: crv4.TempoDriftEpochScheduleProfile,
+		RuntimeCapability:    crv4.ValidatorProducerRuntimeProfile, ValidatorHotkeys: hotkeys, MaximumLastUpdateAge: 50,
 		ValidThroughNativeEpoch: artifact.SubnetEpoch + 10, ActivationNativeHash: [32]byte(admission.finalized)}
 	netuid := binary.LittleEndian.AppendUint16(nil, cfg.Netuid)
 	put := func(pallet, name string, value []byte, args ...[]byte) {
@@ -358,6 +359,19 @@ func (self *ownerRecycleProductionTestFixture) intentAndEnvelope(t *testing.T, s
 	options := releaseSubmitOptions(self.cfg)
 	options.SourceHash = stage.sourceHash
 	options.Now = func() time.Time { return time.Unix(2_000_000_000, 0) }
+	legacy := measurement.admission.approval.Production.EpochScheduleProfile == ""
+	if legacy {
+		// Construct only an old signed test fixture through the retained generic
+		// codec. Production's current purpose/profile gate is exercised separately.
+		artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(t.Context(), native, selected, releaseNativeRuntimeIdentity(self.cfg))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := native.BindRuntimeArtifact(artifact); err != nil {
+			t.Fatal(err)
+		}
+		options.RequireProductionRuntime = false
+	}
 	prepared, err := crv4.PrepareWeightsCRv4ExactAtContext(t.Context(), native, self.hotkey, self.cfg.Netuid, row.UIDs, row.Scores, options, selected)
 	if err != nil {
 		t.Fatal(err)
@@ -369,7 +383,23 @@ func (self *ownerRecycleProductionTestFixture) intentAndEnvelope(t *testing.T, s
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecar, err := sealOwnerRecycleProductionIntent(t.Context(), stage, self.hotkey, prepared, envelopeHash)
+	var sidecar *OwnerRecycleProductionIntent
+	if legacy {
+		// Original v1 sidecars had no schedule field. Generate their original
+		// signature format, then test the actual current verification path.
+		sidecar = &OwnerRecycleProductionIntent{Proof: stage.proof, Hotkey: releaseHex32(self.hotkey.PublicKey()), PreparedExtrinsicHash: prepared.ExtrinsicHash, ProviderEnvelopeHash: envelopeHash}
+		digest, digestErr := ownerRecycleProductionSigningDigest(sidecar)
+		if digestErr != nil {
+			t.Fatal(digestErr)
+		}
+		signature, signErr := self.hotkey.Sign(digest[:])
+		if signErr != nil {
+			t.Fatal(signErr)
+		}
+		sidecar.Signature = codec.HexEncodeToString(signature)
+	} else {
+		sidecar, err = sealOwnerRecycleProductionIntent(t.Context(), stage, self.hotkey, prepared, envelopeHash)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

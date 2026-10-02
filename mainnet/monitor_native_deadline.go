@@ -15,6 +15,7 @@ import (
 // No default margin or process heartbeat silently enables deadline inference.
 type monitorNativeDeadlinePolicy struct {
 	CompletionMarginBlocks uint64 `json:"completion_margin_blocks"`
+	EpochScheduleProfile   string `json:"epoch_schedule_profile,omitempty"`
 }
 
 // Known describes a submission forecast or a reported epoch crossing, never
@@ -58,18 +59,30 @@ var monitorNativeDeadlineStatusCodes = map[string]int{
 
 // Bounds also make doubling the completion margin safe on every platform.
 func (self *monitorNativeDeadlinePolicy) validate() error {
+	if self != nil {
+		if err := crv4.ValidateEpochScheduleProfile(self.EpochScheduleProfile); err != nil {
+			return err
+		}
+	}
 	if self != nil && (self.CompletionMarginBlocks == 0 || self.CompletionMarginBlocks > crv4.MaxTempo) {
 		return errors.New("native deadline completion margin must be between one and the maximum native tempo")
 	}
 	return nil
 }
 
-// Forecast the first possible next epoch from the same rules used by
-// crv4/schedule.go: normal tempo, owner trigger, and the strict > MaxTempo safety
-// condition after the next block's increment. MaxEpochsPerBlock can defer it;
-// reaching a forecast alone therefore cannot establish a missed window.
+// Existing callers retain the old drand-v2 forecast. New production monitoring
+// explicitly selects the same tempo-drift profile as its approved producer.
 func monitorNativeEpochBoundary(native protocol.ValidatorNativeObservation) (uint64, bool) {
-	if native.Block == 0 || native.Block >= math.MaxUint32 || native.Tempo == 0 || uint64(native.Tempo) > crv4.MaxTempo ||
+	return monitorNativeEpochBoundaryWithProfile(native, "")
+}
+
+// Monitor policy selects the profile alongside its exact expected producer and
+// config. Empty retains old evidence; a forecast cannot declare a missed epoch.
+func monitorNativeEpochBoundaryWithProfile(native protocol.ValidatorNativeObservation, profile string) (uint64, bool) {
+	if crv4.ValidateEpochScheduleProfile(profile) != nil {
+		return 0, false
+	}
+	if native.Block == 0 || native.Block >= math.MaxUint32 || native.Tempo == 0 || profile == "" && uint64(native.Tempo) > crv4.MaxTempo ||
 		native.LastEpochBlock > native.Block || native.BlocksSinceLastStep > native.Block || native.PendingEpochAt > math.MaxUint32 {
 		return 0, false
 	}
@@ -78,9 +91,13 @@ func monitorNativeEpochBoundary(native protocol.ValidatorNativeObservation) (uin
 	if native.PendingEpochAt != 0 {
 		boundary = min(boundary, max(next, native.PendingEpochAt))
 	}
+	limit := crv4.MaxTempo
+	if profile == crv4.TempoDriftEpochScheduleProfile {
+		limit = uint64(native.Tempo)
+	}
 	safetyBlocks := uint64(1)
-	if native.BlocksSinceLastStep < crv4.MaxTempo {
-		safetyBlocks = crv4.MaxTempo - native.BlocksSinceLastStep + 1
+	if native.BlocksSinceLastStep < limit {
+		safetyBlocks = limit - native.BlocksSinceLastStep + 1
 	}
 	boundary = min(boundary, native.Block+safetyBlocks)
 	return boundary, boundary <= math.MaxUint32
@@ -129,7 +146,7 @@ func (self *monitorValidatorState) nativeDeadline(policy monitorValidatorPolicy,
 		return result
 	}
 	result.IntentEpoch, result.ObservedEpoch, result.ObservedBlock = intent.NativeEpoch, native.Epoch, native.Block
-	boundary, valid := monitorNativeEpochBoundary(*native)
+	boundary, valid := monitorNativeEpochBoundaryWithProfile(*native, policy.NativeDeadline.EpochScheduleProfile)
 	if !valid || !monitorNativeDeadlineOrdered(*value.Intent, *native, *value.Steering) || intent.NativeEpoch > native.Epoch {
 		result.Status = "incoherent"
 		return result
@@ -190,7 +207,9 @@ func (self *monitorNativeDeadlineHistory) validate(source protocol.ValidatorProg
 		if err := probe.Validate(); err != nil {
 			return err
 		}
-		if _, valid := monitorNativeEpochBoundary(incident.Native); !valid || incident.DetectedAt.IsZero() ||
+		// Historical incidents contain an observed crossing, not a predicted
+		// boundary. Validate root-set u16 tempos without changing that evidence.
+		if _, valid := monitorNativeEpochBoundaryWithProfile(incident.Native, crv4.TempoDriftEpochScheduleProfile); !valid || incident.DetectedAt.IsZero() ||
 			!monitorNativeDeadlineOrdered(incident.Intent, incident.Native, incident.Steering) || incident.Intent.Value.NativeEpoch >= incident.Native.Epoch {
 			return errors.New("native deadline incident lacks its observed epoch crossing")
 		}
