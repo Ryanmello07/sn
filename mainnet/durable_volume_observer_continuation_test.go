@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,6 +67,42 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 	t.Helper()
 	fixture, args := compositionTwoSampleFixture(t)
 	service := fixture.root.plan.PassiveService
+	methodCensus := func() map[string]int {
+		fixture.census.stateLock.Lock()
+		defer fixture.census.stateLock.Unlock()
+		return maps.Clone(fixture.census.methodCounts)
+	}
+	methodDelta := func(after, before map[string]int) map[string]int {
+		result := map[string]int{}
+		for method, count := range after {
+			if count < before[method] {
+				t.Fatal("method census moved backwards", method)
+			}
+			if count != before[method] {
+				result[method] = count - before[method]
+			}
+		}
+		return result
+	}
+	// Independently measure one complete production preview's method vector.
+	// Several finalized-head reads belong to that one bounded preview. The
+	// public command must do zero extra work during the outage, then exactly
+	// this vector once for its single recovered sample.
+	beforeReference := methodCensus()
+	referenceClient, err := newRpcClient(service.RpcUrl, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference, err := referenceClient.readRootPreview(t.Context(), service.Policy, rootObjectHash(service.Policy))
+	referenceClient.httpClient.CloseIdleConnections()
+	if err != nil || !reference.ReadOnlyReady {
+		t.Fatal("reference complete preview unavailable", err)
+	}
+	beforeMethods := methodCensus()
+	expectedMethods := methodDelta(beforeMethods, beforeReference)
+	if expectedMethods["chain_getFinalizedHead"] == 0 {
+		t.Fatal("reference preview omitted finalized identity")
+	}
 	beforeReads := compositionRpcReads(fixture.census)
 	path := filepath.Join(fixture.root.plan.RunDirectory, bootstrapRootProgressFile)
 	before, err := os.ReadFile(path)
@@ -78,6 +115,7 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 	var preparationIdentity, checkpointIdentity os.FileInfo
 	failed, recovered := false, false
 	failedSampleReads := -1
+	var failedSampleMethods map[string]int
 	host := &compositionObservationHost{Host: fixture.root.storage.Host}
 	host.observe = func(file *os.File) error {
 		if preparationFile == nil {
@@ -103,6 +141,7 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 				// than once. The outage must add no reads after this exact
 				// completed preview boundary, rather than assuming its size.
 				failedSampleReads = compositionRpcReads(fixture.census)
+				failedSampleMethods = methodCensus()
 			}
 			failed = true
 			return unix.EIO
@@ -134,6 +173,9 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 				t.Fatal("invalid bounded sample wait", failed, waitCtx.Err(), role, delay)
 			}
 			checkRetainedOwners()
+			if failedSampleMethods == nil || !maps.Equal(methodCensus(), failedSampleMethods) {
+				t.Fatal("unavailable sample issued Rpc calls during its retained wait")
+			}
 			if events == 0 {
 				if waits > 64 || recovered {
 					t.Fatal("sample exceeded its retry budget", waits, recovered)
@@ -178,6 +220,18 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 				if reads := compositionRpcReads(fixture.census); reads != failedSampleReads {
 					t.Fatal("unavailable sample invented an extra network observation", reads, failedSampleReads)
 				}
+				if !maps.Equal(methodCensus(), failedSampleMethods) {
+					t.Fatal("failed sample changed the exact observed method vector")
+				}
+				wantMethods := map[string]int{}
+				if afterRpc {
+					wantMethods = expectedMethods
+				}
+				if got := methodDelta(failedSampleMethods, beforeMethods); !maps.Equal(got, wantMethods) {
+					t.Fatal("failed sample did not stop at its exact complete-preview boundary", got, wantMethods)
+				}
+			} else if got := methodDelta(methodCensus(), failedSampleMethods); !maps.Equal(got, expectedMethods) {
+				t.Fatal("recovered sample issued more than one complete preview", got, expectedMethods)
 			}
 		},
 	}
