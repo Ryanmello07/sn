@@ -171,10 +171,12 @@ and `bootstrap_chain.go` prepare local children and expose no chain submit port.
 The standalone `rootActionStore` is used by internal/test composition rather
 than a public production action command.
 
-Those stores, and the distinct five-marker `bootstrapChainReadinessState`
-reader, require their own physical custody qualification before their remaining
-effect or broader readiness gates can close. They must not be described as fixed
-by the original eight-action writer or reader corrections.
+Those stores and the distinct five-marker `bootstrapChainReadinessState`
+reader are outside this receipt's physical custody scope. The separate
+[October 2 readiness qualification](bootstrap-readiness-custody-qualification-20261001.md)
+now covers that reader and its passive three-marker subset at source `3d1e2ecf`.
+The legacy root/trim writers remain deferred before enabling fresh native sends.
+Neither scope is supplied by the original eight-action writer or reader correction.
 
 These are local checks at explicit admission boundaries. They do not establish
 cross-host signer exclusion, protection from a hostile filesystem owner, or an
@@ -182,8 +184,10 @@ atomic filesystem/network transaction. Missing live custody is a stop condition;
 never copy a cached record into a missing completed journal to continue.
 
 The SN `28ebfced` / server `ac86855d` release baseline predates both corrections.
-A selected successor must include the exact qualified source and receive its
-own artifact/image readback. Independent network/checkpoint approval, runtime
+The [exact custody successor](release-1d580d5e-serverac86-20261001.md) now includes
+the qualified source at SN `1d580d5e` / server `ac86855d`, with matching repeated
+local binaries, bytecode and OCI artifacts. This does not close independent
+build/provenance or live release gates. Independent network/checkpoint approval, runtime
 authority for live use, actual signer cutover, production acceptance, funding,
 live installation and both validator roles remain open. The exact v470 artifact's
 planning-only exception does not supply those live gates. No release, deployment

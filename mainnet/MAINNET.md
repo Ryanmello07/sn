@@ -1,6 +1,6 @@
 # Mainnet launch and operations plan
 
-Updated 2026-10-01. **Mainnet activation is blocked.** At the user's direction,
+Updated 2026-10-02. **Mainnet activation is blocked.** At the user's direction,
 preparation now uses the [Rao Foundation public archive RPC](evidence/public-archive-switch-20261001.md)
 until Snow finishes synchronizing. The archive returned mainnet genesis and
 EVM ID 964 and supports the tested historical runtime read. Its public method
@@ -32,11 +32,26 @@ counted publication, send and completion; shared readers retain the same marker
 identity through their final observations. Missing completed custody stops the
 operation and must not be reconstructed from an in-memory record. Ordinary
 interrupted unsigned claims and exact-byte receipt recovery keep their original
-scope. Source `cb9f3aa2` and reader successor `1922981d` require a release after
-the SN `28ebfced` / server `ac86855d` baseline; `4e6b4a7e` separately restores the
-original approval/predecessor diagnostic. The separate root/trim stores,
-five-marker readiness cohort, cross-host custody and live acceptance remain
-unqualified by this correction.
+scope. The [exact custody successor](evidence/release-1d580d5e-serverac86-20261001.md) packages writer `cb9f3aa2`,
+reader `1922981d` and diagnostic `4e6b4a7e` at SN `1d580d5e` / server `ac86855d`,
+with matching local source/image repeats. It supersedes the SN `28ebfced` baseline
+while independent release and live authority gates remain open. The separate root/trim stores,
+cross-host custody and live acceptance remain unqualified by this correction.
+
+The [bootstrap readiness custody correction](evidence/bootstrap-readiness-custody-qualification-20261001.md)
+at source `3d1e2ecf` separately covers the five original preparation markers and
+the passive profile's three-marker subset. Their original physical custody and
+exact journals now remain checked through receipt/installation observations,
+successor send admission, trim publication and validator/passive-host decisions.
+An observed integrity failure preserves original signed bytes and consumed start
+allowances; an intact interrupted preparation remains recoverable. All 44 author
+normal roots, fourteen race roots and vet pass; independent qualification passes
+all eleven new roots in both modes plus vet, with seven unchanged-source causal
+failures. A separate omission proves the final validator host check. The frozen
+`1d580d5e` release excludes this correction and needs a selected successor.
+Separate root/trim writers still need P0 physical custody qualification before
+fresh native signing or sends are enabled. Current public composition leaves
+those authority ports unavailable. Live acceptance remains open.
 
 The [two-UR current-admission route](VALIDATOR-CURRENT-ADMISSION.md) has
 [scoped qualification](evidence/validator-current-admission-qualification-20261001.md)
@@ -1603,8 +1618,35 @@ Local builds and artifact readback do not close independent compiler/build
 reproduction, composed service/database behavior, production policy, migration,
 rollout, published identity or release/deployment approval. Later source changes
 require a separate exact release; reporting commits do not change these pins.
-This baseline is **superseded for launch** by the later original-authority EVM
-custody successor; a new exact-source build and qualification are required.
+This baseline remains **superseded for launch** by the
+[exact custody successor](evidence/release-1d580d5e-serverac86-20261001.md); its original receipts are preserved.
+
+The [original EVM custody successor](evidence/release-1d580d5e-serverac86-20261001.md) now binds exact
+SN `1d580d5e` / server `ac86855d`, including writer `cb9f3aa2`, borrowed-reader
+`1922981d` and diagnostic `4e6b4a7e`. Ten clean source checkouts were freshly
+fetched from remotes to the data volume. Two sequential fresh-cache builds
+match seventeen executables and ten bytecode outputs; both eight-image
+aggregates verify 342 source/image artifacts and match all platform,
+configuration and archive bytes. Builder/source-graph and sampler normal/race
+gates and vet pass. Twenty component records retain their original source,
+failure and continuation scopes; exact Go/module inclusion of the qualified
+custody source and all 107 custody author evidence checksums pass. The repeated
+61-file inventory retains twelve migration inputs and 751 catalogue entries
+without applying migrations. Independent compiler/build reproduction, complete
+module-body provenance, arm64, restore, production policy/configuration,
+service behavior, migration/rollout, attestation and actual deployed image
+identity remain open. The separately [qualified five-marker/passive-root custody
+correction](evidence/bootstrap-readiness-custody-qualification-20261001.md) at `3d1e2ecf`
+is outside this frozen source and requires a selected successor build. These
+local artifacts do not approve release or launch.
+
+Independent A/B source and all sixteen OCI image readbacks pass, with the
+primary receipt and B-image addendum retaining separate scopes. The exact
+release binary also captures a fresh public combined snapshot at block
+9,191,346 and emits two identical unsigned plans. All ten actions remain
+blocked/non-executable, with twenty-eight missing and two supplied-unvalidated
+requirements; both authority/readiness flags remain false. The planning
+supplement is sealed separately from the build artifacts.
 
 No signed mainnet deployment plan has been evidenced. The existing catalogue
 is release/testnet history, not established mainnet signing authority. Fresh
