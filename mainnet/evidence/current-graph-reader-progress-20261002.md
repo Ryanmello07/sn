@@ -36,3 +36,32 @@ The current SN retained-member composition `5f1fe123` is independently testing
 ten observer, preparation, retained-member and execution seams on its exact
 qualified Server `10a8f4d8` / Connect `0a5cda0e` graph. It is separate from the
 new published-module intake above. Full PH/MG acceptance remains open.
+
+
+## Adjacent Server and preparation reader successors
+
+Server `2c4e5dca72fff0ba505119ff59dfa2a0ac88c04e` / tree
+`749eaf1778d6eb28c231cb89b16862540ef4edf9` is a separate successor of
+current composition `32196d57`. Its actual public Get and capacity readers now
+withhold bytes after a failed post-read guard and retain both EOF and cancellation
+causes where both occurred. Author17 normal/17 race roots and vet pass. Seven
+causal assertions fail on old321 read bodies in each mode; six positives pass.
+Existing io.Copy publication paths already refuse these errors, so successful
+store corruption is not asserted. Root verified all45 bindings of the
+[author receipt](server-guarded-reader-author-20261002.json), SHA-256
+`c2753adc14c964bbd895b7c1b14b898895c4804b7c1fe85813fe665dcce74715`.
+Actual published Connecte0d/SCTP644 and local SN69 dependencies remain pinned.
+Independent actual-current-graph qualification is queued; neither321 nor2c4
+is promoted into Server main.
+
+Preparation reader `f5c0707bed5374c976c31de54573c9c1501085a6` / tree
+`073d31a965a05999a3d43851357503223e1a040e` separately corrects Read and ReadAt
+admitted counts after cancellation. Four actual ReadFull/JSON/ReadAt controls
+fail on f4 in both modes. Eleven affected validator roots and seven actual CLI
+roots pass normal/race; three package vets pass. Root verified all29 bindings
+of the [author receipt](fresh-ledger-reader-author-20261002.json), SHA-256
+`554b2306bd98261859e73c10268e45316cda589bc196f9c4b53c61709c41f5c2`.
+Unchanged Connectea827/core73 stays bound through its original sealed receipt.
+Independent replay is pending. Native/snapshot public-entry controls now run
+on the unchanged f5 baseline before their adapters are implemented; this still
+does not close private-root creation, retained/restore or the full storage gate.
