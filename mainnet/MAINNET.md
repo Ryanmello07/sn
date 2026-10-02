@@ -3057,3 +3057,23 @@ and reopen of the exact acknowledged fallback. An omitted observation remains
 unobserved history; no economic outcome or signing authority follows from it.
 This review finding is assigned to the claim-producer successor, not qualified
 or merged yet.
+
+
+### Independent preparation composition qualification
+
+The exact SN `1f66a2bd` / Connect `ba74f897` / Server `2c4e5dca`
+workspace now passes independent qualification: 101 selected tests normally
+and with race detection (15 mainnet, 11 validator, 73 storage core and two
+chain tests), plus five package vet scopes. All tests completed without
+failures or skips. Root verified all 48 [receipt manifest](evidence/preparation-composition-independent-20261002.json)
+bindings. Receipt SHA-256:
+`b5f4725895eadc33d398b8329bea98671b39f1845db0203a49ae9a7b3f4cd6c4`.
+
+The receipt binds the 648-module local workspace graph and exact source
+readback (20,080 SN and 3,715 Connect tracked blobs), including the unchanged
+core, reader and adapter joins. Earlier old-source causal failures remain
+separate author evidence. This qualifies the frozen source composition; it
+does not qualify tracked published-module consumption, current main with later
+fleet/server changes, directory-owner/private-root successors or a production
+release. Integrate those source/dependency changes without replacing completed
+recovery history, and qualify their actual final graph before launch.
