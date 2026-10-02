@@ -164,10 +164,16 @@ The borrowed-five correction in `ownerTrimStore` is not a qualification of that
 separate sixth-marker writer. Launch must keep these capabilities unavailable
 until their corresponding P0 custody work and authority gates are closed.
 
-The release frozen at `1d580d5e` excludes this source correction. MG-02 must
-select and qualify a successor artifact containing the correction and preserved
-dependency pins. Live current admission, installation/host custody acceptance,
-operational rehearsal, and the other mainnet gates remain open.
+The release frozen at `1d580d5e` excludes this source correction. The
+[exact readiness artifact successor](release-3d1e2ecf-serverac86-20261002.md) now packages the qualified
+`3d1e2ecf` source with server `ac86855d`, matching source/bytecode/OCI repeats
+and separate independent artifact readback. This qualified scoped baseline is
+superseded for launch by later owner-custody source `21640419`, which is excluded
+from those artifacts and requires a new exact release composition. Its unchanged
+base receipt must be read with the separate corrected finalization guard. MG-02
+remains open for independent compiler provenance and complete production
+qualification. Live current admission, installation/host custody acceptance,
+operational rehearsal and the other mainnet gates remain open.
 
 The author evidence manifest is `evidence-sha256.txt` under the retained evidence
 directory. Its SHA-256 is `d6a958be1a17ce642cfcb0b9b68b6f62c22d9a84ddfd1b52a63930f5840a770a`.
