@@ -28,6 +28,7 @@ import (
 
 	snchain "github.com/urfoundation/sn/chain"
 	"github.com/urfoundation/sn/crv4"
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/stabi"
 )
@@ -35,6 +36,7 @@ import (
 // Mutation hooks are explicit Rpc barriers, never timing or scheduler probes.
 type fleetMainnetTestFixture struct {
 	stateLock             sync.Mutex
+	durable               *durablefixture.Fixture
 	authority             fleetMainnetRuntimeAuthority
 	manifest              *protocol.FleetManifest
 	opts                  docopt.Opts
@@ -385,7 +387,14 @@ func newFleetMainnetTestFixture(t *testing.T) *fleetMainnetTestFixture {
 	t.Cleanup(self.server.Close)
 	self.opts["--rpc"] = []string{self.server.URL}
 	self.opts["--substrate"] = []string{self.server.URL}
-	t.Setenv("URNETWORK_STATE_DIR", filepath.Join(directory, "state"))
+	stateRoot := filepath.Join(directory, "state")
+	if err := os.MkdirAll(filepath.Join(stateRoot, "fleet-mainnet-recovery"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	durablefixture.ProvisionSnapshot(t, filepath.Join(stateRoot, "fleet-mainnet-recovery"), "fleet-recovery", "journal.json", fleetRecoveryMaxBytes, "", map[string][]byte{"initialized": nil})
+	durablefixture.ProvisionNativeJournal(t, filepath.Join(stateRoot, "fleet-native"))
+	self.durable = durablefixture.NewOwnerLocal(t, t.Context(), stateRoot)
+	t.Setenv("URNETWORK_STATE_DIR", stateRoot)
 	return self
 }
 

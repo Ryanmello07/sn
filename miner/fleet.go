@@ -168,6 +168,7 @@ func closeFleetNative(chain *crv4.Chain) {
 }
 
 func fleetCommand(opts docopt.Opts) error {
+	ctx := minerStorageContext(context.Background(), opts)
 	manifest, err := loadFleetManifest(fleetOpt(opts, "--manifest"))
 	if err != nil {
 		return err
@@ -179,15 +180,15 @@ func fleetCommand(opts docopt.Opts) error {
 		fmt.Printf("%s\ncommitment_sha256: 0x%x\nmembers: %d\n", canonical, hash, len(manifest.Members))
 		return nil
 	case mustBoolOpt(opts, "register"):
-		return fleetRegister(opts, manifest)
+		return fleetRegister(ctx, opts, manifest)
 	case mustBoolOpt(opts, "publish"):
-		return fleetPublish(opts, manifest)
+		return fleetPublish(ctx, opts, manifest)
 	case mustBoolOpt(opts, "bind"):
-		return fleetBind(opts, manifest)
+		return fleetBind(ctx, opts, manifest)
 	case mustBoolOpt(opts, "status"):
-		return fleetStatus(opts, manifest)
+		return fleetStatus(ctx, opts, manifest)
 	case mustBoolOpt(opts, "revoke"):
-		return fleetRevoke(opts, manifest)
+		return fleetRevoke(ctx, opts, manifest)
 	default:
 		return errors.New("unknown fleet command")
 	}
@@ -223,13 +224,13 @@ const fleetDefaultFeeLimitRao = uint64(10_000_000)
 // finalized runtime against the reviewed pin, reads and prints the live burn
 // economics, refuses a burn above the ceiling, and is a dry run unless
 // --apply is given. Every broadcast is journaled under the provider state.
-func fleetRegister(opts docopt.Opts, manifest *protocol.FleetManifest) error {
+func fleetRegister(ctx context.Context, opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
 	if err != nil {
 		return err
 	}
 	if authority != nil {
-		return fleetRecoverableNative(opts, manifest, authority, "register")
+		return fleetRecoverableNative(ctx, opts, manifest, authority, "register")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -279,13 +280,13 @@ func fleetRegister(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	return err
 }
 
-func fleetPublish(opts docopt.Opts, manifest *protocol.FleetManifest) error {
+func fleetPublish(ctx context.Context, opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
 	if err != nil {
 		return err
 	}
 	if authority != nil {
-		return fleetRecoverableNative(opts, manifest, authority, "publish")
+		return fleetRecoverableNative(ctx, opts, manifest, authority, "publish")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -371,13 +372,13 @@ func fleetBindingAndSign(opts docopt.Opts, manifest *protocol.FleetManifest) (pr
 	return binding, clientSignature, hotkeySignature, err
 }
 
-func fleetBind(opts docopt.Opts, manifest *protocol.FleetManifest) error {
+func fleetBind(ctx context.Context, opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
 	if err != nil {
 		return err
 	}
 	if authority != nil {
-		return fleetRecoverableEvm(opts, manifest, authority, "bind")
+		return fleetRecoverableEvm(ctx, opts, manifest, authority, "bind")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
 	defer cancel()
@@ -429,7 +430,7 @@ func finalizedCoordinatorCall(ctx context.Context, manifest *protocol.FleetManif
 	return nil, "", fmt.Errorf("no finalized coordinator view answered: %w", errors.Join(errs...))
 }
 
-func fleetStatus(opts docopt.Opts, manifest *protocol.FleetManifest) error {
+func fleetStatus(ctx context.Context, opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
 	if err != nil {
 		return err
@@ -465,13 +466,13 @@ func fleetStatus(opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	return nil
 }
 
-func fleetRevoke(opts docopt.Opts, manifest *protocol.FleetManifest) error {
+func fleetRevoke(ctx context.Context, opts docopt.Opts, manifest *protocol.FleetManifest) error {
 	authority, err := loadFleetMainnetRuntimeAuthority(opts, manifest)
 	if err != nil {
 		return err
 	}
 	if authority != nil {
-		return fleetRecoverableEvm(opts, manifest, authority, "revoke")
+		return fleetRecoverableEvm(ctx, opts, manifest, authority, "revoke")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
 	defer cancel()

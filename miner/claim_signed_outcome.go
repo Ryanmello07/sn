@@ -98,7 +98,10 @@ func verifySignedClaimReceipt(tx *types.Transaction, intent *onchain.ClaimIntent
 	return nil
 }
 
-func reconcileSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, entry *ClaimQueueEntry) (string, error) {
+func reconcileSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, entry *ClaimQueueEntry, store *claimQueueStore) (string, error) {
+	if err := store.requireOwner(); err != nil {
+		return "", err
+	}
 	tx, intent, from, err := authenticateSignedClaim(cfg, entry)
 	if err != nil {
 		return "", &claimSignedOutcomeError{reason: "signed identity cannot be authenticated", cause: err}
@@ -116,7 +119,7 @@ func reconcileSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, entry *Cl
 	// The saved signature authorizes only the original transaction. If no
 	// receipt is available, finalized nonce and exact eth_call authorize an
 	// identical rebroadcast without requiring the API to retain old artifacts.
-	consumed, err := rebroadcastSignedClaim(ctx, cfg, tx, from)
+	consumed, err := rebroadcastSignedClaim(ctx, cfg, tx, from, store)
 	if err != nil {
 		return "", &claimSignedOutcomeError{reason: "exact rebroadcast did not reconcile outcome", cause: err}
 	}

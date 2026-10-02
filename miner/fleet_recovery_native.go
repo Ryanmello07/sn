@@ -100,14 +100,14 @@ func fleetRecoveryNativeHeader(ctx context.Context, chain *crv4.Chain, number ui
 
 // Registration and publication share the same durable path; testnet retains
 // its existing operational behavior and never acquires this mainnet authority.
-func fleetRecoverableNative(opts docopt.Opts, manifest *protocol.FleetManifest, authority *fleetMainnetRuntimeAuthority, action string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+func fleetRecoverableNative(ctx context.Context, opts docopt.Opts, manifest *protocol.FleetManifest, authority *fleetMainnetRuntimeAuthority, action string) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	intent, err := fleetRecoveryNewIntent(action, authority, manifest)
 	if err != nil {
 		return err
 	}
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(ctx)
 	if err != nil {
 		return err
 	}
@@ -191,10 +191,17 @@ func fleetRecoverableNative(opts docopt.Opts, manifest *protocol.FleetManifest, 
 		if err != nil {
 			return err
 		}
-		journal, err := snchain.OpenJournal(filepath.Join(stateDir, "fleet-native"))
+		journal, err := snchain.OpenOwnerLocalJournal(ctx, filepath.Join(stateDir, "fleet-native"))
+		// The failed opener has joined/closed its own descriptors. One bounded
+		// exact-custody reconciliation resumes only this native owner; unknown
+		// partial history stays retained and refuses a new signing/send attempt.
+		if errors.Is(err, snchain.ErrJournalUncertain) {
+			journal, err = snchain.ReconcileOwnerLocalJournal(ctx, filepath.Join(stateDir, "fleet-native"))
+		}
 		if err != nil {
 			return err
 		}
+		defer journal.Close()
 		result, err := snchain.RegisterHotkey(ctx, view, snchain.RegisterRequest{Command: "provider fleet register", Netuid: manifest.Netuid, Hotkey: manifest.Hotkey, Coldkey: key, BurnLimitRao: burnLimit, FeeLimitRao: feeLimit, Allowed: []crv4.RuntimeArtifactIdentity{authority.artifactIdentity()}, RuntimeAdmission: authority.nativeAdmission(chain), Journal: journal, Apply: mustBoolOpt(opts, "--apply"), Output: os.Stdout, Prepared: prepare, BeforeBroadcast: before})
 		if err != nil {
 			if record != nil {
@@ -219,6 +226,9 @@ func fleetRecoverableNative(opts docopt.Opts, manifest *protocol.FleetManifest, 
 		if err := authority.nativeAdmission(chain)(ctx, types.Hash{}); err != nil {
 			return err
 		}
+		if err := store.beforeExternal(ctx); err != nil {
+			return err
+		}
 		raw, err := snchain.EncodeSignedCall(view, key.Ring, call, nonce)
 		if err != nil {
 			return err
@@ -230,6 +240,9 @@ func fleetRecoverableNative(opts docopt.Opts, manifest *protocol.FleetManifest, 
 			return fleetRecoveryUnresolved(record, err)
 		}
 		if err := before(); err != nil {
+			return err
+		}
+		if err := store.beforeExternal(ctx); err != nil {
 			return err
 		}
 		receipt, err = view.SubmitRawAndWatchFinalized(ctx, codec.HexEncodeToString(record.Raw))
@@ -418,6 +431,9 @@ func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoverySto
 	copy := *record
 	copy.Stage = "may_have_sent"
 	if err := store.put(&copy, signer); err != nil {
+		return err
+	}
+	if err := store.beforeExternal(ctx); err != nil {
 		return err
 	}
 	receipt, err := view.SubmitRawAndWatchFinalized(ctx, codec.HexEncodeToString(record.Raw))

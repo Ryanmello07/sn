@@ -5,6 +5,7 @@ package miner
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/hex"
@@ -23,7 +24,10 @@ import (
 
 	snchain "github.com/urfoundation/sn/chain"
 	"github.com/urfoundation/sn/crv4"
+	"github.com/urfoundation/sn/internal/durablehead"
+	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urfoundation/sn/protocol"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 const fleetRecoverySchema = "urnetwork-mainnet-fleet-recovery-v1"
@@ -111,6 +115,8 @@ func fleetRecoveryVerify(native [32]byte, evm common.Address, digest [32]byte, s
 // No method is concurrent; callers hold the owner for the whole operation.
 type fleetRecoveryStore struct {
 	directory *os.File
+	guard     *durablepath.Directory
+	head      *durablehead.Owner
 	records   []*fleetRecoveryRecord
 	signer    fleetRecoverySigner
 	// Deterministic durability barriers belong to this owner, never globals.
@@ -235,12 +241,33 @@ func (self fleetRecoverySigner) sign(record *fleetRecoveryRecord) error {
 
 // Opens only private regular files relative to the pinned private directory.
 func (self *fleetRecoveryStore) file(name string, flags int) (*os.File, error) {
-	return fleetRecoveryOpenFile(self.directory, name, flags)
+	if err := self.requireOwner(); err != nil {
+		return nil, err
+	}
+	file, err := fleetRecoveryOpenFile(self.directory, name, flags)
+	if err != nil {
+		return nil, err
+	}
+	if err := self.requireOwner(); err != nil {
+		return nil, errors.Join(err, file.Close())
+	}
+	return file, nil
+}
+
+// The actual persistent store never accepts absent policy or a lost generation.
+func (self *fleetRecoveryStore) requireOwner() error {
+	if self == nil || self.guard == nil || self.directory == nil {
+		return errors.New("fleet recovery directory owner is absent")
+	}
+	if self.head != nil {
+		return self.head.Check()
+	}
+	return self.guard.CheckRead()
 }
 
 // Journal creation precedes signing; an existing owner never silently resets
 // a missing or corrupt journal. An interrupted replacement remains recoverable.
-func openFleetRecoveryStore() (*fleetRecoveryStore, error) {
+func openFleetRecoveryStore(ctx context.Context) (*fleetRecoveryStore, error) {
 	if err := fleetRecoveryPlatformSupported(); err != nil {
 		return nil, err
 	}
@@ -249,49 +276,38 @@ func openFleetRecoveryStore() (*fleetRecoveryStore, error) {
 		return nil, err
 	}
 	dir := filepath.Join(stateDir, "fleet-mainnet-recovery")
-	// New parent directory entries must be durable too; losing the state
-	// directory cannot be allowed to erase evidence of prior initialization.
-	var newDirectories []string
-	for path := dir; ; path = filepath.Dir(path) {
-		_, err := os.Lstat(path)
-		newDirectories = append(newDirectories, path)
-		if err == nil {
-			break
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-	}
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, err
-	}
-	for _, path := range newDirectories {
-		parent, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
-		if err := errors.Join(parent.Sync(), parent.Close()); err != nil {
-			return nil, err
-		}
-	}
-	directory, err := fleetRecoveryOpenDirectory(dir)
+	guard, err := durablepath.OpenOwnerLocal(ctx, dir, durablevolume.ReadWrite, false)
 	if err != nil {
 		return nil, err
 	}
-	self := &fleetRecoveryStore{directory: directory}
+	directory := guard.File()
+	self := &fleetRecoveryStore{directory: directory, guard: guard}
 	fail := func(err error) (*fleetRecoveryStore, error) { self.close(); return nil, err }
+	info, err := directory.Stat()
+	if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+		return fail(errors.Join(errors.New("fleet recovery directory must be private"), err))
+	}
 	if err := fleetRecoveryLock(directory); err != nil {
 		return fail(fmt.Errorf("fleet recovery already has an exclusive owner: %w", err))
 	}
-	read := func(name string) ([]*fleetRecoveryRecord, error) {
-		file, err := self.file(name, os.O_RDONLY)
-		if err != nil {
-			return nil, err
-		}
-		raw, readErr := io.ReadAll(io.LimitReader(file, fleetRecoveryMaxBytes+1))
-		if err := errors.Join(readErr, file.Close()); err != nil {
-			return nil, err
-		}
+	// Pre-anchor legacy candidates need explicit reviewed provisioning; a new
+	// opener cannot guess their relationship to the current signed inventory.
+	if candidate, candidateErr := self.file("journal.next", os.O_RDONLY); candidateErr == nil {
+		return fail(errors.Join(durablehead.ErrUncertain, errors.New("legacy fleet candidate requires explicit custody adoption"), candidate.Close()))
+	} else if !errors.Is(candidateErr, os.ErrNotExist) {
+		return fail(candidateErr)
+	}
+	spec := durablehead.Spec{Kind: "fleet-recovery", Name: "journal.json", MaximumBytes: fleetRecoveryMaxBytes, AuxiliaryNames: []string{"initialized"}}
+	self.head, err = durablehead.Open(ctx, guard, directory, spec)
+	// A failed opener has no running users. The existing exclusive lock stays
+	// held across one bounded exact-byte recovery; no transaction is resent.
+	if errors.Is(err, durablehead.ErrUncertain) {
+		self.head, err = durablehead.Reconcile(ctx, guard, directory, spec)
+	}
+	if err != nil {
+		return fail(err)
+	}
+	read := func(raw []byte) ([]*fleetRecoveryRecord, error) {
 		var journal fleetRecoveryJournal
 		if len(raw) > fleetRecoveryMaxBytes {
 			return nil, errors.New("fleet recovery journal exceeds byte bound")
@@ -333,87 +349,38 @@ func openFleetRecoveryStore() (*fleetRecoveryStore, error) {
 		}
 		return records, nil
 	}
-	// A complete, authenticated next file is the newest state. Promotion only
-	// completes the interrupted local commit; it never transmits a transaction.
-	previous, previousErr := read("journal.json")
-	if previousErr != nil && !errors.Is(previousErr, os.ErrNotExist) {
-		return fail(previousErr)
-	}
-	if records, nextErr := read("journal.next"); nextErr == nil {
-		if len(records) < len(previous) {
-			return fail(errors.New("fleet recovery candidate removed previous records"))
-		}
-		for i, old := range previous {
-			if err := fleetRecoveryAdvance(old, records[i]); err != nil {
-				return fail(err)
-			}
-			if len(records) > len(previous) && records[i].Stage != "finalized" {
-				return fail(errors.New("fleet recovery candidate bypassed a pending owner"))
-			}
-		}
-		candidate, err := self.file("journal.next", os.O_RDONLY)
-		if err != nil {
-			return fail(err)
-		}
-		if err := errors.Join(candidate.Sync(), candidate.Close()); err != nil {
-			return fail(err)
-		}
-		if err := fleetRecoveryRename(directory, "journal.next", "journal.json"); err != nil {
-			return fail(err)
-		}
-		if err := self.directory.Sync(); err != nil {
-			return fail(err)
-		}
-		self.records = records
-	} else if !errors.Is(nextErr, os.ErrNotExist) {
-		return fail(nextErr)
-	}
-	records, err := read("journal.json")
-	if errors.Is(err, os.ErrNotExist) {
-		marker, markerErr := self.file("initialized", os.O_RDONLY)
-		if markerErr == nil {
-			marker.Close()
-			return fail(errors.New("fleet recovery journal is missing after initialization"))
-		}
-		if !errors.Is(markerErr, os.ErrNotExist) {
-			return fail(markerErr)
-		}
-		if err := self.save(); err != nil {
-			return fail(err)
-		}
-	} else if err != nil {
-		return fail(err)
-	} else {
-		self.records = records
-	}
-	marker, err := self.file("initialized", os.O_WRONLY|os.O_CREATE)
+	raw, present, err := self.head.Read()
 	if err != nil {
 		return fail(err)
 	}
-	err = errors.Join(marker.Sync(), marker.Close(), self.directory.Sync())
-	marker, markerErr := self.file("initialized", os.O_RDONLY)
-	if markerErr != nil {
-		return fail(markerErr)
+	if present {
+		self.records, err = read(raw)
+		if err != nil {
+			return fail(err)
+		}
+	} else if err := self.save(); err != nil {
+		return fail(err)
 	}
-	markerBytes, readErr := io.ReadAll(io.LimitReader(marker, 16))
-	if markerErr := errors.Join(readErr, marker.Close()); markerErr != nil {
-		return fail(markerErr)
+	if err := self.completeMarker(); err != nil {
+		return fail(err)
 	}
-	if (len(markerBytes) != 0 && string(markerBytes) != "signed\n") || (len(markerBytes) == 0) != (len(self.records) == 0) {
-		return fail(errors.New("fleet recovery initialized inventory was removed or marker differs"))
-	}
-	parent, parentErr := os.Open(stateDir)
-	if parentErr == nil {
-		parentErr = errors.Join(parent.Sync(), parent.Close())
-	}
-	if err := errors.Join(err, parentErr); err != nil {
+	if err := self.requireOwner(); err != nil {
 		return fail(err)
 	}
 	return self, nil
 }
 
 // Closing the directory releases the process-owned lock.
-func (self *fleetRecoveryStore) close() error { return self.directory.Close() }
+func (self *fleetRecoveryStore) close() error {
+	if self == nil || self.guard == nil {
+		return nil
+	}
+	guard := self.guard
+	self.guard, self.directory = nil, nil
+	err := self.head.Close()
+	self.head = nil
+	return errors.Join(err, guard.Close())
+}
 
 // An interrupted candidate can complete an operation but cannot roll back
 // immutable transaction custody, a finalized outcome or an archive cursor.
@@ -453,6 +420,12 @@ func fleetRecoveryAdvance(old, next *fleetRecoveryRecord) error {
 // Persistence never authorizes a send until file and directory fsync finish.
 // A failed or interrupted save leaves its exact candidate for restart recovery.
 func (self *fleetRecoveryStore) save() error {
+	if self == nil || self.head == nil {
+		return errors.New("fleet recovery checkpoint is absent")
+	}
+	if err := self.head.CheckWrite(); err != nil {
+		return err
+	}
 	journal := fleetRecoveryJournal{Schema: fleetRecoverySchema, Records: self.records}
 	if len(self.records) != 0 {
 		digest := journal.digest()
@@ -472,41 +445,30 @@ func (self *fleetRecoveryStore) save() error {
 	if err != nil || len(raw) > fleetRecoveryMaxBytes || len(self.records) > fleetRecoveryMaxRecords {
 		return errors.Join(errors.New("fleet recovery journal capacity exhausted"), err)
 	}
-	file, err := self.file("journal.next", os.O_WRONLY|os.O_CREATE|os.O_EXCL)
-	if err != nil {
-		return err
-	}
-	if _, err := file.Write(raw); err != nil {
-		file.Close()
-		return err
-	}
-	if err := errors.Join(file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if self.checkpoint != nil {
-		if err := self.checkpoint("file-synced"); err != nil {
-			return err
+	at := func(stage string) error {
+		if self.checkpoint != nil {
+			return self.checkpoint(stage)
 		}
+		return nil
 	}
-	if err := fleetRecoveryRename(self.directory, "journal.next", "journal.json"); err != nil {
+	if err := self.head.PublishWithHooks(raw, durablehead.PublicationHooks{
+		AfterFileSync:      func() error { return at("file-synced") },
+		AfterRename:        func() error { return at("renamed") },
+		AfterDirectorySync: func(*os.File) error { return at("directory-synced") },
+	}); err != nil {
 		return err
 	}
-	if self.checkpoint != nil {
-		if err := self.checkpoint("renamed"); err != nil {
-			return err
-		}
-	}
-	if err := self.directory.Sync(); err != nil {
+	if err := self.completeMarker(); err != nil {
 		return err
 	}
-	if self.checkpoint != nil {
-		return self.checkpoint("directory-synced")
-	}
-	return nil
+	return self.head.CheckWrite()
 }
 
 // A different logical intent cannot escape an unresolved signed liability.
 func (self *fleetRecoveryStore) find(intent fleetRecoveryIntent) (*fleetRecoveryRecord, error) {
+	if err := self.requireOwner(); err != nil {
+		return nil, err
+	}
 	var found *fleetRecoveryRecord
 	for _, record := range self.records {
 		if record.Id == intent.id() {
@@ -525,6 +487,12 @@ func (self *fleetRecoveryStore) find(intent fleetRecoveryIntent) (*fleetRecovery
 // Publishes a new signed transaction or a signed outcome without replacing
 // its immutable authority, transaction, nonce, signer, or signing checkpoint.
 func (self *fleetRecoveryStore) put(record *fleetRecoveryRecord, signer fleetRecoverySigner) error {
+	if self == nil || self.head == nil {
+		return errors.New("fleet recovery checkpoint is absent")
+	}
+	if err := self.head.CheckWrite(); err != nil {
+		return err
+	}
 	if err := signer.sign(record); err != nil {
 		return err
 	}
@@ -542,8 +510,9 @@ func (self *fleetRecoveryStore) put(record *fleetRecoveryRecord, signer fleetRec
 		if err := fleetRecoveryAdvance(old, record); err != nil {
 			return err
 		}
-		self.records[i] = record
-		return self.save()
+		next := append([]*fleetRecoveryRecord(nil), self.records...)
+		next[i] = record
+		return self.saveRecords(next)
 	}
 	if record.Stage != "prepared" || len(self.records) >= fleetRecoveryMaxRecords {
 		return errors.New("fleet recovery new record stage or capacity differs")
@@ -551,19 +520,64 @@ func (self *fleetRecoveryStore) put(record *fleetRecoveryRecord, signer fleetRec
 	if _, err := self.find(record.Intent); err != nil {
 		return err
 	}
-	if len(self.records) == 0 {
-		marker, err := self.file("initialized", os.O_WRONLY)
-		if err != nil {
-			return err
-		}
-		if _, err := marker.Write([]byte("signed\n")); err != nil {
-			marker.Close()
-			return err
-		}
-		if err := errors.Join(marker.Sync(), marker.Close()); err != nil {
-			return err
-		}
+	next := append(append([]*fleetRecoveryRecord(nil), self.records...), record)
+	return self.saveRecords(next)
+}
+
+// Pre-admission failures do not advance process-local custody. Uncertain
+// publication separately poisons the head, retaining actual disk evidence.
+func (self *fleetRecoveryStore) saveRecords(next []*fleetRecoveryRecord) error {
+	previous := self.records
+	self.records = next
+	if err := self.save(); err != nil {
+		self.records = previous
+		return err
 	}
-	self.records = append(self.records, record)
-	return self.save()
+	return nil
+}
+
+// The original marker inode is never created or replaced. Only a complete
+// authenticated retained inventory can finish its empty-to-signed grammar.
+func (self *fleetRecoveryStore) completeMarker() error {
+	var raw []byte
+	if err := self.head.WithAuxiliary("initialized", false, func(file *os.File) error {
+		var err error
+		raw, err = io.ReadAll(io.LimitReader(file, 16))
+		return err
+	}); err != nil {
+		return err
+	}
+	if len(raw) != 0 && string(raw) != "signed\n" {
+		return errors.New("fleet initialized marker grammar differs")
+	}
+	if len(self.records) == 0 {
+		if len(raw) != 0 {
+			return errors.New("fleet initialized inventory was removed")
+		}
+		return nil
+	}
+	if len(raw) != 0 {
+		return nil
+	}
+	return self.head.WithAuxiliary("initialized", true, func(file *os.File) error {
+		n, err := file.WriteAt([]byte("signed\n"), 0)
+		if n != len("signed\n") && err == nil {
+			err = io.ErrShortWrite
+		}
+		return err
+	})
+}
+
+// The current request and the retained owner independently authorize handoff.
+func (self *fleetRecoveryStore) beforeExternal(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("fleet request context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if self == nil || self.head == nil {
+		return errors.New("fleet recovery checkpoint is absent")
+	}
+	return errors.Join(self.head.CheckWrite(), ctx.Err())
 }

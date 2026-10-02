@@ -21,17 +21,22 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/urfoundation/sn/miner/onchain"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // Trailing JSON whitespace makes both files syntactically valid; the extra
 // byte must be rejected for capacity before the decoder can accept it.
 func TestClaimQueueCapacityReadAcceptsExactLimitAndRejectsExcess(t *testing.T) {
-	store := newClaimQueueTestStore(t, filepath.Join(t.TempDir(), "claims"))
-	raw := bytes.Repeat([]byte(" "), maximumClaimQueueBytes)
-	copy(raw, []byte(`{"schema":"urnetwork-provider-claim-queue-v1","last_discovered":-1,"entries":{}}`))
-	if err := os.WriteFile(store.path, raw, 0o600); err != nil {
+	directory := filepath.Join(t.TempDir(), "claims")
+	if err := os.Mkdir(directory, 0700); err != nil {
 		t.Fatal(err)
 	}
+	raw := bytes.Repeat([]byte(" "), maximumClaimQueueBytes)
+	copy(raw, []byte(`{"schema":"urnetwork-provider-claim-queue-v1","last_discovered":-1,"entries":{}}`))
+	if err := os.WriteFile(filepath.Join(directory, "claim-queue.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := newClaimQueueTestStore(t, directory)
 	queue, err := store.load()
 	if err != nil || queue == nil || queue.LastDiscovered != -1 || len(queue.Entries) != 0 {
 		t.Fatalf("exact-limit queue was not admitted: %v", err)
@@ -49,7 +54,7 @@ func TestClaimQueueCapacityReadAcceptsExactLimitAndRejectsExcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	beforeHash := claimQueueCapacityDigest(t, store.path)
-	if queue, err := store.load(); !errors.Is(err, errClaimQueueCapacity) || queue != nil {
+	if queue, err := store.load(); !errors.Is(err, durablevolume.ErrIdentity) || queue != nil {
 		t.Fatalf("limit-plus-one queue was admitted: queue present=%t error=%v", queue != nil, err)
 	}
 	after, err := os.Stat(store.path)
@@ -157,7 +162,7 @@ func TestClaimQueueCapacityPublisherRefusesExcessBeforeFileCreation(t *testing.T
 		if attempt == 2 {
 			queue.LastDiscovered = 1
 		}
-		if err := store.save(queue); !errors.Is(err, errClaimQueueCapacity) {
+		if err := store.save(queue); !errors.Is(err, durablevolume.ErrIdentity) {
 			t.Fatalf("save %d replaced oversized retained bytes: %v", attempt, err)
 		}
 		if claimQueueCapacityDigest(t, store.path) != beforeHash {
@@ -181,6 +186,7 @@ func TestClaimQueueCapacityDaemonRefusesExcessBeforeNetwork(t *testing.T) {
 	if err := os.MkdirAll(cfg.StateDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
+	ctx := claimQueueTestContext(t, context.Background(), cfg.StateDir)
 	path := filepath.Join(cfg.StateDir, "claim-queue.json")
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
@@ -196,16 +202,21 @@ func TestClaimQueueCapacityDaemonRefusesExcessBeforeNetwork(t *testing.T) {
 	beforeHash := claimQueueCapacityDigest(t, path)
 	ready := false
 	admission := &claimAdmission{}
-	err = runClaimDaemonWithAdmission(context.Background(), configPath, admission, 0, func() { ready = true })
-	if !errors.Is(err, errClaimQueueCapacity) || ready || requests.Load() != 0 || admission.nonceMinimum() != 0 {
+	err = runClaimDaemonWithAdmission(ctx, configPath, admission, 0, func() { ready = true })
+	if !errors.Is(err, durablevolume.ErrIdentity) || ready || requests.Load() != 0 || admission.nonceMinimum() != 0 {
 		t.Fatalf("oversized startup reached custody or network work: ready=%t requests=%d nonce=%d error=%v", ready, requests.Load(), admission.nonceMinimum(), err)
 	}
-	reopened := newClaimQueueTestStore(t, cfg.StateDir)
-	after, err := os.Stat(reopened.path)
+	if reopened, err := newClaimQueueStore(cfg.StateDir, ctx); reopened != nil || !errors.Is(err, durablevolume.ErrIdentity) {
+		if reopened != nil {
+			_ = reopened.close()
+		}
+		t.Fatalf("reopen admitted an unacknowledged oversized member: %v", err)
+	}
+	after, err := os.Stat(path)
 	if err != nil || !os.SameFile(before, after) || after.Size() != maximumClaimQueueBytes+1 {
 		t.Fatalf("oversized startup rewrote retained evidence: %v", err)
 	}
-	if claimQueueCapacityDigest(t, reopened.path) != beforeHash {
+	if claimQueueCapacityDigest(t, path) != beforeHash {
 		t.Fatal("oversized startup changed the retained byte hash")
 	}
 }

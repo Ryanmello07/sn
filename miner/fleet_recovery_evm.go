@@ -68,8 +68,8 @@ func fleetRecoveryDialEvm(ctx context.Context, endpoints []string, authority *fl
 
 // Intent selection and the journal lock precede every consent or transaction
 // signature. Pending records keep their original actor, approval and bytes.
-func fleetRecoverableEvm(opts docopt.Opts, manifest *protocol.FleetManifest, authority *fleetMainnetRuntimeAuthority, action string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
+func fleetRecoverableEvm(ctx context.Context, opts docopt.Opts, manifest *protocol.FleetManifest, authority *fleetMainnetRuntimeAuthority, action string) error {
+	ctx, cancel := context.WithTimeout(ctx, fleetStatusTimeout)
 	defer cancel()
 	intent, err := fleetRecoveryNewIntent(action, authority, manifest)
 	if err != nil {
@@ -95,7 +95,7 @@ func fleetRecoverableEvm(opts docopt.Opts, manifest *protocol.FleetManifest, aut
 	if err != nil {
 		return err
 	}
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(ctx)
 	if err != nil {
 		return err
 	}
@@ -183,7 +183,10 @@ func fleetRecoverableEvm(opts docopt.Opts, manifest *protocol.FleetManifest, aut
 		if number != nil {
 			return nil
 		}
-		return authority.admitEvm(ctx, actual, nil)
+		if err := authority.admitEvm(ctx, actual, nil); err != nil {
+			return err
+		}
+		return store.beforeExternal(ctx)
 	}}, onchain.SubmitHooks{Prepared: func(hash common.Hash, raw []byte) error {
 		var tx ethtypes.Transaction
 		if err := tx.UnmarshalBinary(raw); err != nil {
@@ -457,6 +460,9 @@ func fleetRecoveryResumeEvm(ctx context.Context, store *fleetRecoveryStore, reco
 		return err
 	}
 	if err := authority.admitEvm(ctx, client, nil); err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	if err := store.beforeExternal(ctx); err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
 	if err := client.SendTransaction(ctx, &tx); err != nil {

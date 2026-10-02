@@ -3,9 +3,7 @@
 package miner
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +11,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // Unexpected side effects fail immediately; individual tests install only
@@ -300,7 +300,7 @@ func TestClaimQueuePollRejectsMalformedRetryDeadline(t *testing.T) {
 }
 
 // File identity proves unchanged saves do not replace/fsync the queue. A
-// missing or externally changed file still requires a fresh durable write.
+// missing or externally changed file invalidates the retained generation.
 func TestClaimQueueStoreSkipsOnlyCurrentIdenticalBytes(t *testing.T) {
 	store := newClaimQueueTestStore(t, filepath.Join(t.TempDir(), "state"))
 	queue := &ClaimQueue{Schema: "urnetwork-provider-claim-queue-v1", LastDiscovered: 0, Entries: map[string]*ClaimQueueEntry{"0": {Epoch: 0, Status: "pending"}}}
@@ -323,29 +323,23 @@ func TestClaimQueueStoreSkipsOnlyCurrentIdenticalBytes(t *testing.T) {
 	if err := os.WriteFile(store.path, []byte("synthetic replaced bytes"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.save(queue); err != nil {
-		t.Fatal(err)
-	}
-	restored, err := store.load()
-	if err != nil || !reflect.DeepEqual(restored, queue) {
-		t.Fatalf("queue replacement was trusted: %+v %v", restored, err)
+	if err := store.save(queue); !errors.Is(err, durablevolume.ErrIdentity) {
+		t.Fatalf("changed bytes were reconstructed: %v", err)
 	}
 	if err := os.Remove(store.path); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.save(queue); err != nil {
-		t.Fatal(err)
+	if err := store.save(queue); !errors.Is(err, durablevolume.ErrIdentity) {
+		t.Fatalf("missing bytes were reconstructed: %v", err)
 	}
-	raw, err := os.ReadFile(store.path)
-	want, marshalErr := json.MarshalIndent(queue, "", "  ")
-	if err != nil || marshalErr != nil || !bytes.Equal(raw, append(want, '\n')) {
-		t.Fatalf("missing queue was not durably restored: read=%v encode=%v", err, marshalErr)
+	if _, err := os.Stat(store.path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing queue was recreated: %v", err)
 	}
 }
 
 // Equal bytes cannot bypass the existing private-file boundary or turn an
 // external symlink into an acknowledged durable queue generation.
-func TestClaimQueueStoreRepairsChangedPrivacyBeforeSkippingSave(t *testing.T) {
+func TestClaimQueueStoreRefusesChangedPrivacyBeforeSkippingSave(t *testing.T) {
 	store := newClaimQueueTestStore(t, filepath.Join(t.TempDir(), "state"))
 	queue := &ClaimQueue{Schema: "urnetwork-provider-claim-queue-v1", LastDiscovered: -1, Entries: map[string]*ClaimQueueEntry{}}
 	if err := store.save(queue); err != nil {
@@ -354,12 +348,12 @@ func TestClaimQueueStoreRepairsChangedPrivacyBeforeSkippingSave(t *testing.T) {
 	if err := os.Chmod(store.path, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.save(queue); err != nil {
-		t.Fatal(err)
+	if err := store.save(queue); !errors.Is(err, durablevolume.ErrIdentity) {
+		t.Fatalf("changed protection was silently repaired: %v", err)
 	}
 	info, err := os.Lstat(store.path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
-		t.Fatalf("private queue invariant was skipped: %v %v", info, err)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o644 {
+		t.Fatalf("refusal changed the observed evidence: %v %v", info, err)
 	}
 	retained := filepath.Join(filepath.Dir(store.path), "synthetic-retained.json")
 	if err := os.Rename(store.path, retained); err != nil {
@@ -368,12 +362,12 @@ func TestClaimQueueStoreRepairsChangedPrivacyBeforeSkippingSave(t *testing.T) {
 	if err := os.Symlink(retained, store.path); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.save(queue); err != nil {
-		t.Fatal(err)
+	if err := store.save(queue); !errors.Is(err, durablevolume.ErrIdentity) {
+		t.Fatalf("substituted alias was repaired: %v", err)
 	}
 	info, err = os.Lstat(store.path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
-		t.Fatalf("symlink replaced a durable queue generation: %v %v", info, err)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("refusal modified the substituted alias: %v %v", info, err)
 	}
 }
 
