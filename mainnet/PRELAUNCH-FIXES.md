@@ -358,6 +358,19 @@ and custody qualification, an actual approved transition and finalized Recycle
 state, followed by native 10/90 outcome evidence, remain required. This source
 needs a successor release; the SN `6c801a25` / server `720e7c61` baseline retains its scope.
 
+The [October 2 recycle custody correction](evidence/owner-recycle-custody-20261002.md)
+at source `25aa1515` closes detached-marker signing handoffs, recreation of
+deleted completed journals during mode reconciliation, and valid predecessor
+rollback during active ownership. It preserves original approval/nonce/signature
+bytes and interrupted unused-claim recovery. Source qualification is recorded
+separately: author and independent runs each pass 23 roots normally and with the
+race detector, plus vet, and reproduce seven causal baseline failures. The
+exact `3d1e2ecf` release and all owner-trim receipts retain their
+original scope. The full retained v470 native emission metadata profile passes
+unchanged. This custody fix supplies neither a recycle device/submitter nor the
+unresolved native denominator, quantization or actual 10/90 outcome; MG-06 and
+successor release qualification remain open.
+
 **Decoder resource admission implemented:** the shared
 [`DecodeRuntimeMetadata` boundary](evidence/runtime-metadata-bounds-20261001.md)
 at source `b9ee4c91` bounds encoded input before allocating raw bytes, collection

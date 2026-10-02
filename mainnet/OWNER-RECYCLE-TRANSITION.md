@@ -147,6 +147,16 @@ randomized Sr25519 signature is a replacement and is refused. No signed/terminal
 record can be exported for fresh signing. Ambiguous durability poisons the open
 instance; reopen the same config/key and original journal.
 
+The [October 2 physical-custody correction](evidence/owner-recycle-custody-20261002.md)
+at `25aa1515` checks the original marker inode/contents, private parent and
+preceding journal before and after publication and before public return. A
+completed missing journal, changed retained record, detached marker/parent or
+hardlink is an integrity failure for the open instance, including cached
+terminal and import results. Reopening cannot create a replacement for missing
+completed state. Only an incomplete initial claim with no journal or an unused
+reserved row may finish; it cannot recover exported/signed progress as unused.
+Retain the original physical directory and external cross-host custody fence.
+
 An exported request without its signature remains unresolved even after era
 death. The signature may already exist outside this process; missing bytes are
 not evidence that no signature was issued. Completed marker plus missing,

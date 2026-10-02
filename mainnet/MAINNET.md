@@ -908,6 +908,17 @@ records 29 author and 24 independent Sol roots passing normal/race, zero skips,
 and mainnet vet passing on the exact `b3880266` source. This is offline source
 qualification; the live and economic gates above remain open.
 
+The [October 2 recycle custody correction](evidence/owner-recycle-custody-20261002.md)
+at source `25aa1515` additionally binds signing handoffs and retained receipts to
+the original physical marker, private directory and preceding journal. A
+detached marker, deleted completed state or active-owner rollback cannot return
+a request or finalized mode success. Original nonce/signature recovery and
+unused interrupted claims remain supported. Qualification of this later source
+records separate author and independent 23-root normal/race passes, package vet
+and seven causal baseline failures in each run, preserving the earlier receipts
+and frozen release; actual
+owner/device authority, bounded transmission and native 10/90 evidence remain open.
+
 Release 1.0 explicitly rejected owner-directed burning as its head/tail steering strategy. The selected owner-recycle launch policy must therefore be encoded as an explicit economic-policy successor, with its activation and accounting independently verified. Preserve the independent-validator objective and signed weight caps: do not raise a cap, create arbitrary owner recipients, or displace validators merely to force a 90% weight destination. [Whitepaper, head/tail decision](../WHITEPAPER.md#138-headtail-split-θ-in-one-mechanism-chosen-not-two-mechanisms-not-owner-burn)
 
 A weight proposal is not an enforceable payout fraction. Independent validator weights, Yuma clipping, bonds, activity, permits, normalization and u16 rounding affect final incentive. For either owner-withholding path, qualify the complete runtime outcome against the admitted validator set and review adjacent/adversarial weight states. The draft assurance mode is `observed-native-target`: demonstrate the actual 10% allocation within `Q(k)`, disclose sensitivity to other validators, and monitor subsequent deviation. It does not promise that other validators can never change the outcome. If a stronger `enforced-cap` mode is selected, prove that ceiling under all admitted conditions or report `EMISSION_CAP_UNENFORCEABLE`; an after-the-fact monitor is not enforcement. Halting our validator does not revoke other validators' weights or stop already queued native emission. [Consensus implementation][subtensor-epoch]
