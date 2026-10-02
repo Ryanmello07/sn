@@ -25,7 +25,7 @@ func runStoragePreparationExport(ctx context.Context, args []string, stdout, std
 	fencePath := flags.String("former-writer-fence", "", "Protected stopped-and-joined original writer assertion")
 	fenceHash := flags.String("former-writer-fence-sha256", "", "Exact accepted assertion digest")
 	limits := durablevolume.InventoryLimits{}
-	flags.Uint64Var(&limits.MaxEntries, "max-entries", 1000, "Maximum original files/directories (at most 10000)")
+	flags.Uint64Var(&limits.MaxEntries, "max-entries", 1000, "Maximum original files/directories (at most 32768; includes namespace structure)")
 	flags.Uint64Var(&limits.MaxBytes, "max-bytes", 64*1024*1024, "Maximum original bytes read (at most 1 TiB)")
 	flags.Uint64Var(&limits.MaxDepth, "max-depth", 16, "Maximum original namespace depth (at most 32)")
 	flags.Uint64Var(&limits.MaxOwnerAttributes, "max-owner-attributes", 1000, "Maximum retained owner attributes (at most 10000)")
