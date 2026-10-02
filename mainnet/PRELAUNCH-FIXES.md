@@ -9,6 +9,16 @@ consistent usage attribution. Preserve unpaid balances and submitted-transfer
 reconciliation; prevent double payment across the two systems. A committed
 configuration alone does not prove a running worker has adopted the schedule.
 
+The [transition candidate and exact scope](evidence/payout-transition-plan-20261002.md)
+also expose financial hardening requirements: bind the actual amount and wallet
+atomically when reserving a processor key; retry stale snapshots without
+releasing debt; forbid bonus mutation after submission admission; retain
+explicit adjustment provenance and unresolved historical excess. Cached
+reliability scores must match the earning interval. Bounded diagnostic samples
+must disclose that their liability census is incomplete. The first normal
+batch has one fixture failure; the candidate and its original evidence remain
+retained while the successor is fixed and qualified.
+
 The [current preparation state](MAINNET.md#current-preparation-state--october-2)
 distinguishes integrated source fixes, qualified candidates and the remaining
 production work. All 28 hardening lessons and ten production gates retain their

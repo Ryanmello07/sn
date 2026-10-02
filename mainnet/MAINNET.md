@@ -21,6 +21,16 @@ config sources, deploy them, verify the loaded UTC policy and mainnet identity,
 and demonstrate the running payout workers enforce the boundary. Mainnet
 contract, signing, custody and runtime authority remain separate launch inputs.
 
+The [frozen transition plan](evidence/payout-transition-plan-20261002.md)
+records candidate Server `b19f1eba` / config `93dc65fd`, including the exact
+close-time partition and explicitly blocked mainnet activation. The
+[first normal batch](evidence/payout-transition-first-normal-20261002.json)
+passed 15 of 16 selected tests, four package vets and the CLI build. The
+remaining test failed during fixture creation before its paid/free assertion;
+its correction and the manual-bonus/processor-snapshot safeguards are being
+implemented in a separate successor. No completed qualification, merged payout
+code or deployed schedule is claimed by this checkpoint.
+
 ## Current preparation state — October 2
 
 No accepted current production release or live deployment exists. The full
