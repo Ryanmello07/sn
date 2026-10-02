@@ -5491,3 +5491,16 @@ does not qualify tracked published-module consumption, current main with later
 fleet/server changes, directory-owner/private-root successors or a production
 release. Integrate those source/dependency changes without replacing completed
 recovery history, and qualify their actual final graph before launch.
+
+
+### Provider readiness integration retains evidence boundaries
+
+Main `83d92f75` now includes the exact qualified provider readiness producer
+and expected-roster monitor. [Independent integration evidence](evidence/provider-monitor-integration-20261002.md)
+records 20 normal/race tests, three package vets, two causal capacity failures
+per mode and preserved newer fleet/module bytes. The appended admitted-handler
+shutdown control proves that close joins work already in flight, rather than
+merely closing an idle HTTP listener. Device readiness remains separate from
+proof, payment and genesis/finality authority. Current-main release composition,
+claim monitoring, economic-domain evidence and actual alert/repair delivery
+remain open; this source integration does not close MG-07 or PH-28.
