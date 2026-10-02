@@ -114,6 +114,7 @@ func reconcileSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, entry *Cl
 		if err := recordFinalizedClaimReceipt(entry, receipt); err != nil {
 			return "", err
 		}
+		entry.PublicObservation = signedClaimObservation(tx, intent, from, receipt)
 		return "finalized", nil
 	}
 	// The saved signature authorizes only the original transaction. If no

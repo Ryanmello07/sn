@@ -33,18 +33,21 @@ import (
 	"github.com/urfoundation/sn/evmrpc"
 	"github.com/urfoundation/sn/merkle"
 	"github.com/urfoundation/sn/miner/onchain"
+	"github.com/urfoundation/sn/protocol"
 )
 
 type ClaimDaemonConfig struct {
-	SchemaVersion  int      `yaml:"schema_version" json:"schema_version"`
-	Release        string   `yaml:"release" json:"release"`
-	APIURL         string   `yaml:"api_url" json:"api_url"`
-	RPC            []string `yaml:"rpc" json:"rpc"`
-	KeyFile        string   `yaml:"key_file" json:"key_file"`
-	JWTFile        string   `yaml:"jwt_file,omitempty" json:"jwt_file,omitempty"`
-	StateDir       string   `yaml:"state_dir" json:"state_dir"`
-	PollSeconds    int      `yaml:"poll_seconds" json:"poll_seconds"`
-	LookbackEpochs uint64   `yaml:"lookback_epochs" json:"lookback_epochs"`
+	SchemaVersion  int                         `yaml:"schema_version" json:"schema_version"`
+	Release        string                      `yaml:"release" json:"release"`
+	APIURL         string                      `yaml:"api_url" json:"api_url"`
+	RPC            []string                    `yaml:"rpc" json:"rpc"`
+	KeyFile        string                      `yaml:"key_file" json:"key_file"`
+	JWTFile        string                      `yaml:"jwt_file,omitempty" json:"jwt_file,omitempty"`
+	StateDir       string                      `yaml:"state_dir" json:"state_dir"`
+	PollSeconds    int                         `yaml:"poll_seconds" json:"poll_seconds"`
+	LookbackEpochs uint64                      `yaml:"lookback_epochs" json:"lookback_epochs"`
+	ProgressPool   *protocol.ClaimProgressPool `yaml:"progress_pool,omitempty" json:"progress_pool,omitempty"`
+	progress       *claimProgressOwner
 }
 
 func LoadClaimDaemonConfig(path string) (*ClaimDaemonConfig, error) {
@@ -94,6 +97,11 @@ func LoadClaimDaemonConfig(path string) (*ClaimDaemonConfig, error) {
 	if cfg.SchemaVersion != 1 || cfg.Release != "1.0" || cfg.APIURL == "" || len(cfg.RPC) == 0 || cfg.PollSeconds < 5 || cfg.PollSeconds > 3600 || cfg.LookbackEpochs > 256 {
 		return nil, errors.New("invalid release-1.0 claim daemon configuration")
 	}
+	if cfg.ProgressPool != nil {
+		if err := cfg.ProgressPool.Validate(); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := os.Stat(cfg.KeyFile); err != nil {
 		return nil, fmt.Errorf("claim relayer key: %w", err)
 	}
@@ -110,19 +118,20 @@ func LoadClaimDaemonConfig(path string) (*ClaimDaemonConfig, error) {
 }
 
 type ClaimQueueEntry struct {
-	Epoch              int64  `json:"epoch"`
-	Status             string `json:"status"`
-	Attempts           int    `json:"attempts"`
-	ReconcileAttempts  int    `json:"reconcile_attempts,omitempty"`
-	UpdatedAt          string `json:"updated_at"`
-	NextRetryAt        string `json:"next_retry_at,omitempty"`
-	TxHash             string `json:"tx_hash,omitempty"`
-	RawTxHex           string `json:"raw_tx_hex,omitempty"`
-	FinalizedBlock     uint64 `json:"finalized_block,omitempty"`
-	FinalizedBlockHash string `json:"finalized_block_hash,omitempty"`
-	ReceiptStatus      uint64 `json:"receipt_status,omitempty"`
-	ReceiptLogsHash    string `json:"receipt_logs_sha256,omitempty"`
-	LastError          string `json:"last_error,omitempty"`
+	Epoch              int64                      `json:"epoch"`
+	Status             string                     `json:"status"`
+	Attempts           int                        `json:"attempts"`
+	ReconcileAttempts  int                        `json:"reconcile_attempts,omitempty"`
+	UpdatedAt          string                     `json:"updated_at"`
+	NextRetryAt        string                     `json:"next_retry_at,omitempty"`
+	TxHash             string                     `json:"tx_hash,omitempty"`
+	RawTxHex           string                     `json:"raw_tx_hex,omitempty"`
+	FinalizedBlock     uint64                     `json:"finalized_block,omitempty"`
+	FinalizedBlockHash string                     `json:"finalized_block_hash,omitempty"`
+	ReceiptStatus      uint64                     `json:"receipt_status,omitempty"`
+	ReceiptLogsHash    string                     `json:"receipt_logs_sha256,omitempty"`
+	LastError          string                     `json:"last_error,omitempty"`
+	PublicObservation  *protocol.ClaimObservation `json:"public_observation,omitempty"`
 }
 
 type ClaimQueue struct {
@@ -144,6 +153,7 @@ type claimQueueStore struct {
 	uncertain bool
 	savedHash [sha256.Size]byte
 	saved     bool
+	progress  *claimProgressOwner
 }
 
 // Resolve aliases once, then retain a directory descriptor and its process
@@ -191,6 +201,9 @@ func newClaimQueueStore(stateDir string, contexts ...context.Context) (*claimQue
 // Closing the descriptor releases ownership on normal return and every error
 // path. A closed store cannot resume reading or writing retained custody.
 func (self *claimQueueStore) close() error {
+	if self != nil {
+		self.progress.unavailable()
+	}
 	if self == nil || self.directory == nil {
 		return nil
 	}
@@ -276,20 +289,28 @@ func (self *claimQueueStore) load() (*ClaimQueue, error) {
 
 // Compare acknowledged bytes only after physical head admission. Lost or
 // replaced files cannot be recreated from the daemon's process-local cache.
-func (self *claimQueueStore) save(q *ClaimQueue) error {
+func (self *claimQueueStore) save(q *ClaimQueue) (saveErr error) {
 	if self == nil {
 		return errors.New("claim queue store is absent")
 	}
+	if q == nil || q.Entries == nil {
+		return errors.New("claim queue observation has no owned inventory")
+	}
+	defer func() {
+		if saveErr != nil {
+			self.progress.unavailable()
+		}
+	}()
 	if err := self.requireWrite(self.ctx); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(q, "", "  ")
+	b, err := marshalClaimQueue(q)
 	if err != nil {
 		return err
 	}
-	b = append(b, '\n')
-	if len(b) > maximumClaimQueueBytes {
-		return errClaimQueueCapacity
+	committed, b, omitted, err := self.observationCapacity(q, b)
+	if err != nil {
+		return err
 	}
 	hash := sha256.Sum256(b)
 	if self.saved && self.savedHash == hash {
@@ -298,7 +319,12 @@ func (self *claimQueueStore) save(q *ClaimQueue) error {
 			return err
 		}
 		if present && bytes.Equal(prior, b) {
-			return self.requireWrite(self.ctx)
+			if err := self.requireWrite(self.ctx); err != nil {
+				return err
+			}
+			adoptClaimObservationCapacity(q, committed)
+			self.progress.acknowledge(committed, hash, omitted)
+			return nil
 		}
 	}
 	self.saved = false
@@ -311,6 +337,8 @@ func (self *claimQueueStore) save(q *ClaimQueue) error {
 		return errors.Join(durablehead.ErrUncertain, err)
 	}
 	self.savedHash, self.saved = hash, true
+	adoptClaimObservationCapacity(q, committed)
+	self.progress.acknowledge(committed, hash, omitted)
 	return nil
 }
 
@@ -500,6 +528,11 @@ func claimCalldata(claim *sdk.SnPoolClaimResult) (common.Address, []byte, error)
 }
 
 func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *sdk.SnPoolClaimResult) (bool, error) {
+	return queryClaimedFinalizedObserved(ctx, cfg, claim, nil)
+}
+
+// The optional observer receives only a closed actual finalized observation.
+func queryClaimedFinalizedObserved(ctx context.Context, cfg *ClaimDaemonConfig, claim *sdk.SnPoolClaimResult, observe func(*protocol.ClaimObservation)) (bool, error) {
 	if claim == nil {
 		return false, errors.New("claim response is nil")
 	}
@@ -587,6 +620,11 @@ func queryClaimedFinalized(ctx context.Context, cfg *ClaimDaemonConfig, claim *s
 		if unpackErr != nil {
 			failures = append(failures, fmt.Errorf("%s: decode leafClaimed: %w", endpoint, unpackErr))
 			continue
+		}
+		if observe != nil {
+			if observation := finalizedClaimObservation(claim, entitlement, finalized, claimed); observation != nil {
+				observe(observation)
+			}
 		}
 		return claimed, nil
 	}
@@ -726,9 +764,10 @@ func reconcileClaimEntry(ctx context.Context, cfg *ClaimDaemonConfig, api claimA
 	if len(claim.NoId) == 0 {
 		// Only an unsigned entry can become a terminal API zero payout.
 		// Signed liabilities need exact canonical receipt evidence instead.
+		entry.PublicObservation = absentClaimObservation(entry.Epoch)
 		return "no-claim", nil
 	}
-	claimed, err := queryClaimedFinalized(ctx, cfg, claim)
+	claimed, err := queryClaimedFinalizedObserved(ctx, cfg, claim, func(observation *protocol.ClaimObservation) { entry.PublicObservation = observation })
 	if err != nil {
 		return "", err
 	}
@@ -836,7 +875,11 @@ func submitClaimDirect(ctx context.Context, cfg *ClaimDaemonConfig, api claimAPI
 	if err := verifySignedClaimReceipt(tx, intent, from, reconciled); err != nil {
 		return err
 	}
-	return recordFinalizedClaimReceipt(entry, reconciled)
+	if err := recordFinalizedClaimReceipt(entry, reconciled); err != nil {
+		return err
+	}
+	entry.PublicObservation = signedClaimObservation(tx, intent, from, reconciled)
+	return nil
 }
 
 // recordFinalizedClaimReceipt binds a successful queue entry to the exact
@@ -981,6 +1024,7 @@ func runClaimDaemonWithAdmission(ctx context.Context, configPath string, admissi
 // The caller retains the queue owner until this function has joined all local
 // work. A swarm supplies its already loaded config and already locked store.
 func runClaimDaemonWithStore(ctx context.Context, cfg *ClaimDaemonConfig, store *claimQueueStore, admission *claimAdmission, initialDelay time.Duration, onReady func()) (runErr error) {
+	store.progress = cfg.progress
 	defer admission.forget(cfg.StateDir)
 	if err := admission.seedMember(cfg, store); err != nil {
 		return err
