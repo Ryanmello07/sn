@@ -588,6 +588,13 @@ func (self *ProviderSwarm) Run(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return nil
 			}
+			// The failed operation has already joined and retained its failure
+			// in member status. Continue admitting independent members; the
+			// existing member control owns any later explicit recovery. Do not
+			// retry startup here: it may have sent a signed wallet request.
+			if swarmControlErrorStatus(err) == http.StatusServiceUnavailable {
+				continue
+			}
 			return fmt.Errorf("start member %s: %w", member.ID, err)
 		}
 	}
