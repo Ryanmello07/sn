@@ -96,9 +96,12 @@ release creation bytes and `(implementation, initializer)` constructor ABI must
 repack exactly, including the nonempty generated `STCoordinator.initialize`
 call. Implementation, netuid, reserve, vault and proxy-mapped coldkey derive from
 the same graph. Nonzero owner, guardian, commitment oracle and the initial policy
-are decoded only from approved calldata. The source's policy bounds and immutable
-vault claim-window condition are checked with full-width arithmetic. No live
-Safe authority is inferred from the configured owner address.
+are decoded only from approved calldata. Deployer, owner, guardian and commitment
+oracle addresses must be pairwise distinct, matching `Deploy.s.sol`. Proxy and
+descendant selection enforce this in both signed review and unsigned preview.
+The source's policy bounds and immutable vault claim-window condition are
+checked with full-width arithmetic. No live Safe authority is inferred from
+the configured owner address.
 
 Reserve binding selection requires action five to call the derived reserve with
 the generated binding's exact 36-byte `setRecorderOnce(address)` calldata
@@ -225,9 +228,15 @@ their submission attempts together against the original `maximum_attempts`.
 Child resume cannot renew any predecessor's spent allowance. The existing limit of
 eight remains unchanged; this is not an implemented nine-action send policy.
 `maximum_total_wei` still bounds the value plus maximum gas liability of every
-approved action. Every child action's send admission also requires enough
-pending balance for the selected action and all later sealed reservations
-belonging to the same sender.
+approved action. Every executable action's send admission, including the first
+reserve CREATE, also requires enough pending balance for the selected action and
+all later sealed reservations belonging to the same sender. Another sender's
+reservation is not charged to the
+deployer. This admission check does not lock funds on-chain or prevent recovery
+of an already included original transaction. The
+[installation-admission qualification](evidence/contract-installation-admission-qualification-20261002.md)
+records the first-action funding and distinct-role corrections, causal controls,
+and separate author/independent normal and race scopes.
 
 Only empty-access-list EIP-1559 envelopes are admitted here. A separate signer
 returns the original **binary signed transaction**, not a key or a signing

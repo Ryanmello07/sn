@@ -18,6 +18,20 @@ returned HTTP 502 for chain-ID reads across 21 attempts. That is an unavailable
 route, not a mainnet identity. Verify the restarted route and independently
 approve the mainnet chain identity before admitting any signer.
 
+The [contract installation admission correction](evidence/contract-installation-admission-qualification-20261002.md)
+at source `ebf69b9` makes the first reserve CREATE check pending balance against
+its own and all later same-sender value/gas reservations. Proxy and descendant
+review now require pairwise distinct deployer, owner, guardian and oracle
+addresses, including unsigned preview. Author qualification passes 35 selected
+roots normally and under race plus vet; independent qualification passes fourteen
+roots in both modes plus vet. Unchanged-source controls reproduce both defects,
+including one underfunded synthetic send and 48 admitted role collisions.
+Original signed bytes, journal custody, attempt ceilings and the separate Safe
+approval remain intact. The frozen `3d1e2ecf` release excludes this correction;
+package it with the [qualified owner-trim successor](evidence/owner-trim-retained-intent-20261002.md)
+at `0f7c8698` in a new exact release.
+Production policy, live authority, installation and activation remain open.
+
 **September 30 operator report:** Snow mainnet is still synchronizing. This is
 the current operator report, not a new verified RPC observation or a mainnet
 identity/readiness attestation. Live activation remains closed while sync,
@@ -50,11 +64,13 @@ all eleven new roots in both modes plus vet, with seven unchanged-source causal
 failures. A separate omission proves the final validator host check. The frozen
 `1d580d5e` release excludes this correction; the
 [qualified readiness baseline](evidence/release-3d1e2ecf-serverac86-20261002.md) packages that source, but is
-superseded for launch by later owner-custody source `21640419`, pending its own
-exact release composition.
-Separate root/trim writers still need P0 physical custody qualification before
-fresh native signing or sends are enabled. Current public composition leaves
-those authority ports unavailable. Live acceptance remains open.
+superseded for launch by the separately qualified owner-trim source `0f7c8698`
+and contract-admission source `ebf69b9`, pending a new exact release composition.
+The [owner-trim successor](evidence/owner-trim-retained-intent-20261002.md) now
+qualifies the additional trim marker/journal and bounded original-byte submission
+under a separate signed residual policy. Legacy root native mutation ports remain
+unavailable and outside this qualification. Actual owner/device authority, risk
+acceptance, external custody and live activation remain open.
 
 The [two-UR current-admission route](VALIDATOR-CURRENT-ADMISSION.md) has
 [scoped qualification](evidence/validator-current-admission-qualification-20261001.md)
