@@ -5338,3 +5338,16 @@ and six positive controls retained. Main integration preserves newer upstream
 model/monitor code and exact qualified blob/module bytes. A component receipt
 remains scoped to its tested source graph; the final composed release must
 qualify its current dependencies rather than inherit whole-main authority.
+
+
+### Keep source composition separate from published module consumption
+
+Fresh owner APIs must coexist with retained-member and reader recovery while
+preserving dependency fixes. The [bounded preparation composition](evidence/preparation-composition-author-20261002.json)
+passes17 selected normal/race tests and four package vets on its exact eight-pin
+workspace. Original core bytes remain unchanged and prior receipts stay separate.
+An explicit workspace can prove these source seams together, but cannot prove
+the executable consumes the intended published module. Finish the tracked-module
+and current Server composition gate before declaring preparation release-ready.
+Directory-only owner admission and retained/restore policy remain required
+behavior, not documentation-only exceptions.

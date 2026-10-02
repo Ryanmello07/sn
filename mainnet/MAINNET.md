@@ -2968,3 +2968,21 @@ authority, preserving original signatures during recovery. Six causal controls
 discriminate each mode. All117 receipt bindings were verified. Independent
 qualification precedes integration; exact observed472 approval and the final
 release composition remain separate gates.
+
+
+### Preparation source composition — bounded author result
+
+SN `1f66a2bd` joins fixed-owner preparation with retained-member and spool
+recovery. Connect `ba74f897` joins the unchanged preparation core onto the
+published runtime/callback parent; its durablevolume subtree and module bytes
+remain identical to the original qualified core. The exact eight-pin workspace
+uses Server `2c4e5dca`. Fourteen public preparation commands, two native adapters
+and one public successor-execution test pass normally and with race detection;
+four package vets pass. Root verified all49 [author receipt](evidence/preparation-composition-author-20261002.json)
+bindings and raw archive. Receipt SHA-256:
+`dadf721ef6c38a1e1d808ad79dfa73481f9ffe702b2225330c5d7d25c7d1b854`.
+
+This is a source/workspace result. It does not qualify published module consumption
+or later Server main `1d72f577`. Directory-only owners, private-root creation,
+retained/restore semantics and capacity revisions remain in implementation.
+No production preparation or restoration is authorized by this result.
