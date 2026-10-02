@@ -5178,3 +5178,28 @@ now independently reproduces all five lost-history/inode defects and passes
 ten selected normal/race controls plus vet. Integration with the newer current
 observer is a separate pending scope; those results do not imply restore or
 offline owner enrollment is complete.
+
+
+### October 2: guard failure must prevent full-buffer acceptance
+
+Returning a full byte count together with a custody error is insufficient for
+standard consumers: ReadFull can drop that error and a decoder can accept a
+complete object. After a failed post-read guard, admit zero bytes while retaining
+the true descriptor position and cause. Preserve bare EOF on an ordinary finish.
+Test ReadAll, Copy, ReadFull, JSON, direct EOF and the actual production descriptor
+reader, with cancellation and named-inode replacement at the read boundary.
+[Author evidence and pending independent scope](evidence/current-graph-reader-progress-20261002.md)
+retain the earlier correction and its four concrete full-buffer counterexamples.
+
+### October 2: runtime continuation needs caller-owned GET retry budgets
+
+The actual finite claim command on unchanged main made five parallel-route GET
+attempts and panicked on a typed 503 after roughly 0.6 seconds, despite an outage
+that remained transient. Route hedging and a small transport retry are not the
+command's retry budget. Give epoch/pool reads a caller-owned 300-second budget,
+retry classified transient failures, join cancellation and return errors rather
+than panic. Test a sustained outage through the real public command and SDK;
+keep signed submission outside read retry. The first cardinality-only fixture
+was invalid because route attempts consumed its synthetic failures; retain it
+as a harness failure, separately from the corrected causal controls. The fix
+is in implementation, not yet qualified or merged.
