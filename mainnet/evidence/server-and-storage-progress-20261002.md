@@ -25,7 +25,8 @@ Independent focused qualification uses that exact server with SN
 | SN cleanup composition | Seven roots pass normal and race | Synthetic composition seams, not deployed ingestion |
 | SN `sim-testnet` vet | Fails at `evidence_relay_provisional_continuation_test.go:139` and `:218` because test fixtures copy a mutex-bearing runtime | These two fixture findings stay open until a separately qualified correction |
 | Historical server controls | Three roots pass normal and race | Preserves the historical scope only |
-| Broader server model and old-source causal controls | Pending at this checkpoint | No result inherited from the focused subset |
+| Old-source causal controls | Four intended failures across normal/race | Lost retained live grant and excessive Bootstrap retry delay on frozen older source |
+| Broader server model | Pending at this checkpoint | No result inherited from the focused subset |
 
 The effective production maintenance pool still needs at least two connections
 plus unrelated owned work. The five-minute retry cap starts at failed-attempt
@@ -48,6 +49,12 @@ the exact failing `sim-testnet-vet.log` hashes to
 Historical phase logs are `historical-three-normal.jsonl` and
 `historical-three-race.jsonl`; their active wrapper's `early-results.json`
 is not presented as a final receipt.
+
+The later, separate [completed-scope receipt](server025-focused-causal-20261002.json), retained byte-for-byte from `focused-causal-receipt.json`,
+hashes to `484ada95842abdc5eed1b24a57bc0460d541c16c90d61884648ccb3055b9c31d`.
+It binds the 40 focused server/SN roots in both modes, four successful server
+vets, the two SN mutex-copy findings, three historical roots in both modes
+and four intended old-source failures. It makes no whole-model pass claim.
 
 ## Durable storage source work
 
@@ -84,6 +91,35 @@ hashes to
 `af5417461e10f765faf2ae3ad0e466d11abecac270db98f9cadbc83b5f0a0303`.
 An earlier pre-overlay invocation selected no tests; it is retained separately
 as `guard-taxonomy-baseline.jsonl` and is not a causal pass.
+
+The [independently sealed core receipt](durable-core-independent-20261002.json) is retained byte-for-byte from
+`/mnt/data/sn-testnet/sol-connect-durable-core-independent-20261002/receipt.json`,
+SHA-256 `dcbe525ec9fd39d556a8b7d441bb58981d1b56a2866e2edab082d2c5cfdb61fc`.
+It verifies exact clean `5930a970`, 22 normal and 22 race roots plus vet, and
+both old-source causal failures in each mode. Its initial scratch-mode failure
+is retained separately; the retry changed fixture preparation, not source.
+
+Core integration commit `6d0eca1e77cc7f84ebd9615ec43cc876201a1f92`, tree
+`be4115102ff64241afcbaeeb7e6312788aaa0d42`, merges that qualified core into
+current Connect `37153b2b` without replacing unrelated changes. Only the five
+`durablevolume` files differ from `37153b2b`; that subtree, `go.mod` and
+`go.sum` are identical to `5930a970`. The exact merged head passes another
+22 normal/22 race roots and vet. Its nonstandard dependency census contains
+only the peer itself. Go 1.26.6 compiler SHA-256 is
+`29e6e0b8be61beb1489ceae62b304343566de8a1dc700af74bde7aeb9c80ad45`.
+The separate [author integration receipt](durable-core-integration-20261002.json), retained byte-for-byte from
+`/mnt/data/sn-testnet/mainnet-durable-volume-20261002/evidence/core-integration-receipt.json`
+hashes to `647a5f507c34abc594239252313a62f687bc1ea58cb0ff6839851ed350cb26a6`.
+It binds the independent core receipt and exact module/compiler files. It does
+not qualify the rest of Connect, additive inventory or downstream adopters.
+
+The [independent integration join](durable-core-integration-join-20261002.json)
+confirms peer/module byte identity and binds the independent core receipt.
+Compiler binding resides in the separate author integration receipt; this is
+not independent compiler verification. The four small receipts linked here preserve their original bytes;
+the larger raw logs and referenced source workspaces remain external retained
+evidence at the paths recorded in those receipts. This repository copy does not
+claim to contain all raw test output or reproduce the compiler independently.
 
 Pre-publication refusal and uncertain publication have different recovery
 paths. Missing reserve before a write retains the prior checkpoint; a failed
