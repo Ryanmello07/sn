@@ -107,9 +107,17 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 	// Preparation observation shares the complete sample deadline with Rpc.
 	// A finite retry count also bounds deterministic/accelerated wait hooks.
 	// No retry replaces the retained preparation or checkpoint owner.
-	sampleCtx, sampleCancel := context.WithTimeout(ctx, *retryWindow)
-	defer func() { sampleCancel() }()
+	var sampleCtx context.Context
+	sampleCancel := func() {}
 	observationRetries := 0
+	renewSample := func() {
+		sampleCancel()
+		current, cancel := context.WithTimeout(ctx, *retryWindow)
+		sampleCtx, sampleCancel = current, cancel
+		observationRetries = 0
+	}
+	defer func() { sampleCancel() }()
+	renewSample()
 	checkPreparation := func() error {
 		if preparation == nil {
 			return ctx.Err()
@@ -137,6 +145,10 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 	preparationExit := func(err error) int {
 		if ctx.Err() != nil {
 			return 0
+		}
+		if errors.Is(err, durablevolume.ErrIdentity) {
+			fmt.Fprintln(stderr, "passive preparation retained custody is invalid")
+			return 3
 		}
 		if errors.Is(err, durablevolume.ErrUnavailable) || errors.Is(err, context.DeadlineExceeded) {
 			fmt.Fprintln(stderr, "passive preparation observation remains unavailable")
@@ -237,9 +249,7 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 		if ctx.Err() != nil {
 			return 0
 		}
-		sampleCancel()
-		sampleCtx, sampleCancel = context.WithTimeout(ctx, *retryWindow)
-		observationRetries = 0
+		renewSample()
 		if err := checkPreparation(); err != nil {
 			return preparationExit(err)
 		}

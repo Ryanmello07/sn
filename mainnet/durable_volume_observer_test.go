@@ -117,6 +117,27 @@ func TestDurableCompositionPassiveObservationCancellationJoinsOwners(t *testing.
 	compositionPreparationObservationRetry(t, false, false, true)
 }
 
+// This is a classification invariant for an already-classified joined error,
+// not a claim that the real kernel emits a particular mixed fault. Proven loss
+// must remain terminal even if a separate observation was unavailable too.
+func TestDurableCompositionPassiveJoinedIdentityRemainsTerminal(t *testing.T) {
+	fixture := newBootstrapRootPassiveFixture(t)
+	compositionPassiveArguments(t, fixture)
+	ctx := fixture.storageContext(t.Context())
+	reader, err := openRootPassivePreparation(ctx, fixture.root.plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	reader.reader.storage.failed = errors.Join(durablevolume.ErrIdentity, durablevolume.ErrUnavailable)
+	service := fixture.root.plan.PassiveService
+	args := []string{"root-monitor", "--rpc", service.RpcUrl, "--policy", fixture.root.plan.ServiceInput.Path, "--checkpoint", service.CheckpointPath}
+	reads := compositionRpcReads(fixture.census)
+	if code := runRootCommandWithPolicy(ctx, args, io.Discard, io.Discard, time.Now, monitorServiceHooks{}, &service.Policy, rootObjectHash(service.Policy), reader); code != 3 || compositionRpcReads(fixture.census) != reads {
+		t.Fatal("classified identity loss became a retryable observer exit", code)
+	}
+}
+
 // The homogeneous cases vary only the exact observation boundary or terminal
 // policy. Real admission, snapshot reads, Rpc and close remain unchanged.
 func compositionPreparationObservationRetry(t *testing.T, afterRpc, exhausted, canceled bool) {
