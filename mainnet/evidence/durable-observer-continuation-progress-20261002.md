@@ -58,6 +58,17 @@ pending at this checkpoint. Their terminal normal/vet results are retained at
 under the author workspace below. These partial results are not a complete
 successor qualification.
 
+Two separate qualification attempts encountered newly created temporary
+ancestors with mode `0775`, so protected-path admission refused setup before
+their intended causal bodies. These attempts remain setup failures, not product
+regressions or successful negative controls. Qualification launchers must set
+`umask 077` before creating task roots, temporary directories, fixtures and
+capture files; validate the required physical ancestry before launching a
+selection, and check each expected failure's actual cause. Correct only owned
+scratch permissions and preserve the original refusal and retry records. The
+observer author runner already sets this umask and uses its existing private
+temporary root; future composed runners must retain that preflight explicitly.
+
 The [terminal historical census](durable-observer-soft-census-20261002.json)
 binds both four-failure baseline runs, the failed `97c7ae85` normal run and its
 passing vet, including exact commands, logs, exits and source pins. Active
