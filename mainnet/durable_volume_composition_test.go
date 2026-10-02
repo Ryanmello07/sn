@@ -4,10 +4,15 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/urfoundation/sn/internal/durablehead"
+	"golang.org/x/sys/unix"
 )
 
 // Bootstrap leaves a fresh, independently prepared monitor head. The public
@@ -59,5 +64,56 @@ func TestDurableCompositionPassiveBootstrapStartsRetainedMonitor(t *testing.T) {
 	}
 	if raw, err := os.ReadFile(retained); err != nil || !bytes.Equal(raw, completed) {
 		t.Fatal("refused composed restart changed retained checkpoint", err)
+	}
+}
+
+// Direct public entry cannot omit CLI dispatch and acquire legacy persistence.
+// Checkpoint and derived metrics paths both require the explicit daemon policy.
+func TestDurableCompositionRootPersistentEntrypointsRequireDeclaration(t *testing.T) {
+	_, fixture := newRootFixture(t)
+	server := rootFixtureServer(t, fixture)
+	policy := rootTestPolicyFile(t, fixture.policy)
+	for _, kind := range []string{"checkpoint", "metrics"} {
+		path := filepath.Join(monitorMetricsTestDir(t), "root.prom")
+		args := []string{"root-monitor", "--rpc", server.URL, "--policy", policy}
+		if kind == "checkpoint" {
+			args = append(args, "--checkpoint", path)
+		} else {
+			args = append(args, "--metrics-file", path, "--metrics-role", "synthetic-root")
+		}
+		if code := runRootCommand(context.Background(), args, io.Discard, io.Discard); code != 2 {
+			t.Error("direct persistent root observer bypassed declaration", kind, code)
+		}
+		for _, member := range []string{path, path + ".lock"} {
+			if _, err := os.Lstat(member); !os.IsNotExist(err) {
+				t.Error("refused direct entry created an unguarded member", kind, member, err)
+			}
+		}
+	}
+}
+
+// A matching old JSON record and marker grammar cannot replace the durable
+// head that identifies bootstrap's retained physical preparation generation.
+func TestDurableCompositionPassivePreparationRequiresRetainedHead(t *testing.T) {
+	f := newBootstrapRootPassiveFixture(t)
+	f.result(t, "apply")
+	path := filepath.Join(f.root.plan.RunDirectory, bootstrapRootProgressFile)
+	marker, err := os.Open(path + ".lock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Fremovexattr(int(marker.Fd()), durablehead.Attribute("mainnet-bootstrap-root", filepath.Base(path))); err != nil {
+		marker.Close()
+		t.Fatal("fixture did not retain its original bootstrap head", err)
+	}
+	if err := marker.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := openRootPassivePreparation(f.storageContext(t.Context()), f.root.plan)
+	if reader != nil {
+		reader.Close()
+	}
+	if err == nil {
+		t.Fatal("passive runtime accepted preparation after its retained head disappeared")
 	}
 }
