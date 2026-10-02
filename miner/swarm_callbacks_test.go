@@ -178,7 +178,8 @@ func TestProviderSwarmJwtRefreshPreservesStorageCause(t *testing.T) {
 	var listener clientauth.JwtRefreshListenerFunc = swarmMemberJwtRefreshListener(path, func(err error) { failure = err })
 	listener.JwtRefreshed("synthetic-token")
 	var storage *swarmMemberStorageError
-	if !errors.As(failure, &storage) || !errors.Is(failure, syscall.EISDIR) {
+	var rename *os.LinkError
+	if !errors.As(failure, &storage) || !errors.As(failure, &rename) || rename.Op != "rename" || rename.New != path || !errors.Is(failure, rename.Err) {
 		t.Fatal("refresh did not retain actual local rename refusal", failure)
 	}
 }
