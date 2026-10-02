@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"io"
 	"os"
@@ -18,6 +19,7 @@ import (
 // releases a nonce claim; signatures outlive the reviewed native-block window.
 type bootstrapSuccessorExecutionDirectory struct {
 	storage *mainnetDurableDirectory
+	members *bootstrapSuccessorMembers
 	ctx     context.Context
 	path    string
 	root    bootstrapSuccessorRootIdentity
@@ -54,6 +56,10 @@ func openBootstrapSuccessorExecutionDirectory(ctx context.Context, path string, 
 	if err := mainnetDurableFlock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("successor nonce registry already has an owner"), err)
 	}
+	self.members, err = openBootstrapSuccessorMembers(storage, self.file, true, false)
+	if err != nil {
+		return nil, err
+	}
 	return self, self.checkpoint("registry-acquired")
 }
 
@@ -64,6 +70,11 @@ func (self *bootstrapSuccessorExecutionDirectory) checkpoint(stage string) error
 		if self != nil {
 			if err := self.storage.check(self.file); err != nil {
 				return err
+			}
+			if self.members != nil {
+				if err := self.members.check(); err != nil {
+					return err
+				}
 			}
 		}
 		if self == nil || self.file == nil {
@@ -98,9 +109,10 @@ func (self *bootstrapSuccessorExecutionDirectory) names() ([]string, error) {
 	}
 	file := os.NewFile(uintptr(fd), self.path)
 	defer file.Close()
-	names, err := file.Readdirnames(4097)
+	names, err := file.Readdirnames(4098)
+	names = bootstrapSuccessorApplicationNames(names, self.members.spec.Name)
 	if err != nil && !errors.Is(err, io.EOF) || len(names) > 4096 {
-		return nil, errors.Join(errors.New("successor execution custody exceeds its bounded census"), err)
+		return nil, mainnetDurableUnavailable("successor execution custody exceeds its bounded census", err)
 	}
 	return names, nil
 }
@@ -131,7 +143,13 @@ func (self *bootstrapSuccessorExecutionDirectory) stageName(name, kind string) s
 
 // Existing final bytes must be exact and have no competing stage. Recovery
 // repairs only this approved immutable prefix and publishes with no replacement.
-func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw []byte) error {
+func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw []byte) (resultErr error) {
+	mutationStarted := false
+	defer func() {
+		if mutationStarted {
+			resultErr = self.members.publicationError(resultErr)
+		}
+	}()
 	if len(raw) == 0 || len(raw) > maximumBootstrapSuccessorExecutionBytes {
 		return errors.New("successor execution publication exceeds its byte bound")
 	}
@@ -160,14 +178,25 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 		if staged || !bytes.Equal(raw, retained) {
 			return errors.New("successor execution retained publication differs; preserve custody")
 		}
-		return self.file.Sync()
+		if err := self.file.Sync(); err != nil {
+			return err
+		}
+		return self.members.commit(name, raw)
 	}
 	if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	if err := self.members.reserve(name, stage, raw, false); err != nil {
+		return err
+	}
+	if err := self.checkpoint(name + ":reserved"); err != nil {
+		return self.members.publicationError(err)
+	}
 	fd := int(self.file.Fd())
+	mutationStarted = true
 	stageFd, err := unix.Openat(fd, stage, unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CREAT|unix.O_EXCL, 0600)
 	if errors.Is(err, unix.EEXIST) {
+		mutationStarted = false
 		stageFd, err = unix.Openat(fd, stage, unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	}
 	if err != nil {
@@ -179,13 +208,19 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 		return err
 	}
 	retained, err = io.ReadAll(io.LimitReader(file, int64(len(raw))+1))
-	if err != nil || !bytes.HasPrefix(raw, retained) {
-		return errors.Join(errors.New("successor execution stage differs from its exact immutable prefix"), err)
+	if err != nil {
+		return mainnetDurableUnavailable("cannot read original successor execution stage", err)
+	}
+	if !bytes.HasPrefix(raw, retained) {
+		return self.storage.identity("successor execution stage differs from its exact immutable prefix", nil)
 	}
 	if err := self.checkpoint(name + ":name-created"); err != nil {
 		return err
 	}
 	if err := self.file.Sync(); err != nil {
+		return err
+	}
+	if err := self.members.retainStage(stage, file); err != nil {
 		return err
 	}
 	if err := self.checkpoint(name + ":name-synced"); err != nil {
@@ -194,6 +229,7 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 	if err := self.storage.checkWrite(self.file); err != nil {
 		return err
 	}
+	mutationStarted = true
 	written, err := file.WriteAt(raw, 0)
 	if err != nil || written != len(raw) {
 		return errors.Join(io.ErrShortWrite, err)
@@ -219,7 +255,29 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 	if err := self.file.Sync(); err != nil {
 		return err
 	}
+	if err := self.members.commit(name, raw); err != nil {
+		return err
+	}
 	return self.checkpoint(name + ":published-synced")
+}
+
+// The completed write-ahead head retains the original approved public bytes
+// even if a process stopped before creating its named stage. Only the same
+// claimant can finish them; application history validates before any send.
+func (self *bootstrapSuccessorExecutionDirectory) resumePending() error {
+	pending := self.members.census.Pending
+	if pending == nil {
+		return nil
+	}
+	prefix := self.stageName(pending.Name, "")
+	if pending.Append || !strings.HasPrefix(pending.Stage, prefix) || len(pending.Stage) == len(prefix) {
+		return self.storage.identity("successor pending publication belongs to another claimant", nil)
+	}
+	raw, err := base64.StdEncoding.Strict().DecodeString(pending.Payload)
+	if err != nil {
+		return self.storage.identity("successor pending publication lost its retained payload", err)
+	}
+	return self.publish(pending.Name, strings.TrimPrefix(pending.Stage, prefix), raw)
 }
 
 // Ownership ends without releasing any durable nonce or financial liability.
@@ -227,7 +285,7 @@ func (self *bootstrapSuccessorExecutionDirectory) close() error {
 	if self == nil || self.file == nil {
 		return nil
 	}
-	err := errors.Join(self.file.Close(), self.storage.close())
+	err := errors.Join(self.members.close(), self.file.Close(), self.storage.close())
 	self.file = nil
 	return err
 }

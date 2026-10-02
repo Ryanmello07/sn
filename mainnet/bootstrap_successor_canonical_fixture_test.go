@@ -125,6 +125,7 @@ func newBootstrapSuccessorCanonicalFixtureWithClaimGate(t *testing.T, beforeClai
 		signatures = append(signatures, raw...)
 	}
 	registry := bootstrapSuccessorExecutionTestDirectory(t)
+	prepareBootstrapSuccessorMembersTest(t, registry, true)
 	// The separate nonce registry is explicitly declared before approving its
 	// execution scope. Existing original root generations and heads are retained.
 	f.root.storage = durablefixture.New(t, t.Context(), append(append([]string{}, f.root.storage.Roots...), registry)...)
