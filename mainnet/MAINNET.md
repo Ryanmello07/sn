@@ -2996,3 +2996,14 @@ avoid distinct cache identities for unchanged local packages in private checkout
 No live gate changes flags or restarts for this lead. Its source observation does
 not prove a benchmark improvement or close compiler provenance, source authority
 or release qualification. Preserve fresh test execution and exact flag bindings.
+
+
+### Claim projection qualification requirements
+
+The new producer must use exact ABI event identities and preserve aggregate
+coldkey-payment semantics. Tests must distinguish accepted liability from paid
+credit, degrade malformed/impossible payment observations without stopping claim
+recovery, and retain explicit configured-RPC evidence strength. Independent
+finality and genesis admission are separate from matching a chain ID or Merkle
+root. These requirements were refined during candidate review; the producer
+and consumer are still being implemented and have no qualification receipt.

@@ -5364,3 +5364,21 @@ callers and proving reuse across exact source copies. Preserve compiler flags,
 physical source bindings and fresh test execution (`-count=1`). Do not change
 flags or restart a live gate to gain reuse. Compiler results remain separate
 from authenticated protocol proofs and test verdicts.
+
+
+### Derive event selectors from the consumed ABI
+
+Pre-qualification review of the new claim projection caught a handwritten
+`ClaimPaid` topic with swapped amount/relayer types. The contract and generated
+binding declare `ClaimPaid(bytes32,uint256,address)`. Use the consumed ABI's
+event identity instead of duplicating its signature string. Add actual canonical
+receipt controls for deferred credit, aggregate payment larger than the current
+claim, malformed/ambiguous events and amounts smaller than accepted liability.
+Reporting failures must degrade payment observation without invalidating a valid
+finalized claim or changing its retained signature. This was found in unfinished
+candidate code; it is not evidence of a deployed payment fault.
+
+Keep evidence strength explicit as well: configured-RPC receipts and leaf state
+remain assertions until independent finality/runtime/code admission is supplied.
+An EVM chain ID alone does not authenticate native genesis. A Merkle check or
+accepted contract event must not silently become proof of finalized economics.
