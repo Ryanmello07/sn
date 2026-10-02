@@ -5092,3 +5092,28 @@ Cancellation joins outstanding requests and body readers. Signed wallet POSTs
 and transaction broadcasts require durable outcome reconciliation, not this
 read retry policy. This manual-command correction remains queued for causal
 implementation and qualification; the source audit is not a fixed-code claim.
+
+### October 2: isolate callback failures and qualify current dependency composition
+
+The actual SDK JWT persistence callback now names a local storage cause and
+quarantines only its member generation. Its owned teardown runs outside the SDK
+callback, retains the slot until join, and prevents stale callbacks from stopping
+a successor. Joined authentication or unknown causes remain terminal. Startup
+admission retains healthy members after classified temporary failures without
+blindly repeating a possibly signed wallet request. The qualified implementation
+and deterministic old-body controls are [recorded here](evidence/provider-callback-qualification-20261002.md).
+
+A published dependency version can omit required packages even when previous
+local source passed. Current server intake exposed exactly that: Connect
+`6443417d` lacks `durablevolume`. Preserve the failed exact-graph attempt and
+qualify a compatible published successor; a local replacement cannot prove the
+published graph. Module floors from unrelated upstream work must be preserved.
+
+Cache cleanup must use bounded qualification manifests and process ownership
+checks rather than scan every raw artifact as a testing prerequisite. This
+iteration reclaimed 16 GiB from 221 inactive Go archive entries, preserving
+source, module caches, executable cache entries and active caches. Each planned
+inode was rechecked before deletion and absence verified afterward. The retained
+receipt is `/mnt/data/sn-testnet/root-mainnet-cache-reclaim-2-20261002/receipt.json`.
+Reference checks covered declared receipt/manifest/checksum/document classes;
+they do not assert absence of references in every raw artifact.

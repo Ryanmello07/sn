@@ -83,3 +83,13 @@ successful tests merely to replace their evidence.
 
 These are qualification-host protections, not production capacity or restore
 proof. The local data volume still requires active-cache headroom monitoring.
+
+## Integrated callback and private-fixture successors
+
+Miner `36648203` and test-only fixtures `28c970db` have now been merged into
+main. Their [exact scoped qualification](provider-callback-qualification-20261002.md)
+retains 40 author / 12 independent selected miner roots per mode and seven
+fixture roots per mode under each of two umasks. Source/module/release authority
+is not inherited by unrelated candidates. Current server intake at `cebf154f`
+failed before test execution because published Connect `6443417d` lacks the
+required durablevolume package; compatible successor intake remains in progress.
