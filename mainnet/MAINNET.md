@@ -937,6 +937,20 @@ and seven causal baseline failures in each run, preserving the earlier receipts
 and frozen release. Actual owner/device authority, bounded transmission and
 native 10/90 evidence remain open.
 
+The [October 2 native-context and scheduling corrections](evidence/native-economics-context-and-schedule-20261002.md)
+retain separate source pins `dd21ed00` and `258e25b4`. The observer distinguishes
+tempo anchor resets from consumed epochs and accepts a source-authenticated
+owner takeover that appends one UID before Yuma, while preserving unknown
+recipient generations and economic amounts. Fresh production CRv4 preparation
+requires an independently signed tempo-drift profile, exact runtime/source
+authority and a private producer capability; it follows v470's strict
+`BlocksSinceLastStep > tempo` predicate and post-initialization commit phase.
+Old approvals and pending bytes keep their original timing interpretation.
+Monitor policy explicitly selects the corresponding forecast; historical
+misses still require an observed epoch crossing. These later sources need their
+own qualified release. They supply no live approval, denominator `M`, tolerance
+`Q`, finalized 10/90 outcome or service activation; MG-06 remains open.
+
 Release 1.0 explicitly rejected owner-directed burning as its head/tail steering strategy. The selected owner-recycle launch policy must therefore be encoded as an explicit economic-policy successor, with its activation and accounting independently verified. Preserve the independent-validator objective and signed weight caps: do not raise a cap, create arbitrary owner recipients, or displace validators merely to force a 90% weight destination. [Whitepaper, head/tail decision](../WHITEPAPER.md#138-headtail-split-θ-in-one-mechanism-chosen-not-two-mechanisms-not-owner-burn)
 
 A weight proposal is not an enforceable payout fraction. Independent validator weights, Yuma clipping, bonds, activity, permits, normalization and u16 rounding affect final incentive. For either owner-withholding path, qualify the complete runtime outcome against the admitted validator set and review adjacent/adversarial weight states. The draft assurance mode is `observed-native-target`: demonstrate the actual 10% allocation within `Q(k)`, disclose sensitivity to other validators, and monitor subsequent deviation. It does not promise that other validators can never change the outcome. If a stronger `enforced-cap` mode is selected, prove that ceiling under all admitted conditions or report `EMISSION_CAP_UNENFORCEABLE`; an after-the-fact monitor is not enforcement. Halting our validator does not revoke other validators' weights or stop already queued native emission. [Consensus implementation][subtensor-epoch]

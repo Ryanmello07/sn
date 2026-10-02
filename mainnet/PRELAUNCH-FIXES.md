@@ -255,6 +255,18 @@ and runtime authority remain missing. The earlier complete eight-image
 aggregate does not cover these successor SN/server commits. Complete current
 release composition/provenance and independent approval remain open.
 
+**October 2 native economics context and timing (MG-06/PH-04/10):** separate
+source pins `dd21ed00` and `258e25b4` correct two runtime470 archive-observation
+failures and the CRv4 tempo-drift/initialization-phase mismatch. The
+[qualification record](evidence/native-economics-context-and-schedule-20261002.md)
+keeps observer and scheduling receipts separate. The explicit independently
+signed profile gates only fresh production; old approval hashes and retained
+nonces, signatures, epochs and rounds are preserved. Monitor forecasts select
+the same reviewed semantics without declaring unobserved misses. Exact live
+runtime/source authority, signer/activation inputs, denominator, quantization,
+actual provider entitlement and recycled value remain outstanding. This is a
+later source increment requiring a successor release, not MG-06 closure.
+
 ## Closed testnet evidence and remaining lessons
 
 Keep the original result, later recovery, and code qualification distinct:

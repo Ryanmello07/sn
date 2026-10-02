@@ -194,6 +194,17 @@ than becoming an empty emission interval. Explicit null Events storage means
 the authenticated empty-vector default; an omitted JSON result is an error.
 Burn remains an observed mode with a blocker, never an inferred Recycle pass.
 
+The [October 2 context correction](evidence/native-economics-context-and-schedule-20261002.md)
+at `dd21ed00` additionally authenticates `Tempo`, `TempoSet` and
+`SubnetOwnerChanged`. `LastEpochBlock` is a scheduling anchor: a matching tempo
+write can reset it without consuming an epoch. Such a reset requires unchanged
+`SubnetEpochIndex`, a current-block anchor and matching final tempo; unexplained
+resets, changed epoch counters and contradictory deferred epochs still fail.
+An ordered initialization owner takeover may append one UID before Yuma without
+emitting `NeuronRegistered`. Its incentive vector may therefore use the parent
+census or parent count plus one. The event establishes neither recipient
+generation nor ownership entitlement; those amounts remain unknown.
+
 **The incentive sum is not the policy denominator M.** Reviewed
 [`coinbase/run_coinbase.rs`](https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/pallets/subtensor/src/coinbase/run_coinbase.rs)
 can accrue a miner tranche and drain it before post-block pending storage is

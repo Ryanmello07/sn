@@ -5,11 +5,26 @@ intent's native submission window and retain a reported miss. It consumes the
 existing bounded progress file. It has no signer, receipt reader, repair action,
 or authority to expire an immortal extrinsic.
 
-Enable it independently for each validator role in `services.json`:
+Enable it independently for each validator role in `services.json`. Existing
+policies retain their original scheduler when the profile is absent:
 
 ```json
 "native_deadline": {"completion_margin_blocks": 5}
 ```
+
+For newly approved v470 production, select the same reviewed profile as the
+producer's independently signed approval and pin its exact expected config:
+
+```json
+"native_deadline": {
+  "completion_margin_blocks": 5,
+  "epoch_schedule_profile": "urnetwork-subtensor-tempo-drift-v1"
+}
+```
+
+The profile is an explicit operator-policy choice. It is not inferred from a
+runtime number, metadata shape or a testnet observation. Unknown profiles fail
+policy admission. See the [source and causal qualification](evidence/native-economics-context-and-schedule-20261002.md).
 
 Five is a synthetic example, not an approved production margin. Supply the
 measured p95 completion/finality cost in native blocks from the admitted
@@ -20,8 +35,11 @@ deployment, validator, chain, genesis, netuid and config field.
 
 The first possible next epoch is forecast from the producer's authenticated
 native schedule: normal tempo, an earlier owner trigger, and the strict
-`BlocksSinceLastStep > MaxTempo` safety condition after a block's increment.
-The forecast uses the reviewed rules in `crv4/schedule.go`. A deferred epoch
+`BlocksSinceLastStep > tempo` condition after a block's increment for the
+explicit tempo-drift profile. An absent profile retains the original
+`> MaxTempo` interpretation. Valid root-set u16 tempos above the owner setter
+cap also retain their observed incidents through checkpoint reopening.
+The forecast uses the selected rules in `crv4/schedule.go`. A deferred epoch
 remains a forecast for the next block. A changed schedule can move that forecast;
 neither wall time nor passing an old predicted block proves a miss. Warning
 begins at the greater of the ceiling of 20% of the observed tempo and twice the

@@ -32,6 +32,22 @@ The validator still requires complete real
 activation, operator API/key/payout and proof-history inputs through the existing
 V2 startup. Production approval does not grant registration or staking authority.
 
+Fresh production preparation also requires the independently signed
+`production.epoch_schedule_profile: urnetwork-subtensor-tempo-drift-v1` under
+the exact reviewed runtime/source authority. The [v470 scheduling correction](evidence/native-economics-context-and-schedule-20261002.md)
+uses the actual subnet tempo for the drift fallback and evaluates commit timing
+after initialization while preserving pre-coinbase reveal timing. A missing or
+unknown profile, generic runtime binding or revoked producer capability cannot
+reach a fresh nonce/signature. No spec-number or testnet inference supplies it.
+
+The field is optional solely to preserve original signed JSON and historical
+replay. Old pending intents retain their original nonce, signature, epoch and
+drand round. Compatible authority renewal must keep the original profile;
+switching profiles needs a separately reviewed activation, with all preceding
+intent custody and liabilities retained. The monitor's explicit native-deadline
+policy must choose the matching profile and exact expected producer/config;
+forecasts remain distinct from observed epoch misses or successful application.
+
 Before a decision can be signed, actual native reads authenticate every approved
 validator's forward/reverse registration, coldkey, weighted stake and permit.
 Coldkeys must be distinct. Bounded `LastUpdate` or registration freshness allows
