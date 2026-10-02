@@ -21,8 +21,9 @@ Both scopes use Go 1.26.6 linux/amd64, server
 `892ade4a6be396b32ea82a550f243190b5992180`, and goidenticons
 `325750b38314313dc5f44c880ab6f12f6c1ecb3c`. Every source and sibling checkout was
 clean at its fence; all scratch and caches were on `/mnt/data`. The reporting
-branch merges documentation-only main `1413c78a` without retargeting either
-source pin or the retained release, owner-trim and recycle-custody receipts.
+branch merges documentation-only main `9238d8d8` (including `1413c78a`) without
+retargeting either source pin or the retained release, owner-trim and
+recycle-custody receipts.
 
 ## Native observer
 
@@ -74,7 +75,9 @@ For synthetic head/anchor 1000, tempo/counter 100 and epoch 7, the corrected
 first included commit belongs to epoch 8 and reveals at block 1101 for a
 one-epoch period. The old implementation predicts 1100; a threshold-only patch
 incorrectly predicts 1002. Fixed wall time at drand genesis yields round 416,
-instead of 412. Deterministic roots cover below, equal and above tempo, periods,
+instead of 412. With counter 99, the corrected prediction is block 1003 while
+the old implementation still predicts 1100. Deterministic roots cover below,
+equal and above tempo, periods,
 bounded root-set tempo, unknown profiles and native-height/epoch overflow.
 
 Fresh production selects `urnetwork-subtensor-tempo-drift-v1` only from an
@@ -100,7 +103,7 @@ accepts valid root-set u16 tempos above the owner setter's 50,400 bound.
 | Post-initialization commit phase omitted | Two intended failures, predicting block 1002 instead of 1101 |
 | Root-tempo checkpoint correction omitted | The retained observed incident fails reopening |
 | Original signed-profile equality omitted | A new production approval wrongly accepts an unprofiled retained record |
-| Independent Sol | Exact-parent five-root causal baseline reproduced; fixed 16-root normal passes; race/vet pending |
+| Independent Sol | Exact-parent five-root causal baseline reproduced; fixed 16/16 normal and 16/16 race pass, zero skips; vet exit 0 |
 
 The scope contains 16 new roots and 39 adjacent roots. The initial runner
 declared 18 validator roots, while its prefix correctly ran 19, including the
@@ -113,6 +116,7 @@ and are excluded from frozen-source qualification.
 - [Author scheduling receipt](/mnt/data/sn-testnet/native-schedule-20261002/evidence/receipt.json), SHA256 `fca632ebc7bd122a9486ed37d3cd97d317dee033b940d6a818c0654adacf0271`.
 - [63-entry manifest](/mnt/data/sn-testnet/native-schedule-20261002/evidence/manifest.json), SHA256 `ecb7a0c06b57234c37dc00cbe939eb69afb5e5c650e2c92434d6923dce930114`.
 - [Author scheduling bundle](/mnt/data/sn-testnet/native-schedule-20261002/native-schedule-author-evidence.tar.gz), SHA256 `e2c1e3e7ac765fa62310b20d1ef8f73159026ab458952f3b620d97b0acf533c0`.
+- [Independent Sol scheduling receipt](/mnt/data/sn-testnet/sol-mainnet-native-schedule-independent-20261002/receipt.json), SHA256 `5835480892b2973e0567ffd8ff5f30b7b83b6b37979f7bc1a0cce990731c625d`. This is the separate 16-root scope; Sol rehashed all 63 author manifest entries and the bundle without relabeling them as independent executions.
 
 New-root selector: `^(TestTempoDrift|TestProductionSchedule|TestMonitorTempoDrift)`
 across `./crv4 ./validator ./mainnet`. The baseline copies only
