@@ -2959,15 +2959,16 @@ No complete per-pool paid projection is qualified yet. This is part of MG-06/07
 and PH-12/15/28, with deterministic contract and monitor controls still required.
 
 
-### Fleet runtime continuation — author qualification
+### Fleet runtime continuation — integrated
 
-The [fleet runtime catalog candidate](evidence/fleet-runtime-catalog-progress-20261002.md)
-now passes23 normal/race tests plus three package vets. Purpose-scoped artifact
-selection separates historical decoding, current reads and present write
-authority, preserving original signatures during recovery. Six causal controls
-discriminate each mode. All117 receipt bindings were verified. Independent
-qualification precedes integration; exact observed472 approval and the final
-release composition remain separate gates.
+Main merge `9671f4568b92e168d1db86d539d52b00f361a309` includes the independently qualified purpose-scoped
+fleet runtime changes. Author and independent23 tests pass in each mode;
+three package vets pass and six causal controls discriminate each mode. Root
+verified all55 independent receipt bindings and exact merged file/module bytes.
+[Qualification and integration evidence](evidence/fleet-runtime-catalog-progress-20261002.md)
+keep current reads, historical decoding and present signing authority separate.
+Original signatures and retained recovery authority remain intact. Runtime472
+approval and final current Server/module/release composition remain open.
 
 
 ### Preparation source composition — bounded author result

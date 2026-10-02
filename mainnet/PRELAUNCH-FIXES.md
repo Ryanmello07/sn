@@ -5382,3 +5382,15 @@ Keep evidence strength explicit as well: configured-RPC receipts and leaf state
 remain assertions until independent finality/runtime/code admission is supplied.
 An EVM chain ID alone does not authenticate native genesis. A Merkle check or
 accepted contract event must not silently become proof of finalized economics.
+
+
+### Purpose-scoped fleet admission is integrated, not live-approved
+
+The fleet compatibility correction now has independent23-test normal/race
+qualification, three package vets and six causal refusals in each mode, and
+is merged into main. [Exact evidence](evidence/fleet-runtime-catalog-progress-20261002.md)
+retains the source/module fence and all earlier failures. This advances the
+production capability-selection gap while preserving current-read availability
+when writes lack approval. It does not supply source authority for observed472
+or a final composed release verdict. Keep immutable original recovery plans and
+signature domains separate from new capability catalogs.

@@ -24,3 +24,18 @@ preview preserves current main; this source is not merged or deployed.
 The observed mainnet472 artifact remains unapproved. The earlier470 exception
 is planning-only and supplies no472 authority. Broader current-module/release
 composition and all remaining PH/MG work remain open.
+
+
+## Independent qualification and main integration
+
+Main merge `9671f4568b92e168d1db86d539d52b00f361a309` now integrates exact twelve fleet/chain/crv4 files
+from119. Module manifests also match119; current finite-claim read recovery
+and retained-member/spool fixes are preserved. The [independent receipt](fleet-runtime-catalog-independent-20261002.json),
+SHA-256 `3d7b9bafdf52759d4de3081010b266454ba276c4c13e2dbe9196ec9d7e50ed91`,
+records23 normal/race tests, three package vets and six intended causal failures
+in each mode. Root rehashed its manifest and all55 bound files before merging.
+
+The exact636-module test graph remains Server10a/Connect0a5. This main merge
+does not inherit a complete composed release verdict; current Server/module and
+all remaining required source changes still need the final composition gate.
+No runtime472 artifact approval, signature, deployment or activation is implied.
