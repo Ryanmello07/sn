@@ -70,6 +70,7 @@ func newBootstrapSuccessorExecutionNonceFixture(t *testing.T, safeNonce string, 
 	record := bootstrapSuccessorSafeTestRecord(prepared)
 	safeRequest.PreparationRecordHash = record.ContentHash
 	registry := bootstrapSuccessorExecutionTestDirectory(t)
+	prepareBootstrapSuccessorMembersTest(t, registry, true)
 	storage := durablefixture.New(t, t.Context(), prepared.Plan.Proposal.OriginalRunDirectory, registry)
 	preparation, err := openBootstrapSuccessorPreparationStore(storage.Context, prepared.Plan, prepared, true, nil)
 	if err != nil {

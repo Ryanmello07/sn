@@ -88,6 +88,7 @@ func TestBootstrapSuccessorExecutionCommandReconstructsAndRetainsV3Custody(t *te
 		signatures = append(signatures, raw...)
 	}
 	registry := bootstrapSuccessorExecutionTestDirectory(t)
+	prepareBootstrapSuccessorMembersTest(t, registry, true)
 	// The independently scoped nonce registry needs its own declared root;
 	// retaining the original root nonce does not implicitly admit this directory.
 	f.root.storage = durablefixture.New(t, t.Context(), append(append([]string{}, f.root.storage.Roots...), registry)...)
