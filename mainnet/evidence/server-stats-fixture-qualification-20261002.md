@@ -39,7 +39,40 @@ has SHA256 `dc951c14366b4afac730ecbc8e68606c23c008c1dac4edaff0cea924d2d7ba4e`.
 Raw logs, exact commands, optional-skip reasons, dependency pins and cleanup
 receipts remain under
 `/mnt/data/sn-testnet/sol-server025-integration-independent-20261002/`;
-each receipt binds its own raw evidence hashes.
+each receipt binds its own raw evidence hashes, with the three historical runner
+path corrections explicitly recorded below.
+
+## Current integration
+
+Fresh server origin advanced to `2bbea1f128e0d87b65266cf688e9175542819916`.
+The exact test-only repair integrates as
+`0739cab5b74f5d0defcfd17c9194277842dfc521`, tree
+`910e98d2185436918ec9572425a7580e84e78a65`. Its one-file delta and unchanged
+`go.mod`/`go.sum` match the earlier repair. Upstream adds an escrow-revision
+trigger replacement on the same table, so the affected eight roots were checked
+again on this exact integration: normal/race pass, package vet exits zero, and
+private fixture cleanup succeeds. The separate [integration receipt](server-stats-fixture-integrated-20261002.json)
+has SHA256 `2adc095af94c4abf6081b6a7157daf52540c633c21d358619abd994288cad38b`.
+This scope does not qualify the other upstream changes across 15 files.
+
+## Historical runner binding correction
+
+The audit reused `run_private_stage.sh` while adding later stages after earlier
+receipts had sealed different bytes at that path. This caused three historical
+path/hash mismatches. Exact earlier byte sequences were recovered at immutable
+scope-specific paths: `run_private_stage-focused-sealed.sh`,
+`run_private_stage-full-sealed.sh`, and `run_private_stage-fixture-sealed.sh`.
+Their hashes match the three original receipt bindings. The separate
+[binding correction](server025-evidence-binding-correction-20261002.json), SHA256
+`9ce6ac74279fa5d993ddcdb61199abd98b5bdadcf8a5c45cfed86a8d9f5ee59d`, records those
+remaps and readback of all 80 bindings across four original receipts. Original
+receipt JSON, source pins, logs, fixture records and outcomes are unchanged;
+the current shared runner path does not match all historical hashes.
+
+PH-06/PH-16 evidence practice: seal runners at immutable content-addressed or
+scope-specific paths before qualification. Never reuse a sealed mutable path
+for a later stage. Any correction must preserve the original receipt and exact
+raw bytes, with a separate explicit binding addendum.
 
 There was no patched-source full-model rerun. The ten original skips remain
 unqualified. This test-only repair does not qualify the later local-storage
