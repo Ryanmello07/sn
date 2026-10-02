@@ -5,7 +5,7 @@ four-role launch, native economics, storage capacity, composed release, or
 production restore gates. No production signature, submission, deployment,
 service activation, PostgreSQL operation or MinIO restore was performed.
 
-The isolated author-qualified candidate is SN `eb0abe22b6cca75fd17bd349821cfaf8b22add18`
+The isolated author- and independently qualified candidate is SN `eb0abe22b6cca75fd17bd349821cfaf8b22add18`
 (tree `527c650382d2efe6b465bdfdc44296c2ba02262b`). The local-blob candidate is
 server `1b7cc78b2dc43f5191cc7b0d3d22f0754fedc662`
 (tree `e8097e705ab2479e181bcfe37ec2d3926d3afab4`), joining the six-file blob
@@ -130,7 +130,20 @@ restarting completed jobs. The first standalone fixed-pin probe failed only
 because its new module was absent with `GOPROXY=off`; that output remains beside
 the subsequent checksum-verified download and successful resolution.
 
-Independent adopter qualification is pending separately. The exact
+The separate [independent adopter receipt](durable-adopter-independent-20261002.json),
+SHA-256 `72c22dbc94838f454a909c451c2b68146c88e9ea0e0b97e10124f344b970a7d6`,
+records all 111 selected roots passing normal and race modes on clean physical
+checkouts of the exact SN/server pair above, with four package vets and no
+skips or failures. All five causal controls fail as intended in both modes.
+The independent audit rehashed all 189 author evidence entries and checked the
+six pinned sibling dependencies. The real service-credential test remains an
+author scope whose evidence was rehashed, not an independently repeated test.
+The first independent vet wrapper attempt rejected a null expected-result
+field without capturing a terminal exit; its output is preserved and excluded.
+Only the corrected vet rerun is counted. Server `005a9066`, later fixture
+migration, full packages and composed release remain separate scopes.
+
+The exact
 [native and snapshot independent receipts](durable-owner-custody-qualification-20261002.md#source-and-evidence-boundaries)
 remain their primitive scopes and do not qualify these consumers. Full package
 qualification was not run. Older fixture assumptions about empty directories
@@ -161,9 +174,9 @@ author evidence.
   completed leaf. Existing signed startup/history checks must be tested before
   asserting either unsafe fresh admission or complete protection.
 - The peer monitor/miner consumers and actual public storage commands retain
-  their own separate receipts. Inventory-v3 still needs independent checks and
-  CLI adoption; all require a later composed integration, which this branch
-  does not claim.
+  their own separate receipts. Inventory-v3 and its nine-root CLI successor
+  still need independent checks; all require a later composed integration,
+  which this branch does not claim.
 - The production offline `storage-prepare` plan/apply dispatcher and exact
   owner-kind enrollment adapters remain in progress. Startup never initializes
   a missing volume declaration, lease, generation, journal or snapshot anchor.
@@ -194,6 +207,6 @@ visible; it does not turn path names or selected fixtures into live proof.
 | MG-03 / PH-01/09 | Persistent member census for immutable successor registries; causal steering-intent/EMA/history audit; production preparation adapters; peer consumer composition and backup attribute adoption | Original complete custody, former-writer fence, approved volume/generation and verified restoration |
 | MG-05 | Complete production dual-operator/API/validator identity-transition and processed-key readiness qualification, preserving historical payout authority | Independently approved future policy/key boundary and retained real operator histories |
 | MG-06 | Composed native denominator/quantization/recipient and reserve/deposit/settlement/claim qualification; current source and schema release integration | Approved owner/device and runtime identity, actual native inclusion/reveal/application, three 10/90 intervals and a full settlement/claim cycle |
-| MG-07 | Adopt exact declarations in deployment assets; independently qualify current monitor consumers; qualify bounded repair and approved renewal beyond the finite recovery window | Designated approved hosts/configuration, independent collector ingestion, delivered alerts and actual systemd/on-call rehearsal |
+| MG-07 | Adopt exact declarations in deployment assets; compose the separately qualified monitor consumers; qualify bounded repair and approved renewal beyond the finite recovery window | Designated approved hosts/configuration, independent collector ingestion, delivered alerts and actual systemd/on-call rehearsal |
 | MG-08 / four roles | Finish remaining durable chain phases and production current-authority/capability adapters; compose both UR validators, netuid-0 role and operator/contracts. Root fresh signing/submission still has missing capability interfaces, beyond a missing device alone | Owner/device/custody approvals, eligibility, funding, owned route, Safe/contract effects and separately approved service activation |
-| MG-02/09/10 | Independent adopter checks, whole affected source composition, successor release and measured production capacity/restore | Reviewed immutable artifact/configuration, rollout approval, published/running identity and retained acceptance observations |
+| MG-02/09/10 | Remaining member-custody and fixture qualification, whole affected source composition, successor release and measured production capacity/restore | Reviewed immutable artifact/configuration, rollout approval, published/running identity and retained acceptance observations |
