@@ -2906,3 +2906,14 @@ report; the closed testnet effort is not relabeled as a pass.
 [subtensor-dispatches-470]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/macros/dispatches.rs
 [collateral-guide]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/docs/guides/mining/collateral.mdx
 [max-uids]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/docs/hyperparameters/max-allowed-uids.mdx
+
+
+### October 2 runtime source intake follow-up
+
+The [bounded official tag/release census](evidence/runtime-472-upstream-intake-20261002.json)
+returned v470 and v471 for `refs/tags/v47*`; the first ten public releases likewise
+contained no v472 entry. [Official release source](https://github.com/RaoFoundation/subtensor/releases).
+This is not proof that v472 source or a proposal is globally absent. Keep exact
+observed v472 code/metadata as unapproved intake until source attribution and
+consumed-purpose review are complete. Fleet catalog implementation and offline
+native/snapshot preparation continue independently of that live authority input.
