@@ -29,7 +29,8 @@ including one underfunded synthetic send and 48 admitted role collisions.
 Original signed bytes, journal custody, attempt ceilings and the separate Safe
 approval remain intact. The frozen `3d1e2ecf` release excludes this correction;
 package it with the [qualified owner-trim successor](evidence/owner-trim-retained-intent-20261002.md)
-at `0f7c8698` in a new exact release.
+at `0f7c8698` and [recycle custody correction](evidence/owner-recycle-custody-20261002.md)
+at `25aa1515` in a new exact release.
 Production policy, live authority, installation and activation remain open.
 
 **September 30 operator report:** Snow mainnet is still synchronizing. This is
@@ -64,8 +65,9 @@ all eleven new roots in both modes plus vet, with seven unchanged-source causal
 failures. A separate omission proves the final validator host check. The frozen
 `1d580d5e` release excludes this correction; the
 [qualified readiness baseline](evidence/release-3d1e2ecf-serverac86-20261002.md) packages that source, but is
-superseded for launch by the separately qualified owner-trim source `0f7c8698`
-and contract-admission source `ebf69b9`, pending a new exact release composition.
+superseded for launch by the separately qualified owner-trim source `0f7c8698`,
+contract-admission source `ebf69b9` and recycle-custody source `25aa1515`, pending
+a new exact release composition.
 The [owner-trim successor](evidence/owner-trim-retained-intent-20261002.md) now
 qualifies the additional trim marker/journal and bounded original-byte submission
 under a separate signed residual policy. Legacy root native mutation ports remain
@@ -932,8 +934,8 @@ a request or finalized mode success. Original nonce/signature recovery and
 unused interrupted claims remain supported. Qualification of this later source
 records separate author and independent 23-root normal/race passes, package vet
 and seven causal baseline failures in each run, preserving the earlier receipts
-and frozen release; actual
-owner/device authority, bounded transmission and native 10/90 evidence remain open.
+and frozen release. Actual owner/device authority, bounded transmission and
+native 10/90 evidence remain open.
 
 Release 1.0 explicitly rejected owner-directed burning as its head/tail steering strategy. The selected owner-recycle launch policy must therefore be encoded as an explicit economic-policy successor, with its activation and accounting independently verified. Preserve the independent-validator objective and signed weight caps: do not raise a cap, create arbitrary owner recipients, or displace validators merely to force a 90% weight destination. [Whitepaper, head/tail decision](../WHITEPAPER.md#138-headtail-split-θ-in-one-mechanism-chosen-not-two-mechanisms-not-owner-burn)
 

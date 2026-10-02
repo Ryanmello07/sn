@@ -95,6 +95,26 @@ The frozen source is backed up in
 bundle verification passed. It is a later source increment than the retained
 `3d1e2ecf` / server `ac86855d` release. No release was rebuilt for this audit.
 
+## Contract-source integration
+
+Merge `c4f78228a28a2655b2274c067c785de6fe8087e4`, tree
+`a712dfe8391fe344d97eb90f29d32a710ff0265b`, combines the reviewed recycle branch
+with pushed contract-admission main `a6f76388a392e459486574d74383865bfef9f82e`.
+Both MAINNET/PRELAUNCH workstreams merged without conflicts. All five recycle
+source/test files remain byte-identical to `25aa1515`; the three contract
+source/test files remain byte-identical to `a6f76388`.
+
+The [separate integration receipt](/mnt/data/sn-testnet/owner-recycle-transition-20261002/integration/receipt.json),
+SHA-256 `3bef127a8f49f12ae694f97d131c752c23a815e65a91617519b106b4dbea5102`,
+records all 26 selected roots passing normally, zero skips, package 43.244s,
+and `go vet ./mainnet` exiting 0. The exact selector is
+`^Test(OwnerRecycle|EvmReserveAdmission|EvmProxyAdmission)`: all 23 recycle roots
+plus the three new contract-admission roots. This is a focused normal/vet
+integration check; the separate component race receipts retain their original
+source pins. No merged-source race, release or live qualification is claimed.
+Later documentation reconciliation lists trim `0f7c8698`, contract admission
+`ebf69b9` and recycle custody `25aa1515` as inputs to the next exact release.
+
 ## Runtime and economic limits
 
 The full retained official v470 metadata, Blake2b-256
