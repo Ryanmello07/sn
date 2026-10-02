@@ -2581,6 +2581,13 @@ repeatedly. PH-15 and PH-16 follow each change rather than waiting for a final
 large cleanup. Mainnet economics and destructive UID operations retain the
 specific unresolved choices and capability checks in MAINNET.md.
 
+The [October 2 implementation backlog](evidence/mainnet-implementation-backlog-20261002.md)
+maps every PH/MG row to current production boundaries and a concrete next
+patch/test. A `Planned` row does not mean all corresponding code is absent:
+selected retry, runtime-history, proof and control paths already exist, while
+their complete production qualification remains open. The named source census
+is read-only review evidence and does not add a passing test scope.
+
 ### PH-01 — Durable progress and separate audit/run ownership
 
 **Lesson.** Setup served as deployment, historical audit, repair controller and

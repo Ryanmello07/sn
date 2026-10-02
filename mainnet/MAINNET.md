@@ -8,6 +8,12 @@
 
 **October 2 actual public composition failures:** exact test-only `ea2bb37f` reproduces three failures in normal and race: persistent root observation omits durable context, a missing completed passive-monitor checkpoint is recreated, and passive preparation admits a missing retained snapshot head. Separate fixture `22d4ee3e` over unchanged adopter production exposes 48 successor write-admission refusals plus two outdated typed-identity assertions (75 roots: 25 pass, 50 fail). Fixes and complete source integration are in progress; neither failed composition is a qualified launch candidate. [Exact evidence and scope boundaries](evidence/durable-composition-progress-20261002.md).
 
+The [implementation backlog](evidence/mainnet-implementation-backlog-20261002.md)
+maps all 28 PH requirements and ten MG gates to actual production callsites,
+separating missing code, scoped implementation, audit leads and live inputs.
+Storage composition is one slice; provider/domain monitoring, runtime
+continuation, retry coverage, economic proof and full acceptance remain open.
+
 Updated 2026-10-02. **Mainnet activation is blocked.** At the user's direction,
 preparation now uses the [Rao Foundation public archive RPC](evidence/public-archive-switch-20261001.md)
 until Snow finishes synchronizing. The archive returned mainnet genesis and

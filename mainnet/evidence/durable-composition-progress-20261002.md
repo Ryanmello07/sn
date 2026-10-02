@@ -50,9 +50,11 @@ and race modes, with no skips:
   custody admission.
 
 The two additional controls were added after the first 22-root attempt; they
-were not omitted from that attempt's historical source. A census of the four
-optional-context custody constructors found every other non-test caller passes
-or forwards context. The pending fix retains the context at both observer
+were not omitted from that attempt's historical source. The limited census of
+four named monitor/claim optional-context constructors found their other
+non-test callers pass or forward context. This was not a global constructor
+census; the broader [implementation backlog](mainnet-implementation-backlog-20261002.md)
+records separate validator caller leads. The pending fix retains the context at both observer
 constructors and retains a shared, read-only snapshot guard for the passive
 service lifetime. Temporary observation unavailability must retry the same
 owner within a finite policy, while proven custody loss stops the affected
@@ -100,6 +102,21 @@ eight successor admission controls and the affected CLI/lifecycle neighbors.
 It must preserve the earlier failed attempts, then obtain a separate independent
 composition receipt. Unchanged successful 201/114/111-root component scopes are
 not summed into a full-package result or rerun merely to enlarge a count.
+
+The [38-requirement implementation backlog](mainnet-implementation-backlog-20261002.md)
+and its [source census](mainnet-implementation-backlog-source-census-20261002.json)
+distinguish implemented but unqualified paths, specific missing interfaces,
+causal audit leads and live inputs. Its 45 named source files were rehashed;
+this is an implementation review, not an additional test receipt.
+
+The qualification host's [bounded cache cleanup](qualification-cache-reclaim-20261002.json),
+SHA-256 `f2c9656998860ab03ef943dbbbffbb4c9b3517226250d39604a24cc02091b0ad`,
+removed 92 inactive Go archive files older than 48 hours after privileged
+process/reference and file-identity checks. It reclaimed 10.02 GiB and retained
+ELF executables, modules, source, images and sealed evidence. Initial denied or
+missing-tool scanner attempts remain recorded; no deletion preceded the final
+guard. This restores local test headroom only, not production capacity or
+backup/restore qualification.
 
 Production [offline preparation](durable-storage-preparation-design-20261002.md),
 immutable-member census, bounded capacity/rotation policy, actual restore and a
