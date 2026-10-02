@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // All variants retain valid Safe success; only the one-shot coordinator event
@@ -254,7 +255,7 @@ func TestBootstrapContractInstallationPublicReadbackRecoversExactAnchor(t *testi
 		return value
 	}
 	chain.stateLock.Unlock()
-	if code, changed, diagnostic := invoke(args); code != 1 || changed.InstallationComplete || !strings.Contains(diagnostic, "original custody changed") {
+	if code, changed, diagnostic := invoke(args); code != 1 || changed.InstallationComplete || !strings.Contains(diagnostic, durablevolume.ErrIdentity.Error()) {
 		t.Fatal("readback escaped final original custody fence", code, diagnostic)
 	}
 	chain.stateLock.Lock()
