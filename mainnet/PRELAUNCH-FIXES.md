@@ -5216,3 +5216,14 @@ source, modules, immutable evidence and executable artifacts. A new private
 member cache had no large same-key duplicate candidates in the shared reviewer
 cache and was preserved. Compiler-cache cleanup does not change source or test
 qualification and does not establish global raw-artifact reference absence.
+
+
+### October 2: review each guarded reader's actual consumers
+
+The post-read full-count issue also appears in Server durableBlobReader.Read
+and localBlobCapacityReader.Read, and the new preparation reader. Each returns
+read bytes alongside a failed post-read guard. These are assigned for exact
+consumer-level reproduction and narrow successors. Preserve successful frozen
+scope receipts; do not mutate them or label source inspection a reproduced
+production failure. Distinguish exposed standard consumers from outer copy or
+ledger inspectors that already recheck the error/context before publication.
