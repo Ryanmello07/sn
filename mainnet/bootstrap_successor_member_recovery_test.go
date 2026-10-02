@@ -132,6 +132,80 @@ func TestBootstrapSuccessorExecutionResumesReservedCountedIntentBeforeStage(t *t
 	}
 }
 
+// Materializing a terminal reservation cannot make it final or permit newer
+// runtime/policy authority before canonical reconciliation of the old outcome.
+func TestBootstrapSuccessorReservedOutcomeRetainsApplicationOrdering(t *testing.T) {
+	f := newBootstrapSuccessorExecutionFixture(t)
+	owner := f.open(true, nil)
+	base := bootstrapSuccessorCanonicalTestApproval(t, f.approval.Plan, f.key, bootstrapSuccessorCanonicalTestRuntime())
+	if err := owner.retainCanonicalAuthority(t.Context(), base); err != nil {
+		t.Fatal(err)
+	}
+	runtime := bootstrapSuccessorRuntimeTestNext(t, f, base, nil)
+	if err := owner.retainRuntimeRevision(t.Context(), runtime); err != nil {
+		t.Fatal(err)
+	}
+	policy := bootstrapSuccessorSafeCurrentTestNext(t, f, base, owner.runtimeHistory, nil)
+	if err := owner.retainSafeCurrentRevision(t.Context(), policy); err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.append(owner.attemptEvent()); err != nil {
+		t.Fatal(err)
+	}
+	f.resolution = bootstrapSuccessorExecutionReconciliation{Status: "included", Receipt: f.receipt()}
+	name := bootstrapSuccessorExecutionEventName(2) + ".intent"
+	owner.local.hook = func(stage string) error {
+		if stage == name+":reserved" {
+			return io.ErrUnexpectedEOF
+		}
+		return nil
+	}
+	if _, err := advanceBootstrapSuccessorExecution(t.Context(), owner, f, false); !errors.Is(err, errMainnetDurablePublicationUncertain) || !owner.closed || len(f.writes) != 0 {
+		t.Fatal("pre-stage terminal reservation did not stop and join its owner", err)
+	}
+	root := f.approval.Plan.Review.Preparation.Approval.Plan.Proposal.OriginalRunDirectory
+	raw, err := os.ReadFile(filepath.Join(root, bootstrapSuccessorMemberSpec(false).Name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var census bootstrapSuccessorMemberCensus
+	if err := json.Unmarshal(raw, &census); err != nil || census.Pending == nil || census.Pending.Name != name || census.Pending.StageInode != 0 {
+		t.Fatal("pre-stage terminal reservation lost exact original bytes", err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, census.Pending.Stage)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("terminal control already has a physical stage", err)
+	}
+	expected, err := base64.StdEncoding.Strict().DecodeString(census.Pending.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner = f.open(false, nil)
+	defer owner.close()
+	if owner.pending != "installed" || owner.last.CumulativeAttempts != 9 || owner.last.RuntimeRevisionHash != rootObjectHash(runtime) || owner.last.SafeCurrentRevisionHash != rootObjectHash(policy) || len(f.writes) != 0 {
+		t.Fatal("pre-stage terminal recovery finalized or changed original authority")
+	}
+	staged, err := os.ReadFile(filepath.Join(root, census.Pending.Stage))
+	if err != nil || !bytes.Equal(expected, staged) {
+		t.Fatal("pre-stage recovery changed retained terminal bytes", err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, name)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("pre-stage recovery finalized before canonical reconciliation", err)
+	}
+	nextRuntime := bootstrapSuccessorRuntimeTestNext(t, f, base, []bootstrapSuccessorRuntimeApproval{runtime})
+	nextPolicy := bootstrapSuccessorSafeCurrentTestNext(t, f, base, owner.runtimeHistory, []bootstrapSuccessorSafeCurrentRevisionApproval{policy})
+	if err := owner.retainRuntimeRevision(t.Context(), nextRuntime); err == nil {
+		t.Fatal("new runtime authority crossed the pending original outcome")
+	}
+	if err := owner.retainSafeCurrentRevision(t.Context(), nextPolicy); err == nil {
+		t.Fatal("new policy authority crossed the pending original outcome")
+	}
+	result, err := advanceBootstrapSuccessorExecution(t.Context(), owner, f, false)
+	retained, readErr := os.ReadFile(filepath.Join(root, name))
+	if err != nil || readErr != nil || !result.InstallationComplete || !bytes.Equal(expected, retained) || owner.last.CumulativeAttempts != 9 || len(f.writes) != 0 {
+		t.Fatal("canonical reconciliation changed exact reserved outcome or allowance", err, readErr)
+	}
+}
+
 // The child exits after a real payload fsync while its reservation and original
 // staged inode remain retained. No cleanup callback simulates the crash.
 func TestBootstrapSuccessorMemberCrashResumesExactPreparedPayload(t *testing.T) {

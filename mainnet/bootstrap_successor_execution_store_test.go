@@ -30,6 +30,7 @@ func TestBootstrapSuccessorExecutionSeparatelyFencesGlobalNonceDomains(t *testin
 		second.storage = durablefixture.New(t, t.Context(), second.approval.Plan.Review.Preparation.Approval.Plan.Proposal.OriginalRunDirectory, first.approval.Plan.Request.RegistryDirectory)
 		second.approval = bootstrapSuccessorExecutionTestSign(t, second.approval.Plan, second.key, second.profile)
 		before := bootstrapSuccessorPreparationTestFiles(t, first.approval.Plan.Request.RegistryDirectory)
+		delete(before, bootstrapSuccessorMemberSpec(true).Name)
 		competing, err := openBootstrapSuccessorExecutionStore(second.storageContext(t.Context()), second.approval.Plan, second.approval, second.profile, true, nil)
 		if competing != nil {
 			competing.close()

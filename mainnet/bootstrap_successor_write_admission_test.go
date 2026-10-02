@@ -60,6 +60,7 @@ func TestBootstrapSuccessorExecutionDurableWriteAdmission(t *testing.T) {
 	f := newBootstrapSuccessorExecutionFixture(t)
 	root := f.approval.Plan.Review.Preparation.Approval.Plan.Proposal.OriginalRunDirectory
 	original := bootstrapSuccessorPreparationTestFiles(t, root)
+	delete(original, bootstrapSuccessorMemberSpec(false).Name)
 	owner := f.open(true, nil)
 	if owner.last.Phase != "adopted" || owner.last.CumulativeAttempts != f.approval.Plan.Review.Preparation.Approval.Plan.Proposal.Budget.RetainedAttempts || len(f.writes) != 0 {
 		t.Fatal("claim consumed or changed original authority")

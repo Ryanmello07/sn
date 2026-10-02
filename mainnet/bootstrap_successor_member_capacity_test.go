@@ -74,6 +74,12 @@ func TestBootstrapSuccessorMaximumPendingPayloadRecoversWithoutNewAuthority(t *t
 	if err := writer.resumePending(); err != nil {
 		t.Fatal("maximum pending publisher payload could not resume", err)
 	}
+	if _, err := os.Lstat(filepath.Join(root, name)); !errors.Is(err, os.ErrNotExist) || writer.members.census.Pending == nil {
+		t.Fatal("pre-stage recovery finalized a publication before application reconciliation", err)
+	}
+	if err := writer.publish(name, "synthetic-capacity", payload); err != nil {
+		t.Fatal("original maximum-payload publication could not complete", err)
+	}
 	retained, err := os.ReadFile(filepath.Join(root, name))
 	if err != nil || !bytes.Equal(retained, payload) || writer.members.census.Pending != nil || len(f.writes) != 0 {
 		t.Fatal("maximum payload recovery changed original public bytes or caused a send", err)

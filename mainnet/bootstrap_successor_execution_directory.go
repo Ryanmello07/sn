@@ -144,6 +144,12 @@ func (self *bootstrapSuccessorExecutionDirectory) stageName(name, kind string) s
 // Existing final bytes must be exact and have no competing stage. Recovery
 // repairs only this approved immutable prefix and publishes with no replacement.
 func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw []byte) (resultErr error) {
+	return self.publishMember(name, kind, raw, false)
+}
+
+// Pre-stage recovery only materializes the retained bytes. Application replay
+// still owns event ordering and the decision to finalize a terminal outcome.
+func (self *bootstrapSuccessorExecutionDirectory) publishMember(name, kind string, raw []byte, stageOnly bool) (resultErr error) {
 	mutationStarted := false
 	defer func() {
 		if mutationStarted {
@@ -243,6 +249,9 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 	if err := self.checkpoint(name + ":stage-synced"); err != nil {
 		return err
 	}
+	if stageOnly {
+		return nil
+	}
 	if err := self.storage.checkWrite(self.file); err != nil {
 		return err
 	}
@@ -261,23 +270,35 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 	return self.checkpoint(name + ":published-synced")
 }
 
-// The completed write-ahead head retains the original approved public bytes
-// even if a process stopped before creating its named stage. Only the same
-// claimant can finish them; application history validates before any send.
+// A completed reservation retains the approved bytes before stage creation.
+// Materialize only that missing stage; already staged or published members
+// remain under their original application's reconciliation and ordering rules.
 func (self *bootstrapSuccessorExecutionDirectory) resumePending() error {
 	pending := self.members.census.Pending
 	if pending == nil {
 		return nil
 	}
+	if err := self.checkpoint("resume-pending-stage"); err != nil {
+		return err
+	}
 	prefix := self.stageName(pending.Name, "")
 	if pending.Append || !strings.HasPrefix(pending.Stage, prefix) || len(pending.Stage) == len(prefix) {
 		return self.storage.identity("successor pending publication belongs to another claimant", nil)
+	}
+	if pending.StageInode != 0 {
+		return nil
+	}
+	var staged unix.Stat_t
+	if err := unix.Fstatat(int(self.file.Fd()), pending.Stage, &staged, unix.AT_SYMLINK_NOFOLLOW); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return self.members.observation("cannot inspect original successor pending stage", err, false)
 	}
 	raw, err := base64.StdEncoding.Strict().DecodeString(pending.Payload)
 	if err != nil {
 		return self.storage.identity("successor pending publication lost its retained payload", err)
 	}
-	return self.publish(pending.Name, strings.TrimPrefix(pending.Stage, prefix), raw)
+	return self.publishMember(pending.Name, strings.TrimPrefix(pending.Stage, prefix), raw, true)
 }
 
 // Ownership ends without releasing any durable nonce or financial liability.
