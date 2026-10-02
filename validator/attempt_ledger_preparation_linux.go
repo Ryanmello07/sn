@@ -252,6 +252,22 @@ func (self *attemptPreparationView) observe(parent *os.File, name, relative stri
 
 // Every allowed backend and migration member is included; unknown names refuse.
 func (self *attemptPreparationView) census(scope AttemptLedgerPreparationScope) ([]AttemptLedgerPreparationFile, error) {
+	files, err := self.censusMembers(scope, false)
+	if err != nil {
+		return nil, err
+	}
+	if !self.anchorAbsent {
+		var checkpoint attemptLedgerCustodyCheckpoint
+		if err := attemptStoreDecode(self.anchor, &checkpoint); err != nil || !bytes.Equal(self.anchor, mustAttemptPreparationJSON(self.checkpoint(scope))) {
+			return nil, errors.Join(attemptLedgerCustodyLoss("preparation checkpoint is pending or differs from original physical custody", nil), err)
+		}
+	}
+	return files, self.checkCensus()
+}
+
+// Restore's separately authenticated checkpoint may include one complete
+// pending record. Fresh inspection retains its original strict no-pending rule.
+func (self *attemptPreparationView) censusMembers(scope AttemptLedgerPreparationScope, retainedPending bool) ([]AttemptLedgerPreparationFile, error) {
 	rootNames, err := self.names(self.root, self.limits.MaxStorageFiles+16)
 	if err != nil {
 		return nil, err
@@ -260,13 +276,20 @@ func (self *attemptPreparationView) census(scope AttemptLedgerPreparationScope) 
 	if scope.Legacy != nil {
 		allowed[attemptLedgerLegacyName] = true
 	}
+	if retainedPending {
+		for _, name := range rootNames {
+			if name == attemptLedgerPendingName {
+				allowed[name] = true
+			}
+		}
+	}
 	for _, name := range rootNames {
 		if strings.HasPrefix(name, "attempt-ledger") && !allowed[name] {
 			return nil, attemptLedgerCustodyLoss("preparation retains unknown or pending ledger custody", nil)
 		}
 	}
 	files := []AttemptLedgerPreparationFile{{Path: attemptLedgerStoreName, Kind: "directory", Mode: self.backendStat.Mode & 0777}}
-	for _, name := range []string{attemptLedgerImportName, attemptLedgerReadyName, attemptLedgerLegacyName} {
+	for _, name := range []string{attemptLedgerImportName, attemptLedgerReadyName, attemptLedgerLegacyName, attemptLedgerPendingName} {
 		if !allowed[name] {
 			continue
 		}
@@ -275,6 +298,8 @@ func (self *attemptPreparationView) census(scope AttemptLedgerPreparationScope) 
 			maximum = scope.Limits.MaxRecordBytes*6 + 4096
 		} else if name == attemptLedgerLegacyName {
 			maximum = scope.Limits.MaxLegacyBytes
+		} else if name == attemptLedgerPendingName {
+			maximum = scope.Limits.MaxRecordBytes
 		}
 		observation, err := self.observe(self.root, name, name, maximum)
 		if err != nil {
@@ -313,12 +338,6 @@ func (self *attemptPreparationView) census(scope AttemptLedgerPreparationScope) 
 	for _, name := range []string{"LOCK", "CURRENT"} {
 		if _, present := self.members[attemptLedgerStoreName+"/"+name]; !present {
 			return nil, attemptLedgerCustodyLoss("preparation backend lost original LOCK or CURRENT", nil)
-		}
-	}
-	if !self.anchorAbsent {
-		var checkpoint attemptLedgerCustodyCheckpoint
-		if err := attemptStoreDecode(self.anchor, &checkpoint); err != nil || !bytes.Equal(self.anchor, mustAttemptPreparationJSON(self.checkpoint(scope))) {
-			return nil, errors.Join(attemptLedgerCustodyLoss("preparation checkpoint is pending or differs from original physical custody", nil), err)
 		}
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })

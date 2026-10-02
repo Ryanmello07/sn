@@ -66,15 +66,18 @@ func storageSnapshotRestoreTarget(t *testing.T, source *storagePreparationComman
 	for _, entry := range report.Entries {
 		path := filepath.Join(archive, entry.Path)
 		if entry.Path != "" {
-			if entry.Kind != "file" {
-				t.Fatal("snapshot fixture unexpectedly contains a child directory", entry.Path)
-			}
-			raw, err := os.ReadFile(filepath.Join(source.root, entry.Path))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(path, raw, 0600); err != nil {
-				t.Fatal(err)
+			if entry.Kind == "directory" {
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				raw, err := os.ReadFile(filepath.Join(source.root, entry.Path))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, raw, 0600); err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
 		for _, attribute := range entry.OwnerAttributes {

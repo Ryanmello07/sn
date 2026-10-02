@@ -26,7 +26,12 @@ func planStoragePreparationRestore(ctx context.Context, name string, owner durab
 		return chain.PlanNativeJournalRestore(ctx, name, owner, report)
 	case "fleet-recovery", "provider-claim-queue":
 		return miner.PlanStorageRestore(ctx, name, owner, report, ownerLocal)
-	case validator.AttemptLedgerPreparationKind, "mainnet-successor-local-members", "mainnet-successor-nonce-members":
+	case validator.AttemptLedgerPreparationKind:
+		if ownerLocal {
+			return durablevolume.PreparationOwnerPlan{}, errors.New("validator ledger restore requires its daemon declaration scope")
+		}
+		return validator.PlanAttemptLedgerRestore(ctx, name, owner, report)
+	case "mainnet-successor-local-members", "mainnet-successor-nonce-members":
 		return durablevolume.PreparationOwnerPlan{}, errors.New("restore requires its separate original ledger or member-census semantic adapter")
 	}
 	spec, scope, err := storagePreparationSnapshotSpec(ownerLocal, owner)
@@ -48,7 +53,12 @@ func inspectStoragePreparationRestore(ctx context.Context, root *os.File, owner 
 		return chain.InspectNativeJournalRestore(ctx, root, owner, report)
 	case "fleet-recovery", "provider-claim-queue":
 		return miner.InspectStorageRestore(ctx, root, owner, report, ownerLocal)
-	case validator.AttemptLedgerPreparationKind, "mainnet-successor-local-members", "mainnet-successor-nonce-members":
+	case validator.AttemptLedgerPreparationKind:
+		if ownerLocal {
+			return nil, errors.New("validator ledger restore requires its daemon declaration scope")
+		}
+		return validator.InspectAttemptLedgerRestore(ctx, root, owner, report)
+	case "mainnet-successor-local-members", "mainnet-successor-nonce-members":
 		return nil, errors.New("restore requires its separate original ledger or member-census semantic adapter")
 	}
 	spec, scope, err := storagePreparationSnapshotSpec(ownerLocal, owner.Owner)
