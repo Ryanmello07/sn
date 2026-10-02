@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"math"
 	"time"
@@ -14,6 +13,7 @@ import (
 type monitorClaimEpochState struct {
 	Epoch       int64                      `json:"epoch"`
 	Observation *protocol.ClaimObservation `json:"observation,omitempty"`
+	Proof       *protocol.ClaimObservation `json:"proof,omitempty"`
 	FirstSeenAt time.Time                  `json:"first_seen_at"`
 	ProgressAt  time.Time                  `json:"progress_at"`
 }
@@ -40,18 +40,6 @@ func newMonitorClaimState(policy monitorClaimPolicy) *monitorClaimState {
 		value.Epochs = append(value.Epochs, monitorClaimEpochState{Epoch: expected.Epoch})
 	}
 	return value
-}
-
-// Observing a later finalized block or acknowledging unchanged queue bytes is
-// not settlement progress. Compare only actual proof/outcome fields.
-func monitorClaimSemantic(observation *protocol.ClaimObservation) string {
-	if observation == nil {
-		return ""
-	}
-	value := *observation
-	value.ObservedAt, value.BlockHash, value.BlockNumber = "", "", 0
-	raw, _ := json.Marshal(value)
-	return string(raw)
 }
 
 func monitorClaimAccepted(observation *protocol.ClaimObservation) bool {
@@ -120,11 +108,20 @@ func (self *monitorClaimState) observationCode(policy monitorClaimPolicy, value 
 	}
 	for _, prior := range self.Epochs {
 		for _, entry := range value.Entries {
-			if entry.Epoch != prior.Epoch || prior.Observation == nil || entry.Observation == nil {
+			if entry.Epoch != prior.Epoch || entry.Observation == nil {
 				continue
 			}
 			before, after := prior.Observation, entry.Observation
+			if prior.Proof != nil && after.EvidenceKind == "finalized-leaf" && (prior.Proof.PayoutRoot != after.PayoutRoot || prior.Proof.ArtifactHash != "" && after.ArtifactHash != "" && prior.Proof.ArtifactHash != after.ArtifactHash) {
+				return "contradiction"
+			}
+			if before == nil {
+				continue
+			}
 			if monitorClaimAccepted(before) && !monitorClaimAccepted(after) || before.EvidenceKind == "signed-receipt" && after.EvidenceKind == "signed-receipt" && (before.TransactionHash != after.TransactionHash || before.AcceptedAmountRao != after.AcceptedAmountRao || before.BlockHash != after.BlockHash) {
+				return "contradiction"
+			}
+			if before.EvidenceKind == "signed-receipt" && after.EvidenceKind == "signed-receipt" && monitorClaimPaymentKnown(before) && monitorClaimPaymentKnown(after) && (before.PaymentStatus != after.PaymentStatus || before.UnpaidCreditRao != after.UnpaidCreditRao || before.AggregatePaidRao != after.AggregatePaidRao) {
 				return "contradiction"
 			}
 		}
@@ -154,14 +151,24 @@ func (self *monitorClaimState) observe(policy monitorClaimPolicy, value *protoco
 				if entry.Epoch != retained.Epoch || entry.Observation == nil {
 					continue
 				}
+				observation := entry.Observation
+				progressed := false
+				if retained.Proof == nil && observation.EvidenceKind == "finalized-leaf" && observation.ProofStatus == "merkle-verified" {
+					retained.Proof = cloneMonitorClaimObservation(observation)
+					progressed = true
+				}
 				// Do not replace a receipt with weaker leaf/API evidence.
-				if retained.Observation != nil && retained.Observation.EvidenceKind == "signed-receipt" && entry.Observation.EvidenceKind != "signed-receipt" {
+				if retained.Observation != nil && retained.Observation.EvidenceKind == "signed-receipt" && (observation.EvidenceKind != "signed-receipt" || monitorClaimPaymentKnown(retained.Observation) && !monitorClaimPaymentKnown(observation)) {
+					if progressed {
+						retained.ProgressAt, self.SemanticProgressAt = now, now
+					}
 					continue
 				}
 				if retained.FirstSeenAt.IsZero() {
 					retained.FirstSeenAt = now
 				}
-				if monitorClaimSemantic(retained.Observation) != monitorClaimSemantic(entry.Observation) {
+				progressed = progressed || !monitorClaimAccepted(retained.Observation) && monitorClaimAccepted(observation) || observation.EvidenceKind == "signed-receipt" && (retained.Observation == nil || retained.Observation.EvidenceKind != "signed-receipt") || !monitorClaimPaymentKnown(retained.Observation) && monitorClaimPaymentKnown(observation)
+				if progressed {
 					retained.ProgressAt, self.SemanticProgressAt = now, now
 				}
 				retained.Observation = cloneMonitorClaimObservation(entry.Observation)
@@ -207,6 +214,9 @@ func (self *monitorClaimState) summary(policy monitorClaimPolicy, now time.Time)
 	result := monitorClaimSummary{Expected: len(policy.Epochs), ProgressAt: self.SemanticProgressAt}
 	for index, expected := range policy.Epochs {
 		observation := self.Epochs[index].Observation
+		if self.Epochs[index].Proof != nil {
+			result.MerkleProofs++
+		}
 		deadline, _ := time.Parse(time.RFC3339Nano, expected.AcceptBy)
 		if !now.Before(deadline) && !monitorClaimAccepted(observation) {
 			result.Overdue++
@@ -222,9 +232,6 @@ func (self *monitorClaimState) summary(policy monitorClaimPolicy, now time.Time)
 			if observation.LeafClaimed != nil && *observation.LeafClaimed {
 				result.ClaimedLeaves++
 			}
-			if observation.ProofStatus == "merkle-verified" {
-				result.MerkleProofs++
-			}
 		case "signed-receipt":
 			result.AcceptedReceipts++
 		}
@@ -233,8 +240,15 @@ func (self *monitorClaimState) summary(policy monitorClaimPolicy, now time.Time)
 			result.Deferred++
 		case "aggregate-paid":
 			result.AggregatePaid++
-		case "invalid":
-			result.InvalidPayment++
+		}
+		// Current malformed payment reporting stays visible even while an
+		// earlier exact assertion remains in retained evidence.
+		if self.Record != nil {
+			for _, entry := range self.Record.Entries {
+				if entry.Epoch == expected.Epoch && entry.Observation != nil && entry.Observation.PaymentStatus == "invalid" {
+					result.InvalidPayment++
+				}
+			}
 		}
 	}
 	return result
@@ -244,6 +258,10 @@ var monitorClaimCodes = map[string]int{"starting": 0, "ok": 1, "unknown": 2, "ov
 
 func monitorClaimTerminal(code string) bool {
 	return code == "identity" || code == "authentication" || code == "contradiction"
+}
+
+func monitorClaimPaymentKnown(observation *protocol.ClaimObservation) bool {
+	return observation != nil && (observation.PaymentStatus == "deferred" || observation.PaymentStatus == "aggregate-paid")
 }
 
 func validateMonitorClaimState(policy monitorClaimPolicy, state monitorClaimState) error {
@@ -261,17 +279,30 @@ func validateMonitorClaimState(policy monitorClaimPolicy, state monitorClaimStat
 			return errors.New("claim checkpoint expected epoch or times differ")
 		}
 		if epoch.Observation == nil {
-			if !epoch.FirstSeenAt.IsZero() || !epoch.ProgressAt.IsZero() {
+			if !epoch.FirstSeenAt.IsZero() || !epoch.ProgressAt.IsZero() || epoch.Proof != nil {
 				return errors.New("claim checkpoint invented absent evidence history")
 			}
 			continue
 		}
 		observation := epoch.Observation
-		if observation.Validate() != nil || observation.Epoch != epoch.Epoch || epoch.FirstSeenAt.IsZero() || epoch.ProgressAt.Before(epoch.FirstSeenAt) || state.Record == nil {
+		if observation.Validate() != nil || observation.Epoch != epoch.Epoch || epoch.FirstSeenAt.IsZero() || !epoch.ProgressAt.IsZero() && epoch.ProgressAt.Before(epoch.FirstSeenAt) || state.Record == nil {
 			return errors.New("claim checkpoint lost retained evidence identity")
 		}
 		if observation.EvidenceKind != "api-no-claim" && (observation.Pool != policy.ExpectedPool || observation.ShareBps != policy.Epochs[index].ShareBps) {
 			return errors.New("claim checkpoint evidence differs from independent pool")
+		}
+		observed, _ := time.Parse(time.RFC3339Nano, observation.ObservedAt)
+		if observed.After(state.HighWaterAt) || epoch.ProgressAt.After(state.SemanticProgressAt) {
+			return errors.New("claim checkpoint evidence time differs")
+		}
+		if proof := epoch.Proof; proof != nil {
+			if proof.Validate() != nil || proof.Epoch != epoch.Epoch || proof.EvidenceKind != "finalized-leaf" || proof.ProofStatus != "merkle-verified" || proof.Pool != policy.ExpectedPool || proof.ShareBps != policy.Epochs[index].ShareBps || policy.Epochs[index].PayoutRoot != "" && proof.PayoutRoot != policy.Epochs[index].PayoutRoot || policy.Epochs[index].ArtifactHash != "" && proof.ArtifactHash != policy.Epochs[index].ArtifactHash {
+				return errors.New("claim checkpoint proof differs from independent expectation")
+			}
+			observed, _ := time.Parse(time.RFC3339Nano, proof.ObservedAt)
+			if observed.After(state.HighWaterAt) {
+				return errors.New("claim checkpoint proof time differs")
+			}
 		}
 	}
 	return nil
