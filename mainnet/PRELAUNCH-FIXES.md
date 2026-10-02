@@ -5130,3 +5130,22 @@ replacement overridden by go.work must not create a false missing-path alarm.
 The corrected member checkout has a passing graph preflight; its normal/race
 qualification remains a separate result. This preflight does not replace
 compiler checks, published-module qualification or release provenance.
+
+### October 2: preserve reader sentinel contracts at guarded I/O boundaries
+
+The first actual storage preparation CLI candidate compiled, then both public
+tests failed at LevelDB inspection with EOF. Its new reader returned
+`errors.Join(readErr, contextErr)` even when contextErr was nil, wrapping the
+ordinary `io.EOF` sentinel. LevelDB's journal reader requires the original
+sentinel. Preserve the underlying read error unchanged when the additional
+guard succeeds; join only genuine additional causes. Never discard an integrity
+or cancellation failure merely because another cause is EOF.
+
+The adjacent existing validator spool at
+`validator/attempt_cut_v2_seal_scratch.go` also joins every read error with its
+postcheck. That is a concrete audit lead assigned for actual consumer-level
+reproduction and correction, not a proven fixed behavior. Deterministic tests
+must cover a complete stream, empty stream, short read and EOF together with
+a genuine failed guard. Tests of `errors.Is(err, io.EOF)` alone cannot prove
+compatibility with consumers that require an unwrapped sentinel. The original
+preparation failure remains retained separately from later source qualification.
