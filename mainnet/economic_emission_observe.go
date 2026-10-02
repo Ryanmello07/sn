@@ -195,7 +195,7 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 		if err != nil {
 			return result, err
 		}
-		block.Events, err = decodeEconomicEmissionEvents(runtime.metadata, raw, block.BodyCount, policy.Netuid, policy.MaximumUids, number)
+		block.Events, block.ContextEvents, err = decodeEconomicEmissionEvents(runtime.metadata, raw, block.BodyCount, policy.Netuid, policy.MaximumUids, number)
 		if err != nil {
 			return result, err
 		}
@@ -208,7 +208,7 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 		if err != nil {
 			return result, err
 		}
-		block.Denominator, err = economicEmissionDenominatorEvidence(before, after, block.Events)
+		block.Denominator, err = economicEmissionDenominatorEvidence(before, after, block.Events, block.ContextEvents)
 		if err != nil {
 			return result, err
 		}

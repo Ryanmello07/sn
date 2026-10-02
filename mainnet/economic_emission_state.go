@@ -23,6 +23,7 @@ var economicEmissionStorageSpecs = []rootStorageSpec{
 	{name: "MechanismCountCurrent", keys: []string{"u16"}, hashers: []string{"twox64concat"}, value: "u8"},
 	{name: "SubnetEpochIndex", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
 	{name: "LastEpochBlock", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
+	{name: "Tempo", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u16"},
 	{name: "PendingEpochAt", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
 	{name: "PendingServerEmission", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
 	{name: "PendingValidatorEmission", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
@@ -69,6 +70,7 @@ func readEconomicEmissionState(ctx context.Context, client *rpcClient, metadata 
 	state.SubnetUids = binary.LittleEndian.Uint16(valueKVs["SubnetworkN"].data)
 	state.MechanismCount = valueKVs["MechanismCountCurrent"].data[0]
 	state.Epoch, state.LastEpochBlock, state.PendingEpochAt = u64("SubnetEpochIndex"), u64("LastEpochBlock"), u64("PendingEpochAt")
+	state.Tempo = binary.LittleEndian.Uint16(valueKVs["Tempo"].data)
 	state.PendingServerAlpha, state.PendingValidatorAlpha = strconv.FormatUint(u64("PendingServerEmission"), 10), strconv.FormatUint(u64("PendingValidatorEmission"), 10)
 	state.PendingRootAlpha, state.PendingOwnerAlpha = strconv.FormatUint(u64("PendingRootAlphaDivs"), 10), strconv.FormatUint(u64("PendingOwnerCut"), 10)
 	state.BlockAlphaOut = strconv.FormatUint(u64("SubnetAlphaOutEmission"), 10)
@@ -101,7 +103,7 @@ func readEconomicEmissionState(ctx context.Context, client *rpcClient, metadata 
 // Event evidence cannot resolve M or Q: this block's newly accrued tranche was
 // drained before post-state; normalized incentive/dividend terms and each
 // fixed-point truncation are not reconstructed by summing the emitted vector.
-func economicEmissionDenominatorEvidence(before, after economicEmissionState, events []economicEmissionEvent) (economicEmissionDenominator, error) {
+func economicEmissionDenominatorEvidence(before, after economicEmissionState, events []economicEmissionEvent, contextEvents []economicEmissionContextEvent) (economicEmissionDenominator, error) {
 	result := economicEmissionDenominator{
 		Status: "unresolved-no-incentive-event", ObservedIncentiveAlpha: "0", PriorPendingServerAlpha: before.PendingServerAlpha, AfterPendingServerAlpha: after.PendingServerAlpha,
 		Blockers: []string{
@@ -117,9 +119,35 @@ func economicEmissionDenominatorEvidence(before, after economicEmissionState, ev
 	if before.SubnetUids != after.SubnetUids {
 		result.Blockers = append(result.Blockers, "registration count changed across the block; event UID slots require execution-time generation reconciliation")
 	}
+	var lastTempo *uint16
+	var ownerChange *economicEmissionContextEvent
+	for index := range contextEvents {
+		context := &contextEvents[index]
+		switch context.Kind {
+		case "SubtensorModule.TempoSet":
+			lastTempo = context.Tempo
+		case "SubtensorModule.SubnetOwnerChanged":
+			if ownerChange != nil || context.Phase != "Initialization" || len(events) != 1 || events[0].Kind != "SubtensorModule.IncentiveAlphaEmittedToMiners" || context.EventIndex >= events[0].EventIndex {
+				return result, errors.New("native incentive owner change is not the single pre-incentive initialization takeover")
+			}
+			ownerChange = context
+		default:
+			return result, errors.New("native incentive execution context is unknown")
+		}
+	}
+	if lastTempo != nil && *lastTempo != after.Tempo || lastTempo == nil && before.Tempo != after.Tempo {
+		return result, errors.New("native incentive tempo event and storage disagree")
+	}
+	if ownerChange != nil {
+		result.Blockers = append(result.Blockers, "conviction takeover may append or replace an owner neuron before incentives; recipient hotkey generations and actual owner recycling remain unresolved")
+	}
 	if len(events) == 0 {
-		if after.Epoch != before.Epoch || after.LastEpochBlock != before.LastEpochBlock {
+		anchorReset := after.LastEpochBlock != before.LastEpochBlock && after.LastEpochBlock == after.Boundary.Number && lastTempo != nil
+		if after.Epoch != before.Epoch || after.LastEpochBlock != before.LastEpochBlock && (!anchorReset || before.Epoch == math.MaxUint64) {
 			return result, errors.New("native incentive epoch advanced without its reviewed terminal event")
+		}
+		if anchorReset {
+			result.Status = "unresolved-schedule-reset-observed"
 		}
 		return result, nil
 	}
@@ -135,7 +163,10 @@ func economicEmissionDenominatorEvidence(before, after economicEmissionState, ev
 	case "SubtensorModule.IncentiveAlphaEmittedToMiners":
 		result.Status, result.ObservedIncentiveAlpha = "unresolved-incentive-observed", event.TotalAlpha
 		result.ZeroIncentiveFallback = event.TotalAlpha == "0"
-		if len(event.AlphaByUid) != int(before.SubnetUids) || after.Epoch != expectedEpoch || after.LastEpochBlock != after.Boundary.Number || after.PendingServerAlpha != "0" {
+		// A takeover calls register_neuron at most once before Yuma. Its event
+		// permits that one append, never an arbitrary post-block census length.
+		uidCountMatches := len(event.AlphaByUid) == int(before.SubnetUids) || ownerChange != nil && len(event.AlphaByUid) == int(before.SubnetUids)+1
+		if !uidCountMatches || after.Epoch != expectedEpoch || after.LastEpochBlock != after.Boundary.Number || after.PendingServerAlpha != "0" {
 			return result, errors.New("native incentive event and epoch/drain snapshots disagree")
 		}
 	case "SubtensorModule.EpochSkipped":

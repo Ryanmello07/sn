@@ -64,6 +64,7 @@ type economicEmissionState struct {
 	MechanismCount        uint8                    `json:"mechanism_count"`
 	Epoch                 uint64                   `json:"subnet_epoch_index"`
 	LastEpochBlock        uint64                   `json:"last_epoch_block"`
+	Tempo                 uint16                   `json:"tempo"`
 	PendingEpochAt        uint64                   `json:"pending_epoch_at"`
 	PendingServerAlpha    string                   `json:"pending_server_alpha"`
 	PendingValidatorAlpha string                   `json:"pending_validator_alpha"`
@@ -91,6 +92,19 @@ type economicEmissionEvent struct {
 	ToBlock    uint64   `json:"to_block,omitempty"`
 }
 
+// Scheduling and owner changes explain execution order, not economic amounts.
+// The indexed phase and exact values remain separate from terminal epoch events.
+type economicEmissionContextEvent struct {
+	EventIndex      uint64  `json:"event_index"`
+	Kind            string  `json:"kind"`
+	Netuid          uint16  `json:"netuid"`
+	Phase           string  `json:"phase"`
+	ExtrinsicIndex  *uint32 `json:"extrinsic_index,omitempty"`
+	Tempo           *uint16 `json:"tempo,omitempty"`
+	OldOwnerColdkey string  `json:"old_owner_coldkey,omitempty"`
+	NewOwnerColdkey string  `json:"new_owner_coldkey,omitempty"`
+}
+
 // Unknown amounts stay null. In particular, a zero incentive vector cannot
 // erase a positive pre-withholding tranche redirected to validator dividends.
 type economicEmissionDenominator struct {
@@ -108,16 +122,17 @@ type economicEmissionDenominator struct {
 // Headers and complete raw events are retained even if a later read fails.
 // A block's event execution uses the approved parent runtime, not a later tip.
 type economicEmissionBlock struct {
-	Boundary         economicEmissionBoundary    `json:"boundary"`
-	Header           rootReceiptHeader           `json:"header"`
-	BodyCount        int                         `json:"body_count"`
-	EventsHash       string                      `json:"events_hash"`
-	RawEvents        string                      `json:"raw_events"`
-	RawEventsStorage *string                     `json:"raw_events_storage"`
-	Before           *economicEmissionState      `json:"before"`
-	After            *economicEmissionState      `json:"after"`
-	Events           []economicEmissionEvent     `json:"events"`
-	Denominator      economicEmissionDenominator `json:"denominator"`
+	Boundary         economicEmissionBoundary       `json:"boundary"`
+	Header           rootReceiptHeader              `json:"header"`
+	BodyCount        int                            `json:"body_count"`
+	EventsHash       string                         `json:"events_hash"`
+	RawEvents        string                         `json:"raw_events"`
+	RawEventsStorage *string                        `json:"raw_events_storage"`
+	Before           *economicEmissionState         `json:"before"`
+	After            *economicEmissionState         `json:"after"`
+	Events           []economicEmissionEvent        `json:"events"`
+	ContextEvents    []economicEmissionContextEvent `json:"context_events,omitempty"`
+	Denominator      economicEmissionDenominator    `json:"denominator"`
 }
 
 // Complete means the explicit archive range was read and rechecked. It never

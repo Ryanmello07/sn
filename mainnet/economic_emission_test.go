@@ -109,7 +109,7 @@ func TestEconomicEmissionAuthenticatesCompatibleEventReindex(t *testing.T) {
 	for _, artifact := range []*types.Metadata{metadata, changed} {
 		vector := binary.LittleEndian.AppendUint64([]byte{4}, 7)
 		raw := append([]byte{4}, economicEmissionTestEvent(t, artifact, "IncentiveAlphaEmittedToMiners", []byte{25, 0}, vector)...)
-		events, err := decodeEconomicEmissionEvents(artifact, raw, 0, 25, 8, 101)
+		events, _, err := decodeEconomicEmissionEvents(artifact, raw, 0, 25, 8, 101)
 		if err != nil || len(events) != 1 || events[0].TotalAlpha != "7" {
 			t.Fatalf("compatible authenticated event reindex failed: %v", err)
 		}
@@ -180,12 +180,12 @@ func TestEconomicEmissionRejectsWrongPhaseAndAdditionalMechanism(t *testing.T) {
 		if netuid == 25 {
 			raw[1] = 1
 		}
-		if _, err := decodeEconomicEmissionEvents(metadata, raw, 0, 25, 8, 101); err == nil {
+		if _, _, err := decodeEconomicEmissionEvents(metadata, raw, 0, 25, 8, 101); err == nil {
 			t.Fatalf("wrong phase or mechanism accepted for index %d", netuid)
 		}
 	}
 	other := append([]byte{4}, economicEmissionTestEvent(t, metadata, "IncentiveAlphaEmittedToMiners", []byte{26, 0}, vector)...)
-	events, err := decodeEconomicEmissionEvents(metadata, other, 0, 25, 8, 101)
+	events, _, err := decodeEconomicEmissionEvents(metadata, other, 0, 25, 8, 101)
 	if err != nil || len(events) != 0 {
 		t.Fatalf("unrelated valid subnet event was not traversed: %v", err)
 	}
@@ -200,15 +200,15 @@ func TestEconomicEmissionRejectsDuplicateTruncatedAndOverboundEvents(t *testing.
 	valid := append([]byte{4}, event...)
 	duplicate := append(append([]byte{8}, event...), event...)
 	for index, raw := range [][]byte{duplicate, valid[:len(valid)-1], append(append([]byte(nil), valid...), 0), {1, 0}, rootCompact(economicEmissionEventLimit + 1), make([]byte, economicEmissionEventBytesLimit+1)} {
-		if _, err := decodeEconomicEmissionEvents(metadata, raw, 0, 25, 8, 101); err == nil {
+		if _, _, err := decodeEconomicEmissionEvents(metadata, raw, 0, 25, 8, 101); err == nil {
 			t.Fatalf("malformed or duplicate event case %d accepted", index)
 		}
 	}
-	if _, err := decodeEconomicEmissionEvents(metadata, valid, 0, 25, 0, 101); err == nil {
+	if _, _, err := decodeEconomicEmissionEvents(metadata, valid, 0, 25, 0, 101); err == nil {
 		t.Fatal("zero UID budget accepted")
 	}
 	oversized := append([]byte{4}, economicEmissionTestEvent(t, metadata, "IncentiveAlphaEmittedToMiners", []byte{25, 0}, append([]byte{8}, make([]byte, 16)...))...)
-	if _, err := decodeEconomicEmissionEvents(metadata, oversized, 0, 25, 1, 101); err == nil {
+	if _, _, err := decodeEconomicEmissionEvents(metadata, oversized, 0, 25, 1, 101); err == nil {
 		t.Fatal("event vector exceeded independent UID bound")
 	}
 }
@@ -439,12 +439,12 @@ func TestEconomicEmissionTraversesUnrelatedEventsBeforeReturningTarget(t *testin
 	other := economicEmissionTestEvent(t, metadata, "IncentiveAlphaEmittedToMiners", []byte{26, 0}, vector)
 	target := economicEmissionTestEvent(t, metadata, "IncentiveAlphaEmittedToMiners", []byte{25, 0}, vector)
 	raw := append(append([]byte{8}, other...), target...)
-	events, err := decodeEconomicEmissionEvents(metadata, raw, 0, 25, 8, 101)
+	events, _, err := decodeEconomicEmissionEvents(metadata, raw, 0, 25, 8, 101)
 	if err != nil || len(events) != 1 || events[0].EventIndex != 1 || events[0].TotalAlpha != "7" {
 		t.Fatalf("target event index lost after other subnet: %v", err)
 	}
 	bad := append(append([]byte{8}, target...), other[:len(other)-1]...)
-	if _, err := decodeEconomicEmissionEvents(metadata, bad, 0, 25, 8, 101); err == nil {
+	if _, _, err := decodeEconomicEmissionEvents(metadata, bad, 0, 25, 8, 101); err == nil {
 		t.Fatalf("malformed suffix accepted: %s", hex.EncodeToString(bad))
 	}
 }

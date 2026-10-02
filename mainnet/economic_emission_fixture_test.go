@@ -48,6 +48,7 @@ func economicEmissionTestMetadata(t *testing.T, mutate func(*types.Metadata)) (*
 		idKVs[primitive.name] = addType(types.Si1TypeDef{IsPrimitive: true, Primitive: types.Si1TypeDefPrimitive{Si0TypeDefPrimitive: primitive.kind}})
 	}
 	idKVs["u64s"] = addType(types.Si1TypeDef{IsSequence: true, Sequence: types.Si1TypeDefSequence{Type: idKVs["u64"]}})
+	idKVs["account"] = addType(types.Si1TypeDef{IsArray: true, Array: types.Si1TypeDefArray{Len: 32, Type: idKVs["u8"]}})
 	modeId := addType(types.Si1TypeDef{IsVariant: true, Variant: types.Si1TypeDefVariant{Variants: []types.Si1Variant{{Name: "Burn", Index: 0}, {Name: "Recycle", Index: 1}}}})
 	for palletIndex := range metadata.AsMetadataV14.Pallets {
 		pallet := &metadata.AsMetadataV14.Pallets[palletIndex]
@@ -82,7 +83,7 @@ func economicEmissionTestMetadata(t *testing.T, mutate func(*types.Metadata)) (*
 		kept := []types.Si1Variant{}
 		used := map[byte]bool{}
 		for _, variant := range eventType.Def.Variant.Variants {
-			if variant.Name == "IncentiveAlphaEmittedToMiners" || variant.Name == "EpochDeferred" || variant.Name == "EpochSkipped" {
+			if variant.Name == "IncentiveAlphaEmittedToMiners" || variant.Name == "EpochDeferred" || variant.Name == "EpochSkipped" || variant.Name == "SubnetOwnerChanged" {
 				continue
 			}
 			kept = append(kept, variant)
@@ -95,6 +96,7 @@ func economicEmissionTestMetadata(t *testing.T, mutate func(*types.Metadata)) (*
 			{Name: "IncentiveAlphaEmittedToMiners", Fields: []types.Si1Field{field("netuid", "u16"), field("emissions", "u64s")}},
 			{Name: "EpochDeferred", Fields: []types.Si1Field{field("netuid", "u16"), field("from_block", "u64"), field("to_block", "u64")}},
 			{Name: "EpochSkipped", Fields: []types.Si1Field{field("netuid", "u16"), field("block", "u64")}},
+			{Name: "SubnetOwnerChanged", Fields: []types.Si1Field{field("netuid", "u16"), field("old_coldkey", "account"), field("new_coldkey", "account")}},
 		} {
 			for index := 0; index <= 255; index++ {
 				if !used[byte(index)] {
@@ -177,6 +179,7 @@ func newEconomicEmissionFixture(t *testing.T) *economicEmissionFixture {
 		fixture.set(t, number, "NetworksAdded", []byte{1})
 		fixture.set(t, number, "MechanismCountCurrent", []byte{1})
 		fixture.set(t, number, "SubnetworkN", []byte{2, 0})
+		fixture.set(t, number, "Tempo", []byte{100, 0})
 		fixture.set(t, number, "RecycleOrBurn", []byte{1})
 		fixture.set(t, number, "OwnerCutEnabled", []byte{1})
 		fixture.set(t, number, "Events", []byte{0})
