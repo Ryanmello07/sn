@@ -2379,8 +2379,11 @@ profile and 60-second GET retries. Staging starts nothing; separate approval
 must bind the host/chain/release/config bundle before activation, with physical
 custody and actual service-user credential checks repeated at restart.
 Snow's testfinney/runtime-471 configuration remains untouched and refused.
-The author offline tests pass; independent scoped review, selected live hosts,
-actual collector ingestion and delivered missing-host/recovery alerts remain
+Author and independent offline qualification pass on the exact source pins:
+32 new and 19 adjacent xops tests, 13 SN monitor roots normal/race, vet and
+controller/unit/credential controls. The separate independent receipt is
+bound in the evidence above. Selected live hosts, actual collector ingestion
+and delivered missing-host/recovery alerts remain
 explicit launch gates. An unsent delivery-drill payload is not a delivery
 receipt.
 

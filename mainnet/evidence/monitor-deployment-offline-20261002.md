@@ -3,7 +3,9 @@
 MG-07 now has an offline deployment path at xops
 `b98f876999c2ad3f057ca8d32d97a23cd7a535ba` (tree
 `0b77986eb2ee92b5aacb7a8991387667db411857`), based on freshly fetched
-`da09ab5ab313acd1ea37eba259011e19e9035c1a`. The
+`da09ab5ab313acd1ea37eba259011e19e9035c1a`. It is integrated and pushed as xops
+main `5d48b0502b6d80f5c2d2f376793ba89188c49565`, with the identical tree; this
+integration adds no deployment or approval. The
 [deployment runbook](../../../xops/main/ansible/SN-MAINNET-MONITOR.md) describes
 its exact input, staging, activation and unsent delivery-drill interfaces.
 SN application source remains `6cfc4773038fae8b1de07807eeeb4a97c32d07d3`
@@ -80,7 +82,23 @@ Author evidence is retained under
 The Prometheus 3.5.0 Linux/amd64 archive is pinned to its published SHA-256
 `e811827af26d822afb09a4f28314f61b618b12cff5369835a67f674d8b46f39a`;
 exact executable hashes and controller versions are retained in `tools.json`.
-Independent scoped review is pending and must be reported separately.
+
+Independent Sol qualification is **PASS_SCOPED** on clean physical checkouts of
+the same xops `b98f8769` / SN `6cfc4773` pins. Its separate
+[receipt](monitor-deployment-independent-20261002.json) has SHA-256
+`27b85627b3870cdb60236c0565ce5383cc455c7db4c02c406f25b8d4a0d40843`,
+retained originally at
+`/mnt/data/sn-testnet/sol-mainnet-monitor-independent-20261002/receipt.json`.
+It independently passes 27 new xops tests, five real loopback Prometheus tests,
+19 adjacent telemetry tests, all 13 SN monitor roots in normal and race, and
+scoped vet. Ansible syntax, controller-only preflight, unapproved-activation
+refusal, cross-user credential controls and all three systemd unit checks also
+pass. All 58 author raw evidence entries, the author receipt, archive and source
+bundle were separately rehashed. The first adjacent run lacked sibling pins;
+the first credential fixture correctly refused its group-writable scratch
+parent. Both setup failures remain retained with corrected passes on the exact
+frozen source; neither required a product edit. This scope uses synthetic
+credentials and loopback services, and supplies no host or delivery approval.
 
 No live inventory target, host/chain/config/release approval, deployment,
 systemd start, chain action or notification send occurred. The selected actual
