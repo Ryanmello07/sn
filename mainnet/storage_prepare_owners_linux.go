@@ -17,6 +17,7 @@ import (
 
 	"github.com/urfoundation/sn/chain"
 	"github.com/urfoundation/sn/internal/durablehead"
+	"github.com/urfoundation/sn/miner"
 	"github.com/urfoundation/sn/validator"
 	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
@@ -95,6 +96,12 @@ func buildStoragePreparationFixedOwner(ctx context.Context, staging *os.File, na
 		}
 		return buildStoragePreparationOwner(ctx, staging, name, owner)
 	}
+	switch owner.Kind {
+	case "fleet-recovery", "provider-claim-queue":
+		return miner.BuildFreshStoragePreparation(ctx, staging, name, owner, ownerLocal)
+	case "mainnet-successor-local-members", "mainnet-successor-nonce-members":
+		return buildStoragePreparationMembers(ctx, staging, name, owner, ownerLocal)
+	}
 	var files []durablevolume.PreparationFile
 	var attributes []durablevolume.PreparationAttributeSpec
 	var census any
@@ -140,6 +147,12 @@ func inspectStoragePreparationFixedOwner(ctx context.Context, target *os.File, o
 			return nil, errors.New("owner-local preparation cannot reinterpret daemon ledger custody")
 		}
 		return inspectStoragePreparationOwner(ctx, target, owner)
+	}
+	switch owner.Owner.Kind {
+	case "fleet-recovery", "provider-claim-queue":
+		return miner.InspectFreshStoragePreparation(ctx, target, owner, ownerLocal)
+	case "mainnet-successor-local-members", "mainnet-successor-nonce-members":
+		return inspectStoragePreparationMembers(ctx, target, owner, ownerLocal)
 	}
 	var files []durablevolume.PreparationFile
 	var spec durablevolume.PreparationAttributeSpec
