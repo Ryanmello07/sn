@@ -5203,3 +5203,16 @@ keep signed submission outside read retry. The first cardinality-only fixture
 was invalid because route attempts consumed its synthetic failures; retain it
 as a harness failure, separately from the corrected causal controls. The fix
 is in implementation, not yet qualified or merged.
+
+
+### October 2: preserve qualification headroom through scoped cache cleanup
+
+A further [8.04 GiB reclaim](evidence/cache-reclaim-3-20261002.json) removed
+122 inactive Go archives from the old cache, each at least 48 hours old and
+16 MiB, after privileged process-reference checks, archive-magic/link/stat
+checks and a bounded declared-metadata reference scan. Repeat physical identity
+checks before removal and verify absence afterward. Preserve active compilation,
+source, modules, immutable evidence and executable artifacts. A new private
+member cache had no large same-key duplicate candidates in the shared reviewer
+cache and was preserved. Compiler-cache cleanup does not change source or test
+qualification and does not establish global raw-artifact reference absence.
