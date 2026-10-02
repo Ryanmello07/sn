@@ -127,9 +127,7 @@ and verification always return `restart_authorized=false`; they validate no
 protocol signature, pending-head semantics, cross-host restoration, PostgreSQL,
 Redis or remote MinIO recovery.
 
-Independent monitor and inventory-v3 tests, the inventory CLI's new limit fields,
-validator/bootstrap/root/server adoption, exact module composition and deployment
-declaration assets remain separate gates. A production offline preparation
+Monitor independent checking is sealed. The [inventory CLI successor](durable-inventory-cli-qualification-20261002.md) now passes nine author normal/race roots and three-package vet with the v3 limits and explicit owner-local/rebound reporting. Independent inventory-v3/CLI checks, broader validator/bootstrap/root/server composition and deployment declaration assets remain separate gates. A production offline preparation
 plan/apply command is still missing. It must explicitly distinguish fresh and
 retained owner kinds, bind former-writer stop/join evidence, provision reviewed
 roots/leases/generation and owner anchors, and refuse runtime enrollment or
