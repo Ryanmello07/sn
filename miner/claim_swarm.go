@@ -43,7 +43,7 @@ func (self ClaimSwarmConfig) Validate() error {
 	seenIDs := map[string]bool{}
 	seenConfigs := map[string]bool{}
 	for index, member := range self.Members {
-		if member.ID == "" || seenIDs[member.ID] || strings.ContainsAny(member.ID, `/\`) {
+		if member.ID == "" || len(member.ID) > 128 || seenIDs[member.ID] || strings.ContainsAny(member.ID, `/\`) {
 			return fmt.Errorf("claim member %d has an empty, duplicate or unsafe id", index)
 		}
 		seenIDs[member.ID] = true
@@ -96,6 +96,7 @@ type ClaimSwarm struct {
 	stateLock sync.Mutex
 	running   map[string]bool
 	failures  map[string]string
+	progress  map[string]*claimProgressOwner
 }
 
 func NewClaimSwarm(config *ClaimSwarmConfig) (*ClaimSwarm, error) {
@@ -105,7 +106,11 @@ func NewClaimSwarm(config *ClaimSwarmConfig) (*ClaimSwarm, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	return &ClaimSwarm{config: config, running: map[string]bool{}, failures: map[string]string{}}, nil
+	progress := map[string]*claimProgressOwner{}
+	for _, member := range config.Members {
+		progress[member.ID] = nil
+	}
+	return &ClaimSwarm{config: config, running: map[string]bool{}, failures: map[string]string{}, progress: progress}, nil
 }
 
 func (self *ClaimSwarm) status() claimSwarmStatus {
@@ -119,6 +124,10 @@ func (self *ClaimSwarm) status() claimSwarmStatus {
 }
 
 func (self *ClaimSwarm) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	if request.URL.Path == "/claim-progress" {
+		self.serveClaimProgress(writer, request)
+		return
+	}
 	if request.Method != http.MethodGet || request.URL.Path != "/status" {
 		http.NotFound(writer, request)
 		return
@@ -185,6 +194,18 @@ func (self *ClaimSwarm) run(ctx context.Context, afterMember func(string, error,
 	if err != nil {
 		return err
 	}
+	for _, member := range self.config.Members {
+		owner := newClaimProgressOwner(member.ID, loaded[member.ID].ProgressPool)
+		loaded[member.ID].progress = owner
+		self.stateLock.Lock()
+		self.progress[member.ID] = owner
+		self.stateLock.Unlock()
+	}
+	defer func() {
+		for _, member := range self.config.Members {
+			loaded[member.ID].progress.close()
+		}
+	}()
 	members := append([]ClaimSwarmMember(nil), self.config.Members...)
 	sort.Slice(members, func(i, j int) bool { return members[i].ID < members[j].ID })
 	stores := make(map[string]*claimQueueStore, len(members))
@@ -238,6 +259,7 @@ func (self *ClaimSwarm) run(ctx context.Context, afterMember func(string, error,
 		membersDone.Add(1)
 		go func(member ClaimSwarmMember, initialDelay time.Duration) {
 			defer membersDone.Done()
+			defer loaded[member.ID].progress.close()
 			onReady := func() {
 				self.stateLock.Lock()
 				self.running[member.ID] = true
@@ -245,6 +267,7 @@ func (self *ClaimSwarm) run(ctx context.Context, afterMember func(string, error,
 				self.stateLock.Unlock()
 			}
 			onFailure := func(err error) {
+				loaded[member.ID].progress.unavailable()
 				self.stateLock.Lock()
 				delete(self.running, member.ID)
 				self.failures[member.ID] = err.Error()

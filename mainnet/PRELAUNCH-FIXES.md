@@ -7,6 +7,12 @@ full scope. A historical checkpoint below does not supply a later composition,
 deployment or acceptance verdict; use each linked receipt's exact source and
 dependency scope.
 
+The [durable claim producer checkpoint](evidence/claim-projection-progress-20261002.md)
+at `347605fd` passes 37 author tests in each mode and two package vets. Main `bd5e7e72` now integrates that source; independent 29-test normal/race
+qualification and two package vets retain their separate scope. The separately
+configured claim monitor is still being implemented. MG-07/PH-28 remain open for that consumer, current-source
+composition, contract/native economic observations and actual alert/repair delivery.
+
 ## Historical qualification checkpoints
 
 **October 2 continuation checkpoint:** observer `6d398662` is now independently qualified at 17 normal/17 race roots plus vet. Composition `69f4bbdd` / server `10a8f4d8` now passes 78 selected normal/78 race roots and vet, with a separate independent 12-root normal/race scope and vet. The [exact sealed composition](evidence/durable-owner-composition-qualification-20261002.md) is an incremental source qualification. Miner startup isolation `c3707376` passes 37 normal/37 race roots, while callback isolation, member recovery ordering and production preparation remain separate work. The [checkpoint and retained receipts](evidence/mainnet-continuation-checkpoint-20261002.md) record exact scopes, a newly exposed pending-stage ordering defect, private fixture ancestry and immutable physical evidence paths. No launch or full-backlog closure is inferred.
@@ -5392,6 +5398,18 @@ remain assertions until independent finality/runtime/code admission is supplied.
 An EVM chain ID alone does not authenticate native genesis. A Merkle check or
 accepted contract event must not silently become proof of finalized economics.
 
+The corrected [producer `347605fd`](evidence/claim-projection-progress-20261002.md)
+now obtains event selectors from the consumed ABI and publishes optional public
+observations only after the actual retained queue acknowledges its bytes. Author
+qualification passes 37 normal/race tests and two vets; three old-body controls
+fail for the intended causes in each mode with two positive controls. Independent
+qualification remains pending. Fresh and previously retained optional metadata
+both yield to operational queue growth at the unchanged 16 MiB limit; signatures,
+entries and completed history are never removed to make reporting fit. A bounded
+public census includes the oldest unresolved epoch and omitted counts. A new
+publication sequence proves an acknowledged heartbeat, not settlement progress.
+Future-dated or ambiguous reporting degrades without rewriting claim authority.
+
 
 ### Purpose-scoped fleet admission is integrated, not live-approved
 
@@ -5504,3 +5522,55 @@ merely closing an idle HTTP listener. Device readiness remains separate from
 proof, payment and genesis/finality authority. Current-main release composition,
 claim monitoring, economic-domain evidence and actual alert/repair delivery
 remain open; this source integration does not close MG-07 or PH-28.
+
+
+### Keep qualification headroom without discarding completed work
+
+As data-volume free space reached 115 GiB, the sixth guarded inactive-cache
+reclaim removed 155 old compiler archives and recovered 8.01 GiB. The
+[verified receipt](evidence/cache-reclaim-6-20261002.json) binds the process
+censuses, final clean declared-metadata scan, physical identities and all
+removed-path absences. Failed initial scan attempts are recorded; no deletion
+was admitted before the privileged absolute-tool-path scan completed cleanly.
+Active caches, source, modules and evidence remain retained. This preserves
+running qualification progress and its 110 GiB floor; it does not close
+production capacity, restoration or compiler-provenance requirements.
+
+
+### Explicit private-root creation is source-qualified
+
+Frozen SN `c8998b31` / Connect `7600ea5c` passes 83 core and 26 public
+preparation-command tests in each of normal/race modes, plus four package
+vets. Root verified all 43 [author receipt](evidence/private-root-preparation-author-20261002.json)
+manifest bindings, raw archive and source bundles. Receipt SHA-256:
+`693444206629643f2100b2e30c05700241769c1d325aa108fe07c41afaf512ac`.
+The old directory-owner source fails the two new public creation controls in
+each mode. First-checkpoint positive results retain their separate source scope.
+
+The explicit fresh mode stages a private leaf inode during planning, binds its
+parent and zero-history fence, reserves the original inode/control before an
+atomic no-replace move, and syncs both parents. Child crashes, lost sync
+acknowledgements, competing targets and changed or missing completed namespaces
+resume only through original retained custody; runtime absence never triggers
+implicit mkdir. Target parent, staging and metadata roots remain precreated.
+
+This is Linux amd64 source/workspace qualification using Server `2c4e5dca`;
+arm64 execution, independent current-main tracked-module qualification,
+retained/restore semantic rebinding and capacity revisions remain open. The
+qualified candidates are being composed with provider/fleet fixes and current
+server before merge. No live preparation or deployment authority is supplied.
+
+
+### Durable claim projection is integrated
+
+Main merge `bd5e7e72` includes exactly the 11 qualified producer files from
+SN `347605fd`, preserving provider/fleet changes and original module files.
+Root verified all 127 author bindings and 76 independent bindings. The
+[independent receipt](evidence/claim-projection-independent-20261002.json), SHA-256
+`1eda6ff63df36aa0b4260573f31076676badac83224fead862eda57ce4e86a9e`,
+passes 29 tests per mode and two package vets; three old-body controls fail at
+the intended assertions per mode. Author 37-test coverage remains separate.
+The [main integration manifest](evidence/claim-projection-main-integration-20261002.json)
+binds exact source bytes. This graph uses Server10a; current-server composition
+and the independent claim consumer remain open. No finality, payment allocation
+or live launch authority follows from the queue projection.
