@@ -35,7 +35,9 @@ The separate Server successor `ffcc77b8` freezes the fixture correction,
 adjustment provenance, amount/wallet reservation and processor-send safeguards;
 its [independent normal batch](evidence/payout-transition-successor-normal-20261002.json)
 completed 24 passes and one fixture failure across 25 selected tests, with no
-skips. Race qualification remains in progress. A further correction
+skips. The [independent race batch](evidence/payout-transition-successor-race-20261002.json)
+has the same 24 passes/one fixture failure, no skips and no race reports. Five
+affected package vets and the CLI build also pass. A further correction
 must preserve canceled payments' original subsidy and reliability obligations
 through replanning, including after the cutoff. Finish that correction and run
 the full current model suite before treating this transition as qualified.
@@ -45,8 +47,11 @@ The sole normal failure is in the model slice: the paid/free test attempts to
 change immutable terminal attribution before reaching its weighting assertion.
 Its legal lifecycle fixture correction is pending. Root, controller, taskworker
 and CLI selected tests all passed. This failure does not establish a weighting
-defect or a successful weighting check. Preserve the initial private PostgreSQL
-setup failure separately from this actual test result.
+defect or a successful weighting check. The separate test-only correction
+`6a63892b` replaces the invalid non-NULL `"open"` fixture outcome with production's
+NULL active state and checks that terminal cancellation becomes immutable;
+independent behavior qualification is pending. Preserve the initial private
+PostgreSQL setup failure separately from these actual test results.
 
 ## Current preparation state — October 2
 
