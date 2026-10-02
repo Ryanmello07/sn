@@ -32,6 +32,14 @@ observed transaction hash must remain in reconciliation rather than become
 replacement debt. This correction remains pending; do not infer completion from
 the separate bonus and submission-basis candidate.
 
+Processor recovery must also bind each response to its original attempt before
+updating, completing or resetting a payment. A delayed terminal response must
+not clear or complete a newer attempt on the same payment. Preserve the original
+idempotency key, request and response in durable attempt history before clearing
+current submission markers. Review cancellation, denial, failure, progress and
+completion together; test delayed responses and repeated terminal retries with
+explicit barriers. Unknown or contradictory outcomes stay in reconciliation.
+
 Restore must distinguish physical storage identity from logical signing
 authority. The owner-device reservation binds the full device configuration,
 including its logical state pathname, to the original request. Copying files to
