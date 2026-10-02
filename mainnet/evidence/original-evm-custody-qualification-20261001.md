@@ -182,8 +182,10 @@ atomic filesystem/network transaction. Missing live custody is a stop condition;
 never copy a cached record into a missing completed journal to continue.
 
 The SN `28ebfced` / server `ac86855d` release baseline predates both corrections.
-A selected successor must include the exact qualified source and receive its
-own artifact/image readback. Independent network/checkpoint approval, runtime
+The [exact custody successor](release-1d580d5e-serverac86-20261001.md) now includes
+the qualified source at SN `1d580d5e` / server `ac86855d`, with matching repeated
+local binaries, bytecode and OCI artifacts. This does not close independent
+build/provenance or live release gates. Independent network/checkpoint approval, runtime
 authority for live use, actual signer cutover, production acceptance, funding,
 live installation and both validator roles remain open. The exact v470 artifact's
 planning-only exception does not supply those live gates. No release, deployment
