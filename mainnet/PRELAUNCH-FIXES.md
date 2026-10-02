@@ -5422,3 +5422,25 @@ physical archive guards used in earlier cleanups were repeated; all removed path
 were verified absent. Admission measures free space again before each new phase.
 This is qualification-host resource management, not production capacity closure
 or an excuse to recreate lost protocol history.
+
+
+### Directory-owner preparation qualification
+
+Frozen SN `682d568c` / Connect `05e39766` passed 77 core, 21 public
+preparation-command and five miner-constructor tests in each of normal and race
+modes, plus four package vet scopes. Root verified all 49 manifest bindings,
+the raw archive and source bundles in the [author receipt](evidence/directory-owner-preparation-author-20261002.json).
+Receipt SHA-256: `16c755189250f04d75f29c9d745016ae38a6c89420451223f255b2f80ce19d84`.
+The old code reproduced two core and three public-command failures in each
+mode while its negative authority control passed.
+
+Exact attribute-only and fixed-head owner profiles now enroll through the actual
+plan/apply command and reopen through real miner constructors. Interrupted
+publication resumes the original inode and checkpoint; missing completed heads
+and replacement markers remain refused. Existing capacity dimensions remain
+unchanged, including the claim queue's 16 MiB retained-byte bound.
+
+This author qualification uses Server `2c4e5dca` and fresh precreated private
+roots. Independent qualification, private-root creation, retained/restore semantic
+rebind, capacity revisions and the composition with current main remain separate
+requirements. The candidate is not merged or approved for live preparation.
