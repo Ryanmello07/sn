@@ -32,12 +32,12 @@ module selections include Connect `e1b5d77b5029` and SDK
 `v0.0.0-20261001021058-5d37be3876e5`; server and local sibling pins match the
 focused independent integration fence.
 
-- Author receipt:
+- Byte-identical committed [author receipt](relay-retained-fixture-author-20261002.json):
   `/mnt/data/sn-testnet/sim-relay-retained-fixture-20261002/evidence/receipt.json`,
   SHA256 `0d8d4155629e3389a93b72418a9760e54a5fed2dff0f40ec5dc9a68541ecdaff`.
   It binds the exact baseline header failures, intermediate activation-domain
   failure, fixed test logs and frozen source patch.
-- Independent receipt:
+- Byte-identical committed [independent receipt](relay-retained-fixture-independent-20261002.json):
   `/mnt/data/sn-testnet/sol-server025-integration-independent-20261002/sn-fixture-receipt.json`,
   SHA256 `c54bfc26a96f96f171bcebf3eaa314728200a8c1cc6922c6590f31e1c66cdbaa`.
 - Original focused server/SN receipt, including the original SN copylocks
