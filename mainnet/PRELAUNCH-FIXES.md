@@ -1019,6 +1019,14 @@ chain worker retries independently. Application/reveal and settlement deadline
 inference, other domain coverage, delivered alerts and the repair controller remain
 open; source qualification does not establish live monitoring.
 
+The [October 2 deployment audit](evidence/monitor-deployment-gap-20261002.md)
+checked current SN source and xops `origin/main`: the monitor can publish
+atomic textfile metrics, but the checked Subtensor Fluent Bit config omits the
+textfile collector and no SN monitor unit or independent expected-host roster
+is provisioned. Snow's checked configuration still targets testnet. MG-07
+therefore requires a release-pinned, mainnet-gated host installation and an
+actual independent ingestion/alert-delivery receipt before activation.
+
 The MG-07 [read incident continuity increment](READ-INCIDENTS.md) now carries
 stable outage IDs, first/latest failures, successful-read recovery and recurrence
 through per-role checkpoint restart. Legacy history remains explicitly unknown;
