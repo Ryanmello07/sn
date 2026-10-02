@@ -10,18 +10,20 @@ import (
 	"os"
 	"strings"
 
+	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
 )
 
 // One owner uses this descriptor serially. No operation deletes, replaces or
 // releases a nonce claim; signatures outlive the reviewed native-block window.
 type bootstrapSuccessorExecutionDirectory struct {
-	ctx   context.Context
-	path  string
-	root  bootstrapSuccessorRootIdentity
-	file  *os.File
-	claim string
-	hook  func(string) error
+	storage *mainnetDurableDirectory
+	ctx     context.Context
+	path    string
+	root    bootstrapSuccessorRootIdentity
+	file    *os.File
+	claim   string
+	hook    func(string) error
 }
 
 // Registry opening follows original preparation locks and exclusive root
@@ -30,17 +32,26 @@ func openBootstrapSuccessorExecutionDirectory(ctx context.Context, path string, 
 	if ctx == nil || !planSha256(claim) {
 		return nil, errors.New("successor execution directory lacks context or claim")
 	}
+	storage, err := openMainnetDurableDirectory(ctx, path, durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, storage.close())
+		}
+	}()
 	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, err
 	}
-	self := &bootstrapSuccessorExecutionDirectory{ctx: ctx, path: path, root: root, file: os.NewFile(uintptr(fd), path), claim: claim, hook: hook}
+	self := &bootstrapSuccessorExecutionDirectory{storage: storage, ctx: ctx, path: path, root: root, file: os.NewFile(uintptr(fd), path), claim: claim, hook: hook}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, self.close())
 		}
 	}()
-	if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("successor nonce registry already has an owner"), err)
 	}
 	return self, self.checkpoint("registry-acquired")
@@ -50,6 +61,11 @@ func openBootstrapSuccessorExecutionDirectory(ctx context.Context, path string, 
 // hook. Root replacement cannot redirect a later publication into another tree.
 func (self *bootstrapSuccessorExecutionDirectory) checkpoint(stage string) error {
 	check := func() error {
+		if self != nil {
+			if err := self.storage.check(self.file); err != nil {
+				return err
+			}
+		}
 		if self == nil || self.file == nil {
 			return errors.New("successor execution directory is closed")
 		}
@@ -122,6 +138,9 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 	if err := self.checkpoint(name + ":begin"); err != nil {
 		return err
 	}
+	if err := self.storage.checkWrite(self.file); err != nil {
+		return err
+	}
 	stage := self.stageName(name, kind)
 	names, err := self.names()
 	if err != nil {
@@ -172,6 +191,9 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 	if err := self.checkpoint(name + ":name-synced"); err != nil {
 		return err
 	}
+	if err := self.storage.checkWrite(self.file); err != nil {
+		return err
+	}
 	written, err := file.WriteAt(raw, 0)
 	if err != nil || written != len(raw) {
 		return errors.Join(io.ErrShortWrite, err)
@@ -183,6 +205,9 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 		return err
 	}
 	if err := self.checkpoint(name + ":stage-synced"); err != nil {
+		return err
+	}
+	if err := self.storage.checkWrite(self.file); err != nil {
 		return err
 	}
 	if err := unix.Renameat2(fd, stage, fd, name, unix.RENAME_NOREPLACE); err != nil {
@@ -202,7 +227,7 @@ func (self *bootstrapSuccessorExecutionDirectory) close() error {
 	if self == nil || self.file == nil {
 		return nil
 	}
-	err := self.file.Close()
+	err := errors.Join(self.file.Close(), self.storage.close())
 	self.file = nil
 	return err
 }

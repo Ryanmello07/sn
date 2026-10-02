@@ -257,6 +257,7 @@ type ownerTrimExecutor struct {
 	authority ownerTrimAuthority
 	signer    ownerTrimSigner
 	poisoned  bool
+	failure   error
 }
 
 // Ambiguous persistence always requires reopen before another external effect.
@@ -264,11 +265,13 @@ func (self *ownerTrimExecutor) persist(record ownerTrimRecord) error {
 	record.ContentHash = ""
 	record.ContentHash = rootObjectHash(record)
 	if err := record.validate(self.config, self.key); err != nil {
-		self.poisoned = true
+		self.poisoned, self.failure = true, err
 		return err
 	}
 	if err := self.store.save(record); err != nil {
-		self.poisoned = true
+		if !mainnetDurableAdmissionPending(err) {
+			self.poisoned, self.failure = true, err
+		}
 		return err
 	}
 	return nil
@@ -279,14 +282,16 @@ func (self *ownerTrimExecutor) persist(record ownerTrimRecord) error {
 func (self *ownerTrimExecutor) step(ctx context.Context) (ownerTrimStepResult, error) {
 	result := ownerTrimStepResult{Status: "blocked"}
 	if ctx == nil || self.poisoned || self.store == nil {
-		return result, errors.New("owner trim requires context and an open durable owner")
+		return result, errors.Join(errors.New("owner trim requires context and an open durable owner"), self.failure)
 	}
 	record, err := self.store.load()
 	if err == nil {
 		err = record.validate(self.config, self.key)
 	}
 	if err != nil {
-		self.poisoned = true
+		if !mainnetDurableAdmissionPending(err) {
+			self.poisoned, self.failure = true, err
+		}
 		return result, err
 	}
 	result.Phase = record.Phase

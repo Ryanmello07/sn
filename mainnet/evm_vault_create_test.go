@@ -296,7 +296,7 @@ func TestEvmVaultCreatePreviewExportsSameGraphAndConstructor(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), []string{"bootstrap-contracts", "preview", "--config", f.configPath, "--action", "vault-create"}, &stdout, &stderr)
+	code := runMain(f.storageContext(context.Background()), []string{"bootstrap-contracts", "preview", "--config", f.configPath, "--action", "vault-create"}, &stdout, &stderr)
 	var preview evmPhasePreview
 	if err := json.Unmarshal(stdout.Bytes(), &preview); err != nil || code != 0 {
 		t.Fatalf("vault preview: %d %v %s", code, err, stderr.String())
@@ -441,7 +441,7 @@ func TestEvmVaultCreateAmbiguousPublicationPoisonsOwner(t *testing.T) {
 	f := newEvmVaultFixture(t)
 	f.prepareVaultSigned()
 	f.mine = false
-	reserveStore, err := openEvmActionStore(f.config, false, nil)
+	reserveStore, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,7 +450,7 @@ func TestEvmVaultCreateAmbiguousPublicationPoisonsOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := openEvmVaultActionStore(f.plan, reserve, false, nil)
+	store, err := openEvmVaultActionStore(f.plan, reserve, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -496,7 +496,7 @@ func TestEvmVaultCreateClaimRecoveryAndLostChild(t *testing.T) {
 	for _, boundary := range []string{"marker-synced", "record-synced"} {
 		f := newEvmVaultFixture(t)
 		f.prepareVaultPrerequisite()
-		reserveStore, err := openEvmActionStore(f.config, false, nil)
+		reserveStore, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -509,11 +509,11 @@ func TestEvmVaultCreateClaimRecoveryAndLostChild(t *testing.T) {
 				return errors.New("synthetic vault claim interruption")
 			}
 			return nil
-		})
+		}, f.storage.Context)
 		if err == nil || store != nil {
 			t.Fatalf("vault %s interruption acknowledged", boundary)
 		}
-		store, err = openEvmVaultActionStore(f.plan, reserve, false, nil)
+		store, err = openEvmVaultActionStore(f.plan, reserve, false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatalf("vault %s claim recovery: %v", boundary, err)
 		}
@@ -521,11 +521,11 @@ func TestEvmVaultCreateClaimRecoveryAndLostChild(t *testing.T) {
 		if err != nil || record.Signed != "" || record.Attempts != 0 || record.PredecessorHash != rootObjectHash(reserve) {
 			t.Fatalf("vault initial recovery changed custody: %+v %v", record, err)
 		}
-		if other, err := openEvmActionStore(f.config, false, nil); err == nil {
+		if other, err := openEvmActionStore(f.config, false, nil, f.storage.Context); err == nil {
 			other.close()
 			t.Fatal("vault prerequisite lock was not held")
 		}
-		if other, err := openEvmVaultActionStore(f.plan, reserve, false, nil); err == nil {
+		if other, err := openEvmVaultActionStore(f.plan, reserve, false, nil, f.storage.Context); err == nil {
 			other.close()
 			t.Fatal("second vault owner acquired custody")
 		}
@@ -533,7 +533,7 @@ func TestEvmVaultCreateClaimRecoveryAndLostChild(t *testing.T) {
 		if err := os.Remove(filepath.Join(f.config.Plan.RunDirectory, evmVaultCreateStateFile)); err != nil {
 			t.Fatal(err)
 		}
-		if other, err := openEvmVaultActionStore(f.plan, reserve, false, nil); err == nil {
+		if other, err := openEvmVaultActionStore(f.plan, reserve, false, nil, f.storage.Context); err == nil {
 			other.close()
 			t.Fatal("missing completed vault journal became fresh allowance")
 		}
@@ -678,7 +678,7 @@ func TestEvmVaultCreateOutputFailureRecoversCompletedChild(t *testing.T) {
 	}
 	args := []string{"bootstrap-contracts", "resume", "--action", "vault-create", "--config", f.configPath, "--run-dir", f.config.Plan.RunDirectory, "--accept-plan-hash", f.config.Plan.hash(), "--online", "--submit"}
 	var stderr bytes.Buffer
-	if code := runMain(context.Background(), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "output failed") {
+	if code := runMain(f.storageContext(context.Background()), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "output failed") {
 		t.Fatalf("vault output loss was acknowledged or occurred before retention: %d %s", code, stderr.String())
 	}
 	result, code, diagnostic := f.command("resume", "--action", "vault-create")
@@ -779,7 +779,7 @@ func TestEvmVaultCreateRejectsCopiedReserveMarker(t *testing.T) {
 func TestEvmVaultCreateRejectsChangedRetainedPredecessor(t *testing.T) {
 	f := newEvmVaultFixture(t)
 	f.prepareVaultSigned()
-	store, err := openEvmActionStore(f.config, false, nil)
+	store, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

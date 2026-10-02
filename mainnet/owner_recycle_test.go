@@ -27,12 +27,14 @@ import (
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/extrinsic"
 	"github.com/urfoundation/sn/crv4"
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"github.com/vedhavyas/go-subkey/v2"
 	"github.com/vedhavyas/go-subkey/v2/sr25519"
 )
 
 // Independent synthetic approval and native account keys never leave this test.
 type ownerRecycleTestFixture struct {
+	storage  *durablefixture.Fixture
 	input    ownerRecyclePlanInput
 	config   ownerRecycleConfig
 	key      string
@@ -133,6 +135,8 @@ func newOwnerRecycleTestFixture(t *testing.T, ledger bool) *ownerRecycleTestFixt
 		t.Fatal(err)
 	}
 	f.approve()
+	prepareMainnetSnapshotTest(t, f.config.Action.StatePath, "mainnet-owner-recycle", ownerRecycleStoreLimit)
+	f.storage = durablefixture.New(t, t.Context(), filepath.Dir(f.config.Action.StatePath))
 	return f
 }
 
@@ -374,12 +378,12 @@ func TestOwnerRecycleLedgerRequestTrustAndTranscript(t *testing.T) {
 // exact export/signature and refuses replacement or disappearance of signed state.
 func TestOwnerRecycleDurableExportImportRecovery(t *testing.T) {
 	f := newOwnerRecycleTestFixture(t, false)
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
 	custody := ownerRecycleCustody{config: f.config, key: f.key, store: store}
-	if _, err := openOwnerRecycleStore(f.config, f.key, false); err == nil {
+	if _, err := openOwnerRecycleStore(f.config, f.key, false, f.storage.Context); err == nil {
 		t.Fatal("second local owner admitted")
 	}
 	store.syncDirectory = func(*os.File) error { return errors.New("synthetic post-rename sync failure") }
@@ -390,7 +394,7 @@ func TestOwnerRecycleDurableExportImportRecovery(t *testing.T) {
 		t.Fatal("poisoned export continued")
 	}
 	store.close()
-	store, err = openOwnerRecycleStore(f.config, f.key, false)
+	store, err = openOwnerRecycleStore(f.config, f.key, false, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +409,7 @@ func TestOwnerRecycleDurableExportImportRecovery(t *testing.T) {
 		t.Fatal("import acknowledged ambiguous durability")
 	}
 	store.close()
-	store, err = openOwnerRecycleStore(f.config, f.key, false)
+	store, err = openOwnerRecycleStore(f.config, f.key, false, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +437,7 @@ func TestOwnerRecycleDurableExportImportRecovery(t *testing.T) {
 	if err := os.Remove(f.config.Action.StatePath); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openOwnerRecycleStore(f.config, f.key, false); err == nil {
+	if _, err := openOwnerRecycleStore(f.config, f.key, false, f.storage.Context); err == nil {
 		t.Fatal("lost completed state became fresh custody")
 	}
 }
@@ -588,7 +592,7 @@ func TestOwnerRecycleReadbackOutageAndRecovery(t *testing.T) {
 	if err != nil || evidence.Receipt == nil || evidence.Readback != nil || evidence.ReadbackIssue == "" || ownerRecyclePhase(request, evidence) != "finalized-readback-pending" {
 		t.Fatal("readback gap erased financial receipt", err)
 	}
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -121,7 +121,7 @@ func (self *rootPassiveHostStore) load(ctx context.Context) (rootPassiveHostReco
 	if err := self.validateOwner(); err != nil {
 		return record, err
 	}
-	raw, err := readMonitorServiceFile(ctx, self.path, 64*1024, true, monitorServiceReadHooks{})
+	raw, _, err := self.storage.readFile(ctx, self.path, 64*1024)
 	if err != nil {
 		return record, err
 	}
@@ -149,7 +149,10 @@ func (self *rootPassiveHostStore) save(record rootPassiveHostRecord) error {
 		return errors.New("passive host journal exceeds its bound")
 	}
 	raw = append(raw, '\n')
-	if err := publishMonitorFile(self.path, raw, 0600, self.syncDirectory); err != nil {
+	if err := self.storage.publish(self.path, raw, self.syncDirectory); err != nil {
+		if mainnetDurableAdmissionPending(err) {
+			return err
+		}
 		self.poisoned = errors.Join(errors.New("passive host publication is ambiguous; reopen required"), err)
 		return self.poisoned
 	}

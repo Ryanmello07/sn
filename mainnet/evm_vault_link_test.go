@@ -151,7 +151,7 @@ func TestEvmVaultLinkPreviewPreservesApprovedGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), []string{"bootstrap-contracts", "preview", "--action", "vault-link", "--config", f.configPath}, &stdout, &stderr)
+	code := runMain(f.storageContext(context.Background()), []string{"bootstrap-contracts", "preview", "--action", "vault-link", "--config", f.configPath}, &stdout, &stderr)
 	var preview evmPhasePreview
 	message, _ := f.config.Plan.signingBytes()
 	if err := json.Unmarshal(stdout.Bytes(), &preview); err != nil || code != 0 || preview.PlanHash != f.config.Plan.hash() || preview.ApprovalSigningMessageHex != hex.EncodeToString(message) || preview.ApprovalVerified || preview.InstallationComplete || preview.ExecutableAction != "vault-link" || preview.VaultBinding == nil || preview.VaultBinding.Coordinator.Hex() != preview.ProxyAddress || preview.VaultBinding.Vault.Hex() != preview.VaultAddress || len(preview.VaultBindingStorage) != 7 || len(preview.ProxyStorage) != 5 || preview.ProxyConstructor == nil || preview.ProxyConstructor.ApprovedPolicy.EffectiveBlock != 999 || rootObjectHash(preview.Plan) != rootObjectHash(f.config.Plan) {
@@ -633,7 +633,7 @@ func TestEvmVaultLinkRetainedCompletionRequiresBindingDigest(t *testing.T) {
 		t.Fatal(diagnostic)
 	}
 	stores, records := f.openVaultLinkAncestors()
-	store, err := openEvmVaultLinkActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], records[5], false, nil)
+	store, err := openEvmVaultLinkActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], records[5], false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

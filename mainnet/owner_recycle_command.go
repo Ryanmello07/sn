@@ -203,7 +203,7 @@ func ownerRecycleCustodyCommand(ctx context.Context, args []string, stderr io.Wr
 			return nil, errors.New("recycle input overlaps custody journal")
 		}
 	}
-	store, err := openOwnerRecycleStore(config, *key, mode == "reserve")
+	store, err := openOwnerRecycleStore(config, *key, mode == "reserve", ctx)
 	if err != nil {
 		return nil, err
 	}

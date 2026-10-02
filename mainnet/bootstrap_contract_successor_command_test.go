@@ -46,6 +46,7 @@ func newBootstrapSuccessorCommandFixture(t *testing.T) *bootstrapChainFixture {
 	f.config.OwnerTrimPlan = bootstrapRootTestWrite(t, f.config.OwnerTrimPlan.Path, trim)
 	contracts.config.Plan.Network, contracts.config.Plan.DeploymentId = f.config.Network, f.config.DeploymentId
 	contracts.config.Plan.RunDirectory = f.config.RunDirectory
+	contracts.storage = f.root.storage
 	// Genuine inclusion decodes full native metadata under race instrumentation.
 	// This success-path fixture approves the existing finite send bound up front.
 	contracts.config.Plan.Route.SendTimeoutSeconds = 60

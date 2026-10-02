@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,6 +12,8 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 const evmActionStateSchema = "urnetwork-mainnet-evm-action-state-v1"
@@ -115,6 +118,7 @@ type evmActionStorage interface {
 // A local flock is an instance fence, not a claim of distributed key exclusivity.
 // Close is called only after the action owner joins all operations.
 type evmActionStore struct {
+	storage         *mainnetDurableDirectory
 	config          evmPhaseConfig
 	actionIndex     int
 	predecessorHash string
@@ -130,13 +134,13 @@ type evmActionStore struct {
 
 // Initial claim recovery is limited to the exact untouched prepared record.
 // The complete marker is synced before signed bytes can ever be retained.
-func openEvmActionStore(config evmPhaseConfig, create bool, claimHook func(string) error) (*evmActionStore, error) {
-	return openEvmSelectedActionStore(config, 0, "", create, claimHook)
+func openEvmActionStore(config evmPhaseConfig, create bool, claimHook func(string) error, storageContexts ...context.Context) (*evmActionStore, error) {
+	return openEvmSelectedActionStore(config, 0, "", create, claimHook, storageContexts...)
 }
 
 // The caller holds the reserve lock through this store's lifetime. The vault
 // marker and state bind exactly that successful prerequisite, including attempts.
-func openEvmVaultActionStore(plan evmCreatePlan, reserve evmActionRecord, create bool, claimHook func(string) error) (*evmActionStore, error) {
+func openEvmVaultActionStore(plan evmCreatePlan, reserve evmActionRecord, create bool, claimHook func(string) error, storageContexts ...context.Context) (*evmActionStore, error) {
 	if err := plan.validateSelection(); err != nil {
 		return nil, err
 	}
@@ -146,12 +150,12 @@ func openEvmVaultActionStore(plan evmCreatePlan, reserve evmActionRecord, create
 	if err := validateEvmReservePrerequisite(*plan.Reserve, reserve); err != nil {
 		return nil, err
 	}
-	return openEvmSelectedActionStore(plan.Config, 1, rootObjectHash(reserve), create, claimHook)
+	return openEvmSelectedActionStore(plan.Config, 1, rootObjectHash(reserve), create, claimHook, storageContexts...)
 }
 
 // The vault hash transitively seals its reserve; all three original records
 // remain required, under their existing locks, for every coordinator operation.
-func openEvmCoordinatorActionStore(plan evmCreatePlan, reserve, vault evmActionRecord, create bool, claimHook func(string) error) (*evmActionStore, error) {
+func openEvmCoordinatorActionStore(plan evmCreatePlan, reserve, vault evmActionRecord, create bool, claimHook func(string) error, storageContexts ...context.Context) (*evmActionStore, error) {
 	if err := plan.validateSelection(); err != nil {
 		return nil, err
 	}
@@ -162,12 +166,12 @@ func openEvmCoordinatorActionStore(plan evmCreatePlan, reserve, vault evmActionR
 	if err := validateEvmCreatePrerequisite(plan, evmActionRecord{PredecessorHash: rootObjectHash(vault)}); err != nil {
 		return nil, err
 	}
-	return openEvmSelectedActionStore(plan.Config, 2, rootObjectHash(vault), create, claimHook)
+	return openEvmSelectedActionStore(plan.Config, 2, rootObjectHash(vault), create, claimHook, storageContexts...)
 }
 
 // The coordinator record seals both older ancestors. Its hash is immutable
 // while the fourth journal owns its original signature and attempt allowance.
-func openEvmEscrowActionStore(plan evmCreatePlan, reserve, vault, coordinator evmActionRecord, create bool, claimHook func(string) error) (*evmActionStore, error) {
+func openEvmEscrowActionStore(plan evmCreatePlan, reserve, vault, coordinator evmActionRecord, create bool, claimHook func(string) error, storageContexts ...context.Context) (*evmActionStore, error) {
 	if err := plan.validateSelection(); err != nil {
 		return nil, err
 	}
@@ -178,11 +182,11 @@ func openEvmEscrowActionStore(plan evmCreatePlan, reserve, vault, coordinator ev
 	if err := validateEvmCreatePrerequisite(plan, evmActionRecord{PredecessorHash: rootObjectHash(coordinator)}); err != nil {
 		return nil, err
 	}
-	return openEvmSelectedActionStore(plan.Config, 3, rootObjectHash(coordinator), create, claimHook)
+	return openEvmSelectedActionStore(plan.Config, 3, rootObjectHash(coordinator), create, claimHook, storageContexts...)
 }
 
 // Escrow completion seals all four predecessors before the proxy opens custody.
-func openEvmProxyActionStore(plan evmCreatePlan, reserve, vault, coordinator, escrow evmActionRecord, create bool, claimHook func(string) error) (*evmActionStore, error) {
+func openEvmProxyActionStore(plan evmCreatePlan, reserve, vault, coordinator, escrow evmActionRecord, create bool, claimHook func(string) error, storageContexts ...context.Context) (*evmActionStore, error) {
 	if err := plan.validateSelection(); err != nil {
 		return nil, err
 	}
@@ -193,12 +197,12 @@ func openEvmProxyActionStore(plan evmCreatePlan, reserve, vault, coordinator, es
 	if err := validateEvmCreatePrerequisite(plan, evmActionRecord{PredecessorHash: rootObjectHash(escrow)}); err != nil {
 		return nil, err
 	}
-	return openEvmSelectedActionStore(plan.Config, 4, rootObjectHash(escrow), create, claimHook)
+	return openEvmSelectedActionStore(plan.Config, 4, rootObjectHash(escrow), create, claimHook, storageContexts...)
 }
 
 // The proxy record transitively seals all five historical journals before the
 // binding action opens separate custody for its exact original signature.
-func openEvmReserveLinkActionStore(plan evmCreatePlan, reserve, vault, coordinator, escrow, proxy evmActionRecord, create bool, claimHook func(string) error) (*evmActionStore, error) {
+func openEvmReserveLinkActionStore(plan evmCreatePlan, reserve, vault, coordinator, escrow, proxy evmActionRecord, create bool, claimHook func(string) error, storageContexts ...context.Context) (*evmActionStore, error) {
 	if err := plan.validateSelection(); err != nil {
 		return nil, err
 	}
@@ -209,12 +213,12 @@ func openEvmReserveLinkActionStore(plan evmCreatePlan, reserve, vault, coordinat
 	if err := validateEvmCreatePrerequisite(plan, evmActionRecord{PredecessorHash: rootObjectHash(proxy)}); err != nil {
 		return nil, err
 	}
-	return openEvmSelectedActionStore(plan.Config, 5, rootObjectHash(proxy), create, claimHook)
+	return openEvmSelectedActionStore(plan.Config, 5, rootObjectHash(proxy), create, claimHook, storageContexts...)
 }
 
 // Completed reserve binding seals six historical journals before the vault call
 // opens separate custody for its original signature and remaining allowance.
-func openEvmVaultLinkActionStore(plan evmCreatePlan, reserve, vault, coordinator, escrow, proxy, reserveLink evmActionRecord, create bool, claimHook func(string) error) (*evmActionStore, error) {
+func openEvmVaultLinkActionStore(plan evmCreatePlan, reserve, vault, coordinator, escrow, proxy, reserveLink evmActionRecord, create bool, claimHook func(string) error, storageContexts ...context.Context) (*evmActionStore, error) {
 	if err := plan.validateSelection(); err != nil {
 		return nil, err
 	}
@@ -225,12 +229,12 @@ func openEvmVaultLinkActionStore(plan evmCreatePlan, reserve, vault, coordinator
 	if err := validateEvmCreatePrerequisite(plan, evmActionRecord{PredecessorHash: rootObjectHash(reserveLink)}); err != nil {
 		return nil, err
 	}
-	return openEvmSelectedActionStore(plan.Config, 6, rootObjectHash(reserveLink), create, claimHook)
+	return openEvmSelectedActionStore(plan.Config, 6, rootObjectHash(reserveLink), create, claimHook, storageContexts...)
 }
 
 // Completed vault binding seals all seven predecessor journals before evidence
 // acquires its own original signature and the same graph's remaining allowance.
-func openEvmEvidenceActionStore(plan evmCreatePlan, reserve, vault, coordinator, escrow, proxy, reserveLink, vaultLink evmActionRecord, create bool, claimHook func(string) error) (*evmActionStore, error) {
+func openEvmEvidenceActionStore(plan evmCreatePlan, reserve, vault, coordinator, escrow, proxy, reserveLink, vaultLink evmActionRecord, create bool, claimHook func(string) error, storageContexts ...context.Context) (*evmActionStore, error) {
 	if err := plan.validateSelection(); err != nil {
 		return nil, err
 	}
@@ -241,12 +245,12 @@ func openEvmEvidenceActionStore(plan evmCreatePlan, reserve, vault, coordinator,
 	if err := validateEvmCreatePrerequisite(plan, evmActionRecord{PredecessorHash: rootObjectHash(vaultLink)}); err != nil {
 		return nil, err
 	}
-	return openEvmSelectedActionStore(plan.Config, 7, rootObjectHash(vaultLink), create, claimHook)
+	return openEvmSelectedActionStore(plan.Config, 7, rootObjectHash(vaultLink), create, claimHook, storageContexts...)
 }
 
 // All eight actions share publication and initial-claim recovery mechanics with
 // separate schemas/paths/markers; a completed marker never refreshes budget.
-func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predecessorHash string, create bool, claimHook func(string) error) (*evmActionStore, error) {
+func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predecessorHash string, create bool, claimHook func(string) error, storageContexts ...context.Context) (*evmActionStore, error) {
 	if err := errors.Join(config.validate(), bootstrapRootDirectory(config.Plan.RunDirectory)); err != nil {
 		return nil, err
 	}
@@ -280,6 +284,16 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 		marker = rootObjectHash(struct{ ConfigHash, ActionId, PredecessorHash string }{ConfigHash: rootObjectHash(config), ActionId: config.Plan.Actions[actionIndex].Id, PredecessorHash: predecessorHash}) + "\n"
 	}
 	path := filepath.Join(config.Plan.RunDirectory, name)
+	storage, err := openMainnetDurableDirectory(mainnetStorageContext(storageContexts), config.Plan.RunDirectory, durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
+	storageTransferred := false
+	defer func() {
+		if !storageTransferred {
+			_ = storage.close()
+		}
+	}()
 	root, err := bootstrapSuccessorPhysicalRoot(config.Plan.RunDirectory)
 	if err != nil {
 		return nil, err
@@ -288,39 +302,47 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 	if err != nil {
 		return nil, err
 	}
-	store := &evmActionStore{config: copyEvmPhaseConfig(config), actionIndex: actionIndex, predecessorHash: predecessorHash, path: path,
+	store := &evmActionStore{storage: storage, config: copyEvmPhaseConfig(config), actionIndex: actionIndex, predecessorHash: predecessorHash, path: path,
 		directory: os.NewFile(uintptr(directoryFd), config.Plan.RunDirectory), root: root}
+	storageTransferred = true
 	success := false
 	defer func() {
 		if !success {
 			store.close()
 		}
 	}()
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
+	if err := store.storage.checkWrite(store.directory); err != nil {
+		return nil, err
+	}
 	if create {
-		for _, name := range []string{path, path + ".lock"} {
+		for _, name := range []string{path} {
 			if _, err := os.Lstat(name); !errors.Is(err, os.ErrNotExist) {
 				return nil, errors.Join(errors.New("EVM apply requires unused paths; use resume for retained custody"), err)
 			}
 		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := unix.Openat(directoryFd, name+".lock", flags, 0600)
+	store.lock, err = storage.openSnapshotMarker(path)
 	if err != nil {
 		return nil, err
 	}
-	store.lock = os.NewFile(uintptr(fd), path+".lock")
+	fd := int(store.lock.Fd())
 	if err := bootstrapSuccessorPrivateRegular(store.lock); err != nil {
 		return nil, errors.Join(errors.New("EVM marker is not a private regular file"), err)
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("EVM journal already has an owner"), err)
+	}
+	if err := storage.bindMarker(store.lock, false); err != nil {
+		return nil, err
+	}
+	if err := storage.bindSnapshot(path, "mainnet-evm-action", 512*1024, create); err != nil {
+		return nil, err
 	}
 	if create {
 		if err := store.checkpoint(); err != nil {
 			return nil, err
 		}
-		written, err := store.lock.WriteString(marker)
+		written, err := storage.writeMarkerAt([]byte(marker), 0)
 		if written != len(marker) && err == nil {
 			err = io.ErrShortWrite
 		}
@@ -340,6 +362,9 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 		}
 		if string(raw) == marker+bootstrapRootClaimComplete {
 			store.marker, store.complete = string(raw), true
+			if err := storage.bindMarker(store.lock, true); err != nil {
+				return nil, err
+			}
 			if _, err := store.load(); err != nil {
 				return nil, err
 			}
@@ -369,12 +394,15 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 	if _, err := store.load(); err != nil {
 		return nil, err
 	}
-	written, err := store.lock.WriteAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
+	written, err := storage.writeMarkerAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
 	if written != len(bootstrapRootClaimComplete) && err == nil {
 		err = io.ErrShortWrite
 	}
 	store.marker, store.complete = marker+bootstrapRootClaimComplete, true
 	if err := errors.Join(err, store.lock.Sync(), store.checkpoint()); err != nil {
+		return nil, err
+	}
+	if err := storage.bindMarker(store.lock, true); err != nil {
 		return nil, err
 	}
 	success = true
@@ -386,7 +414,7 @@ func (self *evmActionStore) close() error {
 	if self == nil {
 		return nil
 	}
-	var resultErr error
+	resultErr := self.storage.close()
 	for _, file := range []*os.File{self.lock, self.directory} {
 		if file != nil {
 			resultErr = errors.Join(resultErr, file.Close())
@@ -421,6 +449,9 @@ func (self *evmActionStore) load() (evmActionRecord, error) {
 
 // Atomic rename is followed by directory sync before acknowledging custody.
 func (self *evmActionStore) save(record evmActionRecord) error {
+	if err := self.storage.checkWrite(self.directory); err != nil {
+		return err
+	}
 	if record.PredecessorHash != self.predecessorHash {
 		return errors.New("EVM publication changes reserve custody")
 	}
@@ -443,5 +474,5 @@ func (self *evmActionStore) syncParent() error {
 	if syncDirectory == nil {
 		syncDirectory = (*os.File).Sync
 	}
-	return syncDirectory(self.directory)
+	return errors.Join(syncDirectory(self.directory), self.storage.checkWrite(self.directory))
 }

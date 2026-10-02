@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ const ownerTrimStoreLimit = 64 * 1024 * 1024
 // A failed publication poisons this instance, including failure after rename.
 // The external custody fence remains responsible for rollback and cross-host use.
 type ownerTrimStore struct {
+	storage       *mainnetDurableDirectory
 	config        ownerTrimExecutionConfig
 	key           string
 	policy        subnetCensusPolicy
@@ -90,6 +92,10 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 	if err := validateBootstrapChainValidatorPaths(preparation.Plan.ValidatorInspections, seen); err != nil {
 		return nil, err
 	}
+	self.storage, err = openMainnetDurableDirectory(ctx, filepath.Dir(config.Action.StatePath), durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
 	root, err := bootstrapSuccessorPhysicalRoot(filepath.Dir(action.StatePath))
 	if err != nil {
 		return nil, err
@@ -99,31 +105,38 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 		return nil, err
 	}
 	self.directory = os.NewFile(uintptr(directoryFd), filepath.Dir(action.StatePath))
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
+	if err := self.storage.checkWrite(self.directory); err != nil {
+		return nil, err
+	}
 	if create {
 		if _, err := os.Lstat(action.StatePath); !errors.Is(err, os.ErrNotExist) {
 			return nil, errors.Join(errors.New("owner trim action already exists; resume original custody"), err)
 		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := unix.Openat(directoryFd, filepath.Base(action.StatePath)+".lock", flags, 0600)
+	self.lock, err = self.storage.openSnapshotMarker(action.StatePath)
 	if err != nil {
 		return nil, err
 	}
-	self.lock = os.NewFile(uintptr(fd), action.StatePath+".lock")
-	self.marker = &bootstrapContractReadinessMarker{file: self.lock, path: action.StatePath + ".lock", root: root}
+	fd := int(self.lock.Fd())
+	self.marker = &bootstrapContractReadinessMarker{storage: self.storage, file: self.lock, path: action.StatePath + ".lock", root: root}
 	if err := bootstrapSuccessorPrivateRegular(self.lock); err != nil {
 		return nil, errors.Join(errors.New("owner trim marker is not a private regular file"), err)
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("owner trim action already has a local owner"), err)
 	}
 	marker := rootObjectHash(config) + "\n" + key + "\n"
+	if err := self.storage.bindMarker(self.lock, false); err != nil {
+		return nil, err
+	}
+	if err := self.storage.bindSnapshot(action.StatePath, "mainnet-owner-trim", ownerTrimStoreLimit, create); err != nil {
+		return nil, err
+	}
 	if create {
 		if err := self.checkpoint(); err != nil {
 			return nil, err
 		}
-		written, err := self.lock.WriteString(marker)
+		written, err := self.storage.writeMarkerAt([]byte(marker), 0)
 		if written != len(marker) && err == nil {
 			err = io.ErrShortWrite
 		}
@@ -138,6 +151,9 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 		}
 		if string(raw) == marker+bootstrapRootClaimComplete {
 			self.marker.expected, self.complete = string(raw), true
+			if err := self.storage.bindMarker(self.lock, true); err != nil {
+				return nil, err
+			}
 			if _, err := self.load(); err != nil {
 				return nil, err
 			}
@@ -163,12 +179,15 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 	if _, err := self.load(); err != nil {
 		return nil, err
 	}
-	written, err := self.lock.WriteAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
+	written, err := self.storage.writeMarkerAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
 	if written != len(bootstrapRootClaimComplete) && err == nil {
 		err = io.ErrShortWrite
 	}
 	self.marker.expected, self.complete = marker+bootstrapRootClaimComplete, true
 	if err := errors.Join(err, self.lock.Sync(), self.checkpoint()); err != nil {
+		return nil, err
+	}
+	if err := self.storage.bindMarker(self.lock, true); err != nil {
 		return nil, err
 	}
 	return self, nil
@@ -179,7 +198,7 @@ func (self *ownerTrimStore) close() error {
 	if self == nil {
 		return nil
 	}
-	var err error
+	err := self.storage.close()
 	for _, file := range []*os.File{self.lock, self.directory} {
 		if file != nil {
 			err = errors.Join(err, file.Close())
@@ -212,8 +231,11 @@ func (self *ownerTrimStore) load() (ownerTrimRecord, error) {
 
 // Full file sync, atomic rename and directory sync precede every side effect.
 func (self *ownerTrimStore) save(record ownerTrimRecord) (resultErr error) {
+	if err := self.storage.checkWrite(self.directory); err != nil {
+		return err
+	}
 	defer func() {
-		if resultErr != nil {
+		if resultErr != nil && (self.storage == nil || self.storage.failed != nil || !mainnetDurableAdmissionPending(resultErr)) {
 			self.failed = resultErr
 		}
 	}()
@@ -239,5 +261,5 @@ func (self *ownerTrimStore) syncParent() error {
 	if syncDirectory == nil {
 		syncDirectory = (*os.File).Sync
 	}
-	return syncDirectory(self.directory)
+	return errors.Join(syncDirectory(self.directory), self.storage.checkWrite(self.directory))
 }

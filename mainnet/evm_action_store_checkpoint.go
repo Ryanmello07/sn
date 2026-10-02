@@ -3,8 +3,7 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -16,6 +15,11 @@ import (
 // A held flock protects its inode only. The approved path must still name that
 // private single-link marker under the same physical directory.
 func (self *evmActionStore) checkpoint() error {
+	if self != nil {
+		if err := self.storage.checkWrite(self.directory); err != nil {
+			return err
+		}
+	}
 	if self == nil || self.lock == nil || self.directory == nil {
 		return errors.New("EVM journal is closed")
 	}
@@ -53,28 +57,11 @@ func (self *evmActionStore) readRecord() ([]byte, error) {
 	if err := self.checkpoint(); err != nil {
 		return nil, err
 	}
-	fd, err := unix.Openat(int(self.directory.Fd()), filepath.Base(self.path), unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
-	if err != nil {
-		return nil, err
+	raw, _, err := self.storage.readFile(context.Background(), self.path, 512*1024)
+	if errors.Is(err, os.ErrNotExist) && self.complete {
+		err = self.storage.identity("completed EVM journal disappeared", err)
 	}
-	file := os.NewFile(uintptr(fd), self.path)
-	defer file.Close()
-	if err := bootstrapSuccessorPrivateRegular(file); err != nil {
-		return nil, err
-	}
-	raw, err := io.ReadAll(io.LimitReader(file, 512*1024+1))
-	if err != nil || len(raw) == 0 || len(raw) > 512*1024 {
-		return nil, errors.Join(errors.New("EVM journal is not a bounded complete record"), err)
-	}
-	var fileStat, namedStat unix.Stat_t
-	if err := errors.Join(unix.Fstat(fd, &fileStat),
-		unix.Fstatat(int(self.directory.Fd()), filepath.Base(self.path), &namedStat, unix.AT_SYMLINK_NOFOLLOW), self.checkpoint()); err != nil {
-		return nil, err
-	}
-	if fileStat.Dev != namedStat.Dev || fileStat.Ino != namedStat.Ino {
-		return nil, errors.New("EVM journal changed while reading custody")
-	}
-	return raw, nil
+	return raw, err
 }
 
 // Only an incomplete, never-loaded initial claim may create its first journal.
@@ -91,32 +78,10 @@ func (self *evmActionStore) publishRecord(record evmActionRecord, raw []byte) er
 	if err := checkPrevious(); err != nil {
 		return err
 	}
-	var nonce [16]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return err
-	}
-	stage := ".sn-mainnet-evm-" + hex.EncodeToString(nonce[:])
-	directoryFd := int(self.directory.Fd())
-	fd, err := unix.Openat(directoryFd, stage, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0600)
-	if err != nil {
-		return err
-	}
-	defer unix.Unlinkat(directoryFd, stage, 0)
-	file := os.NewFile(uintptr(fd), stage)
-	written, err := file.Write(raw)
-	if written != len(raw) && err == nil {
-		err = io.ErrShortWrite
-	}
-	if err := errors.Join(err, file.Sync(), file.Close(), checkPrevious()); err != nil {
-		return err
-	}
-	if err := unix.Renameat(directoryFd, stage, directoryFd, filepath.Base(self.path)); err != nil {
+	if err := self.storage.publish(self.path, raw, self.syncDirectory); err != nil {
 		return err
 	}
 	self.retainedHash = record.ContentHash
-	if err := self.syncParent(); err != nil {
-		return err
-	}
-	_, err = self.load()
+	_, err := self.load()
 	return err
 }

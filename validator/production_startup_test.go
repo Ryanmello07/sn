@@ -31,7 +31,7 @@ func TestProductionStartupRunReleaseReconcilesBeforeCurrentPreparation(t *testin
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- RunRelease(ctx, fixture.configPath) }()
+	go func() { done <- RunRelease(fixture.storageContext(ctx), fixture.configPath) }()
 	var result error
 	select {
 	case result = <-done:
@@ -99,7 +99,7 @@ func TestProductionStartupRunReleaseInitialDeploymentBecomesReady(t *testing.T) 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- RunRelease(ctx, fixture.configPath) }()
+	go func() { done <- RunRelease(fixture.storageContext(ctx), fixture.configPath) }()
 	select {
 	case err := <-done:
 		t.Fatalf("actual fresh RunRelease failed before readiness: %v", err)

@@ -63,6 +63,7 @@ func newBootstrapRootPassiveFixture(t *testing.T) *bootstrapChainFixture {
 	server := rootFixtureServer(t, f.census)
 	service := rootPassiveServiceConfig{Schema: rootPassiveServiceSchema, Policy: rootPolicy, RpcUrl: server.URL, ReadRetrySeconds: 60,
 		CheckpointPath: filepath.Join(f.config.RunDirectory, "passive-root-checkpoint.json"), MaximumSamples: 1, IntervalSeconds: 1, StallAfterSeconds: 300}
+	prepareMainnetSnapshotTest(t, service.CheckpointPath, "mainnet-monitor-checkpoint", maxRpcReplyBytes)
 	f.root.config.Schema = bootstrapRootPassiveConfigSchema
 	f.root.config.RootService = bootstrapRootTestWrite(t, f.root.config.RootService.Path, service)
 	f.config.Root = bootstrapRootTestWrite(t, f.root.configPath, f.root.config)
@@ -87,8 +88,9 @@ func newBootstrapRootPassiveFixture(t *testing.T) *bootstrapChainFixture {
 // root native custody store, action signature or allowance is fabricated.
 func TestBootstrapRootPassiveComposesAndResumesBothRoles(t *testing.T) {
 	f := newBootstrapRootPassiveFixture(t)
-	if len(f.journals(t)) != 0 || len(f.preparation.Plan.ValidatorInspections) != 2 {
-		t.Fatal("planning mutated state or omitted UR roles")
+	f.requireFreshJournals(t)
+	if len(f.preparation.Plan.ValidatorInspections) != 2 {
+		t.Fatal("planning omitted UR roles")
 	}
 	first := f.result(t, "apply")
 	before := f.journals(t)
@@ -108,7 +110,7 @@ func TestBootstrapRootPassiveReadinessUsesCurrentSupportedProfile(t *testing.T) 
 	f := newBootstrapRootPassiveFixture(t)
 	f.result(t, "apply")
 	before := f.journals(t)
-	result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+	result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 	if err != nil || !result.ObservationComplete || result.Status != "observed-prerequisites" || result.PassiveRoot == nil ||
 		!result.PassiveRoot.Observation.ReadOnlyReady || result.ActivationReady || result.NativeSigning || result.NetworkEffects || result.RootValidator.Observed == nil ||
 		!reflect.DeepEqual(before, f.journals(t)) {
@@ -128,7 +130,7 @@ func TestRootPassiveServiceCommandRunsApprovedObserver(t *testing.T) {
 	ref := bootstrapRootTestWrite(t, filepath.Join(filepath.Dir(f.path), "passive-runtime.json"), config)
 	var output, diagnostics bytes.Buffer
 	args := []string{"root-passive-service", "run", "--config", ref.Path, "--accept-runtime-sha256", ref.Sha256}
-	if code := runMain(t.Context(), args, &output, &diagnostics); code != 0 {
+	if code := runMain(f.storageContext(t.Context()), args, &output, &diagnostics); code != 0 {
 		t.Fatal("passive run failed", code, diagnostics.String(), output.String())
 	}
 	var event rootMonitorEvent
@@ -139,7 +141,7 @@ func TestRootPassiveServiceCommandRunsApprovedObserver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code := runMain(t.Context(), args, io.Discard, &diagnostics); code != 0 {
+	if code := runMain(f.storageContext(t.Context()), args, io.Discard, &diagnostics); code != 0 {
 		t.Fatal("passive restart failed", code, diagnostics.String())
 	}
 	after, err := os.ReadFile(f.root.plan.PassiveService.CheckpointPath)
@@ -147,7 +149,7 @@ func TestRootPassiveServiceCommandRunsApprovedObserver(t *testing.T) {
 		t.Fatal("same finalized state changed checkpoint", err)
 	}
 	for _, extra := range [][]string{{"--submit"}, {"--signature-file", "synthetic-signature"}, {"--samples", "2"}} {
-		if code := runMain(t.Context(), append(append([]string(nil), args...), extra...), io.Discard, io.Discard); code != 2 {
+		if code := runMain(f.storageContext(t.Context()), append(append([]string(nil), args...), extra...), io.Discard, io.Discard); code != 2 {
 			t.Fatal("passive service accepted native/allowance override", extra, code)
 		}
 	}
@@ -179,7 +181,7 @@ func TestRootPassiveServiceRejectsChangedApprovalAndIncompletePreparation(t *tes
 	config := rootPassiveRuntimeConfig{Schema: rootPassiveRuntimeSchema, Root: f.config.Root, Role: *f.config.RootValidator}
 	ref := bootstrapRootTestWrite(t, filepath.Join(filepath.Dir(f.path), "passive-runtime.json"), config)
 	args := []string{"root-passive-service", "run", "--config", ref.Path, "--accept-runtime-sha256", ref.Sha256}
-	if code := runMain(t.Context(), args, io.Discard, io.Discard); code != 3 {
+	if code := runMain(f.storageContext(t.Context()), args, io.Discard, io.Discard); code != 3 {
 		t.Fatal("unprepared passive service ran", code)
 	}
 	f.result(t, "apply")
@@ -187,7 +189,7 @@ func TestRootPassiveServiceRejectsChangedApprovalAndIncompletePreparation(t *tes
 	if err := os.WriteFile(config.Role.Approval.Path, []byte("{}"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if code := runMain(t.Context(), args, io.Discard, io.Discard); code != 2 || !reflect.DeepEqual(before, f.journals(t)) {
+	if code := runMain(f.storageContext(t.Context()), args, io.Discard, io.Discard); code != 2 || !reflect.DeepEqual(before, f.journals(t)) {
 		t.Fatal("changed approval reused retained preparation", code)
 	}
 }
@@ -224,7 +226,7 @@ func TestRootPassiveServiceRejectsRepinnedForgedApproval(t *testing.T) {
 	config := rootPassiveRuntimeConfig{Schema: rootPassiveRuntimeSchema, Root: f.config.Root, Role: *f.config.RootValidator}
 	ref := bootstrapRootTestWrite(t, filepath.Join(filepath.Dir(f.path), "passive-runtime.json"), config)
 	var diagnostic bytes.Buffer
-	if code := runMain(t.Context(), []string{"root-passive-service", "run", "--config", ref.Path, "--accept-runtime-sha256", ref.Sha256}, io.Discard, &diagnostic); code != 2 ||
+	if code := runMain(f.storageContext(t.Context()), []string{"root-passive-service", "run", "--config", ref.Path, "--accept-runtime-sha256", ref.Sha256}, io.Discard, &diagnostic); code != 2 ||
 		!strings.Contains(diagnostic.String(), "independent signer") || !reflect.DeepEqual(before, f.journals(t)) {
 		t.Fatal("repinned passive approval bypassed signature binding", code, diagnostic.String())
 	}
@@ -257,7 +259,7 @@ func TestRootPassiveServiceCannotRecreatePreparation(t *testing.T) {
 		before := f.journals(t)
 		config := rootPassiveRuntimeConfig{Schema: rootPassiveRuntimeSchema, Root: f.config.Root, Role: *f.config.RootValidator}
 		ref := bootstrapRootTestWrite(t, filepath.Join(filepath.Dir(f.path), "passive-runtime.json"), config)
-		if code := runMain(t.Context(), []string{"root-passive-service", "run", "--config", ref.Path, "--accept-runtime-sha256", ref.Sha256}, io.Discard, io.Discard); code != 3 || !reflect.DeepEqual(before, f.journals(t)) {
+		if code := runMain(f.storageContext(t.Context()), []string{"root-passive-service", "run", "--config", ref.Path, "--accept-runtime-sha256", ref.Sha256}, io.Discard, io.Discard); code != 3 || !reflect.DeepEqual(before, f.journals(t)) {
 			t.Fatal("passive start repaired incomplete preparation", change, code)
 		}
 		if _, err := os.Stat(f.root.plan.PassiveService.CheckpointPath); !os.IsNotExist(err) {
@@ -271,7 +273,7 @@ func TestRootPassiveServiceCannotRecreatePreparation(t *testing.T) {
 func TestRootPassiveReadinessSupportsIndependentValidatorAdmission(t *testing.T) {
 	f := newBootstrapRootPassiveFixture(t)
 	f.result(t, "apply")
-	observed, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+	observed, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 	if err != nil || !observed.ObservationComplete || observed.LocalPreparation == nil {
 		t.Fatal("real composed observation unavailable", err)
 	}
@@ -307,7 +309,7 @@ func TestRootPassiveReadinessSupportsIndependentValidatorAdmission(t *testing.T)
 func TestRootPassiveReadinessSupportsContractSuccessorSeals(t *testing.T) {
 	f := newBootstrapRootPassiveFixture(t)
 	f.result(t, "apply")
-	state, err := openBootstrapChainReadinessState(t.Context(), f.preparation)
+	state, err := openBootstrapChainReadinessState(f.storageContext(t.Context()), f.preparation)
 	if err != nil {
 		t.Fatal(err)
 	}

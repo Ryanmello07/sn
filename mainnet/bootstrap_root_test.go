@@ -16,11 +16,16 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urfoundation/sn/internal/durablepath"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // Each fixture has separately private config and run directories. The native
 // action is independently reapproved for its exact service/custody paths.
 type bootstrapRootFixture struct {
+	storage    *durablefixture.Fixture
 	configPath string
 	config     bootstrapRootConfig
 	plan       bootstrapRootPlan
@@ -61,7 +66,7 @@ func bootstrapRootFixtureFromOffline(t *testing.T, offline rootOfflineFixture) *
 		t.Fatal(err)
 	}
 	service := rootServiceConfig{Schema: rootServiceConfigSchema, CustodyTrust: offline.trust, Packet: offline.packet, MaximumObservations: 3}
-	fixture := &bootstrapRootFixture{offline: offline, configPath: filepath.Join(configDirectory, "bootstrap.json"),
+	fixture := &bootstrapRootFixture{storage: durablefixture.New(t, t.Context(), runDirectory), offline: offline, configPath: filepath.Join(configDirectory, "bootstrap.json"),
 		config: bootstrapRootConfig{Schema: bootstrapRootConfigSchema, DeploymentId: "synthetic-mainnet-bootstrap", RunDirectory: runDirectory,
 			Network:     planNetwork{NativeChain: action.Scope.NativeChain, GenesisHash: action.Scope.GenesisHash, EvmChainId: mainnetEvmChainId},
 			RootService: bootstrapRootTestWrite(t, filepath.Join(configDirectory, "service.json"), service)}}
@@ -71,11 +76,14 @@ func bootstrapRootFixtureFromOffline(t *testing.T, offline rootOfflineFixture) *
 		t.Fatal(err)
 	}
 	fixture.plan = plan
+	prepareMainnetSnapshotTest(t, filepath.Join(runDirectory, bootstrapRootProgressFile), "mainnet-bootstrap-root", 16*1024)
+	prepareMainnetSnapshotTest(t, plan.Service.Packet.Action.Scope.StatePath, "mainnet-root-service", rootServiceStoreLimit)
 	return fixture
 }
 
 // Calls the public dispatcher, preserving exact accepted plan/run identities.
 func (self *bootstrapRootFixture) command(ctx context.Context, command string, stdout, stderr io.Writer, extra ...string) int {
+	ctx = durablepath.WithHost(durablevolume.WithReference(ctx, self.storage.Reference), self.storage.Host)
 	args := []string{"bootstrap", command, "--config", self.configPath}
 	if command != "plan" {
 		args = append(args, "--run-dir", self.config.RunDirectory, "--accept-plan-hash", self.plan.ContentHash)
@@ -108,6 +116,7 @@ func TestBootstrapRootCommandReachesExistingServiceAndHttp(t *testing.T) {
 	submission.config.Approval.ServiceConfigHash = rootObjectHash(fixture.plan.Service)
 	submission.config.Approval.PacketHash = fixture.offline.packet.ContentHash
 	submission.approve(t)
+	prepared := mainnetNamespaceTest(t, fixture.config.RunDirectory)
 	var stdout, stderr bytes.Buffer
 	if code := fixture.command(t.Context(), "plan", &stdout, &stderr); code != 0 {
 		t.Fatalf("plan exit %d: %s", code, stderr.String())
@@ -116,9 +125,8 @@ func TestBootstrapRootCommandReachesExistingServiceAndHttp(t *testing.T) {
 	if err := decodePlanJson(stdout.Bytes(), &plan); err != nil || !reflect.DeepEqual(plan, fixture.plan) || plan.NetworkEffects || plan.NativeSigning {
 		t.Fatal("public plan changed immutable inputs or granted live effects", err)
 	}
-	entries, err := os.ReadDir(fixture.config.RunDirectory)
-	if err != nil || len(entries) != 0 {
-		t.Fatal("planning mutated child journals", err)
+	if !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, fixture.config.RunDirectory)) {
+		t.Fatal("planning mutated prepared child custody")
 	}
 	applied := fixture.result(t, "apply")
 	if !applied.LocalCustodyComplete || applied.SignatureStatus != "awaiting-import" || applied.NextPhase != "external-native-signature" ||
@@ -136,7 +144,7 @@ func TestBootstrapRootCommandReachesExistingServiceAndHttp(t *testing.T) {
 	}
 	submitter, submissionStore := submission.open(t, true)
 	custody, custodyStore := fixture.offline.open(t, false)
-	serviceStore, err := openRootServiceStore(fixture.plan.Service, false)
+	serviceStore, err := openRootServiceStore(fixture.plan.Service, false, fixture.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,6 +188,7 @@ func TestBootstrapRootCommandReachesExistingServiceAndHttp(t *testing.T) {
 func TestBootstrapRootCommandRejectsUnapprovedInputsBeforeMutation(t *testing.T) {
 	for _, change := range []string{"accepted-hash", "run-directory", "testnet", "genesis", "service-pin", "unsigned-config", "unknown-json", "duplicate-json", "missing-config"} {
 		fixture := newBootstrapRootFixture(t)
+		prepared := mainnetNamespaceTest(t, fixture.config.RunDirectory)
 		args := []string{"bootstrap", "apply", "--config", fixture.configPath, "--run-dir", fixture.config.RunDirectory, "--accept-plan-hash", fixture.plan.ContentHash}
 		switch change {
 		case "accepted-hash":
@@ -215,12 +224,11 @@ func TestBootstrapRootCommandRejectsUnapprovedInputsBeforeMutation(t *testing.T)
 			}
 		}
 		var stdout, stderr bytes.Buffer
-		if code := runMain(t.Context(), args, &stdout, &stderr); code == 0 || stdout.Len() != 0 {
+		if code := runMain(fixture.storage.Context, args, &stdout, &stderr); code == 0 || stdout.Len() != 0 {
 			t.Fatalf("%s admitted or published partial authority: %d %s", change, code, stderr.String())
 		}
-		entries, err := os.ReadDir(fixture.config.RunDirectory)
-		if err != nil || len(entries) != 0 {
-			t.Fatalf("%s mutated a journal before approval: %v", change, err)
+		if !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, fixture.config.RunDirectory)) {
+			t.Fatalf("%s mutated prepared custody before approval", change)
 		}
 	}
 }
@@ -303,7 +311,7 @@ func TestBootstrapRootReconcilesChildrenAfterAmbiguousProgress(t *testing.T) {
 	for _, phase := range []string{"custody-retained", "service-retained", "signature-retained"} {
 		for _, after := range []bool{false, true} {
 			fixture := newBootstrapRootFixture(t)
-			store, err := openBootstrapRootStore(fixture.plan, true)
+			store, err := openBootstrapRootStore(fixture.plan, true, fixture.storage.Context)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -313,11 +321,11 @@ func TestBootstrapRootReconcilesChildrenAfterAmbiguousProgress(t *testing.T) {
 				t.Fatal(err)
 			}
 			receipt := fixture.offline.receipt(t)
-			result, err := owner.advance(t.Context(), &receipt)
+			result, err := owner.advance(fixture.storage.Context, &receipt)
 			if err == nil || result.Schema != "" || !owner.poisoned {
 				t.Fatalf("%s after=%t published incomplete progress: %v", phase, after, err)
 			}
-			if _, err := owner.advance(t.Context(), nil); err == nil {
+			if _, err := owner.advance(fixture.storage.Context, nil); err == nil {
 				t.Fatal("ambiguous owner continued before reopen")
 			}
 			store.close()
@@ -337,12 +345,12 @@ func TestBootstrapRootReconcilesChildrenAfterAmbiguousProgress(t *testing.T) {
 // child. Store closure is separately enforced even after another owner opens.
 func TestBootstrapRootCancellationAndSingleOwnership(t *testing.T) {
 	fixture := newBootstrapRootFixture(t)
-	store, err := openBootstrapRootStore(fixture.plan, true)
+	store, err := openBootstrapRootStore(fixture.plan, true, fixture.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.close()
-	if other, err := openBootstrapRootStore(fixture.plan, false); err == nil {
+	if other, err := openBootstrapRootStore(fixture.plan, false, fixture.storage.Context); err == nil {
 		other.close()
 		t.Fatal("two process owners acquired the same plan")
 	}
@@ -352,7 +360,7 @@ func TestBootstrapRootCancellationAndSingleOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
-	go func() { _, err := owner.advance(t.Context(), nil); done <- err }()
+	go func() { _, err := owner.advance(fixture.storage.Context, nil); done <- err }()
 	<-failure.entered
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -563,7 +571,7 @@ func TestBootstrapRootRejectsUnsafePathsAndState(t *testing.T) {
 // only reopening may recover it, and the child remains the source of truth.
 func TestBootstrapRootDirectorySyncFailureReopensCompletedChild(t *testing.T) {
 	fixture := newBootstrapRootFixture(t)
-	store, err := openBootstrapRootStore(fixture.plan, true)
+	store, err := openBootstrapRootStore(fixture.plan, true, fixture.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -573,7 +581,7 @@ func TestBootstrapRootDirectorySyncFailureReopensCompletedChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := owner.advance(t.Context(), nil); err == nil || result.LocalCustodyComplete || !owner.poisoned {
+	if result, err := owner.advance(fixture.storage.Context, nil); err == nil || result.LocalCustodyComplete || !owner.poisoned {
 		t.Fatal("ambiguous actual publication did not stop the owner", err)
 	}
 	store.close()
@@ -587,13 +595,14 @@ func TestBootstrapRootDirectorySyncFailureReopensCompletedChild(t *testing.T) {
 func TestBootstrapRootInitialClaimRecovery(t *testing.T) {
 	for _, stage := range []string{"marker-synced", "progress-synced"} {
 		fixture := newBootstrapRootFixture(t)
+		prepared := mainnetNamespaceTest(t, fixture.config.RunDirectory)
 		failure := errors.New("synthetic initial claim interruption")
 		store, err := openBootstrapRootStoreWithClaimHook(fixture.plan, true, func(boundary string) error {
 			if boundary == stage {
 				return failure
 			}
 			return nil
-		})
+		}, fixture.storage.Context)
 		if store != nil || !errors.Is(err, failure) {
 			t.Fatalf("%s did not interrupt the initial claim: %v", stage, err)
 		}
@@ -606,11 +615,14 @@ func TestBootstrapRootInitialClaimRecovery(t *testing.T) {
 		if stage == "marker-synced" && !errors.Is(err, os.ErrNotExist) || stage == "progress-synced" && err != nil {
 			t.Fatal("fault did not occur at the claimed progress boundary", stage, err)
 		}
+		afterClaim := mainnetNamespaceTest(t, fixture.config.RunDirectory)
 		for _, child := range []string{fixture.plan.Service.CustodyTrust.StatePath, fixture.plan.Service.Packet.Action.Scope.StatePath} {
-			for _, candidate := range []string{child, child + ".lock"} {
-				if _, err := os.Lstat(candidate); !errors.Is(err, os.ErrNotExist) {
-					t.Fatal("initial claim opened a child before completion", err)
-				}
+			if _, err := os.Lstat(child); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("initial claim created a child before completion", err)
+			}
+			name, err := filepath.Rel(fixture.config.RunDirectory, child+".lock")
+			if err != nil || !reflect.DeepEqual(prepared[name], afterClaim[name]) {
+				t.Fatal("initial claim changed a prepared child marker", child, err)
 			}
 		}
 		// A second interruption during resume must leave the same recoverable
@@ -620,7 +632,7 @@ func TestBootstrapRootInitialClaimRecovery(t *testing.T) {
 				t.Fatal("resume exposed an unexpected pre-child boundary", boundary)
 			}
 			return failure
-		})
+		}, fixture.storage.Context)
 		if store != nil || !errors.Is(err, failure) {
 			t.Fatalf("accepted initial claim could not resume to its durable progress boundary: %v", err)
 		}
@@ -644,7 +656,7 @@ func TestBootstrapRootInitialClaimRejectsAmbiguousState(t *testing.T) {
 	for _, change := range []string{"empty-progress", "corrupt-progress", "advanced-progress", "custody-file", "custody-marker", "service-file", "service-marker", "partial-marker", "complete-without-progress"} {
 		fixture := newBootstrapRootFixture(t)
 		failure := errors.New("synthetic initial marker interruption")
-		store, err := openBootstrapRootStoreWithClaimHook(fixture.plan, true, func(string) error { return failure })
+		store, err := openBootstrapRootStoreWithClaimHook(fixture.plan, true, func(string) error { return failure }, fixture.storage.Context)
 		if store != nil || !errors.Is(err, failure) {
 			t.Fatal("failed to retain actual interrupted claim", err)
 		}
@@ -671,6 +683,9 @@ func TestBootstrapRootInitialClaimRejectsAmbiguousState(t *testing.T) {
 		}
 		if change == "custody-marker" || change == "service-marker" {
 			changedPath += ".lock"
+			// The original empty precreated marker is approved fresh custody.
+			// A foreign nonempty claim is the ambiguous state being rejected.
+			changedBytes = []byte("synthetic unknown child claim\n")
 		}
 		if err := os.WriteFile(changedPath, changedBytes, 0600); err != nil {
 			t.Fatal(err)

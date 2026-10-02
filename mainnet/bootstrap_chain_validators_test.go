@@ -65,8 +65,9 @@ func TestBootstrapChainValidatorRejectsArbitraryPinnedConfig(t *testing.T) {
 	f := newBootstrapChainFixture(t)
 	f.config.Validators[0].Config = bootstrapRootTestWrite(t, f.config.Validators[0].Config.Path, map[string]any{"schema_version": 3, "validator_id": 1, "production_admission": "pending"})
 	bootstrapRootTestWrite(t, f.path, f.config)
+	prepared := mainnetNamespaceTest(t, f.config.RunDirectory)
 	var stdout, stderr bytes.Buffer
-	if code := f.command(t.Context(), "plan", &stdout, &stderr); code != 2 || stdout.Len() != 0 || len(f.journals(t)) != 0 {
+	if code := f.command(t.Context(), "plan", &stdout, &stderr); code != 2 || stdout.Len() != 0 || !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, f.config.RunDirectory)) {
 		t.Fatalf("arbitrary pinned UR config bypassed production admission: exit %d stdout %s stderr %s", code, stdout.String(), stderr.String())
 	}
 }
@@ -269,16 +270,17 @@ func TestBootstrapChainV1RestartPreservesOriginalScope(t *testing.T) {
 	if f.preparation.Plan.ContentHash != "sha256:"+hex.EncodeToString(digest[:]) {
 		t.Fatal("v1 preparation hash changed its original domain or canonical bytes")
 	}
+	prepared := mainnetNamespaceTest(t, f.config.RunDirectory)
 	var stderr bytes.Buffer
-	if code := f.command(t.Context(), "apply", io.Discard, &stderr); code != 3 || len(f.journals(t)) != 0 {
+	if code := f.command(t.Context(), "apply", io.Discard, &stderr); code != 3 || !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, f.config.RunDirectory)) {
 		t.Fatal("new v1 apply bypassed stronger preparation", code, stderr.String())
 	}
 	// Recreate the same pre-upgrade durable record through its unchanged owner.
-	store, err := openBootstrapChainStore(f.preparation, true, nil)
+	store, err := openBootstrapChainStore(f.preparation, true, nil, f.storageContext(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, advanceErr := advanceBootstrapChain(t.Context(), store, nil)
+	first, advanceErr := advanceBootstrapChain(f.storageContext(t.Context()), store, nil)
 	if err := errors.Join(advanceErr, store.close()); err != nil {
 		t.Fatal(err)
 	}

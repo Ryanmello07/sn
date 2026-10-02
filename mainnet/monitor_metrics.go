@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -25,13 +26,14 @@ var monitorStatusCodes = map[string]int{
 type monitorMetricsStore struct {
 	path          string
 	lock          *os.File
+	directory     *monitorDirectory
 	directoryInfo os.FileInfo
 	syncDirectory func(*os.File) error
 }
 
 // A precreated directory may be group-readable for the collector, but it must
 // not be writable by other users. No output directory or route is inferred.
-func openMonitorMetrics(path string) (*monitorMetricsStore, error) {
+func openMonitorMetrics(path string, contexts ...context.Context) (*monitorMetricsStore, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path || !strings.HasSuffix(path, ".prom") {
 		return nil, errors.New("metrics path must be an absolute canonical .prom file")
 	}
@@ -44,21 +46,24 @@ func openMonitorMetrics(path string) (*monitorMetricsStore, error) {
 	if err != nil || !info.IsDir() || info.Mode().Perm()&0022 != 0 {
 		return nil, errors.Join(errors.New("metrics directory must not be writable by other users"), err)
 	}
-	fd, err := syscall.Open(path+".lock", syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0600)
+	owner, err := openMonitorDirectory(directory, contexts)
 	if err != nil {
-		return nil, fmt.Errorf("open metrics lock: %w", err)
+		return nil, err
 	}
-	lock := os.NewFile(uintptr(fd), path+".lock")
-	self := &monitorMetricsStore{path: path, lock: lock, directoryInfo: info}
+	lock, err := owner.open(filepath.Base(path)+".lock", syscall.O_CREAT|syscall.O_RDWR, 0600)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("open metrics lock: %w", err), owner.close())
+	}
+	self := &monitorMetricsStore{path: path, lock: lock, directory: owner, directoryInfo: info}
 	opened, err := lock.Stat()
 	if err != nil || !opened.Mode().IsRegular() || opened.Mode().Perm()&0077 != 0 {
-		return nil, errors.Join(errors.New("metrics lock is not a private regular file"), err, lock.Close())
+		return nil, errors.Join(errors.New("metrics lock is not a private regular file"), err, self.close())
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		return nil, errors.Join(fmt.Errorf("metrics already has an owner: %w", err), lock.Close())
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return nil, errors.Join(fmt.Errorf("metrics already has an owner: %w", err), self.close())
 	}
 	if err := self.validateDestination(); err != nil {
-		return nil, errors.Join(err, lock.Close())
+		return nil, errors.Join(err, self.close())
 	}
 	return self, nil
 }
@@ -69,7 +74,7 @@ func (self *monitorMetricsStore) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	err := self.lock.Close()
+	err := errors.Join(self.lock.Close(), self.directory.close())
 	self.lock = nil
 	return err
 }
@@ -80,7 +85,7 @@ func (self *monitorMetricsStore) initialize(state *monitorState) error {
 	if err := self.validateDestination(); err != nil {
 		return err
 	}
-	if _, err := os.Lstat(self.path); err == nil {
+	if _, err := self.directory.stat(filepath.Base(self.path)); err == nil {
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -94,6 +99,9 @@ func (self *monitorMetricsStore) validateDestination() error {
 	if self.lock == nil {
 		return errors.New("metrics store is closed")
 	}
+	if err := self.directory.check(); err != nil {
+		return err
+	}
 	info, err := os.Lstat(filepath.Dir(self.path))
 	if err != nil {
 		return err
@@ -102,11 +110,14 @@ func (self *monitorMetricsStore) validateDestination() error {
 		return &monitorOutputOwnershipError{reason: "metrics directory changed"}
 	}
 	ownedLock, lockErr := self.lock.Stat()
-	namedLock, nameErr := os.Lstat(self.path + ".lock")
-	if lockErr != nil || nameErr != nil || !namedLock.Mode().IsRegular() || namedLock.Mode().Perm()&0077 != 0 || !os.SameFile(ownedLock, namedLock) {
+	namedLock, nameErr := self.directory.stat(filepath.Base(self.path) + ".lock")
+	if err := errors.Join(lockErr, nameErr); err != nil {
+		return monitorNamedObservation(err)
+	}
+	if !namedLock.Mode().IsRegular() || namedLock.Mode().Perm()&0077 != 0 || !os.SameFile(ownedLock, namedLock) {
 		return &monitorOutputOwnershipError{reason: "metrics lock changed"}
 	}
-	info, err = os.Lstat(self.path)
+	info, err = self.directory.stat(filepath.Base(self.path))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -208,5 +219,5 @@ func (self *monitorMetricsStore) saveRaw(raw []byte) error {
 	if err := self.validateDestination(); err != nil {
 		return err
 	}
-	return publishMonitorFile(self.path, raw, 0644, self.syncDirectory)
+	return errors.Join(self.directory.publish(filepath.Base(self.path), raw, 0644, self.syncDirectory), self.validateDestination())
 }

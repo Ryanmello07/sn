@@ -10,12 +10,15 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/urfoundation/sn/internal/durablefixture"
 )
 
 // The service serializes this fixture's calls; tests mutate it only after joining.
@@ -57,6 +60,7 @@ func (self *rootServiceSubmitterFixture) submitRoot(_ context.Context, intent ro
 
 // One fixture's adapters belong only to its independently approved existing seat.
 type rootServiceFixture struct {
+	storage   *durablefixture.Fixture
 	config    rootServiceConfig
 	observer  *rootServiceObserverFixture
 	signer    *rootSignerFixture
@@ -70,9 +74,12 @@ func newRootServiceFixture(t *testing.T) rootServiceFixture {
 	t.Helper()
 	offline := newRootOfflineFixture(t)
 	action := offline.packet.Action
+	name := filepath.Base(action.Scope.StatePath)
+	durablefixture.ProvisionSnapshot(t, filepath.Dir(action.Scope.StatePath), "mainnet-root-service", name, rootServiceStoreLimit, name+".lock", map[string][]byte{name + ".lock": nil})
 	position := rootActionObservation{NativeChain: action.Scope.NativeChain, GenesisHash: action.Scope.GenesisHash, EvmChainId: action.Scope.EvmChainId, FinalizedNumber: action.BirthBlock, FinalizedHash: action.BirthHash, RuntimeVersion: action.Scope.RuntimeVersion, RuntimeCodeHash: action.Scope.RuntimeCodeHash, RuntimeMetadataHash: action.Scope.RuntimeMetadataHash, Hotkey: action.Scope.Hotkey, Coldkey: action.Scope.Coldkey, Seat: action.Scope.Seat, AccountNonce: action.Nonce}
 	view := rootWeightObservation{Schema: rootWeightObservationSchema, Position: position, Enabled: true, ActiveNetworks: []uint16{0, 1, 2, 3, 4, 5, 6, 7}, StoredWeights: []rootStoredWeight{}, RateLimitBlocks: 10, ConcentrationCap: 4096, StorageHash: rootObjectHash("synthetic complete root weight storage")}
 	return rootServiceFixture{
+		storage:  durablefixture.New(t, t.Context(), filepath.Dir(action.Scope.StatePath)),
 		config:   rootServiceConfig{Schema: rootServiceConfigSchema, CustodyTrust: offline.trust, Packet: offline.packet, MaximumObservations: 3},
 		observer: &rootServiceObserverFixture{view: view}, signer: &rootSignerFixture{pair: offline.pair}, authority: &rootAuthorityFixture{}, submitter: &rootServiceSubmitterFixture{},
 		chain: &rootChainFixture{result: rootActionReconciliation{Observation: position, AnchorHash: action.BirthHash, CheckedFrom: action.BirthBlock + 1, CheckedThrough: action.BirthBlock}},
@@ -87,7 +94,7 @@ func (self rootServiceFixture) ports() rootServicePorts {
 // Opening never performs an observation or contacts a signer.
 func (self rootServiceFixture) open(t *testing.T, create bool, ports rootServicePorts) (*rootServiceOwner, *rootServiceStore) {
 	t.Helper()
-	store, err := openRootServiceStore(self.config, create)
+	store, err := openRootServiceStore(self.config, create, self.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -610,7 +617,7 @@ func TestRootServiceBoundedRunPreservesIntentAndJoins(t *testing.T) {
 func TestRootServiceStoreRejectsReinitializationAndForeignState(t *testing.T) {
 	fixture := newRootServiceFixture(t)
 	_, store := fixture.open(t, true, fixture.ports())
-	if _, err := openRootServiceStore(fixture.config, false); err == nil {
+	if _, err := openRootServiceStore(fixture.config, false, fixture.storage.Context); err == nil {
 		t.Fatal("two service owners admitted")
 	}
 	store.close()
@@ -634,27 +641,30 @@ func TestRootServiceStoreRejectsReinitializationAndForeignState(t *testing.T) {
 		if err := os.WriteFile(path, invalid, 0600); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootServiceStore(fixture.config, false); err == nil {
+		if _, err := openRootServiceStore(fixture.config, false, fixture.storage.Context); err == nil {
 			t.Fatalf("case %d reused altered service state", index)
 		}
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openRootServiceStore(fixture.config, true); err == nil {
+	if _, err := openRootServiceStore(fixture.config, true, fixture.storage.Context); err == nil {
 		t.Fatal("lost journal reset its durable marker")
 	}
-	other := newRootServiceFixture(t)
-	action := other.config.Packet.Action
-	actionStore, err := openRootActionStore(action.Scope.StatePath, &action)
+	other := newRootOfflineFixture(t)
+	action := other.packet.Action
+	actionStorage := durablefixture.New(t, t.Context(), filepath.Dir(action.Scope.StatePath))
+	prepareMainnetSnapshotTest(t, action.Scope.StatePath, "mainnet-root-action", rootActionStoreLimit)
+	actionStore, err := openRootActionStore(action.Scope.StatePath, &action, actionStorage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
 	actionStore.close()
-	if _, err := openRootServiceStore(other.config, false); err == nil {
+	foreign := rootServiceConfig{Schema: rootServiceConfigSchema, CustodyTrust: other.trust, Packet: other.packet, MaximumObservations: 3}
+	if _, err := openRootServiceStore(foreign, false, actionStorage.Context); err == nil {
 		t.Fatal("standalone action implicitly migrated to service")
 	}
-	if _, err := openRootServiceStore(other.config, true); err == nil {
+	if _, err := openRootServiceStore(foreign, true, actionStorage.Context); err == nil {
 		t.Fatal("standalone action was overwritten")
 	}
 }
@@ -674,7 +684,7 @@ func TestRootServiceStoreRejectsSpecialAndPublicFiles(t *testing.T) {
 		if err := os.Chmod(path, 0644); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootServiceStore(fixture.config, false); err == nil {
+		if _, err := openRootServiceStore(fixture.config, false, fixture.storage.Context); err == nil {
 			t.Fatal("public service file admitted", suffix)
 		}
 		if err := os.Remove(path); err != nil {
@@ -683,7 +693,7 @@ func TestRootServiceStoreRejectsSpecialAndPublicFiles(t *testing.T) {
 		if err := syscall.Mkfifo(path, 0600); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootServiceStore(fixture.config, false); err == nil {
+		if _, err := openRootServiceStore(fixture.config, false, fixture.storage.Context); err == nil {
 			t.Fatal("FIFO service file admitted", suffix)
 		}
 		if err := os.Remove(path); err != nil {
@@ -692,7 +702,7 @@ func TestRootServiceStoreRejectsSpecialAndPublicFiles(t *testing.T) {
 		if err := os.Symlink("synthetic-missing-target", path); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootServiceStore(fixture.config, false); err == nil {
+		if _, err := openRootServiceStore(fixture.config, false, fixture.storage.Context); err == nil {
 			t.Fatal("symlink service file admitted", suffix)
 		}
 		if err := os.Remove(path); err != nil {

@@ -25,6 +25,7 @@ import (
 func ownerSigningTestDeviceConfig(t *testing.T) ownerSigningDeviceConfig {
 	t.Helper()
 	directory := ownerSigningTestDirectory(t)
+	prepareMainnetSnapshotTest(t, filepath.Join(directory, "owner-signing.json"), "mainnet-owner-signing", ownerSigningReplyLimit)
 	return ownerSigningDeviceConfig{StatePath: filepath.Join(directory, "owner-signing.json"), PythonPath: "/synthetic-tools/python3",
 		HelperPath: "/synthetic-tools/owner_ledger_adapter.py", HelperHash: rootObjectHash("synthetic helper"),
 		BackendPath: "/synthetic-tools/bittensor_core.so", BackendHash: rootObjectHash("synthetic SDK artifact"), AppVersion: [3]uint16{100, 0, 5}}
@@ -98,7 +99,7 @@ func TestOwnerSigningDeviceRecoversDurableResponseWithoutResigning(t *testing.T)
 	_, request, _ := ownerSigningTestRequest(t)
 	config := ownerSigningTestDeviceConfig(t)
 	adapter := &ownerSigningDeviceTestAdapter{request: request, loseReply: true}
-	reply, err := signOwnerRequest(t.Context(), config, request, adapter.invoke)
+	reply, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke)
 	if err != nil || adapter.signs.Load() != 1 || adapter.prepares.Load() != 1 {
 		t.Fatal("lost adapter stdout did not recover durable original bytes", err)
 	}
@@ -107,7 +108,7 @@ func TestOwnerSigningDeviceRecoversDurableResponseWithoutResigning(t *testing.T)
 		t.Fatal(err)
 	}
 	for attempt := 0; attempt < 2; attempt++ {
-		got, err := signOwnerRequest(t.Context(), config, request, nil)
+		got, err := ownerSigningTestSign(t, t.Context(), config, request, nil)
 		if err != nil || got != reply {
 			t.Fatal("completed owner journal needed device/backend or replaced reply", err)
 		}
@@ -118,7 +119,7 @@ func TestOwnerSigningDeviceRecoversDurableResponseWithoutResigning(t *testing.T)
 	}
 	changed := config
 	changed.BackendHash = rootObjectHash("replacement native backend")
-	if _, err := signOwnerRequest(t.Context(), changed, request, adapter.invoke); err == nil || adapter.signs.Load() != 1 {
+	if _, err := ownerSigningTestSign(t, t.Context(), changed, request, adapter.invoke); err == nil || adapter.signs.Load() != 1 {
 		t.Fatal("changed tool provenance adopted original custody")
 	}
 }
@@ -130,7 +131,7 @@ func TestOwnerSigningDeviceUnknownIssuanceRequiresOriginalResponse(t *testing.T)
 	config := ownerSigningTestDeviceConfig(t)
 	adapter := &ownerSigningDeviceTestAdapter{request: request, omitResponse: true}
 	for attempt := 0; attempt < 2; attempt++ {
-		if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err == nil {
+		if _, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke); err == nil {
 			t.Fatal("unknown original device issuance claimed a reply")
 		}
 	}
@@ -142,7 +143,7 @@ func TestOwnerSigningDeviceUnknownIssuanceRequiresOriginalResponse(t *testing.T)
 		PublicKey: request.Config.Action.Coldkey, AppVersion: config.AppVersion,
 		Response: "0x" + hex.EncodeToString(append([]byte{0}, ed25519.Sign(ownerSigningTestKey(), ownerSigningBytes(request.Config.Action))...))}
 	bootstrapRootTestWrite(t, config.StatePath+".ledger-response", response)
-	reply, err := signOwnerRequest(t.Context(), config, request, adapter.invoke)
+	reply, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke)
 	if err != nil || reply.Signature == "" || adapter.signs.Load() != 1 || adapter.prepares.Load() != 1 {
 		t.Fatal("original response recovery did not preserve the one device attempt", err)
 	}
@@ -154,17 +155,17 @@ func TestOwnerSigningDeviceMissingJournalAndForeignReplyCannotReissue(t *testing
 	_, request, _ := ownerSigningTestRequest(t)
 	config := ownerSigningTestDeviceConfig(t)
 	adapter := &ownerSigningDeviceTestAdapter{request: request, omitResponse: true}
-	if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err == nil {
+	if _, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke); err == nil {
 		t.Fatal("fixture did not reach ambiguous issuance")
 	}
 	bootstrapRootTestWrite(t, config.StatePath+".ledger-response", ownerSigningAdapterResult{Schema: ownerSigningAdapterSchema, Mode: "sign", RequestHash: rootObjectHash("foreign request")})
-	if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err == nil || adapter.signs.Load() != 1 {
+	if _, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke); err == nil || adapter.signs.Load() != 1 {
 		t.Fatal("foreign response resolved original issuance or retried device")
 	}
 	if err := os.Remove(config.StatePath); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err == nil || adapter.signs.Load() != 1 {
+	if _, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke); err == nil || adapter.signs.Load() != 1 {
 		t.Fatal("missing established owner journal created a fresh signing allowance")
 	}
 }
@@ -179,7 +180,7 @@ func TestOwnerSigningDeviceExclusiveCustodyAcrossConcurrentCommands(t *testing.T
 	completed := make(chan struct{})
 	var signErr error
 	go func() {
-		_, signErr = signOwnerRequest(ctx, config, request, adapter.invoke)
+		_, signErr = ownerSigningTestSign(t, ctx, config, request, adapter.invoke)
 		close(completed)
 	}()
 	t.Cleanup(func() {
@@ -193,7 +194,7 @@ func TestOwnerSigningDeviceExclusiveCustodyAcrossConcurrentCommands(t *testing.T
 	case <-ctx.Done():
 		t.Fatal("first owner command canceled before the device barrier", ctx.Err())
 	}
-	if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err == nil || !strings.Contains(err.Error(), "owner device request already has a local owner") || adapter.signs.Load() != 1 {
+	if _, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke); err == nil || !strings.Contains(err.Error(), "owner device request already has a local owner") || adapter.signs.Load() != 1 {
 		t.Error("second local command did not observe the active exclusive owner", err)
 	}
 	close(adapter.release)
@@ -216,7 +217,7 @@ func TestOwnerSigningDeviceCancellationPreservesUnknownIssuance(t *testing.T) {
 	completed := make(chan struct{})
 	var signErr error
 	go func() {
-		_, signErr = signOwnerRequest(ctx, config, request, adapter.invoke)
+		_, signErr = ownerSigningTestSign(t, ctx, config, request, adapter.invoke)
 		close(completed)
 	}()
 	t.Cleanup(func() {
@@ -235,7 +236,7 @@ func TestOwnerSigningDeviceCancellationPreservesUnknownIssuance(t *testing.T) {
 	if !errors.Is(signErr, context.Canceled) || adapter.signs.Load() != 1 {
 		t.Fatal("device cancellation did not preserve the original issued attempt", signErr)
 	}
-	if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err == nil || adapter.signs.Load() != 1 || adapter.prepares.Load() != 1 {
+	if _, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke); err == nil || adapter.signs.Load() != 1 || adapter.prepares.Load() != 1 {
 		t.Fatal("canceled device operation was reissued", err)
 	}
 	if _, err := os.Stat(config.StatePath + ".ledger-response"); !errors.Is(err, os.ErrNotExist) {
@@ -261,7 +262,7 @@ func TestOwnerSigningDeviceFixturePermissionsIndependentOfUmask(t *testing.T) {
 			t.Fatal("owner fixture inherited ambient directory permissions", encoded, info, err)
 		}
 		adapter := &ownerSigningDeviceTestAdapter{request: request}
-		reply, err := signOwnerRequest(t.Context(), config, request, adapter.invoke)
+		reply, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke)
 		if err != nil || adapter.signs.Load() != 1 || adapter.prepares.Load() != 1 {
 			t.Fatal("private owner fixture could not sign under ambient umask", encoded, err)
 		}
@@ -295,11 +296,11 @@ func TestOwnerSigningDeviceMetadataFailurePrecedesIssuance(t *testing.T) {
 	_, request, _ := ownerSigningTestRequest(t)
 	config := ownerSigningTestDeviceConfig(t)
 	adapter := &ownerSigningDeviceTestAdapter{request: request, prepareError: true}
-	if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err == nil || adapter.signs.Load() != 0 {
+	if _, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke); err == nil || adapter.signs.Load() != 0 {
 		t.Fatal("bad metadata reached the signing device")
 	}
 	adapter.prepareError = false
-	if _, err := signOwnerRequest(t.Context(), config, request, adapter.invoke); err != nil || adapter.signs.Load() != 1 || adapter.prepares.Load() != 2 {
+	if _, err := ownerSigningTestSign(t, t.Context(), config, request, adapter.invoke); err != nil || adapter.signs.Load() != 1 || adapter.prepares.Load() != 2 {
 		t.Fatal("offline preparation failure consumed or renewed device issuance", err)
 	}
 }
@@ -320,7 +321,8 @@ func TestOwnerSigningDevicePublicCommandUsesPortableRequest(t *testing.T) {
 		"--ledger-backend", config.BackendPath, "--ledger-backend-sha256", config.BackendHash, "--ledger-app-version", "100.0.5"}
 	adapter := &ownerSigningDeviceTestAdapter{request: request}
 	var stdout, stderr bytes.Buffer
-	code := runOwnerSigningCommandWithAdapter(t.Context(), args, &stdout, &stderr, adapter.invoke)
+	ctx := ownerLocalDurableTestContext(t, filepath.Dir(config.StatePath))
+	code := runOwnerSigningCommandWithAdapter(ctx, args, &stdout, &stderr, adapter.invoke)
 	var reply ownerSigningReply
 	if code != 0 || decodePlanJson(stdout.Bytes(), &reply) != nil {
 		t.Fatalf("owner sign command: %d %s", code, stderr.String())
@@ -400,7 +402,7 @@ load_backend = lambda path, digest: FixtureBackend
 		}
 		digest := sha256.Sum256([]byte(instrumented))
 		config.HelperHash = "sha256:" + hex.EncodeToString(digest[:])
-		reply, err := signOwnerRequest(t.Context(), config, request, nil)
+		reply, err := ownerSigningTestSign(t, t.Context(), config, request, nil)
 		log, logErr := os.ReadFile(logPath)
 		if logErr != nil {
 			t.Fatal(scenario, "adapter did not run", logErr, err)
@@ -426,7 +428,7 @@ load_backend = lambda path, digest: FixtureBackend
 			}
 		}
 		if scenario != "wrong-digest" {
-			_, _ = signOwnerRequest(t.Context(), config, request, nil)
+			_, _ = ownerSigningTestSign(t, t.Context(), config, request, nil)
 			after, _ := os.ReadFile(logPath)
 			if !bytes.Equal(log, after) {
 				t.Fatal(scenario, "restart invoked the device or adapter again")

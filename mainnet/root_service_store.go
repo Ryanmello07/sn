@@ -4,9 +4,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,13 +20,15 @@ const rootServiceStoreLimit = 1024 * 1024
 // Load/save are serialized by the service. Close follows joined operations and
 // releases only the process lock, retaining all intent and allowance evidence.
 type rootServiceStore struct {
-	config rootServiceConfig
-	lock   *os.File
+	storage              *mainnetDurableDirectory
+	config               rootServiceConfig
+	lock                 *os.File
+	syncDirectoryForTest func(*os.File) error
 }
 
 // Explicit creation is allowed once at the approved action state path. Reopen
 // requires the original marker and complete state; missing files never mean new.
-func openRootServiceStore(config rootServiceConfig, create bool) (*rootServiceStore, error) {
+func openRootServiceStore(config rootServiceConfig, create bool, storageContexts ...context.Context) (*rootServiceStore, error) {
 	if err := config.validate(); err != nil {
 		return nil, err
 	}
@@ -38,35 +42,50 @@ func openRootServiceStore(config rootServiceConfig, create bool) (*rootServiceSt
 	if err != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.Join(errors.New("root service requires a precreated private directory"), err)
 	}
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
+	storage, err := openMainnetDurableDirectory(mainnetStorageContext(storageContexts), filepath.Dir(path), durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = storage.close()
+		}
+	}()
 	if create {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return nil, errors.Join(errors.New("root service state already exists or cannot be inspected"), err)
 		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := syscall.Open(path+".lock", flags, 0600)
+	lock, err := storage.openSnapshotMarker(path)
 	if err != nil {
 		return nil, fmt.Errorf("open root service ownership marker: %w", err)
 	}
-	lock := os.NewFile(uintptr(fd), path+".lock")
-	store := &rootServiceStore{config: copyRootServiceConfig(config), lock: lock}
+	fd := int(lock.Fd())
+	store := &rootServiceStore{storage: storage, config: copyRootServiceConfig(config), lock: lock}
+	transferred = true
 	success := false
 	defer func() {
 		if !success {
-			lock.Close()
+			store.close()
 		}
 	}()
+	if err := storage.bindMarker(lock, false); err != nil {
+		return nil, err
+	}
 	info, err = lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.Join(errors.New("root service marker is not a private regular file"), err)
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, fmt.Errorf("root service already has an owner: %w", err)
 	}
 	configHash := rootObjectHash(config)
+	if err := storage.bindSnapshot(path, "mainnet-root-service", rootServiceStoreLimit, create); err != nil {
+		return nil, err
+	}
 	if create {
-		_, writeErr := lock.WriteString(configHash + "\n")
+		_, writeErr := storage.writeMarkerAt([]byte(configHash+"\n"), 0)
 		if err := errors.Join(writeErr, lock.Sync()); err != nil {
 			return nil, err
 		}
@@ -86,6 +105,9 @@ func openRootServiceStore(config rootServiceConfig, create bool) (*rootServiceSt
 			return nil, err
 		}
 	}
+	if err := storage.bindMarker(store.lock, true); err != nil {
+		return nil, err
+	}
 	success = true
 	return store, nil
 }
@@ -95,7 +117,7 @@ func (self *rootServiceStore) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	err := self.lock.Close()
+	err := errors.Join(self.storage.close(), self.lock.Close())
 	self.lock = nil
 	return err
 }
@@ -107,23 +129,9 @@ func (self *rootServiceStore) load() (rootServiceRecord, error) {
 	if self.lock == nil {
 		return record, errors.New("root service store is closed")
 	}
-	path := self.config.Packet.Action.Scope.StatePath
-	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	raw, _, err := self.storage.readFile(context.Background(), self.config.Packet.Action.Scope.StatePath, rootServiceStoreLimit)
 	if err != nil {
-		return record, fmt.Errorf("retained root service state is unavailable: %w", err)
-	}
-	file := os.NewFile(uintptr(fd), path)
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		file.Close()
-		return record, errors.Join(errors.New("root service state is not a private regular file"), err)
-	}
-	raw, readErr := io.ReadAll(io.LimitReader(file, rootServiceStoreLimit+1))
-	if err := errors.Join(readErr, file.Close()); err != nil {
 		return record, err
-	}
-	if len(raw) == 0 || len(raw) > rootServiceStoreLimit {
-		return record, errors.New("root service state is empty or exceeds its resource bound")
 	}
 	if err := decodePlanJson(raw, &record); err != nil {
 		return record, err
@@ -134,6 +142,9 @@ func (self *rootServiceStore) load() (rootServiceRecord, error) {
 // Atomic replacement syncs the complete composite intent before publication.
 // A post-rename error is ambiguous and poisons the owner until a fresh reopen.
 func (self *rootServiceStore) save(record rootServiceRecord) error {
+	if err := self.storage.checkWrite(nil); err != nil {
+		return err
+	}
 	if self.lock == nil {
 		return errors.New("root service store is closed")
 	}
@@ -152,22 +163,5 @@ func (self *rootServiceStore) save(record rootServiceRecord) error {
 	if err != nil || len(raw)+1 > rootServiceStoreLimit {
 		return errors.Join(errors.New("root service state cannot be encoded within its resource bound"), err)
 	}
-	directory := filepath.Dir(path)
-	file, err := os.CreateTemp(directory, ".root-service-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	_, writeErr := file.Write(append(raw, '\n'))
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(file.Name(), path); err != nil {
-		return err
-	}
-	dir, err := os.Open(directory)
-	if err != nil {
-		return err
-	}
-	return errors.Join(dir.Sync(), dir.Close())
+	return self.storage.publish(self.config.Packet.Action.Scope.StatePath, append(raw, '\n'), self.syncDirectoryForTest)
 }

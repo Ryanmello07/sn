@@ -76,7 +76,7 @@ func (self *evmCreateFixture) prepareEvidenceSigned() {
 func (self *evmCreateFixture) openEvidenceAncestors() ([]*evmActionStore, []evmActionRecord) {
 	self.t.Helper()
 	stores, records := self.openVaultLinkAncestors()
-	store, err := openEvmVaultLinkActionStore(*self.plan.VaultLink, records[0], records[1], records[2], records[3], records[4], records[5], false, nil)
+	store, err := openEvmVaultLinkActionStore(*self.plan.VaultLink, records[0], records[1], records[2], records[3], records[4], records[5], false, nil, self.storage.Context)
 	if err != nil {
 		self.t.Fatal(err)
 	}

@@ -15,6 +15,8 @@ import (
 	"testing"
 
 	native "github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/urfoundation/sn/internal/durablepath"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // Mutable fixture inputs are changed only between complete command invocations.
@@ -95,6 +97,11 @@ func newBootstrapChainFixtureWithCensus(t *testing.T, configure func(*rootRpcFix
 	contracts.config.Plan.Network = network
 	contracts.config.Plan.DeploymentId = root.config.DeploymentId
 	contracts.config.Plan.RunDirectory = root.config.RunDirectory
+	contracts.storage = root.storage
+	for _, name := range []string{evmCreateStateFile, evmVaultCreateStateFile, evmCoordinatorCreateStateFile, evmEscrowRegisterStateFile, evmProxyCreateStateFile, evmReserveLinkStateFile, evmVaultLinkStateFile, evmEvidenceCreateStateFile} {
+		prepareMainnetSnapshotTest(t, filepath.Join(root.config.RunDirectory, name), "mainnet-evm-action", 512*1024)
+	}
+	prepareMainnetSnapshotTest(t, filepath.Join(root.config.RunDirectory, bootstrapChainStateFile), "mainnet-bootstrap-chain", 1024*1024)
 	contracts.config.Plan.Runtime = rootReceiptProfile{RuntimeSourceCommit: policy.RuntimeSourceCommit, RuntimeVersion: policy.RuntimeVersion, RuntimeCodeHash: policy.RuntimeCodeHash, RuntimeMetadataHash: policy.RuntimeMetadataHash}
 	contracts.publishConfig()
 	f := &bootstrapChainFixture{path: filepath.Join(configDirectory, "chain.json"), root: root, contracts: contracts, client: client, census: census,
@@ -117,7 +124,14 @@ func newBootstrapChainFixtureWithCensus(t *testing.T, configure func(*rootRpcFix
 }
 
 // The public dispatcher receives only the exact local preparation acceptance.
+// Each direct public reader receives the same explicit physical declaration;
+// caller cancellation remains owned by the individual observation.
+func (self *bootstrapChainFixture) storageContext(ctx context.Context) context.Context {
+	return durablepath.WithHost(durablevolume.WithReference(ctx, self.root.storage.Reference), self.root.storage.Host)
+}
+
 func (self *bootstrapChainFixture) command(ctx context.Context, command string, stdout, stderr io.Writer, extra ...string) int {
+	ctx = self.storageContext(ctx)
 	args := []string{"bootstrap-chain", command, "--config", self.path}
 	if command != "plan" {
 		args = append(args, "--run-dir", self.config.RunDirectory, "--accept-plan-hash", self.preparation.Plan.ContentHash)
@@ -158,9 +172,24 @@ func (self *bootstrapChainFixture) journals(t *testing.T) map[string]string {
 	return result
 }
 
+// Fresh custody has explicitly prepared empty markers and absent payloads.
+// Inspection must never infer fresh authority by deleting those markers.
+func (self *bootstrapChainFixture) requireFreshJournals(t *testing.T) {
+	t.Helper()
+	for _, path := range self.preparation.childPaths() {
+		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("fresh preparation unexpectedly retained a child record", path, err)
+		}
+		if raw, err := os.ReadFile(path + ".lock"); err != nil || len(raw) != 0 {
+			t.Fatal("fresh preparation changed its precreated empty marker", path, err)
+		}
+	}
+}
+
 // Real custody owners are prepared once while every chain phase stays pending.
 func TestBootstrapChainCommandPreparesExistingCustodyOffline(t *testing.T) {
 	f := newBootstrapChainFixture(t)
+	prepared := f.journals(t)
 	var stdout, stderr bytes.Buffer
 	if code := f.command(t.Context(), "plan", &stdout, &stderr); code != 0 {
 		t.Fatalf("plan exit %d: %s", code, stderr.String())
@@ -169,7 +198,7 @@ func TestBootstrapChainCommandPreparesExistingCustodyOffline(t *testing.T) {
 	if err := decodePlanJson(stdout.Bytes(), &plan); err != nil || !reflect.DeepEqual(plan, f.preparation.Plan) {
 		t.Fatal("plan changed its exact prepared inputs", err)
 	}
-	if len(f.journals(t)) != 0 {
+	if !reflect.DeepEqual(prepared, f.journals(t)) {
 		t.Fatal("read-only planning opened custody")
 	}
 	result := f.result(t, "apply")
@@ -225,19 +254,25 @@ func TestBootstrapChainInterruptedInitialClaim(t *testing.T) {
 	for _, boundary := range []string{"marker-synced", "progress-synced"} {
 		t.Run(boundary, func(t *testing.T) {
 			f := newBootstrapChainFixture(t)
+			prepared := mainnetNamespaceTest(t, f.config.RunDirectory)
 			injected := errors.New("synthetic initial claim interruption")
 			store, err := openBootstrapChainStore(f.preparation, true, func(observed string) error {
 				if observed == boundary {
 					return injected
 				}
 				return nil
-			})
+			}, f.storageContext(t.Context()))
 			if store != nil || !errors.Is(err, injected) {
 				t.Fatal("claim did not stop at the durable boundary", err)
 			}
+			after := mainnetNamespaceTest(t, f.config.RunDirectory)
 			for _, path := range f.preparation.childPaths()[1:] {
-				if _, err := os.Lstat(path + ".lock"); !errors.Is(err, os.ErrNotExist) {
-					t.Fatal("interrupted initial claim opened a child", err)
+				if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+					t.Fatal("interrupted initial claim created a child record", err)
+				}
+				name, err := filepath.Rel(f.config.RunDirectory, path+".lock")
+				if err != nil || !reflect.DeepEqual(prepared[name], after[name]) {
+					t.Fatal("interrupted initial claim changed prepared child custody", path, err)
 				}
 			}
 			f.result(t, "resume")
@@ -251,12 +286,12 @@ func TestBootstrapChainInterruptedChildProgress(t *testing.T) {
 	for _, boundary := range []string{"contracts-retained", "root-retained"} {
 		t.Run(boundary, func(t *testing.T) {
 			f := newBootstrapChainFixture(t)
-			store, err := openBootstrapChainStore(f.preparation, true, nil)
+			store, err := openBootstrapChainStore(f.preparation, true, nil, f.storageContext(t.Context()))
 			if err != nil {
 				t.Fatal(err)
 			}
 			injected := errors.New("synthetic child acknowledgement interruption")
-			_, err = advanceBootstrapChain(t.Context(), store, func(observed string) error {
+			_, err = advanceBootstrapChain(f.storageContext(t.Context()), store, func(observed string) error {
 				if observed == boundary {
 					return injected
 				}
@@ -269,8 +304,22 @@ func TestBootstrapChainInterruptedChildProgress(t *testing.T) {
 				t.Fatal(err)
 			}
 			original := f.journals(t)
+			beforeFiles := mainnetNamespaceTest(t, f.config.RunDirectory)
 			f.result(t, "resume")
+			afterFiles := mainnetNamespaceTest(t, f.config.RunDirectory)
 			for path, raw := range original {
+				if strings.HasSuffix(path, ".lock") {
+					name, err := filepath.Rel(f.config.RunDirectory, path)
+					before, after := beforeFiles[name], afterFiles[name]
+					if err != nil || before.Device != after.Device || before.Inode != after.Inode || before.Mode != after.Mode {
+						t.Fatal("recovery replaced a prepared child marker", path, err)
+					}
+					if _, retained := original[strings.TrimSuffix(path, ".lock")]; !retained && raw == "" {
+						// The exact precreated empty marker may acquire its first
+						// claim after its earlier child completes. Its inode stays.
+						continue
+					}
+				}
 				if path != filepath.Join(f.config.RunDirectory, bootstrapChainStateFile) && f.journals(t)[path] != raw {
 					t.Fatalf("recovery replaced a retained child: %s", path)
 				}
@@ -283,17 +332,17 @@ func TestBootstrapChainInterruptedChildProgress(t *testing.T) {
 // and only a new exclusive owner may inspect the durable record and continue.
 func TestBootstrapChainAmbiguousProgressRequiresReopen(t *testing.T) {
 	f := newBootstrapChainFixture(t)
-	store, err := openBootstrapChainStore(f.preparation, true, nil)
+	store, err := openBootstrapChainStore(f.preparation, true, nil, f.storageContext(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.close()
 	injected := errors.New("synthetic directory sync failure after rename")
 	store.syncDirectory = func(*os.File) error { return injected }
-	if _, err := advanceBootstrapChain(t.Context(), store, nil); !errors.Is(err, injected) {
+	if _, err := advanceBootstrapChain(f.storageContext(t.Context()), store, nil); !errors.Is(err, injected) {
 		t.Fatal("did not stop at actual post-rename sync", err)
 	}
-	if _, err := advanceBootstrapChain(t.Context(), store, nil); !errors.Is(err, injected) {
+	if _, err := advanceBootstrapChain(f.storageContext(t.Context()), store, nil); !errors.Is(err, injected) {
 		t.Fatal("ambiguous owner reused its allowance", err)
 	}
 	if _, err := os.Lstat(filepath.Join(f.config.RunDirectory, bootstrapRootProgressFile)); !errors.Is(err, os.ErrNotExist) {
@@ -313,7 +362,7 @@ func TestBootstrapChainOutputFailureAndExclusiveOwnership(t *testing.T) {
 		t.Fatal("stdout failure did not follow real preparation", code, stderr.String())
 	}
 	original := f.journals(t)
-	store, err := openBootstrapChainStore(f.preparation, false, nil)
+	store, err := openBootstrapChainStore(f.preparation, false, nil, f.storageContext(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -428,8 +477,9 @@ func TestBootstrapChainRejectsConflictingRolesAndChildApprovals(t *testing.T) {
 			f := newBootstrapChainFixture(t)
 			candidate.change(t, f)
 			bootstrapRootTestWrite(t, f.path, f.config)
+			prepared := mainnetNamespaceTest(t, f.config.RunDirectory)
 			var stdout, stderr bytes.Buffer
-			if code := f.command(t.Context(), "plan", &stdout, &stderr); code != 2 || stdout.Len() != 0 || len(f.journals(t)) != 0 {
+			if code := f.command(t.Context(), "plan", &stdout, &stderr); code != 2 || stdout.Len() != 0 || !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, f.config.RunDirectory)) {
 				t.Fatal("conflicting identity or unsigned authority was admitted", code, stderr.String())
 			}
 		})
@@ -440,9 +490,10 @@ func TestBootstrapChainRejectsConflictingRolesAndChildApprovals(t *testing.T) {
 // exist on this dispatcher even when the supplied child plan is approved.
 func TestBootstrapChainRejectsAlternateAuthorityAndOnlineFlags(t *testing.T) {
 	f := newBootstrapChainFixture(t)
+	prepared := mainnetNamespaceTest(t, f.config.RunDirectory)
 	for _, extra := range [][]string{{"--accept-plan-hash", f.preparation.Root.ContentHash}, {"--accept-plan-hash", f.contracts.config.Plan.hash()}, {"--online"}, {"--submit"}, {"--signature-file", f.contracts.signedPath}} {
 		var stdout, stderr bytes.Buffer
-		if code := f.command(t.Context(), "apply", &stdout, &stderr, extra...); code == 0 || stdout.Len() != 0 || len(f.journals(t)) != 0 {
+		if code := f.command(t.Context(), "apply", &stdout, &stderr, extra...); code == 0 || stdout.Len() != 0 || !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, f.config.RunDirectory)) {
 			t.Fatal("alternate authority or network surface acquired custody", code, stderr.String())
 		}
 	}
@@ -498,8 +549,9 @@ func TestBootstrapChainRejectsResealedTrimSelection(t *testing.T) {
 	}
 	f.config.OwnerTrimPlan = bootstrapRootTestWrite(t, f.config.OwnerTrimPlan.Path, trim)
 	bootstrapRootTestWrite(t, f.path, f.config)
+	prepared := mainnetNamespaceTest(t, f.config.RunDirectory)
 	var stdout, stderr bytes.Buffer
-	if code := f.command(t.Context(), "plan", &stdout, &stderr); code != 2 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "trim selection differs") || len(f.journals(t)) != 0 {
+	if code := f.command(t.Context(), "plan", &stdout, &stderr); code != 2 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "trim selection differs") || !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, f.config.RunDirectory)) {
 		t.Fatal("resealed removal selection bypassed reconstruction", code, stderr.String())
 	}
 }
@@ -511,7 +563,7 @@ func TestBootstrapChainInitialRecoveryRefusesAmbiguousState(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			f := newBootstrapChainFixture(t)
 			injected := errors.New("synthetic interrupted preparation claim")
-			store, err := openBootstrapChainStore(f.preparation, true, func(string) error { return injected })
+			store, err := openBootstrapChainStore(f.preparation, true, func(string) error { return injected }, f.storageContext(t.Context()))
 			if store != nil || !errors.Is(err, injected) {
 				t.Fatal("initial boundary was not reached", err)
 			}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/urfoundation/sn/internal/durablepath"
 	"io"
 	"net/http"
 	"net/netip"
@@ -168,8 +169,17 @@ func loadClaimSwarmMembers(config *ClaimSwarmConfig) (map[string]*ClaimDaemonCon
 }
 
 func (self *ClaimSwarm) Run(ctx context.Context) (runErr error) {
+	return self.run(ctx, nil)
+}
+
+// The optional observer runs after a joined member result. It cannot replace
+// admission, worker execution, publication or any stored evidence.
+func (self *ClaimSwarm) run(ctx context.Context, afterMember func(string, error, context.Context)) (runErr error) {
 	if ctx == nil {
 		return errors.New("claim swarm context is nil")
+	}
+	if err := durablepath.Require(ctx); err != nil {
+		return err
 	}
 	loaded, pollPeriod, err := loadClaimSwarmMembers(self.config)
 	if err != nil {
@@ -186,7 +196,7 @@ func (self *ClaimSwarm) Run(ctx context.Context) (runErr error) {
 	// Acquire every queue before reading custody or starting any sibling.
 	// Partial admission releases only our descriptors and leaves bytes untouched.
 	for _, member := range members {
-		store, err := newClaimQueueStore(loaded[member.ID].StateDir)
+		store, err := newClaimQueueStore(loaded[member.ID].StateDir, ctx)
 		if err != nil {
 			return fmt.Errorf("claim member %s queue ownership: %w", member.ID, err)
 		}
@@ -216,7 +226,11 @@ func (self *ClaimSwarm) Run(ctx context.Context) (runErr error) {
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	terminalErrors := make(chan error, 1)
+	type memberResult struct {
+		id  string
+		err error
+	}
+	terminalErrors := make(chan memberResult, len(members))
 	var membersDone sync.WaitGroup
 	defer func() { cancel(); membersDone.Wait() }()
 	for index, member := range members {
@@ -227,32 +241,51 @@ func (self *ClaimSwarm) Run(ctx context.Context) (runErr error) {
 			onReady := func() {
 				self.stateLock.Lock()
 				self.running[member.ID] = true
+				delete(self.failures, member.ID)
 				self.stateLock.Unlock()
 			}
-			if runErr := runClaimDaemonWithStore(runCtx, loaded[member.ID], stores[member.ID], admission, initialDelay, onReady); runErr != nil {
+			onFailure := func(err error) {
 				self.stateLock.Lock()
 				delete(self.running, member.ID)
-				self.failures[member.ID] = runErr.Error()
+				self.failures[member.ID] = err.Error()
 				self.stateLock.Unlock()
-				select {
-				case terminalErrors <- fmt.Errorf("claim member %s: %w", member.ID, runErr):
-				default:
-				}
-				cancel()
 			}
+			runErr := runClaimOwner(runCtx, loaded[member.ID], stores[member.ID], claimOwnerHooks{
+				run: func(owner *claimQueueStore) error {
+					return runClaimDaemonWithStore(runCtx, loaded[member.ID], owner, admission, initialDelay, onReady)
+				}, state: onFailure,
+			})
+			if runErr != nil {
+				onFailure(runErr)
+				runErr = fmt.Errorf("claim member %s: %w", member.ID, runErr)
+			}
+			terminalErrors <- memberResult{id: member.ID, err: runErr}
 		}(member, delay)
 	}
-	select {
-	case <-ctx.Done():
-		return nil
-	case err := <-serverErrors:
-		return err
-	case err := <-terminalErrors:
-		return err
+	// A stopped member remains visible as unhealthy while its independent
+	// siblings retain their owners. Shared nonce custody still gates every
+	// signature through admission; a member error never resets that domain.
+	var failures []error
+	for remaining := len(members); remaining > 0; remaining-- {
+		select {
+		case <-ctx.Done():
+			return nil
+		case err := <-serverErrors:
+			return err
+		case terminal := <-terminalErrors:
+			failures = append(failures, terminal.err)
+			if afterMember != nil {
+				afterMember(terminal.id, terminal.err, runCtx)
+			}
+		}
 	}
+	return errors.Join(failures...)
 }
 
 func RunClaimSwarm(ctx context.Context, configPath string) error {
+	if err := durablepath.Require(ctx); err != nil {
+		return err
+	}
 	config, err := LoadClaimSwarmConfig(configPath)
 	if err != nil {
 		return err

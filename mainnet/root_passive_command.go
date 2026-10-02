@@ -9,11 +9,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strconv"
-	"syscall"
 	"time"
+
+	"github.com/urfoundation/sn/internal/durablepath"
 )
 
 const rootPassiveRuntimeSchema = "urnetwork-mainnet-root-passive-runtime-v1"
@@ -61,36 +61,47 @@ func loadRootPassiveRuntime(ctx context.Context, path string) (plan bootstrapRoo
 	return plan, digest, ctx.Err()
 }
 
-// Shared preparation ownership validates a complete marker without completing
-// interrupted claims. The monitor separately owns its finalized checkpoint.
-func openRootPassivePreparation(ctx context.Context, plan bootstrapRootPlan) (_ *os.File, resultErr error) {
+// The observer borrows a committed physical head for its entire run. Shared
+// admission never repairs a pending writer or consumes write reserve.
+type rootPassivePreparation struct {
+	reader *bootstrapContractReadinessMarker
+}
+
+// The sole synchronous command owner closes after its observation loop joins.
+func (self *rootPassivePreparation) Close() error {
+	if self == nil {
+		return nil
+	}
+	return self.reader.close()
+}
+
+// Both the original marker and complete journal remain authenticated on each
+// sample boundary, including after a delayed RPC read or output operation.
+func (self *rootPassivePreparation) check() error {
+	if self == nil || self.reader == nil {
+		return errors.New("passive preparation owner is absent")
+	}
+	return self.reader.checkpoint()
+}
+
+// Shared preparation ownership validates the complete snapshot without
+// completing interrupted claims. The monitor separately owns its checkpoint.
+func openRootPassivePreparation(ctx context.Context, plan bootstrapRootPlan) (_ *rootPassivePreparation, resultErr error) {
 	if err := plan.validate(); err != nil || plan.PassiveService == nil {
 		return nil, errors.Join(errors.New("passive service preparation is invalid"), err)
 	}
 	path := filepath.Join(plan.RunDirectory, bootstrapRootProgressFile)
-	fd, err := syscall.Open(path+".lock", syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	marker := plan.ContentHash + "\n" + bootstrapRootClaimComplete
+	reader, err := openBootstrapReadinessSnapshot(path, marker, "mainnet-bootstrap-root", 16*1024, ctx)
 	if err != nil {
 		return nil, err
 	}
-	file := os.NewFile(uintptr(fd), path+".lock")
 	defer func() {
 		if resultErr != nil {
-			resultErr = errors.Join(resultErr, file.Close())
+			resultErr = errors.Join(resultErr, reader.close())
 		}
 	}()
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return nil, errors.Join(errors.New("passive preparation marker is not private regular state"), err)
-	}
-	if err := syscall.Flock(fd, syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
-		return nil, err
-	}
-	marker := plan.ContentHash + "\n" + bootstrapRootClaimComplete
-	raw, err := io.ReadAll(io.LimitReader(file, int64(len(marker)+1)))
-	if err != nil || string(raw) != marker {
-		return nil, errors.Join(errors.New("passive preparation marker differs or is incomplete"), err)
-	}
-	raw, _, err = readBootstrapRootFile(ctx, path, 16*1024)
+	raw, _, err := reader.storage.readFile(ctx, path, 16*1024)
 	if err != nil {
 		return nil, err
 	}
@@ -101,15 +112,27 @@ func openRootPassivePreparation(ctx context.Context, plan bootstrapRootPlan) (_ 
 	if err := record.validate(plan); err != nil || record.Phase != "passive-service-retained" {
 		return nil, errors.Join(errors.New("passive service has no completed local preparation"), err)
 	}
-	return file, ctx.Err()
+	return &rootPassivePreparation{reader: reader}, errors.Join(ctx.Err(), reader.checkpoint())
 }
 
 // Running requires exact accepted runtime bytes and prior local preparation.
 // Finite samples/cadence come from the signed service, not command overrides.
-func runRootPassiveServiceCommand(ctx context.Context, args []string, stdout, stderr io.Writer) (code int) {
+func runRootPassiveServiceCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return runRootPassiveServiceCommandWithMonitorHooks(ctx, args, stdout, stderr, time.Now, monitorServiceHooks{})
+}
+
+// Hooks observe the same joined sampling/wait boundaries as the direct root
+// command; they do not supply preparation bytes or a custody decision.
+func runRootPassiveServiceCommandWithMonitorHooks(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (code int) {
 	if ctx == nil || len(args) == 0 || args[0] != "plan" && args[0] != "run" {
 		fmt.Fprintln(stderr, "root-passive-service requires plan|run")
 		return 2
+	}
+	if args[0] == "run" {
+		if err := durablepath.Require(ctx); err != nil {
+			fmt.Fprintln(stderr, "passive root durable custody:", err)
+			return 2
+		}
 	}
 	flags := flag.NewFlagSet("root-passive-service "+args[0], flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -155,5 +178,5 @@ func runRootPassiveServiceCommand(ctx context.Context, args []string, stdout, st
 		"--retry-window", strconv.FormatUint(uint64(service.ReadRetrySeconds), 10) + "s", "--checkpoint", service.CheckpointPath,
 		"--samples", strconv.FormatUint(uint64(service.MaximumSamples), 10), "--interval", strconv.FormatUint(uint64(service.IntervalSeconds), 10) + "s",
 		"--stall-after", strconv.FormatUint(uint64(service.StallAfterSeconds), 10) + "s"}
-	return runRootCommandWithPolicy(ctx, monitorArgs, stdout, stderr, time.Now, monitorServiceHooks{}, &service.Policy, rootObjectHash(service.Policy))
+	return runRootCommandWithPolicy(ctx, monitorArgs, stdout, stderr, now, hooks, &service.Policy, rootObjectHash(service.Policy), lock)
 }

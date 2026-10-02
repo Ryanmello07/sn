@@ -226,13 +226,13 @@ func TestClaimQueueRestartPreservesPartialSignedIdentity(t *testing.T) {
 	}
 }
 
-func TestClaimNonceFloorAdvancesOnlyAfterPreparedCheckpoint(t *testing.T) {
+func TestClaimNonceFloorDoesNotAdvanceWithoutOwner(t *testing.T) {
 	cfg, claim, _, _, _ := signedClaimFixture(t, 70, 23)
 	endpoint, _, _ := claimNonceRpcFixture(t, false)
 	cfg.RPC = []string{endpoint}
 	admission := &claimAdmission{}
 	queue := &ClaimQueue{LastDiscovered: 70, Entries: map[string]*ClaimQueueEntry{"70": {Epoch: 70, Status: "submitting"}}}
-	// A missing directory forces the actual prepared fsync to fail before send.
+	// An absent admitted owner refuses before signing or prepared publication.
 	store := &claimQueueStore{path: filepath.Join(t.TempDir(), "missing", "queue.json")}
 	err := submitClaimDirect(context.Background(), cfg, fakeClaimAPI{result: claim}, queue.Entries["70"], store, queue, admission)
 	if err == nil || admission.nonceMinimum() != 0 || queue.Entries["70"].TxHash != "" || queue.Entries["70"].RawTxHex != "" {

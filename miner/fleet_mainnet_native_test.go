@@ -214,7 +214,7 @@ func (self *fleetMainnetTestFixture) nativeWebsocket(t *testing.T, register bool
 func TestFleetMainnetPublishCommandSignsAndVerifiesApprovedReceipt(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, false)}
-	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
 	if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("chain_getBlock") < 2 || fixture.count("state_getStorageHash") < 5 {
@@ -233,7 +233,7 @@ func TestFleetMainnetPublishCommandRejectsIncludedUpgradeWithoutResend(t *testin
 		}
 	}
 	fixture.stateLock.Unlock()
-	if err := fleetPublish(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "unreviewed identity") {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "unreviewed identity") {
 		t.Fatalf("receipt upgrade: %v", err)
 	}
 	if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("state_getStorage") != 1 {
@@ -247,7 +247,7 @@ func TestFleetMainnetRegisterCommandAppliesAndChecksReceiptAuthority(t *testing.
 	fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, true)}
 	fixture.opts["--apply"] = true
 	fixture.opts["--dry-run"] = false
-	if err := fleetRegister(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetRegister(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
 	if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("chain_getBlock") < 2 || fixture.count("state_getStorageHash") < 5 {
@@ -267,7 +267,7 @@ func TestFleetMainnetRegisterCommandRejectsUpgradeBeforeBroadcast(t *testing.T) 
 		}
 	}
 	fixture.stateLock.Unlock()
-	if err := fleetRegister(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "unreviewed identity") {
+	if err := fleetRegister(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "unreviewed identity") {
 		t.Fatalf("upgrade after fee quotation: %v", err)
 	}
 	if fixture.count("author_submitAndWatchExtrinsic") != 0 {
@@ -287,7 +287,7 @@ func TestFleetMainnetRegisterCommandRejectsIncludedUpgradeWithoutResend(t *testi
 		}
 	}
 	fixture.stateLock.Unlock()
-	if err := fleetRegister(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "unreviewed identity") {
+	if err := fleetRegister(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "unreviewed identity") {
 		t.Fatalf("included registration upgrade: %v", err)
 	}
 	if fixture.count("author_submitAndWatchExtrinsic") != 1 {
@@ -305,7 +305,7 @@ func TestFleetMainnetRegisterRejectsUpgradeDuringNonceReadBeforeSigning(t *testi
 		}
 	}
 	fixture.stateLock.Unlock()
-	if err := fleetRegister(fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "unreviewed identity") {
+	if err := fleetRegister(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "unreviewed identity") {
 		t.Fatalf("upgrade before signing was not refused: %v", err)
 	}
 	if fixture.count("payment_queryInfo") != 0 {

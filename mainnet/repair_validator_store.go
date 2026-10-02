@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"path/filepath"
@@ -46,6 +47,7 @@ type repairValidatorStore struct {
 // Both independently scoped repair journals share physical custody only.
 // The marker and last read bytes are rechecked before each authoritative access.
 type repairValidatorFileOwner struct {
+	storage       *mainnetDurableDirectory
 	path          string
 	lock          *os.File
 	directoryInfo os.FileInfo
@@ -119,32 +121,48 @@ func openRepairValidatorFileOwner(ctx context.Context, path, marker string, crea
 	if err != nil || statErr != nil || resolved != directory || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.New("validator repair needs an existing private physical directory")
 	}
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
+	storage, err := openMainnetDurableDirectory(ctx, directory, durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = storage.close()
+		}
+	}()
 	if create {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return nil, errors.New("validator repair state already exists or is unavailable")
 		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := syscall.Open(path+".lock", flags, 0600)
+	lock, err := storage.openSnapshotMarker(path)
 	if err != nil {
 		return nil, err
 	}
-	self := &repairValidatorFileOwner{path: path, lock: os.NewFile(uintptr(fd), path+".lock"), directoryInfo: info}
+	fd := int(lock.Fd())
+	self := &repairValidatorFileOwner{storage: storage, path: path, lock: lock, directoryInfo: info}
+	transferred = true
 	success := false
 	defer func() {
 		if !success {
 			self.close()
 		}
 	}()
+	if err := self.storage.bindMarker(self.lock, false); err != nil {
+		return nil, err
+	}
 	if err := self.validateOwner(); err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		return nil, errors.New("validator repair already has a process owner")
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return nil, errors.Join(errors.New("validator repair already has a process owner"), err)
+	}
+	if err := storage.bindSnapshot(path, "mainnet-host-action", 64*1024, create); err != nil {
+		return nil, err
 	}
 	if create {
-		_, writeErr := self.lock.WriteString(marker)
+		_, writeErr := storage.writeMarkerAt([]byte(marker), 0)
 		if err := errors.Join(writeErr, self.lock.Sync()); err != nil {
 			return nil, err
 		}
@@ -155,6 +173,9 @@ func openRepairValidatorFileOwner(ctx context.Context, path, marker string, crea
 		}
 	}
 	self.marker = marker
+	if err := self.storage.bindMarker(self.lock, true); err != nil {
+		return nil, err
+	}
 	success = true
 	return self, nil
 }
@@ -163,6 +184,9 @@ func openRepairValidatorFileOwner(ctx context.Context, path, marker string, crea
 func (self *repairValidatorFileOwner) validateOwner() error {
 	if self == nil || self.lock == nil {
 		return errors.New("validator repair store is closed")
+	}
+	if err := self.storage.check(nil); err != nil {
+		return err
 	}
 	if self.poisoned != nil {
 		return self.poisoned
@@ -181,7 +205,7 @@ func (self *repairValidatorFileOwner) validateOwner() error {
 		}
 	}
 	if self.expectedHash != "" {
-		raw, err := readMonitorServiceFile(context.Background(), self.path, 64*1024, true, monitorServiceReadHooks{})
+		raw, _, err := self.storage.readFile(context.Background(), self.path, 64*1024)
 		if err != nil || monitorReadDigest(raw) != self.expectedHash {
 			return errors.Join(errors.New("validator repair retained journal changed"), err)
 		}
@@ -195,7 +219,7 @@ func (self *repairValidatorStore) load(ctx context.Context) (repairValidatorReco
 	if err := self.validateOwner(); err != nil {
 		return record, err
 	}
-	raw, err := readMonitorServiceFile(ctx, self.path, 64*1024, true, monitorServiceReadHooks{})
+	raw, _, err := self.storage.readFile(ctx, self.path, 64*1024)
 	if err != nil {
 		return record, err
 	}
@@ -224,7 +248,10 @@ func (self *repairValidatorStore) save(record repairValidatorRecord) error {
 		return errors.New("validator repair journal exceeds its bound")
 	}
 	raw = append(raw, '\n')
-	if err := publishMonitorFile(self.path, raw, 0600, self.syncDirectory); err != nil {
+	if err := self.storage.publish(self.path, raw, self.syncDirectory); err != nil {
+		if mainnetDurableAdmissionPending(err) {
+			return err
+		}
 		self.poisoned = errors.Join(errors.New("validator repair publication is ambiguous; reopen required"), err)
 		return self.poisoned
 	}
@@ -237,7 +264,7 @@ func (self *repairValidatorFileOwner) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	err := self.lock.Close()
+	err := errors.Join(self.storage.close(), self.lock.Close())
 	self.lock = nil
 	return err
 }

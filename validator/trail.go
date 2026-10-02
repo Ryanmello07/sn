@@ -38,6 +38,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/urnetwork/connect/durablevolume"
 	"os"
 	"path/filepath"
 	"sync"
@@ -216,6 +217,7 @@ func VerifyProofRecord(record *ProofRecord, expectedVPK ed25519.PublicKey, serve
 
 // ProofStore is an append-only JSONL store of completed proofs.
 type ProofStore struct {
+	storageCtx           context.Context
 	mu                   sync.Mutex
 	operationGate        chan struct{}
 	path                 string
@@ -245,11 +247,20 @@ func (self *ProofStore) validatePathWithLock() (bool, error) {
 	return true, nil
 }
 
-func NewProofStore(dir string) (*ProofStore, error) {
-	if err := ensurePrivateStateDir(dir); err != nil {
+func NewProofStore(dir string, storageContexts ...context.Context) (*ProofStore, error) {
+	ctx := validatorStorageContext(storageContexts)
+	storage, err := openValidatorDurableDirectory(ctx, dir, durablevolume.ReadWrite, true)
+	if err != nil {
 		return nil, err
 	}
-	return &ProofStore{path: filepath.Join(dir, "proofs.jsonl")}, nil
+	if storage != nil {
+		if err := storage.Close(); err != nil {
+			return nil, err
+		}
+	} else if err := ensurePrivateStateDir(dir); err != nil {
+		return nil, err
+	}
+	return &ProofStore{storageCtx: context.WithoutCancel(ctx), path: filepath.Join(dir, "proofs.jsonl")}, nil
 }
 
 func (self *ProofStore) Append(record *ProofRecord) (resultErr error) {
@@ -258,7 +269,7 @@ func (self *ProofStore) Append(record *ProofRecord) (resultErr error) {
 		return err
 	}
 	defer release()
-	directory, err := openAttemptLedgerDirectory(filepath.Dir(self.path), nil)
+	directory, err := openAttemptLedgerDirectory(filepath.Dir(self.path), nil, validatorProofStorageContext(self))
 	if err != nil {
 		return err
 	}
@@ -391,7 +402,7 @@ func (self *ProofStore) reconcileAttemptProofsWithWrite(ledger *AttemptLedger, w
 		return err
 	}
 	defer release()
-	directory, err := openAttemptLedgerDirectory(filepath.Dir(self.path), nil)
+	directory, err := openAttemptLedgerDirectory(filepath.Dir(self.path), nil, validatorProofStorageContext(self))
 	if err != nil {
 		return err
 	}

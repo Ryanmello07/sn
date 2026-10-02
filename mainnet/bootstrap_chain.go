@@ -49,7 +49,7 @@ func advanceBootstrapChain(ctx context.Context, store *bootstrapChainStore, boun
 		if err != nil {
 			return result, err
 		}
-		child, err := openEvmActionStore(preparation.Contracts.Config, create, nil)
+		child, err := openEvmActionStore(preparation.Contracts.Config, create, nil, ctx)
 		if err != nil {
 			return result, err
 		}
@@ -87,7 +87,7 @@ func advanceBootstrapChain(ctx context.Context, store *bootstrapChainStore, boun
 		if err != nil {
 			return result, err
 		}
-		child, err := openBootstrapRootStore(preparation.Root, create)
+		child, err := openBootstrapRootStore(preparation.Root, create, ctx)
 		if err != nil {
 			return result, err
 		}

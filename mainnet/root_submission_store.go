@@ -4,9 +4,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,13 +19,14 @@ const rootSubmissionStoreLimit = 1024 * 1024
 
 // Operations are serialized by the submission owner; close follows joined use.
 type rootSubmissionStore struct {
-	config rootSubmissionConfig
-	lock   *os.File
+	storage *mainnetDurableDirectory
+	config  rootSubmissionConfig
+	lock    *os.File
 }
 
 // Explicit creation is single-use, with an immutable approved-config marker.
 // Reopen requires complete state, original approval and an exclusive process lock.
-func openRootSubmissionStore(config rootSubmissionConfig, create bool) (*rootSubmissionStore, error) {
+func openRootSubmissionStore(config rootSubmissionConfig, create bool, storageContexts ...context.Context) (*rootSubmissionStore, error) {
 	if err := config.validate(); err != nil {
 		return nil, err
 	}
@@ -37,35 +40,50 @@ func openRootSubmissionStore(config rootSubmissionConfig, create bool) (*rootSub
 	if err != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.Join(errors.New("root submission needs a precreated private directory"), err)
 	}
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
+	storage, err := openMainnetDurableDirectory(mainnetStorageContext(storageContexts), filepath.Dir(path), durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = storage.close()
+		}
+	}()
 	if create {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return nil, errors.Join(errors.New("root submission state exists or cannot be inspected"), err)
 		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := syscall.Open(path+".lock", flags, 0600)
+	lock, err := storage.openSnapshotMarker(path)
 	if err != nil {
 		return nil, fmt.Errorf("open root submission marker: %w", err)
 	}
-	lock := os.NewFile(uintptr(fd), path+".lock")
-	store := &rootSubmissionStore{config: copyRootSubmissionConfig(config), lock: lock}
+	fd := int(lock.Fd())
+	store := &rootSubmissionStore{storage: storage, config: copyRootSubmissionConfig(config), lock: lock}
+	transferred = true
 	success := false
 	defer func() {
 		if !success {
-			lock.Close()
+			store.close()
 		}
 	}()
+	if err := storage.bindMarker(lock, false); err != nil {
+		return nil, err
+	}
 	info, err = lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.Join(errors.New("root submission marker must be a private regular file"), err)
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, fmt.Errorf("root submission already has an owner: %w", err)
 	}
 	configHash := rootObjectHash(config)
+	if err := storage.bindSnapshot(path, "mainnet-root-submission", rootSubmissionStoreLimit, create); err != nil {
+		return nil, err
+	}
 	if create {
-		_, writeErr := lock.WriteString(configHash + "\n")
+		_, writeErr := storage.writeMarkerAt([]byte(configHash+"\n"), 0)
 		if err := errors.Join(writeErr, lock.Sync()); err != nil {
 			return nil, err
 		}
@@ -83,6 +101,9 @@ func openRootSubmissionStore(config rootSubmissionConfig, create bool) (*rootSub
 			return nil, err
 		}
 	}
+	if err := storage.bindMarker(store.lock, true); err != nil {
+		return nil, err
+	}
 	success = true
 	return store, nil
 }
@@ -92,7 +113,7 @@ func (self *rootSubmissionStore) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	err := self.lock.Close()
+	err := errors.Join(self.storage.close(), self.lock.Close())
 	self.lock = nil
 	return err
 }
@@ -103,23 +124,9 @@ func (self *rootSubmissionStore) load() (rootSubmissionRecord, error) {
 	if self.lock == nil {
 		return record, errors.New("root submission store is closed")
 	}
-	path := self.config.Approval.StatePath
-	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	raw, _, err := self.storage.readFile(context.Background(), self.config.Approval.StatePath, rootSubmissionStoreLimit)
 	if err != nil {
-		return record, fmt.Errorf("retained root submission state is unavailable: %w", err)
-	}
-	file := os.NewFile(uintptr(fd), path)
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		file.Close()
-		return record, errors.Join(errors.New("root submission state is not a private regular file"), err)
-	}
-	raw, readErr := io.ReadAll(io.LimitReader(file, rootSubmissionStoreLimit+1))
-	if err := errors.Join(readErr, file.Close()); err != nil {
 		return record, err
-	}
-	if len(raw) == 0 || len(raw) > rootSubmissionStoreLimit {
-		return record, errors.New("root submission state is empty or exceeds its bound")
 	}
 	if err := decodePlanJson(raw, &record); err != nil {
 		return record, err
@@ -130,6 +137,9 @@ func (self *rootSubmissionStore) load() (rootSubmissionRecord, error) {
 // An atomic synced replacement publishes bytes and attempts together. Failure
 // after rename is ambiguous and forces the submission owner to reopen.
 func (self *rootSubmissionStore) save(record rootSubmissionRecord) error {
+	if err := self.storage.checkWrite(nil); err != nil {
+		return err
+	}
 	if self.lock == nil {
 		return errors.New("root submission store is closed")
 	}
@@ -148,22 +158,5 @@ func (self *rootSubmissionStore) save(record rootSubmissionRecord) error {
 	if err != nil || len(raw)+1 > rootSubmissionStoreLimit {
 		return errors.Join(errors.New("root submission state exceeds its encoded bound"), err)
 	}
-	directory := filepath.Dir(path)
-	file, err := os.CreateTemp(directory, ".root-submission-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	_, writeErr := file.Write(append(raw, '\n'))
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(file.Name(), path); err != nil {
-		return err
-	}
-	dir, err := os.Open(directory)
-	if err != nil {
-		return err
-	}
-	return errors.Join(dir.Sync(), dir.Close())
+	return self.storage.publish(self.config.Approval.StatePath, append(raw, '\n'), nil)
 }

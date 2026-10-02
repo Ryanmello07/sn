@@ -27,7 +27,7 @@ func TestBootstrapContractReceiptAdmissionCommandRetainsHistory(t *testing.T) {
 	bootstrapSuccessorCommandTestComplete(t, f)
 	before := bootstrapContractTestJournals(t, f.config.RunDirectory)
 	maps.Copy(before, f.journals(t))
-	scope, err := openBootstrapContractReceiptScope(t.Context(), f.path, f.config.RunDirectory, f.preparation.Plan.ContentHash)
+	scope, err := openBootstrapContractReceiptScope(f.storageContext(t.Context()), f.path, f.config.RunDirectory, f.preparation.Plan.ContentHash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestBootstrapContractReceiptAdmissionCommandRetainsHistory(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 	args := bootstrapContractReceiptTestArgs(f)
-	if code := runMain(t.Context(), args, &stdout, &stderr); code != 0 {
+	if code := runMain(f.storageContext(t.Context()), args, &stdout, &stderr); code != 0 {
 		t.Fatal("public historical receipt admission refused", code, stderr.String())
 	}
 	var result bootstrapContractReceiptAdmission
@@ -131,7 +131,7 @@ func TestBootstrapContractReceiptAdmissionCommandRetainsHistory(t *testing.T) {
 		})
 		stdout.Reset()
 		stderr.Reset()
-		if code := runMain(t.Context(), args, &stdout, &stderr); code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "canonical inclusion or historical postcondition differs") {
+		if code := runMain(f.storageContext(t.Context()), args, &stdout, &stderr); code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "canonical inclusion or historical postcondition differs") {
 			t.Fatal("historical receipt admission accepted "+item.name, code, stderr.String())
 		}
 	}
@@ -230,7 +230,7 @@ func TestBootstrapContractReceiptRejectsUnretainedCustody(t *testing.T) {
 	f.result(t, "apply")
 	before, reads := f.journals(t), maps.Clone(f.contracts.counts)
 	var stdout, stderr bytes.Buffer
-	if code := runMain(t.Context(), bootstrapContractReceiptTestArgs(f), &stdout, &stderr); code != 2 || stdout.Len() != 0 ||
+	if code := runMain(f.storageContext(t.Context()), bootstrapContractReceiptTestArgs(f), &stdout, &stderr); code != 2 || stdout.Len() != 0 ||
 		!strings.Contains(stderr.String(), "original complete record differs") {
 		t.Fatal("unretained contract receipts acquired canonical authority", code, stderr.String())
 	}
@@ -247,13 +247,13 @@ func TestBootstrapContractReceiptRejectsChangedAcceptance(t *testing.T) {
 	args := bootstrapContractReceiptTestArgs(f)
 	for _, suffix := range [][]string{{"--submit"}, {"--signed-transaction", "synthetic-absent"}, {"--accept-plan-hash", "sha256:" + strings.Repeat("f", 64)}, {"--run-dir", t.TempDir()}, {"--online=false"}} {
 		var stdout, stderr bytes.Buffer
-		if code := runMain(t.Context(), append(append([]string{}, args...), suffix...), &stdout, &stderr); code != 2 || stdout.Len() != 0 {
+		if code := runMain(f.storageContext(t.Context()), append(append([]string{}, args...), suffix...), &stdout, &stderr); code != 2 || stdout.Len() != 0 {
 			t.Fatal("historical receipt command accepted changed authority", suffix, code, stderr.String())
 		}
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if code := runMain(ctx, args, io.Discard, io.Discard); code != 2 {
+	if code := runMain(f.storageContext(ctx), args, io.Discard, io.Discard); code != 2 {
 		t.Fatal("canceled receipt admission reported success", code)
 	}
 	if !reflect.DeepEqual(before, f.journals(t)) || !maps.Equal(reads, f.contracts.counts) {

@@ -40,17 +40,18 @@ func copyRootServiceConfig(config rootServiceConfig) rootServiceConfig {
 // Interrupted observations consume their attempt and preserve the last complete
 // decision. Once active, all future steps reconcile the same exact action.
 type rootServiceRecord struct {
-	Schema               string              `json:"schema"`
-	Config               rootServiceConfig   `json:"config"`
-	Phase                string              `json:"phase"`
-	Observations         uint32              `json:"observations"`
-	ObservationPending   bool                `json:"observation_pending"`
-	Decision             *rootWeightDecision `json:"last_decision,omitempty"`
-	RecoveredSignature   bool                `json:"recovered_signature,omitempty"`
-	SubmissionConfigHash string              `json:"submission_config_hash,omitempty"`
-	SubmissionPrepared   bool                `json:"submission_prepared,omitempty"`
-	Action               rootActionRecord    `json:"action"`
-	ContentHash          string              `json:"content_hash"`
+	Schema               string                     `json:"schema"`
+	Config               rootServiceConfig          `json:"config"`
+	Phase                string                     `json:"phase"`
+	Observations         uint32                     `json:"observations"`
+	ObservationPending   bool                       `json:"observation_pending"`
+	Decision             *rootWeightDecision        `json:"last_decision,omitempty"`
+	RecoveredSignature   bool                       `json:"recovered_signature,omitempty"`
+	SubmissionConfigHash string                     `json:"submission_config_hash,omitempty"`
+	SubmissionPrepared   bool                       `json:"submission_prepared,omitempty"`
+	Recovery             *rootServiceRecoveryRecord `json:"recovery,omitempty"`
+	Action               rootActionRecord           `json:"action"`
+	ContentHash          string                     `json:"content_hash"`
 }
 
 // Both approval and retained decision are revalidated under independent config.
@@ -68,6 +69,11 @@ func (self rootServiceRecord) validate(config rootServiceConfig) error {
 	}
 	if err := self.Action.validate(); err != nil {
 		return err
+	}
+	if self.Recovery != nil {
+		if err := self.Recovery.validate(); err != nil {
+			return err
+		}
 	}
 	if self.Decision != nil {
 		if err := self.Decision.validate(self.Action.Action); err != nil {
@@ -166,6 +172,7 @@ type rootServiceOwner struct {
 	ownerCh     chan struct{}
 	actionOwner *rootActionOwner
 	poisoned    bool
+	failure     error
 	wait        func(context.Context, time.Duration) bool
 }
 
@@ -191,14 +198,14 @@ func newRootServiceOwner(config rootServiceConfig, store rootServiceStorage, por
 // Internal journal access requires the service owner channel or construction.
 func (self *rootServiceOwner) load() (rootServiceRecord, error) {
 	if self.poisoned {
-		return rootServiceRecord{}, errors.New("root service must be reopened after an ambiguous durability or integrity failure")
+		return rootServiceRecord{}, errors.Join(errors.New("root service must be reopened after an ambiguous durability or integrity failure"), self.failure)
 	}
 	record, err := self.store.load()
 	if err == nil {
 		err = record.validate(self.config)
 	}
-	if err != nil {
-		self.poisoned = true
+	if err != nil && !mainnetDurableAdmissionPending(err) {
+		self.poisoned, self.failure = true, err
 	}
 	return record, err
 }
@@ -211,7 +218,9 @@ func (self *rootServiceOwner) persist(record rootServiceRecord) error {
 		return err
 	}
 	if err := self.store.save(record); err != nil {
-		self.poisoned = true
+		if !mainnetDurableAdmissionPending(err) {
+			self.poisoned, self.failure = true, err
+		}
 		return err
 	}
 	return nil
@@ -245,7 +254,12 @@ func (self *rootServiceOwner) step(ctx context.Context) (result rootServiceEvent
 	}
 	// Snapshot custody failure before releasing the serialized step. Run must
 	// retain this original error, not replace it with a later poisoned-owner read.
-	defer func() { result.terminalFailure = self.poisoned }()
+	defer func() {
+		result.terminalFailure = self.poisoned
+		if mainnetDurableAdmissionPending(resultErr) {
+			result.Status = "storage-pending"
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
@@ -258,7 +272,7 @@ func (self *rootServiceOwner) step(ctx context.Context) (result rootServiceEvent
 		actionResult, err := self.actionOwner.step(ctx)
 		result.Action, result.Status = &actionResult, actionResult.Status
 		if self.actionOwner.poisoned {
-			self.poisoned = true
+			self.poisoned, self.failure = true, self.actionOwner.failure
 		}
 		if actionResult.Status == "complete" {
 			result.Phase = "complete"

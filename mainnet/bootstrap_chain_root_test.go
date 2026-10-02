@@ -41,9 +41,7 @@ func TestBootstrapChainRootProductionConfigBoundOffline(t *testing.T) {
 	if !ed25519.Verify(key, append([]byte("urnetwork-mainnet-root-service-approval-v1\x00"), raw...), signature) {
 		t.Fatal("service config signature differs from its documented domain")
 	}
-	if len(f.journals(t)) != 0 {
-		t.Fatal("inspection opened custody")
-	}
+	f.requireFreshJournals(t)
 	first := f.result(t, "apply")
 	before := f.journals(t)
 	if first.Schema != "urnetwork-mainnet-bootstrap-chain-result-v3" || !first.RootValidatorConfigVerified ||
@@ -356,15 +354,16 @@ func TestBootstrapChainV2RestartPreservesOriginalWireAndScope(t *testing.T) {
 	if err != nil || actualErr != nil || legacy.ContentHash != p.ContentHash || !bytes.Equal(raw, actual) || p.RootInspection != nil {
 		t.Fatal("v2 preparation bytes or hash changed", err, actualErr)
 	}
+	prepared := mainnetNamespaceTest(t, f.config.RunDirectory)
 	var stderr bytes.Buffer
-	if code := f.command(t.Context(), "apply", io.Discard, &stderr); code != 3 || len(f.journals(t)) != 0 {
+	if code := f.command(t.Context(), "apply", io.Discard, &stderr); code != 3 || !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, f.config.RunDirectory)) {
 		t.Fatal("new v2 apply bypassed root config admission", code, stderr.String())
 	}
-	store, err := openBootstrapChainStore(f.preparation, true, nil)
+	store, err := openBootstrapChainStore(f.preparation, true, nil, f.storageContext(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, advanceErr := advanceBootstrapChain(t.Context(), store, nil)
+	first, advanceErr := advanceBootstrapChain(f.storageContext(t.Context()), store, nil)
 	if err := errors.Join(advanceErr, store.close()); err != nil {
 		t.Fatal(err)
 	}

@@ -146,7 +146,7 @@ func openRootServiceRuntime(ctx context.Context, preparation rootServiceRuntimeP
 	}()
 	service := preparation.Root.Service
 	var err error
-	self.custodyStore, err = openRootOfflineCustodyStore(service.CustodyTrust, nil)
+	self.custodyStore, err = openRootOfflineCustodyStore(service.CustodyTrust, nil, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func openRootServiceRuntime(ctx context.Context, preparation rootServiceRuntimeP
 	if err != nil || packet.ContentHash != service.Packet.ContentHash {
 		return nil, errors.Join(errors.New("root runtime custody retains a different packet"), err)
 	}
-	self.serviceStore, err = openRootServiceStore(service, false)
+	self.serviceStore, err = openRootServiceStore(service, false, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func openRootServiceRuntime(ctx context.Context, preparation rootServiceRuntimeP
 	if err != nil {
 		return nil, err
 	}
-	self.submissionStore, err = openRootSubmissionStore(preparation.Submission, createChild)
+	self.submissionStore, err = openRootSubmissionStore(preparation.Submission, createChild, ctx)
 	if err != nil {
 		return nil, err
 	}

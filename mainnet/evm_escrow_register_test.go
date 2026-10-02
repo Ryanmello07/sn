@@ -163,7 +163,7 @@ func TestEvmEscrowRegisterPreviewPreservesApprovedGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), []string{"bootstrap-contracts", "preview", "--action", "escrow-register", "--config", f.configPath}, &stdout, &stderr)
+	code := runMain(f.storageContext(context.Background()), []string{"bootstrap-contracts", "preview", "--action", "escrow-register", "--config", f.configPath}, &stdout, &stderr)
 	var preview evmPhasePreview
 	if err := json.Unmarshal(stdout.Bytes(), &preview); err != nil || code != 0 || preview.PlanHash != f.config.Plan.hash() || preview.ApprovalVerified || preview.InstallationComplete || preview.ExecutableAction != "escrow-register" || preview.EscrowRegistration == nil || preview.EscrowRegistration.FundingWei != "2000000000" || preview.Plan.Actions[3].Data != f.config.Plan.Actions[3].Data || preview.VaultAddress != f.config.Plan.Actions[3].To.Hex() || preview.CoordinatorAddress != crypto.CreateAddress(f.config.Plan.Actions[2].Sender, 2).Hex() {
 		t.Fatalf("escrow preview: %+v %d %v %s", preview, code, err, stderr.String())
@@ -545,7 +545,7 @@ func TestEvmEscrowRegisterAmbiguousPublicationRetainsAttempt(t *testing.T) {
 	f.prepareEscrowSigned()
 	f.mine = false
 	stores, records := f.openEscrowAncestors()
-	store, err := openEvmEscrowActionStore(f.plan, records[0], records[1], records[2], false, nil)
+	store, err := openEvmEscrowActionStore(f.plan, records[0], records[1], records[2], false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -598,11 +598,11 @@ func TestEvmEscrowRegisterClaimRecoveryKeepsFourLocks(t *testing.T) {
 				return errors.New("synthetic escrow initial claim interruption")
 			}
 			return nil
-		})
+		}, f.storage.Context)
 		if err == nil || store != nil {
 			t.Fatalf("escrow %s interruption acknowledged", boundary)
 		}
-		store, err = openEvmEscrowActionStore(f.plan, records[0], records[1], records[2], false, nil)
+		store, err = openEvmEscrowActionStore(f.plan, records[0], records[1], records[2], false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -615,7 +615,7 @@ func TestEvmEscrowRegisterClaimRecoveryKeepsFourLocks(t *testing.T) {
 			if index > 0 {
 				predecessor = rootObjectHash(records[index-1])
 			}
-			if other, err := openEvmSelectedActionStore(f.config, index, predecessor, false, nil); err == nil {
+			if other, err := openEvmSelectedActionStore(f.config, index, predecessor, false, nil, f.storage.Context); err == nil {
 				other.close()
 				t.Fatalf("escrow lost lock %d", index)
 			}
@@ -625,7 +625,7 @@ func TestEvmEscrowRegisterClaimRecoveryKeepsFourLocks(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, create := range []bool{false, true} {
-			if other, err := openEvmEscrowActionStore(f.plan, records[0], records[1], records[2], create, nil); err == nil {
+			if other, err := openEvmEscrowActionStore(f.plan, records[0], records[1], records[2], create, nil, f.storage.Context); err == nil {
 				other.close()
 				t.Fatal("lost escrow child renewed allowance")
 			}
@@ -713,7 +713,7 @@ func TestEvmEscrowRegisterOutputFailureRetainsCompletion(t *testing.T) {
 	}
 	args := []string{"bootstrap-contracts", "resume", "--action", "escrow-register", "--config", f.configPath, "--run-dir", f.config.Plan.RunDirectory, "--accept-plan-hash", f.config.Plan.hash(), "--online", "--submit"}
 	var stderr bytes.Buffer
-	if code := runMain(context.Background(), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "output failed") {
+	if code := runMain(f.storageContext(context.Background()), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "output failed") {
 		t.Fatalf("escrow output fault occurred before retention: %d %s", code, stderr.String())
 	}
 	if result, code, diagnostic := f.command("resume", "--action", "escrow-register"); code != 0 || result.Status != "escrow-registered" || result.Receipt == nil || result.Receipt.RegistrationHash == "" || len(f.writes) != 4 {
@@ -819,7 +819,7 @@ func TestEvmEscrowRegisterRetainedReceiptNeedsRegistrationDigest(t *testing.T) {
 		t.Fatal(diagnostic)
 	}
 	stores, records := f.openEscrowAncestors()
-	store, err := openEvmEscrowActionStore(f.plan, records[0], records[1], records[2], false, nil)
+	store, err := openEvmEscrowActionStore(f.plan, records[0], records[1], records[2], false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

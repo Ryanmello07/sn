@@ -86,7 +86,7 @@ func TestClaimClockFinalizedTagClosesReplayAuthority(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := *fixture.entry
-			got, err := rebroadcastSignedClaim(t.Context(), fixture.cfg, tx, from)
+			got, err := rebroadcastSignedClaimTest(t, t.Context(), fixture.cfg, tx, from)
 			_, _, _, sends := fixture.evidence()
 			if closing == 60 {
 				if got || err == nil || !strings.Contains(err.Error(), "regressed") || len(sends) != 0 {

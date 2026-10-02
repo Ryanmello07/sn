@@ -193,6 +193,7 @@ type rootOfflineCustody struct {
 	store    rootOfflineCustodyStorage
 	ownerCh  chan struct{}
 	poisoned bool
+	failure  error
 }
 
 // Only a valid complete preexisting intent can supply this signing port.
@@ -233,14 +234,14 @@ func (self *rootOfflineCustody) acquire(ctx context.Context) error {
 // Any missing, corrupt or ambiguous state remains an unresolved custody event.
 func (self *rootOfflineCustody) load() (rootOfflineCustodyRecord, error) {
 	if self.poisoned {
-		return rootOfflineCustodyRecord{}, errors.New("root offline custody must be reopened after a durability or integrity error")
+		return rootOfflineCustodyRecord{}, errors.Join(errors.New("root offline custody must be reopened after a durability or integrity error"), self.failure)
 	}
 	record, err := self.store.load()
 	if err == nil {
 		err = record.validate(self.trust)
 	}
-	if err != nil {
-		self.poisoned = true
+	if err != nil && !mainnetDurableAdmissionPending(err) {
+		self.poisoned, self.failure = true, err
 	}
 	return record, err
 }
@@ -333,7 +334,9 @@ func (self *rootOfflineCustody) importSignature(ctx context.Context, receipt roo
 	record.ContentHash = ""
 	record.ContentHash = rootObjectHash(record)
 	if err := self.store.save(record); err != nil {
-		self.poisoned = true
+		if !mainnetDurableAdmissionPending(err) {
+			self.poisoned, self.failure = true, err
+		}
 		return err
 	}
 	return ctx.Err()

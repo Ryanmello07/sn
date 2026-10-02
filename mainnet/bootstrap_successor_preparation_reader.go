@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
 )
 
@@ -21,7 +22,9 @@ func openBootstrapSuccessorPreparationReader(ctx context.Context, expected boots
 }
 
 // Execution ownership acquires the same physical directory exclusively before
-// borrowing preparation bytes. It never upgrades a shared lock in place.
+// borrowing preparation bytes. Its retained guard also admits execution writes;
+// passive readers keep read-only admission, even on full or read-only media.
+// Neither path upgrades an already borrowed owner or lock in place.
 func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected bootstrapSuccessorPreparationPlan, exclusive bool, hook func(string) error) (_ *bootstrapSuccessorPreparationStore, _ bootstrapSuccessorPreparationRecord, resultErr error) {
 	var record bootstrapSuccessorPreparationRecord
 	if ctx == nil {
@@ -39,11 +42,24 @@ func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected b
 		return nil, record, err
 	}
 	path := copied.Proposal.OriginalRunDirectory
+	access := durablevolume.ReadOnly
+	if exclusive {
+		access = durablevolume.ReadWrite
+	}
+	storage, err := openMainnetDurableDirectory(ctx, path, access)
+	if err != nil {
+		return nil, record, err
+	}
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, storage.close())
+		}
+	}()
 	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, record, err
 	}
-	self := &bootstrapSuccessorPreparationStore{ctx: ctx, approval: bootstrapSuccessorPreparationApproval{Plan: copied}, directory: os.NewFile(uintptr(fd), path), hook: hook}
+	self := &bootstrapSuccessorPreparationStore{storage: storage, ctx: ctx, approval: bootstrapSuccessorPreparationApproval{Plan: copied}, directory: os.NewFile(uintptr(fd), path), hook: hook}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, self.close())
@@ -53,7 +69,7 @@ func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected b
 	if exclusive {
 		mode = unix.LOCK_EX
 	}
-	if err := unix.Flock(fd, mode|unix.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, mode|unix.LOCK_NB); err != nil {
 		return nil, record, errors.Join(errors.New("successor preparation has an active local owner"), err)
 	}
 	if err := self.checkpoint("reader-acquired"); err != nil {

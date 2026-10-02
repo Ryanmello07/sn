@@ -58,6 +58,9 @@ func (self *validatorActivationHost) admit(ctx context.Context, plan validatorAc
 // exact files reconcile a crash after publication; different bytes never do.
 func (self *validatorActivationHost) install(ctx context.Context, plan validatorActivationPlan, index int, source planFileReference) (resultErr error) {
 	u := plan.Units[index].Unit
+	if err := requireUnitDurableReference(ctx, u.DurableVolumes); err != nil {
+		return err
+	}
 	if filepath.Dir(u.File.Path) != self.unitDirectory {
 		return errors.New("validator activation unit is outside the fixed system directory")
 	}
@@ -81,6 +84,9 @@ func (self *validatorActivationHost) install(ctx context.Context, plan validator
 	raw, err := readBootstrapChainInput(ctx, source, 2*1024*1024)
 	if err != nil || source.Sha256 != u.Config.Sha256 {
 		return errors.Join(errors.New("validator activation runtime config source changed"), err)
+	}
+	if err := self.host.inspectServiceStorage(ctx, u, raw); err != nil {
+		return err
 	}
 	if err := self.installFile(ctx, u.Config, raw, 0440, u.Gid); err != nil {
 		return err

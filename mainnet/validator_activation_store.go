@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"path/filepath"
@@ -46,6 +47,7 @@ type validatorActivationRecord struct {
 // Only one synchronous invocation may hold this process lock. All external
 // operations join before close; ambiguous publication poisons until reopen.
 type validatorActivationStore struct {
+	storage       *mainnetDurableDirectory
 	path          string
 	approval      validatorActivationApproval
 	publicKey     string
@@ -186,33 +188,49 @@ func openValidatorActivationStore(ctx context.Context, approval validatorActivat
 	if err != nil || statErr != nil || resolved != directory || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.New("validator activation needs an existing private physical directory")
 	}
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
+	storage, err := openMainnetDurableDirectory(ctx, directory, durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = storage.close()
+		}
+	}()
 	if create {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return nil, errors.New("validator activation state already exists or is unavailable")
 		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := syscall.Open(path+".lock", flags, 0600)
+	lock, err := storage.openSnapshotMarker(path)
 	if err != nil {
 		return nil, err
 	}
-	self := &validatorActivationStore{path: path, approval: approval, publicKey: publicKey, lock: os.NewFile(uintptr(fd), path+".lock"), directoryInfo: info}
+	fd := int(lock.Fd())
+	self := &validatorActivationStore{storage: storage, path: path, approval: approval, publicKey: publicKey, lock: lock, directoryInfo: info}
+	transferred = true
 	success := false
 	defer func() {
 		if !success {
 			self.close()
 		}
 	}()
+	if err := self.storage.bindMarker(self.lock, false); err != nil {
+		return nil, err
+	}
 	if err := self.validateOwner(); err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		return nil, errors.New("validator activation already has a process owner")
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return nil, errors.Join(errors.New("validator activation already has a process owner"), err)
 	}
 	marker := rootObjectHash(approval) + " " + publicKey + "\n"
+	if err := storage.bindSnapshot(path, "mainnet-validator-activation", 128*1024, create); err != nil {
+		return nil, err
+	}
 	if create {
-		_, writeErr := self.lock.WriteString(marker)
+		_, writeErr := storage.writeMarkerAt([]byte(marker), 0)
 		if err := errors.Join(writeErr, self.lock.Sync()); err != nil {
 			return nil, err
 		}
@@ -228,6 +246,9 @@ func openValidatorActivationStore(ctx context.Context, approval validatorActivat
 			return nil, err
 		}
 	}
+	if err := self.storage.bindMarker(self.lock, true); err != nil {
+		return nil, err
+	}
 	success = true
 	return self, nil
 }
@@ -236,6 +257,9 @@ func openValidatorActivationStore(ctx context.Context, approval validatorActivat
 func (self *validatorActivationStore) validateOwner() error {
 	if self == nil || self.lock == nil {
 		return errors.New("validator activation store is closed")
+	}
+	if err := self.storage.check(nil); err != nil {
+		return err
 	}
 	if self.poisoned != nil {
 		return self.poisoned
@@ -255,7 +279,7 @@ func (self *validatorActivationStore) load(ctx context.Context) (validatorActiva
 	if err := self.validateOwner(); err != nil {
 		return record, err
 	}
-	raw, err := readMonitorServiceFile(ctx, self.path, 128*1024, true, monitorServiceReadHooks{})
+	raw, _, err := self.storage.readFile(ctx, self.path, 128*1024)
 	if err != nil {
 		return record, err
 	}
@@ -279,7 +303,10 @@ func (self *validatorActivationStore) save(record validatorActivationRecord) err
 	if err != nil || len(raw) > 128*1024 {
 		return errors.New("validator activation journal exceeds its bound")
 	}
-	if err := publishMonitorFile(self.path, append(raw, '\n'), 0600, self.syncDirectory); err != nil {
+	if err := self.storage.publish(self.path, append(raw, '\n'), self.syncDirectory); err != nil {
+		if mainnetDurableAdmissionPending(err) {
+			return err
+		}
 		self.poisoned = errors.Join(errors.New("validator activation publication is ambiguous; reopen required"), err)
 		return self.poisoned
 	}
@@ -291,7 +318,7 @@ func (self *validatorActivationStore) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	err := self.lock.Close()
+	err := errors.Join(self.storage.close(), self.lock.Close())
 	self.lock = nil
 	return err
 }

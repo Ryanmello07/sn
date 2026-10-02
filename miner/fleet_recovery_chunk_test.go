@@ -25,10 +25,10 @@ func fleetRecoveryChunkTestPending(t *testing.T) (*fleetMainnetTestFixture, *fle
 		t.Fatal(err)
 	}
 	fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, false)}
-	if err := fleetPublish(fixture.opts, fixture.manifest); err == nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil {
 		t.Fatal("original uncertain send unexpectedly completed")
 	}
-	original := fleetRecoveryTestRecord(t)
+	original := fleetRecoveryTestRecord(t, fixture)
 	if original.Stage != "may_have_sent" || original.StartNumber != 100 || original.ScanNumber != 0 {
 		t.Fatal("original signature did not retain its actual pre-send boundary")
 	}
@@ -43,12 +43,12 @@ func TestFleetRecoveryNativeChunkSurvivesLateUnavailableBody(t *testing.T) {
 	fixture.nativeBodyOverrides[229] = nil
 	fixture.stateLock.Unlock()
 	for attempt := 0; attempt < 2; attempt++ {
-		err := fleetPublish(fixture.opts, fixture.manifest)
+		err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest)
 		var unavailable *crv4.ReceiptEvidenceUnavailableError
 		if !errors.As(err, &unavailable) {
 			t.Fatalf("late absent body lost its unavailable cause: %v", err)
 		}
-		checkpoint := fleetRecoveryTestRecord(t)
+		checkpoint := fleetRecoveryTestRecord(t, fixture)
 		if checkpoint.ScanNumber != 228 || checkpoint.ScanHash != fixture.nativeBlocks[228] || checkpoint.ScanProof != fleetRecoveryNativeScanProof || checkpoint.Stage != original.Stage || !bytes.Equal(checkpoint.Raw, original.Raw) || checkpoint.TxHash != original.TxHash {
 			t.Fatalf("late read discarded completed signed prefix: scanned=%d proof=%s", checkpoint.ScanNumber, checkpoint.ScanProof)
 		}
@@ -61,10 +61,10 @@ func TestFleetRecoveryNativeChunkSurvivesLateUnavailableBody(t *testing.T) {
 	}
 	delete(fixture.nativeBodyOverrides, 229)
 	fixture.stateLock.Unlock()
-	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	final := fleetRecoveryTestRecord(t)
+	final := fleetRecoveryTestRecord(t, fixture)
 	if final.Stage != "finalized" || final.NativeReceipt == nil || final.NativeReceipt.BlockNumber != 230 || !bytes.Equal(final.Raw, original.Raw) || fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("system_accountNextIndex") != 1 {
 		t.Fatal("chunk restart lost exact original inclusion or allocated another send")
 	}
@@ -84,12 +84,12 @@ func TestFleetRecoveryNativeInterruptedChunkKeepsPartialProgress(t *testing.T) {
 	fixture.nativeBodyOverrides[150] = nil
 	fixture.stateLock.Unlock()
 	for attempt := 0; attempt < 2; attempt++ {
-		err := fleetPublish(fixture.opts, fixture.manifest)
+		err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest)
 		var unavailable *crv4.ReceiptEvidenceUnavailableError
 		if !errors.As(err, &unavailable) {
 			t.Fatalf("interrupted chunk lost its original unavailable read: %v", err)
 		}
-		checkpoint := fleetRecoveryTestRecord(t)
+		checkpoint := fleetRecoveryTestRecord(t, fixture)
 		if checkpoint.ScanNumber != 149 || checkpoint.ScanHash != fixture.nativeBlocks[149] || checkpoint.ScanProof != fleetRecoveryNativeScanProof || checkpoint.Stage != original.Stage || !bytes.Equal(checkpoint.Raw, original.Raw) {
 			t.Fatalf("interrupted chunk discarded its admitted partial prefix: scanned=%d proof=%s", checkpoint.ScanNumber, checkpoint.ScanProof)
 		}
@@ -102,10 +102,10 @@ func TestFleetRecoveryNativeInterruptedChunkKeepsPartialProgress(t *testing.T) {
 	}
 	delete(fixture.nativeBodyOverrides, 150)
 	fixture.stateLock.Unlock()
-	if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatal(err)
 	}
-	final := fleetRecoveryTestRecord(t)
+	final := fleetRecoveryTestRecord(t, fixture)
 	if final.Stage != "finalized" || final.NativeReceipt == nil || final.NativeReceipt.BlockNumber != 230 || !bytes.Equal(final.Raw, original.Raw) || fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("system_accountNextIndex") != 1 {
 		t.Fatal("partial progress changed or duplicated the original signed attempt")
 	}
@@ -118,7 +118,7 @@ func TestFleetRecoveryNativeChunkBehindHeadKeepsCheckpoint(t *testing.T) {
 	if err := fleetRecoveryReceiptTestRange(t, fixture, crv4.ReceiptScanChunkBlockLimit); err == nil {
 		t.Fatal("bounded prefix unexpectedly resolved future inclusion")
 	}
-	checkpoint := fleetRecoveryTestRecord(t)
+	checkpoint := fleetRecoveryTestRecord(t, fixture)
 	fixture.stateLock.Lock()
 	fixture.finalizedNumber = 100
 	fixture.stateLock.Unlock()
@@ -127,7 +127,7 @@ func TestFleetRecoveryNativeChunkBehindHeadKeepsCheckpoint(t *testing.T) {
 	if !errors.As(err, &unavailable) {
 		t.Fatalf("behind head became a permanent contradiction: %v", err)
 	}
-	retained := fleetRecoveryTestRecord(t)
+	retained := fleetRecoveryTestRecord(t, fixture)
 	if retained.ScanNumber != checkpoint.ScanNumber || retained.ScanHash != checkpoint.ScanHash || !bytes.Equal(retained.Raw, original.Raw) || retained.Stage != original.Stage {
 		t.Fatal("behind endpoint erased the authenticated original prefix")
 	}

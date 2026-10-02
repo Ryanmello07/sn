@@ -213,16 +213,16 @@ func TestReconcileClaimEntryUsesFinalizedLeafClaimed(t *testing.T) {
 	claim := &sdk.SnPoolClaimResult{Epoch: 7, NoId: []byte{1}, Coldkey: make([]byte, 32), PayoutRoot: root, ChainId: 945, ContractAddress: "0x0000000000000000000000000000000000001234", SettlementVaultAddress: "0x0000000000000000000000000000000000001234"}
 	cfg := &ClaimDaemonConfig{RPC: []string{rpc.URL}}
 	entry := &ClaimQueueEntry{Epoch: 7, Status: "pending"}
-	status, err := reconcileClaimEntry(context.Background(), cfg, fakeClaimAPI{result: claim}, entry)
+	status, err := reconcileClaimEntryTest(t, context.Background(), cfg, fakeClaimAPI{result: claim}, entry)
 	if err != nil || status != "finalized" {
 		t.Fatalf("claimed reconciliation = %q, %v", status, err)
 	}
 	claimed = false
-	status, err = reconcileClaimEntry(context.Background(), cfg, fakeClaimAPI{result: claim}, entry)
+	status, err = reconcileClaimEntryTest(t, context.Background(), cfg, fakeClaimAPI{result: claim}, entry)
 	if err != nil || status != "" {
 		t.Fatalf("unclaimed reconciliation = %q, %v", status, err)
 	}
-	status, err = reconcileClaimEntry(context.Background(), cfg, fakeClaimAPI{result: &sdk.SnPoolClaimResult{Epoch: 7}}, entry)
+	status, err = reconcileClaimEntryTest(t, context.Background(), cfg, fakeClaimAPI{result: &sdk.SnPoolClaimResult{Epoch: 7}}, entry)
 	if err != nil || status != "no-claim" {
 		t.Fatalf("zero payout reconciliation = %q, %v", status, err)
 	}

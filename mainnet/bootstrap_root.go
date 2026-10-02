@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"os"
+
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 const bootstrapRootResultSchema = "urnetwork-mainnet-bootstrap-root-result-v1"
@@ -36,6 +38,7 @@ type bootstrapRootOwner struct {
 	store    bootstrapRootStorage
 	ownerCh  chan struct{}
 	poisoned bool
+	failure  error
 }
 
 // Construction validates independently loaded plan and progress without opening
@@ -57,14 +60,14 @@ func newBootstrapRootOwner(plan bootstrapRootPlan, store bootstrapRootStorage) (
 // The owner channel is held, or construction has not yet published the owner.
 func (self *bootstrapRootOwner) load() (bootstrapRootRecord, error) {
 	if self.poisoned {
-		return bootstrapRootRecord{}, errors.New("bootstrap root must reopen after ambiguous or invalid progress")
+		return bootstrapRootRecord{}, errors.Join(errors.New("bootstrap root must reopen after ambiguous or invalid progress"), self.failure)
 	}
 	record, err := self.store.load()
 	if err == nil {
 		err = record.validate(self.plan)
 	}
-	if err != nil {
-		self.poisoned = true
+	if err != nil && !mainnetDurableAdmissionPending(err) {
+		self.poisoned, self.failure = true, err
 	}
 	return record, err
 }
@@ -78,25 +81,31 @@ func (self *bootstrapRootOwner) persist(record bootstrapRootRecord) error {
 		return err
 	}
 	if err := self.store.save(record); err != nil {
-		self.poisoned = true
+		if !mainnetDurableAdmissionPending(err) {
+			self.poisoned, self.failure = true, err
+		}
 		return err
 	}
 	return nil
 }
 
-// Only a not-yet-completed child with neither marker nor state may be created.
-// A partial marker or existing state is always opened by the strict child owner.
+// A not-yet-completed child may claim its prepared empty marker. The concrete
+// child opener still authenticates its mandatory snapshot head before writing.
+// Missing markers never grant creation, even when parent progress is pending.
 func bootstrapRootCreateChild(path string, completed bool) (bool, error) {
 	_, stateErr := os.Lstat(path)
-	_, markerErr := os.Lstat(path + ".lock")
-	if errors.Is(stateErr, os.ErrNotExist) && errors.Is(markerErr, os.ErrNotExist) {
+	marker, markerErr := os.Lstat(path + ".lock")
+	if errors.Is(markerErr, os.ErrNotExist) {
+		return false, errors.Join(durablevolume.ErrIdentity, errors.New("bootstrap child lost its preprovisioned marker"), markerErr)
+	}
+	if markerErr != nil || stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) {
+		return false, mainnetDurableUnavailable("cannot observe bootstrap child custody", errors.Join(stateErr, markerErr))
+	}
+	if errors.Is(stateErr, os.ErrNotExist) && marker.Size() == 0 {
 		if completed {
 			return false, errors.New("bootstrap root completed child disappeared; refusing a new allowance")
 		}
 		return true, nil
-	}
-	if stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) || markerErr != nil && !errors.Is(markerErr, os.ErrNotExist) {
-		return false, errors.Join(stateErr, markerErr)
 	}
 	return false, nil
 }
@@ -144,7 +153,7 @@ func (self *bootstrapRootOwner) advance(ctx context.Context, receipt *rootOfflin
 		packet := copyRootServiceConfig(self.plan.Service).Packet
 		createPacket = &packet
 	}
-	custodyStore, err := openRootOfflineCustodyStore(self.plan.Service.CustodyTrust, createPacket)
+	custodyStore, err := openRootOfflineCustodyStore(self.plan.Service.CustodyTrust, createPacket, ctx)
 	if err != nil {
 		return bootstrapRootResult{}, err
 	}
@@ -170,7 +179,7 @@ func (self *bootstrapRootOwner) advance(ctx context.Context, receipt *rootOfflin
 	if err != nil {
 		return bootstrapRootResult{}, err
 	}
-	serviceStore, err := openRootServiceStore(self.plan.Service, createService)
+	serviceStore, err := openRootServiceStore(self.plan.Service, createService, ctx)
 	if err != nil {
 		return bootstrapRootResult{}, err
 	}

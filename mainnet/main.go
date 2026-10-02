@@ -14,6 +14,10 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/urfoundation/sn/internal/durablehead"
+	"github.com/urfoundation/sn/internal/durableinspect"
+	"github.com/urfoundation/sn/internal/durablepath"
 )
 
 const monitorSchema = "urnetwork-mainnet-monitor-event-v1"
@@ -106,6 +110,33 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 
 // Test observers cover real file operations and owned waits, not source verdicts.
 func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
+	var argumentErr error
+	ctx, args, argumentErr = mainnetDurableVolumeArguments(ctx, args)
+	if argumentErr != nil {
+		fmt.Fprintln(stderr, "durable-volume command inputs:", argumentErr)
+		return 2
+	}
+	if mainnetRequiresDurableVolumes(args) {
+		if err := durablepath.Require(ctx); err != nil {
+			fmt.Fprintln(stderr, "durable custody declaration:", err)
+			return 2
+		}
+	}
+	if len(args) != 0 && args[0] == "storage-inventory" {
+		return runStorageInventory(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) != 0 && args[0] == "storage-verify" {
+		return runStorageVerify(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) != 0 && args[0] == "storage-owner-inventory" {
+		return runStorageOwnerInventory(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) != 0 && args[0] == "storage-owner-verify" {
+		return runStorageOwnerVerify(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) != 0 && args[0] == "storage-inspect" {
+		return durableinspect.Run(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "root-service" {
 		return runRootServiceCommand(ctx, args[1:], stdout, stderr)
 	}
@@ -113,7 +144,7 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 		return runRootPassiveHostCommand(ctx, args[1:], stdout, stderr, now)
 	}
 	if len(args) != 0 && args[0] == "root-passive-service" {
-		return runRootPassiveServiceCommand(ctx, args[1:], stdout, stderr)
+		return runRootPassiveServiceCommandWithMonitorHooks(ctx, args[1:], stdout, stderr, now, hooks)
 	}
 	if len(args) != 0 && args[0] == "owner-signing" {
 		return runOwnerSigningCommand(ctx, args[1:], stdout, stderr)
@@ -185,6 +216,8 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 		return runEconomicEmissionCommand(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "inspect" && args[0] != "monitor" {
+		fmt.Fprintln(stderr, "storage reports: sn-mainnet storage-inventory|storage-verify --durable-volumes FILE --durable-volumes-sha256 sha256:DIGEST --root DIR --former-writer-fence FILE --former-writer-fence-sha256 sha256:DIGEST [--inventory FILE --inventory-sha256 sha256:DIGEST]; reports do not authorize restart")
+		fmt.Fprintln(stderr, "owner-local storage reports: storage-owner-inventory|storage-owner-verify selects only the owner-local declaration schema; --max-owner-attributes and --max-owner-attribute-bytes bound retained custody metadata; verification --compare-reviewed-rebound only reports comparison to an explicit target declaration")
 		fmt.Fprintln(stderr, "owner recycle offline custody: sn-mainnet owner-recycle observe|plan|reserve|export|inspect-request|ledger-plan|import|status|reconcile [explicit policy, approval, original action and request pins]")
 		fmt.Fprintln(stderr, "offline owner handoff: sn-mainnet owner-signing inspect|sign|reply|verify|ledger-plan --request FILE --accept-request-hash HASH --trim-approval-key HEX --owner-account-id HEX --expected-genesis HEX [owner-local device custody, public response or proof flags]")
 		fmt.Fprintln(stderr, "offline artifacts: sn-mainnet safe-release-verify --version 1.4.1|1.5.0 --variant Safe|SafeL2 --archive ABSOLUTE_FILE")
@@ -289,11 +322,15 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 // Chain sampling retains its original continuity, publication and exit rules.
 // Service composition supervises this independently of bounded file reads.
 func runChainMonitor(ctx context.Context, client *rpcClient, expected identityExpectation, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
+	if ctx.Err() != nil {
+		return 0
+	}
 	encoder := json.NewEncoder(stdout)
 	var err error
 	state := &monitorState{}
 	var checkpoint *monitorCheckpointStore
 	var metrics *monitorMetricsStore
+	var storage monitorStorageRecovery
 	defer func() {
 		if err := errors.Join(metrics.close(), checkpoint.close()); err != nil {
 			fmt.Fprintln(stderr, "monitor chain cleanup:", err)
@@ -301,9 +338,15 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 		}
 	}()
 	if checkpointPath != "" {
-		checkpoint, err = openMonitorCheckpoint(checkpointPath, expected)
+		checkpoint, err = openMonitorCheckpoint(checkpointPath, expected, ctx)
 		if err != nil {
+			if ctx.Err() != nil {
+				return 0
+			}
 			fmt.Fprintln(stderr, "monitor checkpoint:", err)
+			if monitorStoragePending(err) && !errors.Is(err, durablehead.ErrUncertain) {
+				return 1
+			}
 			return 3
 		}
 		state, err = checkpoint.load()
@@ -311,20 +354,46 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 			fmt.Fprintln(stderr, "monitor checkpoint:", err)
 			return 3
 		}
+		if hooks.syncDirectory != nil {
+			checkpoint.syncDirectory = func(file *os.File) error { return hooks.syncDirectory("chain", "checkpoint", file) }
+		}
 	}
 	if metricsPath != "" {
-		metrics, err = openMonitorMetrics(metricsPath)
+		metrics, err = openMonitorMetrics(metricsPath, ctx)
 		if err != nil {
+			if ctx.Err() != nil {
+				return 0
+			}
 			fmt.Fprintln(stderr, "monitor metrics:", err)
+			if monitorStoragePending(err) {
+				return 1
+			}
 			return 2
 		}
-		if err := metrics.initialize(state); err != nil {
-			fmt.Fprintln(stderr, "initialize monitor metrics:", err)
-			return 1
+		if hooks.syncDirectory != nil {
+			metrics.syncDirectory = func(file *os.File) error { return hooks.syncDirectory("chain", "metrics", file) }
+		}
+		for {
+			if err := metrics.initialize(state); err != nil {
+				if ctx.Err() != nil {
+					return 0
+				}
+				fmt.Fprintln(stderr, "initialize monitor metrics:", err)
+				var ownership *monitorOutputOwnershipError
+				if errors.As(err, &ownership) {
+					return 3
+				}
+				if !waitMonitorService(ctx, "chain", time.Second, hooks) {
+					return 0
+				}
+				continue
+			}
+			break
 		}
 	}
 	// Publication follows durable continuity. Errors preserve an explicit failed
 	// event; a stopped/blocked loop leaves a stale textfile for external alerts.
+	var metricsErr error
 	publishEvent := func(event *monitorEvent) error {
 		event.Diagnostics = monitorDiagnosticSnapshot(stdout, stderr)
 		switch event.Status {
@@ -332,7 +401,8 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 			event.Severity = "critical"
 		}
 		if metrics != nil {
-			if err := metrics.save(*event, state); err != nil {
+			metricsErr = metrics.save(*event, state)
+			if metricsErr != nil {
 				event.Detail = fmt.Sprintf("status=%s severity=%s; metrics publication unavailable", event.Status, event.Severity)
 				event.Status, event.Severity = "metrics-error", "critical"
 			}
@@ -344,6 +414,8 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 			return 0
 		}
 		event := monitorEvent{Schema: monitorSchema}
+		var checkpointErr error
+		metricsErr = nil
 		sampleStartedAt := now().UTC()
 		identity, readErr := client.readIdentity(ctx)
 		sampledAt := now().UTC()
@@ -360,7 +432,8 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 			var changed bool
 			event.Severity, changed = state.observeUnavailable(sampleStartedAt, sampledAt)
 			if changed && checkpoint != nil {
-				if saveErr := checkpoint.save(state); saveErr != nil {
+				checkpointErr = checkpoint.save(state)
+				if checkpointErr != nil {
 					event.Status, event.Severity = "checkpoint-error", "critical"
 					event.Detail = "RPC observation and checkpoint publication unavailable"
 				}
@@ -380,9 +453,9 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 			event.Snapshot = &snapshot
 			if identityErr := expected.match(identity); identityErr != nil {
 				event.Status, event.Detail = "identity-mismatch", "observed identity differs from expected configuration"
-				if publishEvent(&event) != nil || event.Status == "metrics-error" {
-					return 1
-				}
+				// Output failure cannot turn an observed identity mismatch into a
+				// retryable source observation or a newly initialized owner.
+				_ = publishEvent(&event)
 				return 3
 			}
 			continuous, continuityErr := client.priorFinalizedMatches(ctx, state, identity)
@@ -398,23 +471,64 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 				if err != nil {
 					event.Detail = "finality progress observation failed"
 				} else if recovered := state.clearUnavailable(); checkpoint != nil && (recovered || state.lastHash != previousHash || state.lastNumber != previousNumber || !state.lastSuccessAt.Equal(previousSuccess)) {
-					if saveErr := checkpoint.save(state); saveErr != nil {
+					checkpointErr = checkpoint.save(state)
+					if checkpointErr != nil {
 						event.Status, event.Severity, event.Detail = "checkpoint-error", "critical", "checkpoint publication unavailable"
 					}
 				}
 			}
 		}
+		terminalObservation := event.Status == "finality-conflict" || event.Status == "rpc-integrity"
 		if err := publishEvent(&event); err != nil {
+			if ctx.Err() != nil {
+				return 0
+			}
 			fmt.Fprintln(stderr, "write monitor event:", err)
-			return 1
-		}
-		if event.Status == "finality-conflict" || event.Status == "rpc-integrity" {
 			return 3
 		}
-		if event.Status == "checkpoint-error" || event.Status == "metrics-error" {
-			return 1
+		if hooks.afterEvent != nil {
+			hooks.afterEvent(ctx, "chain")
 		}
-		if !waitMonitorService(ctx, "chain", interval, hooks) {
+		var ownership *monitorOutputOwnershipError
+		if terminalObservation || errors.As(errors.Join(checkpointErr, metricsErr), &ownership) {
+			return 3
+		}
+		if errors.Is(checkpointErr, durablehead.ErrUncertain) {
+			prior := checkpoint
+			err := storage.resume(ctx, "chain", func() error {
+				file := prior.lock
+				err := prior.close()
+				if hooks.afterClose != nil {
+					err = errors.Join(err, hooks.afterClose("chain", "checkpoint", file))
+				}
+				return err
+			}, func() error {
+				next, err := openMonitorCheckpoint(prior.path, prior.expected, ctx)
+				if err != nil {
+					return err
+				}
+				loaded, err := next.load()
+				if err != nil {
+					return errors.Join(err, next.close())
+				}
+				next.syncDirectory = prior.syncDirectory
+				checkpoint, state = next, loaded
+				return nil
+			}, hooks)
+			if err != nil {
+				if ctx.Err() != nil {
+					return 0
+				}
+				fmt.Fprintln(stderr, "monitor chain storage continuation:", err)
+				return 3
+			}
+			continue
+		}
+		delay := interval
+		if checkpointErr != nil || metricsErr != nil {
+			delay = time.Second
+		}
+		if !waitMonitorService(ctx, "chain", delay, hooks) {
 			return 0
 		}
 	}

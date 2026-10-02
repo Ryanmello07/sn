@@ -166,7 +166,7 @@ func TestEvmReserveLinkAmbiguousPublicationRetainsAttempt(t *testing.T) {
 	f.prepareReserveLinkSigned()
 	f.mine = false
 	stores, records := f.openReserveLinkAncestors()
-	store, err := openEvmReserveLinkActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], false, nil)
+	store, err := openEvmReserveLinkActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,11 +219,11 @@ func TestEvmReserveLinkClaimRecoveryKeepsSixLocks(t *testing.T) {
 				return errors.New("synthetic binding initial claim interruption")
 			}
 			return nil
-		})
+		}, f.storage.Context)
 		if err == nil || store != nil {
 			t.Fatalf("binding %s interruption acknowledged", boundary)
 		}
-		store, err = openEvmReserveLinkActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], false, nil)
+		store, err = openEvmReserveLinkActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -236,7 +236,7 @@ func TestEvmReserveLinkClaimRecoveryKeepsSixLocks(t *testing.T) {
 			if index > 0 {
 				predecessor = rootObjectHash(records[index-1])
 			}
-			if other, err := openEvmSelectedActionStore(f.config, index, predecessor, false, nil); err == nil {
+			if other, err := openEvmSelectedActionStore(f.config, index, predecessor, false, nil, f.storage.Context); err == nil {
 				other.close()
 				t.Fatalf("binding lost held lock %d", index)
 			}
@@ -246,7 +246,7 @@ func TestEvmReserveLinkClaimRecoveryKeepsSixLocks(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, create := range []bool{false, true} {
-			if other, err := openEvmReserveLinkActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], create, nil); err == nil {
+			if other, err := openEvmReserveLinkActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], create, nil, f.storage.Context); err == nil {
 				other.close()
 				t.Fatal("lost binding child renewed allowance")
 			}
@@ -291,7 +291,7 @@ func TestEvmReserveLinkOutputFailureRetainsBinding(t *testing.T) {
 	}
 	args := []string{"bootstrap-contracts", "resume", "--action", "reserve-link", "--config", f.configPath, "--run-dir", f.config.Plan.RunDirectory, "--accept-plan-hash", f.config.Plan.hash(), "--online", "--submit"}
 	var stderr bytes.Buffer
-	if code := runMain(context.Background(), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "output failed") {
+	if code := runMain(f.storageContext(context.Background()), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "output failed") {
 		t.Fatalf("binding output failed before authoritative publication: %d %s", code, stderr.String())
 	}
 	if result, code, diagnostic := f.command("resume", "--action", "reserve-link"); code != 0 || result.Status != "reserve-recorder-bound" || result.Receipt == nil || result.Receipt.StorageHash == "" || len(f.writes) != 6 {

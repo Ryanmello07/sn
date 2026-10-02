@@ -137,19 +137,20 @@ type ownerRecycleCustody struct {
 	key      string
 	store    ownerRecycleStorage
 	poisoned bool
+	failure  error
 }
 
 // Any uncertainty stops this instance before another handoff; recovery reopens.
 func (self *ownerRecycleCustody) load() (ownerRecycleRecord, error) {
 	if self.poisoned || self.store == nil {
-		return ownerRecycleRecord{}, errors.New("recycle custody must reopen")
+		return ownerRecycleRecord{}, errors.Join(errors.New("recycle custody must reopen"), self.failure)
 	}
 	record, err := self.store.load()
 	if err == nil {
 		err = record.validate(self.config, self.key)
 	}
-	if err != nil {
-		self.poisoned = true
+	if err != nil && !mainnetDurableAdmissionPending(err) {
+		self.poisoned, self.failure = true, err
 	}
 	return record, err
 }
@@ -162,8 +163,8 @@ func (self *ownerRecycleCustody) persist(record ownerRecycleRecord) error {
 	if err == nil {
 		err = self.store.save(record)
 	}
-	if err != nil {
-		self.poisoned = true
+	if err != nil && !mainnetDurableAdmissionPending(err) {
+		self.poisoned, self.failure = true, err
 	}
 	return err
 }

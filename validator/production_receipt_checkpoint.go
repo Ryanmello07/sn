@@ -103,7 +103,7 @@ func (self *productionReceiptCheckpointOwner) directory(ctx context.Context, cre
 	if create {
 		directory, err = openReleaseMeasurementInputV2Parents(ctx, self.path)
 	} else {
-		directory, err = openAttemptPrivateDirectory(self.path)
+		directory, err = openAttemptPrivateDirectory(self.path, ctx)
 		if releaseMeasurementInputV2OnlyMissing(err) {
 			return ctx.Err()
 		}

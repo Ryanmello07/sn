@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"path/filepath"
@@ -62,6 +63,7 @@ type bootstrapRootStorage interface {
 // The caller joins phase operations before close. A failed save poisons the
 // owner; reopen rechecks progress and each child's actual durable state.
 type bootstrapRootStore struct {
+	storage       *mainnetDurableDirectory
 	plan          bootstrapRootPlan
 	path          string
 	lock          *os.File
@@ -70,49 +72,64 @@ type bootstrapRootStore struct {
 
 // Apply claims a new plan once. Resume can finish an interrupted initial claim
 // only before any child exists; completed claims require their full record.
-func openBootstrapRootStore(plan bootstrapRootPlan, create bool) (*bootstrapRootStore, error) {
-	return openBootstrapRootStoreWithClaimHook(plan, create, nil)
+func openBootstrapRootStore(plan bootstrapRootPlan, create bool, storageContexts ...context.Context) (*bootstrapRootStore, error) {
+	return openBootstrapRootStoreWithClaimHook(plan, create, nil, storageContexts...)
 }
 
 // The optional scoped hook exposes only durable pre-child claim boundaries.
 // It cannot acknowledge a partial claim or change a child allowance.
-func openBootstrapRootStoreWithClaimHook(plan bootstrapRootPlan, create bool, claimHook func(string) error) (*bootstrapRootStore, error) {
+func openBootstrapRootStoreWithClaimHook(plan bootstrapRootPlan, create bool, claimHook func(string) error, storageContexts ...context.Context) (*bootstrapRootStore, error) {
 	if err := errors.Join(plan.validate(), bootstrapRootDirectory(plan.RunDirectory)); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(plan.RunDirectory, bootstrapRootProgressFile)
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
-	if create {
-		for _, candidate := range append([]string{path}, plan.custodyChildPaths()...) {
-			for _, value := range []string{candidate, candidate + ".lock"} {
-				if _, err := os.Lstat(value); !errors.Is(err, os.ErrNotExist) {
-					return nil, errors.Join(errors.New("bootstrap root apply requires unused journal paths; retain existing owners for resume"), err)
-				}
-			}
-		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
-	}
-	fd, err := syscall.Open(path+".lock", flags, 0600)
+	storage, err := openMainnetDurableDirectory(mainnetStorageContext(storageContexts), filepath.Dir(path), durablevolume.ReadWrite)
 	if err != nil {
 		return nil, err
 	}
-	store := &bootstrapRootStore{plan: copyBootstrapRootPlan(plan), path: path, lock: os.NewFile(uintptr(fd), path+".lock")}
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = storage.close()
+		}
+	}()
+	if create {
+		if err := requireFreshSnapshotPaths(append([]string{path}, plan.custodyChildPaths()...)); err != nil {
+			return nil, err
+		}
+		if err := requireFreshBootstrapPassiveCheckpoint(storage.ctx, plan); err != nil {
+			return nil, err
+		}
+	}
+	lock, err := storage.openSnapshotMarker(path)
+	if err != nil {
+		return nil, err
+	}
+	fd := int(lock.Fd())
+	store := &bootstrapRootStore{storage: storage, plan: copyBootstrapRootPlan(plan), path: path, lock: lock}
+	transferred = true
 	success := false
 	defer func() {
 		if !success {
 			store.close()
 		}
 	}()
+	if err := storage.bindMarker(store.lock, false); err != nil {
+		return nil, err
+	}
 	info, err := store.lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.Join(errors.New("bootstrap root marker is not a private regular file"), err)
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("bootstrap root already has an owner"), err)
+	}
+	if err := storage.bindSnapshot(path, "mainnet-bootstrap-root", 16*1024, create); err != nil {
+		return nil, err
 	}
 	if create {
 		marker := plan.ContentHash + "\n"
-		written, writeErr := store.lock.WriteString(marker)
+		written, writeErr := storage.writeMarkerAt([]byte(marker), 0)
 		if written != len(marker) && writeErr == nil {
 			writeErr = io.ErrShortWrite
 		}
@@ -146,6 +163,9 @@ func openBootstrapRootStoreWithClaimHook(plan bootstrapRootPlan, create bool, cl
 			return nil, errors.Join(errors.New("bootstrap root marker differs from the accepted plan"), err)
 		}
 	}
+	if err := storage.bindMarker(store.lock, true); err != nil {
+		return nil, err
+	}
 	success = true
 	return store, nil
 }
@@ -154,12 +174,11 @@ func openBootstrapRootStoreWithClaimHook(plan bootstrapRootPlan, create bool, cl
 // marker is synced before a caller can open any child, so later record loss
 // cannot be interpreted as an unused allowance.
 func (self *bootstrapRootStore) finishInitialClaim(claimHook func(string) error) error {
-	for _, path := range self.plan.custodyChildPaths() {
-		for _, candidate := range []string{path, path + ".lock"} {
-			if _, err := os.Lstat(candidate); !errors.Is(err, os.ErrNotExist) {
-				return errors.Join(errors.New("bootstrap root interrupted claim has child state; recovery refused"), err)
-			}
-		}
+	if err := requireFreshSnapshotPaths(self.plan.custodyChildPaths()); err != nil {
+		return err
+	}
+	if err := requireFreshBootstrapPassiveCheckpoint(self.storage.ctx, self.plan); err != nil {
+		return err
 	}
 	record, err := self.load()
 	if errors.Is(err, os.ErrNotExist) {
@@ -176,11 +195,24 @@ func (self *bootstrapRootStore) finishInitialClaim(claimHook func(string) error)
 			return err
 		}
 	}
-	written, writeErr := self.lock.WriteAt([]byte(bootstrapRootClaimComplete), int64(len(self.plan.ContentHash)+1))
+	written, writeErr := self.storage.writeMarkerAt([]byte(bootstrapRootClaimComplete), int64(len(self.plan.ContentHash)+1))
 	if written != len(bootstrapRootClaimComplete) && writeErr == nil {
 		writeErr = io.ErrShortWrite
 	}
 	return errors.Join(writeErr, self.lock.Sync())
+}
+
+// Passive preparation never opens the monitor as a writer or repairs it. The
+// separate monitor must already have explicit fresh custody for its own root.
+func requireFreshBootstrapPassiveCheckpoint(ctx context.Context, plan bootstrapRootPlan) error {
+	if plan.PassiveService == nil {
+		return nil
+	}
+	owner, err := openBootstrapUnclaimedSnapshot(ctx, plan.PassiveService.CheckpointPath, "mainnet-monitor-checkpoint", maxRpcReplyBytes)
+	if err != nil {
+		return err
+	}
+	return owner.close()
 }
 
 // Closing releases ownership but never deletes an allowance or a phase marker.
@@ -188,7 +220,7 @@ func (self *bootstrapRootStore) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	err := self.lock.Close()
+	err := errors.Join(self.storage.close(), self.lock.Close())
 	self.lock = nil
 	return err
 }
@@ -199,7 +231,7 @@ func (self *bootstrapRootStore) load() (bootstrapRootRecord, error) {
 	if self.lock == nil {
 		return record, errors.New("bootstrap root progress store is closed")
 	}
-	raw, _, err := readBootstrapRootFile(context.Background(), self.path, 16*1024)
+	raw, _, err := self.storage.readFile(context.Background(), self.path, 16*1024)
 	if err != nil {
 		return record, err
 	}
@@ -212,6 +244,9 @@ func (self *bootstrapRootStore) load() (bootstrapRootRecord, error) {
 // File sync, atomic rename and directory sync precede any published progress.
 // An error after rename is ambiguous and requires a fresh owning instance.
 func (self *bootstrapRootStore) save(record bootstrapRootRecord) error {
+	if err := self.storage.checkWrite(nil); err != nil {
+		return err
+	}
 	if self.lock == nil {
 		return errors.New("bootstrap root progress store is closed")
 	}
@@ -229,35 +264,18 @@ func (self *bootstrapRootStore) save(record bootstrapRootRecord) error {
 	if err != nil || len(raw) > 16*1024 {
 		return errors.Join(errors.New("bootstrap root progress exceeds its bound"), err)
 	}
-	file, err := os.CreateTemp(self.plan.RunDirectory, ".sn-mainnet-bootstrap-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	raw = append(raw, '\n')
-	written, writeErr := file.Write(raw)
-	if written != len(raw) && writeErr == nil {
-		writeErr = io.ErrShortWrite
-	}
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(file.Name(), self.path); err != nil {
-		return err
-	}
-	return self.syncParent()
+	return self.storage.publish(self.path, append(raw, '\n'), self.syncDirectory)
 }
 
 // A parent sync makes newly created markers and renamed records durable before
 // their acknowledgement. Tests can fail this exact boundary without a sleep.
 func (self *bootstrapRootStore) syncParent() error {
-	directory, err := os.Open(self.plan.RunDirectory)
-	if err != nil {
+	if err := self.storage.checkWrite(nil); err != nil {
 		return err
 	}
 	syncDirectory := self.syncDirectory
 	if syncDirectory == nil {
 		syncDirectory = (*os.File).Sync
 	}
-	return errors.Join(syncDirectory(directory), directory.Close())
+	return errors.Join(syncDirectory(self.storage.directory.File()), self.storage.checkWrite(nil))
 }

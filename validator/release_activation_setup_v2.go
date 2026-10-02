@@ -122,25 +122,30 @@ func readReleaseActivationSetupV2(ctx context.Context, path string, limit uint64
 
 // releaseActivationSetup owns one activate/complete invocation.
 type releaseActivationSetup struct {
-	cfg        *ReleaseConfig
-	configPath string
-	output     io.Writer
-	hotkey     *crv4.Keypair
-	clientKeys map[uint64]ed25519.PrivateKey
-	chain      *ChainClient
-	native     *crv4.Chain
-	runtime    crv4.RuntimeArtifactIdentity
-	deployment ReleaseActivationDeploymentV2
-	limit      uint64
+	closeStorage func() error
+	cfg          *ReleaseConfig
+	configPath   string
+	output       io.Writer
+	hotkey       *crv4.Keypair
+	clientKeys   map[uint64]ed25519.PrivateKey
+	chain        *ChainClient
+	native       *crv4.Chain
+	runtime      crv4.RuntimeArtifactIdentity
+	deployment   ReleaseActivationDeploymentV2
+	limit        uint64
 }
 
-func (self *releaseActivationSetup) close() {
+func (self *releaseActivationSetup) close() error {
 	if self.chain != nil {
 		self.chain.Close()
 	}
 	if self.native != nil && self.native.API != nil && self.native.API.Client != nil {
 		self.native.API.Client.Close()
 	}
+	if self.closeStorage != nil {
+		return self.closeStorage()
+	}
+	return nil
 }
 
 // Loads the pre-activation configuration and both signing key families, then
@@ -153,11 +158,21 @@ func openReleaseActivationSetup(ctx context.Context, configPath string, output i
 	if err != nil {
 		return nil, err
 	}
+	closeStorage, err := retainReleaseDurableDirectories(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	storageTransferred := false
+	defer func() {
+		if !storageTransferred {
+			_ = closeStorage()
+		}
+	}()
 	hotkey, err := loadReleaseHotkey(cfg)
 	if err != nil {
 		return nil, err
 	}
-	setup := &releaseActivationSetup{cfg: cfg, configPath: configPath, output: output, hotkey: hotkey, clientKeys: map[uint64]ed25519.PrivateKey{}, limit: cfg.EvidenceV2.Bounds.MaxControlBytes}
+	setup := &releaseActivationSetup{closeStorage: closeStorage, cfg: cfg, configPath: configPath, output: output, hotkey: hotkey, clientKeys: map[uint64]ed25519.PrivateKey{}, limit: cfg.EvidenceV2.Bounds.MaxControlBytes}
 	for _, operator := range cfg.Operators {
 		seed, err := loadClientSeed(operator.ClientKeySeedFile)
 		if err != nil {
@@ -188,6 +203,7 @@ func openReleaseActivationSetup(ctx context.Context, configPath string, output i
 		return nil, err
 	}
 	fmt.Fprintf(output, "activation: validator=%d netuid=%d deployment=%s operators=%d\n", cfg.ValidatorID, cfg.Netuid, cfg.DeploymentID, len(cfg.Operators))
+	storageTransferred = true
 	return setup, nil
 }
 
@@ -666,7 +682,7 @@ func (self *releaseActivationSetup) complete(ctx context.Context, prepared *Rele
 	} else if _, err := writeReleaseActivationSetupV2(ctx, completedPath, completed, self.limit); err != nil {
 		return err
 	}
-	if err := RewriteReleaseConfigEvidenceV2Operators(self.configPath, rendered); err != nil {
+	if err := RewriteReleaseConfigEvidenceV2Operators(self.configPath, rendered, ctx); err != nil {
 		return err
 	}
 	fmt.Fprintf(self.output, "configuration: evidence_v2.operators pinned in %s\n", self.configPath)
@@ -692,12 +708,12 @@ type ReleaseActivationOptions struct {
 // RunReleaseActivation drives the whole flow as far as the release lifecycle
 // allows right now: prepare, publish, then complete once the activation
 // epoch has begun. Without Apply nothing is written, signed or sent.
-func RunReleaseActivation(ctx context.Context, options ReleaseActivationOptions) error {
+func RunReleaseActivation(ctx context.Context, options ReleaseActivationOptions) (resultErr error) {
 	setup, err := openReleaseActivationSetup(ctx, options.ConfigPath, options.Output)
 	if err != nil {
 		return err
 	}
-	defer setup.close()
+	defer func() { resultErr = errors.Join(resultErr, setup.close()) }()
 	prepared, encoded, err := setup.loadOrPrepare(ctx, options.Apply)
 	if err != nil || prepared == nil {
 		return err
@@ -745,12 +761,12 @@ func RunReleaseActivation(ctx context.Context, options ReleaseActivationOptions)
 // activation without any key beyond the validator's own: it renders the
 // inputs once the activation epoch has begun. RunRelease calls it when the
 // configuration's evidence_v2 inputs are still unrendered.
-func CompletePendingReleaseActivation(ctx context.Context, configPath string, output io.Writer) error {
+func CompletePendingReleaseActivation(ctx context.Context, configPath string, output io.Writer) (resultErr error) {
 	setup, err := openReleaseActivationSetup(ctx, configPath, output)
 	if err != nil {
 		return err
 	}
-	defer setup.close()
+	defer func() { resultErr = errors.Join(resultErr, setup.close()) }()
 	prepared, encoded, missing, err := setup.readPrepared(ctx)
 	if err != nil {
 		return err

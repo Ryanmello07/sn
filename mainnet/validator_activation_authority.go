@@ -101,6 +101,9 @@ func (self validatorActivationApproval) validate(publicKey string) error {
 	}
 	for i, item := range p.Units {
 		u := item.Unit
+		if err := validateUnitDurableReference(u.DurableVolumes); err != nil {
+			return err
+		}
 		if item.Role != []string{"majority", "secondary"}[i] || u.Name != "sn-mainnet-validator-"+item.Role+".service" || filepath.Base(u.File.Path) != u.Name ||
 			u.Uid == 0 || u.Gid == 0 || filepath.Dir(u.ProgressFile) != u.StateDirectory || !strings.HasSuffix(u.ProgressFile, ".json") || monitorReadDigest(u.render()) != u.File.Sha256 ||
 			item.Source.ChainId != mainnetEvmChainId || item.Source.Netuid != 25 || item.Source.ValidatorId == 0 || item.Source.DeploymentId == "" || !rootCanonicalHash(item.Source.GenesisHash) || !planSha256(item.Source.ConfigHash) {

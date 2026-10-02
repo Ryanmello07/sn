@@ -137,7 +137,7 @@ func TestBootstrapChainReadinessRejectsStaleRoleGenerations(t *testing.T) {
 		case "root-birth":
 			f.census.set(t, "BlockAtRegistration", binary.LittleEndian.AppendUint64(nil, 99), []byte{0, 0}, []byte{0, 0})
 		}
-		result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+		result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 		if err != nil || !result.ObservationComplete || result.Status != "blocked" {
 			t.Fatalf("%s did not produce complete blocked observation: %+v %v", change, result, err)
 		}
@@ -172,7 +172,7 @@ func TestBootstrapChainReadinessReportsActivityPermitAndSubnetConflict(t *testin
 			f.census.set(t, "RegisteredSubnetCounter", binary.LittleEndian.AppendUint64(nil, 4), []byte{25, 0})
 			blocker = "SUBNET_GENERATION_DIFFERS_FROM_APPROVED_POLICY"
 		}
-		result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+		result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 		if err != nil || result.Status != "blocked" || !slices.Contains(result.UrValidators[0].ObservationBlockers, blocker) || len(result.RootValidator.ObservationBlockers) != 0 {
 			t.Fatalf("%s hid current prerequisite or changed separate root: %+v %v", change, result, err)
 		}
@@ -184,7 +184,7 @@ func TestBootstrapChainReadinessReportsActivityPermitAndSubnetConflict(t *testin
 func TestBootstrapChainReadinessRejectsFutureSignedWindows(t *testing.T) {
 	f := newBootstrapChainFixture(t)
 	f.result(t, "apply")
-	result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+	result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 	if err != nil || result.Status != "blocked" || !slices.Contains(result.RootValidator.ObservationBlockers, "SIGNED_ROOT_MORTAL_WINDOW_CLOSED") ||
 		!slices.Contains(result.RootValidator.ObservationBlockers, "SIGNED_ROOT_CHECKPOINT_UNCONFIRMED") {
 		t.Fatalf("future root action inherited current authority: %+v %v", result, err)
@@ -222,7 +222,7 @@ func TestBootstrapChainReadinessRejectsConflictingRootCheckpoint(t *testing.T) {
 		}
 		return response, err
 	})
-	result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+	result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 	if err != nil || !result.ObservationComplete || result.Status != "blocked" || !slices.Contains(result.RootValidator.ObservationBlockers, "SIGNED_ROOT_CHECKPOINT_UNCONFIRMED") {
 		t.Fatalf("conflicting approved checkpoint admitted: %+v %v", result, err)
 	}
@@ -263,7 +263,7 @@ func TestBootstrapChainReadinessReorgNeverPublishesPartialEligibility(t *testing
 				return response, err
 			})
 		}
-		result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+		result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 		if !errors.Is(err, errRpcIntegrity) || result.ObservationComplete || result.Census != nil || result.Status != "unresolved" || !reflect.DeepEqual(original, f.journals(t)) {
 			t.Fatalf("%s published partial evidence or changed custody: %+v %v", barrier, result, err)
 		}
@@ -289,7 +289,7 @@ func TestBootstrapChainReadinessUnavailableRuntimeAndRouteRemainUnresolved(t *te
 				return &http.Response{StatusCode: http.StatusBadGateway, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("synthetic unavailable route"))}, nil
 			})
 		}
-		result, err := f.client.observeBootstrapChainReadiness(ctx, f.preparation)
+		result, err := f.client.observeBootstrapChainReadiness(f.storageContext(ctx), f.preparation)
 		cancel()
 		if err == nil || result.Status != "unresolved" || result.ObservationComplete || result.Census != nil || result.LocalPreparation == nil || len(result.Blockers) == 0 {
 			t.Fatalf("%s synthesized current evidence: %+v %v", failure, result, err)
@@ -315,7 +315,7 @@ func TestBootstrapChainReadinessMissingStateNeverRepairsCustody(t *testing.T) {
 				t.Fatal(err)
 			}
 			original, calls := f.journals(t), f.census.count("system_chain")
-			result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+			result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 			if err == nil || result.Status != "unresolved" || result.LocalPreparation != nil || !reflect.DeepEqual(original, f.journals(t)) || calls != f.census.count("system_chain") {
 				t.Fatalf("%d %s repaired state or contacted rpc: %+v %v", index, loss, result, err)
 			}
@@ -327,11 +327,11 @@ func TestBootstrapChainReadinessMissingStateNeverRepairsCustody(t *testing.T) {
 // markers on failure so the original owner can resume unchanged afterward.
 func TestBootstrapChainReadinessConflictingOwnerDoesNotLeakLocks(t *testing.T) {
 	f := newBootstrapChainReadinessFixture(t)
-	owner, err := openRootServiceStore(f.preparation.Root.Service, false)
+	owner, err := openRootServiceStore(f.preparation.Root.Service, false, f.storageContext(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+	result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 	if err == nil || result.LocalPreparation != nil {
 		t.Fatal("active custody owner was ignored", result, err)
 	}
@@ -341,7 +341,7 @@ func TestBootstrapChainReadinessConflictingOwnerDoesNotLeakLocks(t *testing.T) {
 	if result := f.result(t, "resume"); !result.LocalPreparationComplete {
 		t.Fatal("failed readiness leaked original locks")
 	}
-	result, err = f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+	result, err = f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 	if err != nil || result.Status != "observed-prerequisites" {
 		t.Fatal("readiness could not reopen", result, err)
 	}

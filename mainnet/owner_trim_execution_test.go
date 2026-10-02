@@ -19,11 +19,13 @@ import (
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"github.com/vedhavyas/go-subkey/v2"
 )
 
 // Approval and native custody are deliberately different synthetic keys.
 type ownerTrimTestFixture struct {
+	storage        *durablefixture.Fixture
 	config         ownerTrimExecutionConfig
 	key            string
 	approval       ed25519.PrivateKey
@@ -488,7 +490,7 @@ func ownerTrimPreparedTestFixtureWithCensus(t *testing.T, configure func(*rootRp
 	t.Helper()
 	chain := newBootstrapChainReadinessFixtureWithCensus(t, configure, nil, ownerOverride...)
 	f := newOwnerTrimActionTestFixture(t)
-	retained, err := openBootstrapChainReadinessState(t.Context(), chain.preparation)
+	retained, err := openBootstrapChainReadinessState(chain.root.storage.Context, chain.preparation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -521,6 +523,8 @@ func ownerTrimPreparedTestFixtureWithCensus(t *testing.T, configure func(*rootRp
 	}
 	f.metadata = chain.census.metadataHex
 	f.approve()
+	prepareMainnetSnapshotTest(t, f.config.Action.StatePath, "mainnet-owner-trim", ownerTrimStoreLimit)
+	f.storage = chain.root.storage
 	return chain, f
 }
 
@@ -528,20 +532,20 @@ func ownerTrimPreparedTestFixtureWithCensus(t *testing.T, configure func(*rootRp
 func TestOwnerTrimStorePreservesOriginalV3CustodyAndCannotRebind(t *testing.T) {
 	chain, f := ownerTrimPreparedTestFixture(t)
 	original := chain.journals(t)
-	store, err := openOwnerTrimStore(t.Context(), chain.preparation, f.config, f.key, true)
+	store, err := openOwnerTrimStore(f.storage.Context, chain.preparation, f.config, f.key, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openBootstrapChainStore(chain.preparation, false, nil); err == nil {
+	if _, err := openBootstrapChainStore(chain.preparation, false, nil, chain.storageContext(t.Context())); err == nil {
 		t.Fatal("parent writer acquired original custody during trim ownership")
 	}
-	if _, err := openOwnerTrimStore(t.Context(), chain.preparation, f.config, f.key, false); err == nil {
+	if _, err := openOwnerTrimStore(f.storage.Context, chain.preparation, f.config, f.key, false); err == nil {
 		t.Fatal("second local trim owner acquired exclusive custody")
 	}
 	if err := store.close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err = openOwnerTrimStore(t.Context(), chain.preparation, f.config, f.key, false)
+	store, err = openOwnerTrimStore(f.storage.Context, chain.preparation, f.config, f.key, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -555,7 +559,7 @@ func TestOwnerTrimStorePreservesOriginalV3CustodyAndCannotRebind(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.approve()
-	if _, err := openOwnerTrimStore(t.Context(), chain.preparation, f.config, f.key, false); err == nil {
+	if _, err := openOwnerTrimStore(f.storage.Context, chain.preparation, f.config, f.key, false); err == nil {
 		t.Fatal("new valid action approval adopted a previously claimed nonce")
 	}
 }
@@ -563,7 +567,7 @@ func TestOwnerTrimStorePreservesOriginalV3CustodyAndCannotRebind(t *testing.T) {
 // Completed markers turn missing state into a custody error, not reservation.
 func TestOwnerTrimStoreMissingStateAndPostRenameRemainRecoverable(t *testing.T) {
 	chain, f := ownerTrimPreparedTestFixture(t)
-	store, err := openOwnerTrimStore(t.Context(), chain.preparation, f.config, f.key, true)
+	store, err := openOwnerTrimStore(f.storage.Context, chain.preparation, f.config, f.key, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -576,7 +580,7 @@ func TestOwnerTrimStoreMissingStateAndPostRenameRemainRecoverable(t *testing.T) 
 		t.Fatal("post-rename directory failure did not poison actual store")
 	}
 	store.close()
-	store, err = openOwnerTrimStore(t.Context(), chain.preparation, f.config, f.key, false)
+	store, err = openOwnerTrimStore(f.storage.Context, chain.preparation, f.config, f.key, false)
 	if err != nil {
 		t.Fatal("complete durable row did not survive reopen", err)
 	}
@@ -585,7 +589,7 @@ func TestOwnerTrimStoreMissingStateAndPostRenameRemainRecoverable(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, create := range []bool{false, true} {
-		if _, err := openOwnerTrimStore(t.Context(), chain.preparation, f.config, f.key, create); err == nil {
+		if _, err := openOwnerTrimStore(f.storage.Context, chain.preparation, f.config, f.key, create); err == nil {
 			t.Fatal("lost state replenished an existing action marker")
 		}
 	}
