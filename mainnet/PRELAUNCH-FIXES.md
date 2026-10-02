@@ -5253,3 +5253,16 @@ owned proof/receipt/durable-flush boundaries, with independent expected pool,
 contract and operator identities. Keep unavailable, zero payout, carry, pending
 claim and uncertain signed liabilities distinct. Do not duplicate a shared pool's
 payment across provider slots or report status before durable acknowledgement.
+
+
+### October 2: resumed custody assertions need an exact allowed transition
+
+An old blanket file-equality assertion rejected an intentionally updated retained
+member-census head. Replace only that assertion with the exact approved transition:
+keep predecessor member inode/hash/size, authenticate each new execution and nonce
+member, preserve original approval/adoption/count/outcome authority, and pin the
+complete resulting namespace and head inode across subsequent resumes. A negative
+missing-receipt control must restore the original held inode, not manufacture a
+replacement. The [separate fixture qualification](evidence/successor-member-qualification-20261002.md)
+retains the original normal/race failure and awaits independent replay. Do not
+solve this by excluding every mutable file from custody checks.

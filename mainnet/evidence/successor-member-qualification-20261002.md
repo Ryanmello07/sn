@@ -34,3 +34,28 @@ the two scopes do not inherit each other's module authority.
 
 Neither receipt closes offline preparation, restored-volume acceptance,
 capacity/rotation policy, a current-module release or deployment.
+
+
+## Completed current composition and separate fixture correction
+
+Current composition `5f1fe123` has finished all ten selected roots in both modes:
+nine PASS and one identical assertion FAIL, zero skips, mainnet vet0. Root
+verified all16 independent manifest bindings and receipt SHA-256
+`adc3e158a841e05bb6a80929127f41e73c46d9fab64d471e45af33baf9e312b8`.
+The [original independent result](member-current-composition-independent-20261002.json)
+remains `NO_GO_SCOPED_TEST_FAILURE`; it is not relabelled by later work.
+The failure pins a local member-census head byte-for-byte while public execution
+legitimately appends four execution members and two nonce members.
+
+Test-only `d8788c9ed8ade71acb287ea97621a77dfe175ec8` / tree `0aa7f108`
+changes exactly two test files over `5f1fe123`. It verifies the exact two retained
+preparation members, four new execution members, two approved nonce members,
+original approval/adoption bytes, unchanged count of eight prior attempts, and
+head/inode/content stability across subsequent resumes. Its missing-receipt
+control now retains and restores the original inode instead of replacing it by
+WriteFile. The [author receipt](member-current-fixture-author-20261002.json)
+SHA-256 is `69799d7cf83bd2c72c7d4b7b8805a656f214c81448f3ec9bb743249b4573d0e2`;
+root verified all14 manifest bindings. The affected public root passes normal,
+race and mainnet vet in the author scope; independent replay is pending.
+No production code changes in this correction. Neither source is merged into
+SN main, and no full-mainnet acceptance or deployment is inferred.
