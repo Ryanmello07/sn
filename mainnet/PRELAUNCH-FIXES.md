@@ -5285,3 +5285,16 @@ optional-context census. Remaining constructors must be traced from their actual
 public role entry before a causal test or admission change is selected. Status
 and legacy measurement remain separate scopes; never weaken production custody
 to make those historical callers fit the mainnet path.
+
+
+### Preserve capacity for qualification without deleting active compiler work
+
+When free data-volume space approached the 110 GiB reserve, a further
+[4.02 GiB scoped reclaim](evidence/cache-reclaim-4-20261002.json) removed 63
+old compiler archives at least 48 hours old and 8 MiB each. Privileged process
+reference checks, archive magic, inode/link/time checks and a bounded declared
+metadata scan preceded removal; physical identities were checked again and
+absence verified afterward. Active compilation continued. This creates local
+qualification headroom; it does not prove production sizing or replace
+capacity/rotation and restored-volume acceptance. Keep cache storage explicitly
+separate from immutable proof, source and executable retention.
