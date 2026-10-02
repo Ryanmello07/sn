@@ -5504,3 +5504,16 @@ merely closing an idle HTTP listener. Device readiness remains separate from
 proof, payment and genesis/finality authority. Current-main release composition,
 claim monitoring, economic-domain evidence and actual alert/repair delivery
 remain open; this source integration does not close MG-07 or PH-28.
+
+
+### Keep qualification headroom without discarding completed work
+
+As data-volume free space reached 115 GiB, the sixth guarded inactive-cache
+reclaim removed 155 old compiler archives and recovered 8.01 GiB. The
+[verified receipt](evidence/cache-reclaim-6-20261002.json) binds the process
+censuses, final clean declared-metadata scan, physical identities and all
+removed-path absences. Failed initial scan attempts are recorded; no deletion
+was admitted before the privileged absolute-tool-path scan completed cleanly.
+Active caches, source, modules and evidence remain retained. This preserves
+running qualification progress and its 110 GiB floor; it does not close
+production capacity, restoration or compiler-provenance requirements.
