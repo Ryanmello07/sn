@@ -5517,3 +5517,27 @@ was admitted before the privileged absolute-tool-path scan completed cleanly.
 Active caches, source, modules and evidence remain retained. This preserves
 running qualification progress and its 110 GiB floor; it does not close
 production capacity, restoration or compiler-provenance requirements.
+
+
+### Explicit private-root creation is source-qualified
+
+Frozen SN `c8998b31` / Connect `7600ea5c` passes 83 core and 26 public
+preparation-command tests in each of normal/race modes, plus four package
+vets. Root verified all 43 [author receipt](evidence/private-root-preparation-author-20261002.json)
+manifest bindings, raw archive and source bundles. Receipt SHA-256:
+`693444206629643f2100b2e30c05700241769c1d325aa108fe07c41afaf512ac`.
+The old directory-owner source fails the two new public creation controls in
+each mode. First-checkpoint positive results retain their separate source scope.
+
+The explicit fresh mode stages a private leaf inode during planning, binds its
+parent and zero-history fence, reserves the original inode/control before an
+atomic no-replace move, and syncs both parents. Child crashes, lost sync
+acknowledgements, competing targets and changed or missing completed namespaces
+resume only through original retained custody; runtime absence never triggers
+implicit mkdir. Target parent, staging and metadata roots remain precreated.
+
+This is Linux amd64 source/workspace qualification using Server `2c4e5dca`;
+arm64 execution, independent current-main tracked-module qualification,
+retained/restore semantic rebinding and capacity revisions remain open. The
+qualified candidates are being composed with provider/fleet fixes and current
+server before merge. No live preparation or deployment authority is supplied.

@@ -13,7 +13,7 @@ source qualifications; older checkpoints retain their historical scope.
 | Fleet runtime capability selection | Integrated at `9671f456`; [independent 23-test normal/race scope](evidence/fleet-runtime-catalog-progress-20261002.md). | Current runtime authority, full native-role coverage and composed release qualification. |
 | Server blob readers | Server main `1d72f577` preserves upstream history and exact qualified reader changes; [26-test independent scope](evidence/current-graph-reader-progress-20261002.md). | Full current-server dependency/release composition and remaining model-suite qualification. |
 | Offline preparation | SN `1f66a2bd` / Connect `ba74f897` / Server `2c4e5dca` pass [101 independent tests per mode and five vets](evidence/preparation-composition-independent-20261002.json). | Tracked dependency publication and current-main integration; local workspace replacements are not a release. |
-| Directory owners | SN `682d568c` / Connect `05e39766` pass [103 author tests per mode and four vets](evidence/directory-owner-preparation-author-20261002.json). | Independent joined qualification, private-root creation, retained/restore semantics and capacity revisions. |
+| Directory owners and private-root creation | Directory owners pass [103 author tests per mode](evidence/directory-owner-preparation-author-20261002.json); explicit fresh leaf-root creation at SN `c8998b31` / Connect `7600ea5c` passes [109 author tests per mode and four vets](evidence/private-root-preparation-author-20261002.json). | Independent current-main tracked-module qualification, retained/restore semantics and capacity revisions. |
 | Provider and claim monitoring | Provider monitoring is integrated at `83d92f75`; [20 independent tests per mode and three vets](evidence/provider-monitor-integration-20261002.md) preserve exact source scope. Claim producer/consumer changes remain in qualification and implementation. | Qualify the joined claim producer/consumer, then complete economic-domain monitoring and actual alert/recovery rehearsal. |
 
 Launch still needs an exact current composed release, runtime/genesis/checkpoint
@@ -3102,3 +3102,27 @@ does not qualify tracked published-module consumption, current main with later
 fleet/server changes, directory-owner/private-root successors or a production
 release. Integrate those source/dependency changes without replacing completed
 recovery history, and qualify their actual final graph before launch.
+
+
+### Explicit private-root creation is source-qualified
+
+Frozen SN `c8998b31` / Connect `7600ea5c` passes 83 core and 26 public
+preparation-command tests in each of normal/race modes, plus four package
+vets. Root verified all 43 [author receipt](evidence/private-root-preparation-author-20261002.json)
+manifest bindings, raw archive and source bundles. Receipt SHA-256:
+`693444206629643f2100b2e30c05700241769c1d325aa108fe07c41afaf512ac`.
+The old directory-owner source fails the two new public creation controls in
+each mode. First-checkpoint positive results retain their separate source scope.
+
+The explicit fresh mode stages a private leaf inode during planning, binds its
+parent and zero-history fence, reserves the original inode/control before an
+atomic no-replace move, and syncs both parents. Child crashes, lost sync
+acknowledgements, competing targets and changed or missing completed namespaces
+resume only through original retained custody; runtime absence never triggers
+implicit mkdir. Target parent, staging and metadata roots remain precreated.
+
+This is Linux amd64 source/workspace qualification using Server `2c4e5dca`;
+arm64 execution, independent current-main tracked-module qualification,
+retained/restore semantic rebinding and capacity revisions remain open. The
+qualified candidates are being composed with provider/fleet fixes and current
+server before merge. No live preparation or deployment authority is supplied.
