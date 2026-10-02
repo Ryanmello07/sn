@@ -62,6 +62,13 @@ Git through a file proxy; that does not establish publication. Retained/restore
 semantic rebinding and joined capacity/retention revisions remain implementation
 work. The separate physical-export candidate is unqualified and grants no restart.
 
+The explicit physical-restore core at Connect `53bc92fa` has now passed
+[32 independent normal tests](evidence/restore-core-independent-normal-20261002.json),
+with no skips or failures. This scope checks original member identity, exact
+source/target authority, namespace capacity and interrupted publication. It does
+not qualify race behavior, public SN/native adapters, retained revisions or an
+operational restore. Those remain open alongside the remaining consumers.
+
 Launch still needs an exact current composed release, runtime/genesis/checkpoint
 and production policy authority, provisioned custody and host configuration,
 restore/upgrade qualification and approved bootstrap actions. Runtime 472 is an

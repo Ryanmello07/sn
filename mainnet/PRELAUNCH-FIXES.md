@@ -22,14 +22,25 @@ retained while the successor is fixed and qualified.
 Cancellation must preserve every unpaid earning component, not just released
 contract sweeps. Review found that canceling a legacy payment can leave its
 subsidy and reliability amounts on the canceled row while the recorded subsidy
-window prevents the planner from creating them again. Carry those original
-obligations into a replacement exactly once, with their source window and
-adjustment provenance intact. Cover both unsubmitted cancellation and confirmed
+window prevents the planner from creating them again. Retain and resume those
+original obligations exactly once, with their source window and adjustment
+provenance intact; prefer the original payment over issuing a new subsidy window.
+Cover both unsubmitted cancellation and confirmed
 processor cancellation, repeated cancellation/replanning, concurrent planning,
 and cancellation after the October 6 boundary. An uncertain submission or an
 observed transaction hash must remain in reconciliation rather than become
 replacement debt. This correction remains pending; do not infer completion from
 the separate bonus and submission-basis candidate.
+
+Restore must distinguish physical storage identity from logical signing
+authority. The owner-device reservation binds the full device configuration,
+including its logical state pathname, to the original request. Copying files to
+a new volume may require reviewed physical identity rebinding; it must not
+silently change that logical pathname or manufacture a fresh signing reservation.
+Keep the original device response, request and pending intent, and test recovery
+through the real owner-signing entry point. The
+[32-test independent restore-core normal scope](evidence/restore-core-independent-normal-20261002.json)
+does not yet qualify that consumer or production restoration.
 
 The [current preparation state](MAINNET.md#current-preparation-state--october-2)
 distinguishes integrated source fixes, qualified candidates and the remaining
