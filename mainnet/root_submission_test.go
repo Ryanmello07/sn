@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/urfoundation/sn/internal/durablefixture"
 )
 
 // One fixture owns a complete canonical reader and a distinct mutation route.
@@ -483,7 +484,7 @@ func TestRootSubmissionCancellationAndConcurrentOwnership(t *testing.T) {
 func TestRootSubmissionStoreRejectsReplacementAndUnsafeFiles(t *testing.T) {
 	fixture := newRootSubmissionFixture(t)
 	_, store := fixture.open(t, true)
-	if _, err := openRootSubmissionStore(fixture.config, false); err == nil {
+	if _, err := openRootSubmissionStore(fixture.config, false, fixture.offline.storage.Context); err == nil {
 		t.Fatal("concurrent journal owner admitted")
 	}
 	store.close()
@@ -502,14 +503,14 @@ func TestRootSubmissionStoreRejectsReplacementAndUnsafeFiles(t *testing.T) {
 		if err := os.WriteFile(path, invalid, 0600); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootSubmissionStore(fixture.config, false); err == nil {
+		if _, err := openRootSubmissionStore(fixture.config, false, fixture.offline.storage.Context); err == nil {
 			t.Fatal("invalid submission journal reopened")
 		}
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openRootSubmissionStore(fixture.config, true); err == nil {
+	if _, err := openRootSubmissionStore(fixture.config, true, fixture.offline.storage.Context); err == nil {
 		t.Fatal("missing journal reset retained allowance")
 	}
 	if err := os.WriteFile(path, raw, 0600); err != nil {
@@ -521,21 +522,21 @@ func TestRootSubmissionStoreRejectsReplacementAndUnsafeFiles(t *testing.T) {
 		if err := os.Chmod(file, 0644); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootSubmissionStore(fixture.config, false); err == nil {
+		if _, err := openRootSubmissionStore(fixture.config, false, fixture.offline.storage.Context); err == nil {
 			t.Fatal("public file admitted")
 		}
 		os.Remove(file)
 		if err := syscall.Mkfifo(file, 0600); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootSubmissionStore(fixture.config, false); err == nil {
+		if _, err := openRootSubmissionStore(fixture.config, false, fixture.offline.storage.Context); err == nil {
 			t.Fatal("special file admitted")
 		}
 		os.Remove(file)
 		if err := os.Symlink("synthetic-missing-state", file); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootSubmissionStore(fixture.config, false); err == nil {
+		if _, err := openRootSubmissionStore(fixture.config, false, fixture.offline.storage.Context); err == nil {
 			t.Fatal("symlink admitted")
 		}
 		os.Remove(file)
@@ -621,7 +622,9 @@ func TestRootSubmissionOfflineCustodyServiceComposition(t *testing.T) {
 		t.Fatal(err)
 	}
 	view := rootWeightObservation{Schema: rootWeightObservationSchema, Position: position.Observation, Enabled: true, ActiveNetworks: []uint16{0, 1, 2, 3, 4, 5, 6, 7}, StoredWeights: []rootStoredWeight{}, ConcentrationCap: 4096, StorageHash: rootObjectHash("synthetic complete root observation")}
-	serviceStore, err := openRootServiceStore(fixture.config.Service, true)
+	serviceStorage := durablefixture.New(t, t.Context(), filepath.Dir(action.Scope.StatePath))
+	prepareMainnetSnapshotTest(t, action.Scope.StatePath, "mainnet-root-service", rootServiceStoreLimit)
+	serviceStore, err := openRootServiceStore(fixture.config.Service, true, serviceStorage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

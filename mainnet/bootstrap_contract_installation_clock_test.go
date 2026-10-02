@@ -24,7 +24,7 @@ func TestBootstrapContractInstallationCurrentPolicyKeepsOriginalReceiptClock(t *
 	for _, store := range stores {
 		t.Cleanup(func() { _ = store.close() })
 	}
-	store, err := openEvmEvidenceActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], records[5], records[6], false, nil)
+	store, err := openEvmEvidenceActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], records[5], records[6], false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

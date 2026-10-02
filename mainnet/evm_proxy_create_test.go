@@ -432,7 +432,7 @@ func TestEvmProxyCreatePreviewPreservesWholeApprovedGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), []string{"bootstrap-contracts", "preview", "--action", "proxy-create", "--config", f.configPath}, &stdout, &stderr)
+	code := runMain(f.storageContext(context.Background()), []string{"bootstrap-contracts", "preview", "--action", "proxy-create", "--config", f.configPath}, &stdout, &stderr)
 	var preview evmPhasePreview
 	if err := json.Unmarshal(stdout.Bytes(), &preview); err != nil || code != 0 || preview.PlanHash != f.config.Plan.hash() || preview.ApprovalVerified || preview.InstallationComplete || preview.ExecutableAction != "proxy-create" || preview.ProxyConstructor == nil || preview.ProxyConstructor.ApprovedPolicy.EffectiveBlock != 999 || preview.ProxyAddress != crypto.CreateAddress(f.config.Plan.Actions[4].Sender, 4).Hex() || len(preview.ProxyStorage) != 5 || preview.Plan.Actions[4].Data != f.config.Plan.Actions[4].Data {
 		t.Fatalf("proxy preview: %+v %d %v %s", preview, code, err, stderr.String())
@@ -622,7 +622,7 @@ func TestEvmProxyCreateAmbiguousPublicationRetainsAttempt(t *testing.T) {
 	f.prepareProxySigned()
 	f.mine = false
 	stores, records := f.openProxyAncestors()
-	store, err := openEvmProxyActionStore(f.plan, records[0], records[1], records[2], records[3], false, nil)
+	store, err := openEvmProxyActionStore(f.plan, records[0], records[1], records[2], records[3], false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -675,11 +675,11 @@ func TestEvmProxyCreateClaimRecoveryKeepsFiveLocks(t *testing.T) {
 				return errors.New("synthetic proxy initial claim interruption")
 			}
 			return nil
-		})
+		}, f.storage.Context)
 		if err == nil || store != nil {
 			t.Fatalf("proxy %s interruption acknowledged", boundary)
 		}
-		store, err = openEvmProxyActionStore(f.plan, records[0], records[1], records[2], records[3], false, nil)
+		store, err = openEvmProxyActionStore(f.plan, records[0], records[1], records[2], records[3], false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -692,7 +692,7 @@ func TestEvmProxyCreateClaimRecoveryKeepsFiveLocks(t *testing.T) {
 			if index > 0 {
 				predecessor = rootObjectHash(records[index-1])
 			}
-			if other, err := openEvmSelectedActionStore(f.config, index, predecessor, false, nil); err == nil {
+			if other, err := openEvmSelectedActionStore(f.config, index, predecessor, false, nil, f.storage.Context); err == nil {
 				other.close()
 				t.Fatalf("proxy lost held lock %d", index)
 			}
@@ -702,7 +702,7 @@ func TestEvmProxyCreateClaimRecoveryKeepsFiveLocks(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, create := range []bool{false, true} {
-			if other, err := openEvmProxyActionStore(f.plan, records[0], records[1], records[2], records[3], create, nil); err == nil {
+			if other, err := openEvmProxyActionStore(f.plan, records[0], records[1], records[2], records[3], create, nil, f.storage.Context); err == nil {
 				other.close()
 				t.Fatal("lost proxy child renewed allowance")
 			}
@@ -795,7 +795,7 @@ func TestEvmProxyCreateOutputFailureRetainsInitialization(t *testing.T) {
 	}
 	args := []string{"bootstrap-contracts", "resume", "--action", "proxy-create", "--config", f.configPath, "--run-dir", f.config.Plan.RunDirectory, "--accept-plan-hash", f.config.Plan.hash(), "--online", "--submit"}
 	var stderr bytes.Buffer
-	if code := runMain(context.Background(), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "output failed") {
+	if code := runMain(f.storageContext(context.Background()), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "output failed") {
 		t.Fatalf("proxy output failed before authoritative publication: %d %s", code, stderr.String())
 	}
 	if result, code, diagnostic := f.command("resume", "--action", "proxy-create"); code != 0 || result.Status != "proxy-created-initialized" || result.Receipt == nil || result.Receipt.StorageHash == "" || len(f.writes) != 5 {
@@ -918,7 +918,7 @@ func TestEvmProxyCreateRetainedCompletionRequiresPolicyDigest(t *testing.T) {
 		t.Fatal(diagnostic)
 	}
 	stores, records := f.openProxyAncestors()
-	store, err := openEvmProxyActionStore(f.plan, records[0], records[1], records[2], records[3], false, nil)
+	store, err := openEvmProxyActionStore(f.plan, records[0], records[1], records[2], records[3], false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

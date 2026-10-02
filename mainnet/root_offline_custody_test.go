@@ -107,7 +107,9 @@ func TestRootOfflineCustodyActionRecovery(t *testing.T) {
 	fixture := newRootOfflineFixture(t)
 	custody, custodyStore := fixture.open(t, true)
 	action := fixture.packet.Action
-	actionStore, err := openRootActionStore(action.Scope.StatePath, &action)
+	actionStorage := durablefixture.New(t, t.Context(), filepath.Dir(action.Scope.StatePath))
+	prepareMainnetSnapshotTest(t, action.Scope.StatePath, "mainnet-root-action", rootActionStoreLimit)
+	actionStore, err := openRootActionStore(action.Scope.StatePath, &action, actionStorage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +259,7 @@ func TestRootOfflineCustodyIndependentTrust(t *testing.T) {
 	store.close()
 	changed := fixture.trust
 	changed.ApprovalPublicKey = "0x" + strings.Repeat("ef", 32)
-	if _, err := openRootOfflineCustodyStore(changed, nil); err == nil {
+	if _, err := openRootOfflineCustodyStore(changed, nil, fixture.storage.Context); err == nil {
 		t.Fatal("recovery changed independent approval signer")
 	}
 }
@@ -478,7 +480,7 @@ func TestRootOfflineCustodyStoreMissingEmptyAndSingleOwner(t *testing.T) {
 	for _, remove := range []bool{false, true} {
 		fixture := newRootOfflineFixture(t)
 		_, store := fixture.open(t, true)
-		if _, err := openRootOfflineCustodyStore(fixture.trust, nil); err == nil {
+		if _, err := openRootOfflineCustodyStore(fixture.trust, nil, fixture.storage.Context); err == nil {
 			t.Fatal("two journal owners admitted")
 		}
 		store.close()
@@ -491,10 +493,10 @@ func TestRootOfflineCustodyStoreMissingEmptyAndSingleOwner(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootOfflineCustodyStore(fixture.trust, nil); err == nil {
+		if _, err := openRootOfflineCustodyStore(fixture.trust, nil, fixture.storage.Context); err == nil {
 			t.Fatal("missing or empty state recovered as fresh intent")
 		}
-		if _, err := openRootOfflineCustodyStore(fixture.trust, &fixture.packet); err == nil {
+		if _, err := openRootOfflineCustodyStore(fixture.trust, &fixture.packet, fixture.storage.Context); err == nil {
 			t.Fatal("missing or empty state allowed recreation")
 		}
 	}
@@ -502,10 +504,10 @@ func TestRootOfflineCustodyStoreMissingEmptyAndSingleOwner(t *testing.T) {
 	if err := os.WriteFile(fixture.trust.StatePath+".lock", []byte("incomplete"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openRootOfflineCustodyStore(fixture.trust, nil); err == nil {
+	if _, err := openRootOfflineCustodyStore(fixture.trust, nil, fixture.storage.Context); err == nil {
 		t.Fatal("incomplete creation marker recovered")
 	}
-	if _, err := openRootOfflineCustodyStore(fixture.trust, &fixture.packet); err == nil {
+	if _, err := openRootOfflineCustodyStore(fixture.trust, &fixture.packet, fixture.storage.Context); err == nil {
 		t.Fatal("incomplete creation marker reused")
 	}
 }
@@ -544,7 +546,7 @@ func TestRootOfflineCustodyStoreRejectsReplacementAndMalformedState(t *testing.T
 		if err := os.WriteFile(fixture.trust.StatePath, invalid, 0600); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootOfflineCustodyStore(fixture.trust, nil); err == nil {
+		if _, err := openRootOfflineCustodyStore(fixture.trust, nil, fixture.storage.Context); err == nil {
 			t.Fatalf("case %d loaded altered custody state", index)
 		}
 	}
@@ -565,7 +567,7 @@ func TestRootOfflineCustodyStoreRejectsSpecialAndSymlinkFiles(t *testing.T) {
 		if err := os.Chmod(path, 0644); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootOfflineCustodyStore(fixture.trust, nil); err == nil {
+		if _, err := openRootOfflineCustodyStore(fixture.trust, nil, fixture.storage.Context); err == nil {
 			t.Fatal("public custody file accepted", suffix)
 		}
 		if err := os.Remove(path); err != nil {
@@ -574,7 +576,7 @@ func TestRootOfflineCustodyStoreRejectsSpecialAndSymlinkFiles(t *testing.T) {
 		if err := syscall.Mkfifo(path, 0600); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootOfflineCustodyStore(fixture.trust, nil); err == nil {
+		if _, err := openRootOfflineCustodyStore(fixture.trust, nil, fixture.storage.Context); err == nil {
 			t.Fatal("FIFO custody file accepted", suffix)
 		}
 		if err := os.Remove(path); err != nil {
@@ -583,7 +585,7 @@ func TestRootOfflineCustodyStoreRejectsSpecialAndSymlinkFiles(t *testing.T) {
 		if err := os.Symlink(filepath.Join(t.TempDir(), "missing"), path); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootOfflineCustodyStore(fixture.trust, nil); err == nil {
+		if _, err := openRootOfflineCustodyStore(fixture.trust, nil, fixture.storage.Context); err == nil {
 			t.Fatal("symlink custody file accepted", suffix)
 		}
 		if err := os.Remove(path); err != nil {
@@ -596,7 +598,7 @@ func TestRootOfflineCustodyStoreRejectsSpecialAndSymlinkFiles(t *testing.T) {
 	if err := os.Chmod(filepath.Dir(fixture.trust.StatePath), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openRootOfflineCustodyStore(fixture.trust, nil); err == nil {
+	if _, err := openRootOfflineCustodyStore(fixture.trust, nil, fixture.storage.Context); err == nil {
 		t.Fatal("public custody directory accepted")
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/urfoundation/sn/internal/durablefixture"
 )
 
 // Every original owner is real fixture code. New public signatures are synthetic
@@ -87,6 +88,10 @@ func TestBootstrapSuccessorExecutionCommandReconstructsAndRetainsV3Custody(t *te
 		signatures = append(signatures, raw...)
 	}
 	registry := bootstrapSuccessorExecutionTestDirectory(t)
+	// The independently scoped nonce registry needs its own declared root;
+	// retaining the original root nonce does not implicitly admit this directory.
+	f.root.storage = durablefixture.New(t, t.Context(), append(append([]string{}, f.root.storage.Roots...), registry)...)
+	f.contracts.storage = f.root.storage
 	executionRequest := bootstrapSuccessorExecutionRequest{Schema: bootstrapSuccessorExecutionRequestSchema, SafeReviewHash: review.ContentHash,
 		RegistryDirectory: registry, Owners: oracle.owners, Singleton: common.BytesToAddress(crypto.Keccak256([]byte("synthetic public singleton"))),
 		SafeSignatures: bootstrapSuccessorExecutionTestRaw(t, "synthetic-public-safe-signatures.bin", signatures)}

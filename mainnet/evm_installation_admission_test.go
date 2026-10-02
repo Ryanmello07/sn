@@ -149,7 +149,7 @@ func TestEvmProxyAdmissionRejectsCollapsedDeploymentRoles(t *testing.T) {
 				t.Fatal(err)
 			}
 			var stdout, stderr bytes.Buffer
-			code := runMain(t.Context(), []string{"bootstrap-contracts", "preview", "--action", actionId, "--config", f.configPath}, &stdout, &stderr)
+			code := runMain(f.storageContext(t.Context()), []string{"bootstrap-contracts", "preview", "--action", actionId, "--config", f.configPath}, &stdout, &stderr)
 			if code != 2 || !strings.Contains(stderr.String(), "distinct") || stdout.Len() != 0 {
 				t.Errorf("unsigned %s %s collision accepted: %d %s", actionId, collision.name, code, stderr.String())
 			}

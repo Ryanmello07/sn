@@ -181,7 +181,7 @@ func TestEvmEvidenceCreateAmbiguousPublicationExhaustsLastAttempt(t *testing.T) 
 	f := newEvmEvidenceFixture(t)
 	f.prepareEvidenceSigned()
 	stores, records := f.openEvidenceAncestors()
-	store, err := openEvmEvidenceActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], records[5], records[6], false, nil)
+	store, err := openEvmEvidenceActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], records[5], records[6], false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,11 +233,11 @@ func TestEvmEvidenceCreateClaimRecoveryKeepsEightLocks(t *testing.T) {
 				return errors.New("synthetic evidence initial claim interruption")
 			}
 			return nil
-		})
+		}, f.storage.Context)
 		if err == nil || store != nil {
 			t.Fatalf("evidence %s interruption acknowledged", boundary)
 		}
-		store, err = openEvmEvidenceActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], records[5], records[6], false, nil)
+		store, err = openEvmEvidenceActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], records[5], records[6], false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -250,7 +250,7 @@ func TestEvmEvidenceCreateClaimRecoveryKeepsEightLocks(t *testing.T) {
 			if index > 0 {
 				predecessor = rootObjectHash(records[index-1])
 			}
-			competing, err := openEvmSelectedActionStore(f.config, index, predecessor, false, nil)
+			competing, err := openEvmSelectedActionStore(f.config, index, predecessor, false, nil, f.storage.Context)
 			if err == nil || competing != nil {
 				t.Fatalf("evidence operation released lock %d", index)
 			}
@@ -300,7 +300,7 @@ func TestEvmEvidenceCreateOutputFailureRetainsCreation(t *testing.T) {
 		t.Fatal(diagnostic)
 	}
 	var stderr bytes.Buffer
-	code := runMain(context.Background(), []string{"bootstrap-contracts", "resume", "--action", "evidence-create", "--config", f.configPath, "--run-dir", f.config.Plan.RunDirectory, "--accept-plan-hash", f.config.Plan.hash(), "--online"}, bootstrapRootFailedWriter{}, &stderr)
+	code := runMain(f.storageContext(context.Background()), []string{"bootstrap-contracts", "resume", "--action", "evidence-create", "--config", f.configPath, "--run-dir", f.config.Plan.RunDirectory, "--accept-plan-hash", f.config.Plan.hash(), "--online"}, bootstrapRootFailedWriter{}, &stderr)
 	if code != 1 || !strings.Contains(stderr.String(), "output failed") {
 		t.Fatalf("evidence output failure not surfaced: %d %s", code, stderr.String())
 	}

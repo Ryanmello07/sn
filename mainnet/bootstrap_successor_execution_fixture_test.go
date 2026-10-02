@@ -18,12 +18,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urfoundation/sn/internal/durablepath"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // Each fixture owns distinct directories while deterministic test keys make
 // cross-root nonce conflicts reproducible. No real identity or route is used.
 type bootstrapSuccessorExecutionFixture struct {
 	t            *testing.T
+	storage      *durablefixture.Fixture
 	approval     bootstrapSuccessorExecutionApproval
 	key          ed25519.PrivateKey
 	profile      *safeExecutionProfile
@@ -65,7 +69,9 @@ func newBootstrapSuccessorExecutionNonceFixture(t *testing.T, safeNonce string, 
 	safeRequest.PreparationPlanHash = prepared.Plan.hash()
 	record := bootstrapSuccessorSafeTestRecord(prepared)
 	safeRequest.PreparationRecordHash = record.ContentHash
-	preparation, err := openBootstrapSuccessorPreparationStore(t.Context(), prepared.Plan, prepared, true, nil)
+	registry := bootstrapSuccessorExecutionTestDirectory(t)
+	storage := durablefixture.New(t, t.Context(), prepared.Plan.Proposal.OriginalRunDirectory, registry)
+	preparation, err := openBootstrapSuccessorPreparationStore(storage.Context, prepared.Plan, prepared, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +82,6 @@ func newBootstrapSuccessorExecutionNonceFixture(t *testing.T, safeNonce string, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry := bootstrapSuccessorExecutionTestDirectory(t)
 	request := bootstrapSuccessorExecutionRequest{Schema: bootstrapSuccessorExecutionRequestSchema, SafeReviewHash: review.ContentHash, RegistryDirectory: registry,
 		Owners: slices.Clone(oracle.owners), Singleton: common.BytesToAddress(crypto.Keccak256([]byte("synthetic singleton 1.4.1Safe")))}
 	draft := bootstrapSuccessorExecutionPlan{Review: review, Request: request}
@@ -105,7 +110,7 @@ func newBootstrapSuccessorExecutionNonceFixture(t *testing.T, safeNonce string, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &bootstrapSuccessorExecutionFixture{t: t, key: key, profile: oracle.profile, oracle: oracle, resolution: bootstrapSuccessorExecutionReconciliation{Status: "absent"}}
+	f := &bootstrapSuccessorExecutionFixture{t: t, storage: storage, key: key, profile: oracle.profile, oracle: oracle, resolution: bootstrapSuccessorExecutionReconciliation{Status: "absent"}}
 	f.approval = bootstrapSuccessorExecutionTestSign(t, plan, key, oracle.profile)
 	f.observation = bootstrapSuccessorExecutionObservation{NativeNumber: safeRequest.StartNativeNumber, NativeHash: common.HexToHash(safeRequest.StartNativeHash),
 		Singleton: request.Singleton, Owners: slices.Clone(request.Owners), Threshold: 2, SafeNonce: safeNonce, RelayerNonce: outerNonce, RelayerPendingNonce: outerNonce,
@@ -227,10 +232,16 @@ func (self *bootstrapSuccessorExecutionFixture) receipt() *bootstrapSuccessorExe
 // Tests retain no open owner at fixture cleanup, including failed assertions.
 func (self *bootstrapSuccessorExecutionFixture) open(create bool, hook func(string) error) *bootstrapSuccessorExecutionStore {
 	self.t.Helper()
-	owner, err := openBootstrapSuccessorExecutionStore(self.t.Context(), self.approval.Plan, self.approval, self.profile, create, hook)
+	owner, err := openBootstrapSuccessorExecutionStore(self.storageContext(self.t.Context()), self.approval.Plan, self.approval, self.profile, create, hook)
 	if err != nil {
 		self.t.Fatal(err)
 	}
 	self.t.Cleanup(func() { owner.close() })
 	return owner
+}
+
+// Each operation preserves its cancellation while selecting the same original
+// declaration; test faults never re-enroll a missing or replaced registry.
+func (self *bootstrapSuccessorExecutionFixture) storageContext(ctx context.Context) context.Context {
+	return durablepath.WithHost(durablevolume.WithReference(ctx, self.storage.Reference), self.storage.Host)
 }

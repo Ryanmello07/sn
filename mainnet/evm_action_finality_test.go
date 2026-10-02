@@ -11,7 +11,7 @@ import (
 // attempt or asking for another signature.
 func readEvmFinalityCustody(t *testing.T, f *evmCreateFixture) evmActionRecord {
 	t.Helper()
-	store, err := openEvmActionStore(f.config, false, nil)
+	store, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -22,6 +22,7 @@ import (
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/urfoundation/sn/crv4"
+	"github.com/urfoundation/sn/internal/durablefixture"
 )
 
 // Public historical metadata exercises the wrapper's advertised inner payment
@@ -145,7 +146,9 @@ func (self *rootChainFixture) submit(ctx context.Context, raw []byte) error {
 func rootOwnerFixture(t *testing.T) (*rootActionOwner, *rootActionStore, *rootSignerFixture, *rootChainFixture) {
 	t.Helper()
 	action, pair, _ := rootActionFixture(t)
-	store, err := openRootActionStore(action.Scope.StatePath, &action)
+	storage := durablefixture.New(t, t.Context(), filepath.Dir(action.Scope.StatePath))
+	prepareMainnetSnapshotTest(t, action.Scope.StatePath, "mainnet-root-action", rootActionStoreLimit)
+	store, err := openRootActionStore(action.Scope.StatePath, &action, storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -509,11 +512,13 @@ func TestRootActionRetainsDispatchFailureAndFeeOverrun(t *testing.T) {
 func TestRootActionStoreMissingEmptyAndSingleOwner(t *testing.T) {
 	for _, remove := range []bool{false, true} {
 		action, _, _ := rootActionFixture(t)
-		store, err := openRootActionStore(action.Scope.StatePath, &action)
+		storage := durablefixture.New(t, t.Context(), filepath.Dir(action.Scope.StatePath))
+		prepareMainnetSnapshotTest(t, action.Scope.StatePath, "mainnet-root-action", rootActionStoreLimit)
+		store, err := openRootActionStore(action.Scope.StatePath, &action, storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if other, err := openRootActionStore(action.Scope.StatePath, nil); err == nil {
+		if other, err := openRootActionStore(action.Scope.StatePath, nil, storage.Context); err == nil {
 			other.close()
 			t.Fatal("second process acquired owned action")
 		}
@@ -526,10 +531,10 @@ func TestRootActionStoreMissingEmptyAndSingleOwner(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := openRootActionStore(action.Scope.StatePath, nil); err == nil {
+		if _, err := openRootActionStore(action.Scope.StatePath, nil, storage.Context); err == nil {
 			t.Fatal("missing/empty record treated as unused allowance")
 		}
-		if _, err := openRootActionStore(action.Scope.StatePath, &action); err == nil {
+		if _, err := openRootActionStore(action.Scope.StatePath, &action, storage.Context); err == nil {
 			t.Fatal("ownership marker allowed a replacement action")
 		}
 	}

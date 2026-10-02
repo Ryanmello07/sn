@@ -33,7 +33,7 @@ func TestBootstrapSuccessorCanonicalCommandExecutesAndRecovers(t *testing.T) {
 	publicArgs := []string{"contract-successor-execution-resume", "--config", f.original.path, "--run-dir", f.original.config.RunDirectory, "--accept-plan-hash", f.original.preparation.Plan.ContentHash}
 	publicArgs = append(append(publicArgs, f.paths...), f.approvalArgs...)
 	publicArgs = append(publicArgs, "--online", "--submit", "--canonical-approval", f.canonicalRef.Path, "--canonical-approval-sha256", f.canonicalRef.Sha256)
-	if code := runBootstrapSuccessorExecutionCommand(t.Context(), publicArgs, &publicOutput, &publicError); code != 2 || publicOutput.Len() != 0 || !strings.Contains(publicError.String(), errBootstrapSuccessorSafeProvenanceUnavailable.Error()) {
+	if code := runBootstrapSuccessorExecutionCommand(f.original.storageContext(t.Context()), publicArgs, &publicOutput, &publicError); code != 2 || publicOutput.Len() != 0 || !strings.Contains(publicError.String(), errBootstrapSuccessorSafeProvenanceUnavailable.Error()) {
 		t.Fatal("complete signed review unlocked public submission", code, publicError.String())
 	}
 	if _, err := os.Stat(filepath.Join(f.original.config.RunDirectory, bootstrapSuccessorCanonicalFile)); !os.IsNotExist(err) {

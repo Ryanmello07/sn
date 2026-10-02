@@ -173,7 +173,7 @@ func TestEvmCoordinatorCreatePreviewExportsFullGraphWithoutCustody(t *testing.T)
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), []string{"bootstrap-contracts", "preview", "--action", "coordinator-create", "--config", f.configPath}, &stdout, &stderr)
+	code := runMain(f.storageContext(context.Background()), []string{"bootstrap-contracts", "preview", "--action", "coordinator-create", "--config", f.configPath}, &stdout, &stderr)
 	var preview evmPhasePreview
 	if err := json.Unmarshal(stdout.Bytes(), &preview); err != nil || code != 0 {
 		t.Fatalf("coordinator preview: %d %v %s", code, err, stderr.String())
@@ -418,7 +418,7 @@ func TestEvmCoordinatorCreateAmbiguousAttemptPublication(t *testing.T) {
 	f := newEvmCoordinatorFixture(t)
 	f.prepareCoordinatorSigned()
 	f.mine = false
-	reserveStore, err := openEvmActionStore(f.config, false, nil)
+	reserveStore, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -427,7 +427,7 @@ func TestEvmCoordinatorCreateAmbiguousAttemptPublication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vaultStore, err := openEvmVaultActionStore(*f.plan.Vault, reserve, false, nil)
+	vaultStore, err := openEvmVaultActionStore(*f.plan.Vault, reserve, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +436,7 @@ func TestEvmCoordinatorCreateAmbiguousAttemptPublication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := openEvmCoordinatorActionStore(f.plan, reserve, vault, false, nil)
+	store, err := openEvmCoordinatorActionStore(f.plan, reserve, vault, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +483,7 @@ func TestEvmCoordinatorCreateClaimRecoveryKeepsAllCustody(t *testing.T) {
 	for _, boundary := range []string{"marker-synced", "record-synced"} {
 		f := newEvmCoordinatorFixture(t)
 		f.prepareCoordinatorPrerequisites()
-		reserveStore, err := openEvmActionStore(f.config, false, nil)
+		reserveStore, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -491,7 +491,7 @@ func TestEvmCoordinatorCreateClaimRecoveryKeepsAllCustody(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		vaultStore, err := openEvmVaultActionStore(*f.plan.Vault, reserve, false, nil)
+		vaultStore, err := openEvmVaultActionStore(*f.plan.Vault, reserve, false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -504,11 +504,11 @@ func TestEvmCoordinatorCreateClaimRecoveryKeepsAllCustody(t *testing.T) {
 				return errors.New("synthetic implementation claim interruption")
 			}
 			return nil
-		})
+		}, f.storage.Context)
 		if err == nil || store != nil {
 			t.Fatalf("implementation %s interruption was acknowledged", boundary)
 		}
-		store, err = openEvmCoordinatorActionStore(f.plan, reserve, vault, false, nil)
+		store, err = openEvmCoordinatorActionStore(f.plan, reserve, vault, false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -516,15 +516,15 @@ func TestEvmCoordinatorCreateClaimRecoveryKeepsAllCustody(t *testing.T) {
 		if err != nil || record.Signed != "" || record.Attempts != 0 || record.PredecessorHash != rootObjectHash(vault) {
 			t.Fatalf("implementation claim recovery altered intent: %+v %v", record, err)
 		}
-		if other, err := openEvmActionStore(f.config, false, nil); err == nil {
+		if other, err := openEvmActionStore(f.config, false, nil, f.storage.Context); err == nil {
 			other.close()
 			t.Fatal("implementation lost reserve lock")
 		}
-		if other, err := openEvmVaultActionStore(*f.plan.Vault, reserve, false, nil); err == nil {
+		if other, err := openEvmVaultActionStore(*f.plan.Vault, reserve, false, nil, f.storage.Context); err == nil {
 			other.close()
 			t.Fatal("implementation lost vault lock")
 		}
-		if other, err := openEvmCoordinatorActionStore(f.plan, reserve, vault, false, nil); err == nil {
+		if other, err := openEvmCoordinatorActionStore(f.plan, reserve, vault, false, nil, f.storage.Context); err == nil {
 			other.close()
 			t.Fatal("second implementation owner acquired custody")
 		}
@@ -532,11 +532,11 @@ func TestEvmCoordinatorCreateClaimRecoveryKeepsAllCustody(t *testing.T) {
 		if err := os.Remove(filepath.Join(f.config.Plan.RunDirectory, evmCoordinatorCreateStateFile)); err != nil {
 			t.Fatal(err)
 		}
-		if other, err := openEvmCoordinatorActionStore(f.plan, reserve, vault, false, nil); err == nil {
+		if other, err := openEvmCoordinatorActionStore(f.plan, reserve, vault, false, nil, f.storage.Context); err == nil {
 			other.close()
 			t.Fatal("missing implementation child became fresh authority")
 		}
-		if other, err := openEvmCoordinatorActionStore(f.plan, reserve, vault, true, nil); err == nil {
+		if other, err := openEvmCoordinatorActionStore(f.plan, reserve, vault, true, nil, f.storage.Context); err == nil {
 			other.close()
 			t.Fatal("apply bypassed completed implementation marker")
 		}
@@ -551,7 +551,7 @@ func TestEvmCoordinatorCreateRejectsChangedPredecessorLineage(t *testing.T) {
 	for _, ancestor := range []int{0, 1} {
 		f := newEvmCoordinatorFixture(t)
 		f.prepareCoordinatorSigned()
-		reserveStore, err := openEvmActionStore(f.config, false, nil)
+		reserveStore, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -561,7 +561,7 @@ func TestEvmCoordinatorCreateRejectsChangedPredecessorLineage(t *testing.T) {
 		}
 		store := reserveStore
 		if ancestor == 1 {
-			store, err = openEvmVaultActionStore(*f.plan.Vault, reserve, false, nil)
+			store, err = openEvmVaultActionStore(*f.plan.Vault, reserve, false, nil, f.storage.Context)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -642,7 +642,7 @@ func TestEvmCoordinatorCreateOutputFailureRetainsCompletion(t *testing.T) {
 	}
 	args := []string{"bootstrap-contracts", "resume", "--action", "coordinator-create", "--config", f.configPath, "--run-dir", f.config.Plan.RunDirectory, "--accept-plan-hash", f.config.Plan.hash(), "--online", "--submit"}
 	var stderr bytes.Buffer
-	if code := runMain(context.Background(), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "output failed") {
+	if code := runMain(f.storageContext(context.Background()), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "output failed") {
 		t.Fatalf("implementation output failure occurred before retention: %d %s", code, stderr.String())
 	}
 	if result, code, diagnostic := f.command("resume", "--action", "coordinator-create"); code != 0 || result.Status != "coordinator-created" || result.Receipt == nil || result.Receipt.StorageHash == "" || len(f.writes) != 3 {

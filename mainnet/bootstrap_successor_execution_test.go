@@ -158,7 +158,7 @@ func TestBootstrapSuccessorExecutionRecoversInterruptedCreation(t *testing.T) {
 			}
 			interrupted := errors.New("synthetic interrupted claim")
 			reached := false
-			owner, err := openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, true, func(stage string) error {
+			owner, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, true, func(stage string) error {
 				if stage == name+":"+boundary {
 					reached = true
 					return interrupted
@@ -171,7 +171,7 @@ func TestBootstrapSuccessorExecutionRecoversInterruptedCreation(t *testing.T) {
 			if !reached || !errors.Is(err, interrupted) {
 				t.Fatalf("creation interruption absent at %s/%s: %v", target, boundary, err)
 			}
-			owner, err = openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, true, nil)
+			owner, err = openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, true, nil)
 			if owner != nil {
 				owner.close()
 			}
@@ -457,7 +457,7 @@ func TestBootstrapSuccessorExecutionRetainsRevertedOuterAndLiveInnerClaim(t *tes
 // silently install the original eight attempts as a new allowance.
 func TestBootstrapSuccessorExecutionCancellationAndMissingClaimFailClosed(t *testing.T) {
 	f := newBootstrapSuccessorExecutionFixture(t)
-	owner, err := openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, false, nil)
+	owner, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 	if owner != nil {
 		owner.close()
 	}
@@ -466,7 +466,7 @@ func TestBootstrapSuccessorExecutionCancellationAndMissingClaimFailClosed(t *tes
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	owner, err = openBootstrapSuccessorExecutionStore(ctx, f.approval.Plan, f.approval, f.profile, true, nil)
+	owner, err = openBootstrapSuccessorExecutionStore(f.storageContext(ctx), f.approval.Plan, f.approval, f.profile, true, nil)
 	if owner != nil {
 		owner.close()
 	}
