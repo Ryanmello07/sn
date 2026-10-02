@@ -5227,3 +5227,29 @@ consumer-level reproduction and narrow successors. Preserve successful frozen
 scope receipts; do not mutate them or label source inspection a reproduced
 production failure. Distinguish exposed standard consumers from outer copy or
 ledger inspectors that already recheck the error/context before publication.
+
+
+### October 2: a running chain can upgrade during offline launch preparation
+
+The public archive advanced from observed v470 to exact finalized v472 while
+preparation continued. Retain the [new observation](evidence/runtime-472-route-observation-20261002.json)
+as unapproved intake, with raw code/metadata, hashes and block identity. An old
+artifact exception does not approve its successor. Continue unaffected reads,
+historical recovery and offline implementation; admit a current signed operation
+only against an independently reviewed consumed interface and exact current
+artifact. Runtime catalog selection must distinguish original receipt execution,
+current observation, pre-sign admission and pre-broadcast recheck. The failing
+Snow route supplies no replacement identity or permission to retarget signed plans.
+
+
+### October 2: progress labels must retain their evidence domain
+
+The [actual producer map](evidence/provider-proof-settlement-hook-map-20261002.md)
+shows that an unsigned claim queue can become finalized from leafClaimed state,
+while signed claims require exact-transaction receipts. Neither route is implied
+by provider transport readiness, and a local operator database snapshot supplies
+no native finality or payment amount. Extend monitoring through the existing
+owned proof/receipt/durable-flush boundaries, with independent expected pool,
+contract and operator identities. Keep unavailable, zero payout, carry, pending
+claim and uncertain signed liabilities distinct. Do not duplicate a shared pool's
+payment across provider slots or report status before durable acknowledgement.
