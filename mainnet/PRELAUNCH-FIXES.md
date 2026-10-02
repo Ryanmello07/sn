@@ -5313,3 +5313,16 @@ a new executed test result. Preserve finalized claim recovery while projecting
 unpaid credit and deferred reasons. A missing history or proof yields unavailable
 paid attribution, never a fabricated zero or fully-paid status. Add exact
 receipt/event and contract-path tests to the actual production monitor join.
+
+
+### Runtime compatibility must follow the consumed purpose
+
+The fleet's single-artifact gate also governed status reads, historical receipts
+and present sends. Its [purpose-scoped successor](evidence/fleet-runtime-catalog-progress-20261002.md)
+preserves an exact reviewed catalog and checks the specific consumed semantics.
+Read-only compatibility does not authorize old signature domains or replace
+retained approvals. An upgrade receipt must decode execution under its parent
+runtime, then independently bind the included post-state; cancellation and wrong
+callback identity must be checked before event decoding. The author23 normal/race
+tests and causal controls are scoped evidence; independent review, current
+production artifact approval and final composed release qualification remain open.

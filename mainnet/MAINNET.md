@@ -2957,3 +2957,14 @@ epochs/operators for one coldkey. See the [producer mapping](evidence/provider-p
 and [source-bound contract semantics](evidence/claim-payment-semantics-20261002.json).
 No complete per-pool paid projection is qualified yet. This is part of MG-06/07
 and PH-12/15/28, with deterministic contract and monitor controls still required.
+
+
+### Fleet runtime continuation — author qualification
+
+The [fleet runtime catalog candidate](evidence/fleet-runtime-catalog-progress-20261002.md)
+now passes23 normal/race tests plus three package vets. Purpose-scoped artifact
+selection separates historical decoding, current reads and present write
+authority, preserving original signatures during recovery. Six causal controls
+discriminate each mode. All117 receipt bindings were verified. Independent
+qualification precedes integration; exact observed472 approval and the final
+release composition remain separate gates.
