@@ -6,11 +6,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
 )
 
@@ -138,6 +138,9 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 	if err := self.checkpoint(name + ":begin"); err != nil {
 		return err
 	}
+	if err := self.storage.checkWrite(self.file); err != nil {
+		return err
+	}
 	stage := self.stageName(name, kind)
 	names, err := self.names()
 	if err != nil {
@@ -186,6 +189,9 @@ func (self *bootstrapSuccessorExecutionDirectory) publish(name, kind string, raw
 		return err
 	}
 	if err := self.checkpoint(name + ":name-synced"); err != nil {
+		return err
+	}
+	if err := self.storage.checkWrite(self.file); err != nil {
 		return err
 	}
 	written, err := file.WriteAt(raw, 0)

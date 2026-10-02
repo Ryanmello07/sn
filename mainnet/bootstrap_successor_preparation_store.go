@@ -7,11 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
 )
 
@@ -130,6 +130,9 @@ func openBootstrapSuccessorPreparationStore(ctx context.Context, expected bootst
 	}
 	// Even an observed complete marker is synced on reopen: an earlier process
 	// might have failed after the completion write but before its fsync.
+	if err := self.storage.checkWrite(self.directory); err != nil {
+		return nil, err
+	}
 	markerFd, err := unix.Openat(fd, markerName, unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
@@ -140,6 +143,9 @@ func openBootstrapSuccessorPreparationStore(ctx context.Context, expected bootst
 		return nil, err
 	}
 	if !complete {
+		if err := self.storage.checkWrite(self.directory); err != nil {
+			return nil, err
+		}
 		written, err := markerFile.WriteAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
 		if err != nil || written != len(bootstrapRootClaimComplete) {
 			return nil, errors.Join(io.ErrShortWrite, err)
@@ -220,6 +226,9 @@ func (self *bootstrapSuccessorPreparationStore) publish(kind, name string, raw [
 	if err := self.checkpoint(kind + "-begin"); err != nil {
 		return err
 	}
+	if err := self.storage.checkWrite(self.directory); err != nil {
+		return err
+	}
 	fd := int(self.directory.Fd())
 	stage := self.stageName(kind)
 	stageFd, err := unix.Openat(fd, stage, unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CREAT|unix.O_EXCL, 0600)
@@ -245,6 +254,9 @@ func (self *bootstrapSuccessorPreparationStore) publish(kind, name string, raw [
 		return err
 	}
 	if err := self.checkpoint(kind + "-name-synced"); err != nil {
+		return err
+	}
+	if err := self.storage.checkWrite(self.directory); err != nil {
 		return err
 	}
 	written, err := file.WriteAt(raw, 0)
