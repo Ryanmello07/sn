@@ -23,7 +23,7 @@ const maxMonitorServicesBytes = 16 * 1024
 const maxMonitorValidatorRoles = 8
 
 // Callers distinguish an exhausted role census from unrelated source or wire faults.
-var errMonitorServicesCensus = errors.New("service policy requires at least one role, at most eight validators, four operators and four provider sources")
+var errMonitorServicesCensus = errors.New("service policy requires at least one role, at most eight validators and four each of operators, providers and claim sources within shared output capacity")
 
 // Roles are fixed by the local expected census, with no candidate-supplied
 // label values. Each role has independent source, checkpoint and metric owners.
@@ -32,6 +32,7 @@ type monitorServicesPolicy struct {
 	Validators []monitorValidatorPolicy `json:"validators"`
 	Operators  []monitorOperatorPolicy  `json:"operators,omitempty"`
 	Providers  []monitorProviderPolicy  `json:"providers,omitempty"`
+	Claims     []monitorClaimPolicy     `json:"claims,omitempty"`
 }
 
 // The full current source is exact. A retained intent may still name its older
@@ -69,8 +70,8 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 	if policy.Schema != monitorServicesSchema {
 		return nil, errors.New("service policy schema is unknown")
 	}
-	rolesCount := len(policy.Validators) + len(policy.Operators) + len(policy.Providers)
-	if rolesCount == 0 || rolesCount > diagnostics.MaximumDomains-2 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators || len(policy.Providers) > maxMonitorProviders {
+	rolesCount := len(policy.Validators) + len(policy.Operators) + len(policy.Providers) + len(policy.Claims)
+	if rolesCount == 0 || rolesCount > diagnostics.MaximumDomains-2 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators || len(policy.Providers) > maxMonitorProviders || len(policy.Claims) > maxMonitorClaims {
 		return nil, errMonitorServicesCensus
 	}
 	paths := map[string]bool{}
@@ -176,6 +177,35 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 		}
 	}
 	slices.SortFunc(policy.Providers, func(a, b monitorProviderPolicy) int { return strings.Compare(a.Role, b.Role) })
+	claimSources := map[string]bool{}
+	claimPools := map[protocol.ClaimProgressPool]bool{}
+	for index := range policy.Claims {
+		claim := &policy.Claims[index]
+		if err := claim.validate(expected); err != nil {
+			return nil, err
+		}
+		key := claim.Endpoint + "\x00" + claim.ExpectedMember
+		if roles[claim.Role] || claimSources[key] || claimPools[claim.ExpectedPool] {
+			return nil, errors.New("claim role, endpoint member or pool repeats the independent census")
+		}
+		roles[claim.Role], claimSources[key], claimPools[claim.ExpectedPool] = true, true, true
+		slices.SortFunc(claim.Epochs, func(a, b monitorClaimEpochPolicy) int {
+			if a.Epoch < b.Epoch {
+				return -1
+			}
+			if a.Epoch > b.Epoch {
+				return 1
+			}
+			return 0
+		})
+		checkpoint, metrics := monitorClaimPaths(checkpointPath, metricsPath, claim.Role)
+		for _, path := range []string{checkpoint, checkpoint + ".lock", metrics, metrics + ".lock"} {
+			if err := addPath(path); err != nil {
+				return nil, err
+			}
+		}
+	}
+	slices.SortFunc(policy.Claims, func(a, b monitorClaimPolicy) int { return strings.Compare(a.Role, b.Role) })
 	slices.SortFunc(policy.Validators, func(a, b monitorValidatorPolicy) int { return strings.Compare(a.Role, b.Role) })
 	return &policy, nil
 }

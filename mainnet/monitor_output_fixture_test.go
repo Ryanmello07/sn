@@ -120,6 +120,10 @@ func monitorTestStorageContext(t *testing.T, ctx context.Context, args []string)
 				path, _ := monitorProviderPaths(values["--checkpoint"], values["--metrics-file"], role.Role)
 				provisionMonitorTestCustody(t, path)
 			}
+			for _, role := range policy.Claims {
+				path, _ := monitorClaimPaths(values["--checkpoint"], values["--metrics-file"], role.Role)
+				provisionMonitorTestCustody(t, path)
+			}
 		}
 	}
 	for index, arg := range args {
