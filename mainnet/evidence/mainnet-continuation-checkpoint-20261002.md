@@ -54,7 +54,12 @@ reconciliation path. The correction must materialize only the exact reserved
 payload that has not yet been staged, preserving historical terminal ordering.
 Those tests must remain intact. Separate assertions that mistake the mutable
 census head for an immutable signed member need narrowly scoped fixture updates.
-The full adjacent census, corrected-source qualification, race and vet are pending.
+The adjacent normal census is terminal: 20 roots, 14 passes and six failures.
+Four failures are positive immutable-protocol fixture maps that include the
+legitimately mutable census head; two are the actual ordering regression above.
+The original log SHA-256 is
+`528aebc3caa805b75a924739ea81b36debc5941c1f1a700720a965d43e5a2b8f`.
+Corrected-source qualification, race and vet remain pending.
 Production offline preparation and its actual role adapters remain open.
 
 ## Qualification and evidence hardening lessons

@@ -1,5 +1,36 @@
 # Production implementation backlog — October 2, 2026
 
+## Later verified deltas
+
+The [continuation checkpoint](mainnet-continuation-checkpoint-20261002.md)
+records newer source qualification without changing the pinned census below.
+Observer `6d398662` is independently qualified. Composed `69f4bbdd` has 78
+selected normal passes; remaining race/independent gates are active. Startup
+`c3707376` preserves healthy miners after a later transient admission failure.
+Callback quarantine and provider observation are separate successor work.
+
+The new immutable-member source `8d37e7a5` passed 16 core normal controls, then
+completed all 20 adjacent normal controls with 14 passes and six failures.
+Four positive fixture maps incorrectly include a legitimately mutable census
+head. Two failures expose real premature finalization of retained terminal or
+policy stages; their ordering assertions must remain unchanged in the fix.
+The original failed source and results stay retained.
+
+PH-03 has a concrete additional read boundary: `miner/sn.go` manual `claim`
+calls SDK `SnEpochSync` and `SnPoolClaimSync` directly and panics on failure.
+The exact SDK `5d37be38` / Connect `0a5cda0e` graph retries only one response
+for default 502/503 status, with a 100–1,000 millisecond pause; its GET wrapper
+returns a transport error rather than retrying it. Route hedging does not prove
+the required minimum read-retry duration: two immediate 503 responses can end
+the operation well before 60 seconds. Qualify an owner-level read budget of at
+least 60 seconds, normally 300 seconds for expected available data, with typed
+permanent/decode refusal and cancellation joins. The separate daemon retry
+path is not evidence that this finite command is resilient. Signed POST or
+claim broadcasts must not be blindly repeated under the read policy.
+
+The immediate patch order below describes the original census; these deltas
+advance its evidence, without closing the entire corresponding PH/MG rows.
+
 This read-only implementation census is pinned to SN
 `653061a15ee32b56f8dfb602d3bfcdaea7d30b47` and server
 `10a8f4d8ab73822b4c796f9035486f0507e09bd2` (incoming server `6387a012`).
