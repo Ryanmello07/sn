@@ -50,7 +50,7 @@ Historical phase logs are `historical-three-normal.jsonl` and
 `historical-three-race.jsonl`; their active wrapper's `early-results.json`
 is not presented as a final receipt.
 
-The later, separate completed-scope receipt `focused-causal-receipt.json`
+The later, separate [completed-scope receipt](server025-focused-causal-20261002.json), retained byte-for-byte from `focused-causal-receipt.json`,
 hashes to `484ada95842abdc5eed1b24a57bc0460d541c16c90d61884648ccb3055b9c31d`.
 It binds the 40 focused server/SN roots in both modes, four successful server
 vets, the two SN mutex-copy findings, three historical roots in both modes
@@ -92,7 +92,7 @@ hashes to
 An earlier pre-overlay invocation selected no tests; it is retained separately
 as `guard-taxonomy-baseline.jsonl` and is not a causal pass.
 
-The independently sealed core receipt is
+The [independently sealed core receipt](durable-core-independent-20261002.json) is retained byte-for-byte from
 `/mnt/data/sn-testnet/sol-connect-durable-core-independent-20261002/receipt.json`,
 SHA-256 `dcbe525ec9fd39d556a8b7d441bb58981d1b56a2866e2edab082d2c5cfdb61fc`.
 It verifies exact clean `5930a970`, 22 normal and 22 race roots plus vet, and
@@ -107,11 +107,18 @@ current Connect `37153b2b` without replacing unrelated changes. Only the five
 22 normal/22 race roots and vet. Its nonstandard dependency census contains
 only the peer itself. Go 1.26.6 compiler SHA-256 is
 `29e6e0b8be61beb1489ceae62b304343566de8a1dc700af74bde7aeb9c80ad45`.
-The separate author integration receipt
+The separate [author integration receipt](durable-core-integration-20261002.json), retained byte-for-byte from
 `/mnt/data/sn-testnet/mainnet-durable-volume-20261002/evidence/core-integration-receipt.json`
 hashes to `647a5f507c34abc594239252313a62f687bc1ea58cb0ff6839851ed350cb26a6`.
 It binds the independent core receipt and exact module/compiler files. It does
 not qualify the rest of Connect, additive inventory or downstream adopters.
+
+The [independent integration join](durable-core-integration-join-20261002.json)
+also binds the unchanged peer, module declarations and compiler to both sealed
+receipts. The four small receipts linked here preserve their original bytes;
+the larger raw logs and referenced source workspaces remain external retained
+evidence at the paths recorded in those receipts. This repository copy does not
+claim to contain all raw test output or reproduce the compiler independently.
 
 Pre-publication refusal and uncertain publication have different recovery
 paths. Missing reserve before a write retains the prior checkpoint; a failed
