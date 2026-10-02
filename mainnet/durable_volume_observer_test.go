@@ -206,7 +206,7 @@ func compositionPreparationObservationRetry(t *testing.T, afterRpc, exhausted, c
 	code := runMainWithMonitorHooks(ctx, args, &output, &diagnostics, time.Now, hooks)
 	wantCode, wantWaits, wantEvents := 0, 1, 1
 	if exhausted {
-		wantCode, wantWaits, wantEvents = 1, 64, 0
+		wantCode, wantWaits, wantEvents = 1, 64, 1
 	}
 	if canceled {
 		wantEvents = 0
@@ -225,7 +225,12 @@ func compositionPreparationObservationRetry(t *testing.T, afterRpc, exhausted, c
 	if raw, err := os.ReadFile(preparationPath); err != nil || !bytes.Equal(before, raw) {
 		t.Fatal("observation recovery changed prepared custody", err)
 	}
-	if wantEvents == 1 {
+	if exhausted {
+		var event rootMonitorEvent
+		if err := json.Unmarshal(output.Bytes(), &event); err != nil || event.Status != "storage-unavailable" || event.Observation != nil || event.Snapshot != nil || compositionRpcReads(fixture.census) != beforeReads {
+			t.Fatal("exhausted finite sample invented freshness or omitted its outage", err, output.String())
+		}
+	} else if wantEvents == 1 {
 		var event rootMonitorEvent
 		if err := json.Unmarshal(output.Bytes(), &event); err != nil || event.Status != "ready" || event.Observation == nil {
 			t.Fatal("recovered actual observation was not published", err, output.String())

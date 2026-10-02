@@ -244,19 +244,79 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 		}
 	}
 	encoder := json.NewEncoder(stdout)
+	// Exhausting one preparation read is a failed sample, not a new custody
+	// owner or permission to discard the remaining signed sample allowance.
+	// This path changes no checkpoint and never publishes a ready observation.
+	finishUnavailableSample := func(sample int, err error, priorFatalExit int) (bool, int) {
+		exit := preparationExit(err)
+		if exit != 1 {
+			return false, exit
+		}
+		// Missing current preparation facts cannot erase a separately observed
+		// integrity failure or uncertainty from an actual checkpoint write.
+		if priorFatalExit != 0 {
+			return false, priorFatalExit
+		}
+		sampledAt := now().UTC()
+		event := rootMonitorEvent{Schema: rootEventSchema, Sample: sample,
+			ObservedAt: sampledAt.Format(time.RFC3339Nano), Status: "storage-unavailable",
+			Detail: "passive preparation observation remains unavailable", ReadPhase: "preparation", ReadCause: "unavailable"}
+		if errors.Is(err, context.DeadlineExceeded) {
+			event.ReadCause = "timeout"
+		}
+		if monitoring {
+			event.Schema = rootDiagnosticEventSchema
+			event.Diagnostics = monitorDiagnosticSnapshot(stdout, stderr)
+			publication.publish(event, state, *metricsRole, sampledAt)
+			event.Publication = publication.outcome
+		}
+		if err := encoder.Encode(event); err != nil {
+			fmt.Fprintln(stderr, rootCommandErrorDetail(err, "root event encoding failed", monitoring))
+			return false, 1
+		}
+		if monitoring && hooks.afterEvent != nil {
+			hooks.afterEvent(ctx, "root")
+		}
+		if ctx.Err() != nil {
+			return false, 0
+		}
+		if sample == *samples {
+			return false, 1
+		}
+		sampleCancel()
+		if !waitMonitorService(ctx, "root", *interval, hooks) {
+			return false, 0
+		}
+		return true, 1
+	}
 	lastExit := 0
+samplesLoop:
 	for sample := 1; sample <= *samples; sample++ {
 		if ctx.Err() != nil {
 			return 0
 		}
 		renewSample()
 		if err := checkPreparation(); err != nil {
-			return preparationExit(err)
+			resume, exit := finishUnavailableSample(sample, err, 0)
+			if resume {
+				lastExit = exit
+				continue samplesLoop
+			}
+			return exit
 		}
 		event := rootMonitorEvent{Schema: rootEventSchema, Sample: sample}
 		preview, readErr := client.readRootPreview(sampleCtx, policy, policyHash)
 		if err := checkPreparation(); err != nil {
-			return preparationExit(err)
+			priorFatalExit := 0
+			if errors.Is(readErr, errRpcIntegrity) {
+				priorFatalExit = 3
+			}
+			resume, exit := finishUnavailableSample(sample, err, priorFatalExit)
+			if resume {
+				lastExit = exit
+				continue samplesLoop
+			}
+			return exit
 		}
 		sampledAt := now().UTC()
 		event.ObservedAt = sampledAt.Format(time.RFC3339Nano)
@@ -294,7 +354,12 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 			} else {
 				previousHash, previousNumber := state.lastHash, state.lastNumber
 				if err := checkPreparation(); err != nil {
-					return preparationExit(err)
+					resume, exit := finishUnavailableSample(sample, err, 0)
+					if resume {
+						lastExit = exit
+						continue samplesLoop
+					}
+					return exit
 				}
 				status, observeErr := state.observe(sampledAt, preview.Identity, *stallAfter)
 				if observeErr != nil {
@@ -331,8 +396,17 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 		if monitoring && ctx.Err() != nil {
 			return 0
 		}
+		priorFatalExit := 0
+		if event.Status == "rpc-integrity" || event.Status == "finality-conflict" || event.Status == "checkpoint-error" {
+			priorFatalExit = lastExit
+		}
 		if err := checkPreparation(); err != nil {
-			return preparationExit(err)
+			resume, exit := finishUnavailableSample(sample, err, priorFatalExit)
+			if resume {
+				lastExit = exit
+				continue samplesLoop
+			}
+			return exit
 		}
 		if monitoring {
 			event.Schema = rootDiagnosticEventSchema
@@ -343,7 +417,12 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 			event.Publication = publication.outcome
 		}
 		if err := checkPreparation(); err != nil {
-			return preparationExit(err)
+			resume, exit := finishUnavailableSample(sample, err, priorFatalExit)
+			if resume {
+				lastExit = exit
+				continue samplesLoop
+			}
+			return exit
 		}
 		if err := encoder.Encode(event); err != nil {
 			fmt.Fprintln(stderr, rootCommandErrorDetail(err, "root event encoding failed", monitoring))

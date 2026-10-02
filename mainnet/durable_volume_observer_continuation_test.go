@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,10 +34,9 @@ func TestDurableCompositionPassiveUnavailableSampleIdentityLossStops(t *testing.
 	compositionPassiveUnavailableSample(t, false, "identity")
 }
 
-// Each variant crosses the actual public two-sample command. Only the kernel
-// fact observation and owned wait are injected; signing uses synthetic keys
-// before preparation, and all root, lock, head and checkpoint bytes are real.
-func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition string) {
+// The two-sample limit is approved before any local state is prepared. Tests
+// cannot extend an already authenticated service's sample authority at runtime.
+func compositionTwoSampleFixture(t *testing.T) (*bootstrapChainFixture, []string) {
 	t.Helper()
 	fixture := newBootstrapRootPassiveFixture(t)
 	service := *fixture.root.plan.PassiveService
@@ -56,7 +56,16 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := compositionPassiveArguments(t, fixture)
+	return fixture, compositionPassiveArguments(t, fixture)
+}
+
+// Each variant crosses the actual public two-sample command. Only the kernel
+// fact observation and owned wait are injected; signing uses synthetic keys
+// before preparation, and all root, lock, head and checkpoint bytes are real.
+func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition string) {
+	t.Helper()
+	fixture, args := compositionTwoSampleFixture(t)
+	service := fixture.root.plan.PassiveService
 	beforeReads := compositionRpcReads(fixture.census)
 	path := filepath.Join(fixture.root.plan.RunDirectory, bootstrapRootProgressFile)
 	before, err := os.ReadFile(path)
@@ -109,6 +118,8 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 		}
 	}
 	waits, events := 0, 0
+	var output, diagnostics bytes.Buffer
+	delivery := &monitorFixtureOutput{writer: &output, completed: make(chan struct{}, 1)}
 	hooks := monitorServiceHooks{
 		wait: func(waitCtx context.Context, role string, delay time.Duration) bool {
 			waits++
@@ -139,7 +150,12 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 			}
 			return true
 		},
-		afterEvent: func(context.Context, string) {
+		afterEvent: func(ctx context.Context, _ string) {
+			select {
+			case <-delivery.completed:
+			case <-ctx.Done():
+				t.Fatal("sample canceled before its bounded diagnostic delivery")
+			}
 			events++
 			checkRetainedOwners()
 			if events == 1 {
@@ -160,8 +176,7 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 		},
 	}
 	ctx := durablepath.WithHost(fixture.storageContext(parent), host)
-	var output, diagnostics bytes.Buffer
-	code := runMainWithMonitorHooks(ctx, args, &output, &diagnostics, time.Now, hooks)
+	code := runMainWithMonitorHooks(ctx, args, delivery, &diagnostics, time.Now, hooks)
 	wantCode, wantEvents := 0, 2
 	if transition == "cancel" {
 		wantEvents = 1
@@ -180,6 +195,12 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 	var first rootMonitorEvent
 	if err := decoder.Decode(&first); err != nil || first.Sample != 1 || first.Status != "storage-unavailable" || first.Observation != nil || first.Snapshot != nil || first.ReadPhase != "preparation" || first.ReadCause != "unavailable" {
 		t.Fatal("failed sample invented freshness or omitted its bounded cause", first, err)
+	}
+	metrics := string(renderRootMonitorMetrics(first, &monitorState{}, "synthetic-root", "unconfigured", time.Time{}))
+	for _, value := range []string{"sn_mainnet_root_monitor_status{role=\"synthetic-root\"} 8\n", "sn_mainnet_root_monitor_current_observation{role=\"synthetic-root\"} 0\n", "sn_mainnet_root_monitor_read_only_ready{role=\"synthetic-root\"} 0\n", "sn_mainnet_root_monitor_finalized_block{role=\"synthetic-root\"} 0\n"} {
+		if !strings.Contains(metrics, value) {
+			t.Fatal("storage outage telemetry fabricated accepted progress", value)
+		}
 	}
 	if transition == "recover" {
 		var second rootMonitorEvent
@@ -200,5 +221,79 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 	}
 	if raw, err := os.ReadFile(path); err != nil || !bytes.Equal(before, raw) {
 		t.Fatal("sample continuation changed original preparation bytes", err)
+	}
+}
+
+func TestDurableCompositionPassiveUnavailableCannotHideRpcIntegrity(t *testing.T) {
+	compositionPassiveUnavailableAfterFatal(t, true)
+}
+
+func TestDurableCompositionPassiveUnavailableCannotRetryUncertainCheckpoint(t *testing.T) {
+	compositionPassiveUnavailableAfterFatal(t, false)
+}
+
+// A real wrong-chain response or lost acknowledgement from a real checkpoint
+// sync already requires this owner to stop. A concurrent observation outage
+// cannot consume another signed sample or reopen uncertain writer custody.
+func compositionPassiveUnavailableAfterFatal(t *testing.T, integrity bool) {
+	t.Helper()
+	fixture, args := compositionTwoSampleFixture(t)
+	beforeReads := fixture.census.count("system_chain")
+	if integrity {
+		fixture.census.evmChainHex = "0x3b1"
+	}
+	var preparationFile *os.File
+	uncertain := false
+	host := &compositionObservationHost{Host: fixture.root.storage.Host}
+	host.observe = func(file *os.File) error {
+		if preparationFile == nil {
+			preparationFile = file
+		}
+		if file == preparationFile && (uncertain || integrity && fixture.census.count("system_chain") > beforeReads) {
+			return unix.EIO
+		}
+		return nil
+	}
+	waits, events, writes := 0, 0, 0
+	hooks := monitorServiceHooks{
+		syncDirectory: func(role, kind string, file *os.File) error {
+			if integrity || role != "root" || kind != "checkpoint" || writes != 0 {
+				t.Fatal("unexpected physical publication after terminal evidence", role, kind, writes)
+			}
+			if err := file.Sync(); err != nil {
+				t.Fatal(err)
+			}
+			writes++
+			uncertain = true
+			return unix.EIO
+		},
+		wait: func(ctx context.Context, role string, delay time.Duration) bool {
+			waits++
+			if ctx.Err() != nil || role != "root" || delay <= 0 || delay > 30*time.Second || waits > 64 || events != 0 {
+				t.Fatal("soft outage continued after independently terminal evidence", waits, events, ctx.Err())
+			}
+			return true
+		},
+		afterEvent: func(context.Context, string) { events++ },
+	}
+	ctx := durablepath.WithHost(fixture.storageContext(t.Context()), host)
+	var output, diagnostics bytes.Buffer
+	code := runMainWithMonitorHooks(ctx, args, &output, &diagnostics, time.Now, hooks)
+	wantCode, wantWrites := 1, 1
+	if integrity {
+		wantCode, wantWrites = 3, 0
+	}
+	if code != wantCode || writes != wantWrites || events != 0 || waits != 64 || fixture.census.count("system_chain") != beforeReads+1 {
+		t.Fatal("observation unavailability erased a terminal result", code, writes, events, waits, diagnostics.String())
+	}
+	if _, err := preparationFile.Stat(); !errors.Is(err, os.ErrClosed) {
+		t.Fatal("terminal evidence did not join its retained preparation", err)
+	}
+	if integrity {
+		if _, err := os.Lstat(fixture.root.plan.PassiveService.CheckpointPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("wrong-chain response created a checkpoint", err)
+		}
+	} else if raw, err := os.ReadFile(fixture.root.plan.PassiveService.CheckpointPath); err != nil || len(raw) == 0 {
+		t.Fatal("lost acknowledgement discarded actual retained bytes", err)
 	}
 }
