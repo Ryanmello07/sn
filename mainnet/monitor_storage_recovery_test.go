@@ -306,7 +306,7 @@ func TestMonitorStorageReserveRecoversOnSameOwner(t *testing.T) {
 // The real retained head classifies a missing leaf as identity loss even though
 // its wrapped syscall also satisfies os.IsNotExist. No reader may call it fresh.
 func TestMonitorStorageLostMemberCannotBecomeFreshThroughWrappedAbsence(t *testing.T) {
-	root := t.TempDir()
+	root := mainnetPrivateTestDir(t)
 	volume := durablefixture.New(t, t.Context(), root)
 	path := filepath.Join(root, "monitor.json")
 	provisionMonitorTestCustody(t, path)
@@ -357,7 +357,7 @@ func (self *monitorStorageChainWriter) WriteContext(ctx context.Context, raw []b
 // original retained finality remains required before a new observation can win.
 func TestMonitorStorageChainLostAckReopensOriginalCheckpoint(t *testing.T) {
 	server, _ := testRpcServerWithEvm(t, "0x3c4", "")
-	root := t.TempDir()
+	root := mainnetPrivateTestDir(t)
 	volume := durablefixture.New(t, t.Context(), root)
 	path := filepath.Join(root, "monitor.json")
 	provisionMonitorTestCustody(t, path)
@@ -437,7 +437,7 @@ func TestMonitorStorageChainLostAckReopensOriginalCheckpoint(t *testing.T) {
 // actual public command publication, with completed bytes unchanged on refusal.
 func TestMonitorStorageChainReserveRetainsOwner(t *testing.T) {
 	server, _ := testRpcServerWithEvm(t, "0x3c4", "")
-	root := t.TempDir()
+	root := mainnetPrivateTestDir(t)
 	volume := durablefixture.New(t, t.Context(), root)
 	path := filepath.Join(root, "monitor.json")
 	provisionMonitorTestCustody(t, path)
