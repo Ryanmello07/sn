@@ -178,6 +178,7 @@ func TestFleetMainnetBindRejectsWrongActualEvmGenesisBeforeKeys(t *testing.T) {
 func TestFleetMainnetEvmChainMismatchNeverFallsBack(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	alternate := newFleetMainnetTestFixture(t)
+	t.Setenv("URNETWORK_STATE_DIR", fixture.durable.Roots[0])
 	fixture.opts["--rpc"] = []string{fixture.server.URL, alternate.server.URL}
 	fixture.stateLock.Lock()
 	fixture.evmChainId = 945
