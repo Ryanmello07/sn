@@ -2928,3 +2928,21 @@ normally and with race detection, with vet passing and causal old-body controls
 retained. See [integration evidence](evidence/current-graph-reader-progress-20261002.md).
 The adjacent Server and fresh-preparation reader scopes remain separate gates.
 This integration does not authorize signing, deployment or activation.
+
+
+### Fresh native and snapshot preparation — author qualification
+
+Candidate `e097cff896313ac346d7165cc8c030a34abb6ffb` passed fourteen public
+preparation command tests and two native checkpoint tests normally and with
+race detection; four package vets passed. Four controls on the previous source
+fail for the expected unsupported-owner boundaries in each mode. Root verified
+the [author receipt](evidence/fixed-owner-preparation-author-20261002.json),
+its 34 manifest members, raw archive and source bundle. Receipt SHA-256:
+`8ef17e85905a18d80248d3d5438b8299e05ec893e6af418c1d002ecf21657ed6`.
+
+This covers fresh native journals and fixed snapshot heads in precreated private
+roots, including pending-attribute recovery and refusal to recreate lost completed
+members. It does not grant runtime authority or restart authorization. Independent
+qualification and the current published Connect/main composition remain pending;
+private-root creation, retained/restore validation, remaining owners and joined
+capacity revisions are still open. This candidate is not merged into main.
