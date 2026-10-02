@@ -155,7 +155,8 @@ func fleetRecoverableNative(ctx context.Context, opts docopt.Opts, manifest *pro
 	if record != nil {
 		return fleetRecoveryResumeNative(ctx, store, record, signer, authority, chain, action == "publish" || mustBoolOpt(opts, "--apply"))
 	}
-	view, start, err := authority.finalizedView(ctx, chain)
+	purpose := fleetNativeWritePurpose(action)
+	view, start, err := authority.finalizedFor(ctx, chain, purpose)
 	if err != nil {
 		return err
 	}
@@ -202,7 +203,17 @@ func fleetRecoverableNative(ctx context.Context, opts docopt.Opts, manifest *pro
 			return err
 		}
 		defer journal.Close()
-		result, err := snchain.RegisterHotkey(ctx, view, snchain.RegisterRequest{Command: "provider fleet register", Netuid: manifest.Netuid, Hotkey: manifest.Hotkey, Coldkey: key, BurnLimitRao: burnLimit, FeeLimitRao: feeLimit, Allowed: []crv4.RuntimeArtifactIdentity{authority.artifactIdentity()}, RuntimeAdmission: authority.nativeAdmission(chain), Journal: journal, Apply: mustBoolOpt(opts, "--apply"), Output: os.Stdout, Prepared: prepare, BeforeBroadcast: before})
+		admission := func(readCtx context.Context, block types.Hash) error {
+			if block == (types.Hash{}) {
+				return authority.signingAdmission(readCtx, chain, start, purpose)
+			}
+			_, err := authority.authenticateFor(readCtx, chain, block, crv4.FleetRegistrationRead)
+			return err
+		}
+		receiptRuntime := func(readCtx context.Context, block types.Hash) (crv4.AuthenticatedRuntimeArtifact, error) {
+			return authority.authenticateFor(readCtx, chain, block, crv4.FleetRegistrationRead)
+		}
+		result, err := snchain.RegisterHotkey(ctx, view, snchain.RegisterRequest{Command: "provider fleet register", Netuid: manifest.Netuid, Hotkey: manifest.Hotkey, Coldkey: key, BurnLimitRao: burnLimit, FeeLimitRao: feeLimit, Allowed: authority.artifactIdentities(), RuntimeAdmission: admission, ExecutionRuntime: authority.executionAdmission(chain, start, purpose), ReceiptRuntime: receiptRuntime, Journal: journal, Apply: mustBoolOpt(opts, "--apply"), Output: os.Stdout, Prepared: prepare, BeforeBroadcast: before})
 		if err != nil {
 			if record != nil {
 				return fleetRecoveryUnresolved(record, err)
@@ -223,7 +234,7 @@ func fleetRecoverableNative(ctx context.Context, opts docopt.Opts, manifest *pro
 		if err != nil {
 			return err
 		}
-		if err := authority.nativeAdmission(chain)(ctx, types.Hash{}); err != nil {
+		if err := authority.signingAdmission(ctx, chain, start, purpose); err != nil {
 			return err
 		}
 		if err := store.beforeExternal(ctx); err != nil {
@@ -236,7 +247,7 @@ func fleetRecoverableNative(ctx context.Context, opts docopt.Opts, manifest *pro
 		if err := prepare(snchain.SubmitResult{Raw: raw, Nonce: nonce, ExtrinsicHash: snchain.ExtrinsicHash(raw)}); err != nil {
 			return err
 		}
-		if err := authority.nativeAdmission(chain)(ctx, types.Hash{}); err != nil {
+		if err := authority.signingAdmission(ctx, chain, start, purpose); err != nil {
 			return fleetRecoveryUnresolved(record, err)
 		}
 		if err := before(); err != nil {
@@ -245,7 +256,7 @@ func fleetRecoverableNative(ctx context.Context, opts docopt.Opts, manifest *pro
 		if err := store.beforeExternal(ctx); err != nil {
 			return err
 		}
-		receipt, err = view.SubmitRawAndWatchFinalized(ctx, codec.HexEncodeToString(record.Raw))
+		receipt, err = view.SubmitRawAndWatchFinalizedRuntime(ctx, codec.HexEncodeToString(record.Raw), authority.executionAdmission(chain, start, purpose))
 		if err != nil {
 			return fleetRecoveryUnresolved(record, err)
 		}
@@ -276,8 +287,16 @@ func fleetRecoveryFinishNative(ctx context.Context, store *fleetRecoveryStore, r
 	if _, err := fleetRecoveryNativeHeader(ctx, chain, receipt.BlockNumber, receipt.BlockHash); err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
-	view, err := authority.viewAt(ctx, chain, receipt.BlockHash)
+	_, parent, err := chain.ReceiptHeaderAtContext(ctx, receipt.BlockHash)
 	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	execution, err := authority.executionAdmission(chain, record.StartHash, fleetNativeWritePurpose(record.Intent.Action))(ctx, parent)
+	if err != nil {
+		return fleetRecoveryUnresolved(record, err)
+	}
+	view := *chain
+	if err := view.BindRuntimeArtifact(execution); err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
 	if err := view.VerifyFinalizedExtrinsicContext(ctx, receipt.BlockHash, receipt.ExtrinsicHash); err != nil {
@@ -305,14 +324,18 @@ func fleetRecoveryFinishNative(ctx context.Context, store *fleetRecoveryStore, r
 		}
 		copy.Outcome = fmt.Sprintf("commitment 0x%x written at native block %d", observed.Hash, observed.CommitmentBlock)
 	} else {
-		uid, present, err := snchain.UIDAtContext(ctx, view, manifest.Netuid, manifest.Hotkey, receipt.BlockHash)
+		postState, err := authority.viewFor(ctx, chain, receipt.BlockHash, crv4.FleetRegistrationRead)
+		if err != nil {
+			return fleetRecoveryUnresolved(record, err)
+		}
+		uid, present, err := snchain.UIDAtContext(ctx, postState, manifest.Netuid, manifest.Hotkey, receipt.BlockHash)
 		if err != nil {
 			return fleetRecoveryUnresolved(record, err)
 		}
 		if !present {
 			return fleetRecoveryUnresolved(record, errors.New("native registration readback absent"))
 		}
-		owner, err := snchain.HotkeyOwnerAtContext(ctx, view, manifest.Hotkey, receipt.BlockHash)
+		owner, err := snchain.HotkeyOwnerAtContext(ctx, postState, manifest.Hotkey, receipt.BlockHash)
 		if err != nil {
 			return fleetRecoveryUnresolved(record, err)
 		}
@@ -411,7 +434,8 @@ func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoverySto
 			return fleetRecoveryUnresolved(record, fmt.Errorf("native archive scan checkpointed through %d; re-run to continue bounded recovery", through))
 		}
 	}
-	view, err := authority.viewAt(ctx, chain, finalized)
+	purpose := fleetNativeWritePurpose(record.Intent.Action)
+	view, err := authority.viewFor(ctx, chain, finalized, purpose)
 	if err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
@@ -425,7 +449,7 @@ func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoverySto
 	if !apply {
 		return fleetRecoveryUnresolved(record, errors.New("native replay requires --apply"))
 	}
-	if err := authority.nativeAdmission(chain)(ctx, types.Hash{}); err != nil {
+	if err := authority.signingAdmission(ctx, chain, record.StartHash, purpose); err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
 	copy := *record
@@ -436,7 +460,7 @@ func fleetRecoveryResumeNativeRange(ctx context.Context, store *fleetRecoverySto
 	if err := store.beforeExternal(ctx); err != nil {
 		return err
 	}
-	receipt, err := view.SubmitRawAndWatchFinalized(ctx, codec.HexEncodeToString(record.Raw))
+	receipt, err := view.SubmitRawAndWatchFinalizedRuntime(ctx, codec.HexEncodeToString(record.Raw), authority.executionAdmission(chain, record.StartHash, purpose))
 	if err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}

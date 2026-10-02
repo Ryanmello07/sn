@@ -26,6 +26,8 @@ type SubmitRequest struct {
 	Output      io.Writer
 	// Zero selects the current finalized head; exact receipts pass their hash.
 	RuntimeAdmission func(context.Context, types.Hash) error
+	// Exact execution-parent authority, separate from current signing checks.
+	ExecutionRuntime func(context.Context, types.Hash) (crv4.AuthenticatedRuntimeArtifact, error)
 	// An external custody owner persists exact signed bytes and send intent.
 	Prepared        func(SubmitResult) error
 	BeforeBroadcast func() error
@@ -146,7 +148,7 @@ func SubmitCall(ctx context.Context, bound *crv4.Chain, req SubmitRequest) (Subm
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
-	receipt, err := bound.SubmitRawAndWatchFinalized(ctx, codec.HexEncodeToString(raw))
+	receipt, err := bound.SubmitRawAndWatchFinalizedRuntime(ctx, codec.HexEncodeToString(raw), req.ExecutionRuntime)
 	if err != nil {
 		failed := base
 		failed.Stage, failed.Detail = JournalStageFailed, err.Error()
