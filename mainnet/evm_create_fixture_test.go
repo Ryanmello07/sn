@@ -40,6 +40,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urfoundation/sn/internal/durablepath"
+	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -312,6 +314,12 @@ func (self *evmCreateFixture) publishConfig() {
 	if err != nil {
 		self.t.Fatal(err)
 	}
+}
+
+// Direct public commands retain the fixture's declaration and the individual
+// caller's cancellation, without an ambient production admission bypass.
+func (self *evmCreateFixture) storageContext(ctx context.Context) context.Context {
+	return durablepath.WithHost(durablevolume.WithReference(ctx, self.storage.Reference), self.storage.Host)
 }
 
 // Every test reaches the actual top-level command dispatcher.

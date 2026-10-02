@@ -14,7 +14,7 @@ import (
 func TestBootstrapReceiptsRejectLostPreparationMarker(t *testing.T) {
 	f, _ := newBootstrapContractRoleFixture(t)
 	bootstrapSuccessorCommandTestComplete(t, f)
-	scope, err := openBootstrapContractReceiptScope(t.Context(), f.path, f.config.RunDirectory, f.preparation.Plan.ContentHash)
+	scope, err := openBootstrapContractReceiptScope(f.storageContext(t.Context()), f.path, f.config.RunDirectory, f.preparation.Plan.ContentHash)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -33,7 +33,7 @@ func runEvmPreview(t *testing.T, f *evmCreateFixture, extra ...string) (evmPhase
 	t.Helper()
 	args := append([]string{"bootstrap-contracts", "preview", "--config", f.configPath}, extra...)
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), args, &stdout, &stderr)
+	code := runMain(f.storageContext(context.Background()), args, &stdout, &stderr)
 	var result evmPhasePreview
 	if code == 0 {
 		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
@@ -223,7 +223,7 @@ func TestEvmPhasePreviewRejectsAmbiguousJsonAndExecutionFlags(t *testing.T) {
 // nor even a deliberately undecodable journal is inspected or replaced.
 func TestEvmPhasePreviewDoesNotInspectRetainedCustody(t *testing.T) {
 	f := newEvmCreateFixture(t)
-	store, err := openEvmActionStore(f.config, true, nil)
+	store, err := openEvmActionStore(f.config, true, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,11 +260,11 @@ func TestEvmPhasePreviewCancellationAndOutputFailureLeaveNoAuthority(t *testing.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var stdout, stderr bytes.Buffer
-	if code := runMain(ctx, args, &stdout, &stderr); code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), context.Canceled.Error()) {
+	if code := runMain(f.storageContext(ctx), args, &stdout, &stderr); code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), context.Canceled.Error()) {
 		t.Fatalf("canceled preview emitted signing material: %d %s", code, stderr.String())
 	}
 	stderr.Reset()
-	if code := runMain(context.Background(), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "unsigned preview output") {
+	if code := runMain(f.storageContext(context.Background()), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "unsigned preview output") {
 		t.Fatalf("failed signing-material output was acknowledged: %d %s", code, stderr.String())
 	}
 	requireEvmPreviewNoAuthority(t, f, f.config.Plan.RunDirectory)

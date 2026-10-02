@@ -94,7 +94,7 @@ func TestBootstrapContractRolePlanBindsApprovedGraph(t *testing.T) {
 	before, reads := f.journals(t), maps.Clone(f.contracts.counts)
 	var stdout, stderr bytes.Buffer
 	args := []string{"bootstrap-chain", "contract-role-plan", "--config", f.path}
-	if code := runMain(t.Context(), args, &stdout, &stderr); code != 0 {
+	if code := runMain(f.storageContext(t.Context()), args, &stdout, &stderr); code != 0 {
 		t.Fatal("approved contract-role plan refused", code, stderr.String())
 	}
 	var result bootstrapContractRolePlan
@@ -126,7 +126,7 @@ func TestBootstrapContractRolePlanBindsApprovedGraph(t *testing.T) {
 	prepared := f.result(t, "apply")
 	retained := f.journals(t)
 	var repeated bytes.Buffer
-	if code := runMain(t.Context(), args, &repeated, &stderr); code != 0 || !bytes.Equal(stdout.Bytes(), repeated.Bytes()) ||
+	if code := runMain(f.storageContext(t.Context()), args, &repeated, &stderr); code != 0 || !bytes.Equal(stdout.Bytes(), repeated.Bytes()) ||
 		!reflect.DeepEqual(retained, f.journals(t)) || !reflect.DeepEqual(prepared, f.result(t, "resume")) {
 		t.Fatal("contract-role planning changed original preparation or recovery", code, stderr.String())
 	}
@@ -199,7 +199,7 @@ func bootstrapContractRoleReject(t *testing.T, f *bootstrapChainFixture, diagnos
 	t.Helper()
 	before, reads := f.journals(t), maps.Clone(f.contracts.counts)
 	var stdout, stderr bytes.Buffer
-	code := runMain(t.Context(), []string{"bootstrap-chain", "contract-role-plan", "--config", f.path}, &stdout, &stderr)
+	code := runMain(f.storageContext(t.Context()), []string{"bootstrap-chain", "contract-role-plan", "--config", f.path}, &stdout, &stderr)
 	if code != 2 || stdout.Len() != 0 || !strings.Contains(stderr.String(), diagnostic) ||
 		!reflect.DeepEqual(before, f.journals(t)) || !reflect.DeepEqual(reads, f.contracts.counts) {
 		t.Fatal(assertion, code, stdout.String(), stderr.String())
@@ -221,16 +221,16 @@ func TestBootstrapContractRolePlanKeepsOfflineBoundary(t *testing.T) {
 	args := []string{"bootstrap-chain", "contract-role-plan", "--config", f.path}
 	for _, suffix := range []string{"--online", "--submit", "--run-dir"} {
 		var stdout, stderr bytes.Buffer
-		if code := runMain(t.Context(), append(append([]string{}, args...), suffix), &stdout, &stderr); code != 2 || stdout.Len() != 0 {
+		if code := runMain(f.storageContext(t.Context()), append(append([]string{}, args...), suffix), &stdout, &stderr); code != 2 || stdout.Len() != 0 {
 			t.Fatal("contract-role plan acquired an execution option", suffix, code)
 		}
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if code := runMain(ctx, args, io.Discard, io.Discard); code == 0 {
+	if code := runMain(f.storageContext(ctx), args, io.Discard, io.Discard); code == 0 {
 		t.Fatal("canceled contract-role plan reported success")
 	}
-	if code := runMain(t.Context(), args, bootstrapContractRoleFailedOutput{}, io.Discard); code != 1 {
+	if code := runMain(f.storageContext(t.Context()), args, bootstrapContractRoleFailedOutput{}, io.Discard); code != 1 {
 		t.Fatal("contract-role output loss reported success", code)
 	}
 	if !reflect.DeepEqual(before, f.journals(t)) || !reflect.DeepEqual(reads, f.contracts.counts) {

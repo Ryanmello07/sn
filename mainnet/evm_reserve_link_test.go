@@ -151,7 +151,7 @@ func TestEvmReserveLinkPreviewPreservesApprovedGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), []string{"bootstrap-contracts", "preview", "--action", "reserve-link", "--config", f.configPath}, &stdout, &stderr)
+	code := runMain(f.storageContext(context.Background()), []string{"bootstrap-contracts", "preview", "--action", "reserve-link", "--config", f.configPath}, &stdout, &stderr)
 	var preview evmPhasePreview
 	message, _ := f.config.Plan.signingBytes()
 	if err := json.Unmarshal(stdout.Bytes(), &preview); err != nil || code != 0 || preview.PlanHash != f.config.Plan.hash() || preview.ApprovalSigningMessageHex != hex.EncodeToString(message) || preview.ApprovalVerified || preview.InstallationComplete || preview.ExecutableAction != "reserve-link" || preview.ReserveBinding == nil || preview.ReserveBinding.Recorder.Hex() != preview.ProxyAddress || preview.ReserveBinding.Reserve.Hex() != preview.ReserveAddress || len(preview.ReserveBindingStorage) != 2 || len(preview.ProxyStorage) != 5 || preview.ProxyConstructor == nil || preview.ProxyConstructor.ApprovedPolicy.EffectiveBlock != 999 || rootObjectHash(preview.Plan) != rootObjectHash(f.config.Plan) {
@@ -648,7 +648,7 @@ func TestEvmReserveLinkRetainedCompletionRequiresBindingDigest(t *testing.T) {
 		t.Fatal(diagnostic)
 	}
 	stores, records := f.openReserveLinkAncestors()
-	store, err := openEvmReserveLinkActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], false, nil)
+	store, err := openEvmReserveLinkActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

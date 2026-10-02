@@ -266,7 +266,7 @@ func TestBootstrapContractSuccessorCommandRetainsScopeAndReleasesOwnership(t *te
 	}
 	request.BootstrapPlanHash = f.preparation.Plan.ContentHash
 	bootstrapRootTestWrite(t, path, request)
-	store, err := openEvmActionStore(f.contracts.config, false, nil)
+	store, err := openEvmActionStore(f.contracts.config, false, nil, f.storageContext(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
