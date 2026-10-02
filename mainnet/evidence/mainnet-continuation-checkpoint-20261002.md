@@ -18,10 +18,10 @@ normal and one race pass, vet, and the old assertion's intended race failure.
 The earlier broad writer run remains 84 passes and one fixture failure.
 
 Frozen composition SN `69f4bbdd` / server `10a8f4d8` has passed all 78 selected
-normal roots. Race mainnet 21 and observer 17 roots have passed; remaining race
-roles and vet are still running at this checkpoint. Independent qualification
-selects 12 public roots, with eight mainnet normal passes so far. Its remaining
-checks are pending. The exact 287-file source join was rehashed; a source join
+normal roots. All 78 race roots and both vets have also passed. Independent qualification
+passes its twelve selected public roots in both modes and affected-package vet.
+The [sealed composition](durable-owner-composition-qualification-20261002.md)
+retains exact overlapping scopes and root binding readback. The exact 287-file source join was rehashed; a source join
 alone does not qualify the dependency graph. This composition still selects
 Connect `0a5cda0e`, not the separately qualified `71df099c` constructor fix.
 

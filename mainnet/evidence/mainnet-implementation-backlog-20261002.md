@@ -4,8 +4,10 @@
 
 The [continuation checkpoint](mainnet-continuation-checkpoint-20261002.md)
 records newer source qualification without changing the pinned census below.
-Observer `6d398662` is independently qualified. Composed `69f4bbdd` has 78
-selected normal passes; remaining race/independent gates are active. Startup
+Observer `6d398662` is independently qualified. Composed `69f4bbdd` now passes 78
+selected roots normal/race and vet, with twelve independent public roots in both
+modes and vet; its [sealed scope](durable-owner-composition-qualification-20261002.md)
+remains separate from later intake and the full backlog. Startup
 `c3707376` preserves healthy miners after a later transient admission failure.
 Callback quarantine and provider observation are separate successor work.
 

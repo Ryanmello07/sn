@@ -1,6 +1,6 @@
 # Mainnet prelaunch fixes
 
-**October 2 continuation checkpoint:** observer `6d398662` is now independently qualified at 17 normal/17 race roots plus vet. Composition `69f4bbdd` / server `10a8f4d8` passes 78 selected normal roots; remaining race/independent gates are active. Miner startup isolation `c3707376` passes 37 normal/37 race roots, while callback isolation, member recovery ordering and production preparation remain separate work. The [checkpoint and retained receipts](evidence/mainnet-continuation-checkpoint-20261002.md) record exact scopes, a newly exposed pending-stage ordering defect, private fixture ancestry and immutable physical evidence paths. No launch or full-backlog closure is inferred.
+**October 2 continuation checkpoint:** observer `6d398662` is now independently qualified at 17 normal/17 race roots plus vet. Composition `69f4bbdd` / server `10a8f4d8` now passes 78 selected normal/78 race roots and vet, with a separate independent 12-root normal/race scope and vet. The [exact sealed composition](evidence/durable-owner-composition-qualification-20261002.md) is an incremental source qualification. Miner startup isolation `c3707376` passes 37 normal/37 race roots, while callback isolation, member recovery ordering and production preparation remain separate work. The [checkpoint and retained receipts](evidence/mainnet-continuation-checkpoint-20261002.md) record exact scopes, a newly exposed pending-stage ordering defect, private fixture ancestry and immutable physical evidence paths. No launch or full-backlog closure is inferred.
 
 **October 2 MG-06 release composition (MG-02):** the [qualified scoped successor](evidence/release-258e25b4-server0aa1-20261002.md) at frozen SN `258e25b4` / server `0aa1e244` now packages economic-observer `dd21ed00` and signed-schedule `258e25b4` with the prior owner, contract-admission, recycle and schema-752 composition. Sequential source and eight-image repeats match and pass independent readback. Fresh current-pair qualification passes 83 normal/83 race roots and three-package vet; an independent nine-root normal/race scope also passes. Thirty-six component receipts and unchanged-server tests preserve their original scopes. This resolves the earlier source exclusion for the new artifact only. All ten fresh unsigned-plan actions stay blocked; independent compiler/dependency provenance, production policy/configuration, rollout/restore, published/running image identity and live authority remain open. Earlier releases stay immutable. Later server `025802a5` retention-debt/cleanup changes remain outside this frozen release. Its [static review and focused qualification checkpoint](evidence/server-and-storage-progress-20261002.md) is now recorded: 33 server roots pass normal/race and four package vets; seven SN composition roots pass normal/race, with its original `6cfc4773` mutex-copy vet failure preserved separately. Three historical server roots pass normal/race. The [full model run and separate test-only repair](evidence/server-stats-fixture-qualification-20261002.md) are now recorded: original `025802a5` executed all 1,345 roots with 1,334 passes, one statistics-fixture failure and ten optional skips; the isolated `a3fc4270` repair passes all eight affected roots normal/race and package vet. The original full run remains failed, and no patched-source full-suite pass is claimed. No successor production release or deployment qualification is inferred.
 
@@ -5049,3 +5049,46 @@ collecting a terminal report after recoverable process findings and clean up
 exact pre-armed faults after any terminal failure, while keeping the original
 failed assertions and signed boundary immutable. A partial or provisional
 release must never be silently promoted to mainnet launch approval.
+
+### October 2: physical recovery must preserve application ordering
+
+The immutable-member work exposed a boundary error: a generic storage opener
+completed a retained terminal or policy stage before the application performed
+its canonical reconciliation. In the failed `8d37e7a5` adjacent gate, both
+interrupted-ordering tests correctly refused that behavior. Retaining exact
+bytes is necessary, but does not alone authorize declaring an action complete,
+advancing runtime or policy authority, consuming a later action, or sending
+again. The [continuation checkpoint](evidence/mainnet-continuation-checkpoint-20261002.md)
+retains the failed source and the full 20-root census.
+
+Across miner, validator, operator and bootstrap owners, recovery of a physical
+reservation may materialize only its exact authorized missing bytes. Existing
+staged outcomes remain staged until their owning application reconciles them.
+Recovery must retain nonce/attempt floors, original runtime/policy identity and
+all signed attempts. A read-only observer may report pending state but must not
+promote it. Any durable-write uncertainty joins the affected owner before a
+replacement opens; unrelated roles continue.
+
+Qualification must cover interruption before stage creation, after stage fsync
+and after publication, with exact retained payload and no additional send.
+It must prove a pending old outcome refuses a newer runtime/policy action,
+then completes only after canonical reconciliation. Test maps must distinguish
+immutable signed protocol members from explicitly mutable authenticated census
+heads. Exclude only the named mutable head from a positive immutable-byte check;
+retain whole-directory no-effects checks at refused admission boundaries.
+
+### October 2: every public read path needs its own retry contract
+
+The manual provider claim command directly reads epoch and payout data through
+the SDK, unlike the retained claim daemon. The selected SDK/Connect defaults
+allow only one quick 502/503 retry, so a healthy service recovering moments later
+can still make this command fail in under 60 seconds. A daemon receipt cannot
+prove the finite command's behavior. Each public role must identify its actual
+GET owner and retain a minimum 60-second transient retry budget, normally 300
+seconds for expected available data. Transient network, timeout and gateway
+failures retry the same immutable read request; authentication, malformed data,
+wrong identity and proven integrity failures return typed permanent causes.
+Cancellation joins outstanding requests and body readers. Signed wallet POSTs
+and transaction broadcasts require durable outcome reconciliation, not this
+read retry policy. This manual-command correction remains queued for causal
+implementation and qualification; the source audit is not a fixed-code claim.
