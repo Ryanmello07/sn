@@ -114,8 +114,9 @@ It binds the independent core receipt and exact module/compiler files. It does
 not qualify the rest of Connect, additive inventory or downstream adopters.
 
 The [independent integration join](durable-core-integration-join-20261002.json)
-also binds the unchanged peer, module declarations and compiler to both sealed
-receipts. The four small receipts linked here preserve their original bytes;
+confirms peer/module byte identity and binds the independent core receipt.
+Compiler binding resides in the separate author integration receipt; this is
+not independent compiler verification. The four small receipts linked here preserve their original bytes;
 the larger raw logs and referenced source workspaces remain external retained
 evidence at the paths recorded in those receipts. This repository copy does not
 claim to contain all raw test output or reproduce the compiler independently.
