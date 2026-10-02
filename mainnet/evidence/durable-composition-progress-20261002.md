@@ -54,12 +54,13 @@ were not omitted from that attempt's historical source. The limited census of
 four named monitor/claim optional-context constructors found their other
 non-test callers pass or forward context. This was not a global constructor
 census; the broader [implementation backlog](mainnet-implementation-backlog-20261002.md)
-records separate validator caller leads. The pending fix retains the context at both observer
-constructors and retains a shared, read-only snapshot guard for the passive
-service lifetime. Temporary observation unavailability must retry the same
-owner within a finite policy, while proven custody loss stops the affected
-role. Valid-declaration checkpoint loss, runtime preparation loss, cancellation
-and shared-reader composition still need the successor's exact-source gate.
+records separate validator caller leads. The
+[separate observer checkpoint](durable-observer-continuation-progress-20261002.md)
+records the `653061a1` author custody/retry scope and the further confirmed
+soft-outage continuation defect. Implemented `97c7ae85` retains the same owners
+across failed samples; corrected test-only `6d398662` is still being qualified.
+Proven custody loss stops only the affected role. The complete peer composition
+still needs its exact-source gate.
 
 ## Separate successor execution admission failure
 
@@ -78,11 +79,11 @@ actual error correctly reports physical identity loss.
 The separate `f3c8a618` successor changes three production files to select
 read/write ownership only for exclusive execution and recheck admission before
 claim/payload/completion publication. Its eight new controls, including public
-shared-reader refusal, joined resume and no-send assertions, pass the initial
-author normal gate (78.471 seconds); its remaining selected normal/race and
-causal gates are pending. This partial result does not qualify the complete
-successor. That source is separate
-from the root observer/passive-preparation fix. The original
+shared-reader refusal, joined resume and no-send assertions, and two typed
+identity neighbors now pass independently in both modes, with vet and separate
+causal controls. The [exact receipt and updated author scope](durable-observer-continuation-progress-20261002.md)
+remain separate from the root observer/passive-preparation fix and full
+composition. The original
 [111-root adopter receipt](durable-adopter-qualification-20261002.md) remains
 valid for its selected scope and does not prove this newly exercised route.
 
