@@ -53,7 +53,10 @@ renamed `network_point` table. Test-only successor `63027130` corrects it to
 `account_point`, also checks unchanged point value and verifies held-payment
 continuation; production and module bytes remain identical to `97d22989`.
 Qualification runs the three affected tests separately while retaining unchanged
-successful scopes, then runs the full model suite on that corrected source.
+successful scopes. The [three affected normal tests](evidence/payout-retention-fixture-normal-20261002.json)
+now pass, and the full `./model` suite is running on exact Server `63027130`
+with an isolated PostgreSQL/Redis fixture. Its results remain pending; the
+affected race tests and causal controls retain separate scopes.
 These checkpoints do not supply completed release, deployment or activation
 evidence.
 
