@@ -36,8 +36,9 @@ adjustment provenance, amount/wallet reservation and processor-send safeguards;
 its [independent normal batch](evidence/payout-transition-successor-normal-20261002.json)
 completed 24 passes and one fixture failure across 25 selected tests, with no
 skips. The [independent race batch](evidence/payout-transition-successor-race-20261002.json)
-has the same 24 passes/one fixture failure, no skips and no race reports. Five
-affected package vets and the CLI build also pass. A further correction
+has the same 24 passes/one fixture failure, no skips and no race reports.
+[Five affected package vets and the CLI build](evidence/payout-transition-successor-vet-build-20261002.json)
+also pass. A further correction
 must preserve canceled payments' original subsidy and reliability obligations
 through replanning, including after the cutoff. Finish that correction and run
 the full current model suite before treating this transition as qualified.
