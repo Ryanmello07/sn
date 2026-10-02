@@ -8,9 +8,9 @@ deployment or acceptance verdict; use each linked receipt's exact source and
 dependency scope.
 
 The [durable claim producer checkpoint](evidence/claim-projection-progress-20261002.md)
-at `347605fd` passes 37 author tests in each mode and two package vets. Its
-independent gate is pending; the separately configured claim monitor is still
-being implemented. MG-07/PH-28 remain open for that consumer, current-source
+at `347605fd` passes 37 author tests in each mode and two package vets. Main `bd5e7e72` now integrates that source; independent 29-test normal/race
+qualification and two package vets retain their separate scope. The separately
+configured claim monitor is still being implemented. MG-07/PH-28 remain open for that consumer, current-source
 composition, contract/native economic observations and actual alert/repair delivery.
 
 ## Historical qualification checkpoints
@@ -5559,3 +5559,18 @@ arm64 execution, independent current-main tracked-module qualification,
 retained/restore semantic rebinding and capacity revisions remain open. The
 qualified candidates are being composed with provider/fleet fixes and current
 server before merge. No live preparation or deployment authority is supplied.
+
+
+### Durable claim projection is integrated
+
+Main merge `bd5e7e72` includes exactly the 11 qualified producer files from
+SN `347605fd`, preserving provider/fleet changes and original module files.
+Root verified all 127 author bindings and 76 independent bindings. The
+[independent receipt](evidence/claim-projection-independent-20261002.json), SHA-256
+`1eda6ff63df36aa0b4260573f31076676badac83224fead862eda57ce4e86a9e`,
+passes 29 tests per mode and two package vets; three old-body controls fail at
+the intended assertions per mode. Author 37-test coverage remains separate.
+The [main integration manifest](evidence/claim-projection-main-integration-20261002.json)
+binds exact source bytes. This graph uses Server10a; current-server composition
+and the independent claim consumer remain open. No finality, payment allocation
+or live launch authority follows from the queue projection.

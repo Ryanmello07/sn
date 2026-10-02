@@ -11,10 +11,10 @@ source qualifications; older checkpoints retain their historical scope.
 | --- | --- | --- |
 | Miner GET recovery, guarded spool and retained-member recovery | Integrated on SN main with the scoped independent receipts cited below. | Include their exact bytes and dependencies in the final release and recovery rehearsal. |
 | Fleet runtime capability selection | Integrated at `9671f456`; [independent 23-test normal/race scope](evidence/fleet-runtime-catalog-progress-20261002.md). | Current runtime authority, full native-role coverage and composed release qualification. |
-| Server blob readers | Server main `1d72f577` preserves upstream history and exact qualified reader changes; [26-test independent scope](evidence/current-graph-reader-progress-20261002.md). | Full current-server dependency/release composition and remaining model-suite qualification. |
+| Server blob readers | Server main `c2563f9a` includes the exact reader changes from `1d72f577` plus newer upstream code; [26-test independent reader scope](evidence/current-graph-reader-progress-20261002.md) remains historical. | Full current-server dependency/release composition and remaining model-suite qualification. |
 | Offline preparation | SN `1f66a2bd` / Connect `ba74f897` / Server `2c4e5dca` pass [101 independent tests per mode and five vets](evidence/preparation-composition-independent-20261002.json). | Tracked dependency publication and current-main integration; local workspace replacements are not a release. |
 | Directory owners and private-root creation | Directory owners pass [103 author tests per mode](evidence/directory-owner-preparation-author-20261002.json); explicit fresh leaf-root creation at SN `c8998b31` / Connect `7600ea5c` passes [109 author tests per mode and four vets](evidence/private-root-preparation-author-20261002.json). | Independent current-main tracked-module qualification, retained/restore semantics and capacity revisions. |
-| Provider and claim monitoring | Provider monitoring is integrated at `83d92f75`; [20 independent tests per mode and three vets](evidence/provider-monitor-integration-20261002.md) preserve exact source scope. The [durable claim producer `347605fd`](evidence/claim-projection-progress-20261002.md) passes 37 author tests per mode and two vets; independent qualification is pending. | Implement and qualify the independently configured claim consumer, compose the current sources, then complete economic-domain monitoring and actual alert/recovery rehearsal. |
+| Provider and claim monitoring | Provider monitoring is integrated at `83d92f75`; [20 independent tests per mode and three vets](evidence/provider-monitor-integration-20261002.md) preserve exact source scope. The durable claim producer is integrated at `bd5e7e72` with [37 author and 29 independent tests per mode](evidence/claim-projection-independent-20261002.json), retaining separate graph scopes. | Implement and qualify the independently configured claim consumer, compose the current sources, then complete economic-domain monitoring and actual alert/recovery rehearsal. |
 
 Launch still needs an exact current composed release, runtime/genesis/checkpoint
 and production policy authority, provisioned custody and host configuration,
@@ -3126,3 +3126,18 @@ arm64 execution, independent current-main tracked-module qualification,
 retained/restore semantic rebinding and capacity revisions remain open. The
 qualified candidates are being composed with provider/fleet fixes and current
 server before merge. No live preparation or deployment authority is supplied.
+
+
+### Durable claim projection is integrated
+
+Main merge `bd5e7e72` includes exactly the 11 qualified producer files from
+SN `347605fd`, preserving provider/fleet changes and original module files.
+Root verified all 127 author bindings and 76 independent bindings. The
+[independent receipt](evidence/claim-projection-independent-20261002.json), SHA-256
+`1eda6ff63df36aa0b4260573f31076676badac83224fead862eda57ce4e86a9e`,
+passes 29 tests per mode and two package vets; three old-body controls fail at
+the intended assertions per mode. Author 37-test coverage remains separate.
+The [main integration manifest](evidence/claim-projection-main-integration-20261002.json)
+binds exact source bytes. This graph uses Server10a; current-server composition
+and the independent claim consumer remain open. No finality, payment allocation
+or live launch authority follows from the queue projection.
