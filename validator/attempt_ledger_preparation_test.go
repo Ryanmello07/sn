@@ -15,6 +15,7 @@ import (
 	"testing"
 )
 
+// Standard consumers require the original EOF sentinel after exact bytes end.
 func TestAttemptPreparationReadersRetainStandardEof(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "retained")
 	raw := []byte("original public bytes")
@@ -50,6 +51,7 @@ type attemptPreparationCancelAtReadEnd struct {
 	cancel       context.CancelFunc
 }
 
+// The second actual admission observation cancels immediately after the read.
 func (self *attemptPreparationCancelAtReadEnd) Err() error {
 	if self.observations.Add(1) == 2 {
 		self.cancel()
@@ -57,6 +59,7 @@ func (self *attemptPreparationCancelAtReadEnd) Err() error {
 	return self.Context.Err()
 }
 
+// A real post-read cancellation must remain visible alongside a short EOF read.
 func TestAttemptPreparationReadersKeepCancellationAlongsideEof(t *testing.T) {
 	for _, mode := range []string{"read", "read-at"} {
 		func() {

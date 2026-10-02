@@ -5,9 +5,11 @@ package durablepath
 
 import (
 	"context"
+
 	"github.com/urnetwork/connect/durablevolume"
 )
 
+// Default scope is always daemon, with the established instance-only facts seam.
 func PlanPreparation(ctx context.Context, reference durablevolume.Reference, adapter durablevolume.PreparationAdapter) (durablevolume.PreparationPlan, error) {
 	if ctx != nil {
 		if host, present := ctx.Value(hostKey{}).(durablevolume.Host); present {
@@ -16,6 +18,8 @@ func PlanPreparation(ctx context.Context, reference durablevolume.Reference, ada
 	}
 	return durablevolume.PlanPreparation(ctx, reference, adapter)
 }
+
+// Owner-local scope is explicit and cannot be inherited from request contents.
 func PlanOwnerLocalPreparation(ctx context.Context, reference durablevolume.Reference, adapter durablevolume.PreparationAdapter) (durablevolume.PreparationPlan, error) {
 	if ctx != nil {
 		if host, present := ctx.Value(hostKey{}).(durablevolume.Host); present {
@@ -24,6 +28,8 @@ func PlanOwnerLocalPreparation(ctx context.Context, reference durablevolume.Refe
 	}
 	return durablevolume.PlanOwnerLocalPreparation(ctx, reference, adapter)
 }
+
+// Accepted daemon bytes are applied with the same physical host as the caller.
 func ApplyPreparation(ctx context.Context, reference durablevolume.Reference, adapter durablevolume.PreparationAdapter) (durablevolume.PreparationResult, error) {
 	if ctx != nil {
 		if host, present := ctx.Value(hostKey{}).(durablevolume.Host); present {
@@ -32,6 +38,8 @@ func ApplyPreparation(ctx context.Context, reference durablevolume.Reference, ad
 	}
 	return durablevolume.ApplyPreparation(ctx, reference, adapter)
 }
+
+// The owner-local entry point stays separate even when both scopes use one device.
 func ApplyOwnerLocalPreparation(ctx context.Context, reference durablevolume.Reference, adapter durablevolume.PreparationAdapter) (durablevolume.PreparationResult, error) {
 	if ctx != nil {
 		if host, present := ctx.Value(hostKey{}).(durablevolume.Host); present {

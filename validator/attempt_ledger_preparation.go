@@ -55,6 +55,7 @@ type AttemptLedgerPreparationFile struct {
 	Sha256 string `json:"sha256,omitempty"`
 }
 
+// A read-only public ledger census binds its exact portable members and head.
 type AttemptLedgerPreparationCensus struct {
 	Schema            string                         `json:"schema"`
 	Kind              string                         `json:"kind"`

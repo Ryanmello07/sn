@@ -10,6 +10,7 @@ import (
 	"io"
 )
 
+// No portable fallback can turn an unsupported host into physical preparation.
 func runStoragePreparationCommand(_ context.Context, _ []string, _ io.Writer, stderr io.Writer, _ bool) int {
 	fmt.Fprintln(stderr, "storage preparation requires the qualified Linux physical-custody profile")
 	return 2

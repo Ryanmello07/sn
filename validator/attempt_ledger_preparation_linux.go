@@ -24,6 +24,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// Original metadata permits cheap unchanged-member checks after initial hashing.
 type attemptPreparationObservation struct {
 	file AttemptLedgerPreparationFile
 	stat unix.Stat_t
@@ -43,6 +44,7 @@ type attemptPreparationView struct {
 	anchorAbsent bool
 }
 
+// Preparation operates only on private files owned by the exact calling identity.
 func attemptPreparationPrivate(file *os.File, directory bool) error {
 	if file == nil {
 		return errors.New("preparation descriptor is absent")
@@ -61,6 +63,7 @@ func attemptPreparationPrivate(file *os.File, directory bool) error {
 	return nil
 }
 
+// Child descriptors are opened without following links and bound to their names.
 func attemptPreparationOpen(parent *os.File, name string, directory bool) (*os.File, error) {
 	if parent == nil || name == "" || name == ".." || strings.ContainsAny(name, "/\x00") {
 		return nil, errors.New("preparation relative member is invalid")
@@ -87,6 +90,7 @@ func attemptPreparationOpen(parent *os.File, name string, directory bool) (*os.F
 	return file, nil
 }
 
+// Content-affecting metadata joins physical identity, mode and ownership checks.
 func attemptPreparationSameStat(a, b unix.Stat_t) bool {
 	return a.Dev == b.Dev && a.Ino == b.Ino && a.Mode == b.Mode && a.Uid == b.Uid && a.Gid == b.Gid && a.Nlink == b.Nlink && a.Size == b.Size && a.Mtim == b.Mtim && a.Ctim == b.Ctim
 }
@@ -117,6 +121,7 @@ func attemptPreparationCreate(ctx context.Context, parent *os.File, name string,
 	return errors.Join(file.Sync(), parent.Sync(), ctx.Err())
 }
 
+// Borrows the already exclusive root; only its backend descriptor is owned here.
 func openAttemptPreparationView(ctx context.Context, root *os.File, limits AttemptLedgerDiskLimits) (_ *attemptPreparationView, resultErr error) {
 	if ctx == nil {
 		return nil, errors.New("preparation context is absent")
@@ -156,6 +161,7 @@ func openAttemptPreparationView(ctx context.Context, root *os.File, limits Attem
 	return self, resultErr
 }
 
+// Callers join all read-only backend users before releasing this one descriptor.
 func (self *attemptPreparationView) close() error {
 	if self == nil || self.backend == nil {
 		return nil
@@ -164,6 +170,7 @@ func (self *attemptPreparationView) close() error {
 }
 
 // Names are sorted and strictly finite. No unknown backend name is skipped.
+// Namespace enumeration is bounded independently from file-byte verification.
 func (self *attemptPreparationView) names(directory *os.File, maximum uint64) ([]string, error) {
 	if err := self.ctx.Err(); err != nil {
 		return nil, err
@@ -186,6 +193,7 @@ func (self *attemptPreparationView) names(directory *os.File, maximum uint64) ([
 	return names, nil
 }
 
+// Only the backend's canonical file names belong to the reviewed database census.
 func attemptPreparationDescriptor(name string) (storage.FileDesc, bool) {
 	for _, candidate := range []struct {
 		kind           storage.FileType
@@ -203,6 +211,7 @@ func attemptPreparationDescriptor(name string) (storage.FileDesc, bool) {
 	return storage.FileDesc{}, false
 }
 
+// One bounded full hash establishes each retained member's exact initial bytes.
 func (self *attemptPreparationView) observe(parent *os.File, name, relative string, maximum uint64) (_ attemptPreparationObservation, resultErr error) {
 	file, err := attemptPreparationOpen(parent, name, false)
 	if err != nil {
@@ -241,6 +250,7 @@ func (self *attemptPreparationView) observe(parent *os.File, name, relative stri
 	return attemptPreparationObservation{stat: after, file: AttemptLedgerPreparationFile{Path: relative, Kind: "file", Mode: after.Mode & 0777, Bytes: uint64(after.Size), Sha256: "sha256:" + hex.EncodeToString(digest.Sum(nil))}}, nil
 }
 
+// Every allowed backend and migration member is included; unknown names refuse.
 func (self *attemptPreparationView) census(scope AttemptLedgerPreparationScope) ([]AttemptLedgerPreparationFile, error) {
 	rootNames, err := self.names(self.root, self.limits.MaxStorageFiles+16)
 	if err != nil {
@@ -316,11 +326,13 @@ func (self *attemptPreparationView) census(scope AttemptLedgerPreparationScope) 
 }
 
 // This struct contains only deterministic JSON-safe scalar fields.
+// This fixed checkpoint struct has no values that can fail JSON serialization.
 func mustAttemptPreparationJSON(value attemptLedgerCustodyCheckpoint) []byte {
 	raw, _ := json.Marshal(value)
 	return raw
 }
 
+// Portable reviewed bytes gain only the actual inspected target's inode bindings.
 func (self *attemptPreparationView) checkpoint(scope AttemptLedgerPreparationScope) attemptLedgerCustodyCheckpoint {
 	member := func(name string) attemptLedgerCustodyMember {
 		observed := self.members[name]
@@ -337,6 +349,7 @@ func (self *attemptPreparationView) checkpoint(scope AttemptLedgerPreparationSco
 
 // A complete initial hash is followed by metadata/name rechecks. No unchanged
 // backend is rehashed on every LevelDB block read during signature verification.
+// Later checks compare original members without rehashing unchanged history.
 func (self *attemptPreparationView) checkCensus() error {
 	if err := self.ctx.Err(); err != nil {
 		return err
@@ -383,6 +396,7 @@ func (self *attemptPreparationView) checkCensus() error {
 	return nil
 }
 
+// Small public migration receipts are read only from their retained root name.
 func (self *attemptPreparationView) readRoot(name string) (_ []byte, resultErr error) {
 	observed, present := self.members[name]
 	if !present {
@@ -418,6 +432,7 @@ func (self *attemptPreparationView) readRoot(name string) (_ []byte, resultErr e
 	return raw, self.ctx.Err()
 }
 
+// Original legacy/import facts must match the exact reviewed signed prefix.
 func (self *attemptPreparationView) verifyReceipts(scope AttemptLedgerPreparationScope, store *attemptRecordStore) error {
 	markerRaw, err := self.readRoot(attemptLedgerImportName)
 	if err != nil {
@@ -513,11 +528,13 @@ type attemptPreparationReadOnlyStorage struct {
 	closed    bool
 }
 
+// The engine's session lock is independent of the borrowed physical owner lock.
 type attemptPreparationReadOnlyLock struct {
 	owner *attemptPreparationReadOnlyStorage
 	once  sync.Once
 }
 
+// A second engine release cannot clear a later session's ownership.
 func (self *attemptPreparationReadOnlyLock) Unlock() {
 	self.once.Do(func() {
 		self.owner.stateLock.Lock()
@@ -526,6 +543,7 @@ func (self *attemptPreparationReadOnlyLock) Unlock() {
 	})
 }
 
+// Engine initialization acquires only this bounded read-only session flag.
 func (self *attemptPreparationReadOnlyStorage) Lock() (storage.Locker, error) {
 	self.stateLock.Lock()
 	defer self.stateLock.Unlock()
@@ -539,20 +557,30 @@ func (self *attemptPreparationReadOnlyStorage) Lock() (storage.Locker, error) {
 	return &attemptPreparationReadOnlyLock{owner: self}, nil
 }
 
+// Diagnostic logging cannot create a database LOG file during inspection.
 func (self *attemptPreparationReadOnlyStorage) Log(string) {}
+
+// CURRENT is immutable throughout offline read-only inspection.
 func (self *attemptPreparationReadOnlyStorage) SetMeta(storage.FileDesc) error {
 	return os.ErrPermission
 }
+
+// No backend output descriptor can be acquired through the read-only adapter.
 func (self *attemptPreparationReadOnlyStorage) Create(storage.FileDesc) (storage.Writer, error) {
 	return nil, os.ErrPermission
 }
+
+// Inspection cannot reap original database members.
 func (self *attemptPreparationReadOnlyStorage) Remove(storage.FileDesc) error {
 	return os.ErrPermission
 }
+
+// Inspection cannot replace an original named member.
 func (self *attemptPreparationReadOnlyStorage) Rename(storage.FileDesc, storage.FileDesc) error {
 	return os.ErrPermission
 }
 
+// The caller joins engine users before closing the borrowed physical view.
 func (self *attemptPreparationReadOnlyStorage) check() error {
 	self.stateLock.Lock()
 	closed := self.closed
@@ -563,6 +591,7 @@ func (self *attemptPreparationReadOnlyStorage) check() error {
 	return self.view.ctx.Err()
 }
 
+// Only a canonical CURRENT pointing at the retained manifest is accepted.
 func (self *attemptPreparationReadOnlyStorage) GetMeta() (storage.FileDesc, error) {
 	if err := self.check(); err != nil {
 		return storage.FileDesc{}, err
@@ -585,6 +614,7 @@ func (self *attemptPreparationReadOnlyStorage) GetMeta() (storage.FileDesc, erro
 	return descriptor, nil
 }
 
+// Stable enumeration comes from the bounded initial physical census.
 func (self *attemptPreparationReadOnlyStorage) List(types storage.FileType) ([]storage.FileDesc, error) {
 	if err := self.check(); err != nil {
 		return nil, err
@@ -603,6 +633,7 @@ func (self *attemptPreparationReadOnlyStorage) List(types storage.FileType) ([]s
 	return descriptors, nil
 }
 
+// Returned readers retain original member identity and bounded cancellation checks.
 func (self *attemptPreparationReadOnlyStorage) Open(descriptor storage.FileDesc) (storage.Reader, error) {
 	if err := self.check(); err != nil {
 		return nil, err
@@ -625,6 +656,7 @@ func (self *attemptPreparationReadOnlyStorage) Open(descriptor storage.FileDesc)
 	return &attemptPreparationReader{File: file, ctx: self.view.ctx}, nil
 }
 
+// Engine closure changes no persistent bytes and does not own the caller's root.
 func (self *attemptPreparationReadOnlyStorage) Close() error {
 	self.stateLock.Lock()
 	defer self.stateLock.Unlock()
@@ -638,6 +670,7 @@ type attemptPreparationReader struct {
 	ctx context.Context
 }
 
+// Chunked reads preserve naked EOF unless a genuine post-read failure also occurred.
 func (self *attemptPreparationReader) Read(raw []byte) (int, error) {
 	if err := self.ctx.Err(); err != nil {
 		return 0, err
@@ -649,6 +682,7 @@ func (self *attemptPreparationReader) Read(raw []byte) (int, error) {
 	return n, err
 }
 
+// Random reads obey the exact short-read sentinel while checking each bounded chunk.
 func (self *attemptPreparationReader) ReadAt(raw []byte, offset int64) (int, error) {
 	total := 0
 	for total < len(raw) {

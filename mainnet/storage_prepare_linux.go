@@ -20,10 +20,24 @@ import (
 
 // The fixed kind registry starts with ledger custody. Unsupported native,
 // snapshot, retained and restore formats refuse; they never become empty state.
-func storagePreparationAdapter() durablevolume.PreparationAdapter {
-	return durablevolume.PreparationAdapter{Build: buildStoragePreparationOwner, Inspect: inspectStoragePreparationOwner}
+func storagePreparationAdapter(ownerLocal bool) durablevolume.PreparationAdapter {
+	return durablevolume.PreparationAdapter{
+		Build: func(ctx context.Context, staging *os.File, name string, owner durablevolume.PreparationOwner) (durablevolume.PreparationOwnerPlan, error) {
+			if ownerLocal {
+				return durablevolume.PreparationOwnerPlan{}, errors.New("owner-local preparation has no implemented signing-owner adapter; validator ledger requires daemon scope")
+			}
+			return buildStoragePreparationOwner(ctx, staging, name, owner)
+		},
+		Inspect: func(ctx context.Context, target *os.File, owner durablevolume.PreparationOwnerPlan) ([]durablevolume.PreparedAttribute, error) {
+			if ownerLocal {
+				return nil, errors.New("owner-local preparation cannot reinterpret daemon ledger custody")
+			}
+			return inspectStoragePreparationOwner(ctx, target, owner)
+		},
+	}
 }
 
+// Only public ledger identity and finite limits can create a fresh staging bundle.
 func buildStoragePreparationOwner(ctx context.Context, staging *os.File, name string, owner durablevolume.PreparationOwner) (durablevolume.PreparationOwnerPlan, error) {
 	if owner.Kind != validator.AttemptLedgerPreparationKind || owner.Purpose != "fresh" || owner.RelativePath != "." {
 		return durablevolume.PreparationOwnerPlan{}, errors.New("storage preparation owner kind/purpose is not in the implemented fixed registry")
@@ -100,7 +114,7 @@ func runStoragePreparationCommand(ctx context.Context, args []string, stdout, st
 		return 2
 	}
 	reference := durablevolume.Reference{Path: path, Sha256: hash}
-	adapter := storagePreparationAdapter()
+	adapter := storagePreparationAdapter(ownerLocal)
 	var result any
 	var err error
 	if mode == "plan" {
