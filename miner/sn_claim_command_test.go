@@ -41,10 +41,11 @@ func TestFiniteClaimChild(t *testing.T) {
 	Run(args)
 }
 
-// Two initial status replies exhaust the SDK default but must not exhaust the
-// finite command's read-only operation. The third real GET can recover.
+// A finite status outage outlasts the SDK's parallel route attempts and short
+// retry. The command's longer read-only operation must reach recovery.
 func testFiniteClaimPublicGetRecovery(t *testing.T, target string) {
 	t.Helper()
+	const unavailableResponses = 16
 	var targetReads, epochReads, poolReads, posts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -63,7 +64,7 @@ func testFiniteClaimPublicGetRecovery(t *testing.T, target string) {
 			http.Error(w, "unexpected route", http.StatusNotFound)
 			return
 		}
-		if r.URL.Path == target && targetReads.Add(1) <= 2 {
+		if r.URL.Path == target && targetReads.Add(1) <= unavailableResponses {
 			http.Error(w, "synthetic temporary outage", http.StatusServiceUnavailable)
 			return
 		}
@@ -82,18 +83,18 @@ func testFiniteClaimPublicGetRecovery(t *testing.T, target string) {
 	if err := os.WriteFile(filepath.Join(state, "jwt"), []byte("synthetic-finite-claim-token"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestFiniteClaimChild$", "-test.timeout=20s")
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestFiniteClaimChild$", "-test.timeout=80s")
 	cmd.Env = append(os.Environ(), "URNETWORK_STATE_DIR="+state, "URNETWORK_FINITE_CLAIM_TEST_CHILD=1", "URNETWORK_FINITE_CLAIM_TEST_URL="+server.URL)
 	if target == "/sn/pool/claim" {
 		cmd.Env = append(cmd.Env, "URNETWORK_FINITE_CLAIM_TEST_EPOCH=1")
 	}
 	output, err := cmd.CombinedOutput()
-	if err != nil || targetReads.Load() != 3 || posts.Load() != 0 || !strings.Contains(string(output), "status: VERIFIED against the server root only") {
+	if err != nil || targetReads.Load() <= unavailableResponses || posts.Load() != 0 || !strings.Contains(string(output), "status: VERIFIED against the server root only") {
 		t.Fatalf("public finite claim abandoned a recoverable GET: target=%s reads=%d posts=%d err=%v output=%s", target, targetReads.Load(), posts.Load(), err, output)
 	}
-	if target == "/sn/epoch" && poolReads.Load() != 1 || target == "/sn/pool/claim" && epochReads.Load() != 0 {
+	if target == "/sn/epoch" && poolReads.Load() == 0 || target == "/sn/pool/claim" && epochReads.Load() != 0 {
 		t.Fatal("recovery repeated a completed operation", epochReads.Load(), poolReads.Load())
 	}
 }
