@@ -27,6 +27,9 @@ const (
 	journalRawDir   = "native-transactions"
 )
 
+// The original bytes require joined reconciliation before another mutation.
+var ErrJournalUncertain = errors.New("native journal publication requires retained-custody reconciliation")
+
 // JournalEntry is one line of the append-only native transaction journal.
 type JournalEntry struct {
 	Time           string `json:"time"`
@@ -47,7 +50,39 @@ type JournalEntry struct {
 // Journal is a private (0700) directory holding native-transactions.jsonl and
 // the exact SCALE bytes of every broadcast extrinsic.
 type Journal struct {
-	dir string
+	dir   string
+	guard durableJournal
+}
+
+// Guarded owners keep actual I/O anchored to admitted descriptors. Legacy
+// journals are explicit testnet callers; persistent mainnet callers choose one
+// of the daemon-volume or owner-local constructors and join before Close.
+type durableJournal interface {
+	append([]byte) error
+	saveRaw(types.Hash, []byte) error
+	entries() ([]JournalEntry, error)
+	checkWrite() error
+	close() error
+}
+
+// The caller joins its synchronous submission before releasing the root lease.
+func (self *Journal) Close() error {
+	if self == nil || self.guard == nil {
+		return nil
+	}
+	return self.guard.close()
+}
+
+// Guarded custody is rechecked immediately before an external signing/send effect.
+// Explicit legacy journals preserve their testnet contract.
+func (self *Journal) CheckWrite() error {
+	if self == nil {
+		return errors.New("journal is nil")
+	}
+	if self.guard != nil {
+		return self.guard.checkWrite()
+	}
+	return nil
 }
 
 // OpenJournal creates the directory when absent and refuses a non-private one.
@@ -93,6 +128,9 @@ func (self *Journal) Append(entry JournalEntry) error {
 	if err != nil {
 		return err
 	}
+	if self.guard != nil {
+		return self.guard.append(append(encoded, '\n'))
+	}
 	file, err := os.OpenFile(self.Path(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 	if err != nil {
 		return err
@@ -109,6 +147,9 @@ func (self *Journal) SaveRaw(hash types.Hash, raw []byte) error {
 	if self == nil {
 		return errors.New("journal is nil")
 	}
+	if self.guard != nil {
+		return self.guard.saveRaw(hash, raw)
+	}
 	path := filepath.Join(self.dir, journalRawDir, strings.TrimPrefix(hash.Hex(), "0x")+".scale")
 	temporary := path + ".tmp"
 	if err := os.WriteFile(temporary, raw, 0o600); err != nil {
@@ -122,12 +163,18 @@ func (self *Journal) RawPath(hash types.Hash) string {
 	return filepath.Join(self.dir, journalRawDir, strings.TrimPrefix(hash.Hex(), "0x")+".scale")
 }
 
-// Entries reads every journal line; a missing journal is empty.
+// Entries reads every journal line. Only the explicit legacy opener treats a
+// missing journal as empty; durable custody requires its retained checkpoint.
 func (self *Journal) Entries() ([]JournalEntry, error) {
 	if self == nil {
 		return nil, errors.New("journal is nil")
 	}
-	file, err := os.Open(self.Path())
+	if self.guard != nil {
+		return self.guard.entries()
+	}
+	var file *os.File
+	var err error
+	file, err = os.Open(self.Path())
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
