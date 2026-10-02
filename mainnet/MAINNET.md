@@ -1,5 +1,30 @@
 # Mainnet launch and operations plan
 
+## Current preparation state — October 2
+
+No accepted current production release or live deployment exists. The full
+28-lesson hardening scope and ten production gates remain tracked in
+[PRELAUNCH-FIXES.md](PRELAUNCH-FIXES.md). The component results below are exact
+source qualifications; older checkpoints retain their historical scope.
+
+| Component | Current evidence | Remaining work |
+| --- | --- | --- |
+| Miner GET recovery, guarded spool and retained-member recovery | Integrated on SN main with the scoped independent receipts cited below. | Include their exact bytes and dependencies in the final release and recovery rehearsal. |
+| Fleet runtime capability selection | Integrated at `9671f456`; [independent 23-test normal/race scope](evidence/fleet-runtime-catalog-progress-20261002.md). | Current runtime authority, full native-role coverage and composed release qualification. |
+| Server blob readers | Server main `1d72f577` preserves upstream history and exact qualified reader changes; [26-test independent scope](evidence/current-graph-reader-progress-20261002.md). | Full current-server dependency/release composition and remaining model-suite qualification. |
+| Offline preparation | SN `1f66a2bd` / Connect `ba74f897` / Server `2c4e5dca` pass [101 independent tests per mode and five vets](evidence/preparation-composition-independent-20261002.json). | Tracked dependency publication and current-main integration; local workspace replacements are not a release. |
+| Directory owners | SN `682d568c` / Connect `05e39766` pass [103 author tests per mode and four vets](evidence/directory-owner-preparation-author-20261002.json). | Independent joined qualification, private-root creation, retained/restore semantics and capacity revisions. |
+| Provider and claim monitoring | Provider author evidence exists; independent provider testing is active. Claim producer capacity, event identity, backlog and durable-publication changes are under implementation. | Freeze and qualify producer/consumer together, then complete economic-domain monitoring and actual alert/recovery rehearsal. |
+
+Launch still needs an exact current composed release, runtime/genesis/checkpoint
+and production policy authority, provisioned custody and host configuration,
+restore/upgrade qualification and approved bootstrap actions. Runtime 472 is an
+unapproved observation; the v470 planning exception does not extend to it.
+Owner device and production signing inputs remain live gates. Keep the 10% native
+miner allocation / 90% owner recycle policy and both validator roles unchanged.
+
+## Historical qualification checkpoints
+
 **October 2 retained-member integration:** main merge `b0fc5e99` now includes the qualified retained-member recovery and exact public custody fixtures. The original current-composition batch completed nine passes/one census assertion failure in each mode; the separate corrected execution root passed independently in normal/race plus vet. [Exact scopes and preserved failure](evidence/successor-member-qualification-20261002.md). Main code/module bytes match the reviewed correction while newer docs remain retained. New release, module intake and storage preparation gates stay separate.
 
 **October 2 adjacent reader successors:** Server main `1d72f577` now includes exact qualified `2c4e5dca` blob and module changes. Independent26 affected tests pass normally and with race detection, plus vet; old-body controls retain seven failures/six positives per mode. [Integration and exact scopes](evidence/current-graph-reader-progress-20261002.md) preserve newer upstream work and keep final current-main release composition open. Preparation `f5c0707b` remains a separate author-qualified reader candidate (11 validator/seven public CLI tests per mode, three vets) awaiting independent review. Native/snapshot preparation and fleet catalog work retain separate scope receipts.
