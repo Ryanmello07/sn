@@ -22,6 +22,15 @@ qualification and two package vets retain their separate scope. The separately
 configured claim monitor is still being implemented. MG-07/PH-28 remain open for that consumer, current-source
 composition, contract/native economic observations and actual alert/repair delivery.
 
+The [tracked preparation checkpoint](evidence/preparation-tracked-module-20261002.md)
+now seals 75 selected author tests per mode by an exact checksum-only source join,
+seven package vets and three verification builds at SN `0384cbfc` / Connect
+`7600ea5c` / Server `c2563f9a`. Candidate `9d7d57fc` preserves the latest
+`e08e1b11` source and documents byte-for-byte; its later claim composition is
+not behaviorally qualified by that receipt. Connect publication, independent
+current composition, retained/restore semantic rebinding and joined capacity
+revisions remain open. MG-09/PH-09 are in progress, with PH-20/PH-23 unchanged.
+
 ## Historical qualification checkpoints
 
 **October 2 continuation checkpoint:** observer `6d398662` is now independently qualified at 17 normal/17 race roots plus vet. Composition `69f4bbdd` / server `10a8f4d8` now passes 78 selected normal/78 race roots and vet, with a separate independent 12-root normal/race scope and vet. The [exact sealed composition](evidence/durable-owner-composition-qualification-20261002.md) is an incremental source qualification. Miner startup isolation `c3707376` passes 37 normal/37 race roots, while callback isolation, member recovery ordering and production preparation remain separate work. The [checkpoint and retained receipts](evidence/mainnet-continuation-checkpoint-20261002.md) record exact scopes, a newly exposed pending-stage ordering defect, private fixture ancestry and immutable physical evidence paths. No launch or full-backlog closure is inferred.
@@ -5568,6 +5577,32 @@ arm64 execution, independent current-main tracked-module qualification,
 retained/restore semantic rebinding and capacity revisions remain open. The
 qualified candidates are being composed with provider/fleet fixes and current
 server before merge. No live preparation or deployment authority is supplied.
+
+### Tracked preparation composition retains exact dependency failures
+
+The current [author receipt](evidence/preparation-tracked-module-author-20261002.json)
+seals core 14, public 31, native 2, ledger 11 and miner 10 tests in each mode on
+`1d51f8be`; server blob 7 passes in each mode on `0384cbfc`. The only source
+delta is four `go.sum` entries for server test dependencies. All Go and `go.mod`
+bytes and effective module versions are identical. The earlier blob normal,
+blob race and core/blob vet attempts failed before tests on missing sums and
+remain failed in the receipt. Nothing is relabeled as 75 tests executed on one
+commit. Complete `go list -deps -test` preflight now covers every selected
+consumer and dependency package before qualification.
+
+All seven package vets and three verification binary builds pass on `0384cbfc`.
+The built mainnet command refuses missing plan inputs with exit 2 and no output;
+no service or live preparation was started. The tracked Connect760 module is
+authenticated from exact local Git using a file proxy; publication and release
+provenance remain separate. Actual owner-startup EIO/EMFILE tests retain the
+original native journal, physical generation and completed preparation control,
+then reopen the same custody after the transient observation recovers.
+
+The source-only [latest-main join](evidence/preparation-current-main-join-20261002.json)
+retains all 27 preparation paths and all 21 newer main paths, including all 11 claim
+producer Go files, without manual conflict adaptation. That join is a candidate,
+not independent current-source qualification. Retained/restore rebinding,
+capacity revisions, actual restore rehearsal and a composed release stay open.
 
 
 ### Durable claim projection is integrated

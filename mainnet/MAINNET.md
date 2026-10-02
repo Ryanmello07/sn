@@ -33,9 +33,16 @@ source qualifications; older checkpoints retain their historical scope.
 | Miner GET recovery, guarded spool and retained-member recovery | Integrated on SN main with the scoped independent receipts cited below. | Include their exact bytes and dependencies in the final release and recovery rehearsal. |
 | Fleet runtime capability selection | Integrated at `9671f456`; [independent 23-test normal/race scope](evidence/fleet-runtime-catalog-progress-20261002.md). | Current runtime authority, full native-role coverage and composed release qualification. |
 | Server blob readers | Server main `c2563f9a` includes the exact reader changes from `1d72f577` plus newer upstream code; [26-test independent reader scope](evidence/current-graph-reader-progress-20261002.md) remains historical. | Full current-server dependency/release composition and remaining model-suite qualification. |
-| Offline preparation | SN `1f66a2bd` / Connect `ba74f897` / Server `2c4e5dca` pass [101 independent tests per mode and five vets](evidence/preparation-composition-independent-20261002.json). | Tracked dependency publication and current-main integration; local workspace replacements are not a release. |
+| Offline preparation | Tracked SN `0384cbfc` / Connect `7600ea5c` / Server `c2563f9a` pass [75 author tests per mode by an exact checksum-only source join, seven vets and three binary builds](evidence/preparation-tracked-module-20261002.md). Earlier `1f66a2bd` retains its separate 101-test independent scope. | Publish the exact Connect dependency and independently qualify the latest-main composition. Candidate `9d7d57fc` preserves all `e08e1b11` claim/provider source; its join is source-only. |
 | Directory owners and private-root creation | Directory owners pass [103 author tests per mode](evidence/directory-owner-preparation-author-20261002.json); explicit fresh leaf-root creation at SN `c8998b31` / Connect `7600ea5c` passes [109 author tests per mode and four vets](evidence/private-root-preparation-author-20261002.json). | Independent current-main tracked-module qualification, retained/restore semantics and capacity revisions. |
 | Provider and claim monitoring | Provider monitoring is integrated at `83d92f75`; [20 independent tests per mode and three vets](evidence/provider-monitor-integration-20261002.md) preserve exact source scope. The durable claim producer is integrated at `bd5e7e72` with [37 author and 29 independent tests per mode](evidence/claim-projection-independent-20261002.json), retaining separate graph scopes. | Implement and qualify the independently configured claim consumer, compose the current sources, then complete economic-domain monitoring and actual alert/recovery rehearsal. |
+
+The offline preparation command now has scoped author coverage for fresh ledger,
+native, fixed snapshot and directory owners, including explicitly reviewed
+private leaf-root creation. Its tracked dependency was authenticated from local
+Git through a file proxy; that does not establish publication. Retained/restore
+semantic rebinding and joined capacity/retention revisions remain implementation
+work. The separate physical-export candidate is unqualified and grants no restart.
 
 Launch still needs an exact current composed release, runtime/genesis/checkpoint
 and production policy authority, provisioned custody and host configuration,
