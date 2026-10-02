@@ -40,7 +40,7 @@ func newOwnerLedgerTranscript(request ownerSigningRequest, metadataProof []byte)
 	if err := action.validate(); err != nil {
 		return ownerLedgerTranscript{}, err
 	}
-	if action.Schema != ownerTrimLedgerActionSchema || request.SignatureScheme != "ed25519" {
+	if !action.ledgerSigning() || request.SignatureScheme != "ed25519" {
 		return ownerLedgerTranscript{}, errors.New("Ledger generic app cannot sign the retained sr25519/disabled-metadata owner v1 action")
 	}
 	payload, _ := hex.DecodeString(action.Payload[2:])

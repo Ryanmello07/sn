@@ -1,5 +1,6 @@
 // The public trim command owns original custody and public signature recovery.
-// Live signing/submission stays unavailable without qualified enforced authority.
+// Strict actions require enforced authority; a fresh best-effort domain requires
+// explicit residual-risk approval and the original imported owner signature.
 package main
 
 import (
@@ -15,25 +16,27 @@ import (
 )
 
 // The current binary can prepare/import/reconcile an approved action. Its
-// executor also implements signing and owned submission for separately qualified
-// capability adapters; no CLI boolean or approval file supplies those adapters.
+// executor never supplies a native signer. Best-effort submission is a separate
+// opt-in mode and never manufactures the strict future-window capability.
 func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr io.Writer) (result int) {
 	mode := args[0]
-	if mode != "trim-plan" && mode != "trim-apply" && mode != "trim-resume" && mode != "trim-import" && mode != "trim-reconcile" && mode != "trim-export" && mode != "trim-import-reply" {
-		fmt.Fprintln(stderr, "bootstrap-chain requires trim-plan, trim-apply, trim-resume, trim-export, trim-import, trim-import-reply or trim-reconcile")
+	if mode != "trim-plan" && mode != "trim-apply" && mode != "trim-resume" && mode != "trim-import" && mode != "trim-reconcile" && mode != "trim-export" && mode != "trim-import-reply" && mode != "trim-submit-plan" && mode != "trim-submit" {
+		fmt.Fprintln(stderr, "bootstrap-chain requires trim-plan, trim-apply, trim-resume, trim-export, trim-import, trim-import-reply, trim-reconcile, trim-submit-plan or trim-submit")
 		return 2
 	}
 	flags := flag.NewFlagSet("bootstrap-chain "+mode, flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	configPath := flags.String("config", "", "exact original v3 chain config")
+	configPath := flags.String("config", "", "exact original v3 or passive-root v4 chain config")
 	runDir := flags.String("run-dir", "", "original precreated private custody directory")
 	accepted := flags.String("accept-plan-hash", "", "exact original accepted v3 preparation")
 	trimPath := flags.String("trim-config", "", "private independently approved trim config; unsigned template for trim-plan")
 	key := flags.String("trim-approval-key", "", "independently provisioned trim approval public key")
 	var metadataPath, ledgerMetadataPath, signaturePath, requestPath, requestHash, replyPath, replyHash string
+	var submissionPath, submissionHash, submissionKey string
+	var pruningPolicy, registrationPolicy string
 	if mode == "trim-plan" || mode == "trim-export" {
 		flags.StringVar(&metadataPath, "metadata", "", "private file containing exact pinned runtime metadata hex")
-		flags.StringVar(&ledgerMetadataPath, "ledger-metadata", "", "v2 only: independently approved unwrapped metadata15 hex")
+		flags.StringVar(&ledgerMetadataPath, "ledger-metadata", "", "Ledger domains: independently approved unwrapped metadata15 hex")
 	}
 	if mode == "trim-import" {
 		flags.StringVar(&signaturePath, "signature", "", "original public native signature file, never a private key")
@@ -44,15 +47,25 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 		flags.StringVar(&replyPath, "reply", "", "owner's original public signed reply")
 		flags.StringVar(&replyHash, "reply-sha256", "", "sha256 pin of the original reply file")
 	}
+	if mode == "trim-submit" {
+		flags.StringVar(&submissionPath, "submission-policy", "", "private independently signed best-effort submission policy")
+		flags.StringVar(&submissionHash, "submission-policy-sha256", "", "sha256 pin of the exact signed submission policy file")
+		flags.StringVar(&submissionKey, "submission-approval-key", "", "independently provisioned submission approval public key")
+	}
+	if mode == "trim-submit-plan" {
+		flags.StringVar(&pruningPolicy, "public-pruning-policy", ownerTrimRequirePruningImmunity, "unsigned choice: require-public-pruning-immunity-through-original-expiry or accept-public-pruning-and-netuid-reuse-risk")
+		flags.StringVar(&registrationPolicy, "registration-policy", ownerTrimRequireClosedRegistration, "unsigned choice: require-observed-closed-registration or accept-competing-registration-and-reentry-risk")
+	}
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *configPath == "" || *trimPath == "" || *runDir == "" ||
 		!planSha256(*accepted) || !rootCanonicalHash(*key) || (mode == "trim-plan" || mode == "trim-export") && metadataPath == "" || mode == "trim-import" && signaturePath == "" ||
-		mode == "trim-import-reply" && (requestPath == "" || replyPath == "" || !planSha256(requestHash) || !planSha256(replyHash)) {
+		mode == "trim-import-reply" && (requestPath == "" || replyPath == "" || !planSha256(requestHash) || !planSha256(replyHash)) ||
+		mode == "trim-submit" && (submissionPath == "" || !planSha256(submissionHash) || !rootCanonicalHash(submissionKey)) {
 		fmt.Fprintln(stderr, "trim phase requires original --config, --run-dir, --accept-plan-hash, --trim-config and independent --trim-approval-key")
 		return 2
 	}
 	preparation, err := loadBootstrapChainPreparation(ctx, *configPath)
 	if err != nil || !bootstrapChainHasRootRole(preparation.Plan.Config.Schema) || preparation.Plan.ContentHash != *accepted || preparation.Plan.Config.RunDirectory != *runDir {
-		fmt.Fprintln(stderr, "trim phase original v3 preparation differs:", err)
+		fmt.Fprintln(stderr, "trim phase original preparation differs:", err)
 		return 3
 	}
 	raw, _, err := readBootstrapRootFile(ctx, *trimPath, maxRpcReplyBytes)
@@ -67,8 +80,8 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 	}
 	ledgerMetadata := ""
 	if mode == "trim-plan" || mode == "trim-export" {
-		if (config.Schema == ownerTrimLedgerExecutionSchema) != (ledgerMetadataPath != "") {
-			fmt.Fprintln(stderr, "trim v2 requires --ledger-metadata; v1 keeps its original metadata profile")
+		if (config.Schema == ownerTrimLedgerExecutionSchema || config.Schema == ownerTrimBestEffortExecutionSchema) != (ledgerMetadataPath != "") {
+			fmt.Fprintln(stderr, "trim Ledger domains require --ledger-metadata; v1 keeps its original metadata profile")
 			return 2
 		}
 		if ledgerMetadataPath != "" {
@@ -115,6 +128,9 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 			if config.Schema == ownerTrimLedgerExecutionSchema {
 				config.Action.Schema = ownerTrimLedgerActionSchema
 			}
+			if config.Schema == ownerTrimBestEffortExecutionSchema {
+				config.Action.Schema = ownerTrimBestEffortActionSchema
+			}
 		}
 		if config.Signature != "" || !config.validSchemas() || config.Route.validate() != nil || config.Route.ReadRetrySeconds < 60 || config.Route.ReadRetrySeconds > 900 || config.Route.SendTimeoutSeconds == 0 || config.Route.SendTimeoutSeconds > 60 {
 			fmt.Fprintln(stderr, "trim-plan requires an unsigned bounded action/route template")
@@ -126,6 +142,9 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 		action.Runtime = rootReceiptProfile{RuntimeSourceCommit: policy.RuntimeSourceCommit, RuntimeVersion: policy.RuntimeVersion, RuntimeCodeHash: policy.RuntimeCodeHash, RuntimeMetadataHash: policy.RuntimeMetadataHash}
 		action.StatePath, action.Coldkey, action.Netuid = filepath.Join(*runDir, ownerTrimStateFile), policy.SubnetOwnerColdkey, policy.Netuid
 		action.SubnetRegistrationBlock, action.SubnetGeneration, action.MaximumUids, action.SelectionRule = *policy.SubnetRegistrationBlock, *policy.SubnetGeneration, review.Best.MaximumUids, ownerTrimSubsetRule
+		if config.Schema == ownerTrimBestEffortExecutionSchema {
+			action.SelectionRule = ownerTrimBestEffortSelection
+		}
 		metadata, _, err := readBootstrapRootFile(ctx, metadataPath, 2*maxMetadataRpcReplyBytes+3)
 		if err == nil {
 			config.Action, err = prepareOwnerTrimAction(action, strings.TrimSpace(string(metadata)))
@@ -145,7 +164,7 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 		return 0
 	}
 	// The new config, public signature and markers must never name each other.
-	for _, input := range []string{*trimPath, signaturePath, metadataPath, ledgerMetadataPath, requestPath, replyPath} {
+	for _, input := range []string{*trimPath, signaturePath, metadataPath, ledgerMetadataPath, requestPath, replyPath, submissionPath} {
 		if input != "" && (!bootstrapRootAbsolutePath(input) || input == config.Action.StatePath || input == config.Action.StatePath+".lock") {
 			fmt.Fprintln(stderr, "trim input overlaps the fixed action journal or marker")
 			return 2
@@ -169,6 +188,31 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 		return 3
 	}
 	step := ownerTrimRetainedResult(record)
+	if mode == "trim-submit-plan" {
+		approval, err := store.bestEffortApprovalTemplate()
+		if err != nil {
+			fmt.Fprintln(stderr, "trim submission planning:", err)
+			return 3
+		}
+		if pruningPolicy != ownerTrimRequirePruningImmunity && pruningPolicy != ownerTrimAcceptPruningRisk || registrationPolicy != ownerTrimRequireClosedRegistration && registrationPolicy != ownerTrimAcceptRegistrationRisk {
+			fmt.Fprintln(stderr, "trim submission planning requires explicit supported pruning and registration policy choices")
+			return 2
+		}
+		approval.PublicPruningPolicy, approval.RegistrationPolicy = pruningPolicy, registrationPolicy
+		approval.ResidualRisks = approval.residuals()
+		if _, err := store.load(); err != nil {
+			fmt.Fprintln(stderr, "trim submission planning custody changed:", err)
+			return 3
+		}
+		if err := encoder.Encode(struct {
+			Approval     ownerTrimBestEffortApproval `json:"approval_template"`
+			SigningBytes string                      `json:"signing_bytes"`
+		}{Approval: approval, SigningBytes: "0x" + hex.EncodeToString(approval.signingBytes())}); err != nil {
+			fmt.Fprintln(stderr, "trim submission policy output:", err)
+			return 1
+		}
+		return 0
+	}
 	if mode == "trim-export" {
 		if record.Phase != "reserved" || record.Signature != "" {
 			fmt.Fprintln(stderr, "trim export requires original reserved custody; recover any existing or uncertain signature")
@@ -183,6 +227,10 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 		if err != nil {
 			fmt.Fprintln(stderr, "trim export request:", err)
 			return 2
+		}
+		if _, err := store.load(); err != nil {
+			fmt.Fprintln(stderr, "trim export original custody changed:", err)
+			return 3
 		}
 		if err := encoder.Encode(request); err != nil {
 			fmt.Fprintln(stderr, "trim export output:", err)
@@ -231,13 +279,31 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 		}
 		step = ownerTrimRetainedResult(record)
 	}
-	if mode == "trim-reconcile" {
+	if mode == "trim-reconcile" || mode == "trim-submit" {
 		chain, err := newOwnerTrimCanonicalChain(config, *key, store.policy, nil)
 		if err != nil {
 			fmt.Fprintln(stderr, "trim owned observation route:", err)
 			return 2
 		}
 		owner.chain = chain
+		if mode == "trim-submit" {
+			raw, digest, err := readBootstrapRootFile(ctx, submissionPath, maxRpcReplyBytes)
+			var approval ownerTrimBestEffortApproval
+			if err != nil || digest != submissionHash {
+				fmt.Fprintln(stderr, "trim submission policy input differs:", err)
+				return 2
+			}
+			if err := decodePlanJson(raw, &approval); err != nil {
+				fmt.Fprintln(stderr, "trim submission policy:", err)
+				return 2
+			}
+			bestEffort, err := newOwnerTrimBestEffortChain(store, approval, submissionKey)
+			if err != nil {
+				fmt.Fprintln(stderr, "trim separate best-effort approval:", err)
+				return 3
+			}
+			owner.chain, owner.authority = bestEffort, bestEffort
+		}
 		step, err = owner.step(ctx)
 		if err != nil {
 			fmt.Fprintln(stderr, "trim reconciliation unresolved or effects blocked; retain original custody:", err)
