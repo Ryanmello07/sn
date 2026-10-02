@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"github.com/docopt/docopt-go"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -43,6 +44,7 @@ type fleetMainnetRuntimeAuthority struct {
 	RuntimeVersion      crv4.RuntimeVersionIdentity `json:"runtime_version"`
 	RuntimeCodeHash     string                      `json:"runtime_code_hash"`
 	RuntimeMetadataHash string                      `json:"runtime_metadata_hash"`
+	RuntimeCatalog      []fleetRuntimeCatalogEntry  `json:"runtime_catalog,omitempty"`
 }
 
 // Canonical nonzero digests keep authority comparison unambiguous.
@@ -101,22 +103,16 @@ func loadFleetMainnetRuntimeAuthority(opts docopt.Opts, manifest *protocol.Fleet
 
 // Approval binds both signing domains and the complete reviewed native tuple.
 func (self *fleetMainnetRuntimeAuthority) validate(manifest *protocol.FleetManifest) error {
-	if self == nil || manifest == nil || self.Schema != fleetMainnetRuntimeAuthoritySchema || self.EvmChainId != 964 || manifest.ChainID != self.EvmChainId || self.Netuid == 0 || self.Netuid != manifest.Netuid || self.NativeChain == "" || strings.TrimSpace(self.NativeChain) != self.NativeChain {
+	if self == nil || manifest == nil || self.EvmChainId != 964 || manifest.ChainID != self.EvmChainId || self.Netuid == 0 || self.Netuid != manifest.Netuid || self.NativeChain == "" || strings.TrimSpace(self.NativeChain) != self.NativeChain {
 		return errors.New("mainnet runtime authority network or subnet scope differs")
 	}
 	if !fleetAuthorityHex(self.Coordinator, 20, "0x") || common.HexToAddress(self.Coordinator) != common.Address(manifest.Coordinator) {
 		return errors.New("mainnet runtime authority coordinator differs from the manifest")
 	}
-	if !fleetAuthorityHex(self.GenesisHash, 32, "0x") || self.GenesisHash == fleetProvisionalTestnetGenesis || !fleetAuthorityHex(self.RuntimeCodeHash, 32, "0x") || !fleetAuthorityHex(self.RuntimeMetadataHash, 32, "0x") {
+	if !fleetAuthorityHex(self.GenesisHash, 32, "0x") || self.GenesisHash == fleetProvisionalTestnetGenesis {
 		return errors.New("mainnet runtime authority requires independent nonzero genesis, code and metadata hashes")
 	}
-	if !fleetAuthorityHex(self.RuntimeSourceCommit, 20, "") || !fleetAuthorityHex(self.RuntimeReviewSha256, 32, "") || self.RuntimeReviewScope != fleetMainnetRuntimeReviewScope {
-		return errors.New("mainnet runtime authority lacks reviewed source, build provenance or fleet interface scope")
-	}
-	if self.RuntimeVersion.SpecName == "" || strings.TrimSpace(self.RuntimeVersion.SpecName) != self.RuntimeVersion.SpecName || self.RuntimeVersion.SpecVersion == 0 || self.RuntimeVersion.TransactionVersion == 0 || self.RuntimeVersion.StateVersion == 0 {
-		return errors.New("mainnet runtime authority version is incomplete")
-	}
-	return nil
+	return self.validateRuntimeCatalog()
 }
 
 // Nil is the existing testnet release authority, never a production fallback.
@@ -131,6 +127,12 @@ func (self *fleetMainnetRuntimeAuthority) artifactIdentity() crv4.RuntimeArtifac
 // header and canonical height around the exact runtime read. A connection
 // carrying testnet compatibility is inadmissible in production.
 func (self *fleetMainnetRuntimeAuthority) authenticateAt(ctx context.Context, chain *crv4.Chain, block types.Hash) (crv4.AuthenticatedRuntimeArtifact, error) {
+	if ctx == nil {
+		return crv4.AuthenticatedRuntimeArtifact{}, errors.New("fleet runtime context is absent")
+	}
+	if err := ctx.Err(); err != nil {
+		return crv4.AuthenticatedRuntimeArtifact{}, err
+	}
 	if self == nil {
 		return authenticateFleetRuntimeAtContext(ctx, chain, block)
 	}
@@ -169,11 +171,11 @@ func (self *fleetMainnetRuntimeAuthority) authenticateAt(ctx context.Context, ch
 	if err := checkCanonical(); err != nil {
 		return crv4.AuthenticatedRuntimeArtifact{}, err
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, chain, block, self.artifactIdentity())
+	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, chain, block, self.artifactIdentities()...)
 	if err != nil {
 		return artifact, err
 	}
-	if artifact.CompatibilityProfile != "" || artifact.Version != self.RuntimeVersion || artifact.CodeHash != self.RuntimeCodeHash || artifact.MetadataHash != self.RuntimeMetadataHash || artifact.Metadata == nil {
+	if artifact.CompatibilityProfile != "" || artifact.Metadata == nil {
 		return crv4.AuthenticatedRuntimeArtifact{}, errors.New("mainnet runtime authority exact artifact differs")
 	}
 	if err := checkCanonical(); err != nil {
@@ -210,7 +212,7 @@ func (self *fleetMainnetRuntimeAuthority) finalizedView(ctx context.Context, cha
 // Native status does not reinterpret a current runtime through cached release
 // metadata, even when the requested commitment has the expected hash.
 func (self *fleetMainnetRuntimeAuthority) commitmentFinalized(ctx context.Context, chain *crv4.Chain, netuid uint16, hotkey [32]byte) (*crv4.FinalizedCommitment, error) {
-	view, block, err := self.finalizedView(ctx, chain)
+	view, block, err := self.finalizedFor(ctx, chain, crv4.FleetCommitmentRead)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +224,7 @@ func (self *fleetMainnetRuntimeAuthority) commitmentWrite(ctx context.Context, c
 	if receipt == nil || receipt.BlockHash == (types.Hash{}) || receipt.BlockNumber == 0 {
 		return nil, errors.New("fleet finalized write receipt is incomplete")
 	}
-	view, err := self.viewAt(ctx, chain, receipt.BlockHash)
+	view, err := self.viewFor(ctx, chain, receipt.BlockHash, crv4.FleetCommitmentRead)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +242,7 @@ func (self *fleetMainnetRuntimeAuthority) commitmentWrite(ctx context.Context, c
 // Publication uses authenticated signing inputs and rechecks before sending.
 // Upgrades at inclusion fail receipt admission instead of acquiring authority.
 func (self *fleetMainnetRuntimeAuthority) publish(ctx context.Context, chain *crv4.Chain, key *crv4.Keypair, netuid uint16, hash [32]byte) (*crv4.FinalizedCommitment, error) {
-	view, _, err := self.finalizedView(ctx, chain)
+	view, prepared, err := self.finalizedFor(ctx, chain, crv4.FleetCommitmentWrite)
 	if err != nil {
 		return nil, err
 	}
@@ -252,17 +254,25 @@ func (self *fleetMainnetRuntimeAuthority) publish(ctx context.Context, chain *cr
 	if err != nil {
 		return nil, err
 	}
-	if _, _, err := self.finalizedView(ctx, chain); err != nil {
+	if err := self.signingAdmission(ctx, chain, prepared, crv4.FleetCommitmentWrite); err != nil {
 		return nil, err
 	}
 	signed, err := view.NewSignedExtrinsic(key, call, nonce)
 	if err != nil {
 		return nil, err
 	}
-	if _, _, err := self.finalizedView(ctx, chain); err != nil {
+	if err := self.signingAdmission(ctx, chain, prepared, crv4.FleetCommitmentWrite); err != nil {
 		return nil, err
 	}
-	receipt, err := view.SubmitAndWatchFinalized(ctx, signed)
+	encoded, err := codec.EncodeToHex(*signed)
+	if err != nil {
+		return nil, err
+	}
+	var executionRuntime func(context.Context, types.Hash) (crv4.AuthenticatedRuntimeArtifact, error)
+	if self != nil {
+		executionRuntime = self.executionAdmission(chain, prepared, crv4.FleetCommitmentWrite)
+	}
+	receipt, err := view.SubmitRawAndWatchFinalizedRuntime(ctx, encoded, executionRuntime)
 	if err != nil {
 		return nil, err
 	}

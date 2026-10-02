@@ -50,6 +50,16 @@ func (self *fleetEvmNativeReadClient) Close() {}
 // Frontier heights and native heights must retain the reviewed one-to-one
 // mapping. Inclusion is checked at its exact height, not at the later head.
 func (self *fleetMainnetRuntimeAuthority) admitEvm(ctx context.Context, client *ethclient.Client, number *big.Int) error {
+	purpose := crv4.FleetFrontierWrite
+	if number != nil {
+		purpose = crv4.FleetFrontierRead
+	}
+	return self.admitEvmPurpose(ctx, client, number, purpose)
+}
+
+// Status getters require only their read capability. Signing callbacks choose
+// the distinct reviewed write purpose before any local consent or EVM send.
+func (self *fleetMainnetRuntimeAuthority) admitEvmPurpose(ctx context.Context, client *ethclient.Client, number *big.Int, purpose crv4.FleetRuntimePurpose) error {
 	if self == nil || ctx == nil || client == nil {
 		return errors.New("mainnet EVM runtime authority is unavailable")
 	}
@@ -77,7 +87,7 @@ func (self *fleetMainnetRuntimeAuthority) admitEvm(ctx context.Context, client *
 	if err != nil {
 		return err
 	}
-	if _, err := self.authenticateAt(ctx, chain, block); err != nil {
+	if _, err := self.authenticateFor(ctx, chain, block, purpose); err != nil {
 		return err
 	}
 	if number != nil {
@@ -111,7 +121,7 @@ func (self *fleetMainnetRuntimeAuthority) dialEvm(ctx context.Context, endpoints
 			errs = append(errs, err)
 			continue
 		}
-		if err := self.admitEvm(ctx, client, nil); err != nil {
+		if err := self.admitEvmPurpose(ctx, client, nil, crv4.FleetFrontierRead); err != nil {
 			client.Close()
 			return nil, "", err
 		}
@@ -128,6 +138,10 @@ func (self *fleetMainnetRuntimeAuthority) prepareEvm(ctx context.Context, endpoi
 	}
 	client, endpoint, err := self.dialEvm(ctx, endpoints)
 	if err != nil {
+		return nil, err
+	}
+	if err := self.admitEvm(ctx, client, nil); err != nil {
+		client.Close()
 		return nil, err
 	}
 	client.Close()
@@ -149,7 +163,7 @@ func (self *fleetMainnetRuntimeAuthority) coordinatorCall(ctx context.Context, m
 		return nil, "", err
 	}
 	// Recheck before a remote digest is eligible for local signing.
-	if err := self.admitEvm(ctx, client, nil); err != nil {
+	if err := self.admitEvmPurpose(ctx, client, nil, crv4.FleetFrontierRead); err != nil {
 		return nil, "", err
 	}
 	return result, endpoint, nil
