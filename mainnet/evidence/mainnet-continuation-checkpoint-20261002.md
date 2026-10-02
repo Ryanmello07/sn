@@ -93,3 +93,13 @@ fixture roots per mode under each of two umasks. Source/module/release authority
 is not inherited by unrelated candidates. Current server intake at `cebf154f`
 failed before test execution because published Connect `6443417d` lacks the
 required durablevolume package; compatible successor intake remains in progress.
+
+Current server successor `22e3c1ba` changes only the Connect replacement to
+published `e0d75562` and adds its checksum lines; SCTP and unrelated upstream
+module floors are preserved. It is prepared for actual declared-graph testing,
+not promoted as a qualified server yet. Member source `2c8017f5` has 38 selected
+author passes per mode and vet, with all 86 manifest bindings rehashed by root.
+Its independent review retains the initial missing-sibling checkout failure;
+the corrected graph preflight passes and selected tests are running. Root's
+clean current-main composition `5f1fe123` is a review candidate, not main or a
+qualified release. It preserves the newer observer, callback and fixture fixes.

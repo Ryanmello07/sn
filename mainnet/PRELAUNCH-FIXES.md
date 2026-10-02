@@ -5117,3 +5117,16 @@ inode was rechecked before deletion and absence verified afterward. The retained
 receipt is `/mnt/data/sn-testnet/root-mainnet-cache-reclaim-2-20261002/receipt.json`.
 Reference checks covered declared receipt/manifest/checksum/document classes;
 they do not assert absence of references in every raw artifact.
+
+### October 2: validate the whole local test graph before compilation
+
+The independent member-recovery checkout initially omitted five local sibling
+modules. Compilation stopped at the first missing import, before any product
+test ran. Preserve this as a harness setup failure rather than a regression or
+a passing qualification. A reusable preflight must resolve effective workspace
+overrides before inspecting local replacements, report all missing paths and
+pin mismatches together, and verify the staged source identity. An obsolete
+replacement overridden by go.work must not create a false missing-path alarm.
+The corrected member checkout has a passing graph preflight; its normal/race
+qualification remains a separate result. This preflight does not replace
+compiler checks, published-module qualification or release provenance.
