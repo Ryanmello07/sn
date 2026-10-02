@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/urfoundation/sn/crv4"
+	"github.com/urfoundation/sn/internal/durablefixture"
 )
 
 // A fixture retains command inputs so the command implementation reconstructs
@@ -117,8 +118,13 @@ func newBootstrapSuccessorCanonicalFixture(t *testing.T) *bootstrapSuccessorCano
 		raw[64] += 27
 		signatures = append(signatures, raw...)
 	}
+	registry := bootstrapSuccessorExecutionTestDirectory(t)
+	// The separate nonce registry is explicitly declared before approving its
+	// execution scope. Existing original root generations and heads are retained.
+	f.root.storage = durablefixture.New(t, t.Context(), append(append([]string{}, f.root.storage.Roots...), registry)...)
+	f.contracts.storage = f.root.storage
 	executionRequest := bootstrapSuccessorExecutionRequest{Schema: bootstrapSuccessorExecutionRequestSchema, SafeReviewHash: review.ContentHash,
-		RegistryDirectory: bootstrapSuccessorExecutionTestDirectory(t), Owners: oracle.owners, Singleton: singleton,
+		RegistryDirectory: registry, Owners: oracle.owners, Singleton: singleton,
 		SafeSignatures: bootstrapSuccessorExecutionTestRaw(t, "synthetic-canonical-safe-signatures.bin", signatures)}
 	draft := bootstrapSuccessorExecutionPlan{Review: review, Request: executionRequest, SafeSignatures: "0x" + hex.EncodeToString(signatures)}
 	outer, err := draft.outer(oracle.profile)
@@ -264,7 +270,7 @@ func (self *bootstrapSuccessorCanonicalFixture) invoke(command string, stdout *b
 	if command == "contract-successor-execution-resume" {
 		args := []string{command, "--config", self.original.path, "--run-dir", self.original.config.RunDirectory, "--accept-plan-hash", self.original.preparation.Plan.ContentHash}
 		args = append(append(args, self.paths...), extra...)
-		code = runBootstrapSuccessorExecutionCommandWithProvenance(self.t.Context(), args, stdout, &stderr, self)
+		code = runBootstrapSuccessorExecutionCommandWithProvenance(self.original.storageContext(self.t.Context()), args, stdout, &stderr, self)
 	} else {
 		code = self.original.command(self.t.Context(), command, stdout, &stderr, append(append([]string{}, self.paths...), extra...)...)
 	}
@@ -292,18 +298,19 @@ func (self *bootstrapSuccessorCanonicalFixture) open() (*bootstrapSuccessorExecu
 // artifacts and explicitly close all original marker locks before a restart.
 func (self *bootstrapSuccessorCanonicalFixture) openRuntimeRevisions(revisions ...bootstrapSuccessorRuntimeApproval) (*bootstrapSuccessorExecutionStore, *bootstrapSuccessorCanonicalChain, func()) {
 	self.t.Helper()
-	plan, profile, retained, err := loadBootstrapSuccessorExecution(self.t.Context(), self.original.path, self.original.config.RunDirectory,
+	ctx := self.original.storageContext(self.t.Context())
+	plan, profile, retained, err := loadBootstrapSuccessorExecution(ctx, self.original.path, self.original.config.RunDirectory,
 		self.original.preparation.Plan.ContentHash, self.paths[1], self.paths[3], self.paths[5], self.approvalArgs[1], self.canonicalRef.Path)
 	if err != nil {
 		self.t.Fatal(err)
 	}
 	self.t.Cleanup(func() { retained.close() })
-	owner, err := openBootstrapSuccessorExecutionStore(self.t.Context(), plan, self.approval, profile, false, nil)
+	owner, err := openBootstrapSuccessorExecutionStore(ctx, plan, self.approval, profile, false, nil)
 	if err != nil {
 		self.t.Fatal(err)
 	}
 	self.t.Cleanup(func() { owner.close() })
-	adapter, err := newBootstrapSuccessorCanonicalChainWithProvenance(self.t.Context(), owner, self.canonical, self, revisions...)
+	adapter, err := newBootstrapSuccessorCanonicalChainWithProvenance(ctx, owner, self.canonical, self, revisions...)
 	if err != nil {
 		self.t.Fatal(err)
 	}

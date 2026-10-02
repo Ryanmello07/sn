@@ -121,7 +121,7 @@ func TestBootstrapSuccessorRuntimeRevisionRejectsEventRollback(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	reopened, err := openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, false, nil)
+	reopened, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 	if reopened != nil {
 		reopened.close()
 	}
@@ -219,7 +219,7 @@ func TestBootstrapSuccessorRuntimeRevisionRejectsLostAndForkedHistory(t *testing
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, false, nil)
+	reopened, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 	if reopened != nil {
 		reopened.close()
 	}
@@ -265,7 +265,7 @@ func TestBootstrapSuccessorRuntimeRevisionRejectsLostAndForkedHistory(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		reopened, err = openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, false, nil)
+		reopened, err = openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 		if reopened != nil {
 			reopened.close()
 		}

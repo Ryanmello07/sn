@@ -157,7 +157,7 @@ func TestBootstrapContractInstallationPublicReadbackRecoversExactAnchor(t *testi
 	invoke := func(input []string) (int, bootstrapContractInstallation, string) {
 		t.Helper()
 		var stdout, stderr bytes.Buffer
-		code := runBootstrapSuccessorExecutionCommand(t.Context(), input, &stdout, &stderr)
+		code := runBootstrapSuccessorExecutionCommand(f.original.storageContext(t.Context()), input, &stdout, &stderr)
 		var result bootstrapContractInstallation
 		if stdout.Len() != 0 {
 			if err := decodePlanJson(stdout.Bytes(), &result); err != nil {
