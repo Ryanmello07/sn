@@ -64,7 +64,11 @@ func newProvisionalFleetRuntimeFixture(t *testing.T) *provisionalFleetRuntimeFix
 	if err := errors.Join(err, reader.Close()); err != nil || len(raw) != 347304 {
 		t.Fatalf("metadata bytes=%d: %v", len(raw), err)
 	}
-	self := &provisionalFleetRuntimeFixture{block: types.Hash{0xb1}, metadataHex: codec.HexEncodeToString(raw), code: types.Hash{0x75}.Hex()}
+	header, block, err := fleetReceiptTestHeader(types.Hash{0xb0}, 100, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	self := &provisionalFleetRuntimeFixture{block: block, metadataHex: codec.HexEncodeToString(raw), code: types.Hash{0x75}.Hex()}
 	var hash string
 	self.metadata, hash, err = crv4.DecodeRuntimeMetadata(self.metadataHex)
 	if err != nil || hash != "0xb0fae6d022b74faf948e3b98463b98b46c4738e87348e24340f91146ededa4bf" {
@@ -97,10 +101,17 @@ func newProvisionalFleetRuntimeFixture(t *testing.T) *provisionalFleetRuntimeFix
 			return setProvisionalFleetRuntimeResult(result, self.block.Hex())
 		}
 		if method == "chain_getBlockHash" {
-			if len(args) != 1 || args[0] != uint64(0) {
-				return errors.New("unexpected genesis request")
+			if len(args) != 1 {
+				return errors.New("unexpected block hash request")
 			}
-			return setProvisionalFleetRuntimeResult(result, genesis.Hex())
+			switch args[0] {
+			case uint64(0):
+				return setProvisionalFleetRuntimeResult(result, genesis.Hex())
+			case uint64(100):
+				return setProvisionalFleetRuntimeResult(result, block.Hex())
+			default:
+				return errors.New("unexpected canonical height")
+			}
 		}
 		if len(args) == 0 || args[len(args)-1] != self.block.Hex() {
 			return fmt.Errorf("unpinned fleet %s: %v", method, args)
@@ -128,7 +139,11 @@ func newProvisionalFleetRuntimeFixture(t *testing.T) *provisionalFleetRuntimeFix
 			}
 			return errors.New("unexpected commitment key")
 		case "chain_getHeader":
-			return setProvisionalFleetRuntimeResult(result, types.Header{Number: 100})
+			return setProvisionalFleetRuntimeResult(result, map[string]any{
+				"number": "0x64", "parentHash": header.ParentHash.Hex(),
+				"stateRoot": header.StateRoot.Hex(), "extrinsicsRoot": header.ExtrinsicsRoot.Hex(),
+				"digest": map[string]any{"logs": []string{}},
+			})
 		default:
 			return fmt.Errorf("unexpected provisional fleet RPC %s", method)
 		}
