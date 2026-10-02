@@ -2946,3 +2946,14 @@ members. It does not grant runtime authority or restart authorization. Independe
 qualification and the current published Connect/main composition remain pending;
 private-root creation, retained/restore validation, remaining owners and joined
 capacity revisions are still open. This candidate is not merged into main.
+
+
+### Payment monitoring must retain accepted-credit semantics
+
+The remaining proof/settlement monitoring implementation must distinguish
+finalized claim acceptance, unpaid vault credit and actual aggregate payment.
+A successful claim may defer transfer; a later payment may settle several
+epochs/operators for one coldkey. See the [producer mapping](evidence/provider-proof-settlement-hook-map-20261002.md)
+and [source-bound contract semantics](evidence/claim-payment-semantics-20261002.json).
+No complete per-pool paid projection is qualified yet. This is part of MG-06/07
+and PH-12/15/28, with deterministic contract and monitor controls still required.

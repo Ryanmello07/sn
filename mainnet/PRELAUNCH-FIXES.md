@@ -5298,3 +5298,18 @@ absence verified afterward. Active compilation continued. This creates local
 qualification headroom; it does not prove production sizing or replace
 capacity/rotation and restored-volume acceptance. Keep cache storage explicitly
 separate from immutable proof, source and executable retention.
+
+
+### Distinguish accepted claims, outstanding credits and actual payments
+
+A successful exact claim receipt establishes accepted liability, not necessarily
+provider payment. The vault can emit `Claimed` followed by
+`ClaimPaymentDeferred` and retain the credit. Later `ClaimPaid` transfers the
+entire coldkey credit accumulated across epochs and operators. Monitoring must
+report these domains separately and must not duplicate an aggregate payment
+across pools or provider slots. The [source-bound semantics review](evidence/claim-payment-semantics-20261002.json)
+identifies existing real contract paths and required causal controls; it is not
+a new executed test result. Preserve finalized claim recovery while projecting
+unpaid credit and deferred reasons. A missing history or proof yields unavailable
+paid attribution, never a fabricated zero or fully-paid status. Add exact
+receipt/event and contract-path tests to the actual production monitor join.
