@@ -18,21 +18,15 @@ import (
 	"github.com/urnetwork/connect/durablevolume"
 )
 
-// The fixed kind registry starts with ledger custody. Unsupported native,
-// snapshot, retained and restore formats refuse; they never become empty state.
+// The command chooses one fixed registry scope before parsing any owner input.
+// Unsupported retained/restore formats never become empty state.
 func storagePreparationAdapter(ownerLocal bool) durablevolume.PreparationAdapter {
 	return durablevolume.PreparationAdapter{
 		Build: func(ctx context.Context, staging *os.File, name string, owner durablevolume.PreparationOwner) (durablevolume.PreparationOwnerPlan, error) {
-			if ownerLocal {
-				return durablevolume.PreparationOwnerPlan{}, errors.New("owner-local preparation has no implemented signing-owner adapter; validator ledger requires daemon scope")
-			}
-			return buildStoragePreparationOwner(ctx, staging, name, owner)
+			return buildStoragePreparationFixedOwner(ctx, staging, name, owner, ownerLocal)
 		},
 		Inspect: func(ctx context.Context, target *os.File, owner durablevolume.PreparationOwnerPlan) ([]durablevolume.PreparedAttribute, error) {
-			if ownerLocal {
-				return nil, errors.New("owner-local preparation cannot reinterpret daemon ledger custody")
-			}
-			return inspectStoragePreparationOwner(ctx, target, owner)
+			return inspectStoragePreparationFixedOwner(ctx, target, owner, ownerLocal)
 		},
 	}
 }
