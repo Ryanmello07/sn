@@ -39,6 +39,12 @@ through replanning, including after the cutoff. Finish that correction and run
 the full current model suite before treating this transition as qualified.
 Neither candidate has been merged or deployed as the operational schedule.
 
+The successor's normal model slice has completed nine passes and one fixture
+failure: the paid/free test attempts to change immutable terminal attribution
+before reaching its weighting assertion. Its legal lifecycle fixture correction
+is pending; the remaining package results are collected independently. This
+failure does not establish a weighting defect or a successful weighting check.
+
 ## Current preparation state — October 2
 
 No accepted current production release or live deployment exists. The full
