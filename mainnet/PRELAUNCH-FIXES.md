@@ -19,6 +19,18 @@ must disclose that their liability census is incomplete. The first normal
 batch has one fixture failure; the candidate and its original evidence remain
 retained while the successor is fixed and qualified.
 
+Cancellation must preserve every unpaid earning component, not just released
+contract sweeps. Review found that canceling a legacy payment can leave its
+subsidy and reliability amounts on the canceled row while the recorded subsidy
+window prevents the planner from creating them again. Carry those original
+obligations into a replacement exactly once, with their source window and
+adjustment provenance intact. Cover both unsubmitted cancellation and confirmed
+processor cancellation, repeated cancellation/replanning, concurrent planning,
+and cancellation after the October 6 boundary. An uncertain submission or an
+observed transaction hash must remain in reconciliation rather than become
+replacement debt. This correction remains pending; do not infer completion from
+the separate bonus and submission-basis candidate.
+
 The [current preparation state](MAINNET.md#current-preparation-state--october-2)
 distinguishes integrated source fixes, qualified candidates and the remaining
 production work. All 28 hardening lessons and ten production gates retain their

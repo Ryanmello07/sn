@@ -31,6 +31,14 @@ its correction and the manual-bonus/processor-snapshot safeguards are being
 implemented in a separate successor. No completed qualification, merged payout
 code or deployed schedule is claimed by this checkpoint.
 
+The separate Server successor `ffcc77b8` freezes the fixture correction,
+adjustment provenance, amount/wallet reservation and processor-send safeguards;
+its 25-test targeted batch is in independent qualification. A further correction
+must preserve canceled payments' original subsidy and reliability obligations
+through replanning, including after the cutoff. Finish that correction and run
+the full current model suite before treating this transition as qualified.
+Neither candidate has been merged or deployed as the operational schedule.
+
 ## Current preparation state — October 2
 
 No accepted current production release or live deployment exists. The full
