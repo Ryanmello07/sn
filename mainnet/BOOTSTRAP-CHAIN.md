@@ -281,6 +281,10 @@ Ed25519/RFC78 action, portable `trim-export` request, real pinned-SDK signing
 command and exact `trim-import-reply` handoff. It preserves original v1 custody
 and keeps physical device, runtime digest and current authority qualification
 explicitly open. The v1 procedure below retains its original sr25519 contract.
+The separate [best-effort workflow](OWNER-TRIM-BEST-EFFORT.md) uses a fresh Ledger
+action domain under original v3 or passive-root v4 custody, plus `trim-submit-plan`
+and `trim-submit` with an independently signed exact residual-risk policy. It
+cannot reinterpret a claimed strict action or supply its enforced-window capability.
 
 The trim phase retains the exact accepted v3 preparation and its five existing
 journals. It adds one fixed `owner-trim-action.json` with a permanent exclusive
@@ -343,10 +347,13 @@ No production capability currently enforces future owner/governance/root
 changes, global coldkey exclusivity, source-to-Wasm provenance and fee exposure.
 The executable owner requires that independent capability before signing and
 again before each send; the owned adapter independently refuses an absent one.
-Conditional qualification and signed configuration are insufficient. A possible
-best-effort risk policy would need separate explicit approval and implementation;
-that choice remains pending and this phase does not assume or enable it.
-Mainnet genesis, current metadata, owned route and custody remain unresolved. See the
+Conditional qualification and signed configuration are insufficient for this
+strict path. The [October 2 separate best-effort domain](OWNER-TRIM-BEST-EFFORT.md)
+implements original-byte submission only after independent exact residual-risk
+approval; no such live approval is supplied. Its conservative defaults still
+require pruning immunity through original expiry and observed closed registration.
+Current runtime/route approval, device and exclusive external custody remain live
+inputs. See the historical
 [source checkpoint and qualification scope](evidence/owner-trim-execution-source-20260929.md).
 
 The [qualified successor](evidence/owner-trim-null-storage-repair-20260929.md)
