@@ -96,6 +96,18 @@ defect or establish the new public behavior, then qualify only affected scopes.
    runtime, retry, monitoring, economic and evidence work. A new composed release
    comes after the required source increments, preserving earlier artifacts.
 
+## Latest qualified read recovery
+
+SN main integrates spool68 and finite40d while preserving retained-member
+recovery. [Guarded-reader evidence](current-graph-reader-progress-20261002.md)
+records 15 affected independent tests in each mode.
+[Finite-claim evidence](finite-claim-independent-20261002.json) records nine
+affected independent tests in each mode, vet, and two causal old-body refusals
+per mode. All miner and module bytes in merge `d5c5df7bf368221253a514cae046e4cd56d55d33` match frozen40d.
+The minute-outage and deadline tests use deterministic clocks with real SDK
+reads; they do not establish a wall-clock outage rehearsal. These integrations
+advance PH-03/09 without closing all callers, PH requirements or mainnet gates.
+
 ## PH requirements and next concrete work
 
 Paths are relative to SN unless prefixed `server/`. The next-step column names

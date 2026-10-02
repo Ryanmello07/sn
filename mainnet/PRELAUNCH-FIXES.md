@@ -5201,8 +5201,13 @@ retry classified transient failures, join cancellation and return errors rather
 than panic. Test a sustained outage through the real public command and SDK;
 keep signed submission outside read retry. The first cardinality-only fixture
 was invalid because route attempts consumed its synthetic failures; retain it
-as a harness failure, separately from the corrected causal controls. The fix
-is in implementation, not yet qualified or merged.
+as a harness failure, separately from the corrected causal controls. The fix is now merged after nine affected author and independent tests pass
+in each mode, plus vet; two old public read-call controls fail as expected in
+each mode. [Independent evidence](evidence/finite-claim-independent-20261002.json)
+retains the corrected graph setup and exact source. The sustained-outage
+SDK/HTTP requests are real, while the retry wait clock is accelerated to model
+65 seconds per read. The deadline test likewise uses an injected clock. Neither
+is a wall-clock production outage rehearsal; report clock fidelity explicitly.
 
 
 ### October 2: preserve qualification headroom through scoped cache cleanup
