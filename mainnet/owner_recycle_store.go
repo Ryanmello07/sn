@@ -3,8 +3,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,6 +20,7 @@ const ownerRecycleStoreLimit = ownerSigningRequestLimit + 1024*1024
 // Local locking is not global coldkey custody. The caller serializes methods;
 // failed writes poison the store, including failures after an atomic rename.
 type ownerRecycleStore struct {
+	storage       *mainnetDurableDirectory
 	config        ownerRecycleConfig
 	key           string
 	lock          *os.File
@@ -31,11 +34,20 @@ type ownerRecycleStore struct {
 
 // Reserve uses exclusive creation; resume accepts only the same approved marker.
 // No path comes from a portable request on an owner's separate signing computer.
-func openOwnerRecycleStore(config ownerRecycleConfig, key string, create bool) (_ *ownerRecycleStore, resultErr error) {
+func openOwnerRecycleStore(config ownerRecycleConfig, key string, create bool, storageContexts ...context.Context) (_ *ownerRecycleStore, resultErr error) {
 	path := config.Action.StatePath
 	if err := errors.Join(config.validate(key), bootstrapRootDirectory(filepath.Dir(path))); err != nil {
 		return nil, err
 	}
+	storage, err := openMainnetDurableDirectory(mainnetStorageContext(storageContexts), filepath.Dir(path), durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, storage.close())
+		}
+	}()
 	root, err := bootstrapSuccessorPhysicalRoot(filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -44,37 +56,44 @@ func openOwnerRecycleStore(config ownerRecycleConfig, key string, create bool) (
 	if err != nil {
 		return nil, err
 	}
-	self := &ownerRecycleStore{config: config, key: key, directory: os.NewFile(uintptr(directoryFd), filepath.Dir(path))}
+	self := &ownerRecycleStore{storage: storage, config: config, key: key, directory: os.NewFile(uintptr(directoryFd), filepath.Dir(path))}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, self.close())
 		}
 	}()
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
+	if err := self.storage.checkWrite(self.directory); err != nil {
+		return nil, err
+	}
 	if create {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return nil, errors.Join(errors.New("recycle custody already exists; reopen original state"), err)
 		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := unix.Openat(directoryFd, filepath.Base(path)+".lock", flags, 0600)
+	self.lock, err = storage.openSnapshotMarker(path)
 	if err != nil {
 		return nil, err
 	}
-	self.lock = os.NewFile(uintptr(fd), path+".lock")
-	self.marker = &bootstrapContractReadinessMarker{file: self.lock, path: path + ".lock", root: root}
+	fd := int(self.lock.Fd())
+	self.marker = &bootstrapContractReadinessMarker{storage: self.storage, file: self.lock, path: path + ".lock", root: root}
 	if err := bootstrapSuccessorPrivateRegular(self.lock); err != nil {
 		return nil, errors.Join(errors.New("recycle marker is not a private regular file"), err)
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("recycle custody has another local owner"), err)
 	}
 	marker := rootObjectHash(config) + "\n" + key + "\n"
+	if err := self.storage.bindMarker(self.lock, false); err != nil {
+		return nil, err
+	}
+	if err := self.storage.bindSnapshot(path, "mainnet-owner-recycle", ownerRecycleStoreLimit, create); err != nil {
+		return nil, err
+	}
 	if create {
 		if err := self.checkpoint(); err != nil {
 			return nil, err
 		}
-		written, err := self.lock.WriteString(marker)
+		written, err := self.storage.writeMarkerAt([]byte(marker), 0)
 		if written != len(marker) && err == nil {
 			err = io.ErrShortWrite
 		}
@@ -89,6 +108,9 @@ func openOwnerRecycleStore(config ownerRecycleConfig, key string, create bool) (
 		}
 		if string(raw) == marker+bootstrapRootClaimComplete {
 			self.marker.expected, self.complete = string(raw), true
+			if err := self.storage.bindMarker(self.lock, true); err != nil {
+				return nil, err
+			}
 			if _, err := self.load(); err != nil {
 				return nil, err
 			}
@@ -112,12 +134,15 @@ func openOwnerRecycleStore(config ownerRecycleConfig, key string, create bool) (
 	if _, err := self.load(); err != nil {
 		return nil, err
 	}
-	written, err := self.lock.WriteAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
+	written, err := self.storage.writeMarkerAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
 	if written != len(bootstrapRootClaimComplete) && err == nil {
 		err = io.ErrShortWrite
 	}
 	self.marker.expected, self.complete = marker+bootstrapRootClaimComplete, true
 	if err := errors.Join(err, self.lock.Sync(), self.checkpoint()); err != nil {
+		return nil, err
+	}
+	if err := self.storage.bindMarker(self.lock, true); err != nil {
 		return nil, err
 	}
 	return self, nil
@@ -128,7 +153,7 @@ func (self *ownerRecycleStore) close() error {
 	if self == nil {
 		return nil
 	}
-	var err error
+	err := self.storage.close()
 	for _, file := range []*os.File{self.lock, self.directory} {
 		if file != nil {
 			err = errors.Join(err, file.Close())
@@ -158,8 +183,11 @@ func (self *ownerRecycleStore) load() (ownerRecycleRecord, error) {
 // File sync, atomic rename and parent sync precede acknowledgment. The original
 // bytes may already be durable on error; never roll back or retry in this instance.
 func (self *ownerRecycleStore) save(record ownerRecycleRecord) (resultErr error) {
+	if err := self.storage.checkWrite(self.directory); err != nil {
+		return err
+	}
 	defer func() {
-		if resultErr != nil {
+		if resultErr != nil && (self.storage == nil || self.storage.failed != nil || !mainnetDurableAdmissionPending(resultErr)) {
 			self.failed = resultErr
 		}
 	}()
@@ -185,5 +213,5 @@ func (self *ownerRecycleStore) syncParent() error {
 	if syncDirectory == nil {
 		syncDirectory = (*os.File).Sync
 	}
-	return syncDirectory(self.directory)
+	return errors.Join(syncDirectory(self.directory), self.storage.checkWrite(self.directory))
 }

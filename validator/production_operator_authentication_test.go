@@ -91,7 +91,7 @@ func TestProductionAuthenticationRunReleaseInvalidApiKeepsObservation(t *testing
 		}})
 		ctx, cancel := context.WithCancel(context.WithValue(observed, releaseDiagnosticHooksKey{}, releaseDiagnosticHooks{writer: output}))
 		done := make(chan error, 1)
-		go func() { done <- RunRelease(ctx, fixture.configPath) }()
+		go func() { done <- RunRelease(fixture.storageContext(ctx), fixture.configPath) }()
 		select {
 		case err := <-done:
 			cancel()
@@ -178,7 +178,7 @@ func TestProductionAuthenticationRunReleaseRevocationKeepsObservation(t *testing
 	ctx, cancel := context.WithCancel(context.WithValue(observed, releaseDiagnosticHooksKey{}, releaseDiagnosticHooks{writer: output}))
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- RunRelease(ctx, fixture.configPath) }()
+	go func() { done <- RunRelease(fixture.storageContext(ctx), fixture.configPath) }()
 	select {
 	case err := <-done:
 		t.Fatalf("live revocation stopped original native observation: %v", err)
@@ -241,7 +241,7 @@ func TestProductionAuthenticationRunReleaseRevocationJoinsActiveTrail(t *testing
 	ctx, cancel := context.WithCancel(context.WithValue(t.Context(), releaseDiagnosticHooksKey{}, releaseDiagnosticHooks{writer: output}))
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- RunRelease(ctx, fixture.configPath) }()
+	go func() { done <- RunRelease(fixture.storageContext(ctx), fixture.configPath) }()
 	select {
 	case err := <-done:
 		t.Fatalf("fresh lifecycle ended before actual trail revocation: %v", err)
@@ -323,7 +323,7 @@ func TestProductionAuthenticationRunReleaseObservesRetainedWithoutClient(t *test
 	ctx, cancel := context.WithCancel(context.WithValue(t.Context(), releaseDiagnosticHooksKey{}, releaseDiagnosticHooks{writer: output}))
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- RunRelease(ctx, fixture.configPath) }()
+	go func() { done <- RunRelease(fixture.storageContext(ctx), fixture.configPath) }()
 	select {
 	case err := <-done:
 		t.Fatalf("missing operator credential stopped retained native observation: %v", err)
@@ -379,7 +379,7 @@ func TestProductionAuthenticationRunReleaseRegistrationRecovers(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- RunRelease(ctx, fixture.configPath) }()
+	go func() { done <- RunRelease(fixture.storageContext(ctx), fixture.configPath) }()
 	for index, api := range fixture.origins {
 		select {
 		case err := <-done:
@@ -574,7 +574,7 @@ func TestProductionAuthenticationRunReleaseRefreshTimeoutKeepsObservation(t *tes
 	ctx, cancel := context.WithCancel(context.WithValue(context.WithValue(t.Context(), releaseDiagnosticHooksKey{}, releaseDiagnosticHooks{writer: output}), productionAuthenticationReadHooksKey{}, hooks))
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- RunRelease(ctx, fixture.configPath) }()
+	go func() { done <- RunRelease(fixture.storageContext(ctx), fixture.configPath) }()
 	for _, read := range entered {
 		select {
 		case <-read:

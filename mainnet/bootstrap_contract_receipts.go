@@ -110,7 +110,7 @@ func openBootstrapContractReceiptScope(ctx context.Context, path, directory, acc
 				PredecessorHash: rootObjectHash(self.records[i-1])}) + "\n"
 		}
 		journal := filepath.Join(directory, bootstrapContractStateFile(i))
-		lock, err := openBootstrapContractReadinessMarker(journal, marker+bootstrapRootClaimComplete)
+		lock, err := openBootstrapContractReadinessMarker(journal, marker+bootstrapRootClaimComplete, ctx)
 		if err != nil {
 			return nil, err
 		}

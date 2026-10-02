@@ -112,13 +112,14 @@ func newRootSubmissionFixture(t *testing.T) *rootSubmissionFixture {
 	}}
 	fixture.approve(t)
 	fixture.intent = rootServiceSubmission{Packet: packet, ConfigHash: rootObjectHash(service), Attempt: 1, RawExtrinsic: "0x" + hex.EncodeToString(receipt.signed), ExtrinsicHash: rootExtrinsicHash(receipt.signed)}
+	prepareMainnetSnapshotTest(t, fixture.config.Approval.StatePath, "mainnet-root-submission", rootSubmissionStoreLimit)
 	return fixture
 }
 
 // Every opened fixture is closed after all operations and handlers are joined.
 func (self *rootSubmissionFixture) open(t *testing.T, create bool) (*rootOwnedSubmission, *rootSubmissionStore) {
 	t.Helper()
-	store, err := openRootSubmissionStore(self.config, create)
+	store, err := openRootSubmissionStore(self.config, create, self.offline.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

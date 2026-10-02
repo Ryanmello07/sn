@@ -7,10 +7,13 @@ package validator
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/urnetwork/connect/durablevolume"
 
 	"gopkg.in/yaml.v3"
 )
@@ -69,7 +72,7 @@ func RenderReleaseConfigEvidenceV2Operators(original []byte, operators []Release
 // RewriteReleaseConfigEvidenceV2Operators pins the rendered operator entries in
 // the configuration file. The original is kept once as <path>.pre-activation,
 // and the replacement is strictly loaded before it is renamed into place.
-func RewriteReleaseConfigEvidenceV2Operators(path string, operators []ReleaseEvidenceV2OperatorConfig) error {
+func RewriteReleaseConfigEvidenceV2Operators(path string, operators []ReleaseEvidenceV2OperatorConfig, storageContexts ...context.Context) error {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return err
@@ -85,12 +88,26 @@ func RewriteReleaseConfigEvidenceV2Operators(path string, operators []ReleaseEvi
 	if err != nil {
 		return err
 	}
+	ctx := validatorStorageContext(storageContexts)
+	config, err := decodeReleaseConfigDocument(abs, original)
+	if err != nil {
+		return err
+	}
+	if err := requireReleaseDurableReference(ctx, config); err != nil {
+		return err
+	}
+	if _, err := decodeReleaseConfigBytesMode(abs, original, releaseConfigLoadMode{preActivation: true}); err != nil {
+		return err
+	}
 	rendered, err := RenderReleaseConfigEvidenceV2Operators(original, operators)
 	if err != nil {
 		return err
 	}
 	if _, err := decodeReleaseConfigBytes(abs, rendered); err != nil {
 		return fmt.Errorf("rewritten configuration is not admitted by the strict loader: %w", err)
+	}
+	if _, present := durablevolume.ReferenceFromContext(ctx); present {
+		return rewriteReleaseConfigDurable(ctx, abs, original, rendered, info.Mode().Perm())
 	}
 	backup := abs + ".pre-activation"
 	if _, err := os.Lstat(backup); errors.Is(err, os.ErrNotExist) {

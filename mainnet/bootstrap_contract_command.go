@@ -111,7 +111,7 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 	}
 	var store, reserveStore, vaultStore, coordinatorStore, escrowStore, proxyStore, reserveLinkStore, vaultLinkStore *evmActionStore
 	if plan.ActionIndex > 0 {
-		reserveStore, err = openEvmActionStore(plan.Config, false, nil)
+		reserveStore, err = openEvmActionStore(plan.Config, false, nil, ctx)
 		if err != nil {
 			fmt.Fprintln(stderr, "contract phase reserve prerequisite custody:", err)
 			return 3
@@ -123,9 +123,9 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 			return 3
 		}
 		if plan.ActionIndex == 1 {
-			store, err = openEvmVaultActionStore(plan, reserve, command == "apply", nil)
+			store, err = openEvmVaultActionStore(plan, reserve, command == "apply", nil, ctx)
 		} else {
-			vaultStore, err = openEvmVaultActionStore(*plan.Vault, reserve, false, nil)
+			vaultStore, err = openEvmVaultActionStore(*plan.Vault, reserve, false, nil, ctx)
 			if err != nil {
 				fmt.Fprintln(stderr, "contract phase vault prerequisite custody:", err)
 				return 3
@@ -137,9 +137,9 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 				return 3
 			}
 			if plan.ActionIndex == 2 {
-				store, err = openEvmCoordinatorActionStore(plan, reserve, vault, command == "apply", nil)
+				store, err = openEvmCoordinatorActionStore(plan, reserve, vault, command == "apply", nil, ctx)
 			} else {
-				coordinatorStore, err = openEvmCoordinatorActionStore(*plan.Coordinator, reserve, vault, false, nil)
+				coordinatorStore, err = openEvmCoordinatorActionStore(*plan.Coordinator, reserve, vault, false, nil, ctx)
 				if err != nil {
 					fmt.Fprintln(stderr, "contract phase coordinator prerequisite custody:", err)
 					return 3
@@ -151,9 +151,9 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 					return 3
 				}
 				if plan.ActionIndex == 3 {
-					store, err = openEvmEscrowActionStore(plan, reserve, vault, coordinator, command == "apply", nil)
+					store, err = openEvmEscrowActionStore(plan, reserve, vault, coordinator, command == "apply", nil, ctx)
 				} else {
-					escrowStore, err = openEvmEscrowActionStore(*plan.Escrow, reserve, vault, coordinator, false, nil)
+					escrowStore, err = openEvmEscrowActionStore(*plan.Escrow, reserve, vault, coordinator, false, nil, ctx)
 					if err != nil {
 						fmt.Fprintln(stderr, "contract phase escrow prerequisite custody:", err)
 						return 3
@@ -165,9 +165,9 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 						return 3
 					}
 					if plan.ActionIndex == 4 {
-						store, err = openEvmProxyActionStore(plan, reserve, vault, coordinator, escrow, command == "apply", nil)
+						store, err = openEvmProxyActionStore(plan, reserve, vault, coordinator, escrow, command == "apply", nil, ctx)
 					} else {
-						proxyStore, err = openEvmProxyActionStore(*plan.Proxy, reserve, vault, coordinator, escrow, false, nil)
+						proxyStore, err = openEvmProxyActionStore(*plan.Proxy, reserve, vault, coordinator, escrow, false, nil, ctx)
 						if err != nil {
 							fmt.Fprintln(stderr, "contract phase proxy prerequisite custody:", err)
 							return 3
@@ -179,9 +179,9 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 							return 3
 						}
 						if plan.ActionIndex == 5 {
-							store, err = openEvmReserveLinkActionStore(plan, reserve, vault, coordinator, escrow, proxy, command == "apply", nil)
+							store, err = openEvmReserveLinkActionStore(plan, reserve, vault, coordinator, escrow, proxy, command == "apply", nil, ctx)
 						} else {
-							reserveLinkStore, err = openEvmReserveLinkActionStore(*plan.ReserveLink, reserve, vault, coordinator, escrow, proxy, false, nil)
+							reserveLinkStore, err = openEvmReserveLinkActionStore(*plan.ReserveLink, reserve, vault, coordinator, escrow, proxy, false, nil, ctx)
 							if err != nil {
 								fmt.Fprintln(stderr, "contract phase reserve binding prerequisite custody:", err)
 								return 3
@@ -193,9 +193,9 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 								return 3
 							}
 							if plan.ActionIndex == 6 {
-								store, err = openEvmVaultLinkActionStore(plan, reserve, vault, coordinator, escrow, proxy, link, command == "apply", nil)
+								store, err = openEvmVaultLinkActionStore(plan, reserve, vault, coordinator, escrow, proxy, link, command == "apply", nil, ctx)
 							} else {
-								vaultLinkStore, err = openEvmVaultLinkActionStore(*plan.VaultLink, reserve, vault, coordinator, escrow, proxy, link, false, nil)
+								vaultLinkStore, err = openEvmVaultLinkActionStore(*plan.VaultLink, reserve, vault, coordinator, escrow, proxy, link, false, nil, ctx)
 								if err != nil {
 									fmt.Fprintln(stderr, "contract phase vault binding prerequisite custody:", err)
 									return 3
@@ -206,7 +206,7 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 									fmt.Fprintln(stderr, "contract phase vault binding prerequisite:", loadErr)
 									return 3
 								}
-								store, err = openEvmEvidenceActionStore(plan, reserve, vault, coordinator, escrow, proxy, link, bound, command == "apply", nil)
+								store, err = openEvmEvidenceActionStore(plan, reserve, vault, coordinator, escrow, proxy, link, bound, command == "apply", nil, ctx)
 							}
 						}
 					}
@@ -214,7 +214,7 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 			}
 		}
 	} else {
-		store, err = openEvmActionStore(plan.Config, command == "apply", nil)
+		store, err = openEvmActionStore(plan.Config, command == "apply", nil, ctx)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, "contract phase retained ownership:", err)

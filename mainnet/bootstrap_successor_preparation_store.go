@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"strings"
@@ -20,6 +21,7 @@ const bootstrapSuccessorStagePrefix = ".contract-successor-preparation-"
 // The directory lock serializes cooperating preparations, not other machines
 // or a privileged operator. An error closes the owner before any further use.
 type bootstrapSuccessorPreparationStore struct {
+	storage   *mainnetDurableDirectory
 	ctx       context.Context
 	approval  bootstrapSuccessorPreparationApproval
 	directory *os.File
@@ -55,17 +57,26 @@ func openBootstrapSuccessorPreparationStore(ctx context.Context, expected bootst
 	if err != nil || physical != expected.Root {
 		return nil, errors.Join(errors.New("successor physical root differs from the signed preparation"), err)
 	}
+	storage, err := openMainnetDurableDirectory(ctx, path, durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, storage.close())
+		}
+	}()
 	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, err
 	}
-	self := &bootstrapSuccessorPreparationStore{ctx: ctx, approval: copied, directory: os.NewFile(uintptr(fd), path), hook: hook}
+	self := &bootstrapSuccessorPreparationStore{storage: storage, ctx: ctx, approval: copied, directory: os.NewFile(uintptr(fd), path), hook: hook}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, self.close())
 		}
 	}()
-	if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("successor preparation already has a local owner"), err)
 	}
 	if err := self.checkpoint("owner-acquired"); err != nil {
@@ -153,6 +164,11 @@ func (self *bootstrapSuccessorPreparationStore) checkpoint(stage string) error {
 		return errors.New("successor preparation owner is closed")
 	}
 	check := func() error {
+		if self != nil {
+			if err := self.storage.check(self.directory); err != nil {
+				return err
+			}
+		}
 		var stat unix.Stat_t
 		if err := unix.Fstat(int(self.directory.Fd()), &stat); err != nil {
 			return err
@@ -244,6 +260,9 @@ func (self *bootstrapSuccessorPreparationStore) publish(kind, name string, raw [
 	if err := self.checkpoint(kind + "-stage-synced"); err != nil {
 		return err
 	}
+	if err := self.storage.checkWrite(self.directory); err != nil {
+		return err
+	}
 	if err := unix.Renameat2(fd, stage, fd, name, unix.RENAME_NOREPLACE); err != nil {
 		return errors.Join(errors.New("successor publication refused an existing fixed name"), err)
 	}
@@ -261,7 +280,7 @@ func (self *bootstrapSuccessorPreparationStore) close() error {
 	if self == nil || self.directory == nil {
 		return nil
 	}
-	err := self.directory.Close()
+	err := errors.Join(self.directory.Close(), self.storage.close())
 	self.directory = nil
 	return err
 }

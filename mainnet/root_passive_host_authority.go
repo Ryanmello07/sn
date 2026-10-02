@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/urnetwork/connect/durablevolume"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,25 +20,26 @@ const rootPassiveHostApprovalDomain = "urnetwork-mainnet-root-passive-host-appro
 const rootPassiveHostUnitName = "sn-mainnet-root-passive.service"
 
 type rootPassiveHostPlan struct {
-	Preparation              planFileReference `json:"bootstrap_config"`
-	PlanHash                 string            `json:"bootstrap_plan_hash"`
-	Runtime                  planFileReference `json:"runtime_config"`
-	RootPlanHash             string            `json:"root_plan_hash"`
-	Unit                     planFileReference `json:"unit_file"`
-	Binary                   planFileReference `json:"mainnet_binary"`
-	Systemctl                planFileReference `json:"systemctl"`
-	MachineId                string            `json:"machine_id"`
-	BootId                   string            `json:"boot_id"`
-	CheckpointDirectory      string            `json:"checkpoint_directory"`
-	RequiredMounts           []string          `json:"required_mounts"`
-	StatePath                string            `json:"state_path"`
-	ValidFrom                time.Time         `json:"valid_from"`
-	ExpiresAt                time.Time         `json:"expires_at"`
-	MaximumOperations        uint32            `json:"maximum_operations"`
-	CommandTimeoutSeconds    uint32            `json:"command_timeout_seconds"`
-	MaximumSampleAgeSeconds  uint32            `json:"maximum_sample_age_seconds"`
-	InstallStaticUnit        bool              `json:"install_static_unit"`
-	AuthorizeOnePassiveStart bool              `json:"authorize_one_passive_start"`
+	DurableVolumes           *durablevolume.Reference `json:"durable_volumes,omitempty"`
+	Preparation              planFileReference        `json:"bootstrap_config"`
+	PlanHash                 string                   `json:"bootstrap_plan_hash"`
+	Runtime                  planFileReference        `json:"runtime_config"`
+	RootPlanHash             string                   `json:"root_plan_hash"`
+	Unit                     planFileReference        `json:"unit_file"`
+	Binary                   planFileReference        `json:"mainnet_binary"`
+	Systemctl                planFileReference        `json:"systemctl"`
+	MachineId                string                   `json:"machine_id"`
+	BootId                   string                   `json:"boot_id"`
+	CheckpointDirectory      string                   `json:"checkpoint_directory"`
+	RequiredMounts           []string                 `json:"required_mounts"`
+	StatePath                string                   `json:"state_path"`
+	ValidFrom                time.Time                `json:"valid_from"`
+	ExpiresAt                time.Time                `json:"expires_at"`
+	MaximumOperations        uint32                   `json:"maximum_operations"`
+	CommandTimeoutSeconds    uint32                   `json:"command_timeout_seconds"`
+	MaximumSampleAgeSeconds  uint32                   `json:"maximum_sample_age_seconds"`
+	InstallStaticUnit        bool                     `json:"install_static_unit"`
+	AuthorizeOnePassiveStart bool                     `json:"authorize_one_passive_start"`
 }
 
 type rootPassiveHostApproval struct {
@@ -54,6 +56,9 @@ func (self rootPassiveHostApproval) signingBytes() ([]byte, error) {
 
 func (self rootPassiveHostApproval) validate(key string) error {
 	p := self.Plan
+	if err := validateUnitDurableReference(p.DurableVolumes); err != nil {
+		return err
+	}
 	if self.Schema != rootPassiveHostSchema || !rootCanonicalHash(key) || !p.InstallStaticUnit || !p.AuthorizeOnePassiveStart ||
 		!planSha256(p.PlanHash) || !planSha256(p.RootPlanHash) || !repairValidatorHex(p.MachineId, 16) ||
 		len(p.BootId) != 36 || p.BootId[8] != '-' || p.BootId[13] != '-' || p.BootId[18] != '-' || p.BootId[23] != '-' || !repairValidatorHex(strings.ReplaceAll(p.BootId, "-", ""), 16) ||
@@ -96,7 +101,7 @@ func (self rootPassiveHostApproval) validate(key string) error {
 }
 
 func (self rootPassiveHostPlan) arguments() string {
-	return "root-passive-service run --config=" + self.Runtime.Path + " --accept-runtime-sha256=" + self.Runtime.Sha256
+	return "root-passive-service run --config=" + self.Runtime.Path + " --accept-runtime-sha256=" + self.Runtime.Sha256 + unitDurableArguments(self.DurableVolumes)
 }
 
 // Root can read the original private approvals. The observer receives no

@@ -115,6 +115,7 @@ type ownerSigningAdapter func(context.Context, ownerSigningDeviceConfig, ownerSi
 // A complete marker distinguishes a missing established journal from an
 // interrupted initial reservation. No missing response proves never-issued.
 type ownerSigningDeviceStore struct {
+	storage *mainnetDurableDirectory
 	path    string
 	binding string
 	request ownerSigningRequest
@@ -135,6 +136,9 @@ type ownerSigningDeviceRecord struct {
 
 // One durable directory sync covers journal and initial lock publication.
 func (self *ownerSigningDeviceStore) syncParent() error {
+	if self.storage != nil {
+		return errors.Join(self.storage.directory.File().Sync(), self.storage.checkWrite(nil))
+	}
 	directory, err := os.Open(filepath.Dir(self.path))
 	if err != nil {
 		return err
@@ -145,7 +149,7 @@ func (self *ownerSigningDeviceStore) syncParent() error {
 // Missing, changed or partial records remain errors after initial claim.
 func (self *ownerSigningDeviceStore) load() (ownerSigningDeviceRecord, error) {
 	var record ownerSigningDeviceRecord
-	raw, _, err := readBootstrapRootFile(context.Background(), self.path, ownerSigningReplyLimit)
+	raw, _, err := self.storage.readFile(context.Background(), self.path, ownerSigningReplyLimit)
 	if err != nil {
 		return record, err
 	}
@@ -180,13 +184,14 @@ func (self *ownerSigningDeviceStore) load() (ownerSigningDeviceRecord, error) {
 	return record, nil
 }
 
-// Any publication failure poisons this instance, including after rename.
+// Pre-admission resource pressure is retryable. A possibly replaced journal
+// remains uncertain until an explicit reopen of the original custody.
 func (self *ownerSigningDeviceStore) save(record ownerSigningDeviceRecord) (resultErr error) {
 	if self.failed != nil {
 		return self.failed
 	}
 	defer func() {
-		if resultErr != nil {
+		if resultErr != nil && (self.storage == nil || self.storage.failed != nil) {
 			self.failed = resultErr
 		}
 	}()
@@ -196,22 +201,7 @@ func (self *ownerSigningDeviceStore) save(record ownerSigningDeviceRecord) (resu
 	if err != nil {
 		return err
 	}
-	file, err := os.CreateTemp(filepath.Dir(self.path), ".owner-signing-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	written, writeErr := file.Write(raw)
-	if written != len(raw) && writeErr == nil {
-		writeErr = io.ErrShortWrite
-	}
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(file.Name(), self.path); err != nil {
-		return err
-	}
-	return self.syncParent()
+	return self.storage.publish(self.path, append(raw, '\n'), nil)
 }
 
 // A single owner directory claims one request once; a new packet, executable,
@@ -239,28 +229,34 @@ func openOwnerSigningDeviceStore(ctx context.Context, config ownerSigningDeviceC
 		Config      ownerSigningDeviceConfig `json:"device_config"`
 		RequestHash string                   `json:"request_hash"`
 	}{Config: config, RequestHash: request.ContentHash})
-	self := &ownerSigningDeviceStore{path: config.StatePath, binding: binding, request: request}
-	defer func() {
-		if resultErr != nil && self.lock != nil {
-			resultErr = errors.Join(resultErr, self.lock.Close())
-		}
-	}()
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
-	fd, err := syscall.Open(self.path+".lock", flags|syscall.O_CREAT|syscall.O_EXCL, 0600)
-	create := err == nil
-	if errors.Is(err, os.ErrExist) {
-		fd, err = syscall.Open(self.path+".lock", flags, 0)
-	}
+	storage, err := openOwnerLocalDurableDirectory(ctx, filepath.Dir(config.StatePath))
 	if err != nil {
 		return nil, err
 	}
-	self.lock = os.NewFile(uintptr(fd), self.path+".lock")
+	self := &ownerSigningDeviceStore{storage: storage, path: config.StatePath, binding: binding, request: request}
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, self.close())
+		}
+	}()
+	self.lock, err = self.storage.openSnapshotMarker(self.path)
+	if err != nil {
+		return nil, err
+	}
+	fd := int(self.lock.Fd())
+	if err := self.storage.bindMarker(self.lock, false); err != nil {
+		return nil, err
+	}
 	info, err := self.lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.New("owner device marker must be a private regular file")
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, errors.New("owner device request already has a local owner")
+	}
+	create := info.Size() == 0
+	if err := storage.bindSnapshot(self.path, "mainnet-owner-signing", ownerSigningReplyLimit, create); err != nil {
+		return nil, err
 	}
 	marker := binding + "\n"
 	if create {
@@ -269,7 +265,7 @@ func openOwnerSigningDeviceStore(ctx context.Context, config ownerSigningDeviceC
 				return nil, errors.New("unclaimed owner state or response already exists; restore original custody")
 			}
 		}
-		written, err := self.lock.WriteString(marker)
+		written, err := storage.writeMarkerAt([]byte(marker), 0)
 		if err != nil || written != len(marker) {
 			return nil, errors.Join(io.ErrShortWrite, err)
 		}
@@ -283,6 +279,9 @@ func openOwnerSigningDeviceStore(ctx context.Context, config ownerSigningDeviceC
 		}
 		if string(raw) == marker+bootstrapRootClaimComplete {
 			if _, err := self.load(); err != nil {
+				return nil, err
+			}
+			if err := self.storage.bindMarker(self.lock, true); err != nil {
 				return nil, err
 			}
 			return self, nil
@@ -303,11 +302,14 @@ func openOwnerSigningDeviceStore(ctx context.Context, config ownerSigningDeviceC
 	} else if err != nil || record.Phase != "reserved" {
 		return nil, errors.Join(errors.New("interrupted owner reservation has ambiguous device state"), err)
 	}
-	written, err := self.lock.WriteAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
+	written, err := storage.writeMarkerAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
 	if err != nil || written != len(bootstrapRootClaimComplete) {
 		return nil, errors.Join(io.ErrShortWrite, err)
 	}
 	if err := self.lock.Sync(); err != nil {
+		return nil, err
+	}
+	if err := self.storage.bindMarker(self.lock, true); err != nil {
 		return nil, err
 	}
 	return self, nil
@@ -331,7 +333,7 @@ func signOwnerRequest(ctx context.Context, config ownerSigningDeviceConfig, requ
 	if err != nil {
 		return reply, err
 	}
-	defer func() { resultErr = errors.Join(resultErr, store.lock.Close()) }()
+	defer func() { resultErr = errors.Join(resultErr, store.close()) }()
 	record, err := store.load()
 	if err != nil {
 		return reply, err
@@ -353,6 +355,9 @@ func signOwnerRequest(ctx context.Context, config ownerSigningDeviceConfig, requ
 			Owner: action.Coldkey, Account: path[2] & 0x7fffffff, Index: path[4] & 0x7fffffff,
 			Call: action.Call, IncludedExtrinsic: "0x" + hex.EncodeToString(payload[len(call):len(call)+extraLength]),
 			IncludedSignedData: "0x" + hex.EncodeToString(payload[len(call)+extraLength:]), ResponsePath: config.StatePath + ".ledger-response", AppVersion: config.AppVersion}
+		if err := store.storage.checkWrite(nil); err != nil {
+			return reply, err
+		}
 		prepared, err := adapter(ctx, config, input)
 		if err != nil || prepared.Schema != ownerSigningAdapterSchema || prepared.Mode != "prepare" || prepared.RequestHash != request.ContentHash ||
 			prepared.SourceCommit != rootActionV1Source || prepared.MetadataDigest != action.MetadataDigest || !planSha256(prepared.ProofHash) ||
@@ -364,11 +369,14 @@ func signOwnerRequest(ctx context.Context, config ownerSigningDeviceConfig, requ
 			return reply, err
 		}
 		input.Mode, input.ProofHash = "sign", prepared.ProofHash
+		if err := store.storage.checkWrite(nil); err != nil {
+			return reply, err
+		}
 		// Even an error may follow a durable device response. Recovery below
 		// reads that artifact and never retries the device call.
 		_, issueErr = adapter(ctx, config, input)
 	}
-	raw, _, err := readBootstrapRootFile(context.Background(), config.StatePath+".ledger-response", ownerSigningReplyLimit)
+	raw, _, err := store.storage.readAuxiliaryFile(context.Background(), config.StatePath+".ledger-response", ownerSigningReplyLimit)
 	if err != nil {
 		return reply, errors.Join(errors.New("owner device issuance unresolved; retain original state and response, never sign this request again"), issueErr, err)
 	}
@@ -395,4 +403,17 @@ func signOwnerRequest(ctx context.Context, config ownerSigningDeviceConfig, requ
 	}
 	record.Phase, record.Reply = "signed", &reply
 	return reply, store.save(record)
+}
+
+// The device owner releases its descriptors only after the adapter has joined.
+func (self *ownerSigningDeviceStore) close() error {
+	if self == nil {
+		return nil
+	}
+	err := self.storage.close()
+	if self.lock != nil {
+		err = errors.Join(err, self.lock.Close())
+		self.lock = nil
+	}
+	return err
 }

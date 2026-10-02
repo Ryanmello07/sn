@@ -360,7 +360,7 @@ func censusReleaseEvidenceCapturesV2(ctx context.Context, parent *attemptPrivate
 	if ctx == nil || parent == nil || maximum == 0 || maximumFiles == 0 || maximumFiles >= uint64(^uint(0)>>1) {
 		return 0, 0, errors.New("client-key capture census owner is incomplete")
 	}
-	directory, err := openAttemptPrivateDirectory(parent.path)
+	directory, err := openAttemptPrivateDirectory(parent.path, parent.storageCtx)
 	if err != nil {
 		return 0, 0, err
 	}

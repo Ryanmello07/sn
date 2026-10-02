@@ -25,7 +25,7 @@ func newRootPassiveHost() *rootPassiveHost {
 
 func (self *rootPassiveHost) profile(plan rootPassiveHostPlan) repairValidatorPlan {
 	return repairValidatorPlan{MachineId: plan.MachineId, BootId: plan.BootId, Systemctl: plan.Systemctl, RequiredMounts: plan.RequiredMounts, CommandTimeoutSeconds: plan.CommandTimeoutSeconds,
-		Unit: repairValidatorUnit{Name: rootPassiveHostUnitName, File: plan.Unit, Binary: plan.Binary, Config: plan.Runtime, StateDirectory: plan.CheckpointDirectory, Uid: self.files.host.rootUid, Gid: self.gid}}
+		Unit: repairValidatorUnit{DurableVolumes: plan.DurableVolumes, Name: rootPassiveHostUnitName, File: plan.Unit, Binary: plan.Binary, Config: plan.Runtime, StateDirectory: plan.CheckpointDirectory, Uid: self.files.host.rootUid, Gid: self.gid}}
 }
 
 func (self *rootPassiveHost) inspect(ctx context.Context, plan rootPassiveHostPlan) (repairValidatorManager, error) {
@@ -182,6 +182,14 @@ func advanceRootPassiveHost(ctx context.Context, store *rootPassiveHostStore, ho
 		return result, err
 	}
 	p, h := store.approval.Plan, host.files.host
+	if operation == "install" || operation == "start" {
+		if err := requireUnitDurableReference(ctx, p.DurableVolumes); err != nil {
+			return record.result(), err
+		}
+		if err := h.inspectServiceStorage(ctx, host.profile(p).Unit, nil); err != nil {
+			return record.result(), err
+		}
+	}
 	finish := func(status string, cause error) (rootPassiveHostResult, error) {
 		record.Status = status
 		err := store.save(record)

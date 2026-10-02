@@ -63,6 +63,7 @@ func newBootstrapRootPassiveFixture(t *testing.T) *bootstrapChainFixture {
 	server := rootFixtureServer(t, f.census)
 	service := rootPassiveServiceConfig{Schema: rootPassiveServiceSchema, Policy: rootPolicy, RpcUrl: server.URL, ReadRetrySeconds: 60,
 		CheckpointPath: filepath.Join(f.config.RunDirectory, "passive-root-checkpoint.json"), MaximumSamples: 1, IntervalSeconds: 1, StallAfterSeconds: 300}
+	prepareMainnetSnapshotTest(t, service.CheckpointPath, "mainnet-monitor-checkpoint", maxRpcReplyBytes)
 	f.root.config.Schema = bootstrapRootPassiveConfigSchema
 	f.root.config.RootService = bootstrapRootTestWrite(t, f.root.config.RootService.Path, service)
 	f.config.Root = bootstrapRootTestWrite(t, f.root.configPath, f.root.config)
@@ -108,7 +109,7 @@ func TestBootstrapRootPassiveReadinessUsesCurrentSupportedProfile(t *testing.T) 
 	f := newBootstrapRootPassiveFixture(t)
 	f.result(t, "apply")
 	before := f.journals(t)
-	result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+	result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 	if err != nil || !result.ObservationComplete || result.Status != "observed-prerequisites" || result.PassiveRoot == nil ||
 		!result.PassiveRoot.Observation.ReadOnlyReady || result.ActivationReady || result.NativeSigning || result.NetworkEffects || result.RootValidator.Observed == nil ||
 		!reflect.DeepEqual(before, f.journals(t)) {
@@ -271,7 +272,7 @@ func TestRootPassiveServiceCannotRecreatePreparation(t *testing.T) {
 func TestRootPassiveReadinessSupportsIndependentValidatorAdmission(t *testing.T) {
 	f := newBootstrapRootPassiveFixture(t)
 	f.result(t, "apply")
-	observed, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+	observed, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 	if err != nil || !observed.ObservationComplete || observed.LocalPreparation == nil {
 		t.Fatal("real composed observation unavailable", err)
 	}
@@ -307,7 +308,7 @@ func TestRootPassiveReadinessSupportsIndependentValidatorAdmission(t *testing.T)
 func TestRootPassiveReadinessSupportsContractSuccessorSeals(t *testing.T) {
 	f := newBootstrapRootPassiveFixture(t)
 	f.result(t, "apply")
-	state, err := openBootstrapChainReadinessState(t.Context(), f.preparation)
+	state, err := openBootstrapChainReadinessState(f.storageContext(t.Context()), f.preparation)
 	if err != nil {
 		t.Fatal(err)
 	}

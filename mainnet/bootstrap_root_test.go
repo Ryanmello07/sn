@@ -16,11 +16,16 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urfoundation/sn/internal/durablepath"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // Each fixture has separately private config and run directories. The native
 // action is independently reapproved for its exact service/custody paths.
 type bootstrapRootFixture struct {
+	storage    *durablefixture.Fixture
 	configPath string
 	config     bootstrapRootConfig
 	plan       bootstrapRootPlan
@@ -61,7 +66,7 @@ func bootstrapRootFixtureFromOffline(t *testing.T, offline rootOfflineFixture) *
 		t.Fatal(err)
 	}
 	service := rootServiceConfig{Schema: rootServiceConfigSchema, CustodyTrust: offline.trust, Packet: offline.packet, MaximumObservations: 3}
-	fixture := &bootstrapRootFixture{offline: offline, configPath: filepath.Join(configDirectory, "bootstrap.json"),
+	fixture := &bootstrapRootFixture{storage: durablefixture.New(t, t.Context(), runDirectory), offline: offline, configPath: filepath.Join(configDirectory, "bootstrap.json"),
 		config: bootstrapRootConfig{Schema: bootstrapRootConfigSchema, DeploymentId: "synthetic-mainnet-bootstrap", RunDirectory: runDirectory,
 			Network:     planNetwork{NativeChain: action.Scope.NativeChain, GenesisHash: action.Scope.GenesisHash, EvmChainId: mainnetEvmChainId},
 			RootService: bootstrapRootTestWrite(t, filepath.Join(configDirectory, "service.json"), service)}}
@@ -71,11 +76,14 @@ func bootstrapRootFixtureFromOffline(t *testing.T, offline rootOfflineFixture) *
 		t.Fatal(err)
 	}
 	fixture.plan = plan
+	prepareMainnetSnapshotTest(t, filepath.Join(runDirectory, bootstrapRootProgressFile), "mainnet-bootstrap-root", 16*1024)
+	prepareMainnetSnapshotTest(t, plan.Service.Packet.Action.Scope.StatePath, "mainnet-root-service", rootServiceStoreLimit)
 	return fixture
 }
 
 // Calls the public dispatcher, preserving exact accepted plan/run identities.
 func (self *bootstrapRootFixture) command(ctx context.Context, command string, stdout, stderr io.Writer, extra ...string) int {
+	ctx = durablepath.WithHost(durablevolume.WithReference(ctx, self.storage.Reference), self.storage.Host)
 	args := []string{"bootstrap", command, "--config", self.configPath}
 	if command != "plan" {
 		args = append(args, "--run-dir", self.config.RunDirectory, "--accept-plan-hash", self.plan.ContentHash)

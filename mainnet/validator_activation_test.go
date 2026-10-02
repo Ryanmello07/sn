@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/validator"
 	"golang.org/x/sys/unix"
@@ -133,9 +134,35 @@ func newValidatorActivationFixtureWithNativeCensus(t *testing.T, mutate func(*ty
 		source := protocol.ValidatorProgressSource{ConfigHash: "sha256:" + hex.EncodeToString(inspection.Approval.ConfigHash[:]), DeploymentId: chain.config.DeploymentId, ValidatorId: role.ValidatorId, ChainId: mainnetEvmChainId, GenesisHash: chain.config.Network.GenesisHash, Netuid: 25}
 		p.Units = append(p.Units, validatorActivationUnit{Role: role.Role, Unit: unit, Source: source})
 	}
+	// The protocol roots and operational output roots are separate explicit
+	// directories. This fixture provisions both before signing unit authority.
+	roots := []string{directory, chain.config.RunDirectory}
+	for i := range p.Units {
+		paths := []string{chain.validators[i].config.StateDir}
+		for _, operator := range chain.validators[i].config.Operators {
+			paths = append(paths, operator.StateDir)
+		}
+		for _, operator := range chain.validators[i].config.EvidenceV2.Operators {
+			paths = append(paths, operator.ReplayScratchRoot, operator.SealScratchRoot, filepath.Dir(operator.Activation.Path))
+		}
+		for _, path := range paths {
+			if err := os.MkdirAll(path, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		roots = append(roots, p.Units[i].Unit.StateDirectory)
+	}
+	chain.root.storage = durablefixture.New(t, t.Context(), roots...)
+	chain.contracts.storage = chain.root.storage
+	for i := range p.Units {
+		p.Units[i].Unit.DurableVolumes = &chain.root.storage.Reference
+		p.Units[i].Unit.File.Sha256 = monitorReadDigest(p.Units[i].Unit.render())
+	}
+	prepareMainnetSnapshotTest(t, p.StatePath, "mainnet-validator-activation", 128*1024)
 	f.approval = validatorActivationApproval{Schema: validatorActivationSchema, Plan: p}
 	h := &repairValidatorHost{rootUid: uint32(os.Geteuid()), trustRoot: hostRoot, machinePath: filepath.Join(directory, "machine-id"), bootPath: filepath.Join(directory, "boot-id"), cgroupRoot: filepath.Join(directory, "cgroup"), execute: f.execute, monotonic: func() (uint64, error) { return 150, nil }, cgroupType: func(string) (int64, error) { return unix.CGROUP2_SUPER_MAGIC, nil }}
 	f.host = &validatorActivationHost{host: h, unitDirectory: unitDirectory}
+	h.storageCommand = serviceStorageTestTransport(t)
 	repairValidatorTestWrite(t, h.machinePath, []byte(p.MachineId+"\n"), 0644)
 	repairValidatorTestWrite(t, h.bootPath, []byte(p.BootId+"\n"), 0644)
 	if err := os.Mkdir(h.cgroupRoot, 0700); err != nil {
@@ -150,6 +177,9 @@ func newValidatorActivationFixtureWithNativeCensus(t *testing.T, mutate func(*ty
 		for key, value := range map[string]string{"Id": u.Name, "LoadState": "loaded", "FragmentPath": u.File.Path, "NeedDaemonReload": "no", "Transient": "no", "Type": "exec", "User": strconv.FormatUint(uint64(uid), 10), "Group": strconv.FormatUint(uint64(gid), 10), "WorkingDirectory": u.StateDirectory, "Restart": "no", "KillMode": "control-group", "Delegate": "no", "Job": "0", "ControlPID": "0", "MainPID": "0", "ExecMainPID": "0", "ExecMainStartTimestampMonotonic": "0", "ActiveState": "inactive", "SubState": "dead", "ControlGroup": "", "Requires": "system.slice -.mount", "Slice": "system.slice", "ExecStart": "{ path=" + u.Binary.Path + " ; argv[]=" + u.Binary.Path + " run --config=" + u.Config.Path + " --progress-file=" + u.ProgressFile + " ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0 }"} {
 			f.managers[i][key] = value
 		}
+	}
+	for i, item := range p.Units {
+		f.managers[i]["ExecStart"] = strings.Replace(f.managers[i]["ExecStart"], " ; ignore_errors=", unitDurableArguments(item.Unit.DurableVolumes)+" ; ignore_errors=", 1)
 	}
 	f.sign()
 	return f
@@ -228,6 +258,7 @@ func (self *validatorActivationFixture) execute(ctx context.Context, path string
 
 func (self *validatorActivationFixture) command(ctx context.Context, operation string, authority validatorActivationAuthority) (validatorActivationResult, int, string) {
 	self.t.Helper()
+	ctx = self.chain.storageContext(ctx)
 	raw, err := os.ReadFile(self.path)
 	if err != nil {
 		self.t.Fatal(err)

@@ -13,6 +13,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/urfoundation/sn/internal/durablepath"
 )
 
 // One bounded read retains exact bytes; no embedded file references are opened.
@@ -52,6 +54,12 @@ func runOwnerSigningCommandWithAdapter(ctx context.Context, args []string, stdou
 		return 2
 	}
 	mode := args[0]
+	if mode == "sign" {
+		if err := durablepath.Require(ctx); err != nil {
+			fmt.Fprintln(stderr, "owner signing requires approved local durable custody:", err)
+			return 2
+		}
+	}
 	flags := flag.NewFlagSet("owner-signing "+mode, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	requestPath := flags.String("request", "", "portable exported request on the owner's computer")

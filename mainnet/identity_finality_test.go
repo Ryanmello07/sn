@@ -477,7 +477,7 @@ func TestBootstrapChainReadinessFinalityClosesAfterRootCheckpoint(t *testing.T) 
 		}
 		return false
 	})
-	result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+	result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 	if !regressed.Load() || !errors.Is(err, errRpcIntegrity) || result.ObservationComplete || result.Census != nil || result.Status != "unresolved" || !reflect.DeepEqual(original, f.journals(t)) {
 		t.Fatalf("late finality loss published readiness or changed custody: heads=%d checks=%d result=%+v err=%v", heads, afterCensus, result, err)
 	}

@@ -3,8 +3,8 @@
 package validator
 
 // These artifacts contain two independent real M8 engines and disk ledgers.
-// The legacy oracle appends the very same signed records into real v1 stores;
-// neither path invents cuts, signatures, scoring totals or verifier verdicts.
+// The legacy oracle uses the very same signed records and actual v1 cut/scoring
+// codecs. Mainnet records remain historical input, never a new legacy writer.
 
 import (
 	"bytes"
@@ -89,21 +89,7 @@ func newReleaseMeasurementV2TestFixtureWithActivation(t *testing.T, completed in
 		seal.engine.stats.mu.Lock()
 		measurement := seal.engine.stats.releaseStatsMeasurementWithLock()
 		seal.engine.stats.mu.Unlock()
-		ledger, err := NewAttemptLedger(newAttemptLedgerDiskTestStateDir(t), identity, seal.key)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = ledger.Close() })
-		for _, record := range seal.recordTs {
-			appended, err := ledger.AppendContext(t.Context(), record)
-			if err != nil || !reflect.DeepEqual(appended, &record) {
-				t.Fatalf("v1 oracle changed actual signed record: %v", err)
-			}
-		}
-		legacyCut, err := ledger.BuildCut(seal.expected.Boundary, 1, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
+		legacyCut := releaseMeasurementTestHistoricalCut(t, seal)
 		options, _ := newAttemptCutV2SealTestOptions(t, seal)
 		cut, _, err := SealAttemptCutV2(t.Context(), seal.ledger, seal.expected, seal.policy, seal.key, seal.bounds, options)
 		if err != nil || cut == nil {
@@ -159,6 +145,58 @@ func newReleaseMeasurementV2TestFixtureWithActivation(t *testing.T, completed in
 	fixture.artifact = artifact
 	fixture.rebuildLegacy(t)
 	return fixture
+}
+
+// Mainnet's historical v1 comparison has no append function or disk owner. Its
+// genuine records are cloned and verified before the production v1 cut codec;
+// legacy testnet controls retain the actual independently appended v1 store.
+func releaseMeasurementTestHistoricalCut(t *testing.T, seal *attemptCutV2SealTestFixture) *AttemptLedgerCut {
+	t.Helper()
+	identity := seal.expected.Identity
+	var ledger *AttemptLedger
+	if identity.ChainID == 964 {
+		records := make([]AttemptRecord, len(seal.recordTs))
+		previous := zeroAttemptHash()
+		for index, record := range seal.recordTs {
+			if record.Sequence != uint64(index+1) || record.PreviousHash != previous {
+				t.Fatal("historical v1 oracle lost the actual signed prefix")
+			}
+			if err := VerifyAttemptRecord(&record, identity, seal.key.Public().(ed25519.PublicKey), seal.server.serverPublicKeys()); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			records[index], err = cloneAttemptRecord(record)
+			if err != nil {
+				t.Fatal(err)
+			}
+			previous = record.RecordHash
+		}
+		if _, _, err := attemptLifecycle(records); err != nil {
+			t.Fatal(err)
+		}
+		ledger = &AttemptLedger{identity: identity, vsk: seal.key, records: records}
+	} else {
+		var err error
+		ledger, err = NewAttemptLedger(newAttemptLedgerDiskTestStateDir(t), identity, seal.key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = ledger.Close() })
+		for _, record := range seal.recordTs {
+			appended, err := ledger.AppendContext(t.Context(), record)
+			if err != nil || !reflect.DeepEqual(appended, &record) {
+				t.Fatalf("v1 oracle changed actual signed record: %v", err)
+			}
+		}
+	}
+	cut, err := ledger.BuildCut(seal.expected.Boundary, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyAttemptLedgerCut(cut, seal.key.Public().(ed25519.PublicKey), seal.server.serverPublicKeys()); err != nil {
+		t.Fatal(err)
+	}
+	return cut
 }
 
 // The independent existing v1 claim path, not the v2 result, determines every

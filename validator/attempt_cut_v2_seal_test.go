@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urnetwork/connect"
 )
@@ -93,12 +94,17 @@ func newAttemptCutV2SealTestFixtureForDomain(t *testing.T, depth, completed, fai
 			t.Fatal(err)
 		}
 	}
-	ledger, err := NewDiskAttemptLedger(context.Background(), state, identity, attemptLedgerDiskTestCoordinator, key, attemptLedgerDiskTestLimits())
+	ctx := t.Context()
+	if identity.ChainID == 964 {
+		ctx = durablefixture.New(t, ctx, state).Context
+		prepareAttemptLedgerCustodyTest(t, ctx, state, identity, key)
+	}
+	ledger, err := NewDiskAttemptLedger(ctx, state, identity, attemptLedgerDiskTestCoordinator, key, attemptLedgerDiskTestLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = ledger.Close() })
-	if err := stats.AttachAttemptLedger(ledger, state); err != nil {
+	if err := stats.AttachAttemptLedgerContext(ctx, ledger, state); err != nil {
 		t.Fatal(err)
 	}
 	if ledgerBeforeEpoch {
@@ -106,7 +112,7 @@ func newAttemptCutV2SealTestFixtureForDomain(t *testing.T, depth, completed, fai
 			t.Fatal(err)
 		}
 	}
-	store, err := NewProofStore(state)
+	store, err := NewProofStore(state, ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

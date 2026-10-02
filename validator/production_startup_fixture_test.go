@@ -34,8 +34,11 @@ import (
 	gojwt "github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/urfoundation/sn/clientauth"
+	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/stabi"
+	"github.com/urnetwork/connect/durablevolume"
 	"github.com/urnetwork/sdk"
 	"gopkg.in/yaml.v3"
 )
@@ -43,6 +46,7 @@ import (
 // All signed values are fixed before serving. The native owner serializes raw
 // fixture state; tests alter it only between joined service lifecycles.
 type productionStartupTestFixture struct {
+	storage            *durablefixture.Fixture
 	continuation       *productionContinuationTestFixture
 	native             *productionContinuationNativeTestClient
 	activationKVs      map[uint64]protocol.ValidatorEvidenceActivation
@@ -648,7 +652,21 @@ func newProductionStartupTestFixtureWithRegistration(t *testing.T, allowRegistra
 	if _, err := LoadReleaseConfig(self.configPath); err != nil {
 		t.Fatalf("complete independently approved startup configuration: %v", err)
 	}
+	roots := []string{self.continuation.production.cfg.StateDir}
+	for _, operator := range self.continuation.production.cfg.Operators {
+		roots = append(roots, operator.StateDir)
+	}
+	for _, operator := range self.continuation.production.cfg.EvidenceV2.Operators {
+		roots = append(roots, operator.ReplayScratchRoot, operator.SealScratchRoot, filepath.Dir(operator.Activation.Path))
+	}
+	self.storage = durablefixture.New(t, t.Context(), roots...)
 	return self
+}
+
+// Physical declaration is operational fixture input, independent of original
+// signed config bytes. Public callers retain their own cancellation lifecycle.
+func (self *productionStartupTestFixture) storageContext(ctx context.Context) context.Context {
+	return durablepath.WithHost(durablevolume.WithReference(ctx, self.storage.Reference), self.storage.Host)
 }
 
 // The independent approver signs precisely the public loader's representation,
@@ -711,6 +729,9 @@ func (self *productionStartupTestFixture) selectEmptyDeployment(t *testing.T) {
 	for index := range cfg.Operators {
 		op := &cfg.Operators[index]
 		op.StateDir = filepath.Join(root, fmt.Sprintf("no-%d", op.NoID))
+		if err := os.Mkdir(op.StateDir, 0700); err != nil {
+			t.Fatal(err)
+		}
 		input := &cfg.EvidenceV2.Operators[index]
 		input.ReplayScratchRoot, input.SealScratchRoot = filepath.Join(root, "scratch", fmt.Sprintf("no-%d", op.NoID), "replay"), filepath.Join(root, "scratch", fmt.Sprintf("no-%d", op.NoID), "seal")
 		for _, path := range []string{input.ReplayScratchRoot, input.SealScratchRoot} {
@@ -736,5 +757,17 @@ func (self *productionStartupTestFixture) selectEmptyDeployment(t *testing.T) {
 	self.configPath = writeReleaseConfig(t, *cfg)
 	if _, err := LoadReleaseConfig(self.configPath); err != nil {
 		t.Fatal(err)
+	}
+	roots := []string{cfg.StateDir}
+	for _, operator := range cfg.Operators {
+		roots = append(roots, operator.StateDir)
+	}
+	for _, operator := range cfg.EvidenceV2.Operators {
+		roots = append(roots, operator.ReplayScratchRoot, operator.SealScratchRoot, filepath.Dir(operator.Activation.Path))
+	}
+	self.storage = durablefixture.New(t, t.Context(), roots...)
+	for _, operator := range cfg.Operators {
+		source := self.continuation.inputKVs[operator.NoID].source
+		prepareAttemptLedgerCustodyTest(t, self.storage.Context, operator.StateDir, source.expected.Identity, source.key)
 	}
 }

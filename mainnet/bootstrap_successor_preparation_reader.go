@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"strings"
@@ -39,11 +40,20 @@ func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected b
 		return nil, record, err
 	}
 	path := copied.Proposal.OriginalRunDirectory
+	storage, err := openMainnetDurableDirectory(ctx, path, durablevolume.ReadOnly)
+	if err != nil {
+		return nil, record, err
+	}
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, storage.close())
+		}
+	}()
 	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, record, err
 	}
-	self := &bootstrapSuccessorPreparationStore{ctx: ctx, approval: bootstrapSuccessorPreparationApproval{Plan: copied}, directory: os.NewFile(uintptr(fd), path), hook: hook}
+	self := &bootstrapSuccessorPreparationStore{storage: storage, ctx: ctx, approval: bootstrapSuccessorPreparationApproval{Plan: copied}, directory: os.NewFile(uintptr(fd), path), hook: hook}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, self.close())
@@ -53,7 +63,7 @@ func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected b
 	if exclusive {
 		mode = unix.LOCK_EX
 	}
-	if err := unix.Flock(fd, mode|unix.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, mode|unix.LOCK_NB); err != nil {
 		return nil, record, errors.Join(errors.New("successor preparation has an active local owner"), err)
 	}
 	if err := self.checkpoint("reader-acquired"); err != nil {

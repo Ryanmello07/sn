@@ -88,7 +88,7 @@ func TestBootstrapReadinessRejectsEveryBorrowedMarkerReplacement(t *testing.T) {
 			fired := bootstrapReadinessTestAtRead(t, f.client, func() {
 				restore = bootstrapReadinessTestReplace(t, f.preparation.childPaths()[index]+".lock")
 			})
-			result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+			result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 			if !*fired || !errors.Is(err, errRpcIntegrity) || result.ObservationComplete || result.Census != nil || result.PassiveRoot != nil || result.Status != "unresolved" {
 				t.Errorf("passive=%v marker=%d: changed custody published readiness: fired=%v complete=%v status=%s err=%v", passive, index, *fired, result.ObservationComplete, result.Status, err)
 			}
@@ -112,7 +112,7 @@ func TestBootstrapReadinessRejectsDeletedCompletedJournalDuringRead(t *testing.T
 				t.Fatal(err)
 			}
 		})
-		result, err := f.client.observeBootstrapChainReadiness(t.Context(), f.preparation)
+		result, err := f.client.observeBootstrapChainReadiness(f.storageContext(t.Context()), f.preparation)
 		if !*fired || !errors.Is(err, errRpcIntegrity) || result.ObservationComplete || result.Census != nil {
 			t.Errorf("journal=%d: completed custody deletion published readiness: fired=%v complete=%v err=%v", index, *fired, result.ObservationComplete, err)
 		}

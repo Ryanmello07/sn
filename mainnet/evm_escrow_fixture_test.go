@@ -110,11 +110,11 @@ func (self *evmCreateFixture) openEscrowAncestors() ([]*evmActionStore, []evmAct
 		var err error
 		switch index {
 		case 0:
-			store, err = openEvmActionStore(self.config, false, nil)
+			store, err = openEvmActionStore(self.config, false, nil, self.storage.Context)
 		case 1:
-			store, err = openEvmVaultActionStore(*self.plan.Vault, records[0], false, nil)
+			store, err = openEvmVaultActionStore(*self.plan.Vault, records[0], false, nil, self.storage.Context)
 		case 2:
-			store, err = openEvmCoordinatorActionStore(*self.plan.Coordinator, records[0], records[1], false, nil)
+			store, err = openEvmCoordinatorActionStore(*self.plan.Coordinator, records[0], records[1], false, nil, self.storage.Context)
 		}
 		if err != nil {
 			self.t.Fatal(err)

@@ -195,7 +195,7 @@ func (self *ownerTrimBestEffortTestFixture) command(t *testing.T, mode string, e
 // Adapter tests use the same public-imported record; no signer is installed.
 func (self *ownerTrimBestEffortTestFixture) open(t *testing.T) (*ownerTrimStore, *ownerTrimBestEffortChain, *ownerTrimExecutor) {
 	t.Helper()
-	store, err := openOwnerTrimStore(t.Context(), self.chain.preparation, self.action.config, self.action.key, false)
+	store, err := openOwnerTrimStore(self.action.storage.Context, self.chain.preparation, self.action.config, self.action.key, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +328,7 @@ func TestOwnerTrimBestEffortApprovalCannotWeakenStrictDomains(t *testing.T) {
 func TestOwnerTrimBestEffortCannotAdoptClaimedStrictAction(t *testing.T) {
 	chain, f := ownerTrimPreparedTestFixture(t, ownerSigningTestKey().Public().(ed25519.PublicKey))
 	ownerSigningTestLedgerConfig(t, f)
-	store, err := openOwnerTrimStore(t.Context(), chain.preparation, f.config, f.key, true)
+	store, err := openOwnerTrimStore(f.storage.Context, chain.preparation, f.config, f.key, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestOwnerTrimBestEffortCannotAdoptClaimedStrictAction(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.approve()
-	if changed, err := openOwnerTrimStore(t.Context(), chain.preparation, f.config, f.key, false); err == nil {
+	if changed, err := openOwnerTrimStore(f.storage.Context, chain.preparation, f.config, f.key, false); err == nil {
 		changed.close()
 		t.Fatal("new domain adopted an already claimed strict journal")
 	}

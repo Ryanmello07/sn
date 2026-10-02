@@ -94,7 +94,7 @@ func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstra
 		return nil, errors.Join(errors.New("successor execution original preparation differs"), err)
 	}
 	claim := rootObjectHash(copied)
-	self.local = &bootstrapSuccessorExecutionDirectory{ctx: ctx, path: p.Proposal.OriginalRunDirectory, root: p.Root, file: self.reader.directory, claim: claim, hook: hook}
+	self.local = &bootstrapSuccessorExecutionDirectory{storage: self.reader.storage, ctx: ctx, path: p.Proposal.OriginalRunDirectory, root: p.Root, file: self.reader.directory, claim: claim, hook: hook}
 	self.registry, err = openBootstrapSuccessorExecutionDirectory(ctx, copied.Plan.Request.RegistryDirectory, copied.Plan.Registry, claim, hook)
 	if err != nil {
 		return nil, err

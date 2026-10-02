@@ -380,7 +380,9 @@ func (self *evmCreateOwner) retain(record *evmActionRecord) error {
 	record.ContentHash = ""
 	record.ContentHash = rootObjectHash(*record)
 	if err := self.store.save(*record); err != nil {
-		self.failed = err
+		if !mainnetDurableAdmissionPending(err) {
+			self.failed = err
+		}
 		return err
 	}
 	return nil
@@ -393,6 +395,9 @@ func (self *evmCreateOwner) checkpointCustody(record evmActionRecord, prior []ev
 	records := append(append([]evmActionRecord(nil), prior...), record)
 	for i, store := range stores {
 		retained, err := store.load()
+		if mainnetDurableAdmissionPending(err) {
+			return err
+		}
 		if err != nil || rootObjectHash(retained) != rootObjectHash(records[i]) {
 			self.failed = errors.Join(errors.New("EVM original action custody changed"), err)
 			return self.failed

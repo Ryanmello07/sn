@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"golang.org/x/sys/unix"
 )
 
@@ -58,6 +59,7 @@ func newRootPassiveHostFixture(t *testing.T) *rootPassiveHostFixture {
 	}
 	service := *chain.root.plan.PassiveService
 	service.CheckpointPath = filepath.Join(checkpointDirectory, "checkpoint.json")
+	prepareMainnetSnapshotTest(t, service.CheckpointPath, "mainnet-monitor-checkpoint", maxRpcReplyBytes)
 	chain.root.config.RootService = bootstrapRootTestWrite(t, chain.root.config.RootService.Path, service)
 	chain.config.Root = bootstrapRootTestWrite(t, chain.root.configPath, chain.root.config)
 	var err error
@@ -88,9 +90,14 @@ func newRootPassiveHostFixture(t *testing.T) *rootPassiveHostFixture {
 	f := &rootPassiveHostFixture{t: t, chain: chain, private: private, key: "0x" + hex.EncodeToString(private.Public().(ed25519.PublicKey)), path: filepath.Join(directory, "passive-host-approval.json"), now: now, manager: map[string]string{}}
 	p := rootPassiveHostPlan{Preparation: planFileReference{Path: chain.path, Sha256: chain.preparation.Plan.ConfigSha256}, PlanHash: chain.preparation.Plan.ContentHash, Runtime: runtime, RootPlanHash: chain.root.plan.ContentHash,
 		Unit: planFileReference{Path: filepath.Join(unitDirectory, rootPassiveHostUnitName)}, Binary: binary, Systemctl: systemctl, MachineId: strings.Repeat("3", 32), BootId: "44444444-4444-4444-4444-444444444444", CheckpointDirectory: checkpointDirectory, RequiredMounts: []string{"-.mount"}, StatePath: filepath.Join(directory, "passive-host-state.json"), ValidFrom: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour), MaximumOperations: 64, CommandTimeoutSeconds: 5, MaximumSampleAgeSeconds: 120, InstallStaticUnit: true, AuthorizeOnePassiveStart: true}
+	prepareMainnetSnapshotTest(t, p.StatePath, "mainnet-host-action", 64*1024)
+	chain.root.storage = durablefixture.New(t, t.Context(), directory, chain.config.RunDirectory)
+	chain.contracts.storage = chain.root.storage
+	p.DurableVolumes = &chain.root.storage.Reference
 	p.Unit.Sha256 = monitorReadDigest(p.render())
 	f.approval = rootPassiveHostApproval{Schema: rootPassiveHostSchema, Plan: p}
 	h := &repairValidatorHost{rootUid: uint32(os.Geteuid()), trustRoot: trustRoot, machinePath: filepath.Join(directory, "machine-id"), bootPath: filepath.Join(directory, "boot-id"), cgroupRoot: filepath.Join(directory, "cgroup"), cgroupType: func(string) (int64, error) { return unix.CGROUP2_SUPER_MAGIC, nil }, execute: f.execute, monotonic: func() (uint64, error) { return 150, nil }}
+	h.storageCommand = serviceStorageTestTransport(t)
 	f.host = &rootPassiveHost{files: &validatorActivationHost{host: h, unitDirectory: unitDirectory}, gid: uint32(os.Getegid())}
 	repairValidatorTestWrite(t, h.machinePath, []byte(p.MachineId+"\n"), 0644)
 	repairValidatorTestWrite(t, h.bootPath, []byte(p.BootId+"\n"), 0644)
@@ -193,7 +200,7 @@ func (self *rootPassiveHostFixture) command(operation string) (rootPassiveHostRe
 		args = append(args, "--execute-approved-start")
 	}
 	var out, diagnostic bytes.Buffer
-	code := runRootPassiveHostCommandWithHost(self.t.Context(), args, &out, &diagnostic, func() time.Time { return self.now }, self.host)
+	code := runRootPassiveHostCommandWithHost(self.chain.storageContext(self.t.Context()), args, &out, &diagnostic, func() time.Time { return self.now }, self.host)
 	var result rootPassiveHostResult
 	if out.Len() > 0 {
 		if err := json.Unmarshal(out.Bytes(), &result); err != nil {
@@ -217,12 +224,12 @@ func (self *rootPassiveHostFixture) require(operation, status string) rootPassiv
 
 func (self *rootPassiveHostFixture) store() *rootPassiveHostStore {
 	self.t.Helper()
-	custody, err := openBootstrapChainReadinessState(self.t.Context(), self.chain.preparation)
+	custody, err := openBootstrapChainReadinessState(self.chain.storageContext(self.t.Context()), self.chain.preparation)
 	if err != nil {
 		self.t.Fatal(err)
 	}
 	self.t.Cleanup(func() { custody.close() })
-	store, err := openRootPassiveHostStore(self.t.Context(), self.approval, self.key, false, self.now, custody, rootObjectHash(self.chain.root.plan.PassiveService.Policy))
+	store, err := openRootPassiveHostStore(self.chain.storageContext(self.t.Context()), self.approval, self.key, false, self.now, custody, rootObjectHash(self.chain.root.plan.PassiveService.Policy))
 	if err != nil {
 		self.t.Fatal(err)
 	}

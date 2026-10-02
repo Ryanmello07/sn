@@ -67,7 +67,7 @@ func openReleaseEvidenceV2HistoryDirectoryForUid(ctx context.Context, coordinato
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	root, err := openAttemptPrivateDirectory(coordinator)
+	root, err := openAttemptPrivateDirectory(coordinator, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func openReleaseEvidenceV2HistoryDirectoryForUid(ctx context.Context, coordinato
 		if err != nil || !before.directory() || before.mode&0o077 != 0 || before.uid != uid {
 			return nil, errors.Join(errors.New("startup history namespace is not a private physical directory"), err)
 		}
-		child, err := openAttemptPrivateDirectory(filepath.Join(owned.root.path, name))
+		child, err := openAttemptPrivateDirectory(filepath.Join(owned.root.path, name), ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +126,7 @@ func (self *releaseEvidenceV2HistoryDirectory) readEntries() (result map[string]
 	if err := errors.Join(self.ctx.Err(), self.root.check()); err != nil {
 		return nil, err
 	}
-	reader, err := openAttemptPrivateDirectory(self.root.path)
+	reader, err := openAttemptPrivateDirectory(self.root.path, self.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func (self *releaseEvidenceV2HistoryDirectory) close() error {
 	if self.hooks.afterClose != nil {
 		self.closeErr = errors.Join(self.closeErr, self.hooks.afterClose(file))
 	}
-	witness, err := openAttemptPrivateDirectory(root.path)
+	witness, err := openAttemptPrivateDirectory(root.path, root.storageCtx)
 	self.closeErr = errors.Join(self.closeErr, err)
 	if err != nil {
 		return self.closeErr
