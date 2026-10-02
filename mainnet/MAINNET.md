@@ -1608,9 +1608,12 @@ Keep the executable plan builder pure after authenticated snapshot inputs are su
 Separate chain adapters, signer interfaces, state storage and supervisors so
 preview cannot reach a transaction submission path.
 
-Target command surface; `inspect`, `runtime-snapshot`, `finalized-mapping`, `finalized-snapshot`, `monitor`, `subnet-preview`, the two root observers and the two
-limited economic preconditions above, `source-lock`, `release-inventory` and the blocked-review `plan` foundation exist, while the remaining commands are
-designs:
+The table distinguishes existing commands and bounded phase implementations
+from the remaining combined launch interfaces. The generic `plan` graph remains
+blocked; its target `apply`, `resume`, `services` and `report` commands are designs.
+Separate bootstrap commands already implement local preparation and explicit
+contract submission at their own scope. Their existence does not qualify the
+combined release, provision production authority or prove a deployment.
 
 | Command | Behavior |
 | --- | --- |
@@ -1627,6 +1630,12 @@ designs:
 | `source-lock` | Existing offline lock of clean SN and every local Go replacement Git commit, module checksums, Go version and tool hash. It binds source inputs only; artifacts, rollout approval and qualification remain separate. |
 | `release-inventory` | Existing local candidate inventory of exact executable/contract/config/policy/migration/image/dependency/toolchain files, bound to the rechecked source lock; missing categories remain explicit, and release completeness/provenance/deployment approval stay false. |
 | `plan` | Existing pure blocked-review graph via `--outline` or strict JSON `--config FILE`; hashes exact finalized-snapshot/source-lock/release inputs. Every action remains non-executable. Full semantic admission, payloads and executable authorization remain future work. |
+| `bootstrap plan/apply/resume` | Existing [local root-custody phase](BOOTSTRAP-ROOT.md), with exact plan/run-directory acceptance and separately pinned public signature import. It does not submit or activate services. |
+| `bootstrap-chain plan/apply/resume/readiness` | Existing [bounded chain preparation](BOOTSTRAP-CHAIN.md); preparation preserves local custody, while explicit readiness observes the approved route with a 60-second minimum retry budget. Contract and trim review subcommands retain their separate scope. |
+| `bootstrap-contracts preview/plan/apply/resume` | Existing [eight-action contract phase](BOOTSTRAP-CONTRACTS.md). Only explicit `resume --online --submit` admits a bounded original signed submission; local apply and unsigned preview do not install contracts. Production inputs and complete installation verification remain required. |
+| `owner-signing` | Existing [owner-local device interface](OWNER-SIGNING.md). Signing remains on the owners' devices; Snow receives separately verified public results, not owner private keys. Actual hardware and production provisioning remain gates. |
+| `activate-validators`, `activate-root-passive`, `root-passive-service` | Existing [UR activation](VALIDATOR-ACTIVATION.md) and [passive root service](ROOT-PASSIVE-SERVICE.md) interfaces with exact custody/configuration admission. Production approval, installation and operational qualification remain separate. |
+| `repair-validator`, `repair-active-validator` | Existing [stopped-validator](VALIDATOR-REPAIR.md) and [active-hang](ACTIVE-VALIDATOR-REPAIR.md) repair interfaces. These bounded phase commands do not implement the generic repair graph below or prove an operational repair rehearsal. |
 | `apply --accept-plan HASH` | Execute only the exactly reviewed plan with matching signed authorization, prerequisites and ceilings. |
 | `status` / `verify` | Read-only journal reconciliation and current/finalized postcondition verification. |
 | `resume --accept-plan HASH` | Recover in-flight actions, verify retained receipts and continue the same approved graph without duplicate spend. |
