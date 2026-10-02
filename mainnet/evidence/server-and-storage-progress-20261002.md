@@ -195,3 +195,9 @@ Preserve completed custody, distinguish pre-publication refusal from uncertain
 publication, and join/restart only the affected owner on the same approved root.
 All-owner adoption, deployment integration, composed release qualification,
 production capacity and restore evidence remain open under MG-09/PH-09.
+
+The later [generation/read-admission checkpoint](durable-generation-progress-20261002.md)
+preserves all receipts above and records their newly demonstrated limits.
+In particular, the 35-root scope does not bind physical root generation across
+restart. Connect `6cd720cf` is a separate author-qualified v2 successor; its
+independent and downstream-owner qualification remain open.
