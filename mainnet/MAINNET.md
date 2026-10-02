@@ -1,5 +1,7 @@
 # Mainnet launch and operations plan
 
+**October 2 exact release composition (MG-02):** the [qualified scoped baseline](evidence/release-1320845d-server0aa1-20261002.md) now includes owner retained intent `0f7c8698`, contract admission `ebf69b9` and recycle custody `25aa1515` at frozen SN `1320845d` / server `0aa1e244`. Sequential source repeats and two complete eight-image repeats match, with independent source/OCI readback. Fresh composition 42 normal/race roots and new server prober/escrow/schema-752 46 normal/race roots plus vet pass; private fixture cleanup is retained. All ten actions in the fresh unsigned plan remain blocked. This closes the selected local composition gap only: independent compiler provenance, production configuration/policy, rollout/restore, published/running image identity and live authority remain open. Required MG-06 observer `dd21ed00` and signed schedule `258e25b4` remain outside this source and require another exact release before launch; earlier receipts stay unchanged.
+
 Updated 2026-10-02. **Mainnet activation is blocked.** At the user's direction,
 preparation now uses the [Rao Foundation public archive RPC](evidence/public-archive-switch-20261001.md)
 until Snow finishes synchronizing. The archive returned mainnet genesis and
@@ -27,10 +29,7 @@ roots normally and under race plus vet; independent qualification passes fourtee
 roots in both modes plus vet. Unchanged-source controls reproduce both defects,
 including one underfunded synthetic send and 48 admitted role collisions.
 Original signed bytes, journal custody, attempt ceilings and the separate Safe
-approval remain intact. The frozen `3d1e2ecf` release excludes this correction;
-package it with the [qualified owner-trim successor](evidence/owner-trim-retained-intent-20261002.md)
-at `0f7c8698` and [recycle custody correction](evidence/owner-recycle-custody-20261002.md)
-at `25aa1515` in a new exact release.
+approval remain intact. The [qualified scoped baseline](evidence/release-1320845d-server0aa1-20261002.md) now packages it with owner `0f7c8698` and recycle `25aa1515`; the older `3d1e2ecf` receipts remain unchanged.
 Production policy, live authority, installation and activation remain open.
 
 **September 30 operator report:** Snow mainnet is still synchronizing. This is
@@ -66,8 +65,7 @@ failures. A separate omission proves the final validator host check. The frozen
 `1d580d5e` release excludes this correction; the
 [qualified readiness baseline](evidence/release-3d1e2ecf-serverac86-20261002.md) packages that source, but is
 superseded for launch by the separately qualified owner-trim source `0f7c8698`,
-contract-admission source `ebf69b9` and recycle-custody source `25aa1515`, pending
-a new exact release composition.
+contract-admission source `ebf69b9` and recycle-custody source `25aa1515`, now included in the [qualified scoped baseline](evidence/release-1320845d-server0aa1-20261002.md). Full release and activation gates remain open.
 The [owner-trim successor](evidence/owner-trim-retained-intent-20261002.md) now
 qualifies the additional trim marker/journal and bounded original-byte submission
 under a separate signed residual policy. Legacy root native mutation ports remain
@@ -533,8 +531,7 @@ physical-custody failures, canonical uncertainty reconciliation and independent
 pruning/re-entry risk choices. The observed SN25 immunity had expired, and the
 inspected v470 owner cannot close all registration routes; usable submission
 therefore needs explicit risk review beyond the conservative defaults. No live
-risk acceptance or owner signature is supplied. Select and qualify a successor
-release containing this source; the frozen `3d1e2ecf` artifact excludes it.
+risk acceptance or owner signature is supplied. The [qualified scoped baseline](evidence/release-1320845d-server0aa1-20261002.md) includes this source; the older `3d1e2ecf` artifact excludes it. Full production qualification and live approval remain open.
 The historical owned Snow route returned HTTP 502 at 06:59 UTC on September 29,
 providing no current mainnet identity or authority. The complete bootstrap,
 Safe evidence anchor, native signing device and live role
@@ -1674,8 +1671,7 @@ This baseline remains **superseded for launch** by the
 
 The [qualified readiness release baseline](evidence/release-3d1e2ecf-serverac86-20261002.md) binds frozen
 SN `3d1e2ecf` / server `ac86855d`, including the five-marker/passive-root correction.
-It is **superseded for launch** by later owner-custody source `21640419`, which
-is excluded from these artifacts and requires its own exact release composition.
+It is **superseded as local artifact selection** by the [qualified scoped baseline](evidence/release-1320845d-server0aa1-20261002.md) at SN `1320845d` / server `0aa1e244`, which includes the later owner, contract-admission and recycle corrections. Its own receipts remain historical and unchanged; neither selection authorizes launch.
 Two sequential fresh-cache builds match seventeen binaries and ten bytecodes;
 two separate eight-image builds match OCI platform/config/archive bytes.
 Independent A/B source and all sixteen image readbacks pass. The unchanged author
