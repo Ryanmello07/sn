@@ -77,6 +77,7 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 	var preparationFile, checkpointFile *os.File
 	var preparationIdentity, checkpointIdentity os.FileInfo
 	failed, recovered := false, false
+	failedSampleReads := -1
 	host := &compositionObservationHost{Host: fixture.root.storage.Host}
 	host.observe = func(file *os.File) error {
 		if preparationFile == nil {
@@ -97,6 +98,12 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 			boundary = compositionRpcReads(fixture.census) > beforeReads
 		}
 		if file == preparationFile && boundary && !recovered {
+			if !failed {
+				// A complete root preview may check the finalized head more
+				// than once. The outage must add no reads after this exact
+				// completed preview boundary, rather than assuming its size.
+				failedSampleReads = compositionRpcReads(fixture.census)
+			}
 			failed = true
 			return unix.EIO
 		}
@@ -165,12 +172,11 @@ func compositionPassiveUnavailableSample(t *testing.T, afterRpc bool, transition
 				if _, err := os.Lstat(service.CheckpointPath); !errors.Is(err, os.ErrNotExist) {
 					t.Fatal("unavailable preparation changed finalized checkpoint custody", err)
 				}
-				wantReads := beforeReads
-				if afterRpc {
-					wantReads++
+				if failedSampleReads < beforeReads || !afterRpc && failedSampleReads != beforeReads || afterRpc && failedSampleReads == beforeReads {
+					t.Fatal("outage missed its exact network boundary", beforeReads, failedSampleReads)
 				}
-				if reads := compositionRpcReads(fixture.census); reads != wantReads {
-					t.Fatal("unavailable sample invented an extra network observation", reads, wantReads)
+				if reads := compositionRpcReads(fixture.census); reads != failedSampleReads {
+					t.Fatal("unavailable sample invented an extra network observation", reads, failedSampleReads)
 				}
 			}
 		},
