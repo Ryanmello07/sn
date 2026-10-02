@@ -56,6 +56,15 @@ type AuthenticatedRuntimeArtifact struct {
 	authenticationProof *runtimeArtifactProof
 }
 
+// A block-view callback cannot manufacture or transfer caller-approved
+// authentication by filling exported artifact fields or swapping metadata.
+func ValidateRuntimeArtifactOwnerContext(ctx context.Context, chain *Chain, artifact AuthenticatedRuntimeArtifact) error {
+	if ctx == nil || chain == nil || chain.API == nil || chain.API.Client == nil || chain.ProvisionalRuntimeCompatibilityEnabled() || artifact.BlockHash == (types.Hash{}) || artifact.CompatibilityProfile != "" || !artifact.authenticationProof.matches(chain, artifact) {
+		return errors.New("runtime view needs this owner's exact authenticated block artifact")
+	}
+	return ctx.Err()
+}
+
 // Coordinates one in-flight or successfully published immutable metadata load.
 type runtimeMetadataArtifactCacheEntry struct {
 	loadDone chan struct{}

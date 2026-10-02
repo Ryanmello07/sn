@@ -1170,6 +1170,12 @@ func (c *Chain) SubmitAndWatchFinalized(ctx context.Context, ext *extrinsic.Extr
 // generically decoded back into gsrpc's Extrinsic type, so durable callers
 // replay the exact persisted SCALE hex through the RPC subscription.
 func (c *Chain) SubmitRawAndWatchFinalized(ctx context.Context, encoded string) (*FinalizedExtrinsic, error) {
+	return c.SubmitRawAndWatchFinalizedRuntime(ctx, encoded, nil)
+}
+
+// A caller-owned artifact selector admits the authenticated execution parent
+// before any event decoding. Nil retains the historical single-view API.
+func (c *Chain) SubmitRawAndWatchFinalizedRuntime(ctx context.Context, encoded string, executionRuntime func(context.Context, types.Hash) (AuthenticatedRuntimeArtifact, error)) (*FinalizedExtrinsic, error) {
 	raw, err := codec.HexDecodeString(encoded)
 	if err != nil || len(raw) == 0 {
 		return nil, fmt.Errorf("crv4: malformed raw extrinsic")
@@ -1202,7 +1208,29 @@ func (c *Chain) SubmitRawAndWatchFinalized(ctx context.Context, encoded string) 
 			}
 			switch {
 			case status.IsFinalized:
-				receipt, err := c.verifyFinalizedExtrinsicContext(ctx, status.AsFinalized, txHash)
+				execution := c
+				if executionRuntime != nil {
+					_, parent, err := c.ReceiptHeaderAtContext(ctx, status.AsFinalized)
+					if err != nil {
+						return nil, err
+					}
+					artifact, err := executionRuntime(ctx, parent)
+					if err != nil {
+						return nil, err
+					}
+					if artifact.BlockHash != parent {
+						return nil, errors.New("receipt runtime does not bind the execution parent")
+					}
+					if err := ValidateRuntimeArtifactOwnerContext(ctx, c, artifact); err != nil {
+						return nil, err
+					}
+					view := *c
+					if err := view.BindRuntimeArtifact(artifact); err != nil {
+						return nil, err
+					}
+					execution = &view
+				}
+				receipt, err := execution.verifyFinalizedExtrinsicContext(ctx, status.AsFinalized, txHash)
 				if err != nil {
 					return nil, err
 				}

@@ -40,3 +40,24 @@ zero payout versus signed uncertain outcome, mismatched root, stale/replaced
 checkpoint, restart sequence, closing finality failure and transient read outage.
 Neither a reported proof nor a healthy monitor authorizes automatic spending;
 repair envelopes remain separately reviewed and bounded.
+
+
+## Accepted claim differs from transferred payment
+
+A [source-bound contract trace](claim-payment-semantics-20261002.json) refines
+the signed-outcome row above. `claim` emits `Claimed` and adds accepted liability
+to `claimCredit[coldkey]`; its successful transaction can then emit
+`ClaimPaymentDeferred`. The existing exact signed receipt verifier authenticates
+`Claimed`, not transfer completion. Preserve that valid finalized-claim outcome
+and report payment separately. `ClaimPaid` follows a successful nested transfer
+and includes the entire accumulated coldkey credit, potentially from multiple
+epochs/operators. Its amount cannot be assigned wholesale to the current pool
+or repeated for each provider slot.
+
+Use distinct accepted amount, retained unpaid credit and aggregate payment
+observations. Per-pool paid attribution needs complete independent credit
+history and an explicit allocation rule. Existing minimum-threshold and recovery
+tests assert retained and aggregated credit; this review did not execute them.
+New producer/monitor tests must exercise deferred payment in a successful claim,
+later aggregate payment larger than the current claim, entitlement expiry with
+accepted credit, and unavailable historical attribution.

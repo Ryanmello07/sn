@@ -278,7 +278,7 @@ func fleetRecoveryEvmMapping(ctx context.Context, record *fleetRecoveryRecord, a
 			return nil, errors.New("fleet recovery EVM/native ancestry differs")
 		}
 		// Both artifact/name checks and first-insertion proof are required.
-		artifact, err := authority.authenticateAt(ctx, chain, native)
+		artifact, err := authority.authenticateFor(ctx, chain, native, crv4.FleetFrontierRead)
 		if err != nil {
 			return nil, err
 		}
@@ -307,7 +307,11 @@ func fleetRecoveryEvmMapping(ctx context.Context, record *fleetRecoveryRecord, a
 			return nil, errors.New("fleet recovery native/EVM mapping conflicts with canonical receipt")
 		}
 		query := crv4.EVMCheckpointQuery{GenesisHash: chain.GenesisHash, NativeHash: native, NativeNumber: number, EVMHash: types.Hash(receipt.BlockHash), EVMNumber: receipt.BlockNumber.Uint64()}
-		observation, err := crv4.ReadEVMCheckpointAtContext(ctx, chain, query, authority.artifactIdentity())
+		// The absence proof also consumes the previous state's map encoding.
+		if _, err := authority.authenticateFor(ctx, chain, header.ParentHash, crv4.FleetFrontierRead); err != nil {
+			return nil, err
+		}
+		observation, err := crv4.ReadEVMCheckpointAtContext(ctx, chain, query, authority.artifactIdentities()...)
 		if err == nil {
 			return &observation, nil
 		}
@@ -411,7 +415,7 @@ func fleetRecoveryFinishEvm(ctx context.Context, store *fleetRecoveryStore, reco
 		return fleetRecoveryUnresolved(record, errors.New("fleet revocation readback differs"))
 	}
 	// The same historical block remains admitted after the getter returns.
-	if _, err := authority.authenticateAt(ctx, fleetRecoveryEvmNative(client, authority), mapping.Query.NativeHash); err != nil {
+	if _, err := authority.authenticateFor(ctx, fleetRecoveryEvmNative(client, authority), mapping.Query.NativeHash, crv4.FleetFrontierRead); err != nil {
 		return fleetRecoveryUnresolved(record, err)
 	}
 	copy := *record

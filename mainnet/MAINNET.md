@@ -1,16 +1,41 @@
 # Mainnet launch and operations plan
 
+## Current preparation state — October 2
+
+No accepted current production release or live deployment exists. The full
+28-lesson hardening scope and ten production gates remain tracked in
+[PRELAUNCH-FIXES.md](PRELAUNCH-FIXES.md). The component results below are exact
+source qualifications; older checkpoints retain their historical scope.
+
+| Component | Current evidence | Remaining work |
+| --- | --- | --- |
+| Miner GET recovery, guarded spool and retained-member recovery | Integrated on SN main with the scoped independent receipts cited below. | Include their exact bytes and dependencies in the final release and recovery rehearsal. |
+| Fleet runtime capability selection | Integrated at `9671f456`; [independent 23-test normal/race scope](evidence/fleet-runtime-catalog-progress-20261002.md). | Current runtime authority, full native-role coverage and composed release qualification. |
+| Server blob readers | Server main `1d72f577` preserves upstream history and exact qualified reader changes; [26-test independent scope](evidence/current-graph-reader-progress-20261002.md). | Full current-server dependency/release composition and remaining model-suite qualification. |
+| Offline preparation | SN `1f66a2bd` / Connect `ba74f897` / Server `2c4e5dca` pass [101 independent tests per mode and five vets](evidence/preparation-composition-independent-20261002.json). | Tracked dependency publication and current-main integration; local workspace replacements are not a release. |
+| Directory owners | SN `682d568c` / Connect `05e39766` pass [103 author tests per mode and four vets](evidence/directory-owner-preparation-author-20261002.json). | Independent joined qualification, private-root creation, retained/restore semantics and capacity revisions. |
+| Provider and claim monitoring | Provider author evidence exists; independent provider testing is active. Claim producer capacity, event identity, backlog and durable-publication changes are under implementation. | Freeze and qualify producer/consumer together, then complete economic-domain monitoring and actual alert/recovery rehearsal. |
+
+Launch still needs an exact current composed release, runtime/genesis/checkpoint
+and production policy authority, provisioned custody and host configuration,
+restore/upgrade qualification and approved bootstrap actions. Runtime 472 is an
+unapproved observation; the v470 planning exception does not extend to it.
+Owner device and production signing inputs remain live gates. Keep the 10% native
+miner allocation / 90% owner recycle policy and both validator roles unchanged.
+
+## Historical qualification checkpoints
+
 **October 2 retained-member integration:** main merge `b0fc5e99` now includes the qualified retained-member recovery and exact public custody fixtures. The original current-composition batch completed nine passes/one census assertion failure in each mode; the separate corrected execution root passed independently in normal/race plus vet. [Exact scopes and preserved failure](evidence/successor-member-qualification-20261002.md). Main code/module bytes match the reviewed correction while newer docs remain retained. New release, module intake and storage preparation gates stay separate.
 
-**October 2 adjacent reader successors:** Server `2c4e5dca` passes 17 author normal/17 race roots plus vet; preparation `f5c0707b` passes 11 validator and seven actual CLI roots in both modes plus three vets. Root rehashed their sealed evidence. The [distinct source scopes](evidence/current-graph-reader-progress-20261002.md) retain old consumer failures and leave independent review pending. Native/snapshot adapters and the fleet runtime catalog are the next active implementation slices.
+**October 2 adjacent reader successors:** Server main `1d72f577` now includes exact qualified `2c4e5dca` blob and module changes. Independent26 affected tests pass normally and with race detection, plus vet; old-body controls retain seven failures/six positives per mode. [Integration and exact scopes](evidence/current-graph-reader-progress-20261002.md) preserve newer upstream work and keep final current-main release composition open. Preparation `f5c0707b` remains a separate author-qualified reader candidate (11 validator/seven public CLI tests per mode, three vets) awaiting independent review. Native/snapshot preparation and fleet catalog work retain separate scope receipts.
 
 **October 2 runtime intake:** the public archive now exposes exact finalized-block runtime **472** at block 9,197,096. The [retained read-only capture](evidence/runtime-472-route-observation-20261002.json) records its code/metadata hashes and raw snapshot bindings with `unapproved_observation` admission. Snow VPN RPC returned HTTP 502 through a 60-second read budget. Continue public RPC preparation; independently audit the new artifact before any signing admission. The v470 planning exception does not authorize v472. Offline hardening continues.
 
-**October 2 finite-claim GET recovery:** frozen miner `40d07ae6` passes nine author normal/nine race roots plus vet, including actual SDK recovery after 65 seconds unavailable and original 300-second deadline exhaustion. Root verified all 51 [author receipt](evidence/finite-claim-author-20261002.json) bindings (SHA-256 `3d16f436e1134cdf0074e981cc6f554306f1b2beb3788ad39a0a0b64e0ee5f76`). Only epoch/pool GETs enter retry; signing/submission remain outside it. Independent qualification is queued. The source is not merged or deployed.
+**October 2 finite-claim GET recovery — integrated:** main merge `d5c5df7bf368221253a514cae046e4cd56d55d33` now includes `40d07ae6`; all miner and module bytes match the independently qualified source. Nine affected tests pass normally and with race detection; vet passes. Both old public read-call controls fail for the expected typed transient status in each mode. The [independent receipt](evidence/finite-claim-independent-20261002.json), SHA-256 `de05ae8dcc5418e03ef448c3618a3223c04f30935e12531758fab5d0a21a3f9c`, and all 23 manifest bindings were rehashed. The sustained-outage test exercises real SDK/HTTP reads with a deterministic retry clock representing 65 seconds per read; it is not a 65-second wall-clock outage rehearsal. The original 300-second deadline test also uses an injected clock. Only epoch/pool GETs retry; signing/submission remain outside the loop. No release deployment is implied.
 
 **October 2 preparation successor:** frozen SN `f4ad15db` / Connect `ea827777` now runs the full bounded fresh-ledger preparation batch after correcting control-record sizing before effects, post-header cancellation uncertainty, EOF handling and plan transport. The full bounded author batch passes 73 core, seven ledger and seven public CLI roots in each of normal/race modes, plus four package vet scopes. Root verified all 95 sealed [author manifest](evidence/fresh-ledger-preparation-author-20261002.json) bindings; independent review remains pending. This slice enrolls a fresh, already provisioned daemon ledger only. Owner-local signing enrollment, native/snapshot adapters, private-root creation and retained/restore remain separate work. The exact reader post-cancellation byte-admission issue is assigned to a narrow successor; current results will remain immutable.
 
-**October 2 current-graph and reader progress:** Server `22e3c1ba` independently passes 12 normal/12 race selected tests plus vet on published Connect `e0d75562`. New upstream changes are preserved in review `32196d57`, whose qualification is pending. Guarded spool reader `68a7be85` passes 15 author roots in each mode plus vet and awaits independent review. The [exact scopes and retained failures](evidence/current-graph-reader-progress-20261002.md) distinguish these candidates from the running retained-member composition gate. No new production release is qualified.
+**October 2 current-graph and reader progress:** Server `22e3c1ba` independently passes 12 normal/12 race selected tests plus vet on published Connect `e0d75562`. Upstream changes are retained in review `32196d57`; its reader successor `2c4e5dca` awaits actual current-graph independent qualification. Guarded spool reader `68a7be85` is now merged into main after 15 author and 15 independent tests in each mode plus vet. [Exact scopes and retained failures](evidence/current-graph-reader-progress-20261002.md) remain separate from full release qualification.
 
 **October 2 offline preparation candidate:** the actual `storage-prepare plan/apply` dispatcher and fresh-ledger adapter now exist at candidate SN `a045a9c7` / Connect `03aafa41`. Both public tests pass with a retained reader-contract correction overlay: exact apply produces a ledger the real validator can reopen, and a wrong digest leaves no effects. The original compiled candidate failed with wrapped EOF and remains retained. Commit/freeze, crash-recovery, race/vet and independent qualification are pending; native/snapshot, retained/restore and private-root creation remain subsequent implementation work. This candidate is not on main or qualified for production.
 
@@ -2946,3 +2971,134 @@ members. It does not grant runtime authority or restart authorization. Independe
 qualification and the current published Connect/main composition remain pending;
 private-root creation, retained/restore validation, remaining owners and joined
 capacity revisions are still open. This candidate is not merged into main.
+
+
+### Payment monitoring must retain accepted-credit semantics
+
+The remaining proof/settlement monitoring implementation must distinguish
+finalized claim acceptance, unpaid vault credit and actual aggregate payment.
+A successful claim may defer transfer; a later payment may settle several
+epochs/operators for one coldkey. See the [producer mapping](evidence/provider-proof-settlement-hook-map-20261002.md)
+and [source-bound contract semantics](evidence/claim-payment-semantics-20261002.json).
+No complete per-pool paid projection is qualified yet. This is part of MG-06/07
+and PH-12/15/28, with deterministic contract and monitor controls still required.
+
+
+### Fleet runtime continuation — integrated
+
+Main merge `9671f4568b92e168d1db86d539d52b00f361a309` includes the independently qualified purpose-scoped
+fleet runtime changes. Author and independent23 tests pass in each mode;
+three package vets pass and six causal controls discriminate each mode. Root
+verified all55 independent receipt bindings and exact merged file/module bytes.
+[Qualification and integration evidence](evidence/fleet-runtime-catalog-progress-20261002.md)
+keep current reads, historical decoding and present signing authority separate.
+Original signatures and retained recovery authority remain intact. Runtime472
+approval and final current Server/module/release composition remain open.
+
+
+### Preparation source composition — bounded author result
+
+SN `1f66a2bd` joins fixed-owner preparation with retained-member and spool
+recovery. Connect `ba74f897` joins the unchanged preparation core onto the
+published runtime/callback parent; its durablevolume subtree and module bytes
+remain identical to the original qualified core. The exact eight-pin workspace
+uses Server `2c4e5dca`. Fourteen public preparation commands, two native adapters
+and one public successor-execution test pass normally and with race detection;
+four package vets pass. Root verified all49 [author receipt](evidence/preparation-composition-author-20261002.json)
+bindings and raw archive. Receipt SHA-256:
+`dadf721ef6c38a1e1d808ad79dfa73481f9ffe702b2225330c5d7d25c7d1b854`.
+
+This is a source/workspace result. It does not qualify published module consumption
+or later Server main `1d72f577`. Directory-only owners, private-root creation,
+retained/restore semantics and capacity revisions remain in implementation.
+No production preparation or restoration is authorized by this result.
+
+
+### Qualification throughput follow-up
+
+The [compiler path-cache lead](evidence/compiler-cache-path-lead-20261002.json)
+identifies a future harness optimization to qualify: stable path trimming can
+avoid distinct cache identities for unchanged local packages in private checkouts.
+No live gate changes flags or restarts for this lead. Its source observation does
+not prove a benchmark improvement or close compiler provenance, source authority
+or release qualification. Preserve fresh test execution and exact flag bindings.
+
+
+### Claim projection qualification requirements
+
+The new producer must use exact ABI event identities and preserve aggregate
+coldkey-payment semantics. Tests must distinguish accepted liability from paid
+credit, degrade malformed/impossible payment observations without stopping claim
+recovery, and retain explicit configured-RPC evidence strength. Independent
+finality and genesis admission are separate from matching a chain ID or Merkle
+root. These requirements were refined during candidate review; the producer
+and consumer are still being implemented and have no qualification receipt.
+
+
+### Actionable claim backlog monitoring
+
+The claim projection must retain bounded oldest/omitted unresolved summaries in
+addition to recent entries. Monitoring separates publication heartbeat from
+actual settlement progress and rejects future-dated observations. An omitted
+entry is unobserved history, not a settled liability. These remain required
+producer/consumer tests before unattended operation and MG-07 acceptance.
+
+
+### Directory-owner preparation qualification
+
+Frozen SN `682d568c` / Connect `05e39766` passed 77 core, 21 public
+preparation-command and five miner-constructor tests in each of normal and race
+modes, plus four package vet scopes. Root verified all 49 manifest bindings,
+the raw archive and source bundles in the [author receipt](evidence/directory-owner-preparation-author-20261002.json).
+Receipt SHA-256: `16c755189250f04d75f29c9d745016ae38a6c89420451223f255b2f80ce19d84`.
+The old code reproduced two core and three public-command failures in each
+mode while its negative authority control passed.
+
+Exact attribute-only and fixed-head owner profiles now enroll through the actual
+plan/apply command and reopen through real miner constructors. Interrupted
+publication resumes the original inode and checkpoint; missing completed heads
+and replacement markers remain refused. Existing capacity dimensions remain
+unchanged, including the claim queue's 16 MiB retained-byte bound.
+
+This author qualification uses Server `2c4e5dca` and fresh precreated private
+roots. Independent qualification, private-root creation, retained/restore semantic
+rebind, capacity revisions and the composition with current main remain separate
+requirements. The candidate is not merged or approved for live preparation.
+
+
+### Optional telemetry cannot reserve operational claim capacity
+
+Claim-queue review found a second pressure case: retaining every previously
+acknowledged optional observation can still exceed the 16 MiB queue limit when
+new signed or operational fields grow. Dropping only newly added observations
+is insufficient. Add a second bounded fallback that omits prior optional
+observations and reports that degradation, while preserving every entry,
+signature, attempt counter and operational outcome. If those required bytes
+alone exceed capacity, retain the actual capacity refusal.
+
+Qualification must exercise the real durable save with prior observations near
+the limit, subsequent signed-field growth, failed-save publication isolation
+and reopen of the exact acknowledged fallback. An omitted observation remains
+unobserved history; no economic outcome or signing authority follows from it.
+This review finding is assigned to the claim-producer successor, not qualified
+or merged yet.
+
+
+### Independent preparation composition qualification
+
+The exact SN `1f66a2bd` / Connect `ba74f897` / Server `2c4e5dca`
+workspace now passes independent qualification: 101 selected tests normally
+and with race detection (15 mainnet, 11 validator, 73 storage core and two
+chain tests), plus five package vet scopes. All tests completed without
+failures or skips. Root verified all 48 [receipt manifest](evidence/preparation-composition-independent-20261002.json)
+bindings. Receipt SHA-256:
+`b5f4725895eadc33d398b8329bea98671b39f1845db0203a49ae9a7b3f4cd6c4`.
+
+The receipt binds the 648-module local workspace graph and exact source
+readback (20,080 SN and 3,715 Connect tracked blobs), including the unchanged
+core, reader and adapter joins. Earlier old-source causal failures remain
+separate author evidence. This qualifies the frozen source composition; it
+does not qualify tracked published-module consumption, current main with later
+fleet/server changes, directory-owner/private-root successors or a production
+release. Integrate those source/dependency changes without replacing completed
+recovery history, and qualify their actual final graph before launch.

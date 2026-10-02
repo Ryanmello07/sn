@@ -79,3 +79,21 @@ All 15 affected roots pass normally and with race detection; vet passes.
 Four old-body controls fail for the expected complete-buffer admission defect
 in each mode, while four positive controls pass. This qualifies the affected
 reader scope, not the complete mainnet release or deployment.
+
+
+## Server guarded-reader integration completed
+
+Server main merge `1d72f577c083f402f7d61ca546d3d6067a4c2699` integrates
+the nine qualified blob/module files from frozen `2c4e5dca`, preserving upstream
+`d150e2f5`. Root verified the [independent receipt](server-guarded-reader-independent-20261002.json),
+SHA-256 `403a7d8cd9c68f29c83a3e231452291b215c9ce13cdfda1bd9fcc9edf59e2c8d`,
+and all30 manifest bindings. The17 reader roots plus nine disjoint public blob
+consumers pass in both modes:26 unique affected roots, no failures/skips; vet0.
+Seven old-body controls fail and six positives pass in each mode.
+
+[Integration source evidence](server-reader-main-integration-20261002.json)
+binds all nine changed files. Every other upstream tree entry is preserved.
+The receipt qualifies frozen2c with published Connecte0d/SCTP644 and localSN69;
+it does not claim the newer model/monitor/main graph or complete production
+release is qualified. Final module/release composition remains required.
+No live effect is authorized.

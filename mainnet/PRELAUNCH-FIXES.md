@@ -1,12 +1,21 @@
 # Mainnet prelaunch fixes
 
+The [current preparation state](MAINNET.md#current-preparation-state--october-2)
+distinguishes integrated source fixes, qualified candidates and the remaining
+production work. All 28 hardening lessons and ten production gates retain their
+full scope. A historical checkpoint below does not supply a later composition,
+deployment or acceptance verdict; use each linked receipt's exact source and
+dependency scope.
+
+## Historical qualification checkpoints
+
 **October 2 continuation checkpoint:** observer `6d398662` is now independently qualified at 17 normal/17 race roots plus vet. Composition `69f4bbdd` / server `10a8f4d8` now passes 78 selected normal/78 race roots and vet, with a separate independent 12-root normal/race scope and vet. The [exact sealed composition](evidence/durable-owner-composition-qualification-20261002.md) is an incremental source qualification. Miner startup isolation `c3707376` passes 37 normal/37 race roots, while callback isolation, member recovery ordering and production preparation remain separate work. The [checkpoint and retained receipts](evidence/mainnet-continuation-checkpoint-20261002.md) record exact scopes, a newly exposed pending-stage ordering defect, private fixture ancestry and immutable physical evidence paths. No launch or full-backlog closure is inferred.
 
 **October 2 MG-06 release composition (MG-02):** the [qualified scoped successor](evidence/release-258e25b4-server0aa1-20261002.md) at frozen SN `258e25b4` / server `0aa1e244` now packages economic-observer `dd21ed00` and signed-schedule `258e25b4` with the prior owner, contract-admission, recycle and schema-752 composition. Sequential source and eight-image repeats match and pass independent readback. Fresh current-pair qualification passes 83 normal/83 race roots and three-package vet; an independent nine-root normal/race scope also passes. Thirty-six component receipts and unchanged-server tests preserve their original scopes. This resolves the earlier source exclusion for the new artifact only. All ten fresh unsigned-plan actions stay blocked; independent compiler/dependency provenance, production policy/configuration, rollout/restore, published/running image identity and live authority remain open. Earlier releases stay immutable. Later server `025802a5` retention-debt/cleanup changes remain outside this frozen release. Its [static review and focused qualification checkpoint](evidence/server-and-storage-progress-20261002.md) is now recorded: 33 server roots pass normal/race and four package vets; seven SN composition roots pass normal/race, with its original `6cfc4773` mutex-copy vet failure preserved separately. Three historical server roots pass normal/race. The [full model run and separate test-only repair](evidence/server-stats-fixture-qualification-20261002.md) are now recorded: original `025802a5` executed all 1,345 roots with 1,334 passes, one statistics-fixture failure and ten optional skips; the isolated `a3fc4270` repair passes all eight affected roots normal/race and package vet. The original full run remains failed, and no patched-source full-suite pass is claimed. No successor production release or deployment qualification is inferred.
 
 **October 2 retained relay fixture correction:** the separate [test-only fix](evidence/relay-retained-fixture-qualification-20261002.md) at SN `734a82dc` passes 35 author normal and 10 race tests, plus 2 independent normal and 10 race tests; `./sim-testnet` vet passes in both scopes. It retains the original signed plan and journal while rebuilding fixture synchronization, canonical header coordinates and the actual producer activation domain. The original `6cfc4773` vet/header failures remain preserved. This does not qualify the broader model run or change the frozen `258e25b4` / `0aa1e244` production artifact.
 
-**October 2 durable storage (MG-09 / PH-09): in progress.** The merged Connect `6cd720cf` [generation/read-admission primitive](evidence/durable-generation-progress-20261002.md) passes 48 author and independent roots per mode plus vet. The new [isolated owner-custody checkpoint](evidence/durable-owner-custody-qualification-20261002.md) separately qualifies native journal `695f6683` (42 author/independent roots per mode), snapshot `a5c765c4` (17 roots plus 17 subtests per mode), and miner fleet/claim `b3c3d66` (201 roots plus three inherited subtests per mode). Monitor `f1b445f9` passes 114 author and independent normal/race roots and vet; these are still separate consumer scopes. These sources require explicit public-entry policy and preprovisioned retained-member authority, preserve reads under write pressure, reconcile only exact pending bytes after the old owner joins, and stop only the affected role. Connect inventory-v3 `0a5cda0e` separately passes 57 author and independent normal/race roots and vet with bounded owner-attribute retention. A separate [CLI candidate `7fb6b6a1`](evidence/durable-inventory-cli-qualification-20261002.md) passes nine author and independent normal/race roots and three-package vet, including explicit owner-local commands and report-only rebound comparison. The [independent receipts and new composition failures](evidence/durable-composition-progress-20261002.md) are now retained. Connect constructor `71df099c` independently passes 59 roots per mode and vet (including the prior 57) and is merged; the current consumer `0a5cda0e` module does not inherit it. The former `cb2e3ffe`/v2 and frozen release receipts are unchanged. The separate [validator/root/bootstrap/local-blob adopter](evidence/durable-adopter-qualification-20261002.md) at SN `eb0abe22` / server `1b7cc78b` passes 111 selected normal/race roots and four-package vet in both author and independent scopes; five causal controls discriminate per mode. The real service-credential test passes separately in the author scope and its evidence was independently rehashed. Module-only server `005a9066` pins the same tested Connect source, with a separate standalone dependency join. The independent adopter receipt is source-pinned to that exact pair; immutable registry/member census, broader fixture migration and peer composition are not closed. Production offline root/lease/nonce/owner-anchor preparation is still missing. Validator/bootstrap/root/server composition, deployment declaration assets, capacity/rotation policy, actual restore and a new exact release remain open. No source receipt authorizes deployment or closes all of PH-09.
+**October 2 durable storage (MG-09 / PH-09): in progress.** The merged Connect `6cd720cf` [generation/read-admission primitive](evidence/durable-generation-progress-20261002.md) passes 48 author and independent roots per mode plus vet. The new [isolated owner-custody checkpoint](evidence/durable-owner-custody-qualification-20261002.md) separately qualifies native journal `695f6683` (42 author/independent roots per mode), snapshot `a5c765c4` (17 roots plus 17 subtests per mode), and miner fleet/claim `b3c3d66` (201 roots plus three inherited subtests per mode). Monitor `f1b445f9` passes 114 author and independent normal/race roots and vet; these are still separate consumer scopes. These sources require explicit public-entry policy and preprovisioned retained-member authority, preserve reads under write pressure, reconcile only exact pending bytes after the old owner joins, and stop only the affected role. Connect inventory-v3 `0a5cda0e` separately passes 57 author and independent normal/race roots and vet with bounded owner-attribute retention. A separate [CLI candidate `7fb6b6a1`](evidence/durable-inventory-cli-qualification-20261002.md) passes nine author and independent normal/race roots and three-package vet, including explicit owner-local commands and report-only rebound comparison. The [independent receipts and new composition failures](evidence/durable-composition-progress-20261002.md) are now retained. Connect constructor `71df099c` independently passes 59 roots per mode and vet (including the prior 57) and is merged; the current consumer `0a5cda0e` module does not inherit it. The former `cb2e3ffe`/v2 and frozen release receipts are unchanged. The separate [validator/root/bootstrap/local-blob adopter](evidence/durable-adopter-qualification-20261002.md) at SN `eb0abe22` / server `1b7cc78b` passes 111 selected normal/race roots and four-package vet in both author and independent scopes; five causal controls discriminate per mode. The real service-credential test passes separately in the author scope and its evidence was independently rehashed. Module-only server `005a9066` pins the same tested Connect source, with a separate standalone dependency join. The independent adopter receipt is source-pinned to that exact pair; immutable registry/member census, broader fixture migration and peer composition are not closed. Production offline root/lease/nonce/owner-anchor preparation now has [source-qualified public plan/apply adapters](evidence/directory-owner-preparation-author-20261002.json), covering fresh precreated roots, exact owner profiles and interrupted publication. Those adapters are not yet merged into the current production composition; private-root creation, retained/restore rebinding and joined capacity revisions remain open. Validator/bootstrap/root/server composition, deployment declaration assets, capacity/rotation policy, actual restore and a new exact release remain open. No source receipt authorizes deployment or closes all of PH-09.
 
 **October 2 actual public composition failures:** exact test-only `ea2bb37f` reproduces three failures in normal and race: persistent root observation omits durable context, a missing completed passive-monitor checkpoint is recreated, and passive preparation admits a missing retained snapshot head. Separate fixture `22d4ee3e` over unchanged adopter production exposes 48 successor write-admission refusals plus two outdated typed-identity assertions (75 roots: 25 pass, 50 fail). Fixes and complete source integration are in progress; neither failed composition is a qualified launch candidate. [Exact evidence and scope boundaries](evidence/durable-composition-progress-20261002.md).
 
@@ -5201,8 +5210,13 @@ retry classified transient failures, join cancellation and return errors rather
 than panic. Test a sustained outage through the real public command and SDK;
 keep signed submission outside read retry. The first cardinality-only fixture
 was invalid because route attempts consumed its synthetic failures; retain it
-as a harness failure, separately from the corrected causal controls. The fix
-is in implementation, not yet qualified or merged.
+as a harness failure, separately from the corrected causal controls. The fix is now merged after nine affected author and independent tests pass
+in each mode, plus vet; two old public read-call controls fail as expected in
+each mode. [Independent evidence](evidence/finite-claim-independent-20261002.json)
+retains the corrected graph setup and exact source. The sustained-outage
+SDK/HTTP requests are real, while the retry wait clock is accelerated to model
+65 seconds per read. The deadline test likewise uses an injected clock. Neither
+is a wall-clock production outage rehearsal; report clock fidelity explicitly.
 
 
 ### October 2: preserve qualification headroom through scoped cache cleanup
@@ -5266,3 +5280,214 @@ missing-receipt control must restore the original held inode, not manufacture a
 replacement. The [separate fixture qualification](evidence/successor-member-qualification-20261002.md)
 retains the original normal/race failure and awaits independent replay. Do not
 solve this by excluding every mutable file from custody checks.
+
+
+### Classify constructor reachability before changing admission
+
+A missing optional storage context is a lead, not proof that mainnet startup
+bypasses custody. The [source-bound proof-store trace](evidence/proof-constructor-reachability-20261002.json)
+classifies three `NewProofStore` omissions: flag-mode measurement, informational
+summary, and a legacy release helper with no direct non-test production caller.
+The actual V2 startup passes its owned context into the proof-store constructor.
+This static check neither qualifies runtime behavior nor closes the wider
+optional-context census. Remaining constructors must be traced from their actual
+public role entry before a causal test or admission change is selected. Status
+and legacy measurement remain separate scopes; never weaken production custody
+to make those historical callers fit the mainnet path.
+
+
+### Preserve capacity for qualification without deleting active compiler work
+
+When free data-volume space approached the 110 GiB reserve, a further
+[4.02 GiB scoped reclaim](evidence/cache-reclaim-4-20261002.json) removed 63
+old compiler archives at least 48 hours old and 8 MiB each. Privileged process
+reference checks, archive magic, inode/link/time checks and a bounded declared
+metadata scan preceded removal; physical identities were checked again and
+absence verified afterward. Active compilation continued. This creates local
+qualification headroom; it does not prove production sizing or replace
+capacity/rotation and restored-volume acceptance. Keep cache storage explicitly
+separate from immutable proof, source and executable retention.
+
+
+### Distinguish accepted claims, outstanding credits and actual payments
+
+A successful exact claim receipt establishes accepted liability, not necessarily
+provider payment. The vault can emit `Claimed` followed by
+`ClaimPaymentDeferred` and retain the credit. Later `ClaimPaid` transfers the
+entire coldkey credit accumulated across epochs and operators. Monitoring must
+report these domains separately and must not duplicate an aggregate payment
+across pools or provider slots. The [source-bound semantics review](evidence/claim-payment-semantics-20261002.json)
+identifies existing real contract paths and required causal controls; it is not
+a new executed test result. Preserve finalized claim recovery while projecting
+unpaid credit and deferred reasons. A missing history or proof yields unavailable
+paid attribution, never a fabricated zero or fully-paid status. Add exact
+receipt/event and contract-path tests to the actual production monitor join.
+
+
+### Runtime compatibility must follow the consumed purpose
+
+The fleet's single-artifact gate also governed status reads, historical receipts
+and present sends. Its [purpose-scoped successor](evidence/fleet-runtime-catalog-progress-20261002.md)
+preserves an exact reviewed catalog and checks the specific consumed semantics.
+Read-only compatibility does not authorize old signature domains or replace
+retained approvals. An upgrade receipt must decode execution under its parent
+runtime, then independently bind the included post-state; cancellation and wrong
+callback identity must be checked before event decoding. The author23 normal/race
+tests and causal controls are scoped evidence; independent review, current
+production artifact approval and final composed release qualification remain open.
+
+
+### Qualify changed public consumers, then preserve newer upstream work
+
+The guarded Server reader change affects all public blob consumers, not only
+the new reader-contract tests. The [independent26-test scope](evidence/current-graph-reader-progress-20261002.md)
+adds nine disjoint existing public consumers to17 reader tests, without repeating
+the three overlaps. Both modes and vet pass, with seven causal old-body failures
+and six positive controls retained. Main integration preserves newer upstream
+model/monitor code and exact qualified blob/module bytes. A component receipt
+remains scoped to its tested source graph; the final composed release must
+qualify its current dependencies rather than inherit whole-main authority.
+
+
+### Keep source composition separate from published module consumption
+
+Fresh owner APIs must coexist with retained-member and reader recovery while
+preserving dependency fixes. The [bounded preparation composition](evidence/preparation-composition-author-20261002.json)
+passes17 selected normal/race tests and four package vets on its exact eight-pin
+workspace. Original core bytes remain unchanged and prior receipts stay separate.
+An explicit workspace can prove these source seams together, but cannot prove
+the executable consumes the intended published module. Finish the tracked-module
+and current Server composition gate before declaring preparation release-ready.
+Directory-only owner admission and retained/restore policy remain required
+behavior, not documentation-only exceptions.
+
+
+### Compiler reuse must account for checkout paths
+
+The local Go build-action implementation includes absolute package directories
+in cache identity when path trimming is disabled. Different private checkouts
+can therefore recompile unchanged local packages. The [source-bound lead](evidence/compiler-cache-path-lead-20261002.json)
+is not a measured explanation for the current compile duration. Qualify a stable
+path-trimming mode for future harness gates only after checking path-sensitive
+callers and proving reuse across exact source copies. Preserve compiler flags,
+physical source bindings and fresh test execution (`-count=1`). Do not change
+flags or restart a live gate to gain reuse. Compiler results remain separate
+from authenticated protocol proofs and test verdicts.
+
+
+### Derive event selectors from the consumed ABI
+
+Pre-qualification review of the new claim projection caught a handwritten
+`ClaimPaid` topic with swapped amount/relayer types. The contract and generated
+binding declare `ClaimPaid(bytes32,uint256,address)`. Use the consumed ABI's
+event identity instead of duplicating its signature string. Add actual canonical
+receipt controls for deferred credit, aggregate payment larger than the current
+claim, malformed/ambiguous events and amounts smaller than accepted liability.
+Reporting failures must degrade payment observation without invalidating a valid
+finalized claim or changing its retained signature. This was found in unfinished
+candidate code; it is not evidence of a deployed payment fault.
+
+Keep evidence strength explicit as well: configured-RPC receipts and leaf state
+remain assertions until independent finality/runtime/code admission is supplied.
+An EVM chain ID alone does not authenticate native genesis. A Merkle check or
+accepted contract event must not silently become proof of finalized economics.
+
+
+### Purpose-scoped fleet admission is integrated, not live-approved
+
+The fleet compatibility correction now has independent23-test normal/race
+qualification, three package vets and six causal refusals in each mode, and
+is merged into main. [Exact evidence](evidence/fleet-runtime-catalog-progress-20261002.md)
+retains the source/module fence and all earlier failures. This advances the
+production capability-selection gap while preserving current-read availability
+when writes lack approval. It does not supply source authority for observed472
+or a final composed release verdict. Keep immutable original recovery plans and
+signature domains separate from new capability catalogs.
+
+
+### Bounded status must retain backlog and semantic progress
+
+A bounded recent-claim projection can hide the oldest unresolved liability when
+more than64 entries remain pending. Keep bounded summaries for the total and
+omitted unresolved census and the oldest unresolved epoch, or a selection that
+preserves old blockers as well as recent work. Never delete retained signatures
+or treat omission as absence of liability.
+
+A writer sequence, saved queue digest or retry timestamp can advance without
+settlement progress. Monitor heartbeat separately from accepted/paid outcomes and
+backlog age; do not reset a settlement stall merely because another retry saved.
+A receipt observation timestamp later than publication must degrade observation
+instead of appearing active after wall-clock rollback. These production consumer
+requirements are under implementation; no complete monitoring verdict is claimed.
+
+
+### Keep the next qualification phase above its resource floor
+
+While composed preparation passed101 normal tests and entered race execution,
+data free space approached the110 GiB floor. A [verified8.02 GiB reclaim](evidence/cache-reclaim-5-20261002.json)
+removed132 old inactive compiler archives, preserving the live handles, active
+caches, source and evidence. The same process-reference, declared-metadata and
+physical archive guards used in earlier cleanups were repeated; all removed paths
+were verified absent. Admission measures free space again before each new phase.
+This is qualification-host resource management, not production capacity closure
+or an excuse to recreate lost protocol history.
+
+
+### Directory-owner preparation qualification
+
+Frozen SN `682d568c` / Connect `05e39766` passed 77 core, 21 public
+preparation-command and five miner-constructor tests in each of normal and race
+modes, plus four package vet scopes. Root verified all 49 manifest bindings,
+the raw archive and source bundles in the [author receipt](evidence/directory-owner-preparation-author-20261002.json).
+Receipt SHA-256: `16c755189250f04d75f29c9d745016ae38a6c89420451223f255b2f80ce19d84`.
+The old code reproduced two core and three public-command failures in each
+mode while its negative authority control passed.
+
+Exact attribute-only and fixed-head owner profiles now enroll through the actual
+plan/apply command and reopen through real miner constructors. Interrupted
+publication resumes the original inode and checkpoint; missing completed heads
+and replacement markers remain refused. Existing capacity dimensions remain
+unchanged, including the claim queue's 16 MiB retained-byte bound.
+
+This author qualification uses Server `2c4e5dca` and fresh precreated private
+roots. Independent qualification, private-root creation, retained/restore semantic
+rebind, capacity revisions and the composition with current main remain separate
+requirements. The candidate is not merged or approved for live preparation.
+
+
+### Optional telemetry cannot reserve operational claim capacity
+
+Claim-queue review found a second pressure case: retaining every previously
+acknowledged optional observation can still exceed the 16 MiB queue limit when
+new signed or operational fields grow. Dropping only newly added observations
+is insufficient. Add a second bounded fallback that omits prior optional
+observations and reports that degradation, while preserving every entry,
+signature, attempt counter and operational outcome. If those required bytes
+alone exceed capacity, retain the actual capacity refusal.
+
+Qualification must exercise the real durable save with prior observations near
+the limit, subsequent signed-field growth, failed-save publication isolation
+and reopen of the exact acknowledged fallback. An omitted observation remains
+unobserved history; no economic outcome or signing authority follows from it.
+This review finding is assigned to the claim-producer successor, not qualified
+or merged yet.
+
+
+### Independent preparation composition qualification
+
+The exact SN `1f66a2bd` / Connect `ba74f897` / Server `2c4e5dca`
+workspace now passes independent qualification: 101 selected tests normally
+and with race detection (15 mainnet, 11 validator, 73 storage core and two
+chain tests), plus five package vet scopes. All tests completed without
+failures or skips. Root verified all 48 [receipt manifest](evidence/preparation-composition-independent-20261002.json)
+bindings. Receipt SHA-256:
+`b5f4725895eadc33d398b8329bea98671b39f1845db0203a49ae9a7b3f4cd6c4`.
+
+The receipt binds the 648-module local workspace graph and exact source
+readback (20,080 SN and 3,715 Connect tracked blobs), including the unchanged
+core, reader and adapter joins. Earlier old-source causal failures remain
+separate author evidence. This qualifies the frozen source composition; it
+does not qualify tracked published-module consumption, current main with later
+fleet/server changes, directory-owner/private-root successors or a production
+release. Integrate those source/dependency changes without replacing completed
+recovery history, and qualify their actual final graph before launch.

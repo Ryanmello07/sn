@@ -232,7 +232,7 @@ func fleetRegister(ctx context.Context, opts docopt.Opts, manifest *protocol.Fle
 	if authority != nil {
 		return fleetRecoverableNative(ctx, opts, manifest, authority, "register")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	hotkeySeed, err := crv4.LoadSeedFile(fleetOpt(opts, "--hotkey_seed_file"))
 	if err != nil {
@@ -288,7 +288,7 @@ func fleetPublish(ctx context.Context, opts docopt.Opts, manifest *protocol.Flee
 	if authority != nil {
 		return fleetRecoverableNative(ctx, opts, manifest, authority, "publish")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	chain, endpoint, err := dialFleetNativeAuthorityContext(ctx, opts, manifest, authority)
 	if err != nil {
@@ -380,7 +380,7 @@ func fleetBind(ctx context.Context, opts docopt.Opts, manifest *protocol.FleetMa
 	if authority != nil {
 		return fleetRecoverableEvm(ctx, opts, manifest, authority, "bind")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
+	ctx, cancel := context.WithTimeout(ctx, fleetStatusTimeout)
 	defer cancel()
 	rpcs, err := authority.prepareEvm(ctx, fleetOpts(opts, "--rpc"))
 	if err != nil {
@@ -435,7 +435,7 @@ func fleetStatus(ctx context.Context, opts docopt.Opts, manifest *protocol.Fleet
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
+	ctx, cancel := context.WithTimeout(ctx, fleetStatusTimeout)
 	defer cancel()
 	clientID, err := parseClientID16(fleetOpt(opts, "--client_id"))
 	if err != nil {
@@ -474,7 +474,7 @@ func fleetRevoke(ctx context.Context, opts docopt.Opts, manifest *protocol.Fleet
 	if authority != nil {
 		return fleetRecoverableEvm(ctx, opts, manifest, authority, "revoke")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), fleetStatusTimeout)
+	ctx, cancel := context.WithTimeout(ctx, fleetStatusTimeout)
 	defer cancel()
 	clientID, err := parseClientID16(fleetOpt(opts, "--client_id"))
 	if err != nil {

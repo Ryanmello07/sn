@@ -82,19 +82,31 @@ func readNetworkJwt() (string, error) {
 // a verified claim is signed and submitted via sn/miner/onchain;
 // otherwise the ready-to-submit calldata is printed for snclaim.
 func claim(opts docopt.Opts) {
-	apiUrl, err := resolveApiUrl(opts)
-	if err != nil {
-		fmt.Printf("network config error: %s\n", err)
-		os.Exit(1)
-	}
-
 	event := connect.NewEventWithContext(context.Background())
 	event.SetOnSignals(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	if err := runFiniteClaim(event.Ctx(), opts, finiteClaimHooks{}); err != nil {
+		fmt.Fprintf(os.Stderr, "claim: %v\n", err)
+		os.Exit(1)
+	}
+}
 
-	ctx, cancel := context.WithCancel(event.Ctx())
+// The complete finite flow owns and joins its SDK before returning an error.
+// Read retries never enclose proof validation, signing or submission.
+func runFiniteClaim(parent context.Context, opts docopt.Opts, hooks finiteClaimHooks) error {
+	if err := parent.Err(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-
-	clientStrategy := connect.NewClientStrategyWithDefaults(ctx)
+	apiUrl, err := resolveApiUrl(opts)
+	if err != nil {
+		return fmt.Errorf("network config: %w", err)
+	}
+	settings := hooks.strategySettings
+	if settings == nil {
+		settings = connect.DefaultClientStrategySettings()
+	}
+	clientStrategy := connect.NewClientStrategy(ctx, settings)
 	defer clientStrategy.Close()
 
 	dryRun, _ := opts.Bool("--dry-run")
@@ -105,7 +117,7 @@ func claim(opts docopt.Opts) {
 
 	byJwt, err := readNetworkJwt()
 	if err != nil {
-		panic(err)
+		return err
 	}
 	api := sdk.NewApi(ctx, clientStrategy, apiUrl)
 	defer func() {
@@ -120,7 +132,7 @@ func claim(opts docopt.Opts) {
 	// submitting needs an rpc endpoint to broadcast through
 	if keyFile != "" && len(rpcUrls) == 0 {
 		fmt.Printf("claim: --key_file needs --rpc to submit\n")
-		os.Exit(1)
+		return errors.New("claim refused; see diagnostic")
 	}
 
 	epoch := int64(0)
@@ -128,57 +140,67 @@ func claim(opts docopt.Opts) {
 	if epochStr, epochErr := opts.String("--epoch"); epochErr == nil && epochStr != "" {
 		epoch, err = strconv.ParseInt(epochStr, 10, 64)
 		if err != nil {
-			panic(fmt.Errorf("bad --epoch %q: %s", epochStr, err))
+			return fmt.Errorf("bad --epoch %q: %s", epochStr, err)
 		}
 		if epoch < 0 {
-			panic(fmt.Errorf("bad --epoch %q: must be non-negative", epochStr))
+			return fmt.Errorf("bad --epoch %q: must be non-negative", epochStr)
 		}
 	} else {
-		epochResult, err := api.SnEpochSync()
+		epochResult, err := retryClaimApiRead(ctx, hooks.retry, api.SnEpochSyncWithContext)
 		if err != nil {
-			panic(err)
+			return err
 		}
-		if epochResult.Epoch == 0 {
-			panic(fmt.Errorf("current epoch is 0; no finalized epoch to claim yet"))
+		if epochResult == nil || epochResult.Epoch <= 0 {
+			return fmt.Errorf("current epoch is 0; no finalized epoch to claim yet")
 		}
 		epoch = epochResult.Epoch - 1
 		epochNote = fmt.Sprintf(" (last finalized; current epoch is %d. Use --epoch to override)", epochResult.Epoch)
 	}
 
-	poolClaim, err := api.SnPoolClaimSync(&sdk.SnPoolClaimArgs{
-		Epoch: epoch,
+	poolClaim, err := retryClaimApiRead(ctx, hooks.retry, func(readCtx context.Context) (*sdk.SnPoolClaimResult, error) {
+		return api.SnPoolClaimSyncWithContext(readCtx, &sdk.SnPoolClaimArgs{Epoch: epoch})
 	})
 	if err != nil {
-		panic(err)
+		return err
+	}
+
+	if poolClaim == nil {
+		return errors.New("claim response is null")
+	}
+	if poolClaim.Error != nil {
+		return fmt.Errorf("claim refused by platform: %s", poolClaim.Error.Message)
+	}
+	if poolClaim.Epoch != epoch {
+		return fmt.Errorf("claim epoch %d differs from requested %d", poolClaim.Epoch, epoch)
 	}
 
 	// decode and sanity-check the claim fields
 	if len(poolClaim.NoId) == 0 {
-		panic(fmt.Errorf("claim has no no_id"))
+		return fmt.Errorf("claim has no no_id")
 	}
 	if 32 < len(poolClaim.NoId) {
-		panic(fmt.Errorf("bad no_id length %d; expected <= 32", len(poolClaim.NoId)))
+		return fmt.Errorf("bad no_id length %d; expected <= 32", len(poolClaim.NoId))
 	}
 	noId := new(big.Int).SetBytes(poolClaim.NoId)
 	if len(poolClaim.Coldkey) != 32 {
-		panic(fmt.Errorf("bad coldkey length %d; expected 32", len(poolClaim.Coldkey)))
+		return fmt.Errorf("bad coldkey length %d; expected 32", len(poolClaim.Coldkey))
 	}
 	var coldkey [32]byte
 	copy(coldkey[:], poolClaim.Coldkey)
 	if len(poolClaim.PayoutRoot) != 32 {
-		panic(fmt.Errorf("bad payout root length %d; expected 32", len(poolClaim.PayoutRoot)))
+		return fmt.Errorf("bad payout root length %d; expected 32", len(poolClaim.PayoutRoot))
 	}
 	var serverRoot [32]byte
 	copy(serverRoot[:], poolClaim.PayoutRoot)
 	if poolClaim.ShareBps < 0 {
-		panic(fmt.Errorf("bad share_bps %d", poolClaim.ShareBps))
+		return fmt.Errorf("bad share_bps %d", poolClaim.ShareBps)
 	}
 	shareBps := uint64(poolClaim.ShareBps)
 	shareBpsBig := new(big.Int).SetUint64(shareBps)
 	proof := make([][32]byte, len(poolClaim.Proof))
 	for i, proofElement := range poolClaim.Proof {
 		if len(proofElement) != 32 {
-			panic(fmt.Errorf("bad proof element %d length %d; expected 32", i, len(proofElement)))
+			return fmt.Errorf("bad proof element %d length %d; expected 32", i, len(proofElement))
 		}
 		copy(proof[i][:], proofElement)
 	}
@@ -199,7 +221,7 @@ func claim(opts docopt.Opts) {
 	var chainRpcUrl string
 	if 0 < len(rpcUrls) {
 		if poolClaim.ChainId < 0 {
-			panic(fmt.Errorf("claim: server chain id %d is invalid", poolClaim.ChainId))
+			return fmt.Errorf("claim: server chain id %d is invalid", poolClaim.ChainId)
 		}
 		entitlementCalldata := stSettlementVault.PackEntitlement(epochBig, noId)
 		for _, rpcUrl := range rpcUrls {
@@ -212,13 +234,13 @@ func claim(opts docopt.Opts) {
 			})
 			if rpcErr != nil {
 				if !retryableEthRpcError(rpcErr, false) || ctx.Err() != nil {
-					panic(fmt.Errorf("claim: rpc %s refused: %w", rpcUrl, rpcErr))
+					return fmt.Errorf("claim: rpc %s refused: %w", rpcUrl, rpcErr)
 				}
 				fmt.Printf("rpc %s: %s\n", rpcUrl, rpcErr)
 				continue
 			}
 			if len(returnData) < 32 {
-				panic(fmt.Errorf("rpc %s: entitlement returned %d bytes; expected >= 32 (wrong vault address?)", rpcUrl, len(returnData)))
+				return fmt.Errorf("rpc %s: entitlement returned %d bytes; expected >= 32 (wrong vault address?)", rpcUrl, len(returnData))
 			}
 			// entitlement returns the tuple with payoutRoot as its first word.
 			copy(chainRoot[:], returnData[:32])
@@ -229,7 +251,7 @@ func claim(opts docopt.Opts) {
 		}
 		if !chainChecked {
 			fmt.Printf("status: UNVERIFIED — no --rpc endpoint answered\n")
-			os.Exit(1)
+			return errors.New("claim refused; see diagnostic")
 		}
 	}
 
@@ -279,7 +301,7 @@ func claim(opts docopt.Opts) {
 		Proof:    proof,
 	})
 	if err != nil {
-		panic(fmt.Errorf("pack settlement-vault claim: %s", err))
+		return fmt.Errorf("pack settlement-vault claim: %s", err)
 	}
 
 	if 0 < len(mismatches) {
@@ -288,7 +310,7 @@ func claim(opts docopt.Opts) {
 			fmt.Printf("mismatch: %s\n", mismatch)
 		}
 		fmt.Printf("status: MISMATCH — do not submit\n")
-		os.Exit(1)
+		return errors.New("claim refused; see diagnostic")
 	}
 
 	// verified. With an EVM key, sign+send through onchain.Submit; otherwise
@@ -296,17 +318,17 @@ func claim(opts docopt.Opts) {
 	if keyFile != "" {
 		if !common.IsHexAddress(poolClaim.ContractAddress) {
 			fmt.Printf("claim: server contract address %q is not a valid EVM address\n", poolClaim.ContractAddress)
-			os.Exit(1)
+			return errors.New("claim refused; see diagnostic")
 		}
 		if poolClaim.ChainId < 0 {
 			fmt.Printf("claim: server chain id %d is invalid\n", poolClaim.ChainId)
-			os.Exit(1)
+			return errors.New("claim refused; see diagnostic")
 		}
 		contract := common.HexToAddress(poolClaim.ContractAddress)
 		key, err := onchain.LoadKeyFile(keyFile)
 		if err != nil {
 			fmt.Printf("claim: %s\n", err)
-			os.Exit(1)
+			return errors.New("claim refused; see diagnostic")
 		}
 		receipt, err := onchain.Submit(ctx, onchain.SubmitParams{
 			Contract: contract,
@@ -318,13 +340,13 @@ func claim(opts docopt.Opts) {
 		})
 		if err != nil {
 			fmt.Printf("claim submit failed: %s\n", err)
-			os.Exit(1)
+			return errors.New("claim refused; see diagnostic")
 		}
 		if receipt == nil {
-			return // dry run; onchain.Submit printed the preflight
+			return nil // dry run; onchain.Submit printed the preflight
 		}
 		printMinerClaimed(receipt, contract)
-		return
+		return nil
 	}
 
 	fmt.Printf("claim calldata:\n0x%x\n", claimCalldata)
@@ -334,6 +356,7 @@ func claim(opts docopt.Opts) {
 	} else {
 		fmt.Printf("status: VERIFIED against the server root only\n")
 	}
+	return nil
 }
 
 type minerClaimReceiptEvents struct {
