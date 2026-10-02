@@ -50,6 +50,14 @@ through the real owner-signing entry point. The
 [32-test independent restore-core normal scope](evidence/restore-core-independent-normal-20261002.json)
 does not yet qualify that consumer or production restoration.
 
+Read-only recovery inspection must support a nonempty signed history without
+requiring a writable backend. The ledger preparation review found a decoder
+dereferencing optional writer hooks through a missing disk owner. Frozen
+candidate `d3c84fe3` skips only that absent optional hook; signature, canonical
+encoding and byte-bound checks remain required. Qualify an actual nonempty
+signed prefix, preserve its bytes, and use the pre-fix path as the panic
+discriminator. Compile-only evidence does not close this recovery requirement.
+
 The [current preparation state](MAINNET.md#current-preparation-state--october-2)
 distinguishes integrated source fixes, qualified candidates and the remaining
 production work. All 28 hardening lessons and ten production gates retain their

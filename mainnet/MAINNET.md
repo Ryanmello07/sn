@@ -46,10 +46,16 @@ Neither candidate has been merged or deployed as the operational schedule.
 
 Financial successor Server `97d22989` now freezes original-component recovery,
 bounded historical ambiguity handling, exact-attempt response admission and
-same-transaction request/outcome history. Its independent 36-test normal batch
-is running on the same config `93dc65fd`; the full model suite follows a passing
-targeted batch. These changes remain unqualified until their actual results
-are retained, and do not supply deployment or activation evidence.
+same-transaction request/outcome history. Its
+[independent 36-test normal batch](evidence/payout-retention-first-normal-20261002.json)
+completed 35 passes and one fixture failure, with no skips. The fixture used the
+renamed `network_point` table. Test-only successor `63027130` corrects it to
+`account_point`, also checks unchanged point value and verifies held-payment
+continuation; production and module bytes remain identical to `97d22989`.
+Qualification runs the three affected tests separately while retaining unchanged
+successful scopes, then runs the full model suite on that corrected source.
+These checkpoints do not supply completed release, deployment or activation
+evidence.
 
 The sole normal failure is in the model slice: the paid/free test attempts to
 change immutable terminal attribution before reaching its weighting assertion.
