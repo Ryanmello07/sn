@@ -643,7 +643,10 @@ func (self *attemptPreparationReader) Read(raw []byte) (int, error) {
 		return 0, err
 	}
 	n, err := self.File.Read(raw[:min(len(raw), 64*1024)])
-	return n, errors.Join(err, self.ctx.Err())
+	if checkErr := self.ctx.Err(); checkErr != nil {
+		err = errors.Join(err, checkErr)
+	}
+	return n, err
 }
 
 func (self *attemptPreparationReader) ReadAt(raw []byte, offset int64) (int, error) {
@@ -656,6 +659,9 @@ func (self *attemptPreparationReader) ReadAt(raw []byte, offset int64) (int, err
 		n, err := self.File.ReadAt(raw[total:end], offset+int64(total))
 		total += n
 		if err != nil {
+			if checkErr := self.ctx.Err(); checkErr != nil {
+				err = errors.Join(err, checkErr)
+			}
 			return total, err
 		}
 		if n == 0 {
