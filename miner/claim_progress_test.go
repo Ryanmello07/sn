@@ -13,6 +13,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/urfoundation/sn/miner/onchain"
 )
 
 // The event is part of the same actual synthetic canonical receipt, not an
@@ -22,6 +24,37 @@ func appendClaimProgressEvent(t *testing.T, receipt *types.Receipt, event *types
 	event.BlockNumber, event.BlockHash = receipt.BlockNumber.Uint64(), receipt.BlockHash
 	event.TxHash, event.TxIndex, event.Index = receipt.TxHash, receipt.TransactionIndex, uint(len(receipt.Logs))
 	receipt.Logs = append(receipt.Logs, event)
+}
+
+func TestClaimProgressActualReceiptRetainsAggregatePayment(t *testing.T) {
+	cfg, claim, entry, receipt, block := signedClaimFixture(t, 70, 23)
+	key, err := onchain.LoadKeyFile(cfg.KeyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relayer := crypto.PubkeyToAddress(key.PublicKey)
+	appendClaimProgressEvent(t, receipt, claimEventLog(t, common.HexToAddress(claim.ContractAddress), "ClaimPaid", []common.Hash{common.BytesToHash(claim.Coldkey), common.BytesToHash(relayer.Bytes())}, big.NewInt(1901)))
+	cfg.RPC = []string{claimReceiptIdentityTestRPC(t, receipt, block)}
+	status, err := reconcileSignedClaimTest(t, t.Context(), cfg, entry)
+	if err != nil || status != "finalized" {
+		t.Fatal("actual aggregate payment reconciliation failed", status, err)
+	}
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retained struct {
+		Observation map[string]any `json:"public_observation"`
+	}
+	if err := json.Unmarshal(raw, &retained); err != nil {
+		t.Fatal(err)
+	}
+	if retained.Observation["payment_status"] != "aggregate-paid" || retained.Observation["aggregate_paid_rao"] != "1901" || retained.Observation["accepted_amount_rao"] != "25" || retained.Observation["unpaid_credit_rao"] != nil {
+		t.Fatal("actual ClaimPaid was lost or allocated only to this epoch", retained.Observation)
+	}
+	if retained.Observation["authority"] != "configured-rpc-assertion" {
+		t.Fatal("RPC receipt silently acquired independent authority", retained.Observation)
+	}
 }
 
 func TestClaimProgressActualReceiptRetainsAcceptedAndDeferredCredit(t *testing.T) {
