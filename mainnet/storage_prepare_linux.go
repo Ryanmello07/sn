@@ -1,0 +1,135 @@
+//go:build linux
+
+// Offline preparation accepts public owner schemas and exact reviewed plans.
+// No RPC, signing key, runtime constructor or service manager is reachable.
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/urfoundation/sn/internal/durablepath"
+	"github.com/urfoundation/sn/validator"
+	"github.com/urnetwork/connect/durablevolume"
+)
+
+// The fixed kind registry starts with ledger custody. Unsupported native,
+// snapshot, retained and restore formats refuse; they never become empty state.
+func storagePreparationAdapter() durablevolume.PreparationAdapter {
+	return durablevolume.PreparationAdapter{Build: buildStoragePreparationOwner, Inspect: inspectStoragePreparationOwner}
+}
+
+func buildStoragePreparationOwner(ctx context.Context, staging *os.File, name string, owner durablevolume.PreparationOwner) (durablevolume.PreparationOwnerPlan, error) {
+	if owner.Kind != validator.AttemptLedgerPreparationKind || owner.Purpose != "fresh" || owner.RelativePath != "." {
+		return durablevolume.PreparationOwnerPlan{}, errors.New("storage preparation owner kind/purpose is not in the implemented fixed registry")
+	}
+	var scope validator.AttemptLedgerPreparationScope
+	if err := decodePlanJson(owner.Inputs, &scope); err != nil {
+		return durablevolume.PreparationOwnerPlan{}, err
+	}
+	census, err := validator.BuildFreshAttemptLedgerPreparation(ctx, staging, name, scope)
+	if err != nil {
+		return durablevolume.PreparationOwnerPlan{}, err
+	}
+	raw, err := json.Marshal(census)
+	if err != nil {
+		return durablevolume.PreparationOwnerPlan{}, err
+	}
+	files := make([]durablevolume.PreparationFile, 0, len(census.Files))
+	for _, file := range census.Files {
+		files = append(files, durablevolume.PreparationFile{Path: file.Path, Kind: file.Kind, Mode: file.Mode, Bytes: file.Bytes, Sha256: file.Sha256})
+	}
+	return durablevolume.PreparationOwnerPlan{Owner: owner, StagingName: name, Files: files, Census: raw,
+		Attributes: []durablevolume.PreparationAttributeSpec{{Path: ".", Name: "user.urnetwork.attempt-ledger-custody"}}}, nil
+}
+
+// The ledger verifies exact public identity/head and every signed record before
+// returning inode-bound checkpoint bytes. Publication belongs to the base stage.
+func inspectStoragePreparationOwner(ctx context.Context, target *os.File, owner durablevolume.PreparationOwnerPlan) ([]durablevolume.PreparedAttribute, error) {
+	if owner.Owner.Kind != validator.AttemptLedgerPreparationKind || owner.Owner.Purpose != "fresh" || owner.Owner.RelativePath != "." {
+		return nil, errors.New("storage preparation cannot inspect an unknown owner kind")
+	}
+	var scope validator.AttemptLedgerPreparationScope
+	var census validator.AttemptLedgerPreparationCensus
+	if err := errors.Join(decodePlanJson(owner.Owner.Inputs, &scope), decodePlanJson(owner.Census, &census)); err != nil {
+		return nil, err
+	}
+	expected := durablevolume.PreparationAttributeSpec{Path: ".", Name: "user.urnetwork.attempt-ledger-custody"}
+	if len(owner.Attributes) != 1 || owner.Attributes[0] != expected {
+		return nil, errors.New("prepared ledger changed its fixed checkpoint destination")
+	}
+	raw, err := validator.BuildAttemptLedgerPreparationCheckpoint(ctx, target, scope, census)
+	if err != nil {
+		return nil, err
+	}
+	return []durablevolume.PreparedAttribute{{Spec: expected, Raw: raw}}, nil
+}
+
+// The independently selected command fixes daemon or owner-local scope before
+// parsing any policy. Only apply accepts an exact accepted plan digest.
+func runStoragePreparationCommand(ctx context.Context, args []string, stdout, stderr io.Writer, ownerLocal bool) int {
+	if len(args) == 0 || args[0] != "plan" && args[0] != "apply" {
+		fmt.Fprintln(stderr, "usage: storage-prepare plan --request FILE --request-sha256 HASH | apply --plan FILE --plan-sha256 HASH")
+		return 2
+	}
+	mode := args[0]
+	flags := flag.NewFlagSet("storage-prepare "+mode, flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	path, hash := "", ""
+	if mode == "plan" {
+		flags.StringVar(&path, "request", "", "exact public preparation request")
+		flags.StringVar(&hash, "request-sha256", "", "accepted request sha256")
+	} else {
+		flags.StringVar(&path, "plan", "", "exact reviewed preparation plan")
+		flags.StringVar(&hash, "plan-sha256", "", "accepted plan sha256")
+	}
+	if err := flags.Parse(args[1:]); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 || path == "" || hash == "" {
+		fmt.Fprintln(stderr, "preparation requires only its explicit local file and exact digest")
+		return 2
+	}
+	if ctx == nil || ctx.Err() != nil {
+		fmt.Fprintln(stderr, "preparation context is unavailable")
+		return 2
+	}
+	reference := durablevolume.Reference{Path: path, Sha256: hash}
+	adapter := storagePreparationAdapter()
+	var result any
+	var err error
+	if mode == "plan" {
+		operation := durablepath.PlanPreparation
+		if ownerLocal {
+			operation = durablepath.PlanOwnerLocalPreparation
+		}
+		result, err = operation(ctx, reference, adapter)
+	} else {
+		operation := durablepath.ApplyPreparation
+		if ownerLocal {
+			operation = durablepath.ApplyOwnerLocalPreparation
+		}
+		result, err = operation(ctx, reference, adapter)
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, "storage preparation:", err)
+		return 2
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		fmt.Fprintln(stderr, "preparation report:", err)
+		return 2
+	}
+	raw = append(raw, '\n')
+	n, err := stdout.Write(raw)
+	if err != nil || n != len(raw) {
+		fmt.Fprintln(stderr, "preparation report was not fully delivered:", errors.Join(io.ErrShortWrite, err))
+		return 2
+	}
+	return 0
+}
