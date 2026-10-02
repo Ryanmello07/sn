@@ -11,7 +11,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/urfoundation/sn/crv4"
 )
 
@@ -90,6 +89,3 @@ func TestFleetRuntimeCatalogPublicStatusHonorsCancellation(t *testing.T) {
 		t.Fatal("canceled public status reached the endpoint", fixture.calls)
 	}
 }
-
-// Keep the imported type tied to the same original receipt block grammar.
-var _ types.Hash
