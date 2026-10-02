@@ -293,6 +293,9 @@ func (self *claimQueueStore) save(q *ClaimQueue) (saveErr error) {
 	if self == nil {
 		return errors.New("claim queue store is absent")
 	}
+	if q == nil || q.Entries == nil {
+		return errors.New("claim queue observation has no owned inventory")
+	}
 	defer func() {
 		if saveErr != nil {
 			self.progress.unavailable()

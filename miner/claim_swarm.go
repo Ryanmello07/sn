@@ -201,6 +201,11 @@ func (self *ClaimSwarm) run(ctx context.Context, afterMember func(string, error,
 		self.progress[member.ID] = owner
 		self.stateLock.Unlock()
 	}
+	defer func() {
+		for _, member := range self.config.Members {
+			loaded[member.ID].progress.close()
+		}
+	}()
 	members := append([]ClaimSwarmMember(nil), self.config.Members...)
 	sort.Slice(members, func(i, j int) bool { return members[i].ID < members[j].ID })
 	stores := make(map[string]*claimQueueStore, len(members))

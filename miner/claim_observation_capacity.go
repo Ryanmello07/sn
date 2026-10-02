@@ -1,5 +1,5 @@
 // Reporting capacity never consumes the space needed by original signed
-// custody. A fallback retains previously acknowledged optional observations.
+// custody. Prior optional observations are retained only while they fit.
 package miner
 
 import (
@@ -57,7 +57,22 @@ func (self *claimQueueStore) observationCapacity(queue *ClaimQueue, raw []byte) 
 		return nil, nil, 0, err
 	}
 	if len(fallback) > maximumClaimQueueBytes {
-		return nil, nil, 0, errClaimQueueCapacity
+		// Even old optional metadata must yield to operational history growth.
+		// This removes no queue record or original signed/receipt field.
+		omitted = 0
+		for epoch, entry := range copy.Entries {
+			if entry.PublicObservation != nil || queue.Entries[epoch].PublicObservation != nil {
+				omitted++
+			}
+			entry.PublicObservation = nil
+		}
+		fallback, err = marshalClaimQueue(&copy)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		if len(fallback) > maximumClaimQueueBytes {
+			return nil, nil, 0, errClaimQueueCapacity
+		}
 	}
 	return &copy, fallback, omitted, nil
 }

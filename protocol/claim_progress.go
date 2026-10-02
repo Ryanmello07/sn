@@ -62,6 +62,7 @@ type ClaimObservation struct {
 	Schema            string            `json:"schema"`
 	EvidenceKind      string            `json:"evidence_kind"`
 	Authority         string            `json:"authority"`
+	GenesisStatus     string            `json:"genesis_status"`
 	Epoch             int64             `json:"epoch"`
 	ObservedAt        string            `json:"observed_at"`
 	Pool              ClaimProgressPool `json:"pool"`
@@ -81,7 +82,7 @@ type ClaimObservation struct {
 }
 
 func (self ClaimObservation) Validate() error {
-	if self.Schema != ClaimObservationSchema || self.Epoch < 0 {
+	if self.Schema != ClaimObservationSchema || self.Epoch < 0 || self.GenesisStatus != "unverified" {
 		return errors.New("claim observation identity differs")
 	}
 	when, err := time.Parse(time.RFC3339Nano, self.ObservedAt)
@@ -121,11 +122,11 @@ func (self ClaimObservation) Validate() error {
 				return errors.New("unverified payment has an amount")
 			}
 		case "deferred":
-			if !ClaimProgressAmount(self.UnpaidCreditRao) || self.AggregatePaidRao != "" {
+			if !claimProgressAmountAtLeast(self.UnpaidCreditRao, self.AcceptedAmountRao) || self.AggregatePaidRao != "" {
 				return errors.New("deferred payment grammar differs")
 			}
 		case "aggregate-paid":
-			if !ClaimProgressAmount(self.AggregatePaidRao) || self.UnpaidCreditRao != "" {
+			if !claimProgressAmountAtLeast(self.AggregatePaidRao, self.AcceptedAmountRao) || self.UnpaidCreditRao != "" {
 				return errors.New("aggregate payment grammar differs")
 			}
 		default:
@@ -135,6 +136,16 @@ func (self ClaimObservation) Validate() error {
 		return errors.New("unknown claim observation kind")
 	}
 	return nil
+}
+
+// Settlement happens after adding the current accepted liability to credit.
+func claimProgressAmountAtLeast(amount, accepted string) bool {
+	if !ClaimProgressAmount(amount) || !ClaimProgressAmount(accepted) {
+		return false
+	}
+	left, _ := new(big.Int).SetString(amount, 10)
+	right, _ := new(big.Int).SetString(accepted, 10)
+	return left.Cmp(right) >= 0
 }
 
 // Only sanitized fields cross the public boundary. Raw signed bytes, private
@@ -147,19 +158,28 @@ type ClaimProgressEntry struct {
 	Observation       *ClaimObservation `json:"observation,omitempty"`
 }
 
+// Sequence/PublishedAt describe durable acknowledgements, including repeated
+// checks and retry bookkeeping; they do not imply settlement progress. Counts
+// cover the retained census, with only bounded detail and no ledger authority.
 type ClaimProgress struct {
-	Schema              string               `json:"schema"`
-	Member              string               `json:"member"`
-	Status              string               `json:"status"`
-	InstanceId          string               `json:"instance_id,omitempty"`
-	StartedAt           string               `json:"started_at,omitempty"`
-	PublishedAt         string               `json:"published_at,omitempty"`
-	Sequence            uint64               `json:"sequence,omitempty"`
-	QueueSha256         string               `json:"queue_sha256,omitempty"`
-	DeclaredPool        *ClaimProgressPool   `json:"declared_pool,omitempty"`
-	Entries             []ClaimProgressEntry `json:"entries,omitempty"`
-	OmittedEntries      uint64               `json:"omitted_entries,omitempty"`
-	OmittedObservations uint64               `json:"omitted_observations,omitempty"`
+	Schema                   string               `json:"schema"`
+	Member                   string               `json:"member"`
+	Status                   string               `json:"status"`
+	InstanceId               string               `json:"instance_id,omitempty"`
+	StartedAt                string               `json:"started_at,omitempty"`
+	PublishedAt              string               `json:"published_at,omitempty"`
+	Sequence                 uint64               `json:"sequence,omitempty"`
+	QueueSha256              string               `json:"queue_sha256,omitempty"`
+	DeclaredPool             *ClaimProgressPool   `json:"declared_pool,omitempty"`
+	Entries                  []ClaimProgressEntry `json:"entries,omitempty"`
+	OmittedEntries           uint64               `json:"omitted_entries,omitempty"`
+	OmittedObservations      uint64               `json:"omitted_observations,omitempty"`
+	TotalEntries             uint64               `json:"total_entries"`
+	UnresolvedEntries        uint64               `json:"unresolved_entries"`
+	OmittedUnresolvedEntries uint64               `json:"omitted_unresolved_entries"`
+	OldestUnresolvedEpoch    *int64               `json:"oldest_unresolved_epoch,omitempty"`
+	FinalizedEntries         uint64               `json:"finalized_entries"`
+	NoClaimEntries           uint64               `json:"no_claim_entries"`
 }
 
 // Decode bounds the entire message before any array allocation. The producer
@@ -172,13 +192,41 @@ func DecodeClaimProgress(raw []byte) (*ClaimProgress, error) {
 		return nil, err
 	}
 	var result ClaimProgress
+	wire := struct {
+		*ClaimProgress
+		Entries json.RawMessage `json:"entries"`
+	}{ClaimProgress: &result}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&result); err != nil {
+	if err := decoder.Decode(&wire); err != nil {
 		return nil, err
 	}
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return nil, errors.New("claim progress trailing data")
+	}
+	if len(wire.Entries) != 0 {
+		entries := json.NewDecoder(bytes.NewReader(wire.Entries))
+		entries.DisallowUnknownFields()
+		token, err := entries.Token()
+		if err != nil || token != json.Delim('[') {
+			return nil, errors.New("claim entries must be a bounded array")
+		}
+		for entries.More() {
+			if len(result.Entries) == MaxClaimProgressEntries {
+				return nil, errors.New("claim entry count bound")
+			}
+			var entry ClaimProgressEntry
+			if err := entries.Decode(&entry); err != nil {
+				return nil, err
+			}
+			result.Entries = append(result.Entries, entry)
+		}
+		if _, err := entries.Token(); err != nil {
+			return nil, err
+		}
+		if err := entries.Decode(new(any)); !errors.Is(err, io.EOF) {
+			return nil, errors.New("claim entry array trailing bytes")
+		}
 	}
 	if err := result.Validate(); err != nil {
 		return nil, err
@@ -199,12 +247,12 @@ func (self ClaimProgress) Validate() error {
 		return errors.New("claim writer status differs")
 	}
 	if self.Sequence == 0 {
-		if self.Status != "unknown" && self.Status != "unavailable" && self.Status != "closed" || self.QueueSha256 != "" || len(self.Entries) != 0 {
+		if self.Status != "unknown" && self.Status != "unavailable" && self.Status != "closed" || self.QueueSha256 != "" || len(self.Entries) != 0 || self.PublishedAt != "" || self.TotalEntries != 0 || self.UnresolvedEntries != 0 || self.OmittedUnresolvedEntries != 0 || self.OldestUnresolvedEpoch != nil || self.FinalizedEntries != 0 || self.NoClaimEntries != 0 || self.OmittedEntries != 0 || self.OmittedObservations != 0 {
 			return errors.New("claim unadmitted writer invented retained data")
 		}
 		return nil
 	}
-	if len(self.InstanceId) != 32 || len(self.QueueSha256) != 64 {
+	if self.Status == "unknown" || len(self.InstanceId) != 32 || len(self.QueueSha256) != 64 || strings.ToLower(self.InstanceId) != self.InstanceId || strings.ToLower(self.QueueSha256) != self.QueueSha256 {
 		return errors.New("claim publication identity differs")
 	}
 	if _, err := hex.DecodeString(self.InstanceId); err != nil {
@@ -221,6 +269,15 @@ func (self ClaimProgress) Validate() error {
 	if err != nil || start.IsZero() || published.Before(start) {
 		return errors.New("claim publication time differs")
 	}
+	if self.OmittedEntries > self.TotalEntries || self.TotalEntries-self.OmittedEntries != uint64(len(self.Entries)) || self.UnresolvedEntries > self.TotalEntries || self.FinalizedEntries > self.TotalEntries-self.UnresolvedEntries || self.NoClaimEntries != self.TotalEntries-self.UnresolvedEntries-self.FinalizedEntries || self.OmittedUnresolvedEntries > self.UnresolvedEntries || self.OmittedUnresolvedEntries > self.OmittedEntries {
+		return errors.New("claim census counts differ")
+	}
+	if self.UnresolvedEntries == 0 && self.OldestUnresolvedEpoch != nil || self.UnresolvedEntries != 0 && (self.OldestUnresolvedEpoch == nil || *self.OldestUnresolvedEpoch < 0) {
+		return errors.New("claim unresolved census has no oldest epoch")
+	}
+	selectedUnresolved := uint64(0)
+	selectedFinalized, selectedNoClaim := uint64(0), uint64(0)
+	oldestIncluded := self.UnresolvedEntries == 0
 	seen := map[int64]bool{}
 	for _, entry := range self.Entries {
 		if entry.Epoch < 0 || seen[entry.Epoch] {
@@ -231,6 +288,17 @@ func (self ClaimProgress) Validate() error {
 		case "pending", "retry", "submitting", "uncertain", "finalized", "no-claim", "unknown":
 		default:
 			return errors.New("claim queue status differs")
+		}
+		if entry.QueueStatus != "finalized" && entry.QueueStatus != "no-claim" {
+			selectedUnresolved++
+			if self.OldestUnresolvedEpoch == nil || entry.Epoch < *self.OldestUnresolvedEpoch {
+				return errors.New("claim selected epoch predates declared oldest unresolved")
+			}
+			oldestIncluded = oldestIncluded || entry.Epoch == *self.OldestUnresolvedEpoch
+		} else if entry.QueueStatus == "finalized" {
+			selectedFinalized++
+		} else {
+			selectedNoClaim++
 		}
 		if entry.DomainStatus != "unknown" && entry.DomainStatus != "match" && entry.DomainStatus != "identity" {
 			return errors.New("claim domain status differs")
@@ -244,6 +312,23 @@ func (self ClaimProgress) Validate() error {
 		if entry.ObservationStatus != "retained" || entry.Observation.Epoch != entry.Epoch || entry.Observation.Validate() != nil {
 			return errors.New("claim retained observation differs")
 		}
+		observed, _ := time.Parse(time.RFC3339Nano, entry.Observation.ObservedAt)
+		if observed.After(published) {
+			return errors.New("claim observation is newer than its publication")
+		}
+		domain := "unknown"
+		if self.DeclaredPool != nil && entry.Observation.EvidenceKind != "api-no-claim" {
+			domain = "identity"
+			if *self.DeclaredPool == entry.Observation.Pool {
+				domain = "match"
+			}
+		}
+		if entry.DomainStatus != domain {
+			return errors.New("claim declared and observed domain comparison differs")
+		}
+	}
+	if selectedUnresolved != self.UnresolvedEntries-self.OmittedUnresolvedEntries || !oldestIncluded || selectedFinalized > self.FinalizedEntries || selectedNoClaim > self.NoClaimEntries {
+		return errors.New("claim bounded census hides its oldest unresolved epoch")
 	}
 	return nil
 }

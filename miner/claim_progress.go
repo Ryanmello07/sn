@@ -50,20 +50,42 @@ func claimProgressPending(entry *ClaimQueueEntry) bool {
 	return entry.Status != "finalized" && entry.Status != "no-claim"
 }
 
-// Selection is bounded while traversing the already byte-bounded queue.
-// Unresolved liabilities precede recent terminal epochs; nothing is deleted.
-func claimProgressEntries(queue *ClaimQueue, pool *protocol.ClaimProgressPool) ([]protocol.ClaimProgressEntry, uint64) {
+// Summary storage is constant; detail holds at most the public entry bound.
+type claimProgressCensus struct {
+	entries                                                                       []protocol.ClaimProgressEntry
+	total, unresolved, finalized, noClaim, omittedUnresolved, omittedObservations uint64
+	oldest                                                                        *int64
+}
+
+// Oldest unresolved liabilities precede recent terminal epochs. The complete
+// count and oldest epoch remain visible when bounded detail omits later work.
+func claimProgressEntries(queue *ClaimQueue, pool *protocol.ClaimProgressPool, published time.Time) (claimProgressCensus, bool) {
+	census := claimProgressCensus{}
 	selected := make([]*ClaimQueueEntry, 0, protocol.MaxClaimProgressEntries)
-	total := uint64(0)
 	for _, entry := range queue.Entries {
 		if entry == nil || entry.Epoch < 0 {
-			continue
+			return census, false
 		}
-		total++
+		census.total++
+		switch entry.Status {
+		case "finalized":
+			census.finalized++
+		case "no-claim":
+			census.noClaim++
+		default:
+			census.unresolved++
+			if census.oldest == nil || entry.Epoch < *census.oldest {
+				epoch := entry.Epoch
+				census.oldest = &epoch
+			}
+		}
 		position := sort.Search(len(selected), func(i int) bool {
 			left, right := claimProgressPending(entry), claimProgressPending(selected[i])
 			if left != right {
 				return left
+			}
+			if left {
+				return entry.Epoch < selected[i].Epoch
 			}
 			return entry.Epoch > selected[i].Epoch
 		})
@@ -75,10 +97,20 @@ func claimProgressEntries(queue *ClaimQueue, pool *protocol.ClaimProgressPool) (
 			selected = selected[:protocol.MaxClaimProgressEntries]
 		}
 	}
-	entries := make([]protocol.ClaimProgressEntry, 0, len(selected))
+	census.entries = make([]protocol.ClaimProgressEntry, 0, len(selected))
+	census.omittedUnresolved = census.unresolved
 	for _, entry := range selected {
+		if claimProgressPending(entry) {
+			census.omittedUnresolved--
+		}
 		projected := protocol.ClaimProgressEntry{Epoch: entry.Epoch, QueueStatus: claimProgressStatus(entry.Status), ObservationStatus: "unknown", DomainStatus: "unknown"}
-		if observation := entry.PublicObservation; observation != nil && observation.Epoch == entry.Epoch && observation.Validate() == nil {
+		observation := entry.PublicObservation
+		validObservation := false
+		if observation != nil && observation.Epoch == entry.Epoch && observation.Validate() == nil {
+			observed, _ := time.Parse(time.RFC3339Nano, observation.ObservedAt)
+			validObservation = !observed.After(published)
+		}
+		if validObservation {
 			copy := *observation
 			if observation.LeafClaimed != nil {
 				value := *observation.LeafClaimed
@@ -92,10 +124,12 @@ func claimProgressEntries(queue *ClaimQueue, pool *protocol.ClaimProgressPool) (
 					projected.DomainStatus = "match"
 				}
 			}
+		} else if observation != nil {
+			census.omittedObservations++
 		}
-		entries = append(entries, projected)
+		census.entries = append(census.entries, projected)
 	}
-	return entries, total - uint64(len(entries))
+	return census, true
 }
 
 // A failed save never calls this method. It accepts only the exact queue
@@ -113,8 +147,8 @@ func (self *claimProgressOwner) acknowledge(queue *ClaimQueue, digest [32]byte, 
 			pool = &copy
 		}
 	}()
-	entries, omittedEntries := claimProgressEntries(queue, pool)
 	now := time.Now().UTC()
+	census, valid := claimProgressEntries(queue, pool, now)
 	self.stateLock.Lock()
 	defer self.stateLock.Unlock()
 	if self.closed {
@@ -122,7 +156,7 @@ func (self *claimProgressOwner) acknowledge(queue *ClaimQueue, digest [32]byte, 
 	}
 	start, _ := time.Parse(time.RFC3339Nano, self.value.StartedAt)
 	previous, _ := time.Parse(time.RFC3339Nano, self.value.PublishedAt)
-	if self.value.Sequence == math.MaxUint64 || now.Before(start) || now.Before(previous) {
+	if !valid || self.value.Sequence == math.MaxUint64 || now.Before(start) || now.Before(previous) {
 		self.value.Status = "unavailable"
 		return
 	}
@@ -130,9 +164,15 @@ func (self *claimProgressOwner) acknowledge(queue *ClaimQueue, digest [32]byte, 
 	self.value.Status = "active"
 	self.value.PublishedAt = now.Format(time.RFC3339Nano)
 	self.value.QueueSha256 = hex.EncodeToString(digest[:])
-	self.value.Entries = entries
-	self.value.OmittedEntries = omittedEntries
-	self.value.OmittedObservations = omitted
+	self.value.Entries = census.entries
+	self.value.OmittedEntries = census.total - uint64(len(census.entries))
+	self.value.OmittedObservations = omitted + census.omittedObservations
+	self.value.TotalEntries = census.total
+	self.value.UnresolvedEntries = census.unresolved
+	self.value.FinalizedEntries = census.finalized
+	self.value.NoClaimEntries = census.noClaim
+	self.value.OmittedUnresolvedEntries = census.omittedUnresolved
+	self.value.OldestUnresolvedEpoch = census.oldest
 }
 
 func (self *claimProgressOwner) unavailable() {

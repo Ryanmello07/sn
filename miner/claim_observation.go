@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/urfoundation/sn/miner/onchain"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/stabi"
@@ -35,11 +34,19 @@ func signedClaimObservation(tx *types.Transaction, intent *onchain.ClaimIntent, 
 		return nil
 	}
 	observation := &protocol.ClaimObservation{Schema: protocol.ClaimObservationSchema, EvidenceKind: "signed-receipt", Epoch: intent.E.Int64(), ObservedAt: time.Now().UTC().Format(time.RFC3339Nano), Pool: protocol.ClaimProgressPool{ChainId: tx.ChainId().Uint64(), Vault: strings.ToLower(tx.To().Hex()), NoId: intent.NoID.String(), Coldkey: common.Hash(intent.Coldkey).Hex()}, ShareBps: intent.ShareBps.Uint64(), ProofStatus: "contract-accepted", BlockNumber: receipt.BlockNumber.Uint64(), BlockHash: strings.ToLower(receipt.BlockHash.Hex()), TransactionHash: strings.ToLower(tx.Hash().Hex()), Relayer: strings.ToLower(from.Hex()), PaymentStatus: "unknown"}
-	paidTopic := crypto.Keccak256Hash([]byte("ClaimPaid(bytes32,address,uint256)"))
-	deferredTopic := crypto.Keccak256Hash([]byte("ClaimPaymentDeferred(bytes32,uint256,uint256,uint64,uint8)"))
+	contractAbi, err := stabi.STSettlementVaultMetaData.ParseABI()
+	if err != nil {
+		return nil
+	}
+	paidTopic := contractAbi.Events["ClaimPaid"].ID
+	deferredTopic := contractAbi.Events["ClaimPaymentDeferred"].ID
+	if paidTopic == (common.Hash{}) || deferredTopic == (common.Hash{}) {
+		return nil
+	}
 	payments := 0
 	invalid := false
 	observation.Authority = "configured-rpc-assertion"
+	observation.GenesisStatus = "unverified"
 	for _, log := range receipt.Logs {
 		if log == nil || log.Address != *tx.To() {
 			continue
@@ -50,7 +57,11 @@ func signedClaimObservation(tx *types.Transaction, intent *onchain.ClaimIntent, 
 		if len(log.Topics) == 0 || (log.Topics[0] != paidTopic && log.Topics[0] != deferredTopic) {
 			continue
 		}
-		if len(log.Topics) < 2 || log.Topics[1] != common.Hash(intent.Coldkey) {
+		if len(log.Topics) < 2 {
+			invalid = true
+			continue
+		}
+		if log.Topics[1] != common.Hash(intent.Coldkey) {
 			continue
 		}
 		payments++
@@ -78,6 +89,18 @@ func signedClaimObservation(tx *types.Transaction, intent *onchain.ClaimIntent, 
 		observation.PaymentStatus = "invalid"
 		observation.UnpaidCreditRao, observation.AggregatePaidRao = "", ""
 	}
+	// The contract adds this accepted liability before settling its aggregate
+	// credit. A smaller reported settlement cannot describe that transition.
+	accepted, _ := new(big.Int).SetString(observation.AcceptedAmountRao, 10)
+	for _, amount := range []string{observation.UnpaidCreditRao, observation.AggregatePaidRao} {
+		if amount != "" {
+			value, ok := new(big.Int).SetString(amount, 10)
+			if !ok || accepted == nil || value.Cmp(accepted) < 0 {
+				observation.PaymentStatus = "invalid"
+				observation.UnpaidCreditRao, observation.AggregatePaidRao = "", ""
+			}
+		}
+	}
 	if observation.Validate() != nil {
 		return nil
 	}
@@ -98,6 +121,7 @@ func finalizedClaimObservation(claim *sdk.SnPoolClaimResult, entitlement stabi.S
 		}
 	}
 	observation.Authority = "configured-rpc-assertion"
+	observation.GenesisStatus = "unverified"
 	if claim.ChainId <= 0 || observation.Validate() != nil {
 		return nil
 	}
@@ -105,5 +129,5 @@ func finalizedClaimObservation(claim *sdk.SnPoolClaimResult, entitlement stabi.S
 }
 
 func absentClaimObservation(epoch int64) *protocol.ClaimObservation {
-	return &protocol.ClaimObservation{Schema: protocol.ClaimObservationSchema, EvidenceKind: "api-no-claim", Authority: "api-assertion", Epoch: epoch, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano), ProofStatus: "unknown", PaymentStatus: "unknown"}
+	return &protocol.ClaimObservation{Schema: protocol.ClaimObservationSchema, EvidenceKind: "api-no-claim", Authority: "api-assertion", GenesisStatus: "unverified", Epoch: epoch, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano), ProofStatus: "unknown", PaymentStatus: "unknown"}
 }
