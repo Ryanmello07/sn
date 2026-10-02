@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/urfoundation/sn/diagnostics"
 	"github.com/urfoundation/sn/protocol"
 )
 
@@ -68,7 +69,8 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 	if policy.Schema != monitorServicesSchema {
 		return nil, errors.New("service policy schema is unknown")
 	}
-	if len(policy.Validators)+len(policy.Operators)+len(policy.Providers) == 0 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators || len(policy.Providers) > maxMonitorProviders {
+	rolesCount := len(policy.Validators) + len(policy.Operators) + len(policy.Providers)
+	if rolesCount == 0 || rolesCount > diagnostics.MaximumDomains-2 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators || len(policy.Providers) > maxMonitorProviders {
 		return nil, errMonitorServicesCensus
 	}
 	paths := map[string]bool{}

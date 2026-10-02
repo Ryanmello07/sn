@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/urfoundation/sn/diagnostics"
 	"github.com/urfoundation/sn/protocol"
 )
 
@@ -195,7 +197,7 @@ type monitorProviderTestEvent struct {
 	Schema, Role, Status string
 	Current              bool
 	CheckpointCurrent    bool `json:"checkpoint_current"`
-	State                *monitorProviderState
+	State                *monitorProviderEventState
 }
 type monitorProviderTestSink struct{ events chan monitorProviderTestEvent }
 
@@ -300,7 +302,7 @@ func TestMonitorProviderPublicRolesRecoverWithoutResettingPeer(t *testing.T) {
 	}
 	resume[two.Role] <- struct{}{}
 	event = sink.next(t)
-	if event.Role != two.Role || event.State.Record.Sequence != 2 || !event.Current {
+	if event.Role != two.Role || event.State.Sequence != 2 || !event.Current {
 		t.Fatal("healthy provider did not retain its live lifetime", event)
 	}
 }
@@ -367,5 +369,27 @@ func TestMonitorProviderPolicyRejectsImplicitRosterAndUnsafeEndpoint(t *testing.
 	policy.Members = nil
 	if policy.validate() == nil {
 		t.Fatal("candidate can supply its own expected roster")
+	}
+}
+
+func TestMonitorProviderSharedOutputBoundsAreAdmittedBeforeOwners(t *testing.T) {
+	fixture := newMonitorServicesFixture(t)
+	fixture.policy.Validators = make([]monitorValidatorPolicy, 8)
+	fixture.policy.Operators = make([]monitorOperatorPolicy, 4)
+	fixture.policy.Providers = make([]monitorProviderPolicy, 3)
+	fixture.writePolicy(t)
+	if _, err := loadMonitorServices(t.Context(), fixture.policyPath, monitorTestExpectation(), fixture.checkpointPath, fixture.metricsPath); !errors.Is(err, errMonitorServicesCensus) {
+		t.Fatal("policy exceeded shared output domain capacity before role validation", err)
+	}
+	value := monitorProviderTestValue(time.Now().UTC())
+	policy := monitorProviderTestPolicy(value, "https://synthetic.invalid/provider-progress")
+	value.Members = make([]protocol.ProviderMemberProgress, maxMonitorProviderMembers)
+	for index := range value.Members {
+		value.Members[index] = protocol.ProviderMemberProgress{Slot: strings.Repeat("x", 128), ClientId: "11111111-1111-1111-1111-111111111111"}
+	}
+	worker := &monitorProviderWorker{policy: policy, state: &monitorProviderState{Record: &value, Incidents: 1}}
+	raw, err := json.Marshal(worker.eventState(false))
+	if err != nil || len(raw) > diagnostics.MaximumRecordBytes/2 || bytes.Contains(raw, []byte(value.Members[0].ClientId)) {
+		t.Fatal("provider diagnostic expanded with candidate census", len(raw), err)
 	}
 }

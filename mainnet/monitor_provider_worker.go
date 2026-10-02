@@ -40,6 +40,33 @@ type monitorProviderWorker struct {
 	storage    monitorStorageRecovery
 }
 
+// Diagnostic events have constant size regardless of the member census. The
+// complete retained roster belongs to the bounded checkpoint, never a queue
+// record that can overflow the shared diagnostic sink's independent limit.
+type monitorProviderEventState struct {
+	SampleAt        time.Time `json:"sample_at"`
+	LastAcceptedAt  time.Time `json:"last_accepted_at"`
+	OutageSince     time.Time `json:"outage_since"`
+	Incidents       uint64    `json:"incidents"`
+	Restarts        uint64    `json:"restarts"`
+	InstanceId      string    `json:"instance_id,omitempty"`
+	Sequence        uint64    `json:"sequence"`
+	ExpectedMembers int       `json:"expected_members"`
+	ReadyMembers    int       `json:"ready_members"`
+}
+
+func (self *monitorProviderWorker) eventState(current bool) monitorProviderEventState {
+	value := monitorProviderEventState{SampleAt: self.state.SampleAt, LastAcceptedAt: self.state.LastAcceptedAt, OutageSince: self.state.OutageSince, Incidents: self.state.Incidents, Restarts: self.state.Restarts, ExpectedMembers: len(self.policy.Members)}
+	if current {
+		value.ReadyMembers = self.state.ready
+	}
+	if self.state.Record != nil {
+		value.InstanceId = self.state.Record.InstanceId
+		value.Sequence = self.state.Record.Sequence
+	}
+	return value
+}
+
 func openMonitorProviderWorker(ctx context.Context, policy monitorProviderPolicy, expected identityExpectation, checkpoint, metrics string, hooks monitorServiceHooks) (*monitorProviderWorker, error) {
 	if err := durablepath.Require(ctx); err != nil {
 		return nil, err
@@ -228,13 +255,13 @@ func (self *monitorProviderWorker) run(ctx context.Context, interval time.Durati
 		var ownership *monitorOutputOwnershipError
 		terminal := monitorProviderTerminal(self.state.Status) || errors.As(combined, &ownership) || errors.Is(combined, durablevolume.ErrIdentity)
 		event := struct {
-			Schema            string                `json:"schema"`
-			Role              string                `json:"role"`
-			Status            string                `json:"status"`
-			Current           bool                  `json:"current"`
-			CheckpointCurrent bool                  `json:"checkpoint_current"`
-			State             *monitorProviderState `json:"state"`
-		}{"urnetwork-mainnet-provider-event-v1", self.policy.Role, self.state.Status, self.state.current && checkpointErr == nil, checkpointErr == nil, self.state}
+			Schema            string                    `json:"schema"`
+			Role              string                    `json:"role"`
+			Status            string                    `json:"status"`
+			Current           bool                      `json:"current"`
+			CheckpointCurrent bool                      `json:"checkpoint_current"`
+			State             monitorProviderEventState `json:"state"`
+		}{"urnetwork-mainnet-provider-event-v1", self.policy.Role, self.state.Status, self.state.current && checkpointErr == nil, checkpointErr == nil, self.eventState(self.state.current && checkpointErr == nil)}
 		if err := json.NewEncoder(stdout).Encode(event); err != nil {
 			if ctx.Err() != nil {
 				return 0
