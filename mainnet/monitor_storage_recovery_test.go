@@ -19,6 +19,133 @@ import (
 	"github.com/urnetwork/connect/durablevolume"
 )
 
+// Terminal notification follows both real descriptor closes. The healthy role
+// remains live while another opener proves the stopped role released its locks.
+func TestMonitorStorageStoppedRoleReleasesOwnersBeforePeerStops(t *testing.T) {
+	fixture := newMonitorServicesFixture(t, "alpha", "beta")
+	url, _, _ := monitorServicesBlockedChain(t)
+	closed := make(chan string, 2)
+	terminal := make(chan int, 1)
+	hooks := monitorServiceHooks{afterClose: func(role, kind string, file *os.File) error {
+		if role == "alpha" {
+			if _, err := file.Stat(); !errors.Is(err, os.ErrClosed) {
+				return errors.New("terminal observer preceded descriptor close")
+			}
+			closed <- kind
+		}
+		return nil
+	}, afterWorker: func(role string, exit int) {
+		if role == "alpha" {
+			terminal <- exit
+		}
+	}}
+	run := fixture.start(t, url, hooks)
+	run.next(t)
+	run.next(t)
+	checkpoint, metrics := monitorValidatorPaths(fixture.checkpointPath, fixture.metricsPath, "alpha")
+	if err := os.Rename(metrics, metrics+".retained"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(metrics+".retained", metrics); err != nil {
+		t.Fatal(err)
+	}
+	run.again(t, "alpha")
+	if event := run.next(t); event.Role != "alpha" || event.Publication != "ownership-error" {
+		t.Fatal("lost exporter did not stop its own role", event)
+	}
+	if exit := <-terminal; exit != 3 || len(closed) != 2 {
+		t.Fatal("stopped role retained its actual owners", exit, len(closed))
+	}
+	if first, second := <-closed, <-closed; first != "metrics" || second != "checkpoint" {
+		t.Fatal("terminal cleanup omitted an owner", first, second)
+	}
+	for _, path := range []string{metrics + ".lock", checkpoint + ".lock"} {
+		file, err := os.OpenFile(path, os.O_RDWR|syscall.O_NOFOLLOW, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err := errors.Join(err, file.Close()); err != nil {
+			t.Fatal("stopped role lock was not released", path, err)
+		}
+	}
+	run.again(t, "beta")
+	if event := run.next(t); event.Role != "beta" || event.Publication != "published" {
+		t.Fatal("joined stopped role suppressed its healthy peer", event)
+	}
+	run.cancel()
+	<-run.done
+	if run.exit != 3 {
+		t.Fatal("terminal role result was lost", run.exit, run.stderr.String())
+	}
+}
+
+// The database-backed role obeys the same terminal ownership boundary. Its
+// reader and publishers join while the validator completes another real sample.
+func TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops(t *testing.T) {
+	fixture, _ := operatorDatabaseFixture(t)
+	url, _, _ := monitorServicesBlockedChain(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	sink := &monitorOperatorTestSink{events: make(chan monitorOperatorTestEvent, 4), validators: make(chan string, 4)}
+	resume := map[string]chan struct{}{"alpha": make(chan struct{}), "operator-a": make(chan struct{})}
+	terminal := make(chan int, 1)
+	hooks := monitorServiceHooks{afterWorker: func(role string, exit int) {
+		if role == "operator-a" {
+			terminal <- exit
+		}
+	}, wait: func(ctx context.Context, role string, _ time.Duration) bool {
+		select {
+		case <-resume[role]:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}}
+	done := make(chan int, 1)
+	go func() {
+		defer close(done)
+		done <- runMonitorStorageTestWithHooks(t, ctx, fixture.args(url), sink, nil, fixture.clock.now, hooks)
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+	if event := <-sink.events; event.Publication != "published" {
+		t.Fatal("operator fixture did not publish its real journal observation", event)
+	}
+	<-sink.validators
+	checkpoint, metrics := monitorOperatorPaths(fixture.checkpointPath, fixture.metricsPath, "operator-a")
+	if err := os.Rename(metrics, metrics+".retained"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(metrics+".retained", metrics); err != nil {
+		t.Fatal(err)
+	}
+	resume["operator-a"] <- struct{}{}
+	if event := <-sink.events; event.Publication != "ownership-error" {
+		t.Fatal("operator publisher loss did not stop its own role", event)
+	}
+	if exit := <-terminal; exit != 3 {
+		t.Fatal("operator terminal exit differs", exit)
+	}
+	for _, path := range []string{metrics + ".lock", checkpoint + ".lock"} {
+		file, err := os.OpenFile(path, os.O_RDWR|syscall.O_NOFOLLOW, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err := errors.Join(err, file.Close()); err != nil {
+			t.Fatal("stopped operator retained its lock", path, err)
+		}
+	}
+	resume["alpha"] <- struct{}{}
+	if role := <-sink.validators; role != "alpha" {
+		t.Fatal("stopped operator suppressed validator publication", role)
+	}
+	cancel()
+	if exit := <-done; exit != 3 {
+		t.Fatal("operator terminal result disappeared", exit)
+	}
+}
+
 func TestMonitorStorageCheckpointLostAckReopensExactBytesAndPreservesPeer(t *testing.T) {
 	fixture := newMonitorServicesFixture(t, "alpha", "beta")
 	url, _, _ := monitorServicesBlockedChain(t)

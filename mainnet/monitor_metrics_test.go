@@ -193,7 +193,7 @@ func TestMonitorMetricsCommandStopsOnPublicationFailure(t *testing.T) {
 	}}
 	var stderr bytes.Buffer
 	exit := runMonitorTest(t, ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--metrics-file", path, "--interval", "1ns"}, stdout, &stderr)
-	if exit != 1 || events != 2 {
+	if exit != 3 || events != 2 {
 		t.Fatalf("failed publication kept running: exit=%d events=%d stderr=%s", exit, events, stderr.String())
 	}
 	after, err := os.ReadFile(retained)

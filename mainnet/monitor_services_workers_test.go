@@ -95,12 +95,15 @@ func TestMonitorServicesCommandRetainsCleanupFailures(t *testing.T) {
 	fixture := newMonitorServicesFixture(t, "alpha")
 	url, entered, left := monitorServicesBlockedChain(t)
 	closed := map[string]bool{}
+	var closedLock sync.Mutex
 	hooks := monitorServiceHooks{afterClose: func(role, kind string, file *os.File) error {
 		_, err := file.Stat()
 		if !errors.Is(err, os.ErrClosed) {
 			return errors.New("cleanup observer ran before physical close")
 		}
+		closedLock.Lock()
 		closed[role+"/"+kind] = true
+		closedLock.Unlock()
 		return errors.New("synthetic " + kind + " close failure")
 	}}
 	run := fixture.start(t, url, hooks)

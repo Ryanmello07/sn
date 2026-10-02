@@ -20,6 +20,7 @@ type monitorServiceHooks struct {
 	read          func(string) monitorServiceReadHooks
 	syncDirectory func(role, kind string, file *os.File) error
 	afterClose    func(role, kind string, file *os.File) error
+	afterWorker   func(role string, exit int)
 	afterEvent    func(context.Context, string)
 	wait          func(context.Context, string, time.Duration) bool
 }
@@ -45,6 +46,39 @@ type monitorValidatorWorker struct {
 	metrics    *monitorMetricsStore
 	state      *monitorValidatorState
 	storage    monitorStorageRecovery
+}
+
+// A terminal role releases its own descriptors before reporting completion.
+// Parent cleanup remains idempotent and also covers partially admitted roles.
+func closeMonitorServiceOwners(role string, metrics *monitorMetricsStore, checkpoint *monitorCheckpointStore, hooks monitorServiceHooks) error {
+	var metricsFile, checkpointFile *os.File
+	if metrics != nil {
+		metricsFile = metrics.lock
+	}
+	if checkpoint != nil {
+		checkpointFile = checkpoint.lock
+	}
+	var result error
+	for _, owner := range []struct {
+		kind  string
+		file  *os.File
+		close func() error
+	}{
+		{kind: "metrics", file: metricsFile, close: metrics.close},
+		{kind: "checkpoint", file: checkpointFile, close: checkpoint.close},
+	} {
+		if owner.file == nil {
+			continue
+		}
+		err := owner.close()
+		if hooks.afterClose != nil {
+			err = errors.Join(err, hooks.afterClose(role, owner.kind, owner.file))
+		}
+		if err != nil {
+			result = errors.Join(result, fmt.Errorf("%s %s close: %w", role, owner.kind, err))
+		}
+	}
+	return result
 }
 
 // Cancellation interrupts waits. Physical regular-file operations are bounded
@@ -79,38 +113,12 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	var workers []*monitorValidatorWorker
 	var operators []*monitorOperatorWorker
 	defer func() {
-		for _, worker := range operators {
-			if err := errors.Join(worker.metrics.close(), worker.checkpoint.owner.close()); err != nil {
-				result = 3
-			}
-		}
-	}()
-	defer func() {
 		var cleanupErr error
+		for _, worker := range operators {
+			cleanupErr = errors.Join(cleanupErr, closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks))
+		}
 		for _, worker := range workers {
-			var metricsFile *os.File
-			if worker.metrics != nil {
-				metricsFile = worker.metrics.lock
-			}
-			for _, owner := range []struct {
-				kind  string
-				file  *os.File
-				close func() error
-			}{
-				{kind: "metrics", file: metricsFile, close: worker.metrics.close},
-				{kind: "checkpoint", file: worker.checkpoint.owner.lock, close: worker.checkpoint.owner.close},
-			} {
-				if owner.file == nil {
-					continue
-				}
-				err := owner.close()
-				if hooks.afterClose != nil {
-					err = errors.Join(err, hooks.afterClose(worker.policy.Role, owner.kind, owner.file))
-				}
-				if err != nil {
-					cleanupErr = errors.Join(cleanupErr, fmt.Errorf("%s %s close: %w", worker.policy.Role, owner.kind, err))
-				}
-			}
+			cleanupErr = errors.Join(cleanupErr, closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks))
 		}
 		if cleanupErr != nil {
 			fmt.Fprintln(diagnostic, "monitor service cleanup:", cleanupErr)
@@ -172,12 +180,32 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	}()
 	for index, worker := range workers {
 		writer := output.events.Writer(fmt.Sprintf("validator%d", index))
-		go func() { results <- worker.run(ctx, interval, writer, diagnostic, now, hooks) }()
+		go func() {
+			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
+			if err := closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks); err != nil {
+				fmt.Fprintln(diagnostic, "monitor service cleanup:", err)
+				exit = 3
+			}
+			if hooks.afterWorker != nil {
+				hooks.afterWorker(worker.policy.Role, exit)
+			}
+			results <- exit
+		}()
 	}
 
 	for index, worker := range operators {
 		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+index))
-		go func() { results <- worker.run(ctx, interval, stallAfter, writer, diagnostic, now, hooks) }()
+		go func() {
+			exit := worker.run(ctx, interval, stallAfter, writer, diagnostic, now, hooks)
+			if err := closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks); err != nil {
+				fmt.Fprintln(diagnostic, "monitor operator cleanup:", err)
+				exit = 3
+			}
+			if hooks.afterWorker != nil {
+				hooks.afterWorker(worker.policy.Role, exit)
+			}
+			results <- exit
+		}()
 	}
 	for remaining := len(workers) + len(operators) + 1; remaining > 0; remaining-- {
 		exit := <-results
