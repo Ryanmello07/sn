@@ -5351,3 +5351,16 @@ the executable consumes the intended published module. Finish the tracked-module
 and current Server composition gate before declaring preparation release-ready.
 Directory-only owner admission and retained/restore policy remain required
 behavior, not documentation-only exceptions.
+
+
+### Compiler reuse must account for checkout paths
+
+The local Go build-action implementation includes absolute package directories
+in cache identity when path trimming is disabled. Different private checkouts
+can therefore recompile unchanged local packages. The [source-bound lead](evidence/compiler-cache-path-lead-20261002.json)
+is not a measured explanation for the current compile duration. Qualify a stable
+path-trimming mode for future harness gates only after checking path-sensitive
+callers and proving reuse across exact source copies. Preserve compiler flags,
+physical source bindings and fresh test execution (`-count=1`). Do not change
+flags or restart a live gate to gain reuse. Compiler results remain separate
+from authenticated protocol proofs and test verdicts.

@@ -2986,3 +2986,13 @@ This is a source/workspace result. It does not qualify published module consumpt
 or later Server main `1d72f577`. Directory-only owners, private-root creation,
 retained/restore semantics and capacity revisions remain in implementation.
 No production preparation or restoration is authorized by this result.
+
+
+### Qualification throughput follow-up
+
+The [compiler path-cache lead](evidence/compiler-cache-path-lead-20261002.json)
+identifies a future harness optimization to qualify: stable path trimming can
+avoid distinct cache identities for unchanged local packages in private checkouts.
+No live gate changes flags or restarts for this lead. Its source observation does
+not prove a benchmark improvement or close compiler provenance, source authority
+or release qualification. Preserve fresh test execution and exact flag bindings.
