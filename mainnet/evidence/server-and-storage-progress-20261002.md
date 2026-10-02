@@ -128,10 +128,70 @@ Keep original signed, pending and completed bytes, join only the affected
 owner, and reconcile the retained checkpoint before continuing. Do not reset
 the whole campaign or call a copied root an approved replacement generation.
 
-All-owner adoption, finite inventory/restore verification, external
-former-writer fences, deployment-unit/config integration and independent
+All-owner adoption and integration of finite inventory/restore verification,
+external former-writer fences, deployment-unit/config integration and independent
 composed qualification remain unfinished. A guarded snapshot alone cannot
 prove that older unguarded writers stopped. Local byte verification cannot
 prove cross-host or database restoration, authorize signed physical-root
 rebinding, or grant restart. No signing, broadcast, live mount, deployment or
 production service start is part of this source work.
+
+## Inventory, owner-local policy and current-main integration
+
+The additive inventory source `8f459b14` passes 28 independent normal/race roots
+and vet. Traversal has explicit work/byte/depth bounds and cancellation; snapshot
+leases belong to individual approved roots and require an external former-writer
+stop/join assertion. Forced child-process death retains synced bytes and releases
+the actual lease. Exact local restore verification reports physical-root changes
+and keeps restart authorization false. It proves neither cross-host restoration
+nor PostgreSQL, Redis or remote MinIO recovery.
+
+Separate owner-local source `c339095c` passes 35 author and independent
+normal/race roots plus vet, including the 28 existing roots. This policy allows
+a signing laptop's explicitly declared system filesystem while retaining the
+UUID/type/marker, precreated private roots, separate leases and capacity checks.
+Daemon constructors reject that schema and keep their non-system-volume rule.
+The old `8f459b14` causal overlay fails the intended system-device admission in
+both modes. Literal `/` validation and kernel-census handling were tested;
+actual descriptor I/O used a synthetic `/mnt/data` topology, not the host root.
+
+The first source join observed origin `6d0eca1e`. Before publication, origin
+advanced to `6c728b94` with eleven unrelated network/extender source and test
+files. The original receipt remains unchanged. Integration
+`cb2e3ffe5db724ea2bae32e395aa258d79c9393e`, tree
+`a38760c914644c7634e4d6fb8e955a5cb29752b5`, preserves all eleven upstream files;
+only nine `durablevolume` paths differ from `6c728b94`. The qualified peer and
+`go.mod`/`go.sum` are byte-identical to `c339095c`. The exact merged peer was
+rerun: 35 normal roots, 35 race roots, zero failures/skips and vet exit 0.
+This is scoped peer qualification and an author source/receipt join; it does
+not independently qualify the compiler, all Connect code or downstream owners.
+
+These repository copies preserve the sealed originals byte-for-byte. Their raw
+logs, source checkouts and any external file bindings remain in the retained
+workspaces recorded inside each receipt.
+
+| Receipt | SHA-256 |
+| --- | --- |
+| [Independent inventory](durable-inventory-independent-20261002.json) | `a98b2345845adba8f0466080687cb927764e0c421f662d2d4444376c1f34fced` |
+| [Author owner-local scope](durable-owner-local-author-20261002.json) | `dde420a78b5cfca4e0aba18628bd2e48387028134bda8160cbd9e009dd39a972` |
+| [Independent owner-local scope](durable-owner-local-independent-20261002.json) | `a7e9426c227c51044dae204ecd5a475ebeeacc86ce4b04602027078e00e9f211` |
+| [Original `c339095c` / `6d0eca1e` join](durable-primitives-prior-join-20261002.json) | `168fe872c8e79d483dad70a188d822718eab4127e08cb72d8e4b0be0527580bd` |
+| [Current-main integration and peer rerun](durable-primitives-current-main-20261002.json) | `899d50b0d12b2bfb4453ecfd2884140dd7a4addad221b0ca18ca68a6050b804f` |
+
+The adoption audit requires storage admission at actual public stateful library
+entry points and host effects, as well as CLI dispatch. Missing ambient context
+must never silently select an unguarded production writer. Stateless owner
+inspection remains portable. A persistent signing owner selects the separate
+owner-local schema explicitly; daemon claims, monitors and system services must
+not auto-detect a filesystem or fall back to that schema.
+
+The same admission ordering applies to cancellation. Review found that
+`VerifyInventory` in the qualified source opens and hashes its retained expected
+inventory before checking the context in `Inventory`. The separate successor
+must refuse nil/canceled admission before any file open and observe cancellation
+between bounded read chunks. That correction and the monitor's cancellation
+boundary are under implementation, not included in the `cb2e3ffe` receipt.
+Preserve completed custody, distinguish pre-publication refusal from uncertain
+publication, and join/restart only the affected owner on the same approved root.
+All-owner adoption, deployment integration, composed release qualification,
+production capacity and restore evidence remain open under MG-09/PH-09.

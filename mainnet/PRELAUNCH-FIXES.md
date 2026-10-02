@@ -4,7 +4,7 @@
 
 **October 2 retained relay fixture correction:** the separate [test-only fix](evidence/relay-retained-fixture-qualification-20261002.md) at SN `734a82dc` passes 35 author normal and 10 race tests, plus 2 independent normal and 10 race tests; `./sim-testnet` vet passes in both scopes. It retains the original signed plan and journal while rebuilding fixture synchronization, canonical header coordinates and the actual producer activation domain. The original `6cfc4773` vet/header failures remain preserved. This does not qualify the broader model run or change the frozen `258e25b4` / `0aa1e244` production artifact.
 
-**October 2 durable storage (MG-09 / PH-09): in progress.** The [shared guard checkpoint](evidence/server-and-storage-progress-20261002.md#durable-storage-source-work) at Connect `5930a970` distinguishes unavailable observations and write reserve from proven volume or descendant identity loss. All local production owners are being adopted; backup/restore, deployment declarations, independent composed qualification and production capacity remain open. The qualified `258e25b4` / `0aa1e244` artifact is unchanged.
+**October 2 durable storage (MG-09 / PH-09): in progress.** The [qualified shared primitives](evidence/server-and-storage-progress-20261002.md#inventory-owner-local-policy-and-current-main-integration) at Connect `cb2e3ffe` retain the guard, bounded per-root inventory and separate owner-local policy. Exact merged peer tests pass 35 normal/35 race roots and vet; independently qualified `8f459b14` and `c339095c` receipts preserve their narrower source scopes. Stateful public entry points must require explicit storage policy; stateless inspection remains portable, and daemon owners never infer or fall back to the system filesystem. All-owner adoption, reference-read cancellation, deployment declarations, composed qualification and production capacity/restore evidence remain open. The frozen `258e25b4` / `0aa1e244` release is unchanged.
 
 Updated 2026-10-02. This is the production gate tracker for UR mainnet
 SN25 (netuid 25). Sim-testnet is **closed with known exceptions, without final
@@ -2550,7 +2550,7 @@ owner boundary, not an additional agent or approval requirement.
 | PH-06 | P0 | Release/configuration tooling: explicit release identity and lossless plan migration | RL-01; PH-01, PH-02 | Planned |
 | PH-07 | P0 | Service supervision: independent restart, single ownership and meaningful readiness | PF-02, PF-04; PH-01, PH-03 | Planned |
 | PH-08 | P1 | Replay and workload scheduling: bounded work, memory and foreground latency | PF-01, PF-02; PH-05 | Planned |
-| PH-09 | P1 | State and artifact storage: explicit durable volume, atomic publication and recovery | PH-01; storage adapter precedent | In progress — shared guard `5930a970`; all-owner adoption and backup/restore qualification pending |
+| PH-09 | P1 | State and artifact storage: explicit durable volume, atomic publication and recovery | PH-01; storage adapter precedent | In progress — shared primitives `cb2e3ffe`; public-owner adoption, canceled reference reads and production restore qualification pending |
 | PH-10 | P0 | Epoch, fleet and evidence scheduling: resumable partial renewals and correct windows | PH-01, PH-02, PH-04 | Planned |
 | PH-11 | P0 | Treasury and bootstrap: conserved lifetime spend, reserve and funding semantics | PH-02, PH-06 | Planned |
 | PH-12 | P0 | Contracts, operator and claims: complete settlement conservation and authorization | PH-02, PH-04, PH-11 | Planned |
