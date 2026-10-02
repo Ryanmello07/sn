@@ -347,6 +347,7 @@ func testFleetCatalogReceiptWatch(t *testing.T, refusal string) {
 	fixture.stateLock.Lock()
 	fixture.finalizedNumber = 100
 	fixture.historicalVersions[fixture.nativeBlocks[101].Hex()] = fixture.authority.RuntimeVersion
+	prepared := fixture.head
 	fixture.stateLock.Unlock()
 	endpoint := fixture.nativeWebsocket(t, false)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -356,21 +357,24 @@ func testFleetCatalogReceiptWatch(t *testing.T, refusal string) {
 		t.Fatal(err)
 	}
 	defer chain.API.Client.Close()
-	view, err := authority.viewFor(ctx, chain, fixture.head, crv4.FleetCommitmentWrite)
+	view, err := authority.viewFor(ctx, chain, prepared, crv4.FleetCommitmentWrite)
 	if err != nil {
 		t.Fatal(err)
 	}
 	before := fixture.count("state_getStorage")
 	called := false
-	admit := authority.executionAdmission(chain, fixture.head, crv4.FleetCommitmentWrite)
+	admit := authority.executionAdmission(chain, prepared, crv4.FleetCommitmentWrite)
 	selector := func(readCtx context.Context, parent types.Hash) (crv4.AuthenticatedRuntimeArtifact, error) {
 		called = true
-		if parent != fixture.nativeBlocks[101] || fixture.count("state_getStorage") != before {
+		fixture.stateLock.Lock()
+		wantParent, finalizedBlock := fixture.nativeBlocks[101], fixture.receiptBlock
+		fixture.stateLock.Unlock()
+		if parent != wantParent || fixture.count("state_getStorage") != before {
 			t.Error("receipt decoding preceded its exact execution parent admission")
 		}
 		artifact, err := admit(readCtx, parent)
 		if refusal == "wrong-block" {
-			artifact.BlockHash = fixture.receiptBlock
+			artifact.BlockHash = finalizedBlock
 		}
 		if refusal == "cancel" {
 			cancel()
@@ -390,7 +394,10 @@ func testFleetCatalogReceiptWatch(t *testing.T, refusal string) {
 		}
 		return
 	}
-	if err != nil || receipt == nil || receipt.BlockHash != fixture.receiptBlock || receipt.BlockNumber != 102 {
+	fixture.stateLock.Lock()
+	finalizedBlock := fixture.receiptBlock
+	fixture.stateLock.Unlock()
+	if err != nil || receipt == nil || receipt.BlockHash != finalizedBlock || receipt.BlockNumber != 102 {
 		t.Fatal("reviewed execution-parent receipt failed", receipt, err)
 	}
 	hash, _ := fixture.manifest.CommitmentHash()
