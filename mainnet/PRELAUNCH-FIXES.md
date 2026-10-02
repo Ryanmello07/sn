@@ -5266,3 +5266,17 @@ missing-receipt control must restore the original held inode, not manufacture a
 replacement. The [separate fixture qualification](evidence/successor-member-qualification-20261002.md)
 retains the original normal/race failure and awaits independent replay. Do not
 solve this by excluding every mutable file from custody checks.
+
+
+### Classify constructor reachability before changing admission
+
+A missing optional storage context is a lead, not proof that mainnet startup
+bypasses custody. The [source-bound proof-store trace](evidence/proof-constructor-reachability-20261002.json)
+classifies three `NewProofStore` omissions: flag-mode measurement, informational
+summary, and a legacy release helper with no direct non-test production caller.
+The actual V2 startup passes its owned context into the proof-store constructor.
+This static check neither qualifies runtime behavior nor closes the wider
+optional-context census. Remaining constructors must be traced from their actual
+public role entry before a causal test or admission change is selected. Status
+and legacy measurement remain separate scopes; never weaken production custody
+to make those historical callers fit the mainnet path.
