@@ -420,28 +420,43 @@ func TestMonitorProviderPublicMaximumRosterRetainsBoundedEvent(t *testing.T) {
 	defer cancel()
 	sink := &monitorProviderTestSink{events: make(chan monitorProviderTestEvent, 2)}
 	done := make(chan int, 1)
-	workerExited := make(chan int, 1)
-	hooks := monitorServiceHooks{afterWorker: func(role string, exit int) {
+	attempted := make(chan struct{}, 2)
+	resume := make(chan struct{})
+	hooks := monitorServiceHooks{afterEvent: func(_ context.Context, role string) {
 		if role == policy.Role {
-			workerExited <- exit
+			attempted <- struct{}{}
 		}
-	}, wait: func(ctx context.Context, _ string, _ time.Duration) bool { <-ctx.Done(); return false }}
+	}, wait: func(ctx context.Context, role string, _ time.Duration) bool {
+		if role != policy.Role {
+			<-ctx.Done()
+			return false
+		}
+		select {
+		case <-resume:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}}
 	go func() {
 		done <- runMonitorStorageTestWithHooks(t, ctx, fixture.args(url), sink, nil, fixture.clock.now, hooks)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	var event monitorProviderTestEvent
-	select {
-	case event = <-sink.events:
-	case exit := <-workerExited:
-		t.Fatal("provider exporter stopped before maximum-roster event", exit)
-	case <-ctx.Done():
-		t.Fatal("provider maximum-roster command canceled before sample", ctx.Err())
+	// The second completed sample exports the actual first offer's drop count.
+	// An oversized diagnostic is best effort and does not terminate the owner.
+	<-attempted
+	resume <- struct{}{}
+	<-attempted
+	checkpoint, metrics := monitorProviderPaths(fixture.checkpointPath, fixture.metricsPath, policy.Role)
+	metricBytes, err := os.ReadFile(metrics)
+	want := fmt.Sprintf("sn_mainnet_provider_output_dropped_total{role=%q,stream=\"events\"} 0\n", policy.Role)
+	if err != nil || !strings.Contains(string(metricBytes), want) {
+		t.Fatal("maximum-roster event was dropped by actual bounded exporter", string(metricBytes), err)
 	}
+	event := sink.next(t)
 	if !event.Current || event.State.ReadyMembers != maxMonitorProviderMembers || event.State.ExpectedMembers != maxMonitorProviderMembers {
 		t.Fatal("maximum expected roster lost public readiness event", event)
 	}
-	checkpoint, _ := monitorProviderPaths(fixture.checkpointPath, fixture.metricsPath, policy.Role)
 	raw, err := os.ReadFile(checkpoint)
 	if err != nil || len(raw) <= diagnostics.MaximumRecordBytes || len(raw) > maxMonitorProviderCheckpointBytes {
 		t.Fatal("control did not exercise a roster larger than the diagnostic queue record", len(raw), err)
