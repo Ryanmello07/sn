@@ -40,7 +40,7 @@ func rootActionFixture(t *testing.T) (rootAction, subkey.KeyPair, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	directory := filepath.Join(t.TempDir(), "private-root-action")
+	directory := filepath.Join(mainnetPrivateTestDir(t), "private-root-action")
 	if err := os.Mkdir(directory, 0700); err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,7 @@ import (
 // Metrics can be rendered again; this checkpoint owns non-reconstructible
 // incident clocks and accepted finality and therefore cannot default to empty.
 func TestMonitorDurableCensusRefusesLostCompletedCheckpoint(t *testing.T) {
-	root := t.TempDir()
+	root := mainnetPrivateTestDir(t)
 	fixture := durablefixture.New(t, t.Context(), root)
 	path := filepath.Join(root, "monitor.json")
 	provisionMonitorTestCustody(t, path)

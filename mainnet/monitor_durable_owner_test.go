@@ -60,7 +60,7 @@ func TestMonitorCanceledBeforeStorageAdmissionClosesQuietly(t *testing.T) {
 
 // The persistent runtime refuses before the first Rpc or checkpoint creation.
 func TestMonitorPersistentLibraryRequiresExplicitVolume(t *testing.T) {
-	root := t.TempDir()
+	root := mainnetPrivateTestDir(t)
 	var stdout, stderr bytes.Buffer
 	code := runChainMonitor(t.Context(), nil, monitorTestExpectation(), filepath.Join(root, "checkpoint.json"), "", time.Hour, time.Hour, &stdout, &stderr, time.Now, monitorServiceHooks{})
 	entries, err := os.ReadDir(root)
@@ -71,7 +71,7 @@ func TestMonitorPersistentLibraryRequiresExplicitVolume(t *testing.T) {
 
 // Capacity recovery stays on the same live owner and preserves acknowledged bytes.
 func TestMonitorDurableReserveRecoveryRetainsSameOwner(t *testing.T) {
-	root := t.TempDir()
+	root := mainnetPrivateTestDir(t)
 	fixture := durablefixture.New(t, t.Context(), root)
 	path := filepath.Join(root, "checkpoint.json")
 	provisionMonitorTestCustody(t, path)
@@ -111,7 +111,7 @@ func TestMonitorDurableReserveRecoveryRetainsSameOwner(t *testing.T) {
 // A lost root poisons only its retained owner. The unaffected root stays live;
 // a joined reopen of the original root retains its completed checkpoint.
 func TestMonitorDurableReplacementRecoveryIsPerRoot(t *testing.T) {
-	parent := t.TempDir()
+	parent := mainnetPrivateTestDir(t)
 	first, second := filepath.Join(parent, "first"), filepath.Join(parent, "second")
 	for _, path := range []string{first, second} {
 		if err := os.Mkdir(path, 0700); err != nil {

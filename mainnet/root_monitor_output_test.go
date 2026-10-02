@@ -196,7 +196,7 @@ func TestRootMonitorOutputUnconfiguredAndCompactWire(t *testing.T) {
 	if strings.Contains(stdout.String(), "storage") || strings.Contains(stdout.String(), "hotkey") {
 		t.Fatal("daemon record contains full root census")
 	}
-	file, err := os.CreateTemp(t.TempDir(), "unsupported")
+	file, err := os.CreateTemp(mainnetPrivateTestDir(t), "unsupported")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestRootMonitorOutputRefusedMetricsAdmissionStillSamples(t *testing.T) {
 	_, fixture := newRootFixture(t)
 	server := rootFixtureServer(t, fixture)
 	for _, unsafeDirectory := range []bool{false, true} {
-		directory := t.TempDir()
+		directory := mainnetPrivateTestDir(t)
 		checkpoint := filepath.Join(directory, "root.json")
 		metricDirectory := filepath.Join(directory, "metrics")
 		if err := os.Mkdir(metricDirectory, 0700); err != nil {

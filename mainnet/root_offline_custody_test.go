@@ -57,7 +57,7 @@ func newRootOfflineFixture(t *testing.T) rootOfflineFixture {
 	action, pair, _ := rootActionFixture(t)
 	seed := sha256.Sum256([]byte("synthetic offline approval tests only"))
 	key := ed25519.NewKeyFromSeed(seed[:])
-	directory := filepath.Join(t.TempDir(), "private-offline-custody")
+	directory := filepath.Join(mainnetPrivateTestDir(t), "private-offline-custody")
 	if err := os.Mkdir(directory, 0700); err != nil {
 		t.Fatal(err)
 	}
