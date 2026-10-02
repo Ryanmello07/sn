@@ -16,6 +16,9 @@ type Owner struct{}
 func Open(context.Context, *durablepath.Directory, *os.File, Spec) (*Owner, error) {
 	return nil, durablevolume.ErrUnsupported
 }
+func OpenReadOnly(context.Context, *durablepath.Directory, *os.File, Spec) (*Owner, error) {
+	return nil, durablevolume.ErrUnsupported
+}
 func Reconcile(context.Context, *durablepath.Directory, *os.File, Spec) (*Owner, error) {
 	return nil, durablevolume.ErrUnsupported
 }

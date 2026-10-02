@@ -39,22 +39,30 @@ type Owner struct {
 	knownKVs      map[string]unix.Stat_t
 	failure       error
 	closed        bool
+	readOnly      bool
 	at            func(string) error
 }
 
 // Normal admission refuses every pending operation. The same borrowed lock
 // description already held by the application avoids a second flock owner.
 func Open(ctx context.Context, directory *durablepath.Directory, lock *os.File, spec Spec) (*Owner, error) {
-	return open(ctx, directory, lock, spec, false)
+	return open(ctx, directory, lock, spec, false, false)
+}
+
+// Passive readers share the application's preprovisioned marker lock. The
+// borrowed descriptor retains a shared lease until its caller closes it. An
+// unresolved pending head is refused; no read path finishes publication.
+func OpenReadOnly(ctx context.Context, directory *durablepath.Directory, lock *os.File, spec Spec) (*Owner, error) {
+	return open(ctx, directory, lock, spec, false, true)
 }
 
 // The caller first joins/closes its old owner. Only complete retained next
 // bytes can finish; absent, partial, extra or unknown bytes remain refused.
 func Reconcile(ctx context.Context, directory *durablepath.Directory, lock *os.File, spec Spec) (*Owner, error) {
-	return open(ctx, directory, lock, spec, true)
+	return open(ctx, directory, lock, spec, true, false)
 }
 
-func open(ctx context.Context, directory *durablepath.Directory, lock *os.File, spec Spec, reconcile bool) (*Owner, error) {
+func open(ctx context.Context, directory *durablepath.Directory, lock *os.File, spec Spec, reconcile, readOnly bool) (*Owner, error) {
 	if ctx == nil || directory == nil || directory.File() == nil || lock == nil {
 		return nil, errors.New("snapshot owner context, directory or writer lock is absent")
 	}
@@ -66,11 +74,15 @@ func open(ctx context.Context, directory *durablepath.Directory, lock *os.File, 
 	}
 	spec.AuxiliaryNames = append([]string(nil), spec.AuxiliaryNames...)
 	sort.Strings(spec.AuxiliaryNames)
-	self := &Owner{ctx: ctx, directory: directory, lock: lock, spec: spec, knownKVs: map[string]unix.Stat_t{}}
+	self := &Owner{ctx: ctx, directory: directory, lock: lock, spec: spec, knownKVs: map[string]unix.Stat_t{}, readOnly: readOnly}
 	if err := self.admit(false); err != nil {
 		return nil, err
 	}
-	if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	lockMode := unix.LOCK_EX
+	if readOnly {
+		lockMode = unix.LOCK_SH
+	}
+	if err := unix.Flock(int(lock.Fd()), lockMode|unix.LOCK_NB); err != nil {
 		if errors.Is(err, unix.EWOULDBLOCK) {
 			return nil, errors.Join(durablevolume.ErrBusy, err)
 		}
@@ -193,6 +205,9 @@ func (self *Owner) admit(write bool) error {
 	}
 	if err := self.ctx.Err(); err != nil {
 		return err
+	}
+	if write && self.readOnly {
+		return ErrReadOnly
 	}
 	var err error
 	if write {

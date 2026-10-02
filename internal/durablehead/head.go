@@ -17,6 +17,10 @@ const Schema = "urnetwork-durable-snapshot-head-v2"
 // one bounded reconciliation of the retained pending bytes.
 var ErrUncertain = errors.New("snapshot publication requires joined reconciliation")
 
+// Passive custody inspection never acquires publication or reconciliation
+// authority, even when its caller also holds a writable volume declaration.
+var ErrReadOnly = errors.New("snapshot owner is read-only")
+
 // Every name is one basename relative to the independently guarded directory.
 // LockName is empty only when the existing application flocks that directory.
 // Auxiliary markers preexist; their byte grammar remains application-owned.
