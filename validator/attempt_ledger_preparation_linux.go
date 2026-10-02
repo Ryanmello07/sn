@@ -670,37 +670,41 @@ type attemptPreparationReader struct {
 	ctx context.Context
 }
 
-// Chunked reads preserve naked EOF unless a genuine post-read failure also occurred.
+// Chunked reads preserve naked EOF and admit no bytes after a post-read failure.
 func (self *attemptPreparationReader) Read(raw []byte) (int, error) {
 	if err := self.ctx.Err(); err != nil {
 		return 0, err
 	}
 	n, err := self.File.Read(raw[:min(len(raw), 64*1024)])
 	if checkErr := self.ctx.Err(); checkErr != nil {
-		err = errors.Join(err, checkErr)
+		return 0, errors.Join(err, checkErr)
 	}
 	return n, err
 }
 
-// Random reads obey the exact short-read sentinel while checking each bounded chunk.
+// Random reads admit the entire result only while every bounded chunk remains
+// authorized. Cancellation does not rewind the descriptor or admit a prefix.
 func (self *attemptPreparationReader) ReadAt(raw []byte, offset int64) (int, error) {
 	total := 0
 	for total < len(raw) {
 		if err := self.ctx.Err(); err != nil {
-			return total, err
+			return 0, err
 		}
 		end := min(len(raw), total+64*1024)
 		n, err := self.File.ReadAt(raw[total:end], offset+int64(total))
 		total += n
+		if checkErr := self.ctx.Err(); checkErr != nil {
+			return 0, errors.Join(err, checkErr)
+		}
 		if err != nil {
-			if checkErr := self.ctx.Err(); checkErr != nil {
-				err = errors.Join(err, checkErr)
-			}
 			return total, err
 		}
 		if n == 0 {
 			return total, io.ErrNoProgress
 		}
 	}
-	return total, self.ctx.Err()
+	if err := self.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
