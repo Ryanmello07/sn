@@ -162,7 +162,7 @@ func ownerRecycleRequestCommand(ctx context.Context, args []string, stderr io.Wr
 
 // Only explicit approved host-custody paths are opened here. The public API can
 // retain an externally supplied signature, but never issue or transmit one.
-func ownerRecycleCustodyCommand(ctx context.Context, args []string, stderr io.Writer) (any, error) {
+func ownerRecycleCustodyCommand(ctx context.Context, args []string, stderr io.Writer) (value any, resultErr error) {
 	mode := args[0]
 	flags := flag.NewFlagSet("owner-recycle "+mode, flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -207,7 +207,15 @@ func ownerRecycleCustodyCommand(ctx context.Context, args []string, stderr io.Wr
 	if err != nil {
 		return nil, err
 	}
-	defer store.close()
+	defer func() {
+		if resultErr == nil {
+			_, resultErr = store.load()
+		}
+		resultErr = errors.Join(resultErr, store.close())
+		if resultErr != nil {
+			value = nil
+		}
+	}()
 	custody := ownerRecycleCustody{config: config, key: *key, store: store}
 	switch mode {
 	case "reserve", "status":
