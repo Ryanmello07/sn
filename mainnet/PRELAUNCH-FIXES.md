@@ -5410,3 +5410,15 @@ backlog age; do not reset a settlement stall merely because another retry saved.
 A receipt observation timestamp later than publication must degrade observation
 instead of appearing active after wall-clock rollback. These production consumer
 requirements are under implementation; no complete monitoring verdict is claimed.
+
+
+### Keep the next qualification phase above its resource floor
+
+While composed preparation passed101 normal tests and entered race execution,
+data free space approached the110 GiB floor. A [verified8.02 GiB reclaim](evidence/cache-reclaim-5-20261002.json)
+removed132 old inactive compiler archives, preserving the live handles, active
+caches, source and evidence. The same process-reference, declared-metadata and
+physical archive guards used in earlier cleanups were repeated; all removed paths
+were verified absent. Admission measures free space again before each new phase.
+This is qualification-host resource management, not production capacity closure
+or an excuse to recreate lost protocol history.
