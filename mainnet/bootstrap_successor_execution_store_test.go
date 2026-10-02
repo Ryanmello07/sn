@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // A competing original root cannot evade either global nonce domain by changing
@@ -24,9 +27,11 @@ func TestBootstrapSuccessorExecutionSeparatelyFencesGlobalNonceDomains(t *testin
 		second := newBootstrapSuccessorExecutionNonceFixture(t, pair.safe, pair.outer)
 		second.approval.Plan.Request.RegistryDirectory = first.approval.Plan.Request.RegistryDirectory
 		second.approval.Plan.Registry = first.approval.Plan.Registry
+		second.storage = durablefixture.New(t, t.Context(), second.approval.Plan.Review.Preparation.Approval.Plan.Proposal.OriginalRunDirectory, first.approval.Plan.Request.RegistryDirectory)
 		second.approval = bootstrapSuccessorExecutionTestSign(t, second.approval.Plan, second.key, second.profile)
 		before := bootstrapSuccessorPreparationTestFiles(t, first.approval.Plan.Request.RegistryDirectory)
-		competing, err := openBootstrapSuccessorExecutionStore(t.Context(), second.approval.Plan, second.approval, second.profile, true, nil)
+		delete(before, bootstrapSuccessorMemberSpec(true).Name)
+		competing, err := openBootstrapSuccessorExecutionStore(second.storageContext(t.Context()), second.approval.Plan, second.approval, second.profile, true, nil)
 		if competing != nil {
 			competing.close()
 		}
@@ -51,7 +56,7 @@ func TestBootstrapSuccessorExecutionSeparatelyFencesGlobalNonceDomains(t *testin
 func TestBootstrapSuccessorExecutionSerializesRootAndRegistryOwners(t *testing.T) {
 	f := newBootstrapSuccessorExecutionFixture(t)
 	owner := f.open(true, nil)
-	contender, err := openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, false, nil)
+	contender, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 	if contender != nil {
 		contender.close()
 	}
@@ -60,8 +65,9 @@ func TestBootstrapSuccessorExecutionSerializesRootAndRegistryOwners(t *testing.T
 	}
 	second := newBootstrapSuccessorExecutionNonceFixture(t, "99", 199)
 	second.approval.Plan.Request.RegistryDirectory, second.approval.Plan.Registry = f.approval.Plan.Request.RegistryDirectory, f.approval.Plan.Registry
+	second.storage = durablefixture.New(t, t.Context(), second.approval.Plan.Review.Preparation.Approval.Plan.Proposal.OriginalRunDirectory, f.approval.Plan.Request.RegistryDirectory)
 	second.approval = bootstrapSuccessorExecutionTestSign(t, second.approval.Plan, second.key, second.profile)
-	contender, err = openBootstrapSuccessorExecutionStore(t.Context(), second.approval.Plan, second.approval, second.profile, true, nil)
+	contender, err = openBootstrapSuccessorExecutionStore(second.storageContext(t.Context()), second.approval.Plan, second.approval, second.profile, true, nil)
 	if contender != nil {
 		contender.close()
 	}
@@ -109,7 +115,7 @@ func TestBootstrapSuccessorExecutionRefusesMissingReboundAndUnsafeCustody(t *tes
 			t.Fatal(err)
 		}
 		before := bootstrapSuccessorPreparationTestFiles(t, directory)
-		owner, err = openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, false, nil)
+		owner, err = openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 		if owner != nil {
 			owner.close()
 		}
@@ -165,11 +171,11 @@ func TestBootstrapSuccessorExecutionFencesRegistryReplacement(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	owner, err := openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, false, nil)
+	owner, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 	if owner != nil {
 		owner.close()
 	}
-	if err == nil || !strings.Contains(err.Error(), "physical directory changed") || !maps.Equal(before, bootstrapSuccessorPreparationTestFiles(t, path)) {
+	if !errors.Is(err, durablevolume.ErrIdentity) || !maps.Equal(before, bootstrapSuccessorPreparationTestFiles(t, path)) {
 		t.Fatal("copied registry acquired the original signed custody", err)
 	}
 }

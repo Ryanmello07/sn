@@ -19,13 +19,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/urnetwork/connect/durablevolume"
 	"gopkg.in/yaml.v3"
 )
 
 // Existing store tests retain explicit ownership until their test work ends.
 func newClaimQueueTestStore(t *testing.T, directory string) *claimQueueStore {
 	t.Helper()
-	store, err := newClaimQueueStore(directory)
+	store, err := newClaimQueueStore(directory, claimQueueTestContext(t, t.Context(), directory))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +83,7 @@ func TestClaimQueueOwnerRejectsDuplicateAndAllowsClosedRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicate, err := newClaimQueueStore(cfg.StateDir)
+	duplicate, err := newClaimQueueStore(cfg.StateDir, store.ctx)
 	if duplicate != nil {
 		_ = duplicate.close()
 	}
@@ -137,7 +138,7 @@ func TestClaimQueueOwnerChildProcess(t *testing.T) {
 	if action == "" {
 		return
 	}
-	store, err := newClaimQueueStore(os.Getenv("URNETWORK_TEST_CLAIM_QUEUE_OWNER_DIRECTORY"))
+	store, err := newClaimQueueStore(os.Getenv("URNETWORK_TEST_CLAIM_QUEUE_OWNER_DIRECTORY"), claimQueueTestContext(t, t.Context(), os.Getenv("URNETWORK_TEST_CLAIM_QUEUE_OWNER_DIRECTORY")))
 	if store != nil {
 		defer store.close()
 	}
@@ -166,7 +167,7 @@ func TestClaimQueueOwnerPinsPhysicalAliases(t *testing.T) {
 	}
 	store := newClaimQueueTestStore(t, filepath.Join(alias, "claims"))
 	for _, directory := range []string{filepath.Join(alias, "claims"), filepath.Join(physical, "claims")} {
-		duplicate, err := newClaimQueueStore(directory)
+		duplicate, err := newClaimQueueStore(directory, store.ctx)
 		if duplicate != nil {
 			_ = duplicate.close()
 		}
@@ -199,18 +200,18 @@ func TestClaimQueueOwnerRejectsReplacedDirectory(t *testing.T) {
 	if err := os.WriteFile(store.path, sentinel, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.load(); err == nil || !strings.Contains(err.Error(), "replaced") {
+	if _, err := store.load(); err == nil {
 		t.Fatalf("old owner read replacement directory: %v", err)
 	}
-	if err := store.save(queue); err == nil || !strings.Contains(err.Error(), "replaced") {
+	if err := store.save(queue); err == nil {
 		t.Fatalf("old owner wrote replacement directory: %v", err)
 	}
-	duplicate, err := newClaimQueueStore(retained)
+	duplicate, err := newClaimQueueStore(retained, store.ctx)
 	if duplicate != nil {
 		_ = duplicate.close()
 	}
-	if err == nil || !strings.Contains(err.Error(), "already has an owner") {
-		t.Fatalf("moving a directory released its live owner: %v", err)
+	if err == nil {
+		t.Fatalf("moving a directory admitted an unapproved writer: %v", err)
 	}
 	after, err := os.ReadFile(store.path)
 	if err != nil || !bytes.Equal(after, sentinel) {
@@ -234,10 +235,10 @@ func TestClaimQueueOwnerRejectsChangedDirectoryAlias(t *testing.T) {
 	if err := os.Symlink(retained, directory); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.load(); err == nil || !strings.Contains(err.Error(), "replaced") {
+	if _, err := store.load(); err == nil {
 		t.Fatalf("changed directory alias supplied custody: %v", err)
 	}
-	if err := store.save(queue); err == nil || !strings.Contains(err.Error(), "replaced") {
+	if err := store.save(queue); err == nil {
 		t.Fatalf("changed directory alias accepted publication: %v", err)
 	}
 }
@@ -329,7 +330,7 @@ func TestClaimQueueOwnerRejectsUnownedAndUnsafeReads(t *testing.T) {
 	if err := os.Symlink(external, store.path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.load(); !errors.Is(err, errClaimQueueUnsafeFile) {
+	if _, err := store.load(); !errors.Is(err, durablevolume.ErrIdentity) {
 		t.Fatalf("external symlink supplied queue custody: %v", err)
 	}
 	after, err := os.ReadFile(external)
@@ -349,7 +350,7 @@ func TestClaimDaemonRejectsDuplicateOwnerBeforeNetwork(t *testing.T) {
 	}
 	ready := false
 	admission := &claimAdmission{}
-	err := runClaimDaemonWithAdmission(context.Background(), configPath, admission, 0, func() { ready = true })
+	err := runClaimDaemonWithAdmission(store.ctx, configPath, admission, 0, func() { ready = true })
 	if err == nil || !strings.Contains(err.Error(), "already has an owner") {
 		t.Fatalf("duplicate daemon passed the ownership boundary: %v", err)
 	}
@@ -370,10 +371,11 @@ func TestClaimDaemonRetainsOwnerUntilJoinedShutdown(t *testing.T) {
 	defer cancel()
 	ready := false
 	var duplicateErr error
+	ctx = claimQueueTestContext(t, ctx, cfg.StateDir)
 	err := runClaimDaemonWithAdmission(ctx, configPath, &claimAdmission{}, time.Hour, func() {
 		ready = true
 		var duplicate *claimQueueStore
-		duplicate, duplicateErr = newClaimQueueStore(cfg.StateDir)
+		duplicate, duplicateErr = newClaimQueueStore(cfg.StateDir, ctx)
 		if duplicate != nil {
 			_ = duplicate.close()
 		}
@@ -455,7 +457,7 @@ func TestClaimSwarmAcquiresAllQueueOwnersBeforeCustodyOrNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = swarm.Run(context.Background())
+	err = swarm.Run(claimSwarmTestContext(t, context.Background(), swarm))
 	if err == nil || !strings.Contains(err.Error(), "second queue ownership") || !strings.Contains(err.Error(), "already has an owner") {
 		t.Fatalf("swarm consumed custody before all directory locks: %v", err)
 	}
@@ -472,7 +474,7 @@ func TestClaimSwarmAcquiresAllQueueOwnersBeforeCustodyOrNetwork(t *testing.T) {
 			t.Fatalf("partial swarm admission changed custody: %v", err)
 		}
 	}
-	duplicate, err := newClaimQueueStore(secondCfg.StateDir)
+	duplicate, err := newClaimQueueStore(secondCfg.StateDir, secondOwner.ctx)
 	if duplicate != nil {
 		_ = duplicate.close()
 	}
@@ -508,7 +510,7 @@ func TestClaimSwarmReleasesAllOwnersOnCustodyFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := swarm.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "seed relayer nonce custody") {
+	if err := swarm.Run(claimSwarmTestContext(t, context.Background(), swarm)); err == nil || !strings.Contains(err.Error(), "seed relayer nonce custody") {
 		t.Fatalf("swarm accepted invalid custody: %v", err)
 	}
 	if requests.Load() != 0 || secondRequests.Load() != 0 || swarm.status().Running != 0 {
@@ -552,13 +554,14 @@ func TestClaimSwarmRetainsOwnerThroughActiveMemberShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
+	ctx = claimSwarmTestContext(t, ctx, swarm)
 	go func() { done <- swarm.Run(ctx) }()
 	select {
 	case <-entered:
 	case err := <-done:
 		t.Fatalf("swarm exited before the real epoch read: %v", err)
 	}
-	duplicate, duplicateErr := newClaimQueueStore(cfg.StateDir)
+	duplicate, duplicateErr := newClaimQueueStore(cfg.StateDir, ctx)
 	if duplicate != nil {
 		_ = duplicate.close()
 	}

@@ -15,6 +15,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // A bounded structurally valid model isolates local publication mechanics. It
@@ -25,6 +28,7 @@ func newBootstrapSuccessorPreparationTestApproval(t *testing.T) (bootstrapSucces
 	if err := os.Chmod(directory, 0700); err != nil {
 		t.Fatal(err)
 	}
+	prepareBootstrapSuccessorMembersTest(t, directory, false)
 	root, err := bootstrapSuccessorPhysicalRoot(directory)
 	if err != nil {
 		t.Fatal(err)
@@ -52,6 +56,15 @@ func newBootstrapSuccessorPreparationTestApproval(t *testing.T) (bootstrapSucces
 		Request:           planFileReference{Path: filepath.Join(directory, "synthetic-request.json"), Sha256: seal},
 		ApprovalPublicKey: "0x" + hex.EncodeToString(key.Public().(ed25519.PublicKey)), Root: root, Proposal: proposal}
 	return bootstrapSuccessorPreparationTestSign(t, plan, key), key
+}
+
+// Persistent fixtures declare the existing physical root before the first
+// claim. Reopens keep this reference, including missing-member fault cases.
+func newBootstrapSuccessorPreparationStorageTestApproval(t *testing.T) (bootstrapSuccessorPreparationApproval, ed25519.PrivateKey, *durablefixture.Fixture) {
+	t.Helper()
+	approval, key := newBootstrapSuccessorPreparationTestApproval(t)
+	storage := durablefixture.New(t, t.Context(), approval.Plan.Proposal.OriginalRunDirectory)
+	return approval, key, storage
 }
 
 // Only synthetic test keys sign the separate local preparation domain.
@@ -189,9 +202,9 @@ func TestBootstrapSuccessorPreparationConservesOriginalFloors(t *testing.T) {
 // The fixed claim is prepared once, survives process-owner close, and cannot
 // silently be replaced by a second independently signed proposed cap increase.
 func TestBootstrapSuccessorPreparationClaimsOnceAndResumesSameRoot(t *testing.T) {
-	approval, key := newBootstrapSuccessorPreparationTestApproval(t)
+	approval, key, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
 	directory := approval.Plan.Proposal.OriginalRunDirectory
-	store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, nil)
+	store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +212,7 @@ func TestBootstrapSuccessorPreparationClaimsOnceAndResumesSameRoot(t *testing.T)
 		t.Fatal(err)
 	}
 	before := bootstrapSuccessorPreparationTestFiles(t, directory)
-	if len(before) != 2 || before[bootstrapSuccessorPreparationFile+".lock"] != rootObjectHash(approval)+"\n"+bootstrapRootClaimComplete {
+	if len(before) != 3 || before[bootstrapSuccessorPreparationFile+".lock"] != rootObjectHash(approval)+"\n"+bootstrapRootClaimComplete {
 		t.Fatal("preparation did not publish exactly one complete fixed claim")
 	}
 	var record bootstrapSuccessorPreparationRecord
@@ -210,7 +223,7 @@ func TestBootstrapSuccessorPreparationClaimsOnceAndResumesSameRoot(t *testing.T)
 		t.Fatal(err)
 	}
 	for range 2 {
-		store, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+		store, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 		if err != nil {
 			t.Fatal("same-root ordinary restart lost retained preparation", err)
 		}
@@ -230,7 +243,7 @@ func TestBootstrapSuccessorPreparationClaimsOnceAndResumesSameRoot(t *testing.T)
 			if !create && rootObjectHash(candidate) == rootObjectHash(approval) {
 				continue
 			}
-			store, err := openBootstrapSuccessorPreparationStore(t.Context(), candidate.Plan, candidate, create, nil)
+			store, err := openBootstrapSuccessorPreparationStore(storage.Context, candidate.Plan, candidate, create, nil)
 			if store != nil {
 				store.close()
 			}
@@ -251,9 +264,9 @@ func TestBootstrapSuccessorPreparationRecoversEveryPublicationBoundary(t *testin
 		"record-name-created", "record-name-synced", "record-stage-written", "record-stage-synced", "record-published", "record-published-synced", "record-retained", "complete-written", "complete-synced"}
 	interrupted := errors.New("synthetic preparation interruption")
 	for _, stage := range stages {
-		approval, key := newBootstrapSuccessorPreparationTestApproval(t)
+		approval, key, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
 		reached := false
-		store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, func(current string) error {
+		store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, func(current string) error {
 			if current == stage {
 				reached = true
 				return interrupted
@@ -280,7 +293,7 @@ func TestBootstrapSuccessorPreparationRecoversEveryPublicationBoundary(t *testin
 		}{
 			{approval: competitor, create: false}, {approval: competitor, create: true}, {approval: approval, create: true},
 		} {
-			store, err := openBootstrapSuccessorPreparationStore(t.Context(), attempt.approval.Plan, attempt.approval, attempt.create, nil)
+			store, err := openBootstrapSuccessorPreparationStore(storage.Context, attempt.approval.Plan, attempt.approval, attempt.create, nil)
 			if store != nil {
 				store.close()
 			}
@@ -288,7 +301,7 @@ func TestBootstrapSuccessorPreparationRecoversEveryPublicationBoundary(t *testin
 				t.Fatalf("interrupted claim admitted replacement at %s", stage)
 			}
 		}
-		store, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+		store, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 		if err != nil {
 			t.Fatalf("exact interrupted preparation could not resume at %s: %v", stage, err)
 		}
@@ -296,7 +309,7 @@ func TestBootstrapSuccessorPreparationRecoversEveryPublicationBoundary(t *testin
 			t.Fatal(err)
 		}
 		after := bootstrapSuccessorPreparationTestFiles(t, directory)
-		if len(after) != 2 || after[bootstrapSuccessorPreparationFile+".lock"] != rootObjectHash(approval)+"\n"+bootstrapRootClaimComplete {
+		if len(after) != 3 || after[bootstrapSuccessorPreparationFile+".lock"] != rootObjectHash(approval)+"\n"+bootstrapRootClaimComplete {
 			t.Fatalf("resumed preparation did not retain one completed claim at %s", stage)
 		}
 		var record bootstrapSuccessorPreparationRecord
@@ -314,8 +327,8 @@ func TestBootstrapSuccessorPreparationRecoversEveryPublicationBoundary(t *testin
 func TestBootstrapSuccessorPreparationRecoversOnlyExactPartialBytes(t *testing.T) {
 	for _, kind := range []string{"claim", "record"} {
 		for _, corruption := range []bool{false, true} {
-			approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
-			store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, func(stage string) error {
+			approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
+			store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, func(stage string) error {
 				if stage == kind+"-stage-written" {
 					return errors.New("synthetic partial write")
 				}
@@ -339,7 +352,7 @@ func TestBootstrapSuccessorPreparationRecoversOnlyExactPartialBytes(t *testing.T
 				t.Fatal(err)
 			}
 			before := bootstrapSuccessorPreparationTestFiles(t, directory)
-			store, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+			store, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 			if store != nil {
 				store.close()
 			}
@@ -353,8 +366,8 @@ func TestBootstrapSuccessorPreparationRecoversOnlyExactPartialBytes(t *testing.T
 		}
 	}
 	for _, missingRecord := range []bool{false, true} {
-		approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
-		store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, func(stage string) error {
+		approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
+		store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, func(stage string) error {
 			if stage == "complete-written" {
 				return errors.New("synthetic partial completion")
 			}
@@ -373,7 +386,7 @@ func TestBootstrapSuccessorPreparationRecoversOnlyExactPartialBytes(t *testing.T
 			}
 		}
 		before := bootstrapSuccessorPreparationTestFiles(t, directory)
-		store, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+		store, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 		if store != nil {
 			store.close()
 		}
@@ -391,8 +404,8 @@ func TestBootstrapSuccessorPreparationRecoversOnlyExactPartialBytes(t *testing.T
 // is still valid. Unknown marker or record bytes remain unchanged for review.
 func TestBootstrapSuccessorPreparationRefusesMissingOrReboundCustody(t *testing.T) {
 	for _, fault := range []string{"record-missing", "record-empty", "record-malformed", "record-rebound", "marker-missing", "marker-empty", "marker-short", "marker-extra", "unknown-stage"} {
-		approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
-		store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, nil)
+		approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
+		store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -440,7 +453,7 @@ func TestBootstrapSuccessorPreparationRefusesMissingOrReboundCustody(t *testing.
 		}
 		before := bootstrapSuccessorPreparationTestFiles(t, directory)
 		for _, create := range []bool{false, true} {
-			store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, create, nil)
+			store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, create, nil)
 			if store != nil {
 				store.close()
 			}
@@ -454,9 +467,9 @@ func TestBootstrapSuccessorPreparationRefusesMissingOrReboundCustody(t *testing.
 // An exact byte clone at the same pathname has a different signed inode. Moving
 // the real directory to an alternate path also requires explicit new approval.
 func TestBootstrapSuccessorPreparationRejectsCopiedAndMovedPhysicalRoot(t *testing.T) {
-	approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
+	approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
 	directory := approval.Plan.Proposal.OriginalRunDirectory
-	store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, nil)
+	store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -477,7 +490,7 @@ func TestBootstrapSuccessorPreparationRejectsCopiedAndMovedPhysicalRoot(t *testi
 			t.Fatal(err)
 		}
 	}
-	store, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+	store, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 	if store != nil {
 		store.close()
 	}
@@ -488,7 +501,7 @@ func TestBootstrapSuccessorPreparationRejectsCopiedAndMovedPhysicalRoot(t *testi
 	changed.Proposal.OriginalRunDirectory = moved
 	changed.Proposal.ContentHash = ""
 	changed.Proposal.ContentHash = rootObjectHash(changed.Proposal)
-	store, err = openBootstrapSuccessorPreparationStore(t.Context(), changed, approval, false, nil)
+	store, err = openBootstrapSuccessorPreparationStore(storage.Context, changed, approval, false, nil)
 	if store != nil {
 		store.close()
 	}
@@ -501,7 +514,7 @@ func TestBootstrapSuccessorPreparationRejectsCopiedAndMovedPhysicalRoot(t *testi
 	if err := os.Rename(moved, directory); err != nil {
 		t.Fatal(err)
 	}
-	store, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+	store, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 	if err != nil {
 		t.Fatal("restoring the same original inode lost ordinary recovery", err)
 	}
@@ -513,12 +526,12 @@ func TestBootstrapSuccessorPreparationRejectsCopiedAndMovedPhysicalRoot(t *testi
 // Directory replacement at a publication hook cannot redirect writes to the
 // new path. The original descriptor's staged evidence stays in the moved root.
 func TestBootstrapSuccessorPreparationFencesRootReplacementDuringPublication(t *testing.T) {
-	approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
+	approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
 	directory := approval.Plan.Proposal.OriginalRunDirectory
 	moved := directory + "-replaced"
 	t.Cleanup(func() { os.RemoveAll(moved) })
 	reached := false
-	store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, func(stage string) error {
+	store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, func(stage string) error {
 		if stage != "claim-stage-synced" {
 			return nil
 		}
@@ -531,10 +544,10 @@ func TestBootstrapSuccessorPreparationFencesRootReplacementDuringPublication(t *
 	if store != nil {
 		store.close()
 	}
-	if !reached || err == nil || !strings.Contains(err.Error(), "physical root changed") || len(bootstrapSuccessorPreparationTestFiles(t, directory)) != 0 {
+	if !reached || !errors.Is(err, durablevolume.ErrIdentity) || len(bootstrapSuccessorPreparationTestFiles(t, directory)) != 0 {
 		t.Fatal("publication followed a replaced physical root", err)
 	}
-	if len(bootstrapSuccessorPreparationTestFiles(t, moved)) != 1 {
+	if len(bootstrapSuccessorPreparationTestFiles(t, moved)) != 2 {
 		t.Fatal("root replacement lost the original staged claim")
 	}
 	if err := os.Remove(directory); err != nil {
@@ -543,7 +556,7 @@ func TestBootstrapSuccessorPreparationFencesRootReplacementDuringPublication(t *
 	if err := os.Rename(moved, directory); err != nil {
 		t.Fatal(err)
 	}
-	store, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+	store, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -555,11 +568,11 @@ func TestBootstrapSuccessorPreparationFencesRootReplacementDuringPublication(t *
 // The first owner holds an explicit barrier before publication; a contender
 // cannot enter the same directory even before the fixed marker exists.
 func TestBootstrapSuccessorPreparationSerializesBeforeClaimPublication(t *testing.T) {
-	approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
+	approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
 	acquired, release := make(chan struct{}), make(chan struct{})
 	finished := make(chan error, 1)
 	go func() {
-		store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, func(stage string) error {
+		store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, func(stage string) error {
 			if stage == "owner-acquired" {
 				close(acquired)
 				<-release
@@ -573,7 +586,7 @@ func TestBootstrapSuccessorPreparationSerializesBeforeClaimPublication(t *testin
 	case err := <-finished:
 		t.Fatal("first preparation could not reach ownership barrier", err)
 	}
-	store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, nil)
+	store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, nil)
 	if store != nil {
 		store.close()
 	}
@@ -588,10 +601,10 @@ func TestBootstrapSuccessorPreparationSerializesBeforeClaimPublication(t *testin
 // publication. The no-replace rename preserves both competing pieces of evidence.
 func TestBootstrapSuccessorPreparationNeverOverwritesPublicationCollision(t *testing.T) {
 	for _, kind := range []string{"claim", "record"} {
-		approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
+		approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
 		directory := approval.Plan.Proposal.OriginalRunDirectory
 		var retained map[string]string
-		store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, func(stage string) error {
+		store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, func(stage string) error {
 			if stage != kind+"-stage-synced" {
 				return nil
 			}
@@ -618,10 +631,10 @@ func TestBootstrapSuccessorPreparationNeverOverwritesPublicationCollision(t *tes
 // size cannot turn an interrupted or completed claim into reusable allowance.
 func TestBootstrapSuccessorPreparationRejectsUnsafeFilesAndBounds(t *testing.T) {
 	for _, fault := range []string{"marker-mode", "record-mode", "marker-symlink", "record-hardlink", "stage-hardlink", "stage-symlink", "namespace-bound"} {
-		approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
+		approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
 		directory := approval.Plan.Proposal.OriginalRunDirectory
 		stageFault := strings.HasPrefix(fault, "stage-")
-		store, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, func(stage string) error {
+		store, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, func(stage string) error {
 			if stageFault && stage == "claim-name-synced" {
 				return errors.New("synthetic unsafe stage")
 			}
@@ -662,7 +675,7 @@ func TestBootstrapSuccessorPreparationRejectsUnsafeFilesAndBounds(t *testing.T) 
 			t.Fatal(err)
 		}
 		before := bootstrapSuccessorPreparationTestFiles(t, directory)
-		store, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+		store, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 		if store != nil {
 			store.close()
 		}
@@ -670,8 +683,8 @@ func TestBootstrapSuccessorPreparationRejectsUnsafeFilesAndBounds(t *testing.T) 
 			t.Fatalf("preparation accepted unsafe retained %s", fault)
 		}
 	}
-	approval, key := newBootstrapSuccessorPreparationTestApproval(t)
-	ctx, cancel := context.WithCancel(t.Context())
+	approval, key, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
+	ctx, cancel := context.WithCancel(storage.Context)
 	cancel()
 	store, err := openBootstrapSuccessorPreparationStore(ctx, approval.Plan, approval, true, nil)
 	if store != nil {
@@ -680,7 +693,7 @@ func TestBootstrapSuccessorPreparationRejectsUnsafeFilesAndBounds(t *testing.T) 
 	if !errors.Is(err, context.Canceled) || len(bootstrapSuccessorPreparationTestFiles(t, approval.Plan.Proposal.OriginalRunDirectory)) != 0 {
 		t.Fatal("canceled preparation created custody", err)
 	}
-	store, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+	store, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 	if store != nil {
 		store.close()
 	}
@@ -698,7 +711,7 @@ func TestBootstrapSuccessorPreparationRejectsUnsafeFilesAndBounds(t *testing.T) 
 	}
 	plan.Proposal.RequiredPrerequisites[0] = strings.Repeat("x", maximumBootstrapSuccessorPreparationBytes-1-len(raw))
 	bounded = bootstrapSuccessorPreparationTestSign(t, plan, key)
-	store, err = openBootstrapSuccessorPreparationStore(t.Context(), bounded.Plan, bounded, true, nil)
+	store, err = openBootstrapSuccessorPreparationStore(storage.Context, bounded.Plan, bounded, true, nil)
 	if store != nil {
 		store.close()
 	}

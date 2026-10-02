@@ -116,7 +116,7 @@ func TestBootstrapSuccessorRuntimeRevisionCommandPreservesUpgradeCustody(t *test
 	publicArgs = append(append(append(publicArgs, f.paths...), args...), "--submit")
 	var publicError bytes.Buffer
 	stdout.Reset()
-	if code := runBootstrapSuccessorExecutionCommand(t.Context(), publicArgs, &stdout, &publicError); code != 2 || !strings.Contains(publicError.String(), errBootstrapSuccessorSafeProvenanceUnavailable.Error()) || stdout.Len() != 0 {
+	if code := runBootstrapSuccessorExecutionCommand(f.original.storageContext(t.Context()), publicArgs, &stdout, &publicError); code != 2 || !strings.Contains(publicError.String(), errBootstrapSuccessorSafeProvenanceUnavailable.Error()) || stdout.Len() != 0 {
 		t.Fatal("signed runtime revision unlocked the public provenance gate", code, publicError.String())
 	}
 	if _, err := os.Stat(filepath.Join(root, bootstrapSuccessorRuntimeName(1))); !os.IsNotExist(err) {

@@ -651,17 +651,20 @@ func TestRootServiceStoreRejectsReinitializationAndForeignState(t *testing.T) {
 	if _, err := openRootServiceStore(fixture.config, true, fixture.storage.Context); err == nil {
 		t.Fatal("lost journal reset its durable marker")
 	}
-	other := newRootServiceFixture(t)
-	action := other.config.Packet.Action
-	actionStore, err := openRootActionStore(action.Scope.StatePath, &action)
+	other := newRootOfflineFixture(t)
+	action := other.packet.Action
+	actionStorage := durablefixture.New(t, t.Context(), filepath.Dir(action.Scope.StatePath))
+	prepareMainnetSnapshotTest(t, action.Scope.StatePath, "mainnet-root-action", rootActionStoreLimit)
+	actionStore, err := openRootActionStore(action.Scope.StatePath, &action, actionStorage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
 	actionStore.close()
-	if _, err := openRootServiceStore(other.config, false, other.storage.Context); err == nil {
+	foreign := rootServiceConfig{Schema: rootServiceConfigSchema, CustodyTrust: other.trust, Packet: other.packet, MaximumObservations: 3}
+	if _, err := openRootServiceStore(foreign, false, actionStorage.Context); err == nil {
 		t.Fatal("standalone action implicitly migrated to service")
 	}
-	if _, err := openRootServiceStore(other.config, true, other.storage.Context); err == nil {
+	if _, err := openRootServiceStore(foreign, true, actionStorage.Context); err == nil {
 		t.Fatal("standalone action was overwritten")
 	}
 }

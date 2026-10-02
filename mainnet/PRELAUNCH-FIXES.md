@@ -1,6 +1,16 @@
 # Mainnet prelaunch fixes
 
-**October 2 MG-06 release composition (MG-02):** the [qualified scoped successor](evidence/release-258e25b4-server0aa1-20261002.md) at frozen SN `258e25b4` / server `0aa1e244` now packages economic-observer `dd21ed00` and signed-schedule `258e25b4` with the prior owner, contract-admission, recycle and schema-752 composition. Sequential source and eight-image repeats match and pass independent readback. Fresh current-pair qualification passes 83 normal/83 race roots and three-package vet; an independent nine-root normal/race scope also passes. Thirty-six component receipts and unchanged-server tests preserve their original scopes. This resolves the earlier source exclusion for the new artifact only. All ten fresh unsigned-plan actions stay blocked; independent compiler/dependency provenance, production policy/configuration, rollout/restore, published/running image identity and live authority remain open. Earlier releases stay immutable. Later server `025802a5` retention-debt/cleanup changes are excluded and await separate static review; no qualification or P0 successor requirement is inferred.
+**October 2 continuation checkpoint:** observer `6d398662` is now independently qualified at 17 normal/17 race roots plus vet. Composition `69f4bbdd` / server `10a8f4d8` now passes 78 selected normal/78 race roots and vet, with a separate independent 12-root normal/race scope and vet. The [exact sealed composition](evidence/durable-owner-composition-qualification-20261002.md) is an incremental source qualification. Miner startup isolation `c3707376` passes 37 normal/37 race roots, while callback isolation, member recovery ordering and production preparation remain separate work. The [checkpoint and retained receipts](evidence/mainnet-continuation-checkpoint-20261002.md) record exact scopes, a newly exposed pending-stage ordering defect, private fixture ancestry and immutable physical evidence paths. No launch or full-backlog closure is inferred.
+
+**October 2 MG-06 release composition (MG-02):** the [qualified scoped successor](evidence/release-258e25b4-server0aa1-20261002.md) at frozen SN `258e25b4` / server `0aa1e244` now packages economic-observer `dd21ed00` and signed-schedule `258e25b4` with the prior owner, contract-admission, recycle and schema-752 composition. Sequential source and eight-image repeats match and pass independent readback. Fresh current-pair qualification passes 83 normal/83 race roots and three-package vet; an independent nine-root normal/race scope also passes. Thirty-six component receipts and unchanged-server tests preserve their original scopes. This resolves the earlier source exclusion for the new artifact only. All ten fresh unsigned-plan actions stay blocked; independent compiler/dependency provenance, production policy/configuration, rollout/restore, published/running image identity and live authority remain open. Earlier releases stay immutable. Later server `025802a5` retention-debt/cleanup changes remain outside this frozen release. Its [static review and focused qualification checkpoint](evidence/server-and-storage-progress-20261002.md) is now recorded: 33 server roots pass normal/race and four package vets; seven SN composition roots pass normal/race, with its original `6cfc4773` mutex-copy vet failure preserved separately. Three historical server roots pass normal/race. The [full model run and separate test-only repair](evidence/server-stats-fixture-qualification-20261002.md) are now recorded: original `025802a5` executed all 1,345 roots with 1,334 passes, one statistics-fixture failure and ten optional skips; the isolated `a3fc4270` repair passes all eight affected roots normal/race and package vet. The original full run remains failed, and no patched-source full-suite pass is claimed. No successor production release or deployment qualification is inferred.
+
+**October 2 retained relay fixture correction:** the separate [test-only fix](evidence/relay-retained-fixture-qualification-20261002.md) at SN `734a82dc` passes 35 author normal and 10 race tests, plus 2 independent normal and 10 race tests; `./sim-testnet` vet passes in both scopes. It retains the original signed plan and journal while rebuilding fixture synchronization, canonical header coordinates and the actual producer activation domain. The original `6cfc4773` vet/header failures remain preserved. This does not qualify the broader model run or change the frozen `258e25b4` / `0aa1e244` production artifact.
+
+**October 2 durable storage (MG-09 / PH-09): in progress.** The merged Connect `6cd720cf` [generation/read-admission primitive](evidence/durable-generation-progress-20261002.md) passes 48 author and independent roots per mode plus vet. The new [isolated owner-custody checkpoint](evidence/durable-owner-custody-qualification-20261002.md) separately qualifies native journal `695f6683` (42 author/independent roots per mode), snapshot `a5c765c4` (17 roots plus 17 subtests per mode), and miner fleet/claim `b3c3d66` (201 roots plus three inherited subtests per mode). Monitor `f1b445f9` passes 114 author and independent normal/race roots and vet; these are still separate consumer scopes. These sources require explicit public-entry policy and preprovisioned retained-member authority, preserve reads under write pressure, reconcile only exact pending bytes after the old owner joins, and stop only the affected role. Connect inventory-v3 `0a5cda0e` separately passes 57 author and independent normal/race roots and vet with bounded owner-attribute retention. A separate [CLI candidate `7fb6b6a1`](evidence/durable-inventory-cli-qualification-20261002.md) passes nine author and independent normal/race roots and three-package vet, including explicit owner-local commands and report-only rebound comparison. The [independent receipts and new composition failures](evidence/durable-composition-progress-20261002.md) are now retained. Connect constructor `71df099c` independently passes 59 roots per mode and vet (including the prior 57) and is merged; the current consumer `0a5cda0e` module does not inherit it. The former `cb2e3ffe`/v2 and frozen release receipts are unchanged. The separate [validator/root/bootstrap/local-blob adopter](evidence/durable-adopter-qualification-20261002.md) at SN `eb0abe22` / server `1b7cc78b` passes 111 selected normal/race roots and four-package vet in both author and independent scopes; five causal controls discriminate per mode. The real service-credential test passes separately in the author scope and its evidence was independently rehashed. Module-only server `005a9066` pins the same tested Connect source, with a separate standalone dependency join. The independent adopter receipt is source-pinned to that exact pair; immutable registry/member census, broader fixture migration and peer composition are not closed. Production offline root/lease/nonce/owner-anchor preparation is still missing. Validator/bootstrap/root/server composition, deployment declaration assets, capacity/rotation policy, actual restore and a new exact release remain open. No source receipt authorizes deployment or closes all of PH-09.
+
+**October 2 actual public composition failures:** exact test-only `ea2bb37f` reproduces three failures in normal and race: persistent root observation omits durable context, a missing completed passive-monitor checkpoint is recreated, and passive preparation admits a missing retained snapshot head. Separate fixture `22d4ee3e` over unchanged adopter production exposes 48 successor write-admission refusals plus two outdated typed-identity assertions (75 roots: 25 pass, 50 fail). Fixes and complete source integration are in progress; neither failed composition is a qualified launch candidate. [Exact evidence and scope boundaries](evidence/durable-composition-progress-20261002.md).
+
+**October 2 passive observer continuation:** the rendered passive service uses `Restart=no`; source `653061a1` exits after one exhausted preparation-observation budget and abandons unused signed samples. Its separate 11-root author normal/race and vet receipt remains scoped to the earlier custody/retry fixes. Implemented successor `97c7ae85` retains the same owners, emits `storage-unavailable` without a fresh observation and continues at the signed interval; exact test-only `6d398662` now passes 17 normal/17 race roots plus vet independently, preserving the earlier RPC-count fixture failure. Separately, the exclusive successor writer fix `f3c8a618` passes eight new plus two typed-identity roots independently in both modes and vet. Complete composition and module adoption remain open. [Evidence and continuation lesson](evidence/durable-observer-continuation-progress-20261002.md).
 
 Updated 2026-10-02. This is the production gate tracker for UR mainnet
 SN25 (netuid 25). Sim-testnet is **closed with known exceptions, without final
@@ -346,9 +356,9 @@ receipts and independent monitor deployment remain open.
 | MG-04 / P0 — Runtime and native continuity | Chain/validator owner; RT-01 through RT-08, PH-03/04/10/18/19/22 | **In progress:** the [standard validator production path](OWNER-RECYCLE-PRODUCTION.md) uses separately signed schema-3 authority, an exact block/purpose-bound producer interface and original authority through startup, preparation, recovery and archive readers. Bounded content-addressed complete config/approval history now preserves signed sidecars, the original drain and proof progress across compatible independently approved renewals and source-file loss. Old configs remain read-only. The [qualified source-receipt correction](evidence/validator-source-runtime-qualification-20260929.md) separates original signing, parent execution and post-state views across an approved upgrade; 103 selected roots pass normal/race. [Downstream upload admission](VALIDATOR-UPLOAD-RUNTIME.md) projects exact runtime windows from those bundles without retaining producer authority. The [miner fleet mainnet gate](../miner/FLEET-MAINNET-RUNTIME.md) retains exact-artifact and uncertain-send recovery for its four mutations. [Complete-header authority and its adjacent correction](evidence/current-native-header-adjacent-authority-20261001.md) reject substituted coordinates across producer/upload/observation windows and retained receipt/application evidence; approved update digests and original recovery retain their signed windows. The [claim EVM finality correction](evidence/miner-claim-evm-finality-20261001.md) closes state, replay, receipt recovery and fresh publication using the EVM clock while retaining exact signed custody. The [shared onchain successor](evidence/shared-evm-finality-closure-20261001.md) closes finalized/canonical receipt witnesses and keeps transient or absent evidence pending within the original deadline. The shared nonce reader requires the exact reviewed 56-byte Subtensor account layout. The [signed continuity policy and inspector](RUNTIME-CONTINUITY-POLICY.md) have scoped independent qualification; [finite offline replay](RUNTIME-SEMANTIC-REPLAY.md) checks exact supplied artifact/state cases. Complete semantic proof and automatic production selection remain absent. No live mainnet authority or deployment is supplied. | Complete remaining consumers, both validator roles, automatic compatible-upgrade and missed-boundary qualification. Arbitrary policy/key/custody changes require separate transitions. Preserve original pending bytes and finalized work; no backdated native success. |
 | MG-05 / P0 — Policy and identity rollover | Server/validator owner; PF-02/05, PH-07/13/27 | **In progress:** server policy-domain rollover and retained resume remain evidenced above; the v651→v724 migration-monitor namespace bug is corrected. The [qualified MG03/R48 composition](evidence/operator-mg03-r48-composition-20260929.md) is integrated at server `05fee56f`, preserving both original histories and exact signed approvals through registration replay, policy rollover and deletion. The [operator epoch-policy correction](evidence/operator-policy-custody-qualification-20261001.md) authenticates retained payout policy/window independently of the current configuration and composes both operators' populated migration, processed registration, restart and fresh proof reads. Live operator cutover and readiness remain open. | Migrate both operators before APIs, retain old signed histories, activate all validator/operator evidence domains and authenticate persistent peer-key transitions. Prove production processed-key readiness and fresh proof progress through a future policy boundary; retain prior-epoch payout policy authority for successor deposit sizing. |
 | MG-06 / P0 — Economics, settlement and custody | Protocol/contracts/treasury owner; PH-11/12/14 and R48 usage lessons | **Blocked for live activation:** The [exact MG-06 release successor](evidence/release-258e25b4-server0aa1-20261002.md) now packages the observer-context and signed schedule corrections; its fresh current-pair tests and repeated artifacts do not close economic outcome or authority gates. The selected 90% owner-recycle has a distinct [production transition](OWNER-RECYCLE-PRODUCTION.md), separate from the unchanged read-only admission/capsule formats. It joins genuine provider proof replay, canonical coordinator facts, native owner/validator eligibility and a signed drained activation block, then binds the 10/90 row through real CRv4 preparation, a hotkey sidecar and durable intent/archive replay. Complete original authority history now preserves these signed decisions under compatible approved renewals without reinterpreting their economic policy or requiring another drain. The [bounded native incentive observer](evidence/incremental-source-composition-20260929.md) now retains canonical event/state evidence and sealed partial results: 18 focused and 170 adjacent roots pass normal/race, with eight causal controls. Native denominator, quantization, recipient generation, provider entitlement, actual owner recycling and the 10/90 outcome remain unresolved. No live approval, native payout or 10% outcome exists. The non-upgradeable [vault claim repair](../evm/CLAIM-RECOVERY.md) preserves accepted credit after an exact runtime payment failure; Forge 226/226 and focused receipt normal/race passed, but runtime rollback and deployment remain unqualified. NetEscrow migrations through 728 and fenced publishers are not deployed. | Obtain actual mainnet identity, reviewed source/code mapping, signed production approval, recognized owner recipients and eligible independent validators. Supply complete real activation, operator API/key/payout custody and authenticated history; qualify production receipt/restart and the runtime's exact native rounding. Monitor inclusion, reveal/application and the actual 10% native-miner / 90% recycle outcome after first submission; that outcome is not a circular first-send prerequisite. Complete vault rollback, reserve funding, deposits/capture/carry/claims and NetEscrow cutover. Recycling does not fund the reserve. |
-| MG-07 / P0 — Continuous monitoring and bounded repair | Operations owner; PH-15/28, PH-01/02/07/09/11/16 | **In progress:** signer-free `inspect`/`monitor` identity and finality commands exist. The v3 checkpoint retains finalized continuity, last successful read and initial or later read outages across restart; warnings begin at two minutes and critical status at five, with immediate escalation on clock rollback. [Monitor telemetry](MONITOR-TELEMETRY.md) wires atomic textfile gauges into the actual command; [alert examples](monitor-alerts.example.yml) detect missing expected hosts, stale samples and explicit severity. The [offline xops deployment increment](evidence/monitor-deployment-offline-20261002.md) supplies explicit host/release/config approval gates, scoped textfile collection and an independent expected roster; actual installation, ingestion and delivered alerts remain open. The [qualified operator journal increment](evidence/operator-monitor-qualification-20260930.md) adds bounded read-only transaction/settlement observations with incident continuity: 62 Go root executions and four alert fixtures pass; nine normal and five selected race controls are causal. The [qualified stopped-validator resume](evidence/validator-repair-qualification-20260930.md) adds one incident-bound, independently signed start under exact release/unit/generation custody: 52 positive executions pass normal/race, and twelve normal plus seven selected race controls are causal. No unit was installed or started. The separate [active-hang capability](ACTIVE-VALIDATOR-REPAIR.md) adds an independently signed one-generation stop/join/start interface. Production approval, real-systemd rehearsal, deployment, unobserved domains, root/operator services and broader repair coverage remain open. | Deploy and verify actual collector ingestion and delivered alerts against an independent expected-host roster. Implement the remaining [operating model](MAINNET.md#continuous-monitoring-and-repair), approve its SLOs and repair envelopes, provision primary/backup on-call, and rehearse outage, wrong chain, missed deadline, uncertain send, full disk and monitor failure. Independent alerts must survive a stopped application and a stopped controller. |
+| MG-07 / P0 — Continuous monitoring and bounded repair | Operations owner; PH-15/28, PH-01/02/07/09/11/16 | **In progress:** signer-free `inspect`/`monitor` identity and finality commands exist. The v3 checkpoint retains finalized continuity, last successful read and initial or later read outages across restart; warnings begin at two minutes and critical status at five, with immediate escalation on clock rollback. [Monitor telemetry](MONITOR-TELEMETRY.md) wires atomic textfile gauges into the actual command; [alert examples](monitor-alerts.example.yml) detect missing expected hosts, stale samples and explicit severity. The [offline xops deployment increment](evidence/monitor-deployment-offline-20261002.md) supplies explicit host/release/config approval gates, scoped textfile collection and an independent expected roster. Author and independent scoped qualification pass 32 new and 19 adjacent xops tests and 13 SN normal/race roots plus vet and deployment controls; actual installation, ingestion and delivered alerts remain open. The [qualified operator journal increment](evidence/operator-monitor-qualification-20260930.md) adds bounded read-only transaction/settlement observations with incident continuity: 62 Go root executions and four alert fixtures pass; nine normal and five selected race controls are causal. The [qualified stopped-validator resume](evidence/validator-repair-qualification-20260930.md) adds one incident-bound, independently signed start under exact release/unit/generation custody: 52 positive executions pass normal/race, and twelve normal plus seven selected race controls are causal. No unit was installed or started. The separate [active-hang capability](ACTIVE-VALIDATOR-REPAIR.md) adds an independently signed one-generation stop/join/start interface. Production approval, real-systemd rehearsal, deployment, unobserved domains, root/operator services and broader repair coverage remain open. | Deploy and verify actual collector ingestion and delivered alerts against an independent expected-host roster. Implement the remaining [operating model](MAINNET.md#continuous-monitoring-and-repair), approve its SLOs and repair envelopes, provision primary/backup on-call, and rehearse outage, wrong chain, missed deadline, uncertain send, full disk and monitor failure. Independent alerts must survive a stopped application and a stopped controller. |
 | MG-08 / P0 — Mainnet bootstrap and both validator roles | Bootstrap/governance owner; PH-14, [MAINNET.md](MAINNET.md) | **Blocked for activation:** the [owner-trim planner](SUBNET-CENSUS.md), [recheck/reconciliation](OWNER-TRIM-GUARD.md) and [bounded qualification](OWNER-TRIM-BOUNDED.md) retain safe partial candidates and old-miner residuals; no full reset is claimed. The [offline chain composition](BOOTSTRAP-CHAIN.md) has [qualified v2 UR config admission](evidence/ur-bootstrap-admission-qualification-20260928.md) for exactly two initial schema-3 signed UR configs matching independent role/signer/runtime/source/deployment pins and protected generations. [V3 root-role admission](evidence/root-role-admission-qualification-20260928.md) independently pins the netuid-0 generation, action approver and signed full-service approver while retaining live authority as pending. Durable local plan/apply/resume preserves child signatures and allowances; v1/v2 recovery keeps its original scope. The [qualified read-only readiness phase](evidence/bootstrap-readiness-qualification-20260929.md), integrated at `6627d15f`, binds original v3 custody to current finalized UR/root prerequisites; all 148 affected roots pass normal/race with four causal controls. The [qualified durable owner-trim action](evidence/owner-trim-null-storage-repair-20260929.md), integrated at `ce567305`, preserves original v3 custody and passes 25 focused plus 229 expanded roots normal/race with eight causal controls; the failed R1 null-storage qualification remains preserved. The qualified [contract-role declarations](evidence/bootstrap-contract-role-qualification-20260930.md), [original receipt prefix](evidence/bootstrap-contract-receipts-qualification-20260930.md), and [current five-account field checks](evidence/bootstrap-contract-current-qualification-20260930.md) now retain exact original authority with 40, 42 and 38 positive normal/race executions respectively. Current fields remain owned-RPC assertions. The [original-authority anchor producer](evidence/contract-installation-anchor-20261001.md) now binds exact creation and anchor receipts to complete initial storage proofs and a fresh current readback; actual policy acceptance, live installation, complete history and activation remain unverified. The [qualified archive census](evidence/safe-history-census-qualification-20260930.md) now retains complete bounded native/EVM witnesses with 68 positive normal/race executions and ten normal/five selected race causal controls; internal/reverted execution and complete Safe history remain unproven and public submission stays closed. The separately signed [passive-root host owner](evidence/passive-root-host-20261001.md) supplies fixed sandboxed installation and one acknowledged process start/recovery under original v4 authority; actual host acceptance and live observer health remain pending. The [qualified two-UR host component](evidence/validator-activation-qualification-20260930.md) implements static installation, exact runtime config copies and durable separate process starts/recovery: 88 positive root executions pass normal/race, with twelve normal and five selected race causal controls. Its public fresh-start authority remains deliberately unavailable; no unit was deployed or started. Strict production enforcement remains open. The [October 2 best-effort owner workflow](OWNER-TRIM-BEST-EFFORT.md) has a [qualified retained-intent and physical-custody source increment](evidence/owner-trim-retained-intent-20261002.md) at `0f7c8698`, with independent signed pruning/re-entry residual options; actual risk acceptance, owner device/signature, external custody and activation are still absent. The [qualified scoped baseline](evidence/release-1320845d-server0aa1-20261002.md) includes this later source while the historical `3d1e2ecf` receipts remain unchanged. Live eligibility, chain effects, service activation and full release qualification remain pending, with no live mainnet authority, signing device or global custody fence supplied. [Review schema v2](PLAN.md) keeps preconditions distinct from produced facts. | Complete live identity/census and custody effects; use the ranked owner trim, exact recheck/reconciliation and bounded protected-identity conditions, retaining explicit old-miner dispositions. Finish production safe-trim authority/execution and the remaining durable chain phases: complete contract installation including the evidence journal/anchor, two UR validators plus netuid-0 role, Safe authority and bounded funding. Qualify production current authority, custody/device and owned route, wire service activation, and observe actual 10/90 native outcomes after approved activation. |
-| MG-09 / P1 — Sustained resource and storage capacity | Service/storage owner; PH-08/09/20/23/26 | **Open:** bounded simulator mechanisms exist; production sizing and restoration receipts are missing. A [qualification-host media error](evidence/qualification-host-media-error-20261001.md) proved that free space and process success do not prove readable storage; it is not a Snow/mainnet-host observation. [Prior verified relocations](evidence/release-1320845d-server0aa1-20261002.md#remaining-release-and-capacity-gates) preserved an unreadable old source tree and the active shared cache. The [MG-06 release](evidence/release-258e25b4-server0aa1-20261002.md#remaining-release-and-capacity-gates) retains the separate inactive-cache cleanup log, uses data-volume scratch and admits each serial image repeat only above 118 GiB to preserve 110 GiB with margin. None of this closes production capacity or restore gates. | Measure backlog, bytes, memory, RPC work and queue fairness with the proposed fleet and retention. Bind finite capacity with reviewed margin; monitor device media errors and backup integrity; prove missing/full-volume behavior, copy verification, backup restore, multi-gigabyte log drainage and foreground deadline headroom. Required before unattended operation. |
+| MG-09 / P1 — Sustained resource and storage capacity | Service/storage owner; PH-08/09/20/23/26 | **In progress; gate open:** [Native/snapshot/miner/monitor source scopes now pass independently; inventory-v3 has a separate author/independent scope](evidence/durable-owner-custody-qualification-20261002.md). [Inventory CLI `7fb6b6a1`](evidence/durable-inventory-cli-qualification-20261002.md) passes nine author/independent normal/race roots and vet. The [public observer and successor execution defects](evidence/durable-observer-continuation-progress-20261002.md) have a separately qualified exclusive-writer fix and a pending same-owner soft-outage successor; coherent integration remains open; module-only adoption of constructor `71df099c` is a separate pending consumer scope. [The separate validator/root/bootstrap/blob scope](evidence/durable-adopter-qualification-20261002.md) passes 111 normal/race roots and four-package vet in author and independent runs, with separate author real-credential preflight; immutable-member census and broader composition remain open. Production preparation, capacity policy and restore are open. Bounded simulator mechanisms exist; production sizing and restoration receipts are missing. A [qualification-host media error](evidence/qualification-host-media-error-20261001.md) proved that free space and process success do not prove readable storage; it is not a Snow/mainnet-host observation. [Prior verified relocations](evidence/release-1320845d-server0aa1-20261002.md#remaining-release-and-capacity-gates) preserved an unreadable old source tree and the active shared cache. The [MG-06 release](evidence/release-258e25b4-server0aa1-20261002.md#remaining-release-and-capacity-gates) retains the separate inactive-cache cleanup log, uses data-volume scratch and admits each serial image repeat only above 118 GiB to preserve 110 GiB with margin. None of this closes production capacity or restore gates. | Measure backlog, bytes, memory, RPC work and queue fairness with the proposed fleet and retention. Bind finite capacity with reviewed margin; monitor device media errors and backup integrity; prove missing/full-volume behavior, copy verification, backup restore, multi-gigabyte log drainage and foreground deadline headroom. Required before unattended operation. |
 | MG-10 / P0 — Qualification, rollout and actual acceptance | Release/operations owner; PH-16 and every affected gate | **Planned:** no accepted composed mainnet release. | Before activation, complete production-path causal regressions, affected normal/race suites and a controlled upgrade/outage/restart/repair rehearsal; retain failed and reused scopes. After bounded activation, observe at least three complete native emission intervals and one full 50,400-block UR settlement/claim cycle before declaring program acceptance. Record pending live evidence as pending. |
 
 MG-01 has a [later read-only public snapshot](evidence/public-route-check-20261001-1356.md)
@@ -1038,7 +1048,10 @@ expected roster/evaluator. New production native deadline policies require the
 approved tempo-drift profile and 60-second GET retries. Snow remains testnet and
 is refused. Author qualification passes 32 new and 19 adjacent xops tests,
 13 SN monitor roots in normal/race, vet and four alert suites, plus controller,
-unit syntax and real credential-reader controls. Independent review is pending.
+unit syntax and real credential-reader controls. Independent qualification
+passes the same 32 new and 19 adjacent xops tests, 13 SN monitor roots
+normal/race, vet and controller/unit/credential controls on clean exact source;
+its separate receipt is hash-bound in the evidence above.
 MG-07 remains open for actual approved host installation, selected collector
 acceptance, remote ingestion, delivered alert/recovery receipts, independent
 watchdog/on-call rehearsal and broader monitoring/repair coverage; no live unit
@@ -2543,7 +2556,7 @@ owner boundary, not an additional agent or approval requirement.
 | PH-06 | P0 | Release/configuration tooling: explicit release identity and lossless plan migration | RL-01; PH-01, PH-02 | Planned |
 | PH-07 | P0 | Service supervision: independent restart, single ownership and meaningful readiness | PF-02, PF-04; PH-01, PH-03 | Planned |
 | PH-08 | P1 | Replay and workload scheduling: bounded work, memory and foreground latency | PF-01, PF-02; PH-05 | Planned |
-| PH-09 | P1 | State and artifact storage: explicit durable volume, atomic publication and recovery | PH-01; storage adapter precedent | Planned |
+| PH-09 | P1 | State and artifact storage: explicit durable volume, atomic publication and recovery | PH-01; storage adapter precedent | In progress — shared `6cd720cf`, native/snapshot/miner/monitor scoped independent gates pass; validator/root/bootstrap/blob author and independent 111-root normal/race scopes pass. Inventory-v3 57-root, CLI nine-root and constructor `71df099c` 59-root normal/race/vet scopes now pass independently and remain separate. The exclusive-writer correction is scoped independently; passive soft-outage continuation, complete composition, consumer module adoption, member census, preparation and production capacity/restore remain open |
 | PH-10 | P0 | Epoch, fleet and evidence scheduling: resumable partial renewals and correct windows | PH-01, PH-02, PH-04 | Planned |
 | PH-11 | P0 | Treasury and bootstrap: conserved lifetime spend, reserve and funding semantics | PH-02, PH-06 | Planned |
 | PH-12 | P0 | Contracts, operator and claims: complete settlement conservation and authorization | PH-02, PH-04, PH-11 | Planned |
@@ -2571,6 +2584,13 @@ independent changes can then be integrated without rebuilding their consumers
 repeatedly. PH-15 and PH-16 follow each change rather than waiting for a final
 large cleanup. Mainnet economics and destructive UID operations retain the
 specific unresolved choices and capability checks in MAINNET.md.
+
+The [October 2 implementation backlog](evidence/mainnet-implementation-backlog-20261002.md)
+maps every PH/MG row to current production boundaries and a concrete next
+patch/test. A `Planned` row does not mean all corresponding code is absent:
+selected retry, runtime-history, proof and control paths already exist, while
+their complete production qualification remains open. The named source census
+is read-only review evidence and does not add a passing test scope.
 
 ### PH-01 — Durable progress and separate audit/run ownership
 
@@ -3271,6 +3291,10 @@ untouched, and cancellation joins without leaked buffers or goroutines. Fixture
 optimizations retain at least one representative full integration path.
 
 ### PH-09 — Durable storage and usable test/build storage
+
+**In progress, October 2.** The [source checkpoint](evidence/server-and-storage-progress-20261002.md#durable-storage-source-work) preserves three causal old-source failures: fleet and claim stores recreated missing state, and a checkpoint publisher wrote into a replaced parent. The [native/snapshot/miner checkpoint](evidence/durable-owner-custody-qualification-20261002.md) now has separate author/independent scopes, monitor also passes its independent 114-root normal/race gate, while inventory-v3 and the [nine-root public CLI successor](evidence/durable-inventory-cli-qualification-20261002.md) now have separate author and independent scopes; the [observer continuation and exclusive-writer checkpoint](evidence/durable-observer-continuation-progress-20261002.md) keeps separate author/independent scopes, with complete composition still open. The [validator/root/bootstrap/local-blob increment](evidence/durable-adopter-qualification-20261002.md) passes 111 author and independent normal/race roots and four-package vet against explicit Connect `6cd720cf` declarations; actual service-credential inspection remains a separately passing author scope. Original member loss, rollback and uncertain writes are covered at the named public owners. The remaining immutable-member/steering-history audit, offline preparation, broader fixture migration and complete source integration remain open. None of these local scopes proves remote PostgreSQL/Redis/MinIO or production restoration.
+
+**Recovery classification.** A failed kernel observation or exhausted write reserve refuses the current admission but is not evidence of a changed identity. Retry only the affected owner against the same retained declaration and custody. Observed replacement, missing retained descendants, aliases or lost protection permanently invalidate that owner; join it before reopening the approved volume. A refusal before publication leaves the checkpoint unchanged. Once a write or rename may have happened, missing acknowledgement is uncertain publication: retain candidate and completed bytes, reopen/reconcile the authenticated checkpoint, and never infer rollback or reset the campaign.
 
 **Lesson.** Root-volume pressure and scratch/cache placement delayed or stopped
 qualification. `a5c23b39` and `2f9ef2b3` introduced data-volume workspaces and
@@ -5025,3 +5049,220 @@ collecting a terminal report after recoverable process findings and clean up
 exact pre-armed faults after any terminal failure, while keeping the original
 failed assertions and signed boundary immutable. A partial or provisional
 release must never be silently promoted to mainnet launch approval.
+
+### October 2: physical recovery must preserve application ordering
+
+The immutable-member work exposed a boundary error: a generic storage opener
+completed a retained terminal or policy stage before the application performed
+its canonical reconciliation. In the failed `8d37e7a5` adjacent gate, both
+interrupted-ordering tests correctly refused that behavior. Retaining exact
+bytes is necessary, but does not alone authorize declaring an action complete,
+advancing runtime or policy authority, consuming a later action, or sending
+again. The [continuation checkpoint](evidence/mainnet-continuation-checkpoint-20261002.md)
+retains the failed source and the full 20-root census.
+
+Across miner, validator, operator and bootstrap owners, recovery of a physical
+reservation may materialize only its exact authorized missing bytes. Existing
+staged outcomes remain staged until their owning application reconciles them.
+Recovery must retain nonce/attempt floors, original runtime/policy identity and
+all signed attempts. A read-only observer may report pending state but must not
+promote it. Any durable-write uncertainty joins the affected owner before a
+replacement opens; unrelated roles continue.
+
+Qualification must cover interruption before stage creation, after stage fsync
+and after publication, with exact retained payload and no additional send.
+It must prove a pending old outcome refuses a newer runtime/policy action,
+then completes only after canonical reconciliation. Test maps must distinguish
+immutable signed protocol members from explicitly mutable authenticated census
+heads. Exclude only the named mutable head from a positive immutable-byte check;
+retain whole-directory no-effects checks at refused admission boundaries.
+
+### October 2: every public read path needs its own retry contract
+
+The manual provider claim command directly reads epoch and payout data through
+the SDK, unlike the retained claim daemon. The selected SDK/Connect defaults
+allow only one quick 502/503 retry, so a healthy service recovering moments later
+can still make this command fail in under 60 seconds. A daemon receipt cannot
+prove the finite command's behavior. Each public role must identify its actual
+GET owner and retain a minimum 60-second transient retry budget, normally 300
+seconds for expected available data. Transient network, timeout and gateway
+failures retry the same immutable read request; authentication, malformed data,
+wrong identity and proven integrity failures return typed permanent causes.
+Cancellation joins outstanding requests and body readers. Signed wallet POSTs
+and transaction broadcasts require durable outcome reconciliation, not this
+read retry policy. This manual-command correction remains queued for causal
+implementation and qualification; the source audit is not a fixed-code claim.
+
+### October 2: isolate callback failures and qualify current dependency composition
+
+The actual SDK JWT persistence callback now names a local storage cause and
+quarantines only its member generation. Its owned teardown runs outside the SDK
+callback, retains the slot until join, and prevents stale callbacks from stopping
+a successor. Joined authentication or unknown causes remain terminal. Startup
+admission retains healthy members after classified temporary failures without
+blindly repeating a possibly signed wallet request. The qualified implementation
+and deterministic old-body controls are [recorded here](evidence/provider-callback-qualification-20261002.md).
+
+A published dependency version can omit required packages even when previous
+local source passed. Current server intake exposed exactly that: Connect
+`6443417d` lacks `durablevolume`. Preserve the failed exact-graph attempt and
+qualify a compatible published successor; a local replacement cannot prove the
+published graph. Module floors from unrelated upstream work must be preserved.
+
+Cache cleanup must use bounded qualification manifests and process ownership
+checks rather than scan every raw artifact as a testing prerequisite. This
+iteration reclaimed 16 GiB from 221 inactive Go archive entries, preserving
+source, module caches, executable cache entries and active caches. Each planned
+inode was rechecked before deletion and absence verified afterward. The retained
+receipt is `/mnt/data/sn-testnet/root-mainnet-cache-reclaim-2-20261002/receipt.json`.
+Reference checks covered declared receipt/manifest/checksum/document classes;
+they do not assert absence of references in every raw artifact.
+
+### October 2: validate the whole local test graph before compilation
+
+The independent member-recovery checkout initially omitted five local sibling
+modules. Compilation stopped at the first missing import, before any product
+test ran. Preserve this as a harness setup failure rather than a regression or
+a passing qualification. A reusable preflight must resolve effective workspace
+overrides before inspecting local replacements, report all missing paths and
+pin mismatches together, and verify the staged source identity. An obsolete
+replacement overridden by go.work must not create a false missing-path alarm.
+The corrected member checkout has a passing graph preflight; its normal/race
+qualification remains a separate result. This preflight does not replace
+compiler checks, published-module qualification or release provenance.
+
+### October 2: preserve reader sentinel contracts at guarded I/O boundaries
+
+The first actual storage preparation CLI candidate compiled, then both public
+tests failed at LevelDB inspection with EOF. Its new reader returned
+`errors.Join(readErr, contextErr)` even when contextErr was nil, wrapping the
+ordinary `io.EOF` sentinel. LevelDB's journal reader requires the original
+sentinel. Preserve the underlying read error unchanged when the additional
+guard succeeds; join only genuine additional causes. Never discard an integrity
+or cancellation failure merely because another cause is EOF.
+
+The adjacent existing validator spool at
+`validator/attempt_cut_v2_seal_scratch.go` also joins every read error with its
+postcheck. That is a concrete audit lead assigned for actual consumer-level
+reproduction and correction, not a proven fixed behavior. Deterministic tests
+must cover a complete stream, empty stream, short read and EOF together with
+a genuine failed guard. Tests of `errors.Is(err, io.EOF)` alone cannot prove
+compatibility with consumers that require an unwrapped sentinel. The original
+preparation failure remains retained separately from later source qualification.
+
+### October 2: reuse compiler work without reusing test outcomes
+
+The independent member-review gate used a new private Go build cache and spent
+minutes compiling unchanged normal/race dependencies. Subsequent selected
+tests should reuse the reviewer's own existing build cache on /mnt/data while
+keeping exact source/module pins, private working data and `-count=1` actual
+test execution. Preserve a live compilation rather than restart it just to
+change cache policy. Go's compilation cache and an authenticated runtime proof
+cache have different contracts; neither permits reusing current balances,
+nonces or test pass results. Independent release/compiler provenance remains
+a separate MG-02 gate and is not established by these cached test runs.
+
+### October 2: cancellation after durable preparation is uncertain progress
+
+The preparation controls reproduced a cancellation after control-header fsync
+that returned only context cancellation, despite retained progress. After a
+durable header or root reservation may exist, report exact-plan readback
+uncertainty and retain the original plan; do not let the caller treat this as
+an unused preparation and generate another nonce or generation. Admission
+pressure before effects remains separately retryable. Test cancellation and
+lost acknowledgements at each publication boundary, including short report
+delivery after successful preparation. The successor remains under qualification.
+
+The [retained-member qualification](evidence/successor-member-qualification-20261002.md)
+now independently reproduces all five lost-history/inode defects and passes
+ten selected normal/race controls plus vet. Integration with the newer current
+observer is a separate pending scope; those results do not imply restore or
+offline owner enrollment is complete.
+
+
+### October 2: guard failure must prevent full-buffer acceptance
+
+Returning a full byte count together with a custody error is insufficient for
+standard consumers: ReadFull can drop that error and a decoder can accept a
+complete object. After a failed post-read guard, admit zero bytes while retaining
+the true descriptor position and cause. Preserve bare EOF on an ordinary finish.
+Test ReadAll, Copy, ReadFull, JSON, direct EOF and the actual production descriptor
+reader, with cancellation and named-inode replacement at the read boundary.
+[Author evidence and pending independent scope](evidence/current-graph-reader-progress-20261002.md)
+retain the earlier correction and its four concrete full-buffer counterexamples.
+
+### October 2: runtime continuation needs caller-owned GET retry budgets
+
+The actual finite claim command on unchanged main made five parallel-route GET
+attempts and panicked on a typed 503 after roughly 0.6 seconds, despite an outage
+that remained transient. Route hedging and a small transport retry are not the
+command's retry budget. Give epoch/pool reads a caller-owned 300-second budget,
+retry classified transient failures, join cancellation and return errors rather
+than panic. Test a sustained outage through the real public command and SDK;
+keep signed submission outside read retry. The first cardinality-only fixture
+was invalid because route attempts consumed its synthetic failures; retain it
+as a harness failure, separately from the corrected causal controls. The fix
+is in implementation, not yet qualified or merged.
+
+
+### October 2: preserve qualification headroom through scoped cache cleanup
+
+A further [8.04 GiB reclaim](evidence/cache-reclaim-3-20261002.json) removed
+122 inactive Go archives from the old cache, each at least 48 hours old and
+16 MiB, after privileged process-reference checks, archive-magic/link/stat
+checks and a bounded declared-metadata reference scan. Repeat physical identity
+checks before removal and verify absence afterward. Preserve active compilation,
+source, modules, immutable evidence and executable artifacts. A new private
+member cache had no large same-key duplicate candidates in the shared reviewer
+cache and was preserved. Compiler-cache cleanup does not change source or test
+qualification and does not establish global raw-artifact reference absence.
+
+
+### October 2: review each guarded reader's actual consumers
+
+The post-read full-count issue also appears in Server durableBlobReader.Read
+and localBlobCapacityReader.Read, and the new preparation reader. Each returns
+read bytes alongside a failed post-read guard. These are assigned for exact
+consumer-level reproduction and narrow successors. Preserve successful frozen
+scope receipts; do not mutate them or label source inspection a reproduced
+production failure. Distinguish exposed standard consumers from outer copy or
+ledger inspectors that already recheck the error/context before publication.
+
+
+### October 2: a running chain can upgrade during offline launch preparation
+
+The public archive advanced from observed v470 to exact finalized v472 while
+preparation continued. Retain the [new observation](evidence/runtime-472-route-observation-20261002.json)
+as unapproved intake, with raw code/metadata, hashes and block identity. An old
+artifact exception does not approve its successor. Continue unaffected reads,
+historical recovery and offline implementation; admit a current signed operation
+only against an independently reviewed consumed interface and exact current
+artifact. Runtime catalog selection must distinguish original receipt execution,
+current observation, pre-sign admission and pre-broadcast recheck. The failing
+Snow route supplies no replacement identity or permission to retarget signed plans.
+
+
+### October 2: progress labels must retain their evidence domain
+
+The [actual producer map](evidence/provider-proof-settlement-hook-map-20261002.md)
+shows that an unsigned claim queue can become finalized from leafClaimed state,
+while signed claims require exact-transaction receipts. Neither route is implied
+by provider transport readiness, and a local operator database snapshot supplies
+no native finality or payment amount. Extend monitoring through the existing
+owned proof/receipt/durable-flush boundaries, with independent expected pool,
+contract and operator identities. Keep unavailable, zero payout, carry, pending
+claim and uncertain signed liabilities distinct. Do not duplicate a shared pool's
+payment across provider slots or report status before durable acknowledgement.
+
+
+### October 2: resumed custody assertions need an exact allowed transition
+
+An old blanket file-equality assertion rejected an intentionally updated retained
+member-census head. Replace only that assertion with the exact approved transition:
+keep predecessor member inode/hash/size, authenticate each new execution and nonce
+member, preserve original approval/adoption/count/outcome authority, and pin the
+complete resulting namespace and head inode across subsequent resumes. A negative
+missing-receipt control must restore the original held inode, not manufacture a
+replacement. The [separate fixture qualification](evidence/successor-member-qualification-20261002.md)
+retains the original normal/race failure and awaits independent replay. Do not
+solve this by excluding every mutable file from custody checks.

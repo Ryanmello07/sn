@@ -74,14 +74,15 @@ func bootstrapContractTestResult(t *testing.T, raw []byte) bootstrapChainContrac
 func TestBootstrapContractPlanPrecedesCustodyAndSigning(t *testing.T) {
 	f := newBootstrapChainFixture(t)
 	originalPlan := f.preparation.Plan.ContentHash
+	prepared := mainnetNamespaceTest(t, f.config.RunDirectory)
 	var stdout, stderr bytes.Buffer
-	if code := runMain(t.Context(), []string{"bootstrap-chain", "contract-plan", "--config", f.path}, &stdout, &stderr); code != 3 {
+	if code := runMain(f.storageContext(t.Context()), []string{"bootstrap-chain", "contract-plan", "--config", f.path}, &stdout, &stderr); code != 3 {
 		t.Fatalf("contract plan exit %d: %s", code, stderr.String())
 	}
 	result := bootstrapContractTestResult(t, stdout.Bytes())
 	if result.PlanHash != originalPlan || result.ContractPlanHash != f.contracts.config.Plan.hash() || result.Scope != "approved-plan" || result.Status != "blocked" || !result.PlanInspectionComplete || result.CustodyInspectionComplete || result.LocalPreparation != nil || result.RemainingOriginalAttempts != nil ||
 		result.MinimumFreshInstallationAttempts != 9 || result.OriginalMaximumAttempts != 2 || !slices.Contains(result.Blockers, "NINE_FRESH_INSTALLATION_SENDS_EXCEED_ORIGINAL_ATTEMPT_CAP") || !slices.Contains(result.Blockers, "FULL_INSTALLATION_ACTION_APPROVAL_MISSING") ||
-		len(result.Actions) != 9 || !result.Actions[0].SemanticsVerified || result.Actions[1].Approved || result.Actions[8].ExecutorImplemented || len(f.journals(t)) != 0 || len(f.contracts.counts) != 0 {
+		len(result.Actions) != 9 || !result.Actions[0].SemanticsVerified || result.Actions[1].Approved || result.Actions[8].ExecutorImplemented || !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, f.config.RunDirectory)) || len(f.contracts.counts) != 0 {
 		t.Fatalf("plan concealed original scope or opened custody: %+v", result)
 	}
 	if prepared := f.result(t, "apply"); prepared.PlanHash != originalPlan || !prepared.LocalPreparationComplete {
@@ -352,7 +353,7 @@ func TestBootstrapContractReadinessReleasesLocksOnAllExits(t *testing.T) {
 	f := newBootstrapChainFixture(t)
 	f.result(t, "apply")
 	before := f.journals(t)
-	store, err := openEvmActionStore(f.contracts.config, false, nil)
+	store, err := openEvmActionStore(f.contracts.config, false, nil, f.storageContext(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +392,7 @@ func TestBootstrapContractReadinessRejectsAuthorityAndScopeChanges(t *testing.T)
 	legacy.Schema, legacy.RootValidator = bootstrapChainConfigSchemaV2, nil
 	bootstrapRootTestWrite(t, f.path, legacy)
 	var stdout, stderr bytes.Buffer
-	if code := runMain(t.Context(), []string{"bootstrap-chain", "contract-plan", "--config", f.path}, &stdout, &stderr); code != 3 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "v3 scope") || !reflect.DeepEqual(before, f.journals(t)) {
+	if code := runMain(f.storageContext(t.Context()), []string{"bootstrap-chain", "contract-plan", "--config", f.path}, &stdout, &stderr); code != 3 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "v3 scope") || !reflect.DeepEqual(before, f.journals(t)) {
 		t.Fatalf("old preparation acquired inspection scope: %d %s", code, stderr.String())
 	}
 }

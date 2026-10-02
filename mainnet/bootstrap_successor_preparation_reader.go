@@ -7,11 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
 )
 
@@ -22,7 +22,9 @@ func openBootstrapSuccessorPreparationReader(ctx context.Context, expected boots
 }
 
 // Execution ownership acquires the same physical directory exclusively before
-// borrowing preparation bytes. It never upgrades a shared lock in place.
+// borrowing preparation bytes. Its retained guard also admits execution writes;
+// passive readers keep read-only admission, even on full or read-only media.
+// Neither path upgrades an already borrowed owner or lock in place.
 func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected bootstrapSuccessorPreparationPlan, exclusive bool, hook func(string) error) (_ *bootstrapSuccessorPreparationStore, _ bootstrapSuccessorPreparationRecord, resultErr error) {
 	var record bootstrapSuccessorPreparationRecord
 	if ctx == nil {
@@ -40,7 +42,11 @@ func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected b
 		return nil, record, err
 	}
 	path := copied.Proposal.OriginalRunDirectory
-	storage, err := openMainnetDurableDirectory(ctx, path, durablevolume.ReadOnly)
+	access := durablevolume.ReadOnly
+	if exclusive {
+		access = durablevolume.ReadWrite
+	}
+	storage, err := openMainnetDurableDirectory(ctx, path, access)
 	if err != nil {
 		return nil, record, err
 	}
@@ -66,12 +72,20 @@ func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected b
 	if err := mainnetDurableFlock(fd, mode|unix.LOCK_NB); err != nil {
 		return nil, record, errors.Join(errors.New("successor preparation has an active local owner"), err)
 	}
+	self.members, err = openBootstrapSuccessorMembers(storage, self.directory, false, !exclusive)
+	if err != nil {
+		return nil, record, err
+	}
+	if pending := self.members.census.Pending; pending != nil && (pending.Name == bootstrapSuccessorPreparationFile || pending.Name == bootstrapSuccessorPreparationFile+".lock") {
+		return nil, record, errors.New("successor preparation member publication is pending; resume its original owner")
+	}
 	if err := self.checkpoint("reader-acquired"); err != nil {
 		return nil, record, err
 	}
-	entries, err := self.directory.Readdirnames(513)
+	entries, err := self.directory.Readdirnames(514)
+	entries = bootstrapSuccessorApplicationNames(entries, self.members.spec.Name)
 	if err != nil && !errors.Is(err, io.EOF) || len(entries) > 512 {
-		return nil, record, errors.Join(errors.New("successor custody directory exceeds its bounded census"), err)
+		return nil, record, mainnetDurableUnavailable("successor custody directory exceeds its bounded census", err)
 	}
 	for _, name := range entries {
 		if strings.HasPrefix(name, bootstrapSuccessorStagePrefix) {

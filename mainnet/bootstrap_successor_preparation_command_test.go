@@ -143,7 +143,7 @@ func TestBootstrapSuccessorPreparationCommandRetainsActualV3Prefix(t *testing.T)
 		t.Fatalf("public preparation lost additive floors or inferred executable authority: %+v", result)
 	}
 	after := bootstrapSuccessorPreparationTestFiles(t, f.config.RunDirectory)
-	if len(after) != len(namesBefore)+2 {
+	if len(after) != len(namesBefore)+3 {
 		t.Fatal("public preparation created caller-selected or extra custody")
 	}
 	var record bootstrapSuccessorPreparationRecord

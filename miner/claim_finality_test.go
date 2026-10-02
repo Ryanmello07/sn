@@ -217,7 +217,7 @@ func TestClaimClockReplayUsesEVMNonceAndExactBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := *fixture.entry
-	consumed, err := rebroadcastSignedClaim(t.Context(), fixture.cfg, tx, from)
+	consumed, err := rebroadcastSignedClaimTest(t, t.Context(), fixture.cfg, tx, from)
 	if err != nil || consumed {
 		t.Fatalf("native100 consumed nonce available at EVM70: %t %v", consumed, err)
 	}
@@ -248,7 +248,7 @@ func TestClaimClockRestartRetainsUnfinalizedSignedReceipt(t *testing.T) {
 		t.Fatal("signed receipt recovery consulted a replacement API intent")
 		return nil, nil
 	})
-	status, err := reconcileClaimEntry(t.Context(), fixture.cfg, api, entry)
+	status, err := reconcileClaimEntry(t.Context(), fixture.cfg, api, entry, store)
 	var unresolved *claimSignedOutcomeError
 	if status != "" || !errors.As(err, &unresolved) || *entry != before {
 		t.Fatalf("restart discarded unfinalized EVM liability: status=%s error=%v entry=%+v", status, err, entry)
@@ -258,7 +258,7 @@ func TestClaimClockRestartRetainsUnfinalizedSignedReceipt(t *testing.T) {
 		defer fixture.stateLock.Unlock()
 		fixture.finalized = 95
 	}()
-	status, err = reconcileClaimEntry(t.Context(), fixture.cfg, api, entry)
+	status, err = reconcileClaimEntry(t.Context(), fixture.cfg, api, entry, store)
 	if err != nil || status != "finalized" || entry.FinalizedBlock != 90 || entry.RawTxHex != before.RawTxHex || entry.TxHash != before.TxHash || entry.Attempts != before.Attempts {
 		t.Fatalf("original EVM95 recovery failed: status=%s error=%v entry=%+v", status, err, entry)
 	}
@@ -307,7 +307,7 @@ func TestClaimClockReplayClosesBeforeNonceDispositionOrSend(t *testing.T) {
 			t.Fatal(err)
 		}
 		before := *fixture.entry
-		got, err := rebroadcastSignedClaim(t.Context(), fixture.cfg, tx, from)
+		got, err := rebroadcastSignedClaimTest(t, t.Context(), fixture.cfg, tx, from)
 		_, _, _, sends := fixture.evidence()
 		if got || err == nil || !strings.Contains(err.Error(), "not canonical") || len(sends) != 0 || *fixture.entry != before {
 			t.Fatalf("changed witness disposed or replayed nonce consumed=%t: got=%t error=%v sends=%v", consumed, got, err, sends)
@@ -395,7 +395,7 @@ func TestClaimClockCancellationClosesWithoutEvidenceOrSend(t *testing.T) {
 			if replay {
 				tx, _, from, err := authenticateSignedClaim(fixture.cfg, fixture.entry)
 				if err == nil {
-					_, err = rebroadcastSignedClaim(ctx, fixture.cfg, tx, from)
+					_, err = rebroadcastSignedClaimTest(t, ctx, fixture.cfg, tx, from)
 				}
 				done <- err
 			} else {

@@ -327,7 +327,7 @@ func TestBootstrapChainReadinessMissingStateNeverRepairsCustody(t *testing.T) {
 // markers on failure so the original owner can resume unchanged afterward.
 func TestBootstrapChainReadinessConflictingOwnerDoesNotLeakLocks(t *testing.T) {
 	f := newBootstrapChainReadinessFixture(t)
-	owner, err := openRootServiceStore(f.preparation.Root.Service, false)
+	owner, err := openRootServiceStore(f.preparation.Root.Service, false, f.storageContext(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}

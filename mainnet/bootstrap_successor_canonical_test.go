@@ -94,7 +94,7 @@ func TestBootstrapSuccessorCanonicalCountedAuthoritySurvivesRestart(t *testing.T
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, false, nil)
+	reopened, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 	if reopened != nil {
 		reopened.close()
 	}

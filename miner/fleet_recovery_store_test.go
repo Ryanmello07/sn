@@ -56,9 +56,9 @@ func fleetRecoveryTestPrepared(t *testing.T, fixture *fleetMainnetTestFixture) (
 }
 
 // Reads the durable record after releasing the command's owner.
-func fleetRecoveryTestRecord(t *testing.T) *fleetRecoveryRecord {
+func fleetRecoveryTestRecord(t *testing.T, fixture *fleetMainnetTestFixture) *fleetRecoveryRecord {
 	t.Helper()
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,12 +71,12 @@ func fleetRecoveryTestRecord(t *testing.T) *fleetRecoveryRecord {
 
 // A second owner is refused while the first holds its actual directory lock.
 func TestFleetRecoveryStoreExclusiveOwner(t *testing.T) {
-	newFleetMainnetTestFixture(t)
-	first, err := openFleetRecoveryStore()
+	fixture := newFleetMainnetTestFixture(t)
+	first, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second, err := openFleetRecoveryStore(); err == nil {
+	if second, err := openFleetRecoveryStore(fixture.durable.Context); err == nil {
 		second.close()
 		first.close()
 		t.Fatal("concurrent owner admitted")
@@ -84,7 +84,7 @@ func TestFleetRecoveryStoreExclusiveOwner(t *testing.T) {
 	if err := first.close(); err != nil {
 		t.Fatal(err)
 	}
-	second, err := openFleetRecoveryStore()
+	second, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestFleetRecoveryStoreInterruptedCommitRetainsExactSignedBytes(t *testing.T
 	for _, barrier := range []string{"file-synced", "renamed", "directory-synced"} {
 		fixture := newFleetMainnetTestFixture(t)
 		record, signer := fleetRecoveryTestPrepared(t, fixture)
-		store, err := openFleetRecoveryStore()
+		store, err := openFleetRecoveryStore(fixture.durable.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -111,7 +111,7 @@ func TestFleetRecoveryStoreInterruptedCommitRetainsExactSignedBytes(t *testing.T
 			t.Fatal("barrier did not stop the commit")
 		}
 		store.close()
-		retained := fleetRecoveryTestRecord(t)
+		retained := fleetRecoveryTestRecord(t, fixture)
 		if retained.TxHash != record.TxHash || !bytes.Equal(retained.Raw, record.Raw) || retained.Stage != "prepared" || retained.Nonce != record.Nonce {
 			t.Fatalf("%s discarded the original transaction", barrier)
 		}
@@ -126,7 +126,7 @@ func TestFleetRecoveryStoreInterruptedCommitRetainsExactSignedBytes(t *testing.T
 func TestFleetRecoveryStoreRejectsTamperedCustodyAndReplacement(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	record, signer := fleetRecoveryTestPrepared(t, fixture)
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,8 +158,8 @@ func TestFleetRecoveryStoreRejectsTamperedCustodyAndReplacement(t *testing.T) {
 // Missing/corrupt state cannot become a fresh empty journal on restart.
 func TestFleetRecoveryStoreMissingOrCorruptJournalFailsClosed(t *testing.T) {
 	for _, corrupt := range []bool{false, true} {
-		newFleetMainnetTestFixture(t)
-		store, err := openFleetRecoveryStore()
+		fixture := newFleetMainnetTestFixture(t)
+		store, err := openFleetRecoveryStore(fixture.durable.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -174,7 +174,7 @@ func TestFleetRecoveryStoreMissingOrCorruptJournalFailsClosed(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if store, err := openFleetRecoveryStore(); err == nil {
+		if store, err := openFleetRecoveryStore(fixture.durable.Context); err == nil {
 			store.close()
 			t.Fatal("missing/corrupt journal was reset")
 		}
@@ -184,8 +184,8 @@ func TestFleetRecoveryStoreMissingOrCorruptJournalFailsClosed(t *testing.T) {
 // A symlink cannot redirect either the exclusive journal or its commit file.
 func TestFleetRecoveryStoreRefusesSymlinkAndOversizedJournal(t *testing.T) {
 	for _, kind := range []string{"journal", "candidate", "oversized"} {
-		newFleetMainnetTestFixture(t)
-		store, err := openFleetRecoveryStore()
+		fixture := newFleetMainnetTestFixture(t)
+		store, err := openFleetRecoveryStore(fixture.durable.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -207,7 +207,7 @@ func TestFleetRecoveryStoreRefusesSymlinkAndOversizedJournal(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if store, err := openFleetRecoveryStore(); err == nil {
+		if store, err := openFleetRecoveryStore(fixture.durable.Context); err == nil {
 			store.close()
 			t.Fatalf("%s admitted", kind)
 		}
@@ -219,7 +219,7 @@ func TestFleetRecoveryStoreRefusesSymlinkAndOversizedJournal(t *testing.T) {
 func TestFleetRecoveryStorePendingIntentBlocksChangedTarget(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	record, signer := fleetRecoveryTestPrepared(t, fixture)
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestFleetRecoveryStorePendingIntentBlocksChangedTarget(t *testing.T) {
 func TestFleetRecoveryStoreRejectsInventoryRemoval(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	record, signer := fleetRecoveryTestPrepared(t, fixture)
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +258,7 @@ func TestFleetRecoveryStoreRejectsInventoryRemoval(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(state, "fleet-mainnet-recovery", "journal.json"), raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if store, err := openFleetRecoveryStore(); err == nil {
+	if store, err := openFleetRecoveryStore(fixture.durable.Context); err == nil {
 		store.close()
 		t.Fatal("removed inventory became fresh state")
 	}
@@ -269,7 +269,7 @@ func TestFleetRecoveryStoreRejectsInventoryRemoval(t *testing.T) {
 func TestFleetRecoveryStoreRejectsCandidateReplacementWithoutMutation(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	record, signer := fleetRecoveryTestPrepared(t, fixture)
-	store, err := openFleetRecoveryStore()
+	store, err := openFleetRecoveryStore(fixture.durable.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestFleetRecoveryStoreRejectsCandidateReplacementWithoutMutation(t *testing
 	if err := os.WriteFile(filepath.Join(dir, "journal.next"), raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if store, err := openFleetRecoveryStore(); err == nil {
+	if store, err := openFleetRecoveryStore(fixture.durable.Context); err == nil {
 		store.close()
 		t.Fatal("immutable replacement promoted")
 	}

@@ -83,7 +83,7 @@ func TestSignedClaimReconcilesCanonicalReceiptWithoutHistoricalAPI(t *testing.T)
 		return nil, errors.New("pruned")
 	})
 	beforeHash, beforeRaw := entry.TxHash, entry.RawTxHex
-	status, err := reconcileClaimEntry(context.Background(), cfg, api, entry)
+	status, err := reconcileClaimEntryTest(t, context.Background(), cfg, api, entry)
 	if err != nil || status != "finalized" || entry.FinalizedBlock != receipt.BlockNumber.Uint64() || entry.FinalizedBlockHash != strings.ToLower(receipt.BlockHash.Hex()) || entry.ReceiptStatus != 1 || entry.ReceiptLogsHash == "" || entry.TxHash != beforeHash || entry.RawTxHex != beforeRaw {
 		t.Fatalf("canonical signed recovery = %s, %v, %+v", status, err, entry)
 	}
@@ -109,7 +109,7 @@ func TestSignedClaimRejectsReceiptWithoutMatchingIntentEvent(t *testing.T) {
 		test.mutate(receipt)
 		cfg.RPC = []string{claimReceiptIdentityTestRPC(t, receipt, block)}
 		before := *entry
-		status, err := reconcileClaimEntry(context.Background(), cfg, fakeClaimAPI{err: errors.New("pruned")}, entry)
+		status, err := reconcileClaimEntryTest(t, context.Background(), cfg, fakeClaimAPI{err: errors.New("pruned")}, entry)
 		var unresolved *claimSignedOutcomeError
 		if status != "" || !errors.As(err, &unresolved) || *entry != before {
 			t.Fatalf("%s disposed signed history: status=%s error=%v entry=%+v", test.name, status, err, entry)
@@ -122,7 +122,7 @@ func TestSignedClaimMissingReceiptCannotBecomeAPINoClaim(t *testing.T) {
 	cfg.RPC = nil // unavailable chain outcome cannot be replaced by an API status
 	claim.NoId = nil
 	before := *entry
-	status, err := reconcileClaimEntry(context.Background(), cfg, fakeClaimAPI{result: claim}, entry)
+	status, err := reconcileClaimEntryTest(t, context.Background(), cfg, fakeClaimAPI{result: claim}, entry)
 	var unresolved *claimSignedOutcomeError
 	if status != "" || !errors.As(err, &unresolved) || *entry != before {
 		t.Fatalf("API no-claim disposed signed uncertainty: %s %v %+v", status, err, entry)
@@ -238,7 +238,7 @@ func TestClaimArtifactRootMismatchRemainsDistinctCorrectnessFailure(t *testing.T
 	}))
 	defer server.Close()
 	cfg.RPC = []string{server.URL}
-	status, err := reconcileClaimEntry(context.Background(), cfg, fakeClaimAPI{result: claim}, entry)
+	status, err := reconcileClaimEntryTest(t, context.Background(), cfg, fakeClaimAPI{result: claim}, entry)
 	var mismatch *claimArtifactRootMismatchError
 	if status != "" || !errors.As(err, &mismatch) || mismatch.epoch != 70 {
 		t.Fatalf("root mismatch was hidden as %s: %v", status, err)
@@ -295,7 +295,7 @@ func TestSignedClaimConsumedNonceRetainsExactLiability(t *testing.T) {
 	defer server.Close()
 	cfg.RPC = []string{server.URL}
 	before := *entry
-	status, err := reconcileClaimEntry(context.Background(), cfg, fakeClaimAPI{result: claim}, entry)
+	status, err := reconcileClaimEntryTest(t, context.Background(), cfg, fakeClaimAPI{result: claim}, entry)
 	var unresolved *claimSignedOutcomeError
 	if status != "" || !errors.As(err, &unresolved) || !strings.Contains(err.Error(), "nonce is consumed") || *entry != before {
 		t.Fatalf("consumed nonce disposed exact liability: status=%s err=%v entry=%+v", status, err, entry)
@@ -361,7 +361,7 @@ func TestSignedClaimPrunedAPIReplaysExactBytesAfterFinalizedPreflight(t *testing
 			t.Fatal("exact signed replay depended on pruned API")
 			return nil, nil
 		})
-		status, err := reconcileClaimEntry(context.Background(), cfg, api, entry)
+		status, err := reconcileClaimEntryTest(t, context.Background(), cfg, api, entry)
 		server.Close()
 		wantSends := 1
 		if rejectPreflight {

@@ -182,7 +182,7 @@ func TestMonitorServicesCommandInitialOutageAndCheckpointCorruption(t *testing.T
 	}
 	broken := fixture.start(t, url, monitorServiceHooks{})
 	<-broken.done
-	if broken.exit != 3 || !strings.Contains(broken.stderr.String(), "checksum") {
+	if broken.exit != 3 || !strings.Contains(broken.stderr.String(), "snapshot bytes differ from the acknowledged head") {
 		t.Fatal("corrupt continuity was reset", broken.exit, broken.stderr.String())
 	}
 }

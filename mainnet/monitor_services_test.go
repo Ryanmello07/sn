@@ -134,7 +134,12 @@ type monitorServicesTestRun struct {
 // Only waiting is controlled. Real command admission, reads and publication run.
 func (self *monitorServicesFixture) start(t *testing.T, url string, hooks monitorServiceHooks) *monitorServicesTestRun {
 	t.Helper()
-	ctx, cancel := context.WithCancel(t.Context())
+	return self.startWithContext(t, t.Context(), url, hooks)
+}
+
+func (self *monitorServicesFixture) startWithContext(t *testing.T, parent context.Context, url string, hooks monitorServiceHooks) *monitorServicesTestRun {
+	t.Helper()
+	ctx, cancel := context.WithCancel(parent)
 	run := &monitorServicesTestRun{cancel: cancel, done: make(chan struct{}), events: make(chan monitorServiceEvent, 32), resume: map[string]chan struct{}{}}
 	for _, role := range self.policy.Validators {
 		run.resume[role.Role] = make(chan struct{})
@@ -157,7 +162,7 @@ func (self *monitorServicesFixture) start(t *testing.T, url string, hooks monito
 	}
 	go func() {
 		defer close(run.done)
-		run.exit = runMainWithMonitorHooks(ctx, self.args(url), &monitorServicesTestWriter{events: run.events}, &run.stderr, self.clock.now, hooks)
+		run.exit = runMonitorStorageTestWithHooks(t, ctx, self.args(url), &monitorServicesTestWriter{events: run.events}, &run.stderr, self.clock.now, hooks)
 	}()
 	t.Cleanup(func() { run.cancel(); <-run.done })
 	return run
@@ -443,12 +448,18 @@ func TestMonitorServicesCommandFutureClockAndRollbackRemainVisible(t *testing.T)
 	}
 }
 
-// A genuine terminal output ownership fault cancels and joins a pending chain
-// read, instead of waiting for its whole retry window or detaching that worker.
-func TestMonitorServicesCommandOwnershipFailureCancelsAndJoinsPeer(t *testing.T) {
-	fixture := newMonitorServicesFixture(t, "alpha")
+// An invalidated owner stops without canceling a healthy role. Explicit parent
+// cancellation still joins the chain request and every remaining owner.
+func TestMonitorServicesCommandOwnershipFailurePreservesPeerAndJoinsCancellation(t *testing.T) {
+	fixture := newMonitorServicesFixture(t, "alpha", "beta")
 	url, entered, left := monitorServicesBlockedChain(t)
-	run := fixture.start(t, url, monitorServiceHooks{})
+	terminal := make(chan error, 1)
+	run := fixture.start(t, url, monitorServiceHooks{afterResult: func(ctx context.Context, exit int) {
+		if exit == 3 {
+			terminal <- ctx.Err()
+		}
+	}})
+	run.next(t)
 	run.next(t)
 	<-entered
 	_, path := monitorValidatorPaths(fixture.checkpointPath, fixture.metricsPath, "alpha")
@@ -460,10 +471,19 @@ func TestMonitorServicesCommandOwnershipFailureCancelsAndJoinsPeer(t *testing.T)
 	}
 	run.again(t, "alpha")
 	event := run.next(t)
+	if err := <-terminal; err != nil {
+		t.Fatal("one stopped role canceled the healthy campaign", err)
+	}
+	run.again(t, "beta")
+	peer := run.next(t)
+	if event.Publication != "ownership-error" || peer.Role != "beta" || peer.Publication != "published" {
+		t.Fatal("ownership loss suppressed its independent peer", event, peer)
+	}
+	run.cancel()
 	<-run.done
 	<-left
 	if run.exit != 3 || event.Publication != "ownership-error" {
-		t.Fatal("ownership failure did not stop and join the composition", run.exit, event)
+		t.Fatal("explicit cancellation failed to join the composition", run.exit, event)
 	}
 }
 
@@ -475,7 +495,7 @@ func TestMonitorServicesCommandAmbiguousPublicationRetriesAndRecovers(t *testing
 	attempt := 0
 	hooks := monitorServiceHooks{syncDirectory: func(role, kind string, file *os.File) error {
 		err := file.Sync()
-		if kind == "metrics" {
+		if role == "alpha" && kind == "metrics" {
 			attempt++
 			if attempt == 3 || attempt == 4 {
 				return errors.Join(err, errors.New("synthetic post-sync failure"))

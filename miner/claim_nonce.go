@@ -50,8 +50,10 @@ func (self *claimAdmission) nonceMinimum() uint64 {
 	return self.nonceFloor
 }
 
-// Call only after the exact raw/hash checkpoint succeeded, or while seeding
-// already durable files before workers start. No receipt/finality is inferred.
+// Call after an acknowledged or uncertain exact raw/hash checkpoint, or while
+// seeding retained files before workers start. Uncertainty conservatively keeps
+// the signed nonce reserved until that owner's actual bytes are reconciled.
+// No receipt/finality is inferred.
 func (self *claimAdmission) rememberSigned(cfg *ClaimDaemonConfig, entry *ClaimQueueEntry) error {
 	tx, _, _, err := authenticateSignedClaim(cfg, entry)
 	if err != nil {

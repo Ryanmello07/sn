@@ -96,13 +96,13 @@ func TestBootstrapContractCurrentCommandRequiresOriginalReadScope(t *testing.T) 
 	for _, suffix := range [][]string{nil, {"--submit"}, {"--signed-transaction", "synthetic-absent"}, {"--pending"},
 		{"--online=false"}, {"--accept-plan-hash", "sha256:" + strings.Repeat("f", 64)}, {"--run-dir", t.TempDir()}} {
 		var stdout, stderr bytes.Buffer
-		if code := runMain(t.Context(), append(append([]string(nil), args...), suffix...), &stdout, &stderr); code != 2 || stdout.Len() != 0 {
+		if code := runMain(f.storageContext(t.Context()), append(append([]string(nil), args...), suffix...), &stdout, &stderr); code != 2 || stdout.Len() != 0 {
 			t.Fatal("current contract command admitted absent or changed read authority", suffix, code, stderr.String())
 		}
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if code := runMain(ctx, args, io.Discard, io.Discard); code != 2 {
+	if code := runMain(f.storageContext(ctx), args, io.Discard, io.Discard); code != 2 {
 		t.Fatal("canceled current contract observation reported success", code)
 	}
 	if !reflect.DeepEqual(before, f.journals(t)) || !maps.Equal(counts, f.contracts.counts) {
@@ -139,7 +139,7 @@ func TestBootstrapContractCurrentCommandChecksPinnedBootstrapState(t *testing.T)
 	args := []string{"bootstrap-chain", "contract-current-state", "--config", f.path, "--run-dir", f.config.RunDirectory,
 		"--accept-plan-hash", f.preparation.Plan.ContentHash, "--online"}
 	var stdout, stderr bytes.Buffer
-	if code := runMain(t.Context(), args, &stdout, &stderr); code != 0 {
+	if code := runMain(f.storageContext(t.Context()), args, &stdout, &stderr); code != 0 {
 		t.Fatal("public current bootstrap observation refused advancing head", code, stderr.String())
 	}
 	var result bootstrapContractCurrentAdmission
@@ -161,7 +161,7 @@ func TestBootstrapContractCurrentCommandChecksPinnedBootstrapState(t *testing.T)
 		result.Snapshot.Mapping.Identity.FinalizedHash == result.CheckedThroughNativeHash {
 		t.Fatal("current bootstrap report changed its proof block or granted wider authority", result, err)
 	}
-	scope, err := openBootstrapContractReceiptScope(t.Context(), f.path, f.config.RunDirectory, f.preparation.Plan.ContentHash)
+	scope, err := openBootstrapContractReceiptScope(f.storageContext(t.Context()), f.path, f.config.RunDirectory, f.preparation.Plan.ContentHash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +296,7 @@ func TestBootstrapContractCurrentCommandChecksPinnedBootstrapState(t *testing.T)
 	})
 	stdout.Reset()
 	stderr.Reset()
-	code := runMain(t.Context(), args, &stdout, &stderr)
+	code := runMain(f.storageContext(t.Context()), args, &stdout, &stderr)
 	chain.stateLock.Lock()
 	observed := armed
 	chain.stateLock.Unlock()

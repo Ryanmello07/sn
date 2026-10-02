@@ -20,6 +20,7 @@ func TestBootstrapSuccessorSafeCurrentRevisionConservesCustody(t *testing.T) {
 	owner := f.open(true, nil)
 	root, registry := owner.local.path, owner.registry.path
 	original := bootstrapSuccessorPreparationTestFiles(t, root)
+	delete(original, bootstrapSuccessorMemberSpec(false).Name)
 	nonces := bootstrapSuccessorPreparationTestFiles(t, registry)
 	base := bootstrapSuccessorCanonicalTestApproval(t, f.approval.Plan, f.key, bootstrapSuccessorCanonicalTestRuntime())
 	if err := owner.retainCanonicalAuthority(t.Context(), base); err != nil {
@@ -207,7 +208,7 @@ func TestBootstrapSuccessorSafeCurrentRevisionRejectsEventSubstitution(t *testin
 			t.Fatal(err)
 		}
 	}
-	reopened, err := openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, false, nil)
+	reopened, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 	if reopened != nil {
 		reopened.close()
 	}
@@ -278,7 +279,7 @@ func TestBootstrapSuccessorSafeCurrentRevisionRejectsLostAndForkedHistory(t *tes
 		if err != nil {
 			t.Fatal(err)
 		}
-		reopened, err := openBootstrapSuccessorExecutionStore(t.Context(), f.approval.Plan, f.approval, f.profile, false, nil)
+		reopened, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 		if reopened != nil {
 			reopened.close()
 		}

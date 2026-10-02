@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
 )
 
@@ -38,13 +39,21 @@ func claimQueueOpenDirectory(path string) (*os.File, error) {
 		return nil, err
 	}
 	directory := os.NewFile(uintptr(fd), path)
-	if err := claimQueuePrivateDirectory(directory); err != nil {
+	if err := claimQueueLockDirectory(directory); err != nil {
 		return nil, errors.Join(err, directory.Close())
 	}
-	if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		return nil, errors.Join(fmt.Errorf("claim queue already has an owner: %w", err), directory.Close())
-	}
 	return directory, nil
+}
+
+// Existing physical ownership is acquired on the guard's borrowed descriptor.
+func claimQueueLockDirectory(directory *os.File) error {
+	if err := claimQueuePrivateDirectory(directory); err != nil {
+		return err
+	}
+	if err := unix.Flock(int(directory.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		return errors.Join(durablevolume.ErrBusy, fmt.Errorf("claim queue already has an owner: %w", err))
+	}
+	return nil
 }
 
 // Read only a private regular entry; a fifo cannot block ownership admission.

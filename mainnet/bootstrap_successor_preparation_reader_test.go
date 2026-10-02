@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // A complete source is opened through the real publication owner; the reader
@@ -73,15 +75,15 @@ func TestBootstrapSuccessorPreparationReaderRequiresCompleteClaim(t *testing.T) 
 		}},
 	}
 	for _, c := range cases {
-		approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
-		owner, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, nil)
+		approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
+		owner, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, nil)
 		if err != nil {
 			t.Fatal(c.name, err)
 		}
 		if err := owner.close(); err != nil {
 			t.Fatal(err)
 		}
-		reader, record, err := openBootstrapSuccessorPreparationReader(t.Context(), approval.Plan, nil)
+		reader, record, err := openBootstrapSuccessorPreparationReader(storage.Context, approval.Plan, nil)
 		if err != nil || record.validate(approval) != nil {
 			t.Fatalf("complete source refused before %s: %v", c.name, err)
 		}
@@ -90,7 +92,7 @@ func TestBootstrapSuccessorPreparationReaderRequiresCompleteClaim(t *testing.T) 
 		}
 		c.change(t, approval)
 		before := bootstrapSuccessorPreparationTestFiles(t, approval.Plan.Proposal.OriginalRunDirectory)
-		reader, _, err = openBootstrapSuccessorPreparationReader(t.Context(), approval.Plan, nil)
+		reader, _, err = openBootstrapSuccessorPreparationReader(storage.Context, approval.Plan, nil)
 		if reader != nil {
 			reader.close()
 		}
@@ -98,8 +100,8 @@ func TestBootstrapSuccessorPreparationReaderRequiresCompleteClaim(t *testing.T) 
 			t.Fatalf("read-only inspection accepted or repaired %s", c.name)
 		}
 	}
-	approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
-	if reader, _, err := openBootstrapSuccessorPreparationReader(t.Context(), approval.Plan, nil); err == nil || reader != nil || len(bootstrapSuccessorPreparationTestFiles(t, approval.Plan.Proposal.OriginalRunDirectory)) != 0 {
+	approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
+	if reader, _, err := openBootstrapSuccessorPreparationReader(storage.Context, approval.Plan, nil); err == nil || reader != nil || len(bootstrapSuccessorPreparationTestFiles(t, approval.Plan.Proposal.OriginalRunDirectory)) != 0 {
 		t.Fatal("read-only inspection created absent custody")
 	}
 }
@@ -107,12 +109,12 @@ func TestBootstrapSuccessorPreparationReaderRequiresCompleteClaim(t *testing.T) 
 // Shared readers coexist, exclude a real preparation writer and release all
 // ownership on rejection or cancellation without timing-dependent scheduling.
 func TestBootstrapSuccessorPreparationReaderFencesPublication(t *testing.T) {
-	approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
-	owner, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, nil)
+	approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
+	owner, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, _, err := openBootstrapSuccessorPreparationReader(t.Context(), approval.Plan, nil)
+	reader, _, err := openBootstrapSuccessorPreparationReader(storage.Context, approval.Plan, nil)
 	if reader != nil {
 		reader.close()
 	}
@@ -123,17 +125,17 @@ func TestBootstrapSuccessorPreparationReaderFencesPublication(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := bootstrapSuccessorPreparationTestFiles(t, approval.Plan.Proposal.OriginalRunDirectory)
-	first, _, err := openBootstrapSuccessorPreparationReader(t.Context(), approval.Plan, nil)
+	first, _, err := openBootstrapSuccessorPreparationReader(storage.Context, approval.Plan, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer first.close()
-	second, _, err := openBootstrapSuccessorPreparationReader(t.Context(), approval.Plan, nil)
+	second, _, err := openBootstrapSuccessorPreparationReader(storage.Context, approval.Plan, nil)
 	if err != nil {
 		t.Fatal("independent read-only inspections cannot coexist", err)
 	}
 	defer second.close()
-	owner, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+	owner, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 	if owner != nil {
 		owner.close()
 	}
@@ -143,7 +145,7 @@ func TestBootstrapSuccessorPreparationReaderFencesPublication(t *testing.T) {
 	if err := errors.Join(first.close(), second.close()); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithCancel(storage.Context)
 	reader, _, err = openBootstrapSuccessorPreparationReader(ctx, approval.Plan, func(stage string) error {
 		if stage == "reader-validated" {
 			cancel()
@@ -156,7 +158,7 @@ func TestBootstrapSuccessorPreparationReaderFencesPublication(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal("reader ignored cancellation after validating the claim", err)
 	}
-	owner, err = openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, false, nil)
+	owner, err = openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, false, nil)
 	if err != nil {
 		t.Fatal("rejected reader retained ownership", err)
 	}
@@ -173,8 +175,8 @@ func TestBootstrapSuccessorPreparationReaderFencesPublication(t *testing.T) {
 func TestBootstrapSuccessorPreparationReaderRejectsUnsafeOrReplacedCustody(t *testing.T) {
 	for _, name := range []string{bootstrapSuccessorPreparationFile, bootstrapSuccessorPreparationFile + ".lock"} {
 		for _, kind := range []string{"permissions", "symlink", "hardlink", "oversized"} {
-			approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
-			owner, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, nil)
+			approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
+			owner, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -204,7 +206,7 @@ func TestBootstrapSuccessorPreparationReaderRejectsUnsafeOrReplacedCustody(t *te
 					t.Fatal(err)
 				}
 			}
-			reader, _, err := openBootstrapSuccessorPreparationReader(t.Context(), approval.Plan, nil)
+			reader, _, err := openBootstrapSuccessorPreparationReader(storage.Context, approval.Plan, nil)
 			if reader != nil {
 				reader.close()
 			}
@@ -213,8 +215,8 @@ func TestBootstrapSuccessorPreparationReaderRejectsUnsafeOrReplacedCustody(t *te
 			}
 		}
 	}
-	approval, _ := newBootstrapSuccessorPreparationTestApproval(t)
-	owner, err := openBootstrapSuccessorPreparationStore(t.Context(), approval.Plan, approval, true, nil)
+	approval, _, storage := newBootstrapSuccessorPreparationStorageTestApproval(t)
+	owner, err := openBootstrapSuccessorPreparationStore(storage.Context, approval.Plan, approval, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +225,7 @@ func TestBootstrapSuccessorPreparationReaderRejectsUnsafeOrReplacedCustody(t *te
 	}
 	root := approval.Plan.Proposal.OriginalRunDirectory
 	moved := filepath.Join(t.TempDir(), "synthetic-original-root")
-	reader, _, err := openBootstrapSuccessorPreparationReader(t.Context(), approval.Plan, func(stage string) error {
+	reader, _, err := openBootstrapSuccessorPreparationReader(storage.Context, approval.Plan, func(stage string) error {
 		if stage == "reader-validated" {
 			if err := os.Rename(root, moved); err != nil {
 				return err
@@ -235,7 +237,7 @@ func TestBootstrapSuccessorPreparationReaderRejectsUnsafeOrReplacedCustody(t *te
 	if reader != nil {
 		reader.close()
 	}
-	if err == nil || !strings.Contains(err.Error(), "physical root changed") {
+	if !errors.Is(err, durablevolume.ErrIdentity) {
 		t.Fatal("reader accepted replacement after claim admission", err)
 	}
 }

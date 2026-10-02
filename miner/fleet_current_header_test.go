@@ -23,7 +23,7 @@ func TestFleetMainnetRegisterAuthenticatesFinalizedUpgradeHeader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := fleetRegister(fixture.opts, fixture.manifest); err != nil {
+	if err := fleetRegister(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 		t.Fatalf("approved upgrade header prevented registration preparation: %v", err)
 	}
 	if fixture.count("payment_queryInfo") != 1 || fixture.count("author_submitAndWatchExtrinsic") != 0 {
@@ -44,7 +44,7 @@ func TestFleetMainnetPublishRetainsUpgradePreparedHeaderAcrossRestart(t *testing
 	}
 	fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, false)}
 	for range 2 {
-		if err := fleetPublish(fixture.opts, fixture.manifest); err != nil {
+		if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err != nil {
 			t.Fatalf("approved upgrade publication or retained recovery failed: %v", err)
 		}
 	}
@@ -68,9 +68,9 @@ func TestFleetMainnetEvmRetainsUpgradePreparedHeaderAcrossRestart(t *testing.T) 
 		fixture.opts["--dry-run"] = false
 		for range 2 {
 			if action == "bind" {
-				err = fleetBind(fixture.opts, fixture.manifest)
+				err = fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest)
 			} else {
-				err = fleetRevoke(fixture.opts, fixture.manifest)
+				err = fleetRevoke(fixture.durable.Context, fixture.opts, fixture.manifest)
 			}
 			if err != nil {
 				t.Fatalf("%s approved upgrade preparation or retained recovery failed: %v", action, err)
@@ -194,15 +194,15 @@ func TestFleetMainnetCommandsRejectUncommittedCurrentHeader(t *testing.T) {
 		var err error
 		switch action {
 		case "register":
-			err = fleetRegister(fixture.opts, fixture.manifest)
+			err = fleetRegister(fixture.durable.Context, fixture.opts, fixture.manifest)
 		case "publish":
-			err = fleetPublish(fixture.opts, fixture.manifest)
+			err = fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest)
 		case "bind":
-			err = fleetBind(fixture.opts, fixture.manifest)
+			err = fleetBind(fixture.durable.Context, fixture.opts, fixture.manifest)
 		case "revoke":
-			err = fleetRevoke(fixture.opts, fixture.manifest)
+			err = fleetRevoke(fixture.durable.Context, fixture.opts, fixture.manifest)
 		case "status":
-			err = fleetStatus(fixture.opts, fixture.manifest)
+			err = fleetStatus(fixture.durable.Context, fixture.opts, fixture.manifest)
 		}
 		if err == nil || !strings.Contains(err.Error(), "header SCALE hash") {
 			t.Fatalf("%s admitted an uncommitted current header: %v", action, err)

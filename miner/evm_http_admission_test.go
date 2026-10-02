@@ -55,7 +55,7 @@ func TestEvmHttpMinerDialPathsRefuseOversizedIdentity(t *testing.T) {
 		case "claim-state":
 			_, err = queryClaimedFinalized(t.Context(), cfg, claim)
 		case "claim-replay":
-			_, err = rebroadcastSignedClaim(t.Context(), cfg, tx, from)
+			_, err = rebroadcastSignedClaimTest(t, t.Context(), cfg, tx, from)
 		case "claim-receipt":
 			_, err = finalizedClaimReceipt(t.Context(), cfg, entry.TxHash, tx.ChainId())
 		}
@@ -130,7 +130,7 @@ func TestEvmHttpClaimRecoveryRetainsSignedReceiptAcrossAdmissionFailure(t *testi
 		t.Fatal(err)
 	}
 	before := *fixture.entry
-	status, err := reconcileSignedClaim(t.Context(), fixture.cfg, fixture.entry)
+	status, err := reconcileSignedClaim(t.Context(), fixture.cfg, fixture.entry, store)
 	if err == nil || status == "finalized" || !errors.Is(err, evmrpc.ErrResponseLimit) || fixture.entry.RawTxHex != before.RawTxHex || fixture.entry.TxHash != before.TxHash || fixture.entry.FinalizedBlock != 0 {
 		t.Fatalf("bad HTTP receipt altered signed custody: status=%s error=%v entry=%+v", status, err, fixture.entry)
 	}
@@ -142,7 +142,7 @@ func TestEvmHttpClaimRecoveryRetainsSignedReceiptAcrossAdmissionFailure(t *testi
 		t.Fatal(err)
 	}
 	refuse.Store(false)
-	status, err = reconcileSignedClaim(t.Context(), fixture.cfg, retained.Entries["70"])
+	status, err = reconcileSignedClaim(t.Context(), fixture.cfg, retained.Entries["70"], store)
 	_, _, _, sends := fixture.evidence()
 	if err != nil || status != "finalized" || retained.Entries["70"].FinalizedBlock != 90 || retained.Entries["70"].RawTxHex != before.RawTxHex || retained.Entries["70"].TxHash != before.TxHash || len(sends) != 1 || sends[0] != before.RawTxHex {
 		t.Fatalf("restart replaced the authorized exact replay or sent again: status=%s error=%v sends=%v", status, err, sends)
@@ -166,7 +166,7 @@ func TestEvmHttpClaimReplayStatusCannotMasqueradeAsKnownTransaction(t *testing.T
 		t.Fatal(err)
 	}
 	before := *fixture.entry
-	consumed, err := rebroadcastSignedClaim(t.Context(), fixture.cfg, tx, from)
+	consumed, err := rebroadcastSignedClaimTest(t, t.Context(), fixture.cfg, tx, from)
 	if err == nil || consumed || knownClaimTransaction(err) || sendCalls.Load() != 1 || *fixture.entry != before {
 		t.Fatalf("status body acknowledged or retried signed send: consumed=%t error=%v calls=%d", consumed, err, sendCalls.Load())
 	}

@@ -125,7 +125,7 @@ func TestEvmCreateLostReplyReconcilesOriginalInclusion(t *testing.T) {
 	if code != 1 || !oneOriginalWrite {
 		t.Fatalf("uncertain send was retried or forgotten: %d %s", code, diagnostic)
 	}
-	store, err := openEvmActionStore(f.config, false, nil)
+	store, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +306,7 @@ func TestEvmCreateAdmissionRejectsChangedRuntimeNetworkAndNonce(t *testing.T) {
 			// This case imports through the owner below, leaving the unrelated
 			// original signed-byte file unused.
 		}
-		store, err := openEvmActionStore(f.config, true, nil)
+		store, err := openEvmActionStore(f.config, true, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -459,7 +459,7 @@ func TestEvmCreateAmbiguousAttemptPublicationPoisonsOwner(t *testing.T) {
 	f := newEvmCreateFixture(t)
 	f.prepareSigned()
 	f.mine = false
-	store, err := openEvmActionStore(f.config, false, nil)
+	store, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -505,7 +505,7 @@ func TestEvmCreateOutputFailureRetainsCompletedChild(t *testing.T) {
 	}
 	args := []string{"bootstrap-contracts", "resume", "--config", f.configPath, "--run-dir", f.config.Plan.RunDirectory, "--accept-plan-hash", f.config.Plan.hash(), "--online", "--submit"}
 	var stderr bytes.Buffer
-	if code := runMain(context.Background(), args, bootstrapRootFailedWriter{}, &stderr); code != 1 {
+	if code := runMain(f.storageContext(context.Background()), args, bootstrapRootFailedWriter{}, &stderr); code != 1 {
 		t.Fatalf("output failure was acknowledged: %d", code)
 	}
 	result, code, diagnostic := f.command("resume", "--online", "--submit")
@@ -524,15 +524,15 @@ func TestEvmCreateInitialClaimRecoveryAndLostCustody(t *testing.T) {
 				return errors.New("synthetic claim interruption")
 			}
 			return nil
-		})
+		}, f.storage.Context)
 		if err == nil || store != nil {
 			t.Fatal("claim interruption was acknowledged")
 		}
-		store, err = openEvmActionStore(f.config, false, nil)
+		store, err = openEvmActionStore(f.config, false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatalf("recover %s: %v", boundary, err)
 		}
-		if _, err := openEvmActionStore(f.config, false, nil); err == nil {
+		if _, err := openEvmActionStore(f.config, false, nil, f.storage.Context); err == nil {
 			t.Fatal("second owner acquired flock")
 		}
 		record, err := store.load()
@@ -543,11 +543,11 @@ func TestEvmCreateInitialClaimRecoveryAndLostCustody(t *testing.T) {
 		if err := os.Remove(filepath.Join(f.config.Plan.RunDirectory, evmCreateStateFile)); err != nil {
 			t.Fatal(err)
 		}
-		if store, err := openEvmActionStore(f.config, false, nil); err == nil {
+		if store, err := openEvmActionStore(f.config, false, nil, f.storage.Context); err == nil {
 			store.close()
 			t.Fatal("completed missing journal became fresh allowance")
 		}
-		if store, err := openEvmActionStore(f.config, true, nil); err == nil {
+		if store, err := openEvmActionStore(f.config, true, nil, f.storage.Context); err == nil {
 			store.close()
 			t.Fatal("apply bypassed completed ownership marker")
 		}
@@ -558,7 +558,7 @@ func TestEvmCreateInitialClaimRecoveryAndLostCustody(t *testing.T) {
 // the retained journal or reserve a send, with no timing assumptions.
 func TestEvmCreateCanceledWaiterAndClosedStorage(t *testing.T) {
 	f := newEvmCreateFixture(t)
-	store, err := openEvmActionStore(f.config, true, nil)
+	store, err := openEvmActionStore(f.config, true, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -743,7 +743,7 @@ func TestEvmCreateScanCheckpointSurvivesLaterReadFailure(t *testing.T) {
 	if code != 0 || result.Status != "receipt-awaiting-finalized-mapping" {
 		t.Fatalf("bounded historical scan: %+v %d %s", result, code, diagnostic)
 	}
-	store, err := openEvmActionStore(f.config, false, nil)
+	store, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -761,7 +761,7 @@ func TestEvmCreateScanCheckpointSurvivesLaterReadFailure(t *testing.T) {
 	if _, code, diagnostic := f.command("resume", "--online"); code != 1 || !strings.Contains(diagnostic, "mapping is unavailable") {
 		t.Fatalf("historical outage acknowledged or misclassified: %d %s", code, diagnostic)
 	}
-	store, err = openEvmActionStore(f.config, false, nil)
+	store, err = openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

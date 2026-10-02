@@ -61,7 +61,7 @@ func (self *rootMonitorPublication) publish(event rootMonitorEvent, state *monit
 // Fixed numeric states and supplied bounded role/stream labels have no RPC text.
 // Delivery, read success and finalized progress are deliberately separate series.
 func renderRootMonitorMetrics(event rootMonitorEvent, state *monitorState, role, publication string, lastPublication time.Time) []byte {
-	status := map[string]int{"starting": 0, "ready": 1, "blocked": 2, "rpc-error": 3, "finality-stalled": 4, "finality-conflict": 5, "rpc-integrity": 6, "checkpoint-error": 7}[event.Status]
+	status := map[string]int{"starting": 0, "ready": 1, "blocked": 2, "rpc-error": 3, "finality-stalled": 4, "finality-conflict": 5, "rpc-integrity": 6, "checkpoint-error": 7, "storage-unavailable": 8}[event.Status]
 	publicationCode := map[string]int{"unconfigured": 0, "starting": 1, "published": 2, "retrying": 3, "ownership-error": 4, "unavailable": 5}[publication]
 	observedAt, _ := time.Parse(time.RFC3339Nano, event.ObservedAt)
 	unix := func(value time.Time) int64 {

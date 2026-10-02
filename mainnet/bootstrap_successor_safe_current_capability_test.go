@@ -207,9 +207,9 @@ func bootstrapSuccessorSafeCurrentTestCommandPreservesExactSend(t *testing.T, pu
 			if route == bootstrapSuccessorSafeCurrentNativeRoute && submit {
 				input = append(input, "--accept-safe-current-policy", rootObjectHash(revision))
 			}
-			code = runBootstrapSuccessorExecutionCommand(t.Context(), input, &stdout, &stderr)
+			code = runBootstrapSuccessorExecutionCommand(f.original.storageContext(t.Context()), input, &stdout, &stderr)
 		} else {
-			code = runBootstrapSuccessorExecutionCommandWithAuthorities(t.Context(), input, &stdout, &stderr, nil, route)
+			code = runBootstrapSuccessorExecutionCommandWithAuthorities(f.original.storageContext(t.Context()), input, &stdout, &stderr, nil, route)
 		}
 		var result bootstrapSuccessorExecutionResult
 		if stdout.Len() != 0 {
@@ -280,18 +280,19 @@ func bootstrapSuccessorSafeCurrentTestCommandPreservesExactSend(t *testing.T, pu
 		args = args[:len(args)-4]
 	}
 	func() {
-		loaded, profile, retained, err := loadBootstrapSuccessorExecution(t.Context(), f.original.path, root,
+		ctx := f.original.storageContext(t.Context())
+		loaded, profile, retained, err := loadBootstrapSuccessorExecution(ctx, f.original.path, root,
 			f.original.preparation.Plan.ContentHash, f.paths[1], f.paths[3], f.paths[5], f.approvalArgs[1], f.canonicalRef.Path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer retained.close()
-		owner, err := openBootstrapSuccessorExecutionStore(t.Context(), loaded, f.approval, profile, false, nil)
+		owner, err := openBootstrapSuccessorExecutionStore(ctx, loaded, f.approval, profile, false, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer owner.close()
-		adapter, err := newBootstrapSuccessorCanonicalChainWithAuthorities(t.Context(), owner, f.canonical, nil, bootstrapSuccessorSafeCurrentNativeRoute, nil)
+		adapter, err := newBootstrapSuccessorCanonicalChainWithAuthorities(ctx, owner, f.canonical, nil, bootstrapSuccessorSafeCurrentNativeRoute, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

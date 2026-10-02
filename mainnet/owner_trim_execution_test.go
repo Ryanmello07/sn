@@ -536,7 +536,7 @@ func TestOwnerTrimStorePreservesOriginalV3CustodyAndCannotRebind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openBootstrapChainStore(chain.preparation, false, nil); err == nil {
+	if _, err := openBootstrapChainStore(chain.preparation, false, nil, chain.storageContext(t.Context())); err == nil {
 		t.Fatal("parent writer acquired original custody during trim ownership")
 	}
 	if _, err := openOwnerTrimStore(f.storage.Context, chain.preparation, f.config, f.key, false); err == nil {

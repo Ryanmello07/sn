@@ -14,6 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/urfoundation/sn/internal/durablepath"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 const rootEventSchema = "urnetwork-mainnet-root-monitor-event-v1"
@@ -42,12 +45,18 @@ func runRootCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 // Long-lived diagnostics have a separate owner even before flag admission.
 // Finite preview output retains its original complete snapshot and I/O contract.
 func runRootCommandWithMonitorHooks(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
-	return runRootCommandWithPolicy(ctx, args, stdout, stderr, now, hooks, nil, "")
+	return runRootCommandWithPolicy(ctx, args, stdout, stderr, now, hooks, nil, "", nil)
 }
 
 // A signed passive-service config supplies the already authenticated policy in
 // memory, so an intervening pathname edit cannot replace the approved bytes.
-func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks, approvedPolicy *rootValidatorPolicy, approvedHash string) (result int) {
+func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks, approvedPolicy *rootValidatorPolicy, approvedHash string, preparation *rootPassivePreparation) (result int) {
+	if ctx == nil || len(args) == 0 || args[0] != "root-monitor" && args[0] != "root-preview" {
+		return 2
+	}
+	if ctx.Err() != nil {
+		return 0
+	}
 	command := args[0]
 	monitoring := command == "root-monitor"
 	if monitoring {
@@ -89,6 +98,68 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 		fmt.Fprintln(stderr, "root-monitor metrics require an absolute canonical .prom path")
 		return 2
 	}
+	if *checkpointPath != "" || *metricsPath != "" {
+		if err := durablepath.Require(ctx); err != nil {
+			fmt.Fprintln(stderr, "root observer durable custody:", err)
+			return 2
+		}
+	}
+	// Preparation observation shares the complete sample deadline with Rpc.
+	// A finite retry count also bounds deterministic/accelerated wait hooks.
+	// No retry replaces the retained preparation or checkpoint owner.
+	var sampleCtx context.Context
+	sampleCancel := func() {}
+	observationRetries := 0
+	renewSample := func() {
+		sampleCancel()
+		current, cancel := context.WithTimeout(ctx, *retryWindow)
+		sampleCtx, sampleCancel = current, cancel
+		observationRetries = 0
+	}
+	defer func() { sampleCancel() }()
+	renewSample()
+	checkPreparation := func() error {
+		if preparation == nil {
+			return ctx.Err()
+		}
+		backoff := time.Second
+		for {
+			if err := sampleCtx.Err(); err != nil {
+				return err
+			}
+			err := preparation.check()
+			if err == nil || errors.Is(err, durablevolume.ErrIdentity) || !errors.Is(err, durablevolume.ErrUnavailable) {
+				return err
+			}
+			if observationRetries == 64 {
+				return errors.Join(durablevolume.ErrUnavailable, errors.New("passive preparation observation budget exhausted"))
+			}
+			observationRetries++
+			fmt.Fprintln(stderr, "passive preparation observation unavailable; retrying retained custody")
+			if !waitMonitorService(sampleCtx, "root", backoff, hooks) {
+				return errors.Join(durablevolume.ErrUnavailable, sampleCtx.Err())
+			}
+			backoff = min(2*backoff, 30*time.Second)
+		}
+	}
+	preparationExit := func(err error) int {
+		if ctx.Err() != nil {
+			return 0
+		}
+		if errors.Is(err, durablevolume.ErrIdentity) {
+			fmt.Fprintln(stderr, "passive preparation retained custody is invalid")
+			return 3
+		}
+		if errors.Is(err, durablevolume.ErrUnavailable) || errors.Is(err, context.DeadlineExceeded) {
+			fmt.Fprintln(stderr, "passive preparation observation remains unavailable")
+			return 1
+		}
+		fmt.Fprintln(stderr, "passive preparation retained custody is invalid")
+		return 3
+	}
+	if err := checkPreparation(); err != nil {
+		return preparationExit(err)
+	}
 	var policy rootValidatorPolicy
 	policyHash, err := "", error(nil)
 	if approvedPolicy == nil {
@@ -115,7 +186,7 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 	state := &monitorState{}
 	var checkpoint *monitorCheckpointStore
 	if *checkpointPath != "" {
-		checkpoint, err = openMonitorCheckpoint(*checkpointPath, identityExpectation{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId})
+		checkpoint, err = openMonitorCheckpoint(*checkpointPath, identityExpectation{NativeChain: policy.NativeChain, GenesisHash: policy.GenesisHash, EvmChainId: policy.EvmChainId}, ctx)
 		if err != nil {
 			fmt.Fprintln(stderr, rootCommandErrorDetail(err, "root checkpoint admission failed", monitoring))
 			return 3
@@ -142,7 +213,7 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 	}
 	publication := &rootMonitorPublication{outcome: "unconfigured"}
 	if *metricsPath != "" {
-		publication.store, err = openMonitorMetrics(*metricsPath)
+		publication.store, err = openMonitorMetrics(*metricsPath, ctx)
 		if err != nil {
 			fmt.Fprintln(stderr, "root metrics admission failed")
 			publication.outcome, publication.disabled = "unavailable", true
@@ -173,13 +244,80 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 		}
 	}
 	encoder := json.NewEncoder(stdout)
+	// Exhausting one preparation read is a failed sample, not a new custody
+	// owner or permission to discard the remaining signed sample allowance.
+	// This path changes no checkpoint and never publishes a ready observation.
+	finishUnavailableSample := func(sample int, err error, priorFatalExit int) (bool, int) {
+		exit := preparationExit(err)
+		if exit != 1 {
+			return false, exit
+		}
+		// Missing current preparation facts cannot erase a separately observed
+		// integrity failure or uncertainty from an actual checkpoint write.
+		if priorFatalExit != 0 {
+			return false, priorFatalExit
+		}
+		sampledAt := now().UTC()
+		event := rootMonitorEvent{Schema: rootEventSchema, Sample: sample,
+			ObservedAt: sampledAt.Format(time.RFC3339Nano), Status: "storage-unavailable",
+			Detail: "passive preparation observation remains unavailable", ReadPhase: "preparation", ReadCause: "unavailable"}
+		if errors.Is(err, context.DeadlineExceeded) {
+			event.ReadCause = "timeout"
+		}
+		if monitoring {
+			event.Schema = rootDiagnosticEventSchema
+			event.Diagnostics = monitorDiagnosticSnapshot(stdout, stderr)
+			publication.publish(event, state, *metricsRole, sampledAt)
+			event.Publication = publication.outcome
+		}
+		if err := encoder.Encode(event); err != nil {
+			fmt.Fprintln(stderr, rootCommandErrorDetail(err, "root event encoding failed", monitoring))
+			return false, 1
+		}
+		if monitoring && hooks.afterEvent != nil {
+			hooks.afterEvent(ctx, "root")
+		}
+		if ctx.Err() != nil {
+			return false, 0
+		}
+		if sample == *samples {
+			return false, 1
+		}
+		sampleCancel()
+		if !waitMonitorService(ctx, "root", *interval, hooks) {
+			return false, 0
+		}
+		return true, 1
+	}
 	lastExit := 0
+samplesLoop:
 	for sample := 1; sample <= *samples; sample++ {
 		if ctx.Err() != nil {
 			return 0
 		}
+		renewSample()
+		if err := checkPreparation(); err != nil {
+			resume, exit := finishUnavailableSample(sample, err, 0)
+			if resume {
+				lastExit = exit
+				continue samplesLoop
+			}
+			return exit
+		}
 		event := rootMonitorEvent{Schema: rootEventSchema, Sample: sample}
-		preview, readErr := client.readRootPreview(ctx, policy, policyHash)
+		preview, readErr := client.readRootPreview(sampleCtx, policy, policyHash)
+		if err := checkPreparation(); err != nil {
+			priorFatalExit := 0
+			if errors.Is(readErr, errRpcIntegrity) {
+				priorFatalExit = 3
+			}
+			resume, exit := finishUnavailableSample(sample, err, priorFatalExit)
+			if resume {
+				lastExit = exit
+				continue samplesLoop
+			}
+			return exit
+		}
 		sampledAt := now().UTC()
 		event.ObservedAt = sampledAt.Format(time.RFC3339Nano)
 		lastExit = 0
@@ -199,7 +337,7 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 		} else {
 			// Continuity has the same bounded budget as existing mainnet monitor
 			// reads and rechecks the retained height, not the previous tip.
-			continuous, continuityErr := client.priorFinalizedMatches(ctx, state, preview.Identity)
+			continuous, continuityErr := client.priorFinalizedMatches(sampleCtx, state, preview.Identity)
 			if continuityErr != nil {
 				event.Status, event.Detail = "rpc-error", rootCommandErrorDetail(continuityErr, "root continuity read unavailable", monitoring)
 				if monitoring {
@@ -215,6 +353,14 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 				lastExit = 3
 			} else {
 				previousHash, previousNumber := state.lastHash, state.lastNumber
+				if err := checkPreparation(); err != nil {
+					resume, exit := finishUnavailableSample(sample, err, 0)
+					if resume {
+						lastExit = exit
+						continue samplesLoop
+					}
+					return exit
+				}
 				status, observeErr := state.observe(sampledAt, preview.Identity, *stallAfter)
 				if observeErr != nil {
 					event.Status, event.Detail = status, rootCommandErrorDetail(observeErr, "root finalized continuity changed", monitoring)
@@ -250,6 +396,18 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 		if monitoring && ctx.Err() != nil {
 			return 0
 		}
+		priorFatalExit := 0
+		if event.Status == "rpc-integrity" || event.Status == "finality-conflict" || event.Status == "checkpoint-error" {
+			priorFatalExit = lastExit
+		}
+		if err := checkPreparation(); err != nil {
+			resume, exit := finishUnavailableSample(sample, err, priorFatalExit)
+			if resume {
+				lastExit = exit
+				continue samplesLoop
+			}
+			return exit
+		}
 		if monitoring {
 			event.Schema = rootDiagnosticEventSchema
 			event.Observation = projectRootMonitorObservation(event.Snapshot)
@@ -257,6 +415,14 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 			event.Diagnostics = monitorDiagnosticSnapshot(stdout, stderr)
 			publication.publish(event, state, *metricsRole, sampledAt)
 			event.Publication = publication.outcome
+		}
+		if err := checkPreparation(); err != nil {
+			resume, exit := finishUnavailableSample(sample, err, priorFatalExit)
+			if resume {
+				lastExit = exit
+				continue samplesLoop
+			}
+			return exit
 		}
 		if err := encoder.Encode(event); err != nil {
 			fmt.Fprintln(stderr, rootCommandErrorDetail(err, "root event encoding failed", monitoring))
@@ -271,6 +437,7 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 		if sample == *samples {
 			return lastExit
 		}
+		sampleCancel()
 		if !waitMonitorService(ctx, "root", *interval, hooks) {
 			return 0
 		}

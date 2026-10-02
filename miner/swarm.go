@@ -431,13 +431,9 @@ func startSwarmMember(ctx context.Context, member ProviderSwarmMember, failed fu
 	networkSpace := sdk.NewNetworkSpaceWithUrls(memberCtx, member.APIURL, member.ConnectURL, strategySettings)
 	api := networkSpace.GetApi()
 	clientJWTPath := filepath.Join(member.StateDir, ".provider.jwt")
-	refreshSub := api.AddJwtRefreshListener(clientauth.JwtRefreshListenerFunc(func(jwt string) {
-		if err := clientauth.WriteToken(clientJWTPath, jwt); err != nil {
-			failed(fmt.Errorf("persist refreshed client JWT: %w", err))
-		}
-	}))
+	refreshSub := api.AddJwtRefreshListener(swarmMemberJwtRefreshListener(clientJWTPath, failed))
 	logoutSub := api.AddAuthLogoutListener(clientauth.AuthLogoutListenerFunc(func() {
-		failed(errors.New("provider authentication was rejected"))
+		failed(errSwarmAuthenticationRejected)
 	}))
 	deviceSettings := swarmMemberDeviceSettings(
 		member, sdk.NewDeviceLocalKeyMaterial(seed, certificatePEM, keyPEM), dialSettings)
@@ -587,6 +583,13 @@ func (self *ProviderSwarm) Run(ctx context.Context) error {
 			}
 			if ctx.Err() != nil {
 				return nil
+			}
+			// The failed operation has already joined and retained its failure
+			// in member status. Continue admitting independent members; the
+			// existing member control owns any later explicit recovery. Do not
+			// retry startup here: it may have sent a signed wallet request.
+			if swarmControlErrorStatus(err) == http.StatusServiceUnavailable {
+				continue
 			}
 			return fmt.Errorf("start member %s: %w", member.ID, err)
 		}

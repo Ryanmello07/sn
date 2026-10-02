@@ -12,6 +12,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -32,8 +33,12 @@ func writeEvmPreviewConfig(t *testing.T, f *evmCreateFixture, config evmPhaseCon
 func runEvmPreview(t *testing.T, f *evmCreateFixture, extra ...string) (evmPhasePreview, int, string) {
 	t.Helper()
 	args := append([]string{"bootstrap-contracts", "preview", "--config", f.configPath}, extra...)
+	prepared := mainnetNamespaceTest(t, f.config.Plan.RunDirectory)
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), args, &stdout, &stderr)
+	code := runMain(f.storageContext(context.Background()), args, &stdout, &stderr)
+	if !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, f.config.Plan.RunDirectory)) {
+		t.Fatal("preview changed the prepared custody namespace")
+	}
 	var result evmPhasePreview
 	if code == 0 {
 		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
@@ -48,10 +53,20 @@ func runEvmPreview(t *testing.T, f *evmCreateFixture, extra ...string) (evmPhase
 // No mutable phase file or owned-RPC observation is a preview side effect.
 func requireEvmPreviewNoAuthority(t *testing.T, f *evmCreateFixture, directory string) {
 	t.Helper()
-	for _, name := range []string{evmCreateStateFile, evmCreateStateFile + ".lock"} {
-		if _, err := os.Lstat(filepath.Join(directory, name)); !errors.Is(err, os.ErrNotExist) {
-			t.Fatalf("unsigned preview acquired %s: %v", name, err)
+	path := filepath.Join(directory, evmCreateStateFile)
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unsigned preview retained a record: %v", err)
+	}
+	if directory == f.config.Plan.RunDirectory {
+		owner, err := openBootstrapUnclaimedSnapshot(f.storageContext(t.Context()), path, "mainnet-evm-action", 512*1024)
+		if err != nil {
+			t.Fatal("unsigned preview changed explicitly fresh custody", err)
 		}
+		if err := owner.close(); err != nil {
+			t.Fatal(err)
+		}
+	} else if _, err := os.Lstat(path + ".lock"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("unsigned preview enrolled a future custody path", err)
 	}
 	f.stateLock.Lock()
 	untouched := len(f.counts) == 0 && len(f.writes) == 0
@@ -223,7 +238,7 @@ func TestEvmPhasePreviewRejectsAmbiguousJsonAndExecutionFlags(t *testing.T) {
 // nor even a deliberately undecodable journal is inspected or replaced.
 func TestEvmPhasePreviewDoesNotInspectRetainedCustody(t *testing.T) {
 	f := newEvmCreateFixture(t)
-	store, err := openEvmActionStore(f.config, true, nil)
+	store, err := openEvmActionStore(f.config, true, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,15 +272,19 @@ func TestEvmPhasePreviewCancellationAndOutputFailureLeaveNoAuthority(t *testing.
 	f.config.Signature = ""
 	writeEvmPreviewConfig(t, f, f.config)
 	args := []string{"bootstrap-contracts", "preview", "--config", f.configPath}
+	prepared := mainnetNamespaceTest(t, f.config.Plan.RunDirectory)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var stdout, stderr bytes.Buffer
-	if code := runMain(ctx, args, &stdout, &stderr); code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), context.Canceled.Error()) {
+	if code := runMain(f.storageContext(ctx), args, &stdout, &stderr); code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), context.Canceled.Error()) {
 		t.Fatalf("canceled preview emitted signing material: %d %s", code, stderr.String())
 	}
 	stderr.Reset()
-	if code := runMain(context.Background(), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "unsigned preview output") {
+	if code := runMain(f.storageContext(context.Background()), args, bootstrapRootFailedWriter{}, &stderr); code != 1 || !strings.Contains(stderr.String(), "unsigned preview output") {
 		t.Fatalf("failed signing-material output was acknowledged: %d %s", code, stderr.String())
+	}
+	if !reflect.DeepEqual(prepared, mainnetNamespaceTest(t, f.config.Plan.RunDirectory)) {
+		t.Fatal("canceled or failed preview changed prepared custody")
 	}
 	requireEvmPreviewNoAuthority(t, f, f.config.Plan.RunDirectory)
 }

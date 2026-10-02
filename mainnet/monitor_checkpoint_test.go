@@ -33,7 +33,7 @@ func TestMonitorCommandPersistsAndResumesCheckpoint(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		stdout := &cancelMonitorWriter{cancel: cancel}
 		var stderr bytes.Buffer
-		exit := runMonitorTest(ctx, []string{
+		exit := runMonitorTest(t, ctx, []string{
 			"monitor", "--rpc", server.URL, "--expected-chain", "Bittensor",
 			"--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964",
 			"--checkpoint", path, "--retry-window", "2s",

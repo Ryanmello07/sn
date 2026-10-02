@@ -1,6 +1,40 @@
 # Mainnet launch and operations plan
 
-**October 2 MG-06 release composition (MG-02):** the [qualified scoped successor](evidence/release-258e25b4-server0aa1-20261002.md) at frozen SN `258e25b4` / server `0aa1e244` now packages economic-observer `dd21ed00` and signed-schedule `258e25b4` with the prior owner, contract-admission, recycle and schema-752 composition. Sequential source and eight-image repeats match and pass independent readback. Fresh current-pair qualification passes 83 normal/83 race roots and three-package vet; an independent nine-root normal/race scope also passes. Thirty-six component receipts and unchanged-server tests preserve their original scopes. This resolves the earlier source exclusion for the new artifact only. All ten fresh unsigned-plan actions stay blocked; independent compiler/dependency provenance, production policy/configuration, rollout/restore, published/running image identity and live authority remain open. Earlier releases stay immutable. Later server `025802a5` retention-debt/cleanup changes are excluded and await separate static review; no qualification or P0 successor requirement is inferred.
+**October 2 retained-member integration:** main merge `b0fc5e99` now includes the qualified retained-member recovery and exact public custody fixtures. The original current-composition batch completed nine passes/one census assertion failure in each mode; the separate corrected execution root passed independently in normal/race plus vet. [Exact scopes and preserved failure](evidence/successor-member-qualification-20261002.md). Main code/module bytes match the reviewed correction while newer docs remain retained. New release, module intake and storage preparation gates stay separate.
+
+**October 2 adjacent reader successors:** Server `2c4e5dca` passes 17 author normal/17 race roots plus vet; preparation `f5c0707b` passes 11 validator and seven actual CLI roots in both modes plus three vets. Root rehashed their sealed evidence. The [distinct source scopes](evidence/current-graph-reader-progress-20261002.md) retain old consumer failures and leave independent review pending. Native/snapshot adapters and the fleet runtime catalog are the next active implementation slices.
+
+**October 2 runtime intake:** the public archive now exposes exact finalized-block runtime **472** at block 9,197,096. The [retained read-only capture](evidence/runtime-472-route-observation-20261002.json) records its code/metadata hashes and raw snapshot bindings with `unapproved_observation` admission. Snow VPN RPC returned HTTP 502 through a 60-second read budget. Continue public RPC preparation; independently audit the new artifact before any signing admission. The v470 planning exception does not authorize v472. Offline hardening continues.
+
+**October 2 finite-claim GET recovery:** frozen miner `40d07ae6` passes nine author normal/nine race roots plus vet, including actual SDK recovery after 65 seconds unavailable and original 300-second deadline exhaustion. Root verified all 51 [author receipt](evidence/finite-claim-author-20261002.json) bindings (SHA-256 `3d16f436e1134cdf0074e981cc6f554306f1b2beb3788ad39a0a0b64e0ee5f76`). Only epoch/pool GETs enter retry; signing/submission remain outside it. Independent qualification is queued. The source is not merged or deployed.
+
+**October 2 preparation successor:** frozen SN `f4ad15db` / Connect `ea827777` now runs the full bounded fresh-ledger preparation batch after correcting control-record sizing before effects, post-header cancellation uncertainty, EOF handling and plan transport. The full bounded author batch passes 73 core, seven ledger and seven public CLI roots in each of normal/race modes, plus four package vet scopes. Root verified all 95 sealed [author manifest](evidence/fresh-ledger-preparation-author-20261002.json) bindings; independent review remains pending. This slice enrolls a fresh, already provisioned daemon ledger only. Owner-local signing enrollment, native/snapshot adapters, private-root creation and retained/restore remain separate work. The exact reader post-cancellation byte-admission issue is assigned to a narrow successor; current results will remain immutable.
+
+**October 2 current-graph and reader progress:** Server `22e3c1ba` independently passes 12 normal/12 race selected tests plus vet on published Connect `e0d75562`. New upstream changes are preserved in review `32196d57`, whose qualification is pending. Guarded spool reader `68a7be85` passes 15 author roots in each mode plus vet and awaits independent review. The [exact scopes and retained failures](evidence/current-graph-reader-progress-20261002.md) distinguish these candidates from the running retained-member composition gate. No new production release is qualified.
+
+**October 2 offline preparation candidate:** the actual `storage-prepare plan/apply` dispatcher and fresh-ledger adapter now exist at candidate SN `a045a9c7` / Connect `03aafa41`. Both public tests pass with a retained reader-contract correction overlay: exact apply produces a ledger the real validator can reopen, and a wrong digest leaves no effects. The original compiled candidate failed with wrapped EOF and remains retained. Commit/freeze, crash-recovery, race/vet and independent qualification are pending; native/snapshot, retained/restore and private-root creation remain subsequent implementation work. This candidate is not on main or qualified for production.
+
+**October 2 provider monitoring:** actual provider readiness publication and independent expected-roster monitoring at frozen `98fcff06` pass 42 author normal/42 race tests plus vet. [Evidence and dependency intake](evidence/provider-monitor-progress-20261002.md) keep proof/settlement unknown, independent qualification pending and server current-graph testing separate. This does not close MG-07 or authorize deployment.
+
+**October 2 integration update:** qualified miner startup/callback source `36648203` and test-only private-root fixtures `28c970db` are now merged into main. Callback qualification passes 40 author roots and 12 independent selected roots in each of normal/race modes, plus miner vet; fixture qualification passes seven roots in each mode under both umask 002 and 077. [Exact evidence and limits](evidence/provider-callback-qualification-20261002.md). Current server dependency intake, provider readiness monitoring and offline storage preparation remain separate work. These merges do not qualify a new release or authorize activation.
+
+**October 2 continuation checkpoint:** observer `6d398662` is now independently qualified at 17 normal/17 race roots plus vet. Composition `69f4bbdd` / server `10a8f4d8` now passes 78 selected normal/78 race roots and vet, with a separate independent 12-root normal/race scope and vet. The [exact sealed composition](evidence/durable-owner-composition-qualification-20261002.md) is an incremental source qualification. Miner startup isolation `c3707376` passes 37 normal/37 race roots, while callback isolation, member recovery ordering and production preparation remain separate work. The [checkpoint and retained receipts](evidence/mainnet-continuation-checkpoint-20261002.md) record exact scopes, a newly exposed pending-stage ordering defect, private fixture ancestry and immutable physical evidence paths. No launch or full-backlog closure is inferred.
+
+**October 2 MG-06 release composition (MG-02):** the [qualified scoped successor](evidence/release-258e25b4-server0aa1-20261002.md) at frozen SN `258e25b4` / server `0aa1e244` now packages economic-observer `dd21ed00` and signed-schedule `258e25b4` with the prior owner, contract-admission, recycle and schema-752 composition. Sequential source and eight-image repeats match and pass independent readback. Fresh current-pair qualification passes 83 normal/83 race roots and three-package vet; an independent nine-root normal/race scope also passes. Thirty-six component receipts and unchanged-server tests preserve their original scopes. This resolves the earlier source exclusion for the new artifact only. All ten fresh unsigned-plan actions stay blocked; independent compiler/dependency provenance, production policy/configuration, rollout/restore, published/running image identity and live authority remain open. Earlier releases stay immutable. Later server `025802a5` retention-debt/cleanup changes remain outside this frozen release. Its [static review and focused qualification checkpoint](evidence/server-and-storage-progress-20261002.md) is now recorded: 33 server roots pass normal/race and four package vets; seven SN composition roots pass normal/race, with its original `6cfc4773` mutex-copy vet failure preserved separately. Three historical server roots pass normal/race. The [full model run and separate test-only repair](evidence/server-stats-fixture-qualification-20261002.md) are now recorded: original `025802a5` executed all 1,345 roots with 1,334 passes, one statistics-fixture failure and ten optional skips; the isolated `a3fc4270` repair passes all eight affected roots normal/race and package vet. The original full run remains failed, and no patched-source full-suite pass is claimed. No successor production release or deployment qualification is inferred.
+
+**October 2 retained relay fixture correction:** the separate [test-only fix](evidence/relay-retained-fixture-qualification-20261002.md) at SN `734a82dc` passes 35 author normal and 10 race tests, plus 2 independent normal and 10 race tests; `./sim-testnet` vet passes in both scopes. It retains the original signed plan and journal while rebuilding fixture synchronization, canonical header coordinates and the actual producer activation domain. The original `6cfc4773` vet/header failures remain preserved. This does not qualify the broader model run or change the frozen `258e25b4` / `0aa1e244` production artifact.
+
+**October 2 durable storage (MG-09 / PH-09): in progress.** The merged Connect `6cd720cf` [generation/read-admission primitive](evidence/durable-generation-progress-20261002.md) passes 48 author and independent roots per mode plus vet. The new [isolated owner-custody checkpoint](evidence/durable-owner-custody-qualification-20261002.md) separately qualifies native journal `695f6683` (42 author/independent roots per mode), snapshot `a5c765c4` (17 roots plus 17 subtests per mode), and miner fleet/claim `b3c3d66` (201 roots plus three inherited subtests per mode). Monitor `f1b445f9` passes 114 author and independent normal/race roots and vet; these are still separate consumer scopes. These sources require explicit public-entry policy and preprovisioned retained-member authority, preserve reads under write pressure, reconcile only exact pending bytes after the old owner joins, and stop only the affected role. Connect inventory-v3 `0a5cda0e` separately passes 57 author and independent normal/race roots and vet with bounded owner-attribute retention. A separate [CLI candidate `7fb6b6a1`](evidence/durable-inventory-cli-qualification-20261002.md) passes nine author and independent normal/race roots and three-package vet, including explicit owner-local commands and report-only rebound comparison. The [independent receipts and new composition failures](evidence/durable-composition-progress-20261002.md) are now retained. Connect constructor `71df099c` independently passes 59 roots per mode and vet (including the prior 57) and is merged; the current consumer `0a5cda0e` module does not inherit it. The former `cb2e3ffe`/v2 and frozen release receipts are unchanged. The separate [validator/root/bootstrap/local-blob adopter](evidence/durable-adopter-qualification-20261002.md) at SN `eb0abe22` / server `1b7cc78b` passes 111 selected normal/race roots and four-package vet in both author and independent scopes; five causal controls discriminate per mode. The real service-credential test passes separately in the author scope and its evidence was independently rehashed. Module-only server `005a9066` pins the same tested Connect source, with a separate standalone dependency join. The independent adopter receipt is source-pinned to that exact pair; immutable registry/member census, broader fixture migration and peer composition are not closed. Production offline root/lease/nonce/owner-anchor preparation is still missing. Validator/bootstrap/root/server composition, deployment declaration assets, capacity/rotation policy, actual restore and a new exact release remain open. No source receipt authorizes deployment or closes all of PH-09.
+
+**October 2 actual public composition failures:** exact test-only `ea2bb37f` reproduces three failures in normal and race: persistent root observation omits durable context, a missing completed passive-monitor checkpoint is recreated, and passive preparation admits a missing retained snapshot head. Separate fixture `22d4ee3e` over unchanged adopter production exposes 48 successor write-admission refusals plus two outdated typed-identity assertions (75 roots: 25 pass, 50 fail). Fixes and complete source integration are in progress; neither failed composition is a qualified launch candidate. [Exact evidence and scope boundaries](evidence/durable-composition-progress-20261002.md).
+
+**October 2 passive observer continuation:** the rendered passive service uses `Restart=no`; source `653061a1` exits after one exhausted preparation-observation budget and abandons unused signed samples. Its separate 11-root author normal/race and vet receipt remains scoped to the earlier custody/retry fixes. Implemented successor `97c7ae85` retains the same owners, emits `storage-unavailable` without a fresh observation and continues at the signed interval; exact test-only `6d398662` now passes 17 normal/17 race roots plus vet independently, preserving the earlier RPC-count fixture failure. Separately, the exclusive successor writer fix `f3c8a618` passes eight new plus two typed-identity roots independently in both modes and vet. Complete composition and module adoption remain open. [Evidence and continuation lesson](evidence/durable-observer-continuation-progress-20261002.md).
+
+The [implementation backlog](evidence/mainnet-implementation-backlog-20261002.md)
+maps all 28 PH requirements and ten MG gates to actual production callsites,
+separating missing code, scoped implementation, audit leads and live inputs.
+Storage composition is one slice; provider/domain monitoring, runtime
+continuation, retry coverage, economic proof and full acceptance remain open.
 
 Updated 2026-10-02. **Mainnet activation is blocked.** At the user's direction,
 preparation now uses the [Rao Foundation public archive RPC](evidence/public-archive-switch-20261001.md)
@@ -2379,8 +2413,11 @@ profile and 60-second GET retries. Staging starts nothing; separate approval
 must bind the host/chain/release/config bundle before activation, with physical
 custody and actual service-user credential checks repeated at restart.
 Snow's testfinney/runtime-471 configuration remains untouched and refused.
-The author offline tests pass; independent scoped review, selected live hosts,
-actual collector ingestion and delivered missing-host/recovery alerts remain
+Author and independent offline qualification pass on the exact source pins:
+32 new and 19 adjacent xops tests, 13 SN monitor roots normal/race, vet and
+controller/unit/credential controls. The separate independent receipt is
+bound in the evidence above. Selected live hosts, actual collector ingestion
+and delivered missing-host/recovery alerts remain
 explicit launch gates. An unsent delivery-drill payload is not a delivery
 receipt.
 
@@ -2869,3 +2906,43 @@ report; the closed testnet effort is not relabeled as a pass.
 [subtensor-dispatches-470]: https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/macros/dispatches.rs
 [collateral-guide]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/docs/guides/mining/collateral.mdx
 [max-uids]: https://github.com/RaoFoundation/subtensor/blob/67dcf7f791dc495064c293f080a0702cb433e51e/docs/hyperparameters/max-allowed-uids.mdx
+
+
+### October 2 runtime source intake follow-up
+
+The [bounded official tag/release census](evidence/runtime-472-upstream-intake-20261002.json)
+returned v470 and v471 for `refs/tags/v47*`; the first ten public releases likewise
+contained no v472 entry. [Official release source](https://github.com/RaoFoundation/subtensor/releases).
+This is not proof that v472 source or a proposal is globally absent. Keep exact
+observed v472 code/metadata as unapproved intake until source attribution and
+consumed-purpose review are complete. Fleet catalog implementation and offline
+native/snapshot preparation continue independently of that live authority input.
+
+
+### Guarded spool reader qualification — 2026-10-02
+
+Main now includes independently qualified guarded spool reader recovery
+(merge `4cda804c5e23d3ae6f48971534108a51ffed52c0`). Normal EOF stays intact; failed post-read custody checks
+admit zero bytes even when the descriptor advanced. Fifteen affected roots pass
+normally and with race detection, with vet passing and causal old-body controls
+retained. See [integration evidence](evidence/current-graph-reader-progress-20261002.md).
+The adjacent Server and fresh-preparation reader scopes remain separate gates.
+This integration does not authorize signing, deployment or activation.
+
+
+### Fresh native and snapshot preparation — author qualification
+
+Candidate `e097cff896313ac346d7165cc8c030a34abb6ffb` passed fourteen public
+preparation command tests and two native checkpoint tests normally and with
+race detection; four package vets passed. Four controls on the previous source
+fail for the expected unsupported-owner boundaries in each mode. Root verified
+the [author receipt](evidence/fixed-owner-preparation-author-20261002.json),
+its 34 manifest members, raw archive and source bundle. Receipt SHA-256:
+`8ef17e85905a18d80248d3d5438b8299e05ec893e6af418c1d002ecf21657ed6`.
+
+This covers fresh native journals and fixed snapshot heads in precreated private
+roots, including pending-attribute recovery and refusal to recreate lost completed
+members. It does not grant runtime authority or restart authorization. Independent
+qualification and the current published Connect/main composition remain pending;
+private-root creation, retained/restore validation, remaining owners and joined
+capacity revisions are still open. This candidate is not merged into main.

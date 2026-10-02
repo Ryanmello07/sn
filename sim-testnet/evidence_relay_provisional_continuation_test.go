@@ -136,8 +136,10 @@ func TestProvisionalRelayContinuationPreparesActualHorizonWithoutReapproval(t *t
 	fixture.stateLock.Lock()
 	fixture.permits[1] = false
 	fixture.stateLock.Unlock()
-	refused := *runtime
-	refused.horizon = nil
+	// A new phase reader borrows the same approved executor, journal and
+	// source checkpoints. Its synchronization and derived horizon start fresh.
+	refused := &evidenceRelayRuntime{ctx: runtime.ctx, executor: runtime.executor, chain: runtime.chain,
+		phase: runtime.phase, origins: runtime.origins, sources: append([]evidenceRelaySource(nil), runtime.sources...)}
 	if err := refused.prepareHorizon(); err == nil || !strings.Contains(err.Error(), "independent finalized eligibility/schedule") || refused.horizon != nil {
 		t.Fatal("provisional continuation waived actual native signing eligibility", err)
 	}
@@ -204,6 +206,10 @@ func TestProvisionalRelayContinuationForecastEndIsAdvisoryAcrossRestart(t *testi
 	if err := validateEvidenceRelayContinuationStartupRunway(&invalid, runtime.executor.plan, c, c.EndBlock); err == nil || !strings.Contains(err.Error(), "exact non-accepting testnet approval") {
 		t.Fatal("accepting provisional record waived the elapsed forecast", err)
 	}
+	// The actual producer above issued this activation. The base fixture's
+	// unrelated synthetic prepared domain is not the resumed source authority.
+	activation := runtime.sources[0].activations[0]
+	member := runtimeEvidenceActivationMemberV2{ValidatorId: runtime.sources[0].validatorId, NoId: activation.NoID, Activation: activation}
 	for _, boundary := range []struct {
 		block uint64
 		hash  common.Hash
@@ -215,9 +221,10 @@ func TestProvisionalRelayContinuationForecastEndIsAdvisoryAcrossRestart(t *testi
 		fixture.stateLock.Lock()
 		fixture.finalizedEvmNumber, fixture.finalizedEvmHash = block, boundary.hash
 		fixture.stateLock.Unlock()
-		restarted := *runtime
-		restarted.horizon = nil
-		restarted.prepared = false
+		// Reconstruct only the reader; the original journal, signed plan,
+		// activation sources and their progress remain the retained authority.
+		restarted := &evidenceRelayRuntime{ctx: runtime.ctx, executor: runtime.executor, chain: runtime.chain,
+			phase: runtime.phase, origins: runtime.origins, sources: append([]evidenceRelaySource(nil), runtime.sources...)}
 		if err := restarted.prepareHorizon(); err != nil {
 			t.Fatalf("provisional continuation restart refused forecast boundary %d: %v", block, err)
 		}
@@ -227,7 +234,7 @@ func TestProvisionalRelayContinuationForecastEndIsAdvisoryAcrossRestart(t *testi
 		if err := restarted.checkHorizonBlock(block + 1); err != nil {
 			t.Fatalf("worker poll after forecast boundary %d failed: %v", block, err)
 		}
-		candidate := evidenceRelayLaunchRequestTest(t, fixture.base, fixture.base.prepared.Members[0], c.EndSettlementEpoch+1, false, 0)
+		candidate := evidenceRelayLaunchRequestTest(t, fixture.base, member, c.EndSettlementEpoch+1, false, 0)
 		if candidate.Evidence.Header.BoundaryBlock <= c.EndBlock {
 			t.Fatal("post-forecast regression candidate did not cross the stored end")
 		}
@@ -256,7 +263,7 @@ func TestProvisionalRelayContinuationForecastEndIsAdvisoryAcrossRestart(t *testi
 		}
 		limited := *restarted.horizon
 		limited.maximum = uint64(len(limited.headerKVs))
-		next := evidenceRelayLaunchRequestTest(t, fixture.base, fixture.base.prepared.Members[0], c.EndSettlementEpoch+2, false, 0)
+		next := evidenceRelayLaunchRequestTest(t, fixture.base, member, c.EndSettlementEpoch+2, false, 0)
 		if err := limited.admit(next.Evidence.Header, next.Evidence.Header.BoundaryBlock); err == nil || !strings.Contains(err.Error(), "no remaining original slots") {
 			t.Fatal("forecast advisory changed exact slot exhaustion", err)
 		}
