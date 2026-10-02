@@ -199,5 +199,7 @@ production capacity and restore evidence remain open under MG-09/PH-09.
 The later [generation/read-admission checkpoint](durable-generation-progress-20261002.md)
 preserves all receipts above and records their newly demonstrated limits.
 In particular, the 35-root scope does not bind physical root generation across
-restart. Connect `6cd720cf` is a separate author-qualified v2 successor; its
-independent and downstream-owner qualification remain open.
+restart. Connect `6cd720cf` is a separate v2 successor with 48 author and
+independent normal/race roots plus vet, now merged into Connect main. The
+separate receipt is linked in that checkpoint; downstream-owner qualification
+remains open.

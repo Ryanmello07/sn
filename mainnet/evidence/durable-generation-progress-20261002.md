@@ -44,8 +44,9 @@ is copied byte-for-byte from
 SHA-256 `7a45df12511cf760cb307ed5a771741f9c99df3ed53851e7b0e61023ac037e37`.
 It binds the exact clean source, compiler bytes, terminal logs and causal source
 overlays. Raw logs and source workspaces remain external at the recorded paths.
-Independent successor verification is pending; this is not a full Connect or
-downstream-consumer qualification.
+Independent verification was pending at the author seal. The separate terminal
+readback below completes that primitive scope; it does not qualify full Connect
+or downstream consumers.
 
 Both external declaration schemas advance to v2 and reject v1 or missing
 generation authority. Each precreated root requires an externally declared
@@ -89,3 +90,23 @@ Deployment declarations and unit plumbing, exact module/source composition,
 independent consumer tests, capacity policy and production backup/restore
 rehearsal remain open. The frozen `258e25b4` / server `0aa1e244` artifacts and
 all ten blocked unsigned actions remain unchanged.
+
+## Independent primitive addendum
+
+The [independent v2 receipt](durable-generation-independent-20261002.json)
+retains SHA-256
+`3c134a458a542b4e423b2d0d7119462aba14af583e5ea707becd56fe7b0e07e4`,
+copied byte-for-byte from
+`/mnt/data/sn-testnet/sol-connect-durable-core-independent-20261002/v2-receipt.json`.
+It verifies the exact physical clean `6cd720cf` / `010533a4` source, 48 normal
+and 48 race roots, vet exit 0, five exact-`cb2e3ffe` causal failures per mode,
+and the hash-verified intermediate observation overlay's two intended failures
+plus one caller-error positive per mode. Raw logs remain external at the
+receipt's retained paths. This is independent scoped primitive testing, not an
+independent compiler build or a consumer/release/deployment qualification.
+
+Root review checked source/receipt bindings and current origin ancestry before
+merging this exact source into Connect main. Original receipts remain unchanged.
+Native-journal, fleet/claim, monitor, validator/bootstrap/root and local-blob
+adoption, uncertain publication handling, bounded root recovery and operational
+backup/restore evidence remain separate unfinished work.
