@@ -5161,3 +5161,20 @@ change cache policy. Go's compilation cache and an authenticated runtime proof
 cache have different contracts; neither permits reusing current balances,
 nonces or test pass results. Independent release/compiler provenance remains
 a separate MG-02 gate and is not established by these cached test runs.
+
+### October 2: cancellation after durable preparation is uncertain progress
+
+The preparation controls reproduced a cancellation after control-header fsync
+that returned only context cancellation, despite retained progress. After a
+durable header or root reservation may exist, report exact-plan readback
+uncertainty and retain the original plan; do not let the caller treat this as
+an unused preparation and generate another nonce or generation. Admission
+pressure before effects remains separately retryable. Test cancellation and
+lost acknowledgements at each publication boundary, including short report
+delivery after successful preparation. The successor remains under qualification.
+
+The [retained-member qualification](evidence/successor-member-qualification-20261002.md)
+now independently reproduces all five lost-history/inode defects and passes
+ten selected normal/race controls plus vet. Integration with the newer current
+observer is a separate pending scope; those results do not imply restore or
+offline owner enrollment is complete.
