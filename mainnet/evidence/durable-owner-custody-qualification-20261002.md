@@ -12,7 +12,7 @@ planning receipts remain unchanged. All ten unsigned actions stay blocked.
 | Native journal | SN `695f6683173889e66926150fed7cc06bd78d8a23` | 42 / 42, three-package vet | 42 / 42, three-package vet |
 | Snapshot head and passive read composition | SN `a5c765c4b0c9342350acf185d35042bbab894dac` | 17 roots + 17 subtests per mode, vet | 17 roots + 17 subtests per mode, three-package vet |
 | Miner fleet and claim custody | SN `b3c3d661849eeacbce7a395ed6829a8f45eb1e79` | 201 roots + 3 inherited subtests per mode, miner vet | 201 roots + 3 inherited subtests per mode, miner vet |
-| Chain, validator-source and operator-source monitors | SN `f1b445f9e8dafca790f7bc147430bc9c242b65e5` | 114 / 114, mainnet vet | Pending separately |
+| Chain, validator-source and operator-source monitors | SN `f1b445f9e8dafca790f7bc147430bc9c242b65e5` | 114 / 114, mainnet vet | 114 / 114, mainnet vet |
 | Owner attributes in backup inventories | Connect `0a5cda0ebe78f6200c4cff6fd3d1aa172a2b172c` | 57 / 57, durablevolume vet | Pending separately |
 
 The new consumer sources use the previously qualified Connect `6cd720cf` v2
@@ -34,6 +34,7 @@ at the paths bound inside each receipt.
 | [Miner author](durable-miner-author-20261002.json) | `fff73485fe63aaeeae1c9212d05b301c01a6fafd9ddb4d10832bf6a04fefabbc` |
 | [Miner independent](durable-miner-independent-20261002.json) | `e28deeff9e1a0b48056f21a14fd25b0f8fc03cba466056a5a5879574d2f6d902` |
 | [Monitor author](durable-monitor-author-20261002.json) | `7ff09e809b48333a3e80185cc78d32943d1d41a972d855ead17f793a32d6f11b` |
+| [Monitor independent](durable-monitor-independent-20261002.json) | `a6e5a4d20bf464d6325b788e05c8dedcc12815d8ece75a0a4fe500d8ad2090d1` |
 | [Inventory-v3 author](durable-inventory-v3-author-20261002.json) | `0cefc7bfb4b13239e2abe4406cbee93b88cdb4fb46d52c3e7b58fba6d25d114f` |
 
 ## Retained custody and bounded continuation
@@ -153,3 +154,10 @@ available bytes rose from 118,836,633,600 to 123,270,598,656. The first guard
 refusal observed the preparation shell's own cache-path references and is
 retained separately; retry ran after that shell joined. This build-host cleanup
 does not close production storage capacity or media/restore gates.
+
+## Separate validator/root/bootstrap/blob addendum
+
+The [bounded adopter source](durable-adopter-qualification-20261002.md) now has
+its own 111-root author normal/race gate, vet and real service-credential test.
+Its independent checking and composed integration remain separate from the
+primitive/miner/monitor receipts above.
