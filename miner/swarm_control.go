@@ -221,6 +221,8 @@ func (self *ProviderSwarm) memberFailed(id string, generation *providerSwarmMemb
 	if err == nil {
 		return
 	}
+	localStorageFailure := swarmMemberStorageFailure(err)
+	detail := err.Error()
 	self.stateLock.Lock()
 	if generation == nil || self.stopping || self.memberGenerations[id] != generation {
 		self.stateLock.Unlock()
@@ -236,8 +238,8 @@ func (self *ProviderSwarm) memberFailed(id string, generation *providerSwarmMemb
 		return
 	}
 	delete(self.running, id)
-	self.failures[id] = err.Error()
-	if swarmMemberStorageFailure(err) {
+	self.failures[id] = detail
+	if localStorageFailure {
 		operation := &providerSwarmMemberOperation{done: make(chan struct{})}
 		self.memberOperations[id] = operation
 		self.operationWaitGroup.Add(1)
