@@ -304,8 +304,22 @@ func TestBootstrapChainInterruptedChildProgress(t *testing.T) {
 				t.Fatal(err)
 			}
 			original := f.journals(t)
+			beforeFiles := mainnetNamespaceTest(t, f.config.RunDirectory)
 			f.result(t, "resume")
+			afterFiles := mainnetNamespaceTest(t, f.config.RunDirectory)
 			for path, raw := range original {
+				if strings.HasSuffix(path, ".lock") {
+					name, err := filepath.Rel(f.config.RunDirectory, path)
+					before, after := beforeFiles[name], afterFiles[name]
+					if err != nil || before.Device != after.Device || before.Inode != after.Inode || before.Mode != after.Mode {
+						t.Fatal("recovery replaced a prepared child marker", path, err)
+					}
+					if _, retained := original[strings.TrimSuffix(path, ".lock")]; !retained && raw == "" {
+						// The exact precreated empty marker may acquire its first
+						// claim after its earlier child completes. Its inode stays.
+						continue
+					}
+				}
 				if path != filepath.Join(f.config.RunDirectory, bootstrapChainStateFile) && f.journals(t)[path] != raw {
 					t.Fatalf("recovery replaced a retained child: %s", path)
 				}

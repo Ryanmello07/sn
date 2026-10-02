@@ -683,6 +683,9 @@ func TestBootstrapRootInitialClaimRejectsAmbiguousState(t *testing.T) {
 		}
 		if change == "custody-marker" || change == "service-marker" {
 			changedPath += ".lock"
+			// The original empty precreated marker is approved fresh custody.
+			// A foreign nonempty claim is the ambiguous state being rejected.
+			changedBytes = []byte("synthetic unknown child claim\n")
 		}
 		if err := os.WriteFile(changedPath, changedBytes, 0600); err != nil {
 			t.Fatal(err)
