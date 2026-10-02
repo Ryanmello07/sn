@@ -44,6 +44,13 @@ through replanning, including after the cutoff. Finish that correction and run
 the full current model suite before treating this transition as qualified.
 Neither candidate has been merged or deployed as the operational schedule.
 
+Financial successor Server `97d22989` now freezes original-component recovery,
+bounded historical ambiguity handling, exact-attempt response admission and
+same-transaction request/outcome history. Its independent 36-test normal batch
+is running on the same config `93dc65fd`; the full model suite follows a passing
+targeted batch. These changes remain unqualified until their actual results
+are retained, and do not supply deployment or activation evidence.
+
 The sole normal failure is in the model slice: the paid/free test attempts to
 change immutable terminal attribution before reaching its weighting assertion.
 Its legal lifecycle fixture correction is pending. Root, controller, taskworker
@@ -87,6 +94,19 @@ with no skips or failures. This scope checks original member identity, exact
 source/target authority, namespace capacity and interrupted publication. It does
 not qualify race behavior, public SN/native adapters, retained revisions or an
 operational restore. Those remain open alongside the remaining consumers.
+
+The separate SN `1982267c` snapshot/fleet/claim restore increment passes
+[seven independent normal tests](evidence/restore-snapshot-independent-normal-20261002.json).
+It preserves original payloads and pending intents while rebinding reviewed
+physical storage identity, including owner-device state at its original logical
+path. Race/vet/causal scopes, ledger/member and multi-owner restore, retained
+revisions and current published-module composition remain open.
+
+The qualification volume has another
+[15.63 GiB of inactive compiler archives reclaimed](evidence/cache-reclaim-8-20261002.json),
+with live-process and repeated physical-file checks. Its metadata reference
+scan explicitly excludes generated container runtime storage. This creates
+headroom for the model run; it does not close production sizing or restore gates.
 
 Launch still needs an exact current composed release, runtime/genesis/checkpoint
 and production policy authority, provisioned custody and host configuration,
