@@ -48,7 +48,10 @@ allowances; an intact interrupted preparation remains recoverable. All 44 author
 normal roots, fourteen race roots and vet pass; independent qualification passes
 all eleven new roots in both modes plus vet, with seven unchanged-source causal
 failures. A separate omission proves the final validator host check. The frozen
-`1d580d5e` release excludes this correction and needs a selected successor.
+`1d580d5e` release excludes this correction; the
+[qualified readiness baseline](evidence/release-3d1e2ecf-serverac86-20261002.md) packages that source, but is
+superseded for launch by later owner-custody source `21640419`, pending its own
+exact release composition.
 Separate root/trim writers still need P0 physical custody qualification before
 fresh native signing or sends are enabled. Current public composition leaves
 those authority ports unavailable. Live acceptance remains open.
@@ -1621,7 +1624,24 @@ require a separate exact release; reporting commits do not change these pins.
 This baseline remains **superseded for launch** by the
 [exact custody successor](evidence/release-1d580d5e-serverac86-20261001.md); its original receipts are preserved.
 
-The [original EVM custody successor](evidence/release-1d580d5e-serverac86-20261001.md) now binds exact
+The [qualified readiness release baseline](evidence/release-3d1e2ecf-serverac86-20261002.md) binds frozen
+SN `3d1e2ecf` / server `ac86855d`, including the five-marker/passive-root correction.
+It is **superseded for launch** by later owner-custody source `21640419`, which
+is excluded from these artifacts and requires its own exact release composition.
+Two sequential fresh-cache builds match seventeen binaries and ten bytecodes;
+two separate eight-image builds match OCI platform/config/archive bytes.
+Independent A/B source and all sixteen image readbacks pass. The unchanged author
+seal verifies 1,060 retained files and must be read with the separate corrected
+finalization guard. The failed schema adapter and checkpointed seal-only
+continuation remain recorded; no source/image build or completed qualification
+phase was rerun. Original readiness and historical component scopes stay separate.
+The exact binary captures a new public combined snapshot at block 9,191,688 and
+emits identical ten-action plans, all blocked/non-executable with twenty-eight
+missing and two supplied-unvalidated requirements. The `1d580d5e` predecessor
+receipts remain preserved. Independent compiler provenance, complete production
+qualification, legacy writer custody, live authority and acceptance remain open.
+
+The [original EVM custody successor](evidence/release-1d580d5e-serverac86-20261001.md) previously bound exact
 SN `1d580d5e` / server `ac86855d`, including writer `cb9f3aa2`, borrowed-reader
 `1922981d` and diagnostic `4e6b4a7e`. Ten clean source checkouts were freshly
 fetched from remotes to the data volume. Two sequential fresh-cache builds
@@ -1637,8 +1657,9 @@ module-body provenance, arm64, restore, production policy/configuration,
 service behavior, migration/rollout, attestation and actual deployed image
 identity remain open. The separately [qualified five-marker/passive-root custody
 correction](evidence/bootstrap-readiness-custody-qualification-20261001.md) at `3d1e2ecf`
-is outside this frozen source and requires a selected successor build. These
-local artifacts do not approve release or launch.
+is outside that historical source and is now included in the
+[exact readiness successor](evidence/release-3d1e2ecf-serverac86-20261002.md). Neither local artifact selection
+approves release or launch.
 
 Independent A/B source and all sixteen OCI image readbacks pass, with the
 primary receipt and B-image addendum retaining separate scopes. The exact
