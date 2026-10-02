@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // A bounded structurally valid model isolates local publication mechanics. It
@@ -542,7 +543,7 @@ func TestBootstrapSuccessorPreparationFencesRootReplacementDuringPublication(t *
 	if store != nil {
 		store.close()
 	}
-	if !reached || err == nil || !strings.Contains(err.Error(), "physical root changed") || len(bootstrapSuccessorPreparationTestFiles(t, directory)) != 0 {
+	if !reached || !errors.Is(err, durablevolume.ErrIdentity) || len(bootstrapSuccessorPreparationTestFiles(t, directory)) != 0 {
 		t.Fatal("publication followed a replaced physical root", err)
 	}
 	if len(bootstrapSuccessorPreparationTestFiles(t, moved)) != 1 {

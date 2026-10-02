@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // A competing original root cannot evade either global nonce domain by changing
@@ -173,7 +174,7 @@ func TestBootstrapSuccessorExecutionFencesRegistryReplacement(t *testing.T) {
 	if owner != nil {
 		owner.close()
 	}
-	if err == nil || !strings.Contains(err.Error(), "physical directory changed") || !maps.Equal(before, bootstrapSuccessorPreparationTestFiles(t, path)) {
+	if !errors.Is(err, durablevolume.ErrIdentity) || !maps.Equal(before, bootstrapSuccessorPreparationTestFiles(t, path)) {
 		t.Fatal("copied registry acquired the original signed custody", err)
 	}
 }

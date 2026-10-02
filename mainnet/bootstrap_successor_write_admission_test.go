@@ -8,10 +8,51 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/urnetwork/connect/durablevolume"
 )
+
+// The actual public claim is blocked while a passive preparation owns a shared
+// view. After it joins, the same command publishes under exclusive admission;
+// no preparation bytes, signature or nonce are replaced to make that work.
+func TestBootstrapSuccessorPublicExclusiveClaimRetainsWriteAdmission(t *testing.T) {
+	blocked := false
+	f := newBootstrapSuccessorCanonicalFixtureWithClaimGate(t, func(f *bootstrapSuccessorCanonicalFixture) {
+		root, registry := f.original.config.RunDirectory, f.approval.Plan.Request.RegistryDirectory
+		before := bootstrapSuccessorPreparationTestFiles(t, root)
+		nonces := bootstrapSuccessorPreparationTestFiles(t, registry)
+		reader, _, err := openBootstrapSuccessorPreparationReader(f.original.storageContext(t.Context()), f.approval.Plan.Review.Preparation.Approval.Plan, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer reader.close()
+		var stdout bytes.Buffer
+		code, diagnostic := f.invoke("contract-successor-execution-claim", &stdout, f.approvalArgs...)
+		if code != 1 || stdout.Len() != 0 || !strings.Contains(diagnostic, "active local owner") || !maps.Equal(before, bootstrapSuccessorPreparationTestFiles(t, root)) || !maps.Equal(nonces, bootstrapSuccessorPreparationTestFiles(t, registry)) {
+			t.Fatal("public claim escaped passive preparation ownership", code, diagnostic)
+		}
+		blocked = true
+		if err := reader.close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !blocked {
+		t.Fatal("public exclusive admission control was not reached")
+	}
+	before := bootstrapSuccessorPreparationTestFiles(t, f.original.config.RunDirectory)
+	nonces := bootstrapSuccessorPreparationTestFiles(t, f.approval.Plan.Request.RegistryDirectory)
+	var stdout bytes.Buffer
+	code := f.original.command(t.Context(), "contract-successor-execution-resume", &stdout, &bytes.Buffer{}, append(append([]string{}, f.paths...), f.approvalArgs...)...)
+	var result bootstrapSuccessorExecutionResult
+	if err := decodePlanJson(stdout.Bytes(), &result); code != 0 || err != nil || !result.LocalCustodyComplete || result.SubmissionAttempted || result.CumulativeAttempts != f.approval.Plan.Review.Preparation.Approval.Plan.Proposal.Budget.RetainedAttempts {
+		t.Fatal("public exclusive claim could not retain and resume original custody", code, err)
+	}
+	if !maps.Equal(before, bootstrapSuccessorPreparationTestFiles(t, f.original.config.RunDirectory)) || !maps.Equal(nonces, bootstrapSuccessorPreparationTestFiles(t, f.approval.Plan.Request.RegistryDirectory)) || len(f.original.contracts.writes) != 8 {
+		t.Fatal("public local resume rewrote or submitted retained authority")
+	}
+}
 
 // An execution writer borrows immutable preparation but must retain its own
 // write admission. Claim/reopen preserves signed bytes and consumes no send.

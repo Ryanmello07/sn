@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // A complete source is opened through the real publication owner; the reader
@@ -235,7 +237,7 @@ func TestBootstrapSuccessorPreparationReaderRejectsUnsafeOrReplacedCustody(t *te
 	if reader != nil {
 		reader.close()
 	}
-	if err == nil || !strings.Contains(err.Error(), "physical root changed") {
+	if !errors.Is(err, durablevolume.ErrIdentity) {
 		t.Fatal("reader accepted replacement after claim admission", err)
 	}
 }

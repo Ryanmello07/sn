@@ -40,6 +40,12 @@ type bootstrapSuccessorCanonicalFixture struct {
 // The original public v3 setup runs once per heavy root. Admission and receipt
 // faults then share that history, without process-global fixtures or caching.
 func newBootstrapSuccessorCanonicalFixture(t *testing.T) *bootstrapSuccessorCanonicalFixture {
+	return newBootstrapSuccessorCanonicalFixtureWithClaimGate(t, nil)
+}
+
+// A test-only barrier observes the public claim before its first effect; the
+// command still reconstructs every approval and physical owner itself.
+func newBootstrapSuccessorCanonicalFixtureWithClaimGate(t *testing.T, beforeClaim func(*bootstrapSuccessorCanonicalFixture)) *bootstrapSuccessorCanonicalFixture {
 	t.Helper()
 	f := newBootstrapSuccessorCommandFixture(t)
 	bootstrapSuccessorCommandTestComplete(t, f)
@@ -164,6 +170,9 @@ func newBootstrapSuccessorCanonicalFixture(t *testing.T) *bootstrapSuccessorCano
 	self.approval = bootstrapSuccessorExecutionTestSign(t, executionPreview.Plan, key, self.profile)
 	approvalRef := bootstrapRootTestWrite(t, filepath.Join(filepath.Dir(f.path), "synthetic-canonical-execution-approval.json"), self.approval)
 	self.approvalArgs = []string{"--approval", approvalRef.Path, "--approval-sha256", approvalRef.Sha256, "--accept-execution-hash", executionPreview.PlanHash}
+	if beforeClaim != nil {
+		beforeClaim(self)
+	}
 	stdout.Reset()
 	if code, diagnostic := self.invoke("contract-successor-execution-claim", &stdout, self.approvalArgs...); code != 0 {
 		t.Fatal("canonical execution claim", code, diagnostic)
