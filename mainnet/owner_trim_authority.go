@@ -158,6 +158,12 @@ func (self *ownerTrimCanonicalChain) readCurrentWindow(ctx context.Context, acti
 	}
 	result.Blockers = append([]string{}, qualified.QualificationBlockers...)
 	result.RequiredEnforcement = []string{"OWNER_NONCE_PROXY_MULTISIG_AND_PENDING_ACTIONS_FENCED_THROUGH_ORIGINAL_EXPIRY", "GOVERNANCE_PRIVILEGED_RUNTIME_AND_ROOT_GENERATIONS_FENCED_THROUGH_ORIGINAL_EXPIRY", "INDEPENDENT_SOURCE_TO_WASM_AND_COLLATERAL_STAKE_CLAIM_HISTORY_APPROVAL", "GLOBAL_COLDKEY_CUSTODY_AND_ENFORCEABLE_FEE_EXPOSURE"}
+	return self.readCurrentPredicates(operationCtx, action, observation, result)
+}
+
+// Observable nonce, proxy, call and public-pruning predicates are shared by
+// both approval domains. They never assert future privileged-action enforcement.
+func (self *ownerTrimCanonicalChain) readCurrentPredicates(operationCtx context.Context, action ownerTrimAction, observation ownerTrimObservation, result ownerTrimCurrentWindow) (ownerTrimCurrentWindow, error) {
 	runtime, err := self.nativeRuntimeAt(operationCtx, observation.FinalizedHash)
 	if err != nil {
 		return ownerTrimCurrentWindow{}, err

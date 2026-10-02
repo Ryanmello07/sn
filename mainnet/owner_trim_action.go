@@ -20,6 +20,9 @@ const ownerTrimActionSchema = "urnetwork-mainnet-owner-trim-action-v1"
 const ownerTrimExecutionSchema = "urnetwork-mainnet-owner-trim-execution-v1"
 const ownerTrimLedgerActionSchema = "urnetwork-mainnet-owner-trim-action-v2"
 const ownerTrimLedgerExecutionSchema = "urnetwork-mainnet-owner-trim-execution-v2"
+const ownerTrimBestEffortActionSchema = "urnetwork-mainnet-owner-trim-best-effort-action-v1"
+const ownerTrimBestEffortExecutionSchema = "urnetwork-mainnet-owner-trim-best-effort-execution-v1"
+const ownerTrimBestEffortSelection = "reviewed-current-selection-with-explicit-inclusion-risks"
 const ownerTrimStateFile = "owner-trim-action.json"
 
 // One action owns one coldkey nonce, era and exact call for its whole lifetime.
@@ -76,7 +79,14 @@ func (self ownerTrimExecutionConfig) signingBytes() []byte {
 // V2 is a fresh approval domain for an Ed25519 account and RFC78 digest.
 func (self ownerTrimExecutionConfig) validSchemas() bool {
 	return self.Schema == ownerTrimExecutionSchema && self.Action.Schema == ownerTrimActionSchema ||
-		self.Schema == ownerTrimLedgerExecutionSchema && self.Action.Schema == ownerTrimLedgerActionSchema
+		self.Schema == ownerTrimLedgerExecutionSchema && self.Action.Schema == ownerTrimLedgerActionSchema ||
+		self.Schema == ownerTrimBestEffortExecutionSchema && self.Action.Schema == ownerTrimBestEffortActionSchema
+}
+
+// A fresh best-effort approval retains the Ledger envelope without inheriting
+// the strict v2 execution guarantee or adopting a previously claimed action.
+func (self ownerTrimAction) ledgerSigning() bool {
+	return self.Schema == ownerTrimLedgerActionSchema || self.Schema == ownerTrimBestEffortActionSchema
 }
 
 // Every reopen verifies the independent approval instead of trusting a journal
@@ -111,7 +121,7 @@ func prepareOwnerTrimAction(action ownerTrimAction, metadataHex string) (ownerTr
 		return ownerTrimAction{}, errors.Join(errors.New("owner trim metadata differs from approved artifact"), err)
 	}
 	variant, index := "Sr25519", uint8(1)
-	if action.Schema == ownerTrimLedgerActionSchema {
+	if action.ledgerSigning() {
 		variant, index = "Ed25519", 0
 	}
 	if err := nativeSigningProfileForSignature(metadata, variant, index); err != nil {
@@ -138,18 +148,22 @@ func (self ownerTrimAction) encoding() ([]byte, []byte, error) {
 		if self.SignatureScheme != "" || self.MetadataDigest != "" || self.DerivationPath != "" || self.LedgerMetadataHash != "" {
 			return nil, nil, errors.New("owner trim v1 signature and metadata mode cannot change")
 		}
-	} else if self.Schema != ownerTrimLedgerActionSchema || self.SignatureScheme != "ed25519" || !rootCanonicalHash(self.MetadataDigest) || !rootCanonicalHash(self.LedgerMetadataHash) {
+	} else if !self.ledgerSigning() || self.SignatureScheme != "ed25519" || !rootCanonicalHash(self.MetadataDigest) || !rootCanonicalHash(self.LedgerMetadataHash) {
 		return nil, nil, errors.New("owner trim v2 requires explicit Ed25519 and an approved RFC78 metadata digest")
 	}
-	if self.Schema == ownerTrimLedgerActionSchema {
+	if self.ledgerSigning() {
 		if _, err := ownerLedgerDerivationPath(self.DerivationPath); err != nil {
 			return nil, nil, err
 		}
 	}
+	selection := ownerTrimSubsetRule
+	if self.Schema == ownerTrimBestEffortActionSchema {
+		selection = ownerTrimBestEffortSelection
+	}
 	if self.Netuid != 25 || self.Network.NativeChain == "" || self.Network.EvmChainId != mainnetEvmChainId ||
 		!mainnetRuntimeCodecSource(self.Runtime.RuntimeSourceCommit) || self.Runtime.RuntimeVersion.SpecName == "" || self.Runtime.RuntimeVersion.SpecVersion == 0 ||
 		self.Runtime.RuntimeVersion.TransactionVersion == 0 || self.Runtime.RuntimeVersion.StateVersion != 1 ||
-		self.SelectionRule != ownerTrimSubsetRule || !planLabel(self.CustodyId) || self.MaximumUids == 0 ||
+		self.SelectionRule != selection || !planLabel(self.CustodyId) || self.MaximumUids == 0 ||
 		self.Nonce == math.MaxUint32 || self.BirthBlock < self.SubnetRegistrationBlock || self.FeeReserveRao == 0 || self.MaxBroadcasts == 0 || self.MaxBroadcasts > 8 ||
 		!bootstrapRootAbsolutePath(self.StatePath) || filepath.Base(self.StatePath) != ownerTrimStateFile {
 		return nil, nil, errors.New("owner trim action scope, call, custody or allowance is invalid")
@@ -173,7 +187,7 @@ func (self ownerTrimAction) encoding() ([]byte, []byte, error) {
 	payload := append(append([]byte(nil), call...), era...)
 	payload = append(payload, rootCompact(uint64(self.Nonce))...)
 	mode := byte(0)
-	if self.Schema == ownerTrimLedgerActionSchema {
+	if self.ledgerSigning() {
 		mode = 1
 	}
 	payload = append(payload, 0, mode)
@@ -218,7 +232,7 @@ func (self ownerTrimAction) signed(signature []byte) ([]byte, error) {
 	}
 	valid := false
 	variant, mode := byte(1), byte(0)
-	if self.Schema == ownerTrimLedgerActionSchema {
+	if self.ledgerSigning() {
 		variant, mode = 0, 1
 		valid = ed25519.Verify(account, payload, signature)
 	} else {
@@ -255,7 +269,7 @@ func ownerTrimSignedAction(action ownerTrimAction, raw []byte) error {
 	}
 	body := raw[reader.offset:]
 	variant := byte(1)
-	if action.Schema == ownerTrimLedgerActionSchema {
+	if action.ledgerSigning() {
 		variant = 0
 	}
 	if len(body) < 99 || body[0] != 0x84 || body[1] != 0 || body[34] != variant {

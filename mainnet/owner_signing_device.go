@@ -324,7 +324,7 @@ func signOwnerRequest(ctx context.Context, config ownerSigningDeviceConfig, requ
 		return reply, err
 	}
 	path, err := ownerLedgerDerivationPath(action.DerivationPath)
-	if err != nil || action.Schema != ownerTrimLedgerActionSchema || path[2]&0x80000000 == 0 || path[3] != 0x80000000 || path[4]&0x80000000 == 0 {
+	if err != nil || !action.ledgerSigning() || path[2]&0x80000000 == 0 || path[3] != 0x80000000 || path[4]&0x80000000 == 0 {
 		return reply, errors.New("owner SDK signer requires Ed25519 v2 and exact m/44'/354'/account'/0'/index' path")
 	}
 	store, err := openOwnerSigningDeviceStore(ctx, config, request)
