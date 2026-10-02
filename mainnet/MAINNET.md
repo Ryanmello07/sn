@@ -2917,3 +2917,14 @@ This is not proof that v472 source or a proposal is globally absent. Keep exact
 observed v472 code/metadata as unapproved intake until source attribution and
 consumed-purpose review are complete. Fleet catalog implementation and offline
 native/snapshot preparation continue independently of that live authority input.
+
+
+### Guarded spool reader qualification — 2026-10-02
+
+Main now includes independently qualified guarded spool reader recovery
+(merge `4cda804c5e23d3ae6f48971534108a51ffed52c0`). Normal EOF stays intact; failed post-read custody checks
+admit zero bytes even when the descriptor advanced. Fifteen affected roots pass
+normally and with race detection, with vet passing and causal old-body controls
+retained. See [integration evidence](evidence/current-graph-reader-progress-20261002.md).
+The adjacent Server and fresh-preparation reader scopes remain separate gates.
+This integration does not authorize signing, deployment or activation.

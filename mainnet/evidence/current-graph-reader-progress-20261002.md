@@ -65,3 +65,17 @@ Unchanged Connectea827/core73 stays bound through its original sealed receipt.
 Independent replay is pending. Native/snapshot public-entry controls now run
 on the unchanged f5 baseline before their adapters are implemented; this still
 does not close private-root creation, retained/restore or the full storage gate.
+
+
+## Guarded spool reader integration completed
+
+SN main merge `4cda804c5e23d3ae6f48971534108a51ffed52c0` integrates the three guarded-reader files from
+`68a7be85502ed7a0fd139afcd2f212178cdec019`. Those files and the module manifests are byte-identical to the
+independently qualified source; the newer retained-member mainnet changes are
+preserved. Root verified the independent receipt, its manifest and all 22 bound
+files before merging. The [independent receipt](guarded-reader-independent-20261002.json)
+has SHA-256 `09b35b8d5c40725aefd57510c3e1f5854769730e0f05e472f70130ed318eb554`.
+All 15 affected roots pass normally and with race detection; vet passes.
+Four old-body controls fail for the expected complete-buffer admission defect
+in each mode, while four positive controls pass. This qualifies the affected
+reader scope, not the complete mainnet release or deployment.
