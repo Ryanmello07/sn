@@ -71,7 +71,7 @@ func runBootstrapRootCommand(ctx context.Context, args []string, stdout, stderr 
 		fmt.Fprintln(stderr, "bootstrap canceled:", err)
 		return 1
 	}
-	store, err := openBootstrapRootStore(plan, command == "apply")
+	store, err := openBootstrapRootStore(plan, command == "apply", ctx)
 	if err != nil {
 		fmt.Fprintln(stderr, "bootstrap retained ownership:", err)
 		return 3

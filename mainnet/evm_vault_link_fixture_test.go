@@ -62,7 +62,7 @@ func (self *evmCreateFixture) prepareVaultLinkSigned() {
 func (self *evmCreateFixture) openVaultLinkAncestors() ([]*evmActionStore, []evmActionRecord) {
 	self.t.Helper()
 	stores, records := self.openReserveLinkAncestors()
-	store, err := openEvmReserveLinkActionStore(*self.plan.ReserveLink, records[0], records[1], records[2], records[3], records[4], false, nil)
+	store, err := openEvmReserveLinkActionStore(*self.plan.ReserveLink, records[0], records[1], records[2], records[3], records[4], false, nil, self.storage.Context)
 	if err != nil {
 		self.t.Fatal(err)
 	}

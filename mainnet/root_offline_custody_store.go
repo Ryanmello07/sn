@@ -4,9 +4,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,6 +20,7 @@ const rootOfflineStoreLimit = 512 * 1024
 // The custody owner serializes load/save. The caller joins all operations before
 // close; the process lock stays held throughout that owner's lifetime.
 type rootOfflineCustodyStore struct {
+	storage    *mainnetDurableDirectory
 	trust      rootOfflineCustodyTrust
 	packetHash string
 	lock       *os.File
@@ -25,7 +28,7 @@ type rootOfflineCustodyStore struct {
 
 // Creation is explicit and one-shot. A lost or partially created record leaves
 // its marker reserved; neither recovery nor another create may invent a request.
-func openRootOfflineCustodyStore(trust rootOfflineCustodyTrust, create *rootOfflineCustodyPacket) (*rootOfflineCustodyStore, error) {
+func openRootOfflineCustodyStore(trust rootOfflineCustodyTrust, create *rootOfflineCustodyPacket, storageContexts ...context.Context) (*rootOfflineCustodyStore, error) {
 	if err := trust.validate(); err != nil {
 		return nil, err
 	}
@@ -39,7 +42,16 @@ func openRootOfflineCustodyStore(trust rootOfflineCustodyTrust, create *rootOffl
 	if err != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.Join(errors.New("root offline custody requires a precreated private directory"), err)
 	}
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
+	storage, err := openMainnetDurableDirectory(mainnetStorageContext(storageContexts), filepath.Dir(path), durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = storage.close()
+		}
+	}()
 	if create != nil {
 		if err := create.validate(trust); err != nil {
 			return nil, err
@@ -47,31 +59,37 @@ func openRootOfflineCustodyStore(trust rootOfflineCustodyTrust, create *rootOffl
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return nil, errors.Join(errors.New("root offline custody state already exists or cannot be inspected"), err)
 		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := syscall.Open(path+".lock", flags, 0600)
+	lock, err := storage.openSnapshotMarker(path)
 	if err != nil {
 		return nil, fmt.Errorf("open root offline custody ownership marker: %w", err)
 	}
-	lock := os.NewFile(uintptr(fd), path+".lock")
-	store := &rootOfflineCustodyStore{trust: trust, lock: lock}
+	fd := int(lock.Fd())
+	store := &rootOfflineCustodyStore{storage: storage, trust: trust, lock: lock}
+	transferred = true
 	success := false
 	defer func() {
 		if !success {
-			lock.Close()
+			store.close()
 		}
 	}()
+	if err := storage.bindMarker(lock, false); err != nil {
+		return nil, err
+	}
 	info, err = lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.Join(errors.New("root offline custody marker is not a private regular file"), err)
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, fmt.Errorf("root offline custody already has an owner: %w", err)
 	}
 	trustHash := rootObjectHash(trust)
+	if err := storage.bindSnapshot(path, "mainnet-root-offline", rootOfflineStoreLimit, create != nil); err != nil {
+		return nil, err
+	}
 	if create != nil {
 		store.packetHash = create.ContentHash
-		_, writeErr := lock.WriteString(trustHash + "\n" + store.packetHash + "\n")
+		_, writeErr := storage.writeMarkerAt([]byte(trustHash+"\n"+store.packetHash+"\n"), 0)
 		if err := errors.Join(writeErr, lock.Sync()); err != nil {
 			return nil, err
 		}
@@ -90,6 +108,9 @@ func openRootOfflineCustodyStore(trust rootOfflineCustodyTrust, create *rootOffl
 			return nil, err
 		}
 	}
+	if err := storage.bindMarker(store.lock, true); err != nil {
+		return nil, err
+	}
 	success = true
 	return store, nil
 }
@@ -99,7 +120,7 @@ func (self *rootOfflineCustodyStore) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	err := self.lock.Close()
+	err := errors.Join(self.storage.close(), self.lock.Close())
 	self.lock = nil
 	return err
 }
@@ -111,22 +132,9 @@ func (self *rootOfflineCustodyStore) load() (rootOfflineCustodyRecord, error) {
 	if self.lock == nil {
 		return record, errors.New("root offline custody store is closed")
 	}
-	fd, err := syscall.Open(self.trust.StatePath, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	raw, _, err := self.storage.readFile(context.Background(), self.trust.StatePath, rootOfflineStoreLimit)
 	if err != nil {
-		return record, fmt.Errorf("retained root offline custody state is unavailable: %w", err)
-	}
-	file := os.NewFile(uintptr(fd), self.trust.StatePath)
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		file.Close()
-		return record, errors.Join(errors.New("root offline custody state is not a private regular file"), err)
-	}
-	raw, readErr := io.ReadAll(io.LimitReader(file, rootOfflineStoreLimit+1))
-	if err := errors.Join(readErr, file.Close()); err != nil {
 		return record, err
-	}
-	if len(raw) == 0 || len(raw) > rootOfflineStoreLimit {
-		return record, errors.New("root offline custody state is empty or exceeds its resource bound")
 	}
 	if err := decodePlanJson(raw, &record); err != nil {
 		return record, err
@@ -140,6 +148,9 @@ func (self *rootOfflineCustodyStore) load() (rootOfflineCustodyRecord, error) {
 // Syncing the file and directory precedes receipt publication. A failure after
 // rename is ambiguous; the owner must reopen rather than retry this instance.
 func (self *rootOfflineCustodyStore) save(record rootOfflineCustodyRecord) error {
+	if err := self.storage.checkWrite(nil); err != nil {
+		return err
+	}
 	if self.lock == nil || record.Packet.ContentHash != self.packetHash {
 		return errors.New("root offline custody store ownership differs")
 	}
@@ -157,22 +168,5 @@ func (self *rootOfflineCustodyStore) save(record rootOfflineCustodyRecord) error
 	if err != nil || len(raw)+1 > rootOfflineStoreLimit {
 		return errors.Join(errors.New("root offline custody state cannot be encoded within its resource bound"), err)
 	}
-	directory := filepath.Dir(self.trust.StatePath)
-	file, err := os.CreateTemp(directory, ".root-offline-custody-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	_, writeErr := file.Write(append(raw, '\n'))
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(file.Name(), self.trust.StatePath); err != nil {
-		return err
-	}
-	dir, err := os.Open(directory)
-	if err != nil {
-		return err
-	}
-	return errors.Join(dir.Sync(), dir.Close())
+	return self.storage.publish(self.trust.StatePath, append(raw, '\n'), nil)
 }

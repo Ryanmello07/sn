@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"path/filepath"
@@ -55,6 +56,7 @@ func (self bootstrapChainRecord) validate(plan bootstrapChainPlan) error {
 // One invocation owns the local flock and serializes all methods until close.
 // A failed save poisons the instance; reopening resolves durability ambiguity.
 type bootstrapChainStore struct {
+	storage       *mainnetDurableDirectory
 	preparation   bootstrapChainPreparation
 	path          string
 	lock          *os.File
@@ -64,43 +66,55 @@ type bootstrapChainStore struct {
 
 // Apply claims unused paths. Resume can recover a complete initial marker only
 // before any child exists; missing completed progress is always refused.
-func openBootstrapChainStore(preparation bootstrapChainPreparation, create bool, claimHook func(string) error) (*bootstrapChainStore, error) {
+func openBootstrapChainStore(preparation bootstrapChainPreparation, create bool, claimHook func(string) error, storageContexts ...context.Context) (*bootstrapChainStore, error) {
 	if err := errors.Join(preparation.validate(), bootstrapRootDirectory(preparation.Plan.Config.RunDirectory)); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(preparation.Plan.Config.RunDirectory, bootstrapChainStateFile)
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
-	if create {
-		for _, path := range preparation.protectedPaths() {
-			for _, candidate := range []string{path, path + ".lock"} {
-				if _, err := os.Lstat(candidate); !errors.Is(err, os.ErrNotExist) {
-					return nil, errors.Join(errors.New("bootstrap chain apply requires unused journals; retain existing custody for resume"), err)
-				}
-			}
-		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
-	}
-	fd, err := syscall.Open(path+".lock", flags, 0600)
+	storage, err := openMainnetDurableDirectory(mainnetStorageContext(storageContexts), filepath.Dir(path), durablevolume.ReadWrite)
 	if err != nil {
 		return nil, err
 	}
-	store := &bootstrapChainStore{preparation: preparation, path: path, lock: os.NewFile(uintptr(fd), path+".lock")}
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = storage.close()
+		}
+	}()
+	if create {
+		if err := requireFreshSnapshotPaths(preparation.protectedPaths()); err != nil {
+			return nil, err
+		}
+	}
+	lock, err := storage.openSnapshotMarker(path)
+	if err != nil {
+		return nil, err
+	}
+	fd := int(lock.Fd())
+	store := &bootstrapChainStore{storage: storage, preparation: preparation, path: path, lock: lock}
+	transferred = true
 	success := false
 	defer func() {
 		if !success {
 			store.close()
 		}
 	}()
+	if err := storage.bindMarker(store.lock, false); err != nil {
+		return nil, err
+	}
 	info, err := store.lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.Join(errors.New("bootstrap chain marker is not a private regular file"), err)
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("bootstrap chain already has a preparation owner"), err)
 	}
 	marker := preparation.Plan.ContentHash + "\n"
+	if err := storage.bindSnapshot(path, "mainnet-bootstrap-chain", rootServiceStoreLimit, create); err != nil {
+		return nil, err
+	}
 	if create {
-		written, err := store.lock.WriteString(marker)
+		written, err := storage.writeMarkerAt([]byte(marker), 0)
 		if written != len(marker) && err == nil {
 			err = io.ErrShortWrite
 		}
@@ -121,6 +135,9 @@ func openBootstrapChainStore(preparation bootstrapChainPreparation, create bool,
 			if _, err := store.load(); err != nil {
 				return nil, err
 			}
+			if err := storage.bindMarker(store.lock, true); err != nil {
+				return nil, err
+			}
 			success = true
 			return store, nil
 		}
@@ -128,12 +145,8 @@ func openBootstrapChainStore(preparation bootstrapChainPreparation, create bool,
 			return nil, errors.New("bootstrap chain marker differs from the accepted plan")
 		}
 	}
-	for _, path := range preparation.protectedPaths()[1:] {
-		for _, candidate := range []string{path, path + ".lock"} {
-			if _, err := os.Lstat(candidate); !errors.Is(err, os.ErrNotExist) {
-				return nil, errors.Join(errors.New("bootstrap chain interrupted claim has child state; recovery refused"), err)
-			}
-		}
+	if err := requireFreshSnapshotPaths(preparation.protectedPaths()[1:]); err != nil {
+		return nil, err
 	}
 	record, err := store.load()
 	if errors.Is(err, os.ErrNotExist) {
@@ -149,11 +162,14 @@ func openBootstrapChainStore(preparation bootstrapChainPreparation, create bool,
 			return nil, err
 		}
 	}
-	written, err := store.lock.WriteAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
+	written, err := storage.writeMarkerAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
 	if written != len(bootstrapRootClaimComplete) && err == nil {
 		err = io.ErrShortWrite
 	}
 	if err := errors.Join(err, store.lock.Sync()); err != nil {
+		return nil, err
+	}
+	if err := storage.bindMarker(store.lock, true); err != nil {
 		return nil, err
 	}
 	success = true
@@ -165,7 +181,7 @@ func (self *bootstrapChainStore) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	err := self.lock.Close()
+	err := errors.Join(self.storage.close(), self.lock.Close())
 	self.lock = nil
 	return err
 }
@@ -176,7 +192,7 @@ func (self *bootstrapChainStore) load() (bootstrapChainRecord, error) {
 	if self.lock == nil || self.failed != nil {
 		return record, errors.Join(errors.New("bootstrap chain store is closed or requires reopen"), self.failed)
 	}
-	raw, _, err := readBootstrapRootFile(context.Background(), self.path, rootServiceStoreLimit)
+	raw, _, err := self.storage.readFile(context.Background(), self.path, rootServiceStoreLimit)
 	if err != nil {
 		return record, err
 	}
@@ -189,11 +205,14 @@ func (self *bootstrapChainStore) load() (bootstrapChainRecord, error) {
 // Publish only after file sync, atomic rename and directory sync. Any failed
 // publication ends this instance, including an error after a successful rename.
 func (self *bootstrapChainStore) save(record bootstrapChainRecord) (resultErr error) {
+	if err := self.storage.checkWrite(nil); err != nil {
+		return err
+	}
 	if self.lock == nil || self.failed != nil {
 		return errors.Join(errors.New("bootstrap chain store is closed or requires reopen"), self.failed)
 	}
 	defer func() {
-		if resultErr != nil {
+		if resultErr != nil && (self.storage == nil || self.storage.failed != nil || !mainnetDurableAdmissionPending(resultErr)) {
 			self.failed = resultErr
 		}
 	}()
@@ -213,34 +232,17 @@ func (self *bootstrapChainStore) save(record bootstrapChainRecord) (resultErr er
 	if err != nil || len(raw) >= rootServiceStoreLimit {
 		return errors.Join(errors.New("bootstrap chain progress exceeds its bound"), err)
 	}
-	file, err := os.CreateTemp(self.preparation.Plan.Config.RunDirectory, ".sn-mainnet-bootstrap-chain-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	raw = append(raw, '\n')
-	written, writeErr := file.Write(raw)
-	if written != len(raw) && writeErr == nil {
-		writeErr = io.ErrShortWrite
-	}
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(file.Name(), self.path); err != nil {
-		return err
-	}
-	return self.syncParent()
+	return self.storage.publish(self.path, append(raw, '\n'), self.syncDirectory)
 }
 
 // A scoped test hook can interrupt the actual post-rename durability boundary.
 func (self *bootstrapChainStore) syncParent() error {
-	directory, err := os.Open(self.preparation.Plan.Config.RunDirectory)
-	if err != nil {
+	if err := self.storage.checkWrite(nil); err != nil {
 		return err
 	}
 	syncDirectory := self.syncDirectory
 	if syncDirectory == nil {
 		syncDirectory = (*os.File).Sync
 	}
-	return errors.Join(syncDirectory(directory), directory.Close())
+	return errors.Join(syncDirectory(self.storage.directory.File()), self.storage.checkWrite(nil))
 }

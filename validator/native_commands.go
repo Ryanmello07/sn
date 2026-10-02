@@ -22,6 +22,7 @@ import (
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/docopt/docopt-go"
 	"github.com/urnetwork/connect"
+	"github.com/urnetwork/connect/durablevolume"
 
 	snchain "github.com/urfoundation/sn/chain"
 	"github.com/urfoundation/sn/crv4"
@@ -62,7 +63,7 @@ func loadReleaseHotkey(cfg *ReleaseConfig) (*crv4.Keypair, error) {
 }
 
 // The native transaction journal lives beside the validator's other state.
-func openReleaseNativeJournal(cfg *ReleaseConfig) (*snchain.Journal, error) {
+func openReleaseNativeJournal(cfg *ReleaseConfig, storageContexts ...context.Context) (*snchain.Journal, error) {
 	if err := rejectMainnetRuntimeObservationWrites(cfg); err != nil {
 		return nil, err
 	}
@@ -70,6 +71,15 @@ func openReleaseNativeJournal(cfg *ReleaseConfig) (*snchain.Journal, error) {
 		if err := validateReleaseProductionRuntimeHistory(cfg); err != nil {
 			return nil, err
 		}
+		ctx := validatorStorageContext(storageContexts)
+		path := filepath.Join(cfg.StateDir, "native")
+		journal, err := snchain.OpenOwnerLocalJournal(ctx, path)
+		if errors.Is(err, snchain.ErrJournalUncertain) && !errors.Is(err, durablevolume.ErrIdentity) {
+			// The failed opener already joined and released its descriptors.
+			// Only its exact retained pending bytes can finish once here.
+			return snchain.ReconcileOwnerLocalJournal(ctx, path)
+		}
+		return journal, err
 	}
 	return snchain.OpenJournal(filepath.Join(cfg.StateDir, "native"))
 }
@@ -207,6 +217,14 @@ func runRegister(opts docopt.Opts) error {
 	if err != nil {
 		return err
 	}
+	ctx, cancel := nativeCommandContext()
+	defer cancel()
+	ctx = nativeOwnerStorageContext(ctx, opts)
+	journal, err := openReleaseNativeJournal(cfg, ctx)
+	if err != nil {
+		return err
+	}
+	defer journal.Close()
 	hotkey, err := loadReleaseHotkey(cfg)
 	if err != nil {
 		return err
@@ -215,17 +233,11 @@ func runRegister(opts docopt.Opts) error {
 	if err != nil {
 		return fmt.Errorf("coldkey seed: %w", err)
 	}
-	ctx, cancel := nativeCommandContext()
-	defer cancel()
 	native, err := dialPinnedNative(ctx, cfg)
 	if err != nil {
 		return err
 	}
 	defer native.API.Client.Close()
-	journal, err := openReleaseNativeJournal(cfg)
-	if err != nil {
-		return err
-	}
 	_, err = snchain.RegisterHotkey(ctx, native, snchain.RegisterRequest{
 		Command: "validator register", Netuid: cfg.Netuid, Hotkey: hotkey.PublicKey(), Coldkey: coldkey,
 		BurnLimitRao: optUint64(opts, "--burn_limit_rao", 0), FeeLimitRao: optUint64(opts, "--fee_limit_rao", defaultNativeFeeLimitRao),
@@ -245,6 +257,14 @@ func runStakeAdd(opts docopt.Opts) error {
 	if err != nil {
 		return err
 	}
+	ctx, cancel := nativeCommandContext()
+	defer cancel()
+	ctx = nativeOwnerStorageContext(ctx, opts)
+	journal, err := openReleaseNativeJournal(cfg, ctx)
+	if err != nil {
+		return err
+	}
+	defer journal.Close()
 	hotkey, err := loadReleaseHotkey(cfg)
 	if err != nil {
 		return err
@@ -257,17 +277,11 @@ func runStakeAdd(opts docopt.Opts) error {
 	if amount == 0 {
 		return errors.New("--amount_rao must be a positive TAO amount in rao")
 	}
-	ctx, cancel := nativeCommandContext()
-	defer cancel()
 	native, err := dialPinnedNative(ctx, cfg)
 	if err != nil {
 		return err
 	}
 	defer native.API.Client.Close()
-	journal, err := openReleaseNativeJournal(cfg)
-	if err != nil {
-		return err
-	}
 	_, err = snchain.AddStake(ctx, native, snchain.AddStakeRequest{
 		Command: "validator stake add", Netuid: cfg.Netuid, Hotkey: hotkey.PublicKey(), Coldkey: coldkey, AmountRao: amount,
 		LimitPriceRao: optUint64(opts, "--limit_price_rao", 0), AllowPartial: optBool(opts, "--allow_partial"),
@@ -277,11 +291,25 @@ func runStakeAdd(opts docopt.Opts) error {
 	return err
 }
 
+// Owner-key commands explicitly select the independently approved local
+// custody declaration. Runtime/daemon commands never inherit that schema.
+func nativeOwnerStorageContext(ctx context.Context, opts docopt.Opts) context.Context {
+	reference := durablevolume.Reference{Path: optString(opts, "--durable-volumes", ""), Sha256: optString(opts, "--durable-volumes-sha256", "")}
+	if reference.Path != "" || reference.Sha256 != "" {
+		return durablevolume.WithReference(ctx, reference)
+	}
+	return ctx
+}
+
 // --- activate ---
 
 func activateCommand(opts docopt.Opts) {
 	ctx, cancel := nativeCommandContext()
 	defer cancel()
+	reference := durablevolume.Reference{Path: optString(opts, "--durable-volumes", ""), Sha256: optString(opts, "--durable-volumes-sha256", "")}
+	if reference.Path != "" || reference.Sha256 != "" {
+		ctx = durablevolume.WithReference(ctx, reference)
+	}
 	exitOnError("validator activate", RunReleaseActivation(ctx, ReleaseActivationOptions{
 		ConfigPath: optString(opts, "--config", ""), RelayerKeyFile: expandHome(optString(opts, "--relayer_key_file", "")),
 		Apply: optBool(opts, "--apply"), Output: os.Stdout,

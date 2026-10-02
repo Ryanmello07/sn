@@ -4,19 +4,22 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 
+	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
 )
 
 // Observed custody loss permanently poisons this instance, even after restoration.
 func (self *ownerTrimStore) failIntegrity(err error) error {
+	if mainnetDurableAdmissionPending(err) {
+		return err
+	}
+	if errors.Is(err, errMainnetDurablePublicationUncertain) && !errors.Is(err, durablevolume.ErrIdentity) && !errors.Is(err, errRpcIntegrity) {
+		return err
+	}
 	if self.failed == nil {
 		self.failed = fmt.Errorf("%w: owner trim original custody: %w", errRpcIntegrity, err)
 	}
@@ -31,7 +34,13 @@ func (self *ownerTrimStore) checkpoint() error {
 	if self.failed != nil {
 		return self.failed
 	}
-	if err := errors.Join(self.retained.checkpoint(context.Background()), self.marker.checkpoint()); err != nil {
+	if err := self.storage.checkWrite(self.directory); err != nil {
+		return err
+	}
+	if err := self.retained.checkpoint(context.Background()); err != nil {
+		return self.failIntegrity(err)
+	}
+	if err := self.marker.checkpoint(); err != nil {
 		return self.failIntegrity(err)
 	}
 	var directory unix.Stat_t
@@ -50,31 +59,11 @@ func (self *ownerTrimStore) readRecord() ([]byte, error) {
 	if err := self.checkpoint(); err != nil {
 		return nil, err
 	}
-	name := filepath.Base(self.config.Action.StatePath)
-	fd, err := unix.Openat(int(self.directory.Fd()), name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) && !self.complete && self.expectedHash == "" {
-			return nil, err
-		}
+	raw, _, err := self.storage.readFile(context.Background(), self.config.Action.StatePath, ownerTrimStoreLimit)
+	if err != nil && !(errors.Is(err, os.ErrNotExist) && !self.complete && self.expectedHash == "") {
 		return nil, self.failIntegrity(err)
 	}
-	file := os.NewFile(uintptr(fd), name)
-	defer file.Close()
-	if err := bootstrapSuccessorPrivateRegular(file); err != nil {
-		return nil, self.failIntegrity(err)
-	}
-	raw, err := io.ReadAll(io.LimitReader(file, ownerTrimStoreLimit+1))
-	if err != nil || len(raw) == 0 || len(raw) > ownerTrimStoreLimit {
-		return nil, self.failIntegrity(errors.Join(errors.New("journal is not a bounded complete record"), err))
-	}
-	var opened, named unix.Stat_t
-	if err := errors.Join(unix.Fstat(fd, &opened), unix.Fstatat(int(self.directory.Fd()), name, &named, unix.AT_SYMLINK_NOFOLLOW), self.checkpoint()); err != nil {
-		return nil, self.failIntegrity(err)
-	}
-	if opened.Dev != named.Dev || opened.Ino != named.Ino || self.expectedHash != "" && monitorReadDigest(raw) != self.expectedHash {
-		return nil, self.failIntegrity(errors.New("retained journal changed during ownership"))
-	}
-	return raw, nil
+	return raw, err
 }
 
 // Validate the same predecessor before rename and reread after directory sync.
@@ -90,32 +79,10 @@ func (self *ownerTrimStore) publishRecord(record ownerTrimRecord, raw []byte) er
 	if err := checkPrevious(); err != nil {
 		return err
 	}
-	var nonce [16]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return err
-	}
-	stage := ".owner-trim-action-" + hex.EncodeToString(nonce[:])
-	directoryFd := int(self.directory.Fd())
-	fd, err := unix.Openat(directoryFd, stage, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0600)
-	if err != nil {
-		return err
-	}
-	defer unix.Unlinkat(directoryFd, stage, 0)
-	file := os.NewFile(uintptr(fd), stage)
-	written, writeErr := file.Write(raw)
-	if written != len(raw) && writeErr == nil {
-		writeErr = io.ErrShortWrite
-	}
-	if err := errors.Join(writeErr, file.Sync(), file.Close(), checkPrevious()); err != nil {
-		return err
-	}
-	if err := unix.Renameat(directoryFd, stage, directoryFd, filepath.Base(self.config.Action.StatePath)); err != nil {
+	if err := self.storage.publish(self.config.Action.StatePath, raw, self.syncDirectory); err != nil {
 		return err
 	}
 	self.expectedHash = monitorReadDigest(raw)
-	if err := self.syncParent(); err != nil {
-		return err
-	}
-	_, err = self.load()
+	_, err := self.load()
 	return err
 }

@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/urfoundation/sn/internal/durablepath"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 type rootServiceRuntimeFixture struct {
@@ -66,6 +68,7 @@ func newRootServiceRuntimeFixture(t *testing.T) *rootServiceRuntimeFixture {
 // own schema. Buffers are inspected after all bounded exporters have joined.
 func (self *rootServiceRuntimeFixture) command(t *testing.T, ctx context.Context, operation string, extra ...string) (int, rootServiceRuntimeResult, string) {
 	t.Helper()
+	ctx = durablepath.WithHost(durablevolume.WithReference(ctx, self.root.storage.Reference), self.root.storage.Host)
 	args := []string{"root-service", operation, "--config", self.input.Path}
 	if operation != "plan" {
 		args = append(args, "--accept-runtime-sha256", self.input.Sha256)
@@ -147,6 +150,10 @@ func (self *rootServiceRuntimeFixture) weights(t *testing.T) {
 
 func TestRootServiceRuntimePublicActivationRemainsClosed(t *testing.T) {
 	f := newRootServiceRuntimeFixture(t)
+	prepared, err := os.ReadDir(f.root.config.RunDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, operation := range []string{"plan", "activate"} {
 		code, result, detail := f.command(t, t.Context(), operation)
 		wanted := 0
@@ -158,8 +165,13 @@ func TestRootServiceRuntimePublicActivationRemainsClosed(t *testing.T) {
 		}
 	}
 	entries, err := os.ReadDir(f.root.config.RunDirectory)
-	if err != nil || len(entries) != 0 || len(f.submission.sent()) != 0 || len(f.submission.receipt.counts) != 0 {
+	if err != nil || len(entries) != len(prepared) || len(f.submission.sent()) != 0 || len(f.submission.receipt.counts) != 0 {
 		t.Fatal("planning/activation touched ownership or the chain", err)
+	}
+	for i := range entries {
+		if entries[i].Name() != prepared[i].Name() {
+			t.Fatal("planning replaced a prepared custody member")
+		}
 	}
 	f.weights(t)
 	f.prepare(t)
@@ -282,7 +294,7 @@ func TestRootServiceRuntimePreparationRecoversDurablePrefixes(t *testing.T) {
 		f := newRootServiceRuntimeFixture(t)
 		f.root.result(t, "apply")
 		// The first synced prefix claims the exact route before child creation.
-		store, err := openRootServiceStore(f.root.plan.Service, false)
+		store, err := openRootServiceStore(f.root.plan.Service, false, f.root.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -298,7 +310,7 @@ func TestRootServiceRuntimePreparationRecoversDurablePrefixes(t *testing.T) {
 		}
 		store.close()
 		if childExists {
-			child, err := openRootSubmissionStore(f.submission.config, true)
+			child, err := openRootSubmissionStore(f.submission.config, true, f.root.storage.Context)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -358,7 +370,7 @@ func TestRootServiceRuntimeConflictingSignaturesStopBeforeChainReads(t *testing.
 		t.Fatal(err)
 	}
 	custodyStore.close()
-	store, err := openRootServiceStore(f.root.plan.Service, false)
+	store, err := openRootServiceStore(f.root.plan.Service, false, f.root.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

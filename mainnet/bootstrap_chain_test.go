@@ -15,6 +15,8 @@ import (
 	"testing"
 
 	native "github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/urfoundation/sn/internal/durablepath"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // Mutable fixture inputs are changed only between complete command invocations.
@@ -95,6 +97,11 @@ func newBootstrapChainFixtureWithCensus(t *testing.T, configure func(*rootRpcFix
 	contracts.config.Plan.Network = network
 	contracts.config.Plan.DeploymentId = root.config.DeploymentId
 	contracts.config.Plan.RunDirectory = root.config.RunDirectory
+	contracts.storage = root.storage
+	for _, name := range []string{evmCreateStateFile, evmVaultCreateStateFile, evmCoordinatorCreateStateFile, evmEscrowRegisterStateFile, evmProxyCreateStateFile, evmReserveLinkStateFile, evmVaultLinkStateFile, evmEvidenceCreateStateFile} {
+		prepareMainnetSnapshotTest(t, filepath.Join(root.config.RunDirectory, name), "mainnet-evm-action", 512*1024)
+	}
+	prepareMainnetSnapshotTest(t, filepath.Join(root.config.RunDirectory, bootstrapChainStateFile), "mainnet-bootstrap-chain", 1024*1024)
 	contracts.config.Plan.Runtime = rootReceiptProfile{RuntimeSourceCommit: policy.RuntimeSourceCommit, RuntimeVersion: policy.RuntimeVersion, RuntimeCodeHash: policy.RuntimeCodeHash, RuntimeMetadataHash: policy.RuntimeMetadataHash}
 	contracts.publishConfig()
 	f := &bootstrapChainFixture{path: filepath.Join(configDirectory, "chain.json"), root: root, contracts: contracts, client: client, census: census,
@@ -117,7 +124,14 @@ func newBootstrapChainFixtureWithCensus(t *testing.T, configure func(*rootRpcFix
 }
 
 // The public dispatcher receives only the exact local preparation acceptance.
+// Each direct public reader receives the same explicit physical declaration;
+// caller cancellation remains owned by the individual observation.
+func (self *bootstrapChainFixture) storageContext(ctx context.Context) context.Context {
+	return durablepath.WithHost(durablevolume.WithReference(ctx, self.root.storage.Reference), self.root.storage.Host)
+}
+
 func (self *bootstrapChainFixture) command(ctx context.Context, command string, stdout, stderr io.Writer, extra ...string) int {
+	ctx = self.storageContext(ctx)
 	args := []string{"bootstrap-chain", command, "--config", self.path}
 	if command != "plan" {
 		args = append(args, "--run-dir", self.config.RunDirectory, "--accept-plan-hash", self.preparation.Plan.ContentHash)
@@ -161,6 +175,7 @@ func (self *bootstrapChainFixture) journals(t *testing.T) map[string]string {
 // Real custody owners are prepared once while every chain phase stays pending.
 func TestBootstrapChainCommandPreparesExistingCustodyOffline(t *testing.T) {
 	f := newBootstrapChainFixture(t)
+	prepared := f.journals(t)
 	var stdout, stderr bytes.Buffer
 	if code := f.command(t.Context(), "plan", &stdout, &stderr); code != 0 {
 		t.Fatalf("plan exit %d: %s", code, stderr.String())
@@ -169,7 +184,7 @@ func TestBootstrapChainCommandPreparesExistingCustodyOffline(t *testing.T) {
 	if err := decodePlanJson(stdout.Bytes(), &plan); err != nil || !reflect.DeepEqual(plan, f.preparation.Plan) {
 		t.Fatal("plan changed its exact prepared inputs", err)
 	}
-	if len(f.journals(t)) != 0 {
+	if !reflect.DeepEqual(prepared, f.journals(t)) {
 		t.Fatal("read-only planning opened custody")
 	}
 	result := f.result(t, "apply")

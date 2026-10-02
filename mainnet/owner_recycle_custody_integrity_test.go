@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // Invoke an explicit boundary after canonical observation, before publication.
@@ -38,7 +40,7 @@ func ownerRecycleReplaceMarker(t *testing.T, path string) {
 // A detached local owner cannot hand an otherwise approved request to a signer.
 func TestOwnerRecycleCustodyRefusesDetachedMarkerBeforeExport(t *testing.T) {
 	f := newOwnerRecycleTestFixture(t, true)
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +48,7 @@ func TestOwnerRecycleCustodyRefusesDetachedMarkerBeforeExport(t *testing.T) {
 	custody := ownerRecycleCustody{config: f.config, key: f.key, store: store}
 	ownerRecycleReplaceMarker(t, f.config.Action.StatePath+".lock")
 	request, err := custody.export(f.input.Metadata, f.input.LedgerMetadata)
-	if !errors.Is(err, errRpcIntegrity) || request.ContentHash != "" {
+	if !errors.Is(err, durablevolume.ErrIdentity) || request.ContentHash != "" {
 		t.Fatal("detached recycle marker released a signing request", err)
 	}
 }
@@ -56,7 +58,7 @@ func TestOwnerRecycleCustodyRefusesDetachedMarkerBeforeExport(t *testing.T) {
 func TestOwnerRecycleCustodyRefusesJournalLossDuringReconciliation(t *testing.T) {
 	f := newOwnerRecycleTestFixture(t, true)
 	chain, _, request, _ := ownerRecycleTestChain(t, f, 2, true)
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +81,7 @@ func TestOwnerRecycleCustodyRefusesJournalLossDuringReconciliation(t *testing.T)
 		return evidence, nil
 	})
 	result, err := custody.reconcile(t.Context(), boundary)
-	if !errors.Is(err, errRpcIntegrity) || result.TransactionFinalized || result.RecycleModeObserved {
+	if !errors.Is(err, durablevolume.ErrIdentity) || result.TransactionFinalized || result.RecycleModeObserved {
 		t.Fatal("lost completed recycle journal became finalized mode readiness", err)
 	}
 	if _, err := os.Lstat(f.config.Action.StatePath); !errors.Is(err, os.ErrNotExist) {
@@ -91,7 +93,7 @@ func TestOwnerRecycleCustodyRefusesJournalLossDuringReconciliation(t *testing.T)
 // signing custody merely because its config and checksum still authenticate.
 func TestOwnerRecycleCustodyRefusesJournalRollbackDuringOwnership(t *testing.T) {
 	f := newOwnerRecycleTestFixture(t, true)
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +113,7 @@ func TestOwnerRecycleCustodyRefusesJournalRollbackDuringOwnership(t *testing.T) 
 	if err := os.WriteFile(f.config.Action.StatePath, reserved, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if replay, err := custody.export(f.input.Metadata, f.input.LedgerMetadata); !errors.Is(err, errRpcIntegrity) || replay.ContentHash != "" {
+	if replay, err := custody.export(f.input.Metadata, f.input.LedgerMetadata); !errors.Is(err, durablevolume.ErrIdentity) || replay.ContentHash != "" {
 		t.Fatal("valid predecessor rollback released a second signing handoff", err)
 	}
 }
@@ -120,7 +122,7 @@ func TestOwnerRecycleCustodyRefusesJournalRollbackDuringOwnership(t *testing.T) 
 // acquired lock. A restored marker cannot revive an already poisoned instance.
 func TestOwnerRecycleCustodyRefusesMarkerLossAfterDurableExport(t *testing.T) {
 	f := newOwnerRecycleTestFixture(t, true)
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,19 +132,19 @@ func TestOwnerRecycleCustodyRefusesMarkerLossAfterDurableExport(t *testing.T) {
 		ownerRecycleReplaceMarker(t, marker)
 		return directory.Sync()
 	}
-	if request, err := custody.export(f.input.Metadata, f.input.LedgerMetadata); !errors.Is(err, errRpcIntegrity) || request.ContentHash != "" {
+	if request, err := custody.export(f.input.Metadata, f.input.LedgerMetadata); !errors.Is(err, durablevolume.ErrIdentity) || request.ContentHash != "" {
 		t.Fatal("post-rename marker loss released a signing request", err)
 	}
 	if err := os.Rename(marker+".detached", marker); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.load(); !errors.Is(err, errRpcIntegrity) {
+	if _, err := store.load(); !errors.Is(err, durablevolume.ErrIdentity) {
 		t.Fatal("restoring marker revived poisoned custody", err)
 	}
 	if err := store.close(); err != nil {
 		t.Fatal(err)
 	}
-	resumed, err := openOwnerRecycleStore(f.config, f.key, false)
+	resumed, err := openOwnerRecycleStore(f.config, f.key, false, f.storage.Context)
 	if err != nil {
 		t.Fatal("original durable export could not reopen", err)
 	}
@@ -158,7 +160,7 @@ func TestOwnerRecycleCustodyRefusesMarkerLossAfterDurableExport(t *testing.T) {
 // writer already holding the original parent and marker descriptors.
 func TestOwnerRecycleCustodyRefusesReplacedParentAfterPublication(t *testing.T) {
 	f := newOwnerRecycleTestFixture(t, true)
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +187,7 @@ func TestOwnerRecycleCustodyRefusesReplacedParentAfterPublication(t *testing.T) 
 		}
 		return file.Sync()
 	}
-	if request, err := custody.export(f.input.Metadata, f.input.LedgerMetadata); !errors.Is(err, errRpcIntegrity) || request.ContentHash != "" {
+	if request, err := custody.export(f.input.Metadata, f.input.LedgerMetadata); !errors.Is(err, durablevolume.ErrIdentity) || request.ContentHash != "" {
 		t.Fatal("replacement parent inherited original signing custody", err)
 	}
 }
@@ -195,7 +197,7 @@ func TestOwnerRecycleCustodyRefusesReplacedParentAfterPublication(t *testing.T) 
 func TestOwnerRecycleCustodyRefusesDetachedMarkerForRetainedResults(t *testing.T) {
 	f := newOwnerRecycleTestFixture(t, true)
 	chain, _, request, _ := ownerRecycleTestChain(t, f, 2, true)
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,15 +214,15 @@ func TestOwnerRecycleCustodyRefusesDetachedMarkerForRetainedResults(t *testing.T
 		t.Fatal("original transition did not reconcile", err)
 	}
 	ownerRecycleReplaceMarker(t, f.config.Action.StatePath+".lock")
-	if result, err := custody.reconcile(t.Context(), chain); !errors.Is(err, errRpcIntegrity) || result.RecycleModeObserved || result.TransactionFinalized {
+	if result, err := custody.reconcile(t.Context(), chain); !errors.Is(err, durablevolume.ErrIdentity) || result.RecycleModeObserved || result.TransactionFinalized {
 		t.Fatal("detached terminal owner claimed original receipt readiness", err)
 	}
 	// Fresh supervisors over the same poisoned store cannot bypass its refusal.
 	custody = ownerRecycleCustody{config: f.config, key: f.key, store: store}
-	if result, err := custody.importSignature(request.ContentHash, signature); !errors.Is(err, errRpcIntegrity) || result.RecycleModeObserved {
+	if result, err := custody.importSignature(request.ContentHash, signature); !errors.Is(err, durablevolume.ErrIdentity) || result.RecycleModeObserved {
 		t.Fatal("cached signature import bypassed original custody", err)
 	}
-	if record, err := store.load(); !errors.Is(err, errRpcIntegrity) || record.ContentHash != "" {
+	if record, err := store.load(); !errors.Is(err, durablevolume.ErrIdentity) || record.ContentHash != "" {
 		t.Fatal("status returned a detached terminal record", err)
 	}
 }
@@ -230,7 +232,7 @@ func TestOwnerRecycleCustodyRefusesDetachedMarkerForRetainedResults(t *testing.T
 func TestOwnerRecycleCustodyRefusesHardlinkedStateAndMarker(t *testing.T) {
 	for _, suffix := range []string{"", ".lock"} {
 		f := newOwnerRecycleTestFixture(t, true)
-		store, err := openOwnerRecycleStore(f.config, f.key, true)
+		store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -238,13 +240,13 @@ func TestOwnerRecycleCustodyRefusesHardlinkedStateAndMarker(t *testing.T) {
 		if err := os.Link(path, path+".alias"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := store.load(); !errors.Is(err, errRpcIntegrity) {
+		if _, err := store.load(); !errors.Is(err, durablevolume.ErrIdentity) {
 			t.Fatal("hardlink retained active recycle custody", suffix, err)
 		}
 		if err := store.close(); err != nil {
 			t.Fatal(err)
 		}
-		if reopened, err := openOwnerRecycleStore(f.config, f.key, false); err == nil {
+		if reopened, err := openOwnerRecycleStore(f.config, f.key, false, f.storage.Context); err == nil {
 			reopened.close()
 			t.Fatal("hardlinked recycle custody reopened", suffix)
 		}
@@ -256,7 +258,7 @@ func TestOwnerRecycleCustodyRefusesHardlinkedStateAndMarker(t *testing.T) {
 func TestOwnerRecycleCustodyRecoversOnlyUnfinishedReservation(t *testing.T) {
 	for _, progress := range []string{"missing", "reserved", "exported"} {
 		f := newOwnerRecycleTestFixture(t, true)
-		store, err := openOwnerRecycleStore(f.config, f.key, true)
+		store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -279,7 +281,7 @@ func TestOwnerRecycleCustodyRecoversOnlyUnfinishedReservation(t *testing.T) {
 		if err := os.WriteFile(path+".lock", []byte(marker), 0600); err != nil {
 			t.Fatal(err)
 		}
-		resumed, err := openOwnerRecycleStore(f.config, f.key, false)
+		resumed, err := openOwnerRecycleStore(f.config, f.key, false, f.storage.Context)
 		if progress == "exported" {
 			if err == nil {
 				resumed.close()

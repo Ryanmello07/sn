@@ -138,6 +138,7 @@ type rootActionOwner struct {
 	signer    rootActionSigner
 	chain     rootActionChain
 	poisoned  bool
+	failure   error
 }
 
 // Typed pending/blocked states cannot be confused with finalized dispatch
@@ -266,7 +267,9 @@ func (self *rootActionOwner) persist(record rootActionRecord) error {
 		return err
 	}
 	if err := self.store.save(record); err != nil {
-		self.poisoned = true
+		if !mainnetDurableAdmissionPending(err) {
+			self.poisoned, self.failure = true, err
+		}
 		return err
 	}
 	return nil
@@ -283,15 +286,17 @@ func copyRootAction(action rootAction) rootAction {
 // replacing the request, reassigning its nonce, or spending a fresh allowance.
 func (self *rootActionOwner) step(ctx context.Context) (rootActionStep, error) {
 	if self.poisoned || self.store == nil {
-		return rootActionStep{Status: "blocked"}, errors.New("root action owner must be reopened after unavailable or ambiguous storage")
+		return rootActionStep{Status: "blocked"}, errors.Join(errors.New("root action owner must be reopened after invalid or ambiguous storage"), self.failure)
 	}
 	record, err := self.store.load()
 	if err != nil {
-		self.poisoned = true
+		if !mainnetDurableAdmissionPending(err) {
+			self.poisoned, self.failure = true, err
+		}
 		return rootActionStep{Status: "blocked"}, err
 	}
 	if err := record.validate(); err != nil {
-		self.poisoned = true
+		self.poisoned, self.failure = true, err
 		return rootActionStep{Status: "blocked"}, err
 	}
 	result := rootActionStep{Phase: record.Phase, Status: "pending"}

@@ -90,7 +90,7 @@ func newBootstrapSuccessorCanonicalChainWithAuthorities(ctx context.Context, own
 				ConfigHash: rootObjectHash(original.Config), ActionId: original.Config.Plan.Actions[i].Id,
 				PredecessorHash: rootObjectHash(self.records[i-1])}) + "\n"
 		}
-		lock, err := openBootstrapContractReadinessMarker(filepath.Join(owner.local.path, bootstrapContractStateFile(i)), marker+bootstrapRootClaimComplete)
+		lock, err := openBootstrapContractReadinessMarker(filepath.Join(owner.local.path, bootstrapContractStateFile(i)), marker+bootstrapRootClaimComplete, ctx)
 		if err != nil {
 			return nil, err
 		}

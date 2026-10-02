@@ -21,6 +21,7 @@ import (
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 	"github.com/urnetwork/connect"
+	"github.com/urnetwork/connect/durablevolume"
 	"github.com/urnetwork/sdk"
 
 	"github.com/urfoundation/sn/clientauth"
@@ -743,6 +744,9 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	if err != nil {
 		return err
 	}
+	if err := requireReleaseDurableReference(ctx, cfg); err != nil {
+		return err
+	}
 	if adoption != nil {
 		if retainedSetup != nil {
 			return errors.New("strict history adoption cannot select provisional startup")
@@ -757,6 +761,11 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 		}
 		fmt.Fprintf(os.Stderr, "validator: provisional retained activation setup; final_acceptance=false; source_plan=%s handoff=%s\n", retainedSetup.SourcePlanHash, retainedSetup.contentHash)
 	}
+	closeStorage, err := retainReleaseDurableDirectories(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { returnErr = errors.Join(returnErr, closeStorage()) }()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	ctx, diagnosticOwner, diagnosticErr := newReleaseDiagnostics(ctx, os.Stderr, time.Now)
@@ -1035,8 +1044,12 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	})
 }
 
-func runReleaseConfig(configPath, progressPath string) {
-	event := connect.NewEventWithContext(context.Background())
+func runReleaseConfig(configPath, progressPath string, reference durablevolume.Reference) {
+	ctx := context.Background()
+	if reference.Path != "" || reference.Sha256 != "" {
+		ctx = durablevolume.WithReference(ctx, reference)
+	}
+	event := connect.NewEventWithContext(ctx)
 	event.SetOnSignals(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	if err := RunReleaseWithProgress(event.Ctx(), configPath, progressPath); err != nil {
 		panic(err)

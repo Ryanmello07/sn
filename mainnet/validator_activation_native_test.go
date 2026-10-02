@@ -56,7 +56,7 @@ func validatorActivationNativeTestReply(response *http.Response, result any) (*h
 
 func validatorActivationNativeTestReadiness(t *testing.T, f *validatorActivationFixture) bootstrapChainReadiness {
 	t.Helper()
-	readiness, err := f.chain.client.observeBootstrapChainReadiness(t.Context(), f.chain.preparation)
+	readiness, err := f.chain.client.observeBootstrapChainReadiness(f.chain.storageContext(t.Context()), f.chain.preparation)
 	if err != nil || !readiness.ObservationComplete {
 		t.Fatal("synthetic original readiness unavailable", err)
 	}

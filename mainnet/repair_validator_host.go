@@ -26,14 +26,15 @@ import (
 // Only the private fixture changes filesystem roots and the command transport.
 // Public selection always uses root-owned releases and the system manager.
 type repairValidatorHost struct {
-	rootUid     uint32
-	trustRoot   string
-	machinePath string
-	bootPath    string
-	cgroupRoot  string
-	cgroupType  func(string) (int64, error)
-	execute     func(context.Context, string, []string) ([]byte, error)
-	monotonic   func() (uint64, error)
+	rootUid        uint32
+	trustRoot      string
+	machinePath    string
+	bootPath       string
+	cgroupRoot     string
+	cgroupType     func(string) (int64, error)
+	execute        func(context.Context, string, []string) ([]byte, error)
+	storageCommand func(context.Context, *exec.Cmd) error
+	monotonic      func() (uint64, error)
 }
 
 // Output is bounded independently of process lifetime. A writer error cancels
@@ -125,52 +126,68 @@ func (self *repairValidatorHost) parents(path string, owner uint32) error {
 // Hash large binaries without retaining them. Size, inode, mode, owner and
 // modification time are checked around the read; deployment owns immutability.
 func (self *repairValidatorHost) pin(ctx context.Context, reference planFileReference, limit int64, executable bool) (resultErr error) {
+	file, err := self.openPinned(ctx, reference, limit, executable)
+	if err != nil {
+		return err
+	}
+	return file.Close()
+}
+
+// The inspector executes this retained read-only descriptor. A pathname swap
+// after pinning cannot redirect the credential-scoped child to another binary.
+func (self *repairValidatorHost) openPinned(ctx context.Context, reference planFileReference, limit int64, executable bool) (result *os.File, resultErr error) {
 	if ctx == nil || ctx.Err() != nil {
-		return errors.New("validator repair release read canceled")
+		return nil, errors.New("validator repair release read canceled")
 	}
 	if err := self.parents(reference.Path, self.rootUid); err != nil {
-		return err
+		return nil, err
 	}
 	fd, err := syscall.Open(reference.Path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	file := os.NewFile(uintptr(fd), reference.Path)
-	defer func() { resultErr = errors.Join(resultErr, file.Close(), ctx.Err()) }()
+	defer func() {
+		resultErr = errors.Join(resultErr, ctx.Err())
+		if resultErr != nil {
+			result = nil
+			resultErr = errors.Join(resultErr, file.Close())
+		}
+	}()
 	before, err := file.Stat()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	stat, ok := before.Sys().(*syscall.Stat_t)
 	if !ok || stat.Uid != self.rootUid || !before.Mode().IsRegular() || before.Mode().Perm()&0022 != 0 || before.Size() < 1 || before.Size() > limit || executable && before.Mode().Perm()&0111 == 0 || before.Mode()&(os.ModeSetuid|os.ModeSetgid) != 0 {
-		return errors.New("validator repair release file is not protected")
+		return nil, errors.New("validator repair release file is not protected")
 	}
 	hash := sha256.New()
 	buffer := make([]byte, 64*1024)
 	var total int64
 	for {
 		if err := ctx.Err(); err != nil {
-			return err
+			return nil, err
 		}
 		n, err := file.Read(buffer)
 		total += int64(n)
 		if total > limit {
-			return errors.New("validator repair release grew beyond its bound")
+			return nil, errors.New("validator repair release grew beyond its bound")
 		}
 		_, _ = hash.Write(buffer[:n])
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	after, err := file.Stat()
 	named, nameErr := os.Lstat(reference.Path)
 	if err != nil || nameErr != nil || !os.SameFile(before, named) || !os.SameFile(before, after) || before.Mode() != named.Mode() || before.Mode() != after.Mode() || before.Size() != total || before.Size() != after.Size() || before.ModTime() != after.ModTime() || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != reference.Sha256 {
-		return errors.New("validator repair release pin changed")
+		return nil, errors.New("validator repair release pin changed")
 	}
-	return self.parents(reference.Path, self.rootUid)
+	return file, self.parents(reference.Path, self.rootUid)
 }
 
 // Operational records retain the producer's distinct owner and strict decoder.
@@ -216,7 +233,7 @@ func (self *repairValidatorHost) command(ctx context.Context, plan repairValidat
 // A canonical on-disk unit is insufficient if systemd has stale or overridden
 // configuration. Check the manager's resolved execution and dependency profile.
 func (self *repairValidatorHost) inspect(ctx context.Context, plan repairValidatorPlan) (repairValidatorManager, error) {
-	return self.inspectCommand(ctx, plan, "run --config="+plan.Unit.Config.Path+" --progress-file="+plan.Unit.ProgressFile, nil)
+	return self.inspectCommand(ctx, plan, plan.Unit.arguments(), nil)
 }
 
 // Independently approved static profiles share the physical host and manager
@@ -413,6 +430,12 @@ func (self *repairValidatorHost) incident(ctx context.Context, plan repairValida
 // A finite acknowledged command is the only concrete process mutation. No
 // restart, stop, daemon reload, enable, dependency repair or reset-failed exists.
 func (self *repairValidatorHost) start(ctx context.Context, plan repairValidatorPlan) error {
+	if err := requireUnitDurableReference(ctx, plan.Unit.DurableVolumes); err != nil {
+		return err
+	}
+	if err := self.inspectServiceStorage(ctx, plan.Unit, nil); err != nil {
+		return err
+	}
 	_, err := self.command(ctx, plan, "--system", "--no-pager", "--no-ask-password", "--job-mode=fail", "start", "--", plan.Unit.Name)
 	return err
 }

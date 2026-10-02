@@ -16,12 +16,12 @@ import (
 // preparation checkpoint. That valid interrupted phase remains resumable.
 func TestBootstrapReadinessIncompletePreparationRemainsRecoverable(t *testing.T) {
 	f := newBootstrapChainFixture(t)
-	store, err := openBootstrapChainStore(f.preparation, true, nil)
+	store, err := openBootstrapChainStore(f.preparation, true, nil, f.storageContext(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	interrupted := errors.New("synthetic interruption before final parent checkpoint")
-	_, err = advanceBootstrapChain(t.Context(), store, func(stage string) error {
+	_, err = advanceBootstrapChain(f.storageContext(t.Context()), store, func(stage string) error {
 		if stage == "root-retained" {
 			return interrupted
 		}
@@ -34,14 +34,14 @@ func TestBootstrapReadinessIncompletePreparationRemainsRecoverable(t *testing.T)
 		t.Fatal(err)
 	}
 	before := f.journals(t)
-	if _, err := openBootstrapChainReadinessState(t.Context(), f.preparation); err == nil || errors.Is(err, errRpcIntegrity) {
+	if _, err := openBootstrapChainReadinessState(f.storageContext(t.Context()), f.preparation); err == nil || errors.Is(err, errRpcIntegrity) {
 		t.Fatal("valid interrupted preparation became complete or permanently invalid", err)
 	}
 	if !maps.Equal(before, f.journals(t)) {
 		t.Fatal("read-only refusal changed pending original preparation")
 	}
 	f.result(t, "resume")
-	state, err := openBootstrapChainReadinessState(t.Context(), f.preparation)
+	state, err := openBootstrapChainReadinessState(f.storageContext(t.Context()), f.preparation)
 	if err != nil {
 		t.Fatal("original owner could not complete its interrupted preparation", err)
 	}
@@ -60,7 +60,7 @@ func TestBootstrapReadinessRetainsSignedIntentAcrossIntegrityFailure(t *testing.
 	f.result(t, "resume")
 	original := f.journals(t)
 	for index, path := range f.preparation.childPaths() {
-		state, err := openBootstrapChainReadinessState(t.Context(), f.preparation)
+		state, err := openBootstrapChainReadinessState(f.storageContext(t.Context()), f.preparation)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -98,7 +98,7 @@ func TestBootstrapReadinessRetainsSignedIntentAcrossIntegrityFailure(t *testing.
 			t.Fatal("closed reader retained authority")
 		}
 	}
-	state, err := openBootstrapChainReadinessState(t.Context(), f.preparation)
+	state, err := openBootstrapChainReadinessState(f.storageContext(t.Context()), f.preparation)
 	if err != nil {
 		t.Fatal("original restored fixture cannot reopen", err)
 	}
@@ -109,7 +109,7 @@ func TestBootstrapReadinessRetainsSignedIntentAcrossIntegrityFailure(t *testing.
 // remain borrowed, including after its own synced journal publication.
 func TestOwnerTrimRejectsLostBorrowedCustodyAfterPublication(t *testing.T) {
 	chain, f := ownerTrimPreparedTestFixture(t)
-	store, err := openOwnerTrimStore(t.Context(), chain.preparation, f.config, f.key, true)
+	store, err := openOwnerTrimStore(chain.storageContext(t.Context()), chain.preparation, f.config, f.key, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestOwnerTrimRejectsLostBorrowedCustodyAfterPublication(t *testing.T) {
 // preparation must still be owned immediately before issuing the counted start.
 func TestValidatorCurrentRejectsBorrowedCustodyAfterFinalManagerRead(t *testing.T) {
 	f := newValidatorActivationCurrentFixture(t)
-	custody, err := openBootstrapChainReadinessState(t.Context(), f.f.chain.preparation)
+	custody, err := openBootstrapChainReadinessState(f.f.chain.storageContext(t.Context()), f.f.chain.preparation)
 	if err != nil {
 		t.Fatal(err)
 	}

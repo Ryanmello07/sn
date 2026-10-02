@@ -62,7 +62,7 @@ func (self *evmCreateFixture) prepareReserveLinkSigned() {
 func (self *evmCreateFixture) openReserveLinkAncestors() ([]*evmActionStore, []evmActionRecord) {
 	self.t.Helper()
 	stores, records := self.openProxyAncestors()
-	store, err := openEvmProxyActionStore(*self.plan.Proxy, records[0], records[1], records[2], records[3], false, nil)
+	store, err := openEvmProxyActionStore(*self.plan.Proxy, records[0], records[1], records[2], records[3], false, nil, self.storage.Context)
 	if err != nil {
 		self.t.Fatal(err)
 	}

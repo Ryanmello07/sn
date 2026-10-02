@@ -34,9 +34,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/urnetwork/connect"
+	"github.com/urnetwork/connect/durablevolume"
 	"github.com/urnetwork/sdk"
 
 	"github.com/urfoundation/sn/clientauth"
+	"github.com/urfoundation/sn/internal/durableinspect"
 )
 
 const DefaultApiUrl = "https://api.bringyour.com"
@@ -77,20 +79,25 @@ The default URLs are:
     connect_url: %s
 
 Usage:
+    validator storage-inspect --durable-volumes=<path> --durable-volumes-sha256=<hash> --directory=<path>...
     validator auth ([<auth_code>] | --user_auth=<user_auth> [--password=<password>]) [-f]
         [--api_url=<api_url>]
         [-v...]
     validator init (--config=<path> | --state_dir=<path> [--hotkey_seed_file=<path>] [--no_id=<id>]...)
         [-v...]
     validator register --config=<path> --coldkey_seed_file=<path>
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [--burn_limit_rao=<n>] [--fee_limit_rao=<n>] [--apply | --dry-run]
         [-v...]
     validator stake add --amount_rao=<n> --config=<path> --coldkey_seed_file=<path>
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [--limit_price_rao=<n>] [--allow_partial] [--fee_limit_rao=<n>] [--apply | --dry-run]
         [-v...]
     validator activate --config=<path> [--relayer_key_file=<path>] [--apply | --dry-run]
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
     validator run --config=<path> [--progress-file=<path>]
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
     validator run [--api_url=<api_url>] [--connect_url=<connect_url>]
         [--concurrency=<n>] [--m=<depth>]
@@ -111,6 +118,9 @@ Options:
                                  init/register/stake/activate/status accept it before its evidence_v2
                                  inputs are rendered; run does not.
 	--progress-file=<path>         Optional bounded operational JSON outside protocol state.
+    --durable-volumes=<path>      Exact external durable-volume declaration; required for mainnet state.
+    --durable-volumes-sha256=<hash>  SHA-256 of the complete declaration bytes; does not change signed config.
+    --directory=<path>           Existing service directory for read-only physical inspection; repeatable.
     --coldkey_seed_file=<path>   sr25519 coldkey seed (64 hex chars or 32 raw bytes) that signs
                                  register_limit / add_stake. The release config carries no coldkey and
                                  the EVM key's mirror account cannot sign a native extrinsic, so the
@@ -155,6 +165,15 @@ Options:
 // Run is the validator CLI entry point (the executable lives at cli/validator).
 // It takes the argument slice (os.Args[1:]) so it can be driven from tests.
 func Run(args []string) {
+	if len(args) != 0 && args[0] == "storage-inspect" {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		if code := durableinspect.Run(ctx, args[1:], os.Stdout, os.Stderr); code != 0 {
+			stop()
+			os.Exit(code)
+		}
+		return
+	}
 	opts, err := docopt.ParseArgs(mainUsage(), args, RequireVersion())
 	if err != nil {
 		panic(err)
@@ -360,7 +379,9 @@ func auth(opts docopt.Opts) {
 func run(opts docopt.Opts) {
 	if configPath := optString(opts, "--config", ""); configPath != "" {
 		progressPath, _ := opts.String("--progress-file")
-		runReleaseConfig(configPath, progressPath)
+		runReleaseConfig(configPath, progressPath, durablevolume.Reference{
+			Path: optString(opts, "--durable-volumes", ""), Sha256: optString(opts, "--durable-volumes-sha256", ""),
+		})
 		return
 	}
 	if err := rejectLegacySteeringOptions(opts); err != nil {

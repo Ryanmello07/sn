@@ -17,12 +17,14 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"github.com/vedhavyas/go-subkey/v2"
 	"github.com/vedhavyas/go-subkey/v2/sr25519"
 )
 
 // Independent synthetic approval and native keys exercise both signature domains.
 type rootOfflineFixture struct {
+	storage     *durablefixture.Fixture
 	trust       rootOfflineCustodyTrust
 	packet      rootOfflineCustodyPacket
 	pair        subkey.KeyPair
@@ -65,7 +67,8 @@ func newRootOfflineFixture(t *testing.T) rootOfflineFixture {
 		PolicyHash: action.Scope.PolicyHash, ApprovalPublicKey: "0x" + hex.EncodeToString(key.Public().(ed25519.PublicKey)),
 		StatePath: filepath.Join(directory, "custody.json"),
 	}
-	return rootOfflineFixture{trust: trust, packet: rootOfflineApprove(t, trust, action, key), pair: pair, approvalKey: key}
+	prepareMainnetSnapshotTest(t, trust.StatePath, "mainnet-root-offline", rootOfflineStoreLimit)
+	return rootOfflineFixture{storage: durablefixture.New(t, t.Context(), directory), trust: trust, packet: rootOfflineApprove(t, trust, action, key), pair: pair, approvalKey: key}
 }
 
 // A public signature is produced only by the test's synthetic native device.
@@ -86,7 +89,7 @@ func (self rootOfflineFixture) open(t *testing.T, create bool) (*rootOfflineCust
 	if create {
 		packet = &self.packet
 	}
-	store, err := openRootOfflineCustodyStore(self.trust, packet)
+	store, err := openRootOfflineCustodyStore(self.trust, packet, self.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

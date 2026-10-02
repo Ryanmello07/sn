@@ -194,7 +194,7 @@ func (self *validatorActivationStakeFixture) setStakes(t *testing.T, stakes []ui
 func (self *validatorActivationStakeFixture) read(t *testing.T, ctx context.Context) (*validatorActivationStakeReadiness, error) {
 	t.Helper()
 	f := self.activation
-	readiness, err := f.chain.client.observeBootstrapChainReadiness(ctx, f.chain.preparation)
+	readiness, err := f.chain.client.observeBootstrapChainReadiness(f.chain.storageContext(ctx), f.chain.preparation)
 	if err != nil || !readiness.ObservationComplete {
 		return nil, errors.Join(errors.New("original fixture readiness unavailable"), err)
 	}

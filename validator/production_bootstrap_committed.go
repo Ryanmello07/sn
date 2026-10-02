@@ -168,7 +168,7 @@ func checkProductionBootstrapStatePath(ctx context.Context, path string, service
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		owner, err := openAttemptPrivateDirectory(directory)
+		owner, err := openAttemptPrivateDirectory(directory, ctx)
 		if err != nil {
 			return err
 		}

@@ -84,7 +84,7 @@ func (self *evmCreateFixture) prepareProxySigned() {
 func (self *evmCreateFixture) openProxyAncestors() ([]*evmActionStore, []evmActionRecord) {
 	self.t.Helper()
 	stores, records := self.openEscrowAncestors()
-	store, err := openEvmEscrowActionStore(*self.plan.Escrow, records[0], records[1], records[2], false, nil)
+	store, err := openEvmEscrowActionStore(*self.plan.Escrow, records[0], records[1], records[2], false, nil, self.storage.Context)
 	if err != nil {
 		self.t.Fatal(err)
 	}

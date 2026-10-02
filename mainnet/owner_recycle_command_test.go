@@ -35,7 +35,7 @@ func TestOwnerRecyclePublicCliRoundTrip(t *testing.T) {
 	inputRaw, _ := json.Marshal(f.input)
 	inputPath, _ := ownerRecycleTestFile(t, directory, "input.json", inputRaw)
 	var out, errOut bytes.Buffer
-	if code := runOwnerRecycleCommand(context.Background(), []string{"plan", "--input", inputPath}, &out, &errOut); code != 0 {
+	if code := runOwnerRecycleCommand(f.storage.Context, []string{"plan", "--input", inputPath}, &out, &errOut); code != 0 {
 		t.Fatal(code, errOut.String())
 	}
 	var unsigned ownerRecycleConfig
@@ -53,7 +53,7 @@ func TestOwnerRecyclePublicCliRoundTrip(t *testing.T) {
 		errOut.Reset()
 		args := append([]string{mode}, common...)
 		args = append(args, extra...)
-		if code := runOwnerRecycleCommand(context.Background(), args, &out, &errOut); code != 0 {
+		if code := runOwnerRecycleCommand(f.storage.Context, args, &out, &errOut); code != 0 {
 			t.Fatal(mode, code, errOut.String())
 		}
 		return bytes.Clone(out.Bytes())
@@ -68,7 +68,7 @@ func TestOwnerRecyclePublicCliRoundTrip(t *testing.T) {
 	trust := []string{"--request", requestPath, "--accept-request-hash", request.ContentHash, "--approval-key", f.key, "--owner-account-id", f.config.Action.Owner, "--expected-genesis", f.config.Action.Policy.GenesisHash}
 	out.Reset()
 	errOut.Reset()
-	if code := runOwnerRecycleCommand(context.Background(), append([]string{"inspect-request"}, trust...), &out, &errOut); code != 0 {
+	if code := runOwnerRecycleCommand(f.storage.Context, append([]string{"inspect-request"}, trust...), &out, &errOut); code != 0 {
 		t.Fatal(code, errOut.String())
 	}
 	proofPath, proofHash := ownerRecycleTestFile(t, directory, "synthetic-proof.bin", bytes.Repeat([]byte{29}, 330))
@@ -76,7 +76,7 @@ func TestOwnerRecyclePublicCliRoundTrip(t *testing.T) {
 	errOut.Reset()
 	args := append([]string{"ledger-plan"}, trust...)
 	args = append(args, "--metadata-proof", proofPath, "--metadata-proof-sha256", proofHash)
-	if code := runOwnerRecycleCommand(context.Background(), args, &out, &errOut); code != 0 {
+	if code := runOwnerRecycleCommand(f.storage.Context, args, &out, &errOut); code != 0 {
 		t.Fatal(code, errOut.String())
 	}
 	var transcript ownerLedgerTranscript
@@ -105,7 +105,7 @@ func TestOwnerRecyclePublicCliRoundTrip(t *testing.T) {
 	trust[1] = moved
 	out.Reset()
 	errOut.Reset()
-	if code := runOwnerRecycleCommand(context.Background(), append([]string{"inspect-request"}, trust...), &out, &errOut); code != 0 {
+	if code := runOwnerRecycleCommand(f.storage.Context, append([]string{"inspect-request"}, trust...), &out, &errOut); code != 0 {
 		t.Fatal("portable inspection depended on host custody", errOut.String())
 	}
 }
@@ -114,7 +114,7 @@ func TestOwnerRecyclePublicCliRoundTrip(t *testing.T) {
 // bytes cannot be interpreted as an unsigned action safe to repeat or replace.
 func TestOwnerRecycleUnreturnedRequestAndUnsafeStoreRefusals(t *testing.T) {
 	f := newOwnerRecycleTestFixture(t, false)
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestOwnerRecycleUnreturnedRequestAndUnsafeStoreRefusals(t *testing.T) {
 	if err := os.Symlink(backup, path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openOwnerRecycleStore(f.config, f.key, false); err == nil {
+	if _, err := openOwnerRecycleStore(f.config, f.key, false, f.storage.Context); err == nil {
 		t.Fatal("journal symlink admitted")
 	}
 	os.Remove(path)
@@ -161,7 +161,7 @@ func TestOwnerRecycleUnreturnedRequestAndUnsafeStoreRefusals(t *testing.T) {
 	changed.Signature = hex.EncodeToString(ed25519.Sign(f.approval, changed.signingBytes()))
 	// The approved action is immutable even under a different independently
 	// signed config; its existing marker cannot be reused as a new reservation.
-	if _, err := openOwnerRecycleStore(changed, f.key, false); err == nil {
+	if _, err := openOwnerRecycleStore(changed, f.key, false, f.storage.Context); err == nil {
 		t.Fatal("journal rebound to another approval")
 	}
 }
@@ -169,7 +169,7 @@ func TestOwnerRecycleUnreturnedRequestAndUnsafeStoreRefusals(t *testing.T) {
 // Invalid Ledger framing is rejected without guessing away variant/status bytes.
 func TestOwnerRecyclePublicImportRejectsLedgerFraming(t *testing.T) {
 	f := newOwnerRecycleTestFixture(t, true)
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestOwnerRecyclePublicImportRejectsLedgerFraming(t *testing.T) {
 		path, digest := ownerRecycleTestFile(t, directory, "response.hex", []byte(hex.EncodeToString(response)))
 		args := []string{"import", "--config", configPath, "--approval-key", f.key, "--accept-action-hash", f.config.Action.RequestHash, "--accept-request-hash", request.ContentHash, "--signature", path, "--signature-file-sha256", digest, "--ledger-response"}
 		var out, errOut bytes.Buffer
-		if code := runOwnerRecycleCommand(context.Background(), args, &out, &errOut); code == 0 || !strings.Contains(errOut.String(), "MultiSignature") {
+		if code := runOwnerRecycleCommand(f.storage.Context, args, &out, &errOut); code == 0 || !strings.Contains(errOut.String(), "MultiSignature") {
 			t.Fatal("ambiguous Ledger response accepted", code, errOut.String())
 		}
 	}
@@ -213,7 +213,7 @@ func TestOwnerRecycleContinuationCannotReplaceReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := openOwnerRecycleStore(f.config, f.key, true)
+	store, err := openOwnerRecycleStore(f.config, f.key, true, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

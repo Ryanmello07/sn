@@ -169,6 +169,7 @@ type rootOwnedSubmission struct {
 	authority rootActionAuthority
 	ownerCh   chan struct{}
 	poisoned  bool
+	failure   error
 }
 
 // Construction performs no network call. Nil authority permits old receipt
@@ -218,14 +219,14 @@ func (self *rootOwnedSubmission) acquire(ctx context.Context) error {
 // state poisons this instance instead of replenishing an allowance.
 func (self *rootOwnedSubmission) load() (rootSubmissionRecord, error) {
 	if self.poisoned {
-		return rootSubmissionRecord{}, errors.New("root submission owner must reopen after an integrity or durability failure")
+		return rootSubmissionRecord{}, errors.Join(errors.New("root submission owner must reopen after an integrity or durability failure"), self.failure)
 	}
 	record, err := self.store.load()
 	if err == nil {
 		err = record.validate(self.config)
 	}
-	if err != nil {
-		self.poisoned = true
+	if err != nil && !mainnetDurableAdmissionPending(err) {
+		self.poisoned, self.failure = true, err
 	}
 	return record, err
 }
@@ -238,7 +239,9 @@ func (self *rootOwnedSubmission) persist(record rootSubmissionRecord) error {
 		return err
 	}
 	if err := self.store.save(record); err != nil {
-		self.poisoned = true
+		if !mainnetDurableAdmissionPending(err) {
+			self.poisoned, self.failure = true, err
+		}
 		return err
 	}
 	return nil

@@ -6,9 +6,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/urnetwork/connect/durablevolume"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,6 +24,7 @@ const rootActionStoreLimit = 256 * 1024
 // A lock remains held from open through close. Methods are serial and must not
 // run concurrently; storage errors force the action owner to close and reopen.
 type rootActionStore struct {
+	storage     *mainnetDurableDirectory
 	path        string
 	requestHash string
 	lock        *os.File
@@ -29,7 +32,7 @@ type rootActionStore struct {
 
 // Creates exactly one action, or opens that same action for recovery. Creation
 // cannot reuse a prior marker even if its state file was lost or truncated.
-func openRootActionStore(path string, create *rootAction) (*rootActionStore, error) {
+func openRootActionStore(path string, create *rootAction, storageContexts ...context.Context) (*rootActionStore, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path || path == "/" {
 		return nil, errors.New("root action store requires a canonical absolute path")
 	}
@@ -42,7 +45,16 @@ func openRootActionStore(path string, create *rootAction) (*rootActionStore, err
 	if err != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.Join(errors.New("root action store requires a precreated private directory"), err)
 	}
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW
+	storage, err := openMainnetDurableDirectory(mainnetStorageContext(storageContexts), filepath.Dir(path), durablevolume.ReadWrite)
+	if err != nil {
+		return nil, err
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = storage.close()
+		}
+	}()
 	if create != nil {
 		if err := create.validate(); err != nil {
 			return nil, err
@@ -53,30 +65,36 @@ func openRootActionStore(path string, create *rootAction) (*rootActionStore, err
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return nil, errors.Join(errors.New("root action state already exists or cannot be inspected"), err)
 		}
-		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := syscall.Open(path+".lock", flags, 0600)
+	lock, err := storage.openSnapshotMarker(path)
 	if err != nil {
 		return nil, fmt.Errorf("open root action ownership marker: %w", err)
 	}
-	lock := os.NewFile(uintptr(fd), path+".lock")
-	store := &rootActionStore{path: path, lock: lock}
+	fd := int(lock.Fd())
+	store := &rootActionStore{storage: storage, path: path, lock: lock}
+	transferred = true
 	success := false
 	defer func() {
 		if !success {
-			lock.Close()
+			store.close()
 		}
 	}()
+	if err := storage.bindMarker(lock, false); err != nil {
+		return nil, err
+	}
 	info, err = lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.Join(errors.New("root ownership marker is not a private regular file"), err)
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := mainnetDurableFlock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, fmt.Errorf("root action already has an owner: %w", err)
+	}
+	if err := storage.bindSnapshot(path, "mainnet-root-action", rootActionStoreLimit, create != nil); err != nil {
+		return nil, err
 	}
 	if create != nil {
 		store.requestHash = create.RequestHash
-		_, err := lock.WriteString(create.RequestHash + "\n")
+		_, err := storage.writeMarkerAt([]byte(create.RequestHash+"\n"), 0)
 		if err := errors.Join(err, lock.Sync()); err != nil {
 			return nil, err
 		}
@@ -95,6 +113,9 @@ func openRootActionStore(path string, create *rootAction) (*rootActionStore, err
 			return nil, err
 		}
 	}
+	if err := storage.bindMarker(store.lock, true); err != nil {
+		return nil, err
+	}
 	success = true
 	return store, nil
 }
@@ -104,7 +125,7 @@ func (self *rootActionStore) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	err := self.lock.Close()
+	err := errors.Join(self.storage.close(), self.lock.Close())
 	self.lock = nil
 	return err
 }
@@ -116,22 +137,9 @@ func (self *rootActionStore) load() (rootActionRecord, error) {
 	if self.lock == nil {
 		return record, errors.New("root action store is closed")
 	}
-	fd, err := syscall.Open(self.path, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	raw, _, err := self.storage.readFile(context.Background(), self.path, rootActionStoreLimit)
 	if err != nil {
-		return record, fmt.Errorf("retained root action state is unavailable; refusing new allowance: %w", err)
-	}
-	file := os.NewFile(uintptr(fd), self.path)
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		file.Close()
-		return record, errors.Join(errors.New("root action state is not a private regular file"), err)
-	}
-	raw, readErr := io.ReadAll(io.LimitReader(file, rootActionStoreLimit+1))
-	if err := errors.Join(readErr, file.Close()); err != nil {
 		return record, err
-	}
-	if len(raw) == 0 || len(raw) > rootActionStoreLimit {
-		return record, errors.New("root action state is empty or exceeds its resource bound")
 	}
 	if err := protocol.ValidateUniqueJsonKeys(raw); err != nil {
 		return record, err
@@ -153,6 +161,9 @@ func (self *rootActionStore) load() (rootActionRecord, error) {
 // Fully synced replacement leaves either complete record readable after a
 // crash. A sync error after rename is ambiguous and poisons the owner above.
 func (self *rootActionStore) save(record rootActionRecord) error {
+	if err := self.storage.checkWrite(nil); err != nil {
+		return err
+	}
 	if self.lock == nil || record.Action.RequestHash != self.requestHash || record.Action.Scope.StatePath != self.path {
 		return errors.New("root action store ownership differs")
 	}
@@ -170,22 +181,5 @@ func (self *rootActionStore) save(record rootActionRecord) error {
 	if err != nil || len(raw) > rootActionStoreLimit {
 		return errors.Join(errors.New("root action state cannot be encoded within its resource bound"), err)
 	}
-	directory := filepath.Dir(self.path)
-	file, err := os.CreateTemp(directory, ".root-action-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	_, writeErr := file.Write(append(raw, '\n'))
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(file.Name(), self.path); err != nil {
-		return err
-	}
-	dir, err := os.Open(directory)
-	if err != nil {
-		return err
-	}
-	return errors.Join(dir.Sync(), dir.Close())
+	return self.storage.publish(self.path, append(raw, '\n'), nil)
 }

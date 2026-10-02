@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/urnetwork/connect/durablevolume"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -25,14 +26,15 @@ var repairValidatorMountPattern = regexp.MustCompile(`^[a-zA-Z0-9_.-]+\.mount$`)
 // Every launch input and operational source is selected outside the controller.
 // Config is the existing production config, not a generated replacement.
 type repairValidatorUnit struct {
-	Name           string            `json:"name"`
-	File           planFileReference `json:"file"`
-	Binary         planFileReference `json:"binary"`
-	Config         planFileReference `json:"config"`
-	StateDirectory string            `json:"state_directory"`
-	ProgressFile   string            `json:"progress_file"`
-	Uid            uint32            `json:"uid"`
-	Gid            uint32            `json:"gid"`
+	DurableVolumes *durablevolume.Reference `json:"durable_volumes,omitempty"`
+	Name           string                   `json:"name"`
+	File           planFileReference        `json:"file"`
+	Binary         planFileReference        `json:"binary"`
+	Config         planFileReference        `json:"config"`
+	StateDirectory string                   `json:"state_directory"`
+	ProgressFile   string                   `json:"progress_file"`
+	Uid            uint32                   `json:"uid"`
+	Gid            uint32                   `json:"gid"`
 }
 
 // PID alone is insufficient: boot and monotonic start identify its lifetime.
@@ -87,7 +89,7 @@ func repairValidatorHex(value string, size int) bool {
 // This dedicated installed profile cannot poll latest images or run stop hooks.
 // Initial installation/activation is a separately approved operations task.
 func (self repairValidatorUnit) render() []byte {
-	return []byte(fmt.Sprintf("[Unit]\nDescription=Approved standard validator %s\nDefaultDependencies=no\nAfter=network-online.target\n\n[Service]\nType=exec\nUser=%d\nGroup=%d\nWorkingDirectory=%s\nExecStart=%s run --config=%s --progress-file=%s\nRestart=no\nKillMode=control-group\nSendSIGKILL=yes\nTimeoutStartSec=30\nTimeoutStopSec=30\nUMask=0077\nNoNewPrivileges=yes\nDelegate=no\n\n[Install]\nWantedBy=multi-user.target\n", self.Name, self.Uid, self.Gid, self.StateDirectory, self.Binary.Path, self.Config.Path, self.ProgressFile))
+	return []byte(fmt.Sprintf("[Unit]\nDescription=Approved standard validator %s\nDefaultDependencies=no\nAfter=network-online.target\n\n[Service]\nType=exec\nUser=%d\nGroup=%d\nWorkingDirectory=%s\nExecStart=%s %s\nRestart=no\nKillMode=control-group\nSendSIGKILL=yes\nTimeoutStartSec=30\nTimeoutStopSec=30\nUMask=0077\nNoNewPrivileges=yes\nDelegate=no\n\n[Install]\nWantedBy=multi-user.target\n", self.Name, self.Uid, self.Gid, self.StateDirectory, self.Binary.Path, self.arguments()))
 }
 
 // The sole admitted incident is missing/unavailable operational output from a
@@ -108,6 +110,9 @@ func (self repairValidatorPlan) incident(record monitorServiceCheckpointRecord) 
 
 // Every limit is finite, signed and specific to this one stopped generation.
 func (self repairValidatorPlan) validate() error {
+	if err := validateUnitDurableReference(self.Unit.DurableVolumes); err != nil {
+		return err
+	}
 	if err := self.validateProfile(); err != nil {
 		return err
 	}
@@ -170,4 +175,9 @@ func (self repairValidatorApproval) validate(publicKey string) error {
 		return errors.New("validator repair independent signature differs")
 	}
 	return nil
+}
+
+// The original command text is unchanged when the signed field is absent.
+func (self repairValidatorUnit) arguments() string {
+	return "run --config=" + self.Config.Path + " --progress-file=" + self.ProgressFile + unitDurableArguments(self.DurableVolumes)
 }

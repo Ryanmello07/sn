@@ -180,7 +180,7 @@ func (self *repairActiveValidatorFixture) commandActive(operation string) (repai
 	}
 	args := []string{operation, "--approval", self.approvalPath, "--accept-approval-hash", monitorReadDigest(raw), "--independent-public-key", self.publicKey}
 	var stdout, stderr bytes.Buffer
-	exit := runRepairActiveValidatorCommandWithHost(self.t.Context(), args, &stdout, &stderr, func() time.Time { return self.now }, self.host)
+	exit := runRepairActiveValidatorCommandWithHost(self.storage.Context, args, &stdout, &stderr, func() time.Time { return self.now }, self.host)
 	var result repairActiveValidatorResult
 	if stdout.Len() > 0 {
 		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
@@ -202,7 +202,7 @@ func (self *repairActiveValidatorFixture) claimActive() {
 // Open the real owner to install deterministic publication-boundary hooks.
 func (self *repairActiveValidatorFixture) openActive() *repairActiveValidatorStore {
 	self.t.Helper()
-	store, err := openRepairActiveValidatorStore(self.t.Context(), self.active, self.publicKey, false, self.now)
+	store, err := openRepairActiveValidatorStore(self.storage.Context, self.active, self.publicKey, false, self.now)
 	if err != nil {
 		self.t.Fatal(err)
 	}

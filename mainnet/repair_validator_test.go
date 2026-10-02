@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"github.com/urfoundation/sn/protocol"
 	"golang.org/x/sys/unix"
 )
@@ -27,6 +28,7 @@ import (
 // The fake manager is deliberately separate from real filesystem custody.
 // No service manager, chain, real binary or production identity is touched.
 type repairValidatorFixture struct {
+	storage       *durablefixture.Fixture
 	t             *testing.T
 	directory     string
 	approvalPath  string
@@ -87,15 +89,23 @@ func newRepairValidatorFixture(t *testing.T) *repairValidatorFixture {
 	original := monitorServiceCheckpointRecord{Schema: monitorServiceCheckpointSchema, Role: policy.Role, Expected: policy.ExpectedSource, State: observed}
 	original.ContentHash, _ = hashMonitorServiceCheckpoint(original)
 	unit := repairValidatorUnit{Name: "sn-mainnet-validator-synthetic.service", File: planFileReference{Path: filepath.Join(directory, "sn-mainnet-validator-synthetic.service")}, Binary: planFileReference{Path: filepath.Join(directory, "validator")}, Config: planFileReference{Path: filepath.Join(directory, "validator.json")}, StateDirectory: state, ProgressFile: policy.ProgressFile, Uid: uid, Gid: gid}
+	storage := durablefixture.New(t, t.Context(), directory)
+	unit.DurableVolumes = &storage.Reference
+	configRaw, err := json.Marshal(map[string]any{"state_dir": state, "hotkey_seed_file": filepath.Join(state, "absent-synthetic-hotkey")})
+	if err != nil {
+		t.Fatal(err)
+	}
 	unit.File.Sha256 = monitorReadDigest(unit.render())
-	unit.Binary.Sha256, unit.Config.Sha256 = monitorReadDigest([]byte("synthetic validator release\n")), monitorReadDigest([]byte("{\"synthetic_config\":true}\n"))
+	unit.Binary.Sha256, unit.Config.Sha256 = monitorReadDigest([]byte("synthetic validator release\n")), monitorReadDigest(configRaw)
 	plan := repairValidatorPlan{Role: policy.Role, Source: policy.ExpectedSource, MachineId: strings.Repeat("3", 32), BootId: "44444444-4444-4444-4444-444444444444", Unit: unit, Systemctl: planFileReference{Path: filepath.Join(directory, "systemctl"), Sha256: monitorReadDigest([]byte("synthetic systemctl transport\n"))}, RequiredMounts: []string{"-.mount"}, Previous: repairValidatorGeneration{InvocationId: strings.Repeat("5", 32), Pid: 71, StartedUsec: 100}, Original: original, IncidentId: observed.ReadIncidents.LastIncident.Id, MonitorCheckpoint: filepath.Join(directory, "monitor.json"), MonitorUid: uint32(os.Getuid()), StatePath: filepath.Join(directory, "repair.json"), ValidFrom: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour), MaximumStarts: 1, MaximumObservations: 8, CommandTimeoutSeconds: 5, MaximumSampleAgeSeconds: 120}
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	self := &repairValidatorFixture{t: t, directory: directory, approvalPath: filepath.Join(directory, "approval.json"), approval: repairValidatorApproval{Schema: repairValidatorSchema, Plan: plan}, publicKey: "0x" + hex.EncodeToString(public), privateKey: private, now: now, writeProgress: true}
+	self := &repairValidatorFixture{storage: storage, t: t, directory: directory, approvalPath: filepath.Join(directory, "approval.json"), approval: repairValidatorApproval{Schema: repairValidatorSchema, Plan: plan}, publicKey: "0x" + hex.EncodeToString(public), privateKey: private, now: now, writeProgress: true}
+	prepareMainnetSnapshotTest(t, plan.StatePath, "mainnet-host-action", 64*1024)
 	self.host = &repairValidatorHost{rootUid: uint32(os.Getuid()), trustRoot: directory, machinePath: filepath.Join(directory, "machine-id"), bootPath: filepath.Join(directory, "boot-id"), cgroupRoot: filepath.Join(directory, "cgroup"), execute: self.execute, monotonic: func() (uint64, error) { return 150, nil }}
+	self.host.storageCommand = serviceStorageTestTransport(t)
 	self.host.cgroupType = func(path string) (int64, error) {
 		if path != filepath.Join(directory, "cgroup") {
 			return 0, errors.New("synthetic cgroup root changed")
@@ -104,7 +114,7 @@ func newRepairValidatorFixture(t *testing.T) *repairValidatorFixture {
 	}
 	repairValidatorTestWrite(t, unit.File.Path, unit.render(), 0644)
 	repairValidatorTestWrite(t, unit.Binary.Path, []byte("synthetic validator release\n"), 0755)
-	repairValidatorTestWrite(t, unit.Config.Path, []byte("{\"synthetic_config\":true}\n"), 0600)
+	repairValidatorTestWrite(t, unit.Config.Path, configRaw, 0600)
 	repairValidatorTestWrite(t, plan.Systemctl.Path, []byte("synthetic systemctl transport\n"), 0755)
 	repairValidatorTestWrite(t, self.host.machinePath, []byte(plan.MachineId+"\n"), 0644)
 	repairValidatorTestWrite(t, self.host.bootPath, []byte(plan.BootId+"\n"), 0644)
@@ -125,6 +135,7 @@ func newRepairValidatorFixture(t *testing.T) *repairValidatorFixture {
 	}
 	self.progress = monitorServicesTestRecord(now, 71)
 	self.manager["Requires"] = "system.slice -.mount"
+	self.manager["ExecStart"] = strings.Replace(self.manager["ExecStart"], " ; ignore_errors=", unitDurableArguments(unit.DurableVolumes)+" ; ignore_errors=", 1)
 	self.manager["Slice"] = "system.slice"
 	self.progress.InstanceId = strings.Repeat("6", 32)
 	self.progress.StartedAt = now.Format(time.RFC3339Nano)
@@ -204,7 +215,7 @@ func (self *repairValidatorFixture) command(operation string) (repairValidatorRe
 	}
 	args := []string{operation, "--approval", self.approvalPath, "--accept-approval-hash", monitorReadDigest(raw), "--independent-public-key", self.publicKey}
 	var stdout, stderr bytes.Buffer
-	exit := runRepairValidatorCommandWithHost(self.t.Context(), args, &stdout, &stderr, func() time.Time { return self.now }, self.host)
+	exit := runRepairValidatorCommandWithHost(self.storage.Context, args, &stdout, &stderr, func() time.Time { return self.now }, self.host)
 	var result repairValidatorResult
 	if stdout.Len() != 0 {
 		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
@@ -394,7 +405,7 @@ func TestRepairValidatorUncertainStartNeverRetries(t *testing.T) {
 	// A crash immediately after reservation can precede the actual command.
 	other := newRepairValidatorFixture(t)
 	other.claim()
-	store, err := openRepairValidatorStore(t.Context(), other.approval, other.publicKey, false, other.now)
+	store, err := openRepairValidatorStore(other.storage.Context, other.approval, other.publicKey, false, other.now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +513,7 @@ func TestRepairValidatorPublicationAmbiguityAndReopen(t *testing.T) {
 	for _, failAt := range []int{2, 4} {
 		fixture := newRepairValidatorFixture(t)
 		fixture.claim()
-		store, err := openRepairValidatorStore(t.Context(), fixture.approval, fixture.publicKey, false, fixture.now)
+		store, err := openRepairValidatorStore(fixture.storage.Context, fixture.approval, fixture.publicKey, false, fixture.now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -542,7 +553,7 @@ func TestRepairValidatorPostSyncAuthorityRecheck(t *testing.T) {
 			fixture.sign()
 		}
 		fixture.claim()
-		store, err := openRepairValidatorStore(t.Context(), fixture.approval, fixture.publicKey, false, fixture.now)
+		store, err := openRepairValidatorStore(fixture.storage.Context, fixture.approval, fixture.publicKey, false, fixture.now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -584,12 +595,12 @@ func TestRepairValidatorPostSyncAuthorityRecheck(t *testing.T) {
 func TestRepairValidatorStoreOwnershipAndMissingState(t *testing.T) {
 	fixture := newRepairValidatorFixture(t)
 	fixture.claim()
-	store, err := openRepairValidatorStore(t.Context(), fixture.approval, fixture.publicKey, false, fixture.now)
+	store, err := openRepairValidatorStore(fixture.storage.Context, fixture.approval, fixture.publicKey, false, fixture.now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.close() })
-	if _, err := openRepairValidatorStore(t.Context(), fixture.approval, fixture.publicKey, false, fixture.now); err == nil {
+	if _, err := openRepairValidatorStore(fixture.storage.Context, fixture.approval, fixture.publicKey, false, fixture.now); err == nil {
 		t.Fatal("duplicate repair journal owner acquired")
 	}
 	if err := os.Remove(fixture.approval.Plan.StatePath); err != nil {
@@ -601,7 +612,7 @@ func TestRepairValidatorStoreOwnershipAndMissingState(t *testing.T) {
 	if err := store.close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openRepairValidatorStore(t.Context(), fixture.approval, fixture.publicKey, true, fixture.now); err == nil {
+	if _, err := openRepairValidatorStore(fixture.storage.Context, fixture.approval, fixture.publicKey, true, fixture.now); err == nil {
 		t.Fatal("permanent incident marker allowed fresh claim")
 	}
 	if _, err := resumeRepairValidator(nil, store, fixture.host, time.Now); err == nil {

@@ -193,11 +193,11 @@ func TestBootstrapContractReadinessDistinguishesUnclaimedAndPartialChild(t *test
 	f.prepareVaultPrerequisite()
 	result, plans := bootstrapContractTestInspection(t, f)
 	before := bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)
-	if err := inspectBootstrapContractCustody(t.Context(), plans, &result); err != nil || !result.CustodyInspectionComplete || result.RetainedCompletedActions != 1 || result.Actions[1].CustodyStatus != "not-claimed" || result.Actions[0].ReceiptObservation != "retained" || !maps.Equal(before, bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)) {
+	if err := inspectBootstrapContractCustody(f.storage.Context, plans, &result); err != nil || !result.CustodyInspectionComplete || result.RetainedCompletedActions != 1 || result.Actions[1].CustodyStatus != "not-claimed" || result.Actions[0].ReceiptObservation != "retained" || !maps.Equal(before, bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)) {
 		t.Fatalf("unclaimed child changed its completed ancestor: %+v %v", result, err)
 	}
 	retainedReceipt := *result.Actions[0].Receipt
-	reserveStore, err := openEvmActionStore(f.config, false, nil)
+	reserveStore, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestBootstrapContractReadinessDistinguishesUnclaimedAndPartialChild(t *test
 			return injected
 		}
 		return nil
-	})
+	}, f.storage.Context)
 	if child != nil || !errors.Is(err, injected) {
 		t.Fatal("child claim did not stop at its exact durable boundary", err)
 	}
@@ -221,7 +221,7 @@ func TestBootstrapContractReadinessDistinguishesUnclaimedAndPartialChild(t *test
 	}
 	before = bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)
 	result, plans = bootstrapContractTestInspection(t, f)
-	if err := inspectBootstrapContractCustody(t.Context(), plans, &result); err == nil || result.Status != "unresolved" || result.CustodyInspectionComplete || result.RemainingOriginalAttempts != nil || result.RetainedCompletedActions != 1 || result.Actions[0].Receipt == nil || *result.Actions[0].Receipt != retainedReceipt || result.Actions[1].CustodyStatus != "unresolved" || !maps.Equal(before, bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)) {
+	if err := inspectBootstrapContractCustody(f.storage.Context, plans, &result); err == nil || result.Status != "unresolved" || result.CustodyInspectionComplete || result.RemainingOriginalAttempts != nil || result.RetainedCompletedActions != 1 || result.Actions[0].Receipt == nil || *result.Actions[0].Receipt != retainedReceipt || result.Actions[1].CustodyStatus != "unresolved" || !maps.Equal(before, bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)) {
 		t.Fatalf("partial child repaired itself or erased its predecessor: %+v %v", result, err)
 	}
 	if resumed, code, diagnostic := f.command("resume", "--action", "vault-create"); code != 0 || resumed.Status != "signature-awaiting-import" {
@@ -239,13 +239,13 @@ func TestBootstrapContractReadinessRequiresSuccessorForCapRevision(t *testing.T)
 	f.config.Plan.MaximumAttempts++
 	f.publishConfig()
 	result, plans := bootstrapContractTestInspection(t, f)
-	if err := inspectBootstrapContractCustody(t.Context(), plans, &result); err == nil || !strings.Contains(err.Error(), "another original approval") || result.CustodyInspectionComplete || result.RetainedCompletedActions != 0 || result.SuccessorRequirements.Implemented || !maps.Equal(before, bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)) {
+	if err := inspectBootstrapContractCustody(f.storage.Context, plans, &result); err == nil || !strings.Contains(err.Error(), "another original approval") || result.CustodyInspectionComplete || result.RetainedCompletedActions != 0 || result.SuccessorRequirements.Implemented || !maps.Equal(before, bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)) {
 		t.Fatalf("new cap adopted old custody without a successor: %+v %v", result, err)
 	}
 	f.config = original
 	f.publishConfig()
 	result, plans = bootstrapContractTestInspection(t, f)
-	if err := inspectBootstrapContractCustody(t.Context(), plans, &result); err != nil || result.RetainedCompletedActions != 1 || result.RetainedAttempts != 1 || result.RemainingOriginalAttempts == nil || *result.RemainingOriginalAttempts != 3 {
+	if err := inspectBootstrapContractCustody(f.storage.Context, plans, &result); err != nil || result.RetainedCompletedActions != 1 || result.RetainedAttempts != 1 || result.RemainingOriginalAttempts == nil || *result.RemainingOriginalAttempts != 3 {
 		t.Fatalf("restoring original approval lost completed work: %+v %v", result, err)
 	}
 }
@@ -268,7 +268,7 @@ func TestBootstrapContractReadinessReusesAuthenticatedPrefixWithoutReplay(t *tes
 	f.stateLock.Unlock()
 	for range 2 {
 		result, plans := bootstrapContractTestInspection(t, f)
-		if err := inspectBootstrapContractCustody(t.Context(), plans, &result); err != nil || !result.CustodyInspectionComplete || result.RetainedCompletedActions != 8 || result.RetainedAttempts != 8 || result.RemainingOriginalAttempts == nil || *result.RemainingOriginalAttempts != 0 || !slices.Equal(result.SuccessorRequirements.UnfinishedActions, []string{"evidence-anchor"}) || result.Actions[8].Approved || result.InstallationComplete || result.ActivationReady {
+		if err := inspectBootstrapContractCustody(f.storage.Context, plans, &result); err != nil || !result.CustodyInspectionComplete || result.RetainedCompletedActions != 8 || result.RetainedAttempts != 8 || result.RemainingOriginalAttempts == nil || *result.RemainingOriginalAttempts != 0 || !slices.Equal(result.SuccessorRequirements.UnfinishedActions, []string{"evidence-anchor"}) || result.Actions[8].Approved || result.InstallationComplete || result.ActivationReady {
 			t.Fatalf("completed prefix became new sends or lost anchor scope: %+v %v", result, err)
 		}
 		for i := range 8 {
@@ -307,7 +307,7 @@ func TestBootstrapContractReadinessRejectsChangedPredecessorLineage(t *testing.T
 	bootstrapRootTestWrite(t, path, record)
 	changed := bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)
 	result, plans := bootstrapContractTestInspection(t, f)
-	if err := inspectBootstrapContractCustody(t.Context(), plans, &result); err == nil || !strings.Contains(err.Error(), "predecessor") || result.CustodyInspectionComplete || result.RetainedCompletedActions != 1 || result.RetainedAttempts != 2 || result.Actions[1].CustodyStatus != "unresolved" || !maps.Equal(changed, bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)) {
+	if err := inspectBootstrapContractCustody(f.storage.Context, plans, &result); err == nil || !strings.Contains(err.Error(), "predecessor") || result.CustodyInspectionComplete || result.RetainedCompletedActions != 1 || result.RetainedAttempts != 2 || result.Actions[1].CustodyStatus != "unresolved" || !maps.Equal(changed, bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)) {
 		t.Fatalf("child adopted changed ancestor custody: %+v %v", result, err)
 	}
 	if err := os.WriteFile(path, []byte(before[path]), 0600); err != nil {
@@ -335,7 +335,7 @@ func TestBootstrapContractReadinessChecksRetainedCompletionPostconditions(t *tes
 	bootstrapRootTestWrite(t, path, record)
 	corrupt := bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)
 	result, plans := bootstrapContractTestInspection(t, f)
-	if err := inspectBootstrapContractCustody(t.Context(), plans, &result); err == nil || result.Actions[0].CustodyStatus != "unresolved" || result.RetainedCompletedActions != 0 || result.CustodyInspectionComplete || !maps.Equal(corrupt, bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)) {
+	if err := inspectBootstrapContractCustody(f.storage.Context, plans, &result); err == nil || result.Actions[0].CustodyStatus != "unresolved" || result.RetainedCompletedActions != 0 || result.CustodyInspectionComplete || !maps.Equal(corrupt, bootstrapContractTestJournals(t, f.config.Plan.RunDirectory)) {
 		t.Fatalf("status one bypassed exact constructor facts: %+v %v", result, err)
 	}
 	if err := os.WriteFile(path, []byte(before[path]), 0600); err != nil {

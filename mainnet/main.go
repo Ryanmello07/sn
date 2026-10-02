@@ -14,6 +14,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/urfoundation/sn/internal/durableinspect"
+	"github.com/urfoundation/sn/internal/durablepath"
 )
 
 const monitorSchema = "urnetwork-mainnet-monitor-event-v1"
@@ -106,6 +109,21 @@ func runMainWithClock(ctx context.Context, args []string, stdout, stderr io.Writ
 
 // Test observers cover real file operations and owned waits, not source verdicts.
 func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
+	var err error
+	ctx, args, err = mainnetDurableVolumeArguments(ctx, args)
+	if err != nil {
+		fmt.Fprintln(stderr, "durable-volume command inputs:", err)
+		return 2
+	}
+	if mainnetRequiresDurableVolumes(args) {
+		if err := durablepath.Require(ctx); err != nil {
+			fmt.Fprintln(stderr, "durable custody declaration:", err)
+			return 2
+		}
+	}
+	if len(args) != 0 && args[0] == "storage-inspect" {
+		return durableinspect.Run(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "root-service" {
 		return runRootServiceCommand(ctx, args[1:], stdout, stderr)
 	}

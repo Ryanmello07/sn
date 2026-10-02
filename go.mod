@@ -196,10 +196,10 @@ require (
 	src.agwa.name/tlshacks v0.0.4 // indirect
 )
 
-// Client authentication requires this reviewed SDK/Connect pair. Versioned
-// replacements also cover the v0.0.0 placeholders required by sibling modules;
-// a clean but older ../sdk or ../connect must not select different source.
-replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20261001021459-e1b5d77b5029
+// Versioned replacements retain the client-authentication source floor and
+// the reviewed durable-volume v2 primitive. They also cover sibling modules'
+// v0.0.0 placeholders without selecting an older local checkout implicitly.
+replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20261002072506-6cd720cf50a4
 
 replace github.com/urnetwork/sdk => github.com/urnetwork/sdk v0.0.0-20261001021058-5d37be3876e5
 

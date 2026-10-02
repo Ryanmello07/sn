@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/urnetwork/connect/durablevolume"
+	"golang.org/x/sys/unix"
 )
 
 // A synchronous boundary follows the real owned route's full reconciliation.
@@ -34,7 +37,7 @@ func (self *evmActionCustodyChain) reconcile(ctx context.Context, plan evmCreate
 func TestEvmCreateLostLiveMarkerRefusesSend(t *testing.T) {
 	f := newEvmCreateFixture(t)
 	f.prepareSigned()
-	store, err := openEvmActionStore(f.config, false, nil)
+	store, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,11 +64,23 @@ func TestEvmCreateLostLiveMarkerRefusesSend(t *testing.T) {
 		if err := os.WriteFile(markerPath, marker, 0600); err != nil {
 			t.Fatal(err)
 		}
-		other, err := openEvmActionStore(f.config, false, nil)
+		replacement, err := os.OpenFile(markerPath, os.O_RDWR, 0)
 		if err != nil {
-			t.Fatalf("replacement did not reproduce a second physical owner: %v", err)
+			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = other.close() })
+		if err := unix.Flock(int(replacement.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+			t.Fatalf("different physical inode did not admit a second flock: %v", err)
+		}
+		if err := replacement.Close(); err != nil {
+			t.Fatal(err)
+		}
+		other, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
+		if other != nil {
+			_ = other.close()
+		}
+		if !errors.Is(err, durablevolume.ErrIdentity) {
+			t.Fatalf("replacement silently became production custody: %v", err)
+		}
 		replaced = true
 	}}
 	owner, err := newEvmCreateOwner(f.plan, store, controlled)
@@ -84,7 +99,7 @@ func TestEvmCreateLostLiveMarkerRefusesSend(t *testing.T) {
 func TestEvmCreateMissingLiveJournalRefusesRecreation(t *testing.T) {
 	f := newEvmCreateFixture(t)
 	f.prepareSigned()
-	store, err := openEvmActionStore(f.config, false, nil)
+	store, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +130,7 @@ func TestEvmCreateMissingLiveJournalRefusesRecreation(t *testing.T) {
 func TestEvmCreateMissingCountedJournalRefusesSend(t *testing.T) {
 	f := newEvmCreateFixture(t)
 	f.prepareSigned()
-	store, err := openEvmActionStore(f.config, false, nil)
+	store, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +175,7 @@ func TestEvmActionLiveCustodyRejectsPhysicalAndRecordChanges(t *testing.T) {
 			if actionIndex != 0 {
 				predecessor = "sha256:" + strings.Repeat("1", 64)
 			}
-			store, err := openEvmSelectedActionStore(f.config, actionIndex, predecessor, true, nil)
+			store, err := openEvmSelectedActionStore(f.config, actionIndex, predecessor, true, nil, f.storage.Context)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -226,7 +241,7 @@ func TestEvmCreateLiveCustodyRejectsValidJournalRollback(t *testing.T) {
 	if _, code, diagnostic := f.command("resume", "--online", "--submit"); code != 0 {
 		t.Fatal(diagnostic)
 	}
-	store, err := openEvmActionStore(f.config, false, nil)
+	store, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +273,7 @@ func TestEvmCreateMissingTerminalJournalRefusesResult(t *testing.T) {
 	if _, code, diagnostic := f.command("resume", "--online", "--submit"); code != 0 {
 		t.Fatal(diagnostic)
 	}
-	store, err := openEvmActionStore(f.config, false, nil)
+	store, err := openEvmActionStore(f.config, false, nil, f.storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +310,7 @@ func TestEvmEvidenceCreateLostPredecessorCustodyRefusesSend(t *testing.T) {
 		f := newEvmEvidenceFixture(t)
 		f.prepareEvidenceSigned()
 		stores, records := f.openEvidenceAncestors()
-		store, err := openEvmEvidenceActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], records[5], records[6], false, nil)
+		store, err := openEvmEvidenceActionStore(f.plan, records[0], records[1], records[2], records[3], records[4], records[5], records[6], false, nil, f.storage.Context)
 		if err != nil {
 			t.Fatal(err)
 		}

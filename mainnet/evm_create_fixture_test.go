@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/urfoundation/sn/crv4"
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -155,6 +156,7 @@ func evmTestNativeHeader(t *testing.T, parent string, number uint64, logs []stri
 type evmCreateFixture struct {
 	stateLock        sync.Mutex
 	t                *testing.T
+	storage          *durablefixture.Fixture
 	server           *httptest.Server
 	config           evmPhaseConfig
 	configPath       string
@@ -281,6 +283,10 @@ func newEvmCreateFixture(t *testing.T) *evmCreateFixture {
 	chainConfig.ChainID = big.NewInt(964)
 	f.vm = runtime.Config{ChainConfig: &chainConfig, State: f.state, Origin: sender, BlockNumber: big.NewInt(38), GasLimit: 2_000_000, GasPrice: big.NewInt(2), Value: big.NewInt(0), BaseFee: big.NewInt(1)}
 	f.state.SetNonce(sender, 0, tracing.NonceChangeUnspecified)
+	for _, name := range []string{evmCreateStateFile, evmVaultCreateStateFile, evmCoordinatorCreateStateFile, evmEscrowRegisterStateFile, evmProxyCreateStateFile, evmReserveLinkStateFile, evmVaultLinkStateFile, evmEvidenceCreateStateFile} {
+		prepareMainnetSnapshotTest(t, filepath.Join(directory, name), "mainnet-evm-action", 512*1024)
+	}
+	f.storage = durablefixture.New(t, t.Context(), directory)
 	return f
 }
 
@@ -317,7 +323,7 @@ func (self *evmCreateFixture) command(command string, extra ...string) (evmCreat
 	}
 	args = append(args, extra...)
 	var stdout, stderr bytes.Buffer
-	code := runMain(context.Background(), args, &stdout, &stderr)
+	code := runMain(self.storage.Context, args, &stdout, &stderr)
 	var result evmCreateResult
 	if code == 0 && command != "plan" {
 		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {

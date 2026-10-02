@@ -48,6 +48,9 @@ func (self *bootstrapChainReadinessState) checkpoint(ctx context.Context) error 
 		return err
 	}
 	fail := func(err error) error {
+		if mainnetDurableAdmissionPending(err) {
+			return err
+		}
 		self.failed = errors.Join(errRpcIntegrity, errors.New("bootstrap readiness original custody changed; retain original intent and reconcile custody"), err)
 		return self.failed
 	}
@@ -55,7 +58,7 @@ func (self *bootstrapChainReadinessState) checkpoint(ctx context.Context) error 
 		if err := self.locks[i].checkpoint(); err != nil {
 			return fail(err)
 		}
-		_, digest, err := readBootstrapRootFile(ctx, journal.path, journal.limit)
+		_, digest, err := self.locks[i].storage.readFile(ctx, journal.path, journal.limit)
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
@@ -128,11 +131,13 @@ func openBootstrapChainReadinessState(ctx context.Context, preparation bootstrap
 		markers = markers[:3]
 	}
 	paths := preparation.childPaths()
+	kinds := []string{"mainnet-bootstrap-chain", "mainnet-evm-action", "mainnet-bootstrap-root", "mainnet-root-offline", "mainnet-root-service"}
+	limits := []int{rootServiceStoreLimit, 512 * 1024, 16 * 1024, rootOfflineStoreLimit, rootServiceStoreLimit}
 	for i, path := range paths {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		lock, err := openBootstrapContractReadinessMarker(path, markers[i])
+		lock, err := openBootstrapReadinessSnapshot(path, markers[i], kinds[i], limits[i], ctx)
 		if err != nil {
 			return nil, errors.Join(errors.New("bootstrap readiness requires complete original markers without an active custody owner"), err)
 		}
@@ -143,17 +148,19 @@ func openBootstrapChainReadinessState(ctx context.Context, preparation bootstrap
 	var root bootstrapRootRecord
 	var custody rootOfflineCustodyRecord
 	var retainedService rootServiceRecord
-	limits := []int{rootServiceStoreLimit, 512 * 1024, 16 * 1024, rootOfflineStoreLimit, rootServiceStoreLimit}
 	destinations := []any{&chain, &contracts, &root, &custody, &retainedService}
 	if preparation.Root.PassiveService != nil {
 		destinations = destinations[:3]
 	}
 	for i, destination := range destinations {
-		raw, digest, err := readBootstrapRootFile(ctx, paths[i], limits[i])
+		raw, digest, err := self.locks[i].storage.readFile(ctx, paths[i], limits[i])
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
 		}
 		if err != nil {
+			if mainnetDurableAdmissionPending(err) {
+				return nil, err
+			}
 			return nil, errors.Join(errRpcIntegrity, errors.New("bootstrap readiness completed original journal is unavailable"), err)
 		}
 		if err := decodePlanJson(raw, destination); err != nil {

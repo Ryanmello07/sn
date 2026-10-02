@@ -74,7 +74,7 @@ func runBootstrapChainCommand(ctx context.Context, args []string, stdout, stderr
 		fmt.Fprintln(stderr, "bootstrap chain canceled:", err)
 		return 1
 	}
-	store, err := openBootstrapChainStore(preparation, command == "apply", nil)
+	store, err := openBootstrapChainStore(preparation, command == "apply", nil, ctx)
 	if err != nil {
 		fmt.Fprintln(stderr, "bootstrap chain retained ownership:", err)
 		return 3

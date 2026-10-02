@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // The authority boundary is synchronous, so no scheduler timing selects a fault.
@@ -25,7 +27,7 @@ func newOwnerTrimCustodyTestOwner(t *testing.T) (*ownerTrimExecutor, *ownerTrimS
 	t.Helper()
 	template := newOwnerTrimActionTestFixture(t)
 	preparation, f := ownerTrimPreparedTestFixture(t, template.pair.Public())
-	store, err := openOwnerTrimStore(t.Context(), preparation.preparation, f.config, f.key, true)
+	store, err := openOwnerTrimStore(f.storage.Context, preparation.preparation, f.config, f.key, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,10 +71,10 @@ func TestOwnerTrimExclusiveMarkerReplacementRefusesSend(t *testing.T) {
 		t.Fatal("authority boundary was not reached", err)
 	}
 	restore()
-	if !errors.Is(err, errRpcIntegrity) || chain.sends != 0 {
+	if !errors.Is(err, durablevolume.ErrIdentity) || chain.sends != 0 {
 		t.Fatalf("replaced exclusive marker admitted native send: sends=%d error=%v", chain.sends, err)
 	}
-	if _, err := store.load(); !errors.Is(err, errRpcIntegrity) {
+	if _, err := store.load(); !errors.Is(err, durablevolume.ErrIdentity) {
 		t.Fatal("restored marker renewed a failed native owner", err)
 	}
 }
@@ -87,7 +89,7 @@ func TestOwnerTrimDeletedSignedJournalIsNeverRecreated(t *testing.T) {
 	}}
 	_, err := owner.step(t.Context())
 	_, statErr := os.Lstat(store.config.Action.StatePath)
-	if !errors.Is(err, errRpcIntegrity) || chain.sends != 0 || !errors.Is(statErr, os.ErrNotExist) {
+	if !errors.Is(err, durablevolume.ErrIdentity) || chain.sends != 0 || !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("deleted signed custody was recreated or sent: sends=%d error=%v state=%v", chain.sends, err, statErr)
 	}
 }
@@ -114,7 +116,7 @@ func TestOwnerTrimLostCountedJournalRefusesSend(t *testing.T) {
 		return directory.Sync()
 	}
 	_, err := owner.step(t.Context())
-	if !fired || !errors.Is(err, errRpcIntegrity) || chain.sends != 0 {
+	if !fired || !errors.Is(err, durablevolume.ErrIdentity) || chain.sends != 0 {
 		t.Fatalf("lost counted native custody admitted send: fault=%t sends=%d error=%v", fired, chain.sends, err)
 	}
 }
@@ -130,13 +132,13 @@ func TestOwnerTrimEarlierValidJournalIsIntegrityFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = store.load()
-	if !errors.Is(err, errRpcIntegrity) {
+	if !errors.Is(err, durablevolume.ErrIdentity) {
 		t.Fatal("earlier valid reservation erased retained native signature", err)
 	}
 	if err := os.WriteFile(store.config.Action.StatePath, current, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.load(); !errors.Is(err, errRpcIntegrity) {
+	if _, err := store.load(); !errors.Is(err, durablevolume.ErrIdentity) {
 		t.Fatal("restoring signed bytes erased native integrity failure", err)
 	}
 }
@@ -168,7 +170,7 @@ func TestOwnerTrimExclusiveCustodyRejectsFilesystemChanges(t *testing.T) {
 			}
 		}}
 		_, err := owner.step(t.Context())
-		if !errors.Is(err, errRpcIntegrity) || chain.sends != 0 {
+		if !errors.Is(err, durablevolume.ErrIdentity) || chain.sends != 0 {
 			t.Fatalf("%s retained native effect authority: sends=%d error=%v", kind, chain.sends, err)
 		}
 	}
@@ -179,7 +181,7 @@ func TestOwnerTrimExclusiveCustodyRejectsFilesystemChanges(t *testing.T) {
 func TestOwnerTrimIncompleteExclusiveClaimRemainsRecoverable(t *testing.T) {
 	for _, retained := range []bool{false, true} {
 		preparation, f := ownerTrimPreparedTestFixture(t)
-		store, err := openOwnerTrimStore(t.Context(), preparation.preparation, f.config, f.key, true)
+		store, err := openOwnerTrimStore(f.storage.Context, preparation.preparation, f.config, f.key, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -195,7 +197,7 @@ func TestOwnerTrimIncompleteExclusiveClaimRemainsRecoverable(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		store, err = openOwnerTrimStore(t.Context(), preparation.preparation, f.config, f.key, false)
+		store, err = openOwnerTrimStore(f.storage.Context, preparation.preparation, f.config, f.key, false)
 		if err != nil {
 			t.Fatal("intact original incomplete claim could not resume", retained, err)
 		}
