@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"math/big"
+	"slices"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -84,6 +85,14 @@ func contractProxyPayload(artifact contractReleaseArtifact, plan evmPhasePlan, v
 	word := func(index int) []byte { return initializer[4+32*index : 4+32*(index+1)] }
 	value := func(index int) uint64 { return binary.BigEndian.Uint64(word(index)[24:]) }
 	constructor = contractProxyConstructor{Owner: common.BytesToAddress(word(1)), Guardian: common.BytesToAddress(word(2)), CommitmentOracle: common.BytesToAddress(word(6)), SelfColdkey: common.BytesToHash(word(3)).Hex(), ApprovedPolicy: contractProxyPolicy{PolicyHash: common.BytesToHash(word(7)).Hex(), EffectiveEpoch: value(8), EffectiveBlock: value(9), EpochBlocks: value(10), RootCommitWindowBlocks: value(11), FinalizeOffsetBlocks: value(12), CloseGraceBlocks: value(13), ClaimTtlEpochs: value(14), ClaimGraceEpochs: value(15), MaximumBindingValidityEpochs: value(16), CommitmentMaxAgeBlocks: value(17), EpochDepositCapRao: new(big.Int).SetBytes(word(18)).String(), CampaignDepositCapRao: new(big.Int).SetBytes(word(19)).String()}}
+	// The deployment script's role separation applies to the Go-built path too;
+	// a valid approval cannot turn the bootstrap deployer into governance custody.
+	roleAddresses := []common.Address{plan.Actions[0].Sender, constructor.Owner, constructor.Guardian, constructor.CommitmentOracle}
+	for i, address := range roleAddresses {
+		if slices.Contains(roleAddresses[:i], address) {
+			return constructor, nil, nil, nil, errors.New("proxy deployer, owner, guardian and commitment oracle must be distinct")
+		}
+	}
 	p := constructor.ApprovedPolicy.binding()
 	if constructor.Owner == (common.Address{}) || constructor.Guardian == (common.Address{}) || constructor.CommitmentOracle == (common.Address{}) || p.PolicyHash == ([32]byte{}) || p.EpochBlocks == 0 || p.RootCommitWindowBlocks == 0 || p.FinalizeOffsetBlocks == 0 || p.CloseGraceBlocks == 0 || p.ClaimTTLEpochs == 0 || p.MaximumBindingValidityEpochs == 0 || p.CommitmentMaxAgeBlocks == 0 || p.EpochDepositCapRao.Sign() == 0 || p.CampaignDepositCapRao.Sign() == 0 || p.CloseGraceBlocks > p.RootCommitWindowBlocks || p.RootCommitWindowBlocks > p.FinalizeOffsetBlocks || p.FinalizeOffsetBlocks >= p.EpochBlocks || p.ClaimGraceEpochs > p.ClaimTTLEpochs || p.EpochDepositCapRao.Cmp(p.CampaignDepositCapRao) > 0 {
 		return constructor, nil, nil, nil, errors.New("proxy initializer roles or policy differ from source bounds")

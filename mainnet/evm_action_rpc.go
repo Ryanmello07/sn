@@ -580,17 +580,15 @@ func (self *evmOwnedChain) admitCurrent(ctx context.Context, plan evmCreatePlan,
 	}
 	tx, _ := action.unsigned()
 	cost := new(big.Int).Add(tx.Value(), new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), tx.GasFeeCap()))
-	if plan.ActionIndex > 0 {
-		// Later sealed reservations still own this sender's funds. They do not
-		// become executable or acquire new nonce/fee authority through this read.
-		for _, reserved := range p.Actions[plan.ActionIndex+1:] {
-			if reserved.Sender == action.Sender {
-				future, err := reserved.unsigned()
-				if err != nil {
-					return result, err
-				}
-				cost.Add(cost, new(big.Int).Add(future.Value(), new(big.Int).Mul(new(big.Int).SetUint64(future.Gas()), future.GasFeeCap())))
+	// The first create and every child preserve this sender's later sealed
+	// reservations. Funding another sender never becomes this sender's liability.
+	for _, reserved := range p.Actions[plan.ActionIndex+1:] {
+		if reserved.Sender == action.Sender {
+			future, err := reserved.unsigned()
+			if err != nil {
+				return result, err
 			}
+			cost.Add(cost, new(big.Int).Add(future.Value(), new(big.Int).Mul(new(big.Int).SetUint64(future.Gas()), future.GasFeeCap())))
 		}
 	}
 	if available.Cmp(cost) < 0 {
