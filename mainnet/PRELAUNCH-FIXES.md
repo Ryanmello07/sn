@@ -5149,3 +5149,15 @@ must cover a complete stream, empty stream, short read and EOF together with
 a genuine failed guard. Tests of `errors.Is(err, io.EOF)` alone cannot prove
 compatibility with consumers that require an unwrapped sentinel. The original
 preparation failure remains retained separately from later source qualification.
+
+### October 2: reuse compiler work without reusing test outcomes
+
+The independent member-review gate used a new private Go build cache and spent
+minutes compiling unchanged normal/race dependencies. Subsequent selected
+tests should reuse the reviewer's own existing build cache on /mnt/data while
+keeping exact source/module pins, private working data and `-count=1` actual
+test execution. Preserve a live compilation rather than restart it just to
+change cache policy. Go's compilation cache and an authenticated runtime proof
+cache have different contracts; neither permits reusing current balances,
+nonces or test pass results. Independent release/compiler provenance remains
+a separate MG-02 gate and is not established by these cached test runs.
