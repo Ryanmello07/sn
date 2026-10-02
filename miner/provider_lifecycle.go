@@ -46,7 +46,10 @@ type providerStatusHandler struct {
 }
 
 // Hooks expose actual request admission, not a substitute HTTP/status result.
-type providerStatusHooks struct{ afterAdmit func(context.Context) }
+type providerStatusHooks struct {
+	afterAdmit func(context.Context)
+	progress   *providerProgressOwner
+}
 
 // A late request after closure does not invoke Status or begin response I/O.
 func (self *providerStatusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +81,7 @@ func (self *providerStatusHandler) stopAdmission() {
 
 // A disabled status port creates no worker. A failed bind is returned before
 // starting providers, preserving the existing service-level shutdown decision.
-func newProviderStatusServer(port int, output *providerDiagnostics, cancel context.CancelFunc) (*providerStatusServer, error) {
+func newProviderStatusServer(port int, output *providerDiagnostics, cancel context.CancelFunc, progress *providerProgressOwner) (*providerStatusServer, error) {
 	if port <= 0 {
 		return nil, nil
 	}
@@ -86,7 +89,7 @@ func newProviderStatusServer(port int, output *providerDiagnostics, cancel conte
 	if err != nil {
 		return nil, err
 	}
-	return startProviderStatusServer(listener, output, cancel), nil
+	return startProviderStatusServer(listener, output, cancel, providerStatusHooks{progress: progress}), nil
 }
 
 // The supplied listener transfers to this concrete HTTP owner. Tests can own
@@ -95,6 +98,7 @@ func startProviderStatusServer(listener net.Listener, output *providerDiagnostic
 	handler := &providerStatusHandler{status: &Status{diagnostics: output}}
 	if len(hooks) > 0 {
 		handler.afterAdmit = hooks[0].afterAdmit
+		handler.status.progress = hooks[0].progress
 	}
 	self := &providerStatusServer{
 		server:  &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, ErrorLog: log.New(providerStatusLogWriter{diagnostics: output}, "", 0)},

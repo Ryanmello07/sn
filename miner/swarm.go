@@ -67,6 +67,7 @@ type providerSwarmStatus struct {
 // partially missing miner population for a healthy topology.
 type ProviderSwarm struct {
 	config             *ProviderSwarmConfig
+	progress           *providerProgressOwner
 	stateLock          sync.Mutex
 	members            map[string]ProviderSwarmMember
 	running            map[string]bool
@@ -358,12 +359,14 @@ func setSwarmMemberWallet(ctx context.Context, member ProviderSwarmMember, setti
 }
 
 type providerSwarmInstance struct {
-	networkSpace      *sdk.NetworkSpace
-	device            *sdk.DeviceLocal
-	refreshSub        sdk.Sub
-	logoutSub         sdk.Sub
-	cancel            context.CancelFunc
-	connectedOverride func() bool
+	progressGeneration uint64
+	progressDevice     providerProgressDevice
+	networkSpace       *sdk.NetworkSpace
+	device             *sdk.DeviceLocal
+	refreshSub         sdk.Sub
+	logoutSub          sdk.Sub
+	cancel             context.CancelFunc
+	connectedOverride  func() bool
 }
 
 // Reports live carrier plus processed current-key readiness. The supervisor
@@ -486,11 +489,17 @@ func NewProviderSwarm(config *ProviderSwarmConfig) (*ProviderSwarm, error) {
 		return nil, err
 	}
 	members := make(map[string]ProviderSwarmMember, len(config.Members))
+	progressMembers := make([]providerProgressConfigMember, 0, len(config.Members))
 	for _, member := range config.Members {
 		members[member.ID] = member
+		progressMembers = append(progressMembers, providerProgressConfigMember{Slot: member.ID, ApiUrl: member.APIURL, ConnectUrl: member.ConnectURL, DnsPumpHost: member.DNSPumpHost, Wallet: member.Wallet, SourceIp: member.SourceIP})
+	}
+	progress, err := newProviderProgressOwner("swarm", progressMembers)
+	if err != nil {
+		return nil, err
 	}
 	return &ProviderSwarm{
-		config: config, members: members, running: map[string]bool{}, disabled: map[string]bool{},
+		config: config, progress: progress, members: members, running: map[string]bool{}, disabled: map[string]bool{},
 		failures: map[string]string{}, instances: map[string]*providerSwarmInstance{}, startMember: startSwarmMember,
 		memberOperations: map[string]*providerSwarmMemberOperation{}, memberGenerations: map[string]*providerSwarmMemberOperation{},
 		startTimeout: 3 * time.Minute,
@@ -550,7 +559,7 @@ func (self *ProviderSwarm) Run(ctx context.Context) error {
 		self.disabled[id] = true
 	}
 	self.stateLock.Unlock()
-	server := &http.Server{Addr: self.config.ListenAddress, Handler: self}
+	server := &http.Server{Addr: self.config.ListenAddress, Handler: self, ReadHeaderTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
 	serverDone := make(chan struct{})
 	defer func() {
 		self.stopMembers()
@@ -560,6 +569,7 @@ func (self *ProviderSwarm) Run(ctx context.Context) error {
 			_ = server.Close()
 		}
 		<-serverDone
+		self.progress.close()
 	}()
 	serverErrors := make(chan error, 1)
 	go func() {
@@ -570,7 +580,10 @@ func (self *ProviderSwarm) Run(ctx context.Context) error {
 			cancel()
 		}
 	}()
-	members := append([]ProviderSwarmMember(nil), self.config.Members...)
+	members := make([]ProviderSwarmMember, 0, len(self.members))
+	for _, member := range self.members {
+		members = append(members, member)
+	}
 	sort.Slice(members, func(i, j int) bool { return members[i].ID < members[j].ID })
 	for _, member := range members {
 		if err := self.controlMember(runCtx, member.ID, true); err != nil {

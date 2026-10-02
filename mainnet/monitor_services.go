@@ -101,7 +101,7 @@ func waitMonitorService(ctx context.Context, role string, duration time.Duration
 func runMonitorServices(ctx context.Context, client *rpcClient, expected identityExpectation, policy *monitorServicesPolicy, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators)+len(policy.Operators), now)
+	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators)+len(policy.Operators)+len(policy.Providers), now)
 	if err != nil {
 		return 3
 	}
@@ -113,8 +113,12 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	diagnostic := output.errors.Writer("diagnostic")
 	var workers []*monitorValidatorWorker
 	var operators []*monitorOperatorWorker
+	var providers []*monitorProviderWorker
 	defer func() {
 		var cleanupErr error
+		for _, worker := range providers {
+			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
+		}
 		for _, worker := range operators {
 			cleanupErr = errors.Join(cleanupErr, closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks))
 		}
@@ -160,9 +164,17 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		}
 		operators = append(operators, worker)
 	}
+	for _, provider := range policy.Providers {
+		worker, err := openMonitorProviderWorker(ctx, provider, expected, checkpointPath, metricsPath, hooks)
+		if err != nil {
+			fmt.Fprintln(diagnostic, "monitor provider admission:", err)
+			return 3
+		}
+		providers = append(providers, worker)
+	}
 	// The channel holds every terminal result even during cancellation. Every
 	// launched worker sends once and is consumed before output owners close.
-	results := make(chan int, len(workers)+len(operators)+1)
+	results := make(chan int, len(workers)+len(operators)+len(providers)+1)
 	go func() {
 		backoff := time.Second
 		for ctx.Err() == nil {
@@ -208,7 +220,21 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 			results <- exit
 		}()
 	}
-	for remaining := len(workers) + len(operators) + 1; remaining > 0; remaining-- {
+	for index, worker := range providers {
+		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+len(operators)+index))
+		go func() {
+			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
+			if err := worker.close(hooks); err != nil {
+				fmt.Fprintln(diagnostic, "monitor provider cleanup:", err)
+				exit = 3
+			}
+			if hooks.afterWorker != nil {
+				hooks.afterWorker(worker.policy.Role, exit)
+			}
+			results <- exit
+		}()
+	}
+	for remaining := len(workers) + len(operators) + len(providers) + 1; remaining > 0; remaining-- {
 		exit := <-results
 		if exit != 0 {
 			result = max(result, exit)

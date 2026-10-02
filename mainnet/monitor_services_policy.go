@@ -22,7 +22,7 @@ const maxMonitorServicesBytes = 16 * 1024
 const maxMonitorValidatorRoles = 8
 
 // Callers distinguish an exhausted role census from unrelated source or wire faults.
-var errMonitorServicesCensus = errors.New("service policy requires at least one role, at most eight validators and at most four operators")
+var errMonitorServicesCensus = errors.New("service policy requires at least one role, at most eight validators, four operators and four provider sources")
 
 // Roles are fixed by the local expected census, with no candidate-supplied
 // label values. Each role has independent source, checkpoint and metric owners.
@@ -30,6 +30,7 @@ type monitorServicesPolicy struct {
 	Schema     string                   `json:"schema"`
 	Validators []monitorValidatorPolicy `json:"validators"`
 	Operators  []monitorOperatorPolicy  `json:"operators,omitempty"`
+	Providers  []monitorProviderPolicy  `json:"providers,omitempty"`
 }
 
 // The full current source is exact. A retained intent may still name its older
@@ -67,7 +68,7 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 	if policy.Schema != monitorServicesSchema {
 		return nil, errors.New("service policy schema is unknown")
 	}
-	if len(policy.Validators)+len(policy.Operators) == 0 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators {
+	if len(policy.Validators)+len(policy.Operators)+len(policy.Providers) == 0 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators || len(policy.Providers) > maxMonitorProviders {
 		return nil, errMonitorServicesCensus
 	}
 	paths := map[string]bool{}
@@ -146,6 +147,33 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 		}
 	}
 	slices.SortFunc(policy.Operators, func(a, b monitorOperatorPolicy) int { return strings.Compare(a.Role, b.Role) })
+	providerSources := map[protocol.ProviderProgressSource]bool{}
+	providerEndpoints := map[string]bool{}
+	providerClients := map[string]bool{}
+	for index := range policy.Providers {
+		provider := &policy.Providers[index]
+		if err := provider.validate(); err != nil {
+			return nil, err
+		}
+		if roles[provider.Role] || providerSources[provider.ExpectedSource] || providerEndpoints[provider.Endpoint] {
+			return nil, errors.New("provider role, endpoint or source repeats the independent census")
+		}
+		roles[provider.Role], providerSources[provider.ExpectedSource], providerEndpoints[provider.Endpoint] = true, true, true
+		for _, member := range provider.Members {
+			if providerClients[member.ClientId] {
+				return nil, errors.New("provider client identity appears in two expected roles")
+			}
+			providerClients[member.ClientId] = true
+		}
+		slices.SortFunc(provider.Members, func(a, b monitorExpectedProviderMember) int { return strings.Compare(a.Slot, b.Slot) })
+		checkpoint, metrics := monitorProviderPaths(checkpointPath, metricsPath, provider.Role)
+		for _, path := range []string{checkpoint, checkpoint + ".lock", metrics, metrics + ".lock"} {
+			if err := addPath(path); err != nil {
+				return nil, err
+			}
+		}
+	}
+	slices.SortFunc(policy.Providers, func(a, b monitorProviderPolicy) int { return strings.Compare(a.Role, b.Role) })
 	slices.SortFunc(policy.Validators, func(a, b monitorValidatorPolicy) int { return strings.Compare(a.Role, b.Role) })
 	return &policy, nil
 }

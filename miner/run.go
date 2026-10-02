@@ -484,7 +484,23 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 	}
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	status, err := newProviderStatusServer(self.port, output, cancel)
+	if err := validateProviderRegistrationSlots(self.proxySettings); err != nil {
+		return err
+	}
+	providers := self.proxySettings
+	if len(providers) == 0 {
+		providers = []*connect.ProxySettings{nil}
+	}
+	progressMembers := make([]providerProgressConfigMember, 0, len(providers))
+	for _, proxy := range providers {
+		progressMembers = append(progressMembers, providerProgressConfigMember{Slot: providerRegistrationSlot(proxy), ApiUrl: self.apiUrl, ConnectUrl: self.connectUrl})
+	}
+	progress, err := newProviderProgressOwner("standalone", progressMembers)
+	if err != nil {
+		return err
+	}
+	defer progress.close()
+	status, err := newProviderStatusServer(self.port, output, cancel, progress)
 	if err != nil {
 		output.observe(providerStatusFailed, 0, false, err, 0, nil)
 		return err
@@ -601,6 +617,11 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		// Always-on public mode includes network and friends/family service,
 		// matching the SDK's hierarchical provide contract.
 		device.SetProvideControlMode(sdk.ProvideControlModeAlways)
+		progressGeneration, err := progress.attach(proxyCtx, providerRegistrationSlot(proxySettings), device)
+		if err != nil {
+			return err
+		}
+		defer progress.retire(providerRegistrationSlot(proxySettings), progressGeneration)
 
 		keyMaterial := device.GetKeyMaterial()
 		if !bytes.Equal(keyMaterial.GetClientKeySeed(), seed) {
@@ -621,10 +642,6 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 	}
 
 	var wg sync.WaitGroup
-	providers := self.proxySettings
-	if len(providers) == 0 {
-		providers = []*connect.ProxySettings{nil}
-	}
 	results := make(chan error, len(providers))
 	for index, proxySettings := range providers {
 		wg.Add(1)
@@ -833,9 +850,14 @@ func writeProviderTlsCertAndKey(certPem, keyPem []byte) error {
 
 type Status struct {
 	diagnostics *providerDiagnostics
+	progress    *providerProgressOwner
 }
 
 func (self *Status) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/provider-progress" {
+		serveProviderProgress(w, r, self.progress)
+		return
+	}
 	type WarpStatusResult struct {
 		Version       string                    `json:"version,omitempty"`
 		ConfigVersion string                    `json:"config_version,omitempty"`
