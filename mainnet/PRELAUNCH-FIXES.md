@@ -5444,3 +5444,21 @@ This author qualification uses Server `2c4e5dca` and fresh precreated private
 roots. Independent qualification, private-root creation, retained/restore semantic
 rebind, capacity revisions and the composition with current main remain separate
 requirements. The candidate is not merged or approved for live preparation.
+
+
+### Optional telemetry cannot reserve operational claim capacity
+
+Claim-queue review found a second pressure case: retaining every previously
+acknowledged optional observation can still exceed the 16 MiB queue limit when
+new signed or operational fields grow. Dropping only newly added observations
+is insufficient. Add a second bounded fallback that omits prior optional
+observations and reports that degradation, while preserving every entry,
+signature, attempt counter and operational outcome. If those required bytes
+alone exceed capacity, retain the actual capacity refusal.
+
+Qualification must exercise the real durable save with prior observations near
+the limit, subsequent signed-field growth, failed-save publication isolation
+and reopen of the exact acknowledged fallback. An omitted observation remains
+unobserved history; no economic outcome or signing authority follows from it.
+This review finding is assigned to the claim-producer successor, not qualified
+or merged yet.
