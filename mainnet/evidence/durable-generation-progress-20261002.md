@@ -34,6 +34,15 @@ temporary refusal before mutation must remain recoverable on the same owner;
 uncertain publication must stop further mutation pending joined reconciliation
 of the original bytes. These consumer corrections are pending source work.
 
+Further adopter review confirmed that an in-memory leaf census does not retain
+native journal membership after close/reopen: missing log/raw members must not
+become an empty journal, even when the original root inode and nonce survive.
+Request cancellation also needs checking at the actual native-journal operation
+boundary. The shared author is implementing a mandatory preprovisioned journal
+anchor with a completed-member census and pending-write protocol. This is still
+unqualified adopter work; Connect's 48-root physical-directory receipt does not
+prove leaf survival or close these two consumer gaps.
+
 ## Separate author-qualified primitive successor
 
 Connect `6cd720cf50a43530c298ed8f931e341b00e8913c`, tree
@@ -90,6 +99,15 @@ Deployment declarations and unit plumbing, exact module/source composition,
 independent consumer tests, capacity policy and production backup/restore
 rehearsal remain open. The frozen `258e25b4` / server `0aa1e244` artifacts and
 all ten blocked unsigned actions remain unchanged.
+
+Offline provisioning is also an implementation gap. Operators need an explicit
+preparation command that creates reviewed private roots, external leases, root
+nonce metadata and the final native-journal anchor, then emits exact declarations
+and a custody manifest for review. Runtime constructors must never enroll absent
+roots or journals, invent replacement anchors, or silently clean old state.
+There is currently no qualified production preparation command; test fixture
+provisioning is not an operator workflow. Its schema must follow the final
+journal-anchor contract before consumer release qualification.
 
 ## Independent primitive addendum
 

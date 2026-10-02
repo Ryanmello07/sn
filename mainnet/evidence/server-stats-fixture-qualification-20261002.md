@@ -55,6 +55,18 @@ private fixture cleanup succeeds. The separate [integration receipt](server-stat
 has SHA256 `2adc095af94c4abf6081b6a7157daf52540c633c21d358619abd994288cad38b`.
 This scope does not qualify the other upstream changes across 15 files.
 
+The final pushed integration is server
+`047a266496709e9410cba3b7f08cd3c2703bf207`, tree
+`92f7251d3f6d5e7da448ba91ec21fecb79106034`, joining qualified `0739cab5`
+with upstream `b3ba233f`. The [final source join](server-stats-fixture-final-join-20261002.json),
+SHA256 `6ddec7f96953aecb2f0dddd809ba4954f8e5431094e9ad7ea3e4b7592f6e95e2`,
+checks seven exact helper/statistics/usage-guard/module files and unchanged
+previous escrow source and migration bytes. The only new database registration
+appends the reservation-snapshot table; it does not change this helper's raw
+INSERT or immutable-usage/contract-trigger paths. No tests were repeated on this
+join. The eight-root execution receipt remains scoped to `0739cab5`, and the
+new reservation cache and other upstream changes need separate qualification.
+
 ## Historical runner binding correction
 
 The audit reused `run_private_stage.sh` while adding later stages after earlier
