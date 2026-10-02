@@ -23,6 +23,7 @@ import (
 func newBootstrapSuccessorCommandFixture(t *testing.T) *bootstrapChainFixture {
 	t.Helper()
 	f := newBootstrapChainFixture(t)
+	prepareBootstrapSuccessorMembersTest(t, f.config.RunDirectory, false)
 	contracts := newEvmEvidenceFixture(t)
 	raw, _, err := readPlanFile(t.Context(), f.config.OwnerTrimPolicy.Path, maxRpcReplyBytes)
 	if err != nil {

@@ -20,6 +20,7 @@ func TestBootstrapSuccessorSafeCurrentRevisionConservesCustody(t *testing.T) {
 	owner := f.open(true, nil)
 	root, registry := owner.local.path, owner.registry.path
 	original := bootstrapSuccessorPreparationTestFiles(t, root)
+	delete(original, bootstrapSuccessorMemberSpec(false).Name)
 	nonces := bootstrapSuccessorPreparationTestFiles(t, registry)
 	base := bootstrapSuccessorCanonicalTestApproval(t, f.approval.Plan, f.key, bootstrapSuccessorCanonicalTestRuntime())
 	if err := owner.retainCanonicalAuthority(t.Context(), base); err != nil {

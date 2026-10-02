@@ -94,7 +94,7 @@ func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstra
 		return nil, errors.Join(errors.New("successor execution original preparation differs"), err)
 	}
 	claim := rootObjectHash(copied)
-	self.local = &bootstrapSuccessorExecutionDirectory{storage: self.reader.storage, ctx: ctx, path: p.Proposal.OriginalRunDirectory, root: p.Root, file: self.reader.directory, claim: claim, hook: hook}
+	self.local = &bootstrapSuccessorExecutionDirectory{storage: self.reader.storage, members: self.reader.members, ctx: ctx, path: p.Proposal.OriginalRunDirectory, root: p.Root, file: self.reader.directory, claim: claim, hook: hook}
 	self.registry, err = openBootstrapSuccessorExecutionDirectory(ctx, copied.Plan.Request.RegistryDirectory, copied.Plan.Registry, claim, hook)
 	if err != nil {
 		return nil, err
@@ -118,6 +118,10 @@ func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstra
 	}
 	claimName, readyName := bootstrapSuccessorExecutionPrefix+".claim", bootstrapSuccessorExecutionPrefix+".ready"
 	claimPresent, namespacePresent, ready := false, false, false
+	if pending := self.local.members.census.Pending; pending != nil {
+		namespacePresent = true
+		claimPresent = !pending.Append && pending.Name == claimName && pending.Stage == self.local.stageName(claimName, "claim") && pending.Sha256 == safeReleaseHash(raw)
+	}
 	for _, name := range names {
 		if strings.HasPrefix(name, bootstrapSuccessorExecutionPrefix) || strings.HasPrefix(name, bootstrapSuccessorExecutionStagePrefix) {
 			namespacePresent = true
@@ -162,6 +166,9 @@ func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstra
 		if err := self.registry.publish(name, "nonce", self.nonceBytes(name)); err != nil {
 			return nil, err
 		}
+	}
+	if err := self.local.resumePending(); err != nil {
+		return nil, err
 	}
 	if !ready {
 		initial := bootstrapSuccessorExecutionEvent{Schema: bootstrapSuccessorExecutionEventSchema, ApprovalHash: claim, Phase: "adopted",

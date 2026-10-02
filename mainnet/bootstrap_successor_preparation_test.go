@@ -28,6 +28,7 @@ func newBootstrapSuccessorPreparationTestApproval(t *testing.T) (bootstrapSucces
 	if err := os.Chmod(directory, 0700); err != nil {
 		t.Fatal(err)
 	}
+	prepareBootstrapSuccessorMembersTest(t, directory, false)
 	root, err := bootstrapSuccessorPhysicalRoot(directory)
 	if err != nil {
 		t.Fatal(err)
@@ -211,7 +212,7 @@ func TestBootstrapSuccessorPreparationClaimsOnceAndResumesSameRoot(t *testing.T)
 		t.Fatal(err)
 	}
 	before := bootstrapSuccessorPreparationTestFiles(t, directory)
-	if len(before) != 2 || before[bootstrapSuccessorPreparationFile+".lock"] != rootObjectHash(approval)+"\n"+bootstrapRootClaimComplete {
+	if len(before) != 3 || before[bootstrapSuccessorPreparationFile+".lock"] != rootObjectHash(approval)+"\n"+bootstrapRootClaimComplete {
 		t.Fatal("preparation did not publish exactly one complete fixed claim")
 	}
 	var record bootstrapSuccessorPreparationRecord
@@ -308,7 +309,7 @@ func TestBootstrapSuccessorPreparationRecoversEveryPublicationBoundary(t *testin
 			t.Fatal(err)
 		}
 		after := bootstrapSuccessorPreparationTestFiles(t, directory)
-		if len(after) != 2 || after[bootstrapSuccessorPreparationFile+".lock"] != rootObjectHash(approval)+"\n"+bootstrapRootClaimComplete {
+		if len(after) != 3 || after[bootstrapSuccessorPreparationFile+".lock"] != rootObjectHash(approval)+"\n"+bootstrapRootClaimComplete {
 			t.Fatalf("resumed preparation did not retain one completed claim at %s", stage)
 		}
 		var record bootstrapSuccessorPreparationRecord
@@ -546,7 +547,7 @@ func TestBootstrapSuccessorPreparationFencesRootReplacementDuringPublication(t *
 	if !reached || !errors.Is(err, durablevolume.ErrIdentity) || len(bootstrapSuccessorPreparationTestFiles(t, directory)) != 0 {
 		t.Fatal("publication followed a replaced physical root", err)
 	}
-	if len(bootstrapSuccessorPreparationTestFiles(t, moved)) != 1 {
+	if len(bootstrapSuccessorPreparationTestFiles(t, moved)) != 2 {
 		t.Fatal("root replacement lost the original staged claim")
 	}
 	if err := os.Remove(directory); err != nil {

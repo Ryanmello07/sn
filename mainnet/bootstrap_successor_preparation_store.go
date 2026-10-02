@@ -22,6 +22,7 @@ const bootstrapSuccessorStagePrefix = ".contract-successor-preparation-"
 // or a privileged operator. An error closes the owner before any further use.
 type bootstrapSuccessorPreparationStore struct {
 	storage   *mainnetDurableDirectory
+	members   *bootstrapSuccessorMembers
 	ctx       context.Context
 	approval  bootstrapSuccessorPreparationApproval
 	directory *os.File
@@ -79,12 +80,17 @@ func openBootstrapSuccessorPreparationStore(ctx context.Context, expected bootst
 	if err := mainnetDurableFlock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		return nil, errors.Join(errors.New("successor preparation already has a local owner"), err)
 	}
+	self.members, err = openBootstrapSuccessorMembers(storage, self.directory, false, false)
+	if err != nil {
+		return nil, err
+	}
 	if err := self.checkpoint("owner-acquired"); err != nil {
 		return nil, err
 	}
-	entries, err := self.directory.Readdirnames(513)
+	entries, err := self.directory.Readdirnames(514)
+	entries = bootstrapSuccessorApplicationNames(entries, self.members.spec.Name)
 	if err != nil && !errors.Is(err, io.EOF) || len(entries) > 512 {
-		return nil, errors.Join(errors.New("successor custody directory exceeds its bounded census"), err)
+		return nil, mainnetDurableUnavailable("successor custody directory exceeds its bounded census", err)
 	}
 	claimStage, recordStage := self.stageName("claim"), self.stageName("record")
 	markerName := bootstrapSuccessorPreparationFile + ".lock"
@@ -97,16 +103,18 @@ func openBootstrapSuccessorPreparationStore(ctx context.Context, expected bootst
 			present[name] = true
 		}
 	}
-	if create && len(present) != 0 {
+	marker := []byte(rootObjectHash(copied) + "\n")
+	pendingClaim := self.members.census.Pending
+	reservedClaim := pendingClaim != nil && !pendingClaim.Append && pendingClaim.Name == markerName && pendingClaim.Stage == claimStage && pendingClaim.Sha256 == safeReleaseHash(marker)
+	if create && (len(present) != 0 || self.members.census.Pending != nil) {
 		return nil, errors.New("successor prepare requires unused fixed custody; retain its existing claim for resume")
 	}
-	if !create && !present[markerName] && !present[claimStage] {
+	if !create && !present[markerName] && !present[claimStage] && !reservedClaim {
 		return nil, errors.New("successor resume requires its retained claim; missing custody cannot renew preparation")
 	}
 	if !present[markerName] && (present[bootstrapSuccessorPreparationFile] || present[recordStage]) || present[markerName] && present[claimStage] || present[bootstrapSuccessorPreparationFile] && present[recordStage] {
 		return nil, errors.New("successor custody contains inconsistent publication stages")
 	}
-	marker := []byte(rootObjectHash(copied) + "\n")
 	if !present[markerName] {
 		if err := self.publish("claim", markerName, marker); err != nil {
 			return nil, err
@@ -116,6 +124,9 @@ func openBootstrapSuccessorPreparationStore(ctx context.Context, expected bootst
 	if err != nil || !bytes.HasPrefix(retainedMarker, marker) || !bytes.HasPrefix([]byte(bootstrapRootClaimComplete), retainedMarker[len(marker):]) {
 		return nil, errors.Join(errors.New("successor retained claim is incomplete or differs from its approval"), err)
 	}
+	if err := self.members.resumePublished(markerName, retainedMarker); err != nil {
+		return nil, err
+	}
 	complete := len(retainedMarker) == len(marker)+len(bootstrapRootClaimComplete)
 	retainedRecord, err := self.read(bootstrapSuccessorPreparationFile, maximumBootstrapSuccessorPreparationBytes)
 	if errors.Is(err, os.ErrNotExist) && !complete && len(retainedMarker) == len(marker) {
@@ -124,6 +135,8 @@ func openBootstrapSuccessorPreparationStore(ctx context.Context, expected bootst
 		}
 	} else if err != nil || !bytes.Equal(retainedRecord, recordBytes) {
 		return nil, errors.Join(errors.New("successor retained record is missing, malformed or rebound; preserve custody"), err)
+	} else if err := self.members.resumePublished(bootstrapSuccessorPreparationFile, retainedRecord); err != nil {
+		return nil, err
 	}
 	if err := self.checkpoint("record-retained"); err != nil {
 		return nil, err
@@ -133,6 +146,15 @@ func openBootstrapSuccessorPreparationStore(ctx context.Context, expected bootst
 	if err := self.storage.checkWrite(self.directory); err != nil {
 		return nil, err
 	}
+	if err := self.members.reserve(markerName, "", append(append([]byte{}, marker...), []byte(bootstrapRootClaimComplete)...), true); err != nil {
+		return nil, err
+	}
+	markerMutationStarted := false
+	defer func() {
+		if markerMutationStarted {
+			resultErr = self.members.publicationError(resultErr)
+		}
+	}()
 	markerFd, err := unix.Openat(fd, markerName, unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
@@ -146,6 +168,7 @@ func openBootstrapSuccessorPreparationStore(ctx context.Context, expected bootst
 		if err := self.storage.checkWrite(self.directory); err != nil {
 			return nil, err
 		}
+		markerMutationStarted = true
 		written, err := markerFile.WriteAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
 		if err != nil || written != len(bootstrapRootClaimComplete) {
 			return nil, errors.Join(io.ErrShortWrite, err)
@@ -155,6 +178,9 @@ func openBootstrapSuccessorPreparationStore(ctx context.Context, expected bootst
 		}
 	}
 	if err := errors.Join(markerFile.Sync(), self.directory.Sync()); err != nil {
+		return nil, err
+	}
+	if err := self.members.commit(markerName, append(append([]byte{}, marker...), []byte(bootstrapRootClaimComplete)...)); err != nil {
 		return nil, err
 	}
 	if err := self.checkpoint("complete-synced"); err != nil {
@@ -173,6 +199,11 @@ func (self *bootstrapSuccessorPreparationStore) checkpoint(stage string) error {
 		if self != nil {
 			if err := self.storage.check(self.directory); err != nil {
 				return err
+			}
+			if self.members != nil {
+				if err := self.members.check(); err != nil {
+					return err
+				}
 			}
 		}
 		var stat unix.Stat_t
@@ -222,7 +253,13 @@ func (self *bootstrapSuccessorPreparationStore) read(name string, maximum int) (
 
 // Only an exact prefix of this immutable stage can be resumed. A no-replace
 // rename publishes the fully synced file; no retained fixed name is overwritten.
-func (self *bootstrapSuccessorPreparationStore) publish(kind, name string, raw []byte) error {
+func (self *bootstrapSuccessorPreparationStore) publish(kind, name string, raw []byte) (resultErr error) {
+	mutationStarted := false
+	defer func() {
+		if mutationStarted {
+			resultErr = self.members.publicationError(resultErr)
+		}
+	}()
 	if err := self.checkpoint(kind + "-begin"); err != nil {
 		return err
 	}
@@ -231,8 +268,16 @@ func (self *bootstrapSuccessorPreparationStore) publish(kind, name string, raw [
 	}
 	fd := int(self.directory.Fd())
 	stage := self.stageName(kind)
+	if err := self.members.reserve(name, stage, raw, false); err != nil {
+		return err
+	}
+	if err := self.checkpoint(kind + "-reserved"); err != nil {
+		return self.members.publicationError(err)
+	}
+	mutationStarted = true
 	stageFd, err := unix.Openat(fd, stage, unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CREAT|unix.O_EXCL, 0600)
 	if errors.Is(err, unix.EEXIST) {
+		mutationStarted = false
 		stageFd, err = unix.Openat(fd, stage, unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	}
 	if err != nil {
@@ -244,13 +289,19 @@ func (self *bootstrapSuccessorPreparationStore) publish(kind, name string, raw [
 		return err
 	}
 	retained, err := io.ReadAll(io.LimitReader(file, int64(len(raw))+1))
-	if err != nil || !bytes.HasPrefix(raw, retained) {
-		return errors.Join(errors.New("successor stage differs from the exact immutable preparation prefix"), err)
+	if err != nil {
+		return mainnetDurableUnavailable("cannot read original successor preparation stage", err)
+	}
+	if !bytes.HasPrefix(raw, retained) {
+		return self.storage.identity("successor stage differs from the exact immutable preparation prefix", nil)
 	}
 	if err := self.checkpoint(kind + "-name-created"); err != nil {
 		return err
 	}
 	if err := self.directory.Sync(); err != nil {
+		return err
+	}
+	if err := self.members.retainStage(stage, file); err != nil {
 		return err
 	}
 	if err := self.checkpoint(kind + "-name-synced"); err != nil {
@@ -259,6 +310,7 @@ func (self *bootstrapSuccessorPreparationStore) publish(kind, name string, raw [
 	if err := self.storage.checkWrite(self.directory); err != nil {
 		return err
 	}
+	mutationStarted = true
 	written, err := file.WriteAt(raw, 0)
 	if err != nil || written != len(raw) {
 		return errors.Join(io.ErrShortWrite, err)
@@ -284,6 +336,9 @@ func (self *bootstrapSuccessorPreparationStore) publish(kind, name string, raw [
 	if err := self.directory.Sync(); err != nil {
 		return err
 	}
+	if err := self.members.commit(name, raw); err != nil {
+		return err
+	}
 	return self.checkpoint(kind + "-published-synced")
 }
 
@@ -292,7 +347,7 @@ func (self *bootstrapSuccessorPreparationStore) close() error {
 	if self == nil || self.directory == nil {
 		return nil
 	}
-	err := errors.Join(self.directory.Close(), self.storage.close())
+	err := errors.Join(self.members.close(), self.directory.Close(), self.storage.close())
 	self.directory = nil
 	return err
 }
