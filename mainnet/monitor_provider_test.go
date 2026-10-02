@@ -420,12 +420,24 @@ func TestMonitorProviderPublicMaximumRosterRetainsBoundedEvent(t *testing.T) {
 	defer cancel()
 	sink := &monitorProviderTestSink{events: make(chan monitorProviderTestEvent, 2)}
 	done := make(chan int, 1)
-	hooks := monitorServiceHooks{wait: func(ctx context.Context, _ string, _ time.Duration) bool { <-ctx.Done(); return false }}
+	workerExited := make(chan int, 1)
+	hooks := monitorServiceHooks{afterWorker: func(role string, exit int) {
+		if role == policy.Role {
+			workerExited <- exit
+		}
+	}, wait: func(ctx context.Context, _ string, _ time.Duration) bool { <-ctx.Done(); return false }}
 	go func() {
 		done <- runMonitorStorageTestWithHooks(t, ctx, fixture.args(url), sink, nil, fixture.clock.now, hooks)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	event := sink.next(t)
+	var event monitorProviderTestEvent
+	select {
+	case event = <-sink.events:
+	case exit := <-workerExited:
+		t.Fatal("provider exporter stopped before maximum-roster event", exit)
+	case <-ctx.Done():
+		t.Fatal("provider maximum-roster command canceled before sample", ctx.Err())
+	}
 	if !event.Current || event.State.ReadyMembers != maxMonitorProviderMembers || event.State.ExpectedMembers != maxMonitorProviderMembers {
 		t.Fatal("maximum expected roster lost public readiness event", event)
 	}
