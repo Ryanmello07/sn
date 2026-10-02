@@ -453,7 +453,12 @@ func TestMonitorServicesCommandFutureClockAndRollbackRemainVisible(t *testing.T)
 func TestMonitorServicesCommandOwnershipFailurePreservesPeerAndJoinsCancellation(t *testing.T) {
 	fixture := newMonitorServicesFixture(t, "alpha", "beta")
 	url, entered, left := monitorServicesBlockedChain(t)
-	run := fixture.start(t, url, monitorServiceHooks{})
+	terminal := make(chan error, 1)
+	run := fixture.start(t, url, monitorServiceHooks{afterResult: func(ctx context.Context, exit int) {
+		if exit == 3 {
+			terminal <- ctx.Err()
+		}
+	}})
 	run.next(t)
 	run.next(t)
 	<-entered
@@ -466,6 +471,9 @@ func TestMonitorServicesCommandOwnershipFailurePreservesPeerAndJoinsCancellation
 	}
 	run.again(t, "alpha")
 	event := run.next(t)
+	if err := <-terminal; err != nil {
+		t.Fatal("one stopped role canceled the healthy campaign", err)
+	}
 	run.again(t, "beta")
 	peer := run.next(t)
 	if event.Publication != "ownership-error" || peer.Role != "beta" || peer.Publication != "published" {

@@ -21,6 +21,7 @@ type monitorServiceHooks struct {
 	syncDirectory func(role, kind string, file *os.File) error
 	afterClose    func(role, kind string, file *os.File) error
 	afterWorker   func(role string, exit int)
+	afterResult   func(context.Context, int)
 	afterEvent    func(context.Context, string)
 	wait          func(context.Context, string, time.Duration) bool
 }
@@ -211,6 +212,9 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		exit := <-results
 		if exit != 0 {
 			result = max(result, exit)
+		}
+		if hooks.afterResult != nil {
+			hooks.afterResult(ctx, exit)
 		}
 		// A failed domain stays visibly stopped while unrelated chain/service
 		// owners continue. Parent cancellation still joins every live worker.
