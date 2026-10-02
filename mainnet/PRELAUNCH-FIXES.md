@@ -7,6 +7,12 @@ full scope. A historical checkpoint below does not supply a later composition,
 deployment or acceptance verdict; use each linked receipt's exact source and
 dependency scope.
 
+The [durable claim producer checkpoint](evidence/claim-projection-progress-20261002.md)
+at `347605fd` passes 37 author tests in each mode and two package vets. Its
+independent gate is pending; the separately configured claim monitor is still
+being implemented. MG-07/PH-28 remain open for that consumer, current-source
+composition, contract/native economic observations and actual alert/repair delivery.
+
 ## Historical qualification checkpoints
 
 **October 2 continuation checkpoint:** observer `6d398662` is now independently qualified at 17 normal/17 race roots plus vet. Composition `69f4bbdd` / server `10a8f4d8` now passes 78 selected normal/78 race roots and vet, with a separate independent 12-root normal/race scope and vet. The [exact sealed composition](evidence/durable-owner-composition-qualification-20261002.md) is an incremental source qualification. Miner startup isolation `c3707376` passes 37 normal/37 race roots, while callback isolation, member recovery ordering and production preparation remain separate work. The [checkpoint and retained receipts](evidence/mainnet-continuation-checkpoint-20261002.md) record exact scopes, a newly exposed pending-stage ordering defect, private fixture ancestry and immutable physical evidence paths. No launch or full-backlog closure is inferred.
@@ -5391,6 +5397,18 @@ Keep evidence strength explicit as well: configured-RPC receipts and leaf state
 remain assertions until independent finality/runtime/code admission is supplied.
 An EVM chain ID alone does not authenticate native genesis. A Merkle check or
 accepted contract event must not silently become proof of finalized economics.
+
+The corrected [producer `347605fd`](evidence/claim-projection-progress-20261002.md)
+now obtains event selectors from the consumed ABI and publishes optional public
+observations only after the actual retained queue acknowledges its bytes. Author
+qualification passes 37 normal/race tests and two vets; three old-body controls
+fail for the intended causes in each mode with two positive controls. Independent
+qualification remains pending. Fresh and previously retained optional metadata
+both yield to operational queue growth at the unchanged 16 MiB limit; signatures,
+entries and completed history are never removed to make reporting fit. A bounded
+public census includes the oldest unresolved epoch and omitted counts. A new
+publication sequence proves an acknowledged heartbeat, not settlement progress.
+Future-dated or ambiguous reporting degrades without rewriting claim authority.
 
 
 ### Purpose-scoped fleet admission is integrated, not live-approved
