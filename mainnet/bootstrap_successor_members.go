@@ -374,7 +374,7 @@ func (self *bootstrapSuccessorMembers) publish(census bootstrapSuccessorMemberCe
 	if len(raw) > maximumBootstrapSuccessorMemberCensusBytes {
 		return mainnetDurableUnavailable("successor member census exceeds its fixed byte capacity", nil)
 	}
-	if err := self.head.Publish(raw); err != nil {
+	if err := self.head.Publish(raw, nil); err != nil {
 		return self.storage.snapshotError(err)
 	}
 	self.census = census
