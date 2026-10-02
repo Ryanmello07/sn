@@ -11,6 +11,13 @@ import (
 )
 
 const ownerTrimBestEffortApprovalSchema = "urnetwork-mainnet-owner-trim-best-effort-submission-v1"
+const ownerTrimRequirePruningImmunity = "require-public-pruning-immunity-through-original-expiry"
+const ownerTrimAcceptPruningRisk = "accept-public-pruning-and-netuid-reuse-risk"
+const ownerTrimRequireClosedRegistration = "require-observed-closed-registration"
+const ownerTrimAcceptRegistrationRisk = "accept-competing-registration-and-reentry-risk"
+
+const ownerTrimPublicPruningResidual = "Public subnet registration may prune the original subnet and reuse its netuid before inclusion; this call has no atomic subnet-generation predicate and may fail or affect a replacement subnet. Current owner and generation checks do not fence that interval."
+const ownerTrimRegistrationResidual = "Competing registration, owner takeover, hotkey swaps and re-entry may change membership after the final read, including earlier actions in the inclusion block. The owner cannot close all registration routes on this runtime; the native call cannot bind the reviewed protected generations atomically."
 
 // Every risk is mandatory; removing one requires a different reviewed protocol.
 func ownerTrimBestEffortResiduals() []string {
@@ -27,17 +34,32 @@ func ownerTrimBestEffortResiduals() []string {
 // Approval is independently signed after the original public signature exists.
 // It cannot extend mortality, change bytes or replenish consumed attempts.
 type ownerTrimBestEffortApproval struct {
-	Schema             string             `json:"schema"`
-	ConfigHash         string             `json:"original_action_config_hash"`
-	ExtrinsicHash      string             `json:"original_signed_extrinsic_hash"`
-	Runtime            rootReceiptProfile `json:"exact_runtime"`
-	BaselineCensusHash string             `json:"reviewed_baseline_census_hash"`
-	ProtectedScopeHash string             `json:"reviewed_protected_generation_scope_hash"`
-	InitialBroadcasts  uint8              `json:"already_consumed_broadcasts"`
-	ValidFromBlock     uint64             `json:"valid_from_finalized_block"`
-	ValidThroughBlock  uint64             `json:"valid_through_finalized_block"`
-	ResidualRisks      []string           `json:"explicitly_accepted_residual_risks"`
-	Signature          string             `json:"approval_signature_ed25519"`
+	Schema              string             `json:"schema"`
+	ConfigHash          string             `json:"original_action_config_hash"`
+	ExtrinsicHash       string             `json:"original_signed_extrinsic_hash"`
+	Runtime             rootReceiptProfile `json:"exact_runtime"`
+	BaselineCensusHash  string             `json:"reviewed_baseline_census_hash"`
+	ProtectedScopeHash  string             `json:"reviewed_protected_generation_scope_hash"`
+	InitialBroadcasts   uint8              `json:"already_consumed_broadcasts"`
+	ValidFromBlock      uint64             `json:"valid_from_finalized_block"`
+	ValidThroughBlock   uint64             `json:"valid_through_finalized_block"`
+	ResidualRisks       []string           `json:"explicitly_accepted_residual_risks"`
+	PublicPruningPolicy string             `json:"public_pruning_policy,omitempty"`
+	RegistrationPolicy  string             `json:"registration_policy,omitempty"`
+	Signature           string             `json:"approval_signature_ed25519"`
+}
+
+// Empty fields preserve already signed conservative policies byte for byte.
+// Each weaker choice requires its own exact residual and independent signature.
+func (self ownerTrimBestEffortApproval) residuals() []string {
+	risks := ownerTrimBestEffortResiduals()
+	if self.PublicPruningPolicy == ownerTrimAcceptPruningRisk {
+		risks = append(risks, ownerTrimPublicPruningResidual)
+	}
+	if self.RegistrationPolicy == ownerTrimAcceptRegistrationRisk {
+		risks = append(risks, ownerTrimRegistrationResidual)
+	}
+	return risks
 }
 
 // The record holds proof and consumed post reservations, never a trust root.
@@ -62,7 +84,9 @@ func (self ownerTrimBestEffortApproval) validate(config ownerTrimExecutionConfig
 		self.ConfigHash != rootObjectHash(config) || !rootCanonicalHash(extrinsicHash) || self.ExtrinsicHash != extrinsicHash || self.Runtime != action.Runtime ||
 		!planSha256(self.BaselineCensusHash) || !planSha256(self.ProtectedScopeHash) || self.InitialBroadcasts >= action.MaxBroadcasts ||
 		self.ValidFromBlock < action.BirthBlock || self.ValidFromBlock > self.ValidThroughBlock || self.ValidThroughBlock >= action.BirthBlock+action.Period ||
-		!slices.Equal(self.ResidualRisks, ownerTrimBestEffortResiduals()) || !rootCanonicalHash(key) {
+		self.PublicPruningPolicy != "" && self.PublicPruningPolicy != ownerTrimRequirePruningImmunity && self.PublicPruningPolicy != ownerTrimAcceptPruningRisk ||
+		self.RegistrationPolicy != "" && self.RegistrationPolicy != ownerTrimRequireClosedRegistration && self.RegistrationPolicy != ownerTrimAcceptRegistrationRisk ||
+		!slices.Equal(self.ResidualRisks, self.residuals()) || !rootCanonicalHash(key) {
 		return errors.New("owner trim best-effort approval differs from original signed action, bounds or mandatory residual risks")
 	}
 	public, _ := hex.DecodeString(key[2:])

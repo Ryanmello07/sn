@@ -86,7 +86,17 @@ func (self *ownerTrimBestEffortChain) authorize(ctx context.Context, config owne
 	if err != nil {
 		return err
 	}
-	if !guard.ObservationMatches || guard.BaselineCensusHash != self.approval.BaselineCensusHash ||
+	matches := guard.ObservationMatches
+	if !matches && self.approval.RegistrationPolicy == ownerTrimAcceptRegistrationRisk && len(guard.ComparisonBlockers) != 0 {
+		before, after := self.store.review.Census.Observation, guard.CurrentCensus.Observation
+		matches = before.RegistrationAllowed == after.RegistrationAllowed && before.PowRegistrationAllowed == after.PowRegistrationAllowed
+		for _, blocker := range guard.ComparisonBlockers {
+			if blocker != "OWNER_TRIM_COMPETING_REGISTRATION_OR_REENTRY_NOT_FENCED" {
+				matches = false
+			}
+		}
+	}
+	if !matches || guard.BaselineCensusHash != self.approval.BaselineCensusHash ||
 		guard.CurrentCensus.Observation.Identity.FinalizedNumber != observation.FinalizedNumber ||
 		guard.CurrentCensus.Observation.Identity.FinalizedHash != observation.FinalizedHash {
 		return errors.New("owner trim best-effort current selection, protected generations or finalized census changed")
@@ -104,8 +114,10 @@ func (self *ownerTrimBestEffortChain) authorize(ctx context.Context, config owne
 	if err != nil {
 		return err
 	}
-	if len(window.Blockers) != 0 {
-		return errors.New("owner trim best-effort current nonce, proxy or public-pruning predicates refuse submission")
+	for _, blocker := range window.Blockers {
+		if blocker != "OWNER_TRIM_PUBLIC_SUBNET_PRUNING_NOT_FENCED_THROUGH_EXPIRY" || self.approval.PublicPruningPolicy != ownerTrimAcceptPruningRisk {
+			return errors.New("owner trim best-effort current nonce, proxy or public-pruning predicates refuse submission")
+		}
 	}
 	_, err = self.store.load()
 	return errors.Join(err, operationCtx.Err())

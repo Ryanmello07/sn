@@ -33,6 +33,7 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 	key := flags.String("trim-approval-key", "", "independently provisioned trim approval public key")
 	var metadataPath, ledgerMetadataPath, signaturePath, requestPath, requestHash, replyPath, replyHash string
 	var submissionPath, submissionHash, submissionKey string
+	var pruningPolicy, registrationPolicy string
 	if mode == "trim-plan" || mode == "trim-export" {
 		flags.StringVar(&metadataPath, "metadata", "", "private file containing exact pinned runtime metadata hex")
 		flags.StringVar(&ledgerMetadataPath, "ledger-metadata", "", "Ledger domains: independently approved unwrapped metadata15 hex")
@@ -50,6 +51,10 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 		flags.StringVar(&submissionPath, "submission-policy", "", "private independently signed best-effort submission policy")
 		flags.StringVar(&submissionHash, "submission-policy-sha256", "", "sha256 pin of the exact signed submission policy file")
 		flags.StringVar(&submissionKey, "submission-approval-key", "", "independently provisioned submission approval public key")
+	}
+	if mode == "trim-submit-plan" {
+		flags.StringVar(&pruningPolicy, "public-pruning-policy", ownerTrimRequirePruningImmunity, "unsigned choice: require-public-pruning-immunity-through-original-expiry or accept-public-pruning-and-netuid-reuse-risk")
+		flags.StringVar(&registrationPolicy, "registration-policy", ownerTrimRequireClosedRegistration, "unsigned choice: require-observed-closed-registration or accept-competing-registration-and-reentry-risk")
 	}
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *configPath == "" || *trimPath == "" || *runDir == "" ||
 		!planSha256(*accepted) || !rootCanonicalHash(*key) || (mode == "trim-plan" || mode == "trim-export") && metadataPath == "" || mode == "trim-import" && signaturePath == "" ||
@@ -189,6 +194,12 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 			fmt.Fprintln(stderr, "trim submission planning:", err)
 			return 3
 		}
+		if pruningPolicy != ownerTrimRequirePruningImmunity && pruningPolicy != ownerTrimAcceptPruningRisk || registrationPolicy != ownerTrimRequireClosedRegistration && registrationPolicy != ownerTrimAcceptRegistrationRisk {
+			fmt.Fprintln(stderr, "trim submission planning requires explicit supported pruning and registration policy choices")
+			return 2
+		}
+		approval.PublicPruningPolicy, approval.RegistrationPolicy = pruningPolicy, registrationPolicy
+		approval.ResidualRisks = approval.residuals()
 		if _, err := store.load(); err != nil {
 			fmt.Fprintln(stderr, "trim submission planning custody changed:", err)
 			return 3

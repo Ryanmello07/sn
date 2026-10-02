@@ -42,9 +42,15 @@ type ownerTrimBestEffortTestFixture struct {
 
 // Offline public commands claim, export and import the exact new-domain action.
 // The original reviewed census remains at 100; admission is at canonical 101.
-func newOwnerTrimBestEffortTestFixture(t *testing.T) *ownerTrimBestEffortTestFixture {
+func newOwnerTrimBestEffortTestFixture(t *testing.T, registrationOpen ...bool) *ownerTrimBestEffortTestFixture {
 	t.Helper()
-	chain, action := ownerTrimPreparedTestFixture(t, ownerSigningTestKey().Public().(ed25519.PublicKey))
+	configure := func(census *rootRpcFixture, _ *subnetCensusPolicy) {
+		if len(registrationOpen) != 0 && registrationOpen[0] {
+			census.set(t, "NetworkRegistrationAllowed", []byte{1}, []byte{25, 0})
+			census.set(t, "NetworkPowRegistrationAllowed", []byte{1}, []byte{25, 0})
+		}
+	}
+	chain, action := ownerTrimPreparedTestFixtureWithCensus(t, configure, ownerSigningTestKey().Public().(ed25519.PublicKey))
 	ownerSigningTestLedgerConfig(t, action)
 	chain.census.set(t, "ValidatorPermit", subnetTestVector([]byte{0, 0, 1, 0, 0, 0}, 1), []byte{25, 0})
 	after := &rootRpcFixture{metadata: chain.census.metadata, metadataHex: chain.census.metadataHex, policy: chain.census.policy,
@@ -305,7 +311,7 @@ func TestOwnerTrimBestEffortApprovalCannotWeakenStrictDomains(t *testing.T) {
 			approval.Signature = strings.Repeat("00", 64)
 		}
 		err := approval.validate(config, adapter.approvalKey, record.ExtrinsicHash)
-		if err == nil {
+		if err == nil && (fault == "census" || fault == "protected") {
 			err = store.validateBestEffortApproval(approval, adapter.approvalKey, record)
 		}
 		if err == nil {
