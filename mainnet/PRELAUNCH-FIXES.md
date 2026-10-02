@@ -5326,3 +5326,15 @@ runtime, then independently bind the included post-state; cancellation and wrong
 callback identity must be checked before event decoding. The author23 normal/race
 tests and causal controls are scoped evidence; independent review, current
 production artifact approval and final composed release qualification remain open.
+
+
+### Qualify changed public consumers, then preserve newer upstream work
+
+The guarded Server reader change affects all public blob consumers, not only
+the new reader-contract tests. The [independent26-test scope](evidence/current-graph-reader-progress-20261002.md)
+adds nine disjoint existing public consumers to17 reader tests, without repeating
+the three overlaps. Both modes and vet pass, with seven causal old-body failures
+and six positive controls retained. Main integration preserves newer upstream
+model/monitor code and exact qualified blob/module bytes. A component receipt
+remains scoped to its tested source graph; the final composed release must
+qualify its current dependencies rather than inherit whole-main authority.
