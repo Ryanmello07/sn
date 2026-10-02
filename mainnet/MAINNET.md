@@ -1,5 +1,26 @@
 # Mainnet launch and operations plan
 
+## October 6 payout transition target
+
+The requested mainnet launch target is **2026-10-06 00:00:00 UTC**. The shared
+provider payout policy belongs in `config/main/sn.yml`. Implementation and
+qualification are in progress; this target is not yet a verified deployed
+schedule or a mainnet activation receipt.
+
+The owner-approved policy allows obligations earned before the boundary to
+finish paying in USDC afterward, including the unplanned legacy backlog and
+processor retries. New mainnet earnings start at the inclusive boundary.
+Use one explicit accounting boundary across legacy planning, queued sends,
+completed-contract usage and SN epoch settlement. Do not convert unpaid dollar
+obligations into alpha or pay the same usage through both systems. Reconcile
+already-submitted transfers throughout the transition. Customer billing is
+outside this provider payout change.
+
+Before announcing the schedule as operational, qualify the exact Server and
+config sources, deploy them, verify the loaded UTC policy and mainnet identity,
+and demonstrate the running payout workers enforce the boundary. Mainnet
+contract, signing, custody and runtime authority remain separate launch inputs.
+
 ## Current preparation state — October 2
 
 No accepted current production release or live deployment exists. The full

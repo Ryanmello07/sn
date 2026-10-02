@@ -1,5 +1,14 @@
 # Mainnet prelaunch fixes
 
+The [October 6 payout transition target](MAINNET.md#october-6-payout-transition-target)
+is **2026-10-06 00:00:00 UTC**. Track its implementation and deployment separately:
+legacy pre-cutoff USDC obligations may finish paying after the boundary, while
+new earnings use mainnet. Qualify before/exactly-at/after boundary behavior,
+delayed settlement, queued work, retries, short final subsidy windows and
+consistent usage attribution. Preserve unpaid balances and submitted-transfer
+reconciliation; prevent double payment across the two systems. A committed
+configuration alone does not prove a running worker has adopted the schedule.
+
 The [current preparation state](MAINNET.md#current-preparation-state--october-2)
 distinguishes integrated source fixes, qualified candidates and the remaining
 production work. All 28 hardening lessons and ten production gates retain their
