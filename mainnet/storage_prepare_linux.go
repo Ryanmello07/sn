@@ -13,7 +13,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/urfoundation/sn/chain"
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urfoundation/sn/validator"
 	"github.com/urnetwork/connect/durablevolume"
@@ -30,16 +29,10 @@ func storagePreparationAdapter(ownerLocal bool) durablevolume.PreparationAdapter
 			return inspectStoragePreparationFixedOwner(ctx, target, owner, ownerLocal)
 		},
 		Restore: func(ctx context.Context, name string, owner durablevolume.PreparationOwner, inventory durablevolume.Inventory) (durablevolume.PreparationOwnerPlan, error) {
-			if owner.Kind != chain.NativeJournalPreparationKind {
-				return durablevolume.PreparationOwnerPlan{}, errors.New("restore kind is not in the implemented fixed registry")
-			}
-			return chain.PlanNativeJournalRestore(ctx, name, owner, inventory)
+			return planStoragePreparationRestore(ctx, name, owner, inventory, ownerLocal)
 		},
 		InspectRestore: func(ctx context.Context, target *os.File, owner durablevolume.PreparationOwnerPlan, inventory durablevolume.Inventory) ([]durablevolume.PreparedAttribute, error) {
-			if owner.Owner.Kind != chain.NativeJournalPreparationKind {
-				return nil, errors.New("restore checkpoint kind is not in the implemented fixed registry")
-			}
-			return chain.InspectNativeJournalRestore(ctx, target, owner, inventory)
+			return inspectStoragePreparationRestore(ctx, target, owner, inventory, ownerLocal)
 		},
 	}
 }

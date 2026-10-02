@@ -63,7 +63,7 @@ func storagePreparationSnapshotSpec(ownerLocal bool, owner durablevolume.Prepara
 		return durablehead.Spec{}, scope, err
 	}
 	name := scope.Name
-	if owner.Purpose != "fresh" || owner.RelativePath != "." || maximum == 0 || scope.Schema != "urnetwork-snapshot-preparation-v1" || scope.MaximumBytes != maximum ||
+	if owner.Purpose != "fresh" && owner.Purpose != "restore" || owner.RelativePath != "." || maximum == 0 || scope.Schema != "urnetwork-snapshot-preparation-v1" || scope.MaximumBytes != maximum ||
 		ownerLocal != (owner.Kind == "mainnet-owner-signing") || name == "" || len(name) > 155 || name == "." || name == ".." || filepath.Base(name) != name ||
 		strings.ContainsAny(name, "\x00\n\r") || strings.HasPrefix(name, ".durable-head-") || owner.Kind == "mainnet-bootstrap-root" && name != bootstrapRootProgressFile {
 		return durablehead.Spec{}, scope, errors.New("snapshot preparation kind, scope, fresh name or capacity differs from its fixed runtime profile")

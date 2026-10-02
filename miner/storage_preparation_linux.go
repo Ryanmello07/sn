@@ -50,7 +50,7 @@ func minerStoragePreparationProfile(ownerLocal bool, owner durablevolume.Prepara
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return spec, nil, errors.New("miner preparation input contains trailing data")
 	}
-	if owner.Purpose != "fresh" || owner.RelativePath != "." || ownerLocal != (owner.Kind == "fleet-recovery") || scope != expected {
+	if owner.Purpose != "fresh" && owner.Purpose != "restore" || owner.RelativePath != "." || ownerLocal != (owner.Kind == "fleet-recovery") || scope != expected {
 		return spec, nil, errors.New("miner preparation scope, name or capacities differ from its fixed runtime profile")
 	}
 	raw, err := json.Marshal(scope)
