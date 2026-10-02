@@ -334,3 +334,83 @@ func TestFleetRuntimeCatalogForgedBlockViewIsNotAuthentication(t *testing.T) {
 		t.Fatal("exported block field transferred authentication")
 	}
 }
+
+// The synthetic websocket finalizes an unsigned fixture extrinsic. It uses
+// the real watch/header/body/event decoder without loading or using a key.
+func testFleetCatalogReceiptWatch(t *testing.T, refusal string) {
+	t.Helper()
+	fixture := newFleetMainnetTestFixture(t)
+	writeFleetRuntimeCatalogFixture(t, fixture)
+	authority := reviseFleetRuntimeCatalogFixture(t, fixture, func(value *fleetMainnetRuntimeAuthority) {
+		value.RuntimeCatalog[0].Purposes = append(value.RuntimeCatalog[0].Purposes, crv4.FleetCommitmentWrite, crv4.FleetDispatchRead)
+	})
+	fixture.stateLock.Lock()
+	fixture.finalizedNumber = 100
+	fixture.historicalVersions[fixture.nativeBlocks[101].Hex()] = fixture.authority.RuntimeVersion
+	fixture.stateLock.Unlock()
+	endpoint := fixture.nativeWebsocket(t, false)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	chain, err := crv4.DialChainContext(ctx, endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.API.Client.Close()
+	view, err := authority.viewFor(ctx, chain, fixture.head, crv4.FleetCommitmentWrite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := fixture.count("state_getStorage")
+	called := false
+	admit := authority.executionAdmission(chain, fixture.head, crv4.FleetCommitmentWrite)
+	selector := func(readCtx context.Context, parent types.Hash) (crv4.AuthenticatedRuntimeArtifact, error) {
+		called = true
+		if parent != fixture.nativeBlocks[101] || fixture.count("state_getStorage") != before {
+			t.Error("receipt decoding preceded its exact execution parent admission")
+		}
+		artifact, err := admit(readCtx, parent)
+		if refusal == "wrong-block" {
+			artifact.BlockHash = fixture.receiptBlock
+		}
+		if refusal == "cancel" {
+			cancel()
+		}
+		return artifact, err
+	}
+	receipt, err := view.SubmitRawAndWatchFinalizedRuntime(ctx, "0x1004010203", selector)
+	if !called {
+		t.Fatal("watch skipped the execution admission callback", err)
+	}
+	if refusal != "" {
+		if err == nil || receipt != nil || fixture.count("state_getStorage") != before {
+			t.Fatal("refused execution view decoded or acknowledged a receipt", receipt, err)
+		}
+		if refusal == "cancel" && !errors.Is(err, context.Canceled) {
+			t.Fatal("execution callback cancellation was lost", err)
+		}
+		return
+	}
+	if err != nil || receipt == nil || receipt.BlockHash != fixture.receiptBlock || receipt.BlockNumber != 102 {
+		t.Fatal("reviewed execution-parent receipt failed", receipt, err)
+	}
+	hash, _ := fixture.manifest.CommitmentHash()
+	observed, err := authority.commitmentWrite(ctx, chain, fixture.manifest.Netuid, fixture.manifest.Hotkey, hash, receipt)
+	if err != nil || observed.CommitmentBlock != 102 {
+		t.Fatal("receipt post-state did not select the reviewed successor", observed, err)
+	}
+	if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("payment_queryInfo") != 0 {
+		t.Fatal("watch fixture signed, retried or relabeled an extrinsic")
+	}
+}
+
+func TestFleetRuntimeCatalogWatchBindsExecutionBeforePostState(t *testing.T) {
+	testFleetCatalogReceiptWatch(t, "")
+}
+
+func TestFleetRuntimeCatalogWatchRejectsWrongExecutionBlock(t *testing.T) {
+	testFleetCatalogReceiptWatch(t, "wrong-block")
+}
+
+func TestFleetRuntimeCatalogWatchHonorsCallbackCancellation(t *testing.T) {
+	testFleetCatalogReceiptWatch(t, "cancel")
+}
