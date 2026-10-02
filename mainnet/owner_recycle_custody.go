@@ -183,6 +183,9 @@ func (self *ownerRecycleCustody) export(metadata, ledgerMetadata string) (ownerR
 		if rootObjectHash(record.Request) != rootObjectHash(request) {
 			return ownerRecycleSigningRequest{}, errors.New("recycle re-export changes original request")
 		}
+		if _, err := self.load(); err != nil {
+			return ownerRecycleSigningRequest{}, err
+		}
 		return *record.Request, nil
 	}
 	if record.Phase != "reserved" {
@@ -212,6 +215,9 @@ func (self *ownerRecycleCustody) importSignature(requestHash string, signature [
 	if record.Signature != "" {
 		if record.Signature != hex.EncodeToString(signature) || record.RawExtrinsic != "0x"+hex.EncodeToString(raw) {
 			return ownerRecycleResult{}, errors.New("recycle import attempts to replace original signature")
+		}
+		if _, err := self.load(); err != nil {
+			return ownerRecycleResult{}, err
 		}
 		return ownerRecycleRetainedResult(record), nil
 	}
