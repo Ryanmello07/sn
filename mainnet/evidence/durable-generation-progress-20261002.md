@@ -128,3 +128,7 @@ merging this exact source into Connect main. Original receipts remain unchanged.
 Native-journal, fleet/claim, monitor, validator/bootstrap/root and local-blob
 adoption, uncertain publication handling, bounded root recovery and operational
 backup/restore evidence remain separate unfinished work.
+
+## Subsequent owner-custody checkpoint
+
+The [separate native/snapshot/miner and monitor checkpoint](durable-owner-custody-qualification-20261002.md) now advances the owner work described above. Native `695f6683`, snapshot `a5c765c4` and miner `b3c3d66` have scoped author and independent receipts; monitor `f1b445f9` has an author receipt. Separate Connect `0a5cda0e` adds owner-attribute inventory-v3 under its own author scope. These candidate sources do not enlarge the original `6cd720cf` receipt or qualify a composed release. Offline preparation, independent remaining adopters, deployment declarations, capacity/rotation and actual restore remain open.
