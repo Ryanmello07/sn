@@ -28,7 +28,8 @@ roots in both modes plus vet. Unchanged-source controls reproduce both defects,
 including one underfunded synthetic send and 48 admitted role collisions.
 Original signed bytes, journal custody, attempt ceilings and the separate Safe
 approval remain intact. The frozen `3d1e2ecf` release excludes this correction;
-compose it with the later owner-custody successors in a new exact release.
+package it with the [qualified owner-trim successor](evidence/owner-trim-retained-intent-20261002.md)
+at `0f7c8698` in a new exact release.
 Production policy, live authority, installation and activation remain open.
 
 **September 30 operator report:** Snow mainnet is still synchronizing. This is
@@ -63,11 +64,13 @@ all eleven new roots in both modes plus vet, with seven unchanged-source causal
 failures. A separate omission proves the final validator host check. The frozen
 `1d580d5e` release excludes this correction; the
 [qualified readiness baseline](evidence/release-3d1e2ecf-serverac86-20261002.md) packages that source, but is
-superseded for launch by later owner-custody source `21640419`, pending its own
-exact release composition.
-Separate root/trim writers still need P0 physical custody qualification before
-fresh native signing or sends are enabled. Current public composition leaves
-those authority ports unavailable. Live acceptance remains open.
+superseded for launch by the separately qualified owner-trim source `0f7c8698`
+and contract-admission source `ebf69b9`, pending a new exact release composition.
+The [owner-trim successor](evidence/owner-trim-retained-intent-20261002.md) now
+qualifies the additional trim marker/journal and bounded original-byte submission
+under a separate signed residual policy. Legacy root native mutation ports remain
+unavailable and outside this qualification. Actual owner/device authority, risk
+acceptance, external custody and live activation remain open.
 
 The [two-UR current-admission route](VALIDATOR-CURRENT-ADMISSION.md) has
 [scoped qualification](evidence/validator-current-admission-qualification-20261001.md)
@@ -517,11 +520,21 @@ reconciliation under original v3 custody. Sol's 25 focused roots and exact
 229-root expanded union pass normal/race, with vet and eight causal controls.
 The failed first candidate `4033609` and its null-storage failure remain
 preserved; the successor corrects the production proxy reader. Its separate
-approval cannot replace current authority: production signing and submission
-remain blocked on the named enforcement and custody capabilities. The pending
-best-effort risk-policy choice is not assumed or enabled. The owned
-Snow route still returned HTTP 502 at 06:59 UTC on September 29, providing no
-current mainnet identity or authority. The complete bootstrap,
+approval cannot replace current authority in strict v1/v2: their named
+enforcement and custody capabilities remain required. The October 2
+[explicit best-effort owner workflow](OWNER-TRIM-BEST-EFFORT.md), frozen at
+`0f7c8698`, adds a fresh Ledger action domain and a separately signed submission
+policy over the original signed bytes, exact runtime/census/protected generations,
+mortality, fees and consumed allowance. Its [scoped qualification and current
+prerequisite check](evidence/owner-trim-retained-intent-20261002.md) retain permanent
+physical-custody failures, canonical uncertainty reconciliation and independent
+pruning/re-entry risk choices. The observed SN25 immunity had expired, and the
+inspected v470 owner cannot close all registration routes; usable submission
+therefore needs explicit risk review beyond the conservative defaults. No live
+risk acceptance or owner signature is supplied. Select and qualify a successor
+release containing this source; the frozen `3d1e2ecf` artifact excludes it.
+The historical owned Snow route returned HTTP 502 at 06:59 UTC on September 29,
+providing no current mainnet identity or authority. The complete bootstrap,
 Safe evidence anchor, native signing device and live role
 activation remain unfinished. The
 [retained Snow inspection](evidence/snow-route-inspect-20260927-1051.json)
@@ -848,6 +861,15 @@ owner/proxy/pending-action, governance/runtime and public subnet-pruning/reuse
 fences; source-to-Wasm,
 custody, actual signed mortality, receipt and subset reconciliation still block
 execution. Exit 0 is evidence only; apply/reset/full-reset remain false.
+
+A separate [best-effort policy domain](OWNER-TRIM-BEST-EFFORT.md) can submit only
+an original offline owner-signed action after independent acceptance of the exact
+unenforceable governance, protected-generation selection, inclusion-fee and
+custody residuals. Public subnet pruning/reuse and competing registration/re-entry
+each require their own explicit signed option. Current observed drift still
+blocks submission; these choices do not establish the strict invariant above.
+Canonical dispatch and before/after correspondence retain every unresolved
+old-miner disposition and never authorize validator activation or claim a full reset.
 
 After a finalized reset, repeat the entire census and compare identities, not just counts. Reconcile commitments, balances and locks separately. Re-establish approved capacity and permitted registration settings before new pool/head registrations; no “temporary” parameter change may remain unreported. Existing settlement/claim service must stay available throughout any migration.
 

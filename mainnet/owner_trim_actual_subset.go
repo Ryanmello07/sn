@@ -42,7 +42,14 @@ func reconcileOwnerTrimActualSubset(action ownerTrimAction, policy subnetCensusP
 			result.Blockers = append(result.Blockers, "OWNER_TRIM_APPROVED_DOMAIN_OR_SUBNET_GENERATION_CHANGED")
 		}
 	}
-	result.Blockers = append(result.Blockers, ownerTrimScopeChanges(before, after)...)
+	for _, blocker := range ownerTrimScopeChanges(before, after) {
+		// Best-effort correspondence describes already observed generations;
+		// open flags do not erase that evidence or supply activation authority.
+		if action.Schema == ownerTrimBestEffortActionSchema && blocker == "OWNER_TRIM_COMPETING_REGISTRATION_OR_REENTRY_NOT_FENCED" {
+			continue
+		}
+		result.Blockers = append(result.Blockers, blocker)
+	}
 	oldKVs, newKVs := map[string]subnetSeat{}, map[string]subnetSeat{}
 	for _, item := range []struct {
 		seats []subnetSeat

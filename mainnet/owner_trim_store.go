@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 const ownerTrimStoreLimit = 64 * 1024 * 1024
@@ -23,6 +25,10 @@ type ownerTrimStore struct {
 	review        ownerTrimPlan
 	retained      *bootstrapChainReadinessState
 	lock          *os.File
+	directory     *os.File
+	marker        *bootstrapContractReadinessMarker
+	complete      bool
+	expectedHash  string
 	failed        error
 	syncDirectory func(*os.File) error
 }
@@ -84,6 +90,15 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 	if err := validateBootstrapChainValidatorPaths(preparation.Plan.ValidatorInspections, seen); err != nil {
 		return nil, err
 	}
+	root, err := bootstrapSuccessorPhysicalRoot(filepath.Dir(action.StatePath))
+	if err != nil {
+		return nil, err
+	}
+	directoryFd, err := unix.Open(filepath.Dir(action.StatePath), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	self.directory = os.NewFile(uintptr(directoryFd), filepath.Dir(action.StatePath))
 	flags := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
 	if create {
 		if _, err := os.Lstat(action.StatePath); !errors.Is(err, os.ErrNotExist) {
@@ -91,13 +106,13 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 		}
 		flags |= syscall.O_CREAT | syscall.O_EXCL
 	}
-	fd, err := syscall.Open(action.StatePath+".lock", flags, 0600)
+	fd, err := unix.Openat(directoryFd, filepath.Base(action.StatePath)+".lock", flags, 0600)
 	if err != nil {
 		return nil, err
 	}
 	self.lock = os.NewFile(uintptr(fd), action.StatePath+".lock")
-	info, err := self.lock.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	self.marker = &bootstrapContractReadinessMarker{file: self.lock, path: action.StatePath + ".lock", root: root}
+	if err := bootstrapSuccessorPrivateRegular(self.lock); err != nil {
 		return nil, errors.Join(errors.New("owner trim marker is not a private regular file"), err)
 	}
 	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
@@ -105,11 +120,15 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 	}
 	marker := rootObjectHash(config) + "\n" + key + "\n"
 	if create {
+		if err := self.checkpoint(); err != nil {
+			return nil, err
+		}
 		written, err := self.lock.WriteString(marker)
 		if written != len(marker) && err == nil {
 			err = io.ErrShortWrite
 		}
-		if err := errors.Join(err, self.lock.Sync(), self.syncParent()); err != nil {
+		self.marker.expected = marker
+		if err := errors.Join(err, self.lock.Sync(), self.syncParent(), self.checkpoint()); err != nil {
 			return nil, err
 		}
 	} else {
@@ -118,6 +137,7 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 			return nil, err
 		}
 		if string(raw) == marker+bootstrapRootClaimComplete {
+			self.marker.expected, self.complete = string(raw), true
 			if _, err := self.load(); err != nil {
 				return nil, err
 			}
@@ -126,6 +146,7 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 		if string(raw) != marker {
 			return nil, errors.New("owner trim marker differs from independently approved original action")
 		}
+		self.marker.expected = marker
 	}
 	// An interrupted initial claim can recover only a reserved, effect-free row.
 	// Once the complete marker exists, missing state is permanently refused.
@@ -139,11 +160,15 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 	} else if err != nil || record.Phase != "reserved" {
 		return nil, errors.Join(errors.New("owner trim interrupted claim has advanced or invalid progress"), err)
 	}
+	if _, err := self.load(); err != nil {
+		return nil, err
+	}
 	written, err := self.lock.WriteAt([]byte(bootstrapRootClaimComplete), int64(len(marker)))
 	if written != len(bootstrapRootClaimComplete) && err == nil {
 		err = io.ErrShortWrite
 	}
-	if err := errors.Join(err, self.lock.Sync()); err != nil {
+	self.marker.expected, self.complete = marker+bootstrapRootClaimComplete, true
+	if err := errors.Join(err, self.lock.Sync(), self.checkpoint()); err != nil {
 		return nil, err
 	}
 	return self, nil
@@ -151,11 +176,16 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 
 // All borrowed locks are released even if the trim marker itself failed to open.
 func (self *ownerTrimStore) close() error {
-	var err error
-	if self.lock != nil {
-		err = self.lock.Close()
-		self.lock = nil
+	if self == nil {
+		return nil
 	}
+	var err error
+	for _, file := range []*os.File{self.lock, self.directory} {
+		if file != nil {
+			err = errors.Join(err, file.Close())
+		}
+	}
+	self.lock, self.directory = nil, nil
 	if self.retained != nil {
 		err = errors.Join(err, self.retained.close())
 		self.retained = nil
@@ -166,78 +196,48 @@ func (self *ownerTrimStore) close() error {
 // Missing, changed, oversized or partial state is never a fresh reservation.
 func (self *ownerTrimStore) load() (ownerTrimRecord, error) {
 	var record ownerTrimRecord
-	if self.lock == nil || self.failed != nil {
-		return record, errors.Join(errors.New("owner trim store must reopen"), self.failed)
-	}
-	if err := self.retained.checkpoint(context.Background()); err != nil {
-		return record, err
-	}
-	raw, _, err := readBootstrapRootFile(context.Background(), self.config.Action.StatePath, ownerTrimStoreLimit)
+	raw, err := self.readRecord()
 	if err != nil {
 		return record, err
 	}
 	if err := decodePlanJson(raw, &record); err != nil {
-		return record, err
+		return ownerTrimRecord{}, self.failIntegrity(err)
 	}
-	return record, errors.Join(record.validate(self.config, self.key), self.retained.checkpoint(context.Background()))
+	if err := record.validate(self.config, self.key); err != nil {
+		return ownerTrimRecord{}, self.failIntegrity(err)
+	}
+	self.expectedHash = monitorReadDigest(raw)
+	return record, nil
 }
 
 // Full file sync, atomic rename and directory sync precede every side effect.
 func (self *ownerTrimStore) save(record ownerTrimRecord) (resultErr error) {
-	if self.lock == nil || self.failed != nil {
-		return errors.Join(errors.New("owner trim store must reopen"), self.failed)
-	}
 	defer func() {
 		if resultErr != nil {
 			self.failed = resultErr
 		}
 	}()
-	if err := self.retained.checkpoint(context.Background()); err != nil {
+	if err := self.checkpoint(); err != nil {
 		return err
 	}
 	if err := record.validate(self.config, self.key); err != nil {
-		return err
-	}
-	path := self.config.Action.StatePath
-	if info, err := os.Lstat(path); err == nil {
-		if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-			return errors.New("owner trim target is not a private regular file")
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	raw, err := json.Marshal(record)
 	if err != nil || len(raw)+1 > ownerTrimStoreLimit {
 		return errors.Join(errors.New("owner trim retained evidence exceeds bound"), err)
 	}
-	file, err := os.CreateTemp(filepath.Dir(path), ".owner-trim-action-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	raw = append(raw, '\n')
-	written, writeErr := file.Write(raw)
-	if written != len(raw) && writeErr == nil {
-		writeErr = io.ErrShortWrite
-	}
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(file.Name(), path); err != nil {
-		return err
-	}
-	return errors.Join(self.syncParent(), self.retained.checkpoint(context.Background()))
+	return self.publishRecord(record, append(raw, '\n'))
 }
 
 // The scoped hook exercises the real post-rename durability boundary.
 func (self *ownerTrimStore) syncParent() error {
-	directory, err := os.Open(filepath.Dir(self.config.Action.StatePath))
-	if err != nil {
-		return err
+	if self.directory == nil {
+		return errors.New("owner trim directory is closed")
 	}
 	syncDirectory := self.syncDirectory
 	if syncDirectory == nil {
 		syncDirectory = (*os.File).Sync
 	}
-	return errors.Join(syncDirectory(directory), directory.Close())
+	return syncDirectory(self.directory)
 }

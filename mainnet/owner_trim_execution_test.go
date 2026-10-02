@@ -480,7 +480,13 @@ func TestOwnerTrimActualSubsetRetainsResidualsAndRejectsGenerations(t *testing.T
 // The sixth journal is independently approved after real v3 custody preparation.
 func ownerTrimPreparedTestFixture(t *testing.T, ownerOverride ...[]byte) (*bootstrapChainFixture, *ownerTrimTestFixture) {
 	t.Helper()
-	chain := newBootstrapChainReadinessFixture(t, ownerOverride...)
+	return ownerTrimPreparedTestFixtureWithCensus(t, nil, ownerOverride...)
+}
+
+// Select current registration predicates before any review or custody is signed.
+func ownerTrimPreparedTestFixtureWithCensus(t *testing.T, configure func(*rootRpcFixture, *subnetCensusPolicy), ownerOverride ...[]byte) (*bootstrapChainFixture, *ownerTrimTestFixture) {
+	t.Helper()
+	chain := newBootstrapChainReadinessFixtureWithCensus(t, configure, nil, ownerOverride...)
 	f := newOwnerTrimActionTestFixture(t)
 	retained, err := openBootstrapChainReadinessState(t.Context(), chain.preparation)
 	if err != nil {

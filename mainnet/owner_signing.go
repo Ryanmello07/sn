@@ -63,7 +63,7 @@ func newOwnerSigningRequest(config ownerTrimExecutionConfig, key, metadataHex st
 	if len(ledgerMetadata) == 1 {
 		request.LedgerMetadata = ledgerMetadata[0]
 	}
-	if config.Action.Schema == ownerTrimLedgerActionSchema {
+	if config.Action.ledgerSigning() {
 		request.SignatureScheme = "ed25519"
 	}
 	request.ContentHash = rootObjectHash(request)
@@ -84,7 +84,7 @@ func (self ownerSigningRequest) validate(trust ownerSigningTrust) error {
 	if _, err := rootReceiptHex(self.MetadataHex, maxMetadataRpcReplyBytes); err != nil {
 		return errors.New("owner signing metadata requires bounded canonical hex")
 	}
-	if self.Config.Action.Schema == ownerTrimLedgerActionSchema {
+	if self.Config.Action.ledgerSigning() {
 		hash, err := ownerLedgerMetadataHash(self.LedgerMetadata)
 		if err != nil || hash != self.Config.Action.LedgerMetadataHash {
 			return errors.Join(errors.New("owner signing metadata15 differs from its independent approval"), err)
@@ -102,7 +102,7 @@ func (self ownerSigningRequest) validate(trust ownerSigningTrust) error {
 		return errors.Join(errors.New("owner signing action differs from pinned metadata or exact native encoding"), err)
 	}
 	scheme := "sr25519"
-	if action.Schema == ownerTrimLedgerActionSchema {
+	if action.ledgerSigning() {
 		scheme = "ed25519"
 	}
 	if self.SignatureScheme != scheme || self.SigningBytes != "0x"+hex.EncodeToString(ownerSigningBytes(action)) {
@@ -168,7 +168,7 @@ func (self ownerSigningReply) validate(request ownerSigningRequest) ([]byte, err
 // Ledger returns a Substrate MultiSignature: variant zero and 64 Ed25519 bytes.
 // Status words and raw 64-byte signatures are not silently stripped or guessed.
 func ownerLedgerResponse(request ownerSigningRequest, response []byte) ([]byte, error) {
-	if request.Config.Action.Schema != ownerTrimLedgerActionSchema || request.SignatureScheme != "ed25519" || len(response) != 65 || response[0] != 0 {
+	if !request.Config.Action.ledgerSigning() || request.SignatureScheme != "ed25519" || len(response) != 65 || response[0] != 0 {
 		return nil, errors.New("Ledger owner response requires exactly MultiSignature::Ed25519 (00 plus 64 bytes)")
 	}
 	signature := bytes.Clone(response[1:])

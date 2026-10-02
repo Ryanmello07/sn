@@ -54,9 +54,9 @@ type ownerTrimSigner interface {
 	recoverSignature(context.Context, string) ([]byte, error)
 }
 
-// This independent capability must enforce source-to-Wasm authority, owner and
-// privileged changes through expiry, coldkey custody and bounded fee exposure.
-// Conditional qualification or a caller-authored boolean cannot implement it.
+// Admission is specific to the original action domain. Strict v1/v2 require
+// enforced future invariants; the distinct best-effort domain requires a separate
+// signed residual-risk policy and current checks. Neither accepts proof booleans.
 type ownerTrimAuthority interface {
 	authorize(context.Context, ownerTrimExecutionConfig, ownerTrimActionReconciliation) error
 }
@@ -139,18 +139,19 @@ func (self ownerTrimActionReconciliation) validate(action ownerTrimAction, raw [
 // Original approval, public signature, attempt count and terminal evidence are
 // retained together. A completed or expired journal cannot be repurposed.
 type ownerTrimRecord struct {
-	Schema            string                         `json:"schema"`
-	Config            ownerTrimExecutionConfig       `json:"config"`
-	ApprovalKey       string                         `json:"approval_public_key_ed25519"`
-	Phase             string                         `json:"phase"`
-	Signature         string                         `json:"signature,omitempty"`
-	RawExtrinsic      string                         `json:"raw_extrinsic,omitempty"`
-	ExtrinsicHash     string                         `json:"extrinsic_hash,omitempty"`
-	Broadcasts        uint8                          `json:"broadcasts"`
-	LastFinalized     uint64                         `json:"last_finalized"`
-	LastFinalizedHash string                         `json:"last_finalized_hash,omitempty"`
-	Reconciliation    *ownerTrimActionReconciliation `json:"terminal_evidence,omitempty"`
-	ContentHash       string                         `json:"content_hash"`
+	Schema            string                               `json:"schema"`
+	Config            ownerTrimExecutionConfig             `json:"config"`
+	ApprovalKey       string                               `json:"approval_public_key_ed25519"`
+	Phase             string                               `json:"phase"`
+	Signature         string                               `json:"signature,omitempty"`
+	RawExtrinsic      string                               `json:"raw_extrinsic,omitempty"`
+	ExtrinsicHash     string                               `json:"extrinsic_hash,omitempty"`
+	Broadcasts        uint8                                `json:"broadcasts"`
+	LastFinalized     uint64                               `json:"last_finalized"`
+	LastFinalizedHash string                               `json:"last_finalized_hash,omitempty"`
+	Reconciliation    *ownerTrimActionReconciliation       `json:"terminal_evidence,omitempty"`
+	Submission        *ownerTrimBestEffortSubmissionRecord `json:"best_effort_submission,omitempty"`
+	ContentHash       string                               `json:"content_hash"`
 }
 
 // Economic deviation is an outcome to retain, never a reason to lose a receipt.
@@ -209,6 +210,14 @@ func (self ownerTrimRecord) validate(config ownerTrimExecutionConfig, key string
 		raw, err = action.signed(signature)
 		if err != nil || self.RawExtrinsic != "0x"+hex.EncodeToString(raw) || self.ExtrinsicHash != rootExtrinsicHash(raw) || self.Phase == "reserved" || self.Phase == "signing" || self.Phase == "expired-unsigned" {
 			return errors.Join(errors.New("owner trim original signed bytes or phase differ"), err)
+		}
+	}
+	if self.Submission != nil {
+		if self.Signature == "" || self.Submission.SubmittedBroadcasts < self.Submission.Approval.InitialBroadcasts || self.Submission.SubmittedBroadcasts > self.Broadcasts {
+			return errors.New("owner trim submission policy has lost its signed bytes or consumed attempts")
+		}
+		if err := self.Submission.Approval.validate(config, self.Submission.ApprovalKey, self.ExtrinsicHash); err != nil {
+			return err
 		}
 	}
 	switch self.Phase {
