@@ -5394,3 +5394,19 @@ production capability-selection gap while preserving current-read availability
 when writes lack approval. It does not supply source authority for observed472
 or a final composed release verdict. Keep immutable original recovery plans and
 signature domains separate from new capability catalogs.
+
+
+### Bounded status must retain backlog and semantic progress
+
+A bounded recent-claim projection can hide the oldest unresolved liability when
+more than64 entries remain pending. Keep bounded summaries for the total and
+omitted unresolved census and the oldest unresolved epoch, or a selection that
+preserves old blockers as well as recent work. Never delete retained signatures
+or treat omission as absence of liability.
+
+A writer sequence, saved queue digest or retry timestamp can advance without
+settlement progress. Monitor heartbeat separately from accepted/paid outcomes and
+backlog age; do not reset a settlement stall merely because another retry saved.
+A receipt observation timestamp later than publication must degrade observation
+instead of appearing active after wall-clock rollback. These production consumer
+requirements are under implementation; no complete monitoring verdict is claimed.

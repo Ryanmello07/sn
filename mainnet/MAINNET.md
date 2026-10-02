@@ -3008,3 +3008,12 @@ recovery, and retain explicit configured-RPC evidence strength. Independent
 finality and genesis admission are separate from matching a chain ID or Merkle
 root. These requirements were refined during candidate review; the producer
 and consumer are still being implemented and have no qualification receipt.
+
+
+### Actionable claim backlog monitoring
+
+The claim projection must retain bounded oldest/omitted unresolved summaries in
+addition to recent entries. Monitoring separates publication heartbeat from
+actual settlement progress and rejects future-dated observations. An omitted
+entry is unobserved history, not a settled liability. These remain required
+producer/consumer tests before unattended operation and MG-07 acceptance.
