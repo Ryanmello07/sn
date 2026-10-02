@@ -2369,13 +2369,20 @@ role and error class; put transaction hashes, client-level detail and exact
 evidence references in the incident store. Monitor telemetry delivery itself
 through a separately hosted dead-man alert and named escalation route.
 
-The [October 2 source audit](evidence/monitor-deployment-gap-20261002.md)
-found that the checked xops Subtensor Fluent Bit config does not collect SN's
-textfile metrics, and it provisions neither the monitor service nor the
-independent expected-host roster. Snow's checked configuration still selects
-testnet. Treat monitor deployment, remote ingestion and delivered missing-host
-alerts as explicit launch gates; a passing local exporter fixture is not a
-deployed observation path.
+The [October 2 offline deployment increment](evidence/monitor-deployment-offline-20261002.md)
+implements the gap from the earlier source audit at exact xops `b98f8769`:
+explicit disjoint monitor/observer hosts, a release- and config-pinned monitor
+unit, a dedicated textfile-only Fluent Bit instance, and an independently owned
+expected-host/role roster and alert evaluator. The shared fleet collector census
+is unchanged. New production policies require the exact native deadline schedule
+profile and 60-second GET retries. Staging starts nothing; separate approval
+must bind the host/chain/release/config bundle before activation, with physical
+custody and actual service-user credential checks repeated at restart.
+Snow's testfinney/runtime-471 configuration remains untouched and refused.
+The author offline tests pass; independent scoped review, selected live hosts,
+actual collector ingestion and delivered missing-host/recovery alerts remain
+explicit launch gates. An unsent delivery-drill payload is not a delivery
+receipt.
 
 Every dashboard distinguishes unavailable, pending, healthy and failed facts:
 
