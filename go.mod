@@ -197,9 +197,9 @@ require (
 )
 
 // Versioned replacements retain the client-authentication source floor and
-// the reviewed durable-volume v2 primitive. They also cover sibling modules'
+// durable-volume v2 admission and bounded v3 custody inventory. They also cover sibling modules'
 // v0.0.0 placeholders without selecting an older local checkout implicitly.
-replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20261002072506-6cd720cf50a4
+replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20261002121440-0a5cda0ebe78
 
 replace github.com/urnetwork/sdk => github.com/urnetwork/sdk v0.0.0-20261001021058-5d37be3876e5
 

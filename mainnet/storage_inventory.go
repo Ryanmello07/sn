@@ -1,6 +1,6 @@
-// Local storage inspection requires the reviewed daemon-volume declaration,
-// an exclusive root lease, and a separate former-writer fence. These commands
-// never copy custody, change signed root bindings, or authorize restart.
+// Local storage inspection requires its explicitly selected policy scope, an
+// exclusive root lease, and a separate former-writer fence. Reports retain
+// opaque owner metadata without granting semantic restore or restart authority.
 package main
 
 import (
@@ -29,6 +29,21 @@ func runStorageVerify(ctx context.Context, args []string, stdout, stderr io.Writ
 	})
 }
 
+// Owner-local inspection is a distinct public command, never an implicit
+// system-filesystem fallback in the daemon inventory path.
+func runStorageOwnerInventory(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return runStorageInspection(ctx, args, stdout, stderr, false, func(_ durablevolume.Reference, root string, access durablevolume.Access) (*durablevolume.Owner, error) {
+		return durablepath.OpenOwnerLocalVolume(ctx, root, access)
+	})
+}
+
+// The explicit owner-local verifier has the same bounded report-only semantics.
+func runStorageOwnerVerify(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return runStorageInspection(ctx, args, stdout, stderr, true, func(_ durablevolume.Reference, root string, access durablevolume.Access) (*durablevolume.Owner, error) {
+		return durablepath.OpenOwnerLocalVolume(ctx, root, access)
+	})
+}
+
 // The instance opener permits facts-only tests; no flag or environment selects it.
 func runStorageInspection(ctx context.Context, args []string, stdout, stderr io.Writer, verify bool, open func(durablevolume.Reference, string, durablevolume.Access) (*durablevolume.Owner, error)) int {
 	flags := flag.NewFlagSet("storage-inventory", flag.ContinueOnError)
@@ -39,10 +54,14 @@ func runStorageInspection(ctx context.Context, args []string, stdout, stderr io.
 	entries := flags.Uint64("max-entries", 1000, "Maximum files and directories (at most 10000)")
 	bytes := flags.Uint64("max-bytes", 64*1024*1024, "Maximum content bytes hashed (at most one TiB)")
 	depth := flags.Uint64("max-depth", 16, "Maximum nested path depth (at most 32)")
+	ownerAttributes := flags.Uint64("max-owner-attributes", 1000, "Maximum retained owner attributes (at most 10000)")
+	ownerAttributeBytes := flags.Uint64("max-owner-attribute-bytes", 4*1024*1024, "Maximum retained owner attribute bytes (at most 16 MiB)")
 	var expectedPath, expectedHash string
+	var compareReviewedRebound bool
 	if verify {
 		flags.StringVar(&expectedPath, "inventory", "", "Retained protected inventory")
 		flags.StringVar(&expectedHash, "inventory-sha256", "", "Exact sha256: digest of retained inventory")
+		flags.BoolVar(&compareReviewedRebound, "compare-reviewed-rebound", false, "Compare against the separately reviewed target declaration; never rebind or authorize restart")
 	}
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -62,10 +81,15 @@ func runStorageInspection(ctx context.Context, args []string, stdout, stderr io.
 	}
 	defer owner.Close()
 	fence := durablevolume.Reference{Path: *fencePath, Sha256: *fenceHash}
-	limits := durablevolume.InventoryLimits{MaxEntries: *entries, MaxBytes: *bytes, MaxDepth: *depth}
+	limits := durablevolume.InventoryLimits{MaxEntries: *entries, MaxBytes: *bytes, MaxDepth: *depth, MaxOwnerAttributes: *ownerAttributes, MaxOwnerAttributeBytes: *ownerAttributeBytes}
 	var report any
 	if verify {
-		report, err = owner.VerifyInventory(ctx, durablevolume.Reference{Path: expectedPath, Sha256: expectedHash}, fence, limits)
+		expected := durablevolume.Reference{Path: expectedPath, Sha256: expectedHash}
+		if compareReviewedRebound {
+			report, err = owner.VerifyReboundInventory(ctx, expected, fence, limits)
+		} else {
+			report, err = owner.VerifyInventory(ctx, expected, fence, limits)
+		}
 	} else {
 		report, err = owner.Inventory(ctx, fence, limits)
 	}

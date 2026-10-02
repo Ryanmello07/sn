@@ -120,6 +120,12 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && args[0] == "storage-verify" {
 		return runStorageVerify(ctx, args[1:], stdout, stderr)
 	}
+	if len(args) != 0 && args[0] == "storage-owner-inventory" {
+		return runStorageOwnerInventory(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) != 0 && args[0] == "storage-owner-verify" {
+		return runStorageOwnerVerify(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "root-service" {
 		return runRootServiceCommand(ctx, args[1:], stdout, stderr)
 	}
@@ -200,6 +206,7 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	}
 	if len(args) == 0 || args[0] != "inspect" && args[0] != "monitor" {
 		fmt.Fprintln(stderr, "storage reports: sn-mainnet storage-inventory|storage-verify --durable-volumes FILE --durable-volumes-sha256 sha256:DIGEST --root DIR --former-writer-fence FILE --former-writer-fence-sha256 sha256:DIGEST [--inventory FILE --inventory-sha256 sha256:DIGEST]; reports do not authorize restart")
+		fmt.Fprintln(stderr, "owner-local storage reports: storage-owner-inventory|storage-owner-verify selects only the owner-local declaration schema; --max-owner-attributes and --max-owner-attribute-bytes bound retained custody metadata; verification --compare-reviewed-rebound only reports comparison to an explicit target declaration")
 		fmt.Fprintln(stderr, "owner recycle offline custody: sn-mainnet owner-recycle observe|plan|reserve|export|inspect-request|ledger-plan|import|status|reconcile [explicit policy, approval, original action and request pins]")
 		fmt.Fprintln(stderr, "offline owner handoff: sn-mainnet owner-signing inspect|sign|reply|verify|ledger-plan --request FILE --accept-request-hash HASH --trim-approval-key HEX --owner-account-id HEX --expected-genesis HEX [owner-local device custody, public response or proof flags]")
 		fmt.Fprintln(stderr, "offline artifacts: sn-mainnet safe-release-verify --version 1.4.1|1.5.0 --variant Safe|SafeL2 --archive ABSOLUTE_FILE")

@@ -50,16 +50,34 @@ func Require(ctx context.Context) error {
 // operation such as snapshot inventory. It never enrolls or infers a root;
 // daemon schema and exact root matching remain in the shared volume admission.
 func OpenVolume(ctx context.Context, root string, access durablevolume.Access) (*durablevolume.Owner, error) {
+	return openVolume(ctx, root, access, false)
+}
+
+// Owner-device inspection is separately selected by its caller. A declaration
+// filename or filesystem location never changes the strict daemon entry point.
+func OpenOwnerLocalVolume(ctx context.Context, root string, access durablevolume.Access) (*durablevolume.Owner, error) {
+	return openVolume(ctx, root, access, true)
+}
+
+// Scope selection is immutable for this opening; admission and close still
+// retain the caller's context and the same actual descriptor checks.
+func openVolume(ctx context.Context, root string, access durablevolume.Access, ownerLocal bool) (*durablevolume.Owner, error) {
 	if err := Require(ctx); err != nil {
 		return nil, err
 	}
 	reference, _ := durablevolume.ReferenceFromContext(ctx)
+	open := durablevolume.Open
+	openWithHost := durablevolume.OpenWithHost
+	if ownerLocal {
+		open = durablevolume.OpenOwnerLocal
+		openWithHost = durablevolume.OpenOwnerLocalWithHost
+	}
 	var owner *durablevolume.Owner
 	var err error
 	if host, present := ctx.Value(hostKey{}).(durablevolume.Host); present {
-		owner, err = durablevolume.OpenWithHost(reference, root, access, host)
+		owner, err = openWithHost(reference, root, access, host)
 	} else {
-		owner, err = durablevolume.Open(reference, root, access)
+		owner, err = open(reference, root, access)
 	}
 	if err != nil {
 		return nil, err
