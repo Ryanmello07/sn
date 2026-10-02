@@ -145,5 +145,4 @@ generations, provider entitlement and actual recycled value stay unknown/null.
 Mainnet source/Wasm/metadata authority, actual owner/device approvals, finalized
 Recycle mode, exact signed activation and eligible independent validators remain
 live gates. Snow's testfinney471 report is not mainnet470 evidence. These source
-increments require a newly selected and qualified release; no retained release
-artifact is silently upgraded or made launch-ready by this document.
+increments are now included in the separately [qualified exact SN258/server0aa release](release-258e25b4-server0aa1-20261002.md). Its 83 normal/race roots on the current source pair and independent nine-root scope preserve the older-server scopes above. No retained release artifact was relabeled, and local qualification does not grant launch authority.
