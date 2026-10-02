@@ -33,17 +33,20 @@ code or deployed schedule is claimed by this checkpoint.
 
 The separate Server successor `ffcc77b8` freezes the fixture correction,
 adjustment provenance, amount/wallet reservation and processor-send safeguards;
-its 25-test targeted batch is in independent qualification. A further correction
+its [independent normal batch](evidence/payout-transition-successor-normal-20261002.json)
+completed 24 passes and one fixture failure across 25 selected tests, with no
+skips. Race qualification remains in progress. A further correction
 must preserve canceled payments' original subsidy and reliability obligations
 through replanning, including after the cutoff. Finish that correction and run
 the full current model suite before treating this transition as qualified.
 Neither candidate has been merged or deployed as the operational schedule.
 
-The successor's normal model slice has completed nine passes and one fixture
-failure: the paid/free test attempts to change immutable terminal attribution
-before reaching its weighting assertion. Its legal lifecycle fixture correction
-is pending; the remaining package results are collected independently. This
-failure does not establish a weighting defect or a successful weighting check.
+The sole normal failure is in the model slice: the paid/free test attempts to
+change immutable terminal attribution before reaching its weighting assertion.
+Its legal lifecycle fixture correction is pending. Root, controller, taskworker
+and CLI selected tests all passed. This failure does not establish a weighting
+defect or a successful weighting check. Preserve the initial private PostgreSQL
+setup failure separately from this actual test result.
 
 ## Current preparation state — October 2
 
