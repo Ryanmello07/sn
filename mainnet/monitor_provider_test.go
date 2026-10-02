@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -391,5 +392,111 @@ func TestMonitorProviderSharedOutputBoundsAreAdmittedBeforeOwners(t *testing.T) 
 	raw, err := json.Marshal(worker.eventState(false))
 	if err != nil || len(raw) > diagnostics.MaximumRecordBytes/2 || bytes.Contains(raw, []byte(value.Members[0].ClientId)) {
 		t.Fatal("provider diagnostic expanded with candidate census", len(raw), err)
+	}
+}
+
+// The largest admitted roster passes through the real public command, owned
+// checkpoint and bounded exporter. Its full wire census must not become one
+// oversized diagnostic record that suppresses the only readiness event.
+func TestMonitorProviderPublicMaximumRosterRetainsBoundedEvent(t *testing.T) {
+	fixture := newMonitorServicesFixture(t)
+	value := monitorProviderTestValue(fixture.clock.now())
+	policy := monitorProviderTestPolicy(value, "")
+	value.Members = nil
+	policy.Members = nil
+	for index := range maxMonitorProviderMembers {
+		slot := fmt.Sprintf("%03d%s", index, strings.Repeat("x", 125))
+		identity := fmt.Sprintf("%08x-1111-1111-1111-111111111111", index+1)
+		value.Members = append(value.Members, protocol.ProviderMemberProgress{Slot: slot, Generation: 1, ClientId: identity, Lifecycle: "running", Current: true, Connected: true, KeyRegistered: true, Ready: true})
+		policy.Members = append(policy.Members, monitorExpectedProviderMember{Slot: slot, ClientId: identity})
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _ = json.NewEncoder(w).Encode(value) }))
+	defer server.Close()
+	policy.Endpoint = server.URL + "/provider-progress"
+	fixture.policy.Providers = []monitorProviderPolicy{policy}
+	fixture.writePolicy(t)
+	url, _, _ := monitorServicesBlockedChain(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	sink := &monitorProviderTestSink{events: make(chan monitorProviderTestEvent, 2)}
+	done := make(chan int, 1)
+	hooks := monitorServiceHooks{wait: func(ctx context.Context, _ string, _ time.Duration) bool { <-ctx.Done(); return false }}
+	go func() {
+		done <- runMonitorStorageTestWithHooks(t, ctx, fixture.args(url), sink, nil, fixture.clock.now, hooks)
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+	event := sink.next(t)
+	if !event.Current || event.State.ReadyMembers != maxMonitorProviderMembers || event.State.ExpectedMembers != maxMonitorProviderMembers {
+		t.Fatal("maximum expected roster lost public readiness event", event)
+	}
+	checkpoint, _ := monitorProviderPaths(fixture.checkpointPath, fixture.metricsPath, policy.Role)
+	raw, err := os.ReadFile(checkpoint)
+	if err != nil || len(raw) <= diagnostics.MaximumRecordBytes || len(raw) > maxMonitorProviderCheckpointBytes {
+		t.Fatal("control did not exercise a roster larger than the diagnostic queue record", len(raw), err)
+	}
+}
+
+// A lost post-sync acknowledgement reopens the exact original checkpoint only
+// after its descriptor joins. The next real response advances the retained
+// sequence, without treating the incomplete publication as a fresh owner.
+func TestMonitorProviderPublicLostCheckpointAckReconcilesOriginal(t *testing.T) {
+	fixture := newMonitorServicesFixture(t)
+	value := monitorProviderTestValue(fixture.clock.now())
+	var sequence atomic.Uint64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		copyValue := value
+		copyValue.Sequence = sequence.Add(1)
+		_ = json.NewEncoder(w).Encode(copyValue)
+	}))
+	defer server.Close()
+	policy := monitorProviderTestPolicy(value, server.URL+"/provider-progress")
+	fixture.policy.Providers = []monitorProviderPolicy{policy}
+	fixture.writePolicy(t)
+	url, _, _ := monitorServicesBlockedChain(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	sink := &monitorProviderTestSink{events: make(chan monitorProviderTestEvent, 3)}
+	done := make(chan int, 1)
+	resume := make(chan struct{})
+	var once sync.Once
+	var closed atomic.Int32
+	hooks := monitorServiceHooks{syncDirectory: func(role, kind string, file *os.File) error {
+		err := file.Sync()
+		if role == policy.Role && kind == "checkpoint" {
+			once.Do(func() { err = errors.Join(err, syscall.EIO) })
+		}
+		return err
+	}, afterClose: func(role, kind string, file *os.File) error {
+		if role == policy.Role && kind == "checkpoint" {
+			if _, err := file.Stat(); !errors.Is(err, os.ErrClosed) {
+				return errors.New("provider close notification preceded descriptor join")
+			}
+			closed.Add(1)
+		}
+		return nil
+	}, wait: func(ctx context.Context, role string, _ time.Duration) bool {
+		if role != policy.Role {
+			<-ctx.Done()
+			return false
+		}
+		select {
+		case <-resume:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}}
+	go func() {
+		done <- runMonitorStorageTestWithHooks(t, ctx, fixture.args(url), sink, nil, fixture.clock.now, hooks)
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+	event := sink.next(t)
+	if event.Current || event.CheckpointCurrent || event.State.Sequence != 1 {
+		t.Fatal("uncertain first publication claimed completed readiness", event)
+	}
+	resume <- struct{}{}
+	event = sink.next(t)
+	if !event.Current || !event.CheckpointCurrent || event.State.Sequence != 2 || closed.Load() != 1 {
+		t.Fatal("provider lost acknowledgement did not join/reopen original custody", event, closed.Load())
 	}
 }

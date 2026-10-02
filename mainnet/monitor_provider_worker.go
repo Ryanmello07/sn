@@ -276,7 +276,14 @@ func (self *monitorProviderWorker) run(ctx context.Context, interval time.Durati
 		}
 		if errors.Is(checkpointErr, durablehead.ErrUncertain) {
 			prior := self.checkpoint
-			err := self.storage.resume(ctx, self.policy.Role, func() error { return prior.close() }, func() error {
+			err := self.storage.resume(ctx, self.policy.Role, func() error {
+				file := prior.lock
+				err := prior.close()
+				if hooks.afterClose != nil {
+					err = errors.Join(err, hooks.afterClose(self.policy.Role, "checkpoint", file))
+				}
+				return err
+			}, func() error {
 				owner, err := openMonitorCheckpoint(prior.path, prior.expected, ctx)
 				if err != nil {
 					return err
