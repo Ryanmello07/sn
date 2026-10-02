@@ -59,3 +59,23 @@ root verified all14 manifest bindings. The affected public root passes normal,
 race and mainnet vet in the author scope; independent replay is pending.
 No production code changes in this correction. Neither source is merged into
 SN main, and no full-mainnet acceptance or deployment is inferred.
+
+
+## Main integration checkpoint
+
+Independent `d8788c9e` replay is sealed: the affected public execution root passes
+normal and race, mainnet vet0, physical20,041 tracked blobs match, and only the
+two test files differ from5f. Root rehashed all13 manifest bindings; the
+[independent receipt](member-current-fixture-independent-20261002.json) SHA-256
+is `017d1140715594824bdce2cb3d38d716b6b0d3a6eb840d8d4e4987157f976cb2`.
+The original5f nine passes and one failure in each mode remain unchanged; the
+corrected execution root has its own source scope. This joins unchanged tested
+production/module bytes, rather than relabelling the original failed run.
+
+Main merge `b0fc5e9924fa97e57b244e27626c2309485d644c` now integrates retained-member
+recovery and the exact custody fixtures. Main Go files and go.mod/go.sum are
+byte-identical to d878; remaining differences are newer mainnet documentation
+and evidence. The sole mainnet embed (`safe-release/profiles.json`) is unchanged.
+Newer documentation is retained. The scoped source integration does not qualify
+a new complete release, current published-module intake, offline storage
+preparation, restore or live mainnet activation.
