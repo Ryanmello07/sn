@@ -157,6 +157,13 @@ func (self *ProviderSwarm) startMemberOperation(
 	if !deadline.Stop() {
 		cancel(context.DeadlineExceeded)
 	}
+	if err == nil && instance != nil && self.progress != nil {
+		device := instance.progressDevice
+		if device == nil && instance.device != nil {
+			device = instance.device
+		}
+		instance.progressGeneration, err = self.progress.attach(memberCtx, member.ID, device)
+	}
 	self.stateLock.Lock()
 	if operation.failure != nil {
 		err = operation.failure
@@ -179,6 +186,9 @@ func (self *ProviderSwarm) startMemberOperation(
 	delete(self.memberGenerations, member.ID)
 	self.stateLock.Unlock()
 	cancel(err)
+	if instance != nil && self.progress != nil {
+		self.progress.retire(member.ID, instance.progressGeneration)
+	}
 	instance.close()
 	self.stateLock.Lock()
 	self.disabled[member.ID] = true
@@ -198,6 +208,9 @@ func (self *ProviderSwarm) stopMemberOperation(
 	defer self.operationWaitGroup.Done()
 	if generation != nil && generation.cancel != nil {
 		generation.cancel(context.Canceled)
+	}
+	if instance != nil && self.progress != nil {
+		self.progress.retire(id, instance.progressGeneration)
 	}
 	instance.close()
 	self.stateLock.Lock()
@@ -278,9 +291,9 @@ func (self *ProviderSwarm) stopMembers() {
 	}
 	self.operationWaitGroup.Wait()
 	self.stateLock.Lock()
-	instances := make([]*providerSwarmInstance, 0, len(self.instances))
-	for _, instance := range self.instances {
-		instances = append(instances, instance)
+	instances := make(map[string]*providerSwarmInstance, len(self.instances))
+	for id, instance := range self.instances {
+		instances[id] = instance
 	}
 	self.instances = map[string]*providerSwarmInstance{}
 	self.running = map[string]bool{}
@@ -288,7 +301,10 @@ func (self *ProviderSwarm) stopMembers() {
 	self.runCancel = nil
 	self.terminalErrors = nil
 	self.stateLock.Unlock()
-	for _, instance := range instances {
+	for id, instance := range instances {
+		if self.progress != nil {
+			self.progress.retire(id, instance.progressGeneration)
+		}
 		instance.close()
 	}
 }
@@ -342,6 +358,10 @@ func swarmControlErrorStatus(err error) int {
 // Keeps the legacy swarm response on successful mutations and exposes a
 // separate member lifecycle read for reconciling timed-out control requests.
 func (self *ProviderSwarm) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	if request.URL.Path == "/provider-progress" {
+		serveProviderProgress(writer, request, self.progress)
+		return
+	}
 	if request.URL.Path == "/status" && request.Method == http.MethodGet {
 		status := self.status()
 		writer.Header().Set("Content-Type", "application/json")
