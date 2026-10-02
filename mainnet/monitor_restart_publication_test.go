@@ -48,7 +48,7 @@ func TestMonitorRestartRetainsMetricsWhileInitialReadPending(t *testing.T) {
 			var exit int
 			go func() {
 				defer close(done)
-				exit = runMonitorTestWithClock(ctx, []string{"monitor", "--rpc", url, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--metrics-file", path}, &stdout, &stderr, func() time.Time { return base.Add(time.Hour) })
+				exit = runMonitorTestWithClock(t, ctx, []string{"monitor", "--rpc", url, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--metrics-file", path}, &stdout, &stderr, func() time.Time { return base.Add(time.Hour) })
 			}()
 			defer func() {
 				cancel()
@@ -98,7 +98,7 @@ func TestMonitorRejectsAliasedCheckpointMetricsLockCollision(t *testing.T) {
 	defer cancel()
 	stdout := &cancelMonitorWriter{cancel: cancel}
 	var stderr bytes.Buffer
-	exit := runMonitorTestWithClock(ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", expected.NativeChain, "--expected-genesis", expected.GenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", filepath.Join(alias, "monitor.prom.lock"), "--metrics-file", metricsPath}, stdout, &stderr, func() time.Time { return base.Add(time.Minute) })
+	exit := runMonitorTestWithClock(t, ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", expected.NativeChain, "--expected-genesis", expected.GenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", filepath.Join(alias, "monitor.prom.lock"), "--metrics-file", metricsPath}, stdout, &stderr, func() time.Time { return base.Add(time.Minute) })
 	after, statErr := os.Stat(lockPath)
 	if exit != 2 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "paths must be separate") || getCount("system_chain") != 0 || statErr != nil || !os.SameFile(before, after) {
 		t.Fatalf("aliased outputs escaped separation: exit=%d reads=%d stat=%v stdout=%s stderr=%s", exit, getCount("system_chain"), statErr, stdout.String(), stderr.String())
@@ -231,7 +231,7 @@ func TestMonitorSuccessfulContinuityUsesCompletionTime(t *testing.T) {
 	defer cancel()
 	stdout := &cancelMonitorWriter{cancel: cancel}
 	var stderr bytes.Buffer
-	exit := runMonitorTestWithClock(ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", expected.NativeChain, "--expected-genesis", expected.GenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", path, "--metrics-file", metricsPath}, stdout, &stderr, func() time.Time { return time.Unix(0, now.Load()).UTC() })
+	exit := runMonitorTestWithClock(t, ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", expected.NativeChain, "--expected-genesis", expected.GenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", path, "--metrics-file", metricsPath}, stdout, &stderr, func() time.Time { return time.Unix(0, now.Load()).UTC() })
 	var event monitorEvent
 	if err := json.Unmarshal(stdout.Bytes(), &event); err != nil || exit != 0 || event.Status != "ok" || continuityReads.Load() != 1 || event.ObservedAt != completedAt.Format(time.RFC3339Nano) {
 		t.Fatalf("continuity completion time was omitted: exit=%d event=%+v reads=%d err=%v stderr=%s", exit, event, continuityReads.Load(), err, stderr.String())

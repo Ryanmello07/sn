@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"github.com/urfoundation/sn/internal/durablehead"
 )
 
 // Hooks observe real reads, real durability, and owned waits. None can supply
@@ -42,6 +44,7 @@ type monitorValidatorWorker struct {
 	checkpoint *monitorServiceCheckpoint
 	metrics    *monitorMetricsStore
 	state      *monitorValidatorState
+	storage    monitorStorageRecovery
 }
 
 // Cancellation interrupts waits. Physical regular-file operations are bounded
@@ -59,7 +62,7 @@ func waitMonitorService(ctx context.Context, role string, duration time.Duration
 }
 
 // Existing chain ownership stays separate. Ordinary output failures retry only
-// that domain; terminal configuration or integrity failures stop and join all.
+// that domain; runtime integrity failures stop only the affected domain.
 func runMonitorServices(ctx context.Context, client *rpcClient, expected identityExpectation, policy *monitorServicesPolicy, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -116,14 +119,14 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	}()
 	for _, validator := range policy.Validators {
 		checkpointFile, metricsFile := monitorValidatorPaths(checkpointPath, metricsPath, validator.Role)
-		checkpoint, err := openMonitorServiceCheckpoint(checkpointFile, expected, validator)
+		checkpoint, err := openMonitorServiceCheckpoint(checkpointFile, expected, validator, ctx)
 		if err != nil {
 			fmt.Fprintln(diagnostic, "monitor service checkpoint admission:", err)
 			return 3
 		}
 		worker := &monitorValidatorWorker{policy: validator, checkpoint: checkpoint}
 		workers = append(workers, worker)
-		metrics, err := openMonitorMetrics(metricsFile)
+		metrics, err := openMonitorMetrics(metricsFile, ctx)
 		if err != nil {
 			fmt.Fprintln(diagnostic, "monitor service metrics admission:", err)
 			return 3
@@ -181,9 +184,8 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		if exit != 0 {
 			result = max(result, exit)
 		}
-		// A domain only returns for cancellation or a terminal fault. Ordinary
-		// unavailable reads/publications stay inside their own bounded retry.
-		cancel()
+		// A failed domain stays visibly stopped while unrelated chain/service
+		// owners continue. Parent cancellation still joins every live worker.
 	}
 	return result
 }
@@ -250,10 +252,44 @@ func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Durat
 			event.Publication, event.Severity = "ownership-error", "critical"
 		}
 		if err := encoder.Encode(event); err != nil {
+			if ctx.Err() != nil {
+				return 0
+			}
 			return 3
 		}
 		if terminal {
 			return 3
+		}
+		if errors.Is(checkpointErr, durablehead.ErrUncertain) {
+			prior := self.checkpoint
+			err := self.storage.resume(ctx, self.policy.Role, func() error {
+				file := prior.owner.lock
+				err := prior.owner.close()
+				if hooks.afterClose != nil {
+					err = errors.Join(err, hooks.afterClose(self.policy.Role, "checkpoint", file))
+				}
+				return err
+			}, func() error {
+				next, err := openMonitorServiceCheckpoint(prior.owner.path, prior.owner.expected, self.policy, ctx)
+				if err != nil {
+					return err
+				}
+				state, err := next.load(ctx)
+				if err != nil {
+					return errors.Join(err, next.owner.close())
+				}
+				next.owner.syncDirectory = prior.owner.syncDirectory
+				self.checkpoint, self.state = next, state
+				return nil
+			}, hooks)
+			if err != nil {
+				if ctx.Err() != nil {
+					return 0
+				}
+				fmt.Fprintln(stderr, "monitor service storage continuation:", err)
+				return 3
+			}
+			continue
 		}
 		delay := interval
 		if combined != nil {

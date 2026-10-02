@@ -144,7 +144,7 @@ func TestMonitorMetricsCommandRetainsSuccessThroughOutageAndRecovery(t *testing.
 		events++
 	}}
 	var stderr bytes.Buffer
-	exit := runMonitorTestWithClock(ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", checkpoint, "--metrics-file", path, "--retry-window", "1s", "--interval", "1ns", "--stall-after", "20m"}, stdout, &stderr, func() time.Time { return sampleTime })
+	exit := runMonitorTestWithClock(t, ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--checkpoint", checkpoint, "--metrics-file", path, "--retry-window", "1s", "--interval", "1ns", "--stall-after", "20m"}, stdout, &stderr, func() time.Time { return sampleTime })
 	if exit != 0 || events != 4 {
 		t.Fatalf("command exit=%d events=%d stderr=%s", exit, events, stderr.String())
 	}
@@ -192,7 +192,7 @@ func TestMonitorMetricsCommandStopsOnPublicationFailure(t *testing.T) {
 		}
 	}}
 	var stderr bytes.Buffer
-	exit := runMonitorTest(ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--metrics-file", path, "--interval", "1ns"}, stdout, &stderr)
+	exit := runMonitorTest(t, ctx, []string{"monitor", "--rpc", server.URL, "--expected-chain", "fixture-mainnet", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964", "--metrics-file", path, "--interval", "1ns"}, stdout, &stderr)
 	if exit != 1 || events != 2 {
 		t.Fatalf("failed publication kept running: exit=%d events=%d stderr=%s", exit, events, stderr.String())
 	}

@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/urfoundation/sn/internal/durablehead"
 	"github.com/urfoundation/sn/protocol"
 )
 
@@ -41,42 +43,67 @@ type monitorCheckpointRecord struct {
 type monitorCheckpointStore struct {
 	path          string
 	lock          *os.File
+	directory     *monitorDirectory
 	expected      identityExpectation
 	syncDirectory func(*os.File) error
 }
 
 // A process owns one checkpoint for its entire monitoring lifetime. The lock
 // prevents two monitors from alternately replacing the same finality history.
-func openMonitorCheckpoint(path string, expected identityExpectation) (*monitorCheckpointStore, error) {
+func openMonitorCheckpoint(path string, expected identityExpectation, contexts ...context.Context) (*monitorCheckpointStore, error) {
 	if !filepath.IsAbs(path) || filepath.Base(path) == "." || expected.NativeChain == "" || !validHash(expected.GenesisHash) || expected.EvmChainId != mainnetEvmChainId {
 		return nil, errors.New("checkpoint path or approved network identity is incomplete")
 	}
-	path, err := resolveMonitorDestination(path)
+	if len(contexts) == 0 {
+		var err error
+		path, err = resolveMonitorDestination(path)
+		if err != nil {
+			return nil, err
+		}
+	}
+	directory, err := openMonitorDirectory(filepath.Dir(path), contexts)
 	if err != nil {
 		return nil, err
 	}
-	fd, err := syscall.Open(path+".lock", syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0600)
-	if err != nil {
-		return nil, fmt.Errorf("open checkpoint lock: %w", err)
+	flags := syscall.O_RDWR
+	if directory.guard == nil {
+		flags |= syscall.O_CREAT
 	}
-	lock := os.NewFile(uintptr(fd), path+".lock")
+	lock, err := directory.open(filepath.Base(path)+".lock", flags, 0600)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("open checkpoint lock: %w", err), directory.close())
+	}
 	info, err := lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 		lock.Close()
-		return nil, errors.Join(errors.New("checkpoint lock is not a private regular file"), err)
+		return nil, errors.Join(errors.New("checkpoint lock is not a private regular file"), err, directory.close())
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		lock.Close()
-		return nil, fmt.Errorf("checkpoint already has an owner: %w", err)
+		return nil, errors.Join(fmt.Errorf("checkpoint already has an owner: %w", err), directory.close())
 	}
-	return &monitorCheckpointStore{path: path, lock: lock, expected: expected}, nil
+	if directory.guard != nil {
+		name := filepath.Base(path)
+		spec := durablehead.Spec{Kind: "mainnet-monitor-checkpoint", Name: name, MaximumBytes: maxRpcReplyBytes, LockName: name + ".lock", AuxiliaryNames: []string{name + ".lock"}}
+		directory.head, err = durablehead.Open(directory.ctx, directory.guard, lock, spec)
+		// A failed opener has no live users. One exact pending-byte recovery
+		// runs under the same retained exclusive lock before observations start.
+		if errors.Is(err, durablehead.ErrUncertain) {
+			directory.head, err = durablehead.Reconcile(directory.ctx, directory.guard, lock, spec)
+		}
+		if err != nil {
+			return nil, errors.Join(monitorCustodyError(err), lock.Close(), directory.close())
+		}
+		directory.headName = name
+	}
+	return &monitorCheckpointStore{path: path, lock: lock, directory: directory, expected: expected}, nil
 }
 
 func (self *monitorCheckpointStore) close() error {
 	if self == nil || self.lock == nil {
 		return nil
 	}
-	err := self.lock.Close()
+	err := errors.Join(self.lock.Close(), self.directory.close())
 	self.lock = nil
 	return err
 }
@@ -85,26 +112,14 @@ func (self *monitorCheckpointStore) load() (*monitorState, error) {
 	if self == nil || self.lock == nil {
 		return nil, errors.New("monitor checkpoint store is closed")
 	}
-	state := &monitorState{}
-	info, err := os.Lstat(self.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return state, nil
-	}
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return nil, errors.Join(errors.New("checkpoint is not a private regular file"), err)
-	}
-	fd, err := syscall.Open(self.path, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0)
-	if err != nil {
+	if err := self.requireOwner(); err != nil {
 		return nil, err
 	}
-	file := os.NewFile(uintptr(fd), self.path)
-	opened, err := file.Stat()
-	if err != nil || !opened.Mode().IsRegular() || opened.Mode().Perm()&0077 != 0 {
-		file.Close()
-		return nil, errors.Join(errors.New("checkpoint opened object is not a private regular file"), err)
+	state := &monitorState{}
+	raw, err := self.directory.read(filepath.Base(self.path), maxRpcReplyBytes, true)
+	if monitorCheckpointAbsent(err) {
+		return state, nil
 	}
-	raw, readErr := io.ReadAll(io.LimitReader(file, maxRpcReplyBytes+1))
-	err = errors.Join(readErr, file.Close())
 	if err != nil || len(raw) > maxRpcReplyBytes {
 		return nil, errors.Join(errors.New("checkpoint cannot be read within 1 MiB"), err)
 	}
@@ -132,6 +147,31 @@ func (self *monitorCheckpointStore) load() (*monitorState, error) {
 		state.unavailableSince, _ = time.Parse(time.RFC3339Nano, record.UnavailableSince)
 	}
 	return state, nil
+}
+
+// The retained lock and actual parent remain one admitted physical generation.
+func (self *monitorCheckpointStore) requireOwner() error {
+	if self == nil || self.lock == nil {
+		return errors.New("monitor checkpoint store is closed")
+	}
+	if err := self.directory.check(); err != nil {
+		return err
+	}
+	if self.directory.head != nil {
+		// The shared head checked both actual named inodes and the protected
+		// ancestry. A redundant pathname probe must not turn unavailable
+		// observation into an invented custody mismatch.
+		return self.directory.ctx.Err()
+	}
+	opened, openErr := self.lock.Stat()
+	named, nameErr := self.directory.stat(filepath.Base(self.path) + ".lock")
+	if err := errors.Join(openErr, nameErr); err != nil {
+		return monitorNamedObservation(err)
+	}
+	if !named.Mode().IsRegular() || named.Mode().Perm()&0077 != 0 || !os.SameFile(opened, named) {
+		return &monitorOutputOwnershipError{reason: "checkpoint lock changed"}
+	}
+	return nil
 }
 
 func (self *monitorCheckpointStore) validate(record monitorCheckpointRecord) error {
@@ -192,7 +232,10 @@ func (self *monitorCheckpointStore) save(state *monitorState) error {
 	if state == nil {
 		return errors.New("monitor checkpoint state is absent")
 	}
-	if info, err := os.Lstat(self.path); err == nil {
+	if err := self.requireOwner(); err != nil {
+		return err
+	}
+	if info, err := self.directory.stat(filepath.Base(self.path)); err == nil {
 		if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 			return errors.New("checkpoint destination is not a private regular file")
 		}
@@ -226,5 +269,5 @@ func (self *monitorCheckpointStore) save(state *monitorState) error {
 		return err
 	}
 	raw = append(raw, '\n')
-	return publishMonitorFile(self.path, raw, 0600, self.syncDirectory)
+	return errors.Join(self.directory.publish(filepath.Base(self.path), raw, 0600, self.syncDirectory), self.requireOwner())
 }

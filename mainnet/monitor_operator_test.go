@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"github.com/urnetwork/server/stmonitor"
 	"github.com/urnetwork/server/stmonitor/testfixture"
 )
@@ -69,8 +70,11 @@ func TestMonitorOperatorOutageRestartPreservesDomainIncidents(t *testing.T) {
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	policy := monitorOperatorTestPolicy()
 	directory := monitorMetricsTestDir(t)
+	storage := durablefixture.New(t, t.Context(), directory)
+	checkpointPath, _ := monitorOperatorPaths(filepath.Join(directory, "monitor.json"), filepath.Join(directory, "monitor.prom"), policy.Role)
+	provisionMonitorTestCustody(t, checkpointPath)
 	open := func() *monitorOperatorWorker {
-		worker, err := openMonitorOperatorWorker(t.Context(), policy, identityExpectation{NativeChain: "fixture", GenesisHash: testGenesisHash, EvmChainId: 964}, filepath.Join(directory, "monitor.json"), filepath.Join(directory, "monitor.prom"), monitorServiceHooks{})
+		worker, err := openMonitorOperatorWorker(storage.Context, policy, identityExpectation{NativeChain: "fixture", GenesisHash: testGenesisHash, EvmChainId: 964}, filepath.Join(directory, "monitor.json"), filepath.Join(directory, "monitor.prom"), monitorServiceHooks{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -176,7 +180,10 @@ func TestMonitorOperatorRefusesChangedIdentityClocksAndOriginalAge(t *testing.T)
 
 func TestMonitorOperatorCheckpointAndPolicySourceFence(t *testing.T) {
 	fixture := newMonitorServicesFixture(t, "alpha")
+	storage := durablefixture.New(t, t.Context(), fixture.directory)
 	policy := monitorOperatorTestPolicy()
+	checkpointPath, _ := monitorOperatorPaths(fixture.checkpointPath, fixture.metricsPath, policy.Role)
+	provisionMonitorTestCustody(t, checkpointPath)
 	policy.DatabaseFile = filepath.Join(fixture.directory, "operator.url")
 	fixture.policy.Operators = []monitorOperatorPolicy{policy}
 	fixture.writePolicy(t)
@@ -198,7 +205,7 @@ func TestMonitorOperatorCheckpointAndPolicySourceFence(t *testing.T) {
 			t.Fatal("operator policy admitted changed source or shared output")
 		}
 	}
-	worker, err := openMonitorOperatorWorker(t.Context(), policy, expected, fixture.checkpointPath, fixture.metricsPath, monitorServiceHooks{})
+	worker, err := openMonitorOperatorWorker(storage.Context, policy, expected, fixture.checkpointPath, fixture.metricsPath, monitorServiceHooks{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +232,7 @@ func TestMonitorOperatorCheckpointAndPolicySourceFence(t *testing.T) {
 	if err := os.WriteFile(checkpoint, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if unexpected, err := openMonitorOperatorWorker(t.Context(), policy, expected, fixture.checkpointPath, fixture.metricsPath, monitorServiceHooks{}); err == nil {
+	if unexpected, err := openMonitorOperatorWorker(storage.Context, policy, expected, fixture.checkpointPath, fixture.metricsPath, monitorServiceHooks{}); err == nil {
 		unexpected.metrics.close()
 		unexpected.checkpoint.owner.close()
 		t.Fatal("changed retained incident passed checkpoint fence")
@@ -295,7 +302,7 @@ func startMonitorOperatorTest(t *testing.T, fixture *monitorServicesFixture, url
 	}
 	go func() {
 		defer close(done)
-		done <- runMainWithMonitorHooks(ctx, fixture.args(url), sink, io.Discard, fixture.clock.now, hooks)
+		done <- runMonitorStorageTestWithHooks(t, ctx, fixture.args(url), sink, io.Discard, fixture.clock.now, hooks)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	return cancel, done, sink, resume

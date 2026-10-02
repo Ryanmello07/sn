@@ -71,7 +71,7 @@ func TestMonitorReadOutageEscalatesAndSurvivesRestart(t *testing.T) {
 	}
 	path := filepath.Join(t.TempDir(), "monitor.json")
 	var stderr bytes.Buffer
-	exit := runMonitorTestWithClock(ctx, []string{
+	exit := runMonitorTestWithClock(t, ctx, []string{
 		"monitor", "--rpc", server.URL, "--expected-chain", "Bittensor",
 		"--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964",
 		"--checkpoint", path, "--retry-window", "2s", "--interval", "1ms", "--stall-after", "20m",

@@ -6,9 +6,17 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
 	"time"
+
+	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 // Only the existing finite in-memory fixture writers are accepted here. This
@@ -46,7 +54,9 @@ func (self *monitorFixtureOutput) WriteContext(ctx context.Context, raw []byte) 
 }
 
 // Preserve exact old barriers while exercising the public command and exporter.
-func runMonitorTestWithClock(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time) int {
+func runMonitorTestWithClock(t *testing.T, ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time) int {
+	t.Helper()
+	ctx = monitorTestStorageContext(t, ctx, args)
 	output := &monitorFixtureOutput{writer: stdout, completed: make(chan struct{}, 1)}
 	hooks := monitorServiceHooks{wait: func(ctx context.Context, _ string, duration time.Duration) bool {
 		select {
@@ -67,6 +77,65 @@ func runMonitorTestWithClock(ctx context.Context, args []string, stdout, stderr 
 }
 
 // Wall-clock fixtures keep the same real timing and merely join publication.
-func runMonitorTest(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	return runMonitorTestWithClock(ctx, args, stdout, stderr, time.Now)
+func runMonitorTest(t *testing.T, ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	t.Helper()
+	return runMonitorTestWithClock(t, ctx, args, stdout, stderr, time.Now)
+}
+
+// Instance-only facts accompany command hooks without changing runtime parsing.
+func runMonitorStorageTestWithHooks(t *testing.T, ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
+	t.Helper()
+	return runMainWithMonitorHooks(monitorTestStorageContext(t, ctx, args), args, stdout, stderr, now, hooks)
+}
+
+// Only test callers provision declarations; command arguments remain exact so
+// aliases, collisions and missing parents still reach production validation.
+func monitorTestStorageContext(t *testing.T, ctx context.Context, args []string) context.Context {
+	t.Helper()
+	if _, present := durablevolume.ReferenceFromContext(ctx); present {
+		return ctx
+	}
+	var roots []string
+	values := map[string]string{}
+	for index, arg := range args {
+		key, value, assigned := strings.Cut(arg, "=")
+		if !assigned && index+1 < len(args) {
+			value = args[index+1]
+		}
+		values[key] = value
+	}
+	provisionMonitorTestCustody(t, values["--checkpoint"])
+	if policyBytes, err := os.ReadFile(values["--services"]); err == nil {
+		var policy monitorServicesPolicy
+		if json.Unmarshal(policyBytes, &policy) == nil {
+			for _, role := range policy.Validators {
+				path, _ := monitorValidatorPaths(values["--checkpoint"], values["--metrics-file"], role.Role)
+				provisionMonitorTestCustody(t, path)
+			}
+			for _, role := range policy.Operators {
+				path, _ := monitorOperatorPaths(values["--checkpoint"], values["--metrics-file"], role.Role)
+				provisionMonitorTestCustody(t, path)
+			}
+		}
+	}
+	for index, arg := range args {
+		key, path, assigned := strings.Cut(arg, "=")
+		if key != "--checkpoint" && key != "--metrics-file" {
+			continue
+		}
+		if !assigned && index+1 < len(args) {
+			path = args[index+1]
+		}
+		root, err := filepath.EvalSymlinks(filepath.Dir(path))
+		if err != nil {
+			continue
+		}
+		if info, err := os.Lstat(root); err == nil && info.IsDir() {
+			roots = append(roots, root)
+		}
+	}
+	if len(roots) == 0 {
+		return ctx
+	}
+	return durablefixture.New(t, ctx, roots...).Context
 }

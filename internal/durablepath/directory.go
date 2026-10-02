@@ -46,6 +46,30 @@ func Require(ctx context.Context) error {
 	return nil
 }
 
+// OpenVolume admits one exact declared daemon state root for a bounded root
+// operation such as snapshot inventory. It never enrolls or infers a root;
+// daemon schema and exact root matching remain in the shared volume admission.
+func OpenVolume(ctx context.Context, root string, access durablevolume.Access) (*durablevolume.Owner, error) {
+	if err := Require(ctx); err != nil {
+		return nil, err
+	}
+	reference, _ := durablevolume.ReferenceFromContext(ctx)
+	var owner *durablevolume.Owner
+	var err error
+	if host, present := ctx.Value(hostKey{}).(durablevolume.Host); present {
+		owner, err = durablevolume.OpenWithHost(reference, root, access, host)
+	} else {
+		owner, err = durablevolume.Open(reference, root, access)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Join(err, owner.Close())
+	}
+	return owner, nil
+}
+
 // Open selects only a root explicitly listed in the authenticated declaration.
 // It never derives a root from the filesystem or creates an absent root.
 // Descendant creation, when requested, stays relative to the pinned root.
