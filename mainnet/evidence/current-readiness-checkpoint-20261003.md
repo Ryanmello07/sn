@@ -62,3 +62,5 @@ The [nonempty-head lineage probe source review](release-lineage-heade65-source-r
 The [validator repair observation source review](validator-repair0fef-source-review-20261003.json) verifies error-first state handling and retained action dispositions; execution and role composition remain pending.
 
 The [35-phase finite mixed batch](mixed-qualification-terminal-20261003.json) is terminal. EVM42 is graph/compile-only; all current-source behavior, full model and host requirements remain retained.
+
+The [model sampler preexecution finding](model-sampler-source-finding-20261003.json) retains a test-evidence defect and zero admitted test operations; its correction must preserve the actual full-suite run.

@@ -25,6 +25,12 @@ The [finite mixed qualification batch](evidence/mixed-qualification-terminal-202
 
 EVM restore SN `42f76551` now passes the selected 848-package dependency graph and compilation. No EVM behavior/race/vet result follows from compilation. The next finite batch must use the completed current-source restore/Claim composition and frozen repair/lineage inputs, with separate forecasts for any database-backed full Server model suite. Historical full-model receipts remain distinct from current Server `5f2edd47`.
 
+## Evidence sampling must preserve the run — October 3
+
+The [preexecution sampler review](evidence/model-sampler-source-finding-20261003.json) caught an undefined cache reference in the proposed model-test resource sampler. An uncaught thread error could leave incomplete measurements while a thread-not-alive check appeared successful. No fixture or test operation had started. Keep the original source and fix the sampler separately; this is a test-evidence defect, not an established production worker failure.
+
+Sampler completion must be explicit. Record unavailable resource and container observations with their original causes, and distinguish a completed sample stream from a terminated thread. An observation failure must not stop an already admitted model run or erase its raw outcomes. Qualify the sampler failure paths, then report any remaining measurement gap separately from test success. Apply the same distinction to production monitoring: failed observation is neither proof of changed authority nor evidence of a healthy outcome.
+
 ## Validator repair observation recovery — October 3
 
 An unavailable manager, cgroup, policy or journal read does not prove that the validator generation changed. The [repair source review](evidence/validator-repair0fef-source-review-20261003.json) verifies SN `0fef99be`: nine changed files, unchanged module inputs and fourteen evidence bindings. The implementation preserves original read/cancellation causes before comparing returned state. Acknowledged generations and consumed stop/start reservations remain durable; later observation of the same generation must not issue another action. Confirmed inode or retained-marker loss remains an integrity refusal.
