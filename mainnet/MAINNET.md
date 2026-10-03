@@ -114,9 +114,11 @@ evidence.
 The [read-only signed-ledger correction](evidence/restore-ledger-readonly-independent-20261003.json)
 at `d3c84fe3` separately passes two normal/race roots and validator vet in its
 pinned workspace. It permits nonempty signed-history inspection without a
-writer and preserves signature/byte-bound refusal. The pre-fix panic control,
-full public restore adapter and current published composition remain separate
-pending requirements; no production restore operation has occurred.
+writer and preserves signature/byte-bound refusal. The [pre-fix valid-prefix
+control](evidence/restore-ledger-readonly-causal-20261003.json) reproduces the
+original nil-hook panic normally and under race detection, without modifying
+original production source. Full public restore and current published
+composition remain pending; no production restore operation has occurred.
 
 The sole normal failure is in the model slice: the paid/free test attempts to
 change immutable terminal attribution before reaching its weighting assertion.

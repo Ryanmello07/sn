@@ -94,9 +94,10 @@ candidate `d3c84fe3` skips only that absent optional hook; signature, canonical
 encoding and byte-bound checks remain required. Qualify an actual nonempty
 signed prefix, preserve its bytes, and use the pre-fix path as the panic
 discriminator. Its [independent two-root normal/race scope and validator vet](evidence/restore-ledger-readonly-independent-20261003.json)
-now pass on exact `d3c84fe3` with the pinned workspace dependencies. The original
-`1982267c` panic control and the broader public ledger-restore adapter remain
-separate pending scopes. No live restoration is established.
+now pass on exact `d3c84fe3` with the pinned workspace dependencies. The [original `1982267c` valid-prefix control](evidence/restore-ledger-readonly-causal-20261003.json)
+reproduces the exact nil writable-hook panic in normal and race modes, using
+only a test overlay; original production bytes were retained. The broader
+public ledger-restore adapter remains a separate pending scope. No live restoration is established.
 
 Physical restore must inspect identity embedded inside owner data, as well as
 outer custody attributes. The immutable-member census contains original inode
