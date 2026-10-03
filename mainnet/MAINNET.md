@@ -4232,3 +4232,10 @@ Preserve the original temporary-image failures separately from the successful ow
 This integration implements bounded historical host operations and separates job-read failures from evidence contradictions. It does not approve the actual mainnet runtime, establish a complete execution witness or authorize native fee accounting. Complete collector qualification, runtime/profile/finality review, economic conservation, cross-root recovery and actual host adoption remain required.
 
 Operational headroom: the guarded reclaim29 plan found no eligible inactive archives older than12hours and removed nothing. Preserve this failed admission; select other disposable build data or derive a measured incremental forecast before admitting larger work. The full512 fixture contains encoded checkpoints, not an established512MiB payload; size forecasts must use measured or bounded actual data.
+
+
+### October 3 EVM archival qualification completed
+
+The [independent EVM archive review](evidence/evm-history8d-qualification-review-20261003.json) binds66 artifacts,27 normal roots from disjoint19+8 runs, the same27 under race detection, vet and five operative omissions in both modes. Controls require exact retained archive custody, fee-prefix accounting, archive-before-compaction publication, original legacy review provenance and retained observation census. A generic failing exit is insufficient: preserve the selected root and intended source assertion.
+
+Qualified source8d9904a5 retains the original checkpoint before compaction and preserves credit, carry, payments and EVM cost history. Its current-main source join remains separate; this component result does not establish actual native fee authority, Claim/native conservation, deployment or observed settlement. Complete the Claim archive adapter and cross-domain economic rehearsal before accepting the continuous monitor as production-ready.
