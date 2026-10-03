@@ -15,6 +15,8 @@ This summary tracks the active release work. Historical candidates and receipts 
 
 The unchanged current full-model run has now exposed seven failing roots, including dispute rollback accounting, reservation drift and balance TTL. Preserve all original failures and complete collection; diagnose all failures before accepting the combined Server release. The passing Redis recovery scope does not establish that disputed settlement leaves terminal state, payer funds and reservations unchanged.
 
+The [thirteenth inactive-cache reclaim](evidence/cache-reclaim-13-20261003.json) verified removal of 222 unreferenced old compiler archives and recovered 3.02 GiB. It preserved active caches, modules, sources and evidence; a transient compiler-directory scan failure remains recorded. Qualification admission must still recheck the 110 GiB floor before each heavy phase. This local headroom result does not establish production capacity or backup readiness.
+
 Do not stop broad qualification on its first ordinary assertion failure. Preserve the running source and collect all failures; repair in separate candidates, then qualify the actual combined release. Runtime/source approval and production activation remain distinct from offline implementation readiness.
 
 
@@ -23,6 +25,8 @@ The [original local restore race failure](evidence/local-pending-original-race-f
 Astra’s source review indicates the dispute rollback fixture reads the old reservation counter while the public create path uses the newer counter. This is an unqualified fixture diagnosis: require a nonzero pre-sweep witness, both counters and the exact request token, followed by failed and successful public settlement checks. Apply the same review to drift and TTL failures; preserve every original result.
 
 The [frozen allocator successor](evidence/redis-allocation-source-intake-20261003.json) preserves the public payer-client distribution policy and atomic whole-grant attempts. Ordinary discovery uses bounded keyset pages in original financial order, with explicit capacity holds and configurable reviewed limits. Root verified all 5,386 physical Git blobs and 44 file bindings; its eight new roots, seventeen neighbors and five causal groups still require independent execution. Source verification is not a passing behavioral gate. Unknown counters must remain retained while independently valid funding peers can continue; paid/free SN weighting does not authorize changing the Server funding policy.
+
+The [admission policy review](evidence/admission-policy-boundary-review-20261003.json) distinguishes intentional approximate Redis admission from authoritative settlement and payout obligations. Upstream explicitly accepts cache-loss and still-open-after-24-hour over-admission; do not impose absolute admission consistency through a test correction. Verify public request-token TTL, legacy mirror drift and mixed public/legacy terminal settlement separately. Scheduled reconciliation has a five-minute recurrence and thirty-minute task budget. The targeted CLI applies by default and currently lacks a finite whole-operation deadline; improve cancellation and bounded execution without losing retained debt or changing the declared economics.
 
 ## Historical RPC recovery lesson — October 3
 
