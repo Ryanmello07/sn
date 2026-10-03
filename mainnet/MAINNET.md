@@ -55,8 +55,9 @@ The transition rollout must retain evidence for each step:
 These are rollout requirements, not completed production steps.
 
 The [durable-boundary source checkpoint](evidence/payout-boundary-source-20261003.md)
-records the frozen implementation and 13 new deterministic controls. It is
-not a passing test receipt, merged release or deployed earning schedule.
+records the frozen implementation and 13 new deterministic controls, followed
+by its separately retained normal test result. It does not prove a merged
+release or deployed earning schedule.
 The [first boundary execution attempt](evidence/payout-boundary-fixture-setup-failure-20261003.json)
 failed during container initialization before any test; corrected execution
 uses a distinct readable fixture copy without changing product source.

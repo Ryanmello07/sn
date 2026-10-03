@@ -5,8 +5,8 @@ Reviewed on October 3, 2026. Server commit
 `3a6b153001e7f36c9ec986ca06931a9a49b461f3`, parent `63027130`.
 Physical candidate: `/mnt/data/sn-testnet/provider-usdc-transition-20261002/server-boundary-anchor`.
 Root checked the clean worktree, exact commit/tree, implementation and public
-consumer references. This is source inspection; no executed-test or deployment
-claim is made.
+consumer references. The initial checkpoint was source inspection; subsequent
+normal execution is recorded separately below. No deployment claim is made.
 
 The [sealed test intake](payout-boundary-intake-20261003.json), SHA-256
 `d5893a214f374ccac75d7182be7b7cae06cdfcd6e86ca850056b779d60a2bee0`,
