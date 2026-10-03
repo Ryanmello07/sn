@@ -207,16 +207,23 @@ func TestValidatorCapacityPreviewRefusesMissingCheckpointAndOwner(t *testing.T) 
 	if code := runMain(f.storage.Context, f.args(t), &output, &diagnostic); code == 0 || output.Len() != 0 || !strings.Contains(diagnostic.String(), "complete") {
 		t.Fatal("preview admitted only a subset of configured owners", code, diagnostic.String())
 	}
+	if !reflect.DeepEqual(before, mainnetNamespaceTest(t, f.root)) {
+		t.Fatal("incomplete owner census changed original custody")
+	}
 	f.request.Sources = complete
 	operator := f.validator.config.Operators[1].StateDir
 	if err := unix.Removexattr(operator, "user.urnetwork.attempt-ledger-custody"); err != nil {
 		t.Fatal(err)
 	}
+	withoutCheckpoint := mainnetNamespaceTest(t, f.root)
+	if reflect.DeepEqual(before, withoutCheckpoint) {
+		t.Fatal("fixture did not remove the original checkpoint")
+	}
 	diagnostic.Reset()
 	if code := runMain(f.storage.Context, f.args(t), &output, &diagnostic); code == 0 || output.Len() != 0 || !strings.Contains(diagnostic.String(), "original custody checkpoint") {
 		t.Fatal("preview inferred fresh authority from missing original head", code, diagnostic.String())
 	}
-	if !reflect.DeepEqual(before, mainnetNamespaceTest(t, f.root)) {
+	if !reflect.DeepEqual(withoutCheckpoint, mainnetNamespaceTest(t, f.root)) {
 		t.Fatal("refused preview rewrote original ledger members")
 	}
 	owner, err := durablepath.OpenVolume(f.storage.Context, f.root, durablevolume.ReadWrite)
@@ -237,9 +244,12 @@ func TestValidatorCapacityPreviewRefusesActiveOwnerCancellationAndShortOutput(t 
 		t.Fatal(err)
 	}
 	var output, diagnostic bytes.Buffer
+	if preview, err := validator.BuildProductionCapacityPreview(f.storage.Context, f.request); !errors.Is(err, durablevolume.ErrBusy) || preview.Config != nil || preview.RestartAuthorized {
+		t.Fatal("active owner was not refused by the typed snapshot admission", err)
+	}
 	code := runMain(f.storage.Context, args, &output, &diagnostic)
 	closeErr := owner.Close()
-	if code == 0 || output.Len() != 0 || !strings.Contains(diagnostic.String(), "busy") || closeErr != nil {
+	if code != 4 || output.Len() != 0 || diagnostic.Len() == 0 || closeErr != nil {
 		t.Fatal("capacity planning observed an active writer or leaked its lease", code, diagnostic.String(), closeErr)
 	}
 	canceled, cancel := context.WithCancel(f.storage.Context)

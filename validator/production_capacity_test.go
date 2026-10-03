@@ -225,7 +225,34 @@ func TestProductionCapacityHistoryRequiresEveryImmediatePredecessor(t *testing.T
 // after a resource-only revision. It neither rewrites proof bytes nor creates
 // another fresh authorization under that historical config.
 func TestProductionCapacityRetainsOriginalSignedSidecar(t *testing.T) {
-	fixture := newOwnerRecycleProductionTestFixture(t)
+	// The measurement-only fixture deliberately omits deployable operator and
+	// evidence paths. Complete them before the first production approval, then
+	// require the public loader to admit the original as well as its successor.
+	fixture := newOwnerRecycleProductionTestFixtureWithInputs(t, func(t *testing.T, hotkey [32]byte) *recycleOperatorFixture {
+		return newRecycleOperatorFixtureWithInputs(t, hotkey, 2, nil, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
+			template := validReleaseConfig(t)
+			cfg := admission.cfg
+			for index := range cfg.Operators {
+				noId := cfg.Operators[index].NoID
+				cfg.Operators[index] = template.Operators[index]
+				cfg.Operators[index].NoID = noId
+			}
+			cfg.TrailDepth, cfg.PollSeconds = cfg.Policy.Verify.TrailDepth, 2
+			cfg.EvidenceV2 = releaseEvidenceV2TestConfig(filepath.Dir(template.StateDir), cfg.Operators)
+			if err := cfg.normalize(filepath.Dir(cfg.StateDir)); err != nil {
+				t.Fatal("original operational paths were not normalized before signing", err)
+			}
+		})
+	}, nil)
+	originalConfigPath := writeReleaseConfig(t, *fixture.cfg)
+	loadedOriginal, err := LoadReleaseConfig(originalConfigPath)
+	if err != nil {
+		t.Fatal("complete original sidecar config failed the public loader", err)
+	}
+	originalHash, err := OwnerRecycleConfigHash(loadedOriginal)
+	if err != nil || originalHash != fixture.operator.measurement.admission.approval.ConfigHash {
+		t.Fatal("public normalization changed originally approved configuration", err)
+	}
 	stage, provider := fixture.stage(t)
 	intent := fixture.intent(t, stage, provider)
 	measurement := fixture.operator.measurement
