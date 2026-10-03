@@ -3910,7 +3910,7 @@ The [latest inactive-cache reclaim](evidence/cache-reclaim-15-17-20261003.json) 
 
 ### Actual public paired-restore candidate
 
-The [verified `39e2744a` source intake](evidence/paired-restore-public-source-intake-20261003.json) connects the paired census to actual local and registry recovery consumers. Root verified twenty bindings, the clean source identity and ten changed Git blobs. Passive preview retains the exact restored metadata pair and permits no repair; approved exclusive continuation reconciles separately while preserving original outcomes, signed bytes and attempt allowance. Seven public roots are now in qualification. Behavioral acceptance, joined capacity/retention changes and final current-module recovery remain required before this can support launch.
+The [verified `39e2744a` source intake](evidence/paired-restore-public-source-intake-20261003.json) connects the paired census to actual local and registry recovery consumers. Root verified twenty bindings, the clean source identity and ten changed Git blobs. Passive preview retains the exact restored metadata pair and permits no repair; approved exclusive continuation reconciles separately while preserving original outcomes, signed bytes and attempt allowance. The [seven-root normal result](evidence/paired-restore-public-normal-failure-20261003.json) has five passes and two failures; original-outcome recovery and changed-member read behavior require a separate correction. Preserve the failed source and qualify its successor rather than claiming complete public recovery. Behavioral acceptance, joined capacity/retention changes and final current-module recovery remain required before this can support launch.
 
 ### Required Safe observations preserve original recovery authority
 
