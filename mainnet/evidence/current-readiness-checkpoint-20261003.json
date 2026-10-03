@@ -26,6 +26,7 @@
     "paired-restore-fixture-affected-qualification-20261003.json": "4705abc95b80c1ef7083f0c7fca676e26f6752342690f20971f37bf0ee83eced",
     "payout-boundary-qualification-20261003.json": "73053846b010911a713ae03ec92e15a9fc868f9b44a8cb091f4677b806c7bc9c",
     "publication556-composed-qualification-20261003.json": "a80c36f0da79e446a595265c6c5387191858e80d1bcee371b2e2e0db07ffbfdb",
+    "qualified-composition-main-merge-20261003.json": "bbd79ee0bf9ddd89e884e62d4448595b0dc6280c59852ca5d6b81e586d2e5da9",
     "restore-complete-union-qualification-20261003.json": "299720785802a49422de595e233e067eb89f379bd52091364ad07fa55d8740af",
     "safe-state-read-joined-qualification-20261003.json": "105d0dcc0378b014f9fd33dadfa1f1bf3ec0d54921e4a70fc780b8d5dd641cd2",
     "server-current-financial-main-publication-20261003.json": "43ee4f0b0093c3996aa6d05b359dbdc595625ac83c8b93ae787ceb3a2c13e30a",
@@ -214,9 +215,9 @@
     },
     {
       "closed": false,
-      "evidence": "publication556-composed-qualification-20261003.json",
+      "evidence": "qualified-composition-main-merge-20261003.json",
       "requirement": "MG-02",
-      "status": "Candidate556 currentgraph source/compile plus16-root normal/race composition andfivevets verified;publication,finalrepeatablebuild andhostadoption remain."
+      "status": "Qualified556 production composition merged into main with exactnon-docinputs;finalrepeatablebuild,publication verification andhostadoption remain."
     },
     {
       "closed": false,

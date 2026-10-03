@@ -33,7 +33,7 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-27 | Authority/client-key transitions implemented; actual two-operator identity/custody composition remains. | No new closure evidence |
 | PH-28 | Claim role and retained renewal scopes qualified; archival/economic joins and live ingestion/on-call remain. | [monitor-policy-renewal-qualification-20261003.json](monitor-policy-renewal-qualification-20261003.json) |
 | MG-01 | Independent current genesis/checkpoint/runtime approval and exact consumer admission remain. | No new closure evidence |
-| MG-02 | Candidate556 currentgraph source/compile plus16-root normal/race composition andfivevets verified;publication,finalrepeatablebuild andhostadoption remain. | [publication556-composed-qualification-20261003.json](publication556-composed-qualification-20261003.json) |
+| MG-02 | Qualified556 production composition merged into main with exactnon-docinputs;finalrepeatablebuild,publication verification andhostadoption remain. | [qualified-composition-main-merge-20261003.json](qualified-composition-main-merge-20261003.json) |
 | MG-03 | Synthetic proof backend twelve roots and two operative controls qualified; actual runtime/finality admission and native withdrawal/refund attribution remain. | [historical-proof-backend-qualification-20261003.json](historical-proof-backend-qualification-20261003.json) |
 | MG-04 | Historical/current capability scopes exist; approved actual runtime and current consumers remain. | No new closure evidence |
 | MG-05 | Actual both-operator/four-role host, credential and network topology remains. | No new closure evidence |
