@@ -19,6 +19,8 @@ The [thirteenth inactive-cache reclaim](evidence/cache-reclaim-13-20261003.json)
 
 The [fifteenth through seventeenth inactive-cache reclaims](evidence/cache-reclaim-15-17-20261003.json) recovered another 3.84 GiB from 124 unreferenced compiler archives across three inactive caches. Active qualification caches remain untouched. This restores local test headroom, not production resource acceptance.
 
+The [eighteenth and nineteenth inactive-cache reclaims](evidence/cache-reclaim-18-19-20261003.json) recovered 0.96 GiB from twenty-six unreferenced compiler archives. Privileged process checks, the bounded metadata scan, repeated physical identity guards and final absence checks passed. Preserve the active warm cache and recheck the 110 GiB floor before each heavy phase; this local cleanup does not close production sizing or restore.
+
 Do not stop broad qualification on its first ordinary assertion failure. Preserve the running source and collect all failures; repair in separate candidates, then qualify the actual combined release. Runtime/source approval and production activation remain distinct from offline implementation readiness.
 
 
