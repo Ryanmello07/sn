@@ -88,15 +88,15 @@ impl<S: TrieBackendStorage<Blake2Hasher>> TrieBackendStorage<Blake2Hasher>
 {
     fn get(&self, key: &H256, prefix: (&[u8], Option<u8>)) -> Result<Option<Vec<u8>>, String> {
         let before = || -> Result<(), String> {
-            if self.canceled.load(Ordering::Acquire) {
-                return Err("historical capture canceled".to_owned());
-            }
             let mut state = self
                 .captured
                 .lock()
                 .map_err(|_| "historical capture lock poisoned")?;
             if let Some(error) = &state.failure {
                 return Err(error.clone());
+            }
+            if self.canceled.load(Ordering::Acquire) {
+                return Err("historical capture canceled".to_owned());
             }
             state.reads = state
                 .reads
@@ -110,9 +110,6 @@ impl<S: TrieBackendStorage<Blake2Hasher>> TrieBackendStorage<Blake2Hasher>
         let outcome = (|| {
             before()?;
             let value = self.original.get(key, prefix)?;
-            if self.canceled.load(Ordering::Acquire) {
-                return Err("historical capture canceled".to_owned());
-            }
             let raw = value
                 .as_ref()
                 .ok_or("historical capture parent trie node is absent")?;
@@ -120,6 +117,11 @@ impl<S: TrieBackendStorage<Blake2Hasher>> TrieBackendStorage<Blake2Hasher>
                 return Err(
                     "historical capture trie node size or content identity differs".to_owned(),
                 );
+            }
+            // Returned bytes can establish an actual contradiction. Preserve
+            // that refusal even if the owner canceled during this read.
+            if self.canceled.load(Ordering::Acquire) {
+                return Err("historical capture canceled".to_owned());
             }
             let mut state = self
                 .captured
@@ -150,10 +152,10 @@ impl<S: TrieBackendStorage<Blake2Hasher>> TrieBackendStorage<Blake2Hasher>
     }
 }
 
-fn check(canceled: &AtomicBool, captured: &Mutex<CapturedNodes>) -> Result<(), ProbeError> {
-    if canceled.load(Ordering::Acquire) {
-        return Err(ProbeError::new("historical capture canceled"));
-    }
+/// Inspect the retained accessor cause before SDK trie error translation. A
+/// canceled read must not become an invalid-root claim, and an already
+/// observed backend refusal must not be erased by a later cancellation.
+fn check_failure(captured: &Mutex<CapturedNodes>) -> Result<(), ProbeError> {
     let state = captured
         .lock()
         .map_err(|_| ProbeError::new("historical capture lock poisoned"))?;
@@ -163,6 +165,30 @@ fn check(canceled: &AtomicBool, captured: &Mutex<CapturedNodes>) -> Result<(), P
     Ok(())
 }
 
+fn check_cancellation(canceled: &AtomicBool) -> Result<(), ProbeError> {
+    if canceled.load(Ordering::Acquire) {
+        return Err(ProbeError::new("historical capture canceled"));
+    }
+    Ok(())
+}
+
+fn check(canceled: &AtomicBool, captured: &Mutex<CapturedNodes>) -> Result<(), ProbeError> {
+    check_failure(captured)?;
+    check_cancellation(canceled)
+}
+
+/// Instance-local observation of completed work. The public entry has no
+/// observer; tests use these boundaries without timers or global hooks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CapturePhase {
+    Code,
+    Heap,
+    Execution,
+    Root,
+    Replay,
+    Report,
+}
+
 /// Borrow an archive node's retained parent `state.as_trie_backend()`. This
 /// uses only its content-addressed read surface, never its transaction writer,
 /// runtime override provider, signer, offchain extensions or network services.
@@ -170,6 +196,15 @@ pub fn capture_historical_on_backend<S: TrieBackendStorage<Blake2Hasher>>(
     raw: &[u8],
     parent_backend: &TrieBackend<S, Blake2Hasher>,
     canceled: &AtomicBool,
+) -> Result<Vec<u8>, ProbeError> {
+    capture_historical_on_backend_observed(raw, parent_backend, canceled, |_| {})
+}
+
+pub(super) fn capture_historical_on_backend_observed<S: TrieBackendStorage<Blake2Hasher>>(
+    raw: &[u8],
+    parent_backend: &TrieBackend<S, Blake2Hasher>,
+    canceled: &AtomicBool,
+    mut observed: impl FnMut(CapturePhase),
 ) -> Result<Vec<u8>, ProbeError> {
     let captured = Mutex::new(CapturedNodes::default());
     check(canceled, &captured)?;
@@ -240,8 +275,10 @@ pub fn capture_historical_on_backend<S: TrieBackendStorage<Blake2Hasher>>(
         *parent.state_root(),
     )
     .build();
-    let code = backend
-        .storage(well_known_keys::CODE)
+    let code = backend.storage(well_known_keys::CODE);
+    observed(CapturePhase::Code);
+    check_failure(&captured)?;
+    let code = code
         .map_err(|e| ProbeError::new(format!("historical capture parent code: {e}")))?
         .ok_or_else(|| ProbeError::new("historical capture parent code absent"))?;
     if code.len() > MAXIMUM_CODE_BYTES
@@ -252,11 +289,15 @@ pub fn capture_historical_on_backend<S: TrieBackendStorage<Blake2Hasher>>(
             "historical capture parent runtime code differs",
         ));
     }
-    let heap_pages = backend
-        .storage(well_known_keys::HEAP_PAGES)
+    check(canceled, &captured)?;
+    let heap_pages = backend.storage(well_known_keys::HEAP_PAGES);
+    observed(CapturePhase::Heap);
+    check_failure(&captured)?;
+    let heap_pages = heap_pages
         .map_err(|e| ProbeError::new(format!("historical capture heap proof: {e}")))?
         .map(|bytes| scale_exact::<u64>("capture heap pages", &bytes))
         .transpose()?;
+    check(canceled, &captured)?;
     let wasm = sp_maybe_compressed_blob::decompress(&code, MAXIMUM_EXPANDED_CODE_BYTES)
         .map_err(|e| ProbeError::new(format!("historical capture code decompression: {e}")))?;
     memory_bound(&wasm, heap_pages)?;
@@ -302,7 +343,7 @@ pub fn capture_historical_on_backend<S: TrieBackendStorage<Blake2Hasher>>(
     check(canceled, &captured)?;
     // This is the exact pinned SDK execution-proof primitive, not a caller
     // claim that an arbitrary state_getReadProof key list happened to suffice.
-    let (output, proof) = std::panic::catch_unwind(AssertUnwindSafe(|| {
+    let execution = std::panic::catch_unwind(AssertUnwindSafe(|| {
         prove_execution_on_trie_backend(
             &backend,
             &mut overlay,
@@ -312,10 +353,12 @@ pub fn capture_historical_on_backend<S: TrieBackendStorage<Blake2Hasher>>(
             &runtime,
             &mut extensions,
         )
-    }))
-    .map_err(|_| ProbeError::new("historical capture execution panicked on parent proof"))?
-    .map_err(|e| ProbeError::new(format!("historical capture execution refused: {e}")))?;
-    check(canceled, &captured)?;
+    }));
+    observed(CapturePhase::Execution);
+    check_failure(&captured)?;
+    let (output, proof) = execution
+        .map_err(|_| ProbeError::new("historical capture execution panicked on parent proof"))?
+        .map_err(|e| ProbeError::new(format!("historical capture execution refused: {e}")))?;
     if !output.is_empty()
         || overlay.transaction_depth() != 0
         || extensions
@@ -327,19 +370,23 @@ pub fn capture_historical_on_backend<S: TrieBackendStorage<Blake2Hasher>>(
             "historical capture output or transaction balance differs",
         ));
     }
+    check(canceled, &captured)?;
     // Record paths needed to materialize writes too. A runtime need not ask
     // the root itself. A suppressed SDK read/root error remains sticky above,
     // and strict replay below independently rejects incomplete write paths.
     let root = std::panic::catch_unwind(AssertUnwindSafe(|| {
         overlay.storage_root(&backend, state_version).0
-    }))
-    .map_err(|_| ProbeError::new("historical capture root materialization panicked"))?;
-    check(canceled, &captured)?;
+    }));
+    observed(CapturePhase::Root);
+    check_failure(&captured)?;
+    let root =
+        root.map_err(|_| ProbeError::new("historical capture root materialization panicked"))?;
     if root != *child.state_root() {
         return Err(ProbeError::new(
             "historical capture child state root differs",
         ));
     }
+    check(canceled, &captured)?;
     drop(backend);
     let state = captured
         .into_inner()
@@ -368,13 +415,13 @@ pub fn capture_historical_on_backend<S: TrieBackendStorage<Blake2Hasher>>(
     };
     let job_json = serde_json::to_string(&job)
         .map_err(|e| ProbeError::new(format!("historical capture job JSON: {e}")))?;
-    if canceled.load(Ordering::Acquire) {
-        return Err(ProbeError::new("historical capture canceled"));
-    }
-    let replay = replay_historical_json(job_json.as_bytes())?;
-    if canceled.load(Ordering::Acquire) {
-        return Err(ProbeError::new("historical capture canceled"));
-    }
+    check_cancellation(canceled)?;
+    let replay = replay_historical_json(job_json.as_bytes());
+    observed(CapturePhase::Replay);
+    // A completed strict replay refusal is evidence already obtained; owner
+    // cancellation must not erase it or publish a successful report instead.
+    let replay = replay?;
+    check_cancellation(canceled)?;
     let report = CaptureReport {
         schema: CAPTURE_SCHEMA.to_owned(),
         request_sha256: sha2_256(raw),
@@ -388,9 +435,11 @@ pub fn capture_historical_on_backend<S: TrieBackendStorage<Blake2Hasher>>(
     };
     let encoded = serde_json::to_vec(&report)
         .map_err(|e| ProbeError::new(format!("historical capture report JSON: {e}")))?;
+    observed(CapturePhase::Report);
     if encoded.len() > MAXIMUM_CAPTURE_REPORT_BYTES {
         return Err(ProbeError::new("historical capture report byte bound"));
     }
+    check_cancellation(canceled)?;
     Ok(encoded)
 }
 

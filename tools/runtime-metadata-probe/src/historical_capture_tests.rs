@@ -262,6 +262,274 @@ fn historical_capture_cancellation_before_and_after_real_backend_read_refuses_ou
 }
 
 #[test]
+fn historical_capture_cancellation_after_completed_phases_never_publishes() {
+    use capture::CapturePhase;
+
+    let code = wasm("", &format!("{READ}{WRITE}{CHILD_WRITE}"));
+    let job = job(&code, |storage| {
+        storage.top.insert(ACCOUNT.to_vec(), b"v".to_vec());
+        storage
+            .children_default
+            .get_mut(OWNER)
+            .unwrap()
+            .data
+            .insert(b"k".to_vec(), b"v".to_vec());
+    });
+    collect(&job).expect("complete phase fixture must reach strict replay before cancellation");
+    let raw = serde_json::to_vec(&request(&job)).unwrap();
+    let phases = [
+        CapturePhase::Code,
+        CapturePhase::Heap,
+        CapturePhase::Execution,
+        CapturePhase::Root,
+        CapturePhase::Replay,
+        CapturePhase::Report,
+    ];
+    for (index, phase) in phases.iter().enumerate() {
+        let canceled = AtomicBool::new(false);
+        let mut reached = Vec::new();
+        let error = capture::capture_historical_on_backend_observed(
+            &raw,
+            &backend(&job),
+            &canceled,
+            |completed| {
+                reached.push(completed);
+                if completed == *phase {
+                    canceled.store(true, Ordering::Release);
+                }
+            },
+        )
+        .expect_err("completed-phase cancellation published a historical proof job");
+        assert_eq!(reached, phases[..=index], "phase {phase:?}");
+        assert_eq!(
+            error.to_string(),
+            "historical capture canceled",
+            "phase {phase:?}"
+        );
+    }
+}
+
+struct PhaseCanceledStorage<'a, S> {
+    inner: &'a S,
+    canceled: &'a AtomicBool,
+    armed: &'a AtomicBool,
+    canceled_reads: &'a AtomicUsize,
+}
+
+impl<S: TrieBackendStorage<Blake2Hasher>> TrieBackendStorage<Blake2Hasher>
+    for PhaseCanceledStorage<'_, S>
+{
+    fn get(&self, key: &H256, prefix: (&[u8], Option<u8>)) -> Result<Option<Vec<u8>>, String> {
+        let raw = self.inner.get(key, prefix)?;
+        if self.armed.swap(false, Ordering::AcqRel) {
+            self.canceled_reads.fetch_add(1, Ordering::AcqRel);
+            self.canceled.store(true, Ordering::Release);
+        }
+        Ok(raw)
+    }
+}
+
+#[test]
+fn historical_capture_backend_cancellation_survives_heap_execution_and_root_translation() {
+    use capture::CapturePhase;
+
+    let code = wasm("", &format!("{READ}{WRITE}{CHILD_WRITE}"));
+    let job = job(&code, |storage| {
+        storage.top.insert(ACCOUNT.to_vec(), b"v".to_vec());
+        storage
+            .children_default
+            .get_mut(OWNER)
+            .unwrap()
+            .data
+            .insert(b"k".to_vec(), b"v".to_vec());
+    });
+    collect(&job).expect("complete adjacent-read fixture must replay");
+    let raw = serde_json::to_vec(&request(&job)).unwrap();
+    for (previous, target) in [
+        (None, CapturePhase::Code),
+        (Some(CapturePhase::Code), CapturePhase::Heap),
+        (Some(CapturePhase::Heap), CapturePhase::Execution),
+        (Some(CapturePhase::Execution), CapturePhase::Root),
+    ] {
+        let parent = backend(&job);
+        let canceled = AtomicBool::new(false);
+        let armed = AtomicBool::new(previous.is_none());
+        let canceled_reads = AtomicUsize::new(0);
+        let observed = TrieBackendBuilder::new(
+            PhaseCanceledStorage {
+                inner: parent.backend_storage(),
+                canceled: &canceled,
+                armed: &armed,
+                canceled_reads: &canceled_reads,
+            },
+            *parent.root(),
+        )
+        .build();
+        let mut reached = Vec::new();
+        let error = capture::capture_historical_on_backend_observed(
+            &raw,
+            &observed,
+            &canceled,
+            |completed| {
+                reached.push(completed);
+                if Some(completed) == previous {
+                    armed.store(true, Ordering::Release);
+                }
+            },
+        )
+        .expect_err("canceled parent read became a historical proof job");
+        assert_eq!(
+            canceled_reads.load(Ordering::Acquire),
+            1,
+            "target {target:?}"
+        );
+        assert_eq!(
+            reached.last(),
+            Some(&target),
+            "actual read missed target {target:?}"
+        );
+        assert_eq!(
+            error.to_string(),
+            "historical capture canceled",
+            "target {target:?}"
+        );
+    }
+}
+
+/// Return a real node before injecting one concrete integrity fault and an
+/// owner cancellation. The caller must not mistake that returned evidence for
+/// the SDK's later generic invalid-root translation or erase its first cause.
+struct InvalidatedStorage<'a, S> {
+    inner: &'a S,
+    reads: &'a AtomicUsize,
+    canceled: &'a AtomicBool,
+    fault: u8,
+}
+
+impl<S: TrieBackendStorage<Blake2Hasher>> TrieBackendStorage<Blake2Hasher>
+    for InvalidatedStorage<'_, S>
+{
+    fn get(&self, key: &H256, prefix: (&[u8], Option<u8>)) -> Result<Option<Vec<u8>>, String> {
+        self.reads.fetch_add(1, Ordering::AcqRel);
+        let mut raw = self.inner.get(key, prefix)?;
+        assert!(raw.as_ref().is_some_and(|value| !value.is_empty()));
+        match self.fault {
+            0 => raw.as_mut().unwrap()[0] ^= 1,
+            1 => raw.as_mut().unwrap().clear(),
+            2 => raw = None,
+            _ => unreachable!(),
+        }
+        self.canceled.store(true, Ordering::Release);
+        Ok(raw)
+    }
+}
+
+#[test]
+fn historical_capture_returned_node_refusal_precedes_later_cancellation() {
+    let job = job(&wasm("", READ), |_| {});
+    collect(&job).expect("complete node fixture must replay before invalidation");
+    let raw = serde_json::to_vec(&request(&job)).unwrap();
+    let parent = backend(&job);
+    let original_code = parent.storage(well_known_keys::CODE).unwrap();
+    for fault in 0..3 {
+        let canceled = AtomicBool::new(false);
+        let reads = AtomicUsize::new(0);
+        let observed = TrieBackendBuilder::new(
+            InvalidatedStorage {
+                inner: parent.backend_storage(),
+                reads: &reads,
+                canceled: &canceled,
+                fault,
+            },
+            *parent.root(),
+        )
+        .build();
+        let error = capture::capture_historical_on_backend(&raw, &observed, &canceled)
+            .expect_err("returned invalid node became proof evidence");
+        assert_eq!(reads.load(Ordering::Acquire), 1);
+        assert!(canceled.load(Ordering::Acquire));
+        assert_eq!(
+            error.to_string(),
+            if fault == 2 {
+                "historical capture parent trie node is absent"
+            } else {
+                "historical capture trie node size or content identity differs"
+            },
+            "returned integrity evidence was erased or translated"
+        );
+        assert_eq!(
+            parent.storage(well_known_keys::CODE).unwrap(),
+            original_code
+        );
+    }
+}
+
+#[test]
+fn historical_capture_completed_refusals_survive_later_phase_cancellation() {
+    use capture::CapturePhase;
+
+    let good = job(&wasm("", ""), |_| {});
+    collect(&good).expect("otherwise complete phase fixture must replay");
+    for (phase, expected) in [
+        (
+            CapturePhase::Code,
+            "historical capture parent runtime code differs",
+        ),
+        (
+            CapturePhase::Execution,
+            "historical capture execution refused:",
+        ),
+        (
+            CapturePhase::Root,
+            "historical capture child state root differs",
+        ),
+    ] {
+        let mut job = if phase == CapturePhase::Execution {
+            job(&wasm("", "unreachable"), |_| {})
+        } else {
+            good.clone()
+        };
+        if phase == CapturePhase::Root {
+            replace_child(&mut job, |header| {
+                let mut root = *header.state_root();
+                root.0[0] ^= 1;
+                header.set_state_root(root);
+            });
+        }
+        let mut input = request(&job);
+        if phase == CapturePhase::Code {
+            input.runtime_code_sha256[0] ^= 1;
+        }
+        let canceled = AtomicBool::new(false);
+        let mut reached = false;
+        let error = capture::capture_historical_on_backend_observed(
+            &serde_json::to_vec(&input).unwrap(),
+            &backend(&job),
+            &canceled,
+            |completed| {
+                if completed == phase {
+                    reached = true;
+                    canceled.store(true, Ordering::Release);
+                }
+            },
+        )
+        .expect_err("completed integrity refusal became proof evidence");
+        assert!(
+            reached && canceled.load(Ordering::Acquire),
+            "phase {phase:?}: {error}"
+        );
+        assert!(
+            error.to_string().starts_with(expected),
+            "phase {phase:?}: {error}"
+        );
+        assert!(
+            !error.to_string().contains("canceled"),
+            "phase {phase:?}: {error}"
+        );
+    }
+}
+
+#[test]
 fn historical_capture_missing_refund_and_observed_zero_remain_distinct_and_unadmitted() {
     for refund in [None, Some(0), Some(250)] {
         let job = fee_job(refund, false, true);
