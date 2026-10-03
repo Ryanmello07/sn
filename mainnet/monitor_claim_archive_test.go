@@ -252,6 +252,8 @@ func (self *monitorClaimArchiveFixture) refusedWhilePeerContinues(t *testing.T, 
 		if exit != 3 || run.closes.Load() != 2 {
 			t.Fatal("Claim refusal lost its terminal cause or did not release both owners", exit, run.closes.Load())
 		}
+	case event := <-run.sink.events:
+		t.Fatal("refused Claim custody emitted another source sample", event)
 	case <-time.After(20 * time.Second):
 		t.Fatal("refused Claim role did not join independently")
 	}

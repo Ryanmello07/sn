@@ -372,10 +372,21 @@ func TestHistoricalFeeContextPublicStrictRequestAndInputPins(t *testing.T) {
 	if code := runMain(t.Context(), []string{"verify-historical-fee-context", "--request", path, "--request-sha256", monitorReadDigest(unknown)}, &stdout, &stderr); code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "unknown field") {
 		t.Fatal("public fee request accepted an injected authority assertion", code, stderr.String())
 	}
-	request.Archive.Sha256 = "sha256:" + strings.Repeat("0", 64)
+	original := request
+	request.Archive.Sha256 = monitorReadDigest([]byte("synthetic different archive bytes"))
+	if request.Archive.Sha256 == original.Archive.Sha256 {
+		t.Fatal("negative fixture did not change the exact archive pin")
+	}
+	if err := request.validate(); err != nil {
+		t.Fatal("negative fixture did not reach actual input reading", err)
+	}
 	code, raw, diagnostic := historicalFeeContextTestRun(t, t.Context(), request)
 	if code == 0 || len(raw) != 0 || !strings.Contains(diagnostic, "input differs") {
 		t.Fatal("public fee context bypassed exact source bytes", code, diagnostic)
+	}
+	request = original
+	if err := request.validate(); err != nil {
+		t.Fatal("alias control baseline is not a valid independent request", err)
 	}
 	request.Engine = request.Job
 	if err := request.validate(); err == nil {

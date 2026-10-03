@@ -374,11 +374,22 @@ func TestMonitorNativeRestoreRefusesOmittedChangedAndUnreviewedHistory(t *testin
 		t.Fatal(err)
 	}
 	var output, diagnostic bytes.Buffer
-	if code := runMain(f.native.ctx, f.requestArgs(t, f.request), &output, &diagnostic); code == 0 || output.Len() != 0 || !strings.Contains(diagnostic.String(), "original reference") {
+	if code := runMain(f.native.ctx, f.requestArgs(t, f.request), &output, &diagnostic); code == 0 || output.Len() != 0 || !strings.Contains(diagnostic.String(), "monitor history copied member read") || !strings.Contains(diagnostic.String(), "differs from its exact pin") {
 		t.Fatal("changed copied segment did not fail its exact-byte admission", code, diagnostic.String())
 	}
 	if !reflect.DeepEqual(before, mainnetNamespaceTest(t, f.storage.target.root)) {
 		t.Fatal("changed segment wrote target custody")
+	}
+	if err := os.WriteFile(segment, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	diagnostic.Reset()
+	if code := runMain(f.native.ctx, f.requestArgs(t, f.request), &output, &diagnostic); code != 0 || output.Len() == 0 {
+		t.Fatal("restored exact copied bytes did not restore request admission", code, diagnostic.String())
+	}
+	if !reflect.DeepEqual(before, mainnetNamespaceTest(t, f.storage.target.root)) {
+		t.Fatal("read-only request recovery changed target custody")
 	}
 }
 

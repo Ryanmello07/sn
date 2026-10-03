@@ -357,7 +357,7 @@ func TestSnapshotHeadLostAcknowledgementRecovery(t *testing.T) {
 func TestSnapshotHeadAcknowledgmentReadFailureRetainsOriginalWrite(t *testing.T) {
 	for _, stage := range []string{"pending-synced", "committed-synced"} {
 		for _, cause := range []string{"canceled", "io"} {
-			t.Run(stage+"/"+cause, func(t *testing.T) {
+			func() {
 				self := newFixture(t)
 				original, next := []byte("original"), []byte("exact-next")
 				if err := self.owner.Publish(original, nil); err != nil {
@@ -393,7 +393,7 @@ func TestSnapshotHeadAcknowledgmentReadFailureRetainsOriginalWrite(t *testing.T)
 					want = context.Canceled
 				}
 				if !reached || !errors.Is(err, want) || !errors.Is(err, ErrUncertain) || errors.Is(err, durablevolume.ErrIdentity) || cause == "io" && failedReads != 1 {
-					t.Fatal("failed acknowledgment invented changed custody or lost pending cause", reached, failedReads, err)
+					t.Fatal("failed acknowledgment invented changed custody or lost pending cause", stage, cause, reached, failedReads, err)
 				}
 				attribute := Attribute(testSpec.Kind, testSpec.Name)
 				retained := make([]byte, 4096)
@@ -437,7 +437,7 @@ func TestSnapshotHeadAcknowledgmentReadFailureRetainsOriginalWrite(t *testing.T)
 				if raw, present, err := self.owner.Read(); err != nil || !present || !bytes.Equal(raw, next) {
 					t.Fatal("recovered acknowledgment changed original next payload", err, present, string(raw))
 				}
-			})
+			}()
 		}
 	}
 }
