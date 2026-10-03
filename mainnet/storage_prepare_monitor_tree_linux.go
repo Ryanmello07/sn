@@ -51,7 +51,10 @@ type storageMonitorTreeCensus struct {
 }
 
 func storageMonitorTreePath(path string) bool {
-	if path == "" || path == "." || path == ".." || filepath.IsAbs(path) || filepath.Clean(path) != path || strings.HasPrefix(path, "../") || strings.ContainsAny(path, "\x00\n\r") || len(path) > 1024 || strings.Count(path, "/") >= 16 {
+	// Runtime history already bounds the full absolute reference at 1024
+	// bytes. Relative names retain that upper bound and the physical
+	// inventory's 32-component profile, including the leaf itself.
+	if path == "" || path == "." || path == ".." || filepath.IsAbs(path) || filepath.Clean(path) != path || strings.HasPrefix(path, "../") || strings.ContainsAny(path, "\x00\n\r") || len(path) > maximumMonitorHistoryPath || strings.Count(path, "/") >= 32 {
 		return false
 	}
 	for _, part := range strings.Split(path, "/") {

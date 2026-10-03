@@ -44,6 +44,16 @@ func newMonitorNativeCohortFixture(t *testing.T, segments int) *monitorNativeCoh
 
 func newMonitorNativeCohortFixtureLayout(t *testing.T, segments int, nested bool) *monitorNativeCohortFixture {
 	t.Helper()
+	profile := ""
+	if nested {
+		profile = "nested"
+	}
+	return newMonitorNativeCohortFixtureNamespace(t, segments, profile)
+}
+
+func newMonitorNativeCohortFixtureNamespace(t *testing.T, segments int, profile string) *monitorNativeCohortFixture {
+	t.Helper()
+	nested := profile != ""
 	parent, err := os.MkdirTemp(os.TempDir(), "nc-")
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +90,7 @@ func newMonitorNativeCohortFixtureLayout(t *testing.T, segments int, nested bool
 	for index := range paths {
 		name := fmt.Sprintf("a%03d.json", index)
 		if nested {
-			paths[index] = filepath.Join(f.sources[1].root, "history", "epoch", name)
+			paths[index] = monitorHistoryRestoreTestPath(t, f.sources[1].root, name, profile)
 		} else {
 			paths[index] = filepath.Join(f.sources[1].root, name)
 			owners[1] = append(owners[1], storagePreparationSnapshotOwner(t, "mainnet-monitor-checkpoint", name, maxRpcReplyBytes))
@@ -172,6 +182,9 @@ func newMonitorNativeCohortFixtureLayout(t *testing.T, segments int, nested bool
 	}
 	f.request = monitorNativeRestoreCohortRequest{Schema: monitorNativeRestoreCohortSchema, Expected: archive.request.Expected, Policy: native.policy, Original: monitorHistoryReference{Path: checkpoint, Sha256: monitorReadDigest(raw), Bytes: uint64(len(raw))}, Limits: durablevolume.PreparationCohortLimits{MaxRoots: 2, MaxPlanBytes: 32 * 1024 * 1024, MaxControlBytes: 64 * 1024 * 1024, MaxEntries: 8192, MaxBytes: 512 * 1024 * 1024, MaxOwnerAttributes: 4096, MaxOwnerAttributeBytes: 16 * 1024 * 1024}}
 	limits := durablevolume.InventoryLimits{MaxEntries: 4096, MaxBytes: 256 * 1024 * 1024, MaxDepth: 4, MaxOwnerAttributes: 2048, MaxOwnerAttributeBytes: 8 * 1024 * 1024}
+	if profile == "deepest" || profile == "longest" {
+		limits.MaxDepth = 32
+	}
 	for index, source := range f.sources {
 		f.files = append(f.files, monitorHistoryRestoreTestFiles(t, source.root, nested))
 		target := storageSnapshotRestoreTargetWithLimits(t, source, native.ctx, owners[index][0], false, &limits)
@@ -184,6 +197,7 @@ func newMonitorNativeCohortFixtureLayout(t *testing.T, segments int, nested bool
 		if err := decodeMonitorHistoryInput(raw, &preparation); err != nil {
 			t.Fatal(err)
 		}
+		preparation.Limits.MaxDepth = limits.MaxDepth
 		if index == 0 {
 			preparation.Owners[0].RestoreCoverage = durablevolume.PreparationCompleteUnion
 		} else if nested {

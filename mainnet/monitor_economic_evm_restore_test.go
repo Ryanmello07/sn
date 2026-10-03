@@ -50,6 +50,16 @@ func newMonitorEvmRestoreFixture(t *testing.T, rootCount, segments int) *monitor
 // restoration still goes through the production public plan/apply commands.
 func newMonitorEvmRestoreFixtureLayout(t *testing.T, rootCount, segments int, nested bool) *monitorEvmRestoreFixture {
 	t.Helper()
+	profile := ""
+	if nested {
+		profile = "nested"
+	}
+	return newMonitorEvmRestoreFixtureNamespace(t, rootCount, segments, profile)
+}
+
+func newMonitorEvmRestoreFixtureNamespace(t *testing.T, rootCount, segments int, profile string) *monitorEvmRestoreFixture {
+	t.Helper()
+	nested := profile != ""
 	if rootCount < 1 || rootCount > 2 || segments < 1 || segments > 512 {
 		t.Fatal("invalid explicit synthetic restore profile")
 	}
@@ -93,7 +103,7 @@ func newMonitorEvmRestoreFixtureLayout(t *testing.T, rootCount, segments int, ne
 	for index := range paths {
 		name := fmt.Sprintf("a%03d.json", index)
 		if nested {
-			paths[index] = filepath.Join(f.sources[rootCount-1].root, "history", "epoch", name)
+			paths[index] = monitorHistoryRestoreTestPath(t, f.sources[rootCount-1].root, name, profile)
 		} else {
 			paths[index] = filepath.Join(f.sources[rootCount-1].root, name)
 			owners[rootCount-1] = append(owners[rootCount-1], storagePreparationSnapshotOwner(t, "mainnet-monitor-checkpoint", name, maxRpcReplyBytes))
@@ -187,6 +197,9 @@ func newMonitorEvmRestoreFixtureLayout(t *testing.T, rootCount, segments int, ne
 	}
 	f.request = monitorEvmRestoreCohortRequest{Schema: monitorEvmRestoreCohortSchema, Expected: archive.request.Expected, Policy: evm.policy, Original: monitorHistoryReference{Path: checkpoint, Sha256: monitorReadDigest(raw), Bytes: uint64(len(raw))}, Limits: durablevolume.PreparationCohortLimits{MaxRoots: uint64(rootCount), MaxPlanBytes: 32 * 1024 * 1024, MaxControlBytes: 64 * 1024 * 1024, MaxEntries: 8192, MaxBytes: 512 * 1024 * 1024, MaxOwnerAttributes: 4096, MaxOwnerAttributeBytes: 16 * 1024 * 1024}}
 	limits := durablevolume.InventoryLimits{MaxEntries: 4096, MaxBytes: 256 * 1024 * 1024, MaxDepth: 4, MaxOwnerAttributes: 2048, MaxOwnerAttributeBytes: 8 * 1024 * 1024}
+	if profile == "deepest" || profile == "longest" {
+		limits.MaxDepth = 32
+	}
 	for index, source := range f.sources {
 		f.files = append(f.files, f.filesAt(t, source.root))
 		target := storageSnapshotRestoreTargetWithLimits(t, source, evm.ctx, owners[index][0], false, &limits)
@@ -199,6 +212,7 @@ func newMonitorEvmRestoreFixtureLayout(t *testing.T, rootCount, segments int, ne
 		if err := decodeMonitorHistoryInput(raw, &preparation); err != nil {
 			t.Fatal(err)
 		}
+		preparation.Limits.MaxDepth = limits.MaxDepth
 		if index == 0 {
 			preparation.Owners[0].RestoreCoverage = durablevolume.PreparationCompleteUnion
 		} else if nested {
