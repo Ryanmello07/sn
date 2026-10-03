@@ -58,8 +58,13 @@ now pass [normally and with race detection](evidence/payout-retention-fixture-ra
 with no skips or race reports. [Five affected package vets and the CLI build](evidence/payout-retention-vet-build-20261003.json)
 also pass on that exact source. The full `./model` suite is running with an
 isolated PostgreSQL/Redis fixture; its terminal result remains pending.
-Additional financial recovery race tests and causal controls retain separate
-scopes and are not closed by the three fixture tests.
+The [six normal recovery control groups](evidence/payout-retention-causal-normal-20261003.json)
+produce all 12 intended assertion failures: stale-attempt admission, retained
+obligations, bounded recovery, historical excess and atomic journal/reset
+updates are discriminated. These include explicitly labeled omission controls
+and an old-body control with the current request-journal precondition; they are
+not all unmodified historical-source runs. Additional financial recovery race
+tests and race controls remain pending in separate scopes.
 These checkpoints do not supply completed release, deployment or activation
 evidence.
 

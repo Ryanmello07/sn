@@ -33,8 +33,11 @@ replacement debt. Frozen Server `97d22989` implements this correction, with
 test-only successor `63027130` retaining identical production and module bytes.
 Its [three corrected fixture tests pass under race detection](evidence/payout-retention-fixture-race-20261003.json),
 and [five affected package vets plus the CLI build pass](evidence/payout-retention-vet-build-20261003.json).
-The full model suite, additional production recovery race coverage and causal
-controls remain pending. Neither source is merged or deployed; these scoped
+The [normal recovery controls](evidence/payout-retention-causal-normal-20261003.json)
+now produce all 12 intended behavioral failures across six groups, with owned
+fixture cleanup completed. Omission controls and modified old-body controls
+retain their explicit labels. The full model suite, additional production
+recovery race coverage and race causal controls remain pending. Neither source is merged or deployed; these scoped
 receipts do not establish complete financial qualification.
 
 Processor recovery must also bind each response to its original attempt before
