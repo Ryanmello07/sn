@@ -3,6 +3,7 @@
   "completion": "NOT_FINALIZED_ALL38_REQUIREMENTS_RETAINED",
   "evidence_sha256": {
     "cache-reclaim-28-20261003.json": "e5e1f8b6097d6c14496b1d107d0771c70f14d8f4c84d3a17055a6696fe0d91d0",
+    "cache-reclaim-30-20261003.json": "93f33337005af28f2d1dc00e36a14eda0ff25c582ed9463de73eb954259750cf",
     "capacity-public-completion-qualification-20261003.json": "90b753f6610be6766faebb62d73e80381fa4449264d8e2b5e6d6f30d9fec58bf",
     "cargo-control-e68-main-integration-20261003.json": "fd352ee7eb1fae47c52a09cf07aeffc7edd2b91e93df1d81bee8b02ada9d5425",
     "cargo-control-e68-qualification-20261003.json": "3266f3e3827328f6ecb7b5d0c476b48d384265b73d97ec9eb163afa9f61290aa",
@@ -33,6 +34,7 @@
     "evm-review-reuse-selected-qualification-20261003.json": "98b17a41e6fad8b9a203a5593837d6ae5da545d9f76b0ff06029e6d369a78de8",
     "existing-validator-cache-selection-source-review-20261003.json": "4a4f215d92e9c73910d89581dff7404a9ebecf4f33f7179e0884012481015dd9",
     "fee-caller-deadline4c96-qualification-20261003.json": "df37d930671134fbbd931ce5e615d809772afed20fe2cdd79c8bb99085d63061",
+    "go-test-image-173f-review-20261003.json": "897560710c3e0331e99b38c85bb35a3220e5ca62798fbd1a6fe0a88acd57a58b",
     "historical-proof-backend-qualification-20261003.json": "3a393f0fcd3e58f2fbd4a8491417c4e1b5739cff8b20a93f1c142c50ac349aa0",
     "monitor-policy-renewal-qualification-20261003.json": "5cee15514cae38a39ffe021c489f57ffaa93346701754b353a7be823d663e5cd",
     "monitor-progress-attempt-controls-qualification-20261003.json": "fd006fd5277e5c5d387ab28a5be12b172b12212846b89adaeae56bcca751a1ec",

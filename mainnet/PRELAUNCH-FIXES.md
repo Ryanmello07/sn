@@ -6679,3 +6679,12 @@ Operational headroom: the guarded reclaim29 plan found no eligible inactive arch
 The [independent EVM archive review](evidence/evm-history8d-qualification-review-20261003.json) binds66 artifacts,27 normal roots from disjoint19+8 runs, the same27 under race detection, vet and five operative omissions in both modes. Controls require exact retained archive custody, fee-prefix accounting, archive-before-compaction publication, original legacy review provenance and retained observation census. A generic failing exit is insufficient: preserve the selected root and intended source assertion.
 
 Qualified source8d9904a5 retains the original checkpoint before compaction and preserves credit, carry, payments and EVM cost history. Its current-main source join remains separate; this component result does not establish actual native fee authority, Claim/native conservation, deployment or observed settlement. Complete the Claim archive adapter and cross-domain economic rehearsal before accepting the continuous monitor as production-ready.
+
+The [guarded cache reclaim30](evidence/cache-reclaim-30-20261003.json) recovered11.07GiB from1,139 inactive compiler archives in the superseded durable-volume cache. Exact-path reference scanning, active-process checks and physical identity checks passed; source, modules, evidence and ELF executables remain retained. Recheck each workload’s current2x incremental forecast before admission; this free-space snapshot is not a lasting capacity guarantee.
+
+
+### October 3 retained Go qualification image safeguard
+
+The [test-image review](evidence/go-test-image-173f-review-20261003.json) verifies six actual-file stdlib controls and three byte-exact workflow files integrated at6f6169c6. Capture the original image’s mode, links, ownership, ancestors and hash, then retain its exact pinned bytes in an owned mode0500 single-link image. Verify physical custody and hash before and after execution, retain bounded logs, join descendant processes and remove inherited GOFLAGS that would retarget fixture subprocesses.
+
+This workflow addresses protected executable fixture admission without weakening production executable checks. Its receipt means pinned execution only: selected application roots, compiler/source/module provenance and actual outcomes require their own evidence. Do not rerun previously qualified application scopes merely to introduce this helper, or infer an original failed admission predicate that was not observed.

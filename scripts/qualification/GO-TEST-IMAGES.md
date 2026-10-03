@@ -1,0 +1,45 @@
+Go tests that use `os.Executable()` as a protected child must run from an
+explicitly retained test image. A normal `go test` invocation can select a
+hardlinked cache executable or unsuitable mode even when the source and module
+graph are correct. Preserve that original failure and its stat observation;
+do not relax the production executable guard or call it a product failure.
+
+Compile the exact test source once (`go test -c`, with the selected direct
+`-modfile`/`-overlay` flags if applicable), bind the build log and ELF SHA256 to
+the source/module receipt, then invoke `go_test_image.py` with a reviewed JSON
+recipe and a new owned output directory. The recipe contains:
+
+```
+{
+  "schema": "urnetwork-go-test-image-v1",
+  "source_image": {"path": "/absolute/mainnet.test", "sha256": "64_lowercase_hex"},
+  "expected_uid": 1000,
+  "cwd": "/absolute/frozen/sn/mainnet",
+  "arguments": ["-test.run=^ExactSelectedRoot$", "-test.count=1", "-test.v=test2json", "-test.timeout=10m"],
+  "timeout_seconds": 660,
+  "minimum_free_bytes": 118111600640,
+  "forecast": {"retained_image_bytes": 536870912, "log_bytes": 8388608},
+  "environment": {"TMPDIR": "/absolute/private/tmp"}
+}
+```
+
+The runner captures the original link count, UID, mode and ancestor metadata,
+streams exact pinned bytes into one fresh UID-owned mode0500/nlink1 ELF, and
+checks its inode/content before and after execution. The shared qualified
+process guard bounds output, joins descendants and cancels on owner timeout
+or floor refusal. The reviewed image/log forecast needs twice its future
+increment above the shared floor. An output directory is never reused.
+
+Parent `GOFLAGS` are removed and `GOWORK=off` is explicit so a fixture's nested
+Go command can inspect its own synthetic module instead of inheriting the
+parent's overlay/modfile. Other required fixture environment overrides are
+explicit in the recipe. This does not change the already-compiled parent
+image's graph.
+
+The receipt's `SOURCE_PINNED_EXECUTION_ONLY` status is not a test pass or a
+source qualification. Independently verify selected Go test events, exit,
+skip/failure distinctions, compilation/source/module joins and expected causal
+assertions. Retain every original automatic-executable setup refusal rather
+than relabeling a later corrected invocation as the original run. The helper's
+own six tests exercise actual files and a small ELF; they do not qualify the
+application or require rerunning already-passed application scopes.
