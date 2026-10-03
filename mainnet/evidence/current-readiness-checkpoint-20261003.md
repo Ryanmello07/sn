@@ -6,7 +6,7 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | --- | --- | --- |
 | PH-01 | Recovery implemented; final composed continuation and host restore rehearsal remain. | [paired-metadata-sn-qualification-20261003.json](paired-metadata-sn-qualification-20261003.json) |
 | PH-02 | Customer/provider request recovery qualified by component; signer custody and current release/client adoption remain. | [customer-final-race-qualification-20261003.json](customer-final-race-qualification-20261003.json) |
-| PH-03 | Provider/claim GET29 selected roots pass normal/race/vet; body hard-cause successor, operative controls and current-role composition remain. | [monitor-progress-attempt-selected-qualification-20261003.json](monitor-progress-attempt-selected-qualification-20261003.json) |
+| PH-03 | Provider/claim GETs: 29 tests pass normally and with race detection, plus vet; seven causal groups verified. Body-error/policy successors and final role composition remain. | [monitor-progress-attempt-controls-qualification-20261003.json](monitor-progress-attempt-controls-qualification-20261003.json) |
 | PH-04 | Capability selection implemented; renewed native scope passes; actual runtime authority and changed consumers remain. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
 | PH-05 | Existing caches retained; actual repeated-work and dependency-invalidation census still required. | No new closure evidence |
 | PH-06 | Published recovery dependency joined; exact final source/module/config release still required. | [current-connect-paired-core-publication-20261003.json](current-connect-paired-core-publication-20261003.json) |
@@ -19,7 +19,7 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-13 | Claim consumer qualified and merged; independently reviewed rolling expectations and two-domain topology remain. | [claim-consumer-merge-20261003.json](claim-consumer-merge-20261003.json) |
 | PH-14 | Bootstrap/role mechanisms implemented; composed policy custody and live activation remain. | No new closure evidence |
 | PH-15 | Claim/native/EVM status scopes implemented; final alert domains and delivered on-call exercise remain. | [claim-consumer-qualification-20261003.json](claim-consumer-qualification-20261003.json) |
-| PH-16 | Corrected1d3c fullmodel complete1473PASS/0FAIL/11SKIP; new f024 semantic join and final exact release qualification remain. | [customer-corrected-full-model-terminal-20261003.json](customer-corrected-full-model-terminal-20261003.json) |
+| PH-16 | Original full model: 1,473 passes, zero failures, 11 skips. Current Server5f: 22 tests pass per mode, vet and five intended causal failures per mode verified; published. Final common-source release remains. | [server-current-financial-main-publication-20261003.json](server-current-financial-main-publication-20261003.json) |
 | PH-17 | Generation/index lookup lifetime census and causal work counts remain. | No new closure evidence |
 | PH-18 | Pinned connection provenance scopes exist; current pooled-route replacement composition remains. | No new closure evidence |
 | PH-19 | Parent/post-state renewed native catalog qualified; current cross-consumer runtime authority join remains. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
