@@ -6174,3 +6174,45 @@ The registry fault-case batch reached a genuine valid-resume defect after correc
 The [independent SN consumer receipt](evidence/current-module-sn-qualification-20261003.json) now passes ten selected roots in normal and race modes, four-package vet and all source/dependency checks on frozen SN `8cb08c95` with Connect `5def2fa4`, SDK `95ccd57d` and SCTP `6443417`. All 38 bindings, actual test outcomes and vet exit were independently verified. This covers selected public startup/native/ledger/miner recovery consumers, not unpublished union/rebind/capacity code, the newer `08d48400` dependency or the full production release. Server `0e04f038` race qualification remains separately active; a later publication join must retain newer upstream Server `49450197`.
 
 The [registry valid-resume failure](evidence/restore-registry-valid-resume-failure-20261003.json) records the genuine one-root failure on test-only batch `7a4123fe`, after invalid approvals correctly refused. Its metadata and actual terminal failure were rehashed. Static tracing identifies inconsistent authenticated receipt inventories between storage construction and checkpoint/replay. The production successor must qualify actual valid continuation, lost acknowledgment/reopen and forged/foreign-record refusal before this recovery gate can close. Earlier diagnostic-only failures remain distinct; no registry pass is inferred.
+
+### October 3 completed compatibility and customer recovery scopes
+
+The [current compatibility receipt](evidence/current-module-compatibility-qualification-20261003.json)
+qualifies frozen SN `8cb08c95` / Server `0e04f038`: 25 selected roots
+pass normal/race, ten package vets pass, and fixture cleanup exits zero.
+All 122 receipt bindings were independently rehashed. This uses Connect
+`5def2fa4`; it does not qualify the later `08d48400` composition.
+
+Customer Server `530726fc` passes [14 selected roots in both modes](evidence/customer-server530-scoped-qualification-20261003.json),
+but its original controller vet fails because a test does not release its
+context on every path. The [test-only `a85c3e3f` correction](evidence/customer-context-correction-qualification-20261003.json)
+adds the missing deferred cancellation; the affected root passes normal/race
+and controller vet passes. Production and module bytes are unchanged. The
+original vet failure remains a failure; no fresh full fourteen-root rerun is
+claimed for the corrected source.
+
+The [separate SDK scope](evidence/customer-sdk-qualification-20261003.json)
+passes two Go roots normal/race, vet, six JavaScript checks and an actual C++
+generated-interface roundtrip at SDK `9ae95704` / API `56545699`. An overbroad
+offline module preflight appended unused checksums to the independent copy;
+that failed attempt is retained. The tracked file was restored exactly before
+the qualified Go reruns, whose before/after checksum guards match. Qualification
+covers the imported package graph, not all unused module metadata.
+
+Coordinator verification rehashed all 47 SDK, 49 original Server and 38 corrected
+Server bindings and counted terminal Go root events in the qualified raw logs.
+Customer causal controls, current-source joins, final model qualification and
+publication remain separate work. Client adoption and deployed behavior are
+unobserved. Latest Server `a244ae7c` on published Connect `08d48400` passes sixteen
+normal roots and seven vets; its race run is active and not yet accepted.
+
+Continuous economic monitoring must catch up through authenticated bounded
+historical pages rather than reject a cursor more than 4,096 blocks behind.
+When an evidence-size limit is reached, commit only a complete verified subpage
+and retain the original requested high-water; never skip history or reset the
+cursor to latest. Native candidate `00d7efcd` implements this behavior and ten
+new deterministic roots, including long outage, mid-page timeout, canonical
+change, lost write acknowledgment and large census pressure. It is frozen for
+independent qualification, not yet accepted. Continuous EVM reserve/credit/
+capture monitoring, rolling claim expectations and composed recovery remain
+required.

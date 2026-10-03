@@ -178,7 +178,7 @@ source qualifications; older checkpoints retain their historical scope.
 | Miner GET recovery, guarded spool and retained-member recovery | Integrated on SN main with the scoped independent receipts cited below. | Include their exact bytes and dependencies in the final release and recovery rehearsal. |
 | Fleet runtime capability selection | Integrated at `9671f456`; [independent 23-test normal/race scope](evidence/fleet-runtime-catalog-progress-20261002.md). | Current runtime authority, full native-role coverage and composed release qualification. |
 | Server blob readers | Server origin/main `49450197` includes the earlier reader changes and newer local-authority/probe work; [26-test independent reader scope](evidence/current-graph-reader-progress-20261002.md) remains historical. | Full current-server dependency/release composition and remaining model-suite qualification. |
-| Provider payout transition | Published config `93dc65fd`; financial630 full-model pass and [frozen Server2a combined qualification](evidence/payout-get-composition-qualification-20261003.json). | Candidate `19952183` now passes targeted upgrade/Redis tests normal/race, causal controls, five vets and CLI build. Current SN `8cb08c95` / Server `0e04f038` normal compatibility passes 25 selected roots on the published `5def2fa4` graph; race qualification is active. Preserve newer upstream `49450197` with combined recovery dependency `08d48400`, publish the joined server and verify deployed worker adoption. |
+| Provider payout transition | Published config `93dc65fd`; financial630 full-model pass and [frozen Server2a combined qualification](evidence/payout-get-composition-qualification-20261003.json). | Candidate `19952183` now passes targeted upgrade/Redis tests normal/race, causal controls, five vets and CLI build. Current SN `8cb08c95` / Server `0e04f038` compatibility passes 25 selected roots in normal and race modes on the published `5def2fa4` graph, with ten package vets; [the complete scoped receipt](evidence/current-module-compatibility-qualification-20261003.json) binds 122 verified files. Preserve newer upstream `49450197` with combined recovery dependency `08d48400`, publish the joined server and verify deployed worker adoption. |
 | Offline preparation | Tracked SN `0384cbfc` / Connect `7600ea5c` / Server `c2563f9a` pass [75 author tests per mode by an exact checksum-only source join, seven vets and three binary builds](evidence/preparation-tracked-module-20261002.md). Earlier `1f66a2bd` retains its separate 101-test independent scope. | Integrate published Connect `08d48400` and independently qualify the current composition; active SN `8cb08c95` / Server `0e04f038` compatibility remains pinned to `5def2fa4`. Candidate `9d7d57fc` preserves all `e08e1b11` claim/provider source; its join is source-only. |
 | Directory owners and private-root creation | Directory owners pass [103 author tests per mode](evidence/directory-owner-preparation-author-20261002.json); explicit fresh leaf-root creation at SN `c8998b31` / Connect `7600ea5c` passes [109 author tests per mode and four vets](evidence/private-root-preparation-author-20261002.json). | Independent current-main tracked-module qualification, retained/restore semantics and capacity revisions. |
 | Provider and claim monitoring | Provider monitoring is integrated at `83d92f75`; [20 independent tests per mode and three vets](evidence/provider-monitor-integration-20261002.md) preserve exact source scope. The durable claim producer is integrated at `bd5e7e72` with [37 author and 29 independent tests per mode](evidence/claim-projection-independent-20261002.json), retaining separate graph scopes. | Finite-window claim consumer is now integrated with [23 normal/race roots and causal qualification](evidence/claim-consumer-qualification-20261003.json). Complete continuous expectation renewal, current module/source composition, economic-domain monitoring and actual alert/recovery rehearsal. |
@@ -3692,3 +3692,45 @@ The registry fault-case batch reached a genuine valid-resume defect after correc
 The [independent SN consumer receipt](evidence/current-module-sn-qualification-20261003.json) now passes ten selected roots in normal and race modes, four-package vet and all source/dependency checks on frozen SN `8cb08c95` with Connect `5def2fa4`, SDK `95ccd57d` and SCTP `6443417`. All 38 bindings, actual test outcomes and vet exit were independently verified. This covers selected public startup/native/ledger/miner recovery consumers, not unpublished union/rebind/capacity code, the newer `08d48400` dependency or the full production release. Server `0e04f038` race qualification remains separately active; a later publication join must retain newer upstream Server `49450197`.
 
 The [registry valid-resume failure](evidence/restore-registry-valid-resume-failure-20261003.json) records the genuine one-root failure on test-only batch `7a4123fe`, after invalid approvals correctly refused. Its metadata and actual terminal failure were rehashed. Static tracing identifies inconsistent authenticated receipt inventories between storage construction and checkpoint/replay. The production successor must qualify actual valid continuation, lost acknowledgment/reopen and forged/foreign-record refusal before this recovery gate can close. Earlier diagnostic-only failures remain distinct; no registry pass is inferred.
+
+### October 3 completed compatibility and customer recovery scopes
+
+The [current compatibility receipt](evidence/current-module-compatibility-qualification-20261003.json)
+qualifies frozen SN `8cb08c95` / Server `0e04f038`: 25 selected roots
+pass normal/race, ten package vets pass, and fixture cleanup exits zero.
+All 122 receipt bindings were independently rehashed. This uses Connect
+`5def2fa4`; it does not qualify the later `08d48400` composition.
+
+Customer Server `530726fc` passes [14 selected roots in both modes](evidence/customer-server530-scoped-qualification-20261003.json),
+but its original controller vet fails because a test does not release its
+context on every path. The [test-only `a85c3e3f` correction](evidence/customer-context-correction-qualification-20261003.json)
+adds the missing deferred cancellation; the affected root passes normal/race
+and controller vet passes. Production and module bytes are unchanged. The
+original vet failure remains a failure; no fresh full fourteen-root rerun is
+claimed for the corrected source.
+
+The [separate SDK scope](evidence/customer-sdk-qualification-20261003.json)
+passes two Go roots normal/race, vet, six JavaScript checks and an actual C++
+generated-interface roundtrip at SDK `9ae95704` / API `56545699`. An overbroad
+offline module preflight appended unused checksums to the independent copy;
+that failed attempt is retained. The tracked file was restored exactly before
+the qualified Go reruns, whose before/after checksum guards match. Qualification
+covers the imported package graph, not all unused module metadata.
+
+Coordinator verification rehashed all 47 SDK, 49 original Server and 38 corrected
+Server bindings and counted terminal Go root events in the qualified raw logs.
+Customer causal controls, current-source joins, final model qualification and
+publication remain separate work. Client adoption and deployed behavior are
+unobserved. Latest Server `a244ae7c` on published Connect `08d48400` passes sixteen
+normal roots and seven vets; its race run is active and not yet accepted.
+
+Continuous economic monitoring must catch up through authenticated bounded
+historical pages rather than reject a cursor more than 4,096 blocks behind.
+When an evidence-size limit is reached, commit only a complete verified subpage
+and retain the original requested high-water; never skip history or reset the
+cursor to latest. Native candidate `00d7efcd` implements this behavior and ten
+new deterministic roots, including long outage, mid-page timeout, canonical
+change, lost write acknowledgment and large census pressure. It is frozen for
+independent qualification, not yet accepted. Continuous EVM reserve/credit/
+capture monitoring, rolling claim expectations and composed recovery remain
+required.
