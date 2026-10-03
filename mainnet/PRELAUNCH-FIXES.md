@@ -6732,3 +6732,10 @@ The [collector Go scope](evidence/proof-capture7b81-go10-review-20261003.json) v
 The [original public cohort result](evidence/native-cohort8fe-public9-original-review-20261003.json) retains eight passing roots and one genuine late-source-custody failure. After valid planning, removal of an inventoried copied source-archive lock was missed by public apply because only its staged counterpart was admitted. The failing test stops before its subsequent no-mutation assertions; those assertions are not claimed as verified.
 
 Check the required original source archive and owner attributes before the first effect, alongside staged inventory admission, for both single-root and cohort restore. Preserve completed target journals and permit exact interrupted resume; do not restart completed peers. Distinguish source custody from intentionally regenerated target inode identity. Qualify missing/replaced late members, pending/lost-ack continuation and unaffected peers in a distinct successor while preserving original failed evidence.
+
+
+### October 3 collector cancellation successor source review
+
+The [collector fix review](evidence/proof-capture550-source-review-20261003.json) verifies exactly two Rust files over7b81 at5501f9ac; Go and Cargo inputs are unchanged. Inspect retained accessor failure before SDK translation, preserve a returned node contradiction ahead of cancellation, and check completed code/heap/execution/root/replay/report boundaries with instance-local deterministic controls. Prior Go10 results retain their actual execution context and need no repeat without a concrete changed dependency.
+
+Independent Rust positives, compiled omission controls, export and actual Go-to-Rust capture are separate gates. No complete runtime authority or finality admission follows from this source review, even when synthetic parent replay succeeds.
