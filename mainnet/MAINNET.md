@@ -3543,3 +3543,10 @@ A [read-only official source refresh](evidence/runtime-source-refresh-20261003.j
 ## October 3 wallet operative controls
 
 The [normal wallet causal controls](evidence/wallet-get-causal-normal-20261003.json) at frozen Server `25f617dc` produce all nine intended assertion failures across five omission groups, with five positive neighbors passing and owned fixture cleanup complete. Coordinator verification covers all 59 bound files and the actual terminal event census. These discriminate retries, Link pagination, shared budgets, Retry-After and redirect credential protection; they are explicitly labelled operative omissions, not historical source replays. Race controls, vet and final combined-source qualification remain pending.
+
+
+## October 3 original-authority registry recovery handoff
+
+The [frozen registry-rebind intake](evidence/registry-rebind-intake-20261003.json) at SN `94e087da` binds fifteen files and proposes four public/neighbor normal/race roots, vet and an old-dispatcher causal check. Source review confirms physical adoption requires completed original claim and nonce custody, preserves exact nonce bytes and the original approver, and refuses an unrelated pending local publication. Compilation/preflight are complete; behavioral qualification is pending. This candidate uses Connect332/Serverc256 and does not establish published Connect9e/current Server2a consumption.
+
+The first registry-only profile is an incremental implementation, not the completed restore requirement. Complete co-owner union restore, local-root rebind, original pending-outcome adoption, pending outer-head recovery, capacity revisions and the final published-module composition remain required. Rebinding must preserve original signing payloads, lifetime counters and histories and must not recreate acknowledged claims or missing receipts.
