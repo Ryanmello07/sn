@@ -6892,7 +6892,7 @@ The [current full-model failure batch](evidence/server-model-clock-and-debit-ori
 
 ### Preserve current wire changes in recovery dependency composition
 
-The [Connect integration preview](evidence/current-connect772-integration-preview-20261003.json) retains all fifteen qualified recovery files alongside newer upstream optional close-report identity fields. This is a Git-only preview, not a published recovery dependency or composed test result. Preserve current upstream protocol changes while adding the pending namespace correction, qualify the final common dependency graph once, then pin its published version in SN. Optional report identity must remain non-emitting until the backend provides durable deduplication of the exact party, amount and checkpoint; a compatible wire field alone cannot authorize that behavior.
+The [Connect integration preview](evidence/current-connect772-integration-preview-20261003.json) retains all fifteen qualified recovery files alongside newer upstream optional close-report identity fields. The [composed source review](evidence/current-connect-composed-source-review-20261003.json) now binds commit `2ea8d82ea5cbc8bdebdee05f5b90a9f21b64128f`: all preview paths remain exact except the two namespace replacements from `e7f24717`. This is a Git-only composition, not a published dependency or test result. Qualify the final common dependency graph, including namespace controls and optional identity wire compatibility, once; then publish and pin it in SN. Optional report identity must remain non-emitting until the backend provides durable deduplication of the exact party, amount and checkpoint; a compatible wire field alone cannot authorize that behavior.
 
 
 ### Continuous native evidence requires an admitted producer
