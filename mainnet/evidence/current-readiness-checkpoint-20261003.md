@@ -12,10 +12,10 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-06 | Published recovery dependency joined; exact final source/module/config release still required. | [current-connect-paired-core-publication-20261003.json](current-connect-paired-core-publication-20261003.json) |
 | PH-07 | Role isolation scopes exist; current all-role independent failure/continuation composition remains. | [claim-consumer-qualification-20261003.json](claim-consumer-qualification-20261003.json) |
 | PH-08 | Joined replay/upload foreground work and sizing measurement remain. | No new closure evidence |
-| PH-09 | Union and paired recovery scopes qualified; corrected outer scope and actual current consumer/host restore remain. | [restore-complete-union-qualification-20261003.json](restore-complete-union-qualification-20261003.json) |
+| PH-09 | Union, paired and corrected outer recovery scopes qualified; actual current consumer graph and host restore remain. | [paired-restore-fixture-affected-qualification-20261003.json](paired-restore-fixture-affected-qualification-20261003.json) |
 | PH-10 | Runtime renewal implemented and scoped qualified; full interrupted authority/epoch renewal composition remains. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
 | PH-11 | Recovery counters remain; independent historical native fee attribution and full conservation join remain. | No new closure evidence |
-| PH-12 | Continuous EVM first38 normal pass; race/causal and native/claim conservation join remain. | [continuous-evm-review-history-neighbors13-normal-20261003.json](continuous-evm-review-history-neighbors13-normal-20261003.json) |
+| PH-12 | Continuous EVM25 normal/race and13 normal pass; affected13race, causal and native/claim conservation join remain. | [continuous-evm-review-history-new25-normal-race-20261003.json](continuous-evm-review-history-new25-normal-race-20261003.json) |
 | PH-13 | Claim consumer qualified and merged; independently reviewed rolling expectations and two-domain topology remain. | [claim-consumer-merge-20261003.json](claim-consumer-merge-20261003.json) |
 | PH-14 | Bootstrap/role mechanisms implemented; composed policy custody and live activation remain. | No new closure evidence |
 | PH-15 | Claim/native/EVM status scopes implemented; final alert domains and delivered on-call exercise remain. | [claim-consumer-qualification-20261003.json](claim-consumer-qualification-20261003.json) |
