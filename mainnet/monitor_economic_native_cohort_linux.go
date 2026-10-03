@@ -12,7 +12,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"path/filepath"
 
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
@@ -56,7 +55,6 @@ func buildMonitorNativeRestoreCohort(ctx context.Context, request monitorNativeR
 			declared[root.Path] = root
 		}
 	}
-	byRoot := map[string]*monitorHistoryRestoreRootReview{}
 	roots := make([]*monitorHistoryRestoreRootReview, 0, len(request.Preparations))
 	for index, preparation := range request.Preparations {
 		if index > 0 && request.Preparations[index-1].RootPath >= preparation.RootPath {
@@ -67,12 +65,11 @@ func buildMonitorNativeRestoreCohort(ctx context.Context, request monitorNativeR
 			return empty, err
 		}
 		roots = append(roots, root)
-		byRoot[preparation.RootPath] = root
 	}
 	read := func(ref monitorHistoryReference) ([]byte, error) {
-		root := byRoot[filepath.Dir(ref.Path)]
-		if root == nil {
-			return nil, errors.New("native cohort omits a root named by original history")
+		root, err := monitorHistoryRestoreRoot(roots, ref)
+		if err != nil {
+			return nil, err
 		}
 		return root.read(ctx, ref)
 	}
@@ -80,7 +77,7 @@ func buildMonitorNativeRestoreCohort(ctx context.Context, request monitorNativeR
 		return empty, err
 	}
 	for _, root := range roots {
-		if err := validateMonitorHistoryRestoreCapacity(root.request, root.inventory); err != nil {
+		if err := root.finish(ctx); err != nil {
 			return empty, err
 		}
 	}
@@ -123,8 +120,12 @@ func runMonitorNativeArchiveRestoreCohort(ctx context.Context, args []string, st
 		return 2
 	}
 	raw, digest, err := readPlanFile(ctx, *path, 8*maxRpcReplyBytes)
-	if err != nil || digest != *hash {
-		fmt.Fprintln(stderr, "native cohort input differs:", err)
+	if err != nil {
+		fmt.Fprintln(stderr, "native cohort input read:", err)
+		return 2
+	}
+	if digest != *hash {
+		fmt.Fprintln(stderr, "native cohort input differs from reviewed digest")
 		return 2
 	}
 	var request monitorNativeRestoreCohortRequest

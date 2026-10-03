@@ -12,7 +12,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"path/filepath"
 
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
@@ -49,7 +48,6 @@ func buildMonitorEvmRestoreCohort(ctx context.Context, request monitorEvmRestore
 	if err != nil {
 		return empty, err
 	}
-	byRoot := map[string]*monitorHistoryRestoreRootReview{}
 	roots := make([]*monitorHistoryRestoreRootReview, 0, len(request.Preparations))
 	for index, preparation := range request.Preparations {
 		if index > 0 && request.Preparations[index-1].RootPath >= preparation.RootPath {
@@ -60,12 +58,11 @@ func buildMonitorEvmRestoreCohort(ctx context.Context, request monitorEvmRestore
 			return empty, err
 		}
 		roots = append(roots, root)
-		byRoot[preparation.RootPath] = root
 	}
 	read := func(ref monitorHistoryReference) ([]byte, error) {
-		root := byRoot[filepath.Dir(ref.Path)]
-		if root == nil {
-			return nil, errors.New("EVM cohort omits a root named by original history")
+		root, err := monitorHistoryRestoreRoot(roots, ref)
+		if err != nil {
+			return nil, err
 		}
 		return root.read(ctx, ref)
 	}
@@ -73,7 +70,7 @@ func buildMonitorEvmRestoreCohort(ctx context.Context, request monitorEvmRestore
 		return empty, err
 	}
 	for _, root := range roots {
-		if err := validateMonitorHistoryRestoreCapacity(root.request, root.inventory); err != nil {
+		if err := root.finish(ctx); err != nil {
 			return empty, err
 		}
 	}

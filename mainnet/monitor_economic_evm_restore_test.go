@@ -35,11 +35,20 @@ type monitorEvmRestoreFixture struct {
 	request monitorEvmRestoreCohortRequest
 	record  monitorEconomicEvmCheckpoint
 	files   []map[string]string
+	nested  bool
 }
 
 // Fresh owner enrollment is through the actual dispatcher. Archive references
 // are born on the second root; no copied signed path is subsequently relocated.
 func newMonitorEvmRestoreFixture(t *testing.T, rootCount, segments int) *monitorEvmRestoreFixture {
+	t.Helper()
+	return newMonitorEvmRestoreFixtureLayout(t, rootCount, segments, false)
+}
+
+// Nested originals are born at their final logical paths. Explicit test-only
+// fresh enrollment establishes their heads before any original role writes;
+// restoration still goes through the production public plan/apply commands.
+func newMonitorEvmRestoreFixtureLayout(t *testing.T, rootCount, segments int, nested bool) *monitorEvmRestoreFixture {
 	t.Helper()
 	if rootCount < 1 || rootCount > 2 || segments < 1 || segments > 512 {
 		t.Fatal("invalid explicit synthetic restore profile")
@@ -53,7 +62,7 @@ func newMonitorEvmRestoreFixture(t *testing.T, rootCount, segments int) *monitor
 			t.Error(err)
 		}
 	})
-	f := &monitorEvmRestoreFixture{}
+	f := &monitorEvmRestoreFixture{nested: nested}
 	for _, name := range []string{"a", "b"}[:rootCount] {
 		path := filepath.Join(parent, name)
 		if err := os.Mkdir(path, 0700); err != nil {
@@ -83,8 +92,15 @@ func newMonitorEvmRestoreFixture(t *testing.T, rootCount, segments int) *monitor
 	paths := make([]string, segments)
 	for index := range paths {
 		name := fmt.Sprintf("a%03d.json", index)
-		paths[index] = filepath.Join(f.sources[rootCount-1].root, name)
-		owners[rootCount-1] = append(owners[rootCount-1], storagePreparationSnapshotOwner(t, "mainnet-monitor-checkpoint", name, maxRpcReplyBytes))
+		if nested {
+			paths[index] = filepath.Join(f.sources[rootCount-1].root, "history", "epoch", name)
+		} else {
+			paths[index] = filepath.Join(f.sources[rootCount-1].root, name)
+			owners[rootCount-1] = append(owners[rootCount-1], storagePreparationSnapshotOwner(t, "mainnet-monitor-checkpoint", name, maxRpcReplyBytes))
+		}
+	}
+	if nested && rootCount == 2 {
+		owners[1] = []durablevolume.PreparationOwner{storagePreparationSnapshotOwner(t, "mainnet-monitor-checkpoint", "retained-peer.json", maxRpcReplyBytes)}
 	}
 	var prepared []durablevolume.Config
 	for index, source := range f.sources {
@@ -117,6 +133,15 @@ func newMonitorEvmRestoreFixture(t *testing.T, rootCount, segments int) *monitor
 			t.Fatal(err)
 		}
 		prepared = append(prepared, config)
+	}
+	if nested {
+		for _, path := range paths {
+			directory, name := filepath.Dir(path), filepath.Base(path)
+			if err := os.MkdirAll(directory, 0700); err != nil {
+				t.Fatal(err)
+			}
+			durablefixture.ProvisionSnapshot(t, directory, "mainnet-monitor-checkpoint", name, maxRpcReplyBytes, name+".lock", map[string][]byte{name + ".lock": nil})
+		}
 	}
 	combined := prepared[0]
 	for _, config := range prepared[1:] {
@@ -163,7 +188,7 @@ func newMonitorEvmRestoreFixture(t *testing.T, rootCount, segments int) *monitor
 	f.request = monitorEvmRestoreCohortRequest{Schema: monitorEvmRestoreCohortSchema, Expected: archive.request.Expected, Policy: evm.policy, Original: monitorHistoryReference{Path: checkpoint, Sha256: monitorReadDigest(raw), Bytes: uint64(len(raw))}, Limits: durablevolume.PreparationCohortLimits{MaxRoots: uint64(rootCount), MaxPlanBytes: 32 * 1024 * 1024, MaxControlBytes: 64 * 1024 * 1024, MaxEntries: 8192, MaxBytes: 512 * 1024 * 1024, MaxOwnerAttributes: 4096, MaxOwnerAttributeBytes: 16 * 1024 * 1024}}
 	limits := durablevolume.InventoryLimits{MaxEntries: 4096, MaxBytes: 256 * 1024 * 1024, MaxDepth: 4, MaxOwnerAttributes: 2048, MaxOwnerAttributeBytes: 8 * 1024 * 1024}
 	for index, source := range f.sources {
-		f.files = append(f.files, bootstrapSuccessorPreparationTestFiles(t, source.root))
+		f.files = append(f.files, f.filesAt(t, source.root))
 		target := storageSnapshotRestoreTargetWithLimits(t, source, evm.ctx, owners[index][0], false, &limits)
 		f.targets = append(f.targets, target)
 		raw, err := os.ReadFile(target.target.requestPath)
@@ -176,12 +201,55 @@ func newMonitorEvmRestoreFixture(t *testing.T, rootCount, segments int) *monitor
 		}
 		if index == 0 {
 			preparation.Owners[0].RestoreCoverage = durablevolume.PreparationCompleteUnion
+		} else if nested {
+			for index := range preparation.Owners {
+				preparation.Owners[index].RestoreCoverage = durablevolume.PreparationCompleteUnion
+			}
 		} else {
 			preparation.Owners = nil
 		}
 		f.request.Preparations = append(f.request.Preparations, preparation)
 	}
 	return f
+}
+
+// A nested fixture retains exact bytes under complete relative names. This
+// helper does not follow symlinks or hide unknown directories/files.
+func (self *monitorEvmRestoreFixture) filesAt(t *testing.T, root string) map[string]string {
+	t.Helper()
+	return monitorHistoryRestoreTestFiles(t, root, self.nested)
+}
+
+func monitorHistoryRestoreTestFiles(t *testing.T, root string, nested bool) map[string]string {
+	t.Helper()
+	if !nested {
+		return bootstrapSuccessorPreparationTestFiles(t, root)
+	}
+	files := map[string]string{}
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return errors.New("nested fixture has a non-regular retained member")
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files[relative] = string(raw)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return files
 }
 
 // Large histories are synthetic storage controls, never chain observations.
@@ -282,8 +350,25 @@ func (self *monitorEvmRestoreFixture) plan(t *testing.T) durablevolume.Reference
 	self.unmodifiedTargets(t)
 	if len(self.targets) == 1 {
 		var request durablevolume.PreparationRequest
-		if err := decodeMonitorHistoryInput(output.Bytes(), &request); err != nil || len(request.Owners) != len(self.record.State.Archive.Segments)+2 {
-			t.Fatal("EVM request omitted a retained segment or co-owner", err)
+		if err := decodeMonitorHistoryInput(output.Bytes(), &request); err != nil {
+			t.Fatal(err)
+		}
+		checkpoints := 0
+		for _, owner := range request.Owners {
+			if owner.Kind == storageMonitorTreeKind {
+				scope, err := storageMonitorTreeProfile(owner, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				checkpoints += len(scope.Snapshots)
+			} else if owner.Kind == "mainnet-monitor-checkpoint" {
+				checkpoints++
+			} else {
+				t.Fatal("unexpected EVM fixture owner", owner.Kind)
+			}
+		}
+		if checkpoints != len(self.record.State.Archive.Segments)+2 {
+			t.Fatal("EVM request omitted a retained segment or co-owner", checkpoints)
 		}
 		if err := os.WriteFile(self.targets[0].target.requestPath, output.Bytes(), 0600); err != nil {
 			t.Fatal(err)
@@ -354,7 +439,7 @@ func (self *monitorEvmRestoreFixture) apply(t *testing.T, reference durablevolum
 		self.evm.ctx = monitorNativeRestoreContext(t, self.sources[0], durablevolume.WithReference(self.targets[0].target.ctx, result.Declaration))
 	}
 	for index, target := range self.targets {
-		if actual := bootstrapSuccessorPreparationTestFiles(t, target.target.root); !reflect.DeepEqual(actual, self.files[index]) {
+		if actual := self.filesAt(t, target.target.root); !reflect.DeepEqual(actual, self.files[index]) {
 			t.Fatal("EVM restore changed original member bytes", index)
 		}
 	}
