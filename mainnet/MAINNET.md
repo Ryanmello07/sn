@@ -101,11 +101,20 @@ actual amount/wallet admission, stale processor outcomes, retained obligations,
 bounded recovery and atomic attempt history. The
 [race recovery controls](evidence/payout-retention-causal-race-20261003.json)
 also produce all 12 intended assertion failures across six groups, with no race
-reports and completed owned-fixture cleanup. Actual final-Circle, submission-basis
-and CLI omission controls remain separate pending scopes; the full model result
-is not complete.
+reports and completed owned-fixture cleanup. The
+[normal final-Circle, submission-basis and CLI controls](evidence/payout-operative-causal-normal-20261003.json)
+produce five intended failures, including actual post-limiter refusal and stale
+amount/wallet protection. Their race scope remains pending, and the full model
+result is not complete.
 These checkpoints do not supply completed release, deployment or activation
 evidence.
+
+The [read-only signed-ledger correction](evidence/restore-ledger-readonly-independent-20261003.json)
+at `d3c84fe3` separately passes two normal/race roots and validator vet in its
+pinned workspace. It permits nonempty signed-history inspection without a
+writer and preserves signature/byte-bound refusal. The pre-fix panic control,
+full public restore adapter and current published composition remain separate
+pending requirements; no production restore operation has occurred.
 
 The sole normal failure is in the model slice: the paid/free test attempts to
 change immutable terminal attribution before reaching its weighting assertion.

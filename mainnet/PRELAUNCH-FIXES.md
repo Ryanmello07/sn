@@ -60,7 +60,10 @@ retain their explicit labels. [Fourteen additional production recovery roots pas
 with no skips or race reports. The
 [race recovery controls](evidence/payout-retention-causal-race-20261003.json)
 now discriminate all 12 intended failures without race reports. The full model
-suite and separate operative Circle/submission-basis/CLI controls remain pending. Neither source is merged or deployed; these scoped
+suite remains pending. The [normal operative controls](evidence/payout-operative-causal-normal-20261003.json)
+produce five intended assertion failures for actual final-send admission,
+submission basis and CLI refusal propagation. Their race scope remains pending;
+these deliberately modified controls do not supply a live payout claim. Neither source is merged or deployed; these scoped
 receipts do not establish complete financial qualification.
 
 Processor recovery must also bind each response to its original attempt before
@@ -87,7 +90,10 @@ dereferencing optional writer hooks through a missing disk owner. Frozen
 candidate `d3c84fe3` skips only that absent optional hook; signature, canonical
 encoding and byte-bound checks remain required. Qualify an actual nonempty
 signed prefix, preserve its bytes, and use the pre-fix path as the panic
-discriminator. Compile-only evidence does not close this recovery requirement.
+discriminator. Its [independent two-root normal/race scope and validator vet](evidence/restore-ledger-readonly-independent-20261003.json)
+now pass on exact `d3c84fe3` with the pinned workspace dependencies. The original
+`1982267c` panic control and the broader public ledger-restore adapter remain
+separate pending scopes. No live restoration is established.
 
 The [current preparation state](MAINNET.md#current-preparation-state--october-2)
 distinguishes integrated source fixes, qualified candidates and the remaining
