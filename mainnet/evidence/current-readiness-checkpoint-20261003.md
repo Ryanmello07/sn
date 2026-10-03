@@ -60,3 +60,5 @@ The [restore namespace source review](namespace-restoreaa46-source-review-202610
 The [nonempty-head lineage probe source review](release-lineage-heade65-source-review-20261003.json) retains uncompiled eleven-root qualification intent; no cache or fairness requirement is closed.
 
 The [validator repair observation source review](validator-repair0fef-source-review-20261003.json) verifies error-first state handling and retained action dispositions; execution and role composition remain pending.
+
+The [35-phase finite mixed batch](mixed-qualification-terminal-20261003.json) is terminal. EVM42 is graph/compile-only; all current-source behavior, full model and host requirements remain retained.
