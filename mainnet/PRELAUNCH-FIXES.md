@@ -6858,3 +6858,10 @@ The [full hardening source review](evidence/full-hardening-source-gap-review-202
 Validator repair stores and manager rereads also conflate some unavailable observations with changed state. Return the original I/O/cancellation cause before comparing returned values, preserving confirmed contradictions and completed repairs. Add deterministic no-new-effect and healthy-peer continuation controls. Existing Solidity reserve, credit, carry and exact-payment guards remain reusable; no new contract defect is established by this source review. Runtime/source/finality approval, installed contracts, funded hosts and live role activation remain separate requirements.
 
 The corrected selected-import graph retry passed with132 core packages/one module and848 SN packages/131 modules;3,895,108 raw metadata bytes and all source controls were verified. The original broad query failure remains charged. A narrow preflight repair preserves completed work and does not authorize source or resource-policy drift.
+
+
+### October 3 retained model preparation and sampler continuation
+
+The [continuation adoption](evidence/model-continuation-adoption-20261003.json) preserves the completed source archive and the dependency preflight failure caused by an uncreated private temporary directory. Provision that directory and retry only the affected graph inspection; do not restart source capture or discard the failed attempt. One corrected graph retry and one full current Server5f model invocation are admitted at the same resource baseline. Admission is not a passing model result.
+
+The distinct sampler removes the undefined cache reference and records unavailable observations, final CSV readback and an explicit terminal outcome. Four independent lightweight controls distinguish complete telemetry, memory/container observation gaps and existing-output refusal. Keep test execution and telemetry qualification separate: a sampler failure must not terminate admitted work or fabricate zero resource usage. Current emissions, Claim rollover/restore, composed economic conservation and actual mainnet authority remain required.

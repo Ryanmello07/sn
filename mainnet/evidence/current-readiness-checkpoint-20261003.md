@@ -64,3 +64,5 @@ The [validator repair observation source review](validator-repair0fef-source-rev
 The [35-phase finite mixed batch](mixed-qualification-terminal-20261003.json) is terminal. EVM42 is graph/compile-only; all current-source behavior, full model and host requirements remain retained.
 
 The [model sampler preexecution finding](model-sampler-source-finding-20261003.json) retains a test-evidence defect and zero admitted test operations; its correction must preserve the actual full-suite run.
+
+The [model continuation admission](model-continuation-adoption-20261003.json) preserves successful preparation and its failed graph attempt while admitting one narrow retry and the full model invocation. Sampler controls pass only their lightweight scope; no full-suite result or requirement closure is claimed.

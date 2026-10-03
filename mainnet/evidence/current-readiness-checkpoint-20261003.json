@@ -2,6 +2,7 @@
   "basis": "Current published component evidence plus explicit in-progress work; supersedes historical absent-implementation labels only.",
   "completion": "NOT_FINALIZED_ALL38_REQUIREMENTS_RETAINED",
   "evidence_sha256": {
+    "model-continuation-adoption-20261003.json": "7c4d02521fb7feecc3fc6cebb836efd2b238b5df6bb2ab27418ff5fff68867b1",
     "cache-reclaim-28-20261003.json": "e5e1f8b6097d6c14496b1d107d0771c70f14d8f4c84d3a17055a6696fe0d91d0",
     "cache-reclaim-30-20261003.json": "93f33337005af28f2d1dc00e36a14eda0ff25c582ed9463de73eb954259750cf",
     "capacity-public-completion-qualification-20261003.json": "90b753f6610be6766faebb62d73e80381fa4449264d8e2b5e6d6f30d9fec58bf",
