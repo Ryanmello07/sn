@@ -91,6 +91,7 @@ type bootstrapSuccessorMembers struct {
 	storage         *mainnetDurableDirectory
 	file            *os.File
 	head            *durablehead.Owner
+	restoredHead    *bootstrapSuccessorRestoredMemberHead
 	spec            durablehead.Spec
 	census          bootstrapSuccessorMemberCensus
 	registry        bool
@@ -153,6 +154,9 @@ func openBootstrapSuccessorMembers(storage *mainnetDurableDirectory, file *os.Fi
 // Unknown names inside an owned namespace are included and then refused by the
 // retained census. Unrelated bootstrap role snapshots are separate owners.
 func (self *bootstrapSuccessorMembers) owns(name string) bool {
+	if self.restoredHead != nil && name == self.restoredHead.temporary {
+		return false
+	}
 	return bootstrapSuccessorMemberOwns(self.spec, self.registry, name)
 }
 
@@ -324,8 +328,20 @@ func (self *bootstrapSuccessorMembers) check() error {
 	if err := self.storage.check(self.file); err != nil {
 		return err
 	}
-	if err := self.head.Check(); err != nil {
-		return self.storage.snapshotError(err)
+	if self.restoredHead != nil {
+		if !self.readOnly {
+			return self.storage.identity("restored passive census acquired writer mode", nil)
+		}
+		if err := self.restoredHead.check(); err != nil {
+			return err
+		}
+	} else {
+		if self.head == nil {
+			return errors.New("successor member head is closed")
+		}
+		if err := self.head.Check(); err != nil {
+			return self.storage.snapshotError(err)
+		}
 	}
 	fd, err := unix.Openat(int(self.file.Fd()), ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
@@ -527,6 +543,9 @@ func (self *bootstrapSuccessorMembers) resumePublished(name string, raw []byte) 
 	if pending := self.census.Pending; pending == nil || pending.Append || pending.Name != name {
 		return nil
 	}
+	if self.readOnly {
+		return durablehead.ErrReadOnly
+	}
 	if err := self.file.Sync(); err != nil {
 		return self.publicationError(err)
 	}
@@ -544,10 +563,17 @@ func (self *bootstrapSuccessorMembers) publicationError(err error) error {
 
 // Close joins the census owner before its borrowed directory is released.
 func (self *bootstrapSuccessorMembers) close() error {
-	if self == nil || self.head == nil {
+	if self == nil {
 		return nil
 	}
-	err := self.head.Close()
+	var err error
+	if self.restoredHead != nil {
+		err = self.restoredHead.close()
+		self.restoredHead = nil
+	}
+	if self.head != nil {
+		err = errors.Join(err, self.head.Close())
+	}
 	self.head = nil
 	return err
 }

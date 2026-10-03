@@ -85,7 +85,11 @@ func openBootstrapSuccessorPreparationReaderRebound(ctx context.Context, expecte
 	if err := mainnetDurableFlock(fd, mode|unix.LOCK_NB); err != nil {
 		return nil, record, errors.Join(errors.New("successor preparation has an active local owner"), err)
 	}
-	self.members, err = openBootstrapSuccessorMembers(storage, self.directory, false, !exclusive)
+	if !exclusive && inspection != nil && inspection.restoredView != nil {
+		self.members, err = openBootstrapSuccessorRestoredMembers(storage, self.directory, inspection.restoredView)
+	} else {
+		self.members, err = openBootstrapSuccessorMembers(storage, self.directory, false, !exclusive)
+	}
 	if err != nil {
 		return nil, record, err
 	}
@@ -97,6 +101,9 @@ func openBootstrapSuccessorPreparationReaderRebound(ctx context.Context, expecte
 	}
 	entries, err := self.directory.Readdirnames(514)
 	entries = bootstrapSuccessorApplicationNames(entries, self.members.spec.Name)
+	if self.members.restoredHead != nil {
+		entries = bootstrapSuccessorApplicationNames(entries, self.members.restoredHead.temporary)
+	}
 	if err != nil && !errors.Is(err, io.EOF) || len(entries) > 512 {
 		return nil, record, mainnetDurableUnavailable("successor custody directory exceeds its bounded census", err)
 	}

@@ -99,7 +99,7 @@ func buildBootstrapSuccessorRegistryRebind(ctx context.Context, original bootstr
 	if plan.Schema != durablevolume.PreparationPlanSchema || plan.RestartAuthorized || request.Purpose != "restore" || request.Scope != "daemon" || request.RestoreSource == nil ||
 		plan.RequestSha256 != plan.Request.Sha256 || safeReleaseHash(plan.RequestBytes) != plan.RequestSha256 ||
 		request.RootPath != original.Plan.Request.RegistryDirectory || len(plan.Owners) != 1 || len(request.Owners) != 1 || !reflect.DeepEqual(request.Owners[0], plan.Owners[0].Owner) ||
-		plan.Owners[0].Owner.Kind != "mainnet-successor-nonce-members" || len(plan.Derivations) != 1 || len(plan.Generation) != durablevolume.RootGenerationBytes || len(plan.Lease) != 32 {
+		plan.Owners[0].Owner.Kind != "mainnet-successor-nonce-members" || len(plan.Derivations) < 1 || len(plan.Derivations) > 2 || len(plan.Generation) != durablevolume.RootGenerationBytes || len(plan.Lease) != 32 {
 		return result, errors.New("successor registry rebind requires one exact restored original nonce registry")
 	}
 	inventory, err := durablevolume.LoadPhysicalInventory(ctx, request.RestoreSource.Inventory)
@@ -121,40 +121,8 @@ func buildBootstrapSuccessorRegistryRebind(ctx context.Context, original bootstr
 	if err != nil {
 		return result, err
 	}
-	derivation := plan.Derivations[0]
-	if derivation.OwnerIndex != 0 || expected.PhysicalMetadata == nil || derivation.Original.File.Path != expected.PhysicalMetadata.Path || derivation.Derived.Path != expected.PhysicalMetadata.Path {
-		return result, errors.New("successor registry restore lost its exact census derivation")
-	}
-	originalOwner := expected
-	expected.Files = append([]durablevolume.PreparationFile(nil), expected.Files...)
-	found = false
-	for index, file := range expected.Files {
-		if file.Path == expected.PhysicalMetadata.Path {
-			if file != derivation.Original.File {
-				return result, errors.New("successor registry derivation changed its original census authority")
-			}
-			expected.Files[index], found = derivation.Derived, true
-		}
-	}
-	if !found || !reflect.DeepEqual(expected, plan.Owners[0]) {
-		return result, errors.New("successor registry derivation changed an original signed member")
-	}
-	originalRaw, originalHash, err := readBootstrapRootFile(ctx, derivation.Original.Path, maximumBootstrapSuccessorMemberCensusBytes)
-	if err != nil || originalHash != derivation.Original.File.Sha256 || uint64(len(originalRaw)) != derivation.Original.File.Bytes {
-		return result, errors.Join(errors.New("successor registry original census lineage is unavailable"), err)
-	}
-	var targets []durablevolume.PreparationSource
-	for _, source := range plan.Sources {
-		if source.File.Path != expected.PhysicalMetadata.Path {
-			targets = append(targets, source)
-		}
-	}
-	derived, err := rebindStoragePreparationMembersRestore(ctx, originalOwner, inventory, originalRaw, targets, false)
-	if err != nil || uint64(len(derived)) != derivation.Derived.Bytes || safeReleaseHash(derived) != derivation.Derived.Sha256 {
-		return result, errors.Join(errors.New("successor registry derived census differs from its reviewed original"), err)
-	}
-	var derivedCensus bootstrapSuccessorMemberCensus
-	if err := decodePlanJson(derived, &derivedCensus); err != nil {
+	census, err := buildBootstrapSuccessorRebindCensus(ctx, plan, 0, expected, inventory)
+	if err != nil {
 		return result, err
 	}
 	declaration, err := durablevolume.Load(declarationReference)
@@ -179,13 +147,13 @@ func buildBootstrapSuccessorRegistryRebind(ctx context.Context, original bootstr
 	if err != nil || physical != (bootstrapSuccessorRootIdentity{Device: plan.Root.Device, Inode: plan.Root.Inode}) {
 		return result, errors.Join(errors.New("successor registry restored physical generation differs"), err)
 	}
-	if err := inspectBootstrapSuccessorRegistryRebindTarget(ctx, request.RootPath, derivedCensus); err != nil {
+	if err := inspectBootstrapSuccessorRestoredCensus(ctx, request.RootPath, census, plan.Owners[0], inventory, true); err != nil {
 		return result, err
 	}
 	result = bootstrapSuccessorRegistryRebindPlan{Schema: bootstrapSuccessorRegistryRebindSchema, ExecutionApprovalHash: rootObjectHash(original), RegistryDirectory: request.RootPath,
 		OriginalRegistry: original.Plan.Registry, RestoredRegistry: physical, RestoredGeneration: safeReleaseHash(plan.Generation), RuntimeDeclaration: declarationReference,
 		RestorePlan: reference, OriginalInventory: request.RestoreSource.Inventory, OriginalFormerWriter: request.RestoreSource.FormerWriterFence,
-		OriginalMemberCensusHash: derivation.Original.File.Sha256, DerivedMemberCensusHash: derivation.Derived.Sha256}
+		OriginalMemberCensusHash: census.Derivation.Original.File.Sha256, DerivedMemberCensusHash: census.Derivation.Derived.Sha256}
 	_, err = result.signingBytes(original, profile)
 	return result, errors.Join(err, ctx.Err())
 }

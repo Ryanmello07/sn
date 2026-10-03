@@ -102,18 +102,19 @@ func loadBootstrapSuccessorExecutionRebound(ctx context.Context, configPath, dir
 			return result, nil, nil, errors.New("successor local rebind changed original preparation authority")
 		}
 		var rebound bootstrapSuccessorLocalRebindPlan
+		var restoredView *bootstrapSuccessorRestoredMemberView
 		if local.approval != nil {
-			if err := local.approval.validate(ctx, local.original, profile); err != nil {
+			if err := local.approval.validateWithView(ctx, local.original, profile, &restoredView); err != nil {
 				return result, nil, nil, err
 			}
 			rebound = local.approval.Plan
 		} else {
-			rebound, err = buildBootstrapSuccessorLocalRebind(ctx, local.original, profile, local.restore)
+			rebound, err = buildBootstrapSuccessorLocalRebindWithView(ctx, local.original, profile, local.restore, &restoredView)
 			if err != nil {
 				return result, nil, nil, err
 			}
 		}
-		inspection = &bootstrapSuccessorLocalInspection{preparationHash: rootObjectHash(originalPreparation), physical: rebound.RestoredLocal}
+		inspection = &bootstrapSuccessorLocalInspection{preparationHash: rootObjectHash(originalPreparation), physical: rebound.RestoredLocal, restoredView: restoredView}
 	}
 	reader, record, err := openBootstrapSuccessorPreparationReaderRebound(ctx, plan, false, nil, inspection)
 	if err != nil {

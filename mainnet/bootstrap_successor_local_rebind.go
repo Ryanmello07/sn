@@ -53,6 +53,7 @@ type bootstrapSuccessorLocalInspection struct {
 	preparationHash string
 	physical        bootstrapSuccessorRootIdentity
 	writer          bool
+	restoredView    *bootstrapSuccessorRestoredMemberView
 }
 
 func (self bootstrapSuccessorLocalRebindPlan) signingBytes(original bootstrapSuccessorExecutionApproval, profile *safeExecutionProfile) ([]byte, error) {
@@ -81,9 +82,18 @@ func (self bootstrapSuccessorLocalRebindPlan) signingBytes(original bootstrapSuc
 	return append([]byte(bootstrapSuccessorLocalRebindSchema+"\x00"), raw...), nil
 }
 
-// This initial profile covers a settled local member census and every co-owned
-// fixed snapshot, all at their original logical path. It never repairs heads.
+// This profile covers the original local member census, any exact retained
+// next image and every co-owned fixed snapshot. Preview never repairs heads.
 func buildBootstrapSuccessorLocalRebind(ctx context.Context, original bootstrapSuccessorExecutionApproval, profile *safeExecutionProfile, reference durablevolume.Reference) (result bootstrapSuccessorLocalRebindPlan, resultErr error) {
+	return buildBootstrapSuccessorLocalRebindWithView(ctx, original, profile, reference, nil)
+}
+
+// A private passive-read capability accompanies the exact already validated
+// pair; it adds no serialized authority and cannot be used by a writer.
+func buildBootstrapSuccessorLocalRebindWithView(ctx context.Context, original bootstrapSuccessorExecutionApproval, profile *safeExecutionProfile, reference durablevolume.Reference, retained **bootstrapSuccessorRestoredMemberView) (result bootstrapSuccessorLocalRebindPlan, resultErr error) {
+	if retained != nil {
+		*retained = nil
+	}
 	if ctx == nil || ctx.Err() != nil {
 		return result, errors.New("successor local rebind requires an active inspection context")
 	}
@@ -109,7 +119,7 @@ func buildBootstrapSuccessorLocalRebind(ctx context.Context, original bootstrapS
 	p := original.Plan.Review.Preparation.Approval.Plan
 	if plan.Schema != durablevolume.PreparationPlanSchema || plan.RestartAuthorized || request.Purpose != "restore" || request.Scope != "daemon" || request.RestoreSource == nil ||
 		plan.RequestSha256 != plan.Request.Sha256 || safeReleaseHash(plan.RequestBytes) != plan.RequestSha256 || request.RootPath != p.Proposal.OriginalRunDirectory ||
-		len(plan.Owners) < 2 || len(plan.Owners) > 32 || len(plan.Owners) != len(request.Owners) || len(plan.Derivations) != 1 || len(plan.Generation) != durablevolume.RootGenerationBytes || len(plan.Lease) != 32 {
+		len(plan.Owners) < 2 || len(plan.Owners) > 32 || len(plan.Owners) != len(request.Owners) || len(plan.Derivations) < 1 || len(plan.Derivations) > 2 || len(plan.Generation) != durablevolume.RootGenerationBytes || len(plan.Lease) != 32 {
 		return result, errors.New("successor local rebind requires the complete original shared-owner restore")
 	}
 	inventory, err := durablevolume.LoadPhysicalInventory(ctx, request.RestoreSource.Inventory)
@@ -128,6 +138,7 @@ func buildBootstrapSuccessorLocalRebind(ctx context.Context, original bootstrapS
 		return result, errors.Join(errors.New("successor local original former-writer assertion differs"), err)
 	}
 	memberIndex := -1
+	var census bootstrapSuccessorRebindCensus
 	originalOwners := make([]durablevolume.PreparationOwnerPlan, 0, len(plan.Owners))
 	for index, owner := range plan.Owners {
 		if !reflect.DeepEqual(owner.Owner, request.Owners[index]) || owner.Owner.RestoreCoverage != durablevolume.PreparationCompleteUnion {
@@ -147,25 +158,11 @@ func buildBootstrapSuccessorLocalRebind(ctx context.Context, original bootstrapS
 		}
 		originalOwners = append(originalOwners, expected)
 		if owner.Owner.Kind == "mainnet-successor-local-members" {
-			derivation := plan.Derivations[0]
-			if derivation.OwnerIndex != index || expected.PhysicalMetadata == nil || derivation.Original.File.Path != expected.PhysicalMetadata.Path || derivation.Derived.Path != expected.PhysicalMetadata.Path {
-				return result, errors.New("successor local restore lost its exact census derivation")
+			census, err = buildBootstrapSuccessorRebindCensus(ctx, plan, index, expected, inventory)
+			if err != nil {
+				return result, err
 			}
-			expected.Files = append([]durablevolume.PreparationFile(nil), expected.Files...)
-			found = false
-			for fileIndex, file := range expected.Files {
-				if file.Path == expected.PhysicalMetadata.Path {
-					if file != derivation.Original.File {
-						return result, errors.New("successor local derivation changed original census authority")
-					}
-					expected.Files[fileIndex], found = derivation.Derived, true
-				}
-			}
-			if !found {
-				return result, errors.New("successor local derivation omitted original census")
-			}
-		}
-		if !reflect.DeepEqual(expected, owner) {
+		} else if !reflect.DeepEqual(expected, owner) {
 			return result, errors.New("successor local restore changed original owner bytes or capacity")
 		}
 	}
@@ -175,48 +172,9 @@ func buildBootstrapSuccessorLocalRebind(ctx context.Context, original bootstrapS
 	if err := validateBootstrapSuccessorLocalCoverage(inventory, originalOwners); err != nil {
 		return result, err
 	}
-	derivation := plan.Derivations[0]
 	memberOwner := plan.Owners[memberIndex]
-	originalRaw, originalHash, err := readBootstrapRootFile(ctx, derivation.Original.Path, maximumBootstrapSuccessorMemberCensusBytes)
-	if err != nil || originalHash != derivation.Original.File.Sha256 || uint64(len(originalRaw)) != derivation.Original.File.Bytes {
-		return result, errors.Join(errors.New("successor local original census lineage is unavailable"), err)
-	}
-	files := map[string]durablevolume.PreparationFile{}
-	memberFiles := map[string]bool{}
-	for index, owner := range plan.Owners {
-		for _, file := range owner.Files {
-			if _, exists := files[file.Path]; exists {
-				return result, errors.New("successor local restore overlaps target ownership")
-			}
-			files[file.Path] = file
-			if index == memberIndex && file.Path != memberOwner.PhysicalMetadata.Path {
-				memberFiles[file.Path] = true
-			}
-		}
-	}
-	var targets []durablevolume.PreparationSource
-	for _, source := range plan.Sources {
-		if expected, ok := files[source.File.Path]; !ok || expected != source.File {
-			return result, errors.New("successor local restore lost or repeated a reviewed target source")
-		}
-		delete(files, source.File.Path)
-		if memberFiles[source.File.Path] {
-			targets = append(targets, source)
-		}
-	}
-	if len(files) != 0 {
-		return result, errors.New("successor local restore omitted a reviewed target source")
-	}
-	derived, err := rebindStoragePreparationMembersRestore(ctx, originalOwners[memberIndex], inventory, originalRaw, targets, false)
-	if err != nil || uint64(len(derived)) != derivation.Derived.Bytes || safeReleaseHash(derived) != derivation.Derived.Sha256 {
-		return result, errors.Join(errors.New("successor local derived census differs from its reviewed original"), err)
-	}
-	var derivedCensus bootstrapSuccessorMemberCensus
-	if err := decodePlanJson(derived, &derivedCensus); err != nil {
-		return result, err
-	}
 	pendingOutcome := ""
-	if pending := derivedCensus.Pending; pending != nil {
+	if pending := census.Census.Pending; pending != nil {
 		// Only an original terminal event can defer the physical receipt.
 		// Its full payload remains in the authenticated restored member head;
 		// the execution owner still requires exact canonical reconciliation.
@@ -255,7 +213,7 @@ func buildBootstrapSuccessorLocalRebind(ctx context.Context, original bootstrapS
 	if err != nil || !found || physical != (bootstrapSuccessorRootIdentity{Device: plan.Root.Device, Inode: plan.Root.Inode}) {
 		return result, errors.Join(errors.New("successor local restored physical generation differs"), err)
 	}
-	if err := inspectBootstrapSuccessorRebindTarget(ctx, request.RootPath, derivedCensus, false); err != nil {
+	if err := inspectBootstrapSuccessorRestoredCensus(ctx, request.RootPath, census, memberOwner, inventory, false); err != nil {
 		return result, err
 	}
 	if err := inspectBootstrapSuccessorLocalSnapshots(ctx, request.RootPath, plan.Owners, inventory); err != nil {
@@ -264,9 +222,12 @@ func buildBootstrapSuccessorLocalRebind(ctx context.Context, original bootstrapS
 	result = bootstrapSuccessorLocalRebindPlan{Schema: bootstrapSuccessorLocalRebindSchema, ExecutionApprovalHash: rootObjectHash(original), LocalDirectory: request.RootPath,
 		OriginalLocal: p.Root, RestoredLocal: physical, RestoredGeneration: safeReleaseHash(plan.Generation), RuntimeDeclaration: declarationReference,
 		RestorePlan: reference, OriginalInventory: request.RestoreSource.Inventory, OriginalFormerWriter: request.RestoreSource.FormerWriterFence,
-		OriginalMemberCensusHash: derivation.Original.File.Sha256, DerivedMemberCensusHash: derivation.Derived.Sha256}
+		OriginalMemberCensusHash: census.Derivation.Original.File.Sha256, DerivedMemberCensusHash: census.Derivation.Derived.Sha256}
 	result.PendingOutcomeSha256 = pendingOutcome
 	_, err = result.signingBytes(original, profile)
+	if err == nil && ctx.Err() == nil && retained != nil && census.OuterPending {
+		*retained = &bootstrapSuccessorRestoredMemberView{owner: memberOwner, inventory: inventory, census: census.Census}
+	}
 	return result, errors.Join(err, ctx.Err())
 }
 
@@ -379,13 +340,27 @@ func inspectBootstrapSuccessorLocalSnapshots(ctx context.Context, path string, o
 
 // A valid independent signature grants only the separately checked new root.
 func (self bootstrapSuccessorLocalRebindApproval) validate(ctx context.Context, original bootstrapSuccessorExecutionApproval, profile *safeExecutionProfile) error {
+	return self.validateWithView(ctx, original, profile, nil)
+}
+
+// The loader alone requests the read-only view after verifying the same
+// signature and complete restore lineage as ordinary owner admission.
+func (self bootstrapSuccessorLocalRebindApproval) validateWithView(ctx context.Context, original bootstrapSuccessorExecutionApproval, profile *safeExecutionProfile, retained **bootstrapSuccessorRestoredMemberView) (resultErr error) {
+	if retained != nil {
+		*retained = nil
+		defer func() {
+			if resultErr != nil {
+				*retained = nil
+			}
+		}()
+	}
 	message, err := self.Plan.signingBytes(original, profile)
 	key, keyErr := rootReceiptHex(original.Plan.Review.Preparation.Approval.Plan.ApprovalPublicKey, ed25519.PublicKeySize)
 	signature, signatureErr := rootOfflineSignatureBytes(self.Signature)
 	if self.Schema != bootstrapSuccessorLocalRebindEnvelopeSchema || err != nil || keyErr != nil || signatureErr != nil || !ed25519.Verify(key, message, signature) {
 		return errors.Join(errors.New("successor local independent rebind approval is invalid"), err, keyErr, signatureErr)
 	}
-	expected, err := buildBootstrapSuccessorLocalRebind(ctx, original, profile, self.Plan.RestorePlan)
+	expected, err := buildBootstrapSuccessorLocalRebindWithView(ctx, original, profile, self.Plan.RestorePlan, retained)
 	if err != nil || expected != self.Plan {
 		return errors.Join(errors.New("successor local approval differs from exact restored lineage"), err)
 	}
