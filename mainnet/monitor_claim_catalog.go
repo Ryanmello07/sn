@@ -70,7 +70,7 @@ const maximumMonitorClaimActiveBytes = 768 * 1024
 // Opted-in claim policies reserve separate active-state, review and catalog
 // envelopes. Capacity growth cannot consume space needed by admitted evidence.
 func monitorClaimCatalogHeadBudget(record monitorClaimCheckpointRecord, policy monitorClaimPolicy, capacity monitorHistoryCapacity) error {
-	record.Archive, record.Catalog = nil, nil
+	record.Archive, record.Catalog, record.Window = nil, nil, nil
 	record.State = monitorClaimState{}
 	entry := monitorProgressPolicyAcknowledgment{Resources: monitorProgressPolicyResources{FreshnessSeconds: 300, ReadBudgetSeconds: 900, Epochs: maximumMonitorRetainedClaimEpochs, EpochCapacity: maximumMonitorRetainedClaimEpochs, ReviewHistoryEntries: maximumMonitorProgressReviews}, PolicyHash: strings.Repeat("f", 64), ReviewSha256: "sha256:" + strings.Repeat("f", 64), PreviousSha256: "sha256:" + strings.Repeat("f", 64), ContentHash: "sha256:" + strings.Repeat("f", 64)}
 	history := &monitorProgressPolicyHistory{LegacyCheckpointSha256: strings.Repeat("f", 64)}
@@ -130,7 +130,7 @@ func encodeMonitorClaimCheckpoint(record monitorClaimCheckpointRecord) ([]byte, 
 
 // This derivation is pure except for read-only declaration admission. The caller
 // holds the original and archive owners throughout planning and final readback.
-func buildMonitorClaimCatalogPlan(ctx context.Context, request monitorClaimCatalogRequest, raw []byte) (plan monitorClaimCatalogPlan, resultErr error) {
+func buildMonitorClaimCatalogPlan(ctx context.Context, request monitorClaimCatalogRequest, raw []byte, retained ...[]monitorHistoryReference) (plan monitorClaimCatalogPlan, resultErr error) {
 	if uint64(len(raw)) != request.Original.Bytes || monitorReadDigest(raw) != request.Original.Sha256 {
 		return plan, errors.New("claim catalog original checkpoint differs from reviewed bytes")
 	}
@@ -157,11 +157,16 @@ func buildMonitorClaimCatalogPlan(ctx context.Context, request monitorClaimCatal
 		return plan, errors.New("claim catalog approval history requires a separately reviewed successor profile")
 	}
 	segments, retainedBytes := uint64(0), uint64(0)
+	var references []monitorHistoryReference
 	if record.Archive != nil {
-		segments = uint64(len(record.Archive.Segments))
-		for _, reference := range record.Archive.Segments {
-			retainedBytes += reference.Bytes
-		}
+		references = record.Archive.Segments
+	}
+	if len(retained) != 0 {
+		references = retained[0]
+	}
+	segments = uint64(len(references))
+	for _, reference := range references {
+		retainedBytes += reference.Bytes
 	}
 	declaration, _ := durablevolume.ReferenceFromContext(ctx)
 	revision := monitorHistoryCatalogRevision{Schema: monitorHistoryCatalogRevisionSchema, Role: request.Policy.Role,
@@ -171,6 +176,15 @@ func buildMonitorClaimCatalogPlan(ctx context.Context, request monitorClaimCatal
 		RequiredBytes: 2 * (retainedBytes + (request.FutureSegments+1)*maxRpcReplyBytes), RequiredInodes: 2 * (2*(segments+request.FutureSegments) + 2),
 		Declaration: declaration, FormerWriterFence: request.FormerWriterFence}
 	revision.RequiredCatalogBytes, err = monitorClaimCatalogForecast(record, request.FutureSegments, maximumMonitorHistoryApprovalBytes)
+	if record.Window != nil {
+		for _, reference := range references {
+			raw, encodingErr := json.Marshal(reference)
+			if encodingErr != nil {
+				return plan, encodingErr
+			}
+			revision.RequiredCatalogBytes += 2 * uint64(len(raw)+1)
+		}
+	}
 	if err != nil {
 		return plan, err
 	}
@@ -209,7 +223,7 @@ func planMonitorClaimCatalog(ctx context.Context, request monitorClaimCatalogReq
 	if err != nil {
 		return plan, err
 	}
-	prior, err := openMonitorClaimArchive(ctx, request.Policy, record)
+	prior, err := openMonitorClaimArchive(ctx, request.Policy, record, request.Original.Path)
 	if err != nil {
 		return plan, err
 	}
@@ -217,7 +231,7 @@ func planMonitorClaimCatalog(ctx context.Context, request monitorClaimCatalogReq
 	if _, err := hydrateMonitorClaimRecord(record, prior.epochStateKVs, request.Policy); err != nil {
 		return plan, err
 	}
-	plan, err = buildMonitorClaimCatalogPlan(ctx, request, raw)
+	plan, err = buildMonitorClaimCatalogPlan(ctx, request, raw, prior.references)
 	err = errors.Join(err, prior.check())
 	return plan, errors.Join(err, source.check(), ctx.Err())
 }
@@ -267,25 +281,25 @@ func applyMonitorClaimCatalog(ctx context.Context, plan monitorClaimCatalogPlan,
 			return err
 		}
 	}
-	hooks.beforeHistoryRead(plan.Request.Policy.Role, "catalog-forecast")
-	expected, err := buildMonitorClaimCatalogPlan(ctx, plan.Request, original)
-	if err != nil {
-		return fmt.Errorf("claim catalog reviewed plan reconstruction: %w", err)
-	}
-	if !reflect.DeepEqual(expected, plan) {
-		return errors.New("claim catalog approval lost exact original progress or forecast")
-	}
 	record, err = decodeMonitorClaimCheckpoint(original, plan.Request.Policy)
 	if err != nil {
 		return err
 	}
-	prior, err := openMonitorClaimArchive(ctx, plan.Request.Policy, record)
+	prior, err := openMonitorClaimArchive(ctx, plan.Request.Policy, record, plan.Request.Original.Path)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, prior.close()) }()
 	if _, err := hydrateMonitorClaimRecord(record, prior.epochStateKVs, plan.Request.Policy); err != nil {
 		return err
+	}
+	hooks.beforeHistoryRead(plan.Request.Policy.Role, "catalog-forecast")
+	expected, err := buildMonitorClaimCatalogPlan(ctx, plan.Request, original, prior.references)
+	if err != nil {
+		return fmt.Errorf("claim catalog reviewed plan reconstruction: %w", err)
+	}
+	if !reflect.DeepEqual(expected, plan) {
+		return errors.New("claim catalog approval lost exact original progress or forecast")
 	}
 	revisions := []monitorHistoryCatalogApproval{}
 	if record.Catalog != nil {

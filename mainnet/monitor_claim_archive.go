@@ -43,6 +43,9 @@ type monitorClaimArchiveAdmission struct {
 	owners        []*monitorHistorySnapshot
 	epochStateKVs map[int64]monitorClaimEpochState
 	commitments   *monitorClaimEpochCommitments
+	windows       *monitorClaimWindowAdmission
+	references    []monitorHistoryReference
+	work          func(string, uint64)
 }
 
 // Admission already checked the ordered, duplicate-free epoch census. Keep
@@ -85,6 +88,9 @@ func (self *monitorClaimArchiveAdmission) externalize(record monitorClaimCheckpo
 }
 
 func (self monitorClaimPolicy) archiveIdentityHash() string {
+	if self.Window != nil {
+		return self.Window.OriginalPolicyHash
+	}
 	resources := self.resources()
 	if self.Renewal != nil {
 		resources = self.Renewal.Original
@@ -118,7 +124,11 @@ func decodeMonitorClaimCheckpoint(raw []byte, policy monitorClaimPolicy) (record
 	if record.Schema != monitorClaimCheckpointSchema || record.ContentHash != hash {
 		return record, errors.New("claim checkpoint differs from its checksum")
 	}
-	if _, err := record.retainedClaimPolicyHistory(policy); err != nil {
+	history, err := record.retainedClaimPolicyHistory(policy)
+	if err != nil {
+		return record, err
+	}
+	if err := record.Window.validate(policy, history); err != nil {
 		return record, err
 	}
 	if err := record.Catalog.validate(policy.HistoryCatalog, policy.Role, policy.archiveIdentityHash(), ""); err != nil {
@@ -218,7 +228,8 @@ func monitorClaimCatalogBytes(record monitorClaimCheckpointRecord) ([]byte, erro
 	return json.Marshal(struct {
 		Archive *monitorClaimArchive        `json:"archive"`
 		Catalog *monitorHistoryCatalogState `json:"catalog"`
-	}{Archive: record.Archive, Catalog: record.Catalog})
+		Window  *monitorClaimWindowState    `json:"window,omitempty"`
+	}{Archive: record.Archive, Catalog: record.Catalog, Window: record.Window})
 }
 
 // The caller owns these clones. A later HTTP sample cannot mutate the admitted
@@ -228,6 +239,7 @@ func hydrateMonitorClaimRecord(record monitorClaimCheckpointRecord, basis map[in
 	references := map[int64]string{}
 	if record.Archive != nil {
 		for _, reference := range record.Archive.Epochs {
+			policy.observeWork("hydrate-commitment", 1)
 			references[reference.Epoch] = reference.StateSha256
 			original, ok := basis[reference.Epoch]
 			if !ok || rootObjectHash(original) != reference.StateSha256 {
@@ -236,6 +248,7 @@ func hydrateMonitorClaimRecord(record monitorClaimCheckpointRecord, basis map[in
 		}
 	}
 	for index, value := range record.State.Epochs {
+		policy.observeWork("hydrate-epoch", 1)
 		original, retained := basis[value.Epoch]
 		if value.Archived {
 			if !monitorClaimEpochPlaceholder(value) || !retained || references[value.Epoch] == "" {
@@ -323,6 +336,7 @@ func compactMonitorClaim(record monitorClaimCheckpointRecord, reference monitorH
 	basis := make(map[int64]monitorClaimEpochState)
 	changed := false
 	for _, epoch := range record.State.Epochs {
+		policy.observeWork("compact-epoch", 1)
 		if epoch.Observation == nil {
 			continue
 		}
@@ -346,62 +360,101 @@ func compactMonitorClaim(record monitorClaimCheckpointRecord, reference monitorH
 
 // One old payload at a time is decoded. Only the bounded current epoch basis
 // remains resident; all original owners remain held for later custody checks.
-func openMonitorClaimArchive(ctx context.Context, policy monitorClaimPolicy, record monitorClaimCheckpointRecord) (admission *monitorClaimArchiveAdmission, resultErr error) {
-	admission = &monitorClaimArchiveAdmission{epochStateKVs: map[int64]monitorClaimEpochState{}}
+func openMonitorClaimArchive(ctx context.Context, policy monitorClaimPolicy, record monitorClaimCheckpointRecord, protected ...string) (admission *monitorClaimArchiveAdmission, resultErr error) {
+	admission = &monitorClaimArchiveAdmission{epochStateKVs: map[int64]monitorClaimEpochState{}, work: policy.observeWork}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, admission.close())
 			admission = nil
 		}
 	}()
-	if err := record.Archive.validate(policy, record); err != nil {
-		return admission, err
-	}
-	currentReviews, err := record.retainedClaimPolicyHistory(policy)
+	basis, windows, references, err := replayMonitorClaimHistory(ctx, policy, record, func(reference monitorHistoryReference) ([]byte, error) {
+		for _, path := range protected {
+			if monitorHistoryPathsAlias(path, reference.Path) {
+				return nil, errors.New("Claim retained history aliases the active or next checkpoint owner")
+			}
+		}
+		owner, raw, err := openMonitorHistoryReader(ctx, reference)
+		if err != nil {
+			return nil, err
+		}
+		admission.owners = append(admission.owners, owner)
+		return raw, nil
+	})
 	if err != nil {
 		return admission, err
 	}
+	admission.epochStateKVs, admission.windows, admission.references = basis, windows, references
+	admission.commitments = newMonitorClaimEpochCommitments(record.Archive)
+	return admission, ctx.Err()
+}
+
+// Runtime reopening and copied-source restore use the same complete replay.
+// The caller owns read custody; a partial page never publishes an epoch basis.
+// Context checks separate bounded payload operations and retain read causes.
+func replayMonitorClaimArchive(ctx context.Context, policy monitorClaimPolicy, record monitorClaimCheckpointRecord, read func(monitorHistoryReference) ([]byte, error)) (map[int64]monitorClaimEpochState, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := record.Archive.validate(policy, record); err != nil {
+		return nil, err
+	}
+	currentReviews, err := record.retainedClaimPolicyHistory(policy)
+	if err != nil {
+		return nil, err
+	}
+	basis := map[int64]monitorClaimEpochState{}
 	if record.Archive == nil {
-		return admission, nil
+		return basis, ctx.Err()
 	}
 	var prior *monitorClaimArchive
 	var priorReviews *monitorProgressPolicyHistory
 	var priorCatalog *monitorHistoryCatalogState
 	for _, reference := range record.Archive.Segments {
 		if err := ctx.Err(); err != nil {
-			return admission, err
+			return nil, err
 		}
-		owner, raw, err := openMonitorHistoryReader(ctx, reference)
+		raw, err := read(reference)
+		policy.observeWork("archive-read", 1)
+		policy.observeWork("archive-read-bytes", uint64(len(raw)))
 		if err != nil {
-			return admission, err
+			return nil, err
 		}
-		admission.owners = append(admission.owners, owner)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		original, err := decodeMonitorClaimCheckpoint(raw, policy)
+		policy.observeWork("archive-decode", 1)
 		if err != nil {
-			return admission, err
+			return nil, err
 		}
-		if !reflect.DeepEqual(original.Archive, prior) || !original.Catalog.retains(priorCatalog) || !record.Catalog.retains(original.Catalog) {
-			return admission, errors.New("claim archive omitted a predecessor or signed catalog acknowledgment")
+		if !reflect.DeepEqual(original.Window, record.Window) || !reflect.DeepEqual(original.Archive, prior) || !original.Catalog.retains(priorCatalog) || !record.Catalog.retains(original.Catalog) {
+			return nil, errors.New("claim archive omitted a predecessor or signed catalog acknowledgment")
 		}
-		original, err = hydrateMonitorClaimRecord(original, admission.epochStateKVs, policy)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		original, err = hydrateMonitorClaimRecord(original, basis, policy)
 		if err != nil {
-			return admission, err
+			return nil, err
 		}
-		next, basis, err := compactMonitorClaim(original, reference, policy)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		next, nextBasis, err := compactMonitorClaim(original, reference, policy)
 		if err != nil {
-			return admission, err
+			return nil, err
 		}
 		if !monitorClaimReviewsRetain(currentReviews, next.PolicyHistory) || priorReviews != nil && !monitorClaimReviewsRetain(next.PolicyHistory, priorReviews) {
-			return admission, errors.New("claim archive lost independently reviewed expectations or policy history")
+			return nil, errors.New("claim archive lost independently reviewed expectations or policy history")
 		}
 		prior, priorReviews, priorCatalog = next.Archive, next.PolicyHistory, original.Catalog
-		admission.epochStateKVs = basis
+		basis = nextBasis
 	}
 	if !reflect.DeepEqual(prior, record.Archive) {
-		return admission, errors.New("claim archive commitments differ from original checkpoints")
+		return nil, errors.New("claim archive commitments differ from original checkpoints")
 	}
-	admission.commitments = newMonitorClaimEpochCommitments(record.Archive)
-	return admission, ctx.Err()
+	return basis, ctx.Err()
 }
 
 func (self *monitorClaimArchiveAdmission) check() error {
@@ -409,6 +462,9 @@ func (self *monitorClaimArchiveAdmission) check() error {
 		return nil
 	}
 	for _, owner := range self.owners {
+		if self.work != nil {
+			self.work("archive-custody-check", 1)
+		}
 		if err := owner.check(); err != nil {
 			return err
 		}
@@ -424,7 +480,7 @@ func (self *monitorClaimArchiveAdmission) close() error {
 	for _, owner := range self.owners {
 		result = errors.Join(result, owner.close())
 	}
-	self.owners, self.epochStateKVs, self.commitments = nil, nil, nil
+	self.owners, self.epochStateKVs, self.commitments, self.windows, self.references = nil, nil, nil, nil, nil
 	return result
 }
 
@@ -460,9 +516,12 @@ func (self *monitorClaimWorker) archiveStatus() monitorClaimArchiveStatus {
 	if self.archive != nil {
 		status.Segments, status.RetainedEpochBases = len(self.archive.Segments), len(self.archive.Epochs)
 	}
-	raw, err := monitorClaimCatalogBytes(monitorClaimCheckpointRecord{Archive: self.archive, Catalog: self.catalog})
+	raw, err := monitorClaimCatalogBytes(monitorClaimCheckpointRecord{Archive: self.archive, Catalog: self.catalog, Window: self.window})
 	if err == nil {
 		status.CatalogBytes = uint64(len(raw))
+	}
+	if self.archiveAdmission != nil {
+		status.Segments = len(self.archiveAdmission.references)
 	}
 	status.CapacityWarning = err != nil || 2*(uint64(status.Segments)+1) >= status.Capacity.Segments || 2*(uint64(status.Segments)+1) >= status.Capacity.HeldReaders || 2*(status.CatalogBytes+6*maximumMonitorHistoryPath+256) >= status.Capacity.CatalogBytes
 	return status

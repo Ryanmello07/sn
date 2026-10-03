@@ -1,8 +1,9 @@
+//go:build linux
+
 package main
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 )
@@ -12,7 +13,7 @@ import (
 // cannot return a hash, alter a guard or skip the durable publication.
 func TestMonitorClaimArchivedSaveWorkGrowsWithEpochCensus(t *testing.T) {
 	for _, census := range []int{8, 16, 32, 64} {
-		t.Run(fmt.Sprint(census), func(t *testing.T) {
+		func() {
 			f := newMonitorClaimArchiveCensusFixture(t, nil, census)
 			_, args := f.plan(t)
 			f.apply(t, args)
@@ -62,7 +63,7 @@ func TestMonitorClaimArchivedSaveWorkGrowsWithEpochCensus(t *testing.T) {
 			if visits != census || stored.Archived || stored.Observation == nil || !*stored.Observation.LeafClaimed || stored.Proof == nil || *stored.Proof.LeafClaimed {
 				t.Fatal("commitment lookup reused stale evidence or lost the first proof", visits, stored)
 			}
-		})
+		}()
 	}
 }
 
@@ -70,7 +71,7 @@ func TestMonitorClaimArchivedSaveWorkGrowsWithEpochCensus(t *testing.T) {
 // permissible map overwrite. Refusal precedes source sampling and head writes.
 func TestMonitorClaimEpochIndexRetainsOrderedDuplicateAdmission(t *testing.T) {
 	for _, fault := range []string{"duplicate", "reordered"} {
-		t.Run(fault, func(t *testing.T) {
+		func() {
 			f := newMonitorClaimArchiveCensusFixture(t, nil, 8)
 			_, args := f.plan(t)
 			f.apply(t, args)
@@ -99,6 +100,6 @@ func TestMonitorClaimEpochIndexRetainsOrderedDuplicateAdmission(t *testing.T) {
 			if err == nil || worker != nil || f.requests.Load() != requests || !reflect.DeepEqual(before, f.record(t)) {
 				t.Fatal("index construction admitted or rewrote a changed ordered commitment census", fault, err)
 			}
-		})
+		}()
 	}
 }

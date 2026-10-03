@@ -276,6 +276,7 @@ func validateMonitorClaimState(policy monitorClaimPolicy, state monitorClaimStat
 		return errors.New("claim checkpoint retained a foreign or incomplete publication")
 	}
 	for index, epoch := range state.Epochs {
+		policy.observeWork("validated-state-epoch", 1)
 		if epoch.Archived || epoch.Epoch != policy.Epochs[index].Epoch || epoch.FirstSeenAt.After(state.HighWaterAt) || epoch.ProgressAt.After(state.HighWaterAt) {
 			return errors.New("claim checkpoint expected epoch or times differ")
 		}

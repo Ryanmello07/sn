@@ -41,6 +41,16 @@ type monitorClaimPolicy struct {
 	ReviewHistoryEntries uint64                        `json:"review_history_entries,omitempty"`
 	Renewal              *monitorProgressPolicyRenewal `json:"renewal,omitempty"`
 	HistoryCatalog       *monitorHistoryCatalogPolicy  `json:"history_catalog,omitempty"`
+	Window               *monitorClaimWindowPolicy     `json:"window,omitempty"`
+	// An owner-local diagnostic observes actual work; it supplies no evidence,
+	// verdict, cache entry or serialized policy field.
+	work func(stage string, units uint64)
+}
+
+func (self monitorClaimPolicy) observeWork(stage string, units uint64) {
+	if self.work != nil {
+		self.work(stage, units)
+	}
 }
 
 func (self monitorClaimPolicy) validate(expected identityExpectation) error {
@@ -57,6 +67,7 @@ func (self monitorClaimPolicy) validate(expected identityExpectation) error {
 	}
 	seen := map[int64]bool{}
 	for _, epoch := range self.Epochs {
+		self.observeWork("policy-epoch", 1)
 		deadline, err := time.Parse(time.RFC3339Nano, epoch.AcceptBy)
 		if epoch.Epoch < 0 || seen[epoch.Epoch] || epoch.ShareBps == 0 || epoch.ShareBps > 10000 || err != nil || deadline.IsZero() {
 			return errors.New("claim expectation needs a unique epoch, exact share and absolute acceptance deadline")
@@ -74,7 +85,7 @@ func (self monitorClaimPolicy) validate(expected identityExpectation) error {
 			}
 		}
 	}
-	return self.HistoryCatalog.validate()
+	return errors.Join(self.HistoryCatalog.validate(), self.Window.validate())
 }
 
 func (self monitorClaimPolicy) hash() string {
@@ -102,6 +113,7 @@ func monitorClaimIdentity(policy monitorClaimPolicy, value *protocol.ClaimProgre
 			return "identity"
 		}
 		for _, expected := range policy.Epochs {
+			policy.observeWork("identity-epoch-comparison", 1)
 			if entry.Epoch != expected.Epoch {
 				continue
 			}

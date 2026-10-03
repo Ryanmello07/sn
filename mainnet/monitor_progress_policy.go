@@ -277,6 +277,8 @@ func (self monitorClaimPolicy) policyHashAt(resources monitorProgressPolicyResou
 	if resources.Epochs > uint64(len(self.Epochs)) {
 		return ""
 	}
+	self.observeWork("policy-hash", 1)
+	self.observeWork("policy-hashed-epoch", resources.Epochs)
 	return self.atResources(resources).hash()
 }
 

@@ -28,11 +28,12 @@ func monitorClaimTestPolicyWire(value protocol.ClaimProgress, endpoint string, n
 }
 
 type monitorClaimTestEvent struct {
-	Schema            string `json:"schema"`
-	Role              string `json:"role"`
-	Status            string `json:"status"`
-	Current           bool   `json:"current"`
-	CheckpointCurrent bool   `json:"checkpoint_current"`
+	Schema            string                   `json:"schema"`
+	Role              string                   `json:"role"`
+	Status            string                   `json:"status"`
+	Current           bool                     `json:"current"`
+	CheckpointCurrent bool                     `json:"checkpoint_current"`
+	Window            monitorClaimWindowStatus `json:"window"`
 	State             struct {
 		AcceptedReceipts int       `json:"accepted_receipts"`
 		ClaimedLeaves    int       `json:"claimed_leaves"`

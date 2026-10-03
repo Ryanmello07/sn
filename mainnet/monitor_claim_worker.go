@@ -30,6 +30,7 @@ type monitorClaimCheckpointRecord struct {
 	PolicyHistory *monitorProgressPolicyHistory `json:"policy_history,omitempty"`
 	Archive       *monitorClaimArchive          `json:"archive,omitempty"`
 	Catalog       *monitorHistoryCatalogState   `json:"catalog,omitempty"`
+	Window        *monitorClaimWindowState      `json:"window,omitempty"`
 	ContentHash   string                        `json:"content_hash"`
 }
 
@@ -45,6 +46,7 @@ type monitorClaimWorker struct {
 	archive              *monitorClaimArchive
 	catalog              *monitorHistoryCatalogState
 	archiveAdmission     *monitorClaimArchiveAdmission
+	window               *monitorClaimWindowState
 }
 
 func openMonitorClaimWorker(ctx context.Context, policy monitorClaimPolicy, expected identityExpectation, checkpoint, metrics string, hooks monitorServiceHooks) (*monitorClaimWorker, error) {
@@ -104,7 +106,7 @@ func (self *monitorClaimWorker) load(ctx context.Context) (result *monitorClaimS
 	}
 	raw, err := self.checkpoint.directory.read(filepath.Base(self.checkpoint.path), maxMonitorClaimCheckpointBytes, true)
 	if monitorCheckpointAbsent(err) {
-		if self.policy.Renewal != nil {
+		if self.policy.Renewal != nil || self.policy.Window != nil {
 			return nil, errors.New("claim policy renewal requires its retained checkpoint")
 		}
 		self.policyHistory = newMonitorProgressPolicyHistory(self.policy.resources(), self.policy.hash(), "")
@@ -127,7 +129,7 @@ func (self *monitorClaimWorker) load(ctx context.Context) (result *monitorClaimS
 			}
 		}
 	}
-	admission, err := openMonitorClaimArchive(ctx, self.policy, record)
+	admission, err := openMonitorClaimArchive(ctx, self.policy, record, self.checkpoint.path)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +147,9 @@ func (self *monitorClaimWorker) load(ctx context.Context) (result *monitorClaimS
 	if err != nil {
 		return nil, err
 	}
+	if err := admission.windows.checkReviews(history); err != nil {
+		return nil, err
+	}
 	if err := validateMonitorClaimState(self.policy.atResources(prior), record.State); err != nil {
 		return nil, err
 	}
@@ -152,7 +157,7 @@ func (self *monitorClaimWorker) load(ctx context.Context) (result *monitorClaimS
 		record.State.Epochs = append(record.State.Epochs, monitorClaimEpochState{Epoch: expected.Epoch})
 	}
 	self.policyHistory, self.acknowledgedPolicies = history, acknowledged
-	self.archive, self.catalog, self.archiveAdmission = record.Archive, record.Catalog, admission
+	self.archive, self.catalog, self.archiveAdmission, self.window = record.Archive, record.Catalog, admission, record.Window
 	admitted = true
 	record.State.current = false
 	return &record.State, nil
@@ -171,7 +176,7 @@ func (self *monitorClaimWorker) save() error {
 	if self.policyHistory == nil || len(self.policyHistory.Entries) == 0 || self.policyHistory.validate(true, self.policyHistory.Entries[0].PolicyHash, self.policy.policyHashAt) != nil {
 		return errors.New("claim policy history is not admitted")
 	}
-	record := monitorClaimCheckpointRecord{Schema: monitorClaimCheckpointSchema, PolicyHash: self.policyHistory.Entries[0].PolicyHash, State: *self.state, PolicyHistory: self.policyHistory, Archive: self.archive, Catalog: self.catalog}
+	record := monitorClaimCheckpointRecord{Schema: monitorClaimCheckpointSchema, PolicyHash: self.policyHistory.Entries[0].PolicyHash, State: *self.state, PolicyHistory: self.policyHistory, Archive: self.archive, Catalog: self.catalog, Window: self.window}
 	record = self.archiveAdmission.externalize(record)
 	var err error
 	record.ContentHash, err = hashMonitorClaimCheckpoint(record)
@@ -181,6 +186,12 @@ func (self *monitorClaimWorker) save() error {
 	raw, err := json.Marshal(record)
 	if err != nil || len(raw)+1 > maxMonitorClaimCheckpointBytes {
 		return errors.New("claim checkpoint exceeds its byte bound")
+	}
+	self.policy.observeWork("checkpoint-encoded-bytes", uint64(len(raw)))
+	if record.Window != nil {
+		// The current bounded transition is serialized for the checksum and
+		// the publication. Report this work separately from hot state scans.
+		self.policy.observeWork("encoded-window-epoch", 2*uint64(len(record.Window.PreviousPolicy.Epochs)+len(record.Window.Transition.Retired)))
 	}
 	err = errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner(), self.archiveAdmission.check())
 	if err == nil {
@@ -281,6 +292,11 @@ func (self *monitorClaimWorker) run(ctx context.Context, interval time.Duration,
 		} else if errors.Is(archiveReadErr, durablevolume.ErrIdentity) {
 			code = "identity"
 		}
+		if value != nil && (code == "ok" || code == "unknown") && self.archiveAdmission != nil {
+			if retainedCode := self.archiveAdmission.windows.publicationCode(value); retainedCode != "ok" {
+				code = retainedCode
+			}
+		}
 		if ctx.Err() != nil && !monitorClaimTerminal(code) {
 			return 0
 		}
@@ -288,6 +304,7 @@ func (self *monitorClaimWorker) run(ctx context.Context, interval time.Duration,
 		checkpointErr := self.save()
 		raw := renderMonitorClaimMetrics(self.policy, self.state, checkpointErr == nil)
 		raw = self.appendArchiveMetrics(raw)
+		raw = self.appendWindowMetrics(raw)
 		raw = appendMonitorProgressPolicyMetrics(raw, "sn_mainnet_claim", self.policy.Role, self.policyHistory, self.acknowledgedPolicies)
 		raw = appendMonitorOutputMetrics(raw, "sn_mainnet_claim", self.policy.Role, monitorDiagnosticSnapshot(stdout, stderr))
 		metricsErr := self.metrics.saveRaw(raw)
@@ -303,7 +320,8 @@ func (self *monitorClaimWorker) run(ctx context.Context, interval time.Duration,
 			State             monitorClaimEventState      `json:"state"`
 			Policy            monitorProgressPolicyStatus `json:"policy"`
 			Archive           monitorClaimArchiveStatus   `json:"archive"`
-		}{Schema: "urnetwork-mainnet-claim-event-v1", Role: self.policy.Role, Status: self.state.Status, Current: self.state.current && checkpointErr == nil, CheckpointCurrent: checkpointErr == nil, State: self.state.eventState(self.policy), Policy: progressPolicyStatus(self.policyHistory, self.acknowledgedPolicies), Archive: self.archiveStatus()}
+			Window            monitorClaimWindowStatus    `json:"window"`
+		}{Schema: "urnetwork-mainnet-claim-event-v1", Role: self.policy.Role, Status: self.state.Status, Current: self.state.current && checkpointErr == nil, CheckpointCurrent: checkpointErr == nil, State: self.state.eventState(self.policy), Policy: progressPolicyStatus(self.policyHistory, self.acknowledgedPolicies), Archive: self.archiveStatus(), Window: self.windowStatus()}
 		if err := json.NewEncoder(stdout).Encode(event); err != nil {
 			if ctx.Err() != nil && !terminal {
 				return 0
@@ -340,7 +358,7 @@ func (self *monitorClaimWorker) run(ctx context.Context, interval time.Duration,
 				owner.syncDirectory = prior.syncDirectory
 				self.checkpoint, self.state = owner, state
 				self.policyHistory, self.acknowledgedPolicies = candidate.policyHistory, candidate.acknowledgedPolicies
-				self.archive, self.catalog, self.archiveAdmission = candidate.archive, candidate.catalog, candidate.archiveAdmission
+				self.archive, self.catalog, self.archiveAdmission, self.window = candidate.archive, candidate.catalog, candidate.archiveAdmission, candidate.window
 				return nil
 			}, hooks)
 			if err != nil {

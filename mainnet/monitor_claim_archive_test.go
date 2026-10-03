@@ -57,6 +57,12 @@ func newMonitorClaimArchiveFixture(t *testing.T, catalog *monitorHistoryCatalogP
 }
 
 func newMonitorClaimArchiveCensusFixture(t *testing.T, catalog *monitorHistoryCatalogPolicy, census int) *monitorClaimArchiveFixture {
+	return newMonitorClaimArchivePreparedFixture(t, catalog, census, nil)
+}
+
+// Restore fixtures prepare their real original logical roots before the first
+// public sample. Ordinary archive tests retain their existing synthetic roots.
+func newMonitorClaimArchivePreparedFixture(t *testing.T, catalog *monitorHistoryCatalogPolicy, census int, prepare func(*monitorClaimArchiveFixture) context.Context) *monitorClaimArchiveFixture {
 	t.Helper()
 	if census < 2 || census > 64 {
 		t.Fatal("fixture census exceeds the actual bounded publication")
@@ -103,7 +109,11 @@ func newMonitorClaimArchiveCensusFixture(t *testing.T, catalog *monitorHistoryCa
 	f.services.policy.Claims = []monitorClaimPolicy{f.policy}
 	f.services.writePolicy(t)
 	f.url, _, _ = monitorServicesBlockedChain(t)
-	f.ctx = monitorTestStorageContext(t, t.Context(), f.services.args(f.url))
+	if prepare == nil {
+		f.ctx = monitorTestStorageContext(t, t.Context(), f.services.args(f.url))
+	} else {
+		f.ctx = prepare(f)
+	}
 	reference, ok := durablevolume.ReferenceFromContext(f.ctx)
 	if !ok {
 		t.Fatal("fixture declaration absent")
@@ -126,7 +136,9 @@ func newMonitorClaimArchiveCensusFixture(t *testing.T, catalog *monitorHistoryCa
 	}
 	f.ctx = durablevolume.WithReference(f.ctx, reference)
 	f.checkpoint, _ = monitorClaimPaths(f.services.checkpointPath, f.services.metricsPath, f.policy.Role)
-	f.archive = filepath.Join(filepath.Dir(f.checkpoint), "claim-archive-001.json")
+	if f.archive == "" {
+		f.archive = filepath.Join(filepath.Dir(f.checkpoint), "claim-archive-001.json")
+	}
 	run := f.start(t, monitorServiceHooks{})
 	event := run.next(t)
 	if !event.Current || !event.CheckpointCurrent || event.State.MerkleProofs != census-1 || event.State.Deferred != 1 || event.State.Overdue != census-1 {
@@ -333,7 +345,7 @@ func TestMonitorClaimArchivePublicRestartRetainsUnresolvedAndOriginalPayment(t *
 
 func TestMonitorClaimArchiveLostAcknowledgmentResumesExactHeads(t *testing.T) {
 	for _, phase := range []string{"archive", "checkpoint"} {
-		t.Run(phase, func(t *testing.T) {
+		func() {
 			f := newMonitorClaimArchiveFixture(t, nil)
 			plan, args := f.plan(t)
 			calls := 0
@@ -359,13 +371,13 @@ func TestMonitorClaimArchiveLostAcknowledgmentResumesExactHeads(t *testing.T) {
 				t.Fatal("lost acknowledgment reset liabilities", event)
 			}
 			run.stop(t, 0)
-		})
+		}()
 	}
 }
 
 func TestMonitorClaimArchiveRefusesOmittedForgedAndRegressedEvidence(t *testing.T) {
 	for _, fault := range []string{"missing", "digest", "repeat", "commitment", "erase-proof", "deferred-change", "incident-reset"} {
-		t.Run(fault, func(t *testing.T) {
+		func() {
 			f := newMonitorClaimArchiveFixture(t, nil)
 			original := f.record(t)
 			_, args := f.plan(t)
@@ -411,7 +423,7 @@ func TestMonitorClaimArchiveRefusesOmittedForgedAndRegressedEvidence(t *testing.
 			if len(run.sink.events) != 0 {
 				t.Fatal("invalid retained claim history emitted an observation", fault)
 			}
-		})
+		}()
 	}
 }
 

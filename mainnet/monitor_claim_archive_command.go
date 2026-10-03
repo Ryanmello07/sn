@@ -89,7 +89,7 @@ func validateMonitorClaimArchiveRequest(ctx context.Context, request monitorClai
 }
 
 // This is pure after the original bytes and prefix have been authenticated.
-func buildMonitorClaimArchivePlan(ctx context.Context, request monitorClaimArchiveRequest, original []byte, record monitorClaimCheckpointRecord) (plan monitorClaimArchivePlan, next []byte, resultErr error) {
+func buildMonitorClaimArchivePlan(ctx context.Context, request monitorClaimArchiveRequest, original []byte, record monitorClaimCheckpointRecord, retained ...[]monitorHistoryReference) (plan monitorClaimArchivePlan, next []byte, resultErr error) {
 	if uint64(len(original)) != request.Original.Bytes || monitorReadDigest(original) != request.Original.Sha256 {
 		return plan, nil, errors.New("claim archive original checkpoint changed after review")
 	}
@@ -122,17 +122,31 @@ func buildMonitorClaimArchivePlan(ctx context.Context, request monitorClaimArchi
 		return plan, nil, errors.New("claim archive declaration is absent")
 	}
 	plan = monitorClaimArchivePlan{Schema: monitorClaimArchivePlanSchema, Request: request, Declaration: declaration, Archive: archive, Next: monitorHistoryReference{Path: request.Original.Path, Bytes: uint64(len(next)), Sha256: monitorReadDigest(next)}, Segments: len(compacted.Archive.Segments)}
+	references := compacted.Archive.Segments
+	if len(retained) != 0 {
+		references = append(append([]monitorHistoryReference(nil), retained[0]...), archive)
+	}
+	plan.Segments = len(references)
 	plan.RequiredSegments = 2 * (uint64(plan.Segments) + request.FutureSegments)
 	capacity := record.Catalog.capacity(request.Policy.HistoryCatalog)
 	if plan.RequiredSegments > capacity.Segments || plan.RequiredSegments > capacity.HeldReaders {
 		return plan, nil, errors.New("claim archive segment forecast needs a reviewed catalog capacity revision")
 	}
 	forecast, err := monitorClaimCatalogForecast(compacted, request.FutureSegments, 0)
+	if record.Window != nil {
+		for _, reference := range references {
+			raw, encodingErr := json.Marshal(reference)
+			if encodingErr != nil {
+				return plan, nil, encodingErr
+			}
+			forecast += 2 * uint64(len(raw)+1)
+		}
+	}
 	if err != nil || forecast > capacity.CatalogBytes {
 		return plan, nil, errors.Join(errors.New("claim archive metadata forecast needs a reviewed catalog capacity revision"), err)
 	}
 	retainedBytes := uint64(0)
-	for _, reference := range compacted.Archive.Segments {
+	for _, reference := range references {
 		retainedBytes += reference.Bytes
 	}
 	plan.RequiredBytes = 2 * (retainedBytes + request.FutureSegments*maxRpcReplyBytes)
@@ -157,7 +171,7 @@ func planMonitorClaimArchive(ctx context.Context, request monitorClaimArchiveReq
 	if err != nil {
 		return plan, err
 	}
-	prior, err := openMonitorClaimArchive(ctx, request.Policy, record)
+	prior, err := openMonitorClaimArchive(ctx, request.Policy, record, request.Original.Path)
 	if err != nil {
 		return plan, err
 	}
@@ -178,7 +192,7 @@ func planMonitorClaimArchive(ctx context.Context, request monitorClaimArchiveReq
 	if present && !bytes.Equal(existing, raw) {
 		return plan, errors.New("claim archive destination already retains different bytes")
 	}
-	plan, _, err = buildMonitorClaimArchivePlan(ctx, request, raw, record)
+	plan, _, err = buildMonitorClaimArchivePlan(ctx, request, raw, record, prior.references)
 	err = errors.Join(err, prior.check())
 	return plan, errors.Join(err, source.check(), archive.check(), ctx.Err())
 }
@@ -226,7 +240,7 @@ func applyMonitorClaimArchive(ctx context.Context, plan monitorClaimArchivePlan,
 	if err != nil {
 		return err
 	}
-	prior, err := openMonitorClaimArchive(ctx, plan.Request.Policy, record)
+	prior, err := openMonitorClaimArchive(ctx, plan.Request.Policy, record, plan.Request.Original.Path)
 	if err != nil {
 		return err
 	}
@@ -235,7 +249,7 @@ func applyMonitorClaimArchive(ctx context.Context, plan monitorClaimArchivePlan,
 	if err != nil {
 		return err
 	}
-	expected, next, err := buildMonitorClaimArchivePlan(ctx, plan.Request, original, record)
+	expected, next, err := buildMonitorClaimArchivePlan(ctx, plan.Request, original, record, prior.references)
 	if err != nil {
 		return err
 	}
@@ -289,6 +303,12 @@ func applyMonitorClaimArchive(ctx context.Context, plan monitorClaimArchivePlan,
 
 // Actual public entrypoint; stdout loss never resets either retained owner.
 func runMonitorClaimArchive(ctx context.Context, args []string, stdout, stderr io.Writer, hooks monitorServiceHooks) int {
+	if len(args) != 0 && args[0] == "restore-request" {
+		return runMonitorClaimArchiveRestoreRequest(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) != 0 && args[0] == "restore-cohort-plan" {
+		return runMonitorClaimArchiveRestoreCohort(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || (args[0] != "plan" && args[0] != "apply") {
 		fmt.Fprintln(stderr, "usage: monitor-claim-archive plan --request FILE --request-sha256 HASH | apply --plan FILE --plan-sha256 HASH")
 		return 2

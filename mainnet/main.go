@@ -143,6 +143,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && args[0] == "monitor-claim-catalog" {
 		return runMonitorClaimCatalog(ctx, args[1:], stdout, stderr, hooks)
 	}
+	if len(args) != 0 && args[0] == "monitor-claim-window" {
+		return runMonitorClaimWindow(ctx, args[1:], stdout, stderr, hooks)
+	}
 	if len(args) != 0 && args[0] == "monitor-claim-archive" {
 		return runMonitorClaimArchive(ctx, args[1:], stdout, stderr, hooks)
 	}
