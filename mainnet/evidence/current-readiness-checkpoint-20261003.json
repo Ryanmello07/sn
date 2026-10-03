@@ -43,6 +43,7 @@
     "native-admission-ceae-source-review-20261003.json": "54b777fe43a3cd1605d86b7369d25d45b8148f6e20d682aa0c4cdaa36741bf65",
     "native-archive-cross-root-restore-scope-review-20261003.json": "ff38d8e1e26bb2f9399cf580be70ff6e6d9c0281f47c5ea1256f0c208780c446",
     "native-archive-restore-owner-capacity-source-gap-20261003.json": "1a31bc900013d955a3b484e7393018328b81235feff0260e4d1ba30a2c1f59a8",
+    "native-ceae-full512-review-20261003.json": "40866ad8d78c20ab7ce54ea1687f99a9fb132ef353b016109c502ab8811b716b",
     "native-cohort8fe-core16-review-20261003.json": "29e2b818327658838c0837f3f0075dd09017b8d6d0a739fd8b619a385bc633f1",
     "native-evm-current0f-source-review-20261003.json": "02a69e2612b20e61164bb2807884903374f900b1ad23690928a32e0322c00629",
     "native-evm-current292-source-review-20261003.json": "b8103afed81f03cb51af6e2447f5eaba617564e7c9c36f7ea69c2a1b7e9f1368",
@@ -56,6 +57,7 @@
     "paired-metadata-sn-qualification-20261003.json": "dbfa1b79b1795cd9fe0ec6d4003939924a7c815430abc1eaf0ffe631c6e2da68",
     "paired-restore-fixture-affected-qualification-20261003.json": "4705abc95b80c1ef7083f0c7fca676e26f6752342690f20971f37bf0ee83eced",
     "payout-boundary-qualification-20261003.json": "73053846b010911a713ae03ec92e15a9fc868f9b44a8cb091f4677b806c7bc9c",
+    "proof-capture7b81-go10-review-20261003.json": "2e6fa10224d2ec7a5147908044c8633be0b603651b158d1727ec80785bfffddf",
     "proof-capture7b81-original-partial-review-20261003.json": "0d86622679a19f91edba5f0be5ec87cf6fe10c6d011b490da0d15478a0847a33",
     "publication556-composed-qualification-20261003.json": "a80c36f0da79e446a595265c6c5387191858e80d1bcee371b2e2e0db07ffbfdb",
     "qualified-composition-main-merge-20261003.json": "bbd79ee0bf9ddd89e884e62d4448595b0dc6280c59852ca5d6b81e586d2e5da9",
@@ -127,9 +129,9 @@
     },
     {
       "closed": false,
-      "evidence": "native-restore-original-and-fixture259-review-20261003.json",
+      "evidence": "native-ceae-full512-review-20261003.json",
       "requirement": "PH-09",
-      "status": "Union/paired recovery scopes qualified; many-owner core passes four roots normally/race and three corrected restore roots pass both modes. Full512 passes normally but race hits a sample-wait timeout. Cross-root cohort and actual host restore remain."
+      "status": "Union/paired scopes and many-owner core qualified; ceae full512 normal/race, three adjacent roots per mode and vet verified. Original d3d race timeout remains retained; cross-root public/causal and actual host restore remain."
     },
     {
       "closed": false,
