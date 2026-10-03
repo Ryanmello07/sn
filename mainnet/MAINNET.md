@@ -4453,3 +4453,10 @@ The [current full-model failure batch](evidence/server-model-clock-and-debit-ori
 ### Preserve current wire changes in recovery dependency composition
 
 The [Connect integration preview](evidence/current-connect772-integration-preview-20261003.json) retains all fifteen qualified recovery files alongside newer upstream optional close-report identity fields. This is a Git-only preview, not a published recovery dependency or composed test result. Preserve current upstream protocol changes while adding the pending namespace correction, qualify the final common dependency graph once, then pin its published version in SN. Optional report identity must remain non-emitting until the backend provides durable deduplication of the exact party, amount and checkpoint; a compatible wire field alone cannot authorize that behavior.
+
+
+### Continuous native evidence requires an admitted producer
+
+The [native admission gap](evidence/native-continuous-admission-source-gap-20261003.json) separates a signed per-block evidence consumer from an operational producer. Reuse the reviewed runtime/layout/engine authority, but automatically collect and independently verify fresh finalized boundaries, jobs and provider generations under explicit bounded producer authority. Owners must not manually sign every block, and an artifact signed by its own unverified collector is not independent proof. Qualify the actual producer→Rust→public consumer path, restart continuity and incomplete/canonical-change controls. Actual network and runtime approval remain required.
+
+The [combined fixture source review](evidence/combined-model4754-source-review-20261003.json) supersedes the804-only testing plan with ten affected roots and six neighbors. Pending debt, public debit/replay and unchanged provider/account allocations are asserted before the original exhaustion checks. Source review establishes no behavioral pass; the unchanged full suite continues before correction tests are admitted.
