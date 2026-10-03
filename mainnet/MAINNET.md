@@ -3946,6 +3946,16 @@ The [guarded reclaim18–19 receipt](evidence/cache-reclaim-18-19-20261003.json)
 
 ### EVM fixture successor and early composition
 
-The [verified `a9eff813` test-only intake](evidence/continuous-evm-monitor-fixture-source-intake-20261003.json) corrects the peer event assertion using actual public fields, a fresh heartbeat and the resume barrier. Root verified five bindings and one changed test Git blob; production and module bytes match the failed `0fb` candidate. First seventeen normal roots are running. Resource review history remains a separate successor, and neither source-only intake supplies behavior acceptance.
+The [verified `a9eff813` test-only intake](evidence/continuous-evm-monitor-fixture-source-intake-20261003.json) corrects the peer event assertion using actual public fields, a fresh heartbeat and the resume barrier. Root verified five bindings and one changed test Git blob; production and module bytes match the failed `0fb` candidate. The [first seventeen normal roots](evidence/continuous-evm-monitor-original-normal-failure-20261003.json) completed with fifteen passes and two restart/cancellation exit assertions. Root verified twelve bindings and both raw failures. Resource review history remains a separate successor, and neither source-only intake supplies behavior acceptance.
 
 Begin a separate current-main composition while capacity and scoped qualification finish. Keep original candidates immutable and distinguish qualified source scopes from pending recovery corrections, rolling monitors and capacity changes. Bind the intended Server `1d3c275b` (full suite still running), published Connect `a53ed36a`, SDK `9ae95704`, SCTP `6443417d` and gVisor `21c2a5da`, plus native renewal and historical-read corrections. Exposing source conflicts early does not close current-role startup or final release qualification.
+
+### Exact fixture corrections retain original failures
+
+The [Safe `9223d8d3` intake](evidence/safe-state-read-fixture-source-intake-20261003.json) and [paired-restore `3af77073` intake](evidence/paired-restore-fixture-source-intake-20261003.json) are verified test/document-only changes, preserving production and module bytes. Independent qualification remains pending. Account-specific retry counts must distinguish legitimate Safe proxy/singleton reads, and paired recovery must bind the exact reserved intent instead of exempting a filename prefix. Keep original normal/race failures and each corrected source distinct.
+
+The [reclaim20 receipt](evidence/cache-reclaim-20-20261003.json) restores 5.56 GiB of local headroom under guarded inactive-archive deletion. Its documented four-MiB threshold does not weaken archive type, age, process/reference or identity checks. Do not stop an active qualification just because it crosses the admission floor for new heavy phases.
+
+### EVM batch failures and independent neighboring positives
+
+The [original seventeen-root normal batch](evidence/continuous-evm-monitor-original-normal-failure-20261003.json) preserves fifteen passes and two cancellation/restart assertions. A diagnostic-only narrower rerun passed both unchanged roots; that outcome is not a fix or replacement qualification. Add deterministic real-owner barriers to establish the cause before correcting cancellation versus integrity classification. The [separate nine affected roots](evidence/continuous-evm-monitor-neighbor-normal-qualification-20261003.json) pass normal execution, with twelve bindings and every passed name independently checked. Keep these scopes distinct.
