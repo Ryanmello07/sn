@@ -6267,3 +6267,8 @@ The [local execution-root intake](evidence/local-root-rebind-intake-20261003.jso
 
 
 The [registry old-source causal comparison](evidence/registry-checkpoint-causal-20261003.json) completes normally and under race detection: each mode exposes two intended public custody failures while the unapproved-receipt refusal remains passing. All nine bound files were rehashed and raw terminal events checked. Receipt v2 names the actual `source-preflight.json` directly instead of the original logical alias and retains the v1 digest; the other logical binding `old7a-source-fence.json` resolves to `/mnt/data/sn-testnet/sol-registry-rebind-7a-independent-20261003/evidence/source-fence.json`, as recorded by the sealer. No historical source or raw result was rewritten. This complements the fixed six-root gate; interrupted restore and capacity adoption remain open.
+
+
+### October 3 incoming local gVisor dependency
+
+An ordinary merge preserves incoming main commit `7debae6d`, which adds `replace gvisor.dev/gvisor => ../gvisor`. At this publication check `/home/by/urnetwork/gvisor/go.mod` is absent. This does not invalidate frozen qualification graphs, whose exact module declarations remain retained; it does mean current-main compilation and final release composition require the actual fork, its source identity and a reproducible dependency arrangement. Locate and bind the intended fork before testing the composed release. Do not remove the upstream replacement merely to reuse earlier green results, and do not claim those results qualify this new dependency.
