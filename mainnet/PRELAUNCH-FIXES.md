@@ -30,14 +30,14 @@ conflicting declaration before planning or sending. Preserve the October 6
 boundary across restart and recovery; deployment identity changes must not
 reclassify already attributed usage. Add deterministic actual-path controls
 for a declaration replacement between planning, limiter admission and send.
-Astra confirmed the gap and is implementing a separate durable earning-policy
-anchor: exact-boundary initialization is idempotent, readiness updates stay
+Astra implemented the separate durable earning-policy anchor at frozen Server
+`cdcb61fa`: exact-boundary initialization is idempotent, readiness updates stay
 independent, and existing accepted-attempt reconciliation remains available.
 Unavailable database reads must retain their retryable classification rather
 than become policy conflicts. Initialization belongs in the existing deployment
-preparation path, with no repeated historical census. This implementation and
-its independent tests remain pending; the unchanged candidate's passing tests
-do not close the gap.
+preparation path, with no repeated historical census. The [source checkpoint](evidence/payout-boundary-source-20261003.md) records
+the implementation and 13 new controls. Independent execution remains pending;
+the unchanged earlier candidate's passing tests do not close this gap.
 
 Cancellation must preserve every unpaid earning component, not just released
 contract sweeps. Review found that canceling a legacy payment can leave its

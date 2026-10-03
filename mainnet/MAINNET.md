@@ -29,7 +29,8 @@ The transition rollout must retain evidence for each step:
    not turn post-cutoff earnings into new USDC obligations.
 2. Apply and verify the payout schema features and initialize the durable
    earning-policy anchor from the exact reviewed config before admitting new
-   allocations or sends. The anchor implementation is pending. Initialization
+   allocations or sends. The anchor is implemented in frozen Server candidate
+   `cdcb61fa`, with independent qualification pending. Initialization
    must be idempotent for the same boundary and refuse a conflicting earning
    policy; subsequent readiness activation must not redefine earning time.
    Join any replaced worker and preserve its pending processor attempts and
@@ -52,6 +53,10 @@ The transition rollout must retain evidence for each step:
    recovery path.
 
 These are rollout requirements, not completed production steps.
+
+The [durable-boundary source checkpoint](evidence/payout-boundary-source-20261003.md)
+records the frozen implementation and 13 new deterministic controls. It is
+not a passing test receipt, merged release or deployed earning schedule.
 
 The [frozen transition plan](evidence/payout-transition-plan-20261002.md)
 records candidate Server `b19f1eba` / config `93dc65fd`, including the exact
