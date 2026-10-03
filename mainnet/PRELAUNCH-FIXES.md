@@ -6711,3 +6711,10 @@ After each fallible backend code/heap, execution, write-root and strict-replay p
 The [current source review](evidence/native-evm-current0f-source-review-20261003.json) verifies39 artifacts and22 actual changed files at0f888694. The qualified archive components are joined with current bounded-host code and both executable qualification guards; all current module inputs are retained. The author’s full20,544-file inventory is bound separately from root’s changed-file verification.
 
 Compilation and dependency preflight passed; the eight public archive/catalog, pending/admission and historical/capacity dispatch roots still require independent normal/race qualification and vet. Do not merge incomplete behavior evidence into launch acceptance. The distinct observation-error successor must preserve this frozen scope and its eventual results.
+
+
+### October 3 cross-root restore core qualification
+
+The [cross-root core review](evidence/native-cohort8fe-core16-review-20261003.json) verifies16 roots in each normal and race mode, with core/public vet successful, on frozen SN8fe01722/Connect1610f7a5. The checks cover exact per-mount and total declaration limits, refusal before the first mutation, healthy untouched owners, completed/pending peers, retained membership, sibling-root staged inode custody and aggregate capacity. Public10 and causal controls remain separate; no full public restore or actual host rehearsal is inferred.
+
+A restore cohort must authenticate every original root and combined capacity before its first effect, then journal exact progress so interrupted or lost-ack continuation preserves completed peers. Keep root count, owner count, serialized declaration bytes, descriptors, retained segment bytes and disk/inode forecasts as distinct limits. Current accepted root ceilings remain64 per mount and256 total; explicit many-owner capacity is not permission to discard untouched roots or weaken identity checks.
