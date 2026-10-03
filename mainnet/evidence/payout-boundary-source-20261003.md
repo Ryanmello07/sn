@@ -8,6 +8,14 @@ Root checked the clean worktree, exact commit/tree, implementation and public
 consumer references. This is source inspection; no executed-test or deployment
 claim is made.
 
+The [sealed test intake](payout-boundary-intake-20261003.json), SHA-256
+`d5893a214f374ccac75d7182be7b7cae06cdfcd6e86ca850056b779d60a2bee0`,
+binds 48 files. Root independently rehashed all bindings and compared all 25
+bound candidate source/module files with Git `cdcb61fa`. It requests 13 new
+roots plus 15 neighbors, five separately labeled causal groups with eight
+expected failures per mode and an accepted-reconciliation positive control.
+These are requested scopes, not executed results.
+
 The appended migration installs an immutable singleton earning identity and
 UPDATE/DELETE/TRUNCATE guards. Explicit `db migrate --sn-schedule-sha256` prepares
 it from the exact reviewed configuration digest. Same-boundary preparation is
