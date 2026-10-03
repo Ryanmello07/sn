@@ -21,6 +21,12 @@ import (
 // Runtime source fixes capacities and marker layout; request bytes cannot
 // introduce a new kind, rename its required file or authorize a larger journal.
 func planStoragePreparationRestore(ctx context.Context, name string, owner durablevolume.PreparationOwner, report durablevolume.Inventory, ownerLocal bool) (durablevolume.PreparationOwnerPlan, error) {
+	if owner.RestoreCoverage != "" {
+		switch owner.Kind {
+		case chain.NativeJournalPreparationKind, "fleet-recovery", "provider-claim-queue", validator.AttemptLedgerPreparationKind:
+			return durablevolume.PreparationOwnerPlan{}, errors.New("restore coverage has no shared namespace for this exclusive owner")
+		}
+	}
 	switch owner.Kind {
 	case chain.NativeJournalPreparationKind:
 		return chain.PlanNativeJournalRestore(ctx, name, owner, report)

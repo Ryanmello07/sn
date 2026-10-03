@@ -45,13 +45,18 @@ func decodeSnapshotRestore(raw []byte, value any) error {
 	return nil
 }
 
-// Only the known owner may consume a complete original archive. A shared root
-// with another owner requires its own explicit multi-owner restore profile.
+// Only the known owner may consume original custody. Shared file-lock owners
+// use an explicit view whose complete union is checked by the core publisher.
 func PlanRestore(ctx context.Context, name string, owner durablevolume.PreparationOwner, spec Spec, profile json.RawMessage, report durablevolume.Inventory) (durablevolume.PreparationOwnerPlan, error) {
 	if ctx == nil || !simpleName(name) || owner.Purpose != "restore" || owner.Kind != spec.Kind || owner.RelativePath != "." || len(profile) == 0 || len(profile) > 64*1024 || !json.Valid(profile) {
 		return durablevolume.PreparationOwnerPlan{}, errors.New("snapshot restore requires a fixed bounded owner profile")
 	}
 	if err := errors.Join(ctx.Err(), validateSpec(spec)); err != nil {
+		return durablevolume.PreparationOwnerPlan{}, err
+	}
+	var err error
+	report, err = snapshotRestoreView(ctx, owner, spec, report)
+	if err != nil {
 		return durablevolume.PreparationOwnerPlan{}, err
 	}
 	if report.Schema != durablevolume.PhysicalInventorySchema || report.RestartAuthorized || len(report.Entries) == 0 || report.Entries[0].Path != "" {
@@ -155,7 +160,7 @@ func PlanRestore(ctx context.Context, name string, owner durablevolume.Preparati
 	if err != nil {
 		return durablevolume.PreparationOwnerPlan{}, err
 	}
-	return durablevolume.PreparationOwnerPlan{Owner: owner, StagingName: name, ExclusiveRoot: true, Files: files, Attributes: []durablevolume.PreparationAttributeSpec{attribute}, Census: census}, ctx.Err()
+	return durablevolume.PreparationOwnerPlan{Owner: owner, StagingName: name, ExclusiveRoot: owner.RestoreCoverage == "", Files: files, Attributes: []durablevolume.PreparationAttributeSpec{attribute}, Census: census}, ctx.Err()
 }
 
 // Target bytes are observed only through retained no-follow descriptors. No

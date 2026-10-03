@@ -28,11 +28,14 @@ type storagePreparationMemberRestoreCensus struct {
 	OriginalCheckpoint []byte          `json:"original_checkpoint"`
 }
 
-// An exclusive complete owner is the initial profile. Another owner head or
-// an unfinished outer snapshot requires the separate complete-union adapter;
-// neither may be dropped to make this profile fit.
+// Legacy restoration owns the complete root. Explicit shared local custody
+// selects its fixed namespace; an unfinished outer snapshot is still refused.
 func planStoragePreparationMembersRestore(ctx context.Context, name string, owner durablevolume.PreparationOwner, report durablevolume.Inventory, ownerLocal bool) (durablevolume.PreparationOwnerPlan, error) {
 	spec, profile, err := storagePreparationMembersProfile(owner, ownerLocal)
+	if err != nil {
+		return durablevolume.PreparationOwnerPlan{}, err
+	}
+	report, err = storagePreparationMembersRestoreView(ctx, owner, spec, report)
 	if err != nil {
 		return durablevolume.PreparationOwnerPlan{}, err
 	}
@@ -112,7 +115,7 @@ func planStoragePreparationMembersRestore(ctx context.Context, name string, owne
 	if err != nil {
 		return durablevolume.PreparationOwnerPlan{}, err
 	}
-	return durablevolume.PreparationOwnerPlan{Owner: owner, StagingName: name, ExclusiveRoot: true, Files: files, Attributes: []durablevolume.PreparationAttributeSpec{attribute}, Census: census, PhysicalMetadata: physical}, ctx.Err()
+	return durablevolume.PreparationOwnerPlan{Owner: owner, StagingName: name, ExclusiveRoot: owner.RestoreCoverage == "", Files: files, Attributes: []durablevolume.PreparationAttributeSpec{attribute}, Census: census, PhysicalMetadata: physical}, ctx.Err()
 }
 
 // Every original member and pending stage must be accounted for. An unfinished
@@ -176,6 +179,10 @@ func rebindStoragePreparationMembersRestore(ctx context.Context, owner durablevo
 		return nil, errors.New("member restore derivation changed its exact original owner")
 	}
 	spec := bootstrapSuccessorMemberSpec(owner.Owner.Kind == "mainnet-successor-nonce-members")
+	report, err = storagePreparationMembersRestoreView(ctx, owner.Owner, spec, report)
+	if err != nil {
+		return nil, err
+	}
 	entries := map[string]durablevolume.InventoryEntry{}
 	for _, entry := range report.Entries {
 		entries[entry.Path] = entry
@@ -287,6 +294,10 @@ func inspectStoragePreparationMembersRestore(ctx context.Context, root *os.File,
 		return nil, err
 	}
 	spec := bootstrapSuccessorMemberSpec(owner.Owner.Kind == "mainnet-successor-nonce-members")
+	report, err = storagePreparationMembersRestoreView(ctx, owner.Owner, spec, report)
+	if err != nil {
+		return nil, err
+	}
 	if root == nil || len(expected.Files) != len(owner.Files) {
 		return nil, errors.New("member restore inspection lost its complete target")
 	}
