@@ -33,6 +33,8 @@ pub mod observer;
 mod pure_hosts;
 #[path = "historical_backend.rs"]
 mod strict;
+#[path = "historical_capture.rs"]
+pub mod capture;
 #[cfg(test)]
 #[path = "historical_tests.rs"]
 mod tests;

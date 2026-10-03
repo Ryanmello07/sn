@@ -2700,6 +2700,7 @@ version = "0.1.0"
 dependencies = [
  "frame-metadata",
  "hex",
+ "libc",
  "parity-scale-codec",
  "sc-executor",
  "sc-executor-common",

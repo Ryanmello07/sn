@@ -17,16 +17,16 @@ import (
 // descriptor. It grants no file selection, signer, network or approval policy.
 func init() {
 	if os.Args[0] == "urnetwork-historical-replay-supervisor" {
-		if len(os.Args) != 2 || os.Args[1] != "--retained-engine-fd3" {
+		if len(os.Args) != 2 || os.Args[1] != "--retained-engine-fd3" && os.Args[1] != "--retained-capture-engine-fd3-nodes-fd5" {
 			os.Exit(1)
 		}
-		os.Exit(superviseHistoricalReplay())
+		os.Exit(superviseHistoricalReplay(os.Args[1] == "--retained-capture-engine-fd3-nodes-fd5"))
 	}
 }
 
 // The child cannot pass a successful result while another process still owns
 // its pipes. Kill and reap every descendant in this owned group before exit.
-func superviseHistoricalReplay() int {
+func superviseHistoricalReplay(capture bool) int {
 	if err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0); err != nil {
 		return 1
 	}
@@ -38,9 +38,22 @@ func superviseHistoricalReplay() int {
 	}
 	engine := os.NewFile(3, "retained-replay-engine")
 	defer engine.Close()
-	command := exec.CommandContext(ctx, "/proc/self/fd/3", "--historical-proof-replay-v1")
+	argument := "--historical-proof-replay-v1"
+	if capture {
+		argument = "--historical-proof-capture-v1"
+	}
+	command := exec.CommandContext(ctx, "/proc/self/fd/3", argument)
 	command.Args[0] = "urnetwork-historical-replay"
 	command.ExtraFiles = []*os.File{engine}
+	if capture {
+		nodes := os.NewFile(5, "retained-capture-nodes")
+		defer nodes.Close()
+		info, err := nodes.Stat()
+		if err != nil || !info.IsDir() {
+			return 1
+		}
+		command.ExtraFiles = append(command.ExtraFiles, nodes)
+	}
 	command.Env = []string{"LANG=C", "LC_ALL=C", "RUST_BACKTRACE=0"}
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
