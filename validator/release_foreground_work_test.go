@@ -51,8 +51,12 @@ type releaseForegroundHttp struct {
 	reader    *HTTPAttemptStreamV2Reader
 }
 
-func newReleaseForegroundHttp(t *testing.T, bounds AttemptCutV2Bounds, stall bool) *releaseForegroundHttp {
+func newReleaseForegroundHttp(t *testing.T, fixture *attemptCutV2SealTestFixture, stall bool) *releaseForegroundHttp {
 	t.Helper()
+	// This fixture crosses the actual public reader. Its in-memory replay
+	// allowance must not advertise a header larger than public metadata.
+	fixture.bounds.MaxHeaderBytes = attemptStreamV2MetadataBytes(fixture.bounds)
+	bounds := fixture.bounds
 	owner := &releaseForegroundHttp{objects: map[string][]byte{}, entered: make(chan struct{}), release: make(chan struct{}), postDone: make(chan struct{})}
 	ctx, cancel := context.WithCancel(t.Context())
 	const credential = "synthetic-foreground-session"
@@ -160,6 +164,9 @@ func newReleaseForegroundHttp(t *testing.T, bounds AttemptCutV2Bounds, stall boo
 	owner.reader, err = NewHTTPAttemptStreamV2Reader(endpoint.URL, bounds)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if owner.reader.metadataBytes != bounds.MaxHeaderBytes || owner.upload.bounds != bounds {
+		t.Fatal("foreground upload and public reader disagree on admitted bounds")
 	}
 	return owner
 }
@@ -283,7 +290,7 @@ func TestReleaseForegroundProgressDuringBlockedHttpAndReplay(t *testing.T) {
 	for _, completed := range []int{1, 4, 8} {
 		func() {
 			fixture := newAttemptCutV2SealTestFixture(t, 8, completed, 0)
-			transport := newReleaseForegroundHttp(t, fixture.bounds, true)
+			transport := newReleaseForegroundHttp(t, fixture, true)
 			options := transport.sealOptions(t, fixture)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -369,7 +376,7 @@ func TestReleaseForegroundProgressDuringBlockedHttpAndReplay(t *testing.T) {
 
 func TestReleaseForegroundCancellationJoinsBlockedUploadWithoutLosingAppend(t *testing.T) {
 	fixture := newAttemptCutV2SealTestFixture(t, 8, 4, 0)
-	transport := newReleaseForegroundHttp(t, fixture.bounds, true)
+	transport := newReleaseForegroundHttp(t, fixture, true)
 	options := transport.sealOptions(t, fixture)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -416,7 +423,7 @@ func TestReleaseForegroundCancellationJoinsBlockedUploadWithoutLosingAppend(t *t
 // replaced by a fixture and all decoded/checked/indexed rows are counted.
 func TestReleaseForegroundProgressDuringContinuousActualReplay(t *testing.T) {
 	fixture := newAttemptCutV2SealTestFixture(t, 8, 16, 0)
-	transport := newReleaseForegroundHttp(t, fixture.bounds, false)
+	transport := newReleaseForegroundHttp(t, fixture, false)
 	options := transport.sealOptions(t, fixture)
 	cut, _, err := SealAttemptCutV2(t.Context(), fixture.ledger, fixture.expected, fixture.policy, fixture.key, fixture.bounds, options)
 	if err != nil || cut == nil {
@@ -526,11 +533,35 @@ func TestReleaseForegroundProgressDuringContinuousActualReplay(t *testing.T) {
 	t.Logf("actual replay rows=512 rounds=4 foreground_observed_checked=%d elapsed=%s process_user_cpu_us=%d process_system_cpu_us=%d process_total_alloc_bytes=%d scratch_bytes=%d scratch_files=%d http=%+v; process measurements include fixture transports and foreground, not production cgroup sizing", foregroundChecked, time.Since(startedAt), micros(afterUsage.Utime)-micros(beforeUsage.Utime), micros(afterUsage.Stime)-micros(beforeUsage.Stime), afterMemory.TotalAlloc-beforeMemory.TotalAlloc, scratchBytes, scratchFiles, transport.snapshot())
 }
 
+// Public upload admission must still reject one extra header byte without
+// credentials or requests. A valid foreground owner remains usable afterward.
+func TestReleaseForegroundHeaderAllowanceMatchesActualPublicMetadata(t *testing.T) {
+	fixture := newAttemptCutV2SealTestFixture(t, 8, 1, 0)
+	transport := newReleaseForegroundHttp(t, fixture, false)
+	bounds := fixture.bounds
+	bounds.MaxHeaderBytes++
+	credentials := 0
+	invalid, err := newReleaseAttemptUploadV2(t.Context(), OperatorConfig{NoID: 9, APIURL: transport.upload.origin}, ReleaseEvidenceV2Bounds{Cut: bounds, MaxTransitionBytes: 1024 * 1024}, func() string {
+		credentials++
+		return "synthetic-unavailable-credential"
+	})
+	if invalid != nil {
+		invalid.close()
+	}
+	if invalid != nil || err == nil || !strings.Contains(err.Error(), "header exceeds its public metadata bound") || credentials != 0 || transport.snapshot() != (releaseForegroundHttpWork{}) {
+		t.Fatal("incompatible public header reached transport work", invalid, err, credentials, transport.snapshot())
+	}
+	releaseForegroundUpload(t, transport, 301)
+	if work := transport.snapshot(); work.posts != 1 || work.gets != 1 || work.active != 0 {
+		t.Fatal("refused header changed the independent valid upload owner", work)
+	}
+}
+
 // A declared record ceiling applies before scratch and HTTP work. Refusal
 // preserves the actual ledger and does not stop an independently owned trail.
 func TestReleaseForegroundCapacityRefusesBeforeBackgroundEffects(t *testing.T) {
 	fixture := newAttemptCutV2SealTestFixture(t, 8, 4, 0)
-	transport := newReleaseForegroundHttp(t, fixture.bounds, false)
+	transport := newReleaseForegroundHttp(t, fixture, false)
 	options := transport.sealOptions(t, fixture)
 	bounds := fixture.bounds
 	bounds.Records.MaxItems = 31
