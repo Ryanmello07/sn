@@ -5574,3 +5574,14 @@ The [main integration manifest](evidence/claim-projection-main-integration-20261
 binds exact source bytes. This graph uses Server10a; current-server composition
 and the independent claim consumer remain open. No finality, payment allocation
 or live launch authority follows from the queue projection.
+
+### Local successor physical rebind candidate — October 3
+
+The [local restore profile](evidence/successor-local-rebind-profile-20261003.md)
+at production checkpoint `88ce38f5` implements the previously missing actual
+local-root review and approved retained-execution path. Exact original member
+and co-owner coverage, independent original-approver authority, no fresh claim,
+and retained immutable receipt checks are required. Behavioral qualification is
+pending; compilation is not an MG09 closure. Keep original pending-outcome and
+outer-head recovery, retained in-place preparation, joined capacity/retention
+revision, current published composition and actual device/host approval open.
