@@ -45,7 +45,11 @@ func repairValidatorRunning(plan repairValidatorPlan, manager repairValidatorMan
 // consumed unacknowledged start remains uncertain even if a new process exists.
 func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, host *repairValidatorHost, now func() time.Time) (result repairValidatorResult, resultErr error) {
 	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil {
-		return repairValidatorResult{}, errors.New("validator repair resume owner is unavailable")
+		var cause error
+		if ctx != nil {
+			cause = ctx.Err()
+		}
+		return repairValidatorResult{}, errors.Join(errors.New("validator repair resume owner is unavailable"), cause)
 	}
 	record, err := store.load(ctx)
 	if err != nil {
@@ -94,6 +98,9 @@ func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, hos
 	}
 	if record.StartAt.IsZero() {
 		if err := host.stopped(ctx, plan, manager); err != nil {
+			if repairValidatorObservationPending(err) {
+				return finish("source-refused", err)
+			}
 			return finish("generation-changed", err)
 		}
 		stamp = now()
@@ -108,7 +115,10 @@ func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, hos
 			return finish("approval-window-closed", ctx.Err())
 		}
 		monotonic, err := host.monotonic()
-		if err != nil || monotonic <= plan.Previous.StartedUsec {
+		if err != nil {
+			return finish("source-refused", repairValidatorObservationError("cannot read validator repair monotonic clock", err, false))
+		}
+		if monotonic <= plan.Previous.StartedUsec {
 			return finish("source-refused", errors.New("validator repair monotonic clock differs"))
 		}
 		record.HighWaterAt, record.StartAt, record.StartMonotonicUsec, record.Status = stamp, stamp, monotonic, "start-consumed"
@@ -129,8 +139,11 @@ func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, hos
 			return finish("uncertain-consumed-start", err)
 		}
 		manager, err = host.inspect(ctx, plan)
-		if err != nil || !repairValidatorRunning(plan, manager, manager.Generation) || manager.Generation.StartedUsec < record.StartMonotonicUsec {
-			return finish("uncertain-consumed-start", errors.Join(errors.New("validator repair start lacks an attributable generation"), err))
+		if err != nil {
+			return finish("uncertain-consumed-start", err)
+		}
+		if !repairValidatorRunning(plan, manager, manager.Generation) || manager.Generation.StartedUsec < record.StartMonotonicUsec {
+			return finish("uncertain-consumed-start", errors.New("validator repair start lacks an attributable generation"))
 		}
 		generation := manager.Generation
 		record.Generation, record.Status = &generation, "waiting-progress"
@@ -151,8 +164,11 @@ func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, hos
 		return finish("waiting-progress", err)
 	}
 	manager, err = host.inspect(ctx, plan)
-	if err != nil || !repairValidatorRunning(plan, manager, *record.Generation) {
-		return finish("generation-changed", errors.Join(errors.New("validator repair generation changed during postcondition"), err))
+	if err != nil {
+		return finish("source-refused", err)
+	}
+	if !repairValidatorRunning(plan, manager, *record.Generation) {
+		return finish("generation-changed", errors.New("validator repair generation changed during postcondition"))
 	}
 	record.Completed = postcondition
 	return finish("resumed-generation-observed", nil)

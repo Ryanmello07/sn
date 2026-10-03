@@ -87,8 +87,11 @@ func (self repairValidatorRecord) validate(approval repairValidatorApproval, pub
 // Creating another path is not implicit authority: the exact path is signed.
 // The host custody owner must protect this directory from rollback or copying.
 func openRepairValidatorStore(ctx context.Context, approval repairValidatorApproval, publicKey string, create bool, now time.Time) (*repairValidatorStore, error) {
-	if ctx == nil || ctx.Err() != nil || now.IsZero() {
+	if ctx == nil || now.IsZero() {
 		return nil, errors.New("validator repair store context or clock is unavailable")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if err := approval.validate(publicKey); err != nil {
 		return nil, err
@@ -111,14 +114,20 @@ func openRepairValidatorStore(ctx context.Context, approval repairValidatorAppro
 
 // The exact signed pathname is immutable authority. An existing marker with
 // missing state cannot create another budget, regardless of the journal schema.
-func openRepairValidatorFileOwner(ctx context.Context, path, marker string, create bool) (*repairValidatorFileOwner, error) {
-	if ctx == nil || ctx.Err() != nil {
+func openRepairValidatorFileOwner(ctx context.Context, path, marker string, create bool) (result *repairValidatorFileOwner, resultErr error) {
+	if ctx == nil {
 		return nil, errors.New("validator repair file owner context unavailable")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	directory := filepath.Dir(path)
 	resolved, err := filepath.EvalSymlinks(directory)
 	info, statErr := os.Lstat(directory)
-	if err != nil || statErr != nil || resolved != directory || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+	if err := errors.Join(err, statErr, ctx.Err()); err != nil {
+		return nil, repairValidatorObservationError("cannot inspect validator repair directory", err, false)
+	}
+	if resolved != directory || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.New("validator repair needs an existing private physical directory")
 	}
 	storage, err := openMainnetDurableDirectory(ctx, directory, durablevolume.ReadWrite)
@@ -128,12 +137,14 @@ func openRepairValidatorFileOwner(ctx context.Context, path, marker string, crea
 	transferred := false
 	defer func() {
 		if !transferred {
-			_ = storage.close()
+			resultErr = errors.Join(resultErr, storage.close())
 		}
 	}()
 	if create {
-		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
-			return nil, errors.New("validator repair state already exists or is unavailable")
+		if _, err := os.Lstat(path); err == nil {
+			return nil, errors.New("validator repair state already exists")
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, repairValidatorObservationError("cannot inspect validator repair state", err, false)
 		}
 	}
 	lock, err := storage.openSnapshotMarker(path)
@@ -146,7 +157,7 @@ func openRepairValidatorFileOwner(ctx context.Context, path, marker string, crea
 	success := false
 	defer func() {
 		if !success {
-			self.close()
+			resultErr = errors.Join(resultErr, self.close())
 		}
 	}()
 	if err := self.storage.bindMarker(self.lock, false); err != nil {
@@ -168,7 +179,10 @@ func openRepairValidatorFileOwner(ctx context.Context, path, marker string, crea
 		}
 	} else {
 		raw, err := io.ReadAll(io.LimitReader(self.lock, 256))
-		if err != nil || string(raw) != marker {
+		if err := repairValidatorObservation(ctx, "owner-open-marker", err); err != nil {
+			return nil, repairValidatorObservationError("cannot read validator repair marker", err, false)
+		}
+		if string(raw) != marker {
 			return nil, errors.New("validator repair marker is incomplete or belongs to another approval")
 		}
 	}
@@ -182,35 +196,69 @@ func openRepairValidatorFileOwner(ctx context.Context, path, marker string, crea
 
 // Parent and marker identity are rechecked before every authoritative access.
 func (self *repairValidatorFileOwner) validateOwner() error {
-	if self == nil || self.lock == nil {
+	if self == nil || self.lock == nil || self.storage == nil {
 		return errors.New("validator repair store is closed")
-	}
-	if err := self.storage.check(nil); err != nil {
-		return err
 	}
 	if self.poisoned != nil {
 		return self.poisoned
 	}
+	if err := self.storage.check(nil); err != nil {
+		return err
+	}
+	ctx := self.storage.ctx
 	parent, err := os.Lstat(filepath.Dir(self.path))
+	if err := repairValidatorObservation(ctx, "owner-parent-stat", err); err != nil {
+		return self.observationError("cannot inspect validator repair parent", err, true)
+	}
 	opened, openErr := self.lock.Stat()
+	if err := repairValidatorObservation(ctx, "owner-open-stat", openErr); err != nil {
+		return self.observationError("cannot inspect validator repair descriptor", err, false)
+	}
 	named, nameErr := os.Lstat(self.path + ".lock")
-	if err != nil || openErr != nil || nameErr != nil || !parent.IsDir() || parent.Mode().Perm()&0077 != 0 || !os.SameFile(parent, self.directoryInfo) || !named.Mode().IsRegular() || named.Mode().Perm()&0077 != 0 || !os.SameFile(opened, named) {
-		return errors.New("validator repair physical owner changed")
+	if err := repairValidatorObservation(ctx, "owner-name-stat", nameErr); err != nil {
+		return self.observationError("cannot inspect named validator repair marker", err, true)
+	}
+	if !parent.IsDir() || parent.Mode().Perm()&0077 != 0 || !os.SameFile(parent, self.directoryInfo) || !named.Mode().IsRegular() || named.Mode().Perm()&0077 != 0 || !os.SameFile(opened, named) {
+		return self.identity("validator repair physical owner changed")
 	}
 	if self.marker != "" {
 		raw := make([]byte, len(self.marker)+1)
 		n, err := self.lock.ReadAt(raw, 0)
-		if err != nil && !errors.Is(err, io.EOF) || string(raw[:n]) != self.marker {
-			return errors.New("validator repair marker content changed")
+		if err == io.EOF {
+			err = nil
+		}
+		if err := repairValidatorObservation(ctx, "owner-marker-read", err); err != nil {
+			return self.observationError("cannot read validator repair marker", err, false)
+		}
+		if string(raw[:n]) != self.marker {
+			return self.identity("validator repair marker content changed")
 		}
 	}
 	if self.expectedHash != "" {
-		raw, _, err := self.storage.readFile(context.Background(), self.path, 64*1024)
-		if err != nil || monitorReadDigest(raw) != self.expectedHash {
-			return errors.Join(errors.New("validator repair retained journal changed"), err)
+		raw, _, err := self.storage.readFile(ctx, self.path, 64*1024)
+		if err := repairValidatorObservation(ctx, "owner-journal-read", err); err != nil {
+			return self.observationError("cannot read validator repair retained journal", err, true)
+		}
+		if monitorReadDigest(raw) != self.expectedHash {
+			return self.identity("validator repair retained journal changed")
 		}
 	}
 	return nil
+}
+
+// A confirmed loss stays refused in this owner even if its name is restored.
+func (self *repairValidatorFileOwner) identity(message string) error {
+	self.poisoned = errors.Join(durablevolume.ErrIdentity, errors.New(message))
+	return self.poisoned
+}
+
+// Unavailable observations do not poison an otherwise unchanged owner.
+func (self *repairValidatorFileOwner) observationError(message string, cause error, retainedName bool) error {
+	err := repairValidatorObservationError(message, cause, retainedName)
+	if errors.Is(err, durablevolume.ErrIdentity) {
+		self.poisoned = err
+	}
+	return err
 }
 
 // Missing state is a lost liability, never a fresh claim.
