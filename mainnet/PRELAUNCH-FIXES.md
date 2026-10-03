@@ -6203,8 +6203,7 @@ Coordinator verification rehashed all 47 SDK, 49 original Server and 38 correcte
 Server bindings and counted terminal Go root events in the qualified raw logs.
 Customer causal controls, current-source joins, final model qualification and
 publication remain separate work. Client adoption and deployed behavior are
-unobserved. Latest Server `a244ae7c` on published Connect `08d48400` passes sixteen
-normal roots and seven vets; its race run is active and not yet accepted.
+unobserved. Latest Server `a244ae7c` on published Connect `08d48400` passes [sixteen roots in normal and race modes plus seven vets](evidence/server-a244-compatibility-qualification-20261003.json). Its scope remains selected compatibility, not the full model suite.
 
 Continuous economic monitoring must catch up through authenticated bounded
 historical pages rather than reject a cursor more than 4,096 blocks behind.
@@ -6216,3 +6215,9 @@ change, lost write acknowledgment and large census pressure. It is frozen for
 independent qualification, not yet accepted. Continuous EVM reserve/credit/
 capture monitoring, rolling claim expectations and composed recovery remain
 required.
+
+### October 3 Server publication
+
+Server main now publishes `29ce22d6`; the [publication proof](evidence/server-publication-20261003.json) verifies remote main, clean custody and the whole source join. The financial/cutoff/retry source from qualified `a244ae7c` is preserved alongside upstream `87e7e8a6`. Coordinator verification independently rehashed all 88 qualification bindings and counted exactly sixteen passing roots per mode. No failed or skipped selected roots occurred; seven vets and both fixture cleanups exited zero.
+
+The final pull observed a new upstream Redis accounting/test repair, and safely refused a divergent fast-forward. An ordinary merge retained its eleven changed paths plus the earlier documentation update; these do not overlap the financial change paths. The public escrow wrappers continue to apply Redis admission before entering their extracted shared bodies. The a244 receipt does not qualify the newly added upstream tests. Full current model qualification and customer recovery composition remain required. Published source is not deployed code or observed worker adoption.
