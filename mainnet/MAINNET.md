@@ -167,7 +167,7 @@ post-cutoff rows. It does not relabel either failed 25-test batch as a pass or
 qualify the pending financial successor. Preserve the initial private
 PostgreSQL setup failure separately from these actual test results.
 
-## Current preparation state — October 2
+## Current preparation state — October 3
 
 No accepted current production release or live deployment exists. The full
 28-lesson hardening scope and ten production gates remain tracked in
@@ -179,14 +179,14 @@ source qualifications; older checkpoints retain their historical scope.
 | Miner GET recovery, guarded spool and retained-member recovery | Integrated on SN main with the scoped independent receipts cited below. | Include their exact bytes and dependencies in the final release and recovery rehearsal. |
 | Fleet runtime capability selection | Integrated at `9671f456`; [independent 23-test normal/race scope](evidence/fleet-runtime-catalog-progress-20261002.md). | Current runtime authority, full native-role coverage and composed release qualification. |
 | Server blob readers | Server main `c2563f9a` includes the exact reader changes from `1d72f577` plus newer upstream code; [26-test independent reader scope](evidence/current-graph-reader-progress-20261002.md) remains historical. | Full current-server dependency/release composition and remaining model-suite qualification. |
-| Offline preparation | Tracked SN `0384cbfc` / Connect `7600ea5c` / Server `c2563f9a` pass [75 author tests per mode by an exact checksum-only source join, seven vets and three binary builds](evidence/preparation-tracked-module-20261002.md). Earlier `1f66a2bd` retains its separate 101-test independent scope. | Publish the exact Connect dependency and independently qualify the latest-main composition. Candidate `9d7d57fc` preserves all `e08e1b11` claim/provider source; its join is source-only. |
+| Offline preparation | Tracked SN `0384cbfc` / Connect `7600ea5c` / Server `c2563f9a` pass [75 author tests per mode by an exact checksum-only source join, seven vets and three binary builds](evidence/preparation-tracked-module-20261002.md). Earlier `1f66a2bd` retains its separate 101-test independent scope. | Consume published Connect `9e7ec0af` and independently qualify the latest-main composition. Candidate `9d7d57fc` preserves all `e08e1b11` claim/provider source; its join is source-only. |
 | Directory owners and private-root creation | Directory owners pass [103 author tests per mode](evidence/directory-owner-preparation-author-20261002.json); explicit fresh leaf-root creation at SN `c8998b31` / Connect `7600ea5c` passes [109 author tests per mode and four vets](evidence/private-root-preparation-author-20261002.json). | Independent current-main tracked-module qualification, retained/restore semantics and capacity revisions. |
 | Provider and claim monitoring | Provider monitoring is integrated at `83d92f75`; [20 independent tests per mode and three vets](evidence/provider-monitor-integration-20261002.md) preserve exact source scope. The durable claim producer is integrated at `bd5e7e72` with [37 author and 29 independent tests per mode](evidence/claim-projection-independent-20261002.json), retaining separate graph scopes. | Implement and qualify the independently configured claim consumer, compose the current sources, then complete economic-domain monitoring and actual alert/recovery rehearsal. |
 
 The offline preparation command now has scoped author coverage for fresh ledger,
 native, fixed snapshot and directory owners, including explicitly reviewed
 private leaf-root creation. Its tracked dependency was authenticated from local
-Git through a file proxy; that does not establish publication. Retained/restore
+Git through a file proxy. The shared restore source is now published as Connect `9e7ec0af` and resolves through the public Go module path as `v0.0.0-20261003012915-9e7ec0afa426`; consumer adoption and qualification remain separate. Retained/restore
 semantic rebinding and joined capacity/retention revisions remain implementation
 work. The separate physical-export candidate is unqualified and grants no restart.
 
@@ -3501,3 +3501,8 @@ leaf-progress defect in the producer's actual signed-receipt path.
 ## October 3 completed cutoff-boundary qualification
 
 Frozen Server `cdcb61fa` completes its [independent scoped qualification](evidence/payout-boundary-qualification-20261003.json): 28 normal and 28 race roots pass, five package vets and the offline CLI build pass, and every owned fixture cleanup completes. The [race causal controls](evidence/payout-boundary-causal-race-20261003.json), like their normal counterparts, produce eight intended assertion failures and one accepted-payment reconciliation positive pass without race reports. The original container-bind setup failure remains retained. This qualifies the durable earning-policy boundary scope; wallet `25f617dc`, combined Server `2a453df9`, final release integration and production deployment remain separate gates.
+
+
+## October 3 full hardening source reconciliation
+
+The [38-requirement source review](evidence/current-requirements-20261003.md) covers every PH-01–PH-28 lesson and MG-01–MG-10 gate, with [68 exact Git-blob bindings](evidence/current-requirements-20261003.json). It identifies integrated fleet capability selection, finite GET recovery, provider monitoring, callback isolation and retained-member/reader recovery; these require composition and production rehearsal rather than duplicate implementations. Confirmed remaining implementation work includes the current claim consumer, durable customer transfer-out challenge recovery, independent continuous credit/reserve/capture/native economic observers, transaction-attributed fee verification, and joined capacity/restore behavior. Existing validator caches need causal work-count and invalidation qualification before additional caching is justified. This is a source census, not test or launch acceptance. Its pinned `4e413cb0`/Server `2a453df9` scopes remain historical; the separately recorded completed financial and cutoff-boundary tests retain their own exact sources.
