@@ -227,3 +227,5 @@ replace github.com/centrifuge/go-substrate-rpc-client/v4 => ./third_party/go-sub
 // generated Windows syscalls only support 386 and amd64. Keep its narrow API
 // behind an arm64-capable go-winio adapter until the upstream import is fixed.
 replace gopkg.in/natefinch/npipe.v2 => ./third_party/npipe
+
+replace gvisor.dev/gvisor => ../gvisor
