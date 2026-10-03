@@ -5771,3 +5771,16 @@ while the test expected a later raw-adapter diagnostic. Both package vets pass.
 Preserve this failed batch; a separate test-only correction must reach that
 assertion without weakening duplicate-input refusal. Broader member/multi-owner
 restore and current published composition remain open.
+
+
+### October 3: preflight container fixture access separately from custody
+
+The [initial durable-boundary batch](evidence/payout-boundary-fixture-setup-failure-20261003.json)
+failed before any product tests: the container PostgreSQL user could not open
+its mode-700 bind-mounted init directory. Owned cleanup completed. Preserve
+this setup failure separately from product assertions. A distinct readable
+fixture copy retains identical initialization bytes; corrected execution is
+pending. Preflight each mounted fixture's parent traversal and file access for
+the actual container UID before launching the full gate. Do not apply the
+fixture permission correction to production custody: host private-root ancestry
+and container initialization mounts have different access requirements.
