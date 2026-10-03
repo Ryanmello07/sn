@@ -1,5 +1,21 @@
 # Mainnet launch and operations plan
 
+## Current execution status — October 3
+
+This summary tracks the active release work. Historical candidates and receipts below retain their original scopes; this table does not replace the full PH-01–PH-28 / MG-01–MG-10 requirements or close them by implication.
+
+| Workstream | Verified state | Required next result |
+| --- | --- | --- |
+| October 6 earning boundary and financial recovery | Published source preserves the approved boundary and legacy USDC obligations; selected financial/cutoff gates pass. No production deployment or loaded-worker adoption is verified. | Fix the current full-model Redis leak, finish current-source model qualification, then verify the exact deployed schema, config and worker behavior. |
+| Customer transfer recovery | Current Server twenty selected roots pass normal/race; current SDK two Go roots pass both modes and vet; migration omission controls discriminate. | Preserve caller-owned intent through the combined release and verify real client/worker adoption. |
+| Native economic monitoring | Frozen observer fifty roots pass both modes; eight causal overlays expose nine intended failures per mode. | Qualify approved runtime/read-purpose renewal without resetting old cursor or amounts; retain historical checkpoint compatibility and operational retry-budget changes. |
+| Continuous EVM and claim monitoring | Finite claim consumer is integrated; continuous EVM accounting and independent rolling expectations are implementation work. | Complete reserve/credit/capture/fee accounting, expectation renewal and durable restart with unresolved obligations preserved. |
+| Physical restore and capacity | Separate core/member/union/registry scopes pass. Local execution-root and pending-outcome successors are frozen, not behaviorally accepted. | Complete local restore qualification, interrupted paired census-head restore, joined capacity migration and actual restored-service continuation. |
+| Combined release and live launch inputs | Current source publication is tracked separately from frozen module gates. Incoming main requires a local gVisor fork. | Bind the intended fork, compose all qualified changes and test actual role startup/recovery. Verify approved runtime/chain identity, RPC, signer/roster and rollout evidence. |
+
+Do not stop broad qualification on its first ordinary assertion failure. Preserve the running source and collect all failures; repair in separate candidates, then qualify the actual combined release. Runtime/source approval and production activation remain distinct from offline implementation readiness.
+
+
 ## October 6 payout transition target
 
 The requested mainnet launch target is **2026-10-06 00:00:00 UTC**. The shared
@@ -3790,3 +3806,15 @@ The [registry old-source causal comparison](evidence/registry-checkpoint-causal-
 ### October 3 incoming local gVisor dependency
 
 An ordinary merge preserves incoming main commit `7debae6d`, which adds `replace gvisor.dev/gvisor => ../gvisor`. At this publication check `/home/by/urnetwork/gvisor/go.mod` is absent. This does not invalidate frozen qualification graphs, whose exact module declarations remain retained; it does mean current-main compilation and final release composition require the actual fork, its source identity and a reproducible dependency arrangement. Locate and bind the intended fork before testing the composed release. Do not remove the upstream replacement merely to reuse earlier green results, and do not claim those results qualify this new dependency.
+
+
+### Restore fixture admission must exercise the complete owner plan
+
+The first independent `2689fced` local-root control failed while constructing its complete owner-union preparation plan: `storage preparation capacities are absent or exceed the finite profile`. This occurs before the public local-rebind preview, so it is not yet evidence of a local-rebind production defect. Retain and finish the original test batch; diagnose whether the complete fixture omitted required profile values or exposed an actual bounded-profile mismatch. Do not widen production acceptance just to admit a test fixture. Before the next behavioral qualification, preflight the actual complete owner census, explicit capacity declarations, source graph and physical scratch ancestry. An empty/compile-only preflight cannot prove public restore admission. Any correction must retain the original failure and bind the corrected source/fixture separately.
+
+
+### October 3 local gVisor fork materialized
+
+The missing local dependency is now available through `/home/by/urnetwork/gvisor`, a symlink to the data-volume checkout `/mnt/data/sn-testnet/mainnet-gvisor-fork-20261003/gvisor`. The [source proof](evidence/local-gvisor-source-20261003.json) records repository `urnetwork/gvisor`, default branch `go`, commit `21c2a5da`, tree `e8600f8a`, and independent verification of all 2,440 tracked entries against their Git blobs and SHA-256 hashes. Its module declares Go 1.26.3. The checkout is clean; no frozen qualification graph was changed. This resolves the absent-directory obstacle, not compilation or behavioral acceptance of the new dependency. The final release must bind and qualify this exact source rather than depend on an unversioned sibling path.
+
+The local-restore fixture mismatch has also been diagnosed: `localRebindTestRestore` requested a 16 MiB plan while the inherited production profile permits at most 8 MiB. Preserve original four-root normal/race outcomes and correct only the fixture request in separate successors for `2689fced` and `fcf41030`. This does not justify raising the production profile. The corrected fixture must exercise public planning and restore; compile success alone is insufficient.
