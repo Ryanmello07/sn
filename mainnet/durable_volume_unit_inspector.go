@@ -19,14 +19,18 @@ import (
 )
 
 type serviceStorageInspectionOutput struct {
-	bytes.Buffer
+	buffer bytes.Buffer
+	cancel context.CancelFunc
+	err    error
 }
 
 func (self *serviceStorageInspectionOutput) Write(raw []byte) (int, error) {
-	if len(raw) > durableinspect.MaximumReportBytes-self.Len() {
-		return 0, errors.New("service storage inspector output exceeds its fixed bound")
+	if len(raw) > durableinspect.MaximumReportBytes-self.buffer.Len() {
+		self.err = errors.New("service storage inspector output exceeds its fixed bound")
+		self.cancel()
+		return 0, self.err
 	}
-	return self.Buffer.Write(raw)
+	return self.buffer.Write(raw)
 }
 
 // The approved runtime config determines every validator operator directory.
@@ -114,7 +118,8 @@ func (self *repairValidatorHost) inspectServiceStorage(ctx context.Context, unit
 		return err
 	}
 	command.WaitDelay = time.Second
-	var stdout, stderr serviceStorageInspectionOutput
+	stdout := serviceStorageInspectionOutput{cancel: cancel}
+	stderr := serviceStorageInspectionOutput{cancel: cancel}
 	command.Stdout, command.Stderr = &stdout, &stderr
 	var commandErr error
 	if self.storageCommand != nil {
@@ -124,8 +129,8 @@ func (self *repairValidatorHost) inspectServiceStorage(ctx context.Context, unit
 	} else {
 		commandErr = command.Run()
 	}
-	if err := commandErr; err != nil {
-		cause := errors.Join(err, commandCtx.Err(), errors.New(strings.TrimSpace(stderr.String())))
+	if err := errors.Join(commandErr, stdout.err, stderr.err); err != nil {
+		cause := errors.Join(err, commandCtx.Err(), errors.New(strings.TrimSpace(stderr.buffer.String())))
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
 			if exit.ExitCode() == 3 {
@@ -137,7 +142,7 @@ func (self *repairValidatorHost) inspectServiceStorage(ctx context.Context, unit
 		}
 		return errors.Join(errors.New("approved service storage inspector failed"), cause)
 	}
-	if err := errors.Join(commandCtx.Err(), durableinspect.Validate(stdout.Bytes(), *unit.DurableVolumes, unit.Uid, unit.Gid, paths)); err != nil {
+	if err := errors.Join(commandCtx.Err(), durableinspect.Validate(stdout.buffer.Bytes(), *unit.DurableVolumes, unit.Uid, unit.Gid, paths)); err != nil {
 		return err
 	}
 	return errors.Join(requireUnitDurableReference(ctx, unit.DurableVolumes), self.pin(ctx, unit.Binary, 512*1024*1024, true))

@@ -73,15 +73,19 @@ type ownerSigningAdapterResult struct {
 // A bounded writer stops child output amplification without truncating JSON
 // into a plausible successful result. It is owned by one exec stream.
 type ownerSigningBoundedOutput struct {
-	bytes.Buffer
+	buffer bytes.Buffer
+	cancel context.CancelFunc
+	err    error
 }
 
 // Only the declared finite response size is accepted from the adapter process.
 func (self *ownerSigningBoundedOutput) Write(raw []byte) (int, error) {
-	if len(raw) > ownerSigningReplyLimit-self.Len() {
-		return 0, errors.New("owner Ledger adapter output exceeds bound")
+	if len(raw) > ownerSigningReplyLimit-self.buffer.Len() {
+		self.err = errors.New("owner Ledger adapter output exceeds bound")
+		self.cancel()
+		return 0, self.err
 	}
-	return self.Buffer.Write(raw)
+	return self.buffer.Write(raw)
 }
 
 // Execute the already hash-checked helper source itself, never a shell command
@@ -99,13 +103,23 @@ func runOwnerLedgerAdapter(ctx context.Context, config ownerSigningDeviceConfig,
 	operationCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	command := exec.CommandContext(operationCtx, config.PythonPath, "-I", "-c", string(helper))
-	command.Stdin = bytes.NewReader(inputRaw)
-	var stdout, stderr ownerSigningBoundedOutput
-	command.Stdout, command.Stderr, command.WaitDelay = &stdout, &stderr, 2*time.Second
-	if err := command.Run(); err != nil {
-		return result, fmt.Errorf("owner Ledger adapter: %w: %s", err, strings.TrimSpace(stderr.String()))
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.Cancel = func() error {
+		err := syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return err
 	}
-	return result, decodePlanJson(stdout.Bytes(), &result)
+	command.Stdin = bytes.NewReader(inputRaw)
+	stdout := ownerSigningBoundedOutput{cancel: cancel}
+	stderr := ownerSigningBoundedOutput{cancel: cancel}
+	command.Stdout, command.Stderr, command.WaitDelay = &stdout, &stderr, 2*time.Second
+	runErr := command.Run()
+	if err := errors.Join(runErr, stdout.err, stderr.err, operationCtx.Err()); err != nil {
+		return result, fmt.Errorf("owner Ledger adapter: %w: %s", err, strings.TrimSpace(stderr.buffer.String()))
+	}
+	return result, decodePlanJson(stdout.buffer.Bytes(), &result)
 }
 
 // Public tests can substitute a finite device boundary without installing any
