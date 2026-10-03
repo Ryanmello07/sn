@@ -213,8 +213,11 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	owner, cancel := context.WithTimeout(ctx, request.Budget)
 	defer cancel()
 	raw, digest, err := readBootstrapRootFile(owner, request.Job.Path, historicalReplayJobLimit)
-	if err != nil || digest != request.Job.Sha256 {
-		return nil, errors.Join(errors.New("historical replay job differs from exact input pin"), err)
+	if err != nil {
+		return nil, fmt.Errorf("read historical replay job: %w", err)
+	}
+	if digest != request.Job.Sha256 {
+		return nil, errors.New("historical replay job differs from exact input pin")
 	}
 	var job historicalReplayJob
 	if err := decodePlanJson(raw, &job); err != nil {
@@ -289,7 +292,7 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	if err := decodePlanJson(stdout.buffer.Bytes(), &report); err != nil {
 		return nil, err
 	}
-	if report.Schema != historicalReplaySchema || report.JobSha256 != historicalReplayDigest(sha256.Sum256(raw)) || report.SdkRevision != historicalReplaySdk || report.HostProfile != "substrate-proof-bounded-storage-v1" || report.ParentHash != job.ParentHash || report.ChildHash != job.ChildHash || report.RuntimeCodeSha256 != job.RuntimeCodeSha256 || report.Extrinsics != uint64(len(job.ExtrinsicsHex)) || report.ProofNodes != uint64(len(job.ProofNodesHex)) || report.ProofBytes > 24*1024*1024 || report.StorageCalls > 65536 || report.StorageIoBytes > 64*1024*1024 || !report.PostStateReproduced {
+	if report.Schema != historicalReplaySchema || report.JobSha256 != historicalReplayDigest(sha256.Sum256(raw)) || report.SdkRevision != historicalReplaySdk || (report.HostProfile != "substrate-proof-bounded-storage-v1" && report.HostProfile != "substrate-proof-bounded-hosts-v2") || report.ParentHash != job.ParentHash || report.ChildHash != job.ChildHash || report.RuntimeCodeSha256 != job.RuntimeCodeSha256 || report.Extrinsics != uint64(len(job.ExtrinsicsHex)) || report.ProofNodes != uint64(len(job.ProofNodesHex)) || report.ProofBytes > 24*1024*1024 || report.StorageCalls > 65536 || report.StorageIoBytes > 64*1024*1024 || !report.PostStateReproduced {
 		return nil, errors.New("historical replay report differs from exact input or execution profile")
 	}
 	if report.AnchorAuthority != "caller-supplied-unapproved" || report.RuntimeAdmitted || report.NativeFeeDebit != nil || report.NativeFeeWithdrawalRefund || report.ProductionSelection {

@@ -25,17 +25,37 @@ child nodes and write paths refuse; authenticated absence remains distinct.
 Current resource limits are 96 MiB JSON, 8192 distinct proof nodes / 24 MiB total
 decoded proof, 8 MiB runtime code before / 32 MiB after decompression, 8 MiB block
 body, 16384 extrinsics, 64 KiB headers, 64 digest items, 64 MiB Wasm memory,
-65536 storage operations and 64 MiB cumulative storage I/O. Rolled-back work
+65536 metered host/argument/iterator steps and 64 MiB cumulative metered I/O.
+The v2 host profile retains the original `storage_calls` and `storage_io_bytes`
+wire fields for these stricter cumulative totals. Rolled-back work
 still counts. A bounded original job is never retried with a skipped state or a
 replacement root when a limit is reached.
 
-The current host profile supports bounded top/child reads, writes, deletion,
-iteration, append, roots and balanced transactions, plus allocator, logging,
-hash and trie helpers. Other imports trap if invoked. Crypto, prefix deletion,
-offchain, keystore, runtime spawning and other missing hosts require separate
-implementation/qualification before a runtime using them can execute. The
-synthetic positive fixtures are not evidence that a production runtime is
-admitted or that its complete host surface is supported.
+The `substrate-proof-bounded-hosts-v2` profile supports bounded top/child
+reads, writes, individual and prefix deletion, iteration, append, roots and
+balanced transactions, plus allocator, logging, hash and trie helpers. Prefix
+and child-kill calls delegate the exact SDK overlay/backend limit semantics:
+zero limits still clear overlay entries and repeated limited calls do not
+invent cursor progress. Every backend iterator step shares the job's meter;
+incomplete iterator creation or traversal traps instead of inheriting the
+SDK bulk-delete helper's logged-error/partial-success result.
+
+A filtered host registry reuses exact pinned SDK ed25519 verification,
+sr25519 verification v1/v2, and secp256k1 recovery/compressed recovery v1/v2.
+Its static and dynamic dispatch both charge work and bound memory reads before
+argument allocation. No key generation, signing or keystore functions are
+registered. Proof-size observation follows the exact SDK no-recorder sentinel
+`u64::MAX`; serialized proof length is never substituted for dynamic usage.
+Other imports trap if invoked. BLS host calls, offchain I/O, runtime spawning
+and runtime-version extension semantics remain outside this host profile.
+The synthetic controls are not evidence that a production runtime is admitted
+or that its complete invoked host surface is supported.
+
+The retained official v470 artifact's read-only structural census found
+original named fee-handler functions and imports for this host increment.
+Names alone do not establish callsite meanings, a source build match or
+authority for currently observed spec472. The original compressed code and
+every function body remain unchanged by the host registry.
 
 Every successful report states `anchor_authority=caller-supplied-unapproved`,
 `runtime_admitted=false`, `production_selection=false`,

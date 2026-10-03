@@ -55,6 +55,18 @@ func init() {
 		report.HookObservations = historicalObservationTestTrace(job)
 	}
 	switch job.RuntimeCodeHex {
+	case "0xc0", "0xc1", "0xc2", "0xc3", "0xc4":
+		report.HostProfile = "substrate-proof-bounded-hosts-v2"
+		switch job.RuntimeCodeHex {
+		case "0xc1":
+			report.HostProfile = "unreviewed-automatic-hosts"
+		case "0xc2":
+			report.StorageCalls = 65537
+		case "0xc3":
+			report.StorageIoBytes = 64*1024*1024 + 1
+		case "0xc4":
+			report.NativeFeeWithdrawalRefund = true
+		}
 	case "0x01":
 		report.JobSha256[0] ^= 1
 	case "0x02":
@@ -417,5 +429,56 @@ func TestHistoricalReplayCancellationJoinsBlockedInput(t *testing.T) {
 	report, err := runHistoricalReplay(ctx, request, historicalReplayHooks{afterStart: func(_ context.Context, value int) { pid = value }, afterOutput: func() { once.Do(cancel) }})
 	if !errors.Is(err, context.Canceled) || report != nil || pid == 0 || !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
 		t.Fatal("cancellation left blocked replay input or process", pid, report, err)
+	}
+}
+
+func TestHistoricalReplayPublicBoundedHostProfileRetainsUnknownAuthority(t *testing.T) {
+	request := historicalReplayTestRequest(t, "0xc0")
+	var stdout, stderr bytes.Buffer
+	code := runMain(t.Context(), []string{"verify-historical-execution", "--engine", request.Engine.Path, "--engine-sha256", request.Engine.Sha256, "--job", request.Job.Path, "--job-sha256", request.Job.Sha256}, &stdout, &stderr)
+	var report historicalReplayReport
+	if code != 0 || decodePlanJson(stdout.Bytes(), &report) != nil || report.HostProfile != "substrate-proof-bounded-hosts-v2" || !report.PostStateReproduced || report.RuntimeAdmitted || report.NativeFeeWithdrawalRefund || report.NativeFeeDebit != nil || report.ProductionSelection {
+		t.Fatal("bounded host support changed economic authority", code, stderr.String(), stdout.String())
+	}
+}
+
+func TestHistoricalReplayBoundedHostProfilePreservesWorkAndAuthorityRefusal(t *testing.T) {
+	for _, mode := range []string{"0xc1", "0xc2", "0xc3", "0xc4"} {
+		request := historicalReplayTestRequest(t, mode)
+		result, err := runHistoricalReplay(t.Context(), request, historicalReplayHooks{})
+		if err == nil || result != nil {
+			t.Fatal("new host profile bypassed exact work or authority refusal", mode, result, err)
+		}
+	}
+}
+
+func TestHistoricalReplayJobReadFailureRetainsCauseWithoutInventingIdentity(t *testing.T) {
+	for _, fault := range []string{"canceled", "missing", "changed-digest"} {
+		request := historicalReplayTestRequest(t, "0xc0")
+		ctx, cancel := context.WithCancel(t.Context())
+		var expected error
+		switch fault {
+		case "canceled":
+			cancel()
+			expected = context.Canceled
+		case "missing":
+			request.Job.Path += ".absent"
+			expected = os.ErrNotExist
+		case "changed-digest":
+			request.Job.Sha256 = "sha256:" + strings.Repeat("a", 64)
+		}
+		started := false
+		report, err := runHistoricalReplay(ctx, request, historicalReplayHooks{beforeStart: func(context.Context, *os.File) { started = true }})
+		cancel()
+		if report != nil || err == nil || started {
+			t.Fatal("unread or mismatched job reached execution", fault, report, started, err)
+		}
+		contradiction := strings.Contains(err.Error(), "historical replay job differs from exact input pin")
+		if expected != nil && (!errors.Is(err, expected) || contradiction) {
+			t.Fatal("read refusal invented an input contradiction or lost its cause", fault, err)
+		}
+		if expected == nil && !contradiction {
+			t.Fatal("actual completed-read digest mismatch lost its refusal", err)
+		}
 	}
 }
