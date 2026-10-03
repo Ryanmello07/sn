@@ -186,11 +186,14 @@ func TestBootstrapSuccessorRegistryRebindPublicResumeKeepsOriginalAuthority(t *t
 	approvalPath := filepath.Join(filepath.Dir(path), "synthetic-registry-rebind-approval.json")
 	for _, mode := range []string{"approver", "domain", "generation", "plan", "declaration"} {
 		plan, key, signingDomain := preview.Plan, f.key, domain
+		expectedRefusal := "successor registry approval differs from exact restored lineage"
 		switch mode {
 		case "approver":
 			key = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{87}, ed25519.SeedSize))
+			expectedRefusal = "successor registry independent rebind approval is invalid"
 		case "domain":
 			signingDomain = "urnetwork-mainnet-successor-execution-approval-v1"
+			expectedRefusal = "successor registry independent rebind approval is invalid"
 		case "generation":
 			plan.RestoredRegistry.Inode++
 		case "plan":
@@ -201,8 +204,8 @@ func TestBootstrapSuccessorRegistryRebindPublicResumeKeepsOriginalAuthority(t *t
 		ref := registryRebindTestSign(t, approvalPath, plan, key, signingDomain)
 		output.Reset()
 		code, diagnostic := invoke("contract-successor-execution-resume", &output, "--registry-rebind-approval", ref.Path, "--registry-rebind-approval-sha256", ref.Sha256)
-		if code == 0 || output.Len() != 0 || !strings.Contains(diagnostic, "rebind") {
-			t.Fatal("invalid independent registry approval was admitted", mode, code, diagnostic)
+		if code != 1 || output.Len() != 0 || !strings.Contains(diagnostic, expectedRefusal) {
+			t.Fatal("invalid registry approval did not refuse at its original authority boundary", mode, code, diagnostic)
 		}
 		if !maps.Equal(beforeLocal, bootstrapSuccessorPreparationTestFiles(t, local)) || !maps.Equal(baselineNonce, bootstrapSuccessorPreparationTestFiles(t, registry)) {
 			t.Fatal("refused registry approval changed original custody", mode)
