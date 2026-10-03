@@ -34,7 +34,7 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-28 | Claim role exists and is qualified; rolling expectation/retry/economic joins and live ingestion/on-call remain. | [claim-consumer-qualification-20261003.json](claim-consumer-qualification-20261003.json) |
 | MG-01 | Independent current genesis/checkpoint/runtime approval and exact consumer admission remain. | No new closure evidence |
 | MG-02 | Final release source/module/compiler/config inventory and repeatable composed build remain. | No new closure evidence |
-| MG-03 | General historical proof-backend prototype underway; native withdrawal/refund attribution still absent. | No new closure evidence |
+| MG-03 | Synthetic proof backend twelve roots and two operative controls qualified; actual runtime/finality admission and native withdrawal/refund attribution remain. | [historical-proof-backend-qualification-20261003.json](historical-proof-backend-qualification-20261003.json) |
 | MG-04 | Historical/current capability scopes exist; approved actual runtime and current consumers remain. | No new closure evidence |
 | MG-05 | Actual both-operator/four-role host, credential and network topology remains. | No new closure evidence |
 | MG-06 | Payout boundary qualified; continuous native/credit/carry/payment conservation and authentic fee witness remain. | [payout-boundary-qualification-20261003.json](payout-boundary-qualification-20261003.json) |
