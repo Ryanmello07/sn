@@ -58,7 +58,7 @@ fixture cleanup completed. Omission controls and modified old-body controls
 retain their explicit labels. [Fourteen additional production recovery roots pass with race detection](evidence/payout-retention-attempt-race-20261003.json),
 with no skips or race reports. The
 [race recovery controls](evidence/payout-retention-causal-race-20261003.json)
-now discriminate all 12 intended failures without race reports. The [full financial model suite](evidence/payout-retention-full-model-20261003.json) at exact Server `63027130` now passes 1,400 top-level roots and all 249 nested subtests, with zero failures and nine explicit skips. These optional/configuration skips remain recorded; a separate nested SQL-plan follow-up is pending. Later candidates retain their own qualification requirements. The [normal operative controls](evidence/payout-operative-causal-normal-20261003.json)
+now discriminate all 12 intended failures without race reports. The [full financial model suite](evidence/payout-retention-full-model-20261003.json) at exact Server `63027130` now passes 1,400 top-level roots and all 249 nested subtests, with zero failures and nine explicit skips. These optional/configuration skips remain recorded; the [separate nested SQL-plan follow-up](evidence/payout-retention-auto-explain-20261003.json) now passes. Later candidates retain their own qualification requirements. The [normal operative controls](evidence/payout-operative-causal-normal-20261003.json)
 produce five intended assertion failures for actual final-send admission,
 submission basis and CLI refusal propagation. Their [race scope also produces
 all five intended failures](evidence/payout-operative-causal-race-20261003.json),
@@ -6057,3 +6057,10 @@ The current-main successor also needs semantic integration coverage beyond confl
 Frozen Server `2a453df9` completes its [independent combined gate](evidence/payout-get-composition-qualification-20261003.json): ten normal and ten race roots pass, four operative causal controls per mode reach intended assertions, five package vets and the offline CLI build pass, and all owned fixture cleanup completes. The [race causal receipt](evidence/payout-get-composition-causal-race-20261003.json) retains each control classification. The [independent source join](evidence/payout-get-composition-independent-join-20261003.json) is confirmed against all 46 physical files from the frozen components plus four explicit composition changes. Financial630 full-model results and wallet25f/boundarycdcb component receipts retain their original scopes.
 
 The final current-main migration successor remains unqualified and unmerged. Preserve upstream18ec migration order and exercise the actual Redis-backed settlement integration before publishing that code; the completed frozen gate does not authorize a production upgrade or mainnet activation.
+
+
+## October 3 claim normal execution and SQL-plan follow-up
+
+Frozen SN `80030acb` passes [all 23 selected normal roots](evidence/claim-consumer-normal-20261003.json): sixteen consumer controls, two public worker neighbors and five actual producer controls, with zero failures/skips. Coordinator verification checks twenty bound files and actual terminal root names. Race/causal/vet and final module composition remain pending; the frozen producer347 graph is retained.
+
+The unchanged financial630 [nested SQL-plan root passes separately](evidence/payout-retention-auto-explain-20261003.json). Its disposable PG18 fixture has the library; the original test role receives SQLSTATE42501 on LOAD. Capability is granted only to that synthetic role, then the exact root passes and fixture cleanup completes. All 27 receipt bindings and the actual terminal test event were verified. The original full-suite skip remains unchanged; no production database permission or newer Server source is qualified by this follow-up.
