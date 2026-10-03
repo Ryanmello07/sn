@@ -3650,3 +3650,10 @@ Published Connect `5def2fa4` merges both `9e7ec0af` recovery APIs and `b8bd3c99`
 ### Current Server publication source join
 
 The [independent source join](evidence/server-publication-source-join-20261003.json) verifies candidate `84007fcb` retains all 46 financial paths exactly from qualified `19952183` and all ten newer upstream paths from `ec6a038a`. The path sets do not overlap and the join introduces no other changes relative to their common base. Preserve these qualified bodies while checking the changed dependency graph; this source receipt does not establish publication, deployment or final release acceptance.
+
+
+## October 3 member restore test-only correction
+
+The [independent affected-root gate](evidence/restore-member-correction-qualification-20261003.json) for `6b23b772` passes normal/race and mainnet vet. Its sole change from `f4e42066` is the test file; production and modules remain identical. The revised root retains the signed physical-directory refusal and proves closed custody, refusal to publish and no new nonce member. The original six-root public scope remains five passes/one failed assertion in each mode; no corrected-source full-suite pass is claimed. The [diagnosis erratum](evidence/restore-member-diagnosis-erratum-20261003.json) corrects a reversed predicate in receipt prose without changing original evidence.
+
+The [original registry gate](evidence/restore-registry-original-failure-20261003.json) remains three passes/one diagnostic assertion failure per mode, with vet passing. Its actual exact-lineage refusal is preserved. The first separate diagnostic correction also encountered another mismatched expectation, so all fault cases are being traced together before further qualification. Constructor error outcomes must be judged by refusal and closed authority, not by an unrelated diagnostic substring or pointer presence alone. Local execution-root rebind and operational restore remain unqualified.
