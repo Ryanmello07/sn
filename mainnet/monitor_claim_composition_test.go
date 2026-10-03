@@ -158,7 +158,9 @@ func monitorClaimPublicPeerControl(t *testing.T, loseCheckpoint bool) {
 	sink := &monitorClaimTestSink{events: make(chan monitorClaimTestEvent, 8)}
 	resume := map[string]chan struct{}{one.Role: make(chan struct{}, 1), two.Role: make(chan struct{}, 1)}
 	retired := make(chan string, 2)
+	// Exhaust only the actual transient sample at its owned wait boundary.
 	hooks := monitorServiceHooks{
+		rpcWait: func(context.Context, string, time.Duration) error { return context.DeadlineExceeded },
 		wait: func(ctx context.Context, role string, _ time.Duration) bool {
 			select {
 			case <-ctx.Done():

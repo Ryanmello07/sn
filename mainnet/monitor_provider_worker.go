@@ -242,8 +242,14 @@ func (self *monitorProviderWorker) close(hooks monitorServiceHooks) error {
 
 func (self *monitorProviderWorker) run(ctx context.Context, interval time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
 	for ctx.Err() == nil {
-		value, code := readMonitorProvider(ctx, self.client, self.policy)
-		if ctx.Err() != nil {
+		clock := monitorProgressReadClock{}
+		if hooks.rpcWait != nil {
+			clock.wait = func(waitCtx context.Context, delay time.Duration) error {
+				return hooks.rpcWait(waitCtx, self.policy.Role, delay)
+			}
+		}
+		value, code := readMonitorProviderWithBudget(ctx, self.client, self.policy, defaultMonitorProgressReadBudget, clock)
+		if ctx.Err() != nil && !monitorProviderTerminal(code) {
 			return 0
 		}
 		self.state.observe(self.policy, value, code, now().UTC())
@@ -263,7 +269,7 @@ func (self *monitorProviderWorker) run(ctx context.Context, interval time.Durati
 			State             monitorProviderEventState `json:"state"`
 		}{"urnetwork-mainnet-provider-event-v1", self.policy.Role, self.state.Status, self.state.current && checkpointErr == nil, checkpointErr == nil, self.eventState(self.state.current && checkpointErr == nil)}
 		if err := json.NewEncoder(stdout).Encode(event); err != nil {
-			if ctx.Err() != nil {
+			if ctx.Err() != nil && !terminal {
 				return 0
 			}
 			return 3

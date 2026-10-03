@@ -76,6 +76,16 @@ func newMonitorProviderClient() *http.Client {
 // Body close is synchronous and joined on every path. A complete identity or
 // authentication refusal dominates a simultaneous observation/close failure.
 func readMonitorProvider(ctx context.Context, client *http.Client, policy monitorProviderPolicy) (*protocol.ProviderProgress, string) {
+	return readMonitorProviderWithBudget(ctx, client, policy, defaultMonitorProgressReadBudget, monitorProgressReadClock{})
+}
+
+func readMonitorProviderWithBudget(ctx context.Context, client *http.Client, policy monitorProviderPolicy, budget time.Duration, clock monitorProgressReadClock) (*protocol.ProviderProgress, string) {
+	return readMonitorProgress(ctx, budget, clock, func(attemptCtx context.Context, attempt *monitorProgressReadAttempt) (*protocol.ProviderProgress, string) {
+		return readMonitorProviderAttempt(attemptCtx, client, policy, attempt)
+	})
+}
+
+func readMonitorProviderAttempt(ctx context.Context, client *http.Client, policy monitorProviderPolicy, attempt *monitorProgressReadAttempt) (*protocol.ProviderProgress, string) {
 	if ctx == nil || ctx.Err() != nil {
 		return nil, "unavailable"
 	}
@@ -86,19 +96,24 @@ func readMonitorProvider(ctx context.Context, client *http.Client, policy monito
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cache-Control", "no-cache")
 	response, err := client.Do(request)
+	attempt.retryable = monitorProgressRetryTransport(err)
 	if response == nil {
 		return nil, "unavailable"
+	}
+	attempt.header = response.Header.Clone()
+	attempt.retryable = attempt.retryable || monitorProgressRetryStatus(response.StatusCode)
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		if response.Body != nil {
+			_ = response.Body.Close()
+		}
+		return nil, "authentication"
 	}
 	if response.Body == nil {
 		return nil, "invalid"
 	}
-	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-		_ = response.Body.Close()
-		return nil, "authentication"
-	}
 	if response.StatusCode != http.StatusOK {
 		_ = response.Body.Close()
-		if response.StatusCode >= 400 && response.StatusCode < 500 {
+		if response.StatusCode >= 400 && response.StatusCode < 500 && !monitorProgressRetryStatus(response.StatusCode) {
 			return nil, "invalid"
 		}
 		return nil, "unavailable"
@@ -109,6 +124,9 @@ func readMonitorProvider(ctx context.Context, client *http.Client, policy monito
 		return nil, "invalid"
 	}
 	value, decodeErr := protocol.DecodeProviderProgress(raw)
+	if readErr == nil && decodeErr != nil {
+		return nil, "invalid"
+	}
 	if readErr == nil && decodeErr == nil {
 		if value.Source != policy.ExpectedSource {
 			return value, "identity"
@@ -125,6 +143,7 @@ func readMonitorProvider(ctx context.Context, client *http.Client, policy monito
 		}
 	}
 	if err != nil || readErr != nil || closeErr != nil || ctx.Err() != nil {
+		attempt.retryable = attempt.retryable || readErr != nil || closeErr != nil
 		return nil, "unavailable"
 	}
 	if decodeErr != nil {
