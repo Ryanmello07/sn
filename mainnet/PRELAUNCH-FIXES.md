@@ -2840,6 +2840,18 @@ unavailable pruned history have distinct outcomes. Integrity errors containing
 the word "timeout" remain integrity errors. Writes use PH-02 reconciliation,
 not the read-retry loop.
 
+**2026-10-03 payment-provider read inventory.** The financial transition review
+found that the generic server GET helper's 60-second request timeout supplied
+no retry loop. The separate candidate adds caller-owned retry budgets to actual
+Circle transaction observation and Coinbase exchange-rate reads, but adjacent
+Circle public-key, wallet-list and balance reads still require review. Classify
+those read paths together; a successful transaction-read fix does not qualify
+them. A composite wallet-list/balance operation must share one outer deadline,
+rather than multiplying a 300-second budget by its wallet count. Keep identity
+and complete-payload checks hard, close every response before retry, and never
+apply the read loop to transfer creation. Candidate implementation and
+independent behavioral qualification remain pending.
+
 **2026-09-28 native HTTP cause preservation.** The pinned GSRPC HTTP client
 flattened statuses to strings and returned decoder EOF without physical origin.
 The [configured native-read adapter](evidence/native-http-read-causes-20260928.md)
