@@ -28,8 +28,11 @@ func (self *repairValidatorHost) inspectActive(ctx context.Context, plan repairA
 		return manager, err
 	}
 	raw, err := self.command(ctx, p, "--system", "--no-pager", "show", "--all", "--property="+strings.Join(repairActiveValidatorProperties, ","), "--", p.Unit.Name)
-	if err != nil || len(raw) > 32*1024 {
-		return manager, errors.Join(errors.New("active repair stop profile unavailable"), err)
+	if err != nil {
+		return manager, repairValidatorObservationError("cannot read active repair stop profile", err, false)
+	}
+	if len(raw) > 32*1024 {
+		return manager, errors.New("active repair stop profile exceeds its bound")
 	}
 	expected := map[string]string{"Names": p.Unit.Name, "SendSIGKILL": "yes", "SendSIGHUP": "no", "KillSignal": "15", "FinalKillSignal": "9", "TimeoutStopUSec": "30s", "TimeoutStartUSec": "30s", "TimeoutStopFailureMode": "terminate", "NotifyAccess": "none", "RefuseManualStart": "no", "RefuseManualStop": "no", "CanStart": "yes", "CanStop": "yes", "StopWhenUnneeded": "no"}
 	lines := make([]string, 0, len(repairActiveValidatorProperties))
@@ -46,10 +49,13 @@ func (self *repairValidatorHost) inspectActive(ctx context.Context, plan repairA
 	// prerequisite, even without any explicit reverse propagation edge.
 	for _, dependency := range append(slices.Clone(p.RequiredMounts), "system.slice") {
 		raw, err := self.command(ctx, p, "--system", "--no-pager", "show", "--all", "--property=Id,StopWhenUnneeded", "--", dependency)
+		if err != nil {
+			return manager, repairValidatorObservationError("cannot read active repair prerequisite", err, false)
+		}
 		lines := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n")
 		slices.Sort(lines)
-		if err != nil || !slices.Equal(lines, []string{"Id=" + dependency, "StopWhenUnneeded=no"}) {
-			return manager, errors.New("active repair prerequisite may stop when unused or is unavailable")
+		if !slices.Equal(lines, []string{"Id=" + dependency, "StopWhenUnneeded=no"}) {
+			return manager, errors.New("active repair prerequisite may stop when unused")
 		}
 	}
 	return manager, nil
@@ -65,9 +71,12 @@ func repairActiveValidatorRunning(plan repairValidatorPlan, manager repairValida
 func (self *repairValidatorHost) activeIncident(ctx context.Context, plan repairActiveValidatorPlan, now time.Time, fresh bool) error {
 	p := plan.Process
 	raw, err := self.read(ctx, plan.MonitorServices.Path, p.MonitorUid, maxMonitorServicesBytes, false)
+	if err != nil {
+		return err
+	}
 	var policy monitorServicesPolicy
-	if err != nil || monitorReadDigest(raw) != plan.MonitorServices.Sha256 || decodePlanJson(raw, &policy) != nil || policy.Schema != monitorServicesSchema || len(policy.Validators) > maxMonitorValidatorRoles {
-		return errors.New("active repair monitor policy changed or is unavailable")
+	if monitorReadDigest(raw) != plan.MonitorServices.Sha256 || decodePlanJson(raw, &policy) != nil || policy.Schema != monitorServicesSchema || len(policy.Validators) > maxMonitorValidatorRoles {
+		return errors.New("active repair monitor policy changed or is malformed")
 	}
 	found := 0
 	for _, role := range policy.Validators {
@@ -83,9 +92,12 @@ func (self *repairValidatorHost) activeIncident(ctx context.Context, plan repair
 		return errors.New("active repair policy role is not unique")
 	}
 	raw, err = self.read(ctx, p.MonitorCheckpoint, p.MonitorUid, maxMonitorServiceCheckpointBytes, true)
+	if err != nil {
+		return err
+	}
 	var checkpoint monitorServiceCheckpointRecord
-	if err != nil || decodePlanJson(raw, &checkpoint) != nil {
-		return errors.Join(errors.New("active repair monitor checkpoint unavailable"), err)
+	if err := decodePlanJson(raw, &checkpoint); err != nil {
+		return errors.Join(errors.New("active repair monitor checkpoint is malformed"), err)
 	}
 	if err := plan.incident(checkpoint); err != nil {
 		return err
@@ -136,8 +148,10 @@ func (self *repairValidatorHost) refuseActiveClaim(plan repairValidatorPlan) err
 		return err
 	}
 	for _, name := range []string{path, path + ".lock"} {
-		if _, err := os.Lstat(name); !errors.Is(err, os.ErrNotExist) {
-			return errors.Join(errors.New("validator generation has active-repair custody or unavailable evidence"), err)
+		if _, err := os.Lstat(name); err == nil {
+			return errors.New("validator generation has active-repair custody")
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return repairValidatorObservationError("cannot inspect validator generation active-repair custody", err, false)
 		}
 	}
 	return nil
@@ -175,8 +189,11 @@ func (self *repairValidatorHost) activeClaim(ctx context.Context, approval repai
 	}
 	for _, name := range []string{path, path + ".lock"} {
 		raw, err := self.read(ctx, name, self.rootUid, 512, true)
-		if err != nil || string(raw) != string(marker) {
-			return errors.Join(fmt.Errorf("active repair generation claim differs: %s", approval.Plan.Process.IncidentId), err)
+		if err != nil {
+			return err
+		}
+		if string(raw) != string(marker) {
+			return fmt.Errorf("active repair generation claim differs: %s", approval.Plan.Process.IncidentId)
 		}
 	}
 	return nil

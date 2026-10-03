@@ -42,7 +42,11 @@ func (self repairActiveValidatorRecord) result() repairActiveValidatorResult {
 // action once per lifetime claim. No sleep, background worker or implicit restart.
 func resumeRepairActiveValidator(ctx context.Context, store *repairActiveValidatorStore, host *repairValidatorHost, now func() time.Time) (result repairActiveValidatorResult, resultErr error) {
 	if ctx == nil || ctx.Err() != nil || store == nil || host == nil || now == nil {
-		return result, errors.New("active repair resume owner unavailable")
+		var cause error
+		if ctx != nil {
+			cause = ctx.Err()
+		}
+		return result, errors.Join(errors.New("active repair resume owner unavailable"), cause)
 	}
 	record, err := store.load(ctx)
 	if err != nil {
@@ -90,8 +94,11 @@ func resumeRepairActiveValidator(ctx context.Context, store *repairActiveValidat
 	actionCheck := func(join bool) (time.Time, uint64, error) {
 		stamp := now()
 		mono, err := host.monotonic()
-		if err != nil || stamp.Before(record.HighWaterAt) || stamp.Before(p.ValidFrom) || !stamp.Before(p.ExpiresAt) || mono <= p.Previous.StartedUsec || ctx.Err() != nil {
-			return stamp, mono, errors.Join(errors.New("active repair action clock or authority window closed"), err, ctx.Err())
+		if err := errors.Join(err, ctx.Err()); err != nil {
+			return stamp, mono, repairValidatorObservationError("cannot read active repair action clock", err, false)
+		}
+		if stamp.Before(record.HighWaterAt) || stamp.Before(p.ValidFrom) || !stamp.Before(p.ExpiresAt) || mono <= p.Previous.StartedUsec {
+			return stamp, mono, errors.New("active repair action clock or authority window closed")
 		}
 		if join && (mono < record.StopMonotonicUsec || mono-record.StopMonotonicUsec > uint64(plan.JoinWindowSeconds)*1000000 || stamp.Sub(record.StopAt) > time.Duration(plan.JoinWindowSeconds)*time.Second) {
 			return stamp, mono, errors.New("active repair join window closed")
@@ -125,8 +132,11 @@ func resumeRepairActiveValidator(ctx context.Context, store *repairActiveValidat
 			return record.result(), err
 		}
 		manager, err = host.inspectActive(ctx, plan)
-		if err != nil || !repairActiveValidatorRunning(p, manager) {
-			return finish("generation-changed", errors.Join(errors.New("active repair generation changed after stop reservation"), err))
+		if err != nil {
+			return finish("source-refused", err)
+		}
+		if !repairActiveValidatorRunning(p, manager) {
+			return finish("generation-changed", errors.New("active repair generation changed after stop reservation"))
 		}
 		if err := host.activeIncident(ctx, plan, now(), true); err != nil {
 			return finish("source-refused", err)
@@ -150,6 +160,9 @@ func resumeRepairActiveValidator(ctx context.Context, store *repairActiveValidat
 	if record.StartAt.IsZero() {
 		stamp, mono, err := actionCheck(true)
 		if err != nil {
+			if mainnetDurableAdmissionPending(err) {
+				return finish("source-refused", err)
+			}
 			return finish("join-window-closed", err)
 		}
 		if err := host.stopped(ctx, p, manager); err != nil {
@@ -166,6 +179,9 @@ func resumeRepairActiveValidator(ctx context.Context, store *repairActiveValidat
 		}
 		stamp, mono, err = actionCheck(true)
 		if err != nil {
+			if mainnetDurableAdmissionPending(err) {
+				return finish("source-refused", err)
+			}
 			return finish("join-window-closed", err)
 		}
 		record.HighWaterAt, record.StartAt, record.StartMonotonicUsec, record.Status = stamp, stamp, mono, "start-consumed"
@@ -191,8 +207,11 @@ func resumeRepairActiveValidator(ctx context.Context, store *repairActiveValidat
 			return finish("uncertain-consumed-start", err)
 		}
 		manager, err = host.inspectActive(ctx, plan)
-		if err != nil || !repairValidatorRunning(p, manager, manager.Generation) || manager.Generation.StartedUsec < record.StartMonotonicUsec {
-			return finish("uncertain-consumed-start", errors.Join(errors.New("active repair start has no attributable generation"), err))
+		if err != nil {
+			return finish("uncertain-consumed-start", err)
+		}
+		if !repairValidatorRunning(p, manager, manager.Generation) || manager.Generation.StartedUsec < record.StartMonotonicUsec {
+			return finish("uncertain-consumed-start", errors.New("active repair start has no attributable generation"))
 		}
 		generation := manager.Generation
 		record.Generation, record.Status = &generation, "waiting-progress"
@@ -213,8 +232,11 @@ func resumeRepairActiveValidator(ctx context.Context, store *repairActiveValidat
 		return finish("waiting-progress", err)
 	}
 	manager, err = host.inspectActive(ctx, plan)
-	if err != nil || !repairValidatorRunning(p, manager, *record.Generation) {
-		return finish("generation-changed", errors.Join(errors.New("active repair generation changed during progress read"), err))
+	if err != nil {
+		return finish("source-refused", err)
+	}
+	if !repairValidatorRunning(p, manager, *record.Generation) {
+		return finish("generation-changed", errors.New("active repair generation changed during progress read"))
 	}
 	record.Completed = postcondition
 	return finish("responsive-generation-observed", nil)
