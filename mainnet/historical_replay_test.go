@@ -51,6 +51,9 @@ func init() {
 		os.Exit(7)
 	}
 	report := historicalReplayReport{Schema: historicalReplaySchema, JobSha256: historicalReplayDigest(sha256.Sum256(raw)), SdkRevision: historicalReplaySdk, HostProfile: "substrate-proof-bounded-storage-v1", ParentHash: job.ParentHash, ChildHash: job.ChildHash, RuntimeCodeSha256: job.RuntimeCodeSha256, Extrinsics: uint64(len(job.ExtrinsicsHex)), ProofNodes: uint64(len(job.ProofNodesHex)), ProofBytes: 1, StorageCalls: 1, StorageIoBytes: 1, PostStateReproduced: true, AnchorAuthority: "caller-supplied-unapproved"}
+	if job.ObservationProfile != nil {
+		report.HookObservations = historicalObservationTestTrace(job)
+	}
 	switch job.RuntimeCodeHex {
 	case "0x01":
 		report.JobSha256[0] ^= 1
@@ -97,6 +100,10 @@ func init() {
 		}
 		// The direct engine exits zero with a superficially valid result.
 		// The supervisor must refuse it while retaining and reaping the peer.
+	case "0xf3":
+		_, _ = os.Stdout.Write(bytes.Repeat([]byte{'x'}, historicalReplayObservedReportLimit+1))
+		time.Sleep(24 * time.Hour)
+		os.Exit(8)
 	}
 	_ = json.NewEncoder(os.Stdout).Encode(report)
 	os.Exit(0)

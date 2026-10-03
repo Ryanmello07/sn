@@ -48,41 +48,43 @@ func (self *historicalReplayDigest) UnmarshalJSON(raw []byte) error {
 // The executable rechecks complete SCALE bodies/proofs and derives roots. The
 // caller also binds every report to the exact job and independent file pins.
 type historicalReplayJob struct {
-	Schema                string                 `json:"schema"`
-	ParentHeaderHex       string                 `json:"parent_header_hex"`
-	ParentHash            historicalReplayDigest `json:"parent_hash"`
-	ChildHeaderHex        string                 `json:"child_header_hex"`
-	ChildHash             historicalReplayDigest `json:"child_hash"`
-	ExtrinsicsHex         []string               `json:"extrinsics_hex"`
-	RuntimeCodeHex        string                 `json:"runtime_code_hex"`
-	RuntimeCodeSha256     historicalReplayDigest `json:"runtime_code_sha256"`
-	RuntimeCodeBlake2b256 historicalReplayDigest `json:"runtime_code_blake2b_256"`
-	ExecutionStateVersion uint8                  `json:"execution_state_version"`
-	ProofNodesHex         []string               `json:"proof_nodes_hex"`
+	Schema                string                              `json:"schema"`
+	ParentHeaderHex       string                              `json:"parent_header_hex"`
+	ParentHash            historicalReplayDigest              `json:"parent_hash"`
+	ChildHeaderHex        string                              `json:"child_header_hex"`
+	ChildHash             historicalReplayDigest              `json:"child_hash"`
+	ExtrinsicsHex         []string                            `json:"extrinsics_hex"`
+	RuntimeCodeHex        string                              `json:"runtime_code_hex"`
+	RuntimeCodeSha256     historicalReplayDigest              `json:"runtime_code_sha256"`
+	RuntimeCodeBlake2b256 historicalReplayDigest              `json:"runtime_code_blake2b_256"`
+	ExecutionStateVersion uint8                               `json:"execution_state_version"`
+	ProofNodesHex         []string                            `json:"proof_nodes_hex"`
+	ObservationProfile    *historicalReplayObservationProfile `json:"observation_profile,omitempty"`
 }
 
 type historicalReplayReport struct {
-	Schema                    string                 `json:"schema"`
-	JobSha256                 historicalReplayDigest `json:"job_sha256"`
-	SdkRevision               string                 `json:"sdk_revision"`
-	HostProfile               string                 `json:"host_profile"`
-	ParentHash                historicalReplayDigest `json:"parent_hash"`
-	ChildHash                 historicalReplayDigest `json:"child_hash"`
-	ParentStateRoot           historicalReplayDigest `json:"parent_state_root"`
-	ChildStateRoot            historicalReplayDigest `json:"child_state_root"`
-	RuntimeCodeSha256         historicalReplayDigest `json:"runtime_code_sha256"`
-	ProofSha256               historicalReplayDigest `json:"proof_sha256"`
-	Extrinsics                uint64                 `json:"extrinsics"`
-	ProofNodes                uint64                 `json:"proof_nodes"`
-	ProofBytes                uint64                 `json:"proof_bytes"`
-	StorageCalls              uint64                 `json:"storage_calls"`
-	StorageIoBytes            uint64                 `json:"storage_io_bytes"`
-	PostStateReproduced       bool                   `json:"post_state_reproduced"`
-	AnchorAuthority           string                 `json:"anchor_authority"`
-	RuntimeAdmitted           bool                   `json:"runtime_admitted"`
-	NativeFeeDebit            *string                `json:"native_fee_debit"`
-	NativeFeeWithdrawalRefund bool                   `json:"native_fee_withdrawal_refund_observed"`
-	ProductionSelection       bool                   `json:"production_selection"`
+	Schema                    string                        `json:"schema"`
+	JobSha256                 historicalReplayDigest        `json:"job_sha256"`
+	SdkRevision               string                        `json:"sdk_revision"`
+	HostProfile               string                        `json:"host_profile"`
+	ParentHash                historicalReplayDigest        `json:"parent_hash"`
+	ChildHash                 historicalReplayDigest        `json:"child_hash"`
+	ParentStateRoot           historicalReplayDigest        `json:"parent_state_root"`
+	ChildStateRoot            historicalReplayDigest        `json:"child_state_root"`
+	RuntimeCodeSha256         historicalReplayDigest        `json:"runtime_code_sha256"`
+	ProofSha256               historicalReplayDigest        `json:"proof_sha256"`
+	Extrinsics                uint64                        `json:"extrinsics"`
+	ProofNodes                uint64                        `json:"proof_nodes"`
+	ProofBytes                uint64                        `json:"proof_bytes"`
+	StorageCalls              uint64                        `json:"storage_calls"`
+	StorageIoBytes            uint64                        `json:"storage_io_bytes"`
+	PostStateReproduced       bool                          `json:"post_state_reproduced"`
+	AnchorAuthority           string                        `json:"anchor_authority"`
+	RuntimeAdmitted           bool                          `json:"runtime_admitted"`
+	NativeFeeDebit            *string                       `json:"native_fee_debit"`
+	NativeFeeWithdrawalRefund bool                          `json:"native_fee_withdrawal_refund_observed"`
+	ProductionSelection       bool                          `json:"production_selection"`
+	HookObservations          *historicalReplayObservations `json:"hook_observations,omitempty"`
 }
 
 type historicalReplayRequest struct {
@@ -221,6 +223,9 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	if job.Schema != historicalReplaySchema || len(job.ProofNodesHex) == 0 || len(job.ProofNodesHex) > 8192 || len(job.ExtrinsicsHex) > 16384 || job.ExecutionStateVersion > 1 {
 		return nil, errors.New("historical replay job exceeds declared protocol bounds")
 	}
+	if err := job.ObservationProfile.validate(job); err != nil {
+		return nil, err
+	}
 	engine, err := historicalReplayEngine(owner, request.Engine)
 	if err != nil {
 		return nil, err
@@ -259,7 +264,11 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 		return err
 	}
 	command.WaitDelay = 5 * time.Second
-	stdout := historicalReplayOutput{maximum: historicalReplayReportLimit, cancel: cancel, read: hooks.afterOutput}
+	maximumReportBytes := historicalReplayReportLimit
+	if job.ObservationProfile != nil {
+		maximumReportBytes = historicalReplayObservedReportLimit
+	}
+	stdout := historicalReplayOutput{maximum: maximumReportBytes, cancel: cancel, read: hooks.afterOutput}
 	stderr := historicalReplayOutput{maximum: 64 * 1024, cancel: cancel}
 	command.Stdout, command.Stderr = &stdout, &stderr
 	if hooks.beforeStart != nil {
@@ -285,6 +294,9 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	}
 	if report.AnchorAuthority != "caller-supplied-unapproved" || report.RuntimeAdmitted || report.NativeFeeDebit != nil || report.NativeFeeWithdrawalRefund || report.ProductionSelection {
 		return nil, errors.New("historical replay report claims unestablished runtime, fee or finality authority")
+	}
+	if err := validateHistoricalReplayObservations(job, report.HookObservations); err != nil {
+		return nil, err
 	}
 	return &report, owner.Err()
 }
