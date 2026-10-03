@@ -94,7 +94,8 @@
     "full-hardening-source-gap-review-20261003.json": "a51780a745bc2c0c5c086a426a14d577c6ca98c9e89dcf5d103f37e30b313a56",
     "namespace-restoreaa46-source-review-20261003.json": "772cfcaa777e900c228a728b94aac00073c859a72fd6b5449edbe20ca84e455e",
     "release-lineage-heade65-source-review-20261003.json": "17f7565884f23ea2deb6978ad43d7ba408941057230abab19c1b5ccf62b19c74",
-    "validator-repair0fef-source-review-20261003.json": "3a6938030be8f039b9f310ac19b89c9819afdcd05e743fb643b11ef2cae69b01"
+    "validator-repair0fef-source-review-20261003.json": "3a6938030be8f039b9f310ac19b89c9819afdcd05e743fb643b11ef2cae69b01",
+    "native-cohort63-scoped-qualification-20261003.json": "28538670d86e156b462fb3f26c30816f5c5732f37f9c72869cb4f5410ce5e66d"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -153,9 +154,9 @@
     },
     {
       "closed": false,
-      "evidence": "native-cohort8fe-original-terminal-review-20261003.json",
+      "evidence": "native-cohort63-scoped-qualification-20261003.json",
       "requirement": "PH-09",
-      "status": "Same-root and cross-root exact512/two-head roots pass normally/race; original public cohort retains late-source-custody failure in both modes. Successor custody/causal qualification and actual host restore remain. Restore32/fresh16 namespace successor source-reviewed only; deepest/escaped/overflow execution and current-source composition remain."
+      "status": "Same-root and cross-root exact512/two-head roots pass normally/race; original late-source-custody failure remains. Successor63/772 passes eight core/five public roots per mode, two vets and fourteen intended old-body assertion failures. Current-source integration, restore32 namespace execution, EVM/Claim composition and actual host restore remain."
     },
     {
       "closed": false,
