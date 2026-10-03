@@ -273,7 +273,7 @@ func TestValidatorCapacityConfigRefusesAuthorityDriftAndRetainsOutputCustody(t *
 			candidate.Config.PollSeconds++
 		case "document":
 			candidate.ConfigDocument += "\nunreviewed_field: true\n"
-			expected = "unknown field"
+			expected = "field unreviewed_field not found"
 		case "message":
 			candidate.SigningBytes = "0x00"
 		case "economic":
@@ -294,7 +294,7 @@ func TestValidatorCapacityConfigRefusesAuthorityDriftAndRetainsOutputCustody(t *
 		case "preview-digest", "approval-digest":
 			expected = "plan reference exact file hash differs"
 		case "cancel":
-			expected = context.Canceled.Error()
+			expected = "plan input context or literal file path is unavailable"
 		}
 		previewBytes, err := json.Marshal(candidate)
 		if err != nil {
@@ -323,10 +323,10 @@ func TestValidatorCapacityConfigRefusesAuthorityDriftAndRetainsOutputCustody(t *
 		if fault == "short-output" {
 			var short storageInspectionShortWriter
 			if code := runMain(ctx, args, &short, &diagnostic); code != 1 || !strings.Contains(diagnostic.String(), io.ErrShortWrite.Error()) {
-				t.Fatal("public completion did not report undelivered exact document", code, diagnostic.String())
+				t.Error("public completion did not report undelivered exact document", code, diagnostic.String())
 			}
-		} else if code := runMain(ctx, args, &output, &diagnostic); code == 0 || output.Len() != 0 || !strings.Contains(diagnostic.String(), expected) {
-			t.Fatal("public completion admitted altered independent authority", fault, code, diagnostic.String())
+		} else if code := runMain(ctx, args, &output, &diagnostic); code != 2 || output.Len() != 0 || !strings.Contains(diagnostic.String(), expected) {
+			t.Error("public completion refusal differs from the intended boundary", fault, code, diagnostic.String())
 		}
 		cancel()
 		if _, err := os.Lstat(configPath); !os.IsNotExist(err) {
