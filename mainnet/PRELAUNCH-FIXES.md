@@ -6303,3 +6303,8 @@ The local-restore fixture mismatch has also been diagnosed: `localRebindTestRest
 
 
 The [original local-root normal failure receipt](evidence/local-root-original-normal-failure-20261003.json) preserves the exact `2689fced` source and raw outcomes: two fixture-planning failures and two passing authority-refusal controls. Coordinator verification rehashed every binding and matched the raw two failed/two passed root events. The failed public roots supply no restore acceptance; race/static results and the corrected fixture successor remain separate.
+
+
+### October 3 qualification headroom restored
+
+[Reclaim12](evidence/cache-reclaim-12-20261003.json) removes 450 old, inactive compiler archives totaling 7,633,731,584 bytes (7.11 GiB). The audited helper differs from reclaim11 only in its task directory. Privileged process-reference checks pass before planning and applying; the declared bounded metadata scan returns no references or diagnostics, and repeated physical identity checks plus final absence checks cover every selected file. The initial sudo PATH lookup failure is retained separately; the completed scan uses the absolute `rg` executable. Active test caches, source, evidence and executables remain intact. The volume returns to roughly 124 GiB free, allowing queued bounded qualification to continue without restarting existing handles. This is test-resource maintenance, not production capacity acceptance.
