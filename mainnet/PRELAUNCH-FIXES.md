@@ -29,8 +29,13 @@ Cover both unsubmitted cancellation and confirmed
 processor cancellation, repeated cancellation/replanning, concurrent planning,
 and cancellation after the October 6 boundary. An uncertain submission or an
 observed transaction hash must remain in reconciliation rather than become
-replacement debt. This correction remains pending; do not infer completion from
-the separate bonus and submission-basis candidate.
+replacement debt. Frozen Server `97d22989` implements this correction, with
+test-only successor `63027130` retaining identical production and module bytes.
+Its [three corrected fixture tests pass under race detection](evidence/payout-retention-fixture-race-20261003.json),
+and [five affected package vets plus the CLI build pass](evidence/payout-retention-vet-build-20261003.json).
+The full model suite, additional production recovery race coverage and causal
+controls remain pending. Neither source is merged or deployed; these scoped
+receipts do not establish complete financial qualification.
 
 Processor recovery must also bind each response to its original attempt before
 updating, completing or resetting a payment. A delayed terminal response must

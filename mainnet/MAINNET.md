@@ -54,15 +54,18 @@ renamed `network_point` table. Test-only successor `63027130` corrects it to
 continuation; production and module bytes remain identical to `97d22989`.
 Qualification runs the three affected tests separately while retaining unchanged
 successful scopes. The [three affected normal tests](evidence/payout-retention-fixture-normal-20261002.json)
-now pass, and the full `./model` suite is running on exact Server `63027130`
-with an isolated PostgreSQL/Redis fixture. Its results remain pending; the
-affected race tests and causal controls retain separate scopes.
+now pass [normally and with race detection](evidence/payout-retention-fixture-race-20261003.json),
+with no skips or race reports. [Five affected package vets and the CLI build](evidence/payout-retention-vet-build-20261003.json)
+also pass on that exact source. The full `./model` suite is running with an
+isolated PostgreSQL/Redis fixture; its terminal result remains pending.
+Additional financial recovery race tests and causal controls retain separate
+scopes and are not closed by the three fixture tests.
 These checkpoints do not supply completed release, deployment or activation
 evidence.
 
 The sole normal failure is in the model slice: the paid/free test attempts to
 change immutable terminal attribution before reaching its weighting assertion.
-Its legal lifecycle fixture correction is pending. Root, controller, taskworker
+This historical failure precedes the separately qualified correction below. Root, controller, taskworker
 and CLI selected tests all passed. This failure does not establish a weighting
 defect or a successful weighting check. The separate test-only correction
 `6a63892b` replaces the invalid non-NULL `"open"` fixture outcome with production's
