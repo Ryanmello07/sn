@@ -83,7 +83,8 @@
     "duplicate-compiler-image-retention-20261003.json": "2651abc63f96eedcc1103741ec505c71dcc869157bf957dfcbbe4da691c89346",
     "capture-request971-positive-review-20261003.json": "d348365f8410676fb2fcd8e88a5a404f7aecd9ea593d6c7a45165dcb4568a090",
     "capture-request971-final-review-20261003.json": "148dfbe1a0d331cbde272ae756bb45b611370771dee07265a3cc84d7dc5a56f6",
-    "capture-currentad0-source-review-20261003.json": "6321ddce5062c20754f69e799b7160e351376cdab5b8aa492e5154a613b3a95c"
+    "capture-currentad0-source-review-20261003.json": "6321ddce5062c20754f69e799b7160e351376cdab5b8aa492e5154a613b3a95c",
+    "mixed-qualification-resource-adoption-20261003.json": "11e97d70326d60b5071d5ddb4399353406eed725ea18277b3154f4f87801f2d4"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
