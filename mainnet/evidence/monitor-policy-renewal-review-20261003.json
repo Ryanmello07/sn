@@ -1,5 +1,11 @@
 {
   "adjacent_candidate": "The new continuous EVM candidate also compares the entire policy hash including read budget, history capacity, batch size and stall threshold; implementation agent notified before freezing. Mutable candidate bytes are not admitted by this source review.",
+  "adjacent_http_read_findings": {
+    "classification": "SOURCE_REVIEW_IMPLEMENTATION_REQUIRED",
+    "client_timeout_seconds": 5,
+    "provider_and_claim_reads": "One HTTP GET per sample; 408 and 429 enter the generic invalid-4xx branch instead of transient unavailability.",
+    "required_continuation": "Use at least sixty seconds total retry authority for expected GETs, defaulting to three hundred seconds; one owned deadline, bounded backoff and joined bodies. Preserve immediate caller cancellation and known authentication/identity failures. A failed read never fabricates a current sample."
+  },
   "bindings": {
     "mainnet/monitor_claim.go": {
       "bytes": 6544,
