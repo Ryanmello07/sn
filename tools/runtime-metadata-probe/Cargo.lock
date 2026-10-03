@@ -2702,6 +2702,7 @@ dependencies = [
  "hex",
  "parity-scale-codec",
  "sc-executor",
+ "sc-executor-common",
  "scale-info",
  "serde",
  "serde_json",
@@ -2714,7 +2715,9 @@ dependencies = [
  "sp-state-machine",
  "sp-trie",
  "sp-version",
+ "sp-wasm-interface",
  "wasmparser",
+ "wasmtime",
  "wat",
 ]
 

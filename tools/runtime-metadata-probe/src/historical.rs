@@ -23,8 +23,12 @@ use sp_trie::StorageProof;
 use sp_version::RuntimeVersion;
 use std::{any::TypeId, collections::BTreeSet, panic::AssertUnwindSafe};
 
+#[path = "historical_fee_events.rs"]
+pub mod fee_events;
 #[path = "historical_hosts.rs"]
 mod hosts;
+#[path = "historical_observer.rs"]
+pub mod observer;
 #[path = "historical_backend.rs"]
 mod strict;
 #[cfg(test)]
@@ -35,6 +39,9 @@ pub const HISTORICAL_SCHEMA: &str = "urnetwork-historical-proof-replay-v1";
 pub const MAXIMUM_HISTORICAL_JOB_BYTES: usize = 96 * 1024 * 1024;
 const MAXIMUM_PROOF_BYTES: usize = 24 * 1024 * 1024;
 const MAXIMUM_CODE_BYTES: usize = 8 * 1024 * 1024;
+// Published real runtimes exceed the original synthetic 8 MiB expanded bound.
+// The original compressed code/proof value bound remains independently fixed.
+const MAXIMUM_EXPANDED_CODE_BYTES: usize = 32 * 1024 * 1024;
 const MAXIMUM_BLOCK_BYTES: usize = 8 * 1024 * 1024;
 const MAXIMUM_HEADER_BYTES: usize = 64 * 1024;
 type NativeHeader = Header<u32, BlakeTwo256>;
@@ -55,6 +62,8 @@ pub struct HistoricalJob {
     pub runtime_code_blake2b_256: [u8; 32],
     pub execution_state_version: u8,
     pub proof_nodes_hex: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observation_profile: Option<observer::ObservationProfile>,
 }
 
 /// A complete state-root reproduction is deliberately separate from economic
@@ -83,6 +92,8 @@ pub struct HistoricalReport {
     pub native_fee_debit: Option<String>,
     pub native_fee_withdrawal_refund_observed: bool,
     pub production_selection: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hook_observations: Option<observer::ObservationReport>,
 }
 
 /// Bound before allocation and reject alternate hexadecimal spellings.
@@ -249,7 +260,7 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
         .map_err(|e| ProbeError::new(format!("historical heap pages proof missing: {e}")))?
         .map(|bytes| scale_exact::<u64>("heap pages", &bytes))
         .transpose()?;
-    let wasm = sp_maybe_compressed_blob::decompress(&code, MAXIMUM_CODE_BYTES)
+    let wasm = sp_maybe_compressed_blob::decompress(&code, MAXIMUM_EXPANDED_CODE_BYTES)
         .map_err(|e| ProbeError::new(format!("historical code decompression: {e}")))?;
     memory_bound(&wasm, heap_pages)?;
     let wrapped = WrappedRuntimeCode(code.as_slice().into());
@@ -258,12 +269,20 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
         heap_pages,
         hash: job.runtime_code_blake2b_256.to_vec(),
     };
-    let executor = WasmExecutor::<hosts::HistoricalHostFunctions>::builder()
-        .with_allow_missing_host_functions(true)
-        .with_onchain_heap_alloc_strategy(HeapAllocStrategy::Dynamic {
-            maximum_pages: Some(1024),
+    let observation = job
+        .observation_profile
+        .clone()
+        .map(|profile| {
+            observer::HistoricalObserver::new(profile, job.runtime_code_sha256, &wasm, heap_pages)
         })
-        .build();
+        .transpose()?;
+    let executor =
+        WasmExecutor::<observer::ObservedHosts<hosts::HistoricalHostFunctions>>::builder()
+            .with_allow_missing_host_functions(true)
+            .with_onchain_heap_alloc_strategy(HeapAllocStrategy::Dynamic {
+                maximum_pages: Some(1024),
+            })
+            .build();
     let mut extensions = Extensions::default();
     extensions.register(hosts::HistoricalBudget::default());
     let mut version_overlay = OverlayedChanges::<Blake2Hasher>::default();
@@ -292,6 +311,26 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
             "historical executing state version or version side effect differs",
         ));
     }
+    // Decode metadata from the same original code with storage/offchain hosts
+    // absent. A witness cannot supply a substituted layout for its events.
+    let event_layout = job
+        .observation_profile
+        .as_ref()
+        .and_then(|profile| profile.metadata_sha256)
+        .map(|expected| {
+            let metadata_executor =
+                WasmExecutor::<crate::StatelessMetadataHostFunctions>::builder()
+                    .with_allow_missing_host_functions(true)
+                    .with_offchain_heap_alloc_strategy(HeapAllocStrategy::Dynamic {
+                        maximum_pages: Some(1024),
+                    })
+                    .build();
+            let raw =
+                crate::execute_runtime_api(&metadata_executor, &runtime, "Metadata_metadata")?;
+            let metadata: sp_core::OpaqueMetadata = scale_exact("original runtime metadata", &raw)?;
+            fee_events::EventLayout::from_generated(metadata.as_slice(), expected)
+        })
+        .transpose()?;
     // Consensus seals are external to runtime execution. Keep their original
     // header hash in the report and refuse seals placed between runtime items.
     let mut execution_header = child.clone();
@@ -318,6 +357,9 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
         extrinsics,
     };
     let mut overlay = OverlayedChanges::<Blake2Hasher>::default();
+    if let Some(observation) = observation {
+        extensions.register(observation);
+    }
     let output = StateMachine::new(
         &backend,
         &mut overlay,
@@ -353,6 +395,11 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
             "historical reproduced child state root differs",
         ));
     }
+    let hook_observations = extensions
+        .get_mut(TypeId::of::<observer::HistoricalObserver>())
+        .and_then(|value| value.downcast_mut::<observer::HistoricalObserver>())
+        .map(|observer| observer.finish(event_layout.as_ref(), job.extrinsics_hex.len()))
+        .transpose()?;
     let budget = extensions
         .get_mut(TypeId::of::<hosts::HistoricalBudget>())
         .and_then(|value| value.downcast_mut::<hosts::HistoricalBudget>())
@@ -379,6 +426,7 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
         native_fee_debit: None,
         native_fee_withdrawal_refund_observed: false,
         production_selection: false,
+        hook_observations,
     })
     .map_err(|e| ProbeError::new(format!("historical report JSON: {e}")))
 }

@@ -2,6 +2,7 @@
 //! budget. Hash/trie helpers are pure; crypto, offchain, keystore, randomness,
 //! indexing, runtime spawning and other omitted hosts remain failing stubs.
 
+use super::observer;
 use sp_core::{
     storage::{well_known_keys::is_child_storage_key, ChildInfo, StateVersion},
     traits::Externalities,
@@ -88,6 +89,7 @@ pub trait Storage {
     ) -> AllocateAndReturnByCodec<Option<Vec<u8>>> {
         key(item);
         charge(*self, item.len());
+        observer::observe(*self, "get", item, None);
         let result = self.storage(item);
         value(*self, result)
     }
@@ -99,6 +101,7 @@ pub trait Storage {
     ) -> AllocateAndReturnByCodec<Option<u32>> {
         key(item);
         charge(*self, item.len());
+        observer::observe(*self, "read", item, None);
         let result = self.storage(item);
         copy_value(value(*self, result), output, offset)
     }
@@ -109,16 +112,19 @@ pub trait Storage {
             "historical storage value bound"
         );
         charge(*self, item.len() + bytes.len());
+        observer::observe(*self, "set", item, Some(bytes));
         self.set_storage(item.to_vec(), bytes.to_vec());
     }
     fn clear(&mut self, item: PassFatPointerAndRead<&[u8]>) {
         key(item);
         charge(*self, item.len());
+        observer::observe(*self, "clear", item, None);
         self.clear_storage(item);
     }
     fn exists(&mut self, item: PassFatPointerAndRead<&[u8]>) -> bool {
         key(item);
         charge(*self, item.len());
+        observer::observe(*self, "exists", item, None);
         self.exists_storage(item)
     }
     fn next_key(
@@ -127,6 +133,7 @@ pub trait Storage {
     ) -> AllocateAndReturnByCodec<Option<Vec<u8>>> {
         key(item);
         charge(*self, item.len());
+        observer::observe(*self, "next_key", item, None);
         let result = self.next_storage_key(item);
         value(*self, result)
     }
@@ -147,6 +154,7 @@ pub trait Storage {
             "historical append value bound"
         );
         charge(*self, item.len() + bytes.len());
+        observer::observe(*self, "append", item, Some(&bytes));
         self.storage_append(item.to_vec(), bytes);
     }
     fn root(&mut self) -> AllocateAndReturnFatPointer<Vec<u8>> {
@@ -167,6 +175,7 @@ pub trait Storage {
         budget.depth += 1;
         assert!(budget.depth <= 32, "historical transaction depth bound");
         self.storage_start_transaction();
+        observer::transaction(*self, "start");
     }
     fn rollback_transaction(&mut self) {
         charge(*self, 0);
@@ -178,6 +187,7 @@ pub trait Storage {
         budget.depth -= 1;
         self.storage_rollback_transaction()
             .expect("historical rollback failed");
+        observer::transaction(*self, "rollback");
     }
     fn commit_transaction(&mut self) {
         charge(*self, 0);
@@ -189,6 +199,7 @@ pub trait Storage {
         budget.depth -= 1;
         self.storage_commit_transaction()
             .expect("historical commit failed");
+        observer::transaction(*self, "commit");
     }
 }
 
