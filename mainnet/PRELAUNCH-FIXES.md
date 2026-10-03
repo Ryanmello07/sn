@@ -13,12 +13,14 @@ This summary tracks the active release work. Historical candidates and receipts 
 | Physical restore and capacity | Separate core/member/union/registry scopes pass. [Paired-head SN restore passes eight roots normally and under race detection](evidence/paired-metadata-sn-qualification-20261003.json); its Connect core has seven passing roots in both modes. Local pending-outcome and approved consumer composition remain open. | Complete local restore qualification, interrupted paired census-head restore, joined capacity migration and actual restored-service continuation. |
 | Combined release and live launch inputs | Current source publication is tracked separately from frozen module gates. Incoming main requires a local gVisor fork. | Bind the intended fork, compose all qualified changes and test actual role startup/recovery. Verify approved runtime/chain identity, RPC, signer/roster and rollout evidence. |
 
-The unchanged current full-model run has now exposed five failing roots, including dispute rollback accounting. Preserve all original failures and complete collection; diagnose the fifth failure before accepting the combined Server release. The passing Redis recovery scope does not establish that disputed settlement leaves terminal state, payer funds and reservations unchanged.
+The unchanged current full-model run has now exposed seven failing roots, including dispute rollback accounting, reservation drift and balance TTL. Preserve all original failures and complete collection; diagnose all failures before accepting the combined Server release. The passing Redis recovery scope does not establish that disputed settlement leaves terminal state, payer funds and reservations unchanged.
 
 Do not stop broad qualification on its first ordinary assertion failure. Preserve the running source and collect all failures; repair in separate candidates, then qualify the actual combined release. Runtime/source approval and production activation remain distinct from offline implementation readiness.
 
 
 The [original local restore race failure](evidence/local-pending-original-race-failure-20261003.json) retains four coverage refusals and three passing controls. The [corrected external signed-input fixture](evidence/local-signed-input-corrected-normal-20261003.json) now passes public resume, lost-ack recovery and two adjacent controls; its two pending-outcome roots still fail because their mock hides earlier historical receipts. Qualify the narrowly corrected pending mock separately. These results establish progress without claiming complete local recovery or changing production coverage requirements.
+
+Astra’s source review indicates the dispute rollback fixture reads the old reservation counter while the public create path uses the newer counter. This is an unqualified fixture diagnosis: require a nonzero pre-sweep witness, both counters and the exact request token, followed by failed and successful public settlement checks. Apply the same review to drift and TTL failures; preserve every original result.
 
 ## Historical RPC recovery lesson — October 3
 
