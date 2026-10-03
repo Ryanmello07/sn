@@ -90,6 +90,10 @@ now pass [normally and with race detection](evidence/payout-retention-fixture-ra
 with no skips or race reports. [Five affected package vets and the CLI build](evidence/payout-retention-vet-build-20261003.json)
 also pass on that exact source. The full `./model` suite is running with an
 isolated PostgreSQL/Redis fixture; its terminal result remains pending.
+Its optional missing-operator-proxy check has a [separate passing one-root
+run](evidence/model-geolocation-companion-20261003.json) with an explicitly
+pinned companion checkout. That pass does not rewrite the original suite's
+skip or close other optional-feature skips.
 The [six normal recovery control groups](evidence/payout-retention-causal-normal-20261003.json)
 produce all 12 intended assertion failures: stale-attempt admission, retained
 obligations, bounded recovery, historical excess and atomic journal/reset
