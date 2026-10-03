@@ -32,7 +32,21 @@ func storagePreparationExportFence(t *testing.T, f *storagePreparationCommandFix
 	if err != nil {
 		t.Fatal(err)
 	}
-	fence := durablevolume.FormerWriterFence{Schema: durablevolume.FormerWriterFenceSchema, RootPath: f.root, DeclarationSha256: ref.Sha256, LeaseSha256: declaration.Volumes[0].StateRoots[0].LeaseSha256, FormerWritersStopped: true, Evidence: "synthetic original native writer closed and joined; no live account or service"}
+	lease := ""
+	for _, volume := range declaration.Volumes {
+		for _, root := range volume.StateRoots {
+			if root.Path == f.root {
+				if lease != "" {
+					t.Fatal("fixture repeats its exact export root")
+				}
+				lease = root.LeaseSha256
+			}
+		}
+	}
+	if lease == "" {
+		t.Fatal("fixture declaration omits its exact export root")
+	}
+	fence := durablevolume.FormerWriterFence{Schema: durablevolume.FormerWriterFenceSchema, RootPath: f.root, DeclarationSha256: ref.Sha256, LeaseSha256: lease, FormerWritersStopped: true, Evidence: "synthetic original writer closed and joined; no live account or service"}
 	raw, err := json.Marshal(fence)
 	if err != nil {
 		t.Fatal(err)
