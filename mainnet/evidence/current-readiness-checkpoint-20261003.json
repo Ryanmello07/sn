@@ -60,6 +60,7 @@
     "paired-metadata-sn-qualification-20261003.json": "dbfa1b79b1795cd9fe0ec6d4003939924a7c815430abc1eaf0ffe631c6e2da68",
     "paired-restore-fixture-affected-qualification-20261003.json": "4705abc95b80c1ef7083f0c7fca676e26f6752342690f20971f37bf0ee83eced",
     "payout-boundary-qualification-20261003.json": "73053846b010911a713ae03ec92e15a9fc868f9b44a8cb091f4677b806c7bc9c",
+    "proof-capture550-qualification-20261003.json": "28f2db1d6f98e4a4ea8fe807623004c0da4bbe1c4d8547e3d1b6d56e702cde0a",
     "proof-capture550-source-review-20261003.json": "7e224a7230b8a0ff92a893d18c11b8ebb9382b110e49dd697594e61ca6a9184c",
     "proof-capture7b81-go10-review-20261003.json": "2e6fa10224d2ec7a5147908044c8633be0b603651b158d1727ec80785bfffddf",
     "proof-capture7b81-original-partial-review-20261003.json": "0d86622679a19f91edba5f0be5ec87cf6fe10c6d011b490da0d15478a0847a33",
@@ -75,7 +76,9 @@
     "validator-cache-permission-main-merge-20261003.json": "c2b95c5afee511e8b40864715ccf3b1598bd58d61ceeab9f41f833bfc0943746",
     "validator-cache-permission0b58-qualification-20261003.json": "05c8a8a1e74081acb18e3e6873cb961a6e574201604fa2e306ed828a016d66b8",
     "validator-cache41-original-failure-review-20261003.json": "c747efc2732ce220c8cbe4f274c1cf6d6577d7c9e398061b5a64ca0961369a95",
-    "wallet-get-qualification-20261003.json": "9ac95c36477c1d8e925ab7cc9a889ace615299ce5a16520f257fc23aee98fe4c"
+    "wallet-get-qualification-20261003.json": "9ac95c36477c1d8e925ab7cc9a889ace615299ce5a16520f257fc23aee98fe4c",
+    "native-evm-read-causes9d-qualification-20261003.json": "da819c804adf6658387e65da8a16a3471505851c9e0362805abcb060d4dd0bf5",
+    "native-evm-read-causes9d-main-merge-20261003.json": "f97ebaaf15cbe1ce0c8b2e802ae56b075fa7465d10a5491011965146d9461c0d"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",

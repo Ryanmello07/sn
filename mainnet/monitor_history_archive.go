@@ -16,6 +16,14 @@ import (
 const maximumMonitorHistorySegments = 128
 const maximumMonitorHistoryPath = 1024
 
+// Instance-local observation barriers cannot supply bytes, errors or admission
+// verdicts. The real guarded read always follows the callback.
+func (self monitorServiceHooks) beforeHistoryRead(role, step string) {
+	if self.historyRead != nil {
+		self.historyRead(role, step)
+	}
+}
+
 // A reference authenticates exact original bytes, not rewritten event data.
 // The catalog, each segment, descriptor count and pathname are separately bound.
 type monitorHistoryReference struct {

@@ -26,6 +26,7 @@ type monitorServiceHooks struct {
 	wait                func(context.Context, string, time.Duration) bool
 	rpcWait             func(context.Context, string, time.Duration) error
 	afterCheckpointOpen func(context.Context, string, *os.File)
+	historyRead         func(role, step string)
 }
 
 // Role events contain bounded operational evidence and a closed export outcome.

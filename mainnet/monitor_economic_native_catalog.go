@@ -235,9 +235,13 @@ func applyMonitorNativeCatalog(ctx context.Context, plan monitorNativeCatalogPla
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, source.close()) }()
+	hooks.beforeHistoryRead(plan.Request.Policy.Role, "catalog-original")
 	current, present, err := source.read()
-	if err != nil || !present {
-		return errors.Join(errors.New("native catalog original checkpoint is absent"), err)
+	if err != nil {
+		return fmt.Errorf("native catalog original checkpoint read: %w", err)
+	}
+	if !present {
+		return errors.New("native catalog original checkpoint is absent")
 	}
 	record, err := decodeMonitorEconomicNativeCheckpoint(current, plan.Request.Policy)
 	if err != nil {
@@ -258,9 +262,13 @@ func applyMonitorNativeCatalog(ctx context.Context, plan monitorNativeCatalogPla
 			return err
 		}
 	}
+	hooks.beforeHistoryRead(plan.Request.Policy.Role, "catalog-forecast")
 	expected, err := buildMonitorNativeCatalogPlan(ctx, plan.Request, original)
-	if err != nil || !reflect.DeepEqual(expected, plan) {
-		return errors.Join(errors.New("native catalog approval lost exact original progress or forecast"), err)
+	if err != nil {
+		return fmt.Errorf("native catalog reviewed plan reconstruction: %w", err)
+	}
+	if !reflect.DeepEqual(expected, plan) {
+		return errors.New("native catalog approval lost exact original progress or forecast")
 	}
 	record, err = decodeMonitorEconomicNativeCheckpoint(original, plan.Request.Policy)
 	if err != nil {
@@ -315,9 +323,13 @@ func applyMonitorNativeCatalog(ctx context.Context, plan monitorNativeCatalogPla
 			return err
 		}
 	}
+	hooks.beforeHistoryRead(plan.Request.Policy.Role, "catalog-published")
 	retained, present, err := source.read()
-	if err != nil || !present || !bytes.Equal(retained, next) {
-		return errors.Join(errors.New("native catalog publication cannot be authenticated"), err)
+	if err != nil {
+		return fmt.Errorf("native catalog publication read: %w", err)
+	}
+	if !present || !bytes.Equal(retained, next) {
+		return errors.New("native catalog publication cannot be authenticated")
 	}
 	return check()
 }
@@ -354,8 +366,12 @@ func runMonitorNativeCatalog(ctx context.Context, args []string, stdout, stderr 
 		return 2
 	}
 	raw, digest, err := readPlanFile(ctx, path, maxRpcReplyBytes)
-	if err != nil || digest != hash {
-		fmt.Fprintln(stderr, "native catalog input differs:", err)
+	if err != nil {
+		fmt.Fprintln(stderr, "native catalog input read failed:", err)
+		return 2
+	}
+	if digest != hash {
+		fmt.Fprintln(stderr, "native catalog input differs: digest mismatch")
 		return 2
 	}
 	var plan monitorNativeCatalogPlan
