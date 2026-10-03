@@ -80,7 +80,10 @@
     "native-evm-read-causes9d-qualification-20261003.json": "da819c804adf6658387e65da8a16a3471505851c9e0362805abcb060d4dd0bf5",
     "native-evm-read-causes9d-main-merge-20261003.json": "f97ebaaf15cbe1ce0c8b2e802ae56b075fa7465d10a5491011965146d9461c0d",
     "native-cohort8fe-original-terminal-review-20261003.json": "a39f897fd8ebd12f331fe312aa3be6dd1fcdee72e9f6837b4f5e019c6bfa21e8",
-    "duplicate-compiler-image-retention-20261003.json": "2651abc63f96eedcc1103741ec505c71dcc869157bf957dfcbbe4da691c89346"
+    "duplicate-compiler-image-retention-20261003.json": "2651abc63f96eedcc1103741ec505c71dcc869157bf957dfcbbe4da691c89346",
+    "capture-request971-positive-review-20261003.json": "d348365f8410676fb2fcd8e88a5a404f7aecd9ea593d6c7a45165dcb4568a090",
+    "capture-request971-final-review-20261003.json": "148dfbe1a0d331cbde272ae756bb45b611370771dee07265a3cc84d7dc5a56f6",
+    "capture-currentad0-source-review-20261003.json": "6321ddce5062c20754f69e799b7160e351376cdab5b8aa492e5154a613b3a95c"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
