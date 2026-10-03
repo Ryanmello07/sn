@@ -111,6 +111,7 @@ func newMonitorNativeRestoreFixture(t *testing.T, segments int) *monitorNativeRe
 		t.Fatal(err)
 	}
 	source.requestHash = durablefixture.Digest(raw)
+	preparationRaw := append([]byte(nil), raw...)
 	ctx := storagePreparationApplyOwnerCommand(t, source, "storage-prepare")
 	native.ctx = monitorNativeRestoreContext(t, source, ctx)
 	native.services.policy.NativeEconomics = []monitorEconomicNativePolicy{native.policy}
@@ -120,7 +121,11 @@ func newMonitorNativeRestoreFixture(t *testing.T, segments int) *monitorNativeRe
 		t.Fatal("native fixture did not reach actual retained pending range", event)
 	}
 	run.stop(t)
-	archive := &monitorNativeArchiveFixture{native: native, checkpoint: checkpoint, archive: filepath.Join(source.root, "a000.json"), metadata: source.metadata}
+	archiveMetadata := filepath.Join(source.metadata, "native-archive-operation")
+	if err := os.Mkdir(archiveMetadata, 0700); err != nil {
+		t.Fatal(err)
+	}
+	archive := &monitorNativeArchiveFixture{native: native, checkpoint: checkpoint, archive: filepath.Join(source.root, "a000.json"), metadata: archiveMetadata}
 	archive.resetRequest(t)
 	catalog := &monitorNativeCatalogFixture{archive: archive, key: key, request: monitorNativeCatalogRequest{Schema: monitorNativeCatalogRequestSchema,
 		Expected: archive.request.Expected, Policy: native.policy, Original: archive.request.Original, FormerWriterFence: archive.request.FormerWriterFence,
@@ -134,6 +139,10 @@ func newMonitorNativeRestoreFixture(t *testing.T, segments int) *monitorNativeRe
 	} else {
 		monitorNativeRestoreSeedFullHistory(t, native, checkpoint, segments)
 	}
+	retainedPreparation, err := os.ReadFile(source.requestPath)
+	if err != nil || !bytes.Equal(retainedPreparation, preparationRaw) {
+		t.Fatal("archive operation replaced its independent original preparation input", err)
+	}
 	record := native.record(t)
 	original := bootstrapSuccessorPreparationTestFiles(t, source.root)
 	limits := durablevolume.InventoryLimits{MaxEntries: 4096, MaxBytes: 256 * 1024 * 1024, MaxDepth: 4, MaxOwnerAttributes: 2048, MaxOwnerAttributeBytes: 8 * 1024 * 1024}
@@ -142,8 +151,12 @@ func newMonitorNativeRestoreFixture(t *testing.T, segments int) *monitorNativeRe
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(raw, &preparation); err != nil {
+	preparation = durablevolume.PreparationRequest{}
+	if err := decodeMonitorHistoryInput(raw, &preparation); err != nil {
 		t.Fatal(err)
+	}
+	if preparation.Schema != durablevolume.PreparationRequestSchema || preparation.Purpose != "restore" || preparation.Scope != "daemon" || preparation.RestoreSource == nil {
+		t.Fatal("public restore fixture did not retain its exact daemon request", preparation.Schema, preparation.Purpose, preparation.Scope)
 	}
 	preparation.Owners[0].RestoreCoverage = "complete-union-v1"
 	raw = []byte(original[filepath.Base(checkpoint)])
