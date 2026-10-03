@@ -29,11 +29,14 @@ type monitorExpectedProviderMember struct {
 	ClientId string `json:"client_id"`
 }
 type monitorProviderPolicy struct {
-	Role             string                          `json:"role"`
-	Endpoint         string                          `json:"endpoint"`
-	ExpectedSource   protocol.ProviderProgressSource `json:"expected_source"`
-	Members          []monitorExpectedProviderMember `json:"members"`
-	FreshnessSeconds uint64                          `json:"freshness_seconds"`
+	Role                 string                          `json:"role"`
+	Endpoint             string                          `json:"endpoint"`
+	ExpectedSource       protocol.ProviderProgressSource `json:"expected_source"`
+	Members              []monitorExpectedProviderMember `json:"members"`
+	FreshnessSeconds     uint64                          `json:"freshness_seconds"`
+	ReadBudgetSeconds    uint64                          `json:"read_budget_seconds,omitempty"`
+	ReviewHistoryEntries uint64                          `json:"review_history_entries,omitempty"`
+	Renewal              *monitorProgressPolicyRenewal   `json:"renewal,omitempty"`
 }
 
 func (self monitorProviderPolicy) validate() error {
@@ -45,7 +48,7 @@ func (self monitorProviderPolicy) validate() error {
 	if endpoint.Scheme != "https" && (endpoint.Scheme != "http" || addressErr != nil || !address.IsLoopback()) {
 		return errors.New("provider endpoint requires HTTPS or literal loopback HTTP")
 	}
-	if !monitorRolePattern.MatchString(self.Role) || self.ExpectedSource.Validate() != nil || self.FreshnessSeconds < 1 || self.FreshnessSeconds > 300 || len(self.Members) == 0 || len(self.Members) > maxMonitorProviderMembers {
+	if !monitorRolePattern.MatchString(self.Role) || self.ExpectedSource.Validate() != nil || validateMonitorProgressRenewal(self.resources(), self.Renewal, false) != nil || len(self.Members) == 0 || len(self.Members) > maxMonitorProviderMembers {
 		return errors.New("provider policy requires bounded role, source, freshness and expected members")
 	}
 	slots, identities := map[string]bool{}, map[string]bool{}
@@ -78,7 +81,7 @@ func newMonitorProviderClient() *http.Client {
 // Body close is synchronous and joined on every path. A complete identity or
 // authentication refusal dominates a simultaneous observation/close failure.
 func readMonitorProvider(ctx context.Context, client *http.Client, policy monitorProviderPolicy) (*protocol.ProviderProgress, string) {
-	return readMonitorProviderWithBudget(ctx, client, policy, defaultMonitorProgressReadBudget, monitorProgressReadClock{})
+	return readMonitorProviderWithBudget(ctx, client, policy, policy.resources().readBudget(), monitorProgressReadClock{})
 }
 
 func readMonitorProviderWithBudget(ctx context.Context, client *http.Client, policy monitorProviderPolicy, budget time.Duration, clock monitorProgressReadClock) (*protocol.ProviderProgress, string) {

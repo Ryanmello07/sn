@@ -19,7 +19,7 @@ import (
 )
 
 const monitorServicesSchema = "urnetwork-mainnet-monitor-services-v1"
-const maxMonitorServicesBytes = 16 * 1024
+const maxMonitorServicesBytes = 64 * 1024
 const maxMonitorValidatorRoles = 8
 
 // Callers distinguish an exhausted role census from unrelated source or wire faults.

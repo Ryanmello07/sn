@@ -30,12 +30,16 @@ type monitorClaimEpochPolicy struct {
 }
 
 type monitorClaimPolicy struct {
-	Role             string                     `json:"role"`
-	Endpoint         string                     `json:"endpoint"`
-	ExpectedMember   string                     `json:"expected_member"`
-	ExpectedPool     protocol.ClaimProgressPool `json:"expected_pool"`
-	FreshnessSeconds uint64                     `json:"freshness_seconds"`
-	Epochs           []monitorClaimEpochPolicy  `json:"epochs"`
+	Role                 string                        `json:"role"`
+	Endpoint             string                        `json:"endpoint"`
+	ExpectedMember       string                        `json:"expected_member"`
+	ExpectedPool         protocol.ClaimProgressPool    `json:"expected_pool"`
+	FreshnessSeconds     uint64                        `json:"freshness_seconds"`
+	Epochs               []monitorClaimEpochPolicy     `json:"epochs"`
+	ReadBudgetSeconds    uint64                        `json:"read_budget_seconds,omitempty"`
+	EpochCapacity        uint64                        `json:"epoch_capacity,omitempty"`
+	ReviewHistoryEntries uint64                        `json:"review_history_entries,omitempty"`
+	Renewal              *monitorProgressPolicyRenewal `json:"renewal,omitempty"`
 }
 
 func (self monitorClaimPolicy) validate(expected identityExpectation) error {
@@ -47,7 +51,7 @@ func (self monitorClaimPolicy) validate(expected identityExpectation) error {
 	if endpoint.Scheme != "https" && (endpoint.Scheme != "http" || addressErr != nil || !address.IsLoopback()) {
 		return errors.New("claim endpoint requires HTTPS or literal loopback HTTP")
 	}
-	if !monitorRolePattern.MatchString(self.Role) || !protocol.ValidProviderSlot(self.ExpectedMember) || self.ExpectedPool.Validate() != nil || self.ExpectedPool.ChainId != expected.EvmChainId || self.FreshnessSeconds < 1 || self.FreshnessSeconds > 300 || len(self.Epochs) == 0 || len(self.Epochs) > maxMonitorClaimEpochs {
+	if !monitorRolePattern.MatchString(self.Role) || !protocol.ValidProviderSlot(self.ExpectedMember) || self.ExpectedPool.Validate() != nil || self.ExpectedPool.ChainId != expected.EvmChainId || validateMonitorProgressRenewal(self.resources(), self.Renewal, true) != nil {
 		return errors.New("claim policy requires independent bounded member, pool, freshness and epochs")
 	}
 	seen := map[int64]bool{}
@@ -112,7 +116,7 @@ func monitorClaimIdentity(policy monitorClaimPolicy, value *protocol.ClaimProgre
 }
 
 func readMonitorClaim(ctx context.Context, client *http.Client, policy monitorClaimPolicy) (*protocol.ClaimProgress, string) {
-	return readMonitorClaimWithBudget(ctx, client, policy, defaultMonitorProgressReadBudget, monitorProgressReadClock{})
+	return readMonitorClaimWithBudget(ctx, client, policy, policy.resources().readBudget(), monitorProgressReadClock{})
 }
 
 func readMonitorClaimWithBudget(ctx context.Context, client *http.Client, policy monitorClaimPolicy, budget time.Duration, clock monitorProgressReadClock) (*protocol.ClaimProgress, string) {
