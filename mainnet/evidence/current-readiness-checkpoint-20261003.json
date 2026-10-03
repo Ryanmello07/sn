@@ -116,7 +116,8 @@
     "common-module-package-readback-20261003.json": "5a96acac641ec18f7e7592b637891b7ca9465fdca6bd733e831af6123df3298e",
     "common-selected-graphs-readback-20261003.json": "b80326bd25b561662c1d5665634b69a42bd4424a77101f49a57f0a8a5d10bffd",
     "common-six-normal-compiles-readback-20261003.json": "dd933945770ccde85c9b833777ad46bcd7b673a87e110805f3ce74f088078fa9",
-    "common-twelve-compiles-readback-20261003.json": "635d14b205062de12e6cf1127485376f47a594cad2d70ed66c3be4beea84b096"
+    "common-twelve-compiles-readback-20261003.json": "635d14b205062de12e6cf1127485376f47a594cad2d70ed66c3be4beea84b096",
+    "common-normal-ordinary-original-failures-20261003.json": "2d031d500a7381fa836c8ad0bc46904fb3c3b5d1ee8b381cd4c3b9d033201992"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -163,9 +164,9 @@
     },
     {
       "closed": false,
-      "evidence": "nested-cleanup-source-review-20261003.json",
+      "evidence": "common-normal-ordinary-original-failures-20261003.json",
       "requirement": "PH-07",
-      "status": "Current startup isolation and nested cleanup successor are source-reviewed; all-role continuation, exact owner cleanup and repair6d twenty-four-root qualification remain."
+      "status": "Combined normal ordinary execution retains seven behavioral failures beyond59 fixture-path errors; cleanup, Claim authority and cohort recovery corrections remain. Source-reviewed startup/cleanup and repair continuation still require composed qualification."
     },
     {
       "closed": false,
