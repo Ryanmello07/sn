@@ -2,6 +2,7 @@
   "basis": "Current published component evidence plus explicit in-progress work; supersedes historical absent-implementation labels only.",
   "completion": "NOT_FINALIZED_ALL38_REQUIREMENTS_RETAINED",
   "evidence_sha256": {
+    "server-full-model-terminal-20261003.json": "cd2eab019b7f9b0b88f1afd3322ce88b497ddc4b4aea7455c5b88aeb0be933cd",
     "common-qualification-scope-review-20261003.json": "72981663e543043b5ad07fc48f5560b97a29aadc931af07413c8e9b851224ba4",
     "server-lease-retention-original-failures-20261003.json": "70a5e0e7046568409266d1dd30932ca30ad351ba55fc319575d5667cd2a77f34",
     "startup-foreground-source-review-20261003.json": "41186d658b136759ecba9be7ca96d2d81ef835f17497336a026776b2dcece654",
@@ -211,9 +212,9 @@
     },
     {
       "closed": false,
-      "evidence": "server-lease-retention-original-failures-20261003.json",
+      "evidence": "server-full-model-terminal-20261003.json",
       "requirement": "PH-16",
-      "status": "Original Server1d3 full model retains1,473 passes/11 skips. Current Server5f22 financial roots pass per mode; its full model remains active with seventeen original failures. Expanded correction covers accounting, retention, force-close, grant and request-lease cases; independent qualification and exact configured skip follow-ups remain."
+      "status": "Original Server1d3 full model retains1,473 passes/11 skips. Current Server5f full model is terminal:1,507 passes/17 failures/11 skips, no timeout or unfinished roots, owned fixture cleaned up. Expanded correction qualification, exact skipped-input follow-ups remain."
     },
     {
       "closed": false,
