@@ -34,10 +34,13 @@ type monitorClaimTestEvent struct {
 	Current           bool   `json:"current"`
 	CheckpointCurrent bool   `json:"checkpoint_current"`
 	State             struct {
-		AcceptedReceipts int    `json:"accepted_receipts"`
-		Deferred         int    `json:"deferred"`
-		Overdue          int    `json:"overdue"`
-		Sequence         uint64 `json:"sequence"`
+		AcceptedReceipts int       `json:"accepted_receipts"`
+		ClaimedLeaves    int       `json:"claimed_leaves"`
+		MerkleProofs     int       `json:"merkle_proofs"`
+		Deferred         int       `json:"deferred"`
+		Overdue          int       `json:"overdue"`
+		Sequence         uint64    `json:"sequence"`
+		ProgressAt       time.Time `json:"semantic_progress_at"`
 	} `json:"state"`
 }
 
