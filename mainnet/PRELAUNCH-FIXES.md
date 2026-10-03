@@ -6688,3 +6688,10 @@ The [guarded cache reclaim30](evidence/cache-reclaim-30-20261003.json) recovered
 The [test-image review](evidence/go-test-image-173f-review-20261003.json) verifies six actual-file stdlib controls and three byte-exact workflow files integrated at6f6169c6. Capture the original image’s mode, links, ownership, ancestors and hash, then retain its exact pinned bytes in an owned mode0500 single-link image. Verify physical custody and hash before and after execution, retain bounded logs, join descendant processes and remove inherited GOFLAGS that would retarget fixture subprocesses.
 
 This workflow addresses protected executable fixture admission without weakening production executable checks. Its receipt means pinned execution only: selected application roots, compiler/source/module provenance and actual outcomes require their own evidence. Do not rerun previously qualified application scopes merely to introduce this helper, or infer an original failed admission predicate that was not observed.
+
+
+### October 3 archive continuation source review and observation causes
+
+The [native/EVM integration source review](evidence/native-evm-current292-source-review-20261003.json) verifies22 changed physical files at29283743:21 match the independently qualified archive component and one joins the retained historical verifier dispatch. Current bounded-host and Cargo guard bytes are retained. The later Go workflow additions require their own exact preservation at final integration. Source review alone does not establish composed behavior.
+
+An archive observation failure must retain its original cause before checking returned presence, digest or bytes. Read timeout or cancellation does not establish owner disappearance or contradictory evidence. Review native/EVM archive, catalog and Claim branches for combined error-and-comparison conditions; fix confirmed misclassification in a separate successor with deterministic interrupted-read controls. Preserve frozen component outcomes and durable original/next checkpoints while qualifying the affected continuation path.
