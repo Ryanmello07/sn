@@ -21,6 +21,32 @@ config sources, deploy them, verify the loaded UTC policy and mainnet identity,
 and demonstrate the running payout workers enforce the boundary. Mainnet
 contract, signing, custody and runtime authority remain separate launch inputs.
 
+The transition rollout must retain evidence for each step:
+
+1. Merge the qualified Server and config revisions, then publish the exact
+   binaries/images and an immutable `main/sn.yml` revision. Preserve the reviewed
+   UTC boundary and legacy-obligation policy; a later configuration edit must
+   not turn post-cutoff earnings into new USDC obligations.
+2. Apply and verify the payout schema features before admitting the new writers.
+   Join any replaced worker and preserve its pending processor attempts and
+   original idempotency keys; do not clear them during rollout.
+3. Start the qualified payout planners, payment workers and SN usage readers
+   with the same declared policy and selected mainnet identity. The policy file
+   is read per operation, while other process configuration may be cached;
+   changing a file alone does not prove coherent adoption across workers.
+4. Run `bringyourctl sn-transition-status` in the deployed environment and retain
+   its config digest, selected identity, schema status and readiness reason.
+   The command explicitly does not prove deployment: independently record each
+   running executable/image and configuration revision, then verify actual
+   worker behavior before, at and after the boundary.
+5. If mainnet readiness is blocked at the boundary, retain post-cutoff usage and
+   keep pre-cutoff USDC reconciliation running. Report the blocked new-earnings
+   path and its claim limits. Recovery must preserve the boundary and retained
+   attempts; rolling back to an old unrestricted USDC writer is not an approved
+   recovery path.
+
+These are rollout requirements, not completed production steps.
+
 The [frozen transition plan](evidence/payout-transition-plan-20261002.md)
 records candidate Server `b19f1eba` / config `93dc65fd`, including the exact
 close-time partition and explicitly blocked mainnet activation. The
