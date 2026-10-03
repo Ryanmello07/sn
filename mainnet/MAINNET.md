@@ -30,6 +30,8 @@ The [admission policy review](evidence/admission-policy-boundary-review-20261003
 
 The [reservation test successor](evidence/reservation-oracle-source-intake-20261003.json) is frozen at Server `1d3c275b`. Root verified thirty-four file bindings, the clean source tree and an exact four-test-file delta over allocator `4aaf4402`; production and module bytes are unchanged. Its five affected/new roots, fourteen settlement neighbors and separately labeled old-oracle discriminator remain pending. Public dispute tests keep the real public create path; legacy-only batching and TTL tests select their legacy owner explicitly. A test correction must not erase a production accounting failure or substitute legacy coverage for the public path.
 
+The [adjacent Safe read review](evidence/safe-read-error-adjacent-review-20261003.json) found combined read-error/mismatch branches in owner storage, nonce, guard slots, retained digest and pending code/authority checks. They can label missing observations as changed authority. Fix these in a separate successor: return read unavailability or cancellation before comparing values, then retain strict rejection of actual returned contradictions. Qualify the real public read paths; pure local signature/hash/encoding failures remain permanent. The frozen historical-receipt candidate does not close these adjacent paths.
+
 ## Historical RPC recovery lesson — October 3
 
 A missing expected historical receipt is an unavailable read, not proof that
