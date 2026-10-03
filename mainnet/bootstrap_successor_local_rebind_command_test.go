@@ -59,7 +59,7 @@ func localRebindTestRestore(t *testing.T, f *bootstrapSuccessorCanonicalFixture)
 	}
 	request.RootPath = source.root
 	request.MountPath, request.FilesystemUuid, request.FilesystemType = declaration.Volumes[0].MountPath, declaration.Volumes[0].FilesystemUuid, declaration.Volumes[0].FilesystemType
-	request.Limits = durablevolume.PreparationLimits{MaxEntries: 512, MaxBytes: 64 * 1024 * 1024, MaxDepth: 4, MaxOwnerAttributes: 64, MaxOwnerAttributeBytes: 256 * 1024, MaxPlanBytes: 16 * 1024 * 1024}
+	request.Limits = durablevolume.PreparationLimits{MaxEntries: 512, MaxBytes: 64 * 1024 * 1024, MaxDepth: 4, MaxOwnerAttributes: 64, MaxOwnerAttributeBytes: 256 * 1024, MaxPlanBytes: 8 * 1024 * 1024}
 	raw, err = json.Marshal(request)
 	if err != nil {
 		t.Fatal(err)
