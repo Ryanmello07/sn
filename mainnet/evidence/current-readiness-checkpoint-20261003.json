@@ -118,7 +118,9 @@
     "common-six-normal-compiles-readback-20261003.json": "dd933945770ccde85c9b833777ad46bcd7b673a87e110805f3ce74f088078fa9",
     "common-twelve-compiles-readback-20261003.json": "635d14b205062de12e6cf1127485376f47a594cad2d70ed66c3be4beea84b096",
     "common-normal-ordinary-original-failures-20261003.json": "2d031d500a7381fa836c8ad0bc46904fb3c3b5d1ee8b381cd4c3b9d033201992",
-    "common-normal-corrected-assertions-20261003.json": "6ecdc6dc8fe637d85c2be6168eb3f2fac748a7e60c77c1726e0e4ab247beebca"
+    "common-normal-corrected-assertions-20261003.json": "6ecdc6dc8fe637d85c2be6168eb3f2fac748a7e60c77c1726e0e4ab247beebca",
+    "0e5-mainnet-normal-independent-readback-20261003.json": "9c5bfb2b558419c363e670e8b1e0d643f2cc8f3db8da6f0bad44a3f149cc62be",
+    "0e5-durablehead-positive-independent-readback-20261003.json": "4374b888a70ba1316cb8051a95542caccf80412d1748e67309630d0e876f6a81"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -165,9 +167,9 @@
     },
     {
       "closed": false,
-      "evidence": "common-normal-corrected-assertions-20261003.json",
+      "evidence": "0e5-mainnet-normal-independent-readback-20261003.json",
       "requirement": "PH-07",
-      "status": "Corrected normal ordinary scope retains190 passes/13 assertion failures with all203 roots terminal. Cancellation/readback production fixes and Claim/native/fee/foreground fixture corrections require qualification; original failures remain retained."
+      "status": "Frozen0e5 mainnet37 normal roots and durablehead6 roots normally/race pass. Mainnet race, validator, vet and operative controls remain; original failing outcomes are retained."
     },
     {
       "closed": false,
