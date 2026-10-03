@@ -6064,3 +6064,14 @@ The final current-main migration successor remains unqualified and unmerged. Pre
 Frozen SN `80030acb` passes [all 23 selected normal roots](evidence/claim-consumer-normal-20261003.json): sixteen consumer controls, two public worker neighbors and five actual producer controls, with zero failures/skips. Coordinator verification checks twenty bound files and actual terminal root names. Race/causal/vet and final module composition remain pending; the frozen producer347 graph is retained.
 
 The unchanged financial630 [nested SQL-plan root passes separately](evidence/payout-retention-auto-explain-20261003.json). Its disposable PG18 fixture has the library; the original test role receives SQLSTATE42501 on LOAD. Capability is granted only to that synthetic role, then the exact root passes and fixture cleanup completes. All 27 receipt bindings and the actual terminal test event were verified. The original full-suite skip remains unchanged; no production database permission or newer Server source is qualified by this follow-up.
+
+
+## Continuous claim expectation renewal
+
+The frozen claim consumer requires one to sixteen independently declared epochs and binds its checkpoint to the exact policy hash, including that epoch list. This qualifies a finite reviewed expectation window. Adding a new epoch changes the policy identity and cannot be treated as a compatible reopen of the old checkpoint. It does not by itself implement continuous mainnet epoch monitoring.
+
+Implement explicit bounded expectation renewal under the same reviewed pool/member/network domain. Preserve original policy references and completed observations; retain unresolved obligations across window changes and disclose archived/omitted coverage. Admit new expectations independently of producer assertions, reject altered original shares/roots/deadlines and foreign identities, and refuse capacity shrink that drops retained obligations. Do not delete checkpoints or silently relax their hash checks to admit a new window. Qualify actual public continuation through repeated renewals, overlap, unresolved old epochs, restart, history loss and exhausted capacity. This remains required under PH-17/PH-23/PH-28 and MG-07, separate from candidate800's finite-window gate.
+
+## October 3 claim consumer race result
+
+Frozen SN `80030acb` passes [all 23 selected roots under race detection](evidence/claim-consumer-race-20261003.json), with zero failures/skips/race reports. Coordinator verification checks all twenty bound files and actual terminal names across consumer, public worker and producer groups. Normal23 results remain separate. Causal and terminal qualification remain pending; published current-module adoption and continuous expectation renewal are separate requirements.
