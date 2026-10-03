@@ -86,6 +86,10 @@ func openMonitorEconomicNativeWorker(ctx context.Context, client *rpcClient, pol
 		return nil, err
 	}
 	policy.Observation.FeePayers = append([]string(nil), policy.Observation.FeePayers...)
+	if policy.Observation.Execution != nil {
+		value := *policy.Observation.Execution
+		policy.Observation.Execution = &value
+	}
 	registration, generation := *policy.Observation.SubnetRegistrationBlock, *policy.Observation.SubnetGeneration
 	policy.Observation.SubnetRegistrationBlock, policy.Observation.SubnetGeneration = &registration, &generation
 	policy.RuntimeCatalog = append([]monitorEconomicRuntimeEntry(nil), policy.RuntimeCatalog...)
@@ -220,6 +224,8 @@ func monitorEconomicNativeReadCode(err error) string {
 // Only this summary is exported. It does not emit unbounded retained history,
 // arbitrary source labels, or a numeric zero for unproved economic amounts.
 type monitorEconomicNativeSummary struct {
+	ExecutionAccounting          *nativeExecutionWindow                 `json:"execution_accounting,omitempty"`
+	ExecutionAuthority           string                                 `json:"execution_authority,omitempty"`
 	ArchivedEvents               uint64                                 `json:"archived_events"`
 	ArchiveSegments              int                                    `json:"archive_segments"`
 	ArchiveSegmentCapacity       int                                    `json:"archive_segment_capacity"`
@@ -259,11 +265,18 @@ func (self *monitorEconomicNativeState) summary(policy monitorEconomicNativePoli
 		value := self.ObservedFeesRao
 		fees = &value
 	}
-	return monitorEconomicNativeSummary{ConfiguredRuntimeCatalogHash: rootObjectHash(policy.RuntimeCatalog), ConfiguredRuntimeEntries: len(policy.RuntimeCatalog), ConfiguredRuntimeCapacity: policy.runtimeCapacity(), ConfiguredReadBudgetSeconds: monitorEconomicReadSeconds(policy.ReadBudgetSeconds), LastExecutionRuntime: self.LastExecutionRuntime, LastPostStateRuntime: self.LastPostStateRuntime, Cursor: self.Cursor, PendingThrough: self.PendingThrough, Finalized: self.Finalized, BatchCount: self.BatchCount, BatchChainHash: self.BatchChainHash,
+	summary := monitorEconomicNativeSummary{ConfiguredRuntimeCatalogHash: rootObjectHash(policy.RuntimeCatalog), ConfiguredRuntimeEntries: len(policy.RuntimeCatalog), ConfiguredRuntimeCapacity: policy.runtimeCapacity(), ConfiguredReadBudgetSeconds: monitorEconomicReadSeconds(policy.ReadBudgetSeconds), LastExecutionRuntime: self.LastExecutionRuntime, LastPostStateRuntime: self.LastPostStateRuntime, Cursor: self.Cursor, PendingThrough: self.PendingThrough, Finalized: self.Finalized, BatchCount: self.BatchCount, BatchChainHash: self.BatchChainHash,
 		ObservedAlpha: self.ObservedAlpha, ObservedFeesRao: fees, FeePayerCount: len(policy.Observation.FeePayers),
 		HistoryEntries: len(self.History), CapacityRemaining: self.CapacityRemaining, CapacityBytesRemaining: self.CapacityBytesRemaining,
 		SampleAt: self.SampleAt, LastReadAt: self.LastReadAt, LastProgressAt: self.LastProgressAt, UnavailableSince: self.UnavailableSince,
 		Incidents: self.Incidents, Authority: "owned-rpc-assertion"}
+	if self.ExecutionAccounting != nil {
+		value := *self.ExecutionAccounting
+		summary.ExecutionAccounting = &value
+		summary.ExecutionAuthority = "independently-approved-runtime-layout-and-finalized-boundaries"
+		summary.NativeMinerAllocationAlpha, summary.ProviderEntitlementAlpha, summary.OwnerRecycledAlpha = &value.MinerAllocation, &value.ProviderEntitlement, &value.OwnerRecycled
+	}
+	return summary
 }
 
 func (self *monitorEconomicNativeWorker) summary() monitorEconomicNativeSummary {
@@ -322,7 +335,7 @@ func renderMonitorEconomicNativeMetrics(policy monitorEconomicNativePolicy, stat
 		{name: "capacity_warning", value: flag(state.CapacityRemaining <= policy.HistoryEntries/4 || state.CapacityBytesRemaining <= maximumMonitorEconomicBytes/4)},
 		{name: "fee_payer_count", value: len(policy.Observation.FeePayers)}, {name: "independent_finality_verified", value: 0},
 		{name: "fee_observation_known", value: flag(len(policy.Observation.FeePayers) != 0 && state.BatchCount != 0)},
-		{name: "native_allocation_known", value: 0}, {name: "provider_entitlement_known", value: 0}, {name: "owner_recycling_known", value: 0},
+		{name: "native_allocation_known", value: flag(state.ExecutionAccounting != nil)}, {name: "provider_entitlement_known", value: flag(state.ExecutionAccounting != nil)}, {name: "owner_recycling_known", value: flag(state.ExecutionAccounting != nil)},
 		{name: "actual_native_outcome_verified", value: 0},
 		{name: "runtime_catalog_entries", value: len(policy.RuntimeCatalog)},
 		{name: "runtime_catalog_bytes", value: len(catalog)},

@@ -114,8 +114,8 @@ pub trait Storage {
     ) -> AllocateAndReturnByCodec<Option<Vec<u8>>> {
         key(item);
         charge(*self, item.len());
-        observer::observe(*self, "get", item, None);
         let result = self.storage(item);
+        observer::observe_return(*self, "get", item, result.as_deref(), None);
         value(*self, result)
     }
     fn read(
@@ -126,8 +126,20 @@ pub trait Storage {
     ) -> AllocateAndReturnByCodec<Option<u32>> {
         key(item);
         charge(*self, item.len());
-        observer::observe(*self, "read", item, None);
         let result = self.storage(item);
+        observer::observe_return(
+            *self,
+            "read",
+            item,
+            result.as_deref(),
+            Some((
+                offset,
+                output
+                    .len()
+                    .try_into()
+                    .expect("historical read output width"),
+            )),
+        );
         copy_value(value(*self, result), output, offset)
     }
     fn set(&mut self, item: PassFatPointerAndRead<&[u8]>, bytes: PassFatPointerAndRead<&[u8]>) {

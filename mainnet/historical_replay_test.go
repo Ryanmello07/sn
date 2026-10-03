@@ -60,7 +60,11 @@ func init() {
 			os.Exit(7)
 		}
 	} else if job.ObservationProfile != nil {
-		report.HookObservations = historicalObservationTestTrace(job)
+		if job.ObservationProfile.Schema == historicalNativeProfileSchema {
+			report.HookObservations = historicalNativeExecutionTestTrace(job)
+		} else {
+			report.HookObservations = historicalObservationTestTrace(job)
+		}
 	}
 	switch job.RuntimeCodeHex {
 	case "0xc0", "0xc1", "0xc2", "0xc3", "0xc4":

@@ -15,6 +15,9 @@ use std::{borrow::Cow, collections::BTreeMap};
 #[path = "historical_capture_tests.rs"]
 mod capture_tests;
 
+#[path = "historical_native_execution_tests.rs"]
+mod native_execution_tests;
+
 const OWNER: &[u8] = b"synthetic-child";
 const ACCOUNT: &[u8] = b"zzzz-account";
 const READ: &str = "(drop (call $get (i64.const 51539609536)))";
@@ -231,6 +234,7 @@ fn observation_profile(code: &[u8], export: &str, purpose: &str) -> observer::Ob
             function_body_sha256: sha2_256(body),
             offset_start: 0,
             offset_end: body.len() as u32,
+            memory: Vec::new(),
         }],
         metadata_sha256: None,
     }
@@ -270,6 +274,199 @@ fn historical_original_wasm_stack_observes_real_host_calls_without_fee_authority
     }
     assert_eq!(report.native_fee_debit, None);
     assert!(!report.native_fee_withdrawal_refund_observed && !report.runtime_admitted);
+}
+
+#[test]
+fn historical_native_captures_actual_returns_and_original_memory() {
+    let code = wasm("", &format!("(i64.store (i32.const 4000) (i64.mul (i64.const 7) (i64.const 11))) {READ} {WRITE} {READ} (call $clear (i64.const 51539609536)) {READ}"));
+    let mut job = job(&code, |storage| {
+        storage.top.remove(ACCOUNT);
+    });
+    let mut profile = observation_profile(&code, "Core_execute_block", "native-drain");
+    profile.schema = "urnetwork-original-wasm-native-observation-v2".to_owned();
+    profile.rules[0].memory = vec![observer::MemoryCapture {
+        name: "computed".to_owned(),
+        address: 4000,
+        global: None,
+        dereference_offsets: Vec::new(),
+        bytes: 8,
+        repeat: None,
+    }];
+    job.observation_profile = Some(profile);
+    let report = run(&job).expect("native original-memory proof refused");
+    assert!(report.post_state_reproduced && !report.runtime_admitted);
+    let records = report.hook_observations.unwrap().observations;
+    assert_eq!(records.len(), 5);
+    assert_eq!(
+        records[0]
+            .storage_return
+            .as_ref()
+            .unwrap()
+            .value_hex
+            .as_deref(),
+        Some(encoded(&vec![7; 96]).as_str())
+    );
+    assert_eq!(
+        records[2]
+            .storage_return
+            .as_ref()
+            .unwrap()
+            .value_hex
+            .as_deref(),
+        Some("0x76")
+    );
+    let absent = records[4].storage_return.as_ref().unwrap();
+    assert!(!absent.present && absent.value_hex.is_none());
+    for record in records {
+        let native = record.native.expect("native capture lost original memory");
+        // Missing phase is retained, never promoted into Initialization.
+        assert!(native.execution_phase_hex.is_none());
+        assert_eq!(native.memory[0].bytes_hex, "0x4d00000000000000");
+    }
+}
+
+#[test]
+fn historical_native_read_retains_full_value_and_slice_provenance() {
+    let code = wasm("(import \"env\" \"ext_storage_read_version_1\" (func $read (param i64 i64 i32) (result i64)))", "(drop (call $read (i64.const 51539609536) (i64.const 12884905888) (i32.const 5)))");
+    let mut job = job(&code, |_| {});
+    let mut profile = observation_profile(&code, "Core_execute_block", "native-drain");
+    profile.schema = "urnetwork-original-wasm-native-observation-v2".to_owned();
+    job.observation_profile = Some(profile);
+    let record = run(&job)
+        .unwrap()
+        .hook_observations
+        .unwrap()
+        .observations
+        .remove(0);
+    let returned = record.storage_return.unwrap();
+    assert!(returned.present);
+    assert_eq!(returned.offset, Some(5));
+    assert_eq!(returned.output_length, Some(3));
+    assert_eq!(returned.value_hex, Some(encoded(&vec![7; 96])));
+}
+
+#[test]
+fn historical_native_capture_refuses_outside_memory_and_missing_global() {
+    let code = wasm("", READ);
+    for global in [None, Some("not_an_original_global".to_owned())] {
+        let mut job = job(&code, |_| {});
+        let mut profile = observation_profile(&code, "Core_execute_block", "native-drain");
+        profile.schema = "urnetwork-original-wasm-native-observation-v2".to_owned();
+        profile.rules[0].memory = vec![observer::MemoryCapture {
+            name: "tranche".to_owned(),
+            address: u32::MAX,
+            global,
+            dereference_offsets: Vec::new(),
+            bytes: 8,
+            repeat: None,
+        }];
+        job.observation_profile = Some(profile);
+        assert!(
+            run(&job).is_err(),
+            "unobserved memory acquired proof authority"
+        );
+    }
+}
+
+#[test]
+fn historical_native_rollback_discards_return_and_memory_together() {
+    let code = wasm(
+        "",
+        &format!("(call $begin) {WRITE} {READ} (call $rollback) {READ}"),
+    );
+    let mut job = job(&code, |_| {});
+    let mut profile = observation_profile(&code, "Core_execute_block", "native-drain");
+    profile.schema = "urnetwork-original-wasm-native-observation-v2".to_owned();
+    job.observation_profile = Some(profile);
+    let trace = run(&job).unwrap().hook_observations.unwrap();
+    assert_eq!(trace.discarded_on_rollback, 2);
+    assert_eq!(trace.observations.len(), 1);
+    assert_eq!(trace.observations[0].ordinal, 3);
+    assert_eq!(
+        trace.observations[0]
+            .storage_return
+            .as_ref()
+            .unwrap()
+            .value_hex,
+        Some(encoded(&vec![7; 96]))
+    );
+}
+
+#[test]
+fn historical_native_repeated_capture_uses_original_count_and_tuple_stride() {
+    let code = wasm("", &format!("(i32.store (i32.const 4000) (i32.const 2)) (i32.store16 (i32.const 4016) (i32.const 17)) (i32.store16 (i32.const 4020) (i32.const 29)) (i32.store16 (i32.const 4024) (i32.const 43)) {READ} (i32.store (i32.const 4000) (i32.const 3)) {READ} (i32.store (i32.const 4000) (i32.const 0)) {READ}"));
+    let mut job = job(&code, |_| {});
+    let mut profile = observation_profile(&code, "Core_execute_block", "native-epoch");
+    profile.schema = "urnetwork-original-wasm-native-observation-v2".to_owned();
+    profile.rules[0].memory = vec![observer::MemoryCapture {
+        name: "uids".to_owned(),
+        address: 4016,
+        global: None,
+        dereference_offsets: Vec::new(),
+        bytes: 2,
+        repeat: Some(observer::MemoryRepeat {
+            count: observer::MemoryPointer {
+                address: 4000,
+                global: None,
+                dereference_offsets: Vec::new(),
+            },
+            maximum: 4096,
+            stride: 4,
+        }),
+    }];
+    job.observation_profile = Some(profile);
+    let report = run(&job).expect("original tuple/count capture refused");
+    assert!(report.post_state_reproduced && !report.runtime_admitted);
+    let records = report.hook_observations.unwrap().observations;
+    assert_eq!(records.len(), 3);
+    for (index, (count, bytes)) in [(2, "0x11001d00"), (3, "0x11001d002b00"), (0, "0x")]
+        .into_iter()
+        .enumerate()
+    {
+        let capture = &records[index].native.as_ref().unwrap().memory[0];
+        assert_eq!(capture.element_count, Some(count));
+        assert_eq!(capture.bytes_hex, bytes);
+    }
+}
+
+#[test]
+fn historical_native_vector_accepts_4096_accounts_and_refuses_actual_overflow() {
+    for count in [4096, 4097] {
+        let code = wasm(
+            "",
+            &format!("(i32.store (i32.const 4000) (i32.const {count})) {READ}"),
+        );
+        let mut job = job(&code, |_| {});
+        let mut profile = observation_profile(&code, "Core_execute_block", "native-epoch");
+        profile.schema = "urnetwork-original-wasm-native-observation-v2".to_owned();
+        profile.rules[0].memory = vec![observer::MemoryCapture {
+            name: "hotkeys".to_owned(),
+            address: 65536,
+            global: None,
+            dereference_offsets: Vec::new(),
+            bytes: 32,
+            repeat: Some(observer::MemoryRepeat {
+                count: observer::MemoryPointer {
+                    address: 4000,
+                    global: None,
+                    dereference_offsets: Vec::new(),
+                },
+                maximum: 4096,
+                stride: 32,
+            }),
+        }];
+        job.observation_profile = Some(profile);
+        let result = run(&job);
+        if count == 4097 {
+            assert!(result.is_err(), "actual overbound count was narrowed");
+        } else {
+            let report = result.expect("accepted full UID profile was narrowed");
+            let records = report.hook_observations.unwrap().observations;
+            let capture = &records[0].native.as_ref().unwrap().memory[0];
+            assert_eq!(capture.element_count, Some(4096));
+            assert_eq!(capture.bytes_hex.len(), 2 + 4096 * 32 * 2);
+        }
+    }
 }
 
 #[test]

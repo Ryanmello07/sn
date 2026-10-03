@@ -85,6 +85,7 @@ func (self monitorEconomicNativeEvent) index() uint64 {
 }
 
 type monitorEconomicNativeState struct {
+	ExecutionAccounting    *nativeExecutionWindow        `json:"execution_accounting,omitempty"`
 	Archive                *monitorEconomicNativeArchive `json:"archive,omitempty"`
 	Catalog                *monitorHistoryCatalogState   `json:"history_catalog,omitempty"`
 	RuntimeBoundFrom       uint64                        `json:"runtime_bound_from,omitempty"`
@@ -121,6 +122,16 @@ func monitorEconomicInteger(value string) (*big.Int, error) {
 }
 
 func (self *monitorEconomicNativeState) validate(policy monitorEconomicNativePolicy) error {
+	if self.ExecutionAccounting != nil {
+		if policy.Observation.Execution == nil || self.ExecutionAccounting.From != policy.Observation.From || self.ExecutionAccounting.Through != self.Cursor {
+			return errors.New("native accounting lost its original policy or retained cursor")
+		}
+		if err := self.ExecutionAccounting.validate(); err != nil {
+			return err
+		}
+	} else if policy.Observation.Execution != nil && self.BatchCount != 0 {
+		return errors.New("native execution policy lost retained accounting")
+	}
 	if self.Catalog != nil && (policy.HistoryCatalog == nil || len(self.Catalog.Revisions) == 0 || len(self.Catalog.Revisions) > maximumMonitorHistoryRevisions) {
 		return errors.New("native economic catalog cannot acquire unapproved history capacity")
 	}
@@ -367,6 +378,15 @@ func (self *monitorEconomicNativeState) append(policy monitorEconomicNativePolic
 		return nil, errors.New("native economic batch cannot advance original custody")
 	}
 	next := *self
+	if policy.Observation.Execution != nil {
+		accounting, err := appendNativeExecution(self.ExecutionAccounting, *observation, policy.Observation.From)
+		if err != nil {
+			return nil, err
+		}
+		next.ExecutionAccounting = accounting
+	} else if observation.ExecutionWindow != nil {
+		return nil, errors.New("legacy native role received unconfigured execution authority")
+	}
 	next.History = append([]monitorEconomicNativeEvent{}, self.History...)
 	alpha, err := monitorEconomicInteger(self.ObservedAlpha)
 	if err != nil {

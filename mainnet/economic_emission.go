@@ -24,6 +24,7 @@ type economicEmissionBoundary struct {
 // This independent read policy does not grant action or economic authority.
 // From is excluded; every following block through Through must be observed.
 type economicEmissionPolicy struct {
+	Execution               *nativeExecutionPolicy   `json:"execution_witness,omitempty"`
 	Schema                  string                   `json:"schema"`
 	Network                 planNetwork              `json:"network"`
 	Runtime                 rootReceiptProfile       `json:"runtime"`
@@ -62,7 +63,7 @@ func (self economicEmissionPolicy) validate() error {
 		}
 		seen[payer] = true
 	}
-	return nil
+	return self.Execution.validate()
 }
 
 // Raw storage is retained alongside decoded epoch and pending-budget facts.
@@ -133,6 +134,7 @@ type economicEmissionDenominator struct {
 // Headers and complete raw events are retained even if a later read fails.
 // A block's event execution uses the approved parent runtime, not a later tip.
 type economicEmissionBlock struct {
+	ExecutionOutcome *nativeExecutionOutcome        `json:"execution_outcome,omitempty"`
 	ExecutionRuntime *rootReceiptProfile            `json:"execution_runtime,omitempty"`
 	PostStateRuntime *rootReceiptProfile            `json:"post_state_runtime,omitempty"`
 	Boundary         economicEmissionBoundary       `json:"boundary"`
@@ -152,6 +154,7 @@ type economicEmissionBlock struct {
 // Complete means the explicit archive range was read and rechecked. It never
 // means the economic target, denominator, payment or finality authority passed.
 type economicEmissionObservation struct {
+	ExecutionWindow             *nativeExecutionWindow        `json:"execution_window,omitempty"`
 	RuntimeCatalog              []monitorEconomicRuntimeEntry `json:"runtime_catalog,omitempty"`
 	Schema                      string                        `json:"schema"`
 	PolicyHash                  string                        `json:"policy_hash"`

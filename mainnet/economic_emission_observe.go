@@ -269,6 +269,17 @@ func observeEconomicEmissionCatalog(ctx context.Context, client *rpcClient, poli
 		if err != nil {
 			return result, err
 		}
+		block.ExecutionOutcome, err = observeNativeExecution(readCtx, client, policy, block, runtime.profile, runtime.metadata)
+		if err != nil {
+			return result, err
+		}
+		if block.ExecutionOutcome != nil {
+			block.Denominator.NativeMinerAllocationAlpha = &block.ExecutionOutcome.MinerAllocation
+			block.Denominator.RuntimeTruncationDustAlpha = &block.ExecutionOutcome.FixedPointDust
+			block.Denominator.ZeroIncentiveFallback = block.ExecutionOutcome.RedirectedToValidators != "0"
+			block.Denominator.Status = "execution-allocation-authenticated"
+			block.Denominator.Blockers = []string{"full economic target tolerance includes earlier runtime/u16 quantization and signed activation policy; final normalization proof alone does not grant it"}
+		}
 		if err := budget.retain(block); err != nil {
 			return result, err
 		}
@@ -306,5 +317,17 @@ func observeEconomicEmissionCatalog(ctx context.Context, client *rpcClient, poli
 		return result, err
 	}
 	result.Status, result.Complete = "observed-economic-outcome-unresolved", true
+	if policy.Execution != nil {
+		window, err := summarizeNativeExecution(result)
+		if err != nil {
+			return result, err
+		}
+		result.ExecutionWindow = window
+		result.NativeMinerAllocationAlpha, result.ProviderEntitlementAlpha, result.OwnerRecycledAlpha = &window.MinerAllocation, &window.ProviderEntitlement, &window.OwnerRecycled
+		result.IndependentStorageProof = true
+		result.FinalityAuthority = "independently-reviewed-finalized-boundaries"
+		result.Status = "observed-execution-amounts-target-unresolved"
+		result.Blockers = []string{"execution amounts and final fixed-point casts are authenticated; complete runtime/u16 quantization tolerance and activation accounting remain separate", "vault capture, independent Claim and cross-domain conservation remain separate; native recycling grants no reserve credit"}
+	}
 	return result, nil
 }
