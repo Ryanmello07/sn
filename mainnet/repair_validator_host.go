@@ -37,16 +37,20 @@ type repairValidatorHost struct {
 	monotonic      func() (uint64, error)
 }
 
-// Output is bounded independently of process lifetime. A writer error cancels
-// the command through its copy/Wait path; cancellation kills the process group.
+// Output is bounded independently of process lifetime. An overflow explicitly
+// cancels the owner; an os/exec copy error alone does not stop a blocked child.
 type repairValidatorOutput struct {
 	buffer bytes.Buffer
+	cancel context.CancelFunc
+	err    error
 }
 
 // The systemctl response and diagnostic stream each have a fixed bound.
 func (self *repairValidatorOutput) Write(raw []byte) (int, error) {
 	if len(raw) > 32*1024-self.buffer.Len() {
-		return 0, errors.New("validator repair command output exceeds its bound")
+		self.err = errors.New("validator repair command output exceeds its bound")
+		self.cancel()
+		return 0, self.err
 	}
 	return self.buffer.Write(raw)
 }
@@ -55,9 +59,14 @@ func (self *repairValidatorOutput) Write(raw []byte) (int, error) {
 // canceled start may already have reached systemd and stays consumed upstream.
 func executeRepairValidatorCommand(ctx context.Context, path string, args []string) ([]byte, error) {
 	if ctx == nil || ctx.Err() != nil {
-		return nil, errors.New("validator repair command context is unavailable")
+		if ctx == nil {
+			return nil, errors.New("validator repair command context is unavailable")
+		}
+		return nil, ctx.Err()
 	}
-	command := exec.CommandContext(ctx, path, args...)
+	owner, cancel := context.WithCancel(ctx)
+	defer cancel()
+	command := exec.CommandContext(owner, path, args...)
 	command.Env = []string{"LANG=C", "LC_ALL=C", "PATH=/usr/sbin:/usr/bin:/sbin:/bin", "SYSTEMD_PAGER=", "SYSTEMD_COLORS=0"}
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.Cancel = func() error {
@@ -68,9 +77,11 @@ func executeRepairValidatorCommand(ctx context.Context, path string, args []stri
 		return err
 	}
 	command.WaitDelay = time.Second
-	var stdout, stderr repairValidatorOutput
+	stdout := repairValidatorOutput{cancel: cancel}
+	stderr := repairValidatorOutput{cancel: cancel}
 	command.Stdout, command.Stderr = &stdout, &stderr
-	if err := command.Run(); err != nil {
+	runErr := command.Run()
+	if err := errors.Join(runErr, stdout.err, stderr.err); err != nil {
 		return nil, errors.Join(errors.New("validator repair systemctl failed or was interrupted"), err, ctx.Err())
 	}
 	return stdout.buffer.Bytes(), ctx.Err()

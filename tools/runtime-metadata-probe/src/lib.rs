@@ -8,6 +8,7 @@
 #![deny(unsafe_code)]
 
 pub mod replay;
+pub mod historical;
 
 use frame_metadata::{RuntimeMetadataPrefixed, META_RESERVED};
 use parity_scale_codec::Decode;
