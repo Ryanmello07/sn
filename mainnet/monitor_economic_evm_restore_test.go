@@ -189,8 +189,21 @@ func newMonitorEvmRestoreFixture(t *testing.T, rootCount, segments int) *monitor
 func monitorEvmRestoreSeedHistoryPaths(t *testing.T, evm *monitorEvmFixture, checkpoint string, paths []string) {
 	t.Helper()
 	record := evm.record(t)
+	client := monitorEvmFixtureClient(t, evm)
 	for index, path := range paths {
-		if index != 0 {
+		if index == 1 {
+			// Complete the original pending page through the actual HTTP/ABI/
+			// receipt reader before adding synthetic later storage history.
+			observation, err := observeMonitorEconomicEvm(evm.ctx, client, evm.policy, &record.State)
+			if err != nil {
+				t.Fatal("original EVM pending page could not be observed", err)
+			}
+			next, err := record.State.append(evm.policy, observation, evm.services.clock.now())
+			if err != nil || next.PendingThrough != nil || next.Cursor.Number != 13 {
+				t.Fatal("original EVM pending page was not completed", err)
+			}
+			record.State = *next
+		} else if index > 1 {
 			number := record.State.Cursor.Number + 1
 			header := types.CopyHeader(evm.blocks[13].header)
 			header.Number, header.ParentHash = new(big.Int).SetUint64(number), common.HexToHash(record.State.Cursor.Hash)
@@ -548,7 +561,7 @@ func TestMonitorEvmRestoreCohortAdmitsAll512OriginalSegments(t *testing.T) {
 	case <-time.After(300 * time.Second):
 		t.Fatal("full EVM archive public admission exceeded its300-second window")
 	}
-	if !event.Current || event.State.ArchiveSegments != 512 || event.State.Cursor != f.record.State.Cursor || event.State.BatchCount != f.record.State.BatchCount || event.State.ObservedFeeCostWei == nil || *event.State.ObservedFeeCostWei != "42000" || !reflect.DeepEqual(event.State.ContractState, f.record.State.Snapshot) {
+	if !event.Current || event.State.ArchiveSegments != 512 || event.State.Cursor != f.record.State.Cursor || event.State.BatchCount != f.record.State.BatchCount || event.State.ObservedFeeCostWei == nil || *event.State.ObservedFeeCostWei != "84000" || !reflect.DeepEqual(event.State.ContractState, f.record.State.Snapshot) {
 		t.Fatal("full EVM archive continuation lost original financial lineage", event)
 	}
 	run.stop(t)
