@@ -2,6 +2,15 @@
   "basis": "Current published component evidence plus explicit in-progress work; supersedes historical absent-implementation labels only.",
   "completion": "NOT_FINALIZED_ALL38_REQUIREMENTS_RETAINED",
   "evidence_sha256": {
+    "native-continuous-admission-source-gap-20261003.json": "e77c2a061e589266dfd35c4b3e0c454d3a237c1a0d61cc65eca44e74ebad4931",
+    "combined-model4754-source-review-20261003.json": "63070d31d6bdca32f46ede9ee1f17f206162cd0a3dd2f72c9429748baacf79be",
+    "current-connect772-integration-preview-20261003.json": "4e606b41f34dc54870d4c33e6a6c3d06822ba2a7142e77884957eca62454ed26",
+    "server-model-clock-and-debit-original-failures-20261003.json": "bc64b4538cf39c9204fee65f61d19dfeb48b1498b6be78d43427632023131108",
+    "monitor-startup-isolation-source-finding-20261003.json": "14f1a5abdbd4a7444e76f5091b33145a747b924628fa542a5b814d8ea07ffa1a",
+    "subsidy-grant804-source-review-20261003.json": "68cad7162cc24d5f7b5bd3bac4a20abfc46e47e87a7868892ab5aff558c01914",
+    "server-model-subsidy-original-failure-20261003.json": "3a3f8d0bb1d9218c3080f7e1a2f4d8edec8955871416300750a92a80f2d21ac5",
+    "native-split-conformance-source-finding-20261003.json": "1e2a599a48145641e656263f85f2b43e606a16d32bb8cd9c21d43d793be37c1b",
+    "model-continuation-adoption-20261003.json": "7c4d02521fb7feecc3fc6cebb836efd2b238b5df6bb2ab27418ff5fff68867b1",
     "cache-reclaim-28-20261003.json": "e5e1f8b6097d6c14496b1d107d0771c70f14d8f4c84d3a17055a6696fe0d91d0",
     "cache-reclaim-30-20261003.json": "93f33337005af28f2d1dc00e36a14eda0ff25c582ed9463de73eb954259750cf",
     "capacity-public-completion-qualification-20261003.json": "90b753f6610be6766faebb62d73e80381fa4449264d8e2b5e6d6f30d9fec58bf",
@@ -94,7 +103,10 @@
     "full-hardening-source-gap-review-20261003.json": "a51780a745bc2c0c5c086a426a14d577c6ca98c9e89dcf5d103f37e30b313a56",
     "namespace-restoreaa46-source-review-20261003.json": "772cfcaa777e900c228a728b94aac00073c859a72fd6b5449edbe20ca84e455e",
     "release-lineage-heade65-source-review-20261003.json": "17f7565884f23ea2deb6978ad43d7ba408941057230abab19c1b5ccf62b19c74",
-    "validator-repair0fef-source-review-20261003.json": "3a6938030be8f039b9f310ac19b89c9819afdcd05e743fb643b11ef2cae69b01"
+    "validator-repair0fef-source-review-20261003.json": "3a6938030be8f039b9f310ac19b89c9819afdcd05e743fb643b11ef2cae69b01",
+    "native-cohort63-scoped-qualification-20261003.json": "28538670d86e156b462fb3f26c30816f5c5732f37f9c72869cb4f5410ce5e66d",
+    "mixed-qualification-terminal-20261003.json": "81d941470af866803698d6bfc17b7c7ee08f7ca968f3c65f6e74aa3e5700dfdb",
+    "model-sampler-source-finding-20261003.json": "ba6c43f63198248d7618c35c0b52b828862f48add0f0315d7e0128d9c45dfe62"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -153,9 +165,9 @@
     },
     {
       "closed": false,
-      "evidence": "native-cohort8fe-original-terminal-review-20261003.json",
+      "evidence": "native-cohort63-scoped-qualification-20261003.json",
       "requirement": "PH-09",
-      "status": "Same-root and cross-root exact512/two-head roots pass normally/race; original public cohort retains late-source-custody failure in both modes. Successor custody/causal qualification and actual host restore remain. Restore32/fresh16 namespace successor source-reviewed only; deepest/escaped/overflow execution and current-source composition remain."
+      "status": "Same-root and cross-root exact512/two-head roots pass normally/race; original late-source-custody failure remains. Successor63/772 passes eight core/five public roots per mode, two vets and fourteen intended old-body assertion failures. Current-source integration, restore32 namespace execution, EVM/Claim composition and actual host restore remain."
     },
     {
       "closed": false,
@@ -195,9 +207,9 @@
     },
     {
       "closed": false,
-      "evidence": "server-current-financial-main-publication-20261003.json",
+      "evidence": "server-model-subsidy-original-failure-20261003.json",
       "requirement": "PH-16",
-      "status": "Original full model: 1,473 passes, zero failures, 11 skips. Current Server5f: 22 tests pass per mode, vet and five intended causal failures per mode verified; published. Final common-source release remains."
+      "status": "Original Server1d3 full model retains1,473 passes/11 skips. Current Server5f22 financial roots pass per mode; its full model is now active and retains an original subsidy fixture failure. Granted-capacity fix and final common-source release remain."
     },
     {
       "closed": false,
@@ -213,9 +225,9 @@
     },
     {
       "closed": false,
-      "evidence": "full-hardening-source-gap-review-20261003.json",
+      "evidence": "native-split-conformance-source-finding-20261003.json",
       "requirement": "PH-19",
-      "status": "Parent/post-state renewed native catalog qualified; execution-time denominator/recipient consumer remains unimplemented, alongside current consumer/runtime authority and conservation join."
+      "status": "Parent/post-state renewed native catalog qualified. Execution-witness denominator/recipient consumer is implemented as unsealed, uncompiled WIP; producer/consumer controls, exact split conformance, full quantization, actual runtime authority and conservation join remain."
     },
     {
       "closed": false,
@@ -303,9 +315,9 @@
     },
     {
       "closed": false,
-      "evidence": "full-hardening-source-gap-review-20261003.json",
+      "evidence": "native-split-conformance-source-finding-20261003.json",
       "requirement": "MG-06",
-      "status": "Payout boundary and contract guards implemented/qualified by component; execution-witness denominator/recipient consumer, repair/conservation composition and authentic fee/runtime evidence remain."
+      "status": "Payout boundary/contract guards qualified by component. Native execution accounting WIP distinguishes amount authentication from10/90 conformance; its qualification, repair/conservation composition and authentic fee/runtime evidence remain."
     },
     {
       "closed": false,
