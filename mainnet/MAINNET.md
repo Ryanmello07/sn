@@ -3569,3 +3569,8 @@ Reviewed config `93dc65fd` is now [published on config main](evidence/payout-con
 Frozen Server `25f617dc` completes its [independent wallet GET gate](evidence/wallet-get-qualification-20261003.json): 26 normal and 26 race roots pass, controller vet passes, all fixture cleanup completes, and both causal modes discriminate nine intended assertion failures with five positive neighbors. The [race causal receipt](evidence/wallet-get-causal-race-20261003.json) retains explicit omission classifications; coordinator verification reads actual terminal events and all component bindings.
 
 Frozen combined Server `2a453df9` separately passes its [ten-root normal composition scope](evidence/payout-get-composition-normal-20261003.json), covering retained read recovery during boundary hold, final-send boundary admission, public ST writer hold, cancellation causes, bounded continuation and atomic attempt-reset rollback. Race/causal/vet/build qualification remains pending. The newer current Server migration-order successor remains separate and must be qualified before production merge.
+
+
+## October 3 combined payout static qualification
+
+Frozen Server `2a453df9` passes [five-package vet and the offline CLI build](evidence/payout-get-composition-vet-build-20261003.json). Coordinator verification checks the seven bound files, terminal exit records and exact binary hash. This is static/compile qualification; it does not invoke the CLI or prove a deployment. Normal composition tests are separately recorded; race and operative controls remain pending. The newer migration-order successor must retain the complete upstream migration prefix and qualify an actual existing-current-schema upgrade, not infer safety from a fresh fixture.
