@@ -373,17 +373,17 @@ func TestMonitorClaimWindowPublicUnknownEpochAndReviewGuards(t *testing.T) {
 	}
 	f.policy.FreshnessSeconds++
 	f.policy.Renewal = &monitorProgressPolicyRenewal{Original: record.PolicyHistory.Entries[0].Resources, PreviousSha256: record.PolicyHistory.Entries[0].ContentHash, ReviewSha256: plan.Request.Policy.Renewal.ReviewSha256}
+	f.healthyPeer(t)
 	f.advance(nil)
+	checkpoint, err := os.ReadFile(f.checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reads := f.requests.Load()
 	run = f.start(t, monitorServiceHooks{})
-	select {
-	case event := <-run.sink.events:
-		t.Fatal("reused archived review admitted a public sample", event)
-	case <-run.done:
-		if run.exit != 3 || !strings.Contains(run.diagnostic.String(), "archived independent review") {
-			t.Fatal("archived review reuse did not reach the retained authority guard", run.exit, run.diagnostic.String())
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("reused archived review did not terminate public admission")
+	f.refusedWhilePeerContinues(t, run, reads, checkpoint)
+	if !strings.Contains(run.diagnostic.String(), "archived independent review") {
+		t.Fatal("archived review reuse did not reach the retained authority guard", run.exit, run.diagnostic.String())
 	}
 }
 

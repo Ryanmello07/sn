@@ -47,6 +47,9 @@ type monitorClaimArchiveRun struct {
 	cancel     context.CancelFunc
 	done       chan struct{}
 	resume     chan struct{}
+	peerResume chan struct{}
+	roleDone   chan int
+	closes     atomic.Uint64
 	sink       *monitorClaimTestSink
 	diagnostic bytes.Buffer
 	exit       int
@@ -123,8 +126,8 @@ func newMonitorClaimArchivePreparedFixture(t *testing.T, catalog *monitorHistory
 		t.Fatal(err)
 	}
 	for index := range configuration.Volumes {
-		configuration.Volumes[index].MinAvailableBytes = 32 * 1024 * 1024
-		configuration.Volumes[index].MinAvailableInodes = 1024
+		configuration.Volumes[index].MinAvailableBytes = max(configuration.Volumes[index].MinAvailableBytes, 32*1024*1024)
+		configuration.Volumes[index].MinAvailableInodes = max(configuration.Volumes[index].MinAvailableInodes, 1024)
 	}
 	raw, err := json.Marshal(configuration)
 	if err != nil {
@@ -154,17 +157,42 @@ func (self *monitorClaimArchiveFixture) start(t *testing.T, hooks monitorService
 	self.services.policy.Claims = []monitorClaimPolicy{self.policy}
 	self.services.writePolicy(t)
 	ctx, cancel := context.WithCancel(self.ctx)
-	run := &monitorClaimArchiveRun{cancel: cancel, done: make(chan struct{}), resume: make(chan struct{}, 1), sink: &monitorClaimTestSink{events: make(chan monitorClaimTestEvent, 4)}}
+	run := &monitorClaimArchiveRun{cancel: cancel, done: make(chan struct{}), resume: make(chan struct{}, 1), peerResume: make(chan struct{}, 1), roleDone: make(chan int, 1), sink: &monitorClaimTestSink{events: make(chan monitorClaimTestEvent, 4), peers: make(chan monitorServiceEvent, 4)}}
+	afterWorker, afterClose := hooks.afterWorker, hooks.afterClose
+	hooks.afterWorker = func(role string, exit int) {
+		if role == self.policy.Role {
+			run.roleDone <- exit
+		}
+		if afterWorker != nil {
+			afterWorker(role, exit)
+		}
+	}
+	hooks.afterClose = func(role, kind string, file *os.File) error {
+		var observed error
+		if role == self.policy.Role {
+			run.closes.Add(1)
+			if _, err := file.Stat(); !errors.Is(err, os.ErrClosed) {
+				observed = errors.New("Claim close observer preceded the actual descriptor close")
+			}
+		}
+		if afterClose != nil {
+			observed = errors.Join(observed, afterClose(role, kind, file))
+		}
+		return observed
+	}
 	if hooks.wait == nil {
 		hooks.wait = func(ctx context.Context, role string, _ time.Duration) bool {
-			if role != self.policy.Role {
-				<-ctx.Done()
-				return false
+			var resume <-chan struct{}
+			switch role {
+			case self.policy.Role:
+				resume = run.resume
+			case "healthy":
+				resume = run.peerResume
 			}
 			select {
 			case <-ctx.Done():
 				return false
-			case <-run.resume:
+			case <-resume:
 				return true
 			}
 		}
@@ -200,6 +228,58 @@ func (self *monitorClaimArchiveRun) stop(t *testing.T, expected int) {
 	}
 	if self.exit != expected {
 		t.Fatal("claim archive consumer exit differs", self.exit, expected, self.diagnostic.String())
+	}
+}
+
+// A separately admitted validator proves actual continuation after Claim
+// refusal; a still-running blocked chain alone is not useful progress evidence.
+func (self *monitorClaimArchiveFixture) healthyPeer(t *testing.T) {
+	t.Helper()
+	value := monitorServicesTestRecord(self.services.clock.now(), 1)
+	policy := monitorValidatorPolicy{Role: "healthy", ProgressFile: filepath.Join(self.services.directory, "healthy.json"), ExpectedSource: value.Source}
+	self.services.policy.Validators = []monitorValidatorPolicy{policy}
+	monitorServicesTestWrite(t, policy.ProgressFile, value)
+	checkpoint, _ := monitorValidatorPaths(self.services.checkpointPath, self.services.metricsPath, policy.Role)
+	provisionMonitorTestCustody(t, checkpoint)
+}
+
+// The affected owner must join before parent cancellation. Its original bytes
+// and source-read count stay fixed while an independent role publishes twice.
+func (self *monitorClaimArchiveFixture) refusedWhilePeerContinues(t *testing.T, run *monitorClaimArchiveRun, reads uint64, checkpoint []byte) {
+	t.Helper()
+	select {
+	case exit := <-run.roleDone:
+		if exit != 3 || run.closes.Load() != 2 {
+			t.Fatal("Claim refusal lost its terminal cause or did not release both owners", exit, run.closes.Load())
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("refused Claim role did not join independently")
+	}
+	for index := range 2 {
+		if index != 0 {
+			run.peerResume <- struct{}{}
+		}
+		select {
+		case event := <-run.sink.peers:
+			if event.Role != "healthy" || event.Publication != "published" || event.State == nil || event.State.Record == nil || event.State.ReadStatus != "ok" || event.State.LastReadSuccessAt.IsZero() {
+				t.Fatal("Claim refusal prevented an actual healthy peer sample", event)
+			}
+		case <-run.done:
+			t.Fatal("Claim refusal stopped the independent monitor service", run.exit)
+		case <-time.After(20 * time.Second):
+			t.Fatal("healthy peer did not continue after Claim refusal")
+		}
+	}
+	if self.requests.Load() != reads || len(run.sink.events) != 0 {
+		t.Fatal("refused Claim custody read or published another source", reads, self.requests.Load(), len(run.sink.events))
+	}
+	retained, err := os.ReadFile(self.checkpoint)
+	if err != nil || !bytes.Equal(retained, checkpoint) {
+		t.Fatal("Claim refusal changed the original checkpoint evidence", err)
+	}
+	run.stop(t, 3)
+	if self.requests.Load() != reads || len(run.sink.events) != 0 {
+		t.Fatal("joined Claim refusal left a delayed read or fabricated sample")
 	}
 }
 
@@ -412,17 +492,11 @@ func TestMonitorClaimArchiveRefusesOmittedForgedAndRegressedEvidence(t *testing.
 			if err := errors.Join(writer.publish(raw, nil), writer.close()); err != nil {
 				t.Fatal(err)
 			}
+			f.healthyPeer(t)
 			f.advance(nil)
+			reads := f.requests.Load()
 			run := f.start(t, monitorServiceHooks{})
-			select {
-			case <-run.done:
-			case <-time.After(20 * time.Second):
-				t.Fatal("invalid retained claim archive did not join")
-			}
-			run.stop(t, 3)
-			if len(run.sink.events) != 0 {
-				t.Fatal("invalid retained claim history emitted an observation", fault)
-			}
+			f.refusedWhilePeerContinues(t, run, reads, raw)
 		}()
 	}
 }
@@ -439,6 +513,7 @@ func TestMonitorClaimArchiveActualHistoryReadOnceAndCustodyAfterAdmission(t *tes
 	if _, err := unix.InotifyAddWatch(fd, f.archive, unix.IN_ACCESS); err != nil {
 		t.Fatal(err)
 	}
+	f.healthyPeer(t)
 	f.advance(nil)
 	run := f.start(t, monitorServiceHooks{})
 	if !run.next(t).Current {
@@ -469,22 +544,21 @@ func TestMonitorClaimArchiveActualHistoryReadOnceAndCustodyAfterAdmission(t *tes
 	if err := os.Rename(replacement, f.archive); err != nil {
 		t.Fatal(err)
 	}
+	checkpoint, err := os.ReadFile(f.checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reads := f.requests.Load()
 	run.resume <- struct{}{}
 	select {
 	case event := <-run.sink.events:
 		if event.Status != "identity" || event.Current {
 			t.Fatal("changed archive custody admitted another source sample", event)
 		}
-	case <-run.done:
 	case <-time.After(20 * time.Second):
 		t.Fatal("changed archive custody did not stop affected role")
 	}
-	select {
-	case <-run.done:
-	case <-time.After(20 * time.Second):
-		t.Fatal("changed archive custody owner did not join")
-	}
-	run.stop(t, 3)
+	f.refusedWhilePeerContinues(t, run, reads, checkpoint)
 }
 
 func TestMonitorClaimArchivePolicyRenewalPreservesUnresolvedPrefix(t *testing.T) {
@@ -675,14 +749,15 @@ func TestMonitorClaimCatalogCannotEnrollLegacyOrReplaceOriginalKey(t *testing.T)
 	}
 	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x37}, ed25519.SeedSize))
 	f.policy.HistoryCatalog = &monitorHistoryCatalogPolicy{Schema: monitorHistoryCatalogPolicySchema, ApprovalPublicKey: fmt.Sprintf("0x%x", key.Public()), ReviewSha256: "sha256:" + strings.Repeat("c", 64), InitialCapacity: monitorHistoryCapacity{Segments: 128, CatalogBytes: 64 * 1024, HeldReaders: 128}}
+	f.healthyPeer(t)
 	f.advance(nil)
-	run := f.start(t, monitorServiceHooks{})
-	select {
-	case <-run.done:
-	case <-time.After(20 * time.Second):
-		t.Fatal("unreviewed catalog authority did not refuse")
+	checkpoint, err := os.ReadFile(f.checkpoint)
+	if err != nil {
+		t.Fatal(err)
 	}
-	run.stop(t, 3)
+	reads := f.requests.Load()
+	run := f.start(t, monitorServiceHooks{})
+	f.refusedWhilePeerContinues(t, run, reads, checkpoint)
 }
 
 func TestMonitorClaimArchivePublicInputReadErrorsPrecedeDigestRefusal(t *testing.T) {

@@ -32,6 +32,7 @@ type monitorClaimRestoreFixture struct {
 	record         monitorClaimCheckpointRecord
 	files          []map[string]string
 	expectedOwners int
+	retained       durablevolume.Config
 }
 
 // Snapshot enrollment runs through storage-prepare. The archive is created at
@@ -150,6 +151,15 @@ func newMonitorClaimRestoreConfiguredFixture(t *testing.T, rootCount int, catalo
 		afterArchive(f.claim)
 	}
 	f.record = f.claim.record(t)
+	reference, present := durablevolume.ReferenceFromContext(f.claim.ctx)
+	if !present {
+		t.Fatal("prepared Claim source declaration is absent")
+	}
+	var err error
+	f.retained, err = durablevolume.Load(reference)
+	if err != nil {
+		t.Fatal(err)
+	}
 	raw, err := os.ReadFile(f.claim.checkpoint)
 	if err != nil {
 		t.Fatal(err)
@@ -168,6 +178,18 @@ func newMonitorClaimRestoreConfiguredFixture(t *testing.T, rootCount int, catalo
 		var request durablevolume.PreparationRequest
 		if err := decodeMonitorHistoryInput(raw, &request); err != nil {
 			t.Fatal(err)
+		}
+		matched := false
+		for _, volume := range f.retained.Volumes {
+			if volume.MountPath == request.MountPath {
+				matched = true
+				if volume.MinAvailableBytes < request.MinAvailableBytes || volume.MinAvailableInodes < request.MinAvailableInodes {
+					t.Fatal("prepared restore reserve was reduced before source export", volume.MinAvailableBytes, volume.MinAvailableInodes, request.MinAvailableBytes, request.MinAvailableInodes)
+				}
+			}
+		}
+		if !matched {
+			t.Fatal("restore request lost its original mount declaration")
 		}
 		if index == 0 {
 			request.Owners[0].RestoreCoverage = durablevolume.PreparationCompleteUnion
@@ -241,6 +263,47 @@ func (self *monitorClaimRestoreFixture) plan(t *testing.T) durablevolume.Referen
 	return result.Cohort
 }
 
+// A restored cohort cannot enlarge reserve or replace marker/root authority
+// still serving an untouched peer on the original synthetic physical mount.
+func (self *monitorClaimRestoreFixture) unchangedHealthyAuthority(t *testing.T, restored durablevolume.Config) {
+	t.Helper()
+	selected := map[string]bool{}
+	for _, request := range self.request.Preparations {
+		selected[request.RootPath] = true
+	}
+	untouched := 0
+	for _, before := range self.retained.Volumes {
+		for _, root := range before.StateRoots {
+			if selected[root.Path] {
+				continue
+			}
+			untouched++
+			matched := false
+			for _, after := range restored.Volumes {
+				if before.MountPath != after.MountPath {
+					continue
+				}
+				oldAuthority, newAuthority := before, after
+				oldAuthority.StateRoots, newAuthority.StateRoots = nil, nil
+				if !reflect.DeepEqual(oldAuthority, newAuthority) {
+					t.Fatal("Claim restore changed untouched mount reserve or marker authority", oldAuthority, newAuthority)
+				}
+				for _, candidate := range after.StateRoots {
+					if candidate.Path == root.Path {
+						matched = candidate == root
+					}
+				}
+			}
+			if !matched {
+				t.Fatal("Claim restore lost an untouched original root", root.Path)
+			}
+		}
+	}
+	if untouched == 0 {
+		t.Fatal("cohort fixture omitted actual untouched authority")
+	}
+}
+
 // Actual output loss is retried against the same retained operation. Every
 // original file is compared before the actual Claim monitor resumes.
 func (self *monitorClaimRestoreFixture) apply(t *testing.T, reference durablevolume.Reference, short bool) {
@@ -276,6 +339,11 @@ func (self *monitorClaimRestoreFixture) apply(t *testing.T, reference durablevol
 			t.Fatal(err)
 		}
 		self.claim.ctx = durablepath.WithHost(durablevolume.WithReference(t.Context(), durablevolume.Reference{Path: path, Sha256: result.DeclarationSha256}), self.sources[0].storage.Host)
+		var restored durablevolume.Config
+		if err := decodeMonitorHistoryInput(output.Bytes(), &restored); err != nil {
+			t.Fatal(err)
+		}
+		self.unchangedHealthyAuthority(t, restored)
 	} else {
 		var result durablevolume.PreparationResult
 		if err := decodeMonitorHistoryInput(output.Bytes(), &result); err != nil || result.RestartAuthorized {
@@ -555,6 +623,29 @@ func TestMonitorClaimRestorePublicRechecksUnresolvedEvidenceAndPayment(t *testin
 		code := runMain(f.claim.ctx, f.args(t, f.request), &output, &diagnostic)
 		if code == 0 || output.Len() != 0 || !strings.Contains(diagnostic.String(), "contradicted or erased archived evidence") {
 			t.Fatal("Claim restore lost original financial semantic guard", fault, code, diagnostic.String())
+		}
+		f.unmodifiedTargets(t)
+	}
+}
+
+// Increasing reserve for a restored root cannot alter a healthy co-owner's
+// original declaration. Refusal is before reservation or target publication.
+func TestMonitorClaimRestoreCohortRejectsChangedHealthyReserve(t *testing.T) {
+	f := newMonitorClaimRestoreFixture(t, 2)
+	for _, dimension := range []string{"bytes", "inodes"} {
+		request := f.request
+		request.Preparations = append([]durablevolume.PreparationRequest(nil), f.request.Preparations...)
+		if len(f.retained.Volumes) != 1 {
+			t.Fatal("fixture must have one independently retained mount")
+		}
+		if dimension == "bytes" {
+			request.Preparations[0].MinAvailableBytes = f.retained.Volumes[0].MinAvailableBytes + 1
+		} else {
+			request.Preparations[0].MinAvailableInodes = f.retained.Volumes[0].MinAvailableInodes + 1
+		}
+		var output, diagnostic bytes.Buffer
+		if code := runMain(f.claim.ctx, f.args(t, request), &output, &diagnostic); code != 2 || output.Len() != 0 || !strings.Contains(diagnostic.String(), "cohort new reserve would change untouched root authority") {
+			t.Fatal("Claim restore relaxed untouched reserve authority", dimension, code, diagnostic.String())
 		}
 		f.unmodifiedTargets(t)
 	}

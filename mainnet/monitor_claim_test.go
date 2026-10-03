@@ -45,7 +45,10 @@ type monitorClaimTestEvent struct {
 	} `json:"state"`
 }
 
-type monitorClaimTestSink struct{ events chan monitorClaimTestEvent }
+type monitorClaimTestSink struct {
+	events chan monitorClaimTestEvent
+	peers  chan monitorServiceEvent
+}
 
 func (self *monitorClaimTestSink) Write(raw []byte) (int, error) {
 	return self.WriteContext(context.Background(), raw)
@@ -59,6 +62,16 @@ func (self *monitorClaimTestSink) WriteContext(ctx context.Context, raw []byte) 
 	if event.Schema == "urnetwork-mainnet-claim-event-v1" {
 		select {
 		case self.events <- event:
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
+	} else if event.Schema == "urnetwork-mainnet-validator-event-v1" && self.peers != nil {
+		var peer monitorServiceEvent
+		if err := json.Unmarshal(raw, &peer); err != nil {
+			return 0, err
+		}
+		select {
+		case self.peers <- peer:
 		case <-ctx.Done():
 			return 0, ctx.Err()
 		}
