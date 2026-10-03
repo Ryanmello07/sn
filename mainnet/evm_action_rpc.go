@@ -98,16 +98,28 @@ func evmQuantity(encoded string, bits int) (*big.Int, error) {
 	return value, nil
 }
 
-// Receipt extraction requires the complete financial/position tuple while
-// tolerating ordinary additional node fields. Duplicate fields are rejected.
-func evmReceiptFacts(raw json.RawMessage, record evmActionRecord, plan evmCreatePlan) (evmCreateReceipt, uint64, error) {
-	var result evmCreateReceipt
-	if err := plan.validateSelection(); err != nil {
-		return result, 0, err
+// The shared field decoder grants no action authority. Callers still bind the
+// receipt to either the original signing plan or an authenticated block body.
+type evmReceiptFields struct {
+	fields  map[string]json.RawMessage
+	values  map[string]*big.Int
+	receipt evmCreateReceipt
+}
+
+func (self evmReceiptFields) text(name string) (string, error) {
+	var value string
+	part, ok := self.fields[name]
+	if !ok || json.Unmarshal(part, &value) != nil || value == "" {
+		return "", fmt.Errorf("EVM receipt lacks %s", name)
 	}
+	return value, nil
+}
+
+func decodeEvmReceiptFields(raw json.RawMessage) (evmReceiptFields, error) {
+	var result evmCreateReceipt
 	var fields map[string]json.RawMessage
 	if err := decodePlanJson(raw, &fields); err != nil {
-		return result, 0, err
+		return evmReceiptFields{}, err
 	}
 	textField := func(name string) (string, error) {
 		var value string
@@ -127,7 +139,7 @@ func evmReceiptFacts(raw json.RawMessage, record evmActionRecord, plan evmCreate
 			err = nil
 		}
 		if err != nil {
-			return result, 0, err
+			return evmReceiptFields{}, err
 		}
 		*field.target = value
 	}
@@ -135,7 +147,7 @@ func evmReceiptFacts(raw json.RawMessage, record evmActionRecord, plan evmCreate
 	for _, name := range []string{"blockNumber", "transactionIndex", "status", "gasUsed", "effectiveGasPrice"} {
 		encoded, err := textField(name)
 		if err != nil {
-			return result, 0, err
+			return evmReceiptFields{}, err
 		}
 		bits := 64
 		if name == "effectiveGasPrice" {
@@ -143,7 +155,7 @@ func evmReceiptFacts(raw json.RawMessage, record evmActionRecord, plan evmCreate
 		}
 		value, err := evmQuantity(encoded, bits)
 		if err != nil {
-			return result, 0, err
+			return evmReceiptFields{}, err
 		}
 		values[name] = value
 	}
@@ -153,7 +165,7 @@ func evmReceiptFacts(raw json.RawMessage, record evmActionRecord, plan evmCreate
 	result.EffectiveGasPrice = values["effectiveGasPrice"].String()
 	if result.ContractAddress != "" {
 		if !common.IsHexAddress(result.ContractAddress) {
-			return result, 0, errors.New("EVM receipt contract address is malformed")
+			return evmReceiptFields{}, errors.New("EVM receipt contract address is malformed")
 		}
 		address := common.HexToAddress(result.ContractAddress)
 		result.ContractAddress = address.Hex()
@@ -161,6 +173,22 @@ func evmReceiptFacts(raw json.RawMessage, record evmActionRecord, plan evmCreate
 			result.ContractAddress = ""
 		}
 	}
+	return evmReceiptFields{fields: fields, values: values, receipt: result}, nil
+}
+
+// Receipt extraction requires the complete financial/position tuple while
+// tolerating ordinary additional node fields. Duplicate fields are rejected.
+func evmReceiptFacts(raw json.RawMessage, record evmActionRecord, plan evmCreatePlan) (evmCreateReceipt, uint64, error) {
+	var result evmCreateReceipt
+	if err := plan.validateSelection(); err != nil {
+		return result, 0, err
+	}
+	decoded, err := decodeEvmReceiptFields(raw)
+	if err != nil {
+		return result, 0, err
+	}
+	result, fields, values := decoded.receipt, decoded.fields, decoded.values
+	textField := decoded.text
 	action := plan.Config.Plan.Actions[plan.ActionIndex]
 	fee, _ := evmWei(action.FeeCapWei)
 	expectedAddress := plan.Address.Hex()

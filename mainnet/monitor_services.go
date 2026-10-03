@@ -102,7 +102,7 @@ func waitMonitorService(ctx context.Context, role string, duration time.Duration
 func runMonitorServices(ctx context.Context, client *rpcClient, expected identityExpectation, policy *monitorServicesPolicy, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators)+len(policy.Operators)+len(policy.Providers)+len(policy.Claims)+len(policy.NativeEconomics), now)
+	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators)+len(policy.Operators)+len(policy.Providers)+len(policy.Claims)+len(policy.NativeEconomics)+len(policy.EvmEconomics), now)
 	if err != nil {
 		return 3
 	}
@@ -117,8 +117,12 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	var providers []*monitorProviderWorker
 	var claims []*monitorClaimWorker
 	var economics []*monitorEconomicNativeWorker
+	var evmEconomics []*monitorEconomicEvmWorker
 	defer func() {
 		var cleanupErr error
+		for _, worker := range evmEconomics {
+			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
+		}
 		for _, worker := range economics {
 			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
 		}
@@ -198,9 +202,18 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		}
 		economics = append(economics, worker)
 	}
+	for _, economic := range policy.EvmEconomics {
+		worker, err := openMonitorEconomicEvmWorker(ctx, client, economic, expected, checkpointPath, metricsPath, hooks)
+		if err != nil {
+			fmt.Fprintln(diagnostic, "monitor EVM economic admission:", err)
+			result = 3
+			continue
+		}
+		evmEconomics = append(evmEconomics, worker)
+	}
 	// The channel holds every terminal result even during cancellation. Every
 	// launched worker sends once and is consumed before output owners close.
-	results := make(chan int, len(workers)+len(operators)+len(providers)+len(claims)+len(economics)+1)
+	results := make(chan int, len(workers)+len(operators)+len(providers)+len(claims)+len(economics)+len(evmEconomics)+1)
 	go func() {
 		backoff := time.Second
 		for ctx.Err() == nil {
@@ -288,7 +301,21 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 			results <- exit
 		}()
 	}
-	for remaining := len(workers) + len(operators) + len(providers) + len(claims) + len(economics) + 1; remaining > 0; remaining-- {
+	for index, worker := range evmEconomics {
+		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+len(operators)+len(providers)+len(claims)+len(economics)+index))
+		go func() {
+			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
+			if err := worker.close(hooks); err != nil {
+				fmt.Fprintln(diagnostic, "monitor EVM economic cleanup:", err)
+				exit = 3
+			}
+			if hooks.afterWorker != nil {
+				hooks.afterWorker(worker.policy.Role, exit)
+			}
+			results <- exit
+		}()
+	}
+	for remaining := len(workers) + len(operators) + len(providers) + len(claims) + len(economics) + len(evmEconomics) + 1; remaining > 0; remaining-- {
 		exit := <-results
 		if exit != 0 {
 			result = max(result, exit)
