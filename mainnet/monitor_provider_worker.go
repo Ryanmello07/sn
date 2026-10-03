@@ -321,7 +321,7 @@ func (self *monitorProviderWorker) run(ctx context.Context, interval time.Durati
 				candidate := &monitorProviderWorker{policy: self.policy, checkpoint: owner}
 				state, err := candidate.load(ctx)
 				if err != nil {
-					return errors.Join(err, owner.close())
+					return monitorAdmissionFailure(err, owner.close())
 				}
 				owner.syncDirectory = prior.syncDirectory
 				self.checkpoint, self.state = owner, state
@@ -329,7 +329,7 @@ func (self *monitorProviderWorker) run(ctx context.Context, interval time.Durati
 				return nil
 			}, hooks)
 			if err != nil {
-				if ctx.Err() != nil {
+				if monitorCanceledCheckpointLoad(ctx, err) {
 					return 0
 				}
 				fmt.Fprintln(stderr, "provider checkpoint continuation:", err)

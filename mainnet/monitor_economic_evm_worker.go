@@ -348,7 +348,7 @@ func (self *monitorEconomicEvmWorker) resume(ctx context.Context, hooks monitorS
 		candidate := &monitorEconomicEvmWorker{policy: self.policy, checkpoint: owner}
 		state, err := candidate.load(ctx)
 		if err != nil {
-			return errors.Join(err, owner.close(), candidate.closeArchive())
+			return monitorAdmissionFailure(err, errors.Join(owner.close(), candidate.closeArchive()))
 		}
 		owner.syncDirectory = prior.syncDirectory
 		self.checkpoint, self.state = owner, state
@@ -457,7 +457,7 @@ func (self *monitorEconomicEvmWorker) run(ctx context.Context, interval time.Dur
 		}
 		if errors.Is(checkpointErr, durablehead.ErrUncertain) {
 			if err := self.resume(ctx, hooks); err != nil {
-				if ctx.Err() != nil {
+				if monitorCanceledCheckpointLoad(ctx, err) {
 					return 0
 				}
 				fmt.Fprintln(stderr, "EVM economic checkpoint continuation:", err)

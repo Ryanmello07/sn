@@ -364,7 +364,7 @@ func openMonitorClaimArchive(ctx context.Context, policy monitorClaimPolicy, rec
 	admission = &monitorClaimArchiveAdmission{epochStateKVs: map[int64]monitorClaimEpochState{}, work: policy.observeWork}
 	defer func() {
 		if resultErr != nil {
-			resultErr = errors.Join(resultErr, admission.close())
+			resultErr = monitorAdmissionFailure(resultErr, admission.close())
 			admission = nil
 		}
 	}()

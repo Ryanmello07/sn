@@ -557,14 +557,14 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 				}
 				loaded, err := next.load()
 				if err != nil {
-					return errors.Join(err, next.close())
+					return monitorAdmissionFailure(err, next.close())
 				}
 				next.syncDirectory = prior.syncDirectory
 				checkpoint, state = next, loaded
 				return nil
 			}, hooks)
 			if err != nil {
-				if ctx.Err() != nil {
+				if monitorCanceledCheckpointLoad(ctx, err) {
 					return 0
 				}
 				fmt.Fprintln(stderr, "monitor chain storage continuation:", err)

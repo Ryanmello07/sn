@@ -366,7 +366,7 @@ func (self *monitorEconomicNativeWorker) resume(ctx context.Context, hooks monit
 		candidate := &monitorEconomicNativeWorker{policy: self.policy, checkpoint: owner}
 		state, err := candidate.load(ctx)
 		if err != nil {
-			return errors.Join(err, owner.close())
+			return monitorAdmissionFailure(err, owner.close())
 		}
 		owner.syncDirectory = prior.syncDirectory
 		self.checkpoint, self.state = owner, state
@@ -469,7 +469,7 @@ func (self *monitorEconomicNativeWorker) run(ctx context.Context, interval time.
 		}
 		if errors.Is(checkpointErr, durablehead.ErrUncertain) {
 			if err := self.resume(ctx, hooks); err != nil {
-				if ctx.Err() != nil {
+				if monitorCanceledCheckpointLoad(ctx, err) {
 					return 0
 				}
 				fmt.Fprintln(stderr, "native economic checkpoint continuation:", err)

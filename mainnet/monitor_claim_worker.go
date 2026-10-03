@@ -136,7 +136,7 @@ func (self *monitorClaimWorker) load(ctx context.Context) (result *monitorClaimS
 	admitted := false
 	defer func() {
 		if !admitted {
-			resultErr = errors.Join(resultErr, admission.close())
+			resultErr = monitorAdmissionFailure(resultErr, admission.close())
 		}
 	}()
 	record, err = hydrateMonitorClaimRecord(record, admission.epochStateKVs, self.policy)
@@ -353,7 +353,7 @@ func (self *monitorClaimWorker) run(ctx context.Context, interval time.Duration,
 				candidate := &monitorClaimWorker{policy: self.policy, checkpoint: owner}
 				state, err := candidate.load(ctx)
 				if err != nil {
-					return errors.Join(err, owner.close())
+					return monitorAdmissionFailure(err, owner.close())
 				}
 				owner.syncDirectory = prior.syncDirectory
 				self.checkpoint, self.state = owner, state
@@ -362,7 +362,7 @@ func (self *monitorClaimWorker) run(ctx context.Context, interval time.Duration,
 				return nil
 			}, hooks)
 			if err != nil {
-				if ctx.Err() != nil {
+				if monitorCanceledCheckpointLoad(ctx, err) {
 					return 0
 				}
 				fmt.Fprintln(stderr, "claim checkpoint continuation:", err)

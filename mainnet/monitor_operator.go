@@ -592,14 +592,14 @@ func (self *monitorOperatorWorker) run(ctx context.Context, interval, stallAfter
 				}
 				loaded := &monitorOperatorWorker{policy: self.policy, checkpoint: next}
 				if err := loaded.load(ctx); err != nil {
-					return errors.Join(err, next.owner.close())
+					return monitorAdmissionFailure(err, next.owner.close())
 				}
 				next.owner.syncDirectory = prior.owner.syncDirectory
 				self.checkpoint, self.state = next, loaded.state
 				return nil
 			}, hooks)
 			if err != nil {
-				if ctx.Err() != nil {
+				if monitorCanceledCheckpointLoad(ctx, err) {
 					return 0
 				}
 				fmt.Fprintln(stderr, "monitor operator storage continuation:", err)

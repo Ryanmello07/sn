@@ -311,14 +311,14 @@ func (self *monitorValidatorWorker) run(ctx context.Context, interval time.Durat
 				}
 				state, err := next.load(ctx)
 				if err != nil {
-					return errors.Join(err, next.owner.close())
+					return monitorAdmissionFailure(err, next.owner.close())
 				}
 				next.owner.syncDirectory = prior.owner.syncDirectory
 				self.checkpoint, self.state = next, state
 				return nil
 			}, hooks)
 			if err != nil {
-				if ctx.Err() != nil {
+				if monitorCanceledCheckpointLoad(ctx, err) {
 					return 0
 				}
 				fmt.Fprintln(stderr, "monitor service storage continuation:", err)
