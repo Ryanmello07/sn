@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -12,7 +13,9 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -28,10 +31,21 @@ func init() {
 	if os.Args[0] != "urnetwork-historical-replay" {
 		return
 	}
+	if len(os.Args) == 2 && os.Args[1] == "--synthetic-replay-descendant" {
+		time.Sleep(24 * time.Hour)
+		os.Exit(8)
+	}
 	if len(os.Args) != 2 || os.Args[1] != "--historical-proof-replay-v1" {
 		os.Exit(6)
 	}
-	raw, err := io.ReadAll(io.LimitReader(os.Stdin, historicalReplayJobLimit+1))
+	reader := bufio.NewReader(os.Stdin)
+	prefix, _ := reader.Peek(256)
+	if bytes.Contains(prefix, []byte(`"parent_header_hex":"0xb10c"`)) {
+		_, _ = os.Stdout.WriteString("{\"schema\":")
+		time.Sleep(24 * time.Hour)
+		os.Exit(8)
+	}
+	raw, err := io.ReadAll(io.LimitReader(reader, historicalReplayJobLimit+1))
 	var job historicalReplayJob
 	if err != nil || len(raw) > historicalReplayJobLimit || json.Unmarshal(raw, &job) != nil || os.Getenv("SYNTHETIC_REPLAY_INHERITED") != "" {
 		os.Exit(7)
@@ -70,6 +84,19 @@ func init() {
 	case "0x0a":
 		_ = json.NewEncoder(os.Stdout).Encode(report)
 		os.Exit(9)
+	case "0x0b":
+		child := exec.Command("/proc/self/exe", "--synthetic-replay-descendant")
+		child.Args[0] = "urnetwork-historical-replay"
+		child.Stdout, child.Stderr = os.Stdout, os.Stderr
+		if child.Start() != nil {
+			os.Exit(10)
+		}
+		path, err := hex.DecodeString(strings.TrimPrefix(job.ExtrinsicsHex[0], "0x"))
+		if err != nil || os.WriteFile(string(path), []byte(strconv.Itoa(child.Process.Pid)), 0600) != nil {
+			os.Exit(10)
+		}
+		// The direct engine exits zero with a superficially valid result.
+		// The supervisor must refuse it while retaining and reaping the peer.
 	}
 	_ = json.NewEncoder(os.Stdout).Encode(report)
 	os.Exit(0)
@@ -253,5 +280,66 @@ func TestHistoricalReplayCanceledOwnerDoesNotLaunch(t *testing.T) {
 	report, err := runHistoricalReplay(ctx, request, historicalReplayHooks{afterStart: func(context.Context, int) { started = true }})
 	if !errors.Is(err, context.Canceled) || report != nil || started {
 		t.Fatal("canceled owner invoked replay", err, started)
+	}
+}
+
+func TestHistoricalReplayDescendantPipesCannotOutliveResult(t *testing.T) {
+	request := historicalReplayTestRequest(t, "0x0b")
+	path := filepath.Join(filepath.Dir(request.Job.Path), "synthetic-child-pid")
+	raw, err := os.ReadFile(request.Job.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var job historicalReplayJob
+	if err := json.Unmarshal(raw, &job); err != nil {
+		t.Fatal(err)
+	}
+	job.ExtrinsicsHex = []string{"0x" + hex.EncodeToString([]byte(path))}
+	raw, err = json.Marshal(job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(request.Job.Path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	request.Job.Sha256 = monitorReadDigest(raw)
+	report, runErr := runHistoricalReplay(t.Context(), request, historicalReplayHooks{})
+	pidRaw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("engine did not reach descendant boundary", err, runErr)
+	}
+	pid, err := strconv.Atoi(string(pidRaw))
+	if err != nil || pid <= 1 || runErr == nil || report != nil || !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
+		t.Fatal("engine descendant survived or gained a valid result", pid, report, runErr, err)
+	}
+}
+
+func TestHistoricalReplayCancellationJoinsBlockedInput(t *testing.T) {
+	request := historicalReplayTestRequest(t, "0x00")
+	raw, err := os.ReadFile(request.Job.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var job historicalReplayJob
+	if err := json.Unmarshal(raw, &job); err != nil {
+		t.Fatal(err)
+	}
+	job.ParentHeaderHex = "0xb10c"
+	job.ExtrinsicsHex = []string{"0x" + strings.Repeat("11", 8*1024*1024)}
+	raw, err = json.Marshal(job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(request.Job.Path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	request.Job.Sha256 = monitorReadDigest(raw)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var once sync.Once
+	pid := 0
+	report, err := runHistoricalReplay(ctx, request, historicalReplayHooks{afterStart: func(_ context.Context, value int) { pid = value }, afterOutput: func() { once.Do(cancel) }})
+	if !errors.Is(err, context.Canceled) || report != nil || pid == 0 || !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
+		t.Fatal("cancellation left blocked replay input or process", pid, report, err)
 	}
 }

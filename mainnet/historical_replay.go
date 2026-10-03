@@ -231,21 +231,34 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 			result = nil
 		}
 	}()
-	command := exec.CommandContext(owner, "/proc/self/fd/3", "--historical-proof-replay-v1")
-	command.Args[0] = "urnetwork-historical-replay"
-	command.ExtraFiles = []*os.File{engine}
+	// The currently running image, not a re-resolved binary name, contains
+	// the matching supervisor. Its process has no unrelated child owners.
+	supervisor, err := os.Open("/proc/self/exe")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		resultErr = errors.Join(resultErr, supervisor.Close())
+		if resultErr != nil {
+			result = nil
+		}
+	}()
+	command := exec.CommandContext(owner, "/proc/self/fd/4", "--retained-engine-fd3")
+	command.Args[0] = "urnetwork-historical-replay-supervisor"
+	command.ExtraFiles = []*os.File{engine, supervisor}
 	command.Env = []string{"LANG=C", "LC_ALL=C", "RUST_BACKTRACE=0"}
 	command.Dir = filepath.Dir(request.Job.Path)
 	command.Stdin = bytes.NewReader(raw)
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.Cancel = func() error {
-		err := syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+		// The supervisor kills/reaps its entire engine group before exiting.
+		err := command.Process.Signal(syscall.SIGTERM)
 		if errors.Is(err, syscall.ESRCH) {
 			return os.ErrProcessDone
 		}
 		return err
 	}
-	command.WaitDelay = time.Second
+	command.WaitDelay = 5 * time.Second
 	stdout := historicalReplayOutput{maximum: historicalReplayReportLimit, cancel: cancel, read: hooks.afterOutput}
 	stderr := historicalReplayOutput{maximum: 64 * 1024, cancel: cancel}
 	command.Stdout, command.Stderr = &stdout, &stderr
