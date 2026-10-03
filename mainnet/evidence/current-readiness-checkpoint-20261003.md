@@ -12,7 +12,7 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-06 | Published recovery dependency joined; exact final source/module/config release still required. | [current-connect-paired-core-publication-20261003.json](current-connect-paired-core-publication-20261003.json) |
 | PH-07 | Role isolation scopes exist; current all-role independent failure/continuation composition remains. | [claim-consumer-qualification-20261003.json](claim-consumer-qualification-20261003.json) |
 | PH-08 | Joined replay/upload foreground work and sizing measurement remain. | No new closure evidence |
-| PH-09 | Union/paired scopes and many-owner core qualified; ceae full512 normal/race, three adjacent roots per mode and vet verified. Original d3d race timeout remains retained; cross-root public/causal and actual host restore remain. | [native-ceae-full512-review-20261003.json](native-ceae-full512-review-20261003.json) |
+| PH-09 | Same-root and cross-root exact512/two-head roots pass normally/race; original public cohort retains late-source-custody failure in both modes. Successor custody/causal qualification and actual host restore remain. | [native-cohort8fe-original-terminal-review-20261003.json](native-cohort8fe-original-terminal-review-20261003.json) |
 | PH-10 | Runtime renewal implemented and scoped qualified; full interrupted authority/epoch renewal composition remains. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
 | PH-11 | Synthetic original-Wasm fee decoder27 roots and five operative controls qualified; bounded complete execution-proof collector, actual runtime profile/finality authority and conservation join remain. | [original-wasm-fee-decoder-a7ed-qualification-20261003.json](original-wasm-fee-decoder-a7ed-qualification-20261003.json) |
 | PH-12 | EVM archive27 normal/race roots and causal controls qualified; current native/EVM public eight-root join qualified normal/race/vet and merged at1a7a123d. Claim/native conservation and actual fee authority remain. | [native-evm-current0f-qualification-20261003.json](native-evm-current0f-qualification-20261003.json) |
@@ -47,7 +47,7 @@ The [JSON binding](current-readiness-checkpoint-20261003.json) records the exact
 
 The [deadline correction](fee-caller-deadline4c96-qualification-20261003.json) and [current-main caller source join](current-caller-cb796-source-join-review-20261003.json) retain their separate test and source-only scopes. Restore fixture namespace correction and cross-root cohort qualification remain in progress; no original failure is waived.
 
-The [EVM archival source/compile review](evm-history8d-source-compile-review-20261003.json) is not behavioral qualification. Complete512-segment race and cross-root restore remain open.
+The [EVM archival source/compile review](evm-history8d-source-compile-review-20261003.json) is not behavioral qualification. Exact512-segment race and cross-root full-history roots now pass; the separate late-source-custody failure and actual host restore remain open.
 
 The [current caller gate](current-caller-cb796-joined-qualification-20261003.json) and [actual main merge](current-caller-cb796-main-merge-20261003.json) establish this incremental source scope; full launch readiness remains unproved.
 

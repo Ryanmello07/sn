@@ -43,3 +43,25 @@ assertions. Retain every original automatic-executable setup refusal rather
 than relabeling a later corrected invocation as the original run. The helper's
 own six tests exercise actual files and a small ELF; they do not qualify the
 application or require rerunning already-passed application scopes.
+
+For a compiler invocation owned by the qualification pipeline, a single fresh
+retained ELF can also be the execution image. Reserve a unique private output
+path before compiling, record the exact compiler/source/module inputs, and
+never compile over that path again. After successful compilation, require a
+regular UID-owned file with one link, protect it with mode0500, sync and hash
+it, and retain its named device/inode/size/mode/link-count/timestamps together
+with the SHA256. Verify that complete identity and content immediately before
+and after execution. This avoids retaining a second identical compiler ELF;
+it does not remove custody, source attribution or process supervision.
+
+This direct-output method is limited to fresh compiler output controlled by
+the same pipeline. Existing external images, cache executables, hardlinked
+files, foreign-owned files and unreviewed ancestors still use the qualified
+copy-and-verify path. The current `go_test_image.py` entrypoint always stages a
+copy; it does not expose a direct-output option. A pipeline using the direct
+method must independently retain the same finite process/log/floor guards,
+explicit package cwd and child environment, cancellation/descendant joins,
+source/module/compile evidence, exact selected-root census and expected causal
+assertions. A chmod or a matching SHA256 alone is insufficient. Existing
+receipts and original images remain immutable; removing a historical duplicate
+requires a separate reference/process audit and an exact retained-byte binding.
