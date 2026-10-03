@@ -4264,3 +4264,10 @@ An archive observation failure must retain its original cause before checking re
 The [original collector result](evidence/proof-capture7b81-original-partial-review-20261003.json) retains seven passing Rust roots and one failing cancellation root at7b81da23. A cancellation after a real parent-trie read was translated by the SDK into `Invalid state root`; the caller returned that wrapper before checking its retained accessor cause. No complete collector qualification is claimed.
 
 After each fallible backend code/heap, execution, write-root and strict-replay phase, inspect the retained accessor outcome before treating a wrapper as contradictory chain evidence. Preserve a concrete integrity error already observed before a later cancellation. Add deterministic before-read, after-read and adjacent phase controls in a distinct successor; retain original failed results and immutable input/output bounds. A failed observation must not become a false permanent rejection of authenticated progress.
+
+
+### October 3 current native/EVM archive integration gate
+
+The [current source review](evidence/native-evm-current0f-source-review-20261003.json) verifies39 artifacts and22 actual changed files at0f888694. The qualified archive components are joined with current bounded-host code and both executable qualification guards; all current module inputs are retained. The author’s full20,544-file inventory is bound separately from root’s changed-file verification.
+
+Compilation and dependency preflight passed; the eight public archive/catalog, pending/admission and historical/capacity dispatch roots still require independent normal/race qualification and vet. Do not merge incomplete behavior evidence into launch acceptance. The distinct observation-error successor must preserve this frozen scope and its eventual results.

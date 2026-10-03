@@ -43,6 +43,7 @@
     "native-admission-ceae-source-review-20261003.json": "54b777fe43a3cd1605d86b7369d25d45b8148f6e20d682aa0c4cdaa36741bf65",
     "native-archive-cross-root-restore-scope-review-20261003.json": "ff38d8e1e26bb2f9399cf580be70ff6e6d9c0281f47c5ea1256f0c208780c446",
     "native-archive-restore-owner-capacity-source-gap-20261003.json": "1a31bc900013d955a3b484e7393018328b81235feff0260e4d1ba30a2c1f59a8",
+    "native-evm-current0f-source-review-20261003.json": "02a69e2612b20e61164bb2807884903374f900b1ad23690928a32e0322c00629",
     "native-evm-current292-source-review-20261003.json": "b8103afed81f03cb51af6e2447f5eaba617564e7c9c36f7ea69c2a1b7e9f1368",
     "native-history-archive3bc-qualification-20261003.json": "cd8f5e17c7c4191114f4ad9c8ed57830a92226934c29c3f9ac7a94a1981de645",
     "native-restore-original-and-fixture259-review-20261003.json": "f8e6a2d6c534583ed21a8f19f34120327c8103faa804ef838fdd6520e79d1ab4",
@@ -101,9 +102,9 @@
     },
     {
       "closed": false,
-      "evidence": null,
+      "evidence": "validator-cache-permission0b58-qualification-20261003.json",
       "requirement": "PH-05",
-      "status": "Existing caches retained; actual repeated-work and dependency-invalidation census still required."
+      "status": "Existing cache scope qualified through38 unchanged original roots and3 corrected affected roots per mode; full-lineage archive work-count/invalidation probe remains."
     },
     {
       "closed": false,
@@ -125,9 +126,9 @@
     },
     {
       "closed": false,
-      "evidence": "paired-restore-fixture-affected-qualification-20261003.json",
+      "evidence": "native-restore-original-and-fixture259-review-20261003.json",
       "requirement": "PH-09",
-      "status": "Union, paired and corrected outer recovery scopes qualified; actual current consumer graph and host restore remain."
+      "status": "Union/paired recovery scopes qualified; many-owner core passes four roots normally/race and three corrected restore roots pass both modes. Full512 passes normally but race hits a sample-wait timeout. Cross-root cohort and actual host restore remain."
     },
     {
       "closed": false,
@@ -137,21 +138,21 @@
     },
     {
       "closed": false,
-      "evidence": null,
+      "evidence": "original-wasm-fee-decoder-a7ed-qualification-20261003.json",
       "requirement": "PH-11",
-      "status": "Recovery counters remain; independent historical native fee attribution and full conservation join remain."
+      "status": "Synthetic original-Wasm fee decoder27 roots and five operative controls qualified; bounded complete execution-proof collector, actual runtime profile/finality authority and conservation join remain."
     },
     {
       "closed": false,
-      "evidence": "evm-history8d-qualification-review-20261003.json",
+      "evidence": "evm-review-reuse-causal-qualification-20261003.json",
       "requirement": "PH-12",
-      "status": "EVM archival27 normal/race roots, vet and five operative omissions per mode qualified; current-main join and native/Claim conservation remain."
+      "status": "Continuous EVM38-root base and6-root review-reuse successor qualified normally/race/vet with operative controls; EVM archive adapter source/compile reviewed; nineteen new roots and eight neighbors now pass normally and under race detection; five controls produce intended failures in both modes. Final current-graph and native/claim conservation join remain."
     },
     {
       "closed": false,
-      "evidence": "monitor-policy-renewal-qualification-20261003.json",
+      "evidence": "native-signed-catalog1b5-qualification-20261003.json",
       "requirement": "PH-13",
-      "status": "Claim consumer and retained rolling policy/epoch renewal qualified by component; archive rollover and two-domain topology remain."
+      "status": "Rolling claim policy and archive9 roots qualified; signed catalog12 roots per mode and two operative controls qualified. Full-union restore, claim/EVM archive adapters and two-domain topology remain."
     },
     {
       "closed": false,
@@ -173,9 +174,9 @@
     },
     {
       "closed": false,
-      "evidence": null,
+      "evidence": "validator-cache-permission0b58-qualification-20261003.json",
       "requirement": "PH-17",
-      "status": "Generation/index lookup lifetime census and causal work counts remain."
+      "status": "Existing boundary/client authority work-count and invalidation roots pass in joined current scope; full generation/index composition remains."
     },
     {
       "closed": false,
@@ -215,15 +216,15 @@
     },
     {
       "closed": false,
-      "evidence": null,
+      "evidence": "validator-cache-permission0b58-qualification-20261003.json",
       "requirement": "PH-24",
-      "status": "Production authentication reuse work-count/invalidation qualification remains."
+      "status": "Existing receipt/client/assignment roots pass in joined current scope; actual full historical archive/predecessor work-count and dependency invalidation probe remains."
     },
     {
       "closed": false,
-      "evidence": "continuous-evm-review-history-new25-normal-20261003.json",
+      "evidence": "replay-output-caller1b3f-qualification-20261003.json",
       "requirement": "PH-25",
-      "status": "Owned cancellation/cleanup scopes exist; composed stop and actual unit/cgroup rehearsal remain."
+      "status": "Replay/adjacent23 roots per mode and operative controls retain historical scope; current caller join now qualified normal/race with separate kernel inspector and merged at778fca83. Actual unit/cgroup rehearsal remains."
     },
     {
       "closed": false,
@@ -253,13 +254,13 @@
       "closed": false,
       "evidence": "current-hosts-c59-main-merge-20261003.json",
       "requirement": "MG-02",
-      "status": "Qualified production composition and bounded current-host increment merged at0a9aeb34; archive/collector joins, final repeatable build and host adoption remain."
+      "status": "Qualified production composition and current bounded host increment merged at0a9aeb34; archive/collector joins, final repeatable build and host adoption remain."
     },
     {
       "closed": false,
       "evidence": "current-hosts-c59-joined-qualification-20261003.json",
       "requirement": "MG-03",
-      "status": "Bounded current-host seven normal/race roots, vet and three actual Go/Rust cases qualified and merged; actual runtime/witness/finality authority and native fee admission remain."
+      "status": "Current bounded-host seven normal/race roots, vet and three actual Go/Rust reports qualified and merged; actual runtime/witness/finality authority and native fee admission remain."
     },
     {
       "closed": false,
