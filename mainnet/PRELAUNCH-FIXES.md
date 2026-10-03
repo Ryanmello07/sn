@@ -17,6 +17,12 @@ The [38-requirement checkpoint](evidence/current-readiness-checkpoint-20261003.m
 
 The [full-lineage probe source review](evidence/release-lineage-heade65-source-review-20261003.json) verifies SN `e65bd674`, a single test-file change over the integrated collector source. Seven new roots and four neighbors now exercise original signed nonempty HeadEMA, real source-read counts, owned-copy isolation, cancellation, late refusal and a genuinely signed double-fold artifact. Twenty-three bindings and five original-control inputs match. This is uncompiled test source: qualify its eleven-root union once rather than running the superseded empty-head slice. Production-sized history, upload contention, durable cross-process reuse and Claim CPU/capacity continuation remain separate work.
 
+## Validator repair observation recovery — October 3
+
+An unavailable manager, cgroup, policy or journal read does not prove that the validator generation changed. The [repair source review](evidence/validator-repair0fef-source-review-20261003.json) verifies SN `0fef99be`: nine changed files, unchanged module inputs and fourteen evidence bindings. The implementation preserves original read/cancellation causes before comparing returned state. Acknowledged generations and consumed stop/start reservations remain durable; later observation of the same generation must not issue another action. Confirmed inode or retained-marker loss remains an integrity refusal.
+
+Fourteen deterministic new test roots and six neighbors are queued for independent normal/race qualification with old-body controls. Tests inspect persisted approval/journal state and actual stop/start counts, including failed readback after acknowledgment and recovery on the same generation. This source is uncompiled; current role composition, native accounting and production host adoption remain open. Observation failures must not manufacture a generation conflict or replenish consumed action budgets.
+
 ## Restore namespace fidelity — October 3
 
 Restore must accept the paths already admitted by the retained inventory. Reusing the fresh-provisioning depth limit rejected valid existing data: inventory accepted 32 components, while preparation and monitor-tree restore capped paths at 16. The [source-reviewed successor](evidence/namespace-restoreaa46-source-review-20261003.json) permits 32 components for restore and keeps fresh provisioning at 16. Original absolute-path 1,024-byte and filename 155-byte limits remain.

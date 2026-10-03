@@ -93,7 +93,8 @@
     "selected-graph63-retry-review-20261003.json": "19981e92faacbd57b970f60b038759475e7ad3f891edd255cf53ec0b42a4cb55",
     "full-hardening-source-gap-review-20261003.json": "a51780a745bc2c0c5c086a426a14d577c6ca98c9e89dcf5d103f37e30b313a56",
     "namespace-restoreaa46-source-review-20261003.json": "772cfcaa777e900c228a728b94aac00073c859a72fd6b5449edbe20ca84e455e",
-    "release-lineage-heade65-source-review-20261003.json": "17f7565884f23ea2deb6978ad43d7ba408941057230abab19c1b5ccf62b19c74"
+    "release-lineage-heade65-source-review-20261003.json": "17f7565884f23ea2deb6978ad43d7ba408941057230abab19c1b5ccf62b19c74",
+    "validator-repair0fef-source-review-20261003.json": "3a6938030be8f039b9f310ac19b89c9819afdcd05e743fb643b11ef2cae69b01"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -142,7 +143,7 @@
       "closed": false,
       "evidence": "claim-consumer-qualification-20261003.json",
       "requirement": "PH-07",
-      "status": "Role isolation scopes exist; current all-role independent failure/continuation composition remains."
+      "status": "Role isolation scopes exist; current all-role independent failure/continuation composition remains. Validator repair observation successor source-reviewed only; fourteen new controls/six neighbors and old-body qualification remain."
     },
     {
       "closed": false,
