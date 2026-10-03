@@ -262,6 +262,7 @@ type bootstrapSuccessorExecutionResult struct {
 	SafeCurrentRevisionHash    string `json:"safe_current_revision_hash,omitempty"`
 	SafeCurrentRevisionCount   int    `json:"safe_current_revision_count,omitempty"`
 	SafeCurrentRevisionPending bool   `json:"safe_current_revision_pending,omitempty"`
+	PhysicalRebindPending      bool   `json:"physical_rebind_pending,omitempty"`
 }
 
 // Adapters receive independent copies so their nested slices cannot mutate the
@@ -276,7 +277,7 @@ func (self *bootstrapSuccessorExecutionStore) planCopy() bootstrapSuccessorExecu
 // Local status cannot infer canonical success from a retained terminal record.
 func (self *bootstrapSuccessorExecutionStore) result() bootstrapSuccessorExecutionResult {
 	return bootstrapSuccessorExecutionResult{PlanHash: self.approval.Plan.hash(), Status: "execution-custody-retained-canonical-adapter-required",
-		CumulativeAttempts: self.last.CumulativeAttempts, ReservedLifetimeWei: self.last.ReservedLifetimeWei, ExecutionApprovalVerified: true, LocalCustodyComplete: true,
+		CumulativeAttempts: self.last.CumulativeAttempts, ReservedLifetimeWei: self.last.ReservedLifetimeWei, ExecutionApprovalVerified: true, LocalCustodyComplete: !self.deferredLocalRebind, PhysicalRebindPending: self.deferredLocalRebind,
 		RuntimeRevisionHash: self.runtimeHistory.hash(), RuntimeRevisionCount: len(self.runtimeHistory.approvals), RuntimeRevisionPending: self.runtimeHistory.pendingHash != "",
 		SafeCurrentRevisionHash: self.safeCurrentHistory.hash(), SafeCurrentRevisionCount: len(self.safeCurrentHistory.approvals), SafeCurrentRevisionPending: self.safeCurrentHistory.pendingHash != ""}
 }
@@ -341,12 +342,13 @@ func advanceBootstrapSuccessorExecution(ctx context.Context, self *bootstrapSucc
 			return result, err
 		}
 		result.Status, result.InstallationComplete = phase, phase == "installed"
+		result.LocalCustodyComplete, result.PhysicalRebindPending = !self.deferredLocalRebind, self.deferredLocalRebind
 		return result, nil
 	}
 	if reconciliation.Receipt != nil || reconciliation.Status != "absent" && reconciliation.Status != "pending" {
 		return result, errors.New("successor canonical reconciliation has an invalid disposition")
 	}
-	if self.last.Phase == "installed" || self.last.Phase == "outer-reverted" || self.pending != "" {
+	if self.last.Phase == "installed" || self.last.Phase == "outer-reverted" || self.pending != "" || self.deferredLocalRebind {
 		return result, errors.New("successor retained or interrupted outcome is not canonically reconciled")
 	}
 	result.Status = "signature-retained-" + reconciliation.Status

@@ -484,7 +484,7 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 			return result, errors.New("EVM reconciliation regressed retained ancestry")
 		}
 		if record.Receipt != nil && (observation.Receipt == nil || *record.Receipt != *observation.Receipt) {
-			return result, errors.New("EVM canonical receipt changed after retention")
+			return result, errors.Join(errRpcIntegrity, errors.New("EVM canonical receipt changed after retention"))
 		}
 		if err := self.checkpointCustody(record, prior); err != nil {
 			return result, err

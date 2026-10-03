@@ -25,18 +25,26 @@ var errRootSubmissionUnavailable = errors.New("root submission is disabled until
 // One adapter serializes reconciliation/cache ownership, like its action owner.
 // Profiles are copied; no mutable observer list can authorize a later runtime.
 type rootCanonicalChain struct {
-	client      *rpcClient
-	expected    identityExpectation
-	profiles    []rootReceiptProfile
-	reconcileCh chan struct{}
-	runtimeKVs  map[rootReceiptProfile]rootReceiptRuntime
+	client              *rpcClient
+	expected            identityExpectation
+	profiles            []rootReceiptProfile
+	reconcileCh         chan struct{}
+	runtimeKVs          map[rootReceiptProfile]rootReceiptRuntime
+	runtimeOrder        []rootReceiptProfile
+	runtimeCacheEntries int
 }
 
 // Construction accepts no inferred genesis, testnet route, signer or raw secret.
 // These read profiles are not signing authority or source-to-Wasm provenance.
 func newRootCanonicalChain(client *rpcClient, expected identityExpectation, profiles []rootReceiptProfile) (*rootCanonicalChain, error) {
-	if client == nil || client.retryWindow < 60*time.Second || client.retryWindow > 15*time.Minute || expected.NativeChain == "" || expected.EvmChainId != mainnetEvmChainId || !rootCanonicalHash(expected.GenesisHash) || len(profiles) == 0 || len(profiles) > 8 {
-		return nil, errors.New("root receipt adapter requires independent mainnet identity, bounded 60–900s reads and 1–8 approved runtimes")
+	return newRootCanonicalChainBounded(client, expected, profiles, 8, 8)
+}
+
+// Only the economic observer selects a larger artifact catalog. Its decoded
+// cache remains smaller than that retained catalog; eviction removes no review.
+func newRootCanonicalChainBounded(client *rpcClient, expected identityExpectation, profiles []rootReceiptProfile, profileLimit, cacheEntries int) (*rootCanonicalChain, error) {
+	if profileLimit < 8 || profileLimit > 64 || cacheEntries < 1 || cacheEntries > profileLimit || client == nil || client.retryWindow < 60*time.Second || client.retryWindow > 15*time.Minute || expected.NativeChain == "" || expected.EvmChainId != mainnetEvmChainId || !rootCanonicalHash(expected.GenesisHash) || len(profiles) == 0 || len(profiles) > profileLimit {
+		return nil, errors.New("root receipt adapter requires independent mainnet identity, bounded 60–900s reads and its declared finite runtime capacity")
 	}
 	seen := map[string]bool{}
 	for _, profile := range profiles {
@@ -53,7 +61,7 @@ func newRootCanonicalChain(client *rpcClient, expected identityExpectation, prof
 		}
 		seen[key] = true
 	}
-	return &rootCanonicalChain{client: client, expected: expected, profiles: append([]rootReceiptProfile(nil), profiles...), runtimeKVs: map[rootReceiptProfile]rootReceiptRuntime{}, reconcileCh: make(chan struct{}, 1)}, nil
+	return &rootCanonicalChain{client: client, expected: expected, profiles: append([]rootReceiptProfile(nil), profiles...), runtimeKVs: map[rootReceiptProfile]rootReceiptRuntime{}, runtimeCacheEntries: cacheEntries, reconcileCh: make(chan struct{}, 1)}, nil
 }
 
 // No production mutation route is exposed by this increment, even if called

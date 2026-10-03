@@ -69,8 +69,14 @@ func newEvmOwnedChain(config evmPhaseConfig) (*evmOwnedChain, error) {
 	return &evmOwnedChain{client: client, configHash: rootObjectHash(config)}, nil
 }
 
-// Only explicit EVM observations reach this additional bounded read profile.
+// Required state values have no nullable EVM representation. This applies to
+// both current admission and retained-receipt postconditions, so a recovered
+// receipt cannot subsequently be invalidated by a missing archive state value.
 func (self *evmOwnedChain) read(ctx context.Context, method string, params []any, result any) error {
+	switch method {
+	case "eth_getCode", "eth_getStorageAt", "eth_call":
+		return self.client.callRequiredEvmStateRead(ctx, method, params, result)
+	}
 	return self.client.callEvmRead(ctx, method, params, result)
 }
 
@@ -86,6 +92,29 @@ func (self *rpcClient) callEvmRead(ctx context.Context, method string, params []
 		return errors.New("method is outside the contract EVM read profile")
 	}
 	return self.callAdmittedRead(ctx, method, params, result, allowAbsent, maxRpcReplyBytes)
+}
+
+// Existing receipt custody or an authenticated inclusion fixes these facts.
+// Null can mean an incomplete archive; it never authorizes another transaction.
+func (self *rpcClient) callRetainedEvmRead(ctx context.Context, method string, params []any, result any) error {
+	switch method {
+	case "eth_getTransactionReceipt", "eth_getTransactionByBlockHashAndIndex":
+	default:
+		return errors.New("method is outside the retained contract EVM read profile")
+	}
+	return self.callAdmittedReadResult(ctx, method, params, result, false, true, maxRpcReplyBytes)
+}
+
+// A reviewed Safe or contract account requires an actual state value. Null is
+// not the EVM encoding of empty code or a zero word; retry under the same signed
+// route budget. Ordinary and intentionally nullable transaction reads differ.
+func (self *rpcClient) callRequiredEvmStateRead(ctx context.Context, method string, params []any, result any) error {
+	switch method {
+	case "eth_getCode", "eth_getStorageAt", "eth_call":
+	default:
+		return errors.New("method is outside the required contract state read profile")
+	}
+	return self.callAdmittedReadResult(ctx, method, params, result, false, true, maxRpcReplyBytes)
 }
 
 // Every quantity is canonical and width checked; missing fields never become
@@ -238,7 +267,7 @@ func (self *evmOwnedChain) locate(ctx context.Context, head chainIdentity, recor
 	result := evmActionObservation{Status: "receipt-awaiting-finalized-mapping", ScanNumber: record.ScanNumber, ScanHash: record.ScanHash}
 	if record.Receipt != nil {
 		if record.Receipt.BlockHash != receipt.BlockHash || record.Receipt.BlockNumber != receipt.BlockNumber {
-			return result, errors.New("EVM receipt moved after finalization")
+			return result, fmt.Errorf("%w: EVM receipt moved after finalization", errRpcIntegrity)
 		}
 		result.Receipt = &receipt
 		result.Receipt.NativeHash = record.Receipt.NativeHash
@@ -317,12 +346,12 @@ func (self *evmOwnedChain) authenticatePositionWithRuntimeHistory(ctx context.Co
 		return chainIdentity{}, err
 	}
 	var tx types.Transaction
-	if err := self.read(ctx, "eth_getTransactionByBlockHashAndIndex", []any{receipt.BlockHash, fmt.Sprintf("0x%x", index)}, &tx); err != nil {
+	if err := self.client.callRetainedEvmRead(ctx, "eth_getTransactionByBlockHashAndIndex", []any{receipt.BlockHash, fmt.Sprintf("0x%x", index)}, &tx); err != nil {
 		return chainIdentity{}, err
 	}
 	raw, err := tx.MarshalBinary()
 	if err != nil || "0x"+hex.EncodeToString(raw) != record.Signed {
-		return chainIdentity{}, errors.Join(errors.New("canonical EVM position does not contain original signed bytes"), err)
+		return chainIdentity{}, errors.Join(errRpcIntegrity, errors.New("canonical EVM position does not contain original signed bytes"), err)
 	}
 	// Variant1's native transaction vector independently commits the position.
 	if mapping.PostLog.Variant == 1 && (index >= uint64(len(mapping.PostLog.TransactionHashes)) || mapping.PostLog.TransactionHashes[index] != record.TransactionHash) {
@@ -442,13 +471,17 @@ func (self *evmOwnedChain) reconcile(ctx context.Context, plan evmCreatePlan, re
 		}
 	}
 	var raw json.RawMessage
-	if err := self.read(ctx, "eth_getTransactionReceipt", []any{record.TransactionHash}, &raw); err != nil {
+	readReceipt := self.read
+	if record.Receipt != nil {
+		readReceipt = self.client.callRetainedEvmRead
+	}
+	if err := readReceipt(ctx, "eth_getTransactionReceipt", []any{record.TransactionHash}, &raw); err != nil {
 		return result, err
 	}
 	if !bytes.Equal(raw, []byte("null")) {
 		receipt, index, err := evmReceiptFacts(raw, record, plan)
 		if err != nil {
-			return result, err
+			return result, errors.Join(errRpcIntegrity, err)
 		}
 		result, err = self.locate(ctx, head, record, receipt)
 		if err != nil {
@@ -473,7 +506,7 @@ func (self *evmOwnedChain) reconcile(ctx context.Context, plan evmCreatePlan, re
 		return result, ctx.Err()
 	}
 	if record.Receipt != nil {
-		return result, errors.New("retained canonical EVM receipt disappeared")
+		return result, fmt.Errorf("%w: retained canonical EVM receipt was not observed", errRpcObservationUnavailable)
 	}
 	result, err = self.admitCurrent(ctx, plan, record, head)
 	if err != nil || !result.SendReady {

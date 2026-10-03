@@ -166,9 +166,16 @@ func TestBootstrapSuccessorCanonicalAdapterBoundaries(t *testing.T) {
 		}
 		return result
 	})
-	if _, err := adapter.authenticate(t.Context(), plan); err == nil {
-		t.Fatal("canonical adapter adopted a disappeared original receipt")
+	missingCtx, cancelMissing := context.WithCancel(t.Context())
+	adapter.chain.client.retryWait = func(ctx context.Context, _ time.Duration) error {
+		cancelMissing()
+		return ctx.Err()
 	}
+	if _, err := adapter.authenticate(missingCtx, plan); !errors.Is(err, context.Canceled) || errors.Is(err, errRpcIntegrity) {
+		t.Fatal("canonical adapter changed history after an unavailable original receipt", err)
+	}
+	cancelMissing()
+	adapter.chain.client.retryWait = nil
 	setFault(nil)
 	transport := &bootstrapSuccessorCanonicalDeadlineTransport{base: adapter.chain.client.httpClient.Transport}
 	adapter.chain.client.httpClient.Transport = transport

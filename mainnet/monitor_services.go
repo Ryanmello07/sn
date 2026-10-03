@@ -24,6 +24,7 @@ type monitorServiceHooks struct {
 	afterResult   func(context.Context, int)
 	afterEvent    func(context.Context, string)
 	wait          func(context.Context, string, time.Duration) bool
+	rpcWait       func(context.Context, string, time.Duration) error
 }
 
 // Role events contain bounded operational evidence and a closed export outcome.
@@ -101,7 +102,7 @@ func waitMonitorService(ctx context.Context, role string, duration time.Duration
 func runMonitorServices(ctx context.Context, client *rpcClient, expected identityExpectation, policy *monitorServicesPolicy, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators)+len(policy.Operators)+len(policy.Providers)+len(policy.Claims), now)
+	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators)+len(policy.Operators)+len(policy.Providers)+len(policy.Claims)+len(policy.NativeEconomics), now)
 	if err != nil {
 		return 3
 	}
@@ -115,8 +116,12 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	var operators []*monitorOperatorWorker
 	var providers []*monitorProviderWorker
 	var claims []*monitorClaimWorker
+	var economics []*monitorEconomicNativeWorker
 	defer func() {
 		var cleanupErr error
+		for _, worker := range economics {
+			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
+		}
 		for _, worker := range claims {
 			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
 		}
@@ -184,9 +189,18 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		}
 		claims = append(claims, worker)
 	}
+	for _, economic := range policy.NativeEconomics {
+		worker, err := openMonitorEconomicNativeWorker(ctx, client, economic, expected, checkpointPath, metricsPath, hooks)
+		if err != nil {
+			fmt.Fprintln(diagnostic, "monitor native economic admission:", err)
+			result = 3
+			continue
+		}
+		economics = append(economics, worker)
+	}
 	// The channel holds every terminal result even during cancellation. Every
 	// launched worker sends once and is consumed before output owners close.
-	results := make(chan int, len(workers)+len(operators)+len(providers)+len(claims)+1)
+	results := make(chan int, len(workers)+len(operators)+len(providers)+len(claims)+len(economics)+1)
 	go func() {
 		backoff := time.Second
 		for ctx.Err() == nil {
@@ -260,7 +274,21 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 			results <- exit
 		}()
 	}
-	for remaining := len(workers) + len(operators) + len(providers) + len(claims) + 1; remaining > 0; remaining-- {
+	for index, worker := range economics {
+		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+len(operators)+len(providers)+len(claims)+index))
+		go func() {
+			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
+			if err := worker.close(hooks); err != nil {
+				fmt.Fprintln(diagnostic, "monitor native economic cleanup:", err)
+				exit = 3
+			}
+			if hooks.afterWorker != nil {
+				hooks.afterWorker(worker.policy.Role, exit)
+			}
+			results <- exit
+		}()
+	}
+	for remaining := len(workers) + len(operators) + len(providers) + len(claims) + len(economics) + 1; remaining > 0; remaining-- {
 		exit := <-results
 		if exit != 0 {
 			result = max(result, exit)

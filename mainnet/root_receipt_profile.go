@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 
@@ -126,8 +127,32 @@ func (self *rootCanonicalChain) runtimeAt(ctx context.Context, block string) (ro
 }
 
 // Authenticate the shared native envelope and financial events without granting
-// a root or owner call profile. Each role checks its call after this read.
+// a root or owner call profile. Cached artifact bytes never bypass these checks.
 func (self *rootCanonicalChain) nativeRuntimeAt(ctx context.Context, block string) (rootReceiptRuntime, error) {
+	runtime, err := self.authenticatedRuntimeAt(ctx, block)
+	if err != nil {
+		return rootReceiptRuntime{}, err
+	}
+	metadata := runtime.metadata
+	if err := nativeSigningProfile(metadata); err != nil {
+		return rootReceiptRuntime{}, err
+	}
+	if err := rootAccountProfile(metadata); err != nil {
+		return rootReceiptRuntime{}, err
+	}
+	if _, err := nativeReceiptEvents(metadata, false); err != nil {
+		return rootReceiptRuntime{}, err
+	}
+	entry, err := rootSystemEntry(metadata, "Events")
+	if err != nil || !entry.Type.IsPlainType {
+		return rootReceiptRuntime{}, errors.New("root receipt System.Events key schema changed")
+	}
+	return runtime, nil
+}
+
+// Only the full independently selected tuple authenticates immutable metadata.
+// Consumers apply their own semantic purpose after this bounded raw-byte cache.
+func (self *rootCanonicalChain) authenticatedRuntimeAt(ctx context.Context, block string) (rootReceiptRuntime, error) {
 	var rawVersion json.RawMessage
 	var codeHash string
 	if err := self.client.call(ctx, "state_getRuntimeVersion", []any{block}, &rawVersion); err != nil {
@@ -152,6 +177,8 @@ func (self *rootCanonicalChain) nativeRuntimeAt(ctx context.Context, block strin
 		}
 		// Cache immutable bytes by the entire approved tuple, never by spec alone.
 		if runtime, exists := self.runtimeKVs[profile]; exists {
+			index := slices.Index(self.runtimeOrder, profile)
+			self.runtimeOrder = append(slices.Delete(self.runtimeOrder, index, index+1), profile)
 			return runtime, nil
 		}
 		var encoded string
@@ -162,21 +189,13 @@ func (self *rootCanonicalChain) nativeRuntimeAt(ctx context.Context, block strin
 		if err != nil || digest != profile.RuntimeMetadataHash {
 			return rootReceiptRuntime{}, errors.Join(errors.New("root receipt metadata differs from independent artifact"), err)
 		}
-		if err := nativeSigningProfile(metadata); err != nil {
-			return rootReceiptRuntime{}, err
-		}
-		if err := rootAccountProfile(metadata); err != nil {
-			return rootReceiptRuntime{}, err
-		}
-		if _, err := nativeReceiptEvents(metadata, false); err != nil {
-			return rootReceiptRuntime{}, err
-		}
-		entry, err := rootSystemEntry(metadata, "Events")
-		if err != nil || !entry.Type.IsPlainType {
-			return rootReceiptRuntime{}, errors.New("root receipt System.Events key schema changed")
-		}
 		runtime := rootReceiptRuntime{profile: profile, metadata: metadata}
+		if len(self.runtimeOrder) >= self.runtimeCacheEntries {
+			delete(self.runtimeKVs, self.runtimeOrder[0])
+			self.runtimeOrder = self.runtimeOrder[1:]
+		}
 		self.runtimeKVs[profile] = runtime
+		self.runtimeOrder = append(self.runtimeOrder, profile)
 		return runtime, nil
 	}
 	return rootReceiptRuntime{}, errRootReceiptProfileUnavailable
