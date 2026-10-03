@@ -34,7 +34,7 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-28 | Claim role and retained renewal scopes qualified; archival/economic joins and live ingestion/on-call remain. | [monitor-policy-renewal-qualification-20261003.json](monitor-policy-renewal-qualification-20261003.json) |
 | MG-01 | Independent current genesis/checkpoint/runtime approval and exact consumer admission remain. | No new closure evidence |
 | MG-02 | Qualified556 production composition merged and remote publication verified at ac8a09ae; remaining successors, final repeatable build and host adoption remain. | [qualified-composition-main-publication-20261003.json](qualified-composition-main-publication-20261003.json) |
-| MG-03 | Synthetic backend, observer/decoder controls and actual Go/Rust three-case protocol qualified; selected caller deadline correction, actual runtime/witness/finality authority and native fee admission remain. | [current-fee-caller-e274-cross-engine-qualification-20261003.json](current-fee-caller-e274-cross-engine-qualification-20261003.json) |
+| MG-03 | Synthetic backend, observer/decoder controls and actual Go/Rust three-case protocol qualified; four-root deadline fixture correction qualified normally/race/vet; current-main caller source joined with behavioral qualification pending. Actual runtime/witness/finality authority and native fee admission remain. | [current-fee-caller-e274-cross-engine-qualification-20261003.json](current-fee-caller-e274-cross-engine-qualification-20261003.json) |
 | MG-04 | Historical/current capability scopes exist; approved actual runtime and current consumers remain. | No new closure evidence |
 | MG-05 | Actual both-operator/four-role host, credential and network topology remains. | No new closure evidence |
 | MG-06 | Payout boundary qualified; continuous native/credit/carry/payment conservation and authentic fee witness remain. | [payout-boundary-qualification-20261003.json](payout-boundary-qualification-20261003.json) |
@@ -44,3 +44,5 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | MG-10 | October6 new-earnings config published; deployment/readiness activation and observed settlement intervals remain. | [current-cutoff-readiness-config-20261003.json](current-cutoff-readiness-config-20261003.json) |
 
 The [JSON binding](current-readiness-checkpoint-20261003.json) records the exact hashes of all linked local receipts. Runtime approval, real host/device/config adoption, and observed mainnet outcomes remain unproved. No percentage or finalization ETA is implied.
+
+The [deadline correction](fee-caller-deadline4c96-qualification-20261003.json) and [current-main caller source join](current-caller-cb796-source-join-review-20261003.json) retain their separate test and source-only scopes. Restore fixture namespace correction and cross-root cohort qualification remain in progress; no original failure is waived.
