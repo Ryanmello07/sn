@@ -4255,3 +4255,10 @@ This workflow addresses protected executable fixture admission without weakening
 The [native/EVM integration source review](evidence/native-evm-current292-source-review-20261003.json) verifies22 changed physical files at29283743:21 match the independently qualified archive component and one joins the retained historical verifier dispatch. Current bounded-host and Cargo guard bytes are retained. The later Go workflow additions require their own exact preservation at final integration. Source review alone does not establish composed behavior.
 
 An archive observation failure must retain its original cause before checking returned presence, digest or bytes. Read timeout or cancellation does not establish owner disappearance or contradictory evidence. Review native/EVM archive, catalog and Claim branches for combined error-and-comparison conditions; fix confirmed misclassification in a separate successor with deterministic interrupted-read controls. Preserve frozen component outcomes and durable original/next checkpoints while qualifying the affected continuation path.
+
+
+### October 3 complete-proof collector cancellation finding
+
+The [original collector result](evidence/proof-capture7b81-original-partial-review-20261003.json) retains seven passing Rust roots and one failing cancellation root at7b81da23. A cancellation after a real parent-trie read was translated by the SDK into `Invalid state root`; the caller returned that wrapper before checking its retained accessor cause. No complete collector qualification is claimed.
+
+After each fallible backend code/heap, execution, write-root and strict-replay phase, inspect the retained accessor outcome before treating a wrapper as contradictory chain evidence. Preserve a concrete integrity error already observed before a later cancellation. Add deterministic before-read, after-read and adjacent phase controls in a distinct successor; retain original failed results and immutable input/output bounds. A failed observation must not become a false permanent rejection of authenticated progress.
