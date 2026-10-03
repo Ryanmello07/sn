@@ -243,7 +243,35 @@ func TestProductionCapacityRetainsOriginalSignedSidecar(t *testing.T) {
 				t.Fatal("original operational paths were not normalized before signing", err)
 			}
 		})
-	}, nil)
+	}, func(fixture *ownerRecycleProductionTestFixture) {
+		// The independent fixture approver must sign the same document the
+		// public loader sees, including YAML's concrete empty slice values.
+		// This happens before the original production approval and sidecar.
+		raw, err := yaml.Marshal(fixture.cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resolved, err := decodeReleaseConfigDocument(filepath.Join(fixture.cfg.StateDir, "original-config.yml"), raw)
+		if err != nil {
+			t.Fatal("original config did not satisfy strict document decoding before approval", err)
+		}
+		resolved.Coordinator = strings.ToLower(resolved.Coordinator)
+		resolved.SettlementVault = strings.ToLower(resolved.SettlementVault)
+		*fixture.cfg = *resolved
+		raw, err = yaml.Marshal(fixture.cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reloaded, err := decodeReleaseConfigDocument(filepath.Join(fixture.cfg.StateDir, "original-config.yml"), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		original, originalErr := OwnerRecycleConfigHash(fixture.cfg)
+		second, secondErr := OwnerRecycleConfigHash(reloaded)
+		if originalErr != nil || secondErr != nil || original != second {
+			t.Fatal("original signing document was not wire-idempotent", originalErr, secondErr)
+		}
+	})
 	originalConfigPath := writeReleaseConfig(t, *fixture.cfg)
 	loadedOriginal, err := LoadReleaseConfig(originalConfigPath)
 	if err != nil {
