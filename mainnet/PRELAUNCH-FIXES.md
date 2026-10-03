@@ -99,6 +99,14 @@ reproduces the exact nil writable-hook panic in normal and race modes, using
 only a test overlay; original production bytes were retained. The broader
 public ledger-restore adapter remains a separate pending scope. No live restoration is established.
 
+Restore qualification must preflight the whole temporary-directory ancestry.
+The first independent `912315cf` public-adapter run encountered group-writable
+ancestor directories even though its immediate temporary root was private.
+That is a fixture admission failure, not evidence of a product restore defect.
+Preserve the original outputs, correct the scratch ancestry, and run the same
+immutable source again in a separate scope. Do not weaken the production owner
+or mode checks to accommodate a test runner's default umask.
+
 Physical restore must inspect identity embedded inside owner data, as well as
 outer custody attributes. The immutable-member census contains original inode
 fields: rebinding only its snapshot attribute leaves an unusable restored owner.
@@ -2898,8 +2906,14 @@ those read paths together; a successful transaction-read fix does not qualify
 them. A composite wallet-list/balance operation must share one outer deadline,
 rather than multiplying a 300-second budget by its wallet count. Keep identity
 and complete-payload checks hard, close every response before retry, and never
-apply the read loop to transfer creation. Candidate implementation and
-independent behavioral qualification remain pending.
+apply the read loop to transfer creation. Frozen Server `5c93b812` now passes [12 independent normal/race roots and
+controller vet](evidence/payment-get-retry-independent-20261003.json) for actual
+Circle transaction and Coinbase rate reads. The tests use an injected clock for
+65-second outage and 300-second budget scenarios; they do not establish a
+wall-clock outage rehearsal. All five changed source files and module bytes
+were compared with that exact Git source. Retry-omission controls, adjacent
+wallet reads, HTTP 500/Retry-After handling and final composition remain pending;
+no POST retry or live deployment is claimed.
 
 **2026-09-28 native HTTP cause preservation.** The pinned GSRPC HTTP client
 flattened statuses to strings and returned decoder EOF without physical origin.

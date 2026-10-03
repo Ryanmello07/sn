@@ -111,6 +111,15 @@ binding and GET retry candidates require their own qualification.
 These checkpoints do not supply completed release, deployment or activation
 evidence.
 
+The separate [payment GET retry candidate](evidence/payment-get-retry-independent-20261003.json)
+at Server `5c93b812` passes 12 normal/race roots and controller vet. Actual Circle
+transaction and Coinbase rate reads have one caller-owned budget (300 seconds
+by default, minimum 60 seconds), bounded responses and typed retry causes.
+Cancellation and identity/schema refusals remain distinct; transfer submission
+is outside the read loop. Timing controls use an injected clock. Retry-omission
+controls and the broader wallet-read successor remain pending, and this source
+is not merged or deployed.
+
 The [read-only signed-ledger correction](evidence/restore-ledger-readonly-independent-20261003.json)
 at `d3c84fe3` separately passes two normal/race roots and validator vet in its
 pinned workspace. It permits nonempty signed-history inspection without a
