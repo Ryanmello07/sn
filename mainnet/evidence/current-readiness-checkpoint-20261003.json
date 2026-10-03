@@ -201,9 +201,9 @@
     },
     {
       "closed": false,
-      "evidence": "server-current-financial-main-publication-20261003.json",
+      "evidence": "server-model-subsidy-original-failure-20261003.json",
       "requirement": "PH-16",
-      "status": "Original full model: 1,473 passes, zero failures, 11 skips. Current Server5f: 22 tests pass per mode, vet and five intended causal failures per mode verified; published. Final common-source release remains."
+      "status": "Original Server1d3 full model retains1,473 passes/11 skips. Current Server5f22 financial roots pass per mode; its full model is now active and retains an original subsidy fixture failure. Granted-capacity fix and final common-source release remain."
     },
     {
       "closed": false,
@@ -219,9 +219,9 @@
     },
     {
       "closed": false,
-      "evidence": "full-hardening-source-gap-review-20261003.json",
+      "evidence": "native-split-conformance-source-finding-20261003.json",
       "requirement": "PH-19",
-      "status": "Parent/post-state renewed native catalog qualified; execution-time denominator/recipient consumer remains unimplemented, alongside current consumer/runtime authority and conservation join."
+      "status": "Parent/post-state renewed native catalog qualified. Execution-witness denominator/recipient consumer is implemented as unsealed, uncompiled WIP; producer/consumer controls, exact split conformance, full quantization, actual runtime authority and conservation join remain."
     },
     {
       "closed": false,
@@ -309,9 +309,9 @@
     },
     {
       "closed": false,
-      "evidence": "full-hardening-source-gap-review-20261003.json",
+      "evidence": "native-split-conformance-source-finding-20261003.json",
       "requirement": "MG-06",
-      "status": "Payout boundary and contract guards implemented/qualified by component; execution-witness denominator/recipient consumer, repair/conservation composition and authentic fee/runtime evidence remain."
+      "status": "Payout boundary/contract guards qualified by component. Native execution accounting WIP distinguishes amount authentication from10/90 conformance; its qualification, repair/conservation composition and authentic fee/runtime evidence remain."
     },
     {
       "closed": false,
