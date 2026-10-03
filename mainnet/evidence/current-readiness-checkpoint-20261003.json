@@ -2,6 +2,7 @@
   "basis": "Current published component evidence plus explicit in-progress work; supersedes historical absent-implementation labels only.",
   "completion": "NOT_FINALIZED_ALL38_REQUIREMENTS_RETAINED",
   "evidence_sha256": {
+    "capacity-public-completion-qualification-20261003.json": "90b753f6610be6766faebb62d73e80381fa4449264d8e2b5e6d6f30d9fec58bf",
     "claim-consumer-merge-20261003.json": "bbca6f7353456363521a37e84404fde4bcdc256bd3c5d3e97bf1ce207841c2a8",
     "claim-consumer-qualification-20261003.json": "43c7e0562327d6c834678bd3ea64c2730ec5972c895cd5fa94adaf5d7fc5dd84",
     "continuous-evm-review-history-neighbors13-normal-20261003.json": "f0ed936da370e49fb9578d57d6031ee6537b2d2961ee76ad115ab0bc1b92967d",
@@ -151,9 +152,9 @@
     },
     {
       "closed": false,
-      "evidence": null,
+      "evidence": "capacity-public-completion-qualification-20261003.json",
       "requirement": "PH-20",
-      "status": "Signed aggregate capacity/profile implementation in progress; public CLI/config/retained-sidecar controls remain."
+      "status": "Public signed capacity preview/completion/config-loader and retained-sidecar scopes qualified normally/race/vet; final aggregate sizing/currentgraph/adoption remain."
     },
     {
       "closed": false,
@@ -169,9 +170,9 @@
     },
     {
       "closed": false,
-      "evidence": null,
+      "evidence": "capacity-public-completion-qualification-20261003.json",
       "requirement": "PH-23",
-      "status": "Retained-head production capacity revision implementation in progress; qualification and actual adoption remain."
+      "status": "Retained-head capacity preview and readonly completion qualified by component; actualsignedrevision adoption and finalcomposedvolume rehearsal remain."
     },
     {
       "closed": false,

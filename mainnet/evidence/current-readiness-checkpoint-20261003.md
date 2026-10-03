@@ -23,10 +23,10 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-17 | Generation/index lookup lifetime census and causal work counts remain. | No new closure evidence |
 | PH-18 | Pinned connection provenance scopes exist; current pooled-route replacement composition remains. | No new closure evidence |
 | PH-19 | Parent/post-state renewed native catalog qualified; current cross-consumer runtime authority join remains. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
-| PH-20 | Signed aggregate capacity/profile implementation in progress; public CLI/config/retained-sidecar controls remain. | No new closure evidence |
+| PH-20 | Public signed capacity preview/completion/config-loader and retained-sidecar scopes qualified normally/race/vet; final aggregate sizing/currentgraph/adoption remain. | [capacity-public-completion-qualification-20261003.json](capacity-public-completion-qualification-20261003.json) |
 | PH-21 | Repair mechanisms exist; durable duplicate/interrupted multi-component repair composition remains. | No new closure evidence |
 | PH-22 | Provider/claim timeout, network, cancellation and body-error scopes qualified normally/race/vet; final all-service join remains. | [monitor-progress-body-qualification-20261003.json](monitor-progress-body-qualification-20261003.json) |
-| PH-23 | Retained-head production capacity revision implementation in progress; qualification and actual adoption remain. | No new closure evidence |
+| PH-23 | Retained-head capacity preview and readonly completion qualified by component; actualsignedrevision adoption and finalcomposedvolume rehearsal remain. | [capacity-public-completion-qualification-20261003.json](capacity-public-completion-qualification-20261003.json) |
 | PH-24 | Production authentication reuse work-count/invalidation qualification remains. | No new closure evidence |
 | PH-25 | Owned cancellation/cleanup scopes exist; composed stop and actual unit/cgroup rehearsal remain. | [continuous-evm-review-history-new25-normal-20261003.json](continuous-evm-review-history-new25-normal-20261003.json) |
 | PH-26 | Bounded evidence mechanisms exist; selected aggregate evidence-size/public transport rehearsal remains. | No new closure evidence |
