@@ -6,14 +6,38 @@ This summary tracks the active release work. Historical candidates and receipts 
 
 | Workstream | Verified state | Required next result |
 | --- | --- | --- |
-| October 6 earning boundary and financial recovery | Published source preserves the approved boundary and legacy USDC obligations; selected financial/cutoff gates pass. No production deployment or loaded-worker adoption is verified. | Fix the current full-model Redis leak, finish current-source model qualification, then verify the exact deployed schema, config and worker behavior. |
+| October 6 earning boundary and financial recovery | Published source preserves the approved boundary and legacy USDC obligations; selected financial/cutoff gates pass. No production deployment or loaded-worker adoption is verified. | Redis recovery now has [33 selected current-source race passes](evidence/redis-recovery-selected-qualification-20261003.json), plus the corrected normal root and sixteen normal neighbors. Finish allocator repair, causal controls and combined current-source model qualification, then verify deployed schema, config and workers. |
 | Customer transfer recovery | Current Server twenty selected roots pass normal/race; current SDK two Go roots pass both modes and vet; migration omission controls discriminate. | Preserve caller-owned intent through the combined release and verify real client/worker adoption. |
 | Native economic monitoring | Frozen observer fifty roots pass both modes; eight causal overlays expose nine intended failures per mode. | Qualify approved runtime/read-purpose renewal without resetting old cursor or amounts; retain historical checkpoint compatibility and operational retry-budget changes. |
 | Continuous EVM and claim monitoring | Finite claim consumer is integrated; continuous EVM accounting and independent rolling expectations are implementation work. | Complete reserve/credit/capture/fee accounting, expectation renewal and durable restart with unresolved obligations preserved. |
-| Physical restore and capacity | Separate core/member/union/registry scopes pass. Local execution-root and pending-outcome successors are frozen, not behaviorally accepted. | Complete local restore qualification, interrupted paired census-head restore, joined capacity migration and actual restored-service continuation. |
+| Physical restore and capacity | Separate core/member/union/registry scopes pass. [Paired-head SN restore passes eight roots normally and under race detection](evidence/paired-metadata-sn-qualification-20261003.json); its Connect core has seven passing roots in both modes. Local pending-outcome and approved consumer composition remain open. | Complete local restore qualification, interrupted paired census-head restore, joined capacity migration and actual restored-service continuation. |
 | Combined release and live launch inputs | Current source publication is tracked separately from frozen module gates. Incoming main requires a local gVisor fork. | Bind the intended fork, compose all qualified changes and test actual role startup/recovery. Verify approved runtime/chain identity, RPC, signer/roster and rollout evidence. |
 
+The unchanged current full-model run has now exposed five failing roots, including dispute rollback accounting. Preserve all original failures and complete collection; diagnose the fifth failure before accepting the combined Server release. The passing Redis recovery scope does not establish that disputed settlement leaves terminal state, payer funds and reservations unchanged.
+
 Do not stop broad qualification on its first ordinary assertion failure. Preserve the running source and collect all failures; repair in separate candidates, then qualify the actual combined release. Runtime/source approval and production activation remain distinct from offline implementation readiness.
+
+
+The [original local restore race failure](evidence/local-pending-original-race-failure-20261003.json) retains four coverage refusals and three passing controls. The [corrected external signed-input fixture](evidence/local-signed-input-corrected-normal-20261003.json) now passes public resume, lost-ack recovery and two adjacent controls; its two pending-outcome roots still fail because their mock hides earlier historical receipts. Qualify the narrowly corrected pending mock separately. These results establish progress without claiming complete local recovery or changing production coverage requirements.
+
+## Historical RPC recovery lesson — October 3
+
+A missing expected historical receipt is an unavailable read, not proof that
+previously authenticated chain evidence changed. Retry expected historical
+receipt and transaction-position reads within the original signed route budget;
+retain typed unavailability on exhaustion or cancellation. New approvals should
+use the preferred 300-second budget, while existing signed 60–900-second budgets
+must remain unchanged. An intentionally nullable pending-transaction lookup has
+a different contract and must not wait merely because its outcome is not known.
+
+Do not join a transport timeout or unavailable read with a canonical-boundary
+conflict. Returned malformed data or contradictory hash, status or nonce still
+requires an integrity refusal. Recovery must preserve the original signed
+transaction and durable outcome, continue healthy independent owners, and never
+resubmit blindly. Qualify delayed success beyond sixty logical seconds, null-read
+exhaustion, cancellation, positive contradictions and healthy-peer continuation
+through the actual production path. This production correction is implementation
+work; the paired-head and Redis scoped receipts do not qualify it.
 
 
 ## October 6 payout transition target
