@@ -157,7 +157,7 @@ func readMonitorClaimAttempt(ctx context.Context, client *http.Client, policy mo
 		return nil, "invalid"
 	}
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusServiceUnavailable {
-		_ = response.Body.Close()
+		attempt.observeErrors(requestErr, response.Body.Close(), ctx.Err())
 		if response.StatusCode >= 400 && response.StatusCode < 500 && !monitorProgressRetryStatus(response.StatusCode) {
 			return nil, "invalid"
 		}
@@ -172,11 +172,11 @@ func readMonitorClaimAttempt(ctx context.Context, client *http.Client, policy mo
 	if readErr == nil && decodeErr != nil && response.StatusCode == http.StatusOK {
 		return nil, "invalid"
 	}
-	if readErr == nil && decodeErr == nil && monitorClaimIdentity(policy, value) == "identity" {
+	if decodeErr == nil && monitorClaimIdentity(policy, value) == "identity" {
 		return value, "identity"
 	}
 	if requestErr != nil || readErr != nil || closeErr != nil || ctx.Err() != nil {
-		attempt.retryable = attempt.retryable || readErr != nil || closeErr != nil
+		attempt.observeErrors(requestErr, readErr, closeErr, ctx.Err())
 		return nil, "unavailable"
 	}
 	if decodeErr != nil {

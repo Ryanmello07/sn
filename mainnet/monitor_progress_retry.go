@@ -61,7 +61,27 @@ func monitorProgressRetryTransport(err error) bool {
 		return monitorProgressRetryTransport(wrapped.Unwrap())
 	}
 	var network net.Error
-	return errors.Is(err, context.DeadlineExceeded) || errors.As(err, &network) && network.Timeout() || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ETIMEDOUT) || errors.Is(err, syscall.ENETUNREACH) || errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETDOWN) || errors.Is(err, syscall.ENETRESET) || errors.Is(err, syscall.ECONNABORTED)
+	return errors.Is(err, context.DeadlineExceeded) || errors.As(err, &network) && network.Timeout() || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.EIO) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ETIMEDOUT) || errors.Is(err, syscall.ENETUNREACH) || errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETDOWN) || errors.Is(err, syscall.ENETRESET) || errors.Is(err, syscall.ECONNABORTED)
+}
+
+// An observed body/close fault replaces the status-only retry permission.
+// Explicit I/O-close failure remains recoverable; a joined permanent cause
+// cannot borrow that permission from another error or a transient HTTP status.
+func (self *monitorProgressReadAttempt) observeErrors(causes ...error) {
+	present := false
+	for _, cause := range causes {
+		if cause == nil {
+			continue
+		}
+		present = true
+		if !monitorProgressRetryTransport(cause) {
+			self.retryable = false
+			return
+		}
+	}
+	if present {
+		self.retryable = true
+	}
 }
 
 // Every body is already closed by read before a wait starts. Complete hard
