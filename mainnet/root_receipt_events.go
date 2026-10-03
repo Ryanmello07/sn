@@ -101,80 +101,41 @@ func nativeDecodeReceiptEvents(metadata *types.Metadata, raw []byte, extrinsicIn
 	if err != nil {
 		return receipt, err
 	}
-	reader := rootScaleReader{data: raw, metadata: metadata}
-	count, err := reader.compact()
-	if err != nil || count > rootBodyCountLimit || count > uint64(len(raw)) {
-		return receipt, errors.New("root receipt event count exceeds bound")
-	}
 	terminalCount, feeCount, rootWeightCount := 0, 0, 0
-	for eventIndex := uint64(0); eventIndex < count; eventIndex++ {
-		phase, err := reader.take(1)
-		if err != nil || phase[0] > 2 {
-			return receipt, errors.New("root receipt phase is absent or unknown")
+	err = walkNativeEventRecords(metadata, raw, bodyCount, events, rootBodyCountLimit, func(record nativeEventRecord) error {
+		if record.extrinsicIndex == nil || *record.extrinsicIndex != extrinsicIndex {
+			return nil
 		}
-		selected := false
-		if phase[0] == 0 {
-			encodedIndex, err := reader.take(4)
-			if err != nil {
-				return receipt, err
-			}
-			index := binary.LittleEndian.Uint32(encodedIndex)
-			if uint64(index) >= uint64(bodyCount) {
-				return receipt, errors.New("root receipt phase refers outside block body")
-			}
-			selected = index == extrinsicIndex
-		}
-		encodedId, err := reader.take(2)
-		if err != nil {
-			return receipt, err
-		}
-		event, exists := events[[2]byte{encodedId[0], encodedId[1]}]
-		if !exists {
-			return receipt, errors.New("root receipt event is absent from execution metadata")
-		}
-		fields := make([][]byte, 0, len(event.variant.Fields))
-		for _, field := range event.variant.Fields {
-			start := reader.offset
-			if err := reader.skip(field.Type, 0); err != nil {
-				return receipt, fmt.Errorf("root receipt %s: %w", event.name, err)
-			}
-			fields = append(fields, raw[start:reader.offset])
-		}
-		topics, err := reader.compact()
-		if err != nil || topics > uint64((len(raw)-reader.offset)/32) {
-			return receipt, errors.New("root receipt event topics are truncated")
-		}
-		if _, err := reader.take(int(topics) * 32); err != nil {
-			return receipt, err
-		}
-		if !selected {
-			continue
-		}
-		switch event.name {
+		switch record.event.name {
 		case "System.ExtrinsicSuccess":
 			terminalCount++
 			receipt.Success = true
 		case "System.ExtrinsicFailed":
 			terminalCount++
-			receipt.DispatchError = "scale:0x" + hex.EncodeToString(fields[0])
+			receipt.DispatchError = "scale:0x" + hex.EncodeToString(record.fields[0])
 		case "TransactionPayment.TransactionFeePaid":
 			feeCount++
-			if "0x"+hex.EncodeToString(fields[0]) != payer || binary.LittleEndian.Uint64(fields[2]) != 0 {
-				return receipt, errors.New("root receipt actual payer or tip differs from direct zero-tip action")
+			if "0x"+hex.EncodeToString(record.fields[0]) != payer || binary.LittleEndian.Uint64(record.fields[2]) != 0 {
+				return errors.New("root receipt actual payer or tip differs from direct zero-tip action")
 			}
-			receipt.ActualFeeRao = binary.LittleEndian.Uint64(fields[1])
+			receipt.ActualFeeRao = binary.LittleEndian.Uint64(record.fields[1])
 		case "SubtensorModule.RootWeightsSet":
 			rootWeightCount++
-			if rootSeat == nil || binary.LittleEndian.Uint16(fields[0]) != *rootSeat {
-				return receipt, errors.New("root receipt weight event has another root seat")
+			if rootSeat == nil || binary.LittleEndian.Uint16(record.fields[0]) != *rootSeat {
+				return errors.New("root receipt weight event has another root seat")
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return receipt, err
 	}
+
 	wantedWeights := 0
 	if rootSeat != nil && receipt.Success {
 		wantedWeights = 1
 	}
-	if reader.offset != len(raw) || terminalCount != 1 || feeCount != 1 || rootWeightCount != wantedWeights {
+	if terminalCount != 1 || feeCount != 1 || rootWeightCount != wantedWeights {
 		return receipt, errors.New("root receipt has trailing, missing, duplicated or contradictory outcome evidence")
 	}
 	return receipt, nil
