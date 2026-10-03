@@ -16,6 +16,12 @@ durable declaration, exact checkpoint bytes, the stopped-and-joined writer
 fence, and shared leases over the checkpoint and every immutable archive.
 The command has no signer or private-key input.
 
+Revision payloads are bounded at 16 KiB; the complete approval frame, including
+its schema, signature and final newline, is bounded at 17 KiB. Preview checks the
+complete importable frame before exposing signing bytes. A synthetic protected
+long-path control crosses the old payload-only import bound through the actual
+public preview, signing-frame export and approval importer.
+
 `monitor-native-catalog apply --plan FILE --plan-sha256 HASH --approval FILE
 --approval-sha256 HASH` verifies the independently produced signature. Adoption
 takes only the affected checkpoint's exclusive lease. Every previous resource

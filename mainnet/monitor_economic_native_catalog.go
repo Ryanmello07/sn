@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
@@ -60,7 +61,7 @@ func monitorNativeCatalogBytes(state monitorEconomicNativeState) ([]byte, error)
 // JSON escaping can consume six bytes per pathname byte. Forecast that public
 // bound, not the length of today's shorter path or the unused accounting slots.
 func monitorNativeCatalogForecast(record monitorEconomicNativeCheckpoint, policy monitorEconomicNativePolicy, future, additional uint64) (uint64, error) {
-	if future == 0 || future > maximumReviewedMonitorHistorySegments/2 || additional > maximumMonitorHistoryRevisionBytes {
+	if future == 0 || future > maximumReviewedMonitorHistorySegments/2 || additional > maximumMonitorHistoryApprovalBytes {
 		return 0, errors.New("native history forecast exceeds its finite segment or revision bound")
 	}
 	raw, err := monitorNativeCatalogBytes(record.State)
@@ -161,12 +162,18 @@ func buildMonitorNativeCatalogPlan(ctx context.Context, request monitorNativeCat
 		FutureSegments: request.FutureSegments, RequiredSegments: 2 * (segments + request.FutureSegments),
 		RequiredBytes: 2 * (retainedBytes + (request.FutureSegments+1)*maxRpcReplyBytes), RequiredInodes: 2 * (2*(segments+request.FutureSegments) + 2),
 		Declaration: declaration, FormerWriterFence: request.FormerWriterFence}
-	revision.RequiredCatalogBytes, err = monitorNativeCatalogForecast(record, request.Policy, request.FutureSegments, maximumMonitorHistoryRevisionBytes)
+	revision.RequiredCatalogBytes, err = monitorNativeCatalogForecast(record, request.Policy, request.FutureSegments, maximumMonitorHistoryApprovalBytes)
 	if err != nil {
 		return plan, err
 	}
 	if _, err := revision.signingBytes(); err != nil {
 		return plan, err
+	}
+	// Signature hex has fixed size. Bound the complete importable envelope before
+	// exporting signing bytes, including its framing and required report newline.
+	frame, err := json.Marshal(monitorHistoryCatalogApproval{Schema: monitorHistoryCatalogApprovalSchema, Revision: revision, Signature: strings.Repeat("0", 128)})
+	if err != nil || len(frame)+1 > maximumMonitorHistoryApprovalBytes {
+		return plan, errors.Join(errors.New("native catalog preview cannot produce a bounded approval frame"), err)
 	}
 	if err := errors.Join(monitorNativeCatalogHeadBudget(record, request.Policy, request.Capacity),
 		monitorHistoryDeclarationForecast(declaration, []string{request.Original.Path}, revision.RequiredBytes, revision.RequiredInodes)); err != nil {
@@ -362,7 +369,7 @@ func runMonitorNativeCatalog(ctx context.Context, args []string, stdout, stderr 
 		err = decodeMonitorHistoryInput(raw, &plan)
 		var approval monitorHistoryCatalogApproval
 		if err == nil {
-			raw, digest, err = readPlanFile(ctx, approvalPath, maximumMonitorHistoryRevisionBytes)
+			raw, digest, err = readPlanFile(ctx, approvalPath, maximumMonitorHistoryApprovalBytes)
 			if err == nil && digest != approvalHash {
 				err = errors.New("native catalog approval digest differs")
 			}

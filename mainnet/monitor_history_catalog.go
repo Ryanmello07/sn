@@ -20,6 +20,7 @@ const maximumReviewedMonitorHistorySegments = 512
 const maximumMonitorHistoryCatalogBytes = 128 * 1024
 const maximumMonitorHistoryRevisions = 16
 const maximumMonitorHistoryRevisionBytes = 16 * 1024
+const maximumMonitorHistoryApprovalBytes = maximumMonitorHistoryRevisionBytes + 1024
 
 // Counts are independent of serialized metadata and of available disk space.
 // HeldReaders counts guarded segment owners, each retaining its own descriptors.
@@ -124,6 +125,10 @@ func (self monitorHistoryCatalogApproval) validate(policy *monitorHistoryCatalog
 	key, keyErr := rootReceiptHex(policy.ApprovalPublicKey, ed25519.PublicKeySize)
 	if self.Schema != monitorHistoryCatalogApprovalSchema || messageErr != nil || signatureErr != nil || keyErr != nil || !ed25519.Verify(key, message, signature) {
 		return errors.New("monitor history catalog approval signature or original authority differs")
+	}
+	raw, err := json.Marshal(self)
+	if err != nil || len(raw)+1 > maximumMonitorHistoryApprovalBytes {
+		return errors.Join(errors.New("monitor history complete approval frame exceeds its import bound"), err)
 	}
 	return nil
 }

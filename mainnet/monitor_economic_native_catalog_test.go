@@ -387,3 +387,57 @@ func TestMonitorNativeCatalogRequiresBothPhysicalForecastReserves(t *testing.T) 
 		}
 	}
 }
+
+// A valid revision near its payload bound must still be importable after the
+// signature envelope is added. The protected long path is synthetic and local.
+func TestMonitorNativeCatalogPublicImportsCompleteBoundedApprovalFrame(t *testing.T) {
+	f := newMonitorNativeCatalogFixture(t, false)
+	baseline := f.plan(t)
+	var path string
+	for count := 1; count <= 3000; count++ {
+		parts := []string{f.archive.metadata}
+		for remaining := count; remaining > 0; remaining -= min(remaining, 100) {
+			parts = append(parts, strings.Repeat("\x01", min(remaining, 100)))
+		}
+		parts = append(parts, "writer-fence.json")
+		candidate := baseline.Revision
+		candidate.FormerWriterFence.Path = filepath.Join(parts...)
+		revision, err := json.Marshal(candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		envelope, err := json.Marshal(monitorHistoryCatalogApproval{Schema: monitorHistoryCatalogApprovalSchema, Revision: candidate, Signature: strings.Repeat("0", 128)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(revision) <= maximumMonitorHistoryRevisionBytes && len(envelope)+1 > maximumMonitorHistoryRevisionBytes {
+			path = candidate.FormerWriterFence.Path
+			break
+		}
+	}
+	if path == "" || len(path) >= 4096 {
+		t.Fatal("synthetic signature-envelope boundary was not representable")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	fence, err := os.ReadFile(f.request.FormerWriterFence.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, fence, 0600); err != nil {
+		t.Fatal(err)
+	}
+	f.request.FormerWriterFence = planFileReference{Path: path, Sha256: monitorReadDigest(fence)}
+	plan := f.plan(t)
+	approval := f.approve(t, plan)
+	raw, err := json.Marshal(approval)
+	if err != nil || len(raw)+1 <= maximumMonitorHistoryRevisionBytes || len(raw)+1 > 17*1024 {
+		t.Fatal("actual emitted signature frame did not cross only the old import boundary", len(raw), err)
+	}
+	f.apply(t, plan, approval)
+	retained := f.archive.native.record(t)
+	if retained.State.Catalog == nil || retained.State.Catalog.Revisions[0] != approval || retained.State.PendingThrough == nil || retained.State.PendingThrough.Number != 102 {
+		t.Fatal("complete approval import lost original signature or pending range")
+	}
+}
