@@ -10,7 +10,7 @@ use sp_core::{
 };
 use sp_runtime::generic::{Digest, DigestItem};
 use sp_state_machine::{prove_read_on_trie_backend, TestExternalities};
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::BTreeMap};
 
 const OWNER: &[u8] = b"synthetic-child";
 const ACCOUNT: &[u8] = b"zzzz-account";
@@ -145,6 +145,7 @@ fn job(code: &[u8], change: impl FnOnce(&mut Storage)) -> HistoricalJob {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect(),
+        observation_profile: None,
     }
 }
 
@@ -182,6 +183,199 @@ fn top_only_proof(job: &mut HistoricalJob, include_account: bool) {
     }
     let proof = prove_read_on_trie_backend(&backing.backend, keys).unwrap();
     job.proof_nodes_hex = proof.into_iter_nodes().map(|node| encoded(&node)).collect();
+}
+
+/// Test-only callsite maps come from the unmodified program's export and code
+/// sections. A label is deliberately not an actual-runtime semantic review.
+fn observation_profile(code: &[u8], export: &str, purpose: &str) -> observer::ObservationProfile {
+    let mut index = None;
+    let mut imported = 0;
+    let mut bodies = BTreeMap::new();
+    for payload in wasmparser::Parser::new(0).parse_all(code) {
+        match payload.unwrap() {
+            wasmparser::Payload::ImportSection(section) => {
+                for import in section {
+                    if matches!(import.unwrap().ty, wasmparser::TypeRef::Func(_)) {
+                        imported += 1;
+                    }
+                }
+            }
+            wasmparser::Payload::ExportSection(section) => {
+                for entry in section {
+                    let entry = entry.unwrap();
+                    if entry.name == export {
+                        assert_eq!(entry.kind, wasmparser::ExternalKind::Func);
+                        assert!(index.replace(entry.index).is_none());
+                    }
+                }
+            }
+            wasmparser::Payload::CodeSectionEntry(body) => {
+                bodies.insert(imported, code[body.range()].to_vec());
+                imported += 1;
+            }
+            _ => {}
+        }
+    }
+    let index = index.expect("synthetic observer export");
+    let body = &bodies[&index];
+    observer::ObservationProfile {
+        schema: "urnetwork-original-wasm-hook-observation-v1".to_owned(),
+        runtime_code_sha256: sha2_256(code),
+        source_review_sha256: [71; 32],
+        rules: vec![observer::HookRule {
+            purpose: purpose.to_owned(),
+            function_index: index,
+            function_body_sha256: sha2_256(body),
+            offset_start: 0,
+            offset_end: body.len() as u32,
+        }],
+    }
+}
+
+#[test]
+fn historical_original_wasm_stack_observes_real_host_calls_without_fee_authority() {
+    let code = wasm("", &format!("{READ} {WRITE}"));
+    let profile = observation_profile(&code, "Core_execute_block", "fee-withdraw");
+    let function = profile.rules[0].function_index;
+    let mut job = job(&code, |storage| {
+        storage.top.insert(ACCOUNT.to_vec(), b"v".to_vec());
+    });
+    let original_code = job.runtime_code_hex.clone();
+    job.observation_profile = Some(profile);
+    let report = run(&job).expect("complete original-code host observation refused");
+    assert_eq!(job.runtime_code_hex, original_code);
+    let trace = report
+        .hook_observations
+        .expect("original stack trace absent");
+    assert!(trace.original_function_bodies_preserved);
+    assert_eq!(
+        trace.authority,
+        "caller-supplied-unapproved-callsite-profile"
+    );
+    assert_eq!(trace.observations.len(), 2);
+    assert_eq!(trace.observations[0].operation, "get");
+    assert_eq!(trace.observations[1].operation, "set");
+    assert_eq!(trace.observations[1].value_hex.as_deref(), Some("0x76"));
+    for event in trace.observations {
+        assert_eq!(event.purpose, "fee-withdraw");
+        assert_eq!(event.key_hex, encoded(ACCOUNT));
+        assert!(event
+            .stack
+            .iter()
+            .any(|frame| frame.function_index == function && frame.function_offset > 0));
+    }
+    assert_eq!(report.native_fee_debit, None);
+    assert!(!report.native_fee_withdrawal_refund_observed && !report.runtime_admitted);
+}
+
+#[test]
+fn historical_original_wasm_observer_refuses_relabelled_body_code_and_range() {
+    let code = wasm("", READ);
+    let profile = observation_profile(&code, "Core_execute_block", "fee-withdraw");
+    for variant in 0..5 {
+        let mut job = job(&code, |_| {});
+        let mut profile = profile.clone();
+        match variant {
+            0 => profile.runtime_code_sha256[0] ^= 1,
+            1 => profile.rules[0].function_body_sha256[0] ^= 1,
+            2 => profile.rules[0].offset_end = u32::MAX,
+            3 => profile.rules[0].purpose = "unreviewed-purpose".to_owned(),
+            4 => profile.rules.push(profile.rules[0].clone()),
+            _ => unreachable!(),
+        }
+        job.observation_profile = Some(profile);
+        let error = run(&job).expect_err("substituted observer identity was accepted");
+        assert!(error.to_string().contains("observer"), "{variant}: {error}");
+    }
+}
+
+#[test]
+fn historical_original_wasm_observer_rollback_discards_effect_not_work() {
+    let code = wasm(
+        "",
+        &format!("(call $begin) {WRITE} (call $rollback) {READ}"),
+    );
+    let mut job = job(&code, |_| {});
+    job.observation_profile = Some(observation_profile(
+        &code,
+        "Core_execute_block",
+        "fee-refund",
+    ));
+    let report = run(&job).expect("complete rollback observation refused");
+    let trace = report.hook_observations.unwrap();
+    assert_eq!(trace.host_calls, 2);
+    assert_eq!(trace.discarded_on_rollback, 1);
+    assert_eq!(trace.observations.len(), 1);
+    assert_eq!(trace.observations[0].ordinal, 2);
+    assert_eq!(trace.observations[0].operation, "get");
+    assert_eq!(report.parent_state_root, report.child_state_root);
+    assert!(!report.native_fee_withdrawal_refund_observed);
+}
+
+#[test]
+fn historical_original_wasm_nested_ambiguous_attribution_refuses_complete_block() {
+    let code = wasm(
+        &format!("(func $nested (export \"nested\") {READ})"),
+        "(call $nested)",
+    );
+    let mut profile = observation_profile(&code, "Core_execute_block", "fee-withdraw");
+    profile
+        .rules
+        .extend(observation_profile(&code, "nested", "fee-refund").rules);
+    let mut job = job(&code, |_| {});
+    job.observation_profile = Some(profile);
+    let error = run(&job).expect_err("two active fee purposes became one fee fact");
+    assert!(
+        error.to_string().contains("execute block refused"),
+        "{error}"
+    );
+}
+
+#[test]
+fn historical_original_wasm_unobserved_calls_and_zero_events_remain_unknown() {
+    let code = wasm("", READ);
+    let mut job = job(&code, |_| {});
+    job.observation_profile = Some(observation_profile(&code, "Core_version", "fee-refund"));
+    let report = run(&job).expect("unmatched original function refused");
+    let trace = report.hook_observations.unwrap();
+    assert_eq!(trace.host_calls, 1);
+    assert!(trace.observations.is_empty());
+    assert_eq!(report.native_fee_debit, None);
+    assert!(!report.native_fee_withdrawal_refund_observed);
+}
+
+#[test]
+fn historical_original_wasm_observer_cumulative_bound_survives_rollback() {
+    let code = wasm("", &format!("(loop $again (call $begin) {WRITE} (call $rollback) (local.set $n (i32.add (local.get $n) (i32.const 1))) (br_if $again (i32.lt_u (local.get $n) (i32.const 4097))))"));
+    let mut job = job(&code, |_| {});
+    job.observation_profile = Some(observation_profile(
+        &code,
+        "Core_execute_block",
+        "fee-withdraw",
+    ));
+    let error = run(&job).expect_err("rolled-back trace bypassed cumulative work bound");
+    assert!(
+        error.to_string().contains("execute block refused"),
+        "{error}"
+    );
+}
+
+#[test]
+fn historical_original_wasm_observer_never_publishes_incomplete_poststate() {
+    let code = wasm("", WRITE);
+    let mut job = job(&code, |_| {});
+    job.observation_profile = Some(observation_profile(
+        &code,
+        "Core_execute_block",
+        "fee-withdraw",
+    ));
+    let error = run(&job).expect_err("host trace escaped a changed child root");
+    assert!(
+        error
+            .to_string()
+            .contains("reproduced child state root differs"),
+        "{error}"
+    );
 }
 
 #[test]
