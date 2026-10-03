@@ -3914,7 +3914,7 @@ The [verified `39e2744a` source intake](evidence/paired-restore-public-source-in
 
 ### Required Safe observations preserve original recovery authority
 
-The [verified adjacent-read candidate](evidence/safe-state-read-source-intake-20261003.json), SN `296980a0`, distinguishes required code/storage/getter absence from intentionally nullable pending lookups. Original signed retry budgets remain unchanged. Transport failure or cancellation returns before authority comparison; a returned conflicting owner, nonce, guard, code or digest still refuses. Ten selected roots include actual public submission custody and unavailable archive state after a retained receipt. Independent normal/race qualification, five old-source controls and final composition remain pending.
+The [verified adjacent-read candidate](evidence/safe-state-read-source-intake-20261003.json), SN `296980a0`, distinguishes required code/storage/getter absence from intentionally nullable pending lookups. Original signed retry budgets remain unchanged. Transport failure or cancellation returns before authority comparison; a returned conflicting owner, nonce, guard, code or digest still refuses. Ten selected roots include actual public submission custody and unavailable archive state after a retained receipt. The [original normal scope](evidence/safe-state-read-normal-failure-20261003.json) has nine passes and one returned-conflict assertion failure; root verified ten bindings and the exact raw result. A separate correction, race qualification, five old-source controls and final composition remain required.
 
 ### Preserve monitoring progress through operational revisions
 
