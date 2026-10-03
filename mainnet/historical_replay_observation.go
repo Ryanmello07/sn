@@ -26,11 +26,54 @@ type historicalReplayObservationProfile struct {
 }
 
 type historicalReplayHookRule struct {
-	Purpose            string                 `json:"purpose"`
-	FunctionIndex      uint32                 `json:"function_index"`
-	FunctionBodySha256 historicalReplayDigest `json:"function_body_sha256"`
-	OffsetStart        uint32                 `json:"offset_start"`
-	OffsetEnd          uint32                 `json:"offset_end"`
+	Purpose            string                    `json:"purpose"`
+	FunctionIndex      uint32                    `json:"function_index"`
+	FunctionBodySha256 historicalReplayDigest    `json:"function_body_sha256"`
+	OffsetStart        uint32                    `json:"offset_start"`
+	OffsetEnd          uint32                    `json:"offset_end"`
+	Memory             []historicalNativeCapture `json:"memory,omitempty"`
+}
+
+type historicalNativeCapture struct {
+	Name               string                  `json:"name"`
+	Address            uint32                  `json:"address"`
+	Global             *string                 `json:"global,omitempty"`
+	DereferenceOffsets []uint32                `json:"dereference_offsets,omitempty"`
+	Bytes              uint32                  `json:"bytes"`
+	Repeat             *historicalNativeRepeat `json:"repeat,omitempty"`
+}
+
+// Count is read from original memory; Maximum and Stride are reviewed bounds.
+// This admits tuple-backed vectors without inventing a contiguous copy in Wasm.
+type historicalNativeRepeat struct {
+	Count   historicalNativePointer `json:"count"`
+	Maximum uint32                  `json:"maximum"`
+	Stride  uint32                  `json:"stride"`
+}
+
+type historicalNativePointer struct {
+	Address            uint32   `json:"address"`
+	Global             *string  `json:"global,omitempty"`
+	DereferenceOffsets []uint32 `json:"dereference_offsets,omitempty"`
+}
+
+type historicalNativeMemory struct {
+	Name         string  `json:"name"`
+	Address      uint32  `json:"address"`
+	BytesHex     string  `json:"bytes_hex"`
+	ElementCount *uint32 `json:"element_count,omitempty"`
+}
+
+type historicalNativeObservation struct {
+	ExecutionPhaseHex *string                  `json:"execution_phase_hex"`
+	Memory            []historicalNativeMemory `json:"memory"`
+}
+
+type historicalStorageReturn struct {
+	Present      bool    `json:"present"`
+	ValueHex     *string `json:"value_hex"`
+	Offset       *uint32 `json:"offset"`
+	OutputLength *uint32 `json:"output_length"`
 }
 
 type historicalReplayFrame struct {
@@ -39,12 +82,14 @@ type historicalReplayFrame struct {
 }
 
 type historicalReplayObservation struct {
-	Ordinal   uint64                  `json:"ordinal"`
-	Purpose   string                  `json:"purpose"`
-	Operation string                  `json:"operation"`
-	KeyHex    string                  `json:"key_hex"`
-	ValueHex  *string                 `json:"value_hex"`
-	Stack     []historicalReplayFrame `json:"stack"`
+	Ordinal       uint64                       `json:"ordinal"`
+	Purpose       string                       `json:"purpose"`
+	Operation     string                       `json:"operation"`
+	KeyHex        string                       `json:"key_hex"`
+	ValueHex      *string                      `json:"value_hex"`
+	Stack         []historicalReplayFrame      `json:"stack"`
+	StorageReturn *historicalStorageReturn     `json:"storage_return,omitempty"`
+	Native        *historicalNativeObservation `json:"native,omitempty"`
 }
 
 type historicalReplayObservations struct {
@@ -114,12 +159,15 @@ func (self *historicalReplayObservationProfile) validate(job historicalReplayJob
 	if self == nil {
 		return nil
 	}
-	if self.Schema != "urnetwork-original-wasm-hook-observation-v1" || self.RuntimeCodeSha256 != job.RuntimeCodeSha256 || self.SourceReviewSha256 == (historicalReplayDigest{}) || len(self.Rules) == 0 || len(self.Rules) > 32 || self.MetadataSha256 != nil && *self.MetadataSha256 == (historicalReplayDigest{}) {
+	if (self.Schema != "urnetwork-original-wasm-hook-observation-v1" && self.Schema != historicalNativeProfileSchema) || self.RuntimeCodeSha256 != job.RuntimeCodeSha256 || self.SourceReviewSha256 == (historicalReplayDigest{}) || len(self.Rules) == 0 || len(self.Rules) > 32 || self.MetadataSha256 != nil && *self.MetadataSha256 == (historicalReplayDigest{}) {
 		return errors.New("historical observation profile differs or exceeds bound")
 	}
 	for index, rule := range self.Rules {
-		if !historicalReplayPurpose(rule.Purpose) || rule.FunctionBodySha256 == (historicalReplayDigest{}) || rule.OffsetStart >= rule.OffsetEnd {
+		if !(historicalReplayPurpose(rule.Purpose) || self.Schema == historicalNativeProfileSchema && historicalNativePurpose(rule.Purpose)) || rule.FunctionBodySha256 == (historicalReplayDigest{}) || rule.OffsetStart >= rule.OffsetEnd {
 			return errors.New("historical observation rule identity or range differs")
+		}
+		if err := validateHistoricalNativeCaptures(rule); err != nil {
+			return err
 		}
 		for _, prior := range self.Rules[:index] {
 			if prior.FunctionIndex == rule.FunctionIndex && rule.OffsetStart < prior.OffsetEnd && prior.OffsetStart < rule.OffsetEnd {
@@ -163,7 +211,11 @@ func validateHistoricalReplayObservations(job historicalReplayJob, trace *histor
 	if err != nil {
 		return err
 	}
-	if trace.ProfileSha256 != historicalReplayDigest(sha256.Sum256(raw)) || trace.SourceReviewSha256 != profile.SourceReviewSha256 || trace.Authority != "caller-supplied-unapproved-callsite-profile" || !trace.OriginalFunctionBodiesPreserved || trace.HostCalls > 65536 || trace.DiscardedOnRollback > 4096 || uint64(len(trace.Observations))+trace.DiscardedOnRollback > 4096 {
+	maximumRecords, maximumBytes := uint64(4096), 2*1024*1024
+	if profile.Schema == historicalNativeProfileSchema {
+		maximumRecords, maximumBytes = 16384, 32*1024*1024
+	}
+	if trace.ProfileSha256 != historicalReplayDigest(sha256.Sum256(raw)) || trace.SourceReviewSha256 != profile.SourceReviewSha256 || trace.Authority != "caller-supplied-unapproved-callsite-profile" || !trace.OriginalFunctionBodiesPreserved || trace.HostCalls > 65536 || trace.DiscardedOnRollback > maximumRecords || uint64(len(trace.Observations))+trace.DiscardedOnRollback > maximumRecords {
 		return errors.New("historical observation binding, authority or resource bound differs")
 	}
 	observations := make(map[uint64]historicalReplayObservation, len(trace.Observations))
@@ -209,12 +261,15 @@ func validateHistoricalReplayObservations(job historicalReplayJob, trace *histor
 		if matches != 1 {
 			return errors.New("historical observation lacks one original callsite")
 		}
+		if err := validateHistoricalNativeObservation(profile, observation); err != nil {
+			return err
+		}
 		encoded, err := json.Marshal(observation)
 		if err != nil {
 			return err
 		}
 		encodedBytes += len(encoded)
-		if encodedBytes > 2*1024*1024 {
+		if encodedBytes > maximumBytes {
 			return errors.New("historical retained observation bytes exceed bound")
 		}
 		observations[observation.Ordinal] = observation

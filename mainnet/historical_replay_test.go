@@ -56,7 +56,11 @@ func init() {
 	}
 	report := historicalReplayReport{Schema: historicalReplaySchema, JobSha256: historicalReplayDigest(sha256.Sum256(raw)), SdkRevision: historicalReplaySdk, HostProfile: "substrate-proof-bounded-storage-v1", ParentHash: job.ParentHash, ChildHash: job.ChildHash, RuntimeCodeSha256: job.RuntimeCodeSha256, Extrinsics: uint64(len(job.ExtrinsicsHex)), ProofNodes: uint64(len(job.ProofNodesHex)), ProofBytes: 1, StorageCalls: 1, StorageIoBytes: 1, PostStateReproduced: true, AnchorAuthority: "caller-supplied-unapproved"}
 	if job.ObservationProfile != nil {
-		report.HookObservations = historicalObservationTestTrace(job)
+		if job.ObservationProfile.Schema == historicalNativeProfileSchema {
+			report.HookObservations = historicalNativeExecutionTestTrace(job)
+		} else {
+			report.HookObservations = historicalObservationTestTrace(job)
+		}
 	}
 	switch job.RuntimeCodeHex {
 	case "0xc0", "0xc1", "0xc2", "0xc3", "0xc4":
