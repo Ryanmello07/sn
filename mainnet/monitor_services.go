@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/urfoundation/sn/internal/durablehead"
+	"github.com/urfoundation/sn/internal/durablepath"
 )
 
 // Hooks observe real reads, real durability, and owned waits. None can supply
@@ -53,7 +54,7 @@ type monitorValidatorWorker struct {
 }
 
 // A terminal role releases its own descriptors before reporting completion.
-// Parent cleanup remains idempotent and also covers partially admitted roles.
+// Constructor failures use the same synchronous cleanup for partial admission.
 func closeMonitorServiceOwners(role string, metrics *monitorMetricsStore, checkpoint *monitorCheckpointStore, hooks monitorServiceHooks) error {
 	var metricsFile, checkpointFile *os.File
 	if metrics != nil {
@@ -105,6 +106,9 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	if ctx.Err() != nil {
 		return 0
 	}
+	if policy == nil || durablepath.Require(ctx) != nil {
+		return 3
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators)+len(policy.Operators)+len(policy.Providers)+len(policy.Claims)+len(policy.NativeEconomics)+len(policy.EvmEconomics), now)
@@ -117,135 +121,80 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		}
 	}()
 	diagnostic := output.errors.Writer("diagnostic")
-	var workers []*monitorValidatorWorker
-	var operators []*monitorOperatorWorker
-	var providers []*monitorProviderWorker
-	var claims []*monitorClaimWorker
-	var economics []*monitorEconomicNativeWorker
-	var evmEconomics []*monitorEconomicEvmWorker
-	defer func() {
-		var cleanupErr error
-		for _, worker := range evmEconomics {
-			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
-		}
-		for _, worker := range economics {
-			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
-		}
-		for _, worker := range claims {
-			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
-		}
-		for _, worker := range providers {
-			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
-		}
-		for _, worker := range operators {
-			cleanupErr = errors.Join(cleanupErr, closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks))
-		}
-		for _, worker := range workers {
-			cleanupErr = errors.Join(cleanupErr, closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks))
-		}
-		if cleanupErr != nil {
-			fmt.Fprintln(diagnostic, "monitor service cleanup:", cleanupErr)
-			result = 3
-		}
-	}()
-	for _, validator := range policy.Validators {
-		checkpointFile, metricsFile := monitorValidatorPaths(checkpointPath, metricsPath, validator.Role)
-		checkpoint, err := openMonitorServiceCheckpoint(checkpointFile, expected, validator, ctx)
-		if err != nil {
-			if monitorCanceledCheckpointLoad(ctx, err) {
-				return result
+	// Every configured role owns one admission/run lifecycle and one result
+	// slot. Local startup cannot prevent another role from starting.
+	roles := len(policy.Validators) + len(policy.Operators) + len(policy.Providers) + len(policy.Claims) + len(policy.NativeEconomics) + len(policy.EvmEconomics)
+	results := make(chan int, roles+1)
+	index := 0
+	launch := func(role string, open func(io.Writer) (*monitorAdmittedRole, error)) {
+		writer := output.events.Writer(fmt.Sprintf("validator%d", index))
+		index++
+		go func() {
+			exit := runMonitorRoleAdmission(ctx, role, func() (*monitorAdmittedRole, error) { return open(writer) }, writer, diagnostic, now, hooks)
+			if hooks.afterWorker != nil {
+				hooks.afterWorker(role, exit)
 			}
-			fmt.Fprintln(diagnostic, "monitor service checkpoint admission:", err)
-			return 3
-		}
-		worker := &monitorValidatorWorker{policy: validator, checkpoint: checkpoint}
-		workers = append(workers, worker)
-		metrics, err := openMonitorMetrics(metricsFile, ctx)
-		if err != nil {
-			if monitorCanceledCheckpointLoad(ctx, err) {
-				return result
-			}
-			fmt.Fprintln(diagnostic, "monitor service metrics admission:", err)
-			return 3
-		}
-		worker.metrics = metrics
-		if hooks.afterCheckpointOpen != nil {
-			hooks.afterCheckpointOpen(ctx, validator.Role, checkpoint.owner.lock)
-		}
-		worker.state, err = checkpoint.load(ctx)
-		if err != nil {
-			if monitorCanceledCheckpointLoad(ctx, err) {
-				return result
-			}
-			fmt.Fprintln(diagnostic, "monitor service retained state:", err)
-			return 3
-		}
-		if hooks.syncDirectory != nil {
-			checkpoint.owner.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(validator.Role, "checkpoint", file) }
-			metrics.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(validator.Role, "metrics", file) }
-		}
+			results <- exit
+		}()
 	}
-
-	for _, operator := range policy.Operators {
-		worker, err := openMonitorOperatorWorker(ctx, operator, expected, checkpointPath, metricsPath, hooks)
-		if err != nil {
-			if monitorCanceledCheckpointLoad(ctx, err) {
-				return result
+	for _, validator := range policy.Validators {
+		launch(validator.Role, func(writer io.Writer) (*monitorAdmittedRole, error) {
+			worker, err := openMonitorValidatorWorker(ctx, validator, expected, checkpointPath, metricsPath, hooks)
+			if worker == nil {
+				return nil, err
 			}
-			fmt.Fprintln(diagnostic, "monitor operator admission:", err)
-			return 3
-		}
-		operators = append(operators, worker)
+			return &monitorAdmittedRole{run: func() int { return worker.run(ctx, interval, writer, diagnostic, now, hooks) }, close: func() error {
+				return closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks)
+			}}, err
+		})
+	}
+	for _, operator := range policy.Operators {
+		launch(operator.Role, func(writer io.Writer) (*monitorAdmittedRole, error) {
+			worker, err := openMonitorOperatorWorker(ctx, operator, expected, checkpointPath, metricsPath, hooks)
+			if worker == nil {
+				return nil, err
+			}
+			return &monitorAdmittedRole{run: func() int { return worker.run(ctx, interval, stallAfter, writer, diagnostic, now, hooks) }, close: func() error {
+				return closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks)
+			}}, err
+		})
 	}
 	for _, provider := range policy.Providers {
-		worker, err := openMonitorProviderWorker(ctx, provider, expected, checkpointPath, metricsPath, hooks)
-		if err != nil {
-			if monitorCanceledCheckpointLoad(ctx, err) {
-				return result
+		launch(provider.Role, func(writer io.Writer) (*monitorAdmittedRole, error) {
+			worker, err := openMonitorProviderWorker(ctx, provider, expected, checkpointPath, metricsPath, hooks)
+			if worker == nil {
+				return nil, err
 			}
-			fmt.Fprintln(diagnostic, "monitor provider admission:", err)
-			return 3
-		}
-		providers = append(providers, worker)
+			return &monitorAdmittedRole{run: func() int { return worker.run(ctx, interval, writer, diagnostic, now, hooks) }, close: func() error { return worker.close(hooks) }}, err
+		})
 	}
 	for _, claim := range policy.Claims {
-		worker, err := openMonitorClaimWorker(ctx, claim, expected, checkpointPath, metricsPath, hooks)
-		if err != nil {
-			if monitorCanceledCheckpointLoad(ctx, err) {
-				return result
+		launch(claim.Role, func(writer io.Writer) (*monitorAdmittedRole, error) {
+			worker, err := openMonitorClaimWorker(ctx, claim, expected, checkpointPath, metricsPath, hooks)
+			if worker == nil {
+				return nil, err
 			}
-			fmt.Fprintln(diagnostic, "monitor claim admission:", err)
-			return 3
-		}
-		claims = append(claims, worker)
+			return &monitorAdmittedRole{run: func() int { return worker.run(ctx, interval, writer, diagnostic, now, hooks) }, close: func() error { return worker.close(hooks) }}, err
+		})
 	}
 	for _, economic := range policy.NativeEconomics {
-		worker, err := openMonitorEconomicNativeWorker(ctx, client, economic, expected, checkpointPath, metricsPath, hooks)
-		if err != nil {
-			if monitorCanceledCheckpointLoad(ctx, err) {
-				return result
+		launch(economic.Role, func(writer io.Writer) (*monitorAdmittedRole, error) {
+			worker, err := openMonitorEconomicNativeWorker(ctx, client, economic, expected, checkpointPath, metricsPath, hooks)
+			if worker == nil {
+				return nil, err
 			}
-			fmt.Fprintln(diagnostic, "monitor native economic admission:", err)
-			result = 3
-			continue
-		}
-		economics = append(economics, worker)
+			return &monitorAdmittedRole{run: func() int { return worker.run(ctx, interval, writer, diagnostic, now, hooks) }, close: func() error { return worker.close(hooks) }}, err
+		})
 	}
 	for _, economic := range policy.EvmEconomics {
-		worker, err := openMonitorEconomicEvmWorker(ctx, client, economic, expected, checkpointPath, metricsPath, hooks)
-		if err != nil {
-			if monitorCanceledCheckpointLoad(ctx, err) {
-				return result
+		launch(economic.Role, func(writer io.Writer) (*monitorAdmittedRole, error) {
+			worker, err := openMonitorEconomicEvmWorker(ctx, client, economic, expected, checkpointPath, metricsPath, hooks)
+			if worker == nil {
+				return nil, err
 			}
-			fmt.Fprintln(diagnostic, "monitor EVM economic admission:", err)
-			result = 3
-			continue
-		}
-		evmEconomics = append(evmEconomics, worker)
+			return &monitorAdmittedRole{run: func() int { return worker.run(ctx, interval, writer, diagnostic, now, hooks) }, close: func() error { return worker.close(hooks) }}, err
+		})
 	}
-	// The channel holds every terminal result even during cancellation. Every
-	// launched worker sends once and is consumed before output owners close.
-	results := make(chan int, len(workers)+len(operators)+len(providers)+len(claims)+len(economics)+len(evmEconomics)+1)
 	go func() {
 		backoff := time.Second
 		for ctx.Err() == nil {
@@ -262,92 +211,7 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		}
 		results <- 0
 	}()
-	for index, worker := range workers {
-		writer := output.events.Writer(fmt.Sprintf("validator%d", index))
-		go func() {
-			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
-			if err := closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks); err != nil {
-				fmt.Fprintln(diagnostic, "monitor service cleanup:", err)
-				exit = 3
-			}
-			if hooks.afterWorker != nil {
-				hooks.afterWorker(worker.policy.Role, exit)
-			}
-			results <- exit
-		}()
-	}
-
-	for index, worker := range operators {
-		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+index))
-		go func() {
-			exit := worker.run(ctx, interval, stallAfter, writer, diagnostic, now, hooks)
-			if err := closeMonitorServiceOwners(worker.policy.Role, worker.metrics, worker.checkpoint.owner, hooks); err != nil {
-				fmt.Fprintln(diagnostic, "monitor operator cleanup:", err)
-				exit = 3
-			}
-			if hooks.afterWorker != nil {
-				hooks.afterWorker(worker.policy.Role, exit)
-			}
-			results <- exit
-		}()
-	}
-	for index, worker := range providers {
-		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+len(operators)+index))
-		go func() {
-			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
-			if err := worker.close(hooks); err != nil {
-				fmt.Fprintln(diagnostic, "monitor provider cleanup:", err)
-				exit = 3
-			}
-			if hooks.afterWorker != nil {
-				hooks.afterWorker(worker.policy.Role, exit)
-			}
-			results <- exit
-		}()
-	}
-	for index, worker := range claims {
-		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+len(operators)+len(providers)+index))
-		go func() {
-			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
-			if err := worker.close(hooks); err != nil {
-				fmt.Fprintln(diagnostic, "monitor claim cleanup:", err)
-				exit = 3
-			}
-			if hooks.afterWorker != nil {
-				hooks.afterWorker(worker.policy.Role, exit)
-			}
-			results <- exit
-		}()
-	}
-	for index, worker := range economics {
-		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+len(operators)+len(providers)+len(claims)+index))
-		go func() {
-			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
-			if err := worker.close(hooks); err != nil {
-				fmt.Fprintln(diagnostic, "monitor native economic cleanup:", err)
-				exit = 3
-			}
-			if hooks.afterWorker != nil {
-				hooks.afterWorker(worker.policy.Role, exit)
-			}
-			results <- exit
-		}()
-	}
-	for index, worker := range evmEconomics {
-		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+len(operators)+len(providers)+len(claims)+len(economics)+index))
-		go func() {
-			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
-			if err := worker.close(hooks); err != nil {
-				fmt.Fprintln(diagnostic, "monitor EVM economic cleanup:", err)
-				exit = 3
-			}
-			if hooks.afterWorker != nil {
-				hooks.afterWorker(worker.policy.Role, exit)
-			}
-			results <- exit
-		}()
-	}
-	for remaining := len(workers) + len(operators) + len(providers) + len(claims) + len(economics) + len(evmEconomics) + 1; remaining > 0; remaining-- {
+	for remaining := roles + 1; remaining > 0; remaining-- {
 		exit := <-results
 		if exit != 0 {
 			result = max(result, exit)

@@ -118,7 +118,13 @@ func TestMonitorEconomicEvmPublicAdjacentAdmissionCancellationJoinsOwners(t *tes
 		}
 		select {
 		case event := <-run.sink.events:
-			t.Fatal("canceled role admission invented an economic sample", kind, event)
+			if kind == "evm" {
+				t.Fatal("canceled EVM admission invented an economic sample", kind, event)
+			}
+			// The independent EVM role can publish while another role waits.
+			if event.State.Cursor.Number != 13 {
+				t.Fatal("peer publication lost its original cursor", kind, event)
+			}
 		default:
 		}
 	}

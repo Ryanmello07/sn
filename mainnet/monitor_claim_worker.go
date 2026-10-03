@@ -59,14 +59,14 @@ func openMonitorClaimWorker(ctx context.Context, policy monitorClaimPolicy, expe
 	worker := &monitorClaimWorker{policy: policy, checkpoint: owner}
 	worker.metrics, err = openMonitorMetrics(metricsPath, ctx)
 	if err != nil {
-		return nil, errors.Join(err, owner.close())
+		return nil, monitorAdmissionFailure(err, closeMonitorServiceOwners(policy.Role, nil, owner, hooks))
 	}
 	if hooks.afterCheckpointOpen != nil {
 		hooks.afterCheckpointOpen(ctx, policy.Role, owner.lock)
 	}
 	worker.state, err = worker.load(ctx)
 	if err != nil {
-		return nil, errors.Join(err, worker.close(hooks))
+		return nil, monitorAdmissionFailure(err, worker.close(hooks))
 	}
 	if hooks.syncDirectory != nil {
 		owner.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(policy.Role, "checkpoint", file) }
