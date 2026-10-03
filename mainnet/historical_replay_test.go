@@ -209,11 +209,21 @@ func TestHistoricalReplayCancellationJoinsPartialOutput(t *testing.T) {
 	defer cancel()
 	var once sync.Once
 	pid := 0
+	started := time.Now()
 	report, err := runHistoricalReplay(ctx, request, historicalReplayHooks{afterStart: func(owner context.Context, value int) {
 		pid = value
 		deadline, ok := owner.Deadline()
-		if !ok || time.Until(deadline) < 290*time.Second || time.Until(deadline) > 300*time.Second {
-			t.Error("default owned replay deadline differs", deadline, ok)
+		minimum, maximum := started.Add(request.Budget), time.Now().Add(request.Budget)
+		if parent, present := ctx.Deadline(); present {
+			if parent.Before(minimum) {
+				minimum = parent
+			}
+			if parent.Before(maximum) {
+				maximum = parent
+			}
+		}
+		if !ok || deadline.Before(minimum) || deadline.After(maximum) {
+			t.Error("default owned replay deadline differs", deadline, ok, minimum, maximum)
 		}
 	}, afterOutput: func() { once.Do(cancel) }})
 	if !errors.Is(err, context.Canceled) || report != nil || pid == 0 || !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
@@ -221,11 +231,45 @@ func TestHistoricalReplayCancellationJoinsPartialOutput(t *testing.T) {
 	}
 }
 
+// The test owns clock advancement, so instrumented engine admission cannot
+// consume the intended post-launch deadline before that phase is reached. This
+// context has its own Done channel; propagation must use its typed Err.
+type historicalReplayTestDeadline struct {
+	context.Context
+	deadline time.Time
+	done     chan struct{}
+	once     sync.Once
+}
+
+func (self *historicalReplayTestDeadline) Deadline() (time.Time, bool) {
+	return self.deadline, true
+}
+func (self *historicalReplayTestDeadline) Done() <-chan struct{} { return self.done }
+func (self *historicalReplayTestDeadline) Err() error {
+	select {
+	case <-self.done:
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
+}
+func (self *historicalReplayTestDeadline) expire() { self.once.Do(func() { close(self.done) }) }
+
+func historicalReplayControlledDeadline(t *testing.T) *historicalReplayTestDeadline {
+	t.Helper()
+	clock := &historicalReplayTestDeadline{Context: t.Context(), deadline: time.Now().Add(5 * time.Second), done: make(chan struct{})}
+	stop := context.AfterFunc(t.Context(), clock.expire)
+	t.Cleanup(func() {
+		stop()
+		clock.expire()
+	})
+	return clock
+}
+
 func TestHistoricalReplayOwnerDeadlineClipsChildAndJoins(t *testing.T) {
 	request := historicalReplayTestRequest(t, "0x06")
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	pid := 0
+	ctx := historicalReplayControlledDeadline(t)
+	pid, output := 0, false
 	report, err := runHistoricalReplay(ctx, request, historicalReplayHooks{afterStart: func(owner context.Context, value int) {
 		pid = value
 		got, ok := owner.Deadline()
@@ -233,9 +277,29 @@ func TestHistoricalReplayOwnerDeadlineClipsChildAndJoins(t *testing.T) {
 		if !ok || !got.Equal(want) {
 			t.Error("child reset the caller deadline", got, want)
 		}
+	}, afterOutput: func() {
+		output = true
+		ctx.expire()
 	}})
-	if !errors.Is(err, context.DeadlineExceeded) || report != nil || pid == 0 || !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
-		t.Fatal("owned replay deadline did not join actual child", report, pid, err)
+	if !errors.Is(err, context.DeadlineExceeded) || report != nil || pid == 0 || !output || !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
+		t.Fatal("owned replay deadline did not join actual started child", report, pid, output, err)
+	}
+}
+
+func TestHistoricalReplayExpiredOwnerRefusesBeforeEngineAdmission(t *testing.T) {
+	request := historicalReplayTestRequest(t, "0x00")
+	// An attempted open would produce a different, observable filesystem error.
+	request.Engine.Path = filepath.Join(filepath.Dir(request.Job.Path), "absent-engine")
+	ctx := historicalReplayControlledDeadline(t)
+	ctx.expire()
+	file, err := historicalReplayEngine(ctx, request.Engine)
+	if file != nil || !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrNotExist) {
+		t.Fatal("expired owner performed engine admission work", file, err)
+	}
+	started := false
+	report, err := runHistoricalReplay(ctx, request, historicalReplayHooks{beforeStart: func(context.Context, *os.File) { started = true }})
+	if report != nil || !errors.Is(err, context.DeadlineExceeded) || started {
+		t.Fatal("prelaunch deadline was lost or started a child", report, started, err)
 	}
 }
 
