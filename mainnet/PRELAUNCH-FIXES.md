@@ -36,8 +36,7 @@ independent, and existing accepted-attempt reconciliation remains available.
 Unavailable database reads must retain their retryable classification rather
 than become policy conflicts. Initialization belongs in the existing deployment
 preparation path, with no repeated historical census. The [source checkpoint](evidence/payout-boundary-source-20261003.md) records
-the implementation and 13 new controls. Independent execution remains pending;
-the unchanged earlier candidate's passing tests do not close this gap.
+the implementation and 13 new controls. Its [independent 28-root normal/race, causal and vet/build qualification](evidence/payout-boundary-qualification-20261003.json) is complete. Final combined release and production adoption remain pending; earlier candidate tests retain their own scopes.
 
 Cancellation must preserve every unpaid earning component, not just released
 contract sweeps. Review found that canceling a legacy payment can leave its
@@ -5998,3 +5997,8 @@ Frozen Server `25f617dc` passes its [independent 26-root normal scope](evidence/
 The [same 26 wallet GET roots pass under race detection](evidence/wallet-get-race-20261003.json) at frozen Server `25f617dc`, with zero failures/skips/race reports and completed fixture cleanup. Omission controls, vet and combined-source qualification remain separate.
 
 The new claim-consumer candidate `80030acb` has a [coordinator source review](evidence/claim-consumer-source-review-20261003.json): exactly nine changed files over the pinned current base; miner, validator, operator, protocol, chain and module bytes are unchanged. Qualification remains pending. Unsigned claimed-leaf progress and signed-receipt progress are distinct actual producer paths; later credit payments belong in the economic observer rather than rewriting original receipt evidence. An adjacent review identifies HTTP 408/429 classification and pacing for follow-up; these current statuses are nonterminal, so this is not evidence of a stopped observer.
+
+
+## October 3 current claim-consumer qualification handoff
+
+The [final frozen intake](evidence/claim-consumer-intake-20261003.json) for SN `80030acb` binds 31 source/control files and selects 23 roots: sixteen claim controls, two public worker neighbors and five actual producer controls. Six explicitly classified overlays expect eight behavioral assertion failures per mode. The final intake supersedes the retained preliminary control recipe; compiler failures cannot count as causal success. No execution result is claimed yet. This uses the unchanged producer347 graph (Server10a/Connect0a5), so published Connect9e/current Server2a consumption still requires its own release composition. The observer supplies no repair, signing, independent finality or per-epoch payment authority.

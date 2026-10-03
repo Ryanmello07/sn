@@ -30,7 +30,7 @@ The transition rollout must retain evidence for each step:
 2. Apply and verify the payout schema features and initialize the durable
    earning-policy anchor from the exact reviewed config before admitting new
    allocations or sends. The anchor is implemented in frozen Server candidate
-   `cdcb61fa`, with independent qualification pending. Initialization
+   `cdcb61fa`, with [independent scoped qualification complete](evidence/payout-boundary-qualification-20261003.json). Final combined release and deployment remain pending. Initialization
    must be idempotent for the same boundary and refuse a conflicting earning
    policy; subsequent readiness activation must not redefine earning time.
    Join any replaced worker and preserve its pending processor attempts and
@@ -56,12 +56,11 @@ These are rollout requirements, not completed production steps.
 
 The [durable-boundary source checkpoint](evidence/payout-boundary-source-20261003.md)
 records the frozen implementation and 13 new deterministic controls, followed
-by its separately retained normal test result. It does not prove a merged
-release or deployed earning schedule.
+by its separately retained normal/race, causal and vet/build results. It does not prove a merged release or deployed earning schedule.
 The [first boundary execution attempt](evidence/payout-boundary-fixture-setup-failure-20261003.json)
 failed during container initialization before any test; corrected execution
 uses a distinct readable fixture copy without changing product source.
-Owned cleanup completed, and qualification remains pending.
+Owned cleanup completed. The corrected exact-source boundary qualification is now complete; the original setup failure remains recorded.
 
 The [frozen transition plan](evidence/payout-transition-plan-20261002.md)
 records candidate Server `b19f1eba` / config `93dc65fd`, including the exact
@@ -3529,3 +3528,8 @@ Frozen Server `25f617dc` passes its [independent 26-root normal scope](evidence/
 The [same 26 wallet GET roots pass under race detection](evidence/wallet-get-race-20261003.json) at frozen Server `25f617dc`, with zero failures/skips/race reports and completed fixture cleanup. Omission controls, vet and combined-source qualification remain separate.
 
 The new claim-consumer candidate `80030acb` has a [coordinator source review](evidence/claim-consumer-source-review-20261003.json): exactly nine changed files over the pinned current base; miner, validator, operator, protocol, chain and module bytes are unchanged. Qualification remains pending. Unsigned claimed-leaf progress and signed-receipt progress are distinct actual producer paths; later credit payments belong in the economic observer rather than rewriting original receipt evidence. An adjacent review identifies HTTP 408/429 classification and pacing for follow-up; these current statuses are nonterminal, so this is not evidence of a stopped observer.
+
+
+## October 3 current claim-consumer qualification handoff
+
+The [final frozen intake](evidence/claim-consumer-intake-20261003.json) for SN `80030acb` binds 31 source/control files and selects 23 roots: sixteen claim controls, two public worker neighbors and five actual producer controls. Six explicitly classified overlays expect eight behavioral assertion failures per mode. The final intake supersedes the retained preliminary control recipe; compiler failures cannot count as causal success. No execution result is claimed yet. This uses the unchanged producer347 graph (Server10a/Connect0a5), so published Connect9e/current Server2a consumption still requires its own release composition. The observer supplies no repair, signing, independent finality or per-epoch payment authority.
