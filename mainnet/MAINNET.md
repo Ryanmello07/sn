@@ -104,8 +104,10 @@ also produce all 12 intended assertion failures across six groups, with no race
 reports and completed owned-fixture cleanup. The
 [normal final-Circle, submission-basis and CLI controls](evidence/payout-operative-causal-normal-20261003.json)
 produce five intended failures, including actual post-limiter refusal and stale
-amount/wallet protection. Their race scope remains pending, and the full model
-result is not complete.
+amount/wallet protection. The [same operative controls under race detection](evidence/payout-operative-causal-race-20261003.json)
+also produce all five intended failures, without race reports and with owned
+fixture cleanup complete. The full model result remains pending; later policy
+binding and GET retry candidates require their own qualification.
 These checkpoints do not supply completed release, deployment or activation
 evidence.
 

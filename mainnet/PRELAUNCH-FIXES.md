@@ -62,8 +62,11 @@ with no skips or race reports. The
 now discriminate all 12 intended failures without race reports. The full model
 suite remains pending. The [normal operative controls](evidence/payout-operative-causal-normal-20261003.json)
 produce five intended assertion failures for actual final-send admission,
-submission basis and CLI refusal propagation. Their race scope remains pending;
-these deliberately modified controls do not supply a live payout claim. Neither source is merged or deployed; these scoped
+submission basis and CLI refusal propagation. Their [race scope also produces
+all five intended failures](evidence/payout-operative-causal-race-20261003.json),
+with no race reports and completed fixture cleanup. These deliberately modified
+controls do not supply a live payout claim or qualify the later policy-binding
+and read-retry candidates. Neither source is merged or deployed; these scoped
 receipts do not establish complete financial qualification.
 
 Processor recovery must also bind each response to its original attempt before
