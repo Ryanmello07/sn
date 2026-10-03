@@ -3645,3 +3645,8 @@ Current Server `ec6a038a` selects Connect `b8bd3c994855` and SDK `95ccd57da971`.
 ### Current Connect dependency join
 
 Published Connect `5def2fa4` merges both `9e7ec0af` recovery APIs and `b8bd3c99` local discovery. The [independent Git source join](evidence/connect-current-recovery-source-join-20261003.json) verifies the complete durable-volume tree is identical to qualified `9e7ec0af`; only two local-discovery paths differ. The server's selected `b8bd3c99` branch alone lacks restore APIs, so the current consumer composition needs this combined published floor, with SDK `95ccd57d` retained. Source identity preserves earlier recovery qualifications within their original scope; it does not replace actual consumer compilation, changed-path tests or release rehearsal.
+
+
+### Current Server publication source join
+
+The [independent source join](evidence/server-publication-source-join-20261003.json) verifies candidate `84007fcb` retains all 46 financial paths exactly from qualified `19952183` and all ten newer upstream paths from `ec6a038a`. The path sets do not overlap and the join introduces no other changes relative to their common base. Preserve these qualified bodies while checking the changed dependency graph; this source receipt does not establish publication, deployment or final release acceptance.
