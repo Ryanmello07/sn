@@ -6075,3 +6075,8 @@ Implement explicit bounded expectation renewal under the same reviewed pool/memb
 ## October 3 claim consumer race result
 
 Frozen SN `80030acb` passes [all 23 selected roots under race detection](evidence/claim-consumer-race-20261003.json), with zero failures/skips/race reports. Coordinator verification checks all twenty bound files and actual terminal names across consumer, public worker and producer groups. Normal23 results remain separate. Causal and terminal qualification remain pending; published current-module adoption and continuous expectation renewal are separate requirements.
+
+
+## October 3 claim normal causal qualification
+
+Frozen SN `80030acb` reaches all [eight intended normal causal assertions](evidence/claim-consumer-causal-normal-20261003.json) across six groups: old public-policy admission, heartbeat/progress conflation, proof loss, receipt contradiction, healthy-peer cancellation and uncertain-publication continuation. Coordinator verification checks 39 bound files and actual failed-root events. One control uses the exact earlier operative policy body; five are explicitly labelled invariant omissions. Compiler/setup failures are not counted as causal evidence. Race causal execution remains active; final qualification and merge are pending.
