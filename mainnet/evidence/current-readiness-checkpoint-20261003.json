@@ -76,7 +76,9 @@
     "validator-cache-permission-main-merge-20261003.json": "c2b95c5afee511e8b40864715ccf3b1598bd58d61ceeab9f41f833bfc0943746",
     "validator-cache-permission0b58-qualification-20261003.json": "05c8a8a1e74081acb18e3e6873cb961a6e574201604fa2e306ed828a016d66b8",
     "validator-cache41-original-failure-review-20261003.json": "c747efc2732ce220c8cbe4f274c1cf6d6577d7c9e398061b5a64ca0961369a95",
-    "wallet-get-qualification-20261003.json": "9ac95c36477c1d8e925ab7cc9a889ace615299ce5a16520f257fc23aee98fe4c"
+    "wallet-get-qualification-20261003.json": "9ac95c36477c1d8e925ab7cc9a889ace615299ce5a16520f257fc23aee98fe4c",
+    "native-evm-read-causes9d-qualification-20261003.json": "da819c804adf6658387e65da8a16a3471505851c9e0362805abcb060d4dd0bf5",
+    "native-evm-read-causes9d-main-merge-20261003.json": "f97ebaaf15cbe1ce0c8b2e802ae56b075fa7465d10a5491011965146d9461c0d"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
