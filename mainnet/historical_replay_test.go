@@ -1,0 +1,257 @@
+// A synthetic executable protocol peer exercises real public command/process
+// custody. It does not pretend to execute Wasm or qualify a runtime fee hook;
+// the separate Rust tests own trie/execution correctness.
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+	"testing"
+	"time"
+
+	"golang.org/x/sys/unix"
+)
+
+// Only the private test binary uses this argv grammar. The production child is
+// the separately hash-pinned Rust ELF and has no test-mode environment switch.
+func init() {
+	if os.Args[0] != "urnetwork-historical-replay" {
+		return
+	}
+	if len(os.Args) != 2 || os.Args[1] != "--historical-proof-replay-v1" {
+		os.Exit(6)
+	}
+	raw, err := io.ReadAll(io.LimitReader(os.Stdin, historicalReplayJobLimit+1))
+	var job historicalReplayJob
+	if err != nil || len(raw) > historicalReplayJobLimit || json.Unmarshal(raw, &job) != nil || os.Getenv("SYNTHETIC_REPLAY_INHERITED") != "" {
+		os.Exit(7)
+	}
+	report := historicalReplayReport{Schema: historicalReplaySchema, JobSha256: historicalReplayDigest(sha256.Sum256(raw)), SdkRevision: historicalReplaySdk, HostProfile: "substrate-proof-bounded-storage-v1", ParentHash: job.ParentHash, ChildHash: job.ChildHash, RuntimeCodeSha256: job.RuntimeCodeSha256, Extrinsics: uint64(len(job.ExtrinsicsHex)), ProofNodes: uint64(len(job.ProofNodesHex)), ProofBytes: 1, StorageCalls: 1, StorageIoBytes: 1, PostStateReproduced: true, AnchorAuthority: "caller-supplied-unapproved"}
+	switch job.RuntimeCodeHex {
+	case "0x01":
+		report.JobSha256[0] ^= 1
+	case "0x02":
+		report.ParentHash[0] ^= 1
+	case "0x03":
+		report.RuntimeCodeSha256[0] ^= 1
+	case "0x04":
+		report.NativeFeeDebit = new(string)
+		*report.NativeFeeDebit = "0"
+		report.NativeFeeWithdrawalRefund = true
+	case "0x05":
+		report.AnchorAuthority = "verified"
+		report.RuntimeAdmitted = true
+	case "0x06":
+		_, _ = os.Stdout.WriteString("{\"schema\":")
+		time.Sleep(24 * time.Hour)
+		os.Exit(8)
+	case "0x07":
+		_, _ = os.Stdout.Write(bytes.Repeat([]byte{'x'}, historicalReplayReportLimit+1))
+		time.Sleep(24 * time.Hour)
+		os.Exit(8)
+	case "0x08":
+		_, _ = os.Stderr.Write(bytes.Repeat([]byte{'x'}, 64*1024+1))
+		time.Sleep(24 * time.Hour)
+		os.Exit(8)
+	case "0x09":
+		_ = json.NewEncoder(os.Stdout).Encode(report)
+		_, _ = os.Stdout.WriteString("{}")
+		os.Exit(0)
+	case "0x0a":
+		_ = json.NewEncoder(os.Stdout).Encode(report)
+		os.Exit(9)
+	}
+	_ = json.NewEncoder(os.Stdout).Encode(report)
+	os.Exit(0)
+}
+
+// Real files/processes have no shared mutable fixture state. The binary is
+// read-only; every invocation gets a newly sealed memfd and owned process.
+func historicalReplayTestRequest(t *testing.T, mode string) historicalReplayRequest {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	engine, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(engine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.New()
+	_, readErr := io.Copy(hash, file)
+	if err := errors.Join(readErr, file.Close()); err != nil {
+		t.Fatal(err)
+	}
+	job := historicalReplayJob{Schema: historicalReplaySchema, ParentHeaderHex: "0x00", ParentHash: historicalReplayDigest{1}, ChildHeaderHex: "0x00", ChildHash: historicalReplayDigest{2}, RuntimeCodeHex: mode, RuntimeCodeSha256: historicalReplayDigest{3}, RuntimeCodeBlake2b256: historicalReplayDigest{4}, ExecutionStateVersion: 1, ExtrinsicsHex: []string{"0x00"}, ProofNodesHex: []string{"0x00"}}
+	raw, err := json.Marshal(job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "synthetic-proof.json")
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	return historicalReplayRequest{Engine: planFileReference{Path: engine, Sha256: "sha256:" + hex.EncodeToString(hash.Sum(nil))}, Job: planFileReference{Path: path, Sha256: monitorReadDigest(raw)}, Budget: 300 * time.Second}
+}
+
+func TestHistoricalReplayPublicCommandRetainsUnknownFeeAndAuthority(t *testing.T) {
+	request := historicalReplayTestRequest(t, "0x00")
+	t.Setenv("SYNTHETIC_REPLAY_INHERITED", "synthetic-not-forwarded")
+	var stdout, stderr bytes.Buffer
+	exit := runMain(t.Context(), []string{"verify-historical-execution", "--engine", request.Engine.Path, "--engine-sha256", request.Engine.Sha256, "--job", request.Job.Path, "--job-sha256", request.Job.Sha256}, &stdout, &stderr)
+	var report historicalReplayReport
+	if exit != 0 || decodePlanJson(stdout.Bytes(), &report) != nil || !report.PostStateReproduced || report.NativeFeeDebit != nil || report.NativeFeeWithdrawalRefund || report.RuntimeAdmitted || report.ProductionSelection || report.AnchorAuthority != "caller-supplied-unapproved" {
+		t.Fatal("public execution caller changed proof authority", exit, stderr.String(), stdout.String())
+	}
+}
+
+func TestHistoricalReplayReportBindsOriginalJobAndAuthority(t *testing.T) {
+	for _, mode := range []string{"0x01", "0x02", "0x03", "0x04", "0x05", "0x09", "0x0a"} {
+		request := historicalReplayTestRequest(t, mode)
+		result, err := runHistoricalReplay(t.Context(), request, historicalReplayHooks{})
+		if err == nil || result != nil {
+			t.Fatal("foreign, partial or authority-forging replay result was accepted", mode, result, err)
+		}
+	}
+}
+
+func TestHistoricalReplayExecutesSealedImageAfterSourceReplacement(t *testing.T) {
+	request := historicalReplayTestRequest(t, "0x00")
+	// Replace only this test-owned copy, never the test runner or sealed input.
+	input, err := os.Open(request.Engine.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(filepath.Dir(request.Job.Path), "engine")
+	output, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0500)
+	if err != nil {
+		input.Close()
+		t.Fatal(err)
+	}
+	_, err = io.Copy(output, input)
+	if err := errors.Join(err, input.Close(), output.Close()); err != nil {
+		t.Fatal(err)
+	}
+	request.Engine.Path = path
+	checked := false
+	report, err := runHistoricalReplay(t.Context(), request, historicalReplayHooks{beforeStart: func(_ context.Context, image *os.File) {
+		checked = true
+		if _, err := image.WriteAt([]byte{0}, 0); !errors.Is(err, syscall.EPERM) {
+			t.Error("pinned executable accepted a write", err)
+		}
+		seals, err := unix.FcntlInt(image.Fd(), unix.F_GET_SEALS, 0)
+		if err != nil || seals&(unix.F_SEAL_WRITE|unix.F_SEAL_GROW|unix.F_SEAL_SHRINK|unix.F_SEAL_SEAL) != unix.F_SEAL_WRITE|unix.F_SEAL_GROW|unix.F_SEAL_SHRINK|unix.F_SEAL_SEAL {
+			t.Error("pinned executable lacks immutable seals", seals, err)
+		}
+		if err := os.Rename(path, path+".retained"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("unexecutable replacement"), 0500); err != nil {
+			t.Fatal(err)
+		}
+	}})
+	if err != nil || report == nil || !checked {
+		t.Fatal("source replacement redirected the sealed executable", err, checked)
+	}
+}
+
+func TestHistoricalReplayCancellationJoinsPartialOutput(t *testing.T) {
+	request := historicalReplayTestRequest(t, "0x06")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var once sync.Once
+	pid := 0
+	report, err := runHistoricalReplay(ctx, request, historicalReplayHooks{afterStart: func(owner context.Context, value int) {
+		pid = value
+		deadline, ok := owner.Deadline()
+		if !ok || time.Until(deadline) < 290*time.Second || time.Until(deadline) > 300*time.Second {
+			t.Error("default owned replay deadline differs", deadline, ok)
+		}
+	}, afterOutput: func() { once.Do(cancel) }})
+	if !errors.Is(err, context.Canceled) || report != nil || pid == 0 || !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
+		t.Fatal("partial replay cancellation lost cause or left a child", report, pid, err)
+	}
+}
+
+func TestHistoricalReplayOwnerDeadlineClipsChildAndJoins(t *testing.T) {
+	request := historicalReplayTestRequest(t, "0x06")
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	pid := 0
+	report, err := runHistoricalReplay(ctx, request, historicalReplayHooks{afterStart: func(owner context.Context, value int) {
+		pid = value
+		got, ok := owner.Deadline()
+		want, _ := ctx.Deadline()
+		if !ok || !got.Equal(want) {
+			t.Error("child reset the caller deadline", got, want)
+		}
+	}})
+	if !errors.Is(err, context.DeadlineExceeded) || report != nil || pid == 0 || !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
+		t.Fatal("owned replay deadline did not join actual child", report, pid, err)
+	}
+}
+
+func TestHistoricalReplayOutputBoundsCancelRealChild(t *testing.T) {
+	for _, mode := range []string{"0x07", "0x08"} {
+		request := historicalReplayTestRequest(t, mode)
+		pid := 0
+		report, err := runHistoricalReplay(t.Context(), request, historicalReplayHooks{afterStart: func(_ context.Context, value int) { pid = value }})
+		if err == nil || !strings.Contains(err.Error(), "output exceeds bound") || report != nil || pid == 0 || !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
+			t.Fatal("replay output bound left a child or published partial evidence", mode, pid, report, err)
+		}
+	}
+}
+
+func TestHistoricalReplayInputPinsAndCanonicalDigestsPrecedeLaunch(t *testing.T) {
+	request := historicalReplayTestRequest(t, "0x00")
+	original, err := os.ReadFile(request.Job.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range [][]byte{
+		append([]byte(`{"schema":"duplicate",`), original[1:]...),
+		bytes.Replace(original, []byte(`"parent_hash":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]`), []byte(`"parent_hash":[1]`), 1),
+	} {
+		if bytes.Equal(raw, original) {
+			t.Fatal("invalid input fixture did not change its wire bytes")
+		}
+		if err := os.WriteFile(request.Job.Path, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		request.Job.Sha256 = monitorReadDigest(raw)
+		started := false
+		report, err := runHistoricalReplay(t.Context(), request, historicalReplayHooks{afterStart: func(context.Context, int) { started = true }})
+		if err == nil || report != nil || started {
+			t.Fatal("malformed replay input reached executable", err, started)
+		}
+	}
+	request.Job.Sha256 = "sha256:" + strings.Repeat("e", 64)
+	if report, err := runHistoricalReplay(t.Context(), request, historicalReplayHooks{}); err == nil || report != nil {
+		t.Fatal("changed replay input pin was accepted")
+	}
+}
+
+func TestHistoricalReplayCanceledOwnerDoesNotLaunch(t *testing.T) {
+	request := historicalReplayTestRequest(t, "0x00")
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	started := false
+	report, err := runHistoricalReplay(ctx, request, historicalReplayHooks{afterStart: func(context.Context, int) { started = true }})
+	if !errors.Is(err, context.Canceled) || report != nil || started {
+		t.Fatal("canceled owner invoked replay", err, started)
+	}
+}

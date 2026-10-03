@@ -215,6 +215,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && args[0] == "observe-native-miner-emission" {
 		return runEconomicEmissionCommand(ctx, args[1:], stdout, stderr)
 	}
+	if len(args) != 0 && args[0] == "verify-historical-execution" {
+		return runHistoricalReplayCommand(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || args[0] != "inspect" && args[0] != "monitor" {
 		fmt.Fprintln(stderr, "storage reports: sn-mainnet storage-inventory|storage-verify --durable-volumes FILE --durable-volumes-sha256 sha256:DIGEST --root DIR --former-writer-fence FILE --former-writer-fence-sha256 sha256:DIGEST [--inventory FILE --inventory-sha256 sha256:DIGEST]; reports do not authorize restart")
 		fmt.Fprintln(stderr, "owner-local storage reports: storage-owner-inventory|storage-owner-verify selects only the owner-local declaration schema; --max-owner-attributes and --max-owner-attribute-bytes bound retained custody metadata; verification --compare-reviewed-rebound only reports comparison to an explicit target declaration")
