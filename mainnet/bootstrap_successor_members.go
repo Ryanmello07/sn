@@ -153,8 +153,13 @@ func openBootstrapSuccessorMembers(storage *mainnetDurableDirectory, file *os.Fi
 // Unknown names inside an owned namespace are included and then refused by the
 // retained census. Unrelated bootstrap role snapshots are separate owners.
 func (self *bootstrapSuccessorMembers) owns(name string) bool {
-	if self.registry {
-		return name != self.spec.Name
+	return bootstrapSuccessorMemberOwns(self.spec, self.registry, name)
+}
+
+// Offline restoration uses the same fixed namespace as the actual owner.
+func bootstrapSuccessorMemberOwns(spec durablehead.Spec, registry bool, name string) bool {
+	if registry {
+		return name != spec.Name
 	}
 	return name == bootstrapSuccessorPreparationFile || name == bootstrapSuccessorPreparationFile+".lock" ||
 		strings.HasPrefix(name, bootstrapSuccessorStagePrefix) || strings.HasPrefix(name, bootstrapSuccessorExecutionPrefix) ||
@@ -163,38 +168,52 @@ func (self *bootstrapSuccessorMembers) owns(name string) bool {
 
 // Schema limits are implementation constants, never values selected by disk.
 func (self *bootstrapSuccessorMembers) validate() error {
-	if self.census.Schema != bootstrapSuccessorMemberSchema || self.census.Kind != self.spec.Kind || self.census.Members == nil || len(self.census.Members) > maximumBootstrapSuccessorMemberCount {
-		return self.storage.identity("successor member census scope or bounds changed", nil)
+	if err := validateBootstrapSuccessorMemberCensus(self.census, self.spec, self.registry); err != nil {
+		self.storage.failed = errors.Join(durablevolume.ErrIdentity, err)
+		return self.storage.failed
+	}
+	return nil
+}
+
+// Parsing a retained census does not require or grant a writer capability.
+func validateBootstrapSuccessorMemberCensus(census bootstrapSuccessorMemberCensus, spec durablehead.Spec, registry bool) error {
+	if census.Schema != bootstrapSuccessorMemberSchema || census.Kind != spec.Kind || census.Members == nil || len(census.Members) > maximumBootstrapSuccessorMemberCount {
+		return errors.New("successor member census scope or bounds changed")
 	}
 	validName := func(name string) bool {
-		return name != "" && name != "." && name != ".." && filepath.Base(name) == name && len(name) <= 255 && !strings.ContainsRune(name, 0) && self.owns(name)
+		return name != "" && name != "." && name != ".." && filepath.Base(name) == name && len(name) <= 255 && !strings.ContainsRune(name, 0) && bootstrapSuccessorMemberOwns(spec, registry, name)
 	}
 	previous, total := "", int64(0)
-	for _, member := range self.census.Members {
+	for _, member := range census.Members {
 		if !validName(member.Name) || member.Name <= previous || member.Inode == 0 || member.Size < 0 || member.Size > maximumBootstrapSuccessorExecutionBytes || !planSha256(member.Sha256) || member.Size > maximumBootstrapSuccessorMemberTotalBytes-total {
-			return self.storage.identity("successor member census contains invalid or unbounded identity", nil)
+			return errors.New("successor member census contains invalid or unbounded identity")
 		}
 		previous, total = member.Name, total+member.Size
 	}
-	if pending := self.census.Pending; pending != nil {
+	if pending := census.Pending; pending != nil {
 		if !validName(pending.Name) || pending.Size <= 0 || pending.Size > maximumBootstrapSuccessorExecutionBytes || !planSha256(pending.Sha256) ||
-			pending.Append && (pending.Stage != "" || pending.StageInode != 0 || self.registry || pending.Name != bootstrapSuccessorPreparationFile+".lock") ||
+			pending.Append && (pending.Stage != "" || pending.StageInode != 0 || registry || pending.Name != bootstrapSuccessorPreparationFile+".lock") ||
 			!pending.Append && (!validName(pending.Stage) || pending.Stage == pending.Name) {
-			return self.storage.identity("successor pending member authority is invalid", nil)
+			return errors.New("successor pending member authority is invalid")
 		}
 		if len(pending.Payload) > base64.StdEncoding.EncodedLen(maximumBootstrapSuccessorExecutionBytes) {
-			return self.storage.identity("successor pending payload exceeds its byte bound", nil)
+			return errors.New("successor pending payload exceeds its byte bound")
 		}
 		raw, err := base64.StdEncoding.Strict().DecodeString(pending.Payload)
 		if err != nil || int64(len(raw)) != pending.Size || safeReleaseHash(raw) != pending.Sha256 || base64.StdEncoding.EncodeToString(raw) != pending.Payload {
-			return self.storage.identity("successor pending payload differs from its exact original bytes", err)
+			return errors.Join(errors.New("successor pending payload differs from its exact original bytes"), err)
 		}
-		prior, exists := self.member(pending.Name)
+		index := sort.Search(len(census.Members), func(i int) bool { return census.Members[i].Name >= pending.Name })
+		exists := index < len(census.Members) && census.Members[index].Name == pending.Name
+		prior := bootstrapSuccessorMember{}
+		if exists {
+			prior = census.Members[index]
+		}
 		if pending.Append != exists {
-			return self.storage.identity("successor pending member predecessor differs", nil)
+			return errors.New("successor pending member predecessor differs")
 		}
-		if pending.Size > maximumBootstrapSuccessorMemberTotalBytes-(total-prior.Size) || !exists && len(self.census.Members) == maximumBootstrapSuccessorMemberCount {
-			return self.storage.identity("successor pending member exceeds its retained census bounds", nil)
+		if pending.Size > maximumBootstrapSuccessorMemberTotalBytes-(total-prior.Size) || !exists && len(census.Members) == maximumBootstrapSuccessorMemberCount {
+			return errors.New("successor pending member exceeds its retained census bounds")
 		}
 	}
 	return nil

@@ -32,7 +32,7 @@ func planStoragePreparationRestore(ctx context.Context, name string, owner durab
 		}
 		return validator.PlanAttemptLedgerRestore(ctx, name, owner, report)
 	case "mainnet-successor-local-members", "mainnet-successor-nonce-members":
-		return durablevolume.PreparationOwnerPlan{}, errors.New("restore requires its separate original ledger or member-census semantic adapter")
+		return planStoragePreparationMembersRestore(ctx, name, owner, report, ownerLocal)
 	}
 	spec, scope, err := storagePreparationSnapshotSpec(ownerLocal, owner)
 	if err != nil {
@@ -59,7 +59,7 @@ func inspectStoragePreparationRestore(ctx context.Context, root *os.File, owner 
 		}
 		return validator.InspectAttemptLedgerRestore(ctx, root, owner, report)
 	case "mainnet-successor-local-members", "mainnet-successor-nonce-members":
-		return nil, errors.New("restore requires its separate original ledger or member-census semantic adapter")
+		return inspectStoragePreparationMembersRestore(ctx, root, owner, report, ownerLocal)
 	}
 	spec, scope, err := storagePreparationSnapshotSpec(ownerLocal, owner.Owner)
 	if err != nil {

@@ -34,6 +34,9 @@ func storagePreparationAdapter(ownerLocal bool) durablevolume.PreparationAdapter
 		InspectRestore: func(ctx context.Context, target *os.File, owner durablevolume.PreparationOwnerPlan, inventory durablevolume.Inventory) ([]durablevolume.PreparedAttribute, error) {
 			return inspectStoragePreparationRestore(ctx, target, owner, inventory, ownerLocal)
 		},
+		RebindRestore: func(ctx context.Context, owner durablevolume.PreparationOwnerPlan, inventory durablevolume.Inventory, original []byte, targets []durablevolume.PreparationSource) ([]byte, error) {
+			return rebindStoragePreparationMembersRestore(ctx, owner, inventory, original, targets, ownerLocal)
+		},
 	}
 }
 

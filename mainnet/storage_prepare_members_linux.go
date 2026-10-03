@@ -38,7 +38,7 @@ func storagePreparationMembersProfile(owner durablevolume.PreparationOwner, owne
 	if err := decodePlanJson(owner.Inputs, &scope); err != nil {
 		return spec, nil, err
 	}
-	if ownerLocal || owner.Purpose != "fresh" || owner.RelativePath != "." || owner.Kind != spec.Kind || scope != expected {
+	if ownerLocal || owner.Purpose != "fresh" && owner.Purpose != "restore" || owner.RelativePath != "." || owner.Kind != spec.Kind || scope != expected {
 		return spec, nil, errors.New("successor preparation scope, name or capacities differ from its fixed runtime profile")
 	}
 	raw, err := json.Marshal(scope)
