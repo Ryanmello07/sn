@@ -23,6 +23,7 @@ type monitorServiceHooks struct {
 	afterWorker   func(role string, exit int)
 	afterResult   func(context.Context, int)
 	afterEvent    func(context.Context, string)
+	rpcWait       func(context.Context, string, time.Duration) error
 	wait          func(context.Context, string, time.Duration) bool
 }
 

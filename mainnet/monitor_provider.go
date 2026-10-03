@@ -69,8 +69,10 @@ func monitorProviderPaths(checkpoint, metrics, role string) (string, string) {
 }
 
 func newMonitorProviderClient() *http.Client {
-	transport := &http.Transport{DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext, ResponseHeaderTimeout: 5 * time.Second, TLSHandshakeTimeout: 5 * time.Second, MaxResponseHeaderBytes: 8 * 1024, MaxConnsPerHost: 1, DisableKeepAlives: true}
-	return &http.Client{Transport: transport, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	// Connection setup can fail quickly, but a healthy slow response needs a
+	// useful read window. The request context clips both phases to its owner.
+	transport := &http.Transport{DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext, ResponseHeaderTimeout: monitorProgressAttemptBudget, TLSHandshakeTimeout: 5 * time.Second, MaxResponseHeaderBytes: 8 * 1024, MaxConnsPerHost: 1, DisableKeepAlives: true}
+	return &http.Client{Transport: transport, Timeout: monitorProgressAttemptBudget, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
 // Body close is synchronous and joined on every path. A complete identity or

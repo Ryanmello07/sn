@@ -13,6 +13,7 @@ import (
 )
 
 const defaultMonitorProgressReadBudget = 300 * time.Second
+const monitorProgressAttemptBudget = 60 * time.Second
 
 type monitorProgressReadAttempt struct {
 	retryable bool
@@ -53,11 +54,14 @@ func monitorProgressRetryTransport(err error) bool {
 		}
 		return true
 	}
+	if dns, ok := err.(*net.DNSError); ok {
+		return !dns.IsNotFound && (dns.IsTimeout || dns.IsTemporary)
+	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok && wrapped.Unwrap() != nil {
 		return monitorProgressRetryTransport(wrapped.Unwrap())
 	}
 	var network net.Error
-	return errors.Is(err, context.DeadlineExceeded) || errors.As(err, &network) && network.Timeout() || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ETIMEDOUT)
+	return errors.Is(err, context.DeadlineExceeded) || errors.As(err, &network) && network.Timeout() || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ETIMEDOUT) || errors.Is(err, syscall.ENETUNREACH) || errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETDOWN) || errors.Is(err, syscall.ENETRESET) || errors.Is(err, syscall.ECONNABORTED)
 }
 
 // Every body is already closed by read before a wait starts. Complete hard
