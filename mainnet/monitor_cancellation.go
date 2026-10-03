@@ -15,13 +15,14 @@ func monitorCanceledCheckpointLoad(ctx context.Context, err error) bool {
 	}
 	var ownership *monitorOutputOwnershipError
 	var cleanup *monitorAdmissionCleanupError
-	return !errors.Is(err, durablevolume.ErrIdentity) && !errors.Is(err, errRpcIdentityMismatch) && !errors.Is(err, errRpcIntegrity) && !errors.As(err, &ownership) && !errors.As(err, &cleanup) && monitorOnlyCancellationCause(err, ctx.Err(), 0)
+	return !errors.Is(err, durablevolume.ErrIdentity) && !errors.Is(err, errRpcIdentityMismatch) && !errors.Is(err, errRpcIntegrity) && !errors.As(err, &ownership) && !errors.As(err, &cleanup) && monitorOnlyCancellationCauses(err, 0)
 }
 
 // Joined independent I/O/close failures are not canceled observations. Owned
-// display wrappers can preserve the exact sentinel without discarding siblings.
-func monitorOnlyCancellationCause(err, cancellation error, depth int) bool {
-	if err == cancellation {
+// display wrappers can join a child deadline and parent cancellation without
+// turning either into changed custody. Every leaf must be a cancellation.
+func monitorOnlyCancellationCauses(err error, depth int) bool {
+	if err == context.Canceled || err == context.DeadlineExceeded {
 		return true
 	}
 	if err == nil || depth >= 32 {
@@ -33,14 +34,14 @@ func monitorOnlyCancellationCause(err, cancellation error, depth int) bool {
 			return false
 		}
 		for _, cause := range causes {
-			if !monitorOnlyCancellationCause(cause, cancellation, depth+1) {
+			if !monitorOnlyCancellationCauses(cause, depth+1) {
 				return false
 			}
 		}
 		return true
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		return monitorOnlyCancellationCause(wrapped.Unwrap(), cancellation, depth+1)
+		return monitorOnlyCancellationCauses(wrapped.Unwrap(), depth+1)
 	}
 	return false
 }

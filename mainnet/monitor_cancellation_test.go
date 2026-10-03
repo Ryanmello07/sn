@@ -60,8 +60,13 @@ func TestMonitorCheckpointCancellationRetainsHardCausePrecedence(t *testing.T) {
 	if !monitorCanceledCheckpointLoad(ctx, context.Canceled) {
 		t.Fatal("actual owner cancellation was not recognized")
 	}
+	for _, cause := range []error{errors.Join(context.Canceled, context.DeadlineExceeded), errors.Join(fmt.Errorf("child: %w", context.DeadlineExceeded), fmt.Errorf("parent: %w", context.Canceled))} {
+		if !monitorCanceledCheckpointLoad(ctx, cause) {
+			t.Fatal("joined child deadline and canceled owner invented an independent failure", cause)
+		}
+	}
 	for _, hard := range []error{syscall.EIO, durablevolume.ErrIdentity, errRpcIntegrity, errRpcIdentityMismatch, &monitorOutputOwnershipError{reason: "synthetic proven named replacement"}} {
-		if monitorCanceledCheckpointLoad(ctx, errors.Join(context.Canceled, hard)) {
+		if monitorCanceledCheckpointLoad(ctx, errors.Join(context.Canceled, context.DeadlineExceeded, hard)) {
 			t.Fatal("cancellation erased an independently observed hard cause", hard)
 		}
 	}
@@ -185,7 +190,7 @@ func TestMonitorNativePublicAdmissionCancellationKeepsCloseFailure(t *testing.T)
 func TestMonitorCheckpointNamedObservationPreservesCancellationCauses(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	for _, cause := range []error{context.Canceled, fmt.Errorf("named read: %w", context.Canceled), errors.Join(context.Canceled, fmt.Errorf("named postcheck: %w", context.Canceled))} {
+	for _, cause := range []error{context.Canceled, fmt.Errorf("named read: %w", context.Canceled), errors.Join(context.Canceled, fmt.Errorf("named postcheck: %w", context.Canceled)), errors.Join(context.Canceled, context.DeadlineExceeded), errors.Join(fmt.Errorf("child read: %w", context.DeadlineExceeded), fmt.Errorf("parent read: %w", context.Canceled))} {
 		observed := monitorNamedObservation(cause)
 		if !monitorCanceledCheckpointLoad(ctx, observed) || errors.Is(observed, durablevolume.ErrUnavailable) || errors.Is(observed, durablevolume.ErrIdentity) {
 			t.Fatal("pure named-read cancellation acquired an invented custody cause", observed)
@@ -196,7 +201,7 @@ func TestMonitorCheckpointNamedObservationPreservesCancellationCauses(t *testing
 		t.Fatal("active named-read timeout lost its original retryable cause", observed)
 	}
 	for _, hard := range []error{syscall.EIO, durablevolume.ErrIdentity, errRpcIntegrity, &monitorAdmissionCleanupError{cause: syscall.EIO}} {
-		observed := monitorNamedObservation(errors.Join(context.Canceled, hard))
+		observed := monitorNamedObservation(errors.Join(context.Canceled, context.DeadlineExceeded, hard))
 		if monitorCanceledCheckpointLoad(ctx, observed) || !errors.Is(observed, hard) {
 			t.Fatal("named-read cancellation erased an independent observed failure", observed)
 		}
