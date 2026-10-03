@@ -6080,3 +6080,10 @@ Frozen SN `80030acb` passes [all 23 selected roots under race detection](evidenc
 ## October 3 claim normal causal qualification
 
 Frozen SN `80030acb` reaches all [eight intended normal causal assertions](evidence/claim-consumer-causal-normal-20261003.json) across six groups: old public-policy admission, heartbeat/progress conflation, proof loss, receipt contradiction, healthy-peer cancellation and uncertain-publication continuation. Coordinator verification checks 39 bound files and actual failed-root events. One control uses the exact earlier operative policy body; five are explicitly labelled invariant omissions. Compiler/setup failures are not counted as causal evidence. Race causal execution remains active; final qualification and merge are pending.
+
+
+## October 3 claim consumer merged on main
+
+The independently configured claim consumer is merged at SN `5d8e73d7`. Its [completed independent gate](evidence/claim-consumer-qualification-20261003.json) passes 23 normal and 23 race roots, mainnet/miner vet, and eight intended causal assertions in each mode. The [race causal receipt](evidence/claim-consumer-causal-race-20261003.json) preserves exact-old-body and explicit-omission classifications. The [merge source join](evidence/claim-consumer-merge-20261003.json) proves all nine changed code/test blobs are identical to qualified candidate800; other differences are documentation/evidence only. No duplicate execution is needed for unchanged tested bodies.
+
+Current monitor policy and dispatch now include Claims alongside validator, operator and provider roles. This closes the missing finite-window claim-consumer code gap. Continuous expectation renewal, independent economic monitoring, current published-module release composition, real roster/alert delivery and production deployment remain open; MG-07 is not closed.
