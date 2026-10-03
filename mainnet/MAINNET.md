@@ -3468,3 +3468,28 @@ caller retries, preserve cancellation causes and format amounts exactly.
 Source review found fresh keys within the existing retry loop; no actual
 duplicate transfer payment is established. Qualify this customer write path
 separately from provider payout migration.
+
+
+### October 3: composed payout/read continuation source
+
+Frozen Server `2a453df9` joins the durable boundary `cdcb61fa` and wallet
+GET successor `25f617dc`. The [source join](evidence/payout-get-composition-source-join-20261003.json)
+retains all matched component bytes, with four deliberate composition changes:
+public payment error/continuation handling, its new tests, the boundary drift
+control and transition status. New legacy submission admission is distinct
+from permission to reconcile existing attempts. Returned I/O errors retain
+their causes, and canceled owners cannot schedule continuation tasks.
+
+Root verified all 58 [intake bindings](evidence/payout-get-composition-intake-20261003.json),
+46 candidate source/module files against Git, and every declared component
+match. Ten controller roots and four operative regression controls are queued;
+no composition execution, full-suite pass or deployment is claimed. Retain
+the unchanged component and full-model scopes.
+
+The source census also confirms a separate MG-07 implementation gap: current
+`monitorServicesPolicy` has provider/validator/operator roles but no claim
+consumer roles. Resume and integrate the retained `e7965b4` claim consumer
+against the actual producer and current policy rather than declaring producer
+publication alone to be monitoring closure. Sequential proof/receipt progress
+requires qualification; the earlier review lead does not establish a hidden
+leaf-progress defect in the producer's actual signed-receipt path.
