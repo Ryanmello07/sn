@@ -3574,3 +3574,10 @@ Frozen combined Server `2a453df9` separately passes its [ten-root normal composi
 ## October 3 combined payout static qualification
 
 Frozen Server `2a453df9` passes [five-package vet and the offline CLI build](evidence/payout-get-composition-vet-build-20261003.json). Coordinator verification checks the seven bound files, terminal exit records and exact binary hash. This is static/compile qualification; it does not invoke the CLI or prove a deployment. Normal composition tests are separately recorded; race and operative controls remain pending. The newer migration-order successor must retain the complete upstream migration prefix and qualify an actual existing-current-schema upgrade, not infer safety from a fresh fixture.
+
+
+## October 3 combined payout race and normal causal results
+
+Frozen Server `2a453df9` passes the [same ten composition roots under race detection](evidence/payout-get-composition-race-20261003.json), with zero failures/skips/race reports and completed fixture cleanup. Its [four normal operative controls](evidence/payout-get-composition-causal-normal-20261003.json) all reach intended behavioral failures: lost cancellation cause, canceled continuation falsely acknowledged, missing retained GET recovery, and new-send hold conflated with accepted-attempt reconciliation. The exact prior error-format body and explicit omissions remain separately labelled. Race causal controls remain pending; this source does not include upstream18ec or establish the production migration upgrade.
+
+The current-main successor also needs semantic integration coverage beyond conflict resolution: upstream18ec changes Redis escrow admission and settlement callbacks in otherwise disjoint files. Exercise actual contract close through that path into retained provider usage and cutoff accounting; a file-disjoint merge alone cannot prove unchanged financial behavior.
