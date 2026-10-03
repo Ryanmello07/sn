@@ -58,6 +58,9 @@ func openMonitorClaimWorker(ctx context.Context, policy monitorClaimPolicy, expe
 	if err != nil {
 		return nil, errors.Join(err, owner.close())
 	}
+	if hooks.afterCheckpointOpen != nil {
+		hooks.afterCheckpointOpen(ctx, policy.Role, owner.lock)
+	}
 	worker.state, err = worker.load(ctx)
 	if err != nil {
 		return nil, errors.Join(err, worker.close(hooks))

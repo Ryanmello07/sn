@@ -31,12 +31,13 @@ var monitorEconomicEvmStatusCodes = map[string]int{
 }
 
 type monitorEconomicEvmCheckpoint struct {
-	Schema               string                  `json:"schema"`
-	PolicyHash           string                  `json:"policy_hash"`
-	State                monitorEconomicEvmState `json:"state"`
-	ContentHash          string                  `json:"content_hash"`
-	Resources            *monitorEvmResources    `json:"resources,omitempty"`
-	ResourceReviewSha256 string                  `json:"resource_review_sha256,omitempty"`
+	Schema               string                     `json:"schema"`
+	PolicyHash           string                     `json:"policy_hash"`
+	State                monitorEconomicEvmState    `json:"state"`
+	ContentHash          string                     `json:"content_hash"`
+	Resources            *monitorEvmResources       `json:"resources,omitempty"`
+	ResourceReviewSha256 string                     `json:"resource_review_sha256,omitempty"`
+	ResourceHistory      *monitorEvmResourceHistory `json:"resource_history,omitempty"`
 }
 
 func (self monitorEconomicEvmCheckpoint) hash() string {
@@ -45,13 +46,14 @@ func (self monitorEconomicEvmCheckpoint) hash() string {
 }
 
 type monitorEconomicEvmWorker struct {
-	policy       monitorEconomicEvmPolicy
-	checkpoint   *monitorCheckpointStore
-	metrics      *monitorMetricsStore
-	state        *monitorEconomicEvmState
-	client       *rpcClient
-	storage      monitorStorageRecovery
-	acknowledged *monitorEvmResources
+	policy          monitorEconomicEvmPolicy
+	checkpoint      *monitorCheckpointStore
+	metrics         *monitorMetricsStore
+	state           *monitorEconomicEvmState
+	client          *rpcClient
+	storage         monitorStorageRecovery
+	acknowledged    *monitorEvmResources
+	resourceHistory *monitorEvmResourceHistory
 }
 
 func openMonitorEconomicEvmWorker(ctx context.Context, client *rpcClient, policy monitorEconomicEvmPolicy, expected identityExpectation, checkpoint, metrics string, hooks monitorServiceHooks) (*monitorEconomicEvmWorker, error) {
@@ -77,6 +79,9 @@ func openMonitorEconomicEvmWorker(ctx context.Context, client *rpcClient, policy
 	worker.metrics, err = openMonitorMetrics(metricsPath, ctx)
 	if err != nil {
 		return nil, errors.Join(err, owner.close())
+	}
+	if hooks.afterCheckpointOpen != nil {
+		hooks.afterCheckpointOpen(ctx, policy.Role, owner.lock)
 	}
 	worker.state, err = worker.load(ctx)
 	if err != nil {
@@ -153,7 +158,17 @@ func (self *monitorEconomicEvmWorker) load(ctx context.Context) (*monitorEconomi
 		return nil, err
 	}
 	acknowledged := validationPolicy.resources()
+	history, err := record.retainedResourceHistory(self.policy, acknowledged)
+	if err != nil {
+		return nil, err
+	}
+	// Validate the proposed revision before observing more data, without
+	// acknowledging it until the next complete checkpoint publication.
+	if _, err := history.advance(self.policy); err != nil {
+		return nil, err
+	}
 	self.acknowledged = &acknowledged
+	self.resourceHistory = history
 	record.State.CapacityRemaining = self.policy.HistoryEntries - uint64(len(record.State.History)+len(record.State.Fees))
 	return &record.State, nil
 }
@@ -166,7 +181,11 @@ func (self *monitorEconomicEvmWorker) save(state *monitorEconomicEvmState) error
 		return err
 	}
 	resources := self.policy.resources()
-	record := monitorEconomicEvmCheckpoint{Schema: monitorEconomicEvmCheckpointSchema, PolicyHash: self.policy.identityHash(), State: *state, Resources: &resources}
+	history, err := self.resourceHistory.advance(self.policy)
+	if err != nil {
+		return err
+	}
+	record := monitorEconomicEvmCheckpoint{Schema: monitorEconomicEvmCheckpointSchema, PolicyHash: self.policy.identityHash(), State: *state, Resources: &resources, ResourceHistory: history}
 	if self.policy.ResourceRevision != nil {
 		record.ResourceReviewSha256 = self.policy.ResourceRevision.ReviewSha256
 	}
@@ -178,7 +197,31 @@ func (self *monitorEconomicEvmWorker) save(state *monitorEconomicEvmState) error
 	if len(raw)+1 > maxRpcReplyBytes {
 		return errMonitorEconomicCapacity
 	}
-	return errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner())
+	err = errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner())
+	if err == nil {
+		self.resourceHistory = history
+	}
+	return err
+}
+
+// The legacy latest-only witness is retained as imported provenance, not
+// described as a complete historical review chain that never existed.
+func (self monitorEconomicEvmCheckpoint) retainedResourceHistory(policy monitorEconomicEvmPolicy, acknowledged monitorEvmResources) (*monitorEvmResourceHistory, error) {
+	history := self.ResourceHistory
+	if history == nil {
+		history = &monitorEvmResourceHistory{LegacyCheckpointSha256: self.ContentHash}
+		entry := monitorEvmResourceAcknowledgment{Resources: acknowledged, ReviewSha256: self.ResourceReviewSha256, ReviewHistoryEntries: defaultMonitorEvmReviewHistoryEntries, PreviousSha256: history.origin(policy)}
+		entry.ContentHash = entry.hash()
+		history.Entries = []monitorEvmResourceAcknowledgment{entry}
+	}
+	if err := history.validate(policy); err != nil {
+		return nil, err
+	}
+	last := history.Entries[len(history.Entries)-1]
+	if last.Resources != acknowledged || last.ReviewSha256 != self.ResourceReviewSha256 {
+		return nil, errors.New("EVM economic latest resource acknowledgment differs from its retained review history")
+	}
+	return history, nil
 }
 
 func monitorEconomicEvmReadCode(err error) string {
@@ -197,33 +240,34 @@ func monitorEconomicEvmReadCode(err error) string {
 // Only bounded summaries are exported. Absent independent finality, native fee
 // debits/refunds and provider entitlement proofs remain explicitly unknown.
 type monitorEconomicEvmSummary struct {
-	Cursor                           economicEmissionBoundary    `json:"cursor"`
-	PendingThrough                   *economicEmissionBoundary   `json:"pending_through,omitempty"`
-	Finalized                        *economicEmissionBoundary   `json:"observed_finalized,omitempty"`
-	BatchCount                       uint64                      `json:"batch_count"`
-	BatchChainHash                   string                      `json:"batch_chain_hash"`
-	ContractState                    *monitorEconomicEvmSnapshot `json:"observed_contract_state,omitempty"`
-	ObservedFeeCostWei               *string                     `json:"observed_fee_cost_wei"`
-	HistoryEntries                   int                         `json:"history_entries"`
-	CapacityRemaining                uint64                      `json:"capacity_remaining"`
-	SampleAt                         time.Time                   `json:"sample_at"`
-	LastReadAt                       time.Time                   `json:"last_read_at"`
-	LastProgressAt                   time.Time                   `json:"last_progress_at"`
-	UnavailableSince                 time.Time                   `json:"unavailable_since"`
-	Incidents                        uint64                      `json:"incidents"`
-	Authority                        string                      `json:"authority"`
-	FeeAuthority                     string                      `json:"fee_authority"`
-	NativeFeeDebitRao                *string                     `json:"native_fee_debit_rao"`
-	NativeFeeRefundRao               *string                     `json:"native_fee_refund_rao"`
-	NativeMinerAllocationAlpha       *string                     `json:"native_miner_allocation_alpha"`
-	CompleteProviderEntitlementAlpha *string                     `json:"complete_provider_entitlement_alpha"`
-	IndependentFinalityVerified      bool                        `json:"independent_finality_verified"`
-	NativeFeeExecutionVerified       bool                        `json:"native_fee_execution_verified"`
-	ConfiguredResources              monitorEvmResources         `json:"configured_resources"`
-	AcknowledgedResources            *monitorEvmResources        `json:"acknowledged_resources"`
+	Cursor                           economicEmissionBoundary         `json:"cursor"`
+	PendingThrough                   *economicEmissionBoundary        `json:"pending_through,omitempty"`
+	Finalized                        *economicEmissionBoundary        `json:"observed_finalized,omitempty"`
+	BatchCount                       uint64                           `json:"batch_count"`
+	BatchChainHash                   string                           `json:"batch_chain_hash"`
+	ContractState                    *monitorEconomicEvmSnapshot      `json:"observed_contract_state,omitempty"`
+	ObservedFeeCostWei               *string                          `json:"observed_fee_cost_wei"`
+	HistoryEntries                   int                              `json:"history_entries"`
+	CapacityRemaining                uint64                           `json:"capacity_remaining"`
+	SampleAt                         time.Time                        `json:"sample_at"`
+	LastReadAt                       time.Time                        `json:"last_read_at"`
+	LastProgressAt                   time.Time                        `json:"last_progress_at"`
+	UnavailableSince                 time.Time                        `json:"unavailable_since"`
+	Incidents                        uint64                           `json:"incidents"`
+	Authority                        string                           `json:"authority"`
+	FeeAuthority                     string                           `json:"fee_authority"`
+	NativeFeeDebitRao                *string                          `json:"native_fee_debit_rao"`
+	NativeFeeRefundRao               *string                          `json:"native_fee_refund_rao"`
+	NativeMinerAllocationAlpha       *string                          `json:"native_miner_allocation_alpha"`
+	CompleteProviderEntitlementAlpha *string                          `json:"complete_provider_entitlement_alpha"`
+	IndependentFinalityVerified      bool                             `json:"independent_finality_verified"`
+	NativeFeeExecutionVerified       bool                             `json:"native_fee_execution_verified"`
+	ConfiguredResources              monitorEvmResources              `json:"configured_resources"`
+	AcknowledgedResources            *monitorEvmResources             `json:"acknowledged_resources"`
+	ResourceReviewHistory            monitorEvmResourceHistorySummary `json:"resource_review_history"`
 }
 
-func (self *monitorEconomicEvmState) summary(policy monitorEconomicEvmPolicy, acknowledged *monitorEvmResources) monitorEconomicEvmSummary {
+func (self *monitorEconomicEvmState) summary(policy monitorEconomicEvmPolicy, acknowledged *monitorEvmResources, history *monitorEvmResourceHistory) monitorEconomicEvmSummary {
 	var feeCost *string
 	if len(policy.FeePayers) != 0 && self.BatchCount != 0 {
 		total := new(big.Int)
@@ -238,7 +282,7 @@ func (self *monitorEconomicEvmState) summary(policy monitorEconomicEvmPolicy, ac
 		BatchCount: self.BatchCount, BatchChainHash: self.BatchChainHash, ContractState: self.Snapshot, ObservedFeeCostWei: feeCost,
 		HistoryEntries: len(self.History) + len(self.Fees), CapacityRemaining: self.CapacityRemaining, SampleAt: self.SampleAt,
 		LastReadAt: self.LastReadAt, LastProgressAt: self.LastProgressAt, UnavailableSince: self.UnavailableSince, Incidents: self.Incidents,
-		Authority: "owned-rpc-assertion", FeeAuthority: "receipt-gas-and-owned-rpc-effective-price", ConfiguredResources: policy.resources(), AcknowledgedResources: acknowledged}
+		Authority: "owned-rpc-assertion", FeeAuthority: "receipt-gas-and-owned-rpc-effective-price", ConfiguredResources: policy.resources(), AcknowledgedResources: acknowledged, ResourceReviewHistory: history.summary(policy)}
 }
 
 func renderMonitorEconomicEvmMetrics(policy monitorEconomicEvmPolicy, state *monitorEconomicEvmState, code string, current, checkpointCurrent bool, now time.Time) []byte {
@@ -299,6 +343,7 @@ func (self *monitorEconomicEvmWorker) resume(ctx context.Context, hooks monitorS
 		owner.syncDirectory = prior.syncDirectory
 		self.checkpoint, self.state = owner, state
 		self.acknowledged = candidate.acknowledged
+		self.resourceHistory = candidate.resourceHistory
 		return nil
 	}, hooks)
 }
@@ -358,6 +403,12 @@ func (self *monitorEconomicEvmWorker) run(ctx context.Context, interval time.Dur
 		}
 		current := readErr == nil && checkpointErr == nil
 		raw := renderMonitorEconomicEvmMetrics(self.policy, self.state, code, current, checkpointErr == nil, observedAt)
+		review := self.resourceHistory.summary(self.policy)
+		warning := 0
+		if review.CapacityWarning {
+			warning = 1
+		}
+		raw = fmt.Appendf(raw, "sn_mainnet_evm_economic_resource_reviews{role=%q} %d\nsn_mainnet_evm_economic_resource_review_capacity_remaining{role=%q} %d\nsn_mainnet_evm_economic_resource_review_capacity_warning{role=%q} %d\n", self.policy.Role, review.Entries, self.policy.Role, review.Remaining, self.policy.Role, warning)
 		raw = appendMonitorOutputMetrics(raw, "sn_mainnet_evm_economic", self.policy.Role, monitorDiagnosticSnapshot(stdout, stderr))
 		metricsErr := self.metrics.saveRaw(raw)
 		combined := errors.Join(readErr, checkpointErr, metricsErr)
@@ -380,7 +431,7 @@ func (self *monitorEconomicEvmWorker) run(ctx context.Context, interval time.Dur
 			State             monitorEconomicEvmSummary `json:"state"`
 			Issue             string                    `json:"issue,omitempty"`
 		}{Schema: "urnetwork-mainnet-evm-economic-event-v1", Role: self.policy.Role, Status: code,
-			Current: current, CheckpointCurrent: checkpointErr == nil, MetricsCurrent: metricsErr == nil, State: self.state.summary(self.policy, self.acknowledged), Issue: issue}
+			Current: current, CheckpointCurrent: checkpointErr == nil, MetricsCurrent: metricsErr == nil, State: self.state.summary(self.policy, self.acknowledged, self.resourceHistory), Issue: issue}
 		if err := json.NewEncoder(stdout).Encode(event); err != nil {
 			if ctx.Err() != nil {
 				return 0

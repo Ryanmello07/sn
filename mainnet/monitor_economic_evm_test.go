@@ -50,7 +50,7 @@ func TestMonitorEconomicEvmPublicRestartRetainsCreditCarryAndAggregatePayment(t 
 	}
 	third.stop(t)
 	if first.exit != 0 || second.exit != 0 || third.exit != 0 {
-		t.Fatal("public EVM restart did not join", first.exit, second.exit, third.exit)
+		t.Fatal("public EVM restart did not join", first.exit, second.exit, third.exit, first.diagnostic.String(), second.diagnostic.String(), third.diagnostic.String())
 	}
 }
 
@@ -344,7 +344,7 @@ func TestMonitorEconomicEvmPublicCancellationJoinsInFlightRead(t *testing.T) {
 	}
 	run.stop(t)
 	if run.exit != 0 {
-		t.Fatal("caller cancellation became a terminal financial contradiction", run.exit)
+		t.Fatal("caller cancellation became a terminal financial contradiction", run.exit, run.diagnostic.String())
 	}
 	select {
 	case event := <-run.sink.events:
@@ -539,12 +539,12 @@ func TestMonitorEconomicEvmResourceAcknowledgmentWaitsForDurablePublication(t *t
 		return err
 	}})
 	event := run.next(t)
-	if event.Current || event.CheckpointCurrent || event.State.ConfiguredResources.ReadBudgetSeconds != 600 || event.State.AcknowledgedResources == nil || event.State.AcknowledgedResources.ReadBudgetSeconds != 0 || event.State.Cursor != old.State.Cursor {
+	if event.Current || event.CheckpointCurrent || event.State.ConfiguredResources.ReadBudgetSeconds != 600 || event.State.AcknowledgedResources == nil || event.State.AcknowledgedResources.ReadBudgetSeconds != 0 || event.State.Cursor != old.State.Cursor || event.State.ResourceReviewHistory.Entries != 1 {
 		t.Fatal("unacknowledged resource renewal advertised a completed checkpoint", event)
 	}
 	run.resume <- struct{}{}
 	recovered := run.next(t)
-	if !recovered.Current || recovered.State.AcknowledgedResources == nil || recovered.State.AcknowledgedResources.ReadBudgetSeconds != 600 || recovered.State.HistoryEntries != 9 {
+	if !recovered.Current || recovered.State.AcknowledgedResources == nil || recovered.State.AcknowledgedResources.ReadBudgetSeconds != 600 || recovered.State.HistoryEntries != 9 || recovered.State.ResourceReviewHistory.Entries != 2 {
 		t.Fatal("lost resource acknowledgment did not recover original same history", recovered)
 	}
 	run.stop(t)

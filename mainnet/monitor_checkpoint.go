@@ -120,8 +120,11 @@ func (self *monitorCheckpointStore) load() (*monitorState, error) {
 	if monitorCheckpointAbsent(err) {
 		return state, nil
 	}
-	if err != nil || len(raw) > maxRpcReplyBytes {
-		return nil, errors.Join(errors.New("checkpoint cannot be read within 1 MiB"), err)
+	if err != nil {
+		return nil, fmt.Errorf("checkpoint cannot be read within 1 MiB: %w", err)
+	}
+	if len(raw) > maxRpcReplyBytes {
+		return nil, errors.New("checkpoint cannot be read within 1 MiB")
 	}
 	if err := protocol.ValidateUniqueJsonKeys(raw); err != nil {
 		return nil, err

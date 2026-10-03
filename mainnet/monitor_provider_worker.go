@@ -86,6 +86,9 @@ func openMonitorProviderWorker(ctx context.Context, policy monitorProviderPolicy
 		return nil, errors.Join(err, owner.close())
 	}
 	worker.metrics = metricOwner
+	if hooks.afterCheckpointOpen != nil {
+		hooks.afterCheckpointOpen(ctx, policy.Role, owner.lock)
+	}
 	worker.state, err = worker.load(ctx)
 	if err != nil {
 		return nil, errors.Join(err, closeMonitorServiceOwners(policy.Role, metricOwner, owner, hooks))
