@@ -2911,8 +2911,10 @@ controller vet](evidence/payment-get-retry-independent-20261003.json) for actual
 Circle transaction and Coinbase rate reads. The tests use an injected clock for
 65-second outage and 300-second budget scenarios; they do not establish a
 wall-clock outage rehearsal. All five changed source files and module bytes
-were compared with that exact Git source. Retry-omission controls, adjacent
-wallet reads, HTTP 500/Retry-After handling and final composition remain pending;
+were compared with that exact Git source. The [retry-omission controls](evidence/payment-get-retry-causal-20261003.json)
+now produce four intended failures and two permanent/hard positive controls
+normally and under race, with no race reports. Adjacent wallet reads,
+HTTP 500/Retry-After handling and final composition remain pending;
 no POST retry or live deployment is claimed.
 
 **2026-09-28 native HTTP cause preservation.** The pinned GSRPC HTTP client

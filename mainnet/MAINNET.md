@@ -116,9 +116,13 @@ at Server `5c93b812` passes 12 normal/race roots and controller vet. Actual Circ
 transaction and Coinbase rate reads have one caller-owned budget (300 seconds
 by default, minimum 60 seconds), bounded responses and typed retry causes.
 Cancellation and identity/schema refusals remain distinct; transfer submission
-is outside the read loop. Timing controls use an injected clock. Retry-omission
-controls and the broader wallet-read successor remain pending, and this source
-is not merged or deployed.
+is outside the read loop. Timing controls use an injected clock. Its
+[retry-omission controls](evidence/payment-get-retry-causal-20261003.json)
+produce four intended transient/no-retry failures and retain two permanent/hard
+positive controls in each mode, without race reports. This is an explicit
+omission experiment, not an unmodified historical-source run. The broader
+wallet-read successor and current release composition remain pending; this
+source is not merged or deployed.
 
 The [read-only signed-ledger correction](evidence/restore-ledger-readonly-independent-20261003.json)
 at `d3c84fe3` separately passes two normal/race roots and validator vet in its
