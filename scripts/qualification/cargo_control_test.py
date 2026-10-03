@@ -2,7 +2,11 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import selectors
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -83,6 +87,78 @@ class CargoControlTests(unittest.TestCase):
             stderr.write_text("expected message from compiler context")
             with self.assertRaisesRegex(guard.Refused, "exactly the selected failed root"):
                 guard.classify_test(101, stdout, stderr, "historical::tests::exact_control", "expected message")
+
+    def process_program(self, leader_exits):
+        child = "import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); print('READY',flush=True); time.sleep(60)"
+        return ("import os,signal,subprocess,sys,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+                f"child=subprocess.Popen([sys.executable,'-c',{child!r}],stdout=subprocess.PIPE); "
+                "assert child.stdout.readline()==b'READY\\n'; print(child.pid,flush=True); "
+                + ("os._exit(0)" if leader_exits else "time.sleep(60)"))
+
+    def assert_process_gone(self, pid):
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)
+
+    def test_normal_leader_exit_refuses_and_reaps_remaining_descendant(self):
+        output = self.root / "normal-process"
+        output.mkdir()
+        with self.assertRaisesRegex(guard.Refused, "descendants retained process custody"):
+            guard.run_process([sys.executable, "-c", self.process_program(True)],
+                              self.root, os.environ.copy(), output, "child", 15)
+        pid = int((output / "child.stdout").read_text().strip())
+        self.assert_process_gone(pid)
+
+    def test_failed_phase_joins_term_ignoring_leader_and_descendant(self):
+        previous = guard.set_subreaper(True)
+        process = None
+        try:
+            process = subprocess.Popen([sys.executable, "-c", self.process_program(False)],
+                                       stdout=subprocess.PIPE, start_new_session=True)
+            with selectors.DefaultSelector() as ready:
+                ready.register(process.stdout, selectors.EVENT_READ)
+                self.assertTrue(ready.select(timeout=15), "actual child did not reach its ready barrier")
+                pid = int(process.stdout.readline())
+            self.assertTrue(guard.join_process_tree(process, True))
+            self.assert_process_gone(pid)
+            self.assert_process_gone(process.pid)
+        finally:
+            if process is not None:
+                guard.join_process_tree(process, True)
+                process.stdout.close()
+            guard.set_subreaper(previous)
+
+    def test_recipe_read_refuses_fifo_and_preexisting_oversize(self):
+        fifo = self.root / "fifo"
+        os.mkfifo(fifo)
+        with self.assertRaisesRegex(guard.Refused, "bounded regular file"):
+            guard.bounded_regular_bytes(fifo, 16)
+        large = self.root / "large"
+        large.write_bytes(b"abc")
+        with self.assertRaisesRegex(guard.Refused, "bounded regular file"):
+            guard.bounded_regular_bytes(large, 2)
+
+    def test_reviewed_growth_must_fit_before_any_compiler_starts(self):
+        target, output = self.root / "target", self.root / "output"
+        target.mkdir()
+        recipe = dict(self.recipe, schema=guard.SCHEMA, target_dir=str(target),
+                      compile_seconds=60, test_seconds=60, jobs=1,
+                      forecast={"compile_bytes": 10 ** 30, "retained_elf_bytes": 1, "log_bytes": 1024})
+        recipe_path = self.root / "recipe.json"
+        recipe_path.write_text(json.dumps(recipe))
+        with self.assertRaisesRegex(guard.Refused, "twice the reviewed future"):
+            guard.run(recipe_path, output)
+        self.assertFalse(output.exists())
+
+    def test_actual_pipe_overflow_cancels_owned_process(self):
+        output = self.root / "overflow-process"
+        output.mkdir()
+        script = "import os,time; print(os.getpid(),flush=True); os.write(1,b'x'*8192); time.sleep(60)"
+        with self.assertRaisesRegex(guard.Refused, "output exceeds reviewed log forecast"):
+            guard.run_process([sys.executable, "-c", script], self.root, os.environ.copy(),
+                              output, "child", 15, log_limit=4096)
+        # The process group and all adopted descendants must be joined even if
+        # the overflowing chunk was refused before its bytes were logged.
+        self.assertEqual(guard.owned_children(), [])
 
 
 if __name__ == "__main__":

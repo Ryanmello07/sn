@@ -9,7 +9,11 @@ harness outcomes, including apparently passing controls.
 must be a fresh directory beneath an existing private qualification root. All
 Cargo invocations that share the target must respect its
 `.urnetwork-cargo-control.lease`; the runner also refuses already active target
-processes. It cleans only the named root package with `cargo clean --package`,
+processes. The dedicated runner becomes a Linux subreaper for each phase, kills
+and joins its complete child tree on failure, and refuses a nominally successful
+leader that leaves descendants behind. TERM-ignoring descendants are killed and
+reaped even after their leader exits. It cleans only the exact root package
+and version with `cargo clean --package`,
 preserving dependencies, and requires Cargo's JSON artifact to say `fresh:false`
 and identify the exact physical root crate. It copies the ELF into OUTPUT,
 checks its SHA-256, executes that copy, and checks source/recipe/ELF again. The
@@ -32,8 +36,14 @@ The recipe schema is `urnetwork-cargo-control-v1` and contains:
 - Optional `environment`: only `CARGO_HOME`, `RUSTUP_HOME`, `PATH`,
   `CARGO_PROFILE_DEV_DEBUG`, `CARGO_PROFILE_TEST_DEBUG`, `TMPDIR`. Compiler
   wrappers or ambient Rust flags refuse. `CARGO_INCREMENTAL=0` is enforced.
-- Optional `minimum_free_bytes` (default 110 GiB): checked before compilation
-  and before retaining the ELF. Qualification owners may require a higher floor.
+- `forecast`: positive `compile_bytes`, `retained_elf_bytes`, `log_bytes` reviewed
+  for this exact scope. Logs have a shared 64 MiB upper bound and are captured
+  incrementally; output beyond the forecast cancels and joins the child tree.
+  Initial admission requires the floor plus **twice** all forecast increments.
+  ELF size must fit its forecast, and the twice-remaining-growth check repeats
+  before retention. The free floor is also checked during every process phase.
+- Optional `minimum_free_bytes` (default and minimum 110 GiB). Qualification
+  owners may require a higher floor; a recipe cannot lower it.
 
 Freeze and hash the complete recipe before execution. Bind its baseline census
 to the existing Git/source receipt, not merely to a fresh mutable directory.
@@ -42,7 +52,10 @@ Cargo artifact, retained ELF and final classification. A failed guard emits an
 `UNQUALIFIED` receipt where the owned output directory has been created. Normal
 product tests and independent qualifications remain distinct scopes.
 
-The small guard tests run without Cargo or dependency compilation:
+Recipe and log parsing use bounded regular-file reads, not post-allocation size
+checks. The guard tests run without Cargo or dependency compilation; five added
+controls cover actual subprocess descendants, TERM refusal, output overflow,
+nonregular/oversized input and prelaunch growth admission:
 
 ```
 python3 -B scripts/qualification/cargo_control_test.py

@@ -9,6 +9,7 @@ before results can be classified. No test or compiler failure is a causal pass.
 """
 
 import argparse
+import ctypes
 import fcntl
 import hashlib
 import json
@@ -16,6 +17,7 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import selectors
 import stat
 import subprocess
 import sys
@@ -28,6 +30,7 @@ MAXIMUM_RECIPE_BYTES = 1024 * 1024
 MAXIMUM_FILES = 256
 MAXIMUM_FILE_BYTES = 8 * 1024 * 1024
 MINIMUM_FREE_BYTES = 110 * 1024 ** 3
+MAXIMUM_LOG_BYTES = 64 * 1024 * 1024
 
 
 class Refused(Exception):
@@ -45,8 +48,32 @@ def digest(path):
     return result
 
 
+def bounded_regular_bytes(path, maximum):
+    """Refuse aliases/devices and bound allocation before reading control input."""
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        before = os.fstat(descriptor)
+        require(stat.S_ISREG(before.st_mode) and before.st_size <= maximum,
+                "control input is not a bounded regular file")
+        pieces, used = [], 0
+        while True:
+            raw = os.read(descriptor, min(65536, maximum - used + 1))
+            if not raw:
+                break
+            used += len(raw)
+            require(used <= maximum, "control input grew beyond byte bound")
+            pieces.append(raw)
+        after = os.fstat(descriptor)
+        require((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns) ==
+                (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+                and used == before.st_size, "control input changed while reading")
+        return b"".join(pieces)
+    finally:
+        os.close(descriptor)
+
+
 def read_recipe(path):
-    raw = path.read_bytes()
+    raw = bounded_regular_bytes(path, MAXIMUM_RECIPE_BYTES)
     require(0 < len(raw) <= MAXIMUM_RECIPE_BYTES, "recipe byte bound")
     recipe = json.loads(raw)
     require(recipe.get("schema") == SCHEMA, "recipe schema differs")
@@ -131,34 +158,112 @@ def active_target_processes(target):
     return conflicts
 
 
-def run_process(args, cwd, environment, output, label, timeout):
-    """Own and join the complete process group, including failed compilation."""
-    stdout = output / (label + ".stdout")
-    stderr = output / (label + ".stderr")
-    with stdout.open("xb") as out, stderr.open("xb") as err:
-        process = subprocess.Popen(args, cwd=cwd, env=environment, stdout=out,
-                                   stderr=err, start_new_session=True)
+def set_subreaper(enabled):
+    """This dedicated runner owns one child tree at a time, never a shared host."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    original = ctypes.c_int()
+    require(libc.prctl(37, ctypes.byref(original), 0, 0, 0) == 0, "subreaper read failed")
+    require(libc.prctl(36, int(enabled), 0, 0, 0) == 0, "subreaper update failed")
+    return bool(original.value)
+
+
+def owned_children():
+    return [int(value) for value in Path(f"/proc/self/task/{os.getpid()}/children").read_text().split()]
+
+
+def join_process_tree(process, failed):
+    """Reap adopted descendants even after a leader exits or ignores TERM."""
+    unexpected = False
+    if failed or process.poll() is None:
         try:
-            code = process.wait(timeout=timeout)
-        except BaseException:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    end = time.monotonic() + 5
+    while True:
+        children = owned_children()
+        for pid in children:
+            if pid != process.pid:
+                unexpected = True
             try:
-                os.killpg(process.pid, signal.SIGTERM)
+                os.kill(pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        if process.poll() is None:
+            process.wait(timeout=max(0.001, end - time.monotonic()))
+        while True:
             try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
-            raise
+                pid, _ = os.waitpid(-1, os.WNOHANG)
+            except ChildProcessError:
+                break
+            if pid == 0:
+                break
+            unexpected = True
+        if not owned_children():
+            return unexpected
+        require(time.monotonic() < end, "owned descendant cleanup did not join")
+        time.sleep(0.01)
+
+
+def run_process(args, cwd, environment, output, label, timeout,
+                log_limit=MAXIMUM_LOG_BYTES, minimum_free=0):
+    """Stream bounded logs; cancel and reap descendants on every completion path."""
+    stdout = output / (label + ".stdout")
+    stderr = output / (label + ".stderr")
+    require(0 < log_limit <= MAXIMUM_LOG_BYTES, "process log bound differs")
+    process = None
+    failed = True
+    used = 0
+    with stdout.open("xb") as out, stderr.open("xb") as err:
+        original_subreaper = set_subreaper(True)
+        try:
+            require(not owned_children(), "runner already owns an unrelated child")
+            process = subprocess.Popen(args, cwd=cwd, env=environment, stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, start_new_session=True)
+            with selectors.DefaultSelector() as select:
+                for pipe, destination in ((process.stdout, out), (process.stderr, err)):
+                    os.set_blocking(pipe.fileno(), False)
+                    select.register(pipe, selectors.EVENT_READ, destination)
+                deadline = time.monotonic() + timeout
+                while select.get_map() or process.poll() is None:
+                    if time.monotonic() >= deadline:
+                        raise subprocess.TimeoutExpired(args, timeout)
+                    require(shutil.disk_usage(output).free >= minimum_free,
+                            "active phase crossed the shared floor")
+                    for key, _ in select.select(timeout=0.05):
+                        raw = os.read(key.fileobj.fileno(), min(65536, log_limit - used + 1))
+                        if raw:
+                            used += len(raw)
+                            require(used <= log_limit, "process output exceeds reviewed log forecast")
+                            key.data.write(raw)
+                        else:
+                            select.unregister(key.fileobj)
+                    if process.poll() is not None and owned_children():
+                        require(not join_process_tree(process, False),
+                                "leader exited while descendants retained process custody")
+                code = process.wait()
+            require(not join_process_tree(process, False), "surviving descendant after leader exit")
+            failed = False
+        finally:
+            try:
+                if process is not None:
+                    join_process_tree(process, failed)
+                    process.stdout.close()
+                    process.stderr.close()
+            finally:
+                set_subreaper(original_subreaper)
     return {"argv": args, "exit": code, "stdout_sha256": digest(stdout),
-            "stderr_sha256": digest(stderr)}
+            "stderr_sha256": digest(stderr), "log_bytes": used, "tree_joined": True}
 
 
 def fresh_artifact(path, package, crate):
     """Cargo's explicit root artifact is required, not elapsed time or mtimes."""
     selected = []
-    for raw in path.read_bytes().splitlines():
+    for raw in bounded_regular_bytes(path, MAXIMUM_LOG_BYTES).splitlines():
         try:
             item = json.loads(raw)
         except (ValueError, UnicodeDecodeError):
@@ -178,7 +283,8 @@ def fresh_artifact(path, package, crate):
 
 def classify_test(code, stdout, stderr, selector, expected_assertion):
     """One selected assertion failure is distinct from setup, panic, or timeout."""
-    text = stdout.read_text(errors="replace") + stderr.read_text(errors="replace")
+    text = (bounded_regular_bytes(stdout, MAXIMUM_LOG_BYTES) +
+            bounded_regular_bytes(stderr, MAXIMUM_LOG_BYTES)).decode(errors="replace")
     require("running 1 test" in text and f"test {selector} ... FAILED" in text,
             "control did not execute exactly the selected failed root")
     require(code == 101 and "test result: FAILED. 0 passed; 1 failed;" in text,
@@ -199,6 +305,14 @@ def run(recipe_path, output):
     require(1 <= recipe.get("jobs", 2) <= 2, "control compiler job bound")
     require(recipe.get("minimum_free_bytes", MINIMUM_FREE_BYTES) >= MINIMUM_FREE_BYTES,
             "control cannot lower the shared admission floor")
+    forecast = recipe["forecast"]
+    require(set(forecast) == {"compile_bytes", "retained_elf_bytes", "log_bytes"}
+            and all(type(value) is int and value > 0 for value in forecast.values())
+            and forecast["log_bytes"] <= MAXIMUM_LOG_BYTES,
+            "positive reviewed compile/ELF/log forecast required")
+    floor = recipe.get("minimum_free_bytes", MINIMUM_FREE_BYTES)
+    require(shutil.disk_usage(target).free >= floor + 2 * sum(forecast.values()),
+            "target lacks twice the reviewed future compile/retention/log increment")
     for tool in ("cargo", "rustc"):
         tool_path = Path(recipe[tool]["path"])
         require(tool_path.is_absolute() and tool_path.resolve() == tool_path,
@@ -231,19 +345,25 @@ def run(recipe_path, output):
         clean = [cargo, "clean", "--locked", "--offline", "--package",
                  recipe["package"] + "@" + package_version,
                  "--target-dir", str(target)]
-        receipt["steps"].append(run_process(clean, source, environment, output, "clean", 60))
+        receipt["forecast"] = forecast
+        receipt["steps"].append(run_process(clean, source, environment, output, "clean", 60,
+                                            forecast["log_bytes"], floor))
         require(receipt["steps"][-1]["exit"] == 0, "package-only clean failed")
         compile_args = [cargo, "test", "--locked", "--offline", "--lib", "--no-run",
                         "--message-format=json", "--target-dir", str(target)]
         receipt["steps"].append(run_process(compile_args, source, environment, output,
-                                            "compile", recipe["compile_seconds"]))
+                                            "compile", recipe["compile_seconds"],
+                                            forecast["log_bytes"] - sum(item["log_bytes"] for item in receipt["steps"]), floor))
         require(receipt["steps"][-1]["exit"] == 0, "control did not compile")
         require(validate_sources(recipe)[1] == expected, "source changed during compilation")
         artifact = fresh_artifact(output / "compile.stdout", recipe["package"], source)
         executable = Path(artifact["executable"])
         require(executable.resolve().is_relative_to(target), "artifact escaped owned target")
-        require(shutil.disk_usage(output).free - executable.stat().st_size >=
-                recipe.get("minimum_free_bytes", MINIMUM_FREE_BYTES), "artifact retention crosses floor")
+        require(executable.stat().st_size <= forecast["retained_elf_bytes"],
+                "compiled ELF exceeds reviewed retention forecast")
+        remaining_logs = forecast["log_bytes"] - sum(item["log_bytes"] for item in receipt["steps"])
+        require(shutil.disk_usage(output).free >= floor + 2 * (executable.stat().st_size + remaining_logs),
+                "artifact retention lacks twice its remaining reviewed increment")
         retained = output / "control-test"
         shutil.copyfile(executable, retained)
         retained.chmod(0o500)
@@ -252,7 +372,7 @@ def run(recipe_path, output):
         receipt["artifact"] = {"cargo": artifact, "path": str(retained), "sha256": executable_sha}
         test_args = [str(retained), "--exact", recipe["test"], "--nocapture", "--test-threads=1"]
         receipt["steps"].append(run_process(test_args, source, environment, output,
-                                            "test", recipe["test_seconds"]))
+                                            "test", recipe["test_seconds"], remaining_logs, floor))
         require(validate_sources(recipe)[1] == expected, "source changed during test")
         require(read_recipe(recipe_path)[1] == recipe_sha, "recipe changed during control")
         require(digest(retained) == executable_sha, "executed artifact changed")
@@ -270,6 +390,9 @@ def run(recipe_path, output):
 
 def main():
     os.umask(0o077)
+    def interrupted(signum, _frame):
+        raise KeyboardInterrupt("owned Cargo control interrupted by signal " + str(signum))
+    signal.signal(signal.SIGTERM, interrupted)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("recipe", type=Path)
     parser.add_argument("output", type=Path)
