@@ -200,12 +200,12 @@ require (
 // durable-volume v2 admission, bounded v3 custody inventory and reviewed fresh
 // namespace preparation. They also cover sibling modules'
 // v0.0.0 placeholders without selecting an older local checkout implicitly.
-replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20261002204525-7600ea5c8227
+replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20261003082047-631bcb282d39
 
-replace github.com/urnetwork/sdk => github.com/urnetwork/sdk v0.0.0-20261001021058-5d37be3876e5
+replace github.com/urnetwork/sdk => github.com/urnetwork/sdk v0.0.0-20261003032453-9ae95704a230
 
 // A dependency's replaces are ignored, so pin Connect's SCTP fork here too.
-replace github.com/pion/sctp => github.com/urnetwork/connect/sctp v0.0.0-20261001021459-e1b5d77b5029
+replace github.com/pion/sctp => github.com/urnetwork/connect/sctp v0.0.0-20261002163341-6443417d70dc
 
 replace github.com/urnetwork/server => ../server
 
