@@ -265,7 +265,8 @@ func TestMonitorProviderPublicRolesRecoverWithoutResettingPeer(t *testing.T) {
 	defer cancel()
 	sink := &monitorProviderTestSink{events: make(chan monitorProviderTestEvent, 8)}
 	resume := map[string]chan struct{}{one.Role: make(chan struct{}), two.Role: make(chan struct{})}
-	hooks := monitorServiceHooks{wait: func(ctx context.Context, role string, _ time.Duration) bool {
+	// Exhaust only the real failing sample at its owned wait boundary.
+	hooks := monitorServiceHooks{rpcWait: func(context.Context, string, time.Duration) error { return context.DeadlineExceeded }, wait: func(ctx context.Context, role string, _ time.Duration) bool {
 		select {
 		case <-resume[role]:
 			return true

@@ -29,6 +29,9 @@ type bootstrapSuccessorExecutionStore struct {
 	canonicalAuthority     *bootstrapSuccessorCanonicalApproval
 	runtimeHistory         bootstrapSuccessorRuntimeHistory
 	safeCurrentHistory     bootstrapSuccessorSafeCurrentHistory
+	registryRebind         *bootstrapSuccessorRegistryRebindApproval
+	localRebind            *bootstrapSuccessorLocalRebindApproval
+	deferredLocalRebind    bool
 }
 
 // Global within the approved physical registry, these keys deliberately use
@@ -60,18 +63,55 @@ func (self bootstrapSuccessorExecutionStore) nonceBytes(name string) []byte {
 		SafeDigest      string                         `json:"safe_digest"`
 		TransactionHash string                         `json:"transaction_hash"`
 	}{Schema: "urnetwork-mainnet-successor-nonce-claim-v1", Domain: name, ApprovalHash: rootObjectHash(self.approval),
-		OriginalRoot: self.local.path, PhysicalRoot: self.local.root, SafeDigest: self.approval.Plan.Review.Transaction.Digest.Hex(), TransactionHash: self.approval.Plan.TransactionHash.Hex()})
+		OriginalRoot: self.approval.Plan.Review.Preparation.Approval.Plan.Proposal.OriginalRunDirectory, PhysicalRoot: self.approval.Plan.Review.Preparation.Approval.Plan.Root,
+		SafeDigest: self.approval.Plan.Review.Transaction.Digest.Hex(), TransactionHash: self.approval.Plan.TransactionHash.Hex()})
 	return raw
 }
 
 // Fresh ownership requires an unused fixed root claim. Recovery requires that
 // same claim or its durable hash-named stage; missing custody cannot renew it.
 func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstrapSuccessorExecutionPlan, approval bootstrapSuccessorExecutionApproval, profile *safeExecutionProfile, create bool, hook func(string) error) (_ *bootstrapSuccessorExecutionStore, resultErr error) {
+	return openBootstrapSuccessorExecutionStoreWithRegistryRebind(ctx, expected, approval, profile, create, hook, nil)
+}
+
+// A physical adoption is explicit and resume-only. The original approval and
+// every nonce claim remain in their original byte/signature domains.
+func openBootstrapSuccessorExecutionStoreWithRegistryRebind(ctx context.Context, expected bootstrapSuccessorExecutionPlan, approval bootstrapSuccessorExecutionApproval, profile *safeExecutionProfile, create bool, hook func(string) error, rebind *bootstrapSuccessorRegistryRebindApproval) (_ *bootstrapSuccessorExecutionStore, resultErr error) {
+	return openBootstrapSuccessorExecutionStoreWithPhysicalRebind(ctx, expected, approval, profile, create, hook, rebind, nil)
+}
+
+// Local and registry coordinates have distinct approval domains; both preserve
+// the same original claim. Neither approval permits fresh ownership.
+func openBootstrapSuccessorExecutionStoreWithPhysicalRebind(ctx context.Context, expected bootstrapSuccessorExecutionPlan, approval bootstrapSuccessorExecutionApproval, profile *safeExecutionProfile, create bool, hook func(string) error, rebind *bootstrapSuccessorRegistryRebindApproval, localRebind *bootstrapSuccessorLocalRebindApproval) (_ *bootstrapSuccessorExecutionStore, resultErr error) {
 	if ctx == nil {
 		return nil, errors.New("successor execution context is absent")
 	}
 	if err := errors.Join(ctx.Err(), approval.validate(expected, profile)); err != nil {
 		return nil, err
+	}
+	var retainedRebind *bootstrapSuccessorRegistryRebindApproval
+	var retainedLocalRebind *bootstrapSuccessorLocalRebindApproval
+	var inspection *bootstrapSuccessorLocalInspection
+	if localRebind != nil {
+		if create {
+			return nil, errors.New("successor local rebind cannot create a fresh execution claim")
+		}
+		if err := localRebind.validate(ctx, approval, profile); err != nil {
+			return nil, err
+		}
+		copy := *localRebind
+		retainedLocalRebind = &copy
+		inspection = &bootstrapSuccessorLocalInspection{preparationHash: rootObjectHash(approval.Plan.Review.Preparation.Approval.Plan), physical: copy.Plan.RestoredLocal, writer: true}
+	}
+	if rebind != nil {
+		if create {
+			return nil, errors.New("successor registry rebind cannot create a fresh execution claim")
+		}
+		if err := rebind.validate(ctx, approval, profile); err != nil {
+			return nil, err
+		}
+		copy := *rebind
+		retainedRebind = &copy
 	}
 	raw, err := json.Marshal(approval)
 	if err != nil || len(raw) > maximumBootstrapSuccessorExecutionBytes {
@@ -81,7 +121,7 @@ func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstra
 	if err := decodePlanJson(raw, &copied); err != nil {
 		return nil, err
 	}
-	self := &bootstrapSuccessorExecutionStore{approval: copied, profile: profile}
+	self := &bootstrapSuccessorExecutionStore{approval: copied, profile: profile, registryRebind: retainedRebind, localRebind: retainedLocalRebind}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, self.close())
@@ -89,13 +129,20 @@ func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstra
 	}()
 	p := copied.Plan.Review.Preparation.Approval.Plan
 	var preparation bootstrapSuccessorPreparationRecord
-	self.reader, preparation, err = openBootstrapSuccessorPreparationReaderMode(ctx, p, true, nil)
+	self.reader, preparation, err = openBootstrapSuccessorPreparationReaderRebound(ctx, p, true, nil, inspection)
 	if err != nil || rootObjectHash(preparation) != rootObjectHash(copied.Plan.Review.Preparation) {
 		return nil, errors.Join(errors.New("successor execution original preparation differs"), err)
 	}
 	claim := rootObjectHash(copied)
 	self.local = &bootstrapSuccessorExecutionDirectory{storage: self.reader.storage, members: self.reader.members, ctx: ctx, path: p.Proposal.OriginalRunDirectory, root: p.Root, file: self.reader.directory, claim: claim, hook: hook}
-	self.registry, err = openBootstrapSuccessorExecutionDirectory(ctx, copied.Plan.Request.RegistryDirectory, copied.Plan.Registry, claim, hook)
+	if inspection != nil {
+		self.local.root = inspection.physical
+	}
+	registryRoot := copied.Plan.Registry
+	if retainedRebind != nil {
+		registryRoot = retainedRebind.Plan.RestoredRegistry
+	}
+	self.registry, err = openBootstrapSuccessorExecutionDirectory(ctx, copied.Plan.Request.RegistryDirectory, registryRoot, claim, hook)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +184,15 @@ func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstra
 	if create && namespacePresent || !create && !claimPresent {
 		return nil, errors.New("successor execution requires unused custody for claim or its exact retained claim for resume")
 	}
+	if retainedRebind != nil || retainedLocalRebind != nil {
+		if !ready {
+			return nil, errors.New("successor physical rebind requires completed original claim and nonce custody")
+		}
+		if pending := self.local.members.census.Pending; pending != nil && !(retainedRebind != nil && pending.Name == bootstrapSuccessorRegistryRebindFile) && !(retainedLocalRebind != nil && pending.Name == bootstrapSuccessorLocalRebindFile) &&
+			!(retainedLocalRebind != nil && planSha256(retainedLocalRebind.Plan.PendingOutcomeSha256) && pending.Sha256 == retainedLocalRebind.Plan.PendingOutcomeSha256) {
+			return nil, errors.New("successor physical rebind requires a completed original local publication checkpoint")
+		}
+	}
 	if ready {
 		// A complete owner can never recreate a missing adoption or nonce claim.
 		for _, item := range []struct {
@@ -157,6 +213,19 @@ func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstra
 		}
 		if _, err := self.local.read(bootstrapSuccessorExecutionEventName(0) + ".json"); err != nil {
 			return nil, errors.Join(errors.New("successor execution completed adoption is missing"), err)
+		}
+	}
+	if pending := self.local.members.census.Pending; (retainedRebind != nil || retainedLocalRebind != nil) && pending != nil && (pending.Name == bootstrapSuccessorRegistryRebindFile || pending.Name == bootstrapSuccessorLocalRebindFile) {
+		// Only this previously retained exact rebind intent may be completed
+		// before inspecting history. It cannot displace an original outcome.
+		var err error
+		if self.local.members.census.Pending.Name == bootstrapSuccessorLocalRebindFile {
+			err = self.retainLocalRebind()
+		} else {
+			err = self.retainRegistryRebind()
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	if err := self.local.publish(claimName, "claim", raw); err != nil {
@@ -182,6 +251,18 @@ func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstra
 		}
 	}
 	if err := self.loadEvents(); err != nil {
+		return nil, err
+	}
+	if pending := self.local.members.census.Pending; pending != nil && retainedLocalRebind != nil {
+		self.deferredLocalRebind = true
+		if err := self.checkDeferredLocalRebind(); err != nil {
+			return nil, err
+		}
+	}
+	if err := self.retainRegistryRebind(); err != nil {
+		return nil, err
+	}
+	if err := self.retainLocalRebind(); err != nil {
 		return nil, err
 	}
 	return self, self.checkpoint("execution-ready")
@@ -230,6 +311,9 @@ func (self *bootstrapSuccessorExecutionStore) loadEvents() error {
 	}
 	allowed := map[string]bool{bootstrapSuccessorExecutionPrefix + ".claim": true, bootstrapSuccessorExecutionPrefix + ".ready": true,
 		bootstrapSuccessorCanonicalFile: true, self.local.stageName(bootstrapSuccessorCanonicalFile, "canonical-authority"): true}
+	if err := self.includePhysicalRebindReceipts(allowed, true); err != nil {
+		return err
+	}
 	self.runtimeHistory, err = self.readRuntimeHistory(self.local.ctx, names, allowed)
 	if err != nil {
 		return err
@@ -358,6 +442,9 @@ func (self *bootstrapSuccessorExecutionStore) append(event bootstrapSuccessorExe
 		return errors.Join(err, self.close())
 	}
 	self.last, self.pending, self.pendingOutcomeHash = copied, "", ""
+	if err := self.completeDeferredLocalRebind(); err != nil {
+		return err
+	}
 	return errors.Join(self.checkpointExecutionHistory(), self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory())
 }
 

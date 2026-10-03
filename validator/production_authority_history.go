@@ -90,6 +90,9 @@ func loadReleaseProductionAuthorityHistory(cfg *ReleaseConfig) error {
 		return err
 	}
 	if len(cfg.ProductionAuthorityHistory) == 0 {
+		if cfg.ProductionCapacityRevision != nil {
+			return errors.New("capacity revision omits original signed production authority")
+		}
 		cfg.productionAuthorityHistory = nil
 		return nil
 	}
@@ -202,8 +205,12 @@ func decodeProductionAuthorityBundle(raw []byte, current *ReleaseConfig, prefix 
 			return nil, err
 		}
 	}
-	if err := validateProductionAuthorityContinuity(&cfg, current); err != nil {
-		return nil, err
+	// Each revision binds its immediate predecessor. All earlier links were
+	// authenticated above; comparing an ancestor directly would skip that link.
+	if index+1 == len(current.ProductionAuthorityHistory) {
+		if err := validateProductionAuthorityContinuity(&cfg, current); err != nil {
+			return nil, err
+		}
 	}
 	cfg.ownerRecycleProduction.historicalOnly = true
 	return &cfg, nil
@@ -212,6 +219,9 @@ func decodeProductionAuthorityBundle(raw []byte, current *ReleaseConfig, prefix 
 // This first continuity class preserves policy, identities, operators, proof
 // bounds and custody. Runtime pins, approval history and polling may advance.
 func validateProductionAuthorityContinuity(original, current *ReleaseConfig) error {
+	if err := validateProductionCapacityTransition(original, current); err != nil {
+		return err
+	}
 	stable := func(cfg *ReleaseConfig) ([]byte, error) {
 		owned := *cfg
 		owned.RuntimeSpec, owned.TransactionVersion, owned.StateVersion = 0, 0, 0
@@ -219,6 +229,8 @@ func validateProductionAuthorityContinuity(original, current *ReleaseConfig) err
 		owned.ProductionRuntimeApprovals, owned.ProductionAuthorityHistory = nil, nil
 		owned.OwnerRecycleApproval = &ReleaseOwnerRecycleApprovalConfig{Signer: cfg.OwnerRecycleApproval.Signer}
 		owned.PollSeconds = 0
+		owned.EvidenceV2.Bounds = ReleaseEvidenceV2Bounds{}
+		owned.ProductionCapacityRevision = nil
 		return json.Marshal(&owned)
 	}
 	old, err := stable(original)
@@ -344,6 +356,9 @@ func validateReleaseProductionAuthorityHistory(cfg *ReleaseConfig) error {
 		return err
 	}
 	if len(cfg.ProductionAuthorityHistory) == 0 && cfg.productionAuthorityHistory == nil {
+		if cfg.ProductionCapacityRevision != nil {
+			return errors.New("capacity revision has no retained original authority")
+		}
 		return nil
 	}
 	owner := cfg.productionAuthorityHistory

@@ -150,11 +150,11 @@ func validateReleaseEvidenceV2YAML(node *yaml.Node, valueType reflect.Type) erro
 				return err
 			}
 		}
-	case reflect.Uint64:
+	case reflect.Uint16, reflect.Uint64:
 		if node.Kind != yaml.ScalarNode || node.Tag != "!!int" {
 			return errors.New("evidence_v2 requires unquoted decimal uint64 values")
 		}
-		parsed, err := strconv.ParseUint(node.Value, 10, 64)
+		parsed, err := strconv.ParseUint(node.Value, 10, valueType.Bits())
 		if err != nil || strconv.FormatUint(parsed, 10) != node.Value {
 			return errors.New("evidence_v2 integer is non-canonical or overflows uint64")
 		}

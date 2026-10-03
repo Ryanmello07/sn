@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 )
@@ -19,6 +20,8 @@ type economicEmissionBudget struct {
 	used int
 }
 
+var errEconomicEmissionEvidenceCapacity = errors.New("native incentive retained evidence exceeds 8 MiB budget")
+
 // Accounting precedes retaining the value; an attempted block remains bounded
 // by the independent single-response/event/UID limits when this budget fills.
 func (self *economicEmissionBudget) retain(value any) error {
@@ -27,7 +30,7 @@ func (self *economicEmissionBudget) retain(value any) error {
 		return err
 	}
 	if len(raw) > economicEmissionBytesLimit-self.used {
-		return errors.New("native incentive retained evidence exceeds 8 MiB budget")
+		return errEconomicEmissionEvidenceCapacity
 	}
 	self.used += len(raw)
 	return nil
@@ -102,6 +105,18 @@ func readEconomicEmissionEvents(ctx context.Context, client *rpcClient, metadata
 // Range completeness and economic verification are independent. Even a fully
 // read range leaves target/Q unset until native denominator and outcome proof.
 func observeEconomicEmission(ctx context.Context, client *rpcClient, policy economicEmissionPolicy, policyHash string) (result economicEmissionObservation, resultErr error) {
+	return observeEconomicEmissionPage(ctx, client, policy, policyHash, false)
+}
+
+// Only an explicitly declared continuous reader uses historical pages. The
+// original finite command retains its stronger bounded head-to-window walk.
+func observeEconomicEmissionPage(ctx context.Context, client *rpcClient, policy economicEmissionPolicy, policyHash string, historical bool) (economicEmissionObservation, error) {
+	return observeEconomicEmissionCatalog(ctx, client, policy, policyHash, historical, nil, false)
+}
+
+// Catalog admission is exclusive to the continuous reader. Original finite
+// inputs keep their single-artifact and original receipt-envelope requirements.
+func observeEconomicEmissionCatalog(ctx context.Context, client *rpcClient, policy economicEmissionPolicy, policyHash string, historical bool, catalog []monitorEconomicRuntimeEntry, renewed bool) (result economicEmissionObservation, resultErr error) {
 	result = economicEmissionObservation{
 		Schema: economicEmissionSchema, Policy: policy, PolicyHash: policyHash, Status: "unresolved", FinalityAuthority: "owned-rpc-assertion",
 		ObservedIncentiveTotalAlpha: "0", Blocks: []economicEmissionBlock{}, Ancestry: []rootReceiptHeader{}, ClosingAncestry: []rootReceiptHeader{},
@@ -111,6 +126,9 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 			"recipient generations, provider entitlement, collateral capture/claim and actual owner recycling require separate complete native evidence",
 			"cross-window exact-once accounting, activation drain, signed economic authority and live acceptance remain separate gates",
 		},
+	}
+	if renewed {
+		result.RuntimeCatalog = append([]monitorEconomicRuntimeEntry(nil), catalog...)
 	}
 	defer func() {
 		if resultErr != nil {
@@ -126,9 +144,28 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 	if !planSha256(policyHash) {
 		return result, errors.New("native incentive exact input SHA256 is missing")
 	}
-	chain, err := newRootCanonicalChain(client, identityExpectation{NativeChain: policy.Network.NativeChain, GenesisHash: policy.Network.GenesisHash, EvmChainId: policy.Network.EvmChainId}, []rootReceiptProfile{policy.Runtime})
+	profiles := []rootReceiptProfile{policy.Runtime}
+	if renewed && len(catalog) != 0 {
+		profiles = nil
+		for _, entry := range catalog {
+			if !slices.Contains(profiles, entry.Profile) {
+				profiles = append(profiles, entry.Profile)
+			}
+		}
+	}
+	profileLimit, cacheEntries := 8, 8
+	if renewed {
+		profileLimit, cacheEntries = 64, 2
+	}
+	chain, err := newRootCanonicalChainBounded(client, identityExpectation{NativeChain: policy.Network.NativeChain, GenesisHash: policy.Network.GenesisHash, EvmChainId: policy.Network.EvmChainId}, profiles, profileLimit, cacheEntries)
 	if err != nil {
 		return result, err
+	}
+	runtimeFor := func(ctx context.Context, block, purpose string) (rootReceiptRuntime, error) {
+		if renewed {
+			return economicRuntimeFor(ctx, chain, block, policy, catalog, purpose)
+		}
+		return chain.nativeRuntimeAt(ctx, block)
 	}
 	readCtx, cancel := context.WithTimeout(ctx, client.retryWindow)
 	defer cancel()
@@ -137,10 +174,15 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 	}
 	budget := economicEmissionBudget{}
 	var blocks map[uint64]economicEmissionBlock
-	result.Finalized, blocks, err = economicEmissionAncestry(readCtx, chain, policy.From, &budget, &result.Ancestry)
-	if len(result.Ancestry) != 0 {
-		header := result.Ancestry[0]
-		result.FinalizedHeader = &header
+	if historical {
+		result.HistoricalFinality = "owned-rpc-assertion"
+		result.Finalized, result.FinalizedHeader, blocks, err = economicEmissionHistoricalPage(readCtx, chain, policy, &budget, &result.RangeAncestry)
+	} else {
+		result.Finalized, blocks, err = economicEmissionAncestry(readCtx, chain, policy.From, &budget, &result.Ancestry)
+		if len(result.Ancestry) != 0 {
+			header := result.Ancestry[0]
+			result.FinalizedHeader = &header
+		}
 	}
 	if err != nil {
 		return result, err
@@ -149,11 +191,11 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 	if !exists || through.Boundary != policy.Through {
 		return result, errors.New("native incentive end boundary is not in the observed finalized ancestry")
 	}
-	runtime, err := chain.nativeRuntimeAt(readCtx, policy.From.Hash)
+	runtime, err := runtimeFor(readCtx, policy.From.Hash, economicRuntimeStatePurpose)
 	if err != nil {
 		return result, err
 	}
-	if _, err := economicEmissionEventProfile(runtime.metadata); err != nil {
+	if _, err := economicEmissionEventProfile(runtime.metadata); !renewed && err != nil {
 		return result, err
 	}
 	// Retain exact independently pinned bytes, not just a parsed cache object.
@@ -161,7 +203,7 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 		return result, err
 	}
 	metadataRaw, err := rootReceiptHex(result.MetadataHex, maxMetadataRpcReplyBytes)
-	if err != nil || rootExtrinsicHash(metadataRaw) != policy.Runtime.RuntimeMetadataHash {
+	if err != nil || rootExtrinsicHash(metadataRaw) != runtime.profile.RuntimeMetadataHash {
 		return result, errors.New("native incentive retained metadata differs from approved artifact")
 	}
 	initial, err := readEconomicEmissionState(readCtx, client, runtime.metadata, policy, policy.From)
@@ -182,7 +224,7 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 			return result, errors.New("native incentive block range has an unobserved predecessor")
 		}
 		// Check parent execution runtime even if the current block has new code.
-		runtime, err := chain.nativeRuntimeAt(readCtx, before.Boundary.Hash)
+		runtime, err := runtimeFor(readCtx, before.Boundary.Hash, economicRuntimeEventsPurpose)
 		if err != nil {
 			return result, err
 		}
@@ -199,9 +241,24 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 		if err != nil {
 			return result, err
 		}
-		postRuntime, err := chain.nativeRuntimeAt(readCtx, block.Boundary.Hash)
+		if len(policy.FeePayers) != 0 {
+			if renewed {
+				if _, err := runtimeFor(readCtx, before.Boundary.Hash, economicRuntimeFeePurpose); err != nil {
+					return result, err
+				}
+			}
+			block.Fees, err = decodeEconomicNativeFees(runtime.metadata, raw, body, policy.FeePayers)
+			if err != nil {
+				return result, err
+			}
+		}
+		postRuntime, err := runtimeFor(readCtx, block.Boundary.Hash, economicRuntimeStatePurpose)
 		if err != nil {
 			return result, err
+		}
+		if renewed {
+			execution, post := runtime.profile, postRuntime.profile
+			block.ExecutionRuntime, block.PostStateRuntime = &execution, &post
 		}
 		after, err := readEconomicEmissionState(readCtx, client, postRuntime.metadata, policy, block.Boundary)
 		block.After = &after
@@ -225,7 +282,14 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 		result.AttemptedBlock = nil
 		previous = after
 	}
-	result.ClosingFinalized, _, err = economicEmissionAncestry(readCtx, chain, result.Finalized, &budget, &result.ClosingAncestry)
+	if historical {
+		result.ClosingFinalized, result.ClosingFinalizedHeader, err = economicEmissionFinalizedAssertion(readCtx, chain)
+		if err == nil && (result.ClosingFinalized.Number < result.Finalized.Number || result.ClosingFinalized.Number == result.Finalized.Number && result.ClosingFinalized.Hash != result.Finalized.Hash) {
+			err = errors.Join(errRpcIntegrity, errors.New("native economic closing finalized assertion regressed"))
+		}
+	} else {
+		result.ClosingFinalized, _, err = economicEmissionAncestry(readCtx, chain, result.Finalized, &budget, &result.ClosingAncestry)
+	}
 	if err != nil {
 		return result, err
 	}

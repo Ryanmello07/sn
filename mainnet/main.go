@@ -137,6 +137,15 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && args[0] == "storage-inspect" {
 		return durableinspect.Run(ctx, args[1:], stdout, stderr)
 	}
+	if len(args) != 0 && (args[0] == "storage-prepare" || args[0] == "storage-owner-prepare") {
+		return runStoragePreparationCommand(ctx, args[1:], stdout, stderr, args[0] == "storage-owner-prepare")
+	}
+	if len(args) != 0 && args[0] == "validator-capacity-preview" {
+		return runValidatorCapacityPreview(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) != 0 && args[0] == "validator-capacity-config" {
+		return runValidatorCapacityConfig(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "root-service" {
 		return runRootServiceCommand(ctx, args[1:], stdout, stderr)
 	}
@@ -349,8 +358,14 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 			}
 			return 3
 		}
+		if hooks.afterCheckpointOpen != nil {
+			hooks.afterCheckpointOpen(ctx, "chain", checkpoint.lock)
+		}
 		state, err = checkpoint.load()
 		if err != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
+				return 0
+			}
 			fmt.Fprintln(stderr, "monitor checkpoint:", err)
 			return 3
 		}

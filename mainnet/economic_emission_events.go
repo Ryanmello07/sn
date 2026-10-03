@@ -121,59 +121,19 @@ func decodeEconomicEmissionEvents(metadata *types.Metadata, raw []byte, bodyCoun
 	if err != nil {
 		return nil, nil, err
 	}
-	reader := rootScaleReader{data: raw, metadata: metadata}
-	count, err := reader.compact()
-	if err != nil || count > economicEmissionEventLimit || count > uint64(len(raw)) {
-		return nil, nil, errors.New("native incentive event count exceeds bound")
-	}
 	selected := []economicEmissionEvent{}
 	contextEvents := []economicEmissionContextEvent{}
-	for eventIndex := uint64(0); eventIndex < count; eventIndex++ {
-		phase, err := reader.take(1)
-		if err != nil || phase[0] > 2 {
-			return nil, nil, errors.New("native incentive event phase is invalid")
-		}
-		var extrinsicIndex *uint32
-		if phase[0] == 0 {
-			index, err := reader.take(4)
-			if err != nil || uint64(binary.LittleEndian.Uint32(index)) >= uint64(bodyCount) {
-				return nil, nil, errors.New("native incentive event phase refers outside block body")
-			}
-			value := binary.LittleEndian.Uint32(index)
-			extrinsicIndex = &value
-		}
-		id, err := reader.take(2)
-		if err != nil {
-			return nil, nil, err
-		}
-		event, exists := eventKVs[[2]byte{id[0], id[1]}]
-		if !exists {
-			return nil, nil, errors.New("native incentive event is absent from execution metadata")
-		}
-		fields := make([][]byte, 0, len(event.variant.Fields))
-		for _, field := range event.variant.Fields {
-			start := reader.offset
-			if err := reader.skip(field.Type, 0); err != nil {
-				return nil, nil, err
-			}
-			fields = append(fields, raw[start:reader.offset])
-		}
-		topics, err := reader.compact()
-		if err != nil || topics > uint64((len(raw)-reader.offset)/32) {
-			return nil, nil, errors.New("native incentive event topics are truncated")
-		}
-		if _, err := reader.take(int(topics) * 32); err != nil {
-			return nil, nil, err
-		}
+	err = walkNativeEventRecords(metadata, raw, bodyCount, eventKVs, economicEmissionEventLimit, func(record nativeEventRecord) error {
+		event, fields, eventIndex, extrinsicIndex := record.event, record.fields, record.index, record.extrinsicIndex
 		if event.name == "SubtensorModule.TempoSet" || event.name == "SubtensorModule.SubnetOwnerChanged" {
 			if binary.LittleEndian.Uint16(fields[0]) != netuid {
-				continue
+				return nil
 			}
-			if phase[0] == 1 || event.name == "SubtensorModule.SubnetOwnerChanged" && phase[0] != 2 {
-				return nil, nil, errors.New("native incentive execution context has an unreviewed phase")
+			if record.phase == 1 || event.name == "SubtensorModule.SubnetOwnerChanged" && record.phase != 2 {
+				return errors.New("native incentive execution context has an unreviewed phase")
 			}
 			context := economicEmissionContextEvent{EventIndex: eventIndex, Kind: event.name, Netuid: netuid, Phase: "Initialization", ExtrinsicIndex: extrinsicIndex}
-			if phase[0] == 0 {
+			if record.phase == 0 {
 				context.Phase = "ApplyExtrinsic"
 			}
 			if event.name == "SubtensorModule.TempoSet" {
@@ -182,14 +142,14 @@ func decodeEconomicEmissionEvents(metadata *types.Metadata, raw []byte, bodyCoun
 			} else {
 				context.OldOwnerColdkey, context.NewOwnerColdkey = "0x"+hex.EncodeToString(fields[1]), "0x"+hex.EncodeToString(fields[2])
 				if context.OldOwnerColdkey == context.NewOwnerColdkey {
-					return nil, nil, errors.New("native incentive takeover did not change the owner")
+					return errors.New("native incentive takeover did not change the owner")
 				}
 			}
 			contextEvents = append(contextEvents, context)
-			continue
+			return nil
 		}
 		if event.name != "SubtensorModule.IncentiveAlphaEmittedToMiners" && event.name != "SubtensorModule.EpochDeferred" && event.name != "SubtensorModule.EpochSkipped" {
-			continue
+			return nil
 		}
 		index := binary.LittleEndian.Uint16(fields[0])
 		baseNetuid, mechanism := index, uint8(0)
@@ -197,21 +157,21 @@ func decodeEconomicEmissionEvents(metadata *types.Metadata, raw []byte, bodyCoun
 			baseNetuid, mechanism = index%economicEmissionMechanismStride, uint8(index/economicEmissionMechanismStride)
 		}
 		if baseNetuid != netuid {
-			continue
+			return nil
 		}
-		if phase[0] != 2 || mechanism != 0 {
-			return nil, nil, errors.New("native incentive target event is not initialization of reviewed mechanism zero")
+		if record.phase != 2 || mechanism != 0 {
+			return errors.New("native incentive target event is not initialization of reviewed mechanism zero")
 		}
 		// Exactly one terminal epoch event per target block in this profile.
 		if len(selected) != 0 {
-			return nil, nil, errors.New("native incentive target epoch event is duplicated or contradictory")
+			return errors.New("native incentive target epoch event is duplicated or contradictory")
 		}
 		observed := economicEmissionEvent{EventIndex: eventIndex, Kind: event.name, Netuid: baseNetuid, Mechanism: mechanism}
 		switch event.name {
 		case "SubtensorModule.IncentiveAlphaEmittedToMiners":
 			values, count, err := rootVector(fields[1], 8, 0)
 			if err != nil || count > int(maximumUids) {
-				return nil, nil, errors.New("native incentive UID vector exceeds policy bound")
+				return errors.New("native incentive UID vector exceeds policy bound")
 			}
 			observed.AlphaByUid = make([]string, count)
 			total := new(big.Int)
@@ -224,18 +184,19 @@ func decodeEconomicEmissionEvents(metadata *types.Metadata, raw []byte, bodyCoun
 		case "SubtensorModule.EpochDeferred":
 			observed.FromBlock, observed.ToBlock = binary.LittleEndian.Uint64(fields[1]), binary.LittleEndian.Uint64(fields[2])
 			if observed.FromBlock != block || observed.ToBlock != block+1 {
-				return nil, nil, errors.New("native incentive deferred epoch block differs from event block")
+				return errors.New("native incentive deferred epoch block differs from event block")
 			}
 		case "SubtensorModule.EpochSkipped":
 			observed.FromBlock = binary.LittleEndian.Uint64(fields[1])
 			if observed.FromBlock != block {
-				return nil, nil, errors.New("native incentive skipped epoch block differs from event block")
+				return errors.New("native incentive skipped epoch block differs from event block")
 			}
 		}
 		selected = append(selected, observed)
-	}
-	if reader.offset != len(raw) {
-		return nil, nil, errors.New("native incentive event storage has trailing bytes")
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 	return selected, contextEvents, nil
 }

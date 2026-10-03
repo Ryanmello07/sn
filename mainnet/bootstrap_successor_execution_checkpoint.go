@@ -37,6 +37,9 @@ func (self *bootstrapSuccessorExecutionStore) checkpointExecutionHistory() error
 		readExact(bootstrapSuccessorExecutionPrefix+".ready", []byte(rootObjectHash(self.approval)+"\n"))); err != nil {
 		return err
 	}
+	if err := self.includePhysicalRebindReceipts(allowed, false); err != nil {
+		return err
+	}
 	expectedHash := self.last.ContentHash
 	for sequence := int(self.last.Sequence); sequence >= 0; sequence-- {
 		name := bootstrapSuccessorExecutionEventName(uint16(sequence))

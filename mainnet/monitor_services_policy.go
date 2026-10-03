@@ -19,20 +19,22 @@ import (
 )
 
 const monitorServicesSchema = "urnetwork-mainnet-monitor-services-v1"
-const maxMonitorServicesBytes = 16 * 1024
+const maxMonitorServicesBytes = 64 * 1024
 const maxMonitorValidatorRoles = 8
 
 // Callers distinguish an exhausted role census from unrelated source or wire faults.
-var errMonitorServicesCensus = errors.New("service policy requires at least one role, at most eight validators and four each of operators, providers and claim sources within shared output capacity")
+var errMonitorServicesCensus = errors.New("service policy requires at least one role, at most eight validators and four each of operators, providers, claim sources, native and EVM economic readers within shared output capacity")
 
 // Roles are fixed by the local expected census, with no candidate-supplied
 // label values. Each role has independent source, checkpoint and metric owners.
 type monitorServicesPolicy struct {
-	Schema     string                   `json:"schema"`
-	Validators []monitorValidatorPolicy `json:"validators"`
-	Operators  []monitorOperatorPolicy  `json:"operators,omitempty"`
-	Providers  []monitorProviderPolicy  `json:"providers,omitempty"`
-	Claims     []monitorClaimPolicy     `json:"claims,omitempty"`
+	Schema          string                        `json:"schema"`
+	Validators      []monitorValidatorPolicy      `json:"validators"`
+	Operators       []monitorOperatorPolicy       `json:"operators,omitempty"`
+	Providers       []monitorProviderPolicy       `json:"providers,omitempty"`
+	Claims          []monitorClaimPolicy          `json:"claims,omitempty"`
+	NativeEconomics []monitorEconomicNativePolicy `json:"native_economics,omitempty"`
+	EvmEconomics    []monitorEconomicEvmPolicy    `json:"evm_economics,omitempty"`
 }
 
 // The full current source is exact. A retained intent may still name its older
@@ -70,8 +72,8 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 	if policy.Schema != monitorServicesSchema {
 		return nil, errors.New("service policy schema is unknown")
 	}
-	rolesCount := len(policy.Validators) + len(policy.Operators) + len(policy.Providers) + len(policy.Claims)
-	if rolesCount == 0 || rolesCount > diagnostics.MaximumDomains-2 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators || len(policy.Providers) > maxMonitorProviders || len(policy.Claims) > maxMonitorClaims {
+	rolesCount := len(policy.Validators) + len(policy.Operators) + len(policy.Providers) + len(policy.Claims) + len(policy.NativeEconomics) + len(policy.EvmEconomics)
+	if rolesCount == 0 || rolesCount > diagnostics.MaximumDomains-2 || len(policy.Validators) > maxMonitorValidatorRoles || len(policy.Operators) > maxMonitorOperators || len(policy.Providers) > maxMonitorProviders || len(policy.Claims) > maxMonitorClaims || len(policy.NativeEconomics) > maximumMonitorEconomicRoles || len(policy.EvmEconomics) > maximumMonitorEconomicRoles {
 		return nil, errMonitorServicesCensus
 	}
 	paths := map[string]bool{}
@@ -206,6 +208,42 @@ func loadMonitorServices(ctx context.Context, path string, expected identityExpe
 		}
 	}
 	slices.SortFunc(policy.Claims, func(a, b monitorClaimPolicy) int { return strings.Compare(a.Role, b.Role) })
+	economicSources := map[string]bool{}
+	for _, economic := range policy.NativeEconomics {
+		if err := economic.validate(expected); err != nil {
+			return nil, err
+		}
+		key := fmt.Sprintf("%s/%d/%d/%d", economic.Observation.Network.GenesisHash, economic.Observation.Netuid, *economic.Observation.SubnetRegistrationBlock, *economic.Observation.SubnetGeneration)
+		if roles[economic.Role] || economicSources[key] {
+			return nil, errors.New("native economic role or subnet generation repeats the independent census")
+		}
+		roles[economic.Role], economicSources[key] = true, true
+		checkpoint, metrics := monitorEconomicNativePaths(checkpointPath, metricsPath, economic.Role)
+		for _, path := range []string{checkpoint, checkpoint + ".lock", metrics, metrics + ".lock"} {
+			if err := addPath(path); err != nil {
+				return nil, err
+			}
+		}
+	}
+	slices.SortFunc(policy.NativeEconomics, func(a, b monitorEconomicNativePolicy) int { return strings.Compare(a.Role, b.Role) })
+	evmSources := map[string]bool{}
+	for _, economic := range policy.EvmEconomics {
+		if err := economic.validate(expected); err != nil {
+			return nil, err
+		}
+		key := economic.EvmGenesisHash + "/" + economic.Address
+		if roles[economic.Role] || evmSources[key] {
+			return nil, errors.New("EVM economic role or contract repeats the independent census")
+		}
+		roles[economic.Role], evmSources[key] = true, true
+		checkpoint, metrics := monitorEconomicEvmPaths(checkpointPath, metricsPath, economic.Role)
+		for _, path := range []string{checkpoint, checkpoint + ".lock", metrics, metrics + ".lock"} {
+			if err := addPath(path); err != nil {
+				return nil, err
+			}
+		}
+	}
+	slices.SortFunc(policy.EvmEconomics, func(a, b monitorEconomicEvmPolicy) int { return strings.Compare(a.Role, b.Role) })
 	slices.SortFunc(policy.Validators, func(a, b monitorValidatorPolicy) int { return strings.Compare(a.Role, b.Role) })
 	return &policy, nil
 }

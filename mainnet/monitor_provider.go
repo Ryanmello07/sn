@@ -29,11 +29,14 @@ type monitorExpectedProviderMember struct {
 	ClientId string `json:"client_id"`
 }
 type monitorProviderPolicy struct {
-	Role             string                          `json:"role"`
-	Endpoint         string                          `json:"endpoint"`
-	ExpectedSource   protocol.ProviderProgressSource `json:"expected_source"`
-	Members          []monitorExpectedProviderMember `json:"members"`
-	FreshnessSeconds uint64                          `json:"freshness_seconds"`
+	Role                 string                          `json:"role"`
+	Endpoint             string                          `json:"endpoint"`
+	ExpectedSource       protocol.ProviderProgressSource `json:"expected_source"`
+	Members              []monitorExpectedProviderMember `json:"members"`
+	FreshnessSeconds     uint64                          `json:"freshness_seconds"`
+	ReadBudgetSeconds    uint64                          `json:"read_budget_seconds,omitempty"`
+	ReviewHistoryEntries uint64                          `json:"review_history_entries,omitempty"`
+	Renewal              *monitorProgressPolicyRenewal   `json:"renewal,omitempty"`
 }
 
 func (self monitorProviderPolicy) validate() error {
@@ -45,7 +48,7 @@ func (self monitorProviderPolicy) validate() error {
 	if endpoint.Scheme != "https" && (endpoint.Scheme != "http" || addressErr != nil || !address.IsLoopback()) {
 		return errors.New("provider endpoint requires HTTPS or literal loopback HTTP")
 	}
-	if !monitorRolePattern.MatchString(self.Role) || self.ExpectedSource.Validate() != nil || self.FreshnessSeconds < 1 || self.FreshnessSeconds > 300 || len(self.Members) == 0 || len(self.Members) > maxMonitorProviderMembers {
+	if !monitorRolePattern.MatchString(self.Role) || self.ExpectedSource.Validate() != nil || validateMonitorProgressRenewal(self.resources(), self.Renewal, false) != nil || len(self.Members) == 0 || len(self.Members) > maxMonitorProviderMembers {
 		return errors.New("provider policy requires bounded role, source, freshness and expected members")
 	}
 	slots, identities := map[string]bool{}, map[string]bool{}
@@ -69,13 +72,25 @@ func monitorProviderPaths(checkpoint, metrics, role string) (string, string) {
 }
 
 func newMonitorProviderClient() *http.Client {
-	transport := &http.Transport{DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext, ResponseHeaderTimeout: 5 * time.Second, TLSHandshakeTimeout: 5 * time.Second, MaxResponseHeaderBytes: 8 * 1024, MaxConnsPerHost: 1, DisableKeepAlives: true}
-	return &http.Client{Transport: transport, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	// Connection setup can fail quickly, but a healthy slow response needs a
+	// useful read window. The request context clips both phases to its owner.
+	transport := &http.Transport{DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext, ResponseHeaderTimeout: monitorProgressAttemptBudget, TLSHandshakeTimeout: 5 * time.Second, MaxResponseHeaderBytes: 8 * 1024, MaxConnsPerHost: 1, DisableKeepAlives: true}
+	return &http.Client{Transport: transport, Timeout: monitorProgressAttemptBudget, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
 // Body close is synchronous and joined on every path. A complete identity or
 // authentication refusal dominates a simultaneous observation/close failure.
 func readMonitorProvider(ctx context.Context, client *http.Client, policy monitorProviderPolicy) (*protocol.ProviderProgress, string) {
+	return readMonitorProviderWithBudget(ctx, client, policy, policy.resources().readBudget(), monitorProgressReadClock{})
+}
+
+func readMonitorProviderWithBudget(ctx context.Context, client *http.Client, policy monitorProviderPolicy, budget time.Duration, clock monitorProgressReadClock) (*protocol.ProviderProgress, string) {
+	return readMonitorProgress(ctx, budget, clock, func(attemptCtx context.Context, attempt *monitorProgressReadAttempt) (*protocol.ProviderProgress, string) {
+		return readMonitorProviderAttempt(attemptCtx, client, policy, attempt)
+	})
+}
+
+func readMonitorProviderAttempt(ctx context.Context, client *http.Client, policy monitorProviderPolicy, attempt *monitorProgressReadAttempt) (*protocol.ProviderProgress, string) {
 	if ctx == nil || ctx.Err() != nil {
 		return nil, "unavailable"
 	}
@@ -86,19 +101,24 @@ func readMonitorProvider(ctx context.Context, client *http.Client, policy monito
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cache-Control", "no-cache")
 	response, err := client.Do(request)
+	attempt.retryable = monitorProgressRetryTransport(err)
 	if response == nil {
 		return nil, "unavailable"
+	}
+	attempt.header = response.Header.Clone()
+	attempt.retryable = attempt.retryable || monitorProgressRetryStatus(response.StatusCode)
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		if response.Body != nil {
+			_ = response.Body.Close()
+		}
+		return nil, "authentication"
 	}
 	if response.Body == nil {
 		return nil, "invalid"
 	}
-	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-		_ = response.Body.Close()
-		return nil, "authentication"
-	}
 	if response.StatusCode != http.StatusOK {
-		_ = response.Body.Close()
-		if response.StatusCode >= 400 && response.StatusCode < 500 {
+		attempt.observeErrors(err, response.Body.Close(), ctx.Err())
+		if response.StatusCode >= 400 && response.StatusCode < 500 && !monitorProgressRetryStatus(response.StatusCode) {
 			return nil, "invalid"
 		}
 		return nil, "unavailable"
@@ -109,7 +129,10 @@ func readMonitorProvider(ctx context.Context, client *http.Client, policy monito
 		return nil, "invalid"
 	}
 	value, decodeErr := protocol.DecodeProviderProgress(raw)
-	if readErr == nil && decodeErr == nil {
+	if readErr == nil && decodeErr != nil {
+		return nil, "invalid"
+	}
+	if decodeErr == nil {
 		if value.Source != policy.ExpectedSource {
 			return value, "identity"
 		}
@@ -125,6 +148,7 @@ func readMonitorProvider(ctx context.Context, client *http.Client, policy monito
 		}
 	}
 	if err != nil || readErr != nil || closeErr != nil || ctx.Err() != nil {
+		attempt.observeErrors(err, readErr, closeErr, ctx.Err())
 		return nil, "unavailable"
 	}
 	if decodeErr != nil {

@@ -26,12 +26,21 @@ func openBootstrapSuccessorPreparationReader(ctx context.Context, expected boots
 // passive readers keep read-only admission, even on full or read-only media.
 // Neither path upgrades an already borrowed owner or lock in place.
 func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected bootstrapSuccessorPreparationPlan, exclusive bool, hook func(string) error) (_ *bootstrapSuccessorPreparationStore, _ bootstrapSuccessorPreparationRecord, resultErr error) {
+	return openBootstrapSuccessorPreparationReaderRebound(ctx, expected, exclusive, hook, nil)
+}
+
+// The only alternate physical coordinate comes from a reviewed restore. An
+// unsigned inspection cannot create an exclusive borrowing capability.
+func openBootstrapSuccessorPreparationReaderRebound(ctx context.Context, expected bootstrapSuccessorPreparationPlan, exclusive bool, hook func(string) error, inspection *bootstrapSuccessorLocalInspection) (_ *bootstrapSuccessorPreparationStore, _ bootstrapSuccessorPreparationRecord, resultErr error) {
 	var record bootstrapSuccessorPreparationRecord
 	if ctx == nil {
 		return nil, record, errors.New("successor preparation reader context is absent")
 	}
 	if err := errors.Join(ctx.Err(), expected.validate()); err != nil {
 		return nil, record, err
+	}
+	if inspection != nil && (inspection.preparationHash != rootObjectHash(expected) || inspection.physical.Inode == 0 || exclusive && !inspection.writer) {
+		return nil, record, errors.New("successor preparation rebind inspection lacks its exact owner authority")
 	}
 	raw, err := json.Marshal(expected)
 	if err != nil || len(raw) > maximumBootstrapSuccessorPreparationBytes {
@@ -60,6 +69,10 @@ func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected b
 		return nil, record, err
 	}
 	self := &bootstrapSuccessorPreparationStore{storage: storage, ctx: ctx, approval: bootstrapSuccessorPreparationApproval{Plan: copied}, directory: os.NewFile(uintptr(fd), path), hook: hook}
+	if inspection != nil {
+		physical := inspection.physical
+		self.reboundRoot = &physical
+	}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, self.close())
@@ -72,7 +85,11 @@ func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected b
 	if err := mainnetDurableFlock(fd, mode|unix.LOCK_NB); err != nil {
 		return nil, record, errors.Join(errors.New("successor preparation has an active local owner"), err)
 	}
-	self.members, err = openBootstrapSuccessorMembers(storage, self.directory, false, !exclusive)
+	if !exclusive && inspection != nil && inspection.restoredView != nil {
+		self.members, err = openBootstrapSuccessorRestoredMembers(storage, self.directory, inspection.restoredView)
+	} else {
+		self.members, err = openBootstrapSuccessorMembers(storage, self.directory, false, !exclusive)
+	}
 	if err != nil {
 		return nil, record, err
 	}
@@ -84,6 +101,9 @@ func openBootstrapSuccessorPreparationReaderMode(ctx context.Context, expected b
 	}
 	entries, err := self.directory.Readdirnames(514)
 	entries = bootstrapSuccessorApplicationNames(entries, self.members.spec.Name)
+	if self.members.restoredHead != nil {
+		entries = bootstrapSuccessorApplicationNames(entries, self.members.restoredHead.temporary)
+	}
 	if err != nil && !errors.Is(err, io.EOF) || len(entries) > 512 {
 		return nil, record, mainnetDurableUnavailable("successor custody directory exceeds its bounded census", err)
 	}
