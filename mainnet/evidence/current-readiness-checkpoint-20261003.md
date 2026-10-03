@@ -8,7 +8,7 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-02 | Customer/provider request recovery qualified by component; signer custody and current release/client adoption remain. | [customer-final-race-qualification-20261003.json](customer-final-race-qualification-20261003.json) |
 | PH-03 | Provider/claim GET retries, body-error and retained policy-renewal scopes qualified normally/race/vet with operative controls; final role composition remains. | [monitor-policy-renewal-qualification-20261003.json](monitor-policy-renewal-qualification-20261003.json) |
 | PH-04 | Capability selection implemented; renewed native scope passes; actual runtime authority and changed consumers remain. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
-| PH-05 | Existing cache scope qualified through38 unchanged original roots and3 corrected affected roots per mode; full-lineage archive work-count/invalidation probe remains. | [validator-cache-permission0b58-qualification-20261003.json](validator-cache-permission0b58-qualification-20261003.json) |
+| PH-05 | Existing cache scope qualified through38 unchanged original roots and3 corrected affected roots per mode; full-lineage archive work-count/invalidation probe remains. Nonempty-head eleven-root probe source-reviewed only; execution, larger-history and contention scope remain. | [validator-cache-permission0b58-qualification-20261003.json](validator-cache-permission0b58-qualification-20261003.json) |
 | PH-06 | Published recovery dependency joined; exact final source/module/config release still required. | [current-connect-paired-core-publication-20261003.json](current-connect-paired-core-publication-20261003.json) |
 | PH-07 | Role isolation scopes exist; current all-role independent failure/continuation composition remains. | [claim-consumer-qualification-20261003.json](claim-consumer-qualification-20261003.json) |
 | PH-08 | Joined replay/upload foreground work and sizing measurement remain. | No new closure evidence |
@@ -56,3 +56,5 @@ The [current host qualification](current-hosts-c59-joined-qualification-20261003
 The [EVM archival qualification](evm-history8d-qualification-review-20261003.json) now verifies27 normal/race roots and ten exact intended assertion failures. Its current-main source join and cross-domain conservation remain required.
 
 The [restore namespace source review](namespace-restoreaa46-source-review-20261003.json) records the restore32/fresh16 correction and unexecuted deepest/escaped/overflow controls. It closes no requirement.
+
+The [nonempty-head lineage probe source review](release-lineage-heade65-source-review-20261003.json) retains uncompiled eleven-root qualification intent; no cache or fairness requirement is closed.

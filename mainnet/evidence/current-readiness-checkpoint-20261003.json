@@ -92,7 +92,8 @@
     "fee-context-current1b3-source-review-20261003.json": "f7947392a0b6ee8a28c11e763c93562289df0a7eb54c8972d99a97bac016a559",
     "selected-graph63-retry-review-20261003.json": "19981e92faacbd57b970f60b038759475e7ad3f891edd255cf53ec0b42a4cb55",
     "full-hardening-source-gap-review-20261003.json": "a51780a745bc2c0c5c086a426a14d577c6ca98c9e89dcf5d103f37e30b313a56",
-    "namespace-restoreaa46-source-review-20261003.json": "772cfcaa777e900c228a728b94aac00073c859a72fd6b5449edbe20ca84e455e"
+    "namespace-restoreaa46-source-review-20261003.json": "772cfcaa777e900c228a728b94aac00073c859a72fd6b5449edbe20ca84e455e",
+    "release-lineage-heade65-source-review-20261003.json": "17f7565884f23ea2deb6978ad43d7ba408941057230abab19c1b5ccf62b19c74"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -129,7 +130,7 @@
       "closed": false,
       "evidence": "validator-cache-permission0b58-qualification-20261003.json",
       "requirement": "PH-05",
-      "status": "Existing cache scope qualified through38 unchanged original roots and3 corrected affected roots per mode; full-lineage archive work-count/invalidation probe remains."
+      "status": "Existing cache scope qualified through38 unchanged original roots and3 corrected affected roots per mode; full-lineage archive work-count/invalidation probe remains. Nonempty-head eleven-root probe source-reviewed only; execution, larger-history and contention scope remain."
     },
     {
       "closed": false,
