@@ -140,6 +140,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && (args[0] == "storage-prepare" || args[0] == "storage-owner-prepare") {
 		return runStoragePreparationCommand(ctx, args[1:], stdout, stderr, args[0] == "storage-owner-prepare")
 	}
+	if len(args) != 0 && args[0] == "validator-capacity-preview" {
+		return runValidatorCapacityPreview(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "root-service" {
 		return runRootServiceCommand(ctx, args[1:], stdout, stderr)
 	}

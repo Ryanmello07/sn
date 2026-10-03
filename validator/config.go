@@ -78,6 +78,7 @@ type ReleaseConfig struct {
 	MainnetRuntimeApprovals    []ReleaseEvidenceV2File            `yaml:"mainnet_runtime_approvals,omitempty" json:"mainnet_runtime_approvals,omitempty"`
 	ProductionRuntimeApprovals []ReleaseEvidenceV2File            `yaml:"production_runtime_approvals,omitempty" json:"production_runtime_approvals,omitempty"`
 	ProductionAuthorityHistory []ReleaseEvidenceV2File            `yaml:"production_authority_history,omitempty" json:"production_authority_history,omitempty"`
+	ProductionCapacityRevision *ProductionCapacityRevision        `yaml:"production_capacity_revision,omitempty" json:"production_capacity_revision,omitempty"`
 
 	ProvisionalDeferClosedNativeInput bool   `yaml:"provisional_defer_closed_native_input,omitempty" json:"provisional_defer_closed_native_input,omitempty"`
 	ProvisionalRuntimeCompatibility   string `yaml:"provisional_runtime_compatibility,omitempty" json:"provisional_runtime_compatibility,omitempty"`
@@ -168,6 +169,9 @@ func decodeReleaseConfigDocument(abs string, b []byte) (*ReleaseConfig, error) {
 	}
 	if err := ValidateReleaseEvidenceV2ConfigYAML(b); err != nil {
 		return nil, fmt.Errorf("decode validator config %s: %w", abs, err)
+	}
+	if err := validateProductionCapacityDocument(b); err != nil {
+		return nil, fmt.Errorf("decode validator capacity revision %s: %w", abs, err)
 	}
 	if err := cfg.normalize(filepath.Dir(abs)); err != nil {
 		return nil, err
@@ -372,6 +376,9 @@ func (c ReleaseConfig) validate(historical bool) error {
 // no runtime, history or producer authority.
 func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObservation, preActivation, mainnetRuntimeObservation bool) error {
 	production := c.SchemaVersion == ReleaseMainnetProductionSchemaVersion
+	if c.ProductionCapacityRevision != nil && (!production || len(c.ProductionAuthorityHistory) == 0) {
+		return errors.New("capacity revision requires original independently approved production authority")
+	}
 	if production {
 		if provisionalActivationObservation || preActivation || mainnetRuntimeObservation {
 			return errors.New("mainnet production authority cannot authorize another config load purpose")
