@@ -98,8 +98,12 @@ and an old-body control with the current request-journal precondition; they are
 not all unmodified historical-source runs. [Fourteen additional financial recovery roots pass with race detection](evidence/payout-retention-attempt-race-20261003.json),
 with no skips or race reports and completed owned-fixture cleanup. They cover
 actual amount/wallet admission, stale processor outcomes, retained obligations,
-bounded recovery and atomic attempt history. Race causal controls remain pending
-in a separate scope.
+bounded recovery and atomic attempt history. The
+[race recovery controls](evidence/payout-retention-causal-race-20261003.json)
+also produce all 12 intended assertion failures across six groups, with no race
+reports and completed owned-fixture cleanup. Actual final-Circle, submission-basis
+and CLI omission controls remain separate pending scopes; the full model result
+is not complete.
 These checkpoints do not supply completed release, deployment or activation
 evidence.
 
