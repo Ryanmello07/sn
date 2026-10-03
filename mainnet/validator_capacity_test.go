@@ -235,23 +235,45 @@ func TestValidatorCapacityConfigRefusesAuthorityDriftAndRetainsOutputCustody(t *
 		t.Fatal(err)
 	}
 	envelope := validator.OwnerRecycleApprovalEnvelope{Approval: original.Approval, Signature: hex.EncodeToString(ed25519.Sign(f.validator.private, message))}
-	approvalBytes, err := json.Marshal(envelope)
+	// Use the same canonical envelope producer as the positive command path.
+	// A valid completion must succeed before any negative fixture is trusted.
+	f.validator.config = *original.Config
+	f.validator.writeApproval(t, envelope)
+	approvalPath := original.Config.OwnerRecycleApproval.Approval.Path
+	approvalBytes, err := os.ReadFile(approvalPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	previewPath, configPath := filepath.Join(f.metadata, "complete-preview.json"), filepath.Join(f.metadata, "unwritten-config.yml")
-	approvalPath := original.Config.OwnerRecycleApproval.Approval.Path
+	if err := os.WriteFile(previewPath, originalPreview, 0600); err != nil {
+		t.Fatal(err)
+	}
+	validArgs := []string{"validator-capacity-config", "--preview", previewPath, "--preview-sha256", monitorReadDigest(originalPreview), "--approval", approvalPath, "--approval-sha256", monitorReadDigest(approvalBytes), "--config-path", configPath}
+	output.Reset()
+	diagnostic.Reset()
+	if code := runMain(t.Context(), validArgs, &output, &diagnostic); code != 0 || output.Len() == 0 {
+		t.Fatal("negative fixture never admitted its unchanged public baseline", code, diagnostic.String())
+	}
+	admittedPath := filepath.Join(f.metadata, "admitted-baseline.yml")
+	if err := os.WriteFile(admittedPath, output.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := validator.LoadReleaseConfig(admittedPath); err != nil {
+		t.Fatal("negative fixture baseline did not pass the public config loader", err)
+	}
 	for _, fault := range []string{"view", "document", "message", "economic", "signer", "predecessor", "signature", "preview-digest", "approval-digest", "cancel", "short-output"} {
 		var candidate validator.ProductionCapacityPreview
 		if err := json.Unmarshal(originalPreview, &candidate); err != nil {
 			t.Fatal(err)
 		}
 		approval := bytes.Clone(approvalBytes)
+		expected := "capacity completion changes the reviewed document or signing bytes"
 		switch fault {
 		case "view":
 			candidate.Config.PollSeconds++
 		case "document":
 			candidate.ConfigDocument += "\nunreviewed_field: true\n"
+			expected = "unknown field"
 		case "message":
 			candidate.SigningBytes = "0x00"
 		case "economic":
@@ -263,10 +285,16 @@ func TestValidatorCapacityConfigRefusesAuthorityDriftAndRetainsOutputCustody(t *
 		case "signature":
 			bad := envelope
 			bad.Signature = strings.Repeat("00", ed25519.SignatureSize)
-			approval, err = json.Marshal(bad)
+			f.validator.writeApproval(t, bad)
+			approval, err = os.ReadFile(approvalPath)
 			if err != nil {
 				t.Fatal(err)
 			}
+			expected = "approval signature differs"
+		case "preview-digest", "approval-digest":
+			expected = "plan reference exact file hash differs"
+		case "cancel":
+			expected = context.Canceled.Error()
 		}
 		previewBytes, err := json.Marshal(candidate)
 		if err != nil {
@@ -297,7 +325,7 @@ func TestValidatorCapacityConfigRefusesAuthorityDriftAndRetainsOutputCustody(t *
 			if code := runMain(ctx, args, &short, &diagnostic); code != 1 || !strings.Contains(diagnostic.String(), io.ErrShortWrite.Error()) {
 				t.Fatal("public completion did not report undelivered exact document", code, diagnostic.String())
 			}
-		} else if code := runMain(ctx, args, &output, &diagnostic); code == 0 || output.Len() != 0 {
+		} else if code := runMain(ctx, args, &output, &diagnostic); code == 0 || output.Len() != 0 || !strings.Contains(diagnostic.String(), expected) {
 			t.Fatal("public completion admitted altered independent authority", fault, code, diagnostic.String())
 		}
 		cancel()
