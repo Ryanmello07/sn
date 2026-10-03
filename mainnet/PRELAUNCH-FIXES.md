@@ -5816,7 +5816,9 @@ PostgreSQL/Redis cleanup complete. The exact source tests concurrent explicit
 preparation, declaration drift at actual planning/send paths, retained accepted
 attempt reconciliation, process restart and a database timeout's bounded
 continuation. The original container setup failure stays separately retained.
-Race/causal/vet/build scopes remain queued. This does not relabel the earlier
+The [same 28-root race scope](evidence/payout-boundary-race-20261003.json) now
+passes without failures, skips or race reports, with owned cleanup complete.
+Causal/vet/build scopes remain queued. This does not relabel the earlier
 full model source, prove a composed release or make the October 6 schedule
 operational. Merge, production preparation and running worker evidence remain
 required.
@@ -5900,3 +5902,38 @@ qualified production release or usable live restore. Pin this exact published
 revision in the next consumer composition without retargeting active tests.
 Member `332b1f43`, complete co-owner restoration, explicit execution rebind
 and capacity revisions remain subsequent requirements.
+
+
+### October 3: returned I/O errors must preserve their causes
+
+Composition review found that accepted-payment transaction readback wrapped
+its error with `%s`, discarding typed cancellation and timeout causes before
+retained continuation handled it. Candidate `bfb224c8` changes the actual
+returned wrapper to `%w` and adds end-to-end controls; it is not yet qualified.
+Audit adjacent wallet, cancellation, submit/reset and record-save return paths
+for the same defect, distinguishing returned errors from log formatting.
+Preserve joined hard causes and caller cancellation through public boundaries.
+A canceled owner must not schedule more work, and an ephemeral physical read
+may retain the same attempt for bounded continuation. Existing passing scopes
+do not qualify this later composition correction.
+
+
+### October 3: read retry fixes do not make ambiguous writes safe
+
+The frozen wallet GET candidate deliberately retains the existing
+`WalletCircleTransferOut` POST body. Source review confirms four attempts each
+create a fresh idempotency key for the same transfer challenge. An ambiguous
+response can therefore create another remote challenge rather than reconcile
+the first. This proves a duplicate-write risk, not duplicate paid transfers:
+the user-controlled flow still requires user confirmation. Its cancellation
+returns a non-nil `Done.` error but discards the cancellation cause.
+
+Implement a separate logical write identity with durable original request/key,
+bounded reconciliation of uncertain outcomes and no new key on retry. Preserve
+caller cancellation, distinguish an unparseable accepted response from a
+confirmed refusal, and test interruption/restart and repeated caller requests
+through the actual challenge path. Audit exact decimal amount formatting and
+minimum precision before submission; float formatting must not redefine the
+requested value. Keep customer challenge writes distinct from provider payout
+attribution. This correction is assigned to a separate successor; GET tests
+and unchanged-POST byte joins do not qualify write recovery.

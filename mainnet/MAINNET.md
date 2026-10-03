@@ -3381,7 +3381,9 @@ PostgreSQL/Redis cleanup complete. The exact source tests concurrent explicit
 preparation, declaration drift at actual planning/send paths, retained accepted
 attempt reconciliation, process restart and a database timeout's bounded
 continuation. The original container setup failure stays separately retained.
-Race/causal/vet/build scopes remain queued. This does not relabel the earlier
+The [same 28-root race scope](evidence/payout-boundary-race-20261003.json) now
+passes without failures, skips or race reports, with owned cleanup complete.
+Causal/vet/build scopes remain queued. This does not relabel the earlier
 full model source, prove a composed release or make the October 6 schedule
 operational. Merge, production preparation and running worker evidence remain
 required.
@@ -3443,3 +3445,26 @@ qualified production release or usable live restore. Pin this exact published
 revision in the next consumer composition without retargeting active tests.
 Member `332b1f43`, complete co-owner restoration, explicit execution rebind
 and capacity revisions remain subsequent requirements.
+
+
+### October 3: returned I/O errors must preserve their causes
+
+Composition review found that accepted-payment transaction readback wrapped
+its error with `%s`, discarding typed cancellation and timeout causes before
+retained continuation handled it. Candidate `bfb224c8` changes the actual
+returned wrapper to `%w` and adds end-to-end controls; it is not yet qualified.
+Audit adjacent wallet, cancellation, submit/reset and record-save return paths
+for the same defect, distinguishing returned errors from log formatting.
+Preserve joined hard causes and caller cancellation through public boundaries.
+A canceled owner must not schedule more work, and an ephemeral physical read
+may retain the same attempt for bounded continuation. Existing passing scopes
+do not qualify this later composition correction.
+
+
+The wallet read candidate's unchanged-POST fence preserves historical behavior;
+it does not prove write recovery. A separately reviewed correction must retain
+one transfer-challenge request/idempotency key across ambiguous responses and
+caller retries, preserve cancellation causes and format amounts exactly.
+Source review found fresh keys within the existing retry loop; no actual
+duplicate transfer payment is established. Qualify this customer write path
+separately from provider payout migration.
