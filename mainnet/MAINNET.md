@@ -3339,3 +3339,15 @@ The [main integration manifest](evidence/claim-projection-main-integration-20261
 binds exact source bytes. This graph uses Server10a; current-server composition
 and the independent claim consumer remain open. No finality, payment allocation
 or live launch authority follows from the queue projection.
+
+
+### October 3: native raw restore diagnostic correction
+
+The [original native raw restore batch](evidence/restore-native-raw-original-20261003.json)
+at frozen SN `00a30655` completed normally and under race detection. Each mode
+passed ten mainnet roots and one chain root, with one mainnet assertion failure:
+a duplicate JSON nomination was correctly refused by the earlier strict reader,
+while the test expected a later raw-adapter diagnostic. Both package vets pass.
+Preserve this failed batch; a separate test-only correction must reach that
+assertion without weakening duplicate-input refusal. Broader member/multi-owner
+restore and current published composition remain open.
