@@ -141,6 +141,16 @@ func observeEconomicEmissionCatalog(ctx context.Context, client *rpcClient, poli
 	if err := policy.validate(); err != nil {
 		return result, err
 	}
+	var producer *nativeProducerSession
+	if policy.Execution != nil && policy.Execution.Producer != nil {
+		var err error
+		producer, err = openNativeProducerSession(ctx, policy)
+		if err != nil {
+			return result, err
+		}
+		defer func() { resultErr = errors.Join(resultErr, producer.files.close()) }()
+		ctx = context.WithValue(ctx, nativeProducerSessionKey{}, producer)
+	}
 	if !planSha256(policyHash) {
 		return result, errors.New("native incentive exact input SHA256 is missing")
 	}
@@ -323,9 +333,16 @@ func observeEconomicEmissionCatalog(ctx context.Context, client *rpcClient, poli
 			return result, err
 		}
 		result.ExecutionWindow = window
+		if producer != nil {
+			value := producer.state
+			result.ExecutionProducer = &value
+			result.FinalityAuthority = "independently-approved-anchor-and-verified-grandpa"
+		}
 		result.NativeMinerAllocationAlpha, result.ProviderEntitlementAlpha, result.OwnerRecycledAlpha = &window.MinerAllocation, &window.ProviderEntitlement, &window.OwnerRecycled
 		result.IndependentStorageProof = true
-		result.FinalityAuthority = "independently-reviewed-finalized-boundaries"
+		if producer == nil {
+			result.FinalityAuthority = "independently-reviewed-finalized-boundaries"
+		}
 		result.Status = "observed-execution-amounts-target-unresolved"
 		result.Blockers = []string{"execution amounts and final fixed-point casts are authenticated; complete runtime/u16 quantization tolerance and activation accounting remain separate", "vault capture, independent Claim and cross-domain conservation remain separate; native recycling grants no reserve credit"}
 	}

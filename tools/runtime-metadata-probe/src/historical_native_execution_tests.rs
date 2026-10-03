@@ -37,6 +37,10 @@ fn words(values: &[u64]) -> Vec<u8> {
 }
 
 fn fixture() -> HistoricalJob {
+    fixture_with_continuation(false).0
+}
+
+fn fixture_with_continuation(continuous: bool) -> (HistoricalJob, sp_core::storage::Storage) {
     let drains = [
         key(b"SubtensorModule", b"PendingServerEmission", true),
         key(b"SubtensorModule", b"PendingValidatorEmission", true),
@@ -112,6 +116,16 @@ fn fixture() -> HistoricalJob {
         body.push_str(&format!("(local.set $n (i32.wrap_i64 (call $drain (i64.const {})))) (if (i32.ne (i32.load8_u (local.get $n)) (i32.const 1)) (then unreachable)) (if (i32.ne (i32.load8_u offset=1 (local.get $n)) (i32.const 32)) (then unreachable)) (i64.store (i32.const {}) (i64.load offset=2 (local.get $n))) (call $set (i64.const {}) (i64.const {}))",span(1000+index as u32*100,drains[index].len()),4024+index*8,span(1000+index as u32*100,drains[index].len()),span(1800,8)));
     }
     body.push_str("(call $epoch) (call $emission) (call $provider) (call $owner)");
+    if continuous {
+        // This check is outside the admitted native callsites. Ordinary empty
+        // blocks perform no drain/epoch/allocation, rather than fabricating a
+        // zero emission or spending the first block's recipient amounts again.
+        declarations.push_str(&segment(1900, &[0]));
+        body = format!(
+            "(call $set (i64.const {}) (i64.const {})) (local.set $n (i32.wrap_i64 (call $get (i64.const {})))) (if (i64.ne (i64.load offset=2 (local.get $n)) (i64.const 0)) (then {}))",
+            span(1400, events.len()), span(1900, 1), span(1000, drains[0].len()), body
+        );
+    }
     let code = wasm(&declarations, &body);
     let mut initial = parent_storage(&code);
     for (index, drain) in drains.iter().enumerate() {
@@ -144,7 +158,7 @@ fn fixture() -> HistoricalJob {
     expected.top.insert(events, [vec![4], event].concat());
     let backing = TestExternalities::<Blake2Hasher>::new_with_code_and_state(
         &code,
-        expected,
+        expected.clone(),
         StateVersion::V1,
     );
     let extrinsics: Vec<Vec<u8>> = Vec::new();
@@ -224,24 +238,104 @@ fn fixture() -> HistoricalJob {
         rule.memory = fields(&items);
         profile.rules.push(rule);
     }
-    HistoricalJob {
-        schema: HISTORICAL_SCHEMA.to_owned(),
-        parent_header_hex: encoded(&parent.encode()),
-        parent_hash: parent.hash().0,
-        child_header_hex: encoded(&child.encode()),
-        child_hash: child.hash().0,
-        extrinsics_hex: Vec::new(),
-        runtime_code_hex: encoded(&code),
-        runtime_code_sha256: sha2_256(&code),
-        runtime_code_blake2b_256: blake2_256(&code),
-        execution_state_version: 1,
-        proof_nodes_hex: nodes
+    (
+        HistoricalJob {
+            schema: HISTORICAL_SCHEMA.to_owned(),
+            parent_header_hex: encoded(&parent.encode()),
+            parent_hash: parent.hash().0,
+            child_header_hex: encoded(&child.encode()),
+            child_hash: child.hash().0,
+            extrinsics_hex: Vec::new(),
+            runtime_code_hex: encoded(&code),
+            runtime_code_sha256: sha2_256(&code),
+            runtime_code_blake2b_256: blake2_256(&code),
+            execution_state_version: 1,
+            proof_nodes_hex: nodes
+                .into_iter()
+                .map(|(_, (value, _))| encoded(&value))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect(),
+            observation_profile: Some(profile),
+        },
+        expected,
+    )
+}
+
+// Five actual original-program jobs allow the Go producer to restart while a
+// retained GRANDPA window certifies a later head. Only the first block emits;
+// the next clears its events and the later blocks reproduce unchanged state.
+#[test]
+fn historical_native_producer_exports_contiguous_original_jobs() {
+    let (first, mut post_storage) = fixture_with_continuation(true);
+    let mut jobs = vec![first];
+    let code = hex_bytes(
+        "producer code",
+        &jobs[0].runtime_code_hex,
+        MAXIMUM_CODE_BYTES,
+    )
+    .expect("original producer code");
+    for number in 102..=105 {
+        let backing = TestExternalities::<Blake2Hasher>::new_with_code_and_state(
+            &code,
+            post_storage.clone(),
+            StateVersion::V1,
+        );
+        let (nodes, _) = backing.into_raw_snapshot();
+        let proof: Vec<String> = nodes
             .into_iter()
             .map(|(_, (value, _))| encoded(&value))
             .collect::<BTreeSet<_>>()
             .into_iter()
-            .collect(),
-        observation_profile: Some(profile),
+            .collect();
+        post_storage
+            .top
+            .insert(key(b"System", b"Events", false), vec![0]);
+        let expected = TestExternalities::<Blake2Hasher>::new_with_code_and_state(
+            &code,
+            post_storage.clone(),
+            StateVersion::V1,
+        );
+        let mut job = jobs[0].clone();
+        let previous = jobs.last().unwrap();
+        let child = NativeHeader::new(
+            number,
+            BlakeTwo256::ordered_trie_root(Vec::<Vec<u8>>::new(), StateVersion::V1),
+            *expected.backend.root(),
+            H256(previous.child_hash),
+            Digest::default(),
+        );
+        job.parent_header_hex = previous.child_header_hex.clone();
+        job.parent_hash = previous.child_hash;
+        job.child_header_hex = encoded(&child.encode());
+        job.child_hash = child.hash().0;
+        job.proof_nodes_hex = proof.clone();
+        jobs.push(job);
+    }
+    for (index, job) in jobs.iter().enumerate() {
+        let report = run(job).expect("contiguous actual native producer job");
+        assert!(report.post_state_reproduced && !report.runtime_admitted);
+        let records = &report.hook_observations.as_ref().unwrap().observations;
+        assert_eq!(records.len(), if index == 0 { 7 } else { 0 });
+    }
+    if let Some(directory) = std::env::var_os("URNETWORK_NATIVE_PRODUCER_FIXTURE_OUT") {
+        let directory = Path::new(&directory);
+        assert!(directory.is_absolute() && directory.is_dir());
+        for (index, job) in jobs.iter().enumerate() {
+            let mut file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .mode(0o600)
+                .open(directory.join(format!("native-job-{}.json", index + 101)))
+                .expect("exclusive contiguous producer fixture");
+            file.write_all(&serde_json::to_vec(job).unwrap())
+                .expect("complete producer fixture");
+            file.sync_all().expect("durable producer fixture");
+        }
+        std::fs::File::open(directory)
+            .expect("producer fixture directory")
+            .sync_all()
+            .expect("durable producer fixture names");
     }
 }
 

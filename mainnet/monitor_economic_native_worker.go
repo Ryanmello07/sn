@@ -17,6 +17,7 @@ import (
 	"github.com/urfoundation/sn/internal/durablehead"
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
+	"github.com/urnetwork/server/strecovery"
 )
 
 const monitorEconomicNativeCheckpointSchema = "urnetwork-mainnet-native-economic-checkpoint-v1"
@@ -88,6 +89,10 @@ func openMonitorEconomicNativeWorker(ctx context.Context, client *rpcClient, pol
 	policy.Observation.FeePayers = append([]string(nil), policy.Observation.FeePayers...)
 	if policy.Observation.Execution != nil {
 		value := *policy.Observation.Execution
+		if value.Producer != nil {
+			producer := *value.Producer
+			value.Producer = &producer
+		}
 		policy.Observation.Execution = &value
 	}
 	registration, generation := *policy.Observation.SubnetRegistrationBlock, *policy.Observation.SubnetGeneration
@@ -210,7 +215,7 @@ func (self *monitorEconomicNativeWorker) save(state *monitorEconomicNativeState)
 
 func monitorEconomicNativeReadCode(err error) string {
 	switch {
-	case errors.Is(err, errRpcIntegrity), errors.Is(err, errRpcIdentityMismatch), errors.Is(err, durablevolume.ErrIdentity):
+	case errors.Is(err, errRpcIntegrity), errors.Is(err, errRpcIdentityMismatch), errors.Is(err, durablevolume.ErrIdentity), errors.Is(err, strecovery.ErrNativeFinalityConflict):
 		return "identity-conflict"
 	case errors.Is(err, errMonitorEconomicCapacity):
 		return "capacity-held"
@@ -388,7 +393,15 @@ func (self *monitorEconomicNativeWorker) run(ctx context.Context, interval time.
 		if readErr == nil {
 			observation, readErr = observeMonitorEconomicNative(ctx, self.client, self.policy, self.state)
 		}
+		if errors.Is(readErr, errNativeProducerCleanup) {
+			fmt.Fprintln(stderr, "native execution producer ownership:", readErr)
+			return 3
+		}
 		if ctx.Err() != nil {
+			if monitorEconomicNativeReadCode(readErr) == "identity-conflict" {
+				fmt.Fprintln(stderr, "native execution contradictory evidence:", readErr)
+				return 3
+			}
 			return 0
 		}
 		observedAt := now().UTC()
