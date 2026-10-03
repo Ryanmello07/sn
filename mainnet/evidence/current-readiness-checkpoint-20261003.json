@@ -12,6 +12,8 @@
     "current-cutoff-readiness-config-20261003.json": "f9689f1953a29e7c8d4b69fcbcd4f588740706c645a09412bb9e698b144e154c",
     "customer-corrected-full-model-terminal-20261003.json": "a96f2c33e4a921d9e54a39e0b7716d15c0f5e959188908cc64d121926ecb545d",
     "customer-final-race-qualification-20261003.json": "138253034e509103211bf57f10a61b999ef3d59c19eb6286b30fa0d5e6322513",
+    "evm-review-reuse-causal-qualification-20261003.json": "9a2b53efcf3e57d6522911859c6bd139e03c090c1a2f48d9b1c2689bc0a84bfb",
+    "evm-review-reuse-selected-qualification-20261003.json": "98b17a41e6fad8b9a203a5593837d6ae5da545d9f76b0ff06029e6d369a78de8",
     "historical-proof-backend-qualification-20261003.json": "3a393f0fcd3e58f2fbd4a8491417c4e1b5739cff8b20a93f1c142c50ac349aa0",
     "monitor-policy-renewal-qualification-20261003.json": "5cee15514cae38a39ffe021c489f57ffaa93346701754b353a7be823d663e5cd",
     "monitor-progress-attempt-controls-qualification-20261003.json": "fd006fd5277e5c5d387ab28a5be12b172b12212846b89adaeae56bcca751a1ec",
@@ -101,9 +103,9 @@
     },
     {
       "closed": false,
-      "evidence": "continuous-evm-review-history-product-qualification-20261003.json",
+      "evidence": "evm-review-reuse-causal-qualification-20261003.json",
       "requirement": "PH-12",
-      "status": "Continuous EVM38normal/race/vet and10causal groups pass; digest-reuse successor and native/claim conservation join remain."
+      "status": "Continuous EVM38-root base and6-root review-reuse successor qualified normally/race/vet with operative controls; finalcurrentgraph and native/claim conservation join remain."
     },
     {
       "closed": false,
