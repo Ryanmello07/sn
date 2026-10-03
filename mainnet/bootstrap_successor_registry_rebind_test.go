@@ -184,7 +184,7 @@ func TestBootstrapSuccessorRegistryRebindPublicResumeKeepsOriginalAuthority(t *t
 		}
 	}
 	approvalPath := filepath.Join(filepath.Dir(path), "synthetic-registry-rebind-approval.json")
-	for _, mode := range []string{"approver", "domain", "generation", "plan", "declaration"} {
+	for _, mode := range []string{"approver", "domain", "generation", "plan", "declaration", "plan-lineage", "declaration-lineage"} {
 		plan, key, signingDomain := preview.Plan, f.key, domain
 		expectedRefusal := "successor registry approval differs from exact restored lineage"
 		switch mode {
@@ -197,18 +197,33 @@ func TestBootstrapSuccessorRegistryRebindPublicResumeKeepsOriginalAuthority(t *t
 		case "generation":
 			plan.RestoredRegistry.Inode++
 		case "plan":
+			// A zero digest is malformed before any lineage file is read.
 			plan.RestorePlan.Sha256 = "sha256:" + strings.Repeat("0", 64)
+			expectedRefusal = "successor registry independent rebind approval is invalid"
 		case "declaration":
 			plan.RuntimeDeclaration.Sha256 = "sha256:" + strings.Repeat("0", 64)
+			expectedRefusal = "successor registry independent rebind approval is invalid"
+		case "plan-lineage":
+			// A canonical but wrong digest passes envelope admission and must
+			// still refuse the exact original reviewed restore lineage.
+			plan.RestorePlan.Sha256 = "sha256:" + strings.Repeat("a", 64)
+		case "declaration-lineage":
+			plan.RuntimeDeclaration.Sha256 = "sha256:" + strings.Repeat("b", 64)
 		}
 		ref := registryRebindTestSign(t, approvalPath, plan, key, signingDomain)
 		output.Reset()
 		code, diagnostic := invoke("contract-successor-execution-resume", &output, "--registry-rebind-approval", ref.Path, "--registry-rebind-approval-sha256", ref.Sha256)
-		if code != 1 || output.Len() != 0 || !strings.Contains(diagnostic, expectedRefusal) {
-			t.Fatal("invalid registry approval did not refuse at its original authority boundary", mode, code, diagnostic)
+		if code != 1 || output.Len() != 0 {
+			t.Fatal("invalid registry approval admitted execution", mode, code, diagnostic)
 		}
 		if !maps.Equal(beforeLocal, bootstrapSuccessorPreparationTestFiles(t, local)) || !maps.Equal(baselineNonce, bootstrapSuccessorPreparationTestFiles(t, registry)) {
 			t.Fatal("refused registry approval changed original custody", mode)
+		}
+		// Collect all diagnostic mismatches only after the semantic refusal
+		// and exact original-byte checks. A message mismatch must not hide
+		// the remaining fault cases or the valid retained resume control.
+		if !strings.HasPrefix(diagnostic, "successor execution custody unresolved; retain original and nonce registry files:") || !strings.Contains(diagnostic, expectedRefusal) {
+			t.Errorf("registry approval refusal cause differs: mode=%s code=%d diagnostic=%s", mode, code, diagnostic)
 		}
 	}
 	ref := registryRebindTestSign(t, approvalPath, preview.Plan, f.key, domain)
