@@ -4430,3 +4430,8 @@ The distinct sampler removes the undefined cache reference and records unavailab
 ### Native allocation conservation and launch split conformance
 
 The [native accounting source finding](evidence/native-split-conformance-source-finding-20261003.json) distinguishes two requirements: authenticating observed emissions and enforcing the approved 10% provider / 90% owner recycle policy. Conserving the total alone cannot establish that split. Expose actual deviations and unknown authority explicitly; compare cumulative amounts against exact references with independently reviewed rounding, collateral capture and Claim reconciliation. Test a conserving wrong split and partitioned continuation so a new observation page cannot reset rounding carry or make incorrect economics appear ready. This finding concerns unsealed implementation and remains unqualified.
+
+
+### Requested and granted transfer capacity
+
+The [original full-model subsidy failure](evidence/server-model-subsidy-original-failure-20261003.json) remains retained while the suite continues. Initial source triage found a consumption loop counting requested capacity although successful escrow can now grant fewer bytes. Confirm the cause before changing assertions. Consumers and fixtures must use the returned, signed grant for capacity and completed-byte accounting; test partial grants and repeated exhaustion with exact revenue conservation. Check adjacent loops and production callers, preserving legitimate balance/debt retention. No post-fix result is established yet.
