@@ -19,6 +19,8 @@ type economicEmissionBudget struct {
 	used int
 }
 
+var errEconomicEmissionEvidenceCapacity = errors.New("native incentive retained evidence exceeds 8 MiB budget")
+
 // Accounting precedes retaining the value; an attempted block remains bounded
 // by the independent single-response/event/UID limits when this budget fills.
 func (self *economicEmissionBudget) retain(value any) error {
@@ -27,7 +29,7 @@ func (self *economicEmissionBudget) retain(value any) error {
 		return err
 	}
 	if len(raw) > economicEmissionBytesLimit-self.used {
-		return errors.New("native incentive retained evidence exceeds 8 MiB budget")
+		return errEconomicEmissionEvidenceCapacity
 	}
 	self.used += len(raw)
 	return nil
@@ -102,6 +104,12 @@ func readEconomicEmissionEvents(ctx context.Context, client *rpcClient, metadata
 // Range completeness and economic verification are independent. Even a fully
 // read range leaves target/Q unset until native denominator and outcome proof.
 func observeEconomicEmission(ctx context.Context, client *rpcClient, policy economicEmissionPolicy, policyHash string) (result economicEmissionObservation, resultErr error) {
+	return observeEconomicEmissionPage(ctx, client, policy, policyHash, false)
+}
+
+// Only an explicitly declared continuous reader uses historical pages. The
+// original finite command retains its stronger bounded head-to-window walk.
+func observeEconomicEmissionPage(ctx context.Context, client *rpcClient, policy economicEmissionPolicy, policyHash string, historical bool) (result economicEmissionObservation, resultErr error) {
 	result = economicEmissionObservation{
 		Schema: economicEmissionSchema, Policy: policy, PolicyHash: policyHash, Status: "unresolved", FinalityAuthority: "owned-rpc-assertion",
 		ObservedIncentiveTotalAlpha: "0", Blocks: []economicEmissionBlock{}, Ancestry: []rootReceiptHeader{}, ClosingAncestry: []rootReceiptHeader{},
@@ -137,10 +145,15 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 	}
 	budget := economicEmissionBudget{}
 	var blocks map[uint64]economicEmissionBlock
-	result.Finalized, blocks, err = economicEmissionAncestry(readCtx, chain, policy.From, &budget, &result.Ancestry)
-	if len(result.Ancestry) != 0 {
-		header := result.Ancestry[0]
-		result.FinalizedHeader = &header
+	if historical {
+		result.HistoricalFinality = "owned-rpc-assertion"
+		result.Finalized, result.FinalizedHeader, blocks, err = economicEmissionHistoricalPage(readCtx, chain, policy, &budget, &result.RangeAncestry)
+	} else {
+		result.Finalized, blocks, err = economicEmissionAncestry(readCtx, chain, policy.From, &budget, &result.Ancestry)
+		if len(result.Ancestry) != 0 {
+			header := result.Ancestry[0]
+			result.FinalizedHeader = &header
+		}
 	}
 	if err != nil {
 		return result, err
@@ -199,6 +212,12 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 		if err != nil {
 			return result, err
 		}
+		if len(policy.FeePayers) != 0 {
+			block.Fees, err = decodeEconomicNativeFees(runtime.metadata, raw, body, policy.FeePayers)
+			if err != nil {
+				return result, err
+			}
+		}
 		postRuntime, err := chain.nativeRuntimeAt(readCtx, block.Boundary.Hash)
 		if err != nil {
 			return result, err
@@ -225,7 +244,14 @@ func observeEconomicEmission(ctx context.Context, client *rpcClient, policy econ
 		result.AttemptedBlock = nil
 		previous = after
 	}
-	result.ClosingFinalized, _, err = economicEmissionAncestry(readCtx, chain, result.Finalized, &budget, &result.ClosingAncestry)
+	if historical {
+		result.ClosingFinalized, result.ClosingFinalizedHeader, err = economicEmissionFinalizedAssertion(readCtx, chain)
+		if err == nil && (result.ClosingFinalized.Number < result.Finalized.Number || result.ClosingFinalized.Number == result.Finalized.Number && result.ClosingFinalized.Hash != result.Finalized.Hash) {
+			err = errors.Join(errRpcIntegrity, errors.New("native economic closing finalized assertion regressed"))
+		}
+	} else {
+		result.ClosingFinalized, _, err = economicEmissionAncestry(readCtx, chain, result.Finalized, &budget, &result.ClosingAncestry)
+	}
 	if err != nil {
 		return result, err
 	}
