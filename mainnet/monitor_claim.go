@@ -40,6 +40,7 @@ type monitorClaimPolicy struct {
 	EpochCapacity        uint64                        `json:"epoch_capacity,omitempty"`
 	ReviewHistoryEntries uint64                        `json:"review_history_entries,omitempty"`
 	Renewal              *monitorProgressPolicyRenewal `json:"renewal,omitempty"`
+	HistoryCatalog       *monitorHistoryCatalogPolicy  `json:"history_catalog,omitempty"`
 }
 
 func (self monitorClaimPolicy) validate(expected identityExpectation) error {
@@ -73,7 +74,7 @@ func (self monitorClaimPolicy) validate(expected identityExpectation) error {
 			}
 		}
 	}
-	return nil
+	return self.HistoryCatalog.validate()
 }
 
 func (self monitorClaimPolicy) hash() string {
