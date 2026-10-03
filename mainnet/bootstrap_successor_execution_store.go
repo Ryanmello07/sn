@@ -271,11 +271,8 @@ func (self *bootstrapSuccessorExecutionStore) loadEvents() error {
 	}
 	allowed := map[string]bool{bootstrapSuccessorExecutionPrefix + ".claim": true, bootstrapSuccessorExecutionPrefix + ".ready": true,
 		bootstrapSuccessorCanonicalFile: true, self.local.stageName(bootstrapSuccessorCanonicalFile, "canonical-authority"): true}
-	if self.registryRebind != nil {
-		allowed[bootstrapSuccessorRegistryRebindFile] = true
-		if err := self.checkRegistryRebind(true); err != nil {
-			return err
-		}
+	if err := self.includePhysicalRebindReceipts(allowed, true); err != nil {
+		return err
 	}
 	self.runtimeHistory, err = self.readRuntimeHistory(self.local.ctx, names, allowed)
 	if err != nil {
@@ -405,7 +402,7 @@ func (self *bootstrapSuccessorExecutionStore) append(event bootstrapSuccessorExe
 		return errors.Join(err, self.close())
 	}
 	self.last, self.pending, self.pendingOutcomeHash = copied, "", ""
-	return errors.Join(self.checkpointExecutionHistory(), self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory(), self.checkpointRegistryRebind())
+	return errors.Join(self.checkpointExecutionHistory(), self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory())
 }
 
 // Check original preparation, both directories and durable nonce claims again
@@ -423,7 +420,7 @@ func (self *bootstrapSuccessorExecutionStore) checkpoint(stage string) error {
 			return errors.Join(errors.New("successor execution nonce custody changed"), err)
 		}
 	}
-	return errors.Join(self.checkpointExecutionHistory(), self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory(), self.checkpointRegistryRebind())
+	return errors.Join(self.checkpointExecutionHistory(), self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory())
 }
 
 // Release registry, then the borrowed original directory. Original preparation

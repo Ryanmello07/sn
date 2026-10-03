@@ -243,15 +243,10 @@ func (self bootstrapSuccessorRegistryRebindApproval) validate(ctx context.Contex
 	return nil
 }
 
-// Immutable local history remembers this single bounded physical adoption.
-// A different second rebind needs a separately designed chained profile.
-func (self *bootstrapSuccessorExecutionStore) checkpointRegistryRebind() error {
-	return self.checkRegistryRebind(false)
-}
-
-// Only the constructor's first history inspection can accept an unpublished
-// receipt. The member head has already refused any lost acknowledged member.
-func (self *bootstrapSuccessorExecutionStore) checkRegistryRebind(allowUnpublished bool) error {
+// Both replay and live checkpoints use this exact authenticated receipt
+// inventory. A filename prefix never grants authority. Only initial replay may
+// accept absence before publication; the member head still refuses lost custody.
+func (self *bootstrapSuccessorExecutionStore) includePhysicalRebindReceipts(allowed map[string]bool, allowUnpublished bool) error {
 	if self.registryRebind == nil {
 		return nil
 	}
@@ -266,6 +261,7 @@ func (self *bootstrapSuccessorExecutionStore) checkRegistryRebind(allowUnpublish
 	if err != nil || !bytes.Equal(raw, retained) {
 		return errors.Join(errors.New("successor execution lost its original registry rebind receipt"), err)
 	}
+	allowed[bootstrapSuccessorRegistryRebindFile] = true
 	return nil
 }
 
