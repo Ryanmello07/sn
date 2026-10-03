@@ -140,6 +140,12 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && args[0] == "monitor-native-archive" {
 		return runMonitorNativeArchive(ctx, args[1:], stdout, stderr, hooks)
 	}
+	if len(args) != 0 && args[0] == "monitor-claim-catalog" {
+		return runMonitorClaimCatalog(ctx, args[1:], stdout, stderr, hooks)
+	}
+	if len(args) != 0 && args[0] == "monitor-claim-archive" {
+		return runMonitorClaimArchive(ctx, args[1:], stdout, stderr, hooks)
+	}
 	if len(args) != 0 && args[0] == "monitor-evm-archive" {
 		return runMonitorEvmArchive(ctx, args[1:], stdout, stderr, hooks)
 	}
@@ -238,6 +244,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	}
 	if len(args) != 0 && args[0] == "verify-historical-execution" {
 		return runHistoricalReplayCommand(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) != 0 && args[0] == "verify-historical-fee-context" {
+		return runHistoricalFeeContextCommand(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) != 0 && args[0] == "capture-historical-execution" {
 		return runHistoricalCaptureCommand(ctx, args[1:], stdout, stderr)
