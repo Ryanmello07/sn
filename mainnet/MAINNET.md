@@ -27,9 +27,15 @@ The transition rollout must retain evidence for each step:
    binaries/images and an immutable `main/sn.yml` revision. Preserve the reviewed
    UTC boundary and legacy-obligation policy; a later configuration edit must
    not turn post-cutoff earnings into new USDC obligations.
-2. Apply and verify the payout schema features before admitting the new writers.
+2. Apply and verify the payout schema features and initialize the durable
+   earning-policy anchor from the exact reviewed config before admitting new
+   allocations or sends. The anchor implementation is pending. Initialization
+   must be idempotent for the same boundary and refuse a conflicting earning
+   policy; subsequent readiness activation must not redefine earning time.
    Join any replaced worker and preserve its pending processor attempts and
-   original idempotency keys; do not clear them during rollout.
+   original idempotency keys; do not clear them during rollout. A missing or
+   unavailable anchor suspends affected new work while accepted transfers
+   continue reconciliation.
 3. Start the qualified payout planners, payment workers and SN usage readers
    with the same declared policy and selected mainnet identity. The policy file
    is read per operation, while other process configuration may be cached;
