@@ -19,6 +19,20 @@ must disclose that their liability census is incomplete. The first normal
 batch has one fixture failure; the candidate and its original evidence remain
 retained while the successor is fixed and qualified.
 
+The earning boundary itself needs durable admission identity. Review of the
+transition candidate found that `LoadProviderPayoutTransition` rereads the
+schedule for each operation and the USDC attribution query compares contracts
+against that current cutoff. The attempt basis freezes amount and wallet, but
+not the schedule: a later cutoff edit could admit usage previously excluded
+from USDC, and an earlier edit could block retained original obligations.
+Bind the adopted earning policy to durable production state, or refuse a
+conflicting declaration before planning or sending. Preserve the October 6
+boundary across restart and recovery; deployment identity changes must not
+reclassify already attributed usage. Add deterministic actual-path controls
+for a declaration replacement between planning, limiter admission and send.
+This source gap is assigned to Astra; it is not closed by the unchanged
+candidate's passing tests.
+
 Cancellation must preserve every unpaid earning component, not just released
 contract sweeps. Review found that canceling a legacy payment can leave its
 subsidy and reliability amounts on the canceled row while the recorded subsidy
