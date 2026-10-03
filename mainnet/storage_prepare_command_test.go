@@ -37,6 +37,13 @@ type storagePreparationCommandFixture struct {
 func newStoragePreparationCommandFixture(t *testing.T) *storagePreparationCommandFixture {
 	t.Helper()
 	parent := t.TempDir()
+	return newStoragePreparationCommandFixtureAt(t, parent)
+}
+
+// A caller-owned scratch parent also supports deliberately bounded pathname
+// fixtures; it never retargets any previously provisioned root or declaration.
+func newStoragePreparationCommandFixtureAt(t *testing.T, parent string) *storagePreparationCommandFixture {
+	t.Helper()
 	if err := os.Chmod(parent, 0700); err != nil {
 		t.Fatal(err)
 	}

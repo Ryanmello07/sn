@@ -361,6 +361,12 @@ func applyMonitorNativeArchive(ctx context.Context, plan monitorNativeArchivePla
 
 // Actual public entrypoint; stdout loss never resets either retained owner.
 func runMonitorNativeArchive(ctx context.Context, args []string, stdout, stderr io.Writer, hooks monitorServiceHooks) int {
+	if len(args) != 0 && args[0] == "restore-cohort-plan" {
+		return runMonitorNativeArchiveRestoreCohort(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) != 0 && args[0] == "restore-request" {
+		return runMonitorNativeArchiveRestoreRequest(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || (args[0] != "plan" && args[0] != "apply") {
 		fmt.Fprintln(stderr, "usage: monitor-native-archive plan --request FILE --request-sha256 HASH | apply --plan FILE --plan-sha256 HASH")
 		return 2

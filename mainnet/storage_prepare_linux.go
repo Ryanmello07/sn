@@ -90,6 +90,9 @@ func inspectStoragePreparationOwner(ctx context.Context, target *os.File, owner 
 // The independently selected command fixes daemon or owner-local scope before
 // parsing any policy. Only apply accepts an exact accepted plan digest.
 func runStoragePreparationCommand(ctx context.Context, args []string, stdout, stderr io.Writer, ownerLocal bool) int {
+	if len(args) != 0 && (args[0] == "cohort-check" || args[0] == "cohort-apply" || args[0] == "cohort-config") {
+		return runStoragePreparationCohort(ctx, args, stdout, stderr, ownerLocal)
+	}
 	if len(args) != 0 && args[0] == "export" {
 		return runStoragePreparationExport(ctx, args[1:], stdout, stderr, ownerLocal)
 	}
