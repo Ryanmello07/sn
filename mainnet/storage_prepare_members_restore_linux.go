@@ -29,7 +29,7 @@ type storagePreparationMemberRestoreCensus struct {
 }
 
 // Legacy restoration owns the complete root. Explicit shared local custody
-// selects its fixed namespace; an unfinished outer snapshot is still refused.
+// selects its fixed namespace, including its exact original head exchange.
 func planStoragePreparationMembersRestore(ctx context.Context, name string, owner durablevolume.PreparationOwner, report durablevolume.Inventory, ownerLocal bool) (durablevolume.PreparationOwnerPlan, error) {
 	spec, profile, err := storagePreparationMembersProfile(owner, ownerLocal)
 	if err != nil {
@@ -41,6 +41,13 @@ func planStoragePreparationMembersRestore(ctx context.Context, name string, owne
 	}
 	if ctx == nil || owner.Purpose != "restore" || name == "" || filepath.Base(name) != name || name == "." || name == ".." || strings.ContainsRune(name, 0) || report.Schema != durablevolume.PhysicalInventorySchema || report.RestartAuthorized || len(report.Entries) == 0 || len(report.Entries) > maximumBootstrapSuccessorMemberCount+8 || report.Entries[0].Path != "" {
 		return durablevolume.PreparationOwnerPlan{}, errors.New("member restore requires its bounded complete original physical inventory")
+	}
+	head, _, err := storagePreparationMemberRestoreHead(spec, report)
+	if err != nil {
+		return durablevolume.PreparationOwnerPlan{}, err
+	}
+	isMetadata := func(path string) bool {
+		return path == spec.Name || head.Pending != nil && path == head.Pending.Temporary
 	}
 	attribute := durablevolume.PreparationAttributeSpec{Path: ".", Name: durablehead.Attribute(spec.Kind, spec.Name)}
 	files := []durablevolume.PreparationFile{}
@@ -66,13 +73,13 @@ func planStoragePreparationMembersRestore(ctx context.Context, name string, owne
 			}
 		} else {
 			maximum := uint64(maximumBootstrapSuccessorExecutionBytes)
-			if entry.Path == spec.Name {
+			if isMetadata(entry.Path) {
 				maximum = uint64(spec.MaximumBytes)
 			}
-			if entry.Kind != "file" || entry.Mode != 0600 || filepath.Base(entry.Path) != entry.Path || entry.Path == "." || entry.Path == ".." || len(entry.Path) > 255 || strings.ContainsRune(entry.Path, 0) || entry.Size > maximum || !planSha256(entry.Sha256) || entry.Path != spec.Name && !bootstrapSuccessorMemberOwns(spec, owner.Kind == "mainnet-successor-nonce-members", entry.Path) {
+			if entry.Kind != "file" || entry.Mode != 0600 || filepath.Base(entry.Path) != entry.Path || entry.Path == "." || entry.Path == ".." || len(entry.Path) > 255 || strings.ContainsRune(entry.Path, 0) || entry.Size > maximum || !planSha256(entry.Sha256) || !isMetadata(entry.Path) && !bootstrapSuccessorMemberOwns(spec, owner.Kind == "mainnet-successor-nonce-members", entry.Path) {
 				return durablevolume.PreparationOwnerPlan{}, errors.New("member restore has an unknown name, structure or capacity")
 			}
-			if entry.Size > uint64(maximumBootstrapSuccessorMemberTotalBytes+maximumBootstrapSuccessorMemberCensusBytes)-total {
+			if entry.Size > uint64(maximumBootstrapSuccessorMemberTotalBytes+2*maximumBootstrapSuccessorMemberCensusBytes)-total {
 				return durablevolume.PreparationOwnerPlan{}, errors.New("member restore exceeds its finite retained byte capacity")
 			}
 			total += entry.Size
@@ -91,24 +98,48 @@ func planStoragePreparationMembersRestore(ctx context.Context, name string, owne
 	if original == nil {
 		return durablevolume.PreparationOwnerPlan{}, errors.Join(durablevolume.ErrIdentity, errors.New("member restore original checkpoint is missing"))
 	}
-	var head durablehead.Checkpoint
 	if err := decodePlanJson(original, &head); err != nil {
 		return durablevolume.PreparationOwnerPlan{}, err
 	}
 	if head.Schema != durablehead.Schema || head.Kind != spec.Kind || head.Name != spec.Name || head.MaximumBytes != spec.MaximumBytes || head.DirectoryInode != report.PhysicalRoot.Inode || head.LockName != "" || len(head.Auxiliaries) != 0 {
 		return durablevolume.PreparationOwnerPlan{}, errors.New("member restore original checkpoint differs from its fixed profile")
 	}
-	if head.Pending != nil {
-		return durablevolume.PreparationOwnerPlan{}, errors.Join(durablehead.ErrUncertain, errors.New("member restore requires the separate unfinished outer-census profile"))
-	}
-	metadata, present := entries[spec.Name]
-	var physical *durablevolume.PreparationPhysicalMetadata
-	if head.Committed.Present {
-		if !present || head.Committed.Inode != metadata.Physical.Inode || head.Committed.Size <= 0 || uint64(head.Committed.Size) != metadata.Size || head.Committed.Size > spec.MaximumBytes || "sha256:"+head.Committed.Sha256 != metadata.Sha256 {
-			return durablevolume.PreparationOwnerPlan{}, errors.Join(durablevolume.ErrIdentity, errors.New("member restore lost its acknowledged original census"))
+	// The shared snapshot grammar authenticates both sides of a completed
+	// write-ahead exchange. It never treats a partial temporary as complete.
+	headView := report
+	headView.Entries = nil
+	for _, entry := range report.Entries {
+		if entry.Path == "" || isMetadata(entry.Path) {
+			headView.Entries = append(headView.Entries, entry)
 		}
-		physical = &durablevolume.PreparationPhysicalMetadata{Path: spec.Name, MaximumBytes: uint64(spec.MaximumBytes)}
-	} else if head.Committed != (durablehead.Member{}) || present || len(files) != 0 {
+	}
+	headOwner := owner
+	headOwner.RestoreCoverage = ""
+	if _, err := durablehead.PlanRestore(ctx, name, headOwner, spec, profile, headView); err != nil {
+		return durablevolume.PreparationOwnerPlan{}, err
+	}
+	var physical *durablevolume.PreparationPhysicalMetadata
+	for _, path := range []string{spec.Name, func() string {
+		if head.Pending != nil {
+			return head.Pending.Temporary
+		}
+		return ""
+	}()} {
+		if path == "" {
+			continue
+		}
+		if metadata, present := entries[path]; present {
+			if metadata.Size == 0 {
+				return durablevolume.PreparationOwnerPlan{}, errors.New("member restore census is empty")
+			}
+			if physical == nil {
+				physical = &durablevolume.PreparationPhysicalMetadata{Path: path, MaximumBytes: uint64(spec.MaximumBytes)}
+			} else {
+				physical.CompanionPath = path
+			}
+		}
+	}
+	if physical == nil && len(files) != 0 {
 		return durablevolume.PreparationOwnerPlan{}, errors.Join(durablevolume.ErrIdentity, errors.New("member restore absent head cannot authorize historical members"))
 	}
 	census, err := json.Marshal(storagePreparationMemberRestoreCensus{Schema: "urnetwork-successor-members-restore-v1", Profile: profile, OriginalCheckpoint: original})
@@ -116,6 +147,40 @@ func planStoragePreparationMembersRestore(ctx context.Context, name string, owne
 		return durablevolume.PreparationOwnerPlan{}, err
 	}
 	return durablevolume.PreparationOwnerPlan{Owner: owner, StagingName: name, ExclusiveRoot: owner.RestoreCoverage == "", Files: files, Attributes: []durablevolume.PreparationAttributeSpec{attribute}, Census: census, PhysicalMetadata: physical}, ctx.Err()
+}
+
+// Selecting a temporary requires this exact retained bounded checkpoint, never
+// a prefix match or a caller-nominated basename. Full grammar is checked later.
+func storagePreparationMemberRestoreHead(spec durablehead.Spec, report durablevolume.Inventory) (durablehead.Checkpoint, []byte, error) {
+	var head durablehead.Checkpoint
+	var raw []byte
+	for _, entry := range report.Entries {
+		if entry.Path != "" {
+			continue
+		}
+		for _, attribute := range entry.OwnerAttributes {
+			if attribute.Name != durablehead.Attribute(spec.Kind, spec.Name) {
+				continue
+			}
+			if raw != nil || len(attribute.Value) == 0 || len(attribute.Value) > 4096 || safeReleaseHash(attribute.Value) != attribute.Sha256 {
+				return head, nil, errors.New("member restore original head is repeated or changed")
+			}
+			raw = attribute.Value
+		}
+	}
+	if raw == nil {
+		return head, nil, errors.Join(durablevolume.ErrIdentity, errors.New("member restore original checkpoint is missing"))
+	}
+	if err := decodePlanJson(raw, &head); err != nil {
+		return head, nil, err
+	}
+	return head, raw, nil
+}
+
+// Both metadata images describe the same complete application namespace. They
+// are excluded only by the fixed adapter's already authenticated pair.
+func storagePreparationMemberMetadataOwns(metadata *durablevolume.PreparationPhysicalMetadata, path string) bool {
+	return metadata != nil && (path == metadata.Path || metadata.CompanionPath != "" && path == metadata.CompanionPath)
 }
 
 // Every original member and pending stage must be accounted for. An unfinished
@@ -187,8 +252,15 @@ func rebindStoragePreparationMembersRestore(ctx context.Context, owner durablevo
 	for _, entry := range report.Entries {
 		entries[entry.Path] = entry
 	}
-	metadata := entries[spec.Name]
-	if uint64(len(raw)) != metadata.Size || safeReleaseHash(raw) != metadata.Sha256 {
+	metadataCount := 0
+	matched := false
+	for _, metadata := range expected.Files {
+		if storagePreparationMemberMetadataOwns(expected.PhysicalMetadata, metadata.Path) {
+			metadataCount++
+			matched = matched || uint64(len(raw)) == metadata.Bytes && safeReleaseHash(raw) == metadata.Sha256
+		}
+	}
+	if !matched {
 		return nil, errors.New("member restore original census bytes differ")
 	}
 	var census bootstrapSuccessorMemberCensus
@@ -199,7 +271,13 @@ func rebindStoragePreparationMembersRestore(ctx context.Context, owner durablevo
 	if err != nil || !bytes.Equal(raw, canonical) {
 		return nil, errors.Join(errors.New("member restore original census is not canonical"), err)
 	}
-	if err := validateStoragePreparationMemberImage(census, spec, entries); err != nil {
+	memberEntries := make(map[string]durablevolume.InventoryEntry, len(entries))
+	for path, entry := range entries {
+		if !storagePreparationMemberMetadataOwns(expected.PhysicalMetadata, path) || path == spec.Name {
+			memberEntries[path] = entry
+		}
+	}
+	if err := validateStoragePreparationMemberImage(census, spec, memberEntries); err != nil {
 		return nil, err
 	}
 	rebound := map[uint64]uint64{}
@@ -208,7 +286,7 @@ func rebindStoragePreparationMembersRestore(ctx context.Context, owner durablevo
 	var device uint64
 	for _, target := range targets {
 		original, found := entries[target.File.Path]
-		if !found || target.File.Path == "" || target.File.Path == spec.Name || seen[target.File.Path] || target.File != (durablevolume.PreparationFile{Path: original.Path, Kind: original.Kind, Mode: original.Mode, Bytes: original.Size, Sha256: original.Sha256}) || target.Identity.Inode == 0 || inodes[target.Identity.Inode] || target.Identity.Mode&unix.S_IFMT != unix.S_IFREG || target.Identity.Mode&07777 != 0600 {
+		if !found || target.File.Path == "" || storagePreparationMemberMetadataOwns(expected.PhysicalMetadata, target.File.Path) || seen[target.File.Path] || target.File != (durablevolume.PreparationFile{Path: original.Path, Kind: original.Kind, Mode: original.Mode, Bytes: original.Size, Sha256: original.Sha256}) || target.Identity.Inode == 0 || inodes[target.Identity.Inode] || target.Identity.Mode&unix.S_IFMT != unix.S_IFREG || target.Identity.Mode&07777 != 0600 {
 			return nil, errors.New("member restore target member is missing, aliased or changed")
 		}
 		if len(seen) != 0 && target.Identity.Device != device {
@@ -218,7 +296,7 @@ func rebindStoragePreparationMembersRestore(ctx context.Context, owner durablevo
 		seen[target.File.Path], inodes[target.Identity.Inode] = true, true
 		rebound[original.Physical.Inode] = target.Identity.Inode
 	}
-	if len(targets) != len(expected.Files)-1 {
+	if len(targets) != len(expected.Files)-metadataCount {
 		return nil, errors.New("member restore target omits original members")
 	}
 	for index := range census.Members {
@@ -302,7 +380,7 @@ func inspectStoragePreparationMembersRestore(ctx context.Context, root *os.File,
 		return nil, errors.New("member restore inspection lost its complete target")
 	}
 	for index, member := range expected.Files {
-		if member.Path == spec.Name {
+		if storagePreparationMemberMetadataOwns(expected.PhysicalMetadata, member.Path) {
 			if owner.Files[index].Path != member.Path || owner.Files[index].Kind != member.Kind || owner.Files[index].Mode != member.Mode || owner.Files[index].Bytes == 0 || owner.Files[index].Bytes > uint64(spec.MaximumBytes) {
 				return nil, errors.New("member restore changed the metadata profile")
 			}
@@ -325,8 +403,8 @@ func inspectStoragePreparationMembersRestore(ctx context.Context, root *os.File,
 	}
 	entries := map[string]durablevolume.InventoryEntry{}
 	inodes := map[uint64]bool{parent.Ino: true}
-	var metadataRaw []byte
-	var metadataStat unix.Stat_t
+	metadataBytes := map[string][]byte{}
+	metadataStats := map[string]unix.Stat_t{}
 	for _, member := range owner.Files {
 		raw, stat, err := readStoragePreparationMember(ctx, root, parent, member)
 		if err != nil {
@@ -340,8 +418,8 @@ func inspectStoragePreparationMembersRestore(ctx context.Context, root *os.File,
 		entry.Physical = &durablevolume.PhysicalRoot{Device: durablevolume.Device{Major: unix.Major(stat.Dev), Minor: unix.Minor(stat.Dev)}, Inode: stat.Ino}
 		entry.Size, entry.Sha256 = member.Bytes, member.Sha256
 		entries[member.Path] = entry
-		if member.Path == spec.Name {
-			metadataRaw, metadataStat = raw, stat
+		if storagePreparationMemberMetadataOwns(expected.PhysicalMetadata, member.Path) {
+			metadataBytes[member.Path], metadataStats[member.Path] = raw, stat
 		}
 	}
 	var retained storagePreparationMemberRestoreCensus
@@ -352,7 +430,17 @@ func inspectStoragePreparationMembersRestore(ctx context.Context, root *os.File,
 	if err := decodePlanJson(retained.OriginalCheckpoint, &head); err != nil {
 		return nil, err
 	}
-	if head.Committed.Present {
+	committedInode, nextInode := head.Committed.Inode, uint64(0)
+	if head.Pending != nil {
+		nextInode = head.Pending.Next.Inode
+	}
+	memberEntries := make(map[string]durablevolume.InventoryEntry, len(entries))
+	for path, entry := range entries {
+		if !storagePreparationMemberMetadataOwns(expected.PhysicalMetadata, path) || path == spec.Name {
+			memberEntries[path] = entry
+		}
+	}
+	for path, metadataRaw := range metadataBytes {
 		var census bootstrapSuccessorMemberCensus
 		if err := decodePlanJson(metadataRaw, &census); err != nil {
 			return nil, err
@@ -361,7 +449,7 @@ func inspectStoragePreparationMembersRestore(ctx context.Context, root *os.File,
 		if err != nil || !bytes.Equal(canonical, metadataRaw) {
 			return nil, errors.Join(errors.New("restored member census is not canonical"), err)
 		}
-		if err := validateStoragePreparationMemberImage(census, spec, entries); err != nil {
+		if err := validateStoragePreparationMemberImage(census, spec, memberEntries); err != nil {
 			return nil, err
 		}
 		for index := range census.Members {
@@ -375,11 +463,34 @@ func inspectStoragePreparationMembersRestore(ctx context.Context, root *os.File,
 			pending.StageInode = original.Physical.Inode
 		}
 		originalRaw, err := json.Marshal(census)
-		original := originalEntries[spec.Name]
+		original := originalEntries[path]
 		if err != nil || uint64(len(originalRaw)) != original.Size || safeReleaseHash(originalRaw) != original.Sha256 {
 			return nil, errors.Join(errors.New("restored census changes authority beyond physical inode fields"), err)
 		}
-		head.Committed = durablehead.Member{Present: true, Inode: metadataStat.Ino, Size: int64(len(metadataRaw)), Sha256: strings.TrimPrefix(safeReleaseHash(metadataRaw), "sha256:")}
+		metadataStat := metadataStats[path]
+		rebound := durablehead.Member{Present: true, Inode: metadataStat.Ino, Size: int64(len(metadataRaw)), Sha256: strings.TrimPrefix(safeReleaseHash(metadataRaw), "sha256:")}
+		if head.Committed.Present && committedInode == original.Physical.Inode {
+			head.Committed = rebound
+		} else if head.Pending != nil && nextInode == original.Physical.Inode {
+			head.Pending.Next = rebound
+		} else {
+			return nil, errors.New("restored census is not bound by either original checkpoint member")
+		}
+	}
+	if head.Committed.Present && head.Pending != nil {
+		// The old exchanged temporary may already have been removed. Its
+		// retired coordinate cannot accidentally name any new target inode.
+		originalHead, _, err := storagePreparationMemberRestoreHead(spec, report)
+		if err != nil {
+			return nil, err
+		}
+		oldPresent := false
+		for path := range metadataBytes {
+			oldPresent = oldPresent || originalEntries[path].Physical.Inode == originalHead.Committed.Inode
+		}
+		if !oldPresent && inodes[originalHead.Committed.Inode] {
+			return nil, errors.Join(durablevolume.ErrIdentity, errors.New("retired outer-census coordinate collides with restored live custody"))
+		}
 	}
 	head.DirectoryInode = parent.Ino
 	var after unix.Stat_t

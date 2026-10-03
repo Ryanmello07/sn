@@ -25,13 +25,17 @@ func storagePreparationMembersRestoreView(ctx context.Context, owner durablevolu
 	if ctx == nil {
 		return durablevolume.Inventory{}, errors.New("member restore coverage requires a bounded context")
 	}
+	head, _, err := storagePreparationMemberRestoreHead(spec, report)
+	if err != nil {
+		return durablevolume.Inventory{}, err
+	}
 	view := report
 	view.Entries = nil
 	for _, entry := range report.Entries {
 		if err := ctx.Err(); err != nil {
 			return durablevolume.Inventory{}, err
 		}
-		if entry.Path != "" && entry.Path != spec.Name && !bootstrapSuccessorMemberOwns(spec, false, entry.Path) {
+		if entry.Path != "" && entry.Path != spec.Name && (head.Pending == nil || entry.Path != head.Pending.Temporary) && !bootstrapSuccessorMemberOwns(spec, false, entry.Path) {
 			continue
 		}
 		if entry.Path == "" {
