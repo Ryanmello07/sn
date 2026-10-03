@@ -22,22 +22,25 @@ import (
 )
 
 const monitorClaimCheckpointSchema = "urnetwork-mainnet-claim-checkpoint-v1"
-const maxMonitorClaimCheckpointBytes = 512 * 1024
+const maxMonitorClaimCheckpointBytes = 1024 * 1024
 
 type monitorClaimCheckpointRecord struct {
-	Schema      string            `json:"schema"`
-	PolicyHash  string            `json:"policy_hash"`
-	State       monitorClaimState `json:"state"`
-	ContentHash string            `json:"content_hash"`
+	Schema        string                        `json:"schema"`
+	PolicyHash    string                        `json:"policy_hash"`
+	State         monitorClaimState             `json:"state"`
+	PolicyHistory *monitorProgressPolicyHistory `json:"policy_history,omitempty"`
+	ContentHash   string                        `json:"content_hash"`
 }
 
 type monitorClaimWorker struct {
-	policy     monitorClaimPolicy
-	checkpoint *monitorCheckpointStore
-	metrics    *monitorMetricsStore
-	state      *monitorClaimState
-	client     *http.Client
-	storage    monitorStorageRecovery
+	policy               monitorClaimPolicy
+	checkpoint           *monitorCheckpointStore
+	metrics              *monitorMetricsStore
+	state                *monitorClaimState
+	client               *http.Client
+	storage              monitorStorageRecovery
+	policyHistory        *monitorProgressPolicyHistory
+	acknowledgedPolicies int
 }
 
 func openMonitorClaimWorker(ctx context.Context, policy monitorClaimPolicy, expected identityExpectation, checkpoint, metrics string, hooks monitorServiceHooks) (*monitorClaimWorker, error) {
@@ -93,6 +96,10 @@ func (self *monitorClaimWorker) load(ctx context.Context) (*monitorClaimState, e
 	}
 	raw, err := self.checkpoint.directory.read(filepath.Base(self.checkpoint.path), maxMonitorClaimCheckpointBytes, true)
 	if monitorCheckpointAbsent(err) {
+		if self.policy.Renewal != nil {
+			return nil, errors.New("claim policy renewal requires its retained checkpoint")
+		}
+		self.policyHistory = newMonitorProgressPolicyHistory(self.policy.resources(), self.policy.hash(), "")
 		return newMonitorClaimState(self.policy), nil
 	}
 	if err != nil {
@@ -111,12 +118,20 @@ func (self *monitorClaimWorker) load(ctx context.Context) (*monitorClaimState, e
 		return nil, errors.New("claim checkpoint has trailing JSON")
 	}
 	hash, err := hashMonitorClaimCheckpoint(record)
-	if err != nil || hash != record.ContentHash || record.Schema != monitorClaimCheckpointSchema || record.PolicyHash != self.policy.hash() {
+	if err != nil || hash != record.ContentHash || record.Schema != monitorClaimCheckpointSchema {
 		return nil, errors.New("claim checkpoint differs from retained policy or checksum")
 	}
-	if err := validateMonitorClaimState(self.policy, record.State); err != nil {
+	history, prior, acknowledged, err := renewMonitorProgressPolicy(true, self.policy.resources(), self.policy.Renewal, record.PolicyHash, record.ContentHash, record.PolicyHistory, self.policy.policyHashAt)
+	if err != nil {
 		return nil, err
 	}
+	if err := validateMonitorClaimState(self.policy.atResources(prior), record.State); err != nil {
+		return nil, err
+	}
+	for _, expected := range self.policy.Epochs[len(record.State.Epochs):] {
+		record.State.Epochs = append(record.State.Epochs, monitorClaimEpochState{Epoch: expected.Epoch})
+	}
+	self.policyHistory, self.acknowledgedPolicies = history, acknowledged
 	record.State.current = false
 	return &record.State, nil
 }
@@ -128,7 +143,10 @@ func (self *monitorClaimWorker) save() error {
 	if err := validateMonitorClaimState(self.policy, *self.state); err != nil {
 		return err
 	}
-	record := monitorClaimCheckpointRecord{Schema: monitorClaimCheckpointSchema, PolicyHash: self.policy.hash(), State: *self.state}
+	if self.policyHistory == nil || len(self.policyHistory.Entries) == 0 || self.policyHistory.validate(true, self.policyHistory.Entries[0].PolicyHash, self.policy.policyHashAt) != nil {
+		return errors.New("claim policy history is not admitted")
+	}
+	record := monitorClaimCheckpointRecord{Schema: monitorClaimCheckpointSchema, PolicyHash: self.policyHistory.Entries[0].PolicyHash, State: *self.state, PolicyHistory: self.policyHistory}
 	var err error
 	record.ContentHash, err = hashMonitorClaimCheckpoint(record)
 	if err != nil {
@@ -138,7 +156,11 @@ func (self *monitorClaimWorker) save() error {
 	if err != nil || len(raw)+1 > maxMonitorClaimCheckpointBytes {
 		return errors.New("claim checkpoint exceeds its byte bound")
 	}
-	return errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner())
+	err = errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner())
+	if err == nil {
+		self.acknowledgedPolicies = len(self.policyHistory.Entries)
+	}
+	return err
 }
 
 type monitorClaimEventState struct {
@@ -219,28 +241,36 @@ func (self *monitorClaimWorker) close(hooks monitorServiceHooks) error {
 
 func (self *monitorClaimWorker) run(ctx context.Context, interval time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
 	for ctx.Err() == nil {
-		value, code := readMonitorClaim(ctx, self.client, self.policy)
-		if ctx.Err() != nil {
+		clock := monitorProgressReadClock{}
+		if hooks.rpcWait != nil {
+			clock.wait = func(waitCtx context.Context, delay time.Duration) error {
+				return hooks.rpcWait(waitCtx, self.policy.Role, delay)
+			}
+		}
+		value, code := readMonitorClaimWithBudget(ctx, self.client, self.policy, self.policy.resources().readBudget(), clock)
+		if ctx.Err() != nil && !monitorClaimTerminal(code) {
 			return 0
 		}
 		self.state.observe(self.policy, value, code, now().UTC())
 		checkpointErr := self.save()
 		raw := renderMonitorClaimMetrics(self.policy, self.state, checkpointErr == nil)
+		raw = appendMonitorProgressPolicyMetrics(raw, "sn_mainnet_claim", self.policy.Role, self.policyHistory, self.acknowledgedPolicies)
 		raw = appendMonitorOutputMetrics(raw, "sn_mainnet_claim", self.policy.Role, monitorDiagnosticSnapshot(stdout, stderr))
 		metricsErr := self.metrics.saveRaw(raw)
 		combined := errors.Join(checkpointErr, metricsErr)
 		var ownership *monitorOutputOwnershipError
 		terminal := monitorClaimTerminal(self.state.Status) || errors.As(combined, &ownership) || errors.Is(combined, durablevolume.ErrIdentity)
 		event := struct {
-			Schema            string                 `json:"schema"`
-			Role              string                 `json:"role"`
-			Status            string                 `json:"status"`
-			Current           bool                   `json:"current"`
-			CheckpointCurrent bool                   `json:"checkpoint_current"`
-			State             monitorClaimEventState `json:"state"`
-		}{Schema: "urnetwork-mainnet-claim-event-v1", Role: self.policy.Role, Status: self.state.Status, Current: self.state.current && checkpointErr == nil, CheckpointCurrent: checkpointErr == nil, State: self.state.eventState(self.policy)}
+			Schema            string                      `json:"schema"`
+			Role              string                      `json:"role"`
+			Status            string                      `json:"status"`
+			Current           bool                        `json:"current"`
+			CheckpointCurrent bool                        `json:"checkpoint_current"`
+			State             monitorClaimEventState      `json:"state"`
+			Policy            monitorProgressPolicyStatus `json:"policy"`
+		}{Schema: "urnetwork-mainnet-claim-event-v1", Role: self.policy.Role, Status: self.state.Status, Current: self.state.current && checkpointErr == nil, CheckpointCurrent: checkpointErr == nil, State: self.state.eventState(self.policy), Policy: progressPolicyStatus(self.policyHistory, self.acknowledgedPolicies)}
 		if err := json.NewEncoder(stdout).Encode(event); err != nil {
-			if ctx.Err() != nil {
+			if ctx.Err() != nil && !terminal {
 				return 0
 			}
 			return 3
@@ -272,6 +302,7 @@ func (self *monitorClaimWorker) run(ctx context.Context, interval time.Duration,
 				}
 				owner.syncDirectory = prior.syncDirectory
 				self.checkpoint, self.state = owner, state
+				self.policyHistory, self.acknowledgedPolicies = candidate.policyHistory, candidate.acknowledgedPolicies
 				return nil
 			}, hooks)
 			if err != nil {
