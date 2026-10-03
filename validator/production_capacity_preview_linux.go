@@ -17,6 +17,7 @@ import (
 
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
+	"gopkg.in/yaml.v3"
 )
 
 const ProductionCapacityRequestSchema = "urnetwork-validator-production-capacity-request-v1"
@@ -60,6 +61,7 @@ type ProductionCapacityRequest struct {
 type ProductionCapacityPreview struct {
 	Schema                 string                           `json:"schema"`
 	Config                 *ReleaseConfig                   `json:"config"`
+	ConfigDocument         string                           `json:"config_document"`
 	Approval               OwnerRecycleApproval             `json:"approval"`
 	SigningBytes           string                           `json:"signing_bytes"`
 	OriginalAuthority      ReleaseEvidenceV2File            `json:"original_authority"`
@@ -255,10 +257,10 @@ func BuildProductionCapacityPreview(ctx context.Context, request ProductionCapac
 	next.EvidenceV2.Bounds = request.Bounds
 	next.ProductionCapacityRevision = &revision
 	next.OwnerRecycleApproval = &ReleaseOwnerRecycleApprovalConfig{Signer: cfg.OwnerRecycleApproval.Signer, Approval: ReleaseEvidenceV2File{Path: request.SuccessorApprovalPath}}
-	// The exported config is JSON, also accepted by the strict document
-	// decoder. Check its actual wire form before committing signing bytes;
-	// never repair a changed config after an external signature is supplied.
-	raw, err = json.Marshal(&next)
+	// Nested runtime bounds retain their original YAML names, which are not
+	// always their default Go JSON field names. Emit that exact document and
+	// validate it before any independent signer receives a message.
+	raw, err = yaml.Marshal(&next)
 	if err != nil {
 		return result, err
 	}
@@ -272,6 +274,7 @@ func BuildProductionCapacityPreview(ctx context.Context, request ProductionCapac
 		return result, errors.Join(errors.New("capacity proposal changes under strict document decoding"), beforeErr, afterErr)
 	}
 	next = *decoded
+	result.ConfigDocument = string(raw)
 	approval := approved.Approval
 	approval.ConfigHash, err = OwnerRecycleConfigHash(&next)
 	if err != nil {
@@ -288,4 +291,52 @@ func BuildProductionCapacityPreview(ctx context.Context, request ProductionCapac
 	result.SigningBytes = "0x" + hex.EncodeToString(message)
 	result.OriginalAuthority, result.OriginalAuthorityBytes = reference, bundle
 	return result, nil
+}
+
+// Complete only the unsigned reference to an independently supplied approval.
+// Every signed config field must remain equal to the preview; the actual full
+// loader authenticates the original history and signature before output.
+func CompleteProductionCapacityDocument(ctx context.Context, path string, preview ProductionCapacityPreview, approval ReleaseEvidenceV2File) ([]byte, error) {
+	if ctx == nil {
+		return nil, errors.New("capacity completion context is absent")
+	}
+	if err := errors.Join(ctx.Err(), ValidateReleaseEvidenceV2Path(path)); err != nil {
+		return nil, err
+	}
+	if preview.Schema != "urnetwork-validator-production-capacity-preview-v1" || preview.RestartAuthorized || preview.ConfigDocument == "" || preview.Config == nil {
+		return nil, errors.New("capacity completion requires the original unsigned document preview")
+	}
+	cfg, err := decodeReleaseConfigDocument(path, []byte(preview.ConfigDocument))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.OwnerRecycleApproval == nil || cfg.OwnerRecycleApproval.Approval.Path != approval.Path {
+		return nil, errors.New("capacity completion changes the originally nominated approval path")
+	}
+	digest, err := OwnerRecycleConfigHash(cfg)
+	viewDigest, viewErr := OwnerRecycleConfigHash(preview.Config)
+	message, messageErr := preview.Approval.SigningMessage()
+	if err != nil || viewErr != nil || messageErr != nil || digest != viewDigest || digest != preview.Approval.ConfigHash || "0x"+hex.EncodeToString(message) != preview.SigningBytes {
+		return nil, errors.Join(errors.New("capacity completion changes the reviewed document or signing bytes"), err, viewErr, messageErr)
+	}
+	if _, err := ReadReleaseEvidenceV2File(ctx, approval, maximumOwnerRecycleApprovalBytes); err != nil {
+		return nil, err
+	}
+	cfg.OwnerRecycleApproval.Approval = approval
+	raw, err := yaml.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	loaded, err := decodeReleaseConfigBytes(path, raw)
+	if err != nil {
+		return nil, err
+	}
+	approved, err := ownerRecycleProductionApproval(loaded)
+	if err != nil || !reflect.DeepEqual(approved.Approval, preview.Approval) {
+		return nil, errors.Join(errors.New("capacity completion changes independently approved authority"), err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return raw, nil
 }

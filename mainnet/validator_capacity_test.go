@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -177,7 +178,26 @@ func TestValidatorCapacityPreviewBindsJoinedRetainedCensus(t *testing.T) {
 	}
 	f.validator.writeApproval(t, validator.OwnerRecycleApprovalEnvelope{Approval: preview.Approval,
 		Signature: hex.EncodeToString(ed25519.Sign(f.validator.private, exportedMessage))})
-	f.validator.writeConfig(t)
+	previewPath := filepath.Join(f.metadata, "original-preview.json")
+	if err := os.WriteFile(previewPath, first.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	approvalRaw, err := os.ReadFile(f.validator.config.OwnerRecycleApproval.Approval.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completeArgs := []string{"validator-capacity-config", "--preview", previewPath, "--preview-sha256", monitorReadDigest(first.Bytes()),
+		"--approval", f.validator.config.OwnerRecycleApproval.Approval.Path, "--approval-sha256", monitorReadDigest(approvalRaw), "--config-path", f.validator.path}
+	var document bytes.Buffer
+	if code := runMain(t.Context(), completeArgs, &document, &diagnostic); code != 0 {
+		t.Fatal("public independent approval could not complete its exact config document", code, diagnostic.String())
+	}
+	if _, err := os.Lstat(f.validator.path); !os.IsNotExist(err) {
+		t.Fatal("document completion wrote the requested path", err)
+	}
+	if err := os.WriteFile(f.validator.path, document.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
 	loaded, err := validator.LoadReleaseConfig(f.validator.path)
 	if err != nil || loaded.ProductionCapacityRevision == nil || len(loaded.ProductionAuthorityHistory) != 1 {
 		t.Fatal("public preview cannot become an independently approved resource successor", err)
@@ -190,6 +210,103 @@ func TestValidatorCapacityPreviewBindsJoinedRetainedCensus(t *testing.T) {
 	actual.ConfigHash, oldApproval.ConfigHash = [32]byte{}, [32]byte{}
 	if !reflect.DeepEqual(actual, oldApproval) || !reflect.DeepEqual(before, mainnetNamespaceTest(t, f.root)) {
 		t.Fatal("capacity preview changed original economic scope or owned bytes")
+	}
+}
+
+// A public signature completes only its exact nominated document. Altering a
+// view, economic field, predecessor, signer or byte pin never reaches stdout.
+func TestValidatorCapacityConfigRefusesAuthorityDriftAndRetainsOutputCustody(t *testing.T) {
+	f := newValidatorCapacityCommandFixture(t)
+	before := mainnetNamespaceTest(t, f.root)
+	var output, diagnostic bytes.Buffer
+	if code := runMain(f.storage.Context, f.args(t), &output, &diagnostic); code != 0 {
+		t.Fatal("original public preview failed", code, diagnostic.String())
+	}
+	originalPreview := bytes.Clone(output.Bytes())
+	var original validator.ProductionCapacityPreview
+	if err := json.Unmarshal(originalPreview, &original); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(original.OriginalAuthority.Path, original.OriginalAuthorityBytes, 0600); err != nil {
+		t.Fatal(err)
+	}
+	message, err := hex.DecodeString(strings.TrimPrefix(original.SigningBytes, "0x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := validator.OwnerRecycleApprovalEnvelope{Approval: original.Approval, Signature: hex.EncodeToString(ed25519.Sign(f.validator.private, message))}
+	approvalBytes, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previewPath, configPath := filepath.Join(f.metadata, "complete-preview.json"), filepath.Join(f.metadata, "unwritten-config.yml")
+	approvalPath := original.Config.OwnerRecycleApproval.Approval.Path
+	for _, fault := range []string{"view", "document", "message", "economic", "signer", "predecessor", "signature", "preview-digest", "approval-digest", "cancel", "short-output"} {
+		var candidate validator.ProductionCapacityPreview
+		if err := json.Unmarshal(originalPreview, &candidate); err != nil {
+			t.Fatal(err)
+		}
+		approval := bytes.Clone(approvalBytes)
+		switch fault {
+		case "view":
+			candidate.Config.PollSeconds++
+		case "document":
+			candidate.ConfigDocument += "\nunreviewed_field: true\n"
+		case "message":
+			candidate.SigningBytes = "0x00"
+		case "economic":
+			candidate.Approval.MaximumOwnedHotkeys++
+		case "signer":
+			candidate.Config.OwnerRecycleApproval.Signer = "0x" + strings.Repeat("21", 32)
+		case "predecessor":
+			candidate.Config.ProductionAuthorityHistory = nil
+		case "signature":
+			bad := envelope
+			bad.Signature = strings.Repeat("00", ed25519.SignatureSize)
+			approval, err = json.Marshal(bad)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		previewBytes, err := json.Marshal(candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(previewPath, previewBytes, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(approvalPath, approval, 0600); err != nil {
+			t.Fatal(err)
+		}
+		previewDigest, approvalDigest := monitorReadDigest(previewBytes), monitorReadDigest(approval)
+		if fault == "preview-digest" {
+			previewDigest = "sha256:" + strings.Repeat("12", 32)
+		}
+		if fault == "approval-digest" {
+			approvalDigest = "sha256:" + strings.Repeat("12", 32)
+		}
+		args := []string{"validator-capacity-config", "--preview", previewPath, "--preview-sha256", previewDigest, "--approval", approvalPath, "--approval-sha256", approvalDigest, "--config-path", configPath}
+		ctx, cancel := context.WithCancel(t.Context())
+		if fault == "cancel" {
+			cancel()
+		}
+		output.Reset()
+		diagnostic.Reset()
+		if fault == "short-output" {
+			var short storageInspectionShortWriter
+			if code := runMain(ctx, args, &short, &diagnostic); code != 1 || !strings.Contains(diagnostic.String(), io.ErrShortWrite.Error()) {
+				t.Fatal("public completion did not report undelivered exact document", code, diagnostic.String())
+			}
+		} else if code := runMain(ctx, args, &output, &diagnostic); code == 0 || output.Len() != 0 {
+			t.Fatal("public completion admitted altered independent authority", fault, code, diagnostic.String())
+		}
+		cancel()
+		if _, err := os.Lstat(configPath); !os.IsNotExist(err) {
+			t.Fatal("completion wrote its output pathname", fault, err)
+		}
+		if !reflect.DeepEqual(before, mainnetNamespaceTest(t, f.root)) {
+			t.Fatal("completion changed original owned ledger history", fault)
+		}
 	}
 }
 

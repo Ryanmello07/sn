@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -244,6 +245,22 @@ func TestProductionCapacityRetainsOriginalSignedSidecar(t *testing.T) {
 			}
 		})
 	}, func(fixture *ownerRecycleProductionTestFixture) {
+		// The measurement constructor intentionally narrows only two metadata
+		// fields after the operator hook. Use the entire already loadable
+		// release profile here, after all those overrides; never combine its
+		// 1 MiB artifact cap with another profile's 4 MiB closure allowance.
+		template := validReleaseConfig(t)
+		validated, err := LoadReleaseConfig(writeReleaseConfig(t, template))
+		if err != nil {
+			t.Fatal("complete operational capacity template failed admission", err)
+		}
+		fixture.cfg.EvidenceV2.Bounds = validated.EvidenceV2.Bounds
+		fixture.cfg.EvidenceV2.Bounds.MaxOperators = uint64(len(fixture.cfg.Operators))
+		if err := errors.Join(fixture.cfg.Policy.Validate(),
+			fixture.cfg.EvidenceV2.Bounds.Validate(uint64(len(fixture.cfg.Operators))),
+			fixture.cfg.EvidenceV2.Validate(fixture.cfg.Operators, fixture.cfg.StateDir, fixture.cfg.HotkeySeedFile)); err != nil {
+			t.Fatal("complete original evidence profile failed pre-sign admission", err)
+		}
 		// The independent fixture approver must sign the same document the
 		// public loader sees, including YAML's concrete empty slice values.
 		// This happens before the original production approval and sidecar.

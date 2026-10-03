@@ -13,3 +13,8 @@ func runValidatorCapacityPreview(_ context.Context, _ []string, _ io.Writer, std
 	fmt.Fprintln(stderr, "validator capacity preview requires the qualified Linux physical custody backend")
 	return 2
 }
+
+func runValidatorCapacityConfig(_ context.Context, _ []string, _ io.Writer, stderr io.Writer) int {
+	fmt.Fprintln(stderr, "capacity document completion is not qualified on this platform")
+	return 2
+}

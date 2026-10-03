@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urfoundation/sn/validator"
@@ -58,6 +59,52 @@ func runValidatorCapacityPreview(ctx context.Context, args []string, stdout, std
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, "capacity preview output:", err)
+		return 1
+	}
+	return 0
+}
+
+// Completion consumes an external public signature, not a signing key or
+// physical journal. It emits the exact validated document without writing it.
+func runValidatorCapacityConfig(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("validator-capacity-config", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	previewPath := flags.String("preview", "", "Exact reviewed preview")
+	previewHash := flags.String("preview-sha256", "", "Accepted preview digest")
+	approvalPath := flags.String("approval", "", "Independent completed public approval")
+	approvalHash := flags.String("approval-sha256", "", "Accepted approval digest")
+	configPath := flags.String("config-path", "", "Future document path, never created by this command")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 || *previewPath == "" || *approvalPath == "" || *configPath == "" || !planSha256(*previewHash) || !planSha256(*approvalHash) {
+		fmt.Fprintln(stderr, "capacity config requires exact preview, public approval and output path")
+		return 2
+	}
+	previewRaw, err := readPlanReference(ctx, *previewPath, planFileReference{Path: *previewPath, Sha256: *previewHash}, 4*1024*1024)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	var preview validator.ProductionCapacityPreview
+	if err := decodePlanJson(previewRaw, &preview); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	approvalRaw, err := readPlanReference(ctx, *approvalPath, planFileReference{Path: *approvalPath, Sha256: *approvalHash}, 64*1024)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	ref := validator.ReleaseEvidenceV2File{Path: *approvalPath, Bytes: uint64(len(approvalRaw)), SHA256: "0x" + strings.TrimPrefix(*approvalHash, "sha256:")}
+	raw, err := validator.CompleteProductionCapacityDocument(ctx, *configPath, preview, ref)
+	if err != nil {
+		fmt.Fprintln(stderr, "capacity config:", err)
+		return 2
+	}
+	written, err := stdout.Write(raw)
+	if err != nil || written != len(raw) {
+		fmt.Fprintln(stderr, "capacity config output:", errors.Join(io.ErrShortWrite, err))
 		return 1
 	}
 	return 0
