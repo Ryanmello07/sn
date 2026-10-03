@@ -114,7 +114,9 @@
     "mixed-qualification-terminal-20261003.json": "81d941470af866803698d6bfc17b7c7ee08f7ca968f3c65f6e74aa3e5700dfdb",
     "model-sampler-source-finding-20261003.json": "ba6c43f63198248d7618c35c0b52b828862f48add0f0315d7e0128d9c45dfe62",
     "common-module-package-readback-20261003.json": "5a96acac641ec18f7e7592b637891b7ca9465fdca6bd733e831af6123df3298e",
-    "common-selected-graphs-readback-20261003.json": "b80326bd25b561662c1d5665634b69a42bd4424a77101f49a57f0a8a5d10bffd"
+    "common-selected-graphs-readback-20261003.json": "b80326bd25b561662c1d5665634b69a42bd4424a77101f49a57f0a8a5d10bffd",
+    "common-six-normal-compiles-readback-20261003.json": "dd933945770ccde85c9b833777ad46bcd7b673a87e110805f3ce74f088078fa9",
+    "common-twelve-compiles-readback-20261003.json": "635d14b205062de12e6cf1127485376f47a594cad2d70ed66c3be4beea84b096"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -155,9 +157,9 @@
     },
     {
       "closed": false,
-      "evidence": "common-selected-graphs-readback-20261003.json",
+      "evidence": "common-twelve-compiles-readback-20261003.json",
       "requirement": "PH-06",
-      "status": "Exact b6/Core2ea source staging, official module hash and six selected package graphs pass. Compilation, behavioral tests and final source/config release remain."
+      "status": "Exact b6/Core2ea provenance, dependency graphs and all twelve normal/race package compiles pass. Behavioral tests and final source/config release remain."
     },
     {
       "closed": false,
