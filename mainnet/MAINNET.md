@@ -3943,3 +3943,9 @@ The [verified `0fb5db88` source intake](evidence/continuous-evm-monitor-source-i
 ### Qualification headroom preserved without restarting work
 
 The [guarded reclaim18–19 receipt](evidence/cache-reclaim-18-19-20261003.json) verifies removal of twenty-six unreferenced old compiler archives and recovery of 0.96 GiB. Active caches, module inputs, source and evidence remain retained. Keep existing full-suite and recovery processes; admit corrected sources only after checking current headroom. This is qualification-host maintenance, not production resource acceptance.
+
+### EVM fixture successor and early composition
+
+The [verified `a9eff813` test-only intake](evidence/continuous-evm-monitor-fixture-source-intake-20261003.json) corrects the peer event assertion using actual public fields, a fresh heartbeat and the resume barrier. Root verified five bindings and one changed test Git blob; production and module bytes match the failed `0fb` candidate. First seventeen normal roots are running. Resource review history remains a separate successor, and neither source-only intake supplies behavior acceptance.
+
+Begin a separate current-main composition while capacity and scoped qualification finish. Keep original candidates immutable and distinguish qualified source scopes from pending recovery corrections, rolling monitors and capacity changes. Bind the intended Server `1d3c275b` (full suite still running), published Connect `a53ed36a`, SDK `9ae95704`, SCTP `6443417d` and gVisor `21c2a5da`, plus native renewal and historical-read corrections. Exposing source conflicts early does not close current-role startup or final release qualification.
