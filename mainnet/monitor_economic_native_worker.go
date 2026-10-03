@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/urfoundation/sn/internal/durablehead"
 	"github.com/urfoundation/sn/internal/durablepath"
-	"github.com/urfoundation/sn/protocol"
 	"github.com/urnetwork/connect/durablevolume"
 )
 
@@ -27,6 +25,7 @@ var monitorEconomicNativeStatusCodes = map[string]int{
 	"starting": 0, "observed-economic-outcome-unresolved": 1, "caught-up": 2,
 	"unavailable": 3, "runtime-unavailable": 4, "capacity-held": 5,
 	"identity-conflict": 6, "clock-unavailable": 7,
+	"archive-ready": 8,
 }
 
 type monitorEconomicNativeCheckpoint struct {
@@ -52,6 +51,7 @@ type monitorEconomicNativeWorker struct {
 	client                 *rpcClient
 	storage                monitorStorageRecovery
 	runtimeAcknowledgement *monitorEconomicRuntimeAcknowledgement
+	archive                []*monitorHistorySnapshot
 }
 
 // These settings describe an acknowledged checkpoint, not a config proposal.
@@ -100,6 +100,10 @@ func openMonitorEconomicNativeWorker(ctx context.Context, client *rpcClient, pol
 		value := *policy.ReadBudgetBasisSeconds
 		policy.ReadBudgetBasisSeconds = &value
 	}
+	if policy.HistoryCatalog != nil {
+		value := *policy.HistoryCatalog
+		policy.HistoryCatalog = &value
+	}
 	checkpointPath, metricsPath := monitorEconomicNativePaths(checkpoint, metrics, policy.Role)
 	owner, err := openMonitorCheckpoint(checkpointPath, expected, ctx)
 	if err != nil {
@@ -140,7 +144,7 @@ func (self *monitorEconomicNativeWorker) close(hooks monitorServiceHooks) error 
 	if self.client != nil {
 		self.client.httpClient.CloseIdleConnections()
 	}
-	return closeMonitorServiceOwners(self.policy.Role, self.metrics, self.checkpoint, hooks)
+	return errors.Join(self.closeArchive(), closeMonitorServiceOwners(self.policy.Role, self.metrics, self.checkpoint, hooks))
 }
 
 func (self *monitorEconomicNativeWorker) load(ctx context.Context) (*monitorEconomicNativeState, error) {
@@ -157,25 +161,15 @@ func (self *monitorEconomicNativeWorker) load(ctx context.Context) (*monitorEcon
 	if err != nil {
 		return nil, err
 	}
-	if err := protocol.ValidateUniqueJsonKeys(raw); err != nil {
+	record, err := decodeMonitorEconomicNativeCheckpoint(raw, self.policy)
+	if err != nil {
 		return nil, err
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	var record monitorEconomicNativeCheckpoint
-	if err := decoder.Decode(&record); err != nil {
+	if err := record.State.Catalog.checkPath(self.checkpoint.path); err != nil {
 		return nil, err
 	}
-	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
-		return nil, errors.New("native economic checkpoint has trailing JSON")
-	}
-	if record.Schema != monitorEconomicNativeCheckpointSchema || record.PolicyHash != self.policy.identityHash() || record.ContentHash != record.hash() {
-		return nil, errors.New("native economic checkpoint differs from its retained policy or checksum")
-	}
-	if err := self.policy.retainsRuntimePolicy(record); err != nil {
-		return nil, err
-	}
-	if err := record.State.validate(self.policy); err != nil {
+	self.archive, err = openMonitorEconomicNativeArchive(ctx, self.policy, &record.State)
+	if err != nil {
 		return nil, err
 	}
 	self.acknowledgeRuntime(record)
@@ -183,6 +177,9 @@ func (self *monitorEconomicNativeWorker) load(ctx context.Context) (*monitorEcon
 }
 
 func (self *monitorEconomicNativeWorker) save(state *monitorEconomicNativeState) error {
+	if err := self.checkArchive(); err != nil {
+		return err
+	}
 	if err := self.checkpoint.requireOwner(); err != nil {
 		return err
 	}
@@ -200,7 +197,7 @@ func (self *monitorEconomicNativeWorker) save(state *monitorEconomicNativeState)
 	if len(raw)+1 > maxRpcReplyBytes {
 		return errMonitorEconomicCapacity
 	}
-	err = errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner())
+	err = errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner(), self.checkArchive())
 	if err == nil {
 		self.acknowledgeRuntime(record)
 	}
@@ -223,6 +220,9 @@ func monitorEconomicNativeReadCode(err error) string {
 // Only this summary is exported. It does not emit unbounded retained history,
 // arbitrary source labels, or a numeric zero for unproved economic amounts.
 type monitorEconomicNativeSummary struct {
+	ArchivedEvents               uint64                                 `json:"archived_events"`
+	ArchiveSegments              int                                    `json:"archive_segments"`
+	ArchiveSegmentCapacity       int                                    `json:"archive_segment_capacity"`
 	ConfiguredRuntimeCatalogHash string                                 `json:"configured_runtime_catalog_hash"`
 	ConfiguredRuntimeEntries     int                                    `json:"configured_runtime_entries"`
 	ConfiguredRuntimeCapacity    monitorEconomicRuntimeCapacity         `json:"configured_runtime_capacity"`
@@ -269,6 +269,11 @@ func (self *monitorEconomicNativeState) summary(policy monitorEconomicNativePoli
 func (self *monitorEconomicNativeWorker) summary() monitorEconomicNativeSummary {
 	summary := self.state.summary(self.policy)
 	summary.RuntimeAcknowledgement = self.runtimeAcknowledgement
+	summary.ArchiveSegmentCapacity = int(self.state.Catalog.capacity(self.policy.HistoryCatalog).Segments)
+	if self.state.Archive != nil {
+		summary.ArchiveSegments = len(self.state.Archive.Segments)
+		summary.ArchivedEvents = self.state.Archive.Events
+	}
 	return summary
 }
 
@@ -288,6 +293,16 @@ func renderMonitorEconomicNativeMetrics(policy monitorEconomicNativePolicy, stat
 	stalled := !state.LastProgressAt.IsZero() && now.Sub(state.LastProgressAt) >= time.Duration(policy.StallSeconds)*time.Second
 	catalog, _ := json.Marshal(policy.RuntimeCatalog)
 	capacity := policy.runtimeCapacity()
+	archiveSegments := 0
+	archiveCapacity := state.Catalog.capacity(policy.HistoryCatalog)
+	archiveCatalog, _ := monitorNativeCatalogBytes(*state)
+	if state.Archive != nil {
+		archiveSegments = len(state.Archive.Segments)
+	}
+	archiveWarning := 2*uint64(archiveSegments+1) >= archiveCapacity.Segments || 2*uint64(archiveSegments+1) >= archiveCapacity.HeldReaders
+	if policy.HistoryCatalog != nil {
+		archiveWarning = archiveWarning || 2*(uint64(len(archiveCatalog))+6*maximumMonitorHistoryPath+256) >= archiveCapacity.CatalogBytes || state.Catalog != nil && len(state.Catalog.Revisions)+1 >= maximumMonitorHistoryRevisions
+	}
 	var output strings.Builder
 	for _, metric := range []struct {
 		name  string
@@ -301,6 +316,9 @@ func renderMonitorEconomicNativeMetrics(policy monitorEconomicNativePolicy, stat
 		{name: "outage_started_timestamp_seconds", value: stamp(state.UnavailableSince)}, {name: "incidents", value: state.Incidents},
 		{name: "history_capacity", value: policy.HistoryEntries}, {name: "history_remaining", value: state.CapacityRemaining},
 		{name: "history_bytes_remaining", value: state.CapacityBytesRemaining},
+		{name: "archive_segments", value: archiveSegments}, {name: "archive_segment_capacity", value: archiveCapacity.Segments},
+		{name: "archive_catalog_byte_capacity", value: archiveCapacity.CatalogBytes}, {name: "archive_reader_capacity", value: archiveCapacity.HeldReaders},
+		{name: "archive_catalog_bytes", value: len(archiveCatalog)}, {name: "archive_capacity_warning", value: flag(archiveWarning)},
 		{name: "capacity_warning", value: flag(state.CapacityRemaining <= policy.HistoryEntries/4 || state.CapacityBytesRemaining <= maximumMonitorEconomicBytes/4)},
 		{name: "fee_payer_count", value: len(policy.Observation.FeePayers)}, {name: "independent_finality_verified", value: 0},
 		{name: "fee_observation_known", value: flag(len(policy.Observation.FeePayers) != 0 && state.BatchCount != 0)},
@@ -322,7 +340,7 @@ func (self *monitorEconomicNativeWorker) resume(ctx context.Context, hooks monit
 	prior := self.checkpoint
 	return self.storage.resume(ctx, self.policy.Role, func() error {
 		file := prior.lock
-		err := prior.close()
+		err := errors.Join(self.closeArchive(), prior.close())
 		if hooks.afterClose != nil {
 			err = errors.Join(err, hooks.afterClose(self.policy.Role, "checkpoint", file))
 		}
@@ -339,6 +357,7 @@ func (self *monitorEconomicNativeWorker) resume(ctx context.Context, hooks monit
 		}
 		owner.syncDirectory = prior.syncDirectory
 		self.checkpoint, self.state = owner, state
+		self.archive = candidate.archive
 		self.runtimeAcknowledgement = candidate.runtimeAcknowledgement
 		return nil
 	}, hooks)
@@ -349,7 +368,7 @@ func (self *monitorEconomicNativeWorker) resume(ctx context.Context, hooks monit
 func (self *monitorEconomicNativeWorker) run(ctx context.Context, interval time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
 	for ctx.Err() == nil {
 		var observation *economicEmissionObservation
-		readErr := self.checkpoint.requireOwner()
+		readErr := errors.Join(self.checkpoint.requireOwner(), self.checkArchive())
 		if readErr == nil && self.state.Status == "capacity-held" {
 			readErr = errMonitorEconomicCapacity
 		}
