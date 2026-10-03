@@ -6878,3 +6878,13 @@ The [original full-model subsidy failure](evidence/server-model-subsidy-original
 
 
 The [source review of the subsidy correction](evidence/subsidy-grant804-source-review-20261003.json) verifies the exact test-only successor: returned grant consumption, checked settlement errors, original exhaustion/payment assertions and unchanged production/modules. Qualify the affected root and two declared neighbors after the ongoing full suite joins; retain unaffected results through exact source scope rather than restarting the entire suite. The original failure remains evidence, and this source review supplies no behavioral pass.
+
+
+### Role isolation must include startup admission
+
+The [startup source finding](evidence/monitor-startup-isolation-source-finding-20261003.json) shows validator/operator/provider/Claim owner-admission failures can stop the monitor before healthy workers start. Runtime isolation alone does not cover this path. Separate invalid shared configuration and network/declaration admission from role-local observation or custody errors. Start healthy domains, retry recoverable local admission and quarantine confirmed local integrity failures, preserving exclusive ownership and checkpoints. Exercise actual multi-role startup, cancellation and duplicate-writer controls before closing this requirement.
+
+
+### Preserve debit lifecycle and meaningful writer guards in tests
+
+The [current full-model failure batch](evidence/server-model-clock-and-debit-original-failures-20261003.json) retains two writer-guard failures and six participant payout failures. Source triage separates a new early refusal branch from the later checked endpoint lock, and terminal settlement from asynchronous journal application. Review actual control flow and keep missing/late-lock mutants effective. For asynchronous debit, assert retained pending consumption and unavailable spendable credit, then exercise the real replay-safe flusher before checking raw balance and released reservations. Do not sleep, ignore close/read errors or weaken payout conservation to make fixtures pass. Continue the full run and qualify one combined affected-scope correction afterward.
