@@ -22,6 +22,8 @@ The [original local restore race failure](evidence/local-pending-original-race-f
 
 Astra’s source review indicates the dispute rollback fixture reads the old reservation counter while the public create path uses the newer counter. This is an unqualified fixture diagnosis: require a nonzero pre-sweep witness, both counters and the exact request token, followed by failed and successful public settlement checks. Apply the same review to drift and TTL failures; preserve every original result.
 
+The [frozen allocator successor](evidence/redis-allocation-source-intake-20261003.json) preserves the public payer-client distribution policy and atomic whole-grant attempts. Ordinary discovery uses bounded keyset pages in original financial order, with explicit capacity holds and configurable reviewed limits. Root verified all 5,386 physical Git blobs and 44 file bindings; its eight new roots, seventeen neighbors and five causal groups still require independent execution. Source verification is not a passing behavioral gate. Unknown counters must remain retained while independently valid funding peers can continue; paid/free SN weighting does not authorize changing the Server funding policy.
+
 ## Historical RPC recovery lesson — October 3
 
 A missing expected historical receipt is an unavailable read, not proof that
