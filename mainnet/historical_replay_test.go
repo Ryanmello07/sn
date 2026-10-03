@@ -35,6 +35,10 @@ func init() {
 		time.Sleep(24 * time.Hour)
 		os.Exit(8)
 	}
+	if len(os.Args) == 2 && os.Args[1] == "--historical-proof-capture-v1" {
+		historicalCaptureSyntheticPeer()
+		os.Exit(0)
+	}
 	if len(os.Args) != 2 || os.Args[1] != "--historical-proof-replay-v1" {
 		os.Exit(6)
 	}

@@ -229,6 +229,49 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	if err := job.ObservationProfile.validate(job); err != nil {
 		return nil, err
 	}
+	maximumReportBytes := historicalReplayReportLimit
+	if job.ObservationProfile != nil {
+		maximumReportBytes = historicalReplayObservedReportLimit
+	}
+	output, err := runHistoricalProofWorker(owner, cancel, historicalProofWorkerRequest{Engine: request.Engine, Input: raw, Directory: filepath.Dir(request.Job.Path), MaximumReport: maximumReportBytes}, hooks)
+	if err != nil {
+		return nil, err
+	}
+	var report historicalReplayReport
+	if err := decodePlanJson(output, &report); err != nil {
+		return nil, err
+	}
+	if err := validateHistoricalReplayReport(job, raw, report); err != nil {
+		return nil, err
+	}
+	return &report, owner.Err()
+}
+
+func validateHistoricalReplayReport(job historicalReplayJob, raw []byte, report historicalReplayReport) error {
+	if report.Schema != historicalReplaySchema || report.JobSha256 != historicalReplayDigest(sha256.Sum256(raw)) || report.SdkRevision != historicalReplaySdk || (report.HostProfile != "substrate-proof-bounded-storage-v1" && report.HostProfile != "substrate-proof-bounded-hosts-v2") || report.ParentHash != job.ParentHash || report.ChildHash != job.ChildHash || report.RuntimeCodeSha256 != job.RuntimeCodeSha256 || report.Extrinsics != uint64(len(job.ExtrinsicsHex)) || report.ProofNodes != uint64(len(job.ProofNodesHex)) || report.ProofBytes > 24*1024*1024 || report.StorageCalls > 65536 || report.StorageIoBytes > 64*1024*1024 || !report.PostStateReproduced {
+		return errors.New("historical replay report differs from exact input or execution profile")
+	}
+	if report.AnchorAuthority != "caller-supplied-unapproved" || report.RuntimeAdmitted || report.NativeFeeDebit != nil || report.NativeFeeWithdrawalRefund || report.ProductionSelection {
+		return errors.New("historical replay report claims unestablished runtime, fee or finality authority")
+	}
+	return validateHistoricalReplayObservations(job, report.HookObservations)
+}
+
+// Both fixed workers share exact executable custody and joined bounded pipes.
+// The optional node descriptor selects capture; it never selects another argv,
+// executable path, signer or network target inside the supervisor.
+type historicalProofWorkerRequest struct {
+	Engine        planFileReference
+	Input         []byte
+	Directory     string
+	MaximumReport int
+	Nodes         *os.File
+}
+
+func runHistoricalProofWorker(owner context.Context, cancel context.CancelFunc, request historicalProofWorkerRequest, hooks historicalReplayHooks) (result []byte, resultErr error) {
+	if request.MaximumReport <= 0 || request.MaximumReport > historicalCaptureReportLimit || len(request.Input) > historicalReplayJobLimit {
+		return nil, errors.New("historical proof worker exceeds its fixed profile")
+	}
 	engine, err := historicalReplayEngine(owner, request.Engine)
 	if err != nil {
 		return nil, err
@@ -251,12 +294,19 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 			result = nil
 		}
 	}()
-	command := exec.CommandContext(owner, "/proc/self/fd/4", "--retained-engine-fd3")
+	argument := "--retained-engine-fd3"
+	if request.Nodes != nil {
+		argument = "--retained-capture-engine-fd3-nodes-fd5"
+	}
+	command := exec.CommandContext(owner, "/proc/self/fd/4", argument)
 	command.Args[0] = "urnetwork-historical-replay-supervisor"
 	command.ExtraFiles = []*os.File{engine, supervisor}
+	if request.Nodes != nil {
+		command.ExtraFiles = append(command.ExtraFiles, request.Nodes)
+	}
 	command.Env = []string{"LANG=C", "LC_ALL=C", "RUST_BACKTRACE=0"}
-	command.Dir = filepath.Dir(request.Job.Path)
-	command.Stdin = bytes.NewReader(raw)
+	command.Dir = request.Directory
+	command.Stdin = bytes.NewReader(request.Input)
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.Cancel = func() error {
 		// The supervisor kills/reaps its entire engine group before exiting.
@@ -267,11 +317,7 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 		return err
 	}
 	command.WaitDelay = 5 * time.Second
-	maximumReportBytes := historicalReplayReportLimit
-	if job.ObservationProfile != nil {
-		maximumReportBytes = historicalReplayObservedReportLimit
-	}
-	stdout := historicalReplayOutput{maximum: maximumReportBytes, cancel: cancel, read: hooks.afterOutput}
+	stdout := historicalReplayOutput{maximum: request.MaximumReport, cancel: cancel, read: hooks.afterOutput}
 	stderr := historicalReplayOutput{maximum: 64 * 1024, cancel: cancel}
 	command.Stdout, command.Stderr = &stdout, &stderr
 	if hooks.beforeStart != nil {
@@ -288,18 +334,5 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	if err := errors.Join(err, stdout.err, stderr.err, owner.Err()); err != nil {
 		return nil, fmt.Errorf("historical replay child refused: %w", err)
 	}
-	var report historicalReplayReport
-	if err := decodePlanJson(stdout.buffer.Bytes(), &report); err != nil {
-		return nil, err
-	}
-	if report.Schema != historicalReplaySchema || report.JobSha256 != historicalReplayDigest(sha256.Sum256(raw)) || report.SdkRevision != historicalReplaySdk || (report.HostProfile != "substrate-proof-bounded-storage-v1" && report.HostProfile != "substrate-proof-bounded-hosts-v2") || report.ParentHash != job.ParentHash || report.ChildHash != job.ChildHash || report.RuntimeCodeSha256 != job.RuntimeCodeSha256 || report.Extrinsics != uint64(len(job.ExtrinsicsHex)) || report.ProofNodes != uint64(len(job.ProofNodesHex)) || report.ProofBytes > 24*1024*1024 || report.StorageCalls > 65536 || report.StorageIoBytes > 64*1024*1024 || !report.PostStateReproduced {
-		return nil, errors.New("historical replay report differs from exact input or execution profile")
-	}
-	if report.AnchorAuthority != "caller-supplied-unapproved" || report.RuntimeAdmitted || report.NativeFeeDebit != nil || report.NativeFeeWithdrawalRefund || report.ProductionSelection {
-		return nil, errors.New("historical replay report claims unestablished runtime, fee or finality authority")
-	}
-	if err := validateHistoricalReplayObservations(job, report.HookObservations); err != nil {
-		return nil, err
-	}
-	return &report, owner.Err()
+	return stdout.buffer.Bytes(), owner.Err()
 }

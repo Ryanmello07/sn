@@ -12,6 +12,9 @@ use sp_runtime::generic::{Digest, DigestItem};
 use sp_state_machine::{prove_read_on_trie_backend, TestExternalities};
 use std::{borrow::Cow, collections::BTreeMap};
 
+#[path = "historical_capture_tests.rs"]
+mod capture_tests;
+
 const OWNER: &[u8] = b"synthetic-child";
 const ACCOUNT: &[u8] = b"zzzz-account";
 const READ: &str = "(drop (call $get (i64.const 51539609536)))";

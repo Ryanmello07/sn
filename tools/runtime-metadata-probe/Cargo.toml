@@ -16,6 +16,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ["cfg(substrate_runtime)"] }
 [dependencies]
 frame-metadata = "=23.0.0"
 hex = "=0.4.3"
+libc = "=0.2.189"
 parity-scale-codec = "=3.7.5"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
