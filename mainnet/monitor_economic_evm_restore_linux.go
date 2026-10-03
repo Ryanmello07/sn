@@ -54,7 +54,7 @@ func buildMonitorEvmRestoreRequest(ctx context.Context, request monitorEvmRestor
 	}); err != nil {
 		return empty, err
 	}
-	if err := validateMonitorHistoryRestoreCapacity(root.request, root.inventory); err != nil {
+	if err := root.finish(ctx); err != nil {
 		return empty, err
 	}
 	return root.request, ctx.Err()

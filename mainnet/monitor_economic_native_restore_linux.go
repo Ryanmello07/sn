@@ -13,10 +13,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"path/filepath"
 	"reflect"
 
-	"github.com/urfoundation/sn/internal/durablehead"
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
 )
@@ -45,72 +43,23 @@ func buildMonitorNativeRestoreRequest(ctx context.Context, request monitorNative
 	if err := errors.Join(request.Policy.validate(request.Expected), request.Original.validate()); err != nil {
 		return result, err
 	}
-	preparation := request.Preparation
-	report, err := durablevolume.LoadPhysicalInventory(ctx, preparation.RestoreSource.Inventory)
+	_, declared, err := monitorHistoryRestoreDeclaration(ctx)
 	if err != nil {
 		return result, err
 	}
-	if report.StateRoot.Path != preparation.RootPath || filepath.Dir(request.Original.Path) != report.StateRoot.Path || !monitorHistoryPath(preparation.RestoreSource.Directory) {
-		return result, errors.New("native history restore must retain its original logical root")
-	}
-	entries := make(map[string]durablevolume.InventoryEntry, len(report.Entries))
-	for _, entry := range report.Entries {
-		entries[entry.Path] = entry
-	}
-	owners := append([]durablevolume.PreparationOwner(nil), preparation.Owners...)
-	seen := map[string]bool{}
-	for _, owner := range owners {
-		if owner.RestoreCoverage != "complete-union-v1" || owner.Purpose != "restore" {
-			return result, errors.New("native history additional owners require complete retained union coverage")
-		}
-		if owner.Kind == "mainnet-monitor-checkpoint" {
-			_, scope, err := storagePreparationSnapshotSpec(false, owner)
-			if err != nil || seen[scope.Name] {
-				return result, errors.Join(errors.New("native history repeats an additional snapshot owner"), err)
-			}
-			seen[scope.Name] = true
-		}
-	}
-	read := func(reference monitorHistoryReference) ([]byte, error) {
-		if err := reference.validate(); err != nil {
-			return nil, err
-		}
-		if filepath.Dir(reference.Path) != report.StateRoot.Path {
-			return nil, errors.New("native history crosses a root requiring its own reviewed restore union")
-		}
-		name := filepath.Base(reference.Path)
-		entry, present := entries[name]
-		if !present || entry.Kind != "file" || entry.Size != reference.Bytes || entry.Sha256 != reference.Sha256 || seen[name] {
-			return nil, errors.New("native history inventory omits, repeats or changes an original member")
-		}
-		inputs, err := json.Marshal(storageSnapshotPreparationScope{Schema: "urnetwork-snapshot-preparation-v1", Name: name, MaximumBytes: maxRpcReplyBytes})
-		if err != nil {
-			return nil, err
-		}
-		owner := durablevolume.PreparationOwner{Kind: "mainnet-monitor-checkpoint", RelativePath: ".", Purpose: "restore", RestoreCoverage: "complete-union-v1", Inputs: inputs}
-		spec, _, err := storagePreparationSnapshotSpec(false, owner)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := durablehead.PlanRestore(ctx, "native-history-review", owner, spec, inputs, report); err != nil {
-			return nil, err
-		}
-		raw, err := readBootstrapChainInput(ctx, planFileReference{Path: filepath.Join(preparation.RestoreSource.Directory, name), Sha256: reference.Sha256}, maxRpcReplyBytes)
-		if err != nil || uint64(len(raw)) != reference.Bytes {
-			return nil, errors.Join(errors.New("native history copied bytes differ from the original reference"), err)
-		}
-		seen[name] = true
-		owners = append(owners, owner)
-		return raw, nil
-	}
-	if err := validateMonitorNativeRestoreHistory(request.Policy, request.Original, read); err != nil {
+	root, err := newMonitorHistoryRestoreRootReview(ctx, request.Preparation, declared)
+	if err != nil {
 		return result, err
 	}
-	preparation.Owners = owners
-	if err := validateMonitorHistoryRestoreCapacity(preparation, report); err != nil {
+	if err := validateMonitorNativeRestoreHistory(request.Policy, request.Original, func(reference monitorHistoryReference) ([]byte, error) {
+		return root.read(ctx, reference)
+	}); err != nil {
 		return result, err
 	}
-	return preparation, ctx.Err()
+	if err := root.finish(ctx); err != nil {
+		return result, err
+	}
+	return root.request, ctx.Err()
 }
 
 // Each source inventory can live under a different root. The original signed
@@ -173,8 +122,12 @@ func runMonitorNativeArchiveRestoreRequest(ctx context.Context, args []string, s
 		return 2
 	}
 	raw, digest, err := readPlanFile(ctx, *path, maxRpcReplyBytes)
-	if err != nil || digest != *hash {
-		fmt.Fprintln(stderr, "native restore input differs:", err)
+	if err != nil {
+		fmt.Fprintln(stderr, "native restore input read:", err)
+		return 2
+	}
+	if digest != *hash {
+		fmt.Fprintln(stderr, "native restore input differs from reviewed digest")
 		return 2
 	}
 	var request monitorNativeRestoreRequest

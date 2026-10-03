@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/urfoundation/sn/internal/durablehead"
 	"github.com/urnetwork/connect/durablevolume"
@@ -21,6 +22,7 @@ type monitorHistoryRestoreRootReview struct {
 	inventory durablevolume.Inventory
 	entries   map[string]durablevolume.InventoryEntry
 	seen      map[string]bool
+	nested    []string
 }
 
 // An additional co-owner has exact explicit coverage; unknown files never get
@@ -37,7 +39,7 @@ func newMonitorHistoryRestoreRootReview(ctx context.Context, request durablevolu
 		return nil, errors.New("monitor history changed an original declared logical root")
 	}
 	self := &monitorHistoryRestoreRootReview{request: request, inventory: report, entries: map[string]durablevolume.InventoryEntry{}, seen: map[string]bool{}}
-	self.request.Owners = append([]durablevolume.PreparationOwner(nil), request.Owners...)
+	self.request.Owners = nil
 	for _, entry := range report.Entries {
 		if _, present := self.entries[entry.Path]; present {
 			return nil, errors.New("monitor history inventory repeats an original member")
@@ -55,8 +57,53 @@ func newMonitorHistoryRestoreRootReview(ctx context.Context, request durablevolu
 			}
 			self.seen[scope.Name] = true
 		}
+		if owner.Kind == storageMonitorTreeKind {
+			scope, err := storageMonitorTreeProfile(owner, false)
+			if err != nil {
+				return nil, err
+			}
+			for _, path := range scope.Snapshots {
+				if self.seen[path] {
+					return nil, errors.New("monitor history repeats an additional tree snapshot")
+				}
+				self.seen[path] = true
+				self.nested = append(self.nested, path)
+			}
+			continue
+		}
+		self.request.Owners = append(self.request.Owners, owner)
 	}
 	return self, nil
+}
+
+// Containment is component-based and must identify one original declared root.
+// A nearby prefix or an overlapping root cannot silently select other custody.
+func monitorHistoryRestoreRelative(root, path string) (string, bool) {
+	if !monitorHistoryPath(path) || !filepath.IsAbs(root) || filepath.Clean(root) != root {
+		return "", false
+	}
+	relative, err := filepath.Rel(root, path)
+	return relative, err == nil && storageMonitorTreePath(relative)
+}
+
+func monitorHistoryRestoreRoot(roots []*monitorHistoryRestoreRootReview, reference monitorHistoryReference) (*monitorHistoryRestoreRootReview, error) {
+	if err := reference.validate(); err != nil {
+		return nil, err
+	}
+	var found *monitorHistoryRestoreRootReview
+	for _, root := range roots {
+		if _, present := monitorHistoryRestoreRelative(root.request.RootPath, reference.Path); !present {
+			continue
+		}
+		if found != nil {
+			return nil, errors.New("monitor history reference has overlapping declared roots")
+		}
+		found = root
+	}
+	if found == nil {
+		return nil, errors.New("monitor history cohort omits an original reference root")
+	}
+	return found, nil
 }
 
 // Only the exact signed-history reference selects a new fixed snapshot owner.
@@ -64,15 +111,15 @@ func (self *monitorHistoryRestoreRootReview) read(ctx context.Context, reference
 	if err := reference.validate(); err != nil {
 		return nil, err
 	}
-	if filepath.Dir(reference.Path) != self.request.RootPath {
+	name, contained := monitorHistoryRestoreRelative(self.request.RootPath, reference.Path)
+	if !contained {
 		return nil, errors.New("monitor history reference changed its original root")
 	}
-	name := filepath.Base(reference.Path)
 	entry, present := self.entries[name]
 	if !present || entry.Kind != "file" || entry.Size != reference.Bytes || entry.Sha256 != reference.Sha256 || self.seen[name] {
 		return nil, errors.New("monitor history inventory omits, repeats or changes an original member")
 	}
-	inputs, err := json.Marshal(storageSnapshotPreparationScope{Schema: "urnetwork-snapshot-preparation-v1", Name: name, MaximumBytes: maxRpcReplyBytes})
+	inputs, err := json.Marshal(storageSnapshotPreparationScope{Schema: "urnetwork-snapshot-preparation-v1", Name: filepath.Base(name), MaximumBytes: maxRpcReplyBytes})
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +128,14 @@ func (self *monitorHistoryRestoreRootReview) read(ctx context.Context, reference
 	if err != nil {
 		return nil, err
 	}
-	if _, err := durablehead.PlanRestore(ctx, "monitor-history-review", owner, spec, inputs, self.inventory); err != nil {
-		return nil, err
+	if filepath.Dir(name) == "." {
+		if _, err := durablehead.PlanRestore(ctx, "monitor-history-review", owner, spec, inputs, self.inventory); err != nil {
+			return nil, err
+		}
+	} else {
+		if _, _, _, _, err := storageMonitorTreeHeadPlan(ctx, "monitor-history-review", name, self.inventory); err != nil {
+			return nil, err
+		}
 	}
 	raw, err := readBootstrapChainInput(ctx, planFileReference{Path: filepath.Join(self.request.RestoreSource.Directory, name), Sha256: reference.Sha256}, maxRpcReplyBytes)
 	if err != nil {
@@ -92,8 +145,32 @@ func (self *monitorHistoryRestoreRootReview) read(ctx context.Context, reference
 		return nil, errors.New("monitor history copied bytes differ from retained reference")
 	}
 	self.seen[name] = true
-	self.request.Owners = append(self.request.Owners, owner)
+	if filepath.Dir(name) == "." {
+		self.request.Owners = append(self.request.Owners, owner)
+	} else {
+		self.nested = append(self.nested, name)
+	}
 	return raw, nil
+}
+
+// Shared ancestors are carried once by one explicit fixed tree owner. Each
+// checkpoint still has its original per-file grammar and physical head. This
+// final review occurs before any staging or target publication.
+func (self *monitorHistoryRestoreRootReview) finish(ctx context.Context) error {
+	if len(self.nested) != 0 {
+		sort.Strings(self.nested)
+		inputs, err := json.Marshal(storageMonitorTreeScope{Schema: storageMonitorTreeSchema, Snapshots: self.nested})
+		if err != nil {
+			return err
+		}
+		owner := durablevolume.PreparationOwner{Kind: storageMonitorTreeKind, RelativePath: ".", Purpose: "restore", RestoreCoverage: durablevolume.PreparationCompleteUnion, Inputs: inputs}
+		if _, err := planStorageMonitorTreeRestore(ctx, "monitor-history-tree-review", owner, self.inventory, false); err != nil {
+			return err
+		}
+		self.request.Owners = append(self.request.Owners, owner)
+		self.nested = nil
+	}
+	return validateMonitorHistoryRestoreCapacity(self.request, self.inventory)
 }
 
 // Read-only declaration admission keeps original root generations bound even
