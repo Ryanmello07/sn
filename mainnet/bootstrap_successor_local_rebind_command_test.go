@@ -9,9 +9,11 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -102,6 +104,7 @@ func localRebindTestRestore(t *testing.T, f *bootstrapSuccessorCanonicalFixture)
 	if len(owners) < 10 {
 		t.Fatal("actual bootstrap fixture lost its shared owner scope", len(owners))
 	}
+	localRebindTestCoverage(t, owners, report)
 	request.Owners = owners
 	raw, err = json.Marshal(request)
 	if err != nil {
@@ -149,6 +152,52 @@ func localRebindTestRestore(t *testing.T, f *bootstrapSuccessorCanonicalFixture)
 		Context: durablepath.WithHost(durablevolume.WithReference(t.Context(), reference), original.Host)}
 	f.original.contracts.storage = f.original.root.storage
 	return path, hash
+}
+
+// This read-only fixture census names the exact entries left after the same
+// fixed production adapters have planned their views. The public command still
+// decides coverage and performs the only preparation; diagnostics grant none.
+func localRebindTestCoverage(t *testing.T, owners []durablevolume.PreparationOwner, report durablevolume.Inventory) {
+	t.Helper()
+	files := map[string]bool{}
+	attributes := map[durablevolume.PreparationAttributeSpec]bool{}
+	for _, entry := range report.Entries {
+		if entry.Path != "" {
+			files[entry.Path] = true
+		}
+		for _, attribute := range entry.OwnerAttributes {
+			if entry.Path == "" && attribute.Name == durablevolume.PreparationAttribute {
+				continue
+			}
+			path := entry.Path
+			if path == "" {
+				path = "."
+			}
+			attributes[durablevolume.PreparationAttributeSpec{Path: path, Name: attribute.Name}] = true
+		}
+	}
+	for index, owner := range owners {
+		plan, err := planStoragePreparationRestore(t.Context(), fmt.Sprintf("synthetic-coverage-%02d", index), owner, report, false)
+		if err != nil {
+			t.Fatal("actual owner cannot plan its original view", owner.Kind, err)
+		}
+		for _, file := range plan.Files {
+			delete(files, file.Path)
+		}
+		for _, attribute := range plan.Attributes {
+			delete(attributes, attribute)
+		}
+		t.Logf("original coverage owner=%q files=%d attributes=%d", owner.Kind, len(plan.Files), len(plan.Attributes))
+	}
+	names := []string{}
+	for name := range files {
+		names = append(names, "file:"+name)
+	}
+	for attribute := range attributes {
+		names = append(names, "attribute:"+attribute.Path+":"+attribute.Name)
+	}
+	slices.Sort(names)
+	t.Logf("original coverage unassigned=%q", names)
 }
 
 func localRebindTestSign(t *testing.T, path string, plan localRebindTestPlan, key ed25519.PrivateKey, domain string) planFileReference {
