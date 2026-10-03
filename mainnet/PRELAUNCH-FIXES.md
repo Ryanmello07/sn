@@ -6002,3 +6002,13 @@ The new claim-consumer candidate `80030acb` has a [coordinator source review](ev
 ## October 3 current claim-consumer qualification handoff
 
 The [final frozen intake](evidence/claim-consumer-intake-20261003.json) for SN `80030acb` binds 31 source/control files and selects 23 roots: sixteen claim controls, two public worker neighbors and five actual producer controls. Six explicitly classified overlays expect eight behavioral assertion failures per mode. The final intake supersedes the retained preliminary control recipe; compiler failures cannot count as causal success. No execution result is claimed yet. This uses the unchanged producer347 graph (Server10a/Connect0a5), so published Connect9e/current Server2a consumption still requires its own release composition. The observer supplies no repair, signing, independent finality or per-epoch payment authority.
+
+
+## October 3 runtime source refresh
+
+A [read-only official source refresh](evidence/runtime-source-refresh-20261003.json) finds returned v470/v471 tags and releases; the main ref is `c004cebf`, whose runtime source and v471 manifest/digest explicitly describe spec version 471. These sources do not authorize the earlier observed v472 artifact. This does not establish absence of another branch or unpublished proposal, and does not claim a fresh on-chain version. Exact artifact/source attribution and consumed-purpose admission remain open launch inputs, independent of payout and monitoring qualification.
+
+
+## October 3 wallet operative controls
+
+The [normal wallet causal controls](evidence/wallet-get-causal-normal-20261003.json) at frozen Server `25f617dc` produce all nine intended assertion failures across five omission groups, with five positive neighbors passing and owned fixture cleanup complete. Coordinator verification covers all 59 bound files and the actual terminal event census. These discriminate retries, Link pagination, shared budgets, Retry-After and redirect credential protection; they are explicitly labelled operative omissions, not historical source replays. Race controls, vet and final combined-source qualification remain pending.
