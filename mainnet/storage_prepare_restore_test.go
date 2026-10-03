@@ -64,6 +64,7 @@ type storagePreparationRestoreFixture struct {
 	original   storagePreparationNativeImage
 	rawName    string
 	raw        []byte
+	pendingRaw []byte
 	ownerLocal bool
 }
 
@@ -83,6 +84,7 @@ func newStoragePreparationRestoreFixture(t *testing.T, ownerLocal bool, pending 
 	ctx, cancel := context.WithCancel(sourceContext)
 	t.Cleanup(cancel)
 	armed, called := false, false
+	nextRaw := []byte("synthetic second original raw intent, never sent")
 	observed := &storagePreparationObservedHost{Host: source.storage.Host, observe: func(*os.File) {
 		if !armed || called {
 			return
@@ -109,15 +111,25 @@ func newStoragePreparationRestoreFixture(t *testing.T, ownerLocal bool, pending 
 			if err != nil || info.Size() != head.Pending.JournalSize {
 				return
 			}
-		} else if pending == "raw" {
+		} else if pending == "raw" || pending == "raw-temporary" {
 			names, err := os.ReadDir(filepath.Join(source.root, "native-transactions"))
 			if err != nil || len(names) != head.Pending.RawCount || head.Pending.RawCount != head.Committed.RawCount+1 {
 				return
 			}
+			temporaries := 0
 			for _, name := range names {
-				if !strings.HasSuffix(name.Name(), ".scale") {
+				if strings.Contains(name.Name(), ".pending-") {
+					temporaries++
+					raw, err := os.ReadFile(filepath.Join(source.root, "native-transactions", name.Name()))
+					if err != nil || !bytes.Equal(raw, nextRaw) {
+						return
+					}
+				} else if !strings.HasSuffix(name.Name(), ".scale") {
 					return
 				}
+			}
+			if pending == "raw" && temporaries != 0 || pending == "raw-temporary" && temporaries != 1 {
+				return
 			}
 		} else {
 			return
@@ -150,10 +162,9 @@ func newStoragePreparationRestoreFixture(t *testing.T, ownerLocal bool, pending 
 	} else if err != nil {
 		t.Fatal(err)
 	}
-	if pending == "raw" {
+	if pending == "raw" || pending == "raw-temporary" {
 		armed = true
-		next := []byte("synthetic second original raw intent, never sent")
-		err = journal.SaveRaw(chain.ExtrinsicHash(next), next)
+		err = journal.SaveRaw(chain.ExtrinsicHash(nextRaw), nextRaw)
 		if !called || !errors.Is(err, context.Canceled) || !errors.Is(err, chain.ErrJournalUncertain) {
 			t.Fatal("actual raw barrier did not retain uncertainty", called, err)
 		}
@@ -252,7 +263,7 @@ func newStoragePreparationRestoreFixture(t *testing.T, ownerLocal bool, pending 
 	target.requestHash = durablefixture.Digest(requestRaw)
 	target.ctx = durablepath.WithHost(target.ctx, &storagePreparationRestoreHost{Host: target.storage.Host, source: source.storage.Host})
 	return &storagePreparationRestoreFixture{source: source, target: target, command: command, archive: archive, reportPath: reportPath, report: report, original: original,
-		rawName: strings.TrimPrefix(hash.Hex(), "0x") + ".scale", raw: raw, ownerLocal: ownerLocal}
+		rawName: strings.TrimPrefix(hash.Hex(), "0x") + ".scale", raw: raw, pendingRaw: nextRaw, ownerLocal: ownerLocal}
 }
 
 // The actual apply dispatcher returns an offline declaration, never restart.
