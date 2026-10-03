@@ -4472,3 +4472,6 @@ The [common hardening source preview](evidence/hardening-composition-source-prev
 
 
 The [StatsProvider original failure](evidence/server-stats-original-failure-20261003.json) is the tenth current full-model failure and the seventh shared-balance assertion affected by asynchronous journal application. Its complete excerpt remains separate from the earlier six-test bundle. It was already included in the combined4754 ten-affected/six-neighbor scope; retain that batch and require actual public debit flushing/replay before raw-balance assertions. No correction pass is established yet.
+
+
+The [final Claim source review](evidence/claim-final-source-review-20261003.json) verifies fifty-two changed Git bindings, fifty-one physical intake bindings and sixty-five exact test declarations (forty-four primary plus twenty-one compatibility roots). The common source preserves all reviewed Claim files except the explicitly resolved replay-test fixture. Keep the fourteen operative control groups and the native/repair/lineage scopes in the combined qualification. This source remains uncompiled and unqualified; official dependency packaging, behavioral execution, actual upload contention and production authority are still required.
