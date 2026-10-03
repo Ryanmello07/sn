@@ -98,6 +98,19 @@ now pass on exact `d3c84fe3` with the pinned workspace dependencies. The origina
 `1982267c` panic control and the broader public ledger-restore adapter remain
 separate pending scopes. No live restoration is established.
 
+Physical restore must inspect identity embedded inside owner data, as well as
+outer custody attributes. The immutable-member census contains original inode
+fields: rebinding only its snapshot attribute leaves an unusable restored owner.
+Keep original signed member bytes and the original archive intact. Derive only
+unsigned physical census fields from reviewed staging descriptors, retain both
+census digests and the derivation lineage, and publish those same staged inodes
+with a no-replace move. Qualify interruption on both sides of the move and
+publication, including directory fsync and repeated exact reconciliation.
+For shared roots, prove the complete union of overlapping owners' files and
+heads; filtering an inconvenient overlap must not produce a false complete
+restore. Astra is implementing this separate increment; current scoped ledger
+and raw-restore receipts do not close immutable-member or multi-owner restore.
+
 The [current preparation state](MAINNET.md#current-preparation-state--october-2)
 distinguishes integrated source fixes, qualified candidates and the remaining
 production work. All 28 hardening lessons and ten production gates retain their
