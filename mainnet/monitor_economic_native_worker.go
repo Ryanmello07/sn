@@ -30,10 +30,13 @@ var monitorEconomicNativeStatusCodes = map[string]int{
 }
 
 type monitorEconomicNativeCheckpoint struct {
-	Schema      string                     `json:"schema"`
-	PolicyHash  string                     `json:"policy_hash"`
-	State       monitorEconomicNativeState `json:"state"`
-	ContentHash string                     `json:"content_hash"`
+	Schema            string                          `json:"schema"`
+	PolicyHash        string                          `json:"policy_hash"`
+	RuntimeCatalog    []monitorEconomicRuntimeEntry   `json:"runtime_catalog,omitempty"`
+	RuntimeCapacity   *monitorEconomicRuntimeCapacity `json:"runtime_capacity,omitempty"`
+	ReadBudgetSeconds *uint64                         `json:"read_budget_seconds,omitempty"`
+	State             monitorEconomicNativeState      `json:"state"`
+	ContentHash       string                          `json:"content_hash"`
 }
 
 func (self monitorEconomicNativeCheckpoint) hash() string {
@@ -42,12 +45,37 @@ func (self monitorEconomicNativeCheckpoint) hash() string {
 }
 
 type monitorEconomicNativeWorker struct {
-	policy     monitorEconomicNativePolicy
-	checkpoint *monitorCheckpointStore
-	metrics    *monitorMetricsStore
-	state      *monitorEconomicNativeState
-	client     *rpcClient
-	storage    monitorStorageRecovery
+	policy                 monitorEconomicNativePolicy
+	checkpoint             *monitorCheckpointStore
+	metrics                *monitorMetricsStore
+	state                  *monitorEconomicNativeState
+	client                 *rpcClient
+	storage                monitorStorageRecovery
+	runtimeAcknowledgement *monitorEconomicRuntimeAcknowledgement
+}
+
+// These settings describe an acknowledged checkpoint, not a config proposal.
+type monitorEconomicRuntimeAcknowledgement struct {
+	CatalogHash       string                         `json:"catalog_hash"`
+	Entries           int                            `json:"entries"`
+	Capacity          monitorEconomicRuntimeCapacity `json:"capacity"`
+	ReadBudgetSeconds uint64                         `json:"read_budget_seconds"`
+}
+
+func (self *monitorEconomicNativeWorker) acknowledgeRuntime(record monitorEconomicNativeCheckpoint) {
+	capacity := monitorEconomicRuntimeCapacity{Entries: 8, Bytes: 8 * 1024}
+	if record.RuntimeCapacity != nil {
+		capacity = *record.RuntimeCapacity
+	}
+	seconds := self.policy.ReadBudgetSeconds
+	if self.policy.ReadBudgetBasisSeconds != nil {
+		seconds = *self.policy.ReadBudgetBasisSeconds
+	}
+	seconds = monitorEconomicReadSeconds(seconds)
+	if record.ReadBudgetSeconds != nil {
+		seconds = *record.ReadBudgetSeconds
+	}
+	self.runtimeAcknowledgement = &monitorEconomicRuntimeAcknowledgement{CatalogHash: rootObjectHash(record.RuntimeCatalog), Entries: len(record.RuntimeCatalog), Capacity: capacity, ReadBudgetSeconds: seconds}
 }
 
 func openMonitorEconomicNativeWorker(ctx context.Context, client *rpcClient, policy monitorEconomicNativePolicy, expected identityExpectation, checkpoint, metrics string, hooks monitorServiceHooks) (*monitorEconomicNativeWorker, error) {
@@ -58,6 +86,20 @@ func openMonitorEconomicNativeWorker(ctx context.Context, client *rpcClient, pol
 		return nil, err
 	}
 	policy.Observation.FeePayers = append([]string(nil), policy.Observation.FeePayers...)
+	registration, generation := *policy.Observation.SubnetRegistrationBlock, *policy.Observation.SubnetGeneration
+	policy.Observation.SubnetRegistrationBlock, policy.Observation.SubnetGeneration = &registration, &generation
+	policy.RuntimeCatalog = append([]monitorEconomicRuntimeEntry(nil), policy.RuntimeCatalog...)
+	for i := range policy.RuntimeCatalog {
+		policy.RuntimeCatalog[i].Purposes = append([]string(nil), policy.RuntimeCatalog[i].Purposes...)
+	}
+	if policy.RuntimeCapacity != nil {
+		value := *policy.RuntimeCapacity
+		policy.RuntimeCapacity = &value
+	}
+	if policy.ReadBudgetBasisSeconds != nil {
+		value := *policy.ReadBudgetBasisSeconds
+		policy.ReadBudgetBasisSeconds = &value
+	}
 	checkpointPath, metricsPath := monitorEconomicNativePaths(checkpoint, metrics, policy.Role)
 	owner, err := openMonitorCheckpoint(checkpointPath, expected, ctx)
 	if err != nil {
@@ -76,10 +118,7 @@ func openMonitorEconomicNativeWorker(ctx context.Context, client *rpcClient, pol
 		owner.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(policy.Role, "checkpoint", file) }
 		worker.metrics.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(policy.Role, "metrics", file) }
 	}
-	seconds := policy.ReadBudgetSeconds
-	if seconds == 0 {
-		seconds = 300
-	}
+	seconds := monitorEconomicReadSeconds(policy.ReadBudgetSeconds)
 	worker.client, err = newRpcClient(client.url, time.Duration(seconds)*time.Second)
 	if err != nil {
 		return nil, errors.Join(err, worker.close(hooks))
@@ -127,12 +166,16 @@ func (self *monitorEconomicNativeWorker) load(ctx context.Context) (*monitorEcon
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return nil, errors.New("native economic checkpoint has trailing JSON")
 	}
-	if record.Schema != monitorEconomicNativeCheckpointSchema || record.PolicyHash != rootObjectHash(self.policy) || record.ContentHash != record.hash() {
+	if record.Schema != monitorEconomicNativeCheckpointSchema || record.PolicyHash != self.policy.identityHash() || record.ContentHash != record.hash() {
 		return nil, errors.New("native economic checkpoint differs from its retained policy or checksum")
+	}
+	if err := self.policy.retainsRuntimePolicy(record); err != nil {
+		return nil, err
 	}
 	if err := record.State.validate(self.policy); err != nil {
 		return nil, err
 	}
+	self.acknowledgeRuntime(record)
 	return &record.State, nil
 }
 
@@ -143,7 +186,9 @@ func (self *monitorEconomicNativeWorker) save(state *monitorEconomicNativeState)
 	if err := state.validate(self.policy); err != nil {
 		return err
 	}
-	record := monitorEconomicNativeCheckpoint{Schema: monitorEconomicNativeCheckpointSchema, PolicyHash: rootObjectHash(self.policy), State: *state}
+	capacity := self.policy.runtimeCapacity()
+	seconds := monitorEconomicReadSeconds(self.policy.ReadBudgetSeconds)
+	record := monitorEconomicNativeCheckpoint{Schema: monitorEconomicNativeCheckpointSchema, PolicyHash: self.policy.identityHash(), RuntimeCatalog: self.policy.RuntimeCatalog, RuntimeCapacity: &capacity, ReadBudgetSeconds: &seconds, State: *state}
 	record.ContentHash = record.hash()
 	raw, err := json.Marshal(record)
 	if err != nil {
@@ -152,7 +197,11 @@ func (self *monitorEconomicNativeWorker) save(state *monitorEconomicNativeState)
 	if len(raw)+1 > maxRpcReplyBytes {
 		return errMonitorEconomicCapacity
 	}
-	return errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner())
+	err = errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner())
+	if err == nil {
+		self.acknowledgeRuntime(record)
+	}
+	return err
 }
 
 func monitorEconomicNativeReadCode(err error) string {
@@ -171,27 +220,34 @@ func monitorEconomicNativeReadCode(err error) string {
 // Only this summary is exported. It does not emit unbounded retained history,
 // arbitrary source labels, or a numeric zero for unproved economic amounts.
 type monitorEconomicNativeSummary struct {
-	Cursor                      economicEmissionBoundary  `json:"cursor"`
-	PendingThrough              *economicEmissionBoundary `json:"pending_through,omitempty"`
-	Finalized                   *economicEmissionBoundary `json:"observed_finalized,omitempty"`
-	BatchCount                  uint64                    `json:"batch_count"`
-	BatchChainHash              string                    `json:"batch_chain_hash"`
-	ObservedAlpha               string                    `json:"observed_alpha"`
-	ObservedFeesRao             *string                   `json:"observed_fees_rao"`
-	FeePayerCount               int                       `json:"fee_payer_count"`
-	HistoryEntries              int                       `json:"history_entries"`
-	CapacityRemaining           uint64                    `json:"capacity_remaining"`
-	CapacityBytesRemaining      uint64                    `json:"capacity_bytes_remaining"`
-	SampleAt                    time.Time                 `json:"sample_at"`
-	LastReadAt                  time.Time                 `json:"last_read_at"`
-	LastProgressAt              time.Time                 `json:"last_progress_at"`
-	UnavailableSince            time.Time                 `json:"unavailable_since"`
-	Incidents                   uint64                    `json:"incidents"`
-	Authority                   string                    `json:"authority"`
-	NativeMinerAllocationAlpha  *string                   `json:"native_miner_allocation_alpha"`
-	ProviderEntitlementAlpha    *string                   `json:"provider_entitlement_alpha"`
-	OwnerRecycledAlpha          *string                   `json:"owner_recycled_alpha"`
-	ActualNativeOutcomeVerified bool                      `json:"actual_native_outcome_verified"`
+	ConfiguredRuntimeCatalogHash string                                 `json:"configured_runtime_catalog_hash"`
+	ConfiguredRuntimeEntries     int                                    `json:"configured_runtime_entries"`
+	ConfiguredRuntimeCapacity    monitorEconomicRuntimeCapacity         `json:"configured_runtime_capacity"`
+	ConfiguredReadBudgetSeconds  uint64                                 `json:"configured_read_budget_seconds"`
+	RuntimeAcknowledgement       *monitorEconomicRuntimeAcknowledgement `json:"runtime_acknowledgement"`
+	LastExecutionRuntime         *rootReceiptProfile                    `json:"last_execution_runtime,omitempty"`
+	LastPostStateRuntime         *rootReceiptProfile                    `json:"last_post_state_runtime,omitempty"`
+	Cursor                       economicEmissionBoundary               `json:"cursor"`
+	PendingThrough               *economicEmissionBoundary              `json:"pending_through,omitempty"`
+	Finalized                    *economicEmissionBoundary              `json:"observed_finalized,omitempty"`
+	BatchCount                   uint64                                 `json:"batch_count"`
+	BatchChainHash               string                                 `json:"batch_chain_hash"`
+	ObservedAlpha                string                                 `json:"observed_alpha"`
+	ObservedFeesRao              *string                                `json:"observed_fees_rao"`
+	FeePayerCount                int                                    `json:"fee_payer_count"`
+	HistoryEntries               int                                    `json:"history_entries"`
+	CapacityRemaining            uint64                                 `json:"capacity_remaining"`
+	CapacityBytesRemaining       uint64                                 `json:"capacity_bytes_remaining"`
+	SampleAt                     time.Time                              `json:"sample_at"`
+	LastReadAt                   time.Time                              `json:"last_read_at"`
+	LastProgressAt               time.Time                              `json:"last_progress_at"`
+	UnavailableSince             time.Time                              `json:"unavailable_since"`
+	Incidents                    uint64                                 `json:"incidents"`
+	Authority                    string                                 `json:"authority"`
+	NativeMinerAllocationAlpha   *string                                `json:"native_miner_allocation_alpha"`
+	ProviderEntitlementAlpha     *string                                `json:"provider_entitlement_alpha"`
+	OwnerRecycledAlpha           *string                                `json:"owner_recycled_alpha"`
+	ActualNativeOutcomeVerified  bool                                   `json:"actual_native_outcome_verified"`
 }
 
 func (self *monitorEconomicNativeState) summary(policy monitorEconomicNativePolicy) monitorEconomicNativeSummary {
@@ -200,11 +256,17 @@ func (self *monitorEconomicNativeState) summary(policy monitorEconomicNativePoli
 		value := self.ObservedFeesRao
 		fees = &value
 	}
-	return monitorEconomicNativeSummary{Cursor: self.Cursor, PendingThrough: self.PendingThrough, Finalized: self.Finalized, BatchCount: self.BatchCount, BatchChainHash: self.BatchChainHash,
+	return monitorEconomicNativeSummary{ConfiguredRuntimeCatalogHash: rootObjectHash(policy.RuntimeCatalog), ConfiguredRuntimeEntries: len(policy.RuntimeCatalog), ConfiguredRuntimeCapacity: policy.runtimeCapacity(), ConfiguredReadBudgetSeconds: monitorEconomicReadSeconds(policy.ReadBudgetSeconds), LastExecutionRuntime: self.LastExecutionRuntime, LastPostStateRuntime: self.LastPostStateRuntime, Cursor: self.Cursor, PendingThrough: self.PendingThrough, Finalized: self.Finalized, BatchCount: self.BatchCount, BatchChainHash: self.BatchChainHash,
 		ObservedAlpha: self.ObservedAlpha, ObservedFeesRao: fees, FeePayerCount: len(policy.Observation.FeePayers),
 		HistoryEntries: len(self.History), CapacityRemaining: self.CapacityRemaining, CapacityBytesRemaining: self.CapacityBytesRemaining,
 		SampleAt: self.SampleAt, LastReadAt: self.LastReadAt, LastProgressAt: self.LastProgressAt, UnavailableSince: self.UnavailableSince,
 		Incidents: self.Incidents, Authority: "owned-rpc-assertion"}
+}
+
+func (self *monitorEconomicNativeWorker) summary() monitorEconomicNativeSummary {
+	summary := self.state.summary(self.policy)
+	summary.RuntimeAcknowledgement = self.runtimeAcknowledgement
+	return summary
 }
 
 func renderMonitorEconomicNativeMetrics(policy monitorEconomicNativePolicy, state *monitorEconomicNativeState, code string, current, checkpointCurrent bool, now time.Time) []byte {
@@ -221,6 +283,8 @@ func renderMonitorEconomicNativeMetrics(policy monitorEconomicNativePolicy, stat
 		return value.Unix()
 	}
 	stalled := !state.LastProgressAt.IsZero() && now.Sub(state.LastProgressAt) >= time.Duration(policy.StallSeconds)*time.Second
+	catalog, _ := json.Marshal(policy.RuntimeCatalog)
+	capacity := policy.runtimeCapacity()
 	var output strings.Builder
 	for _, metric := range []struct {
 		name  string
@@ -239,6 +303,12 @@ func renderMonitorEconomicNativeMetrics(policy monitorEconomicNativePolicy, stat
 		{name: "fee_observation_known", value: flag(len(policy.Observation.FeePayers) != 0 && state.BatchCount != 0)},
 		{name: "native_allocation_known", value: 0}, {name: "provider_entitlement_known", value: 0}, {name: "owner_recycling_known", value: 0},
 		{name: "actual_native_outcome_verified", value: 0},
+		{name: "runtime_catalog_entries", value: len(policy.RuntimeCatalog)},
+		{name: "runtime_catalog_bytes", value: len(catalog)},
+		{name: "runtime_catalog_entry_capacity", value: capacity.Entries},
+		{name: "runtime_catalog_byte_capacity", value: capacity.Bytes},
+		{name: "runtime_catalog_capacity_warning", value: flag(uint64(len(policy.RuntimeCatalog))*5 >= capacity.Entries*4 || uint64(len(catalog))*5 >= capacity.Bytes*4)},
+		{name: "configured_read_budget_seconds", value: monitorEconomicReadSeconds(policy.ReadBudgetSeconds)},
 	} {
 		fmt.Fprintf(&output, "sn_mainnet_native_economic_%s{role=%q} %v\n", metric.name, policy.Role, metric.value)
 	}
@@ -266,6 +336,7 @@ func (self *monitorEconomicNativeWorker) resume(ctx context.Context, hooks monit
 		}
 		owner.syncDirectory = prior.syncDirectory
 		self.checkpoint, self.state = owner, state
+		self.runtimeAcknowledgement = candidate.runtimeAcknowledgement
 		return nil
 	}, hooks)
 }
@@ -348,7 +419,7 @@ func (self *monitorEconomicNativeWorker) run(ctx context.Context, interval time.
 			State             monitorEconomicNativeSummary `json:"state"`
 			Issue             string                       `json:"issue,omitempty"`
 		}{Schema: "urnetwork-mainnet-native-economic-event-v1", Role: self.policy.Role, Status: code,
-			Current: current, CheckpointCurrent: checkpointErr == nil, MetricsCurrent: metricsErr == nil, State: self.state.summary(self.policy), Issue: issue}
+			Current: current, CheckpointCurrent: checkpointErr == nil, MetricsCurrent: metricsErr == nil, State: self.summary(), Issue: issue}
 		if err := json.NewEncoder(stdout).Encode(event); err != nil {
 			if ctx.Err() != nil {
 				return 0

@@ -21,13 +21,16 @@ const maximumMonitorEconomicBytes = 768 * 1024
 // Observation supplies an independently reviewed chain/runtime/generation and
 // first window. Later windows start at the retained cursor and remain bounded.
 type monitorEconomicNativePolicy struct {
-	Role               string                 `json:"role"`
-	Observation        economicEmissionPolicy `json:"observation"`
-	BatchBlocks        uint64                 `json:"batch_blocks"`
-	HistoryEntries     uint64                 `json:"history_entries"`
-	StallSeconds       uint64                 `json:"stall_seconds"`
-	ReadBudgetSeconds  uint64                 `json:"read_budget_seconds,omitempty"`
-	HistoricalFinality string                 `json:"historical_finality"`
+	Role                   string                          `json:"role"`
+	RuntimeCatalog         []monitorEconomicRuntimeEntry   `json:"runtime_catalog,omitempty"`
+	RuntimeCapacity        *monitorEconomicRuntimeCapacity `json:"runtime_capacity,omitempty"`
+	Observation            economicEmissionPolicy          `json:"observation"`
+	BatchBlocks            uint64                          `json:"batch_blocks"`
+	HistoryEntries         uint64                          `json:"history_entries"`
+	StallSeconds           uint64                          `json:"stall_seconds"`
+	ReadBudgetSeconds      uint64                          `json:"read_budget_seconds,omitempty"`
+	ReadBudgetBasisSeconds *uint64                         `json:"read_budget_basis_seconds,omitempty"`
+	HistoricalFinality     string                          `json:"historical_finality"`
 }
 
 func (self monitorEconomicNativePolicy) validate(expected identityExpectation) error {
@@ -47,7 +50,7 @@ func (self monitorEconomicNativePolicy) validate(expected identityExpectation) e
 	if network.NativeChain != expected.NativeChain || network.GenesisHash != expected.GenesisHash || network.EvmChainId != expected.EvmChainId {
 		return errors.New("native economic role differs from independently configured monitor network")
 	}
-	return nil
+	return self.validateCatalog()
 }
 
 func monitorEconomicNativePaths(checkpoint, metrics, role string) (string, string) {
@@ -58,11 +61,13 @@ func monitorEconomicNativePaths(checkpoint, metrics, role string) (string, strin
 // hash. Cursor-only blocks contribute to the chained batch digest, not an
 // invented financial event. This is a bounded observation record, not finality.
 type monitorEconomicNativeEvent struct {
-	Block      economicEmissionBoundary      `json:"block"`
-	EventsHash string                        `json:"events_hash"`
-	Incentive  *economicEmissionEvent        `json:"incentive,omitempty"`
-	Fee        *economicNativeFee            `json:"fee,omitempty"`
-	Context    *economicEmissionContextEvent `json:"context,omitempty"`
+	ExecutionRuntime *rootReceiptProfile           `json:"execution_runtime,omitempty"`
+	PostStateRuntime *rootReceiptProfile           `json:"post_state_runtime,omitempty"`
+	Block            economicEmissionBoundary      `json:"block"`
+	EventsHash       string                        `json:"events_hash"`
+	Incentive        *economicEmissionEvent        `json:"incentive,omitempty"`
+	Fee              *economicNativeFee            `json:"fee,omitempty"`
+	Context          *economicEmissionContextEvent `json:"context,omitempty"`
 }
 
 func (self monitorEconomicNativeEvent) index() uint64 {
@@ -79,6 +84,9 @@ func (self monitorEconomicNativeEvent) index() uint64 {
 }
 
 type monitorEconomicNativeState struct {
+	RuntimeBoundFrom       uint64                       `json:"runtime_bound_from,omitempty"`
+	LastExecutionRuntime   *rootReceiptProfile          `json:"last_execution_runtime,omitempty"`
+	LastPostStateRuntime   *rootReceiptProfile          `json:"last_post_state_runtime,omitempty"`
 	Cursor                 economicEmissionBoundary     `json:"cursor"`
 	PendingThrough         *economicEmissionBoundary    `json:"pending_through,omitempty"`
 	Finalized              *economicEmissionBoundary    `json:"observed_finalized,omitempty"`
@@ -98,7 +106,7 @@ type monitorEconomicNativeState struct {
 }
 
 func newMonitorEconomicNativeState(policy monitorEconomicNativePolicy) *monitorEconomicNativeState {
-	return &monitorEconomicNativeState{Cursor: policy.Observation.From, BatchChainHash: rootObjectHash(policy), ObservedAlpha: "0", ObservedFeesRao: "0", History: []monitorEconomicNativeEvent{}, Status: "starting", CapacityRemaining: policy.HistoryEntries, CapacityBytesRemaining: maximumMonitorEconomicBytes - 2}
+	return &monitorEconomicNativeState{Cursor: policy.Observation.From, BatchChainHash: policy.identityHash(), ObservedAlpha: "0", ObservedFeesRao: "0", History: []monitorEconomicNativeEvent{}, Status: "starting", CapacityRemaining: policy.HistoryEntries, CapacityBytesRemaining: maximumMonitorEconomicBytes - 2}
 }
 
 func monitorEconomicInteger(value string) (*big.Int, error) {
@@ -113,7 +121,7 @@ func (self *monitorEconomicNativeState) validate(policy monitorEconomicNativePol
 	if self.Cursor.Number < policy.Observation.From.Number || self.Cursor.Number > math.MaxUint32 || !rootCanonicalHash(self.Cursor.Hash) || !planSha256(self.BatchChainHash) || len(self.History) > int(policy.HistoryEntries) || self.CapacityRemaining != policy.HistoryEntries-uint64(len(self.History)) {
 		return errors.New("native economic cursor or history exceeds its retained policy")
 	}
-	if self.BatchCount == 0 && (self.Cursor != policy.Observation.From || self.BatchChainHash != rootObjectHash(policy) || len(self.History) != 0 || self.ObservedAlpha != "0" || self.ObservedFeesRao != "0") {
+	if self.BatchCount == 0 && (self.Cursor != policy.Observation.From || self.BatchChainHash != policy.identityHash() || len(self.History) != 0 || self.ObservedAlpha != "0" || self.ObservedFeesRao != "0") {
 		return errors.New("native economic initial cursor was replaced")
 	}
 	if self.PendingThrough != nil && (self.PendingThrough.Number <= self.Cursor.Number || self.PendingThrough.Number-self.Cursor.Number > policy.BatchBlocks || !rootCanonicalHash(self.PendingThrough.Hash)) {
@@ -126,6 +134,13 @@ func (self *monitorEconomicNativeState) validate(policy monitorEconomicNativePol
 		if _, err := monitorEconomicInteger(amount); err != nil {
 			return err
 		}
+	}
+	if self.RuntimeBoundFrom != 0 {
+		if self.RuntimeBoundFrom <= policy.Observation.From.Number || self.RuntimeBoundFrom > self.Cursor.Number || self.LastExecutionRuntime == nil || self.LastPostStateRuntime == nil || !slices.Contains(policy.profiles(), *self.LastExecutionRuntime) || !slices.Contains(policy.profiles(), *self.LastPostStateRuntime) {
+			return errors.New("native economic retained runtime context changed")
+		}
+	} else if self.LastExecutionRuntime != nil || self.LastPostStateRuntime != nil {
+		return errors.New("native economic retained runtime context has no original boundary")
 	}
 	seen := map[string]bool{}
 	alpha, fees := new(big.Int), new(big.Int)
@@ -141,6 +156,13 @@ func (self *monitorEconomicNativeState) validate(policy monitorEconomicNativePol
 		}
 		if item.Block.Number <= policy.Observation.From.Number || item.Block.Number < previous || item.Block.Number > self.Cursor.Number || !rootCanonicalHash(item.Block.Hash) || !rootCanonicalHash(item.EventsHash) || kinds != 1 {
 			return errors.New("native economic retained event has no original position")
+		}
+		if self.RuntimeBoundFrom != 0 && item.Block.Number >= self.RuntimeBoundFrom {
+			if item.ExecutionRuntime == nil || item.PostStateRuntime == nil || !slices.Contains(policy.profiles(), *item.ExecutionRuntime) || !slices.Contains(policy.profiles(), *item.PostStateRuntime) {
+				return errors.New("native economic retained event lost its execution or post-state artifact")
+			}
+		} else if item.ExecutionRuntime != nil || item.PostStateRuntime != nil {
+			return errors.New("native economic legacy event was relabeled with a new artifact")
 		}
 		index := item.index()
 		if item.Block.Number == self.Cursor.Number && item.Block.Hash != self.Cursor.Hash {
@@ -224,7 +246,7 @@ func (self *monitorEconomicNativeState) validate(policy monitorEconomicNativePol
 func observeMonitorEconomicNative(ctx context.Context, client *rpcClient, policy monitorEconomicNativePolicy, state *monitorEconomicNativeState) (*economicEmissionObservation, error) {
 	ctx, cancel := context.WithTimeout(ctx, client.retryWindow)
 	defer cancel()
-	chain, err := newRootCanonicalChain(client, identityExpectation{NativeChain: policy.Observation.Network.NativeChain, GenesisHash: policy.Observation.Network.GenesisHash, EvmChainId: policy.Observation.Network.EvmChainId}, []rootReceiptProfile{policy.Observation.Runtime})
+	chain, err := newRootCanonicalChainBounded(client, identityExpectation{NativeChain: policy.Observation.Network.NativeChain, GenesisHash: policy.Observation.Network.GenesisHash, EvmChainId: policy.Observation.Network.EvmChainId}, policy.profiles(), 64, 2)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +320,7 @@ func observeMonitorEconomicNative(ctx context.Context, client *rpcClient, policy
 				return nil, err
 			}
 		}
-		observation, err := observeEconomicEmissionPage(ctx, client, window, rootObjectHash(window), true)
+		observation, err := observeEconomicEmissionCatalog(ctx, client, window, rootObjectHash(window), true, policy.RuntimeCatalog, true)
 		if err == nil {
 			if !observation.Complete || observation.Policy.From != state.Cursor || observation.Policy.Through != window.Through || uint64(len(observation.Blocks)) != width {
 				return nil, errors.Join(errRpcIntegrity, errors.New("native economic batch is incomplete or changed its requested range"))
@@ -344,9 +366,16 @@ func (self *monitorEconomicNativeState) append(policy monitorEconomicNativePolic
 		if block.Boundary.Number != cursor.Number+1 || block.Header.ParentHash != cursor.Hash {
 			return nil, errors.Join(errRpcIntegrity, errors.New("native economic batch skipped its original predecessor"))
 		}
+		if block.ExecutionRuntime == nil || block.PostStateRuntime == nil {
+			return nil, errors.New("native economic completed block lacks runtime read context")
+		}
+		if next.RuntimeBoundFrom == 0 {
+			next.RuntimeBoundFrom = block.Boundary.Number
+		}
+		next.LastExecutionRuntime, next.LastPostStateRuntime = block.ExecutionRuntime, block.PostStateRuntime
 		items := make([]monitorEconomicNativeEvent, 0, len(block.Events)+len(block.Fees)+len(block.ContextEvents))
 		for _, event := range block.Events {
-			items = append(items, monitorEconomicNativeEvent{Block: block.Boundary, EventsHash: block.EventsHash, Incentive: &event})
+			items = append(items, monitorEconomicNativeEvent{Block: block.Boundary, EventsHash: block.EventsHash, ExecutionRuntime: block.ExecutionRuntime, PostStateRuntime: block.PostStateRuntime, Incentive: &event})
 			if event.Kind == "SubtensorModule.IncentiveAlphaEmittedToMiners" {
 				amount, err := monitorEconomicInteger(event.TotalAlpha)
 				if err != nil {
@@ -356,7 +385,7 @@ func (self *monitorEconomicNativeState) append(policy monitorEconomicNativePolic
 			}
 		}
 		for _, fee := range block.Fees {
-			items = append(items, monitorEconomicNativeEvent{Block: block.Boundary, EventsHash: block.EventsHash, Fee: &fee})
+			items = append(items, monitorEconomicNativeEvent{Block: block.Boundary, EventsHash: block.EventsHash, ExecutionRuntime: block.ExecutionRuntime, PostStateRuntime: block.PostStateRuntime, Fee: &fee})
 			amount, err := monitorEconomicInteger(fee.ActualFeeRao)
 			if err != nil {
 				return nil, err
@@ -364,7 +393,7 @@ func (self *monitorEconomicNativeState) append(policy monitorEconomicNativePolic
 			fees.Add(fees, amount)
 		}
 		for _, event := range block.ContextEvents {
-			items = append(items, monitorEconomicNativeEvent{Block: block.Boundary, EventsHash: block.EventsHash, Context: &event})
+			items = append(items, monitorEconomicNativeEvent{Block: block.Boundary, EventsHash: block.EventsHash, ExecutionRuntime: block.ExecutionRuntime, PostStateRuntime: block.PostStateRuntime, Context: &event})
 		}
 		slices.SortFunc(items, func(a, b monitorEconomicNativeEvent) int {
 			if a.index() < b.index() {

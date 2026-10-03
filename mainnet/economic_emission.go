@@ -133,6 +133,8 @@ type economicEmissionDenominator struct {
 // Headers and complete raw events are retained even if a later read fails.
 // A block's event execution uses the approved parent runtime, not a later tip.
 type economicEmissionBlock struct {
+	ExecutionRuntime *rootReceiptProfile            `json:"execution_runtime,omitempty"`
+	PostStateRuntime *rootReceiptProfile            `json:"post_state_runtime,omitempty"`
 	Boundary         economicEmissionBoundary       `json:"boundary"`
 	Header           rootReceiptHeader              `json:"header"`
 	BodyCount        int                            `json:"body_count"`
@@ -150,36 +152,37 @@ type economicEmissionBlock struct {
 // Complete means the explicit archive range was read and rechecked. It never
 // means the economic target, denominator, payment or finality authority passed.
 type economicEmissionObservation struct {
-	Schema                      string                    `json:"schema"`
-	PolicyHash                  string                    `json:"policy_hash"`
-	Policy                      economicEmissionPolicy    `json:"policy"`
-	Status                      string                    `json:"status"`
-	Complete                    bool                      `json:"complete"`
-	FinalityAuthority           string                    `json:"finality_authority"`
-	RuntimeSourceProven         bool                      `json:"runtime_source_proven"`
-	IndependentStorageProof     bool                      `json:"independent_storage_proof"`
-	Finalized                   economicEmissionBoundary  `json:"observed_finalized"`
-	FinalizedHeader             *rootReceiptHeader        `json:"finalized_header"`
-	Ancestry                    []rootReceiptHeader       `json:"ancestry"`
-	ClosingFinalized            economicEmissionBoundary  `json:"closing_finalized"`
-	ClosingAncestry             []rootReceiptHeader       `json:"closing_ancestry"`
-	HistoricalFinality          string                    `json:"historical_finality,omitempty"`
-	RangeAncestry               []rootReceiptHeader       `json:"range_ancestry,omitempty"`
-	ClosingFinalizedHeader      *rootReceiptHeader        `json:"closing_finalized_header,omitempty"`
-	RequestedThrough            *economicEmissionBoundary `json:"requested_through,omitempty"`
-	MetadataHex                 string                    `json:"metadata_hex"`
-	InitialState                *economicEmissionState    `json:"initial_state"`
-	Blocks                      []economicEmissionBlock   `json:"blocks"`
-	AttemptedBlock              *economicEmissionBlock    `json:"attempted_block,omitempty"`
-	ObservedIncentiveTotalAlpha string                    `json:"observed_incentive_total_alpha"`
-	NativeMinerAllocationAlpha  *string                   `json:"native_miner_allocation_alpha"`
-	ProviderEntitlementAlpha    *string                   `json:"provider_entitlement_alpha"`
-	OwnerRecycledAlpha          *string                   `json:"owner_recycled_alpha"`
-	QuantizationToleranceAlpha  *string                   `json:"quantization_tolerance_alpha"`
-	TargetMet                   *bool                     `json:"target_met"`
-	ActualNativeOutcomeVerified bool                      `json:"actual_native_outcome_verified"`
-	ActivationReady             bool                      `json:"activation_ready"`
-	Issue                       string                    `json:"issue,omitempty"`
-	Blockers                    []string                  `json:"economic_blockers"`
-	ContentHash                 string                    `json:"content_hash"`
+	RuntimeCatalog              []monitorEconomicRuntimeEntry `json:"runtime_catalog,omitempty"`
+	Schema                      string                        `json:"schema"`
+	PolicyHash                  string                        `json:"policy_hash"`
+	Policy                      economicEmissionPolicy        `json:"policy"`
+	Status                      string                        `json:"status"`
+	Complete                    bool                          `json:"complete"`
+	FinalityAuthority           string                        `json:"finality_authority"`
+	RuntimeSourceProven         bool                          `json:"runtime_source_proven"`
+	IndependentStorageProof     bool                          `json:"independent_storage_proof"`
+	Finalized                   economicEmissionBoundary      `json:"observed_finalized"`
+	FinalizedHeader             *rootReceiptHeader            `json:"finalized_header"`
+	Ancestry                    []rootReceiptHeader           `json:"ancestry"`
+	ClosingFinalized            economicEmissionBoundary      `json:"closing_finalized"`
+	ClosingAncestry             []rootReceiptHeader           `json:"closing_ancestry"`
+	HistoricalFinality          string                        `json:"historical_finality,omitempty"`
+	RangeAncestry               []rootReceiptHeader           `json:"range_ancestry,omitempty"`
+	ClosingFinalizedHeader      *rootReceiptHeader            `json:"closing_finalized_header,omitempty"`
+	RequestedThrough            *economicEmissionBoundary     `json:"requested_through,omitempty"`
+	MetadataHex                 string                        `json:"metadata_hex"`
+	InitialState                *economicEmissionState        `json:"initial_state"`
+	Blocks                      []economicEmissionBlock       `json:"blocks"`
+	AttemptedBlock              *economicEmissionBlock        `json:"attempted_block,omitempty"`
+	ObservedIncentiveTotalAlpha string                        `json:"observed_incentive_total_alpha"`
+	NativeMinerAllocationAlpha  *string                       `json:"native_miner_allocation_alpha"`
+	ProviderEntitlementAlpha    *string                       `json:"provider_entitlement_alpha"`
+	OwnerRecycledAlpha          *string                       `json:"owner_recycled_alpha"`
+	QuantizationToleranceAlpha  *string                       `json:"quantization_tolerance_alpha"`
+	TargetMet                   *bool                         `json:"target_met"`
+	ActualNativeOutcomeVerified bool                          `json:"actual_native_outcome_verified"`
+	ActivationReady             bool                          `json:"activation_ready"`
+	Issue                       string                        `json:"issue,omitempty"`
+	Blockers                    []string                      `json:"economic_blockers"`
+	ContentHash                 string                        `json:"content_hash"`
 }
