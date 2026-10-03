@@ -25,11 +25,19 @@ fn wasm(imports: &str, body: &str) -> Vec<u8> {
     let version = RuntimeVersion {
         spec_name: Cow::Borrowed("synthetic-historical-runtime"),
         spec_version: 1,
+        apis: Cow::Owned(vec![(sp_core::hashing::blake2_64(b"Core"), 4)]),
         transaction_version: 1,
         system_version: 1,
         ..RuntimeVersion::default()
     }
     .encode();
+    // The pinned SDK selects the SCALE layout from the advertised Core API.
+    // Check the fixture before it enters the production replay decoder.
+    let mut encoded_version = version.as_slice();
+    let decoded_version = RuntimeVersion::decode(&mut encoded_version)
+        .expect("synthetic Core4 runtime version decodes");
+    assert!(encoded_version.is_empty());
+    assert_eq!(decoded_version.encode(), version);
     let escaped = version
         .iter()
         .map(|byte| format!("\\{byte:02x}"))
