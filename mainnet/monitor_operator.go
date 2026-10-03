@@ -635,6 +635,9 @@ func openMonitorOperatorWorker(ctx context.Context, policy monitorOperatorPolicy
 		return nil, errors.Join(err, checkpoint.owner.close())
 	}
 	worker.metrics = metrics
+	if hooks.afterCheckpointOpen != nil {
+		hooks.afterCheckpointOpen(ctx, policy.Role, checkpoint.owner.lock)
+	}
 	if err := worker.load(ctx); err != nil {
 		return nil, errors.Join(err, metrics.close(), checkpoint.owner.close())
 	}

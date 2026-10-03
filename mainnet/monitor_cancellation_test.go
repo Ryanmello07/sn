@@ -1,0 +1,159 @@
+// Cancellation barriers run after actual physical admission, never in place
+// of custody checks. Hard causes and close failures retain their own authority.
+package main
+
+import (
+	"context"
+	"errors"
+	"os"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/urnetwork/connect/durablevolume"
+)
+
+func TestMonitorEconomicEvmPublicCancellationDuringChainCheckpointLoad(t *testing.T) {
+	fixture := newMonitorEvmFixture(t, "settlement-vault", false)
+	entered := make(chan struct{})
+	evmExit := make(chan int, 1)
+	run := fixture.start(t, monitorServiceHooks{afterCheckpointOpen: func(ctx context.Context, role string, file *os.File) {
+		if role != "chain" {
+			return
+		}
+		if file == nil {
+			panic("checkpoint barrier ran without a retained file")
+		}
+		close(entered)
+		<-ctx.Done()
+	}, afterWorker: func(role string, exit int) {
+		if role == fixture.policy.Role {
+			evmExit <- exit
+		}
+	}})
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("chain checkpoint did not reach actual admitted descriptor barrier")
+	}
+	if event := run.next(t); !event.Current || event.State.Cursor.Number != 13 {
+		t.Fatal("independent EVM role did not complete while chain load waited", event)
+	}
+	run.stop(t)
+	if exit := <-evmExit; exit != 0 || run.exit != 0 {
+		t.Fatal("canceled retained chain load became a terminal custody failure", exit, run.exit, run.diagnostic.String())
+	}
+	record := fixture.record(t)
+	if record.State.Cursor.Number != 13 || record.State.Snapshot == nil || record.State.Snapshot.Counters["totalPaid"] != "15" {
+		t.Fatal("joined cancellation lost completed independent economic evidence", record)
+	}
+}
+
+func TestMonitorCheckpointCancellationRetainsHardCausePrecedence(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	if monitorCanceledCheckpointLoad(ctx, context.DeadlineExceeded) || monitorCanceledCheckpointLoad(ctx, context.Canceled) {
+		t.Fatal("active owner treated attempt timeout as joined cancellation")
+	}
+	cancel()
+	if !monitorCanceledCheckpointLoad(ctx, context.Canceled) {
+		t.Fatal("actual owner cancellation was not recognized")
+	}
+	for _, hard := range []error{syscall.EIO, durablevolume.ErrIdentity, errRpcIntegrity, errRpcIdentityMismatch, &monitorOutputOwnershipError{reason: "synthetic proven named replacement"}} {
+		if monitorCanceledCheckpointLoad(ctx, errors.Join(context.Canceled, hard)) {
+			t.Fatal("cancellation erased an independently observed hard cause", hard)
+		}
+	}
+	if monitorCanceledCheckpointLoad(ctx, errors.New("checkpoint checksum differs")) {
+		t.Fatal("parent cancellation erased malformed retained checkpoint")
+	}
+}
+
+func TestMonitorEconomicEvmPublicAdjacentAdmissionCancellationJoinsOwners(t *testing.T) {
+	for _, kind := range []string{"validator", "provider", "claim", "evm"} {
+		fixture := newMonitorEvmFixture(t, "settlement-vault", true)
+		role := "validator-a"
+		switch kind {
+		case "provider":
+			value := monitorProviderTestValue(fixture.services.clock.now())
+			policy := monitorProviderTestPolicy(value, "https://synthetic.invalid/provider-progress")
+			fixture.services.policy.Providers = []monitorProviderPolicy{policy}
+			role = policy.Role
+			path, _ := monitorProviderPaths(fixture.services.checkpointPath, fixture.services.metricsPath, role)
+			provisionMonitorTestCustody(t, path)
+		case "claim":
+			value := monitorClaimTestValue(fixture.services.clock.now())
+			policy := monitorClaimPolicy{Role: "claim-a", Endpoint: "https://synthetic.invalid/claim-progress", ExpectedMember: value.Member, ExpectedPool: *value.DeclaredPool, FreshnessSeconds: 60, Epochs: []monitorClaimEpochPolicy{{Epoch: 7, ShareBps: 5000, AcceptBy: fixture.services.clock.now().Add(time.Hour).Format(time.RFC3339Nano)}}}
+			fixture.services.policy.Claims = []monitorClaimPolicy{policy}
+			role = policy.Role
+			path, _ := monitorClaimPaths(fixture.services.checkpointPath, fixture.services.metricsPath, role)
+			provisionMonitorTestCustody(t, path)
+		case "evm":
+			role = fixture.policy.Role
+		}
+		entered := make(chan struct{})
+		closes := make(chan string, 16)
+		run := fixture.start(t, monitorServiceHooks{afterCheckpointOpen: func(ctx context.Context, opened string, file *os.File) {
+			if opened == role {
+				if file == nil {
+					panic("admission barrier ran without actual owner")
+				}
+				close(entered)
+				<-ctx.Done()
+			}
+		}, afterClose: func(closedRole, owner string, _ *os.File) error {
+			if closedRole == role {
+				closes <- owner
+			}
+			return nil
+		}})
+		select {
+		case <-entered:
+		case <-time.After(10 * time.Second):
+			t.Fatal("adjacent role did not admit real checkpoint", kind)
+		}
+		run.stop(t)
+		if run.exit != 0 || len(closes) != 2 {
+			t.Fatal("canceled adjacent admission was fatal or left owners unjoined", kind, run.exit, len(closes), run.diagnostic.String())
+		}
+		select {
+		case event := <-run.sink.events:
+			t.Fatal("canceled role admission invented an economic sample", kind, event)
+		default:
+		}
+	}
+}
+
+func TestMonitorNativePublicAdmissionCancellationKeepsCloseFailure(t *testing.T) {
+	for _, closeFailure := range []bool{false, true} {
+		fixture := newMonitorEconomicTestFixture(t, false)
+		entered := make(chan struct{})
+		run := fixture.start(t, monitorServiceHooks{afterCheckpointOpen: func(ctx context.Context, role string, file *os.File) {
+			if role == fixture.policy.Role {
+				if file == nil {
+					panic("native admission lacks actual descriptor")
+				}
+				close(entered)
+				<-ctx.Done()
+			}
+		}, afterClose: func(role, kind string, _ *os.File) error {
+			if closeFailure && role == fixture.policy.Role && kind == "checkpoint" {
+				return syscall.EIO
+			}
+			return nil
+		}})
+		select {
+		case <-entered:
+		case <-time.After(10 * time.Second):
+			t.Fatal("native real admission barrier not reached")
+		}
+		run.stop(t)
+		expected := 0
+		if closeFailure {
+			expected = 3
+		}
+		if run.exit != expected {
+			t.Fatal("native cancellation lost ordinary stop or genuine joined close failure", closeFailure, run.exit)
+		}
+	}
+}

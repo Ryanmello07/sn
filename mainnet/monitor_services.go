@@ -17,14 +17,15 @@ import (
 // Hooks observe real reads, real durability, and owned waits. None can supply
 // a source record, source match, checkpoint content or metric verdict.
 type monitorServiceHooks struct {
-	read          func(string) monitorServiceReadHooks
-	syncDirectory func(role, kind string, file *os.File) error
-	afterClose    func(role, kind string, file *os.File) error
-	afterWorker   func(role string, exit int)
-	afterResult   func(context.Context, int)
-	afterEvent    func(context.Context, string)
-	wait          func(context.Context, string, time.Duration) bool
-	rpcWait       func(context.Context, string, time.Duration) error
+	read                func(string) monitorServiceReadHooks
+	syncDirectory       func(role, kind string, file *os.File) error
+	afterClose          func(role, kind string, file *os.File) error
+	afterWorker         func(role string, exit int)
+	afterResult         func(context.Context, int)
+	afterEvent          func(context.Context, string)
+	wait                func(context.Context, string, time.Duration) bool
+	rpcWait             func(context.Context, string, time.Duration) error
+	afterCheckpointOpen func(context.Context, string, *os.File)
 }
 
 // Role events contain bounded operational evidence and a closed export outcome.
@@ -100,9 +101,12 @@ func waitMonitorService(ctx context.Context, role string, duration time.Duration
 // Existing chain ownership stays separate. Ordinary output failures retry only
 // that domain; runtime integrity failures stop only the affected domain.
 func runMonitorServices(ctx context.Context, client *rpcClient, expected identityExpectation, policy *monitorServicesPolicy, checkpointPath, metricsPath string, interval, stallAfter time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (result int) {
+	if ctx.Err() != nil {
+		return 0
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators)+len(policy.Operators)+len(policy.Providers)+len(policy.Claims)+len(policy.NativeEconomics), now)
+	output, err := newMonitorOutput(ctx, stdout, stderr, len(policy.Validators)+len(policy.Operators)+len(policy.Providers)+len(policy.Claims)+len(policy.NativeEconomics)+len(policy.EvmEconomics), now)
 	if err != nil {
 		return 3
 	}
@@ -117,8 +121,12 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	var providers []*monitorProviderWorker
 	var claims []*monitorClaimWorker
 	var economics []*monitorEconomicNativeWorker
+	var evmEconomics []*monitorEconomicEvmWorker
 	defer func() {
 		var cleanupErr error
+		for _, worker := range evmEconomics {
+			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
+		}
 		for _, worker := range economics {
 			cleanupErr = errors.Join(cleanupErr, worker.close(hooks))
 		}
@@ -143,6 +151,9 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		checkpointFile, metricsFile := monitorValidatorPaths(checkpointPath, metricsPath, validator.Role)
 		checkpoint, err := openMonitorServiceCheckpoint(checkpointFile, expected, validator, ctx)
 		if err != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
+				return result
+			}
 			fmt.Fprintln(diagnostic, "monitor service checkpoint admission:", err)
 			return 3
 		}
@@ -150,12 +161,21 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 		workers = append(workers, worker)
 		metrics, err := openMonitorMetrics(metricsFile, ctx)
 		if err != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
+				return result
+			}
 			fmt.Fprintln(diagnostic, "monitor service metrics admission:", err)
 			return 3
 		}
 		worker.metrics = metrics
+		if hooks.afterCheckpointOpen != nil {
+			hooks.afterCheckpointOpen(ctx, validator.Role, checkpoint.owner.lock)
+		}
 		worker.state, err = checkpoint.load(ctx)
 		if err != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
+				return result
+			}
 			fmt.Fprintln(diagnostic, "monitor service retained state:", err)
 			return 3
 		}
@@ -168,6 +188,9 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	for _, operator := range policy.Operators {
 		worker, err := openMonitorOperatorWorker(ctx, operator, expected, checkpointPath, metricsPath, hooks)
 		if err != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
+				return result
+			}
 			fmt.Fprintln(diagnostic, "monitor operator admission:", err)
 			return 3
 		}
@@ -176,6 +199,9 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	for _, provider := range policy.Providers {
 		worker, err := openMonitorProviderWorker(ctx, provider, expected, checkpointPath, metricsPath, hooks)
 		if err != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
+				return result
+			}
 			fmt.Fprintln(diagnostic, "monitor provider admission:", err)
 			return 3
 		}
@@ -184,6 +210,9 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	for _, claim := range policy.Claims {
 		worker, err := openMonitorClaimWorker(ctx, claim, expected, checkpointPath, metricsPath, hooks)
 		if err != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
+				return result
+			}
 			fmt.Fprintln(diagnostic, "monitor claim admission:", err)
 			return 3
 		}
@@ -192,15 +221,30 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 	for _, economic := range policy.NativeEconomics {
 		worker, err := openMonitorEconomicNativeWorker(ctx, client, economic, expected, checkpointPath, metricsPath, hooks)
 		if err != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
+				return result
+			}
 			fmt.Fprintln(diagnostic, "monitor native economic admission:", err)
 			result = 3
 			continue
 		}
 		economics = append(economics, worker)
 	}
+	for _, economic := range policy.EvmEconomics {
+		worker, err := openMonitorEconomicEvmWorker(ctx, client, economic, expected, checkpointPath, metricsPath, hooks)
+		if err != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
+				return result
+			}
+			fmt.Fprintln(diagnostic, "monitor EVM economic admission:", err)
+			result = 3
+			continue
+		}
+		evmEconomics = append(evmEconomics, worker)
+	}
 	// The channel holds every terminal result even during cancellation. Every
 	// launched worker sends once and is consumed before output owners close.
-	results := make(chan int, len(workers)+len(operators)+len(providers)+len(claims)+len(economics)+1)
+	results := make(chan int, len(workers)+len(operators)+len(providers)+len(claims)+len(economics)+len(evmEconomics)+1)
 	go func() {
 		backoff := time.Second
 		for ctx.Err() == nil {
@@ -288,7 +332,21 @@ func runMonitorServices(ctx context.Context, client *rpcClient, expected identit
 			results <- exit
 		}()
 	}
-	for remaining := len(workers) + len(operators) + len(providers) + len(claims) + len(economics) + 1; remaining > 0; remaining-- {
+	for index, worker := range evmEconomics {
+		writer := output.events.Writer(fmt.Sprintf("validator%d", len(workers)+len(operators)+len(providers)+len(claims)+len(economics)+index))
+		go func() {
+			exit := worker.run(ctx, interval, writer, diagnostic, now, hooks)
+			if err := worker.close(hooks); err != nil {
+				fmt.Fprintln(diagnostic, "monitor EVM economic cleanup:", err)
+				exit = 3
+			}
+			if hooks.afterWorker != nil {
+				hooks.afterWorker(worker.policy.Role, exit)
+			}
+			results <- exit
+		}()
+	}
+	for remaining := len(workers) + len(operators) + len(providers) + len(claims) + len(economics) + len(evmEconomics) + 1; remaining > 0; remaining-- {
 		exit := <-results
 		if exit != 0 {
 			result = max(result, exit)

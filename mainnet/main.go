@@ -352,8 +352,14 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 			}
 			return 3
 		}
+		if hooks.afterCheckpointOpen != nil {
+			hooks.afterCheckpointOpen(ctx, "chain", checkpoint.lock)
+		}
 		state, err = checkpoint.load()
 		if err != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
+				return 0
+			}
 			fmt.Fprintln(stderr, "monitor checkpoint:", err)
 			return 3
 		}
