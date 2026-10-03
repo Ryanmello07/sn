@@ -102,7 +102,7 @@ type historicalReplayHooks struct {
 // Output refusal actively cancels the owned child; simply returning a writer
 // error could otherwise leave a child with no reader waiting until deadline.
 type historicalReplayOutput struct {
-	bytes.Buffer
+	buffer  bytes.Buffer
 	maximum int
 	cancel  context.CancelFunc
 	read    func()
@@ -110,12 +110,12 @@ type historicalReplayOutput struct {
 }
 
 func (self *historicalReplayOutput) Write(raw []byte) (int, error) {
-	if len(raw) > self.maximum-self.Len() {
+	if len(raw) > self.maximum-self.buffer.Len() {
 		self.err = errors.New("historical replay child output exceeds bound")
 		self.cancel()
 		return 0, self.err
 	}
-	n, err := self.Buffer.Write(raw)
+	n, err := self.buffer.Write(raw)
 	if self.read != nil {
 		self.read()
 	}
@@ -277,7 +277,7 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 		return nil, fmt.Errorf("historical replay child refused: %w", err)
 	}
 	var report historicalReplayReport
-	if err := decodePlanJson(stdout.Bytes(), &report); err != nil {
+	if err := decodePlanJson(stdout.buffer.Bytes(), &report); err != nil {
 		return nil, err
 	}
 	if report.Schema != historicalReplaySchema || report.JobSha256 != historicalReplayDigest(sha256.Sum256(raw)) || report.SdkRevision != historicalReplaySdk || report.HostProfile != "substrate-proof-bounded-storage-v1" || report.ParentHash != job.ParentHash || report.ChildHash != job.ChildHash || report.RuntimeCodeSha256 != job.RuntimeCodeSha256 || report.Extrinsics != uint64(len(job.ExtrinsicsHex)) || report.ProofNodes != uint64(len(job.ProofNodesHex)) || report.ProofBytes > 24*1024*1024 || report.StorageCalls > 65536 || report.StorageIoBytes > 64*1024*1024 || !report.PostStateReproduced {

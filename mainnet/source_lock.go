@@ -4,6 +4,7 @@ package main
 // release. It has no signer, RPC client, deployment action or approval claim.
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -18,11 +19,29 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
 const sourceLockSchema = "urnetwork-mainnet-source-lock-v1"
 const sourceLockMaximumModuleBytes = 8 * 1024 * 1024
+
+// Combined command output is admitted during copying, not after allocating an
+// arbitrary reply. A named buffer cannot promote io.ReaderFrom past this guard.
+type sourceLockOutput struct {
+	buffer bytes.Buffer
+	cancel context.CancelFunc
+	err    error
+}
+
+func (self *sourceLockOutput) Write(raw []byte) (int, error) {
+	if len(raw) > sourceLockMaximumModuleBytes-self.buffer.Len() {
+		self.err = errors.New("source-lock command reply exceeds resource bound")
+		self.cancel()
+		return 0, self.err
+	}
+	return self.buffer.Write(raw)
+}
 
 type sourceLockRepository struct {
 	Path   string `json:"path"`
@@ -87,15 +106,25 @@ func sourceLockCommand(ctx context.Context, dir, executable string, args ...stri
 	commandCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	command := exec.CommandContext(commandCtx, executable, args...)
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.Cancel = func() error {
+		err := syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return err
+	}
+	command.WaitDelay = time.Second
 	command.Dir = dir
-	output, err := command.CombinedOutput()
+	output := sourceLockOutput{cancel: cancel}
+	// Identical writers give os/exec one shared pipe/copy owner for both streams.
+	command.Stdout, command.Stderr = &output, &output
+	runErr := command.Run()
+	err := errors.Join(runErr, output.err)
 	if err != nil {
 		return nil, fmt.Errorf("%s %s failed: %w", executable, strings.Join(args, " "), errors.Join(err, commandCtx.Err()))
 	}
-	if len(output) > sourceLockMaximumModuleBytes {
-		return nil, fmt.Errorf("%s reply exceeds source-lock resource bound", executable)
-	}
-	return output, nil
+	return output.buffer.Bytes(), commandCtx.Err()
 }
 
 func sourceLockFileHash(path string) (string, error) {
