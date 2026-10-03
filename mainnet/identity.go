@@ -26,6 +26,7 @@ const maxMetadataRpcReplyBytes = 8 * 1024 * 1024
 
 var errRpcIntegrity = errors.New("RPC evidence is inconsistent or malformed")
 var errRpcIdentityMismatch = errors.New("RPC identity mismatch")
+var errRpcObservationUnavailable = errors.New("RPC observation is unavailable")
 
 // chainIdentity is one finalized, read-only observation from an owned RPC route.
 type chainIdentity struct {
@@ -149,11 +150,23 @@ func (self *rpcClient) callBoundedRead(ctx context.Context, method string, param
 // Only explicit read profiles call this transport. The ordinary profile above
 // keeps its existing whitelist; specialized observations add no global methods.
 func (self *rpcClient) callAdmittedRead(ctx context.Context, method string, params []any, result any, allowAbsent bool, replyLimit int) error {
+	return self.callAdmittedReadResult(ctx, method, params, result, allowAbsent, false, replyLimit)
+}
+
+// A separately selected retained-fact profile retries null without treating it
+// as an observation of changed history. Other callers keep their null grammar.
+func (self *rpcClient) callAdmittedReadResult(ctx context.Context, method string, params []any, result any, allowAbsent, retryAbsent bool, replyLimit int) error {
 	if ctx == nil || replyLimit <= 0 || replyLimit > 2*rootBodyBytesLimit+maxRpcReplyBytes {
 		return errors.New("invalid bounded read budget")
 	}
 	operationCtx, cancel := context.WithTimeout(ctx, self.retryWindow)
 	defer cancel()
+	exhausted := func(err error) error {
+		if retryAbsent {
+			err = errors.Join(errRpcObservationUnavailable, err)
+		}
+		return fmt.Errorf("%s: retry window exhausted: %w", method, err)
+	}
 	requestBody, err := json.Marshal(struct {
 		JsonRpc string `json:"jsonrpc"`
 		Id      int    `json:"id"`
@@ -206,6 +219,8 @@ func (self *rpcClient) callAdmittedRead(ctx context.Context, method string, para
 						attemptCancel()
 						return requestErr
 					}
+				} else if retryAbsent && bytes.Equal(reply.Result, []byte("null")) {
+					requestErr = fmt.Errorf("%w: %s did not return the retained fact", errRpcObservationUnavailable, method)
 				} else {
 					if len(reply.Result) == 0 || bytes.Equal(reply.Result, []byte("null")) && !allowAbsent {
 						attemptCancel()
@@ -233,14 +248,14 @@ func (self *rpcClient) callAdmittedRead(ctx context.Context, method string, para
 		attemptCancel()
 		lastErr = requestErr
 		if operationCtx.Err() != nil {
-			return fmt.Errorf("%s: retry window exhausted: %w", method, errors.Join(operationCtx.Err(), lastErr))
+			return exhausted(errors.Join(operationCtx.Err(), lastErr))
 		}
 		wait := self.retryWait
 		if wait == nil {
 			wait = waitRpcReadRetry
 		}
 		if err := wait(operationCtx, delay); err != nil || operationCtx.Err() != nil {
-			return fmt.Errorf("%s: retry window exhausted: %w", method, errors.Join(operationCtx.Err(), err, lastErr))
+			return exhausted(errors.Join(operationCtx.Err(), err, lastErr))
 		}
 	}
 }
