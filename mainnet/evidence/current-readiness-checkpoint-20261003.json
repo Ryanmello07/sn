@@ -2,6 +2,7 @@
   "basis": "Current published component evidence plus explicit in-progress work; supersedes historical absent-implementation labels only.",
   "completion": "NOT_FINALIZED_ALL38_REQUIREMENTS_RETAINED",
   "evidence_sha256": {
+    "common-source-stage-readback-20261003.json": "b21e4fc7d73d237fbf5fc76a5680d5113a1d5d03bffa2b1e6324cbb7993035f6",
     "server-full-model-terminal-20261003.json": "cd2eab019b7f9b0b88f1afd3322ce88b497ddc4b4aea7455c5b88aeb0be933cd",
     "common-qualification-scope-review-20261003.json": "72981663e543043b5ad07fc48f5560b97a29aadc931af07413c8e9b851224ba4",
     "server-lease-retention-original-failures-20261003.json": "70a5e0e7046568409266d1dd30932ca30ad351ba55fc319575d5667cd2a77f34",
@@ -111,7 +112,8 @@
     "validator-repair0fef-source-review-20261003.json": "3a6938030be8f039b9f310ac19b89c9819afdcd05e743fb643b11ef2cae69b01",
     "native-cohort63-scoped-qualification-20261003.json": "28538670d86e156b462fb3f26c30816f5c5732f37f9c72869cb4f5410ce5e66d",
     "mixed-qualification-terminal-20261003.json": "81d941470af866803698d6bfc17b7c7ee08f7ca968f3c65f6e74aa3e5700dfdb",
-    "model-sampler-source-finding-20261003.json": "ba6c43f63198248d7618c35c0b52b828862f48add0f0315d7e0128d9c45dfe62"
+    "model-sampler-source-finding-20261003.json": "ba6c43f63198248d7618c35c0b52b828862f48add0f0315d7e0128d9c45dfe62",
+    "common-module-package-readback-20261003.json": "5a96acac641ec18f7e7592b637891b7ca9465fdca6bd733e831af6123df3298e"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -152,9 +154,9 @@
     },
     {
       "closed": false,
-      "evidence": "current-connect-paired-core-publication-20261003.json",
+      "evidence": "common-module-package-readback-20261003.json",
       "requirement": "PH-06",
-      "status": "Published recovery dependency joined; exact final source/module/config release still required."
+      "status": "Exact b6/Core2ea source staging and official module hash pass; seven peers and historical floor retained. Composed graphs/tests and final source/config release remain."
     },
     {
       "closed": false,
