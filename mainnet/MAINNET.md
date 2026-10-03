@@ -4463,3 +4463,6 @@ The [combined fixture source review](evidence/combined-model4754-source-review-2
 
 
 The [frozen native source review](evidence/native-ad1-source-review-20261003.json) verifies all sixteen changed files and twenty-four intake bindings at `ad1e5b19`. Qualification must exercise the actual Rust-exported original-Wasm job through the owned Go replay process and accounting consumer; its environment-dependent skip is not a pass. Normal/race, Rust controls and the continuous independent producer remain outstanding. Missing admission input must preserve the cursor and unknown amounts while healthy domains continue; confirmed identity conflicts retain their integrity handling.
+
+
+The [closed-observation successor review](evidence/repair-closed6d-source-review-20261003.json) verifies `6d0612b8`, four changed files and eleven intake bindings. A closed handle or `EBADF` now remains unavailable evidence at stopped-generation and active pre/post-join checks; it cannot establish generation change or replenish the original join window. Positive integrity loss and uncertain durable publication keep precedence. Four new deterministic public controls join the existing twenty-root repair scope; qualification and current-role composition are pending.
