@@ -2708,9 +2708,13 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-io",
+ "sp-maybe-compressed-blob",
+ "sp-runtime",
  "sp-runtime-interface",
  "sp-state-machine",
+ "sp-trie",
  "sp-version",
+ "wasmparser",
  "wat",
 ]
 
