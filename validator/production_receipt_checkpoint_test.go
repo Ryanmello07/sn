@@ -129,13 +129,30 @@ func TestProductionReceiptCheckpointRejectsForgedCoverageAndCustody(t *testing.T
 		case "permissions":
 			mode = 0644
 		}
-		raw, _ := json.Marshal(value)
+		raw, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
 		raw = append(raw, '\n')
 		if fault == "oversized" {
 			raw = make([]byte, productionReceiptCheckpointLimit+1)
 		}
 		if err := os.WriteFile(path, raw, mode); err != nil {
 			t.Fatal(err)
+		}
+		if fault == "permissions" {
+			// Creation permissions are filtered by the runner's umask. Create
+			// and verify the intended public-readable fault explicitly.
+			if err := os.Chmod(path, mode); err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Lstat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !info.Mode().IsRegular() || info.Mode().Perm() != mode {
+				t.Fatalf("permissions fault not created: got %v, want regular %04o", info.Mode(), mode)
+			}
 		}
 		if fault == "alias" || fault == "symlink" {
 			alias := filepath.Join(owner.path, fault)
