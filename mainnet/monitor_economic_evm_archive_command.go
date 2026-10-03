@@ -217,9 +217,13 @@ func applyMonitorEvmArchive(ctx context.Context, plan monitorEvmArchivePlan, hoo
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, archive.close()) }()
+	hooks.beforeHistoryRead(plan.Request.Policy.Role, "archive-original")
 	current, present, err := source.read()
-	if err != nil || !present {
-		return errors.Join(errors.New("EVM archive original owner disappeared"), err)
+	if err != nil {
+		return fmt.Errorf("EVM archive original checkpoint read: %w", err)
+	}
+	if !present {
+		return errors.New("EVM archive original owner disappeared")
 	}
 	retained, archived, err := archive.read()
 	if err != nil {
@@ -279,9 +283,13 @@ func applyMonitorEvmArchive(ctx context.Context, plan monitorEvmArchivePlan, hoo
 		if err := archive.publish(original, hook("archive")); err != nil {
 			return err
 		}
+		hooks.beforeHistoryRead(plan.Request.Policy.Role, "archive-published")
 		retained, present, err = archive.read()
-		if err != nil || !present || !bytes.Equal(retained, original) {
-			return errors.Join(errors.New("EVM archive publication cannot be authenticated"), err)
+		if err != nil {
+			return fmt.Errorf("EVM archive publication read: %w", err)
+		}
+		if !present || !bytes.Equal(retained, original) {
+			return errors.New("EVM archive publication cannot be authenticated")
 		}
 	}
 	if err := check(); err != nil {
@@ -324,8 +332,12 @@ func runMonitorEvmArchive(ctx context.Context, args []string, stdout, stderr io.
 		return 2
 	}
 	raw, digest, err := readPlanFile(ctx, path, maxRpcReplyBytes)
-	if err != nil || digest != hash {
-		fmt.Fprintln(stderr, "EVM archive reviewed input differs:", err)
+	if err != nil {
+		fmt.Fprintln(stderr, "EVM archive reviewed input read failed:", err)
+		return 2
+	}
+	if digest != hash {
+		fmt.Fprintln(stderr, "EVM archive reviewed input differs: digest mismatch")
 		return 2
 	}
 	var plan monitorEvmArchivePlan

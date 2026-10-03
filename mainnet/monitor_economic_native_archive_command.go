@@ -273,9 +273,13 @@ func applyMonitorNativeArchive(ctx context.Context, plan monitorNativeArchivePla
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, archive.close()) }()
+	hooks.beforeHistoryRead(plan.Request.Policy.Role, "archive-original")
 	current, present, err := source.read()
-	if err != nil || !present {
-		return errors.Join(errors.New("native archive original owner disappeared"), err)
+	if err != nil {
+		return fmt.Errorf("native archive original checkpoint read: %w", err)
+	}
+	if !present {
+		return errors.New("native archive original owner disappeared")
 	}
 	retained, archived, err := archive.read()
 	if err != nil {
@@ -335,9 +339,13 @@ func applyMonitorNativeArchive(ctx context.Context, plan monitorNativeArchivePla
 		if err := archive.publish(original, hook("archive")); err != nil {
 			return err
 		}
+		hooks.beforeHistoryRead(plan.Request.Policy.Role, "archive-published")
 		retained, present, err = archive.read()
-		if err != nil || !present || !bytes.Equal(retained, original) {
-			return errors.Join(errors.New("native archive publication cannot be authenticated"), err)
+		if err != nil {
+			return fmt.Errorf("native archive publication read: %w", err)
+		}
+		if !present || !bytes.Equal(retained, original) {
+			return errors.New("native archive publication cannot be authenticated")
 		}
 	}
 	if err := check(); err != nil {
@@ -380,8 +388,12 @@ func runMonitorNativeArchive(ctx context.Context, args []string, stdout, stderr 
 		return 2
 	}
 	raw, digest, err := readPlanFile(ctx, path, maxRpcReplyBytes)
-	if err != nil || digest != hash {
-		fmt.Fprintln(stderr, "native archive reviewed input differs:", err)
+	if err != nil {
+		fmt.Fprintln(stderr, "native archive reviewed input read failed:", err)
+		return 2
+	}
+	if digest != hash {
+		fmt.Fprintln(stderr, "native archive reviewed input differs: digest mismatch")
 		return 2
 	}
 	var plan monitorNativeArchivePlan
