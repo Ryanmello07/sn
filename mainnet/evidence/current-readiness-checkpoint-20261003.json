@@ -86,7 +86,12 @@
     "capture-currentad0-source-review-20261003.json": "6321ddce5062c20754f69e799b7160e351376cdab5b8aa492e5154a613b3a95c",
     "mixed-qualification-resource-adoption-20261003.json": "11e97d70326d60b5071d5ddb4399353406eed725ea18277b3154f4f87801f2d4",
     "claim-archivee594-source-review-20261003.json": "fbaed3a80dc9e7e9c1f2585aa84ff36b3cdc17100f19b10b439e6fa3e4b64431",
-    "synthetic-fee-exporter-review-20261003.json": "5826e94aaf6e9694df9c011950343a197c11062f787d7f72096566aaa5e88088"
+    "synthetic-fee-exporter-review-20261003.json": "5826e94aaf6e9694df9c011950343a197c11062f787d7f72096566aaa5e88088",
+    "capture-currentad0-qualification-20261003.json": "612478dafb348da0311e8fc4c8b63aeb2a276936fda24fa7b428b61f12b94b4f",
+    "capture-currentad0-main-merge-20261003.json": "1b19e31af362d8b8488530a4656240f764656b7c4f9d07c99eb1ccaec5d5db66",
+    "fee-context-current1b3-source-review-20261003.json": "f7947392a0b6ee8a28c11e763c93562289df0a7eb54c8972d99a97bac016a559",
+    "selected-graph63-retry-review-20261003.json": "19981e92faacbd57b970f60b038759475e7ad3f891edd255cf53ec0b42a4cb55",
+    "full-hardening-source-gap-review-20261003.json": "a51780a745bc2c0c5c086a426a14d577c6ca98c9e89dcf5d103f37e30b313a56"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -157,9 +162,9 @@
     },
     {
       "closed": false,
-      "evidence": "original-wasm-fee-decoder-a7ed-qualification-20261003.json",
+      "evidence": "capture-currentad0-qualification-20261003.json",
       "requirement": "PH-11",
-      "status": "Synthetic original-Wasm fee decoder27 roots and five operative controls qualified; bounded complete execution-proof collector, actual runtime profile/finality authority and conservation join remain."
+      "status": "Original-Wasm decoder, complete collector/request components and current eight-root normal/race/vet integration qualified and merged; actual runtime profile, parent witness/finality authority and conservation join remain."
     },
     {
       "closed": false,
@@ -205,9 +210,9 @@
     },
     {
       "closed": false,
-      "evidence": "native-runtime-renewal-qualification-20261003.json",
+      "evidence": "full-hardening-source-gap-review-20261003.json",
       "requirement": "PH-19",
-      "status": "Parent/post-state renewed native catalog qualified; current cross-consumer runtime authority join remains."
+      "status": "Parent/post-state renewed native catalog qualified; execution-time denominator/recipient consumer remains unimplemented, alongside current consumer/runtime authority and conservation join."
     },
     {
       "closed": false,
@@ -271,15 +276,15 @@
     },
     {
       "closed": false,
-      "evidence": "native-evm-current0f-main-merge-20261003.json",
+      "evidence": "capture-currentad0-main-merge-20261003.json",
       "requirement": "MG-02",
-      "status": "Qualified bounded host and native/EVM archive increments integrated; collector/Claim/restore successors, final repeatable build and host adoption remain."
+      "status": "Qualified bounded host, native/EVM archive and current collector increments integrated; offline archive, fee-context, Claim/restore successors, final repeatable build and host adoption remain."
     },
     {
       "closed": false,
-      "evidence": "current-hosts-c59-joined-qualification-20261003.json",
+      "evidence": "capture-currentad0-qualification-20261003.json",
       "requirement": "MG-03",
-      "status": "Current bounded-host seven normal/race roots, vet and three actual Go/Rust reports qualified and merged; actual runtime/witness/finality authority and native fee admission remain."
+      "status": "Bounded host and current collector/request integration qualified normal/race/vet and merged; actual parent witness, runtime/source/finality authority and native fee admission remain."
     },
     {
       "closed": false,
@@ -295,9 +300,9 @@
     },
     {
       "closed": false,
-      "evidence": "payout-boundary-qualification-20261003.json",
+      "evidence": "full-hardening-source-gap-review-20261003.json",
       "requirement": "MG-06",
-      "status": "Payout boundary qualified; continuous native/credit/carry/payment conservation and authentic fee witness remain."
+      "status": "Payout boundary and contract guards implemented/qualified by component; execution-witness denominator/recipient consumer, repair/conservation composition and authentic fee/runtime evidence remain."
     },
     {
       "closed": false,
