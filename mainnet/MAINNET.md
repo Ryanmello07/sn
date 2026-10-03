@@ -3522,3 +3522,10 @@ Qualification must exercise the actual public command and checkpoint owners: tim
 ## October 3 wallet GET normal qualification
 
 Frozen Server `25f617dc` passes its [independent 26-root normal scope](evidence/wallet-get-normal-20261003.json): fourteen new wallet-read controls and twelve prior payment-read controls, zero failures/skips and completed fixture cleanup. The sealed receipt binds twenty files; coordinator verification also reads the actual terminal JSON events and exact expected root names. Race execution, omission controls, vet and combined Server `2a453df9` qualification remain pending. This scope covers reads and the unchanged POST source join, not behavioral qualification of customer challenge writes or a deployed cutoff.
+
+
+## October 3 wallet race and claim-consumer source checkpoint
+
+The [same 26 wallet GET roots pass under race detection](evidence/wallet-get-race-20261003.json) at frozen Server `25f617dc`, with zero failures/skips/race reports and completed fixture cleanup. Omission controls, vet and combined-source qualification remain separate.
+
+The new claim-consumer candidate `80030acb` has a [coordinator source review](evidence/claim-consumer-source-review-20261003.json): exactly nine changed files over the pinned current base; miner, validator, operator, protocol, chain and module bytes are unchanged. Qualification remains pending. Unsigned claimed-leaf progress and signed-receipt progress are distinct actual producer paths; later credit payments belong in the economic observer rather than rewriting original receipt evidence. An adjacent review identifies HTTP 408/429 classification and pacing for follow-up; these current statuses are nonterminal, so this is not evidence of a stopped observer.
