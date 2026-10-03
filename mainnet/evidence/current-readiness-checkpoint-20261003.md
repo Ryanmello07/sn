@@ -6,7 +6,7 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | --- | --- | --- |
 | PH-01 | Recovery implemented; final composed continuation and host restore rehearsal remain. | [paired-metadata-sn-qualification-20261003.json](paired-metadata-sn-qualification-20261003.json) |
 | PH-02 | Customer/provider request recovery qualified by component; signer custody and current release/client adoption remain. | [customer-final-race-qualification-20261003.json](customer-final-race-qualification-20261003.json) |
-| PH-03 | Provider/claim GETs: 29 tests pass normally and with race detection, plus vet; seven causal groups verified. Body-error/policy successors and final role composition remain. | [monitor-progress-attempt-controls-qualification-20261003.json](monitor-progress-attempt-controls-qualification-20261003.json) |
+| PH-03 | Provider/claim GET retries, body-error and retained policy-renewal scopes qualified normally/race/vet with operative controls; final role composition remains. | [monitor-policy-renewal-qualification-20261003.json](monitor-policy-renewal-qualification-20261003.json) |
 | PH-04 | Capability selection implemented; renewed native scope passes; actual runtime authority and changed consumers remain. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
 | PH-05 | Existing caches retained; actual repeated-work and dependency-invalidation census still required. | No new closure evidence |
 | PH-06 | Published recovery dependency joined; exact final source/module/config release still required. | [current-connect-paired-core-publication-20261003.json](current-connect-paired-core-publication-20261003.json) |
@@ -16,7 +16,7 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-10 | Runtime renewal implemented and scoped qualified; full interrupted authority/epoch renewal composition remains. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
 | PH-11 | Recovery counters remain; independent historical native fee attribution and full conservation join remain. | No new closure evidence |
 | PH-12 | Continuous EVM38normal/race/vet and10causal groups pass; digest-reuse successor and native/claim conservation join remain. | [continuous-evm-review-history-product-qualification-20261003.json](continuous-evm-review-history-product-qualification-20261003.json) |
-| PH-13 | Claim consumer qualified and merged; independently reviewed rolling expectations and two-domain topology remain. | [claim-consumer-merge-20261003.json](claim-consumer-merge-20261003.json) |
+| PH-13 | Claim consumer and retained rolling policy/epoch renewal qualified by component; archive rollover and two-domain topology remain. | [monitor-policy-renewal-qualification-20261003.json](monitor-policy-renewal-qualification-20261003.json) |
 | PH-14 | Bootstrap/role mechanisms implemented; composed policy custody and live activation remain. | No new closure evidence |
 | PH-15 | Claim/native/EVM status scopes implemented; final alert domains and delivered on-call exercise remain. | [claim-consumer-qualification-20261003.json](claim-consumer-qualification-20261003.json) |
 | PH-16 | Original full model: 1,473 passes, zero failures, 11 skips. Current Server5f: 22 tests pass per mode, vet and five intended causal failures per mode verified; published. Final common-source release remains. | [server-current-financial-main-publication-20261003.json](server-current-financial-main-publication-20261003.json) |
@@ -25,13 +25,13 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-19 | Parent/post-state renewed native catalog qualified; current cross-consumer runtime authority join remains. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
 | PH-20 | Signed aggregate capacity/profile implementation in progress; public CLI/config/retained-sidecar controls remain. | No new closure evidence |
 | PH-21 | Repair mechanisms exist; durable duplicate/interrupted multi-component repair composition remains. | No new closure evidence |
-| PH-22 | Provider/claim timeout/network/cancellation selected scope passes normal/race/vet; body-error successor and all-service join remain. | [monitor-progress-attempt-selected-qualification-20261003.json](monitor-progress-attempt-selected-qualification-20261003.json) |
+| PH-22 | Provider/claim timeout, network, cancellation and body-error scopes qualified normally/race/vet; final all-service join remains. | [monitor-progress-body-qualification-20261003.json](monitor-progress-body-qualification-20261003.json) |
 | PH-23 | Retained-head production capacity revision implementation in progress; qualification and actual adoption remain. | No new closure evidence |
 | PH-24 | Production authentication reuse work-count/invalidation qualification remains. | No new closure evidence |
 | PH-25 | Owned cancellation/cleanup scopes exist; composed stop and actual unit/cgroup rehearsal remain. | [continuous-evm-review-history-new25-normal-20261003.json](continuous-evm-review-history-new25-normal-20261003.json) |
 | PH-26 | Bounded evidence mechanisms exist; selected aggregate evidence-size/public transport rehearsal remains. | No new closure evidence |
 | PH-27 | Authority/client-key transitions implemented; actual two-operator identity/custody composition remains. | No new closure evidence |
-| PH-28 | Claim role exists and is qualified; rolling expectation/retry/economic joins and live ingestion/on-call remain. | [claim-consumer-qualification-20261003.json](claim-consumer-qualification-20261003.json) |
+| PH-28 | Claim role and retained renewal scopes qualified; archival/economic joins and live ingestion/on-call remain. | [monitor-policy-renewal-qualification-20261003.json](monitor-policy-renewal-qualification-20261003.json) |
 | MG-01 | Independent current genesis/checkpoint/runtime approval and exact consumer admission remain. | No new closure evidence |
 | MG-02 | Final release source/module/compiler/config inventory and repeatable composed build remain. | No new closure evidence |
 | MG-03 | Synthetic proof backend twelve roots and two operative controls qualified; actual runtime/finality admission and native withdrawal/refund attribution remain. | [historical-proof-backend-qualification-20261003.json](historical-proof-backend-qualification-20261003.json) |
