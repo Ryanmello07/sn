@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 )
 
@@ -201,8 +202,17 @@ func (self *bootstrapSuccessorCanonicalChain) authenticate(ctx context.Context, 
 	seals := make([]string, 0, 8)
 	for i, original := range self.plans {
 		observation, err := self.chain.reconcile(ctx, original, self.records[i])
-		if err != nil || observation.Receipt == nil || *observation.Receipt != *self.records[i].Receipt || observation.Status != original.completedStatus() {
-			return nil, errors.Join(errors.New("successor canonical original receipt or historical postcondition differs"), err)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				err = errors.Join(errRpcObservationUnavailable, err)
+			}
+			return nil, fmt.Errorf("successor canonical original receipt observation failed: %w", err)
+		}
+		if observation.Receipt == nil {
+			return nil, fmt.Errorf("%w: successor canonical original receipt was not observed", errRpcObservationUnavailable)
+		}
+		if *observation.Receipt != *self.records[i].Receipt || observation.Status != original.completedStatus() {
+			return nil, fmt.Errorf("%w: successor canonical original receipt or historical postcondition differs", errRpcIntegrity)
 		}
 		seals = append(seals, rootObjectHash(self.records[i]))
 	}

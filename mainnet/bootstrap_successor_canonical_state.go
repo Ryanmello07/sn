@@ -18,12 +18,12 @@ import (
 // Raw words and ABI outputs must be canonical, bounded and fully consumed.
 func (self *bootstrapSuccessorCanonicalChain) word(ctx context.Context, address common.Address, slot common.Hash, block any) (common.Hash, error) {
 	var encoded string
-	if err := self.chain.read(ctx, "eth_getStorageAt", []any{address.Hex(), slot.Hex(), block}, &encoded); err != nil {
+	if err := self.chain.client.callRequiredEvmStateRead(ctx, "eth_getStorageAt", []any{address.Hex(), slot.Hex(), block}, &encoded); err != nil {
 		return common.Hash{}, err
 	}
 	raw, err := rootReceiptHex(encoded, 32)
 	if err != nil || len(raw) != 32 || encoded != "0x"+hex.EncodeToString(raw) {
-		return common.Hash{}, errors.New("successor canonical storage word is not exact")
+		return common.Hash{}, errors.Join(errRpcIntegrity, errors.New("successor canonical storage word is not exact"))
 	}
 	return common.BytesToHash(raw), nil
 }
@@ -31,12 +31,12 @@ func (self *bootstrapSuccessorCanonicalChain) word(ctx context.Context, address 
 // Code is compared before invoking that account's getters.
 func (self *bootstrapSuccessorCanonicalChain) code(ctx context.Context, address common.Address, block any) ([]byte, error) {
 	var encoded string
-	if err := self.chain.read(ctx, "eth_getCode", []any{address.Hex(), block}, &encoded); err != nil {
+	if err := self.chain.client.callRequiredEvmStateRead(ctx, "eth_getCode", []any{address.Hex(), block}, &encoded); err != nil {
 		return nil, err
 	}
 	raw, err := rootReceiptHex(encoded, 64*1024)
 	if err != nil || encoded != "0x"+hex.EncodeToString(raw) {
-		return nil, errors.New("successor canonical runtime encoding differs")
+		return nil, errors.Join(errRpcIntegrity, errors.New("successor canonical runtime encoding differs"))
 	}
 	return raw, nil
 }
@@ -50,20 +50,20 @@ func (self *bootstrapSuccessorCanonicalChain) safeCall(ctx context.Context, plan
 		return nil, err
 	}
 	var encoded string
-	if err := self.chain.read(ctx, "eth_call", []any{map[string]any{"to": plan.Review.Transaction.Safe.Hex(), "data": "0x" + hex.EncodeToString(input)}, block}, &encoded); err != nil {
+	if err := self.chain.client.callRequiredEvmStateRead(ctx, "eth_call", []any{map[string]any{"to": plan.Review.Transaction.Safe.Hex(), "data": "0x" + hex.EncodeToString(input)}, block}, &encoded); err != nil {
 		return nil, err
 	}
 	raw, err := rootReceiptHex(encoded, maximum)
 	if err != nil || encoded != "0x"+hex.EncodeToString(raw) {
-		return nil, errors.New("successor canonical Safe getter is not bounded canonical bytes")
+		return nil, errors.Join(errRpcIntegrity, errors.New("successor canonical Safe getter is not bounded canonical bytes"))
 	}
 	values, err := profile.contractAbi.Methods[name].Outputs.Unpack(raw)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(errRpcIntegrity, err)
 	}
 	canonical, err := profile.contractAbi.Methods[name].Outputs.Pack(values...)
 	if err != nil || !bytes.Equal(canonical, raw) {
-		return nil, errors.New("successor canonical Safe getter has padding or trailing bytes")
+		return nil, errors.Join(errRpcIntegrity, errors.New("successor canonical Safe getter has padding or trailing bytes"))
 	}
 	return values, nil
 }
@@ -79,12 +79,15 @@ func (self *bootstrapSuccessorCanonicalChain) safeState(ctx context.Context, pla
 		return result, err
 	}
 	singletonWord, err := self.word(ctx, plan.Review.Transaction.Safe, common.Hash{}, block)
-	if err != nil || !bytes.Equal(singletonWord[:12], make([]byte, 12)) {
-		return result, errors.Join(errors.New("successor canonical singleton word differs"), err)
+	if err != nil {
+		return result, err
+	}
+	if !bytes.Equal(singletonWord[:12], make([]byte, 12)) {
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical singleton word differs"))
 	}
 	result.Singleton = common.BytesToAddress(singletonWord[12:])
 	if result.Singleton != plan.Request.Singleton {
-		return result, errors.New("successor canonical singleton changed")
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical singleton changed"))
 	}
 	singleton, err := self.code(ctx, result.Singleton, block)
 	if err != nil {
@@ -98,69 +101,93 @@ func (self *bootstrapSuccessorCanonicalChain) safeState(ctx context.Context, pla
 	for _, artifact := range pin.Artifacts {
 		if artifact.Name == "SafeProxy" && result.SafeProxyRuntimeHash.Hex() != artifact.RuntimeKeccak256 ||
 			artifact.Name == plan.Review.Request.Variant && result.SingletonRuntimeHash.Hex() != artifact.RuntimeKeccak256 {
-			return result, errors.New("successor canonical Safe runtime differs from reviewed release")
+			return result, errors.Join(errRpcIntegrity, errors.New("successor canonical Safe runtime differs from reviewed release"))
 		}
 	}
 	owners, err := self.safeCall(ctx, plan, block, 160, "getOwners")
-	if err != nil || len(owners) != 1 {
-		return result, errors.Join(errors.New("successor canonical owner census is unavailable"), err)
+	if err != nil {
+		return result, err
+	}
+	if len(owners) != 1 {
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical owner census differs"))
 	}
 	ownerAddresses, ok := owners[0].([]common.Address)
 	if !ok || len(ownerAddresses) != 3 {
-		return result, errors.New("successor canonical owner census differs")
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical owner census differs"))
 	}
 	result.Owners = slices.Clone(ownerAddresses)
 	slices.SortFunc(result.Owners, func(a, b common.Address) int { return bytes.Compare(a[:], b[:]) })
 	if !slices.Equal(result.Owners, plan.Request.Owners) {
-		return result, errors.New("successor canonical current owners differ")
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical current owners differ"))
 	}
 	threshold, err := self.safeCall(ctx, plan, block, 32, "getThreshold")
-	if err != nil || len(threshold) != 1 {
-		return result, errors.Join(errors.New("successor canonical threshold unavailable"), err)
+	if err != nil {
+		return result, err
+	}
+	if len(threshold) != 1 {
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical threshold differs"))
 	}
 	thresholdNumber, ok := threshold[0].(*big.Int)
 	if !ok || !thresholdNumber.IsUint64() || thresholdNumber.Uint64() != 2 {
-		return result, errors.New("successor canonical threshold differs")
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical threshold differs"))
 	}
 	result.Threshold = thresholdNumber.Uint64()
 	for _, value := range []struct{ slot, expected uint64 }{{slot: 3, expected: 3}, {slot: 4, expected: 2}} {
 		word, err := self.word(ctx, plan.Review.Transaction.Safe, common.BigToHash(new(big.Int).SetUint64(value.slot)), block)
-		if err != nil || word != common.BigToHash(new(big.Int).SetUint64(value.expected)) {
-			return result, errors.Join(errors.New("successor canonical owner storage differs from getters"), err)
+		if err != nil {
+			return result, err
+		}
+		if word != common.BigToHash(new(big.Int).SetUint64(value.expected)) {
+			return result, errors.Join(errRpcIntegrity, errors.New("successor canonical owner storage differs from getters"))
 		}
 	}
 	nonce, err := self.safeCall(ctx, plan, block, 32, "nonce")
-	if err != nil || len(nonce) != 1 {
-		return result, errors.Join(errors.New("successor canonical Safe nonce unavailable"), err)
+	if err != nil {
+		return result, err
+	}
+	if len(nonce) != 1 {
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical Safe nonce differs"))
 	}
 	nonceNumber, ok := nonce[0].(*big.Int)
 	if !ok || nonceNumber.Sign() < 0 || nonceNumber.BitLen() > 256 {
-		return result, errors.New("successor canonical Safe nonce is malformed")
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical Safe nonce is malformed"))
 	}
 	nonceWord, err := self.word(ctx, plan.Review.Transaction.Safe, common.BigToHash(big.NewInt(5)), block)
-	if err != nil || nonceWord != common.BigToHash(nonceNumber) {
-		return result, errors.Join(errors.New("successor canonical Safe nonce storage differs"), err)
+	if err != nil {
+		return result, err
+	}
+	if nonceWord != common.BigToHash(nonceNumber) {
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical Safe nonce storage differs"))
 	}
 	result.SafeNonce = nonceNumber.String()
 	modules, err := self.safeCall(ctx, plan, block, 128, "getModulesPaginated", common.HexToAddress("0x1"), big.NewInt(1))
-	if err != nil || len(modules) != 2 {
-		return result, errors.Join(errors.New("successor canonical module census unavailable"), err)
+	if err != nil {
+		return result, err
+	}
+	if len(modules) != 2 {
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical module census differs"))
 	}
 	moduleAddresses, ok := modules[0].([]common.Address)
 	if !ok || len(moduleAddresses) != 0 || modules[1] != common.HexToAddress("0x1") {
-		return result, errors.New("successor canonical module census is not empty")
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical module census is not empty"))
 	}
 	result.Modules = []common.Address{}
 	for _, slot := range []string{"0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8", "0xb104e0b93118902c651344349b610029d694cfdec91c589c91ebafbcd0289947", "0x6c9a6c4a39284e37ed1cf53d337577d14212a4870fb976a4366c693b939918d5"} {
 		word, err := self.word(ctx, plan.Review.Transaction.Safe, common.HexToHash(slot), block)
-		if err != nil || word != (common.Hash{}) {
-			return result, errors.Join(errors.New("successor canonical guard, module guard or fallback is active"), err)
+		if err != nil {
+			return result, err
+		}
+		if word != (common.Hash{}) {
+			return result, errors.Join(errRpcIntegrity, errors.New("successor canonical guard, module guard or fallback is active"))
 		}
 	}
 	tx := plan.transaction()
 	digest, err := self.safeCall(ctx, plan, block, 32, "getTransactionHash", tx.To, tx.Value, tx.Data, tx.Operation, tx.SafeTxGas, tx.BaseGas, tx.GasPrice, tx.GasToken, tx.RefundReceiver, tx.Nonce)
-	if err != nil || len(digest) != 1 || digest[0] != [32]byte(plan.Review.Transaction.Digest) {
-		return result, errors.Join(errors.New("successor canonical Safe digest differs from exact retained inner operation"), err)
+	if err != nil {
+		return result, err
+	}
+	if len(digest) != 1 || digest[0] != [32]byte(plan.Review.Transaction.Digest) {
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical Safe digest differs from exact retained inner operation"))
 	}
 	return result, nil
 }
@@ -175,8 +202,11 @@ func (self *bootstrapSuccessorCanonicalChain) contractsState(ctx context.Context
 	for _, index := range []int{2, 4, 5, 6, 7} {
 		plan := self.plans[index]
 		code, err := self.code(ctx, plan.Address, block)
-		if err != nil || !bytes.Equal(code, plan.Runtime) {
-			return "", "", errors.Join(errors.New("successor canonical contract runtime differs"), err)
+		if err != nil {
+			return "", "", err
+		}
+		if !bytes.Equal(code, plan.Runtime) {
+			return "", "", errors.Join(errRpcIntegrity, errors.New("successor canonical contract runtime differs"))
 		}
 		getters, err := plan.receiptGetters(*self.records[index].Receipt)
 		if err != nil {
@@ -191,17 +221,20 @@ func (self *bootstrapSuccessorCanonicalChain) contractsState(ctx context.Context
 				expected = common.BytesToHash(evidence[:]).Hex()
 			}
 			var output string
-			if err := self.chain.read(ctx, "eth_call", []any{map[string]any{"to": plan.Address.Hex(), "data": getter.Data}, block}, &output); err != nil {
+			if err := self.chain.client.callRequiredEvmStateRead(ctx, "eth_call", []any{map[string]any{"to": plan.Address.Hex(), "data": getter.Data}, block}, &output); err != nil {
 				return "", "", err
 			}
 			if output != expected {
-				return "", "", errors.New("successor canonical contract getter or evidence binding differs")
+				return "", "", errors.Join(errRpcIntegrity, errors.New("successor canonical contract getter or evidence binding differs"))
 			}
 		}
 		for _, expected := range plan.Storage {
 			word, err := self.word(ctx, plan.Address, common.HexToHash(expected.Slot), block)
-			if err != nil || word.Hex() != expected.Expected {
-				return "", "", errors.Join(errors.New("successor canonical contract storage differs"), err)
+			if err != nil {
+				return "", "", err
+			}
+			if word.Hex() != expected.Expected {
+				return "", "", errors.Join(errRpcIntegrity, errors.New("successor canonical contract storage differs"))
 			}
 		}
 	}
@@ -226,14 +259,15 @@ func (self *bootstrapSuccessorCanonicalChain) identity(ctx context.Context, plan
 // Historical originals continue to use their own immutable approved artifacts.
 func (self *bootstrapSuccessorCanonicalChain) currentRuntime(ctx context.Context, head chainIdentity) error {
 	runtime, err := self.chain.client.readRuntimeSnapshotAtIdentity(ctx, head)
-	if err == nil {
-		for _, profile := range self.runtimeProfiles {
-			if runtime.Version == profile.RuntimeVersion && runtime.CodeHash == profile.RuntimeCodeHash && runtime.MetadataHash == profile.RuntimeMetadataHash {
-				return nil
-			}
+	if err != nil {
+		return err
+	}
+	for _, profile := range self.runtimeProfiles {
+		if runtime.Version == profile.RuntimeVersion && runtime.CodeHash == profile.RuntimeCodeHash && runtime.MetadataHash == profile.RuntimeMetadataHash {
+			return nil
 		}
 	}
-	return errors.Join(errors.New("successor canonical current runtime differs from its independent successor approval"), err)
+	return errors.Join(errRpcIntegrity, errors.New("successor canonical current runtime differs from its independent successor approval"))
 }
 
 // Finalized reads keep one canonical hash while ordinary head advancement is
@@ -307,8 +341,11 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 		return result, err
 	}
 	pending, err := self.safeState(ctx, plan, "pending")
-	if err != nil || rootObjectHash(pending) != safeHash {
-		return result, errors.Join(errors.New("successor canonical Safe pending authority or nonce differs"), err)
+	if err != nil {
+		return result, err
+	}
+	if rootObjectHash(pending) != safeHash {
+		return result, errors.Join(errRpcIntegrity, errors.New("successor canonical Safe pending authority or nonce differs"))
 	}
 	for _, read := range []struct {
 		method string
@@ -331,8 +368,11 @@ func (self *bootstrapSuccessorCanonicalChain) observe(ctx context.Context, plan 
 	}
 	result.RelayerBalanceWei = available.String()
 	known, err := self.retainedTransactionKnown(ctx, plan)
-	if err != nil || known {
-		return result, errors.Join(errors.New("successor canonical retained transaction is pending or unresolved for this account"), err)
+	if err != nil {
+		return result, err
+	}
+	if known {
+		return result, errors.New("successor canonical retained transaction is pending or unresolved for this account")
 	}
 	if _, err := self.chain.client.readFinalizedMappingAtIdentity(ctx, head); err != nil {
 		return result, err

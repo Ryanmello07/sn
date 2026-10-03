@@ -110,8 +110,11 @@ func (self *bootstrapSuccessorCanonicalChain) readmitCurrentPolicy(ctx context.C
 		return err
 	}
 	pending, err := self.safeState(ctx, plan, "pending")
-	if err != nil || rootObjectHash(pending) != safeHash {
-		return errors.Join(errors.New("successor final current-policy Safe authority changed"), err)
+	if err != nil {
+		return err
+	}
+	if rootObjectHash(pending) != safeHash {
+		return errors.Join(errRpcIntegrity, errors.New("successor final current-policy Safe authority changed"))
 	}
 	var nonce, balance string
 	for _, read := range []struct {
@@ -133,8 +136,11 @@ func (self *bootstrapSuccessorCanonicalChain) readmitCurrentPolicy(ctx context.C
 	}
 	result.RelayerPendingNonce, result.RelayerBalanceWei = queued.Uint64(), available.String()
 	known, err := self.retainedTransactionKnown(ctx, plan)
-	if err != nil || known {
-		return errors.Join(errors.New("successor final current-policy transaction is pending or unresolved"), err)
+	if err != nil {
+		return err
+	}
+	if known {
+		return errors.New("successor final current-policy transaction is pending or unresolved")
 	}
 	// This final check fetches only identities and a code hash, never another
 	// large proof/artifact. Equal reviewed code preserves its codec/metadata
