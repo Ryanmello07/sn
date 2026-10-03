@@ -21,6 +21,9 @@
     "current-cutoff-readiness-config-20261003.json": "f9689f1953a29e7c8d4b69fcbcd4f588740706c645a09412bb9e698b144e154c",
     "current-fee-caller-e274-cross-engine-qualification-20261003.json": "c2d0620398ab6938ff735486da2972d6b1a5a5b37bf4bb8a59c43483ae77ee3b",
     "current-fee-caller-e274-original-gate-review-20261003.json": "f796d7cdbab1b2f9df5e547cda1cd15e6a987da396f88c120a8a3eb82d973250",
+    "current-hosts-c59-joined-qualification-20261003.json": "7cf7dfce2c456f5fb8b2155240206bf15c32b1309ea4a5afb9219733057d19db",
+    "current-hosts-c59-main-merge-20261003.json": "1a64b5f8673d876769b0252f75bb0e4159cfafd31d336f4432e71cd417899fb5",
+    "current-hosts-c59-source-join-review-20261003.json": "855d10f71edfecf0e907bcafed9fd4376a0421f4c14f137473fd8e9cf1c0049a",
     "current-release-556-source-compile-review-20261003.json": "bf0848fe1342d9bbd75d5c29e028faca0337fba03247f9c539411f982fba518a",
     "customer-corrected-full-model-terminal-20261003.json": "a96f2c33e4a921d9e54a39e0b7716d15c0f5e959188908cc64d121926ecb545d",
     "customer-final-race-qualification-20261003.json": "138253034e509103211bf57f10a61b999ef3d59c19eb6286b30fa0d5e6322513",
@@ -243,15 +246,15 @@
     },
     {
       "closed": false,
-      "evidence": "qualified-composition-main-merge-20261003.json",
+      "evidence": "current-hosts-c59-main-merge-20261003.json",
       "requirement": "MG-02",
-      "status": "Qualified556 production composition merged into main with exactnon-docinputs;finalrepeatablebuild,publication verification andhostadoption remain."
+      "status": "Qualified production composition and bounded current-host increment merged at0a9aeb34; archive/collector joins, final repeatable build and host adoption remain."
     },
     {
       "closed": false,
-      "evidence": "historical-proof-backend-qualification-20261003.json",
+      "evidence": "current-hosts-c59-joined-qualification-20261003.json",
       "requirement": "MG-03",
-      "status": "Synthetic proof backend twelve roots and two operative controls qualified; actual runtime/finality admission and native withdrawal/refund attribution remain."
+      "status": "Bounded current-host seven normal/race roots, vet and three actual Go/Rust cases qualified and merged; actual runtime/witness/finality authority and native fee admission remain."
     },
     {
       "closed": false,

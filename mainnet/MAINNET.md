@@ -4221,3 +4221,14 @@ The [guard qualification](evidence/cargo-control-e68-qualification-20261003.json
 The [bounded host qualification](evidence/runtime-hosts9cf-scoped-qualification-20261003.json) verifies39 Rust roots, including the twelve new roots, five Go roots normally and under race detection, five freshly compiled Rust omission groups with six intended assertion failures, two Go omissions in both modes and three actual Go-to-Rust typed reports. A dynamic error assertion may print the unexpected SDK error rather than its expected phrase: bind the exact source assertion site and actual payload instead of accepting a generic failing exit. Synthetic host support still does not admit actual runtime fee authority or finality.
 
 Current-main host integration remains a separate gate. Four initial Go-run fixture failures rejected the temporary test image at protected-executable admission; the same seven roots pass from an owned single-link pinned image. Preserve the original result and qualify normal/race continuations from the immutable executable, with mode and ancestor custody recorded. Do not relax production executable admission to accommodate a compiler-generated fixture.
+
+
+### October 3 current runtime-host integration completed
+
+The [joined qualification](evidence/current-hosts-c59-joined-qualification-20261003.json) verifies seven selected roots in each normal and race mode, vet, and three exact Go-to-Rust executions. The [source join](evidence/current-hosts-c59-source-join-review-20261003.json) retains qualified Rust component results through nine byte-exact files. The [actual merge](evidence/current-hosts-c59-main-merge-20261003.json) records main0a9aeb34 and preserves the three compiler-guard workflow files.
+
+Preserve the original temporary-image failures separately from the successful owned-image runs. The original failed executable-admission predicate was not captured; do not infer that its link count alone caused the rejection. Capture mode, links, ownership, ancestors and executable digest before running a protected test image. A corrected harness result does not change production admission policy.
+
+This integration implements bounded historical host operations and separates job-read failures from evidence contradictions. It does not approve the actual mainnet runtime, establish a complete execution witness or authorize native fee accounting. Complete collector qualification, runtime/profile/finality review, economic conservation, cross-root recovery and actual host adoption remain required.
+
+Operational headroom: the guarded reclaim29 plan found no eligible inactive archives older than12hours and removed nothing. Preserve this failed admission; select other disposable build data or derive a measured incremental forecast before admitting larger work. The full512 fixture contains encoded checkpoints, not an established512MiB payload; size forecasts must use measured or bounded actual data.

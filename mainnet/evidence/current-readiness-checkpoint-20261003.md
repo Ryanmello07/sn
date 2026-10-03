@@ -50,3 +50,5 @@ The [deadline correction](fee-caller-deadline4c96-qualification-20261003.json) a
 The [EVM archival source/compile review](evm-history8d-source-compile-review-20261003.json) is not behavioral qualification. Complete512-segment race and cross-root restore remain open.
 
 The [current caller gate](current-caller-cb796-joined-qualification-20261003.json) and [actual main merge](current-caller-cb796-main-merge-20261003.json) establish this incremental source scope; full launch readiness remains unproved.
+
+The [current host qualification](current-hosts-c59-joined-qualification-20261003.json) and [actual main merge](current-hosts-c59-main-merge-20261003.json) now establish the incremental bounded host/caller integration. Actual runtime authority, complete witness acquisition and final production rehearsal remain open. Reclaim29 found no eligible12-hour archives; no deletion occurred. Full512 sizing must use actual encoded checkpoint measurements rather than an assumed one-MiB segment.
