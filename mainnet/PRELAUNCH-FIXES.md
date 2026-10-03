@@ -97,7 +97,13 @@ discriminator. Its [independent two-root normal/race scope and validator vet](ev
 now pass on exact `d3c84fe3` with the pinned workspace dependencies. The [original `1982267c` valid-prefix control](evidence/restore-ledger-readonly-causal-20261003.json)
 reproduces the exact nil writable-hook panic in normal and race modes, using
 only a test overlay; original production bytes were retained. The broader
-public ledger-restore adapter remains a separate pending scope. No live restoration is established.
+public ledger-restore adapter at `912315cf` now has a [separate six-root
+normal/race scope and two passing package vets](evidence/restore-ledger-adapter-independent-20261003.json),
+after correcting only private scratch ancestry. Original signed history,
+pending phases and actual owner reopening are exercised; missing/partial
+intent, wrong heads and foreign members are refused. The original setup
+failures remain retained. Public-dispatch causal, broader restore composition
+and live restoration remain pending.
 
 Restore qualification must preflight the whole temporary-directory ancestry.
 The [first independent `912315cf` public-adapter run](evidence/restore-ledger-initial-setup-failure-20261003.json)
