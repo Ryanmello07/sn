@@ -114,12 +114,19 @@ func (self monitorEvmResourceHistory) validate(policy monitorEconomicEvmPolicy) 
 	}
 	previous := self.origin(policy)
 	resources, capacity := policy.originalResources(), uint64(defaultMonitorEvmReviewHistoryEntries)
+	reviews := make(map[string]bool, len(self.Entries))
 	for index, entry := range self.Entries {
 		if entry.Resources.validate() != nil || !entry.Resources.includes(resources) || entry.ReviewHistoryEntries < capacity || entry.ReviewHistoryEntries > maximumMonitorEvmReviewHistoryEntries || uint64(index+1) > entry.ReviewHistoryEntries || entry.PreviousSha256 != previous || entry.ContentHash != entry.hash() {
 			return errors.New("EVM economic acknowledged resource history changed or shrank")
 		}
 		if entry.ReviewSha256 != "" && !planSha256(entry.ReviewSha256) || entry.ReviewSha256 == "" && (index != 0 || entry.Resources != policy.originalResources() || entry.ReviewHistoryEntries != defaultMonitorEvmReviewHistoryEntries) {
 			return errors.New("EVM economic resource growth lacks its retained review reference")
+		}
+		if entry.ReviewSha256 != "" {
+			if reviews[entry.ReviewSha256] {
+				return errors.New("EVM economic resource review reference was already acknowledged")
+			}
+			reviews[entry.ReviewSha256] = true
 		}
 		if index != 0 {
 			prior := self.Entries[index-1]
