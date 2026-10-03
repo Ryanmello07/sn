@@ -5876,3 +5876,24 @@ test caches, source, evidence, modules and executables were retained. The data
 volume subsequently had about 146 GiB free; admission must still remeasure
 headroom before each costly phase. This is qualification-host evidence, not
 production capacity qualification.
+
+
+### October 3: shared recovery dependency published
+
+Connect main now publishes `9e7ec0afa426472c083c750196155f5708e7d23b`,
+tree `b1919e473daab790c5cf7a6fb6fc56e74831d636`. The
+[sealed source join](evidence/connect53-source-join-20261003.json) preserves
+all durable-volume and module bytes from qualified `53bc92fa`, and all paths
+outside that package from upstream `69a006b3`. Root verified all 37 bindings.
+Pull/rebase changed the integration commit identity from `da2385aa`, but root
+verified the entire published tree remained identical and independently read
+back the remote main ref. The [publication checkpoint](evidence/connect53-publication-20261003.json)
+retains that distinction.
+
+The 32 independent normal/race roots and package vet retain their original
+source scopes; earlier preparation receipts remain separate. This is shared
+source publication, not proof of current SN/server module consumption, a
+qualified production release or usable live restore. Pin this exact published
+revision in the next consumer composition without retargeting active tests.
+Member `332b1f43`, complete co-owner restoration, explicit execution rebind
+and capacity revisions remain subsequent requirements.
