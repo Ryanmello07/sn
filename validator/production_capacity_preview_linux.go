@@ -255,6 +255,23 @@ func BuildProductionCapacityPreview(ctx context.Context, request ProductionCapac
 	next.EvidenceV2.Bounds = request.Bounds
 	next.ProductionCapacityRevision = &revision
 	next.OwnerRecycleApproval = &ReleaseOwnerRecycleApprovalConfig{Signer: cfg.OwnerRecycleApproval.Signer, Approval: ReleaseEvidenceV2File{Path: request.SuccessorApprovalPath}}
+	// The exported config is JSON, also accepted by the strict document
+	// decoder. Check its actual wire form before committing signing bytes;
+	// never repair a changed config after an external signature is supplied.
+	raw, err = json.Marshal(&next)
+	if err != nil {
+		return result, err
+	}
+	decoded, err := decodeReleaseConfigDocument(request.Config.Path, raw)
+	if err != nil {
+		return result, err
+	}
+	beforeHash, beforeErr := OwnerRecycleConfigHash(&next)
+	afterHash, afterErr := OwnerRecycleConfigHash(decoded)
+	if beforeErr != nil || afterErr != nil || beforeHash != afterHash {
+		return result, errors.Join(errors.New("capacity proposal changes under strict document decoding"), beforeErr, afterErr)
+	}
+	next = *decoded
 	approval := approved.Approval
 	approval.ConfigHash, err = OwnerRecycleConfigHash(&next)
 	if err != nil {

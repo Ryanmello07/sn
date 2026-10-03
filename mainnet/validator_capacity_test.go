@@ -164,14 +164,27 @@ func TestValidatorCapacityPreviewBindsJoinedRetainedCensus(t *testing.T) {
 	oldApproval := f.validator.approval
 	f.validator.config, f.validator.approval = *preview.Config, preview.Approval
 	f.validator.path = filepath.Join(f.metadata, "signed-successor.yml")
-	f.validator.publish(t)
 	message, err := f.validator.approval.SigningMessage()
 	if err != nil || "0x"+hex.EncodeToString(message) != preview.SigningBytes {
 		t.Fatal("preview signing bytes differed from actual normalized config", err)
 	}
+	// Sign only the bytes emitted by the public command. Do not invoke the
+	// fixture publish helper, which could rehash/normalize before signing and
+	// conceal a proposal that changed through serialization.
+	exportedMessage, err := hex.DecodeString(strings.TrimPrefix(preview.SigningBytes, "0x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.validator.writeApproval(t, validator.OwnerRecycleApprovalEnvelope{Approval: preview.Approval,
+		Signature: hex.EncodeToString(ed25519.Sign(f.validator.private, exportedMessage))})
+	f.validator.writeConfig(t)
 	loaded, err := validator.LoadReleaseConfig(f.validator.path)
 	if err != nil || loaded.ProductionCapacityRevision == nil || len(loaded.ProductionAuthorityHistory) != 1 {
 		t.Fatal("public preview cannot become an independently approved resource successor", err)
+	}
+	loadedHash, err := validator.OwnerRecycleConfigHash(loaded)
+	if err != nil || loadedHash != preview.Approval.ConfigHash {
+		t.Fatal("wire reload changed the exact independently approved preview", err)
 	}
 	actual := f.validator.approval
 	actual.ConfigHash, oldApproval.ConfigHash = [32]byte{}, [32]byte{}
