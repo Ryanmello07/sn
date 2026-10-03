@@ -134,15 +134,23 @@ func TestMonitorOutputEarlyAdmissionStillJoinsBlockedSink(t *testing.T) {
 	}
 	sink := &monitorBlockedOutput{entered: make(chan struct{}), left: make(chan struct{})}
 	closed := false
-	hooks := monitorServiceHooks{afterClose: func(_, _ string, file *os.File) error {
-		_, err := file.Stat()
-		closed = errors.Is(err, os.ErrClosed)
-		// The admission diagnostic was queued before cleanup. Observe its
-		// actual blocked write before allowing the bounded final drain.
-		<-sink.entered
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	hooks := monitorServiceHooks{afterClose: func(role, kind string, file *os.File) error {
+		if role == "alpha" && kind == "checkpoint" {
+			_, err := file.Stat()
+			closed = errors.Is(err, os.ErrClosed)
+		}
 		return nil
+	}, afterWorker: func(role string, exit int) {
+		if role == "alpha" && exit == 3 {
+			// Cleanup precedes this role's admission diagnostic. Its actual
+			// blocked export is joined by explicit parent cancellation.
+			<-sink.entered
+			cancel()
+		}
 	}}
-	if exit := runMonitorStorageTestWithHooks(t, t.Context(), fixture.args("http://rpc.example"), sink, sink, fixture.clock.now, hooks); exit != 3 || !closed {
+	if exit := runMonitorStorageTestWithHooks(t, ctx, fixture.args("http://rpc.example"), sink, sink, fixture.clock.now, hooks); exit != 3 || !closed {
 		t.Fatal("early failure leaked admitted owners", exit, closed)
 	}
 	<-sink.entered

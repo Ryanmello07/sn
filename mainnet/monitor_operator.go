@@ -622,7 +622,7 @@ func (self *monitorOperatorWorker) run(ctx context.Context, interval, stallAfter
 }
 
 // Admission uses the same physical checkpoint owner and telemetry lock. No DB
-// connection starts until every role's files have been admitted successfully.
+// connection starts until this role's files have been admitted successfully.
 func openMonitorOperatorWorker(ctx context.Context, policy monitorOperatorPolicy, expected identityExpectation, checkpointPath, metricsPath string, hooks monitorServiceHooks) (*monitorOperatorWorker, error) {
 	checkpointPath, metricsPath = monitorOperatorPaths(checkpointPath, metricsPath, policy.Role)
 	checkpoint, err := openMonitorServiceCheckpoint(checkpointPath, expected, monitorValidatorPolicy{}, ctx)
@@ -632,14 +632,14 @@ func openMonitorOperatorWorker(ctx context.Context, policy monitorOperatorPolicy
 	worker := &monitorOperatorWorker{policy: policy, checkpoint: checkpoint}
 	metrics, err := openMonitorMetrics(metricsPath, ctx)
 	if err != nil {
-		return nil, errors.Join(err, checkpoint.owner.close())
+		return nil, monitorAdmissionFailure(err, closeMonitorServiceOwners(policy.Role, nil, checkpoint.owner, hooks))
 	}
 	worker.metrics = metrics
 	if hooks.afterCheckpointOpen != nil {
 		hooks.afterCheckpointOpen(ctx, policy.Role, checkpoint.owner.lock)
 	}
 	if err := worker.load(ctx); err != nil {
-		return nil, errors.Join(err, metrics.close(), checkpoint.owner.close())
+		return nil, monitorAdmissionFailure(err, closeMonitorServiceOwners(policy.Role, metrics, checkpoint.owner, hooks))
 	}
 	if hooks.syncDirectory != nil {
 		checkpoint.owner.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(policy.Role, "checkpoint", file) }
