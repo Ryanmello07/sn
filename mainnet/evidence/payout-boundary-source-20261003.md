@@ -40,8 +40,12 @@ all 28 selected roots (13 new plus 15 neighbors), with no failures or skips and
 owned fixture cleanup complete. Root verified all 37 receipt bindings and the
 actual test events. The [same 28 roots under race detection](payout-boundary-race-20261003.json)
 also pass, with no race reports and completed fixture cleanup. Root verified
-all 33 race-receipt bindings and actual events. Causal controls, affected
-package vets and CLI build remain pending. These roots do not substitute for the full model run
+all 33 race-receipt bindings and actual events. The [normal regression
+controls](payout-boundary-causal-normal-20261003.json) reproduce all eight
+intended failures across five deliberately modified groups while accepted
+reconciliation remains a positive pass. Root verified 62 bindings and actual
+assertions; cleanup completed. Race controls, affected package vets and CLI
+build remain pending. These roots do not substitute for the full model run
 on the earlier exact source or the eventual composed release qualification.
 
 Merge/publication, production migration and anchor preparation, running worker

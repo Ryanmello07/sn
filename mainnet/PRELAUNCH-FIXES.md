@@ -5818,7 +5818,11 @@ attempt reconciliation, process restart and a database timeout's bounded
 continuation. The original container setup failure stays separately retained.
 The [same 28-root race scope](evidence/payout-boundary-race-20261003.json) now
 passes without failures, skips or race reports, with owned cleanup complete.
-Causal/vet/build scopes remain queued. This does not relabel the earlier
+The [normal regression controls](evidence/payout-boundary-causal-normal-20261003.json)
+also reproduce all eight intended failures while accepted reconciliation
+remains a positive pass; owned cleanup completed. The five groups include
+explicit omission/misclassification controls, not all unmodified historical
+source. Race controls and vet/build remain queued. This does not relabel the earlier
 full model source, prove a composed release or make the October 6 schedule
 operational. Merge, production preparation and running worker evidence remain
 required.
