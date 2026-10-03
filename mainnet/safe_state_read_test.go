@@ -20,10 +20,13 @@ import (
 
 // Each selection names the exact account method/slot rather than masking all
 // historical receipts or unrelated contract state on the same HTTP route.
-type safeStateReadSelection struct{ method, slot, getter string }
+type safeStateReadSelection struct{ method, account, slot, getter string }
 
 func (self safeStateReadSelection) matches(method string, params []any) bool {
 	if method != self.method {
+		return false
+	}
+	if self.account != "" && (len(params) != 2 || params[0] != self.account) {
 		return false
 	}
 	if self.slot != "" {
@@ -187,7 +190,14 @@ func TestSafeStateReadUnavailableDoesNotClaimChangedAuthority(t *testing.T) {
 func TestSafeStateReadReturnedConflictsRemainIntegrity(t *testing.T) {
 	adapter, model, chain := newSafeStateReadFixture(t)
 	base := adapter.chain.client.httpClient.Transport
-	for _, selection := range safeStateReadSelections(model) {
+	// Proxy and singleton are distinct required reads. Count the selected
+	// account once; reading its healthy peer is not a retry of the conflict.
+	selections := []safeStateReadSelection{
+		{method: "eth_getCode", account: model.approval.Plan.Review.Transaction.Safe.Hex()},
+		{method: "eth_getCode", account: model.approval.Plan.Request.Singleton.Hex()},
+	}
+	selections = append(selections, safeStateReadSelections(model)[1:]...)
+	for _, selection := range selections {
 		waits, calls := 0, 0
 		value := common.Hash{31: 99}.Hex()
 		if selection.method == "eth_getCode" {
