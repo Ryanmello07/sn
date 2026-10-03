@@ -44,6 +44,35 @@ type localRebindTestPlan struct {
 // plan/apply, then update only the test's separately reviewed declaration.
 func localRebindTestRestore(t *testing.T, f *bootstrapSuccessorCanonicalFixture) (string, string) {
 	t.Helper()
+	// External signing inputs are retained separately; every original journal
+	// must already own precisely the same transaction and approved envelope.
+	inputDirectory := filepath.Dir(f.original.contracts.configPath)
+	if inputDirectory == f.original.config.RunDirectory {
+		t.Fatal("composed fixture did not separate signed input and runtime custody")
+	}
+	inputs := map[string][]byte{}
+	for index, action := range f.original.contracts.config.Plan.Actions {
+		path := filepath.Join(inputDirectory, action.Id+".signed.bin")
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal("original signing input was lost", action.Id, err)
+		}
+		journal, err := os.ReadFile(filepath.Join(f.original.config.RunDirectory, bootstrapContractStateFile(index)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var record evmActionRecord
+		if err := decodePlanJson(journal, &record); err != nil {
+			t.Fatal(err)
+		}
+		if err := record.validateForAction(f.original.contracts.config, index); err != nil || record.Signed != "0x"+hex.EncodeToString(raw) {
+			t.Fatal("original journal lost exact signed bytes or action lineage", action.Id, err)
+		}
+		inputs[path] = raw
+	}
+	if len(inputs) != 8 {
+		t.Fatal("complete original fixture did not retain all eight signing inputs")
+	}
 	source := newStoragePreparationCommandFixture(t)
 	original := f.original.root.storage
 	declaration, err := durablevolume.Load(original.Reference)
@@ -151,6 +180,12 @@ func localRebindTestRestore(t *testing.T, f *bootstrapSuccessorCanonicalFixture)
 	f.original.root.storage = &durablefixture.Fixture{Reference: reference, Host: original.Host, Roots: append([]string(nil), original.Roots...),
 		Context: durablepath.WithHost(durablevolume.WithReference(t.Context(), reference), original.Host)}
 	f.original.contracts.storage = f.original.root.storage
+	for path, original := range inputs {
+		retained, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(retained, original) {
+			t.Fatal("restoring runtime custody changed original signing input", filepath.Base(path), err)
+		}
+	}
 	return path, hash
 }
 
@@ -159,11 +194,11 @@ func localRebindTestRestore(t *testing.T, f *bootstrapSuccessorCanonicalFixture)
 // decides coverage and performs the only preparation; diagnostics grant none.
 func localRebindTestCoverage(t *testing.T, owners []durablevolume.PreparationOwner, report durablevolume.Inventory) {
 	t.Helper()
-	files := map[string]bool{}
+	files := map[string]durablevolume.PreparationFile{}
 	attributes := map[durablevolume.PreparationAttributeSpec]bool{}
 	for _, entry := range report.Entries {
 		if entry.Path != "" {
-			files[entry.Path] = true
+			files[entry.Path] = durablevolume.PreparationFile{Path: entry.Path, Kind: entry.Kind, Mode: entry.Mode, Bytes: entry.Size, Sha256: entry.Sha256}
 		}
 		for _, attribute := range entry.OwnerAttributes {
 			if entry.Path == "" && attribute.Name == durablevolume.PreparationAttribute {
@@ -182,12 +217,17 @@ func localRebindTestCoverage(t *testing.T, owners []durablevolume.PreparationOwn
 			t.Fatal("actual owner cannot plan its original view", owner.Kind, err)
 		}
 		for _, file := range plan.Files {
+			if original, found := files[file.Path]; !found || original != file {
+				t.Fatal("actual fixed owners overlap or change original member", owner.Kind, file.Path)
+			}
 			delete(files, file.Path)
 		}
 		for _, attribute := range plan.Attributes {
+			if !attributes[attribute] {
+				t.Fatal("actual fixed owners overlap or invent original checkpoint", owner.Kind, attribute)
+			}
 			delete(attributes, attribute)
 		}
-		t.Logf("original coverage owner=%q files=%d attributes=%d", owner.Kind, len(plan.Files), len(plan.Attributes))
 	}
 	names := []string{}
 	for name := range files {
@@ -197,7 +237,9 @@ func localRebindTestCoverage(t *testing.T, owners []durablevolume.PreparationOwn
 		names = append(names, "attribute:"+attribute.Path+":"+attribute.Name)
 	}
 	slices.Sort(names)
-	t.Logf("original coverage unassigned=%q", names)
+	if len(names) != 0 {
+		t.Fatalf("actual original fixture has unassigned custody: %q", names)
+	}
 }
 
 func localRebindTestSign(t *testing.T, path string, plan localRebindTestPlan, key ed25519.PrivateKey, domain string) planFileReference {
