@@ -18,9 +18,11 @@ The preview verifies the original signed execution, derives the unsigned local
 member census from original bytes and reviewed transferred inodes, and accounts
 for every co-owned snapshot file and checkpoint. It refuses omitted or
 overlapping owners, repeated sources, changed capacities, unrelated members,
-missing physical heads and a changed generation. This first profile admits at
-most 32 fixed owners and requires a settled original local member publication;
-it does not infer completion for a pending original outcome or outer head.
+missing physical heads and a changed generation. This profile admits at
+most 32 fixed owners. The settled-source checkpoint required no pending local
+publication. Its pending-outcome successor additionally accepts one exact
+original terminal event, as described below; it still refuses an unresolved
+outer head or unrelated publication.
 Co-owned snapshots must retain their exact original bytes and derived physical
 heads. Actual passive preparation then reads the original signed record under
 the restored root; unsigned inspection cannot borrow an exclusive writer.
@@ -45,9 +47,23 @@ and local receipt inventory is shared by replay and live checkpoints. Joined
 retry may finish only that receipt's retained publication; an unknown receipt
 or loss of a completed member refuses without recreation.
 
+The pending-outcome successor adds optional `pending_outcome_sha256` to the
+separately approved plan. Omission preserves the settled plan's signing bytes.
+The digest binds the full original installed or outer-reverted event already
+retained in the authenticated restored member census. An original reservation
+may acquire its first stage inode, but an acknowledged inode, name, payload and
+event authority cannot change. Offline resume reports
+`physical_rebind_pending: true` and `local_custody_complete: false`; it retains
+the original pending slot without inserting a new physical receipt. Missing or
+pending canonical inclusion cannot cause another send. Exact canonical outcome
+reconciliation completes the original journal first, then retains the physical
+receipt. Publication uncertainty closes the affected owner and requires a
+joined reopen of the exact original bytes. This source extension awaits its own
+behavioral qualification and does not inherit a settled-root test result.
+
 Ordinary online canonical/runtime/current-policy gates remain required.
 Combined local-and-registry recovery is not qualified merely by the individual
-source paths. Rebind chaining, original pending-outcome and outer-head recovery,
+source paths. Rebind chaining, remaining outer-head recovery,
 retained in-place preparation, joined capacity/retention revision, current
 published dependency composition and release/host approval remain required
 work. Copied local files prove no remote database or object storage recovery.

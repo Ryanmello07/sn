@@ -3152,3 +3152,11 @@ allowance bytes. Preflight/compilation alone do not qualify its four new
 behavioral controls or the published current composition. Original pending
 outcomes/outer heads, retained in-place preparation, capacity/retention revisions
 and actual launch authority remain open PH09/MG09 requirements.
+
+The separate pending-outcome successor binds the original terminal payload in
+the independent local approval and defers physical receipt publication until
+that exact original outcome is canonically reconciled. Offline status cannot
+claim local custody complete or permit another send while reconciliation is
+pending. Its public reserved-stage and acknowledged-stage controls require
+their own independent gate; outer-head recovery, retained in-place preparation,
+capacity/retention revisions and current published composition remain open.

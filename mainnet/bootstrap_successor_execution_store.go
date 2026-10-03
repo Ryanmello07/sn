@@ -31,6 +31,7 @@ type bootstrapSuccessorExecutionStore struct {
 	safeCurrentHistory     bootstrapSuccessorSafeCurrentHistory
 	registryRebind         *bootstrapSuccessorRegistryRebindApproval
 	localRebind            *bootstrapSuccessorLocalRebindApproval
+	deferredLocalRebind    bool
 }
 
 // Global within the approved physical registry, these keys deliberately use
@@ -187,7 +188,8 @@ func openBootstrapSuccessorExecutionStoreWithPhysicalRebind(ctx context.Context,
 		if !ready {
 			return nil, errors.New("successor physical rebind requires completed original claim and nonce custody")
 		}
-		if pending := self.local.members.census.Pending; pending != nil && !(retainedRebind != nil && pending.Name == bootstrapSuccessorRegistryRebindFile) && !(retainedLocalRebind != nil && pending.Name == bootstrapSuccessorLocalRebindFile) {
+		if pending := self.local.members.census.Pending; pending != nil && !(retainedRebind != nil && pending.Name == bootstrapSuccessorRegistryRebindFile) && !(retainedLocalRebind != nil && pending.Name == bootstrapSuccessorLocalRebindFile) &&
+			!(retainedLocalRebind != nil && planSha256(retainedLocalRebind.Plan.PendingOutcomeSha256) && pending.Sha256 == retainedLocalRebind.Plan.PendingOutcomeSha256) {
 			return nil, errors.New("successor physical rebind requires a completed original local publication checkpoint")
 		}
 	}
@@ -213,7 +215,7 @@ func openBootstrapSuccessorExecutionStoreWithPhysicalRebind(ctx context.Context,
 			return nil, errors.Join(errors.New("successor execution completed adoption is missing"), err)
 		}
 	}
-	if (retainedRebind != nil || retainedLocalRebind != nil) && self.local.members.census.Pending != nil {
+	if pending := self.local.members.census.Pending; (retainedRebind != nil || retainedLocalRebind != nil) && pending != nil && (pending.Name == bootstrapSuccessorRegistryRebindFile || pending.Name == bootstrapSuccessorLocalRebindFile) {
 		// Only this previously retained exact rebind intent may be completed
 		// before inspecting history. It cannot displace an original outcome.
 		var err error
@@ -250,6 +252,12 @@ func openBootstrapSuccessorExecutionStoreWithPhysicalRebind(ctx context.Context,
 	}
 	if err := self.loadEvents(); err != nil {
 		return nil, err
+	}
+	if pending := self.local.members.census.Pending; pending != nil && retainedLocalRebind != nil {
+		self.deferredLocalRebind = true
+		if err := self.checkDeferredLocalRebind(); err != nil {
+			return nil, err
+		}
 	}
 	if err := self.retainRegistryRebind(); err != nil {
 		return nil, err
@@ -434,6 +442,9 @@ func (self *bootstrapSuccessorExecutionStore) append(event bootstrapSuccessorExe
 		return errors.Join(err, self.close())
 	}
 	self.last, self.pending, self.pendingOutcomeHash = copied, "", ""
+	if err := self.completeDeferredLocalRebind(); err != nil {
+		return err
+	}
 	return errors.Join(self.checkpointExecutionHistory(), self.checkpointRuntimeHistory(), self.checkpointSafeCurrentHistory())
 }
 

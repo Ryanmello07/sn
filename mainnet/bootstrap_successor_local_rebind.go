@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -37,6 +38,7 @@ type bootstrapSuccessorLocalRebindPlan struct {
 	OriginalFormerWriter     durablevolume.Reference        `json:"original_former_writer_fence"`
 	OriginalMemberCensusHash string                         `json:"original_member_census_sha256"`
 	DerivedMemberCensusHash  string                         `json:"derived_member_census_sha256"`
+	PendingOutcomeSha256     string                         `json:"pending_outcome_sha256,omitempty"`
 }
 
 type bootstrapSuccessorLocalRebindApproval struct {
@@ -63,6 +65,9 @@ func (self bootstrapSuccessorLocalRebindPlan) signingBytes(original bootstrapSuc
 		self.RestoredLocal.Inode == 0 || self.RestoredLocal == self.OriginalLocal || !planSha256(self.RestoredGeneration) ||
 		!planSha256(self.OriginalMemberCensusHash) || !planSha256(self.DerivedMemberCensusHash) {
 		return nil, errors.New("successor local rebind changes original scope or lacks exact restored custody")
+	}
+	if self.PendingOutcomeSha256 != "" && !planSha256(self.PendingOutcomeSha256) {
+		return nil, errors.New("successor local rebind lacks an exact pending outcome digest")
 	}
 	for _, reference := range []durablevolume.Reference{self.RuntimeDeclaration, self.RestorePlan, self.OriginalInventory, self.OriginalFormerWriter} {
 		if !bootstrapRootAbsolutePath(reference.Path) || !planSha256(reference.Sha256) || reference.Path == self.LocalDirectory || strings.HasPrefix(reference.Path, self.LocalDirectory+"/") {
@@ -210,8 +215,26 @@ func buildBootstrapSuccessorLocalRebind(ctx context.Context, original bootstrapS
 	if err := decodePlanJson(derived, &derivedCensus); err != nil {
 		return result, err
 	}
-	if derivedCensus.Pending != nil {
-		return result, errors.New("successor local rebind requires a settled original publication")
+	pendingOutcome := ""
+	if pending := derivedCensus.Pending; pending != nil {
+		// Only an original terminal event can defer the physical receipt.
+		// Its full payload remains in the authenticated restored member head;
+		// the execution owner still requires exact canonical reconciliation.
+		raw, err := base64.StdEncoding.Strict().DecodeString(pending.Payload)
+		var event bootstrapSuccessorExecutionEvent
+		if err == nil {
+			err = decodePlanJson(raw, &event)
+		}
+		claimed := event.ContentHash
+		event.ContentHash = ""
+		name := bootstrapSuccessorExecutionEventName(event.Sequence)
+		directory := bootstrapSuccessorExecutionDirectory{claim: rootObjectHash(original)}
+		if err != nil || pending.Append || event.Sequence == 0 || event.Sequence >= 32 || event.Phase != "installed" && event.Phase != "outer-reverted" ||
+			event.ApprovalHash != rootObjectHash(original) || claimed != rootObjectHash(event) || pending.Sha256 != safeReleaseHash(raw) || pending.Size != int64(len(raw)) ||
+			pending.Name != name+".intent" && pending.Name != name+".json" || pending.Stage != directory.stageName(pending.Name, event.Phase) {
+			return result, errors.Join(errors.New("successor local rebind pending publication is not its original exact terminal outcome"), err)
+		}
+		pendingOutcome = pending.Sha256
 	}
 	declaration, err := durablevolume.Load(declarationReference)
 	if err != nil {
@@ -242,6 +265,7 @@ func buildBootstrapSuccessorLocalRebind(ctx context.Context, original bootstrapS
 		OriginalLocal: p.Root, RestoredLocal: physical, RestoredGeneration: safeReleaseHash(plan.Generation), RuntimeDeclaration: declarationReference,
 		RestorePlan: reference, OriginalInventory: request.RestoreSource.Inventory, OriginalFormerWriter: request.RestoreSource.FormerWriterFence,
 		OriginalMemberCensusHash: derivation.Original.File.Sha256, DerivedMemberCensusHash: derivation.Derived.Sha256}
+	result.PendingOutcomeSha256 = pendingOutcome
 	_, err = result.signingBytes(original, profile)
 	return result, errors.Join(err, ctx.Err())
 }
@@ -370,7 +394,7 @@ func (self bootstrapSuccessorLocalRebindApproval) validate(ctx context.Context, 
 
 // The constructor calls this only after original claim, nonce and history checks.
 func (self *bootstrapSuccessorExecutionStore) retainLocalRebind() error {
-	if self.localRebind == nil {
+	if self.localRebind == nil || self.deferredLocalRebind {
 		return nil
 	}
 	raw, err := json.Marshal(self.localRebind)
@@ -378,6 +402,39 @@ func (self *bootstrapSuccessorExecutionStore) retainLocalRebind() error {
 		return err
 	}
 	return self.local.publish(bootstrapSuccessorLocalRebindFile, "local-rebind", raw)
+}
+
+// Deferral admits only the explicitly bound original terminal member. It never
+// frees the shared publication slot for a new attempt, runtime or policy file.
+func (self *bootstrapSuccessorExecutionStore) checkDeferredLocalRebind() error {
+	if !self.deferredLocalRebind {
+		return nil
+	}
+	pending := self.local.members.census.Pending
+	if self.localRebind == nil || !planSha256(self.localRebind.Plan.PendingOutcomeSha256) || pending == nil || pending.Sha256 != self.localRebind.Plan.PendingOutcomeSha256 ||
+		self.pending != "installed" && self.pending != "outer-reverted" {
+		return errors.New("successor deferred local adoption lost its original terminal publication")
+	}
+	return nil
+}
+
+// The original terminal publication has joined before its physical receipt is
+// admitted. Failure closes this owner; a later opener keeps the exact bytes.
+func (self *bootstrapSuccessorExecutionStore) completeDeferredLocalRebind() error {
+	if !self.deferredLocalRebind {
+		return nil
+	}
+	if self.local.members.census.Pending != nil || self.pending != "" || self.last.Phase != "installed" && self.last.Phase != "outer-reverted" {
+		return errors.New("successor local adoption cannot precede original outcome completion")
+	}
+	self.deferredLocalRebind = false
+	if err := self.retainRegistryRebind(); err != nil {
+		return errors.Join(err, self.close())
+	}
+	if err := self.retainLocalRebind(); err != nil {
+		return errors.Join(err, self.close())
+	}
+	return nil
 }
 
 // Review output contains no inferred runtime start, transaction or signer grant.

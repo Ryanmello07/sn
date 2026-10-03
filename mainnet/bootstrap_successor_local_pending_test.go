@@ -78,6 +78,23 @@ func localRebindPendingOutcomeControl(t *testing.T, boundary string) {
 		Plan      json.RawMessage `json:"plan"`
 		Signature string          `json:"signature_ed25519"`
 	}{Schema: "urnetwork-mainnet-successor-local-rebind-envelope-v1", Plan: preview.Plan, Signature: hex.EncodeToString(ed25519.Sign(f.key, message))})
+	changedPlan := bytes.Replace(preview.Plan, []byte(`"pending_outcome_sha256":"`+expected.Sha256+`"`), []byte(`"pending_outcome_sha256":"sha256:`+strings.Repeat("a", 64)+`"`), 1)
+	if bytes.Equal(changedPlan, preview.Plan) {
+		t.Fatal("pending payload fault did not change the exact approval field")
+	}
+	changedMessage := append([]byte("urnetwork-mainnet-successor-local-rebind-v1\x00"), changedPlan...)
+	changedApproval := bootstrapRootTestWrite(t, filepath.Join(filepath.Dir(path), "synthetic-wrong-pending-local.json"), struct {
+		Schema    string          `json:"schema"`
+		Plan      json.RawMessage `json:"plan"`
+		Signature string          `json:"signature_ed25519"`
+	}{Schema: "urnetwork-mainnet-successor-local-rebind-envelope-v1", Plan: changedPlan, Signature: hex.EncodeToString(ed25519.Sign(f.key, changedMessage))})
+	restoredBefore := bootstrapSuccessorPreparationTestFiles(t, local)
+	output.Reset()
+	diagnostic.Reset()
+	changedArgs := append(append(append([]string{}, f.paths...), f.approvalArgs...), "--local-rebind-approval", changedApproval.Path, "--local-rebind-approval-sha256", changedApproval.Sha256)
+	if code := f.original.command(t.Context(), "contract-successor-execution-resume", &output, &diagnostic, changedArgs...); code == 0 || output.Len() != 0 || !maps.Equal(restoredBefore, bootstrapSuccessorPreparationTestFiles(t, local)) || !maps.Equal(nonces, bootstrapSuccessorPreparationTestFiles(t, registry)) {
+		t.Fatal("independently signed changed terminal intent displaced original custody", code, diagnostic.String())
+	}
 	extra := append(append([]string{}, f.approvalArgs...), "--local-rebind-approval", approval.Path, "--local-rebind-approval-sha256", approval.Sha256)
 	for attempt := 0; attempt < 2; attempt++ {
 		output.Reset()
@@ -170,4 +187,54 @@ func TestBootstrapSuccessorLocalRebindRetainsReservedOriginalOutcome(t *testing.
 
 func TestBootstrapSuccessorLocalRebindRetainsAcknowledgedOriginalOutcome(t *testing.T) {
 	localRebindPendingOutcomeControl(t, "name-synced")
+}
+
+// The same readback serves registry adoption. An originally reserved stage may
+// acquire its first inode; no other pending name, payload or known inode changes.
+func TestBootstrapSuccessorRebindRetainsFirstPendingStageGeneration(t *testing.T) {
+	f := newBootstrapSuccessorExecutionFixture(t)
+	owner := f.open(true, nil)
+	registry := owner.registry
+	name, kind := "safe-inner-"+strings.Repeat("a", 64)+".json", "nonce"
+	payload := []byte(`{"schema":"synthetic-original-reserved-nonce","nonce":71}`)
+	stage := registry.stageName(name, kind)
+	if err := registry.members.reserve(name, stage, payload, false); err != nil {
+		t.Fatal(err)
+	}
+	expected := registry.members.census
+	pending := *expected.Pending
+	expected.Pending = &pending
+	if expected.Pending.StageInode != 0 {
+		t.Fatal("original reservation unexpectedly acquired an inode")
+	}
+	if err := registry.publishMember(name, kind, payload, true); err != nil {
+		t.Fatal(err)
+	}
+	path := registry.path
+	if registry.members.census.Pending == nil || registry.members.census.Pending.StageInode == 0 {
+		t.Fatal("exact pending materialization did not retain its first stage inode")
+	}
+	if err := owner.close(); err != nil {
+		t.Fatal(err)
+	}
+	before := bootstrapSuccessorPreparationTestFiles(t, path)
+	if err := inspectBootstrapSuccessorRebindTarget(f.storage.Context, path, expected, true); err != nil {
+		t.Fatal("rebind readback rejected exact original first stage materialization", err)
+	}
+	for _, fault := range []string{"payload", "inode"} {
+		changed := expected
+		copy := *expected.Pending
+		changed.Pending = &copy
+		if fault == "payload" {
+			changed.Pending.Payload += "AA=="
+		} else {
+			changed.Pending.StageInode = 1
+		}
+		if err := inspectBootstrapSuccessorRebindTarget(f.storage.Context, path, changed, true); err == nil {
+			t.Fatal("rebind readback accepted changed original pending authority", fault)
+		}
+	}
+	if !maps.Equal(before, bootstrapSuccessorPreparationTestFiles(t, path)) {
+		t.Fatal("pending rebind inspection wrote or recreated nonce custody")
+	}
 }

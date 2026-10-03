@@ -5585,3 +5585,10 @@ and retained immutable receipt checks are required. Behavioral qualification is
 pending; compilation is not an MG09 closure. Keep original pending-outcome and
 outer-head recovery, retained in-place preparation, joined capacity/retention
 revision, current published composition and actual device/host approval open.
+
+The separately frozen pending-outcome implementation adds original-payload
+binding and canonical-completion-before-physical-receipt ordering. Its public
+controls cover interruption before stage creation, a retained empty stage and
+strict first-stage inode admission; source/preflight is not behavioral closure.
+The original terminal bytes, nonce claims and attempt count remain the authority.
+Remaining outer-head, retained in-place and capacity/retention work stays open.

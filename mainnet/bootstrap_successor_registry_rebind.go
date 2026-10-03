@@ -223,6 +223,15 @@ func inspectBootstrapSuccessorRebindTarget(ctx context.Context, path string, exp
 		}
 	}
 	if pending := expected.Pending; pending != nil && !reflect.DeepEqual(pending, members.census.Pending) {
+		if current := members.census.Pending; current != nil && pending.StageInode == 0 && current.StageInode != 0 {
+			// A joined runtime may have materialized the exact originally
+			// reserved stage. All other payload and name fields remain fixed.
+			copy := *current
+			copy.StageInode = 0
+			if reflect.DeepEqual(pending, &copy) {
+				return members.check()
+			}
+		}
 		// Another joined owner may have finished the original retained nonce.
 		// The original exact payload and any acknowledged stage inode survive.
 		completed, found := current[pending.Name]
@@ -253,6 +262,9 @@ func (self bootstrapSuccessorRegistryRebindApproval) validate(ctx context.Contex
 // inventory. A filename prefix never grants authority. Only initial replay may
 // accept absence before publication; the member head still refuses lost custody.
 func (self *bootstrapSuccessorExecutionStore) includePhysicalRebindReceipts(allowed map[string]bool, allowUnpublished bool) error {
+	if err := self.checkDeferredLocalRebind(); err != nil {
+		return err
+	}
 	receipts := map[string]any{}
 	if self.registryRebind != nil {
 		receipts[bootstrapSuccessorRegistryRebindFile] = self.registryRebind
@@ -266,7 +278,7 @@ func (self *bootstrapSuccessorExecutionStore) includePhysicalRebindReceipts(allo
 			return err
 		}
 		retained, err := self.local.read(name)
-		if allowUnpublished && errors.Is(err, os.ErrNotExist) {
+		if (allowUnpublished || self.deferredLocalRebind) && errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if err != nil || !bytes.Equal(raw, retained) {
@@ -280,7 +292,7 @@ func (self *bootstrapSuccessorExecutionStore) includePhysicalRebindReceipts(allo
 // Original completed nonce/claim bytes and event history are inspected before
 // first publication. A joined retry may finish only this exact reserved receipt.
 func (self *bootstrapSuccessorExecutionStore) retainRegistryRebind() error {
-	if self.registryRebind == nil {
+	if self.registryRebind == nil || self.deferredLocalRebind {
 		return nil
 	}
 	raw, err := json.Marshal(self.registryRebind)
