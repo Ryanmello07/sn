@@ -114,7 +114,7 @@ func readMonitorProviderAttempt(ctx context.Context, client *http.Client, policy
 		return nil, "invalid"
 	}
 	if response.StatusCode != http.StatusOK {
-		_ = response.Body.Close()
+		attempt.observeErrors(err, response.Body.Close(), ctx.Err())
 		if response.StatusCode >= 400 && response.StatusCode < 500 && !monitorProgressRetryStatus(response.StatusCode) {
 			return nil, "invalid"
 		}
@@ -129,7 +129,7 @@ func readMonitorProviderAttempt(ctx context.Context, client *http.Client, policy
 	if readErr == nil && decodeErr != nil {
 		return nil, "invalid"
 	}
-	if readErr == nil && decodeErr == nil {
+	if decodeErr == nil {
 		if value.Source != policy.ExpectedSource {
 			return value, "identity"
 		}
@@ -145,7 +145,7 @@ func readMonitorProviderAttempt(ctx context.Context, client *http.Client, policy
 		}
 	}
 	if err != nil || readErr != nil || closeErr != nil || ctx.Err() != nil {
-		attempt.retryable = attempt.retryable || readErr != nil || closeErr != nil
+		attempt.observeErrors(err, readErr, closeErr, ctx.Err())
 		return nil, "unavailable"
 	}
 	if decodeErr != nil {
