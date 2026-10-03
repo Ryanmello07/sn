@@ -20,6 +20,18 @@ import (
 // The request is signable only after actual original journals, completed local
 // preparation, pinned Safe release and both signature files are reconstructed.
 func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory, accepted, requestPath, safeRequestPath, executionRequestPath, approvalPath string, additionalPaths ...string) (_ bootstrapSuccessorExecutionPlan, _ *safeExecutionProfile, _ *bootstrapChainReadinessState, resultErr error) {
+	return loadBootstrapSuccessorExecutionRebound(ctx, configPath, directory, accepted, requestPath, safeRequestPath, executionRequestPath, approvalPath, nil, additionalPaths...)
+}
+
+// Only this explicit inspected input can borrow restored preparation. A
+// preview remains read-only; resume still verifies its independent signature.
+type bootstrapSuccessorLocalLoad struct {
+	original bootstrapSuccessorExecutionApproval
+	restore  durablevolume.Reference
+	approval *bootstrapSuccessorLocalRebindApproval
+}
+
+func loadBootstrapSuccessorExecutionRebound(ctx context.Context, configPath, directory, accepted, requestPath, safeRequestPath, executionRequestPath, approvalPath string, local *bootstrapSuccessorLocalLoad, additionalPaths ...string) (_ bootstrapSuccessorExecutionPlan, _ *safeExecutionProfile, _ *bootstrapChainReadinessState, resultErr error) {
 	var result bootstrapSuccessorExecutionPlan
 	var request bootstrapSuccessorExecutionRequest
 	raw, requestHash, err := readBootstrapRootFile(ctx, executionRequestPath, 16*1024)
@@ -58,18 +70,9 @@ func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory,
 			return result, nil, nil, errors.New("successor execution input overlaps the nonce registry")
 		}
 	}
-	reader, record, err := openBootstrapSuccessorPreparationReader(ctx, plan, nil)
-	if err != nil {
-		return result, nil, nil, err
-	}
-	defer func() { resultErr = errors.Join(resultErr, reader.close()) }()
 	rawArchive, archiveHash, err := readPlanFile(ctx, safeRequest.Archive.Path, maximumSafeReleaseArchiveBytes)
 	if err != nil || archiveHash != safeRequest.Archive.Sha256 {
 		return result, nil, nil, errors.Join(errors.New("successor execution archive pin differs"), err)
-	}
-	review, err := buildBootstrapSuccessorSafeReview(ctx, plan, record, safeRequest, planFileReference{Path: safeRequestPath, Sha256: safeHash}, rawArchive)
-	if err != nil {
-		return result, nil, nil, err
 	}
 	pin, err := loadSafeReleasePin(safeRequest.Version, safeRequest.Variant)
 	if err != nil {
@@ -87,6 +90,39 @@ func loadBootstrapSuccessorExecution(ctx context.Context, configPath, directory,
 	}
 	if err != nil || profile == nil {
 		return result, nil, nil, errors.Join(errors.New("successor execution static profile is absent"), err)
+	}
+	var inspection *bootstrapSuccessorLocalInspection
+	if local != nil {
+		if err := local.original.validate(local.original.Plan, profile); err != nil {
+			return result, nil, nil, err
+		}
+		originalPreparation := local.original.Plan.Review.Preparation.Approval.Plan
+		plan.Root = originalPreparation.Root
+		if rootObjectHash(plan) != rootObjectHash(originalPreparation) {
+			return result, nil, nil, errors.New("successor local rebind changed original preparation authority")
+		}
+		var rebound bootstrapSuccessorLocalRebindPlan
+		if local.approval != nil {
+			if err := local.approval.validate(ctx, local.original, profile); err != nil {
+				return result, nil, nil, err
+			}
+			rebound = local.approval.Plan
+		} else {
+			rebound, err = buildBootstrapSuccessorLocalRebind(ctx, local.original, profile, local.restore)
+			if err != nil {
+				return result, nil, nil, err
+			}
+		}
+		inspection = &bootstrapSuccessorLocalInspection{preparationHash: rootObjectHash(originalPreparation), physical: rebound.RestoredLocal}
+	}
+	reader, record, err := openBootstrapSuccessorPreparationReaderRebound(ctx, plan, false, nil, inspection)
+	if err != nil {
+		return result, nil, nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, reader.close()) }()
+	review, err := buildBootstrapSuccessorSafeReview(ctx, plan, record, safeRequest, planFileReference{Path: safeRequestPath, Sha256: safeHash}, rawArchive)
+	if err != nil {
+		return result, nil, nil, err
 	}
 	result, err = buildBootstrapSuccessorExecution(ctx, review, request, planFileReference{Path: executionRequestPath, Sha256: requestHash}, profile)
 	if err != nil {
@@ -110,13 +146,14 @@ func runBootstrapSuccessorExecutionCommandWithProvenance(ctx context.Context, ar
 // Independent acceptance and caller opt-in are separate gates. Legacy acceptance
 // and a review proposal alone cannot select the public current-only route.
 func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, args []string, stdout, stderr io.Writer, provenance bootstrapSuccessorSafeProvenanceAuthenticator, route bootstrapSuccessorSafeCurrentRoute) (resultCode int) {
-	if len(args) == 0 || args[0] != "contract-successor-execution-preview" && args[0] != "contract-successor-execution-claim" && args[0] != "contract-successor-execution-resume" && args[0] != "contract-successor-execution-readback" && args[0] != "contract-successor-execution-rebind-preview" {
+	if len(args) == 0 || args[0] != "contract-successor-execution-preview" && args[0] != "contract-successor-execution-claim" && args[0] != "contract-successor-execution-resume" && args[0] != "contract-successor-execution-readback" && args[0] != "contract-successor-execution-rebind-preview" && args[0] != "contract-successor-execution-local-rebind-preview" {
 		fmt.Fprintln(stderr, "unknown successor execution custody command")
 		return 2
 	}
 	preview := args[0] == "contract-successor-execution-preview"
 	readback := args[0] == "contract-successor-execution-readback"
 	rebindPreview := args[0] == "contract-successor-execution-rebind-preview"
+	localPreview := args[0] == "contract-successor-execution-local-rebind-preview"
 	flags := flag.NewFlagSet("bootstrap-chain "+args[0], flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	if readback {
@@ -147,6 +184,10 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 	restoreHash := flags.String("registry-restore-plan-sha256", "", "exact reviewed registry restore plan digest")
 	rebindPath := flags.String("registry-rebind-approval", "", "independent original-approver physical registry rebind; resume/readback only")
 	rebindHash := flags.String("registry-rebind-approval-sha256", "", "exact registry rebind approval file digest")
+	localRestorePath := flags.String("local-restore-plan", "", "exact completed shared local restore plan for independent review")
+	localRestoreHash := flags.String("local-restore-plan-sha256", "", "exact reviewed local restore plan digest")
+	localRebindPath := flags.String("local-rebind-approval", "", "independent original-approver local physical rebind; resume/readback only")
+	localRebindHash := flags.String("local-rebind-approval-sha256", "", "exact local rebind approval file digest")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *configPath == "" || *directory == "" || !planSha256(*accepted) ||
 		*requestPath == "" || *safeRequestPath == "" || *executionRequestPath == "" ||
 		preview && (*approvalPath != "" || *approvalHash != "" || *executionHash != "") ||
@@ -158,8 +199,11 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 		*acceptedCurrent != "" && (!*submit && !readback || !planSha256(*acceptedCurrent) || provenance != nil || route != 0) ||
 		rebindPreview && (*restorePath == "" || !planSha256(*restoreHash) || *rebindPath != "" || *rebindHash != "" || *online || *submit) ||
 		!rebindPreview && (*restorePath != "" || *restoreHash != "") ||
-		(*rebindPath != "" || *rebindHash != "") && (*rebindPath == "" || !planSha256(*rebindHash) || args[0] != "contract-successor-execution-resume" && !readback) {
-		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume/rebind-preview also require --approval, --approval-sha256 and --accept-execution-hash; rebind-preview requires --registry-restore-plan and --registry-restore-plan-sha256; resume/readback may supply --registry-rebind-approval and --registry-rebind-approval-sha256; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; optional runtime/current-policy revision files and their SHA-256 pins require --online; --submit requires --online and an installed capability; public current-only submission requires --accept-safe-current-policy with the exact retained v2 acceptance object hash")
+		(*rebindPath != "" || *rebindHash != "") && (*rebindPath == "" || !planSha256(*rebindHash) || args[0] != "contract-successor-execution-resume" && !readback && !localPreview) ||
+		localPreview && (*localRestorePath == "" || !planSha256(*localRestoreHash) || *localRebindPath != "" || *localRebindHash != "" || *online || *submit) ||
+		!localPreview && (*localRestorePath != "" || *localRestoreHash != "") ||
+		(*localRebindPath != "" || *localRebindHash != "") && (*localRebindPath == "" || !planSha256(*localRebindHash) || args[0] != "contract-successor-execution-resume" && !readback && !rebindPreview) {
+		fmt.Fprintln(stderr, "successor execution requires original --config, --run-dir, --accept-plan-hash, --request, --safe-request and --execution-request; claim/resume/rebind-preview also require --approval, --approval-sha256 and --accept-execution-hash; rebind-preview requires --registry-restore-plan and --registry-restore-plan-sha256; local-rebind-preview requires --local-restore-plan and --local-restore-plan-sha256; resume/readback may supply --registry-rebind-approval or --local-rebind-approval with their SHA-256 pins; only resume accepts --online with --canonical-approval and --canonical-approval-sha256; optional runtime/current-policy revision files and their SHA-256 pins require --online; --submit requires --online and an installed capability; public current-only submission requires --accept-safe-current-policy with the exact retained v2 acceptance object hash")
 		return 2
 	}
 	if *acceptedCurrent != "" {
@@ -185,7 +229,33 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 	if *rebindPath != "" {
 		additionalPaths = append(additionalPaths, *rebindPath)
 	}
-	plan, profile, retained, err := loadBootstrapSuccessorExecution(ctx, *configPath, *directory, *accepted, *requestPath, *safeRequestPath, *executionRequestPath, *approvalPath, additionalPaths...)
+	var local *bootstrapSuccessorLocalLoad
+	if localPreview || *localRebindPath != "" {
+		local = &bootstrapSuccessorLocalLoad{restore: durablevolume.Reference{Path: *localRestorePath, Sha256: *localRestoreHash}}
+		raw, hash, err := readBootstrapRootFile(ctx, *approvalPath, maximumBootstrapSuccessorExecutionBytes)
+		if err == nil && hash == *approvalHash {
+			err = decodePlanJson(raw, &local.original)
+		} else {
+			err = errors.Join(errors.New("successor original approval pin differs"), err)
+		}
+		if err == nil && *localRebindPath != "" {
+			raw, hash, err = readBootstrapRootFile(ctx, *localRebindPath, maximumBootstrapSuccessorRegistryRebindBytes)
+			if err == nil && hash == *localRebindHash {
+				local.approval = &bootstrapSuccessorLocalRebindApproval{}
+				err = decodePlanJson(raw, local.approval)
+				local.restore = local.approval.Plan.RestorePlan
+			} else {
+				err = errors.Join(errors.New("successor local rebind file pin differs"), err)
+			}
+			additionalPaths = append(additionalPaths, *localRebindPath)
+		}
+		if err != nil {
+			fmt.Fprintln(stderr, "successor local rebind input:", err)
+			return 2
+		}
+		additionalPaths = append(additionalPaths, local.restore.Path)
+	}
+	plan, profile, retained, err := loadBootstrapSuccessorExecutionRebound(ctx, *configPath, *directory, *accepted, *requestPath, *safeRequestPath, *executionRequestPath, *approvalPath, local, additionalPaths...)
 	if err != nil {
 		fmt.Fprintln(stderr, "successor execution original custody or exact inputs unresolved:", err)
 		return 1
@@ -253,6 +323,21 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 		}
 		return 0
 	}
+	if localPreview {
+		rebindPlan, err := buildBootstrapSuccessorLocalRebind(ctx, approval, profile, local.restore)
+		var result any
+		if err == nil {
+			result, err = rebindPlan.preview(approval, profile)
+		}
+		if err = errors.Join(err, retained.checkpoint(ctx)); err == nil {
+			err = json.NewEncoder(stdout).Encode(result)
+		}
+		if err != nil {
+			fmt.Fprintln(stderr, "successor local rebind review:", err)
+			return 1
+		}
+		return 0
+	}
 	var rebind *bootstrapSuccessorRegistryRebindApproval
 	if *rebindPath != "" {
 		raw, hash, err := readBootstrapRootFile(ctx, *rebindPath, maximumBootstrapSuccessorRegistryRebindBytes)
@@ -272,7 +357,11 @@ func runBootstrapSuccessorExecutionCommandWithAuthorities(ctx context.Context, a
 		fmt.Fprintln(stderr, "successor execution original custody changed:", err)
 		return 1
 	}
-	owner, err = openBootstrapSuccessorExecutionStoreWithRegistryRebind(ctx, plan, approval, profile, args[0] == "contract-successor-execution-claim", nil, rebind)
+	var localApproval *bootstrapSuccessorLocalRebindApproval
+	if local != nil {
+		localApproval = local.approval
+	}
+	owner, err = openBootstrapSuccessorExecutionStoreWithPhysicalRebind(ctx, plan, approval, profile, args[0] == "contract-successor-execution-claim", nil, rebind, localApproval)
 	if err != nil {
 		fmt.Fprintln(stderr, "successor execution custody unresolved; retain original and nonce registry files:", err)
 		return 1

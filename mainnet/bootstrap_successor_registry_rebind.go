@@ -193,6 +193,12 @@ func buildBootstrapSuccessorRegistryRebind(ctx context.Context, original bootstr
 // Passive admission checks the real retained root/head/member union and never
 // repairs a pending outer head. Its shared lock joins before execution opens.
 func inspectBootstrapSuccessorRegistryRebindTarget(ctx context.Context, path string, expected bootstrapSuccessorMemberCensus) (resultErr error) {
+	return inspectBootstrapSuccessorRebindTarget(ctx, path, expected, true)
+}
+
+// Both physical adoptions keep the exact original member set. Additional
+// authenticated history may accumulate only through its existing owner.
+func inspectBootstrapSuccessorRebindTarget(ctx context.Context, path string, expected bootstrapSuccessorMemberCensus, global bool) (resultErr error) {
 	storage, err := openMainnetDurableDirectory(ctx, path, durablevolume.ReadOnly)
 	if err != nil {
 		return err
@@ -202,7 +208,7 @@ func inspectBootstrapSuccessorRegistryRebindTarget(ctx context.Context, path str
 	if err := mainnetDurableFlock(int(file.Fd()), unix.LOCK_SH); err != nil {
 		return err
 	}
-	members, err := openBootstrapSuccessorMembers(storage, file, true, true)
+	members, err := openBootstrapSuccessorMembers(storage, file, global, true)
 	if err != nil {
 		return err
 	}
@@ -247,21 +253,27 @@ func (self bootstrapSuccessorRegistryRebindApproval) validate(ctx context.Contex
 // inventory. A filename prefix never grants authority. Only initial replay may
 // accept absence before publication; the member head still refuses lost custody.
 func (self *bootstrapSuccessorExecutionStore) includePhysicalRebindReceipts(allowed map[string]bool, allowUnpublished bool) error {
-	if self.registryRebind == nil {
-		return nil
+	receipts := map[string]any{}
+	if self.registryRebind != nil {
+		receipts[bootstrapSuccessorRegistryRebindFile] = self.registryRebind
 	}
-	raw, err := json.Marshal(self.registryRebind)
-	if err != nil {
-		return err
+	if self.localRebind != nil {
+		receipts[bootstrapSuccessorLocalRebindFile] = self.localRebind
 	}
-	retained, err := self.local.read(bootstrapSuccessorRegistryRebindFile)
-	if allowUnpublished && errors.Is(err, os.ErrNotExist) {
-		return nil
+	for name, receipt := range receipts {
+		raw, err := json.Marshal(receipt)
+		if err != nil {
+			return err
+		}
+		retained, err := self.local.read(name)
+		if allowUnpublished && errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil || !bytes.Equal(raw, retained) {
+			return errors.Join(errors.New("successor execution lost its original physical rebind receipt"), err)
+		}
+		allowed[name] = true
 	}
-	if err != nil || !bytes.Equal(raw, retained) {
-		return errors.Join(errors.New("successor execution lost its original registry rebind receipt"), err)
-	}
-	allowed[bootstrapSuccessorRegistryRebindFile] = true
 	return nil
 }
 

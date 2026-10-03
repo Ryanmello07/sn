@@ -30,6 +30,7 @@ type bootstrapSuccessorExecutionStore struct {
 	runtimeHistory         bootstrapSuccessorRuntimeHistory
 	safeCurrentHistory     bootstrapSuccessorSafeCurrentHistory
 	registryRebind         *bootstrapSuccessorRegistryRebindApproval
+	localRebind            *bootstrapSuccessorLocalRebindApproval
 }
 
 // Global within the approved physical registry, these keys deliberately use
@@ -75,6 +76,12 @@ func openBootstrapSuccessorExecutionStore(ctx context.Context, expected bootstra
 // A physical adoption is explicit and resume-only. The original approval and
 // every nonce claim remain in their original byte/signature domains.
 func openBootstrapSuccessorExecutionStoreWithRegistryRebind(ctx context.Context, expected bootstrapSuccessorExecutionPlan, approval bootstrapSuccessorExecutionApproval, profile *safeExecutionProfile, create bool, hook func(string) error, rebind *bootstrapSuccessorRegistryRebindApproval) (_ *bootstrapSuccessorExecutionStore, resultErr error) {
+	return openBootstrapSuccessorExecutionStoreWithPhysicalRebind(ctx, expected, approval, profile, create, hook, rebind, nil)
+}
+
+// Local and registry coordinates have distinct approval domains; both preserve
+// the same original claim. Neither approval permits fresh ownership.
+func openBootstrapSuccessorExecutionStoreWithPhysicalRebind(ctx context.Context, expected bootstrapSuccessorExecutionPlan, approval bootstrapSuccessorExecutionApproval, profile *safeExecutionProfile, create bool, hook func(string) error, rebind *bootstrapSuccessorRegistryRebindApproval, localRebind *bootstrapSuccessorLocalRebindApproval) (_ *bootstrapSuccessorExecutionStore, resultErr error) {
 	if ctx == nil {
 		return nil, errors.New("successor execution context is absent")
 	}
@@ -82,6 +89,19 @@ func openBootstrapSuccessorExecutionStoreWithRegistryRebind(ctx context.Context,
 		return nil, err
 	}
 	var retainedRebind *bootstrapSuccessorRegistryRebindApproval
+	var retainedLocalRebind *bootstrapSuccessorLocalRebindApproval
+	var inspection *bootstrapSuccessorLocalInspection
+	if localRebind != nil {
+		if create {
+			return nil, errors.New("successor local rebind cannot create a fresh execution claim")
+		}
+		if err := localRebind.validate(ctx, approval, profile); err != nil {
+			return nil, err
+		}
+		copy := *localRebind
+		retainedLocalRebind = &copy
+		inspection = &bootstrapSuccessorLocalInspection{preparationHash: rootObjectHash(approval.Plan.Review.Preparation.Approval.Plan), physical: copy.Plan.RestoredLocal, writer: true}
+	}
 	if rebind != nil {
 		if create {
 			return nil, errors.New("successor registry rebind cannot create a fresh execution claim")
@@ -100,7 +120,7 @@ func openBootstrapSuccessorExecutionStoreWithRegistryRebind(ctx context.Context,
 	if err := decodePlanJson(raw, &copied); err != nil {
 		return nil, err
 	}
-	self := &bootstrapSuccessorExecutionStore{approval: copied, profile: profile, registryRebind: retainedRebind}
+	self := &bootstrapSuccessorExecutionStore{approval: copied, profile: profile, registryRebind: retainedRebind, localRebind: retainedLocalRebind}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, self.close())
@@ -108,12 +128,15 @@ func openBootstrapSuccessorExecutionStoreWithRegistryRebind(ctx context.Context,
 	}()
 	p := copied.Plan.Review.Preparation.Approval.Plan
 	var preparation bootstrapSuccessorPreparationRecord
-	self.reader, preparation, err = openBootstrapSuccessorPreparationReaderMode(ctx, p, true, nil)
+	self.reader, preparation, err = openBootstrapSuccessorPreparationReaderRebound(ctx, p, true, nil, inspection)
 	if err != nil || rootObjectHash(preparation) != rootObjectHash(copied.Plan.Review.Preparation) {
 		return nil, errors.Join(errors.New("successor execution original preparation differs"), err)
 	}
 	claim := rootObjectHash(copied)
 	self.local = &bootstrapSuccessorExecutionDirectory{storage: self.reader.storage, members: self.reader.members, ctx: ctx, path: p.Proposal.OriginalRunDirectory, root: p.Root, file: self.reader.directory, claim: claim, hook: hook}
+	if inspection != nil {
+		self.local.root = inspection.physical
+	}
 	registryRoot := copied.Plan.Registry
 	if retainedRebind != nil {
 		registryRoot = retainedRebind.Plan.RestoredRegistry
@@ -160,12 +183,12 @@ func openBootstrapSuccessorExecutionStoreWithRegistryRebind(ctx context.Context,
 	if create && namespacePresent || !create && !claimPresent {
 		return nil, errors.New("successor execution requires unused custody for claim or its exact retained claim for resume")
 	}
-	if retainedRebind != nil {
+	if retainedRebind != nil || retainedLocalRebind != nil {
 		if !ready {
-			return nil, errors.New("successor registry rebind requires completed original claim and nonce custody")
+			return nil, errors.New("successor physical rebind requires completed original claim and nonce custody")
 		}
-		if pending := self.local.members.census.Pending; pending != nil && pending.Name != bootstrapSuccessorRegistryRebindFile {
-			return nil, errors.New("successor registry rebind requires a completed original local publication checkpoint")
+		if pending := self.local.members.census.Pending; pending != nil && !(retainedRebind != nil && pending.Name == bootstrapSuccessorRegistryRebindFile) && !(retainedLocalRebind != nil && pending.Name == bootstrapSuccessorLocalRebindFile) {
+			return nil, errors.New("successor physical rebind requires a completed original local publication checkpoint")
 		}
 	}
 	if ready {
@@ -190,10 +213,16 @@ func openBootstrapSuccessorExecutionStoreWithRegistryRebind(ctx context.Context,
 			return nil, errors.Join(errors.New("successor execution completed adoption is missing"), err)
 		}
 	}
-	if retainedRebind != nil && self.local.members.census.Pending != nil {
+	if (retainedRebind != nil || retainedLocalRebind != nil) && self.local.members.census.Pending != nil {
 		// Only this previously retained exact rebind intent may be completed
 		// before inspecting history. It cannot displace an original outcome.
-		if err := self.retainRegistryRebind(); err != nil {
+		var err error
+		if self.local.members.census.Pending.Name == bootstrapSuccessorLocalRebindFile {
+			err = self.retainLocalRebind()
+		} else {
+			err = self.retainRegistryRebind()
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -223,6 +252,9 @@ func openBootstrapSuccessorExecutionStoreWithRegistryRebind(ctx context.Context,
 		return nil, err
 	}
 	if err := self.retainRegistryRebind(); err != nil {
+		return nil, err
+	}
+	if err := self.retainLocalRebind(); err != nil {
 		return nil, err
 	}
 	return self, self.checkpoint("execution-ready")

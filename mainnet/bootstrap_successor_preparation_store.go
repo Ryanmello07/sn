@@ -21,12 +21,13 @@ const bootstrapSuccessorStagePrefix = ".contract-successor-preparation-"
 // The directory lock serializes cooperating preparations, not other machines
 // or a privileged operator. An error closes the owner before any further use.
 type bootstrapSuccessorPreparationStore struct {
-	storage   *mainnetDurableDirectory
-	members   *bootstrapSuccessorMembers
-	ctx       context.Context
-	approval  bootstrapSuccessorPreparationApproval
-	directory *os.File
-	hook      func(string) error
+	storage     *mainnetDurableDirectory
+	members     *bootstrapSuccessorMembers
+	ctx         context.Context
+	approval    bootstrapSuccessorPreparationApproval
+	directory   *os.File
+	hook        func(string) error
+	reboundRoot *bootstrapSuccessorRootIdentity
 }
 
 // Fresh prepare claims once. Resume requires an existing exact claim or its
@@ -211,7 +212,11 @@ func (self *bootstrapSuccessorPreparationStore) checkpoint(stage string) error {
 			return err
 		}
 		physical, err := bootstrapSuccessorPhysicalRoot(self.approval.Plan.Proposal.OriginalRunDirectory)
-		if err != nil || physical != self.approval.Plan.Root || physical.Device != uint64(stat.Dev) || physical.Inode != stat.Ino || stat.Mode&0077 != 0 {
+		expected := self.approval.Plan.Root
+		if self.reboundRoot != nil {
+			expected = *self.reboundRoot
+		}
+		if err != nil || physical != expected || physical.Device != uint64(stat.Dev) || physical.Inode != stat.Ino || stat.Mode&0077 != 0 {
 			return errors.Join(errors.New("successor physical root changed during local preparation"), err)
 		}
 		return self.ctx.Err()
