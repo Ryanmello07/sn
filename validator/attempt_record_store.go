@@ -360,7 +360,9 @@ func (self *attemptRecordStore) decodeRecord(raw []byte) (AttemptRecord, error) 
 	if err := verifyAttemptRecord(&record, self.identity.Identity, self.vpk, nil, false); err != nil {
 		return record, err
 	}
-	if self.disk.hooks.Step != nil {
+	// Public preparation verifies retained bytes through a read-only backend;
+	// it has no writable storage owner or optional write-owner observation hook.
+	if self.disk != nil && self.disk.hooks.Step != nil {
 		if err := self.disk.step("decode-record", strconv.Itoa(len(raw))); err != nil {
 			return record, err
 		}

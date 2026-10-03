@@ -51,6 +51,8 @@ func newEvmVaultFixture(t *testing.T) *evmCreateFixture {
 }
 
 // This signer is fixture-only and signs exactly the selected approved action.
+// Exported inputs remain with the original configuration when a composed
+// fixture assigns a separate runtime root. The runtime owns its journal copy.
 func (self *evmCreateFixture) signSelectedAction() {
 	self.t.Helper()
 	private, err := crypto.HexToECDSA(strings.Repeat("17", 32))
@@ -70,7 +72,7 @@ func (self *evmCreateFixture) signSelectedAction() {
 	if err != nil {
 		self.t.Fatal(err)
 	}
-	self.signedPath = filepath.Join(self.config.Plan.RunDirectory, action.Id+".signed.bin")
+	self.signedPath = filepath.Join(filepath.Dir(self.configPath), action.Id+".signed.bin")
 	if err := os.WriteFile(self.signedPath, self.raw, 0600); err != nil {
 		self.t.Fatal(err)
 	}
