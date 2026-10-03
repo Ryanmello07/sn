@@ -3911,3 +3911,7 @@ The [latest inactive-cache reclaim](evidence/cache-reclaim-15-17-20261003.json) 
 ### Actual public paired-restore candidate
 
 The [verified `39e2744a` source intake](evidence/paired-restore-public-source-intake-20261003.json) connects the paired census to actual local and registry recovery consumers. Root verified twenty bindings, the clean source identity and ten changed Git blobs. Passive preview retains the exact restored metadata pair and permits no repair; approved exclusive continuation reconciles separately while preserving original outcomes, signed bytes and attempt allowance. Seven public roots are now in qualification. Behavioral acceptance, joined capacity/retention changes and final current-module recovery remain required before this can support launch.
+
+### Required Safe observations preserve original recovery authority
+
+The [verified adjacent-read candidate](evidence/safe-state-read-source-intake-20261003.json), SN `296980a0`, distinguishes required code/storage/getter absence from intentionally nullable pending lookups. Original signed retry budgets remain unchanged. Transport failure or cancellation returns before authority comparison; a returned conflicting owner, nonce, guard, code or digest still refuses. Ten selected roots include actual public submission custody and unavailable archive state after a retained receipt. Independent normal/race qualification, five old-source controls and final composition remain pending.
