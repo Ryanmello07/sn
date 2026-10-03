@@ -32,8 +32,16 @@ type monitorNativeArchiveFixture struct {
 
 func newMonitorNativeArchiveFixture(t *testing.T, peer bool) *monitorNativeArchiveFixture {
 	t.Helper()
+	return newMonitorNativeArchiveFixtureWithPolicy(t, peer, nil)
+}
+
+func newMonitorNativeArchiveFixtureWithPolicy(t *testing.T, peer bool, configure func(*monitorEconomicNativePolicy)) *monitorNativeArchiveFixture {
+	t.Helper()
 	native := newMonitorEconomicTestFixture(t, peer)
 	native.policy.HistoryEntries = 1
+	if configure != nil {
+		configure(&native.policy)
+	}
 	run := native.start(t, monitorServiceHooks{})
 	if event := run.next(t); !event.Current || event.State.Cursor.Number != 101 || event.State.PendingThrough == nil || event.State.PendingThrough.Number != 102 {
 		t.Fatal("original public checkpoint did not retain the incomplete range", event)

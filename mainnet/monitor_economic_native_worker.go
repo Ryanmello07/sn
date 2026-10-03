@@ -100,6 +100,10 @@ func openMonitorEconomicNativeWorker(ctx context.Context, client *rpcClient, pol
 		value := *policy.ReadBudgetBasisSeconds
 		policy.ReadBudgetBasisSeconds = &value
 	}
+	if policy.HistoryCatalog != nil {
+		value := *policy.HistoryCatalog
+		policy.HistoryCatalog = &value
+	}
 	checkpointPath, metricsPath := monitorEconomicNativePaths(checkpoint, metrics, policy.Role)
 	owner, err := openMonitorCheckpoint(checkpointPath, expected, ctx)
 	if err != nil {
@@ -156,6 +160,9 @@ func (self *monitorEconomicNativeWorker) load(ctx context.Context) (*monitorEcon
 	}
 	record, err := decodeMonitorEconomicNativeCheckpoint(raw, self.policy)
 	if err != nil {
+		return nil, err
+	}
+	if err := record.State.Catalog.checkPath(self.checkpoint.path); err != nil {
 		return nil, err
 	}
 	self.archive, err = openMonitorEconomicNativeArchive(ctx, self.policy, &record.State)
@@ -259,7 +266,7 @@ func (self *monitorEconomicNativeState) summary(policy monitorEconomicNativePoli
 func (self *monitorEconomicNativeWorker) summary() monitorEconomicNativeSummary {
 	summary := self.state.summary(self.policy)
 	summary.RuntimeAcknowledgement = self.runtimeAcknowledgement
-	summary.ArchiveSegmentCapacity = maximumMonitorHistorySegments
+	summary.ArchiveSegmentCapacity = int(self.state.Catalog.capacity(self.policy.HistoryCatalog).Segments)
 	if self.state.Archive != nil {
 		summary.ArchiveSegments = len(self.state.Archive.Segments)
 		summary.ArchivedEvents = self.state.Archive.Events
@@ -284,8 +291,14 @@ func renderMonitorEconomicNativeMetrics(policy monitorEconomicNativePolicy, stat
 	catalog, _ := json.Marshal(policy.RuntimeCatalog)
 	capacity := policy.runtimeCapacity()
 	archiveSegments := 0
+	archiveCapacity := state.Catalog.capacity(policy.HistoryCatalog)
+	archiveCatalog, _ := monitorNativeCatalogBytes(*state)
 	if state.Archive != nil {
 		archiveSegments = len(state.Archive.Segments)
+	}
+	archiveWarning := 2*uint64(archiveSegments+1) >= archiveCapacity.Segments || 2*uint64(archiveSegments+1) >= archiveCapacity.HeldReaders
+	if policy.HistoryCatalog != nil {
+		archiveWarning = archiveWarning || 2*(uint64(len(archiveCatalog))+6*maximumMonitorHistoryPath+256) >= archiveCapacity.CatalogBytes || state.Catalog != nil && len(state.Catalog.Revisions)+1 >= maximumMonitorHistoryRevisions
 	}
 	var output strings.Builder
 	for _, metric := range []struct {
@@ -300,8 +313,9 @@ func renderMonitorEconomicNativeMetrics(policy monitorEconomicNativePolicy, stat
 		{name: "outage_started_timestamp_seconds", value: stamp(state.UnavailableSince)}, {name: "incidents", value: state.Incidents},
 		{name: "history_capacity", value: policy.HistoryEntries}, {name: "history_remaining", value: state.CapacityRemaining},
 		{name: "history_bytes_remaining", value: state.CapacityBytesRemaining},
-		{name: "archive_segments", value: archiveSegments}, {name: "archive_segment_capacity", value: maximumMonitorHistorySegments},
-		{name: "archive_capacity_warning", value: flag(2*(archiveSegments+1) >= maximumMonitorHistorySegments)},
+		{name: "archive_segments", value: archiveSegments}, {name: "archive_segment_capacity", value: archiveCapacity.Segments},
+		{name: "archive_catalog_byte_capacity", value: archiveCapacity.CatalogBytes}, {name: "archive_reader_capacity", value: archiveCapacity.HeldReaders},
+		{name: "archive_catalog_bytes", value: len(archiveCatalog)}, {name: "archive_capacity_warning", value: flag(archiveWarning)},
 		{name: "capacity_warning", value: flag(state.CapacityRemaining <= policy.HistoryEntries/4 || state.CapacityBytesRemaining <= maximumMonitorEconomicBytes/4)},
 		{name: "fee_payer_count", value: len(policy.Observation.FeePayers)}, {name: "independent_finality_verified", value: 0},
 		{name: "fee_observation_known", value: flag(len(policy.Observation.FeePayers) != 0 && state.BatchCount != 0)},

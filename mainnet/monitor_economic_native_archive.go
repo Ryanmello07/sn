@@ -48,6 +48,9 @@ func decodeMonitorEconomicNativeCheckpoint(raw []byte, policy monitorEconomicNat
 	if err := policy.retainsRuntimePolicy(record); err != nil {
 		return record, err
 	}
+	if err := record.State.Catalog.validate(policy.HistoryCatalog, policy.Role, policy.identityHash(), ""); err != nil {
+		return record, err
+	}
 	return record, record.State.validate(policy)
 }
 
@@ -55,7 +58,8 @@ func (self *monitorEconomicNativeArchive) validate(policy monitorEconomicNativeP
 	if self == nil {
 		return nil
 	}
-	if len(self.Segments) == 0 || len(self.Segments) > maximumMonitorHistorySegments || self.Cursor.Number <= policy.Observation.From.Number || self.Cursor.Number > state.Cursor.Number || !rootCanonicalHash(self.Cursor.Hash) || self.BatchCount == 0 || self.BatchCount > state.BatchCount || !planSha256(self.BatchChainHash) || self.Events == 0 {
+	capacity := state.Catalog.capacity(policy.HistoryCatalog)
+	if len(self.Segments) == 0 || uint64(len(self.Segments)) > capacity.Segments || uint64(len(self.Segments)) > capacity.HeldReaders || self.Cursor.Number <= policy.Observation.From.Number || self.Cursor.Number > state.Cursor.Number || !rootCanonicalHash(self.Cursor.Hash) || self.BatchCount == 0 || self.BatchCount > state.BatchCount || !planSha256(self.BatchChainHash) || self.Events == 0 {
 		return errors.New("native economic archive lost its bounded original prefix")
 	}
 	if self.Cursor.Number == state.Cursor.Number && (self.Cursor != state.Cursor || self.BatchCount != state.BatchCount || self.BatchChainHash != state.BatchChainHash) {
@@ -74,6 +78,15 @@ func (self *monitorEconomicNativeArchive) validate(policy monitorEconomicNativeP
 	for _, amount := range []string{self.ObservedAlpha, self.ObservedFeesRao} {
 		if _, err := monitorEconomicInteger(amount); err != nil {
 			return err
+		}
+	}
+	if policy.HistoryCatalog != nil {
+		raw, err := json.Marshal(struct {
+			Archive *monitorEconomicNativeArchive `json:"archive"`
+			Catalog *monitorHistoryCatalogState   `json:"catalog"`
+		}{Archive: self, Catalog: state.Catalog})
+		if err != nil || uint64(len(raw)) > capacity.CatalogBytes {
+			return errors.Join(errors.New("native economic archive exceeds signed catalog metadata capacity"), err)
 		}
 	}
 	return nil
@@ -143,6 +156,9 @@ func openMonitorEconomicNativeArchive(ctx context.Context, policy monitorEconomi
 		record, err := decodeMonitorEconomicNativeCheckpoint(raw, policy)
 		if err != nil {
 			return owners, err
+		}
+		if !state.Catalog.retains(record.State.Catalog) {
+			return owners, errors.New("native archive discarded a retained signed catalog revision")
 		}
 		if !reflect.DeepEqual(record.State.Archive, prior) {
 			return owners, errors.New("native archive omitted or changed its complete predecessor chain")

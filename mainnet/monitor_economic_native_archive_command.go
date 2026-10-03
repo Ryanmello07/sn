@@ -84,7 +84,11 @@ func validateMonitorNativeArchiveRequest(ctx context.Context, request monitorNat
 	if request.Schema != monitorNativeArchiveRequestSchema {
 		return errors.New("native archive request schema differs")
 	}
-	if request.FutureSegments == 0 || request.FutureSegments > maximumMonitorHistorySegments/2 {
+	maximumSegments := uint64(maximumMonitorHistorySegments)
+	if request.Policy.HistoryCatalog != nil {
+		maximumSegments = maximumReviewedMonitorHistorySegments
+	}
+	if request.FutureSegments == 0 || request.FutureSegments > maximumSegments/2 {
 		return errors.New("native archive requires a finite positive segment forecast with two-times margin")
 	}
 	if err := errors.Join(request.Policy.validate(request.Expected), request.Original.validate()); err != nil {
@@ -123,6 +127,9 @@ func buildMonitorNativeArchivePlan(ctx context.Context, request monitorNativeArc
 	if err != nil {
 		return plan, nil, err
 	}
+	if err := record.State.Catalog.checkPath(request.Original.Path); err != nil {
+		return plan, nil, err
+	}
 	if record.State.Archive != nil {
 		for _, reference := range record.State.Archive.Segments {
 			if monitorHistoryPathsAlias(reference.Path, request.ArchivePath) || monitorHistoryPathsAlias(reference.Path, request.Original.Path) {
@@ -150,8 +157,18 @@ func buildMonitorNativeArchivePlan(ctx context.Context, request monitorNativeArc
 	}
 	plan = monitorNativeArchivePlan{Schema: monitorNativeArchivePlanSchema, Request: request, Declaration: declaration, Archive: archive, Next: monitorHistoryReference{Path: request.Original.Path, Bytes: uint64(len(next)), Sha256: monitorReadDigest(next)}, Segments: len(compacted.State.Archive.Segments)}
 	plan.RequiredSegments = 2 * (uint64(plan.Segments) + request.FutureSegments)
-	if plan.RequiredSegments > maximumMonitorHistorySegments {
+	capacity := record.State.Catalog.capacity(request.Policy.HistoryCatalog)
+	if plan.RequiredSegments > capacity.Segments || plan.RequiredSegments > capacity.HeldReaders {
 		return plan, nil, errors.New("native archive segment forecast needs a reviewed catalog capacity revision")
+	}
+	if request.Policy.HistoryCatalog != nil {
+		forecast, err := monitorNativeCatalogForecast(compacted, request.Policy, request.FutureSegments, 0)
+		if err != nil || forecast > capacity.CatalogBytes {
+			return plan, nil, errors.Join(errors.New("native archive metadata forecast needs a reviewed catalog capacity revision"), err)
+		}
+		if err := monitorNativeCatalogHeadBudget(compacted, request.Policy, capacity); err != nil {
+			return plan, nil, err
+		}
 	}
 	retainedBytes := uint64(0)
 	for _, reference := range compacted.State.Archive.Segments {
@@ -159,29 +176,37 @@ func buildMonitorNativeArchivePlan(ctx context.Context, request monitorNativeArc
 	}
 	plan.RequiredBytes = 2 * (retainedBytes + request.FutureSegments*maxRpcReplyBytes)
 	plan.RequiredInodes = 2 * (2*(uint64(plan.Segments)+request.FutureSegments) + 2)
-	config, err := durablevolume.Load(declaration)
-	if err != nil {
+	if err := monitorHistoryDeclarationForecast(declaration, []string{request.Original.Path, request.ArchivePath}, plan.RequiredBytes, plan.RequiredInodes); err != nil {
 		return plan, nil, err
 	}
-	for _, path := range []string{request.Original.Path, request.ArchivePath} {
+	plan.PlanHash = plan.hash()
+	return plan, next, nil
+}
+
+// Physical reserves are separate from logical retention and reader capacities.
+func monitorHistoryDeclarationForecast(declaration durablevolume.Reference, paths []string, requiredBytes, requiredInodes uint64) error {
+	config, err := durablevolume.Load(declaration)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
 		found := false
 		for _, volume := range config.Volumes {
 			for _, root := range volume.StateRoots {
 				relative, err := filepath.Rel(root.Path, path)
 				if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative) {
-					if found || volume.MinAvailableBytes < plan.RequiredBytes || volume.MinAvailableInodes < plan.RequiredInodes {
-						return plan, nil, errors.New("native archive declaration lacks exact unique two-times byte/inode forecast floors")
+					if found || volume.MinAvailableBytes < requiredBytes || volume.MinAvailableInodes < requiredInodes {
+						return errors.New("native archive declaration lacks exact unique two-times byte/inode forecast floors")
 					}
 					found = true
 				}
 			}
 		}
 		if !found {
-			return plan, nil, errors.New("native archive forecast is outside declared custody")
+			return errors.New("native archive forecast is outside declared custody")
 		}
 	}
-	plan.PlanHash = plan.hash()
-	return plan, next, nil
+	return nil
 }
 
 func planMonitorNativeArchive(ctx context.Context, request monitorNativeArchiveRequest) (plan monitorNativeArchivePlan, resultErr error) {

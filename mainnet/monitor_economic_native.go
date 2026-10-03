@@ -22,6 +22,7 @@ const maximumMonitorEconomicBytes = 768 * 1024
 // first window. Later windows start at the retained cursor and remain bounded.
 type monitorEconomicNativePolicy struct {
 	Role                   string                          `json:"role"`
+	HistoryCatalog         *monitorHistoryCatalogPolicy    `json:"history_catalog,omitempty"`
 	RuntimeCatalog         []monitorEconomicRuntimeEntry   `json:"runtime_catalog,omitempty"`
 	RuntimeCapacity        *monitorEconomicRuntimeCapacity `json:"runtime_capacity,omitempty"`
 	Observation            economicEmissionPolicy          `json:"observation"`
@@ -50,7 +51,7 @@ func (self monitorEconomicNativePolicy) validate(expected identityExpectation) e
 	if network.NativeChain != expected.NativeChain || network.GenesisHash != expected.GenesisHash || network.EvmChainId != expected.EvmChainId {
 		return errors.New("native economic role differs from independently configured monitor network")
 	}
-	return self.validateCatalog()
+	return errors.Join(self.validateCatalog(), self.HistoryCatalog.validate())
 }
 
 func monitorEconomicNativePaths(checkpoint, metrics, role string) (string, string) {
@@ -85,6 +86,7 @@ func (self monitorEconomicNativeEvent) index() uint64 {
 
 type monitorEconomicNativeState struct {
 	Archive                *monitorEconomicNativeArchive `json:"archive,omitempty"`
+	Catalog                *monitorHistoryCatalogState   `json:"history_catalog,omitempty"`
 	RuntimeBoundFrom       uint64                        `json:"runtime_bound_from,omitempty"`
 	LastExecutionRuntime   *rootReceiptProfile           `json:"last_execution_runtime,omitempty"`
 	LastPostStateRuntime   *rootReceiptProfile           `json:"last_post_state_runtime,omitempty"`
@@ -119,6 +121,9 @@ func monitorEconomicInteger(value string) (*big.Int, error) {
 }
 
 func (self *monitorEconomicNativeState) validate(policy monitorEconomicNativePolicy) error {
+	if self.Catalog != nil && (policy.HistoryCatalog == nil || len(self.Catalog.Revisions) == 0 || len(self.Catalog.Revisions) > maximumMonitorHistoryRevisions) {
+		return errors.New("native economic catalog cannot acquire unapproved history capacity")
+	}
 	if err := self.Archive.validate(policy, self); err != nil {
 		return err
 	}
