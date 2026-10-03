@@ -3383,3 +3383,13 @@ Race/causal/vet/build scopes remain queued. This does not relabel the earlier
 full model source, prove a composed release or make the October 6 schedule
 operational. Merge, production preparation and running worker evidence remain
 required.
+
+
+### October 3: wallet GET protocol qualification
+
+The broader wallet GET successor must follow returned endpoint pagination
+links, with confined destinations and a shared retry budget, rather than
+deriving cursors from wallet/token IDs. Retained endpoint OpenAPI inspection
+establishes this implementation requirement; deterministic public-client tests
+and the frozen release join remain pending. The earlier qualified transaction
+GET/rate scope does not establish wallet-census correctness.
