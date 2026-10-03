@@ -9,6 +9,7 @@ package validator
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/urfoundation/sn/crv4"
+	"github.com/urnetwork/connect"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -67,8 +69,8 @@ type releaseArchiveLineageFixture struct {
 
 // A failed submission may be retried in the same native epoch. Two distinct
 // signed measurements therefore exercise a real predecessor edge without
-// inventing a second native cut or advancing HeadEMA twice. All providers are
-// explicitly unbound; positive pool quality still uses genuine M8 statistics.
+// inventing a second native cut or advancing HeadEMA twice. Active providers
+// carry nonempty HeadEMA; one unbound provider preserves positive pool work.
 func newReleaseArchiveLineageFixture(t *testing.T) *releaseArchiveLineageFixture {
 	t.Helper()
 	f := &releaseArchiveLineageFixture{releaseArchiveV2TestFixture: newReleaseArchiveV2TestFixture(t)}
@@ -102,9 +104,31 @@ func newReleaseArchiveLineageFixture(t *testing.T) *releaseArchiveLineageFixture
 		a.Inputs = append(a.Inputs, input)
 		a.NativeSnapshotBlock, a.NativeSnapshotHash = input.CutNativeBlock, input.CutNativeBlockHash
 		a.EVMSnapshotBlock, a.EVMSnapshotHash, a.SettlementEpoch = input.CutEVMSnapshotBlock, input.CutEVMSnapshotHash, input.SettlementEpoch
-		zero := releaseHex32([32]byte{})
+		if len(input.Stats.Providers) == 0 {
+			t.Fatal("original M8 input has no provider census")
+		}
+		unbound := input.Stats.Providers[0]
 		for _, provider := range input.Stats.Providers {
-			a.Bindings = append(a.Bindings, ReleaseBindingMeasurement{NoID: input.NoID, ClientID: provider.ClientID, FleetID: zero, Hotkey: zero, ClientKey: zero, LocalClientKey: zero, CommitmentHash: zero})
+			if provider.Assignments > unbound.Assignments {
+				unbound = provider
+			}
+		}
+		for _, provider := range input.Stats.Providers {
+			clientId, err := connect.ParseId(provider.ClientID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			binding := attemptLedgerTestBinding(clientId, 1)
+			observed := ReleaseBindingMeasurement{NoID: input.NoID, ClientID: provider.ClientID, Active: true,
+				FleetID: binding.FleetID, Hotkey: binding.Hotkey, Generation: binding.Generation,
+				ClientKey: releaseHex32([32]byte{0x31}), LocalClientKey: releaseHex32([32]byte{0x31}),
+				CommitmentHash: releaseHex32([32]byte{0x32}), ValidFromEpoch: a.SettlementEpoch, ValidToEpoch: a.SettlementEpoch + 1,
+				RecordUID: binding.UID, LiveUIDFound: true, LiveUID: binding.UID}
+			if provider.ClientID == unbound.ClientID {
+				observed.Active, observed.LiveUIDFound, observed.LiveUID = false, false, 0
+				observed.LocalClientKey = releaseHex32([32]byte{})
+			}
+			a.Bindings = append(a.Bindings, observed)
 		}
 		a.Pools = append(a.Pools, ReleasePoolMeasurement{NoID: input.NoID, UID: uint16(100 + input.NoID), PoolHotkey: releaseHex32([32]byte{0x61, byte(input.NoID)})})
 		audit := releaseMeasurementDepositAudit(t, a.Policy, input.NoID)
@@ -119,6 +143,7 @@ func newReleaseArchiveLineageFixture(t *testing.T) *releaseArchiveLineageFixture
 	slices.SortFunc(a.Bindings, func(left, right ReleaseBindingMeasurement) int {
 		return strings.Compare(fmt.Sprintf("%020d:%s", left.NoID, left.ClientID), fmt.Sprintf("%020d:%s", right.NoID, right.ClientID))
 	})
+	f.populateOriginalHead(t, a)
 	hotkey, err := crv4.KeypairFromSeed([32]byte{0x31})
 	if err != nil || hotkey == nil || hotkey.PublicKey() != f.options.Hotkey {
 		t.Fatalf("fixture original hotkey: %v", err)
@@ -190,6 +215,72 @@ func newReleaseArchiveLineageFixture(t *testing.T) *releaseArchiveLineageFixture
 	}
 	f.repinIntents(t)
 	return f
+}
+
+// The existing legacy scoring oracle reconstructs original head inputs from
+// the exact signed record prefix. No compact verifier result supplies raw head
+// scores or prior EMA; the current public archive must reproduce both itself.
+func (self *releaseArchiveLineageFixture) populateOriginalHead(t *testing.T, artifact *ReleaseMeasurementArtifact) {
+	t.Helper()
+	legacy := cloneReleaseMeasurementArtifact(t, artifact)
+	legacy.Schema = ReleaseMeasurementSchema
+	stats := map[uint64]VerifiedReleaseStats{}
+	for index := range legacy.Inputs {
+		input := &legacy.Inputs[index]
+		cut := input.AttemptCutV2
+		participant := self.startup.disk.participants[index]
+		if participant.NoID != input.NoID || cut == nil || cut.Context.FirstSequence != 1 || cut.Context.EgressFirstSequence != 1 {
+			t.Fatal("lineage head oracle requires the original complete first prefix")
+		}
+		var records []AttemptRecord
+		if err := participant.Ledger.Walk(t.Context(), 1, cut.LastSequence, func(record AttemptRecord) error {
+			copyRecord, err := cloneAttemptRecord(record)
+			if err == nil {
+				records = append(records, copyRecord)
+			}
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		ledger := &AttemptLedger{identity: cut.Context.Identity, vsk: self.startup.inputs[index].PrivateKey, records: records}
+		var err error
+		input.Stats.AttemptCut, err = ledger.BuildCut(cut.Context.Boundary, 1, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := VerifyAttemptLedgerCut(input.Stats.AttemptCut, self.startup.inputs[index].PrivateKey.Public().(ed25519.PublicKey), self.startup.keys[input.NoID]); err != nil {
+			t.Fatal(err)
+		}
+		input.AttemptCutV2 = nil
+		stats[input.NoID], err = VerifyReleaseStatsMeasurement(input.Stats)
+		if err != nil {
+			t.Fatalf("original signed head scoring prefix: %v", err)
+		}
+	}
+	fleets, _, _, _, err := releaseMeasurementBindings(legacy, stats)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := NewHeadEMAStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, artifact.HeadEMA, err = head.PreviewForEpoch(artifact.SubnetEpoch, releaseRawHeadScores(fleets), artifact.Policy.Steering.HeadScoreEMA)
+	if err != nil || len(artifact.HeadEMA) == 0 {
+		t.Fatalf("original M8 lineage lacks nonempty HeadEMA: %v", err)
+	}
+	positive := 0
+	for _, record := range artifact.HeadEMA {
+		if record.HasPrior {
+			t.Fatal("original full-lineage fixture invented a prior head fold")
+		}
+		if record.HasRaw && record.Next.Numerator != "0" {
+			positive++
+		}
+	}
+	if positive == 0 {
+		t.Fatal("original full-lineage fixture lacks actual positive first head fold")
+	}
 }
 
 // Lifecycle replay needs exact prepared wire bytes, not an on-chain receipt.
@@ -335,6 +426,125 @@ func TestReleaseArchiveFullLineageRejectsRemovedPredecessor(t *testing.T) {
 	if reads[ReleaseEvidenceV2CaptureSource{Kind: "private", Name: f.file.Current.MeasurementArtifactPath}] != 1 {
 		t.Fatal("predecessor refusal did not reach the actual current signed artifact")
 	}
+}
+
+// Standalone mathematical validity and a fresh real signature cannot authorize
+// folding the failed predecessor's nonempty HeadEMA again in the same epoch.
+// The full public archive must reject that edge after reading both originals.
+func TestReleaseArchiveFullLineageCountsNonemptyHeadAndRefusesDoubleFold(t *testing.T) {
+	f := newReleaseArchiveLineageFixture(t)
+	options, work := f.measuredOptions(t)
+	archive, err := OpenReleaseEvidenceV2Archive(t.Context(), options)
+	if err != nil || archive == nil {
+		t.Fatalf("original nonempty-head lineage: %v", err)
+	}
+	defer func() {
+		if err := archive.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if err := archive.ReplayDecisions(t.Context(), f.observations); err != nil {
+		t.Fatal(err)
+	}
+	before, beforeBytes := work.snapshot()
+	previous, _, err := archive.Measurement(f.file.History[0].MeasurementArtifactHash)
+	if err != nil || previous == nil || len(previous.HeadEMA) == 0 {
+		t.Fatalf("owned original nonempty head: %v", err)
+	}
+	current, _, err := archive.Measurement(f.file.Current.MeasurementArtifactHash)
+	if err != nil || current == nil || !reflect.DeepEqual(current.HeadEMA, previous.HeadEMA) {
+		t.Fatalf("same-native retry did not retain original head base: %v", err)
+	}
+	for range 16 {
+		value, _, err := archive.Measurement(f.file.Current.MeasurementArtifactHash)
+		if err != nil || value == nil || !reflect.DeepEqual(value.HeadEMA, previous.HeadEMA) {
+			t.Fatalf("owned nonempty-head repeat lookup: %v", err)
+		}
+		value.HeadEMA[0].Next = RationalJSON{Numerator: "999", Denominator: "1"}
+	}
+	after, afterBytes := work.snapshot()
+	if !reflect.DeepEqual(before, after) || beforeBytes != afterBytes {
+		t.Fatal("owned nonempty-head lookups repeated full historical source work")
+	}
+	head, err := NewHeadEMAStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := head.CommitForEpoch(previous.SubnetEpoch, previous.HeadEMA, current.Policy.Steering.HeadScoreEMA); err != nil {
+		t.Fatal(err)
+	}
+	rawHead := map[FleetScoreKey]*big.Rat{}
+	for _, record := range current.HeadEMA {
+		if record.HasRaw {
+			value, err := decodeRationalJSON(record.Raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rawHead[record.Key] = value
+		}
+	}
+	_, current.HeadEMA, err = head.PreviewForEpoch(previous.SubnetEpoch+1, rawHead, current.Policy.Steering.HeadScoreEMA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	priorCount := 0
+	for _, record := range current.HeadEMA {
+		if record.HasPrior {
+			priorCount++
+		}
+	}
+	if priorCount == 0 {
+		t.Fatal("double-fold control lacks actual positive prior head")
+	}
+	intent := f.file.Current
+	observation := f.observations[1]
+	verifyOptions, err := archive.decisionOptions(t.Context(), intent, current, observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, hash, err := SealReleaseMeasurementArtifactV2(t.Context(), current, verifyOptions)
+	if err != nil {
+		t.Fatalf("double fold did not reach lineage with valid standalone mathematics: %v", err)
+	}
+	hotkey, err := crv4.KeypairFromSeed([32]byte{0x31})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyOptions, err = archive.decisionOptions(t.Context(), intent, current, observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signedAt, err := time.Parse(time.RFC3339Nano, intent.CreatedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope, envelopeHash, _, err := SealReleaseMeasurementEnvelopeV2(t.Context(), raw, current.SelfUID, hotkey, intent.Prepared.ExtrinsicHash, signedAt, verifyOptions)
+	if err != nil {
+		t.Fatalf("genuine double-fold envelope: %v", err)
+	}
+	intent.MeasurementArtifactHash, intent.MeasurementArtifactSize = hash, uint64(len(raw))
+	intent.MeasurementArtifactPath = "measurements/" + strings.TrimPrefix(hash, "sha256:") + ".json"
+	intent.MeasurementEnvelopeHash, intent.MeasurementEnvelopeSize = envelopeHash, uint64(len(envelope))
+	intent.MeasurementEnvelopePath = "measurements/envelopes/" + strings.TrimPrefix(envelopeHash, "sha256:") + ".json"
+	intent.VectorHash, err = intent.ReconstructedVectorHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.files[ReleaseEvidenceV2CaptureSource{Kind: "private", Name: intent.MeasurementArtifactPath}] = raw
+	f.files[ReleaseEvidenceV2CaptureSource{Kind: "private", Name: intent.MeasurementEnvelopePath}] = envelope
+	f.repinIntents(t)
+	changedOptions, changedWork := f.measuredOptions(t)
+	changed, err := OpenReleaseEvidenceV2Archive(t.Context(), changedOptions)
+	if err == nil || changed != nil || !strings.Contains(err.Error(), "head EMA prior state changed") {
+		t.Fatalf("signed double fold bypassed original complete archive lineage: %v", err)
+	}
+	changedReads, changedBytes := changedWork.snapshot()
+	for _, original := range []*SteeringIntent{&f.file.History[0], f.file.Current} {
+		if changedReads[ReleaseEvidenceV2CaptureSource{Kind: "private", Name: original.MeasurementArtifactPath}] != 1 || changedReads[ReleaseEvidenceV2CaptureSource{Kind: "private", Name: original.MeasurementEnvelopePath}] != 1 {
+			t.Fatal("double-fold refusal skipped an original measurement or envelope")
+		}
+	}
+	t.Logf("admitted source identities=%d bytes=%d owned measurement calls=18 head entries=%d; changed-source identities=%d bytes=%d", len(before), beforeBytes, len(previous.HeadEMA), len(changedReads), changedBytes)
 }
 
 // The second signature fails after the first predecessor's actual admission.
