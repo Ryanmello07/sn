@@ -6098,3 +6098,10 @@ The production lesson is to preserve already-published migration identities, not
 ### Test error contracts before weakening recovery admission
 
 The current member and registry recovery tests exposed mismatched error assertions: signed-root or exact-lineage refusal happened correctly, but tests required a nil constructor result or an unrelated diagnostic word. Keep the production refusal intact. Separate test-only corrections must prove a returned failed constructor has closed custody, cannot publish, and creates no nonce; command refusals must retain their exact status and no-effects checks. Preserve original failed receipts and qualify corrections independently. This is not evidence that invalid authority was admitted.
+
+
+## October 3 completed current migration candidate gate
+
+Server `19952183` has completed its [independent candidate qualification](evidence/payout-current-migration-qualification-20261003.json): 14 normal and 14 race roots pass with no skips, failures or race reports; all three exact-old-migration controls fail as intended in each mode; five package vets and the offline CLI build pass. The [causal receipt](evidence/payout-current-migration-causal-20261003.json) and [independent source join](evidence/payout-current-migration-source-join-readback-20261003.json) were rehashed with their bound artifacts. This completes that immutable source scope, not production deployment.
+
+A fresh publication fetch found Server main advanced to `ec6a038a` with hosted local-authority/proxy changes and updated modules after the candidate's `18ec7c05` base. Preserve both the qualified payout bytes and the new upstream work in a separate current publication composition. Reuse unchanged source-qualified outcomes with explicit joins; verify the changed dependency graph and its real consumers rather than assuming either that every test must repeat or that dependency changes cannot matter. The current publication join and release/recovery rehearsal remain outstanding. No migration or live payment was executed.
