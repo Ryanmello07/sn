@@ -4469,3 +4469,6 @@ The [closed-observation successor review](evidence/repair-closed6d-source-review
 
 
 The [common hardening source preview](evidence/hardening-composition-source-preview-20261003.json) joins Claim/fee/restore, native execution, repair closed-observation and lineage controls at `b704fcde`, retaining the exact Core `2ea8d82e` pin. Integration exposed overlapping replay-fixture dispatch changes; Astra resolved them at `5029c6c2` by retaining the fee marker and both native/other-profile paths. Qualify all retained scopes on this common graph instead of rebuilding separate precursors. This is a Git-only preview: final intake/census, compilation, normal/race and actual cross-engine qualification remain pending; no publication or activation is implied.
+
+
+The [StatsProvider original failure](evidence/server-stats-original-failure-20261003.json) is the tenth current full-model failure and the seventh shared-balance assertion affected by asynchronous journal application. Its complete excerpt remains separate from the earlier six-test bundle. It was already included in the combined4754 ten-affected/six-neighbor scope; retain that batch and require actual public debit flushing/replay before raw-balance assertions. No correction pass is established yet.

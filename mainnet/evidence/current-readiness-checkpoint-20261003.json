@@ -209,7 +209,7 @@
       "closed": false,
       "evidence": "server-model-subsidy-original-failure-20261003.json",
       "requirement": "PH-16",
-      "status": "Original Server1d3 full model retains1,473 passes/11 skips. Current Server5f22 financial roots pass per mode; its full model is now active and retains an original subsidy fixture failure. Granted-capacity fix and final common-source release remain."
+      "status": "Original Server1d3 full model retains1,473 passes/11 skips. Current Server5f22 financial roots pass per mode; its full model is active and retains ten failures in granted-capacity, writer-guard and asynchronous-debit fixtures. Combined test-only4754 correction covers all ten plus six neighbors; independent qualification and final common-source release remain."
     },
     {
       "closed": false,
