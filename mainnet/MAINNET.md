@@ -4306,3 +4306,12 @@ Independent Rust positives, compiled omission controls, export and actual Go-to-
 The [joined-source qualification](evidence/native-evm-current0f-qualification-20261003.json) verifies eight public roots normally and under race detection, vet and current dependency inputs. The initial four-pass/four-failure runner attempt used module-root cwd and could not find package-relative metadata fixtures; the exact unchanged source and owned binary passed from the correct package cwd. Preserve both outcomes and record execution context explicitly.
 
 The [actual merge](evidence/native-evm-current0f-main-merge-20261003.json) integrates22 exact candidate files at1a7a123d; every non-documentation Git entry matches the qualified candidate and newer plans/evidence survive. Main now includes native/EVM immutable archive rollover, reviewed signed capacity catalogs and retained checkpoint continuation. Observation-error refinements, Claim archive lineage, source-custody restore, actual runtime fee/finality authority, cross-domain conservation and production rehearsal remain distinct open work.
+
+
+### October 3 actual runtime472 structural review
+
+The [retained runtime structure review](evidence/runtime472-structure-review-20261003.json) independently verifies compressed code and metadata against the saved snapshot, expanded Wasm bytes and five original function-body hashes. There are51 imports total, including50 functions and one memory; function-body indices must count only function imports. Observed fee-handler indices3053/3058 differ from runtime470’s3052/3057. Names and indices are source-review leads, not admitted economic semantics.
+
+Bind a callsite profile to the exact original parent code and metadata; never carry an old runtime’s indices forward merely because function names resemble one another. Source/build correspondence, original branch/return evidence, complete execution witness and independent finality remain required. A missing refund event remains unknown; the failed-deposit branch cannot be inferred to return zero merely from absent events. Reuse existing receipt/finality verifiers and retained code snapshots while keeping their authority scopes explicit.
+
+The owned archive’s configuration supplies a location lead, not live custody: Snow’s staged mainnet service uses `/data/subtensor-mainnet-archive-v1` and loopback RPC19945. Verify actual startup, sync and backend/export access before borrowing a parent trie. Ordinary state read proofs and a runtime-code snapshot do not constitute a complete parent execution witness.
