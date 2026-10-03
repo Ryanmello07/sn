@@ -29,6 +29,8 @@ pub mod fee_events;
 mod hosts;
 #[path = "historical_observer.rs"]
 pub mod observer;
+#[path = "historical_pure_hosts.rs"]
+mod pure_hosts;
 #[path = "historical_backend.rs"]
 mod strict;
 #[cfg(test)]
@@ -242,7 +244,9 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
     }
     let proof_sha256 = sha2_256(&proof_nodes.encode());
     let proof_nodes_count = proof_nodes.len();
+    let work = std::sync::Arc::new(hosts::Work::default());
     let backend = strict::StrictBackend {
+        work: work.clone(),
         inner: create_proof_check_backend::<Blake2Hasher>(
             *parent.state_root(),
             StorageProof::new(proof_nodes),
@@ -284,7 +288,7 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
             })
             .build();
     let mut extensions = Extensions::default();
-    extensions.register(hosts::HistoricalBudget::default());
+    extensions.register(hosts::HistoricalBudget(hosts::Budget { work, depth: 0 }));
     let mut version_overlay = OverlayedChanges::<Blake2Hasher>::default();
     let version_raw = StateMachine::new(
         &backend,
@@ -418,8 +422,8 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
         extrinsics: job.extrinsics_hex.len(),
         proof_nodes: proof_nodes_count,
         proof_bytes,
-        storage_calls: budget.0.calls,
-        storage_io_bytes: budget.0.io_bytes,
+        storage_calls: budget.0.work.counts().0,
+        storage_io_bytes: budget.0.work.counts().1,
         post_state_reproduced: true,
         anchor_authority: "caller-supplied-unapproved".to_owned(),
         runtime_admitted: false,

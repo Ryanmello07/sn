@@ -1,7 +1,10 @@
 //! SDK root writers log incomplete-trie errors and can return the original root.
-//! A proof verifier must refuse instead. All read/iterator behavior is delegated;
+//! A proof verifier must refuse instead. SDK bulk-deletion also suppresses
+//! iterator errors; trap those before partial deletion can be called complete.
+//! Exact read/iterator ordering is delegated;
 //! every root mutation first executes the fallible trie API over the same nodes.
 
+use super::hosts::Work;
 use parity_scale_codec::{Decode, Encode};
 use sp_core::{
     storage::{ChildInfo, StateVersion},
@@ -15,6 +18,7 @@ use sp_trie::{
     child_delta_trie_root, delta_trie_root, empty_child_trie_root, LayoutV0, LayoutV1, MemoryDB,
     MerkleValue,
 };
+use std::sync::Arc;
 
 type Inner = TrieBackend<MemoryDB<Blake2Hasher>, Blake2Hasher>;
 
@@ -22,6 +26,7 @@ type Inner = TrieBackend<MemoryDB<Blake2Hasher>, Blake2Hasher>;
 #[derive(Debug)]
 pub(super) struct StrictBackend {
     pub inner: Inner,
+    pub work: Arc<Work>,
 }
 
 /// Preserve the iterator's missing-node errors while changing its owner type.
@@ -33,10 +38,25 @@ impl StorageIterator<Blake2Hasher> for StrictIterator {
     type Backend = StrictBackend;
     type Error = String;
     fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<Vec<u8>, String>> {
-        self.inner.next_key(&backend.inner)
+        backend.work.charge(0);
+        self.inner.next_key(&backend.inner).map(|result| {
+            let key = result.expect("historical iterator proof incomplete");
+            assert!(key.len() <= 512, "historical iterator key bound");
+            backend.work.charge(key.len());
+            Ok(key)
+        })
     }
     fn next_pair(&mut self, backend: &Self::Backend) -> Option<Result<(Vec<u8>, Vec<u8>), String>> {
-        self.inner.next_pair(&backend.inner)
+        backend.work.charge(0);
+        self.inner.next_pair(&backend.inner).map(|result| {
+            let (key, value) = result.expect("historical iterator proof incomplete");
+            assert!(
+                key.len() <= 512 && value.len() <= 8 * 1024 * 1024,
+                "historical iterator value bound"
+            );
+            backend.work.charge(key.len() + value.len());
+            Ok((key, value))
+        })
     }
     fn was_complete(&self) -> bool {
         self.inner.was_complete()
@@ -81,9 +101,13 @@ impl Backend<Blake2Hasher> for StrictBackend {
         self.inner.next_child_storage_key(child, key)
     }
     fn raw_iter(&self, mut args: IterArgs) -> Result<Self::RawIter, String> {
+        self.work.charge(0);
         args.stop_on_incomplete_database = false;
         Ok(StrictIterator {
-            inner: self.inner.raw_iter(args)?,
+            inner: self
+                .inner
+                .raw_iter(args)
+                .expect("historical iterator proof incomplete"),
         })
     }
     fn register_overlay_stats(&self, stats: &StateMachineStats) {
