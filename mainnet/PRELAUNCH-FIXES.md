@@ -102,8 +102,10 @@ normal/race scope and two passing package vets](evidence/restore-ledger-adapter-
 after correcting only private scratch ancestry. Original signed history,
 pending phases and actual owner reopening are exercised; missing/partial
 intent, wrong heads and foreign members are refused. The original setup
-failures remain retained. Public-dispatch causal, broader restore composition
-and live restoration remain pending.
+failures remain retained. The [old public-dispatch control](evidence/restore-ledger-public-causal-20261003.json)
+reproduces the missing semantic-adapter refusal normally and under race, with
+only test overlays. Broader restore composition and live restoration remain
+pending.
 
 Restore qualification must preflight the whole temporary-directory ancestry.
 The [first independent `912315cf` public-adapter run](evidence/restore-ledger-initial-setup-failure-20261003.json)

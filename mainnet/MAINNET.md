@@ -137,9 +137,11 @@ original nil-hook panic normally and under race detection, without modifying
 original production source. The [public ledger-restore adapter](evidence/restore-ledger-adapter-independent-20261003.json)
 at `912315cf` separately passes six roots normally and under race detection,
 plus mainnet/validator vet, after correcting scratch ancestry without source
-changes. Public-dispatch controls, native raw/member/multi-owner restoration
-and current published composition remain pending; no production restore
-operation has occurred.
+changes. The [old public-dispatch control](evidence/restore-ledger-public-causal-20261003.json)
+reproduces the missing ledger semantic adapter in both modes without changing
+original production code. Native raw/member/multi-owner restoration and current
+published composition remain pending; no production restore operation has
+occurred.
 
 The sole normal failure is in the model slice: the paid/free test attempts to
 change immutable terminal attribution before reaching its weighting assertion.
