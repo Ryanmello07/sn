@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +40,13 @@ type storageSnapshotRestoreFixture struct {
 // custody attributes remain both in the held tree and in the copied archive.
 func storageSnapshotRestoreTarget(t *testing.T, source *storagePreparationCommandFixture, sourceContext context.Context, owner durablevolume.PreparationOwner, ownerLocal bool) *storageSnapshotRestoreFixture {
 	t.Helper()
+	return storageSnapshotRestoreTargetWithLimits(t, source, sourceContext, owner, ownerLocal, nil)
+}
+
+// Large accepted namespaces retain explicit exporter bounds as well as their
+// restore bounds; no successful small-profile report can stand in for them.
+func storageSnapshotRestoreTargetWithLimits(t *testing.T, source *storagePreparationCommandFixture, sourceContext context.Context, owner durablevolume.PreparationOwner, ownerLocal bool, limits *durablevolume.InventoryLimits) *storageSnapshotRestoreFixture {
+	t.Helper()
 	command := "storage-prepare"
 	if ownerLocal {
 		command = "storage-owner-prepare"
@@ -49,7 +57,11 @@ func storageSnapshotRestoreTarget(t *testing.T, source *storagePreparationComman
 	}
 	fence := storagePreparationExportFence(t, source, reference, ownerLocal)
 	var output, diagnostic bytes.Buffer
-	if code := runMain(sourceContext, []string{command, "export", "--root", source.root, "--former-writer-fence", fence.Path, "--former-writer-fence-sha256", fence.Sha256}, &output, &diagnostic); code != 0 {
+	args := []string{command, "export", "--root", source.root, "--former-writer-fence", fence.Path, "--former-writer-fence-sha256", fence.Sha256}
+	if limits != nil {
+		args = append(args, "--max-entries", fmt.Sprint(limits.MaxEntries), "--max-bytes", fmt.Sprint(limits.MaxBytes), "--max-depth", fmt.Sprint(limits.MaxDepth), "--max-owner-attributes", fmt.Sprint(limits.MaxOwnerAttributes), "--max-owner-attribute-bytes", fmt.Sprint(limits.MaxOwnerAttributeBytes))
+	}
+	if code := runMain(sourceContext, args, &output, &diagnostic); code != 0 {
 		t.Fatal("joined snapshot source cannot export", code, diagnostic.String())
 	}
 	var report durablevolume.Inventory
