@@ -107,7 +107,7 @@ func buildMonitorNativeRestoreRequest(ctx context.Context, request monitorNative
 		return result, err
 	}
 	preparation.Owners = owners
-	if err := validateMonitorNativeRestoreCapacity(preparation, report); err != nil {
+	if err := validateMonitorHistoryRestoreCapacity(preparation, report); err != nil {
 		return result, err
 	}
 	return preparation, ctx.Err()
@@ -154,29 +154,6 @@ func validateMonitorNativeRestoreHistory(policy monitorEconomicNativePolicy, ori
 	}
 	if !reflect.DeepEqual(prior, record.State.Archive) {
 		return errors.New("native restore summary differs from complete original history")
-	}
-	return nil
-}
-
-// Counts, actual encoded bytes and two-times reserve remain independent. A
-// larger owner count does not silently increase any per-root physical budget.
-func validateMonitorNativeRestoreCapacity(preparation durablevolume.PreparationRequest, report durablevolume.Inventory) error {
-	// The complete inventory includes independently declared co-owners. Their
-	// exact semantic coverage is enforced again by storage-prepare before effects.
-	limits := preparation.Limits
-	if limits.MaxEntries < 2*uint64(len(report.Entries)) || limits.MaxBytes < 2*report.TotalBytes ||
-		limits.MaxOwnerAttributes < 2*report.TotalOwnerAttributes || limits.MaxOwnerAttributeBytes < 2*report.TotalOwnerAttributes*4096 ||
-		preparation.MinAvailableBytes < 2*(report.TotalBytes+report.TotalOwnerAttributes*4096) || preparation.MinAvailableInodes < 2*uint64(len(report.Entries)) {
-		return errors.New("native restore requires explicit two-times complete-namespace byte, head and inode reserves")
-	}
-	if len(preparation.Owners) > 32 || limits.MaxOwnerAttributes > 128 || limits.MaxOwnerAttributeBytes > 128*4096 {
-		if preparation.CapacityProfile != "urnetwork-preparation-many-owners-v1" {
-			return errors.New("native restore requires the explicit many-owner preparation capacity profile")
-		}
-	}
-	encoded, err := json.Marshal(preparation)
-	if err != nil || len(encoded)+1 > maxRpcReplyBytes {
-		return errors.Join(errors.New("native restore request exceeds its complete serialized byte bound"), err)
 	}
 	return nil
 }
