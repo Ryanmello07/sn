@@ -15,6 +15,16 @@ import (
 // No command, policy or environment option installs this instance-local hook.
 type repairValidatorObservationKey struct{}
 
+// A closed observation handle is unavailable evidence, not an observed clock
+// or generation change. Positive custody loss and uncertain publication retain
+// precedence; this does not broaden durable publication retry admission.
+func repairValidatorObservationPending(err error) bool {
+	if err == nil || errors.Is(err, durablevolume.ErrIdentity) || errors.Is(err, errRpcIntegrity) || errors.Is(err, errMainnetDurablePublicationUncertain) {
+		return false
+	}
+	return mainnetDurableAdmissionPending(err) || errors.Is(err, os.ErrClosed) || errors.Is(err, syscall.EBADF)
+}
+
 // Both the caller's cancellation and the actual observation error survive.
 func repairValidatorObservation(ctx context.Context, operation string, cause error) error {
 	if ctx == nil {

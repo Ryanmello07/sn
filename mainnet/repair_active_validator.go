@@ -160,7 +160,7 @@ func resumeRepairActiveValidator(ctx context.Context, store *repairActiveValidat
 	if record.StartAt.IsZero() {
 		stamp, mono, err := actionCheck(true)
 		if err != nil {
-			if mainnetDurableAdmissionPending(err) {
+			if repairValidatorObservationPending(err) {
 				return finish("source-refused", err)
 			}
 			return finish("join-window-closed", err)
@@ -179,7 +179,7 @@ func resumeRepairActiveValidator(ctx context.Context, store *repairActiveValidat
 		}
 		stamp, mono, err = actionCheck(true)
 		if err != nil {
-			if mainnetDurableAdmissionPending(err) {
+			if repairValidatorObservationPending(err) {
 				return finish("source-refused", err)
 			}
 			return finish("join-window-closed", err)

@@ -98,7 +98,7 @@ func resumeRepairValidator(ctx context.Context, store *repairValidatorStore, hos
 	}
 	if record.StartAt.IsZero() {
 		if err := host.stopped(ctx, plan, manager); err != nil {
-			if mainnetDurableAdmissionPending(err) {
+			if repairValidatorObservationPending(err) {
 				return finish("source-refused", err)
 			}
 			return finish("generation-changed", err)
