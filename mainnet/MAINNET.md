@@ -4466,3 +4466,6 @@ The [frozen native source review](evidence/native-ad1-source-review-20261003.jso
 
 
 The [closed-observation successor review](evidence/repair-closed6d-source-review-20261003.json) verifies `6d0612b8`, four changed files and eleven intake bindings. A closed handle or `EBADF` now remains unavailable evidence at stopped-generation and active pre/post-join checks; it cannot establish generation change or replenish the original join window. Positive integrity loss and uncertain durable publication keep precedence. Four new deterministic public controls join the existing twenty-root repair scope; qualification and current-role composition are pending.
+
+
+The [common hardening source preview](evidence/hardening-composition-source-preview-20261003.json) joins Claim/fee/restore, native execution, repair closed-observation and lineage controls at `b704fcde`, retaining the exact Core `2ea8d82e` pin. Integration exposed overlapping replay-fixture dispatch changes; Astra resolved them at `5029c6c2` by retaining the fee marker and both native/other-profile paths. Qualify all retained scopes on this common graph instead of rebuilding separate precursors. This is a Git-only preview: final intake/census, compilation, normal/race and actual cross-engine qualification remain pending; no publication or activation is implied.
