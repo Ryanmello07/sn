@@ -6875,3 +6875,6 @@ The [native accounting source finding](evidence/native-split-conformance-source-
 ### Requested and granted transfer capacity
 
 The [original full-model subsidy failure](evidence/server-model-subsidy-original-failure-20261003.json) remains retained while the suite continues. Initial source triage found a consumption loop counting requested capacity although successful escrow can now grant fewer bytes. Confirm the cause before changing assertions. Consumers and fixtures must use the returned, signed grant for capacity and completed-byte accounting; test partial grants and repeated exhaustion with exact revenue conservation. Check adjacent loops and production callers, preserving legitimate balance/debt retention. No post-fix result is established yet.
+
+
+The [source review of the subsidy correction](evidence/subsidy-grant804-source-review-20261003.json) verifies the exact test-only successor: returned grant consumption, checked settlement errors, original exhaustion/payment assertions and unchanged production/modules. Qualify the affected root and two declared neighbors after the ongoing full suite joins; retain unaffected results through exact source scope rather than restarting the entire suite. The original failure remains evidence, and this source review supplies no behavioral pass.
