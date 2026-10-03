@@ -6638,3 +6638,10 @@ The [guarded cache reclaim28](evidence/cache-reclaim-28-20261003.json) recovered
 
 
 The [large-history diagnostic source review](evidence/native-admission-ceae-source-review-20261003.json) verifies a two-test-file change over259 with all production/module tree entries retained. Observe positive reads of every exact retained inode under a300-second liveness budget, then require the unchanged public sample; access events alone do not prove admission. Preserve early worker errors, cancellation and original timeout evidence separately. Check observer cleanup errors and join its reader. Behavioral qualification and the cleanup successor remain separate from this source review.
+
+
+### October 3 current replay/caller increment qualified and merged
+
+The [current caller qualification](evidence/current-caller-cb796-joined-qualification-20261003.json) verifies59 artifact bindings. Normal and race ordinary-user gates each pass11 roots with one intentional root-only skip; the skipped storage inspector passes separately in both modes using protected pinned binaries and the observed filesystem UUID. Mainnet vet passes. The [merge review](evidence/current-caller-cb796-main-merge-20261003.json) verifies all23 actual changed files at778fca83 against the independently qualified candidate; every other code/module/config input matches that candidate while newer plans and evidence are retained.
+
+Main now includes bounded subprocess collection and cancellation for replay, signing adapters, repair and storage inspection, plus the public original-Wasm historical verifier and typed fee-observation caller. Missing refund evidence remains unknown; synthetic candidates remain unapproved. Complete actual-runtime proof acquisition, source/profile/finality authority, archive adapters, full cross-root restore, deployment and observed settlement are still required. A published verifier alone cannot authorize production native fee accounting.
