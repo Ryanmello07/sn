@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -67,6 +68,7 @@ func bootstrapSuccessorOuterPublicControl(t *testing.T, registry, pending bool, 
 	f := newBootstrapSuccessorCanonicalFixture(t)
 	attempts := uint16(8)
 	pendingHash, pendingPayload := "", ""
+	var pendingOriginal bootstrapSuccessorMemberPending
 	if pending {
 		owner, adapter, join := f.openRuntimeRevisions()
 		if result, err := advanceBootstrapSuccessorExecution(t.Context(), owner, adapter, true); err != nil || !result.SubmissionAttempted || result.CumulativeAttempts != 9 {
@@ -84,7 +86,11 @@ func bootstrapSuccessorOuterPublicControl(t *testing.T, registry, pending bool, 
 		if _, err := advanceBootstrapSuccessorExecution(t.Context(), owner, adapter, false); !reached || !errors.Is(err, lost) || owner.local.members.census.Pending == nil {
 			t.Fatal("original terminal reservation missed its barrier", reached, err)
 		}
-		pendingHash, pendingPayload = owner.local.members.census.Pending.Sha256, owner.local.members.census.Pending.Payload
+		pendingOriginal = *owner.local.members.census.Pending
+		pendingHash, pendingPayload = pendingOriginal.Sha256, pendingOriginal.Payload
+		if pendingOriginal.Name != bootstrapSuccessorExecutionEventName(2)+".intent" || pendingOriginal.StageInode != 0 {
+			t.Fatal("original reservation did not precede its exact second-event intent")
+		}
 		join()
 		attempts = 9
 	}
@@ -217,6 +223,16 @@ func bootstrapSuccessorOuterPublicControl(t *testing.T, registry, pending bool, 
 		if err := json.Unmarshal([]byte(completed[".successor-local-members.json"]), &census); err != nil || census.Pending == nil || census.Pending.Payload != pendingPayload || census.Pending.Sha256 != pendingHash {
 			t.Fatal("outer reconciliation replaced original pending outcome", err)
 		}
+		expected, err := base64.StdEncoding.Strict().DecodeString(pendingOriginal.Payload)
+		if err != nil || int64(len(expected)) != pendingOriginal.Size || safeReleaseHash(expected) != pendingOriginal.Sha256 {
+			t.Fatal("original terminal reservation lost its exact payload", err)
+		}
+		stage := filepath.Join(local, census.Pending.Stage)
+		staged, err := os.ReadFile(stage)
+		var stagedStat unix.Stat_t
+		if err != nil || !bytes.Equal(staged, expected) || unix.Stat(stage, &stagedStat) != nil || census.Pending.StageInode == 0 || census.Pending.StageInode != stagedStat.Ino || census.Pending.Name != pendingOriginal.Name || census.Pending.Stage != pendingOriginal.Stage {
+			t.Fatal("approved offline recovery did not retain its exact staged original intent", err)
+		}
 		var output bytes.Buffer
 		online := append(append(append([]string{}, f.approvalArgs...), extra...), "--online", "--canonical-approval", f.canonicalRef.Path, "--canonical-approval-sha256", f.canonicalRef.Sha256)
 		if code, diagnostic := f.invoke("contract-successor-execution-resume", &output, online...); code != 0 {
@@ -227,6 +243,27 @@ func bootstrapSuccessorOuterPublicControl(t *testing.T, registry, pending bool, 
 			t.Fatal("original outer-pending completion changed economic authority", result, err)
 		}
 		completed = bootstrapSuccessorPreparationTestFiles(t, local)
+		// Only the already reserved event may become this exact intent/final
+		// pair. Its staged inode moves to intent; its signed lineage stays exact.
+		intentName := pendingOriginal.Name
+		finalName := bootstrapSuccessorExecutionEventName(2) + ".json"
+		var intentStat unix.Stat_t
+		if completed[intentName] != string(expected) || completed[finalName] != string(expected) || unix.Stat(filepath.Join(local, intentName), &intentStat) != nil || intentStat.Dev != stagedStat.Dev || intentStat.Ino != stagedStat.Ino {
+			t.Fatal("canonical recovery replaced original staged intent bytes or inode")
+		}
+		if _, err := os.Lstat(stage); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("canonical completion retained another staged copy", err)
+		}
+		var outcome, predecessor bootstrapSuccessorExecutionEvent
+		if err := decodePlanJson(expected, &outcome); err != nil {
+			t.Fatal(err)
+		}
+		if err := decodePlanJson([]byte(originals[bootstrapSuccessorExecutionEventName(1)+".json"]), &predecessor); err != nil {
+			t.Fatal(err)
+		}
+		if outcome.Sequence != 2 || outcome.Phase != "installed" || outcome.Receipt == nil || outcome.CumulativeAttempts != attempts || outcome.PreviousHash != predecessor.ContentHash || outcome.ApprovalHash != predecessor.ApprovalHash || outcome.CanonicalAuthorityHash != predecessor.CanonicalAuthorityHash || outcome.RuntimeRevisionHash != predecessor.RuntimeRevisionHash || outcome.SafeCurrentRevisionHash != predecessor.SafeCurrentRevisionHash || outcome.ReservedLifetimeWei != predecessor.ReservedLifetimeWei {
+			t.Fatal("original terminal intent changed its action, predecessor or economic authority")
+		}
 	}
 	for name, raw := range originals {
 		if name != ".successor-local-members.json" && !(!registry && metadataNames[name]) && completed[name] != raw {
@@ -238,7 +275,7 @@ func bootstrapSuccessorOuterPublicControl(t *testing.T, registry, pending bool, 
 		receiptName = bootstrapSuccessorExecutionPrefix + "-registry-rebind.json"
 	}
 	for name := range completed {
-		if _, found := originals[name]; !found && name != receiptName && !(pending && name == bootstrapSuccessorExecutionEventName(2)) {
+		if _, found := originals[name]; !found && name != receiptName && !(pending && (name == pendingOriginal.Name || name == bootstrapSuccessorExecutionEventName(2)+".json")) {
 			t.Fatal("public outer recovery invented an unrelated local member", name)
 		}
 	}

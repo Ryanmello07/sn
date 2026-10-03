@@ -5,6 +5,9 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"maps"
 	"os"
@@ -104,14 +107,89 @@ func TestBootstrapSuccessorRestoredReaderReusesUnchangedMembers(t *testing.T) {
 	if err := os.WriteFile(path, changed, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.check(); !errors.Is(err, durablevolume.ErrIdentity) || readBytes != len(changed) {
-		t.Fatal("one changed member did not receive exactly one full admission read", err, readBytes, len(changed))
+	if err := owner.check(); !errors.Is(err, durablevolume.ErrIdentity) || readBytes != 0 {
+		t.Fatal("changed acknowledged metadata was reenrolled or reread", err, readBytes)
 	}
 	if err := os.WriteFile(path, []byte(before[name]), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.check(); !errors.Is(err, durablevolume.ErrIdentity) || readBytes != len(changed) {
+	if err := owner.check(); !errors.Is(err, durablevolume.ErrIdentity) || readBytes != 0 {
 		t.Fatal("restoring bytes silently reenrolled lost passive custody", err, readBytes)
+	}
+}
+
+// An unacknowledged stage may progress only within its original exact payload
+// reservation. Changing that pending file invalidates its cached byte digest;
+// every unchanged acknowledged member still avoids another payload read.
+func TestBootstrapSuccessorRestoredReaderReadsOnlyChangedPendingStage(t *testing.T) {
+	owner, f, _ := bootstrapSuccessorRestoredViewFixture(t)
+	pending := *owner.census.Pending
+	payload, err := base64.StdEncoding.Strict().DecodeString(pending.Payload)
+	if err != nil || pending.Append || pending.StageInode != 0 || len(payload) < 2 || int64(len(payload)) != pending.Size || safeReleaseHash(payload) != pending.Sha256 {
+		t.Fatal("fixture lacks an exact unacknowledged original stage reservation", err)
+	}
+	before := bootstrapSuccessorPreparationTestFiles(t, f.storage.target.root)
+	censusBefore, err := json.Marshal(owner.census)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(f.storage.target.root, pending.Stage)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	partial := len(payload) / 2
+	if n, err := file.Write(payload[:partial]); err != nil || n != partial {
+		t.Fatal("cannot retain the selected partial pending stage", n, err)
+	}
+	if err := file.Sync(); err != nil {
+		t.Fatal(err)
+	}
+	var staged unix.Stat_t
+	if err := unix.Fstat(int(file.Fd()), &staged); err != nil {
+		t.Fatal(err)
+	}
+	readBytes := map[string]int{}
+	owner.afterRead = func(name string, n int) { readBytes[name] += n }
+	if err := owner.check(); err != nil || readBytes[pending.Stage] != partial || len(readBytes) != 1 {
+		t.Fatal("original unacknowledged stage did not receive one bounded read", err, readBytes)
+	}
+	for repeat := 0; repeat < 8; repeat++ {
+		if err := owner.check(); err != nil || readBytes[pending.Stage] != partial || len(readBytes) != 1 {
+			t.Fatal("unchanged pending or historical members were reread", repeat, err, readBytes)
+		}
+	}
+	if n, err := file.Write(payload[partial:]); err != nil || n != len(payload)-partial {
+		t.Fatal("cannot complete the exact retained pending stage", n, err)
+	}
+	if err := file.Sync(); err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.check(); err != nil || readBytes[pending.Stage] != partial+len(payload) || len(readBytes) != 1 {
+		t.Fatal("changed admissible stage did not receive exactly one new full read", err, readBytes)
+	}
+	for repeat := 0; repeat < 8; repeat++ {
+		if err := owner.check(); err != nil || readBytes[pending.Stage] != partial+len(payload) || len(readBytes) != 1 {
+			t.Fatal("completed unchanged stage was rehashed", repeat, err, readBytes)
+		}
+	}
+	var current unix.Stat_t
+	if err := unix.Stat(path, &current); err != nil || current.Dev != staged.Dev || current.Ino != staged.Ino {
+		t.Fatal("pending read control replaced its original staged inode", err)
+	}
+	censusAfter, err := json.Marshal(owner.census)
+	after := bootstrapSuccessorPreparationTestFiles(t, f.storage.target.root)
+	if err != nil || !bytes.Equal(censusBefore, censusAfter) || after[pending.Stage] != string(payload) || len(after) != len(before)+1 {
+		t.Fatal("passive admission published or acknowledged the pending stage", err)
+	}
+	for name, raw := range before {
+		if after[name] != raw {
+			t.Fatal("pending work control changed original custody", name)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(f.storage.target.root, pending.Name)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("passive admission published the final member", err)
 	}
 }
 
