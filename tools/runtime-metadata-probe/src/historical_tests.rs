@@ -229,6 +229,7 @@ fn observation_profile(code: &[u8], export: &str, purpose: &str) -> observer::Ob
             offset_start: 0,
             offset_end: body.len() as u32,
         }],
+        metadata_sha256: None,
     }
 }
 
@@ -376,6 +377,373 @@ fn historical_original_wasm_observer_never_publishes_incomplete_poststate() {
             .contains("reproduced child state root differs"),
         "{error}"
     );
+}
+
+#[derive(Encode, scale_info::TypeInfo)]
+enum SyntheticBalanceEvents {
+    #[codec(index = 7)]
+    Withdraw { who: [u8; 32], amount: u64 },
+    #[codec(index = 5)]
+    Deposit { who: [u8; 32], amount: u64 },
+}
+
+#[derive(Encode, scale_info::TypeInfo)]
+enum SyntheticExitReason {
+    Succeed,
+    Revert,
+}
+
+#[derive(Encode, scale_info::TypeInfo)]
+enum SyntheticEthereumEvents {
+    #[codec(index = 3)]
+    Executed {
+        from: [u8; 20],
+        to: [u8; 20],
+        transaction_hash: [u8; 32],
+        exit_reason: SyntheticExitReason,
+        extra_data: Vec<u8>,
+    },
+}
+
+/// This metadata is embedded in and returned by the same synthetic Wasm;
+/// production has no caller-provided replacement-metadata input.
+fn fee_metadata() -> Vec<u8> {
+    use frame_metadata::v14::{
+        ExtrinsicMetadata, PalletEventMetadata, PalletMetadata, RuntimeMetadataV14,
+    };
+    let balance = PalletMetadata {
+        name: "Balances",
+        storage: None,
+        calls: None,
+        event: Some(PalletEventMetadata {
+            ty: scale_info::meta_type::<SyntheticBalanceEvents>(),
+        }),
+        constants: vec![],
+        error: None,
+        index: 5,
+    };
+    let ethereum = PalletMetadata {
+        name: "Ethereum",
+        storage: None,
+        calls: None,
+        event: Some(PalletEventMetadata {
+            ty: scale_info::meta_type::<SyntheticEthereumEvents>(),
+        }),
+        constants: vec![],
+        error: None,
+        index: 18,
+    };
+    let metadata = RuntimeMetadataV14::new(
+        vec![balance, ethereum],
+        ExtrinsicMetadata {
+            ty: scale_info::meta_type::<()>(),
+            version: 4,
+            signed_extensions: vec![],
+        },
+        scale_info::meta_type::<()>(),
+    );
+    frame_metadata::RuntimeMetadataPrefixed::from(metadata).encode()
+}
+
+fn fee_record(index: u32, pallet: u8, event: &[u8]) -> Vec<u8> {
+    let mut raw = vec![0];
+    raw.extend(index.to_le_bytes());
+    raw.push(pallet);
+    raw.extend(event);
+    raw.push(0); // canonical empty topic vector
+    raw
+}
+
+/// Each balance event is generated inside a separate original-Wasm function.
+/// An unrelated same-payer deposit is optionally executed outside those exact
+/// callsite ranges, reproducing the precompile-attribution ambiguity.
+fn fee_job(refund: Option<u64>, foreign_payer: bool, unrelated_deposit: bool) -> HistoricalJob {
+    fee_job_changed(refund, foreign_payer, unrelated_deposit, |_, _| {})
+}
+
+fn fee_job_changed(
+    refund: Option<u64>,
+    foreign_payer: bool,
+    unrelated_deposit: bool,
+    change: impl FnOnce(&mut Vec<(Option<&'static str>, Vec<u8>)>, &mut Vec<u8>),
+) -> HistoricalJob {
+    let source = [29u8; 20];
+    let mut mapping = b"evm:".to_vec();
+    mapping.extend(source);
+    let payer = blake2_256(&mapping);
+    let observed_payer = if foreign_payer { [99; 32] } else { payer };
+    let mut events = vec![(
+        Some("fee-withdraw"),
+        fee_record(
+            0,
+            5,
+            &SyntheticBalanceEvents::Withdraw {
+                who: observed_payer,
+                amount: 1000,
+            }
+            .encode(),
+        ),
+    )];
+    if unrelated_deposit {
+        events.push((
+            None,
+            fee_record(
+                0,
+                5,
+                &SyntheticBalanceEvents::Deposit {
+                    who: payer,
+                    amount: 9000,
+                }
+                .encode(),
+            ),
+        ));
+    }
+    if let Some(amount) = refund {
+        events.push((
+            Some("fee-refund"),
+            fee_record(
+                0,
+                5,
+                &SyntheticBalanceEvents::Deposit { who: payer, amount }.encode(),
+            ),
+        ));
+    }
+    events.push((
+        Some("ethereum-executed"),
+        fee_record(
+            0,
+            18,
+            &SyntheticEthereumEvents::Executed {
+                from: source,
+                to: [31; 20],
+                transaction_hash: [41; 32],
+                exit_reason: SyntheticExitReason::Revert,
+                extra_data: vec![1, 2],
+            }
+            .encode(),
+        ),
+    ));
+    let mut metadata = fee_metadata();
+    change(&mut events, &mut metadata);
+    let metadata_opaque = metadata.encode();
+    let escape = |bytes: &[u8]| {
+        bytes
+            .iter()
+            .map(|byte| format!("\\{byte:02x}"))
+            .collect::<String>()
+    };
+    let mut key = sp_core::hashing::twox_128(b"System").to_vec();
+    key.extend(sp_core::hashing::twox_128(b"Events"));
+    let mut imports = format!(
+        r#"(import "env" "ext_storage_append_version_1" (func $append (param i64 i64)))
+        (data (i32.const 4500) "{}")
+        (data (i32.const 40000) "{}")
+        (func (export "Metadata_metadata") (param i32 i32) (result i64) (i64.const {}))"#,
+        escape(&key),
+        escape(&metadata_opaque),
+        ((metadata_opaque.len() as u64) << 32) | 40000
+    );
+    let mut body = String::new();
+    for (index, (_, event)) in events.iter().enumerate() {
+        let offset = 5000 + index * 256;
+        imports.push_str(&format!(r#"(data (i32.const {offset}) "{}")
+            (func $event{index} (export "event{index}") (call $append (i64.const {}) (i64.const {})))"#,
+            escape(event), (32u64 << 32) | 4500, ((event.len() as u64) << 32) | offset as u64));
+        body.push_str(&format!("(call $event{index})"));
+    }
+    let code = wasm(&imports, &body);
+    let mut final_events = parity_scale_codec::Compact(events.len() as u32).encode();
+    for (_, event) in &events {
+        final_events.extend(event);
+    }
+    let mut job = job(&code, |storage| {
+        storage.top.insert(key, final_events);
+    });
+    let mut profile = observation_profile(&code, "event0", "fee-withdraw");
+    profile.rules.clear();
+    for (index, (purpose, _)) in events.iter().enumerate() {
+        if let Some(purpose) = purpose {
+            profile
+                .rules
+                .extend(observation_profile(&code, &format!("event{index}"), purpose).rules);
+        }
+    }
+    profile.metadata_sha256 = Some(sha2_256(&metadata));
+    job.observation_profile = Some(profile);
+    job
+}
+
+#[test]
+fn historical_fee_original_metadata_separates_actual_refund_from_same_phase_effects() {
+    let job = fee_job(Some(250), false, true);
+    let report = run(&job).expect("original metadata and exact callsite event pair refused");
+    let trace = report.hook_observations.unwrap();
+    let events = trace.fee_events.unwrap();
+    assert_eq!(events.events.len(), 3); // the unlabelled 9000 deposit is not gas
+    assert_eq!(events.candidates.len(), 1);
+    assert_eq!(events.unmatched_fee_events, 0);
+    let candidate = &events.candidates[0];
+    assert_eq!(candidate.withdrawal_rao.as_deref(), Some("1000"));
+    assert_eq!(candidate.refund_rao.as_deref(), Some("250"));
+    assert_eq!(candidate.debit_rao.as_deref(), Some("750"));
+    assert_eq!(candidate.extrinsic_index, Some(0));
+    assert_eq!(candidate.transaction_hash, [41; 32]);
+    assert_eq!(candidate.status, "observed-pair-unadmitted");
+    assert_eq!(report.native_fee_debit, None);
+    assert!(!report.runtime_admitted && !report.native_fee_withdrawal_refund_observed);
+}
+
+#[test]
+fn historical_fee_missing_refund_never_relabels_prior_deposit_or_zero() {
+    let job = fee_job(None, false, true);
+    let report = run(&job).expect("missing refund must retain unresolved evidence");
+    let events = report.hook_observations.unwrap().fee_events.unwrap();
+    assert_eq!(events.candidates.len(), 1);
+    let candidate = &events.candidates[0];
+    assert_eq!(candidate.withdrawal_rao.as_deref(), Some("1000"));
+    assert_eq!(candidate.refund_rao, None);
+    assert_eq!(candidate.debit_rao, None);
+    assert_eq!(candidate.status, "refund-unobserved");
+}
+
+#[test]
+fn historical_fee_observed_zero_refund_differs_from_missing() {
+    let job = fee_job(Some(0), false, false);
+    let report = run(&job).expect("actual zero deposit event refused");
+    let events = report.hook_observations.unwrap().fee_events.unwrap();
+    assert_eq!(events.candidates[0].refund_rao.as_deref(), Some("0"));
+    assert_eq!(events.candidates[0].debit_rao.as_deref(), Some("1000"));
+}
+
+#[test]
+fn historical_fee_foreign_payer_and_excess_refund_refuse_attribution() {
+    for job in [
+        fee_job(Some(250), true, false),
+        fee_job(Some(1001), false, false),
+    ] {
+        let error = run(&job).expect_err("foreign or impossible fee event became expenditure");
+        assert!(
+            error.to_string().contains("payer differs")
+                || error.to_string().contains("refund exceeds"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
+fn historical_fee_runtime_metadata_pin_cannot_be_substituted() {
+    let mut job = fee_job(Some(250), false, false);
+    job.observation_profile
+        .as_mut()
+        .unwrap()
+        .metadata_sha256
+        .as_mut()
+        .unwrap()[0] ^= 1;
+    let error = run(&job).expect_err("different runtime metadata was admitted");
+    assert!(
+        error.to_string().contains("runtime-generated metadata pin"),
+        "{error}"
+    );
+}
+
+#[test]
+fn historical_fee_exact_metadata_rejects_changed_amount_units_and_duplicate_pallets() {
+    for fault in ["amount-width", "pallet-index", "event-name"] {
+        let job = fee_job_changed(Some(250), false, false, |_, raw| {
+            let mut metadata: frame_metadata::RuntimeMetadataPrefixed =
+                scale_exact("fixture metadata", raw).unwrap();
+            let frame_metadata::RuntimeMetadata::V14(ref mut value) = metadata.1 else {
+                panic!("fixture version")
+            };
+            match fault {
+                "amount-width" => {
+                    let balance_type = value.pallets[0].event.as_ref().unwrap().ty.id;
+                    let scale_info::TypeDef::Variant(events) =
+                        &value.types.resolve(balance_type).unwrap().type_def
+                    else {
+                        panic!("fixture event type")
+                    };
+                    let amount_type = events.variants[0].fields[1].ty.id;
+                    value.types.types[amount_type as usize].ty.type_def =
+                        scale_info::TypeDef::Primitive(scale_info::TypeDefPrimitive::U128);
+                }
+                "pallet-index" => value.pallets[1].index = value.pallets[0].index,
+                "event-name" => {
+                    let balance_type = value.pallets[0].event.as_ref().unwrap().ty.id;
+                    let scale_info::TypeDef::Variant(events) =
+                        &mut value.types.types[balance_type as usize].ty.type_def
+                    else {
+                        panic!("fixture event type")
+                    };
+                    events.variants[0].fields[1].name = Some("requested_amount".to_owned());
+                }
+                _ => unreachable!(),
+            }
+            *raw = metadata.encode();
+        });
+        let error =
+            run(&job).expect_err("original runtime emitted an unsupported or ambiguous fee layout");
+        assert!(
+            error
+                .to_string()
+                .contains("native payer or amount layout differs")
+                || error.to_string().contains("ambiguous pallet identity"),
+            "{fault}: {error}"
+        );
+    }
+}
+
+#[test]
+fn historical_fee_original_event_bytes_reject_bad_phase_topics_and_duplicate_execution() {
+    for fault in [
+        "phase",
+        "index",
+        "topics",
+        "duplicate-execution",
+        "duplicate-refund",
+        "purpose",
+        "refund-order",
+    ] {
+        let job = fee_job_changed(Some(250), false, false, |events, _| match fault {
+            "phase" => events[0].1[0] = 3,
+            "index" => events[0].1[1..5].copy_from_slice(&1u32.to_le_bytes()),
+            "topics" => events[0].1.push(0),
+            "duplicate-execution" => events.push(events.last().unwrap().clone()),
+            "duplicate-refund" => events.insert(2, events[1].clone()),
+            "purpose" => events[1].0 = Some("fee-withdraw"),
+            "refund-order" => events.swap(0, 1),
+            _ => unreachable!(),
+        });
+        let error =
+            run(&job).expect_err("runtime fee bytes with contradictory placement became a fact");
+        assert!(
+            error.to_string().contains("historical fee event"),
+            "{fault}: {error}"
+        );
+    }
+}
+
+#[test]
+fn historical_fee_init_phase_and_late_refund_remain_unassigned() {
+    let late = fee_job_changed(Some(250), false, false, |events, _| {
+        events.swap(1, 2);
+    });
+    let report = run(&late).expect("late refund evidence should remain retained and unassigned");
+    let events = report.hook_observations.unwrap().fee_events.unwrap();
+    assert_eq!(events.candidates[0].refund_rao, None);
+    assert_eq!(events.candidates[0].debit_rao, None);
+    assert_eq!(events.unmatched_fee_events, 1);
+    let initialize = fee_job_changed(Some(250), false, false, |events, _| {
+        for (_, raw) in events {
+            raw[0] = 2;
+            raw.drain(1..5);
+        }
+    });
+    let report = run(&initialize).expect("initialization placement should be explicit unknown");
+    let events = report.hook_observations.unwrap().fee_events.unwrap();
+    assert_eq!(events.candidates[0].status, "placement-unresolved");
+    assert_eq!(events.candidates[0].debit_rao, None);
+    assert_eq!(events.unmatched_fee_events, 2);
 }
 
 #[test]

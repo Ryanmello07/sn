@@ -33,7 +33,7 @@ sp-runtime = { git = "https://github.com/RaoFoundation/polkadot-sdk.git", rev = 
 sp-trie = { git = "https://github.com/RaoFoundation/polkadot-sdk.git", rev = "cacb4310f20c7cac83eb3ccd8ed5a5ad4212608a" }
 sp-maybe-compressed-blob = { git = "https://github.com/RaoFoundation/polkadot-sdk.git", rev = "cacb4310f20c7cac83eb3ccd8ed5a5ad4212608a" }
 wasmparser = "=0.102.0"
+scale-info = "=2.11.6"
 
 [dev-dependencies]
 wat = "=1.0.70"
-scale-info = "=2.11.6"

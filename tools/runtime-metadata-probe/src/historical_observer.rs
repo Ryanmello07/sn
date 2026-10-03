@@ -33,6 +33,8 @@ pub struct ObservationProfile {
     pub runtime_code_sha256: [u8; 32],
     pub source_review_sha256: [u8; 32],
     pub rules: Vec<HookRule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata_sha256: Option<[u8; 32]>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -63,6 +65,8 @@ pub struct ObservationReport {
     pub host_calls: usize,
     pub discarded_on_rollback: usize,
     pub observations: Vec<Observation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fee_events: Option<super::fee_events::FeeEventReport>,
 }
 
 pub(super) struct Observer {
@@ -183,7 +187,11 @@ impl HistoricalObserver {
         }))
     }
 
-    pub(super) fn finish(&mut self) -> Result<ObservationReport, ProbeError> {
+    pub(super) fn finish(
+        &mut self,
+        layout: Option<&super::fee_events::EventLayout>,
+        extrinsics: usize,
+    ) -> Result<ObservationReport, ProbeError> {
         if !self.0.transactions.is_empty() {
             return Err(ProbeError::new("observer unfinished storage transaction"));
         }
@@ -196,6 +204,9 @@ impl HistoricalObserver {
             original_function_bodies_preserved: true,
             host_calls: self.0.calls,
             discarded_on_rollback: self.0.discarded,
+            fee_events: layout
+                .map(|layout| layout.decode(&self.0.records, extrinsics))
+                .transpose()?,
             observations: std::mem::take(&mut self.0.records),
         })
     }

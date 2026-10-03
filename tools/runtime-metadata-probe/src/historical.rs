@@ -23,6 +23,8 @@ use sp_trie::StorageProof;
 use sp_version::RuntimeVersion;
 use std::{any::TypeId, collections::BTreeSet, panic::AssertUnwindSafe};
 
+#[path = "historical_fee_events.rs"]
+pub mod fee_events;
 #[path = "historical_hosts.rs"]
 mod hosts;
 #[path = "historical_observer.rs"]
@@ -309,6 +311,26 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
             "historical executing state version or version side effect differs",
         ));
     }
+    // Decode metadata from the same original code with storage/offchain hosts
+    // absent. A witness cannot supply a substituted layout for its events.
+    let event_layout = job
+        .observation_profile
+        .as_ref()
+        .and_then(|profile| profile.metadata_sha256)
+        .map(|expected| {
+            let metadata_executor =
+                WasmExecutor::<crate::StatelessMetadataHostFunctions>::builder()
+                    .with_allow_missing_host_functions(true)
+                    .with_offchain_heap_alloc_strategy(HeapAllocStrategy::Dynamic {
+                        maximum_pages: Some(1024),
+                    })
+                    .build();
+            let raw =
+                crate::execute_runtime_api(&metadata_executor, &runtime, "Metadata_metadata")?;
+            let metadata: sp_core::OpaqueMetadata = scale_exact("original runtime metadata", &raw)?;
+            fee_events::EventLayout::from_generated(metadata.as_slice(), expected)
+        })
+        .transpose()?;
     // Consensus seals are external to runtime execution. Keep their original
     // header hash in the report and refuse seals placed between runtime items.
     let mut execution_header = child.clone();
@@ -376,7 +398,7 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
     let hook_observations = extensions
         .get_mut(TypeId::of::<observer::HistoricalObserver>())
         .and_then(|value| value.downcast_mut::<observer::HistoricalObserver>())
-        .map(observer::HistoricalObserver::finish)
+        .map(|observer| observer.finish(event_layout.as_ref(), job.extrinsics_hex.len()))
         .transpose()?;
     let budget = extensions
         .get_mut(TypeId::of::<hosts::HistoricalBudget>())
