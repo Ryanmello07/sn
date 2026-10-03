@@ -146,6 +146,26 @@ pub trait Storage {
         observer::observe(*self, "clear", item, None);
         self.clear_storage(item);
     }
+    // Delegate overlay/backend limit semantics to the pinned SDK. The strict
+    // backend traps incomplete iterators that the generic SDK helper would log
+    // and treat as partial success. A declared limit is never silently changed.
+    fn clear_prefix(&mut self, prefix: PassFatPointerAndRead<&[u8]>) {
+        key(prefix);
+        charge(*self, prefix.len());
+        observer::observe(*self, "clear_prefix", prefix, None);
+        let _ = Externalities::clear_prefix(*self, prefix, None, None);
+    }
+    #[version(2)]
+    fn clear_prefix(
+        &mut self,
+        prefix: PassFatPointerAndRead<&[u8]>,
+        limit: PassFatPointerAndDecode<Option<u32>>,
+    ) -> AllocateAndReturnByCodec<sp_io::KillStorageResult> {
+        key(prefix);
+        charge(*self, prefix.len());
+        observer::observe(*self, "clear_prefix", prefix, None);
+        Externalities::clear_prefix(*self, prefix, limit, None).into()
+    }
     fn exists(&mut self, item: PassFatPointerAndRead<&[u8]>) -> bool {
         key(item);
         charge(*self, item.len());
@@ -274,26 +294,6 @@ pub trait DefaultChildStorage {
         key(item);
         charge(*self, owner.len() + item.len());
         self.clear_child_storage(&child, item);
-    }
-    // Delegate overlay/backend limit semantics to the pinned SDK. The strict
-    // backend traps incomplete iterators that the generic SDK helper would log
-    // and treat as partial success. A declared limit is never silently changed.
-    fn clear_prefix(&mut self, prefix: PassFatPointerAndRead<&[u8]>) {
-        key(prefix);
-        charge(*self, prefix.len());
-        observer::observe(*self, "clear_prefix", prefix, None);
-        let _ = Externalities::clear_prefix(*self, prefix, None, None);
-    }
-    #[version(2)]
-    fn clear_prefix(
-        &mut self,
-        prefix: PassFatPointerAndRead<&[u8]>,
-        limit: PassFatPointerAndDecode<Option<u32>>,
-    ) -> AllocateAndReturnByCodec<sp_io::KillStorageResult> {
-        key(prefix);
-        charge(*self, prefix.len());
-        observer::observe(*self, "clear_prefix", prefix, None);
-        Externalities::clear_prefix(*self, prefix, limit, None).into()
     }
     fn storage_kill(&mut self, owner: PassFatPointerAndRead<&[u8]>) {
         let child = child(owner);
