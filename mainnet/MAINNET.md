@@ -44,8 +44,7 @@ requires an integrity refusal. Recovery must preserve the original signed
 transaction and durable outcome, continue healthy independent owners, and never
 resubmit blindly. Qualify delayed success beyond sixty logical seconds, null-read
 exhaustion, cancellation, positive contradictions and healthy-peer continuation
-through the actual production path. This production correction is implementation
-work; the paired-head and Redis scoped receipts do not qualify it.
+through the actual production path. The [production successor is now frozen](evidence/retained-evm-read-source-intake-20261003.json) at SN `5a0a8f66`: root verified seventeen bindings, all seven changed Git blobs and the clean commit/tree. Its nine-root normal/race scope, package vet and four historical causal controls remain pending. The paired-head and Redis scoped receipts do not qualify it; its historical dependency graph also does not establish the final composed release.
 
 
 ## October 6 payout transition target
