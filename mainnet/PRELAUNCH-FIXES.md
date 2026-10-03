@@ -5784,3 +5784,24 @@ pending. Preflight each mounted fixture's parent traversal and file access for
 the actual container UID before launching the full gate. Do not apply the
 fixture permission correction to production custody: host private-root ancestry
 and container initialization mounts have different access requirements.
+
+
+### October 3: qualify restored state through the actual execution consumer
+
+Unsigned member/checkpoint rebinding is not complete recovery when a higher
+layer still binds physical identity into reviewed authority. Current
+`openBootstrapSuccessorExecutionStore` passes the original approval's
+`Plan.Registry` into `openBootstrapSuccessorExecutionDirectory`; its ongoing
+check compares pathname identity and descriptor device/inode with that root.
+Local preparation also retains the original physical root. A valid copy on a
+new generation can therefore remain unusable by the real execution consumer.
+
+Keep original signed approvals, signed relayer bytes, Safe signatures, nonce
+registry and attempts unchanged. Implement a separate reviewed rebind receipt
+that links the original approval and authenticated restore lineage to the exact
+new physical generation without increasing economic, nonce or signing authority.
+Qualify the real reopen/resume entry point after restore, including pending
+attempt reconciliation and rejection of an unrelated target, modified approval,
+omitted registry member or surviving former writer. Storage-only successful
+copy/inspection tests cannot close this consumer requirement. Implementation
+and independent qualification remain open; no new signing is authorized here.

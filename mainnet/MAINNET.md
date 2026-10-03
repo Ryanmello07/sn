@@ -3355,3 +3355,15 @@ while the test expected a later raw-adapter diagnostic. Both package vets pass.
 Preserve this failed batch; a separate test-only correction must reach that
 assertion without weakening duplicate-input refusal. Broader member/multi-owner
 restore and current published composition remain open.
+
+
+### October 3: restored registry usability remains a launch requirement
+
+The physical restore adapter must also satisfy the real successor execution
+consumer's retained registry and local-preparation root authority. Original
+approvals bind device/inode, so unsigned metadata rebinding alone does not
+authorize execution at a new physical generation. Implement and qualify an
+explicit reviewed lineage-bound rebind while retaining every original signed
+approval and attempt. A successful storage copy is not proof of usable restart.
+This requirement remains open alongside member/multi-owner restore; it does
+not invalidate the earlier scoped ledger/native test results.
