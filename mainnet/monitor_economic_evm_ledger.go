@@ -210,6 +210,9 @@ type monitorEconomicEvmState struct {
 	Status            string                      `json:"status"`
 	Incidents         uint64                      `json:"incidents"`
 	CapacityRemaining uint64                      `json:"capacity_remaining"`
+	Archive           *monitorEconomicEvmArchive  `json:"archive,omitempty"`
+	Catalog           *monitorHistoryCatalogState `json:"history_catalog,omitempty"`
+	Retained          *monitorEvmRetainedCounts   `json:"retained_observations,omitempty"`
 }
 
 func newMonitorEconomicEvmState(policy monitorEconomicEvmPolicy) *monitorEconomicEvmState {
@@ -217,10 +220,22 @@ func newMonitorEconomicEvmState(policy monitorEconomicEvmPolicy) *monitorEconomi
 }
 
 func (self *monitorEconomicEvmState) validate(policy monitorEconomicEvmPolicy) error {
+	if self.Catalog != nil && (policy.HistoryCatalog == nil || len(self.Catalog.Revisions) == 0 || len(self.Catalog.Revisions) > maximumMonitorHistoryRevisions) {
+		return errors.New("EVM economic catalog lacks its original bounded authority")
+	}
+	if err := self.Archive.validate(policy, self); err != nil {
+		return err
+	}
+	if self.Retained != nil {
+		counts, err := self.retainedCounts()
+		if err != nil || *self.Retained != counts {
+			return errors.Join(errors.New("EVM checkpoint omitted retained event or fee history"), err)
+		}
+	}
 	if self.Cursor.Number < policy.From.Number || self.Cursor.Number > math.MaxInt64 || !rootCanonicalHash(self.Cursor.Hash) || !planSha256(self.BatchChainHash) || uint64(len(self.History)+len(self.Fees)) > policy.HistoryEntries || self.CapacityRemaining != policy.HistoryEntries-uint64(len(self.History)+len(self.Fees)) {
 		return errors.New("EVM economic retained cursor or history exceeds its policy")
 	}
-	if self.BatchCount == 0 && (self.Cursor != policy.From || len(self.History) != 0 || len(self.Fees) != 0 || self.BatchChainHash != policy.identityHash()) {
+	if self.BatchCount == 0 && (self.Archive != nil || self.Cursor != policy.From || len(self.History) != 0 || len(self.Fees) != 0 || self.BatchChainHash != policy.identityHash()) {
 		return errors.New("EVM economic original cursor was replaced")
 	}
 	if self.PendingThrough != nil && (self.PendingThrough.Number <= self.Cursor.Number || self.PendingThrough.Number-self.Cursor.Number > policy.BatchBlocks || !rootCanonicalHash(self.PendingThrough.Hash)) {
@@ -234,11 +249,15 @@ func (self *monitorEconomicEvmState) validate(policy monitorEconomicEvmPolicy) e
 			return err
 		}
 	}
-	previous := policy.From.Number
+	from := policy.From.Number
+	if self.Archive != nil {
+		from = self.Archive.Cursor.Number
+	}
+	previous := from
 	var previousIndex uint64
 	var previousHash string
 	for _, event := range self.History {
-		if event.Block.Number <= policy.From.Number || event.Block.Number < previous || event.Block.Number > self.Cursor.Number || !rootCanonicalHash(event.Block.Hash) || !rootCanonicalHash(event.TransactionHash) || !planSha256(event.ReceiptHash) || event.TransactionIndex >= maximumMonitorEvmTransactions || event.LogIndex >= maximumMonitorEvmLogs || len(event.Name) > 64 || len(event.Values) > 16 || event.Block.Number == previous && (event.Block.Hash != previousHash || event.LogIndex <= previousIndex) || event.Block.Number == self.Cursor.Number && event.Block.Hash != self.Cursor.Hash {
+		if event.Block.Number <= from || event.Block.Number < previous || event.Block.Number > self.Cursor.Number || !rootCanonicalHash(event.Block.Hash) || !rootCanonicalHash(event.TransactionHash) || !planSha256(event.ReceiptHash) || event.TransactionIndex >= maximumMonitorEvmTransactions || event.LogIndex >= maximumMonitorEvmLogs || len(event.Name) > 64 || len(event.Values) > 16 || event.Block.Number == previous && (event.Block.Hash != previousHash || event.LogIndex <= previousIndex) || event.Block.Number == self.Cursor.Number && event.Block.Hash != self.Cursor.Hash {
 			return errors.New("EVM economic original event identity/order changed")
 		}
 		for key, value := range event.Values {
@@ -248,18 +267,18 @@ func (self *monitorEconomicEvmState) validate(policy monitorEconomicEvmPolicy) e
 		}
 		previous, previousIndex, previousHash = event.Block.Number, event.LogIndex, event.Block.Hash
 	}
-	previous = policy.From.Number
+	previous = from
 	previousIndex = 0
 	previousHash = ""
 	for _, fee := range self.Fees {
 		price, e1 := monitorEconomicInteger(fee.EffectiveGasPriceWei)
 		cost, e2 := monitorEconomicInteger(fee.FeeWei)
-		if e1 != nil || e2 != nil || fee.GasUsed == 0 || new(big.Int).Mul(price, new(big.Int).SetUint64(fee.GasUsed)).Cmp(cost) != 0 || !slices.Contains(policy.FeePayers, fee.Payer) || fee.Block.Number <= policy.From.Number || fee.Block.Number < previous || fee.Block.Number > self.Cursor.Number || !rootCanonicalHash(fee.Block.Hash) || !rootCanonicalHash(fee.TransactionHash) || !planSha256(fee.ReceiptHash) || fee.TransactionIndex >= maximumMonitorEvmTransactions || fee.Block.Number == previous && (fee.Block.Hash != previousHash || fee.TransactionIndex <= previousIndex) || fee.Block.Number == self.Cursor.Number && fee.Block.Hash != self.Cursor.Hash {
+		if e1 != nil || e2 != nil || fee.GasUsed == 0 || new(big.Int).Mul(price, new(big.Int).SetUint64(fee.GasUsed)).Cmp(cost) != 0 || !slices.Contains(policy.FeePayers, fee.Payer) || fee.Block.Number <= from || fee.Block.Number < previous || fee.Block.Number > self.Cursor.Number || !rootCanonicalHash(fee.Block.Hash) || !rootCanonicalHash(fee.TransactionHash) || !planSha256(fee.ReceiptHash) || fee.TransactionIndex >= maximumMonitorEvmTransactions || fee.Block.Number == previous && (fee.Block.Hash != previousHash || fee.TransactionIndex <= previousIndex) || fee.Block.Number == self.Cursor.Number && fee.Block.Hash != self.Cursor.Hash {
 			return errors.New("EVM economic fee lost original transaction attribution")
 		}
 		previous, previousIndex, previousHash = fee.Block.Number, fee.TransactionIndex, fee.Block.Hash
 	}
-	if _, ok := monitorEconomicNativeStatusCodes[self.Status]; !ok {
+	if _, ok := monitorEconomicEvmStatusCodes[self.Status]; !ok {
 		return errors.New("EVM economic retained status is unknown")
 	}
 	for _, stamp := range []time.Time{self.LastReadAt, self.LastProgressAt, self.UnavailableSince} {
@@ -346,6 +365,11 @@ func (self *monitorEconomicEvmState) append(policy monitorEconomicEvmPolicy, obs
 		next.Status = "observed-economic-outcome-unresolved"
 	}
 	next.CapacityRemaining = policy.HistoryEntries - uint64(len(next.History)+len(next.Fees))
+	counts, err := next.retainedCounts()
+	if err != nil {
+		return nil, err
+	}
+	next.Retained = &counts
 	if err := next.validate(policy); err != nil {
 		return nil, err
 	}

@@ -20,23 +20,24 @@ const maximumMonitorEvmReadBytes = 8 * 1024 * 1024
 // Hashes and identities come from the local review, never from discovered RPC
 // code or observed event labels. EVM heights are not native heights.
 type monitorEconomicEvmPolicy struct {
-	Role              string                      `json:"role"`
-	Network           planNetwork                 `json:"network"`
-	EvmGenesisHash    string                      `json:"evm_genesis_hash"`
-	ContractKind      string                      `json:"contract_kind"`
-	Address           string                      `json:"address"`
-	CodeHash          string                      `json:"code_hash"`
-	Netuid            uint16                      `json:"netuid"`
-	PoolIds           []string                    `json:"pool_ids"`
-	Coldkeys          []string                    `json:"coldkeys,omitempty"`
-	FeePayers         []string                    `json:"fee_payers,omitempty"`
-	From              economicEmissionBoundary    `json:"from_exclusive"`
-	BatchBlocks       uint64                      `json:"batch_blocks"`
-	HistoryEntries    uint64                      `json:"history_entries"`
-	StallSeconds      uint64                      `json:"stall_seconds"`
-	ReadBudgetSeconds uint64                      `json:"read_budget_seconds,omitempty"`
-	Finality          string                      `json:"finality"`
-	ResourceRevision  *monitorEvmResourceRevision `json:"resource_revision,omitempty"`
+	Role              string                       `json:"role"`
+	Network           planNetwork                  `json:"network"`
+	EvmGenesisHash    string                       `json:"evm_genesis_hash"`
+	ContractKind      string                       `json:"contract_kind"`
+	Address           string                       `json:"address"`
+	CodeHash          string                       `json:"code_hash"`
+	Netuid            uint16                       `json:"netuid"`
+	PoolIds           []string                     `json:"pool_ids"`
+	Coldkeys          []string                     `json:"coldkeys,omitempty"`
+	FeePayers         []string                     `json:"fee_payers,omitempty"`
+	From              economicEmissionBoundary     `json:"from_exclusive"`
+	BatchBlocks       uint64                       `json:"batch_blocks"`
+	HistoryEntries    uint64                       `json:"history_entries"`
+	StallSeconds      uint64                       `json:"stall_seconds"`
+	ReadBudgetSeconds uint64                       `json:"read_budget_seconds,omitempty"`
+	Finality          string                       `json:"finality"`
+	ResourceRevision  *monitorEvmResourceRevision  `json:"resource_revision,omitempty"`
+	HistoryCatalog    *monitorHistoryCatalogPolicy `json:"history_catalog,omitempty"`
 }
 
 func monitorEvmAddress(value string) bool {
@@ -81,7 +82,7 @@ func (self monitorEconomicEvmPolicy) validate(expected identityExpectation) erro
 			seen[value] = true
 		}
 	}
-	return nil
+	return self.HistoryCatalog.validate()
 }
 
 func monitorEconomicEvmPaths(checkpoint, metrics, role string) (string, string) {

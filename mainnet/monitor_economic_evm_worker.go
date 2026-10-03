@@ -3,14 +3,12 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
-	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +16,6 @@ import (
 
 	"github.com/urfoundation/sn/internal/durablehead"
 	"github.com/urfoundation/sn/internal/durablepath"
-	"github.com/urfoundation/sn/protocol"
 	"github.com/urnetwork/connect/durablevolume"
 )
 
@@ -28,6 +25,7 @@ var monitorEconomicEvmStatusCodes = map[string]int{
 	"starting": 0, "observed-economic-outcome-unresolved": 1, "caught-up": 2,
 	"unavailable": 3, "runtime-unavailable": 4, "capacity-held": 5,
 	"identity-conflict": 6, "clock-unavailable": 7,
+	"archive-ready": 8,
 }
 
 type monitorEconomicEvmCheckpoint struct {
@@ -54,6 +52,7 @@ type monitorEconomicEvmWorker struct {
 	storage         monitorStorageRecovery
 	acknowledged    *monitorEvmResources
 	resourceHistory *monitorEvmResourceHistory
+	archive         []*monitorHistorySnapshot
 }
 
 func openMonitorEconomicEvmWorker(ctx context.Context, client *rpcClient, policy monitorEconomicEvmPolicy, expected identityExpectation, checkpoint, metrics string, hooks monitorServiceHooks) (*monitorEconomicEvmWorker, error) {
@@ -69,6 +68,10 @@ func openMonitorEconomicEvmWorker(ctx context.Context, client *rpcClient, policy
 	if policy.ResourceRevision != nil {
 		revision := *policy.ResourceRevision
 		policy.ResourceRevision = &revision
+	}
+	if policy.HistoryCatalog != nil {
+		catalog := *policy.HistoryCatalog
+		policy.HistoryCatalog = &catalog
 	}
 	checkpointPath, metricsPath := monitorEconomicEvmPaths(checkpoint, metrics, policy.Role)
 	owner, err := openMonitorCheckpoint(checkpointPath, expected, ctx)
@@ -113,7 +116,7 @@ func (self *monitorEconomicEvmWorker) close(hooks monitorServiceHooks) error {
 	if self.client != nil {
 		self.client.httpClient.CloseIdleConnections()
 	}
-	return closeMonitorServiceOwners(self.policy.Role, self.metrics, self.checkpoint, hooks)
+	return errors.Join(closeMonitorServiceOwners(self.policy.Role, self.metrics, self.checkpoint, hooks), self.closeArchive())
 }
 
 func (self *monitorEconomicEvmWorker) load(ctx context.Context) (*monitorEconomicEvmState, error) {
@@ -130,31 +133,12 @@ func (self *monitorEconomicEvmWorker) load(ctx context.Context) (*monitorEconomi
 	if err != nil {
 		return nil, err
 	}
-	if err := protocol.ValidateUniqueJsonKeys(raw); err != nil {
+	record, err := decodeMonitorEconomicEvmCheckpoint(raw, self.policy)
+	if err != nil {
 		return nil, err
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	var record monitorEconomicEvmCheckpoint
-	if err := decoder.Decode(&record); err != nil {
-		return nil, err
-	}
-	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
-		return nil, errors.New("EVM economic checkpoint has trailing JSON")
-	}
-	if record.Schema != monitorEconomicEvmCheckpointSchema || record.PolicyHash != self.policy.identityHash() || record.ContentHash != record.hash() {
-		return nil, errors.New("EVM economic checkpoint differs from its retained policy or checksum")
-	}
-	validationPolicy := self.policy
-	if record.Resources != nil {
-		if record.Resources.validate() != nil || !self.policy.resources().includes(*record.Resources) || record.ResourceReviewSha256 != "" && !planSha256(record.ResourceReviewSha256) {
-			return nil, errors.New("EVM economic renewal shrank acknowledged resources or changed their review")
-		}
-		validationPolicy.setResources(*record.Resources)
-	} else if self.policy.ResourceRevision != nil {
-		validationPolicy.setResources(self.policy.ResourceRevision.Original)
-	}
-	if err := record.State.validate(validationPolicy); err != nil {
+	validationPolicy, err := record.validationPolicy(self.policy)
+	if err != nil {
 		return nil, err
 	}
 	acknowledged := validationPolicy.resources()
@@ -167,6 +151,13 @@ func (self *monitorEconomicEvmWorker) load(ctx context.Context) (*monitorEconomi
 	if _, err := history.advance(self.policy); err != nil {
 		return nil, err
 	}
+	if err := record.State.Catalog.checkPath(self.checkpoint.path); err != nil {
+		return nil, err
+	}
+	self.archive, err = openMonitorEconomicEvmArchive(ctx, self.policy, record)
+	if err != nil {
+		return nil, err
+	}
 	self.acknowledged = &acknowledged
 	self.resourceHistory = history
 	record.State.CapacityRemaining = self.policy.HistoryEntries - uint64(len(record.State.History)+len(record.State.Fees))
@@ -174,6 +165,9 @@ func (self *monitorEconomicEvmWorker) load(ctx context.Context) (*monitorEconomi
 }
 
 func (self *monitorEconomicEvmWorker) save(state *monitorEconomicEvmState) error {
+	if err := self.checkArchive(); err != nil {
+		return err
+	}
 	if err := self.checkpoint.requireOwner(); err != nil {
 		return err
 	}
@@ -197,7 +191,7 @@ func (self *monitorEconomicEvmWorker) save(state *monitorEconomicEvmState) error
 	if len(raw)+1 > maxRpcReplyBytes {
 		return errMonitorEconomicCapacity
 	}
-	err = errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner())
+	err = errors.Join(self.checkpoint.directory.publish(filepath.Base(self.checkpoint.path), append(raw, '\n'), 0600, self.checkpoint.syncDirectory), self.checkpoint.requireOwner(), self.checkArchive())
 	if err == nil {
 		self.resourceHistory = history
 	}
@@ -248,6 +242,9 @@ type monitorEconomicEvmSummary struct {
 	ContractState                    *monitorEconomicEvmSnapshot      `json:"observed_contract_state,omitempty"`
 	ObservedFeeCostWei               *string                          `json:"observed_fee_cost_wei"`
 	HistoryEntries                   int                              `json:"history_entries"`
+	ArchivedEvents                   uint64                           `json:"archived_events"`
+	ArchivedTransactionFees          uint64                           `json:"archived_transaction_fees"`
+	ArchiveSegments                  int                              `json:"archive_segments"`
 	CapacityRemaining                uint64                           `json:"capacity_remaining"`
 	SampleAt                         time.Time                        `json:"sample_at"`
 	LastReadAt                       time.Time                        `json:"last_read_at"`
@@ -270,15 +267,14 @@ type monitorEconomicEvmSummary struct {
 func (self *monitorEconomicEvmState) summary(policy monitorEconomicEvmPolicy, acknowledged *monitorEvmResources, history *monitorEvmResourceHistory) monitorEconomicEvmSummary {
 	var feeCost *string
 	if len(policy.FeePayers) != 0 && self.BatchCount != 0 {
-		total := new(big.Int)
-		for _, fee := range self.Fees {
-			amount, _ := monitorEconomicInteger(fee.FeeWei)
-			total.Add(total, amount)
-		}
-		value := total.String()
+		value := self.feeTotal().String()
 		feeCost = &value
 	}
-	return monitorEconomicEvmSummary{Cursor: self.Cursor, PendingThrough: self.PendingThrough, Finalized: self.Finalized,
+	archivedEvents, archivedFees, segments := uint64(0), uint64(0), 0
+	if self.Archive != nil {
+		archivedEvents, archivedFees, segments = self.Archive.Events, self.Archive.Fees, len(self.Archive.Segments)
+	}
+	return monitorEconomicEvmSummary{ArchivedEvents: archivedEvents, ArchivedTransactionFees: archivedFees, ArchiveSegments: segments, Cursor: self.Cursor, PendingThrough: self.PendingThrough, Finalized: self.Finalized,
 		BatchCount: self.BatchCount, BatchChainHash: self.BatchChainHash, ContractState: self.Snapshot, ObservedFeeCostWei: feeCost,
 		HistoryEntries: len(self.History) + len(self.Fees), CapacityRemaining: self.CapacityRemaining, SampleAt: self.SampleAt,
 		LastReadAt: self.LastReadAt, LastProgressAt: self.LastProgressAt, UnavailableSince: self.UnavailableSince, Incidents: self.Incidents,
@@ -298,6 +294,16 @@ func renderMonitorEconomicEvmMetrics(policy monitorEconomicEvmPolicy, state *mon
 		}
 		return value.Unix()
 	}
+	segments, archivedEvents, archivedFees := 0, uint64(0), uint64(0)
+	if state.Archive != nil {
+		segments, archivedEvents, archivedFees = len(state.Archive.Segments), state.Archive.Events, state.Archive.Fees
+	}
+	capacity := state.Catalog.capacity(policy.HistoryCatalog)
+	catalog, catalogErr := monitorEvmCatalogBytes(*state)
+	warning := catalogErr != nil || 2*uint64(segments+1) >= capacity.Segments || 2*uint64(segments+1) >= capacity.HeldReaders
+	if policy.HistoryCatalog != nil {
+		warning = warning || 2*(uint64(len(catalog))+6*maximumMonitorHistoryPath+256) >= capacity.CatalogBytes || state.Catalog != nil && len(state.Catalog.Revisions)+1 >= maximumMonitorHistoryRevisions
+	}
 	var output strings.Builder
 	for _, metric := range []struct {
 		name  string
@@ -307,6 +313,10 @@ func renderMonitorEconomicEvmMetrics(policy monitorEconomicEvmPolicy, state *mon
 		{name: "checkpoint_current", value: flag(checkpointCurrent)}, {name: "cursor_block", value: state.Cursor.Number},
 		{name: "batches", value: state.BatchCount}, {name: "retained_events", value: len(state.History)},
 		{name: "retained_transaction_fees", value: len(state.Fees)}, {name: "sample_timestamp_seconds", value: stamp(state.SampleAt)},
+		{name: "archived_events", value: archivedEvents}, {name: "archived_transaction_fees", value: archivedFees},
+		{name: "archive_segments", value: segments}, {name: "archive_segment_capacity", value: capacity.Segments},
+		{name: "archive_catalog_byte_capacity", value: capacity.CatalogBytes}, {name: "archive_reader_capacity", value: capacity.HeldReaders},
+		{name: "archive_catalog_bytes", value: len(catalog)}, {name: "archive_capacity_warning", value: flag(warning)},
 		{name: "last_read_timestamp_seconds", value: stamp(state.LastReadAt)}, {name: "last_progress_timestamp_seconds", value: stamp(state.LastProgressAt)},
 		{name: "progress_stalled", value: flag(!state.LastProgressAt.IsZero() && now.Sub(state.LastProgressAt) >= time.Duration(policy.StallSeconds)*time.Second)},
 		{name: "incidents", value: state.Incidents}, {name: "outage_started_timestamp_seconds", value: stamp(state.UnavailableSince)},
@@ -325,7 +335,7 @@ func (self *monitorEconomicEvmWorker) resume(ctx context.Context, hooks monitorS
 	prior := self.checkpoint
 	return self.storage.resume(ctx, self.policy.Role, func() error {
 		file := prior.lock
-		err := prior.close()
+		err := errors.Join(prior.close(), self.closeArchive())
 		if hooks.afterClose != nil {
 			err = errors.Join(err, hooks.afterClose(self.policy.Role, "checkpoint", file))
 		}
@@ -338,12 +348,13 @@ func (self *monitorEconomicEvmWorker) resume(ctx context.Context, hooks monitorS
 		candidate := &monitorEconomicEvmWorker{policy: self.policy, checkpoint: owner}
 		state, err := candidate.load(ctx)
 		if err != nil {
-			return errors.Join(err, owner.close())
+			return errors.Join(err, owner.close(), candidate.closeArchive())
 		}
 		owner.syncDirectory = prior.syncDirectory
 		self.checkpoint, self.state = owner, state
 		self.acknowledged = candidate.acknowledged
 		self.resourceHistory = candidate.resourceHistory
+		self.archive = candidate.archive
 		return nil
 	}, hooks)
 }
@@ -353,7 +364,7 @@ func (self *monitorEconomicEvmWorker) resume(ctx context.Context, hooks monitorS
 func (self *monitorEconomicEvmWorker) run(ctx context.Context, interval time.Duration, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) int {
 	for ctx.Err() == nil {
 		var observation *monitorEvmObservation
-		readErr := self.checkpoint.requireOwner()
+		readErr := errors.Join(self.checkpoint.requireOwner(), self.checkArchive())
 		if readErr == nil {
 			observation, readErr = observeMonitorEconomicEvm(ctx, self.client, self.policy, self.state)
 		}
