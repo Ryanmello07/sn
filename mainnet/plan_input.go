@@ -30,26 +30,43 @@ const maximumPlanReviewInputs = 32
 
 // Nonblocking/no-follow open refuses special files and final-component links
 // before reading. A replacement regular file still has to match the exact hash.
-func readPlanFile(ctx context.Context, path string, maximumBytes int) ([]byte, string, error) {
-	if ctx == nil || ctx.Err() != nil || path == "" || strings.ContainsAny(path, "$\x00") {
+func readPlanFile(ctx context.Context, path string, maximumBytes int) (raw []byte, digest string, resultErr error) {
+	if ctx == nil {
 		return nil, "", errors.New("plan input context or literal file path is unavailable")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, "", err
+	}
+	if path == "" || strings.ContainsAny(path, "$\x00") || maximumBytes <= 0 {
+		return nil, "", errors.New("plan input literal file path or positive byte bound is unavailable")
 	}
 	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, "", err
 	}
 	file := os.NewFile(uintptr(fd), path)
-	defer file.Close()
+	defer func() {
+		resultErr = errors.Join(resultErr, file.Close())
+		if resultErr != nil {
+			raw, digest = nil, ""
+		}
+	}()
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > int64(maximumBytes) {
+	if err != nil {
+		return nil, "", err
+	}
+	if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > int64(maximumBytes) {
 		return nil, "", errors.New("plan input is empty, oversized or not a regular file")
 	}
-	raw, err := io.ReadAll(io.LimitReader(file, int64(maximumBytes)+1))
-	if err != nil || len(raw) == 0 || len(raw) > maximumBytes || ctx.Err() != nil {
-		return nil, "", errors.Join(errors.New("plan input read failed, was canceled or exceeded its bound"), err, ctx.Err())
+	raw, err = io.ReadAll(io.LimitReader(file, int64(maximumBytes)+1))
+	if err := errors.Join(err, ctx.Err()); err != nil {
+		return nil, "", err
 	}
-	digest := sha256.Sum256(raw)
-	return raw, "sha256:" + hex.EncodeToString(digest[:]), nil
+	if len(raw) == 0 || len(raw) > maximumBytes {
+		return nil, "", errors.New("plan input read is empty or exceeds its byte bound")
+	}
+	sum := sha256.Sum256(raw)
+	return raw, "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
 // Unknown fields, duplicate names and trailing values cannot silently change
