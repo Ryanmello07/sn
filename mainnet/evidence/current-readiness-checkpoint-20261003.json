@@ -4,6 +4,8 @@
   "evidence_sha256": {
     "cache-reclaim-28-20261003.json": "e5e1f8b6097d6c14496b1d107d0771c70f14d8f4c84d3a17055a6696fe0d91d0",
     "capacity-public-completion-qualification-20261003.json": "90b753f6610be6766faebb62d73e80381fa4449264d8e2b5e6d6f30d9fec58bf",
+    "cargo-control-e68-main-integration-20261003.json": "fd352ee7eb1fae47c52a09cf07aeffc7edd2b91e93df1d81bee8b02ada9d5425",
+    "cargo-control-e68-qualification-20261003.json": "3266f3e3827328f6ecb7b5d0c476b48d384265b73d97ec9eb163afa9f61290aa",
     "cargo-control-f0-source-review-20261003.json": "74c1a1ec7e69a9aae5a439cc9fa7ad15e997acf12508a34b2cbe9738c1a2fdd1",
     "claim-consumer-merge-20261003.json": "bbca6f7353456363521a37e84404fde4bcdc256bd3c5d3e97bf1ce207841c2a8",
     "claim-consumer-qualification-20261003.json": "43c7e0562327d6c834678bd3ea64c2730ec5972c895cd5fa94adaf5d7fc5dd84",
@@ -50,6 +52,7 @@
     "qualified-composition-main-publication-20261003.json": "c5659919dcea7eec659cac7ddbde1650332453f46ea5469e0a761d2e0594f905",
     "replay-output-caller1b3f-qualification-20261003.json": "f1cdf74d4f34e2ca463ae1c2b5facf33ed777e294890d43e2ba1a0eaa26813bd",
     "restore-complete-union-qualification-20261003.json": "299720785802a49422de595e233e067eb89f379bd52091364ad07fa55d8740af",
+    "runtime-hosts9cf-scoped-qualification-20261003.json": "48a0db8af8379caa6de1e7fc2096c5860e861451bc303c8c33c8bb8f087b00d3",
     "safe-state-read-joined-qualification-20261003.json": "105d0dcc0378b014f9fd33dadfa1f1bf3ec0d54921e4a70fc780b8d5dd641cd2",
     "server-current-financial-main-publication-20261003.json": "43ee4f0b0093c3996aa6d05b359dbdc595625ac83c8b93ae787ceb3a2c13e30a",
     "validator-cache-permission-main-merge-20261003.json": "c2b95c5afee511e8b40864715ccf3b1598bd58d61ceeab9f41f833bfc0943746",
