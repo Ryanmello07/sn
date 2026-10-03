@@ -3367,3 +3367,18 @@ explicit reviewed lineage-bound rebind while retaining every original signed
 approval and attempt. A successful storage copy is not proof of usable restart.
 This requirement remains open alongside member/multi-owner restore; it does
 not invalidate the earlier scoped ledger/native test results.
+
+
+### October 3: durable earning boundary normal qualification
+
+Frozen Server `cdcb61fa` now passes the [independent 28-root normal
+batch](evidence/payout-boundary-normal-20261003.json): all 13 new boundary
+controls and 15 neighbors pass, with no failures or skips and owned
+PostgreSQL/Redis cleanup complete. The exact source tests concurrent explicit
+preparation, declaration drift at actual planning/send paths, retained accepted
+attempt reconciliation, process restart and a database timeout's bounded
+continuation. The original container setup failure stays separately retained.
+Race/causal/vet/build scopes remain queued. This does not relabel the earlier
+full model source, prove a composed release or make the October 6 schedule
+operational. Merge, production preparation and running worker evidence remain
+required.

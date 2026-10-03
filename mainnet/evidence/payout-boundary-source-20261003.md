@@ -35,7 +35,10 @@ controls, three controller controls and one CLI control. They cover concurrent
 same/conflicting preparation, immutable schema, process restart, declaration
 drift around the actual send barrier, accepted-attempt reconciliation and a
 real PostgreSQL statement timeout feeding retained-payment continuation.
-Independent normal/race execution, causal controls, affected package vets and
+The [independent normal batch](payout-boundary-normal-20261003.json) now passes
+all 28 selected roots (13 new plus 15 neighbors), with no failures or skips and
+owned fixture cleanup complete. Root verified all 37 receipt bindings and the
+actual test events. Race execution, causal controls, affected package vets and
 CLI build remain pending. These roots do not substitute for the full model run
 on the earlier exact source or the eventual composed release qualification.
 
