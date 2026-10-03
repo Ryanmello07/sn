@@ -163,14 +163,20 @@ func TestMonitorEconomicEvmPublicReceiptContradictionStopsOnlyAffectedRole(t *te
 		t.Fatal("affected EVM role did not join")
 	}
 	select {
-	case <-run.sink.peers:
+	case peer := <-run.sink.peers:
+		if peer.Role != "validator-a" || peer.Publication != "published" || peer.State == nil || peer.State.ReadStatus != "ok" || peer.State.Record == nil || peer.State.LastReadSuccessAt.IsZero() {
+			t.Fatal("healthy validator did not publish its actual first read", peer)
+		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("healthy validator never observed")
 	}
+	fixture.services.clock.seconds.Add(1)
+	fresh := monitorServicesTestRecord(fixture.services.clock.now(), 1)
+	monitorServicesTestWrite(t, fixture.services.policy.Validators[0].ProgressFile, fresh)
 	run.peerResume <- struct{}{}
 	select {
 	case peer := <-run.sink.peers:
-		if !peer.Current {
+		if peer.Role != "validator-a" || peer.Publication != "published" || peer.State == nil || peer.State.ReadStatus != "ok" || peer.State.Record == nil || !peer.State.LastReadSuccessAt.Equal(fixture.services.clock.now()) || peer.State.Record.HeartbeatAt != fresh.HeartbeatAt {
 			t.Fatal("healthy peer lost progress after EVM contradiction", peer)
 		}
 	case <-time.After(10 * time.Second):
