@@ -100,8 +100,10 @@ only a test overlay; original production bytes were retained. The broader
 public ledger-restore adapter remains a separate pending scope. No live restoration is established.
 
 Restore qualification must preflight the whole temporary-directory ancestry.
-The first independent `912315cf` public-adapter run encountered group-writable
-ancestor directories even though its immediate temporary root was private.
+The [first independent `912315cf` public-adapter run](evidence/restore-ledger-initial-setup-failure-20261003.json)
+encountered group-writable ancestor directories even though its immediate
+temporary root was private. All six selected roots in each mode failed at that
+setup check; the two package vets passed but supplied no restore behavior.
 That is a fixture admission failure, not evidence of a product restore defect.
 Preserve the original outputs, correct the scratch ancestry, and run the same
 immutable source again in a separate scope. Do not weaken the production owner
