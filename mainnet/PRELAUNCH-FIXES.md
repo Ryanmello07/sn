@@ -5849,3 +5849,30 @@ The primary endpoints are [wallet balances](https://developers.circle.com/api-re
 and [wallet list](https://developers.circle.com/api-reference/wallets/user-controlled-wallets/list-wallets.md).
 The frozen successor intake must retain these source URLs and captures
 separately from executed regression evidence.
+
+
+### October 3: retained native correction and restore-core race scope
+
+The [single native diagnostic correction](evidence/restore-native-diagnostic-independent-20261003.json)
+at test-only `3ca923a9` passes normally and under race detection, without skips
+or race reports. Root verified its 11 bindings, actual test events and exact
+corrected test bytes. Production/module bytes remain `00a30655`; its eleven
+passing roots per mode and two vets remain separately retained, and the
+original diagnostic assertion failure stays failed.
+
+Connect `53bc92fa` now also passes the [same 32 restore-core roots under race
+detection and package vet](evidence/restore-core-race-vet-20261003.json). Root
+verified eight addendum bindings and all 32 tracked package source files against
+the exact Git commit. The prior independent normal scope remains retained.
+This advances the shared dependency qualification; public member/multi-owner
+restore, execution rebind, current published composition and live restoration
+remain separate requirements.
+
+The [ninth bounded inactive-cache cleanup](evidence/cache-reclaim-9-20261003.json)
+reclaimed 16,330,846,208 bytes (15.21 GiB) from 450 old compiler archives.
+Privileged process checks and bounded metadata reference checks found no
+references; exact physical identities were rechecked before deletion. Active
+test caches, source, evidence, modules and executables were retained. The data
+volume subsequently had about 146 GiB free; admission must still remeasure
+headroom before each costly phase. This is qualification-host evidence, not
+production capacity qualification.

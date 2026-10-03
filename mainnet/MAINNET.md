@@ -194,8 +194,9 @@ The explicit physical-restore core at Connect `53bc92fa` has now passed
 [32 independent normal tests](evidence/restore-core-independent-normal-20261002.json),
 with no skips or failures. This scope checks original member identity, exact
 source/target authority, namespace capacity and interrupted publication. It does
-not qualify race behavior, public SN/native adapters, retained revisions or an
-operational restore. Those remain open alongside the remaining consumers.
+not qualify public SN/native adapters, retained revisions or an operational
+restore. The separate [same-root race/vet addendum](evidence/restore-core-race-vet-20261003.json)
+now passes; the remaining consumers and production restoration stay open.
 
 The separate SN `1982267c` snapshot/fleet/claim restore increment passes
 [seven independent normal tests](evidence/restore-snapshot-independent-normal-20261002.json).
@@ -3393,3 +3394,30 @@ deriving cursors from wallet/token IDs. Retained endpoint OpenAPI inspection
 establishes this implementation requirement; deterministic public-client tests
 and the frozen release join remain pending. The earlier qualified transaction
 GET/rate scope does not establish wallet-census correctness.
+
+
+### October 3: retained native correction and restore-core race scope
+
+The [single native diagnostic correction](evidence/restore-native-diagnostic-independent-20261003.json)
+at test-only `3ca923a9` passes normally and under race detection, without skips
+or race reports. Root verified its 11 bindings, actual test events and exact
+corrected test bytes. Production/module bytes remain `00a30655`; its eleven
+passing roots per mode and two vets remain separately retained, and the
+original diagnostic assertion failure stays failed.
+
+Connect `53bc92fa` now also passes the [same 32 restore-core roots under race
+detection and package vet](evidence/restore-core-race-vet-20261003.json). Root
+verified eight addendum bindings and all 32 tracked package source files against
+the exact Git commit. The prior independent normal scope remains retained.
+This advances the shared dependency qualification; public member/multi-owner
+restore, execution rebind, current published composition and live restoration
+remain separate requirements.
+
+The [ninth bounded inactive-cache cleanup](evidence/cache-reclaim-9-20261003.json)
+reclaimed 16,330,846,208 bytes (15.21 GiB) from 450 old compiler archives.
+Privileged process checks and bounded metadata reference checks found no
+references; exact physical identities were rechecked before deletion. Active
+test caches, source, evidence, modules and executables were retained. The data
+volume subsequently had about 146 GiB free; admission must still remeasure
+headroom before each costly phase. This is qualification-host evidence, not
+production capacity qualification.
