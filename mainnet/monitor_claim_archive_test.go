@@ -53,17 +53,30 @@ type monitorClaimArchiveRun struct {
 }
 
 func newMonitorClaimArchiveFixture(t *testing.T, catalog *monitorHistoryCatalogPolicy) *monitorClaimArchiveFixture {
+	return newMonitorClaimArchiveCensusFixture(t, catalog, 2)
+}
+
+func newMonitorClaimArchiveCensusFixture(t *testing.T, catalog *monitorHistoryCatalogPolicy, census int) *monitorClaimArchiveFixture {
 	t.Helper()
+	if census < 2 || census > 64 {
+		t.Fatal("fixture census exceeds the actual bounded publication")
+	}
 	f := &monitorClaimArchiveFixture{services: newMonitorServicesFixture(t), metadata: t.TempDir()}
 	if err := os.Chmod(f.metadata, 0700); err != nil {
 		t.Fatal(err)
 	}
 	now := f.services.clock.now()
 	value := monitorClaimTestPending(monitorClaimTestValue(now))
+	for index := 1; index < census-1; index++ {
+		entry := value.Entries[0]
+		entry.Observation = cloneMonitorClaimObservation(entry.Observation)
+		entry.Epoch, entry.Observation.Epoch = 7+int64(index), 7+int64(index)
+		value.Entries = append(value.Entries, entry)
+	}
 	accepted := monitorClaimTestValue(now).Entries[0]
-	accepted.Epoch, accepted.Observation.Epoch = 8, 8
+	accepted.Epoch, accepted.Observation.Epoch = 6+int64(census), 6+int64(census)
 	value.Entries = append(value.Entries, accepted)
-	value.TotalEntries, value.FinalizedEntries = 2, 1
+	value.TotalEntries, value.FinalizedEntries, value.UnresolvedEntries = uint64(census), 1, uint64(census-1)
 	if err := value.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +93,12 @@ func newMonitorClaimArchiveFixture(t *testing.T, catalog *monitorHistoryCatalogP
 	}))
 	t.Cleanup(source.Close)
 	f.policy = monitorClaimTestPolicy(t, value, source.URL+"/claim-progress", now)
-	f.policy.Epochs = append(f.policy.Epochs, monitorClaimEpochPolicy{Epoch: 8, ShareBps: 5000, AcceptBy: now.Add(-time.Minute).Format(time.RFC3339Nano)})
+	for index := 1; index < census; index++ {
+		f.policy.Epochs = append(f.policy.Epochs, monitorClaimEpochPolicy{Epoch: 7 + int64(index), ShareBps: 5000, AcceptBy: now.Add(-time.Minute).Format(time.RFC3339Nano)})
+	}
+	if census > maxMonitorClaimEpochs {
+		f.policy.EpochCapacity = uint64(census)
+	}
 	f.policy.HistoryCatalog = catalog
 	f.services.policy.Claims = []monitorClaimPolicy{f.policy}
 	f.services.writePolicy(t)
@@ -111,7 +129,7 @@ func newMonitorClaimArchiveFixture(t *testing.T, catalog *monitorHistoryCatalogP
 	f.archive = filepath.Join(filepath.Dir(f.checkpoint), "claim-archive-001.json")
 	run := f.start(t, monitorServiceHooks{})
 	event := run.next(t)
-	if !event.Current || !event.CheckpointCurrent || event.State.MerkleProofs != 1 || event.State.Deferred != 1 || event.State.Overdue != 1 {
+	if !event.Current || !event.CheckpointCurrent || event.State.MerkleProofs != census-1 || event.State.Deferred != 1 || event.State.Overdue != census-1 {
 		t.Fatal("actual original monitor did not retain unresolved proof and deferred credit", event)
 	}
 	run.stop(t, 0)

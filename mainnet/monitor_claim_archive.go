@@ -42,6 +42,46 @@ type monitorClaimArchive struct {
 type monitorClaimArchiveAdmission struct {
 	owners        []*monitorHistorySnapshot
 	epochStateKVs map[int64]monitorClaimEpochState
+	commitments   *monitorClaimEpochCommitments
+}
+
+// Admission already checked the ordered, duplicate-free epoch census. Keep
+// its immutable commitments once; every later save performs one lookup per
+// live epoch. The optional observer counts actual lookups without supplying a
+// verdict or replacing the original content hash.
+type monitorClaimEpochCommitments struct {
+	ordered []monitorClaimArchivedEpoch
+	hashes  map[int64]string
+	visit   func()
+}
+
+func newMonitorClaimEpochCommitments(archive *monitorClaimArchive) *monitorClaimEpochCommitments {
+	if archive == nil {
+		return nil
+	}
+	index := &monitorClaimEpochCommitments{ordered: append([]monitorClaimArchivedEpoch(nil), archive.Epochs...), hashes: make(map[int64]string, len(archive.Epochs))}
+	for _, epoch := range index.ordered {
+		index.hashes[epoch.Epoch] = epoch.StateSha256
+	}
+	return index
+}
+
+func (self *monitorClaimEpochCommitments) matches(epoch monitorClaimEpochState) bool {
+	if self == nil {
+		return false
+	}
+	if self.visit != nil {
+		self.visit()
+	}
+	hash, present := self.hashes[epoch.Epoch]
+	return present && rootObjectHash(epoch) == hash
+}
+
+func (self *monitorClaimArchiveAdmission) externalize(record monitorClaimCheckpointRecord) monitorClaimCheckpointRecord {
+	if self == nil {
+		return record
+	}
+	return externalizeMonitorClaimRecord(record, self.commitments)
 }
 
 func (self monitorClaimPolicy) archiveIdentityHash() string {
@@ -243,17 +283,14 @@ func monitorClaimEpochRetains(current, prior monitorClaimEpochState) bool {
 
 // Unchanged evidence alone becomes a placeholder. Changed and unresolved
 // observations stay in the active record or their authenticated archive basis.
-func externalizeMonitorClaimRecord(record monitorClaimCheckpointRecord) monitorClaimCheckpointRecord {
+func externalizeMonitorClaimRecord(record monitorClaimCheckpointRecord, commitments *monitorClaimEpochCommitments) monitorClaimCheckpointRecord {
 	if record.Archive == nil {
 		return record
 	}
 	record.State.Epochs = append([]monitorClaimEpochState(nil), record.State.Epochs...)
 	for index, value := range record.State.Epochs {
-		for _, reference := range record.Archive.Epochs {
-			if value.Epoch == reference.Epoch && rootObjectHash(value) == reference.StateSha256 {
-				record.State.Epochs[index] = monitorClaimEpochState{Epoch: value.Epoch, Archived: true}
-				break
-			}
+		if commitments.matches(value) {
+			record.State.Epochs[index] = monitorClaimEpochState{Epoch: value.Epoch, Archived: true}
 		}
 	}
 	return record
@@ -302,7 +339,7 @@ func compactMonitorClaim(record monitorClaimCheckpointRecord, reference monitorH
 	if err := archive.validate(policy, record); err != nil {
 		return record, nil, err
 	}
-	record = externalizeMonitorClaimRecord(record)
+	record = externalizeMonitorClaimRecord(record, newMonitorClaimEpochCommitments(archive))
 	record.ContentHash, err = hashMonitorClaimCheckpoint(record)
 	return record, basis, err
 }
@@ -363,6 +400,7 @@ func openMonitorClaimArchive(ctx context.Context, policy monitorClaimPolicy, rec
 	if !reflect.DeepEqual(prior, record.Archive) {
 		return admission, errors.New("claim archive commitments differ from original checkpoints")
 	}
+	admission.commitments = newMonitorClaimEpochCommitments(record.Archive)
 	return admission, ctx.Err()
 }
 
@@ -386,7 +424,7 @@ func (self *monitorClaimArchiveAdmission) close() error {
 	for _, owner := range self.owners {
 		result = errors.Join(result, owner.close())
 	}
-	self.owners, self.epochStateKVs = nil, nil
+	self.owners, self.epochStateKVs, self.commitments = nil, nil, nil
 	return result
 }
 

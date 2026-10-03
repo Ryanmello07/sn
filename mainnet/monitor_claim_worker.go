@@ -172,7 +172,7 @@ func (self *monitorClaimWorker) save() error {
 		return errors.New("claim policy history is not admitted")
 	}
 	record := monitorClaimCheckpointRecord{Schema: monitorClaimCheckpointSchema, PolicyHash: self.policyHistory.Entries[0].PolicyHash, State: *self.state, PolicyHistory: self.policyHistory, Archive: self.archive, Catalog: self.catalog}
-	record = externalizeMonitorClaimRecord(record)
+	record = self.archiveAdmission.externalize(record)
 	var err error
 	record.ContentHash, err = hashMonitorClaimCheckpoint(record)
 	if err != nil {
