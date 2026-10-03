@@ -135,8 +135,9 @@ is outside the read loop. Timing controls use an injected clock. Its
 produce four intended transient/no-retry failures and retain two permanent/hard
 positive controls in each mode, without race reports. This is an explicit
 omission experiment, not an unmodified historical-source run. The broader
-wallet-read successor and current release composition remain pending; this
-source is not merged or deployed.
+wallet-read successor is now frozen at `25f617dc`, with its [26-root test
+intake](evidence/wallet-get-intake-20261003.json) verified and queued. Current
+release composition remains pending; neither source is deployed.
 
 The [read-only signed-ledger correction](evidence/restore-ledger-readonly-independent-20261003.json)
 at `d3c84fe3` separately passes two normal/race roots and validator vet in its

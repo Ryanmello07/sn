@@ -5836,8 +5836,8 @@ to the approved HTTPS host and exact endpoint path, retain required filters,
 refuse cycles/ambiguous links and enforce finite page/member bounds. Test opaque
 cursors different from item IDs, absent final-page links, multiple header
 values, malformed/cross-host links and cancellation across pages. Never turn a
-partial census into an empty wallet or zero balance. The mutable successor is
-being corrected; no passing execution or release inclusion is claimed.
+partial census into an empty wallet or zero balance. The successor is frozen
+at Server `25f617dc`; no passing execution or release inclusion is claimed.
 
 Root independently checked the retained endpoint captures at
 `/mnt/data/sn-testnet/provider-usdc-transition-20261002/evidence/circle-contract-review/`.
@@ -5847,8 +5847,11 @@ Root independently checked the retained endpoint captures at
 `1cf0df5fe1294ffcbf564ab6d8cdd949e3af2d38bd18cfc43f688307ae2bdffb`.
 The primary endpoints are [wallet balances](https://developers.circle.com/api-reference/wallets/user-controlled-wallets/list-wallet-balance.md)
 and [wallet list](https://developers.circle.com/api-reference/wallets/user-controlled-wallets/list-wallets.md).
-The frozen successor intake must retain these source URLs and captures
-separately from executed regression evidence.
+The [frozen successor intake](evidence/wallet-get-intake-20261003.json) retains
+these source URLs and captures separately from executed regression evidence.
+Root verified all 23 bindings and nine candidate source/module files against
+Git `25f617dc`. Its 14 new plus 12 prior roots and five causal omission groups
+remain queued for independent execution.
 
 
 ### October 3: retained native correction and restore-core race scope
