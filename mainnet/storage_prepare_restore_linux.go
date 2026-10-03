@@ -28,6 +28,8 @@ func planStoragePreparationRestore(ctx context.Context, name string, owner durab
 		}
 	}
 	switch owner.Kind {
+	case storageMonitorTreeKind:
+		return planStorageMonitorTreeRestore(ctx, name, owner, report, ownerLocal)
 	case chain.NativeJournalPreparationKind:
 		return chain.PlanNativeJournalRestore(ctx, name, owner, report)
 	case "fleet-recovery", "provider-claim-queue":
@@ -55,6 +57,8 @@ func planStoragePreparationRestore(ctx context.Context, name string, owner durab
 // after checking original bytes, never a replacement signed protocol record.
 func inspectStoragePreparationRestore(ctx context.Context, root *os.File, owner durablevolume.PreparationOwnerPlan, report durablevolume.Inventory, ownerLocal bool) ([]durablevolume.PreparedAttribute, error) {
 	switch owner.Owner.Kind {
+	case storageMonitorTreeKind:
+		return inspectStorageMonitorTreeRestore(ctx, root, owner, report, ownerLocal)
 	case chain.NativeJournalPreparationKind:
 		return chain.InspectNativeJournalRestore(ctx, root, owner, report)
 	case "fleet-recovery", "provider-claim-queue":
