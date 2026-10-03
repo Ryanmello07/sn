@@ -69,8 +69,14 @@ func newEvmOwnedChain(config evmPhaseConfig) (*evmOwnedChain, error) {
 	return &evmOwnedChain{client: client, configHash: rootObjectHash(config)}, nil
 }
 
-// Only explicit EVM observations reach this additional bounded read profile.
+// Required state values have no nullable EVM representation. This applies to
+// both current admission and retained-receipt postconditions, so a recovered
+// receipt cannot subsequently be invalidated by a missing archive state value.
 func (self *evmOwnedChain) read(ctx context.Context, method string, params []any, result any) error {
+	switch method {
+	case "eth_getCode", "eth_getStorageAt", "eth_call":
+		return self.client.callRequiredEvmStateRead(ctx, method, params, result)
+	}
 	return self.client.callEvmRead(ctx, method, params, result)
 }
 
@@ -95,6 +101,18 @@ func (self *rpcClient) callRetainedEvmRead(ctx context.Context, method string, p
 	case "eth_getTransactionReceipt", "eth_getTransactionByBlockHashAndIndex":
 	default:
 		return errors.New("method is outside the retained contract EVM read profile")
+	}
+	return self.callAdmittedReadResult(ctx, method, params, result, false, true, maxRpcReplyBytes)
+}
+
+// A reviewed Safe or contract account requires an actual state value. Null is
+// not the EVM encoding of empty code or a zero word; retry under the same signed
+// route budget. Ordinary and intentionally nullable transaction reads differ.
+func (self *rpcClient) callRequiredEvmStateRead(ctx context.Context, method string, params []any, result any) error {
+	switch method {
+	case "eth_getCode", "eth_getStorageAt", "eth_call":
+	default:
+		return errors.New("method is outside the required contract state read profile")
 	}
 	return self.callAdmittedReadResult(ctx, method, params, result, false, true, maxRpcReplyBytes)
 }

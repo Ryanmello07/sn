@@ -80,8 +80,11 @@ func (self *bootstrapSuccessorCanonicalChain) readSafeCurrentPending(ctx context
 	}
 	for address, expected := range map[common.Address]common.Hash{scope.Safe: scope.SafeProxyRuntimeHash, scope.Singleton: scope.SingletonRuntimeHash} {
 		code, err := self.code(ctx, address, "pending")
-		if err != nil || crypto.Keccak256Hash(code) != expected {
-			return nil, errors.Join(errors.New("Safe scoped pending code changed"), err)
+		if err != nil {
+			return nil, err
+		}
+		if crypto.Keccak256Hash(code) != expected {
+			return nil, errors.Join(errRpcIntegrity, errors.New("Safe scoped pending code changed"))
 		}
 	}
 	expectedKVs := map[common.Hash]common.Hash{}
@@ -105,8 +108,11 @@ func (self *bootstrapSuccessorCanonicalChain) readSafeCurrentPending(ctx context
 	}
 	for _, slot := range slots {
 		word, err := self.word(ctx, scope.Safe, slot, "pending")
-		if err != nil || word != expectedKVs[slot] {
-			return nil, errors.Join(errors.New("Safe scoped pending authority word changed"), err)
+		if err != nil {
+			return nil, err
+		}
+		if word != expectedKVs[slot] {
+			return nil, errors.Join(errRpcIntegrity, errors.New("Safe scoped pending authority word changed"))
 		}
 	}
 	if err := ctx.Err(); err != nil {
