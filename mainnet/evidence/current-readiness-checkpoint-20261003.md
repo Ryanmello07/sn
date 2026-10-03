@@ -15,11 +15,11 @@ This replaces stale absent-implementation labels in the earlier [source census](
 | PH-09 | Union, paired and corrected outer recovery scopes qualified; actual current consumer graph and host restore remain. | [paired-restore-fixture-affected-qualification-20261003.json](paired-restore-fixture-affected-qualification-20261003.json) |
 | PH-10 | Runtime renewal implemented and scoped qualified; full interrupted authority/epoch renewal composition remains. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
 | PH-11 | Recovery counters remain; independent historical native fee attribution and full conservation join remain. | No new closure evidence |
-| PH-12 | Continuous EVM25 normal/race and13 normal pass; affected13race, causal and native/claim conservation join remain. | [continuous-evm-review-history-new25-normal-race-20261003.json](continuous-evm-review-history-new25-normal-race-20261003.json) |
+| PH-12 | Continuous EVM38normal/race/vet and10causal groups pass; digest-reuse successor and native/claim conservation join remain. | [continuous-evm-review-history-product-qualification-20261003.json](continuous-evm-review-history-product-qualification-20261003.json) |
 | PH-13 | Claim consumer qualified and merged; independently reviewed rolling expectations and two-domain topology remain. | [claim-consumer-merge-20261003.json](claim-consumer-merge-20261003.json) |
 | PH-14 | Bootstrap/role mechanisms implemented; composed policy custody and live activation remain. | No new closure evidence |
 | PH-15 | Claim/native/EVM status scopes implemented; final alert domains and delivered on-call exercise remain. | [claim-consumer-qualification-20261003.json](claim-consumer-qualification-20261003.json) |
-| PH-16 | Corrected server full model and EVM/outer race remain active; final exact release qualification remains. | No new closure evidence |
+| PH-16 | Corrected1d3c fullmodel complete1473PASS/0FAIL/11SKIP; new f024 semantic join and final exact release qualification remain. | [customer-corrected-full-model-terminal-20261003.json](customer-corrected-full-model-terminal-20261003.json) |
 | PH-17 | Generation/index lookup lifetime census and causal work counts remain. | No new closure evidence |
 | PH-18 | Pinned connection provenance scopes exist; current pooled-route replacement composition remains. | No new closure evidence |
 | PH-19 | Parent/post-state renewed native catalog qualified; current cross-consumer runtime authority join remains. | [native-runtime-renewal-qualification-20261003.json](native-runtime-renewal-qualification-20261003.json) |
