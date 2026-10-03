@@ -6,9 +6,11 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -34,12 +36,10 @@ func monitorNativeObserveAdmission(t *testing.T, references []monitorHistoryRefe
 	for _, reference := range references {
 		watch, err := unix.InotifyAddWatch(fd, reference.Path, unix.IN_ACCESS|unix.IN_DELETE_SELF|unix.IN_MOVE_SELF|unix.IN_ATTRIB)
 		if err != nil {
-			_ = file.Close()
-			t.Fatal(err)
+			t.Fatal(errors.Join(err, file.Close()))
 		}
 		if _, present := watchNames[watch]; present {
-			_ = file.Close()
-			t.Fatal("archive admission watches alias one inode")
+			t.Fatal(errors.Join(errors.New("archive admission watches alias one inode"), file.Close()))
 		}
 		watchNames[watch] = reference.Path
 	}
@@ -68,12 +68,8 @@ func monitorNativeObserveAdmission(t *testing.T, references []monitorHistoryRefe
 					return
 				}
 				offset += unix.SizeofInotifyEvent + size
-				if mask&(unix.IN_Q_OVERFLOW|unix.IN_DELETE_SELF|unix.IN_MOVE_SELF|unix.IN_IGNORED) != 0 {
-					observations <- monitorNativeAdmissionObservation{count: len(seen), err: fmt.Errorf("archive custody access census invalidated: %x", mask)}
-					return
-				}
-				if _, present := watchNames[watch]; !present {
-					observations <- monitorNativeAdmissionObservation{count: len(seen), err: errors.New("unknown archive access watch")}
+				if err := monitorNativeAdmissionWatchStatus(watch, mask, watchNames); err != nil {
+					observations <- monitorNativeAdmissionObservation{count: len(seen), err: err}
 					return
 				}
 				if mask&unix.IN_ACCESS != 0 && !seen[watch] {
@@ -92,32 +88,134 @@ func monitorNativeObserveAdmission(t *testing.T, references []monitorHistoryRefe
 			return
 		}
 		closed = true
-		_ = file.Close()
-		<-joined
+		if err := monitorNativeAdmissionJoin(file, joined); err != nil {
+			t.Error("archive admission observer cleanup failed", err)
+		}
 	}
 	t.Cleanup(closeObserver)
 	return func(run *monitorEconomicTestRun) {
 		t.Helper()
 		defer closeObserver()
 		started := time.Now()
-		timer := time.NewTimer(300 * time.Second)
-		defer timer.Stop()
-		count := 0
-		for count < len(references) {
-			select {
-			case observation := <-observations:
-				count = observation.count
-				if observation.err != nil {
-					t.Fatal("actual archive admission read failed", count, len(references), observation.err)
-				}
-			case <-run.done:
+		count, err := monitorNativeWaitAdmission(t.Context(), observations, run.done, len(references))
+		if err != nil {
+			if errors.Is(err, errMonitorNativeAdmissionWorkerExited) {
 				t.Fatal("public native worker returned before complete archive admission", count, len(references), run.exit, run.diagnostic.String())
-			case <-t.Context().Done():
-				t.Fatal("caller canceled archive admission", count, len(references), t.Context().Err())
-			case <-timer.C:
-				t.Fatal("archive admission progress budget exhausted", count, len(references))
 			}
+			t.Fatal("actual archive admission read failed", count, len(references), err)
 		}
 		t.Logf("actual native startup read all %d retained segments in %s before sample assertion", count, time.Since(started))
+	}
+}
+
+var errMonitorNativeAdmissionWorkerExited = errors.New("public native worker returned before complete archive admission")
+
+// Cancellation and early exit remain distinguishable from access-count progress.
+func monitorNativeWaitAdmission(ctx context.Context, observations <-chan monitorNativeAdmissionObservation, done <-chan struct{}, maximum int) (int, error) {
+	count := 0
+	budget := time.After(300 * time.Second)
+	for count < maximum {
+		select {
+		case observation := <-observations:
+			count = observation.count
+			if observation.err != nil {
+				return count, observation.err
+			}
+		case <-done:
+			return count, errMonitorNativeAdmissionWorkerExited
+		case <-ctx.Done():
+			return count, ctx.Err()
+		case <-budget:
+			return count, errors.New("archive admission progress budget exhausted")
+		}
+	}
+	return count, nil
+}
+
+// Overflow and unknown/replaced inodes are rejected before any progress count.
+func monitorNativeAdmissionWatchStatus(watch int, mask uint32, names map[int]string) error {
+	if mask&(unix.IN_Q_OVERFLOW|unix.IN_DELETE_SELF|unix.IN_MOVE_SELF|unix.IN_IGNORED) != 0 {
+		return fmt.Errorf("archive custody access census invalidated: %x", mask)
+	}
+	if _, present := names[watch]; !present {
+		return errors.New("unknown archive access watch")
+	}
+	return nil
+}
+
+// Cleanup always joins even when descriptor close reports an error.
+func monitorNativeAdmissionJoin(file io.Closer, joined <-chan struct{}) error {
+	err := file.Close()
+	<-joined
+	return err
+}
+
+func TestMonitorNativeAdmissionRefusesLostAndUnknownWatchEvents(t *testing.T) {
+	names := map[int]string{1: "synthetic-original"}
+	if err := monitorNativeAdmissionWatchStatus(1, unix.IN_ACCESS, names); err != nil {
+		t.Fatal("positive access refused", err)
+	}
+	for _, mask := range []uint32{unix.IN_Q_OVERFLOW, unix.IN_DELETE_SELF, unix.IN_MOVE_SELF, unix.IN_IGNORED} {
+		if err := monitorNativeAdmissionWatchStatus(1, mask|unix.IN_ACCESS, names); err == nil {
+			t.Fatal("lost custody counted as progress", mask)
+		}
+	}
+	if err := monitorNativeAdmissionWatchStatus(2, unix.IN_ACCESS, names); err == nil {
+		t.Fatal("foreign inode counted as progress")
+	}
+}
+
+// The close callback releases an actually blocked pipe reader. Its causal
+// cleanup error must survive while the reader's completion is joined.
+type monitorNativeAdmissionCloseFailure struct {
+	reader *io.PipeReader
+	cause  error
+}
+
+func (self monitorNativeAdmissionCloseFailure) Close() error {
+	return errors.Join(self.reader.Close(), self.cause)
+}
+
+func TestMonitorNativeAdmissionCleanupJoinsAndRetainsCloseFailure(t *testing.T) {
+	reader, writer := io.Pipe()
+	t.Cleanup(func() {
+		if err := writer.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	entered, joined := make(chan struct{}), make(chan struct{})
+	readResult := make(chan error, 1)
+	go func() {
+		defer close(joined)
+		close(entered)
+		var raw [1]byte
+		_, err := reader.Read(raw[:])
+		readResult <- err
+	}()
+	<-entered
+	cause := errors.New("synthetic cleanup acknowledgement failure")
+	if err := monitorNativeAdmissionJoin(monitorNativeAdmissionCloseFailure{reader: reader, cause: cause}, joined); !errors.Is(err, cause) {
+		t.Fatal("cleanup failure discarded", err)
+	}
+	if err := <-readResult; !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatal("cleanup did not cancel and join original reader", err)
+	}
+}
+
+func TestMonitorNativeAdmissionCancellationCannotBecomeReadiness(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	count, err := monitorNativeWaitAdmission(ctx, make(chan monitorNativeAdmissionObservation), make(chan struct{}), 512)
+	if count != 0 || !errors.Is(err, context.Canceled) {
+		t.Fatal("cancellation became complete admission", count, err)
+	}
+}
+
+func TestMonitorNativeAdmissionEarlyExitCannotBecomeReadiness(t *testing.T) {
+	done := make(chan struct{})
+	close(done)
+	count, err := monitorNativeWaitAdmission(t.Context(), make(chan monitorNativeAdmissionObservation), done, 512)
+	if count != 0 || !errors.Is(err, errMonitorNativeAdmissionWorkerExited) {
+		t.Fatal("early worker exit became complete admission", count, err)
 	}
 }

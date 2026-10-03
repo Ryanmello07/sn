@@ -171,9 +171,20 @@ func newMonitorNativeRestoreFixture(t *testing.T, segments int) *monitorNativeRe
 // pending-range control uses wholly RPC-produced original economics.
 func monitorNativeRestoreSeedFullHistory(t *testing.T, native *monitorEconomicTestFixture, checkpoint string, count int) {
 	t.Helper()
+	paths := make([]string, count)
+	for index := range paths {
+		paths[index] = filepath.Join(filepath.Dir(checkpoint), fmt.Sprintf("a%03d.json", index))
+	}
+	monitorNativeRestoreSeedHistoryPaths(t, native, checkpoint, paths)
+}
+
+// Explicit original paths allow a separately reviewed cross-root fixture.
+// The state machine and all emitted signed/catalog bytes are otherwise shared.
+func monitorNativeRestoreSeedHistoryPaths(t *testing.T, native *monitorEconomicTestFixture, checkpoint string, paths []string) {
+	t.Helper()
 	record := native.record(t)
 	event := *record.State.History[0].Incentive
-	for index := 0; index < count; index++ {
+	for index, path := range paths {
 		if index != 0 {
 			number := record.State.Cursor.Number + 1
 			hash := native.source.chain.byHeight[number]
@@ -199,7 +210,6 @@ func monitorNativeRestoreSeedFullHistory(t *testing.T, native *monitorEconomicTe
 		if err != nil {
 			t.Fatal(err)
 		}
-		path := filepath.Join(filepath.Dir(checkpoint), fmt.Sprintf("a%03d.json", index))
 		owner, err := openMonitorHistorySnapshot(native.ctx, path, true)
 		if err != nil {
 			t.Fatal(err)

@@ -103,64 +103,82 @@ func buildMonitorNativeRestoreRequest(ctx context.Context, request monitorNative
 		owners = append(owners, owner)
 		return raw, nil
 	}
-	raw, err := read(request.Original)
-	if err != nil {
+	if err := validateMonitorNativeRestoreHistory(request.Policy, request.Original, read); err != nil {
 		return result, err
 	}
-	record, err := decodeMonitorEconomicNativeCheckpoint(raw, request.Policy)
-	if err != nil {
+	preparation.Owners = owners
+	if err := validateMonitorNativeRestoreCapacity(preparation, report); err != nil {
 		return result, err
+	}
+	return preparation, ctx.Err()
+}
+
+// Each source inventory can live under a different root. The original signed
+// paths and exact predecessor summaries, not root placement, bind the history.
+func validateMonitorNativeRestoreHistory(policy monitorEconomicNativePolicy, original monitorHistoryReference, read func(monitorHistoryReference) ([]byte, error)) error {
+	raw, err := read(original)
+	if err != nil {
+		return err
+	}
+	record, err := decodeMonitorEconomicNativeCheckpoint(raw, policy)
+	if err != nil {
+		return err
 	}
 	canonical, err := encodeMonitorNativeCheckpoint(record)
 	if err != nil || !bytes.Equal(canonical, raw) {
-		return result, errors.Join(errors.New("native restore requires the exact original checkpoint frame"), err)
+		return errors.Join(errors.New("native restore requires the exact original checkpoint frame"), err)
 	}
-	if err := record.State.Catalog.checkPath(request.Original.Path); err != nil {
-		return result, err
+	if err := record.State.Catalog.checkPath(original.Path); err != nil {
+		return err
 	}
 	var prior *monitorEconomicNativeArchive
 	if record.State.Archive != nil {
 		for _, reference := range record.State.Archive.Segments {
 			raw, err := read(reference)
 			if err != nil {
-				return result, err
+				return err
 			}
-			segment, err := decodeMonitorEconomicNativeCheckpoint(raw, request.Policy)
+			segment, err := decodeMonitorEconomicNativeCheckpoint(raw, policy)
 			if err != nil {
-				return result, err
+				return err
 			}
 			if !record.State.Catalog.retains(segment.State.Catalog) || !reflect.DeepEqual(segment.State.Archive, prior) {
-				return result, errors.New("native restore discarded a signed revision or an original archive predecessor")
+				return errors.New("native restore discarded a signed revision or an original archive predecessor")
 			}
-			next, err := compactMonitorEconomicNative(segment, reference, request.Policy)
+			next, err := compactMonitorEconomicNative(segment, reference, policy)
 			if err != nil {
-				return result, err
+				return err
 			}
 			prior = next.State.Archive
 		}
 	}
 	if !reflect.DeepEqual(prior, record.State.Archive) {
-		return result, errors.New("native restore summary differs from complete original history")
+		return errors.New("native restore summary differs from complete original history")
 	}
-	preparation.Owners = owners
+	return nil
+}
+
+// Counts, actual encoded bytes and two-times reserve remain independent. A
+// larger owner count does not silently increase any per-root physical budget.
+func validateMonitorNativeRestoreCapacity(preparation durablevolume.PreparationRequest, report durablevolume.Inventory) error {
 	// The complete inventory includes independently declared co-owners. Their
 	// exact semantic coverage is enforced again by storage-prepare before effects.
 	limits := preparation.Limits
 	if limits.MaxEntries < 2*uint64(len(report.Entries)) || limits.MaxBytes < 2*report.TotalBytes ||
 		limits.MaxOwnerAttributes < 2*report.TotalOwnerAttributes || limits.MaxOwnerAttributeBytes < 2*report.TotalOwnerAttributes*4096 ||
 		preparation.MinAvailableBytes < 2*(report.TotalBytes+report.TotalOwnerAttributes*4096) || preparation.MinAvailableInodes < 2*uint64(len(report.Entries)) {
-		return result, errors.New("native restore requires explicit two-times complete-namespace byte, head and inode reserves")
+		return errors.New("native restore requires explicit two-times complete-namespace byte, head and inode reserves")
 	}
-	if len(owners) > 32 || limits.MaxOwnerAttributes > 128 || limits.MaxOwnerAttributeBytes > 128*4096 {
+	if len(preparation.Owners) > 32 || limits.MaxOwnerAttributes > 128 || limits.MaxOwnerAttributeBytes > 128*4096 {
 		if preparation.CapacityProfile != "urnetwork-preparation-many-owners-v1" {
-			return result, errors.New("native restore requires the explicit many-owner preparation capacity profile")
+			return errors.New("native restore requires the explicit many-owner preparation capacity profile")
 		}
 	}
 	encoded, err := json.Marshal(preparation)
 	if err != nil || len(encoded)+1 > maxRpcReplyBytes {
-		return result, errors.Join(errors.New("native restore request exceeds its complete serialized byte bound"), err)
+		return errors.Join(errors.New("native restore request exceeds its complete serialized byte bound"), err)
 	}
-	return preparation, ctx.Err()
+	return nil
 }
 
 // This emits a strict storage-prepare request for independent review. It does
