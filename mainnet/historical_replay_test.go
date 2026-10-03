@@ -309,6 +309,11 @@ func TestHistoricalReplayDescendantPipesCannotOutliveResult(t *testing.T) {
 		t.Fatal("engine did not reach descendant boundary", err, runErr)
 	}
 	pid, err := strconv.Atoi(string(pidRaw))
+	if err == nil && pid > 1 {
+		// The old direct-child control intentionally leaves this owned peer;
+		// always clean it after recording the intended assertion failure.
+		defer syscall.Kill(pid, syscall.SIGKILL)
+	}
 	if err != nil || pid <= 1 || runErr == nil || report != nil || !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
 		t.Fatal("engine descendant survived or gained a valid result", pid, report, runErr, err)
 	}
