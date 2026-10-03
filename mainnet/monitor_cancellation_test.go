@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"syscall"
 	"testing"
@@ -93,6 +94,11 @@ func TestMonitorEconomicEvmPublicAdjacentAdmissionCancellationJoinsOwners(t *tes
 		}
 		entered := make(chan struct{})
 		closes := make(chan string, 16)
+		type roleResult struct {
+			role string
+			exit int
+		}
+		results := make(chan roleResult, 4)
 		run := fixture.start(t, monitorServiceHooks{afterCheckpointOpen: func(ctx context.Context, opened string, file *os.File) {
 			if opened == role {
 				if file == nil {
@@ -106,6 +112,8 @@ func TestMonitorEconomicEvmPublicAdjacentAdmissionCancellationJoinsOwners(t *tes
 				closes <- owner
 			}
 			return nil
+		}, afterWorker: func(role string, exit int) {
+			results <- roleResult{role: role, exit: exit}
 		}})
 		select {
 		case <-entered:
@@ -113,8 +121,16 @@ func TestMonitorEconomicEvmPublicAdjacentAdmissionCancellationJoinsOwners(t *tes
 			t.Fatal("adjacent role did not admit real checkpoint", kind)
 		}
 		run.stop(t)
+		close(results)
+		joined := map[string]int{}
+		for result := range results {
+			joined[result.role] = result.exit
+		}
 		if run.exit != 0 || len(closes) != 2 {
-			t.Fatal("canceled adjacent admission was fatal or left owners unjoined", kind, run.exit, len(closes), run.diagnostic.String())
+			t.Fatal("canceled adjacent admission was fatal or left owners unjoined", kind, run.exit, len(closes), joined, run.diagnostic.String())
+		}
+		if exit, present := joined[role]; !present || exit != 0 {
+			t.Fatal("canceled actual role did not report a joined lifecycle", kind, joined)
 		}
 		select {
 		case event := <-run.sink.events:
@@ -160,6 +176,29 @@ func TestMonitorNativePublicAdmissionCancellationKeepsCloseFailure(t *testing.T)
 		}
 		if run.exit != expected {
 			t.Fatal("native cancellation lost ordinary stop or genuine joined close failure", closeFailure, run.exit)
+		}
+	}
+}
+
+// Named metadata observation must not add a fabricated physical outage to a
+// pure caller cancellation. Independent read/custody/cleanup errors dominate.
+func TestMonitorCheckpointNamedObservationPreservesCancellationCauses(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	for _, cause := range []error{context.Canceled, fmt.Errorf("named read: %w", context.Canceled), errors.Join(context.Canceled, fmt.Errorf("named postcheck: %w", context.Canceled))} {
+		observed := monitorNamedObservation(cause)
+		if !monitorCanceledCheckpointLoad(ctx, observed) || errors.Is(observed, durablevolume.ErrUnavailable) || errors.Is(observed, durablevolume.ErrIdentity) {
+			t.Fatal("pure named-read cancellation acquired an invented custody cause", observed)
+		}
+	}
+	deadline := fmt.Errorf("named read: %w", context.DeadlineExceeded)
+	if observed := monitorNamedObservation(deadline); observed != deadline || !monitorStartupPending(observed) {
+		t.Fatal("active named-read timeout lost its original retryable cause", observed)
+	}
+	for _, hard := range []error{syscall.EIO, durablevolume.ErrIdentity, errRpcIntegrity, &monitorAdmissionCleanupError{cause: syscall.EIO}} {
+		observed := monitorNamedObservation(errors.Join(context.Canceled, hard))
+		if monitorCanceledCheckpointLoad(ctx, observed) || !errors.Is(observed, hard) {
+			t.Fatal("named-read cancellation erased an independent observed failure", observed)
 		}
 	}
 }

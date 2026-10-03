@@ -45,6 +45,11 @@ func monitorNamedObservation(err error) error {
 	if err == nil {
 		return nil
 	}
+	// Cancellation is a caller outcome, not an unavailable physical fact.
+	// Mixed independent causes still follow the ordinary hard-error rules.
+	if monitorOnlyCancellationCause(err, context.Canceled, 0) || monitorOnlyCancellationCause(err, context.DeadlineExceeded, 0) {
+		return err
+	}
 	if errors.Is(err, os.ErrClosed) || errors.Is(err, syscall.EBADF) {
 		return err
 	}

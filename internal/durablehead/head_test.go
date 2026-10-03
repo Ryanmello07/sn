@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -348,6 +349,121 @@ func TestSnapshotHeadLostAcknowledgementRecovery(t *testing.T) {
 				t.Fatal("bounded recovery could not continue", err)
 			}
 		})
+	}
+}
+
+// Actual post-sync cancellation and read faults leave the original write
+// unresolved. Neither an unobserved byte slice nor a retry can mint identity.
+func TestSnapshotHeadAcknowledgmentReadFailureRetainsOriginalWrite(t *testing.T) {
+	for _, stage := range []string{"pending-synced", "committed-synced"} {
+		for _, cause := range []string{"canceled", "io"} {
+			t.Run(stage+"/"+cause, func(t *testing.T) {
+				self := newFixture(t)
+				original, next := []byte("original"), []byte("exact-next")
+				if err := self.owner.Publish(original, nil); err != nil {
+					t.Fatal(err)
+				}
+				ctx, cancel := context.WithCancel(self.volume.Context)
+				defer cancel()
+				if err := self.owner.Close(); err != nil {
+					t.Fatal(err)
+				}
+				var err error
+				self.owner, err = Open(ctx, self.directory, self.lock, testSpec)
+				if err != nil {
+					t.Fatal(err)
+				}
+				reached, failedReads := false, 0
+				self.owner.at = func(point string) error {
+					if point == stage {
+						reached = true
+						if cause == "canceled" {
+							cancel()
+						}
+					}
+					if reached && cause == "io" && point == "checkpoint-observe" {
+						failedReads++
+						return unix.EIO
+					}
+					return nil
+				}
+				err = self.owner.Publish(next, nil)
+				want := error(unix.EIO)
+				if cause == "canceled" {
+					want = context.Canceled
+				}
+				if !reached || !errors.Is(err, want) || !errors.Is(err, ErrUncertain) || errors.Is(err, durablevolume.ErrIdentity) || cause == "io" && failedReads != 1 {
+					t.Fatal("failed acknowledgment invented changed custody or lost pending cause", reached, failedReads, err)
+				}
+				attribute := Attribute(testSpec.Kind, testSpec.Name)
+				retained := make([]byte, 4096)
+				n, err := unix.Fgetxattr(int(self.lock.Fd()), attribute, retained)
+				if err != nil {
+					t.Fatal(err)
+				}
+				retained = retained[:n]
+				var checkpoint Checkpoint
+				if err := json.Unmarshal(retained, &checkpoint); err != nil {
+					t.Fatal(err)
+				}
+				if stage == "pending-synced" {
+					if checkpoint.Pending == nil || checkpoint.Pending.Next.Sha256 != digest(next) || checkpoint.Committed.Sha256 != digest(original) {
+						t.Fatal("failed read lost the exact retained pending operation", checkpoint)
+					}
+				} else if checkpoint.Pending != nil || checkpoint.Committed.Sha256 != digest(next) {
+					t.Fatal("committed acknowledgment fault lost exact next bytes", checkpoint)
+				}
+				if err := self.owner.Publish([]byte("replacement"), nil); !errors.Is(err, ErrUncertain) {
+					t.Fatal("unresolved owner admitted replacement", err)
+				}
+				if err := self.close(); err != nil {
+					t.Fatal(err)
+				}
+				err = self.open(true)
+				if stage == "pending-synced" {
+					if err == nil {
+						t.Fatal("incomplete pending payload became completed recovery")
+					}
+					observed := make([]byte, 4096)
+					n, readErr := unix.Getxattr(filepath.Join(self.root, testSpec.LockName), attribute, observed)
+					if readErr != nil || !bytes.Equal(observed[:n], retained) {
+						t.Fatal("refused recovery rewrote the original pending authority", readErr)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal("complete next bytes did not recover", err)
+				}
+				if raw, present, err := self.owner.Read(); err != nil || !present || !bytes.Equal(raw, next) {
+					t.Fatal("recovered acknowledgment changed original next payload", err, present, string(raw))
+				}
+			})
+		}
+	}
+}
+
+// A successful observation of different checkpoint bytes still invalidates
+// the owner. This runs at the same real synchronization boundary as read faults.
+func TestSnapshotHeadAcknowledgmentObservedMismatchRemainsIdentity(t *testing.T) {
+	self := newFixture(t)
+	if err := self.owner.Publish([]byte("original"), nil); err != nil {
+		t.Fatal(err)
+	}
+	original := append([]byte(nil), self.owner.checkpointRaw...)
+	reached := false
+	self.owner.at = func(stage string) error {
+		if stage == "committed-synced" {
+			reached = true
+			return unix.Fsetxattr(int(self.lock.Fd()), Attribute(testSpec.Kind, testSpec.Name), original, unix.XATTR_REPLACE)
+		}
+		return nil
+	}
+	err := self.owner.Publish([]byte("next"), nil)
+	if !reached || !errors.Is(err, ErrUncertain) || !errors.Is(err, durablevolume.ErrIdentity) || !strings.Contains(err.Error(), "acknowledgement differs") {
+		t.Fatal("observed acknowledgment mismatch lost its identity authority", reached, err)
+	}
+	if err := self.owner.Publish([]byte("replacement"), nil); !errors.Is(err, durablevolume.ErrIdentity) {
+		t.Fatal("mismatched owner resumed", err)
 	}
 }
 
