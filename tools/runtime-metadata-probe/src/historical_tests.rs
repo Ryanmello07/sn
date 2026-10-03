@@ -6,7 +6,7 @@
 use super::*;
 use sp_core::{
     storage::{ChildInfo, Storage, StorageChild},
-    H256,
+    Pair, H256,
 };
 use sp_runtime::generic::{Digest, DigestItem};
 use sp_state_machine::{prove_read_on_trie_backend, TestExternalities};
@@ -992,4 +992,300 @@ fn historical_public_decoder_refuses_unknown_trailing_duplicate_and_bounded_inpu
         }
         assert!(run(&changed).is_err(), "malformed input accepted: {fault}");
     }
+}
+
+fn host_data(offset: u32, raw: &[u8]) -> String {
+    format!(
+        "(data (i32.const {offset}) \"{}\")",
+        raw.iter()
+            .map(|byte| format!("\\{byte:02x}"))
+            .collect::<String>()
+    )
+}
+
+fn host_span(offset: u32, size: usize) -> u64 {
+    (size as u64) << 32 | u64::from(offset)
+}
+
+#[test]
+fn historical_hosts_ed25519_uses_exact_sdk_valid_and_invalid_messages() {
+    let pair = sp_core::ed25519::Pair::from_seed(&[7; 32]);
+    let message = b"original bounded historical message";
+    let signature = pair.sign(message);
+    let imports = format!(
+        r#"(import "env" "ext_crypto_ed25519_verify_version_1" (func $verify (param i32 i64 i32) (result i32))) {} {} {}"#,
+        host_data(4096, signature.as_ref()),
+        host_data(4200, pair.public().as_ref()),
+        host_data(4300, message)
+    );
+    let body = format!(
+        r#"(if (i32.eqz (call $verify (i32.const 4096) (i64.const {}) (i32.const 4200))) (then unreachable))
+        (i32.store8 (i32.const 4300) (i32.const 255))
+        (if (call $verify (i32.const 4096) (i64.const {}) (i32.const 4200)) (then unreachable))"#,
+        host_span(4300, message.len()),
+        host_span(4300, message.len())
+    );
+    let code = wasm(&imports, &body);
+    let report = run(&job(&code, |_| {}))
+        .expect("SDK ed25519 host should verify exact original message and reject mutation");
+    assert_eq!(report.host_profile, "substrate-proof-bounded-hosts-v2");
+    assert!(report.storage_calls >= 8 && report.storage_io_bytes >= message.len() * 2 + 192);
+    assert!(!report.runtime_admitted && report.native_fee_debit.is_none());
+}
+
+#[test]
+fn historical_hosts_sr25519_version_two_preserves_sdk_verification() {
+    let pair = sp_core::sr25519::Pair::from_seed(&[9; 32]);
+    let message = b"historical sr25519 context";
+    let signature = pair.sign(message);
+    let imports = format!(
+        r#"(import "env" "ext_crypto_sr25519_verify_version_2" (func $verify (param i32 i64 i32) (result i32))) {} {} {}"#,
+        host_data(4096, signature.as_ref()),
+        host_data(4200, pair.public().as_ref()),
+        host_data(4300, message)
+    );
+    let body = format!(
+        r#"(if (i32.eqz (call $verify (i32.const 4096) (i64.const {}) (i32.const 4200))) (then unreachable))
+        (i32.store8 (i32.const 4096) (i32.xor (i32.load8_u (i32.const 4096)) (i32.const 1)))
+        (if (call $verify (i32.const 4096) (i64.const {}) (i32.const 4200)) (then unreachable))"#,
+        host_span(4300, message.len()),
+        host_span(4300, message.len())
+    );
+    let code = wasm(&imports, &body);
+    assert!(
+        run(&job(&code, |_| {}))
+            .expect("SDK sr25519 v2 host outcome differs")
+            .post_state_reproduced
+    );
+}
+
+#[test]
+fn historical_hosts_secp_recovery_keeps_sdk_bytes_and_bad_recovery_id() {
+    let pair = sp_core::ecdsa::Pair::from_seed(&[11; 32]);
+    let message = blake2_256(b"original secp256k1 digest");
+    let signature = pair.sign_prehashed(&message);
+    let imports = format!(
+        r#"(import "env" "ext_crypto_secp256k1_ecdsa_recover_compressed_version_2" (func $recover (param i32 i32) (result i64))) {} {} {}"#,
+        host_data(4096, signature.as_ref()),
+        host_data(4200, &message),
+        host_data(4300, pair.public().as_ref())
+    );
+    let body = r#"(local $pointer i32)
+        (local.set $pointer (i32.wrap_i64 (call $recover (i32.const 4096) (i32.const 4200))))
+        (if (i32.load8_u (local.get $pointer)) (then unreachable))
+        (local.set $n (i32.const 0))
+        (loop $bytes
+            (if (i32.ne (i32.load8_u offset=1 (i32.add (local.get $pointer) (local.get $n)))
+                (i32.load8_u (i32.add (i32.const 4300) (local.get $n)))) (then unreachable))
+            (local.set $n (i32.add (local.get $n) (i32.const 1)))
+            (br_if $bytes (i32.lt_u (local.get $n) (i32.const 33))))
+        (i32.store8 (i32.const 4160) (i32.const 255))
+        (local.set $pointer (i32.wrap_i64 (call $recover (i32.const 4096) (i32.const 4200))))
+        (if (i32.ne (i32.load8_u (local.get $pointer)) (i32.const 1)) (then unreachable))
+        (if (i32.ne (i32.load8_u offset=1 (local.get $pointer)) (i32.const 1)) (then unreachable))"#;
+    let code = wasm(&imports, body);
+    assert!(
+        run(&job(&code, |_| {}))
+            .expect("SDK recovery bytes or BadV result differ")
+            .post_state_reproduced
+    );
+}
+
+#[test]
+fn historical_hosts_crypto_refuses_before_oversized_argument_allocation() {
+    let code = wasm(
+        r#"(import "env" "ext_crypto_ed25519_verify_version_1" (func $verify (param i32 i64 i32) (result i32)))"#,
+        &format!(
+            "(drop (call $verify (i32.const 4096) (i64.const {}) (i32.const 4200)))",
+            host_span(4300, 8 * 1024 * 1024 + 1)
+        ),
+    );
+    let error =
+        run(&job(&code, |_| {})).expect_err("oversized crypto argument reached SDK allocation");
+    assert!(
+        error
+            .to_string()
+            .contains("historical crypto argument byte bound"),
+        "{error}"
+    );
+}
+
+#[test]
+fn historical_hosts_crypto_rollback_does_not_refund_shared_work_budget() {
+    let code = wasm(
+        r#"(import "env" "ext_crypto_ed25519_verify_version_1" (func $verify (param i32 i64 i32) (result i32)))"#,
+        r#"(loop $calls (call $begin)
+            (drop (call $verify (i32.const 4096) (i64.const 0) (i32.const 4200)))
+            (call $rollback)
+            (local.set $n (i32.add (local.get $n) (i32.const 1)))
+            (br_if $calls (i32.lt_u (local.get $n) (i32.const 20000))))"#,
+    );
+    let error =
+        run(&job(&code, |_| {})).expect_err("crypto work survived rollback without accounting");
+    assert!(
+        error.to_string().contains("historical storage work bound"),
+        "{error}"
+    );
+}
+
+#[test]
+fn historical_hosts_key_creation_and_external_io_remain_unavailable() {
+    for (import, call) in [
+        (
+            r#"(import "env" "ext_crypto_ed25519_generate_version_1" (func $side (param i32 i64) (result i32)))"#,
+            "(drop (call $side (i32.const 0) (i64.const 4294971392)))",
+        ),
+        (
+            r#"(import "env" "ext_offchain_timestamp_version_1" (func $side (result i64)))"#,
+            "(drop (call $side))",
+        ),
+    ] {
+        let code = wasm(import, call);
+        let error =
+            run(&job(&code, |_| {})).expect_err("unapproved external-effect host was admitted");
+        assert!(
+            error.to_string().contains("missing") || error.to_string().contains("not found"),
+            "{error}"
+        );
+    }
+}
+
+const PREFIX_HOST: &str = r#"(import "env" "ext_storage_clear_prefix_version_2" (func $prefix (param i64 i64) (result i64)))"#;
+const KILL_HOST: &str = r#"(import "env" "ext_default_child_storage_storage_kill_version_3" (func $kill (param i64 i64) (result i64)))"#;
+
+#[test]
+fn historical_hosts_prefix_zero_limit_keeps_backend_and_removes_overlay() {
+    let imports = format!(
+        "{PREFIX_HOST} {} {}",
+        host_data(4096, &Some(0u32).encode()),
+        host_data(4200, b"zzzz-new")
+    );
+    let body = format!(
+        r#"(local $result i32)
+        (call $set (i64.const {}) (i64.const 4294970400))
+        (local.set $result (i32.wrap_i64 (call $prefix (i64.const {}) (i64.const {}))))
+        (if (i32.ne (i32.load8_u (local.get $result)) (i32.const 1)) (then unreachable))
+        (if (i32.load offset=1 (local.get $result)) (then unreachable))"#,
+        host_span(4200, 8),
+        host_span(1984, 5),
+        host_span(4096, 5)
+    );
+    let code = wasm(&imports, &body);
+    assert!(
+        run(&job(&code, |_| {}))
+            .expect("zero backend limit lost original state or retained overlay key")
+            .post_state_reproduced
+    );
+}
+
+#[test]
+fn historical_hosts_prefix_complete_result_preserves_unrelated_state() {
+    let imports = format!(
+        "{PREFIX_HOST} {}",
+        host_data(4096, &Option::<u32>::None.encode())
+    );
+    let body = format!(
+        r#"(local $result i32)
+        (local.set $result (i32.wrap_i64 (call $prefix (i64.const {}) (i64.const {}))))
+        (if (i32.load8_u (local.get $result)) (then unreachable))
+        (if (i32.ne (i32.load offset=1 (local.get $result)) (i32.const 1)) (then unreachable))"#,
+        host_span(1984, 5),
+        host_span(4096, 1)
+    );
+    let code = wasm(&imports, &body);
+    let report = run(&job(&code, |storage| {
+        storage.top.remove(ACCOUNT);
+    }))
+    .expect("complete prefix deletion differs from exact SDK outcome");
+    assert!(report.post_state_reproduced && report.storage_calls >= 4);
+}
+
+#[test]
+fn historical_hosts_child_limit_counts_backend_not_repeated_overlay() {
+    let imports = format!("{KILL_HOST} {}", host_data(4096, &Some(1u32).encode()));
+    let call = format!(
+        r#"(local.set $result (i32.wrap_i64 (call $kill (i64.const {}) (i64.const {}))))
+        (if (i32.ne (i32.load8_u (local.get $result)) (i32.const 1)) (then unreachable))
+        (if (i32.ne (i32.load offset=1 (local.get $result)) (i32.const 1)) (then unreachable))"#,
+        host_span(3072, OWNER.len()),
+        host_span(4096, 5)
+    );
+    let code = wasm(&imports, &format!("(local $result i32) {call} {call}"));
+    assert!(
+        run(&job(&code, |storage| {
+            storage
+                .children_default
+                .get_mut(OWNER)
+                .unwrap()
+                .data
+                .remove(b"k".as_slice());
+        }))
+        .expect("repeated limited child deletion consumed a different backend page")
+        .post_state_reproduced
+    );
+}
+
+#[test]
+fn historical_hosts_missing_prefix_proof_cannot_publish_unchanged_parent_root() {
+    let imports = format!(
+        "{PREFIX_HOST} {}",
+        host_data(4096, &Option::<u32>::None.encode())
+    );
+    let code = wasm(
+        &imports,
+        &format!(
+            "(drop (call $prefix (i64.const {}) (i64.const {})))",
+            host_span(1984, 5),
+            host_span(4096, 1)
+        ),
+    );
+    let mut incomplete = job(&code, |_| {});
+    top_only_proof(&mut incomplete, false);
+    let error = run(&incomplete)
+        .expect_err("incomplete prefix iterator published the unchanged parent root");
+    assert!(
+        error
+            .to_string()
+            .contains("historical iterator proof incomplete"),
+        "{error}"
+    );
+}
+
+#[test]
+fn historical_hosts_missing_child_iteration_cannot_publish_unchanged_parent_root() {
+    let imports = format!(
+        "{KILL_HOST} {}",
+        host_data(4096, &Option::<u32>::None.encode())
+    );
+    let code = wasm(
+        &imports,
+        &format!(
+            "(drop (call $kill (i64.const {}) (i64.const {})))",
+            host_span(3072, OWNER.len()),
+            host_span(4096, 1)
+        ),
+    );
+    let mut incomplete = job(&code, |_| {});
+    top_only_proof(&mut incomplete, true);
+    let error = run(&incomplete)
+        .expect_err("incomplete child iterator published the unchanged parent root");
+    assert!(
+        error
+            .to_string()
+            .contains("historical iterator proof incomplete"),
+        "{error}"
+    );
+}
+
+#[test]
+fn historical_hosts_proof_size_without_recorder_is_unknown_not_zero() {
+    let code = wasm(
+        r#"(import "env" "ext_storage_proof_size_storage_proof_size_version_1" (func $size (result i64)))"#,
+        "(if (i64.ne (call $size) (i64.const -1)) (then unreachable))",
+    );
+    assert!(
+        run(&job(&code, |_| {}))
+            .expect("proof-size sentinel was replaced by fabricated measured bytes")
+            .post_state_reproduced
+    );
 }

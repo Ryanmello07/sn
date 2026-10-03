@@ -187,7 +187,7 @@ func validateHistoricalReplayObservations(job historicalReplayJob, trace *histor
 			if observation.ValueHex == nil {
 				return errors.New("historical value-bearing observation omits bytes")
 			}
-		case "get", "read", "clear", "exists", "next_key":
+		case "get", "read", "clear", "clear_prefix", "exists", "next_key":
 			if observation.ValueHex != nil {
 				return errors.New("historical request-only observation invents a value")
 			}

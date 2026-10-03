@@ -1,6 +1,7 @@
 //! Deterministic storage hosts carry a job-owned operation and cumulative byte
-//! budget. Hash/trie helpers are pure; crypto, offchain, keystore, randomness,
-//! indexing, runtime spawning and other omitted hosts remain failing stubs.
+//! budget. Read-only crypto delegates to the exact pinned SDK through a bounded
+//! memory interface. Offchain, keystore, randomness, indexing, runtime spawning
+//! and other omitted hosts remain failing stubs.
 
 use super::observer;
 use sp_core::{
@@ -9,40 +10,64 @@ use sp_core::{
 };
 use sp_externalities::ExternalitiesExt;
 use sp_runtime_interface::{pass_by::*, runtime_interface};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 
-pub(super) const HOST_PROFILE: &str = "substrate-proof-bounded-storage-v1";
+pub(super) const HOST_PROFILE: &str = "substrate-proof-bounded-hosts-v2";
 const MAXIMUM_VALUE: usize = 8 * 1024 * 1024;
 const MAXIMUM_CALLS: usize = 65536;
 const MAXIMUM_IO: usize = 64 * 1024 * 1024;
 
-/// Cumulative work is not refunded by a rollback or repeated access.
-#[derive(Default)]
-pub(super) struct Budget {
-    pub calls: usize,
-    pub io_bytes: usize,
-    pub depth: usize,
+/// One job-owned meter covers host arguments, crypto memory and backend
+/// iteration. Rollback never refunds it. Atomics share only counters; no lock
+/// is held while a host or trie operation executes. The report's original
+/// storage_calls/storage_io_bytes fields retain this stricter v2 total.
+#[derive(Debug, Default)]
+pub(super) struct Work {
+    calls: AtomicUsize,
+    io_bytes: AtomicUsize,
 }
-sp_externalities::decl_extension! { pub(super) struct HistoricalBudget(Budget); }
-impl Default for HistoricalBudget {
-    fn default() -> Self {
-        Self(Budget::default())
+impl Work {
+    pub(super) fn charge(&self, bytes: usize) {
+        self.calls
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                n.checked_add(1).filter(|n| *n <= MAXIMUM_CALLS)
+            })
+            .expect("historical storage work bound");
+        self.io_bytes
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                n.checked_add(bytes).filter(|n| *n <= MAXIMUM_IO)
+            })
+            .expect("historical storage work bound");
+    }
+    pub(super) fn counts(&self) -> (usize, usize) {
+        (
+            self.calls.load(Ordering::Relaxed),
+            self.io_bytes.load(Ordering::Relaxed),
+        )
     }
 }
 
+#[derive(Default)]
+pub(super) struct Budget {
+    pub work: Arc<Work>,
+    pub depth: usize,
+}
+sp_externalities::decl_extension! { pub(super) struct HistoricalBudget(Budget); }
+
 fn charge(mut ext: &mut dyn Externalities, bytes: usize) {
-    let budget = &mut ext
-        .extension::<HistoricalBudget>()
+    ext.extension::<HistoricalBudget>()
         .expect("historical budget absent")
-        .0;
-    budget.calls += 1;
-    budget.io_bytes = budget
-        .io_bytes
-        .checked_add(bytes)
-        .expect("historical byte count overflow");
-    assert!(
-        budget.calls <= MAXIMUM_CALLS && budget.io_bytes <= MAXIMUM_IO,
-        "historical storage work bound"
-    );
+        .0
+        .work
+        .charge(bytes);
+}
+
+pub(super) fn charge_active(bytes: usize) {
+    sp_externalities::with_externalities(|ext| charge(ext, bytes))
+        .expect("historical budget context absent");
 }
 
 fn key(key: &[u8]) {
@@ -250,6 +275,75 @@ pub trait DefaultChildStorage {
         charge(*self, owner.len() + item.len());
         self.clear_child_storage(&child, item);
     }
+    // Delegate overlay/backend limit semantics to the pinned SDK. The strict
+    // backend traps incomplete iterators that the generic SDK helper would log
+    // and treat as partial success. A declared limit is never silently changed.
+    fn clear_prefix(&mut self, prefix: PassFatPointerAndRead<&[u8]>) {
+        key(prefix);
+        charge(*self, prefix.len());
+        observer::observe(*self, "clear_prefix", prefix, None);
+        let _ = Externalities::clear_prefix(*self, prefix, None, None);
+    }
+    #[version(2)]
+    fn clear_prefix(
+        &mut self,
+        prefix: PassFatPointerAndRead<&[u8]>,
+        limit: PassFatPointerAndDecode<Option<u32>>,
+    ) -> AllocateAndReturnByCodec<sp_io::KillStorageResult> {
+        key(prefix);
+        charge(*self, prefix.len());
+        observer::observe(*self, "clear_prefix", prefix, None);
+        Externalities::clear_prefix(*self, prefix, limit, None).into()
+    }
+    fn storage_kill(&mut self, owner: PassFatPointerAndRead<&[u8]>) {
+        let child = child(owner);
+        charge(*self, owner.len());
+        let _ = self.kill_child_storage(&child, None, None);
+    }
+    #[version(2)]
+    fn storage_kill(
+        &mut self,
+        owner: PassFatPointerAndRead<&[u8]>,
+        limit: PassFatPointerAndDecode<Option<u32>>,
+    ) -> bool {
+        let child = child(owner);
+        charge(*self, owner.len());
+        self.kill_child_storage(&child, limit, None)
+            .maybe_cursor
+            .is_none()
+    }
+    #[version(3)]
+    fn storage_kill(
+        &mut self,
+        owner: PassFatPointerAndRead<&[u8]>,
+        limit: PassFatPointerAndDecode<Option<u32>>,
+    ) -> AllocateAndReturnByCodec<sp_io::KillStorageResult> {
+        let child = child(owner);
+        charge(*self, owner.len());
+        self.kill_child_storage(&child, limit, None).into()
+    }
+    fn clear_prefix(
+        &mut self,
+        owner: PassFatPointerAndRead<&[u8]>,
+        prefix: PassFatPointerAndRead<&[u8]>,
+    ) {
+        let child = child(owner);
+        key(prefix);
+        charge(*self, owner.len() + prefix.len());
+        let _ = self.clear_child_prefix(&child, prefix, None, None);
+    }
+    #[version(2)]
+    fn clear_prefix(
+        &mut self,
+        owner: PassFatPointerAndRead<&[u8]>,
+        prefix: PassFatPointerAndRead<&[u8]>,
+        limit: PassFatPointerAndDecode<Option<u32>>,
+    ) -> AllocateAndReturnByCodec<sp_io::KillStorageResult> {
+        let child = child(owner);
+        key(prefix);
+        charge(*self, owner.len() + prefix.len());
+        self.clear_child_prefix(&child, prefix, limit, None).into()
+    }
     fn exists(
         &mut self,
         owner: PassFatPointerAndRead<&[u8]>,
@@ -291,6 +385,17 @@ pub trait DefaultChildStorage {
     }
 }
 
+/// Match the SDK's no-recorder execution semantics. The serialized parent proof
+/// length is not the dynamic proof recorder's usage and must never replace it.
+#[runtime_interface]
+pub trait StorageProofSize {
+    fn storage_proof_size(&mut self) -> u64 {
+        charge(*self, 0);
+        self.extension::<sp_trie::proof_size_extension::ProofSizeExt>()
+            .map_or(u64::MAX, |recorder| recorder.storage_proof_size())
+    }
+}
+
 pub(super) type HistoricalHostFunctions = (
     sp_io::allocator::HostFunctions,
     sp_io::logging::HostFunctions,
@@ -298,4 +403,6 @@ pub(super) type HistoricalHostFunctions = (
     sp_io::trie::HostFunctions,
     storage::HostFunctions,
     default_child_storage::HostFunctions,
+    storage_proof_size::HostFunctions,
+    super::pure_hosts::CryptoHosts,
 );
