@@ -5940,6 +5940,21 @@ requested value. Keep customer challenge writes distinct from provider payout
 attribution. This correction is assigned to a separate successor; GET tests
 and unchanged-POST byte joins do not qualify write recovery.
 
+Bound custody by semantic progress, not arbitrary provider-response variation.
+A changed raw response digest for the same challenge/status must not consume a
+new permanent obligation slot on every expected GET. Retain original evidence
+and disclose repeated observations; preserve room for terminal or contradictory
+outcomes. Add a deterministic actual-path control with at least 65 equivalent
+responses whose metadata differs, followed by completion, restart and a genuine
+contradiction. If history capacity needs revision, it must preserve old evidence
+and unfinished work rather than erase the request or mint another key.
+
+The JavaScript caller boundary must reject unsafe numeric amounts before HTTP
+or use an explicitly defined exact wire format. Go int64 and integer formatting
+inside the server do not prove exactness after JavaScript number conversion.
+Caller request IDs must survive retries and application restart; generated API
+fields alone do not prove external applications have adopted that contract.
+
 
 ### October 3: composed payout/read continuation source
 
