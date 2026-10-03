@@ -120,8 +120,7 @@ reports and completed owned-fixture cleanup. The
 produce five intended failures, including actual post-limiter refusal and stale
 amount/wallet protection. The [same operative controls under race detection](evidence/payout-operative-causal-race-20261003.json)
 also produce all five intended failures, without race reports and with owned
-fixture cleanup complete. The full model result remains pending; later policy
-binding and GET retry candidates require their own qualification.
+fixture cleanup complete. The [full financial model suite](evidence/payout-retention-full-model-20261003.json) at exact Server `63027130` now passes: 1,400 top-level roots, all 249 nested subtests, zero failures and nine explicit skips. The skips remain recorded; the optional proxy check has its separate pass, while the nested SQL-plan follow-up remains pending. Later policy binding and GET retry candidates require their own qualification.
 These checkpoints do not supply completed release, deployment or activation
 evidence.
 
@@ -3497,3 +3496,8 @@ against the actual producer and current policy rather than declaring producer
 publication alone to be monitoring closure. Sequential proof/receipt progress
 requires qualification; the earlier review lead does not establish a hidden
 leaf-progress defect in the producer's actual signed-receipt path.
+
+
+## October 3 completed cutoff-boundary qualification
+
+Frozen Server `cdcb61fa` completes its [independent scoped qualification](evidence/payout-boundary-qualification-20261003.json): 28 normal and 28 race roots pass, five package vets and the offline CLI build pass, and every owned fixture cleanup completes. The [race causal controls](evidence/payout-boundary-causal-race-20261003.json), like their normal counterparts, produce eight intended assertion failures and one accepted-payment reconciliation positive pass without race reports. The original container-bind setup failure remains retained. This qualifies the durable earning-policy boundary scope; wallet `25f617dc`, combined Server `2a453df9`, final release integration and production deployment remain separate gates.

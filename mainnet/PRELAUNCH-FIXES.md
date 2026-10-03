@@ -59,8 +59,7 @@ fixture cleanup completed. Omission controls and modified old-body controls
 retain their explicit labels. [Fourteen additional production recovery roots pass with race detection](evidence/payout-retention-attempt-race-20261003.json),
 with no skips or race reports. The
 [race recovery controls](evidence/payout-retention-causal-race-20261003.json)
-now discriminate all 12 intended failures without race reports. The full model
-suite remains pending. The [normal operative controls](evidence/payout-operative-causal-normal-20261003.json)
+now discriminate all 12 intended failures without race reports. The [full financial model suite](evidence/payout-retention-full-model-20261003.json) at exact Server `63027130` now passes 1,400 top-level roots and all 249 nested subtests, with zero failures and nine explicit skips. These optional/configuration skips remain recorded; a separate nested SQL-plan follow-up is pending. Later candidates retain their own qualification requirements. The [normal operative controls](evidence/payout-operative-causal-normal-20261003.json)
 produce five intended assertion failures for actual final-send admission,
 submission basis and CLI refusal propagation. Their [race scope also produces
 all five intended failures](evidence/payout-operative-causal-race-20261003.json),
@@ -5966,3 +5965,8 @@ against the actual producer and current policy rather than declaring producer
 publication alone to be monitoring closure. Sequential proof/receipt progress
 requires qualification; the earlier review lead does not establish a hidden
 leaf-progress defect in the producer's actual signed-receipt path.
+
+
+## October 3 completed cutoff-boundary qualification
+
+Frozen Server `cdcb61fa` completes its [independent scoped qualification](evidence/payout-boundary-qualification-20261003.json): 28 normal and 28 race roots pass, five package vets and the offline CLI build pass, and every owned fixture cleanup completes. The [race causal controls](evidence/payout-boundary-causal-race-20261003.json), like their normal counterparts, produce eight intended assertion failures and one accepted-payment reconciliation positive pass without race reports. The original container-bind setup failure remains retained. This qualifies the durable earning-policy boundary scope; wallet `25f617dc`, combined Server `2a453df9`, final release integration and production deployment remain separate gates.
