@@ -127,25 +127,28 @@ func localRebindPendingOutcomeControl(t *testing.T, boundary string) {
 	chain := f.original.contracts
 	chain.stateLock.Lock()
 	baseOverride, writes := chain.override, len(chain.writes)
+	unresolvedReads, historicalReads := 0, 0
 	chain.override = func(method string, params []any, result any) any {
 		result = baseOverride(method, params, result)
-		if method == "eth_getTransactionByHash" || method == "eth_getTransactionReceipt" {
+		if len(params) == 1 && (method == "eth_getTransactionByHash" || method == "eth_getTransactionReceipt") && params[0] == f.approval.Plan.TransactionHash.Hex() {
+			unresolvedReads++
 			return nil
+		}
+		if method == "eth_getTransactionReceipt" {
+			historicalReads++
 		}
 		return result
 	}
 	chain.stateLock.Unlock()
 	online := append(append([]string{}, extra...), "--online", "--canonical-approval", f.canonicalRef.Path, "--canonical-approval-sha256", f.canonicalRef.Sha256)
 	output.Reset()
-	if code, diagnostic := f.invoke("contract-successor-execution-resume", &output, append(append([]string{}, online...), "--submit")...); code == 0 || !strings.Contains(diagnostic, "outcome is not canonically reconciled") {
-		t.Fatal("unresolved restored outcome became another send", code, diagnostic)
-	}
+	code, pendingDiagnostic := f.invoke("contract-successor-execution-resume", &output, append(append([]string{}, online...), "--submit")...)
 	chain.stateLock.Lock()
 	actualWrites := len(chain.writes)
 	chain.override = baseOverride
 	chain.stateLock.Unlock()
-	if actualWrites != writes {
-		t.Fatal("absent canonical read renewed the original signed send")
+	if code == 0 || output.Len() != 0 || !strings.Contains(pendingDiagnostic, "outcome is not canonically reconciled") || unresolvedReads != 2 || historicalReads != 8 || actualWrites != writes {
+		t.Fatal("exact ninth-transaction absence did not retain its original outcome after eight historical receipts", code, pendingDiagnostic, unresolvedReads, historicalReads, actualWrites-writes)
 	}
 	output.Reset()
 	if code, diagnostic := f.invoke("contract-successor-execution-resume", &output, online...); code != 0 {
