@@ -84,25 +84,26 @@ func (self monitorEconomicNativeEvent) index() uint64 {
 }
 
 type monitorEconomicNativeState struct {
-	RuntimeBoundFrom       uint64                       `json:"runtime_bound_from,omitempty"`
-	LastExecutionRuntime   *rootReceiptProfile          `json:"last_execution_runtime,omitempty"`
-	LastPostStateRuntime   *rootReceiptProfile          `json:"last_post_state_runtime,omitempty"`
-	Cursor                 economicEmissionBoundary     `json:"cursor"`
-	PendingThrough         *economicEmissionBoundary    `json:"pending_through,omitempty"`
-	Finalized              *economicEmissionBoundary    `json:"observed_finalized,omitempty"`
-	BatchCount             uint64                       `json:"batch_count"`
-	BatchChainHash         string                       `json:"batch_chain_hash"`
-	ObservedAlpha          string                       `json:"observed_alpha"`
-	ObservedFeesRao        string                       `json:"observed_fees_rao"`
-	History                []monitorEconomicNativeEvent `json:"history"`
-	SampleAt               time.Time                    `json:"sample_at"`
-	LastReadAt             time.Time                    `json:"last_read_at"`
-	LastProgressAt         time.Time                    `json:"last_progress_at"`
-	UnavailableSince       time.Time                    `json:"unavailable_since"`
-	Status                 string                       `json:"status"`
-	Incidents              uint64                       `json:"incidents"`
-	CapacityRemaining      uint64                       `json:"capacity_remaining"`
-	CapacityBytesRemaining uint64                       `json:"capacity_bytes_remaining"`
+	Archive                *monitorEconomicNativeArchive `json:"archive,omitempty"`
+	RuntimeBoundFrom       uint64                        `json:"runtime_bound_from,omitempty"`
+	LastExecutionRuntime   *rootReceiptProfile           `json:"last_execution_runtime,omitempty"`
+	LastPostStateRuntime   *rootReceiptProfile           `json:"last_post_state_runtime,omitempty"`
+	Cursor                 economicEmissionBoundary      `json:"cursor"`
+	PendingThrough         *economicEmissionBoundary     `json:"pending_through,omitempty"`
+	Finalized              *economicEmissionBoundary     `json:"observed_finalized,omitempty"`
+	BatchCount             uint64                        `json:"batch_count"`
+	BatchChainHash         string                        `json:"batch_chain_hash"`
+	ObservedAlpha          string                        `json:"observed_alpha"`
+	ObservedFeesRao        string                        `json:"observed_fees_rao"`
+	History                []monitorEconomicNativeEvent  `json:"history"`
+	SampleAt               time.Time                     `json:"sample_at"`
+	LastReadAt             time.Time                     `json:"last_read_at"`
+	LastProgressAt         time.Time                     `json:"last_progress_at"`
+	UnavailableSince       time.Time                     `json:"unavailable_since"`
+	Status                 string                        `json:"status"`
+	Incidents              uint64                        `json:"incidents"`
+	CapacityRemaining      uint64                        `json:"capacity_remaining"`
+	CapacityBytesRemaining uint64                        `json:"capacity_bytes_remaining"`
 }
 
 func newMonitorEconomicNativeState(policy monitorEconomicNativePolicy) *monitorEconomicNativeState {
@@ -118,6 +119,9 @@ func monitorEconomicInteger(value string) (*big.Int, error) {
 }
 
 func (self *monitorEconomicNativeState) validate(policy monitorEconomicNativePolicy) error {
+	if err := self.Archive.validate(policy, self); err != nil {
+		return err
+	}
 	if self.Cursor.Number < policy.Observation.From.Number || self.Cursor.Number > math.MaxUint32 || !rootCanonicalHash(self.Cursor.Hash) || !planSha256(self.BatchChainHash) || len(self.History) > int(policy.HistoryEntries) || self.CapacityRemaining != policy.HistoryEntries-uint64(len(self.History)) {
 		return errors.New("native economic cursor or history exceeds its retained policy")
 	}
@@ -145,6 +149,12 @@ func (self *monitorEconomicNativeState) validate(policy monitorEconomicNativePol
 	seen := map[string]bool{}
 	alpha, fees := new(big.Int), new(big.Int)
 	previous := policy.Observation.From.Number
+	historyFrom := previous
+	if self.Archive != nil {
+		alpha, _ = monitorEconomicInteger(self.Archive.ObservedAlpha)
+		fees, _ = monitorEconomicInteger(self.Archive.ObservedFeesRao)
+		previous, historyFrom = self.Archive.Cursor.Number, self.Archive.Cursor.Number
+	}
 	var previousHash string
 	var previousIndex uint64
 	for _, item := range self.History {
@@ -154,7 +164,7 @@ func (self *monitorEconomicNativeState) validate(policy monitorEconomicNativePol
 				kinds++
 			}
 		}
-		if item.Block.Number <= policy.Observation.From.Number || item.Block.Number < previous || item.Block.Number > self.Cursor.Number || !rootCanonicalHash(item.Block.Hash) || !rootCanonicalHash(item.EventsHash) || kinds != 1 {
+		if item.Block.Number <= historyFrom || item.Block.Number < previous || item.Block.Number > self.Cursor.Number || !rootCanonicalHash(item.Block.Hash) || !rootCanonicalHash(item.EventsHash) || kinds != 1 {
 			return errors.New("native economic retained event has no original position")
 		}
 		if self.RuntimeBoundFrom != 0 && item.Block.Number >= self.RuntimeBoundFrom {
