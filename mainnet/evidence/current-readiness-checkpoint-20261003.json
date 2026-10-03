@@ -2,6 +2,7 @@
   "basis": "Current published component evidence plus explicit in-progress work; supersedes historical absent-implementation labels only.",
   "completion": "NOT_FINALIZED_ALL38_REQUIREMENTS_RETAINED",
   "evidence_sha256": {
+    "current-connect772-integration-preview-20261003.json": "4e606b41f34dc54870d4c33e6a6c3d06822ba2a7142e77884957eca62454ed26",
     "server-model-clock-and-debit-original-failures-20261003.json": "bc64b4538cf39c9204fee65f61d19dfeb48b1498b6be78d43427632023131108",
     "monitor-startup-isolation-source-finding-20261003.json": "14f1a5abdbd4a7444e76f5091b33145a747b924628fa542a5b814d8ea07ffa1a",
     "subsidy-grant804-source-review-20261003.json": "68cad7162cc24d5f7b5bd3bac4a20abfc46e47e87a7868892ab5aff558c01914",

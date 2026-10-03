@@ -6888,3 +6888,8 @@ The [startup source finding](evidence/monitor-startup-isolation-source-finding-2
 ### Preserve debit lifecycle and meaningful writer guards in tests
 
 The [current full-model failure batch](evidence/server-model-clock-and-debit-original-failures-20261003.json) retains two writer-guard failures and six participant payout failures. Source triage separates a new early refusal branch from the later checked endpoint lock, and terminal settlement from asynchronous journal application. Review actual control flow and keep missing/late-lock mutants effective. For asynchronous debit, assert retained pending consumption and unavailable spendable credit, then exercise the real replay-safe flusher before checking raw balance and released reservations. Do not sleep, ignore close/read errors or weaken payout conservation to make fixtures pass. Continue the full run and qualify one combined affected-scope correction afterward.
+
+
+### Preserve current wire changes in recovery dependency composition
+
+The [Connect integration preview](evidence/current-connect772-integration-preview-20261003.json) retains all fifteen qualified recovery files alongside newer upstream optional close-report identity fields. This is a Git-only preview, not a published recovery dependency or composed test result. Preserve current upstream protocol changes while adding the pending namespace correction, qualify the final common dependency graph once, then pin its published version in SN. Optional report identity must remain non-emitting until the backend provides durable deduplication of the exact party, amount and checkpoint; a compatible wire field alone cannot authorize that behavior.
