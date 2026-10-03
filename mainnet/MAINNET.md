@@ -38,10 +38,10 @@ completed 24 passes and one fixture failure across 25 selected tests, with no
 skips. The [independent race batch](evidence/payout-transition-successor-race-20261002.json)
 has the same 24 passes/one fixture failure, no skips and no race reports.
 [Five affected package vets and the CLI build](evidence/payout-transition-successor-vet-build-20261002.json)
-also pass. A further correction
-must preserve canceled payments' original subsidy and reliability obligations
-through replanning, including after the cutoff. Finish that correction and run
-the full current model suite before treating this transition as qualified.
+also pass. The later financial successor below preserves canceled payments' original
+subsidy and reliability obligations through replanning, including after the
+cutoff. Finish its full current model qualification before treating this
+transition as qualified.
 Neither candidate has been merged or deployed as the operational schedule.
 
 Financial successor Server `97d22989` now freezes original-component recovery,
@@ -63,8 +63,11 @@ produce all 12 intended assertion failures: stale-attempt admission, retained
 obligations, bounded recovery, historical excess and atomic journal/reset
 updates are discriminated. These include explicitly labeled omission controls
 and an old-body control with the current request-journal precondition; they are
-not all unmodified historical-source runs. Additional financial recovery race
-tests and race controls remain pending in separate scopes.
+not all unmodified historical-source runs. [Fourteen additional financial recovery roots pass with race detection](evidence/payout-retention-attempt-race-20261003.json),
+with no skips or race reports and completed owned-fixture cleanup. They cover
+actual amount/wallet admission, stale processor outcomes, retained obligations,
+bounded recovery and atomic attempt history. Race causal controls remain pending
+in a separate scope.
 These checkpoints do not supply completed release, deployment or activation
 evidence.
 

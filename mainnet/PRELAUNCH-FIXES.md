@@ -36,8 +36,9 @@ and [five affected package vets plus the CLI build pass](evidence/payout-retenti
 The [normal recovery controls](evidence/payout-retention-causal-normal-20261003.json)
 now produce all 12 intended behavioral failures across six groups, with owned
 fixture cleanup completed. Omission controls and modified old-body controls
-retain their explicit labels. The full model suite, additional production
-recovery race coverage and race causal controls remain pending. Neither source is merged or deployed; these scoped
+retain their explicit labels. [Fourteen additional production recovery roots pass with race detection](evidence/payout-retention-attempt-race-20261003.json),
+with no skips or race reports. The full model suite and race causal controls
+remain pending. Neither source is merged or deployed; these scoped
 receipts do not establish complete financial qualification.
 
 Processor recovery must also bind each response to its original attempt before
