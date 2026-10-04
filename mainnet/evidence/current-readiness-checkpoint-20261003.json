@@ -300,7 +300,8 @@
     "qualification-scratch72-root-admission-addendum-20261004.json": "f9349a36ce5f22b5b9a71b12ce0ab584755d71389092ae17b67f1993fcd0a1db",
     "validator-current-e9-three-roots-vet-qualified-root-readback-20261004.json": "76b567a125d20df1dcd1e4917c612ef6501ef8343dd69ac6408b4d6e8b38e481",
     "validator-current-qualified-publication-root-readback-20261004.json": "c7f136d5ffb2e5389ef271b5eefa7ac69d2273c36a926cef5fc3e068d6184747",
-    "funding-e00-framing-pass-capture-census-failure-root-readback-20261004.json": "1492f8d48b451f79ccc6555031c06d5ea4c4ca34f555d21e63bd72c415222a10"
+    "funding-e00-framing-pass-capture-census-failure-root-readback-20261004.json": "1492f8d48b451f79ccc6555031c06d5ea4c4ca34f555d21e63bd72c415222a10",
+    "funding-capture-committed-effects-source-review-20261004.json": "1c1035d5a9d81442db1438d16ec6ddb4502191b071f50cb6c9da530e847c66a4"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
