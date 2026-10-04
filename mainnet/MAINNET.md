@@ -2,6 +2,10 @@
 
 ## Current execution status — October 4
 
+The [container-lifecycle observer correction](evidence/container-lifecycle-scoped-root-review-20261004.json) passes nine deterministic controls. It records actual same-ID teardown states, retries within a finite observation budget and accepts absence only after workload exit and confirmed removal. Unknown/live/foreign observations remain unavailable. This is a scoped helper result; the active model sampler remains unchanged and original telemetry failures remain.
+
+The [corrected complete Server model suite](evidence/server1709-complete-model-live-root-review-20261004.json) has started behavioral tests on Server1709/SN663/Coread6. Root independently verified the live test binary and exact launch bindings. Collect the full suite without stopping at ordinary assertions; report any telemetry gap separately. The fee-consumer and Server exporter test binaries compile, and their scoped normal/race/controls can qualify concurrently within measured resource admission. Full release qualification remains open.
+
 The [corrected Server1709 compile](evidence/server1709-actual-compile-root-review-20261004.json) passes all six affected packages under the selected SN663/Coread6 graph. This fixes the a2 missing-import build failure; no behavioral root was selected. The corrected complete model fixture is authorized to start automatically. An observer teardown gap remains separately reportable and must not hold or erase an admitted test body.
 
 The resilience review now includes runtime-continuity and checkpoint observations: unavailable RPC reads must not be labeled as changed runtime, noncanonical history or regressed finality. Qualify bounded reconnect/reobservation of the same pinned block alongside genuine contradiction controls before current-role admission.
