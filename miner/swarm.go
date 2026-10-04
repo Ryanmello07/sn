@@ -39,25 +39,29 @@ import (
 const ProviderSwarmSchema = "urnetwork-provider-swarm-v1"
 
 type ProviderSwarmMember struct {
-	CloseReportDomain  *protocol.ClientKeyHistoryDomain `json:"close_report_domain,omitempty"`
-	ID                 string                           `json:"id"`
-	APIURL             string                           `json:"api_url"`
-	ConnectURL         string                           `json:"connect_url"`
-	DNSPumpHost        string                           `json:"dns_pump_host"`
-	StateDir           string                           `json:"state_dir"`
-	Wallet             string                           `json:"wallet"`
-	WalletSeedFile     string                           `json:"wallet_seed_file"`
-	SourceIP           string                           `json:"source_ip"`
-	WorkCapturePath    string                           `json:"whole_work_capture,omitempty"`
-	WorkCaptureSha256  string                           `json:"whole_work_capture_sha256,omitempty"`
-	RequireWorkCapture bool                             `json:"require_whole_work_capture,omitempty"`
+	CloseReportDomain      *protocol.ClientKeyHistoryDomain `json:"close_report_domain,omitempty"`
+	ID                     string                           `json:"id"`
+	APIURL                 string                           `json:"api_url"`
+	ConnectURL             string                           `json:"connect_url"`
+	DNSPumpHost            string                           `json:"dns_pump_host"`
+	StateDir               string                           `json:"state_dir"`
+	Wallet                 string                           `json:"wallet"`
+	WalletSeedFile         string                           `json:"wallet_seed_file"`
+	SourceIP               string                           `json:"source_ip"`
+	WorkCapturePath        string                           `json:"whole_work_capture,omitempty"`
+	WorkCaptureSha256      string                           `json:"whole_work_capture_sha256,omitempty"`
+	RequireWorkCapture     bool                             `json:"require_whole_work_capture,omitempty"`
+	ContractCapturePath    string                           `json:"original_contract_capture,omitempty"`
+	ContractCaptureSha256  string                           `json:"original_contract_capture_sha256,omitempty"`
+	RequireContractCapture bool                             `json:"require_original_contract_capture,omitempty"`
 }
 
 type ProviderSwarmConfig struct {
-	Schema             string                `json:"schema"`
-	ListenAddress      string                `json:"listen_address"`
-	Members            []ProviderSwarmMember `json:"members"`
-	RequireWorkCapture bool                  `json:"require_whole_work_capture,omitempty"`
+	Schema                 string                `json:"schema"`
+	ListenAddress          string                `json:"listen_address"`
+	Members                []ProviderSwarmMember `json:"members"`
+	RequireWorkCapture     bool                  `json:"require_whole_work_capture,omitempty"`
+	RequireContractCapture bool                  `json:"require_original_contract_capture,omitempty"`
 }
 
 type providerSwarmStatus struct {
@@ -131,7 +135,7 @@ func (self ProviderSwarmConfig) Validate() error {
 	seenIDs := map[string]bool{}
 	seenStates := map[string]bool{}
 	seenSources := map[string]bool{}
-	workOutboxes := map[string]bool{}
+	captureDirectories := map[string]bool{}
 	for index, member := range self.Members {
 		if member.ID == "" || seenIDs[member.ID] || strings.ContainsAny(member.ID, `/\\`) {
 			return fmt.Errorf("member %d has an empty, duplicate or unsafe id", index)
@@ -152,15 +156,31 @@ func (self ProviderSwarmConfig) Validate() error {
 		if err := profile.validateRole(member.APIURL, []string{member.ID}, domainHash); err != nil {
 			return fmt.Errorf("member %s whole-work capture: %w", member.ID, err)
 		}
+		contractProfile, err := ReadProviderContractCaptureProfile(context.Background(), member.ContractCapturePath, member.ContractCaptureSha256, self.RequireContractCapture || member.RequireContractCapture)
+		if err != nil {
+			return fmt.Errorf("member %s original contract capture: %w", member.ID, err)
+		}
+		if err := contractProfile.validateRole(member.APIURL, []string{member.ID}, domainHash, profile); err != nil {
+			return fmt.Errorf("member %s original contract capture: %w", member.ID, err)
+		}
+		var directories []string
 		if profile != nil {
 			for _, provider := range profile.Providers {
-				for prior := range workOutboxes {
-					if prior == provider.OutboxDirectory || strings.HasPrefix(prior, provider.OutboxDirectory+string(filepath.Separator)) || strings.HasPrefix(provider.OutboxDirectory, prior+string(filepath.Separator)) {
-						return errors.New("provider swarm whole-work outboxes overlap")
-					}
-				}
-				workOutboxes[provider.OutboxDirectory] = true
+				directories = append(directories, provider.OutboxDirectory)
 			}
+		}
+		if contractProfile != nil {
+			for _, provider := range contractProfile.Providers {
+				directories = append(directories, provider.Directory)
+			}
+		}
+		for _, directory := range directories {
+			for prior := range captureDirectories {
+				if providerCapturePathsOverlap(directory, prior) {
+					return errors.New("provider swarm original capture directories overlap")
+				}
+			}
+			captureDirectories[directory] = true
 		}
 		if err := validateApiUrl(member.APIURL); err != nil {
 			return fmt.Errorf("member %s: %w", member.ID, err)
@@ -436,6 +456,10 @@ func startSwarmMember(ctx context.Context, member ProviderSwarmMember, failed fu
 	if err != nil {
 		return nil, err
 	}
+	contractProfile, err := ReadProviderContractCaptureProfile(ctx, member.ContractCapturePath, member.ContractCaptureSha256, member.RequireContractCapture)
+	if err != nil {
+		return nil, err
+	}
 	dialSettings, err := testEgressDialContextForIP(member.SourceIP)
 	if err != nil {
 		return nil, err
@@ -464,11 +488,17 @@ func startSwarmMember(ctx context.Context, member ProviderSwarmMember, failed fu
 	if err := workProfile.validateRole(member.APIURL, []string{member.ID}, deviceSettings.ContractManagerSettings.CloseReportDomainHash); err != nil {
 		return nil, err
 	}
+	if err := contractProfile.validateRole(member.APIURL, []string{member.ID}, deviceSettings.ContractManagerSettings.CloseReportDomainHash, workProfile); err != nil {
+		return nil, err
+	}
 	clientId, err := clientauth.ClientIdFromJwt(byClientJWT)
 	if err != nil {
 		return nil, err
 	}
 	if err := workProfile.apply(deviceSettings, member.ID, clientId); err != nil {
+		return nil, err
+	}
+	if err := contractProfile.apply(deviceSettings, member.ID, clientId); err != nil {
 		return nil, err
 	}
 	if err := setSwarmMemberWallet(ctx, member, strategySettings); err != nil {
@@ -482,7 +512,7 @@ func startSwarmMember(ctx context.Context, member ProviderSwarmMember, failed fu
 	logoutSub := api.AddAuthLogoutListener(clientauth.AuthLogoutListenerFunc(func() {
 		failed(errSwarmAuthenticationRejected)
 	}))
-	device, err := newProviderDeviceLocal(memberCtx, networkSpace, strategySettings, byClientJWT, "provider swarm "+runtime.GOOS+" "+RequireVersion(), deviceSettings, workProfile, member.ID, clientId)
+	device, err := newProviderDeviceLocal(memberCtx, networkSpace, strategySettings, byClientJWT, "provider swarm "+runtime.GOOS+" "+RequireVersion(), deviceSettings, workProfile, member.ID, clientId, contractProfile)
 	if err != nil {
 		refreshSub.Close()
 		logoutSub.Close()
@@ -538,6 +568,7 @@ func NewProviderSwarm(config *ProviderSwarmConfig) (*ProviderSwarm, error) {
 	progressMembers := make([]providerProgressConfigMember, 0, len(config.Members))
 	for _, member := range config.Members {
 		member.RequireWorkCapture = config.RequireWorkCapture || member.RequireWorkCapture
+		member.RequireContractCapture = config.RequireContractCapture || member.RequireContractCapture
 		members[member.ID] = member
 		progressMembers = append(progressMembers, providerProgressConfigMember{Slot: member.ID, ApiUrl: member.APIURL, ConnectUrl: member.ConnectURL, DnsPumpHost: member.DNSPumpHost, Wallet: member.Wallet, SourceIp: member.SourceIP})
 	}

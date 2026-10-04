@@ -29,6 +29,9 @@ type providerRunSettings struct {
 	workCapturePath         string
 	workCaptureSha256       string
 	requireWorkCapture      bool
+	contractCapturePath     string
+	contractCaptureSha256   string
+	requireContractCapture  bool
 }
 
 // This owner starts exactly one Serve goroutine after listener admission. Its

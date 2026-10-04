@@ -50,6 +50,31 @@ type ProviderWorkCaptureOwner struct {
 // Both CLI and embedded roles use this descriptor-bound public profile reader.
 // An absent optional profile remains unknown; a partial reference is an error.
 func ReadProviderWorkCaptureProfile(ctx context.Context, path, expectedSha256 string, required bool) (*ProviderWorkCaptureProfile, error) {
+	raw, err := readProviderCaptureProfileBytes(ctx, path, expectedSha256, required)
+	if err != nil || raw == nil {
+		return nil, err
+	}
+	result, err := DecodeProviderWorkCaptureProfile(ctx, raw, expectedSha256)
+	if err != nil {
+		return nil, err
+	}
+	if err := result.validateCustody(); err != nil {
+		return nil, err
+	}
+	for _, provider := range result.Providers {
+		if strings.HasPrefix(path, provider.OutboxDirectory+string(filepath.Separator)) {
+			return nil, errors.New("whole-work launch profile overlaps original outbox custody")
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Both original capture profiles borrow the same bounded protected file reader.
+// Their independent schema decoders retain exact hash and semantic authority.
+func readProviderCaptureProfileBytes(ctx context.Context, path, expectedSha256 string, required bool) ([]byte, error) {
 	if ctx == nil {
 		return nil, errors.New("whole-work launch profile requires an owner")
 	}
@@ -77,22 +102,7 @@ func ReadProviderWorkCaptureProfile(ctx context.Context, path, expectedSha256 st
 	if err := errors.Join(readErr, file.Close(), ctx.Err()); err != nil {
 		return nil, err
 	}
-	result, err := DecodeProviderWorkCaptureProfile(ctx, raw, expectedSha256)
-	if err != nil {
-		return nil, err
-	}
-	if err := result.validateCustody(); err != nil {
-		return nil, err
-	}
-	for _, provider := range result.Providers {
-		if strings.HasPrefix(path, provider.OutboxDirectory+string(filepath.Separator)) {
-			return nil, errors.New("whole-work launch profile overlaps original outbox custody")
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return raw, nil
 }
 
 // DecodeProviderWorkCaptureProfile borrows exact independently approved bytes.
@@ -290,15 +300,37 @@ func (self *ProviderWorkCaptureProfile) apply(settings *sdk.DeviceLocalSettings,
 
 // Both production provider roles enter this constructor. The evidence worker
 // receives the same owner's dial and trust settings, with its own finite pool.
-func newProviderDeviceLocal(ctx context.Context, networkSpace *sdk.NetworkSpace, strategySettings *connect.ClientStrategySettings, token, description string, settings *sdk.DeviceLocalSettings, profile *ProviderWorkCaptureProfile, slot string, clientId connect.Id) (*sdk.DeviceLocal, error) {
+func newProviderDeviceLocal(ctx context.Context, networkSpace *sdk.NetworkSpace, strategySettings *connect.ClientStrategySettings, token, description string, settings *sdk.DeviceLocalSettings, profile *ProviderWorkCaptureProfile, slot string, clientId connect.Id, contractProfiles ...*ProviderContractCaptureProfile) (*sdk.DeviceLocal, error) {
 	if ctx == nil {
 		return nil, errors.New("whole-work provider constructor requires its lifecycle owner")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if len(contractProfiles) > 1 {
+		return nil, errors.New("provider constructor repeats original contract authority")
+	}
+	var contractProfile *ProviderContractCaptureProfile
+	if len(contractProfiles) == 1 {
+		contractProfile = contractProfiles[0]
+	}
 	if err := profile.apply(settings, slot, clientId); err != nil {
 		return nil, err
+	}
+	if err := contractProfile.apply(settings, slot, clientId); err != nil {
+		return nil, err
+	}
+	if capture := settings.ContractManagerSettings.OriginalContractCapture; capture != nil {
+		if contractProfile == nil {
+			return nil, errors.New("original contract capture lacks independently approved source authority")
+		}
+		if work := settings.ContractManagerSettings.OriginalWorkCapture; work != nil && providerCapturePathsOverlap(capture.Directory, work.OutboxDirectory) {
+			return nil, errors.New("original contract and whole-work custody overlap")
+		}
+		scope := connect.OriginalContractStoreScope{DomainHash: settings.ContractManagerSettings.CloseReportDomainHash, ClientId: [16]byte(clientId), PublicKey: capture.PublicKey, SourceGeneration: capture.SourceGeneration}
+		if err := connect.ValidateOriginalContractStore(ctx, capture.Directory, scope); err != nil {
+			return nil, err
+		}
 	}
 	var transport *http.Transport
 	if capture := settings.ContractManagerSettings.OriginalWorkCapture; capture != nil {
