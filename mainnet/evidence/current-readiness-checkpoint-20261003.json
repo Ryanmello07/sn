@@ -123,7 +123,9 @@
     "0e5-durablehead-positive-independent-readback-20261003.json": "4374b888a70ba1316cb8051a95542caccf80412d1748e67309630d0e876f6a81",
     "0e5-validator-foreground-failure-source-review-20261003.json": "f8e974b65e620bbeb08d07c4dc2f83cf755ab74cccd2e1c7fb9afe2fb3005056",
     "0e5-three-vet-independent-readback-20261004.json": "51a00702d6aefffc82859437fac22d68b24f6fd08f57747e9fe957175bdc4f93",
-    "native-continuous-producer-source-review-20261004.json": "b8c8b902b3fe60be3e279989ab58b70f21ce740e5a8bbabadc18e87b004c5a72"
+    "native-continuous-producer-source-review-20261004.json": "b8c8b902b3fe60be3e279989ab58b70f21ce740e5a8bbabadc18e87b004c5a72",
+    "0e5-four-normal-operative-controls-independent-review-20261004.json": "a9a266e9aa3e381af064afbfec32472f27c777ae4f9f6f2760088980a2f52ad9",
+    "0e5-mainnet-race-independent-readback-20261004.json": "a90af504723444fe7451790341f2d7ffcab726c91efd6abb77070204773671c7"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -172,7 +174,7 @@
       "closed": false,
       "evidence": "0e5-mainnet-normal-independent-readback-20261003.json",
       "requirement": "PH-07",
-      "status": "Frozen0e5 mainnet37 normal roots and durablehead6 roots normally/race pass. Mainnet race, validator, vet and operative controls remain; original failing outcomes are retained."
+      "status": "Frozen0e5 mainnet37 and durablehead6 roots pass normally and under race detection; all three package vets pass. First four normal operative controls reproduce intended old-body assertions. Validator successor and remaining controls remain; original failures retained."
     },
     {
       "closed": false,
