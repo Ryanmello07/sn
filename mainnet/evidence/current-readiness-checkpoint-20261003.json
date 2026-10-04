@@ -184,7 +184,9 @@
     "conservation-claim-window7dc-source-root-review-20261004.json": "c4976da650c0fc4c0d8007ce977f6ad0379c54d5d9e826b94b91478acbd7a187",
     "server1709-bounded-causes-controls-root-review-20261004.json": "9ef62bcf44c569049f87e1ace08a93f80db1eb4c99028f1e441898c1004cf6ef",
     "principal-dc1-protocol-resource-clarification-root-review-20261004.json": "dc3e67cb2baefcee908aa64c9a6e373599afc3dcdec4859f5d2803a935606234",
-    "server1709-receipt-retry-typed-nil-source-finding-20261004.json": "053175499ed7634ded60f3aad8029161778ba9ca3553c2e8c124cc465c8947a0"
+    "server1709-receipt-retry-typed-nil-source-finding-20261004.json": "053175499ed7634ded60f3aad8029161778ba9ca3553c2e8c124cc465c8947a0",
+    "runtime-observation6fa-short-partition-root-review-20261004.json": "7eb71d1db11448cdee7e8f7a38644a668f1708d2fea0d2b9d67bcc51a9394ceb",
+    "economic-principal-effects986-source-root-review-20261004.json": "4ac668d1e50adbb523bcdc018ce5a7b5e071599e06ba544521b3ee00b1b1344e"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -297,15 +299,15 @@
     },
     {
       "closed": false,
-      "evidence": "runtime-observation6fa-validator-normal-root-review-20261004.json",
+      "evidence": "runtime-observation6fa-short-partition-root-review-20261004.json",
       "requirement": "PH-18",
-      "status": "Original f3 normal/race each32PASS1FAIL remain. Exact6fa sixpackages compile and validator normal10/10 passes, including actual WebSocket whole-read recovery with original authority/budget. Remaining40 roots, validator race, six vets and12causal controls remain; final all-role composition unproved."
+      "status": "Original f3 normal/race failures retained. Exact6fa compiles six packages; 45 selected non-mainnet roots pass per mode and six vets pass. Five mainnet roots per mode, twelve causal control groups and final all-role continuation remain."
     },
     {
       "closed": false,
       "evidence": "fee-revision3e7-source-root-review-20261004.json",
       "requirement": "PH-19",
-      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal48PASS1FAIL; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with conditional Rust resource admission; behavioral qualification remains. Execution effects, full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain."
+      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal48PASS1FAIL; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with conditional Rust resource admission; behavioral qualification remains. Principal-effects986 source-reviewed (48 Go roots/mode,27 Rust roots,eight causal groups); behavioral qualification and actual native-to-vault capture join remain. Full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain."
     },
     {
       "closed": false,
