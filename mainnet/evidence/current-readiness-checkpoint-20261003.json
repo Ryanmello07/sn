@@ -138,7 +138,8 @@
     "qualified-base-main-integration-20261004.json": "da2ae37c4a27a17b4b5849a26f980c292a0dbd67c8fcae7e8ad42e051d52be2e",
     "connect-upstream-main-integration-20261004.json": "6820d22b15c63bae7500b635f48225ea34762993765771b5105891adda96d5e0",
     "native-qualification-lease-continuity-20261004.json": "be2c304b1896f036d9c7177d3c125509ff3bac618643ee101e3d7b0dc4663f39",
-    "native-engine-lifetime-failure-20261004.json": "57cadcf24efa526df4c013fb05116804d192fc78f911570d09b4e3a4d8e183b8"
+    "native-engine-lifetime-failure-20261004.json": "57cadcf24efa526df4c013fb05116804d192fc78f911570d09b4e3a4d8e183b8",
+    "native-finite66-terminal-independent-review-20261004.json": "b03c8ca70037badd8dbf90cfa02af610b1b5de831dc3643004ecd4cdd8ddc58b"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
