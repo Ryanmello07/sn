@@ -268,6 +268,9 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 		if !contract.active {
 			continue
 		}
+		if _, reconciled := expectedPriorKVs[id]; reconciled {
+			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("previously reconciled contract was reassigned to another window"))
+		}
 		if _, ok := ownerKVs[contract.source]; !ok {
 			return nil, ErrClosedWorkIntegrity
 		}
