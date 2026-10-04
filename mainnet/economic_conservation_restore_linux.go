@@ -34,13 +34,16 @@ type economicConservationRestoreRequest struct {
 // immutable receipts, carry and native source provenance. Its temporary index
 // cannot be used by a live worker: all target owners must later reopen normally.
 func validateEconomicConservationRestoreHistory(ctx context.Context, policy economicConservationPolicy, original monitorHistoryReference, read func(monitorHistoryReference) ([]byte, error), hooks monitorServiceHooks) error {
-	if err := errors.Join(ctx.Err(), policy.validate(), original.validate()); err != nil {
+	if err := errors.Join(ctx.Err(), policy.validate(), policy.validateReference(original)); err != nil {
 		return err
 	}
 	if read == nil {
 		return errors.New("economic restore requires an original source reader")
 	}
 	readExact := func(reference monitorHistoryReference) ([]byte, error) {
+		if err := policy.validateReference(reference); err != nil {
+			return nil, err
+		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -60,7 +63,7 @@ func validateEconomicConservationRestoreHistory(ctx context.Context, policy econ
 	if err != nil {
 		return err
 	}
-	state, err := decodeEconomicConservation(raw, policy)
+	state, err := decodeEconomicConservation(ctx, raw, policy)
 	if err != nil {
 		return err
 	}
@@ -105,7 +108,7 @@ func reviewEconomicConservationRestore(ctx context.Context, request economicCons
 	if request.Schema != economicConservationRestoreSchema || len(request.Preparations) == 0 || len(request.Preparations) > 256 || uint64(len(request.Preparations)) > request.Limits.MaxRoots {
 		return empty, nil, errors.New("economic restore requires the complete bounded original root census")
 	}
-	if err := errors.Join(request.Policy.validate(), request.Original.validate()); err != nil {
+	if err := errors.Join(request.Policy.validate(), request.Policy.validateReference(request.Original)); err != nil {
 		return empty, nil, err
 	}
 	declaration, declared, err := monitorHistoryRestoreDeclaration(ctx)
@@ -125,11 +128,11 @@ func reviewEconomicConservationRestore(ctx context.Context, request economicCons
 	}
 	var originalRaw []byte
 	if err := validateEconomicConservationRestoreHistory(ctx, request.Policy, request.Original, func(reference monitorHistoryReference) ([]byte, error) {
-		root, err := monitorHistoryRestoreRoot(roots, reference)
+		root, err := monitorHistoryRestoreRootLimit(roots, reference, request.Policy.storageMaximum())
 		if err != nil {
 			return nil, err
 		}
-		raw, err := root.read(ctx, reference)
+		raw, err := root.readProfile(ctx, reference, request.Policy.storageKind(), int(request.Policy.storageMaximum()))
 		if err == nil && reference == request.Original {
 			originalRaw = raw
 		}
@@ -138,7 +141,7 @@ func reviewEconomicConservationRestore(ctx context.Context, request economicCons
 		return empty, nil, err
 	}
 	if execution := request.Policy.Native.Observation.Execution; execution != nil && execution.Producer != nil {
-		state, err := decodeEconomicConservation(originalRaw, request.Policy)
+		state, err := decodeEconomicConservation(ctx, originalRaw, request.Policy)
 		if err != nil {
 			return empty, nil, err
 		}
@@ -146,7 +149,7 @@ func reviewEconomicConservationRestore(ctx context.Context, request economicCons
 		if err != nil {
 			return empty, nil, err
 		}
-		if err := reviewEconomicNativeProducerRestore(ctx, nativePolicy.Observation, request.Original, state.Native, roots, declared); err != nil {
+		if err := reviewEconomicNativeProducerRestore(ctx, nativePolicy.Observation, request.Original, request.Policy.StorageProfile, state.Native, roots, declared); err != nil {
 			return empty, nil, err
 		}
 	}

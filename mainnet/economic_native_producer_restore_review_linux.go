@@ -19,7 +19,7 @@ import (
 // Config approvals outside restored durable roots remain exact independently
 // signed inputs. Files inside a copied artifact namespace are read from that
 // copy; a missing declared root is never replaced by reading a live namespace.
-func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmissionPolicy, checkpoint monitorHistoryReference, state monitorEconomicNativeState, roots []*monitorHistoryRestoreRootReview, declared map[string]durablevolume.StateRootSpec) (resultErr error) {
+func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmissionPolicy, checkpoint monitorHistoryReference, storage *economicConservationStorageProfile, state monitorEconomicNativeState, roots []*monitorHistoryRestoreRootReview, declared map[string]durablevolume.StateRootSpec) (resultErr error) {
 	if ctx == nil || policy.Execution == nil || policy.Execution.Producer == nil {
 		return errors.New("native restore lacks original producer policy")
 	}
@@ -36,7 +36,7 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 	if selected == nil {
 		return errors.New("economic restore omits original native artifact root")
 	}
-	scope := storageNativeProducerScope{Schema: storageNativeProducerSchema, Checkpoint: checkpoint, Policy: policy, Cursor: state.Cursor, State: state.ExecutionProducer}
+	scope := storageNativeProducerScope{Schema: storageNativeProducerSchema, Checkpoint: checkpoint, CheckpointStorage: storage, Policy: policy, Cursor: state.Cursor, State: state.ExecutionProducer}
 	for _, reference := range append([]planFileReference{policy.Execution.Producer.Authority}, policy.Execution.Producer.Renewals...) {
 		var approvalRoot *monitorHistoryRestoreRootReview
 		var member durablevolume.PreparationFile

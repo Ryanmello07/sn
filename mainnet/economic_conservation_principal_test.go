@@ -25,20 +25,37 @@ import (
 // original runtime, API, state roots, native trace and proof nodes stay exact.
 func newEconomicConservationPrincipalFixture(t *testing.T, name string, parentMapping bool, change func(*historicalReplayJob)) (*economicConservationArchiveFixture, *nativeProducerPublicFixture) {
 	t.Helper()
+	return newEconomicConservationPrincipalFixtureWithVault(t, name, parentMapping, change)
+}
+
+func newEconomicConservationPrincipalFixtureWithVault(t *testing.T, name string, parentMapping bool, change func(*historicalReplayJob), configureVault ...func(*monitorEvmFixture)) (*economicConservationArchiveFixture, *nativeProducerPublicFixture) {
+	t.Helper()
 	directory := os.Getenv("URNETWORK_NATIVE_PRINCIPAL_FIXTURE_DIR")
 	if strings.HasPrefix(name, "effects-") {
 		directory = os.Getenv("URNETWORK_NATIVE_PRINCIPAL_EFFECTS_FIXTURE_DIR")
 	}
+	if strings.HasPrefix(name, "capture") {
+		directory = os.Getenv("URNETWORK_NATIVE_VAULT_CAPTURE_FIXTURE_DIR")
+	}
+	filename := "principal-" + name + ".json"
+	yuma := strings.HasPrefix(name, "yuma-")
+	if yuma {
+		directory = os.Getenv("URNETWORK_NATIVE_YUMA_FIXTURE_DIR")
+		filename = name + ".json"
+		if strings.HasPrefix(name, "yuma-capacity-") {
+			directory = os.Getenv("URNETWORK_NATIVE_YUMA_CAPACITY_FIXTURE_DIR")
+		}
+	}
 	if directory == "" || os.Getenv("URNETWORK_NATIVE_CAPTURE_ENGINE") == "" || os.Getenv("URNETWORK_NATIVE_EXECUTION_ENGINE") == "" {
 		t.Fatal("principal scope requires explicit real Rust exports and two distinct owned engines")
 	}
-	f := newEconomicConservationFixture(t, false)
-	raw, _, err := readPlanFile(t.Context(), filepath.Join(directory, "principal-"+name+".json"), historicalNativeJobLimit)
+	f := newEconomicConservationFixture(t, false, configureVault...)
+	raw, _, err := readPlanFile(t.Context(), filepath.Join(directory, filename), historicalNativeJobLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var job historicalReplayJob
-	if err := decodePlanJson(raw, &job); err != nil || len(job.PrincipalQueries) != 1 {
+	if err := decodePlanJson(raw, &job); err != nil || !yuma && len(job.PrincipalQueries) != 1 {
 		t.Fatal("principal original job is absent", err)
 	}
 	if change != nil {
@@ -55,6 +72,25 @@ func newEconomicConservationPrincipalFixture(t *testing.T, name string, parentMa
 		}
 		if index == 1 {
 			header.ParentHash = types.Hash(job.ParentHash)
+			if strings.HasPrefix(name, "capture") {
+				body := [][]byte{}
+				for _, encoded := range job.ExtrinsicsHex {
+					raw, err := historicalReplayHex(encoded, 8*1024*1024)
+					if err != nil {
+						t.Fatal(err)
+					}
+					body = append(body, raw)
+				}
+				root, err := rootExtrinsicsRoot(body, job.ExecutionStateVersion)
+				if err != nil {
+					t.Fatal(err)
+				}
+				hash, err := types.NewHashFromHexString(root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				header.ExtrinsicsRoot = hash
+			}
 		}
 		if index == 1 || parentMapping {
 			mapping, err := hex.DecodeString(strings.TrimPrefix(mappingTestDigest(t, 3, f.vault.blocks[uint64(index+10)].header.Hash().Hex(), nil), "0x"))
@@ -88,13 +124,24 @@ func newEconomicConservationPrincipalFixture(t *testing.T, name string, parentMa
 	t.Setenv("URNETWORK_NATIVE_EXECUTION_FIXTURE", path)
 	producer := newNativeProducerPublicFixture(t)
 	f.native, f.policy.Native.Observation, f.policy.Native.BatchBlocks = producer.source, producer.source.policy, 1
-	// Matching exported original parent proofs are actually drained; accrual
-	// occurs in the original next-block program, before its observed epoch.
+	// Matching original proof parents are drained before per-block accrual.
 	f.native.set(t, 100, "PendingServerEmission", make([]byte, 8))
+	if yuma {
+		f.policy.MaximumFacts = 4096
+		if strings.HasPrefix(name, "yuma-capacity-") {
+			f.policy.StorageProfile = economicConservationTestStorageProfile()
+			f.policy.MaximumFacts = economicConservationMaximumFacts
+			f.policy.ReadBudgetSeconds, f.policy.Native.ReadBudgetSeconds = 900, 900
+		}
+	}
 	f.writePolicy(t)
 	// A synthetic volume declaration does not provision a snapshot owner. The
 	// combined checkpoint explicitly starts with an owned absent-head marker.
-	provisionEconomicConservationPrincipalFixture(t, f.checkpoint)
+	if f.policy.StorageProfile == nil {
+		provisionEconomicConservationPrincipalFixture(t, f.checkpoint)
+	} else {
+		provisionMonitorTestCustodyProfile(t, f.checkpoint, f.policy.storageKind(), int(f.policy.storageMaximum()))
+	}
 	storage := durablefixture.New(t, t.Context(), producer.source.policy.Execution.Directory, filepath.Dir(f.checkpoint))
 	storage.Host.SetReserve(4*1024*1024*1024, 1024*1024)
 	producer.ctx = storage.Context

@@ -52,7 +52,7 @@ func (self economicConservationNativeRenewal) signingBytes() ([]byte, error) {
 	if self.Schema != economicConservationNativeRenewalSchema || !planSha256(self.PolicyHash) || !planSha256(self.Previous) || !planSha256(self.ReviewSha256) || self.Ordinal == 0 || len(self.To) <= len(self.From) || !economicConservationNativeReferencesInclude(self.From, self.To) {
 		return nil, errors.New("economic native adoption requires exact append-only bounded approval lineage")
 	}
-	if err := self.Original.validate(); err != nil {
+	if err := self.Original.validateLimit(economicConservationStorageMaximum); err != nil {
 		return nil, err
 	}
 	self.Signature = ""
@@ -74,6 +74,9 @@ func economicConservationNativeBasis(policy economicConservationPolicy) economic
 
 func (self economicConservationNativeRenewal) verify(policy economicConservationPolicy) error {
 	policy = economicConservationNativeBasis(policy)
+	if err := policy.validateReference(self.Original); err != nil {
+		return err
+	}
 	execution := policy.Native.Observation.Execution
 	if execution == nil || execution.Producer == nil {
 		return errors.New("legacy conservation policy cannot enroll a native producer approver")
@@ -132,6 +135,7 @@ func (self *economicConservationState) nativeOperatingPolicy(policy economicCons
 		return policy.Native, err
 	}
 	result := economicConservationNativeBasis(policy).Native
+	result.archiveReferenceBytes = policy.storageMaximum()
 	if result.Observation.Execution == nil || result.Observation.Execution.Producer == nil {
 		return result, nil
 	}
@@ -196,5 +200,5 @@ func applyEconomicConservationNativeRenewal(ctx context.Context, policy economic
 		return err
 	}
 	next.ContentHash = next.hash()
-	return errors.Join(ctx.Err(), next.validate(policy))
+	return errors.Join(ctx.Err(), next.validate(ctx, policy))
 }

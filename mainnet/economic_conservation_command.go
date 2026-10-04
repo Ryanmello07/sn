@@ -22,6 +22,7 @@ const economicConservationRole = "economic-conservation"
 
 type economicConservationSummary struct {
 	OriginalEntitlements           *economicConservationEntitlementSummary     `json:"original_entitlement_census,omitempty"`
+	Yuma                           *economicConservationYumaSummary            `json:"complete_native_allocation,omitempty"`
 	PrincipalEffects               *economicConservationPrincipalEffectSummary `json:"original_principal_execution,omitempty"`
 	OpeningPrincipals              *economicConservationPrincipalSummary       `json:"original_opening_principal,omitempty"`
 	NativeFeeIssue                 string                                      `json:"native_fee_issue,omitempty"`
@@ -51,6 +52,7 @@ type economicConservationSummary struct {
 	VaultState                     *monitorEconomicEvmSnapshot                 `json:"observed_vault_state"`
 	EarningOccurrences             int                                         `json:"earning_occurrences"`
 	Captures                       int                                         `json:"captures"`
+	CausallyJoinedCaptures         uint64                                      `json:"original_native_receipt_captures"`
 	MatchedCaptures                int                                         `json:"mapped_captures"`
 	AcceptedClaims                 int                                         `json:"accepted_claims"`
 	AggregatePayments              int                                         `json:"aggregate_payments"`
@@ -92,6 +94,13 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 	}
 	result.NativeFeeIssue, result.NativeFeeHeldRequest, result.NativeFeePending = self.NativeFeeIssue, self.NativeFeeHeldRequest, self.NativeFeePending
 	result.NativeFeeHeldPolicy = self.NativeFeeHeldPolicy
+	result.Yuma, err = self.yumaSummary(ctx, policy)
+	if err != nil {
+		return result, err
+	}
+	if result.Yuma != nil && result.Yuma.Current {
+		result.FullQuantizationToleranceAlpha = result.Yuma.FullQuantizationTolerance
+	}
 	result.PrincipalEffects, err = self.principalEffectsSummary(policy)
 	if err != nil {
 		return result, err
@@ -115,6 +124,9 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 		result.ClaimStatuses = append(result.ClaimStatuses, state.Status)
 	}
 	for _, capture := range self.Captures {
+		if capture.causalComplete() {
+			result.CausallyJoinedCaptures++
+		}
 		if capture.Native != nil {
 			result.MatchedCaptures++
 		}
@@ -129,6 +141,7 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 		if self.Archive != nil {
 			direct, tail, unrouted, collateral = self.Archive.Amounts.Direct, self.Archive.Amounts.Tail, self.Archive.Amounts.Unrouted, self.Archive.Amounts.Collateral
 			result.EarningOccurrences += int(self.Archive.Counts.Lots)
+			result.CausallyJoinedCaptures += self.Archive.Counts.CausalCaptures
 			result.Captures += int(self.Archive.Counts.Captures)
 			result.MatchedCaptures += int(self.Archive.Counts.Captures)
 			result.AcceptedClaims += int(self.Archive.Counts.Claims)
@@ -164,16 +177,26 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 	}
 	// Warning is explicit before the bounded active owner fills. No warning
 	// grants a larger capacity or discards old/unmatched obligations.
-	result.CapacityWarning = self.facts()*2 >= policy.MaximumFacts || len(raw)*2 >= maxRpcReplyBytes || self.Native.CapacityRemaining*2 <= policy.Native.HistoryEntries || self.Vault.CapacityRemaining*2 <= policy.Vault.HistoryEntries || 2*(result.ArchiveSegments+1) >= resources.ArchiveSegments || 4*result.ArchiveIndexEntries >= resources.IndexEntries || 4*result.ArchiveIndexBytes >= resources.IndexBytes
+	result.CapacityWarning = self.facts()*2 >= policy.MaximumFacts || uint64(len(raw))*2 >= resources.headBytes() || self.Native.CapacityRemaining*2 <= policy.Native.HistoryEntries || self.Vault.CapacityRemaining*2 <= policy.Vault.HistoryEntries || 2*(result.ArchiveSegments+1) >= resources.ArchiveSegments || 4*result.ArchiveIndexEntries >= resources.IndexEntries || 4*result.ArchiveIndexBytes >= resources.IndexBytes
 	return result, nil
 }
 
-func cloneEconomicConservation(value *economicConservationState) (*economicConservationState, error) {
+func cloneEconomicConservation(value *economicConservationState, policies ...economicConservationPolicy) (*economicConservationState, error) {
+	maximum := uint64(maxRpcReplyBytes)
+	if len(policies) > 1 {
+		return nil, errors.New("economic clone requires one original policy")
+	}
+	if len(policies) == 1 {
+		if err := policies[0].StorageProfile.validate(); err != nil {
+			return nil, err
+		}
+		maximum = policies[0].storageMaximum()
+	}
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
 	}
-	if len(raw)+1 > maxRpcReplyBytes {
+	if uint64(len(raw)+1) > maximum {
 		return nil, errMonitorEconomicCapacity
 	}
 	var result economicConservationState
@@ -184,11 +207,11 @@ func cloneEconomicConservation(value *economicConservationState) (*economicConse
 	return &result, nil
 }
 
-func loadEconomicConservation(owner *monitorCheckpointStore, policy economicConservationPolicy) (*economicConservationState, error) {
+func loadEconomicConservation(ctx context.Context, owner *monitorCheckpointStore, policy economicConservationPolicy) (*economicConservationState, error) {
 	if err := owner.requireOwner(); err != nil {
 		return nil, err
 	}
-	raw, err := owner.directory.read(filepath.Base(owner.path), maxRpcReplyBytes, true)
+	raw, err := owner.directory.read(filepath.Base(owner.path), int(policy.storageMaximum()), true)
 	if monitorCheckpointAbsent(err) {
 		return newEconomicConservationState(policy), nil
 	}
@@ -199,7 +222,7 @@ func loadEconomicConservation(owner *monitorCheckpointStore, policy economicCons
 	if err := decodePlanJson(raw, &result); err != nil {
 		return nil, err
 	}
-	if err := result.validate(policy); err != nil {
+	if err := result.validate(ctx, policy); err != nil {
 		return nil, err
 	}
 	if result.Renewal != nil && result.Renewal.Original.Path != owner.path {
@@ -214,7 +237,7 @@ func loadEconomicConservation(owner *monitorCheckpointStore, policy economicCons
 	return &result, nil
 }
 
-func saveEconomicConservation(owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
+func saveEconomicConservation(ctx context.Context, owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
 	if err := state.requireEntitlementHistory(); err != nil {
 		return err
 	}
@@ -224,11 +247,16 @@ func saveEconomicConservation(owner *monitorCheckpointStore, policy economicCons
 	if (len(state.ClaimWindows) != 0 || state.Archive != nil && len(state.Archive.ClaimHeads) != 0) && state.archiveView == nil {
 		return errors.New("economic Claim publication requires admitted original history")
 	}
+	resources, err := state.resources(policy)
+	if err != nil {
+		return err
+	}
+	maximum := resources.headBytes()
 	if err := state.archiveView.check(); err != nil {
 		return err
 	}
 	state.ContentHash = state.hash()
-	if err := state.validate(policy); err != nil {
+	if err := state.validate(ctx, policy); err != nil {
 		return err
 	}
 	if err := owner.requireOwner(); err != nil {
@@ -238,7 +266,7 @@ func saveEconomicConservation(owner *monitorCheckpointStore, policy economicCons
 	if err != nil {
 		return err
 	}
-	if len(raw)+1 > maxRpcReplyBytes {
+	if uint64(len(raw)+1) > maximum {
 		return errMonitorEconomicCapacity
 	}
 	return errors.Join(owner.directory.publish(filepath.Base(owner.path), append(raw, '\n'), 0600, owner.syncDirectory), owner.requireOwner())
@@ -337,30 +365,33 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 		}
 		return nil, false, false, errors.Join(ctx.Err(), nativeErr, vaultErr, claimErr)
 	}
-	next, err := cloneEconomicConservation(prior)
+	next, err := cloneEconomicConservation(prior, policy)
 	if err != nil {
 		return nil, false, false, err
 	}
 	next.SampleAt = now.UTC()
 	nativeCurrent, vaultCurrent := !prior.NativeHeld && nativeErr == nil, !prior.VaultHeld && vaultErr == nil
 	if nativeCurrent && nativeValue != nil {
-		candidate, copyErr := cloneEconomicConservation(next)
+		if hooks.beforeEconomicNativeAppend != nil {
+			hooks.beforeEconomicNativeAppend(readCtx, cancel)
+		}
+		candidate, copyErr := cloneEconomicConservation(next, policy)
 		if copyErr != nil {
 			return nil, false, false, copyErr
 		}
-		nativeErr = candidate.appendNative(policy, nativeValue, now)
+		nativeErr = candidate.appendNative(readCtx, policy, nativeValue, now)
 		if nativeErr == nil {
 			next = candidate
 		} else {
 			nativeCurrent = false
-			hardNative = !errors.Is(nativeErr, errMonitorEconomicCapacity)
+			hardNative = economicConservationAppendHeld(nativeErr)
 		}
 	}
 	if !prior.NativeHeld {
 		next.NativeIssue, next.NativeHeld = economicConservationIssue(nativeErr), hardNative
 	}
 	if vaultCurrent && vaultValue != nil {
-		candidate, copyErr := cloneEconomicConservation(next)
+		candidate, copyErr := cloneEconomicConservation(next, policy)
 		if copyErr != nil {
 			return nil, false, false, copyErr
 		}
@@ -369,7 +400,7 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 			next = candidate
 		} else {
 			vaultCurrent = false
-			hardVault = !errors.Is(vaultErr, errMonitorEconomicCapacity)
+			hardVault = economicConservationAppendHeld(vaultErr)
 		}
 	}
 	if !prior.VaultHeld {
@@ -378,7 +409,19 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 	for index, claim := range policy.Claims {
 		next.ClaimStates[index].observe(claim, claimValues[index], claimCodes[index], now.UTC())
 	}
-	candidate, err := cloneEconomicConservation(next)
+	// Arithmetic and evidence validation can outlive the read join. Recheck the
+	// actual owner before publishing any candidate made during that work.
+	if ctx.Err() != nil {
+		if !hardNative && !hardVault && !hardClaim {
+			return nil, false, false, ctx.Err()
+		}
+		var claimErr error
+		if hardClaim {
+			claimErr = errors.New("economic Claim source contradicted original authority")
+		}
+		return nil, false, false, errors.Join(ctx.Err(), nativeErr, vaultErr, claimErr)
+	}
+	candidate, err := cloneEconomicConservation(next, policy)
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -387,6 +430,8 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 		fundingErr = candidate.reconcileEntitlementFunding(ctx)
 	}
 	if err := errors.Join(candidate.reconcile(policy), candidate.reconcileEntitlementLeaves(ctx), fundingErr); err != nil {
+		next.JoinIssue = economicConservationIssue(err)
+	} else if err := candidate.reconcileCaptureEffects(ctx, policy, false); err != nil {
 		next.JoinIssue = economicConservationIssue(err)
 	} else {
 		candidate.JoinIssue = ""
@@ -399,6 +444,13 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 // fee authority has been established. --follow retains this same owner and
 // input policy, with bounded reads and no signing or transaction submission.
 func runEconomicConservationCommand(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (code int) {
+	refuse := func(err error) int {
+		if ctx.Err() != nil && monitorOnlyCancellationCauses(err, 0) {
+			return 0
+		}
+		fmt.Fprintln(stderr, err)
+		return 3
+	}
 	flags := flag.NewFlagSet("observe-economic-conservation", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	policyPath := flags.String("policy", "", "exact independent native/vault/Claim policy file")
@@ -458,7 +510,7 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		}
 	}
 	network := policy.Native.Observation.Network
-	owner, err := openMonitorCheckpoint(*checkpoint, identityExpectation{NativeChain: network.NativeChain, GenesisHash: network.GenesisHash, EvmChainId: network.EvmChainId}, ctx)
+	owner, err := policy.openCheckpoint(ctx, *checkpoint, identityExpectation{NativeChain: network.NativeChain, GenesisHash: network.GenesisHash, EvmChainId: network.EvmChainId})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 3
@@ -472,15 +524,13 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	if hooks.afterCheckpointOpen != nil {
 		hooks.afterCheckpointOpen(ctx, economicConservationRole, owner.lock)
 	}
-	state, err := loadEconomicConservation(owner, policy)
+	state, err := loadEconomicConservation(ctx, owner, policy)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 3
+		return refuse(err)
 	}
 	archive, err := openEconomicConservationArchive(ctx, policy, state, hooks)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 3
+		return refuse(err)
 	}
 	defer func() {
 		if err := archive.close(); err != nil {
@@ -552,15 +602,13 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 				return 3
 			}
 		}
-		if err := saveEconomicConservation(owner, policy, next); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 3
+		if err := saveEconomicConservation(ctx, owner, policy, next); err != nil {
+			return refuse(err)
 		}
 		state = next
 		summary, err := state.summary(ctx, policy, nativeCurrent, vaultCurrent)
 		if err != nil {
-			fmt.Fprintln(stderr, err)
-			return 3
+			return refuse(err)
 		}
 		encoded, err := json.Marshal(summary)
 		if err != nil {

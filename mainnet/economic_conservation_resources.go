@@ -13,6 +13,7 @@ const economicConservationResourcesSchema = "urnetwork-economic-conservation-res
 const economicConservationRenewalSchema = "urnetwork-economic-conservation-renewal-v1"
 
 type economicConservationResources struct {
+	HeadBytes         uint64 `json:"head_bytes,omitempty"`
 	ActiveFacts       uint64 `json:"active_facts"`
 	ReadBudgetSeconds uint64 `json:"read_budget_seconds"`
 	ArchiveSegments   uint64 `json:"archive_segments"`
@@ -21,14 +22,18 @@ type economicConservationResources struct {
 }
 
 func (self economicConservationResources) validate() error {
-	if self.ActiveFacts < 16 || self.ActiveFacts > 65536 || self.ReadBudgetSeconds < 60 || self.ReadBudgetSeconds > 900 || self.ArchiveSegments < 128 || self.ArchiveSegments > 512 || self.IndexEntries < 8192 || self.IndexEntries > 1024*1024 || self.IndexBytes < 1024*1024 || self.IndexBytes > 256*1024*1024 {
+	maximumFacts := uint64(65536)
+	if self.HeadBytes > maxRpcReplyBytes {
+		maximumFacts = economicConservationMaximumFacts
+	}
+	if self.HeadBytes != 0 && (self.HeadBytes < maxRpcReplyBytes || self.HeadBytes > economicConservationStorageMaximum) || self.ActiveFacts < 16 || self.ActiveFacts > maximumFacts || self.ReadBudgetSeconds < 60 || self.ReadBudgetSeconds > 900 || self.ArchiveSegments < 128 || self.ArchiveSegments > 512 || self.IndexEntries < 8192 || self.IndexEntries > 1024*1024 || self.IndexBytes < 1024*1024 || self.IndexBytes > 256*1024*1024 {
 		return errors.New("economic conservation resources exceed their separate finite profiles")
 	}
 	return nil
 }
 
 func (self economicConservationResources) includes(prior economicConservationResources) bool {
-	return self.ActiveFacts >= prior.ActiveFacts && self.ReadBudgetSeconds >= prior.ReadBudgetSeconds && self.ArchiveSegments >= prior.ArchiveSegments && self.IndexEntries >= prior.IndexEntries && self.IndexBytes >= prior.IndexBytes
+	return self.headBytes() >= prior.headBytes() && self.ActiveFacts >= prior.ActiveFacts && self.ReadBudgetSeconds >= prior.ReadBudgetSeconds && self.ArchiveSegments >= prior.ArchiveSegments && self.IndexEntries >= prior.IndexEntries && self.IndexBytes >= prior.IndexBytes
 }
 
 type economicConservationContinuationPolicy struct {
@@ -45,7 +50,11 @@ func (self economicConservationPolicy) initialResources() economicConservationRe
 	if self.Continuation != nil {
 		return self.Continuation.Initial
 	}
-	return economicConservationResources{ActiveFacts: self.MaximumFacts, ReadBudgetSeconds: monitorEconomicReadSeconds(self.ReadBudgetSeconds), ArchiveSegments: 128, IndexEntries: 65536, IndexBytes: 64 * 1024 * 1024}
+	headBytes := uint64(0)
+	if self.StorageProfile != nil {
+		headBytes = self.storageMaximum()
+	}
+	return economicConservationResources{HeadBytes: headBytes, ActiveFacts: self.MaximumFacts, ReadBudgetSeconds: monitorEconomicReadSeconds(self.ReadBudgetSeconds), ArchiveSegments: 128, IndexEntries: 65536, IndexBytes: 64 * 1024 * 1024}
 }
 
 func (self economicConservationPolicy) identityHash() string {
@@ -64,7 +73,7 @@ func (self *economicConservationContinuationPolicy) validate(policy economicCons
 	if self.Schema != economicConservationResourcesSchema || !rootCanonicalHash(self.ApprovalPublicKey) || !planSha256(self.ReviewSha256) || self.Initial.ActiveFacts != policy.MaximumFacts || self.Initial.ReadBudgetSeconds != monitorEconomicReadSeconds(policy.ReadBudgetSeconds) {
 		return errors.New("economic conservation continuation must pin its approver and initial resource basis at original admission")
 	}
-	return self.Initial.validate()
+	return self.Initial.validatePolicy(policy)
 }
 
 // Each revision binds the exact old checkpoint and previous signed revision.
@@ -86,7 +95,7 @@ func (self economicConservationRenewal) signingBytes() ([]byte, error) {
 	if self.Schema != economicConservationRenewalSchema || !planSha256(self.PolicyHash) || self.Ordinal == 0 || !planSha256(self.Previous) || !planSha256(self.ReviewSha256) || self.From == self.To || !self.To.includes(self.From) {
 		return nil, errors.New("economic conservation renewal lacks monotonic resources or original review lineage")
 	}
-	if err := errors.Join(self.Original.validate(), self.From.validate(), self.To.validate()); err != nil {
+	if err := errors.Join(self.Original.validateLimit(self.From.headBytes()), self.From.validate(), self.To.validate()); err != nil {
 		return nil, err
 	}
 	self.Signature = ""
@@ -100,6 +109,9 @@ func (self economicConservationRenewal) signingBytes() ([]byte, error) {
 func (self economicConservationRenewal) verify(policy economicConservationPolicy) error {
 	if policy.Continuation == nil {
 		return errors.New("legacy economic policy cannot enroll a continuation approver")
+	}
+	if err := errors.Join(self.From.validatePolicy(policy), self.To.validatePolicy(policy), policy.validateReference(self.Original)); err != nil {
+		return err
 	}
 	message, err := self.signingBytes()
 	key, keyErr := rootReceiptHex(policy.Continuation.ApprovalPublicKey, ed25519.PublicKeySize)
@@ -130,7 +142,7 @@ func (self *economicConservationState) resources(policy economicConservationPoli
 		}
 		resources = self.Renewal.To
 	}
-	return resources, resources.validate()
+	return resources, resources.validatePolicy(policy)
 }
 
 func (self *economicConservationState) operatingPolicy(policy economicConservationPolicy) (economicConservationPolicy, error) {
@@ -158,5 +170,6 @@ func (self *economicConservationState) operatingPolicy(policy economicConservati
 			policy.Claims[index].work = func(stage string, units uint64) { self.archiveView.claimWork(head.Role, stage, units) }
 		}
 	}
-	return policy, nil
+	policy.operatingHeadBytes = resources.headBytes()
+	return policy.withStorageProfile(), nil
 }

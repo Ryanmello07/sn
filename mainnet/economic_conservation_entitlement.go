@@ -356,7 +356,7 @@ func (self *economicConservationState) validateEntitlementShapes(policy economic
 			if policy.EntitlementSources == nil || record.Finalization == nil || !planSha256(reference.ContentHash) || reference.FundingHash != economicEntitlementFundingHash(record) || reference.Providers == 0 || reference.Providers > maximumEconomicEntitlementProviders || reference.Leaves == 0 || reference.Leaves > reference.Providers {
 				return errors.New("economic compact entitlement lost original census identity")
 			}
-			if err := reference.Original.validate(); err != nil {
+			if err := policy.validateReference(reference.Original); err != nil {
 				return err
 			}
 			amount, err := economicConservationSum(reference.LeafObligationsAlpha, reference.FloorResidueAlpha)

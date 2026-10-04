@@ -287,7 +287,7 @@ func (self *economicConservationFixture) state(t *testing.T) economicConservatio
 	if err := decodePlanJson(raw, &value); err != nil {
 		t.Fatal(err)
 	}
-	if err := value.validate(self.policy); err != nil {
+	if err := value.validate(t.Context(), self.policy); err != nil {
 		t.Fatal("retained actual checkpoint", err)
 	}
 	return value

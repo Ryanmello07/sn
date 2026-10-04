@@ -32,13 +32,14 @@ const storageNativeProducerSchema = "urnetwork-native-execution-artifact-restore
 // They are verified with the original policy key by the runtime's same loader.
 // Checkpoint is an independent original-byte pin, not a newly inferred cursor.
 type storageNativeProducerScope struct {
-	Schema            string                        `json:"schema"`
-	Checkpoint        monitorHistoryReference       `json:"original_checkpoint"`
-	Policy            economicEmissionPolicy        `json:"original_observation_policy"`
-	Cursor            economicEmissionBoundary      `json:"original_cursor"`
-	State             *nativeExecutionProducerState `json:"original_producer_state"`
-	Approvals         [][]byte                      `json:"original_signed_approval_bytes"`
-	SharedDirectories []string                      `json:"shared_original_ancestors,omitempty"`
+	CheckpointStorage *economicConservationStorageProfile `json:"original_checkpoint_storage,omitempty"`
+	Schema            string                              `json:"schema"`
+	Checkpoint        monitorHistoryReference             `json:"original_checkpoint"`
+	Policy            economicEmissionPolicy              `json:"original_observation_policy"`
+	Cursor            economicEmissionBoundary            `json:"original_cursor"`
+	State             *nativeExecutionProducerState       `json:"original_producer_state"`
+	Approvals         [][]byte                            `json:"original_signed_approval_bytes"`
+	SharedDirectories []string                            `json:"shared_original_ancestors,omitempty"`
 }
 
 // A single bounded inventory hash covers pending and completed custody. The
@@ -55,7 +56,11 @@ func storageNativeProducerAuthorities(ctx context.Context, scope storageNativePr
 	if ctx == nil || scope.Schema != storageNativeProducerSchema || scope.Policy.Execution == nil || scope.Policy.Execution.Producer == nil {
 		return nil, errors.New("native artifact restore requires its original producer policy")
 	}
-	if err := errors.Join(ctx.Err(), scope.Checkpoint.validate(), scope.Policy.validate(), scope.State.validate(scope.Policy, scope.Cursor)); err != nil {
+	maximum := uint64(maxRpcReplyBytes)
+	if scope.CheckpointStorage != nil {
+		maximum = scope.CheckpointStorage.MaximumBytes
+	}
+	if err := errors.Join(ctx.Err(), scope.CheckpointStorage.validate(), scope.Checkpoint.validateLimit(maximum), scope.Policy.validate(), scope.State.validate(scope.Policy, scope.Cursor)); err != nil {
 		return nil, err
 	}
 	references := append([]planFileReference{scope.Policy.Execution.Producer.Authority}, scope.Policy.Execution.Producer.Renewals...)

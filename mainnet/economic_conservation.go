@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,7 +29,9 @@ type economicConservationRoute struct {
 }
 
 type economicConservationPolicy struct {
-	EntitlementSources *economicConservationEntitlementPolicy  `json:"original_entitlement_sources,omitempty"`
+	EntitlementSources *economicConservationEntitlementPolicy `json:"original_entitlement_sources,omitempty"`
+	StorageProfile     *economicConservationStorageProfile    `json:"storage_profile,omitempty"`
+	operatingHeadBytes uint64
 	FeeAuthority       *economicNativeFeePolicy                `json:"native_fee_authority,omitempty"`
 	Continuation       *economicConservationContinuationPolicy `json:"continuation,omitempty"`
 	Schema             string                                  `json:"schema"`
@@ -42,15 +45,25 @@ type economicConservationPolicy struct {
 }
 
 func (self economicConservationPolicy) validate() error {
+	if err := self.StorageProfile.validate(); err != nil {
+		return err
+	}
+	maximumFacts := uint64(8192)
+	if self.StorageProfile != nil {
+		maximumFacts = economicConservationMaximumFacts
+	}
 	network := self.Native.Observation.Network
 	expected := identityExpectation{NativeChain: network.NativeChain, GenesisHash: network.GenesisHash, EvmChainId: network.EvmChainId}
-	if self.Schema != economicConservationPolicySchema || self.Native.Observation.Execution == nil || self.Vault.Network != network || self.Vault.Netuid != self.Native.Observation.Netuid || self.Vault.ContractKind != "settlement-vault" || self.MaximumFacts < 16 || self.MaximumFacts > 8192 || self.ReadBudgetSeconds != 0 && (self.ReadBudgetSeconds < 60 || self.ReadBudgetSeconds > 900) || len(self.Routes) == 0 || len(self.Routes) > rootCensusLimit || len(self.Claims) > maxMonitorClaims {
+	if self.Schema != economicConservationPolicySchema || self.Native.Observation.Execution == nil || self.Vault.Network != network || self.Vault.Netuid != self.Native.Observation.Netuid || self.Vault.ContractKind != "settlement-vault" || self.MaximumFacts < 16 || self.MaximumFacts > maximumFacts || self.ReadBudgetSeconds != 0 && (self.ReadBudgetSeconds < 60 || self.ReadBudgetSeconds > 900) || len(self.Routes) == 0 || len(self.Routes) > rootCensusLimit || len(self.Claims) > maxMonitorClaims {
 		return errors.New("economic conservation requires original native execution, one vault, independent routes and finite resources")
 	}
 	if err := errors.Join(self.Native.validate(expected), self.Vault.validate(expected)); err != nil {
 		return err
 	}
-	if err := self.Continuation.validate(self); err != nil {
+	if err := errors.Join(self.Continuation.validate(self), self.initialResources().validatePolicy(self)); err != nil {
+		return err
+	}
+	if err := self.validateYumaCapacity(); err != nil {
 		return err
 	}
 	if err := self.validatePrincipalAuthority(); err != nil {
@@ -129,14 +142,15 @@ type economicConservationBacking struct {
 }
 
 type economicConservationCapture struct {
-	Id                    string                    `json:"id"`
-	Event                 monitorEconomicEvmEvent   `json:"event"`
-	Native                *economicEmissionBoundary `json:"native,omitempty"`
-	Lots                  []string                  `json:"native_lots"`
-	KnownLiquidAlpha      *string                   `json:"known_native_liquid_alpha"`
-	AmountDifferenceAlpha *string                   `json:"capture_minus_known_liquid_alpha"`
-	OpeningPrincipalAlpha *string                   `json:"opening_principal_alpha"`
-	Status                string                    `json:"status"`
+	PrincipalEffects      *economicConservationCaptureEffects `json:"original_native_capture,omitempty"`
+	Id                    string                              `json:"id"`
+	Event                 monitorEconomicEvmEvent             `json:"event"`
+	Native                *economicEmissionBoundary           `json:"native,omitempty"`
+	Lots                  []string                            `json:"native_lots"`
+	KnownLiquidAlpha      *string                             `json:"known_native_liquid_alpha"`
+	AmountDifferenceAlpha *string                             `json:"capture_minus_known_liquid_alpha"`
+	OpeningPrincipalAlpha *string                             `json:"opening_principal_alpha"`
+	Status                string                              `json:"status"`
 }
 
 type economicConservationEntitlement struct {
@@ -194,6 +208,7 @@ type economicConservationReceipt struct {
 type economicConservationState struct {
 	EntitlementReadAfter map[string]string                        `json:"entitlement_read_after,omitempty"`
 	NativeRenewal        *economicConservationNativeRenewal       `json:"native_approval_adoption,omitempty"`
+	Yuma                 []economicConservationYumaEvidence       `json:"original_yuma_evidence,omitempty"`
 	PrincipalExecutions  []economicConservationPrincipalExecution `json:"principal_execution_evidence,omitempty"`
 	OpeningPrincipals    *economicConservationOpeningPrincipal    `json:"opening_principal_evidence,omitempty"`
 	ClaimWindows         []economicConservationClaimWindow        `json:"claim_windows,omitempty"`
@@ -253,10 +268,17 @@ func (self economicConservationState) facts() uint64 {
 	if self.OpeningPrincipals != nil {
 		principalFacts = uint64(len(self.OpeningPrincipals.Projection.Observations)) + 1
 	}
-	return self.entitlementCensusFacts() + principalFacts + self.principalEffectFacts() + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
+	return self.entitlementCensusFacts() + principalFacts + self.yumaFacts() + self.principalEffectFacts() + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
 }
 
-func (self economicConservationState) validate(policy economicConservationPolicy) error {
+func (self economicConservationState) validate(ctx context.Context, policy economicConservationPolicy) error {
+	policy = policy.withStorageProfile()
+	if ctx == nil {
+		return errors.New("economic conservation validation has no lifecycle owner")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if _, err := self.nativeFeeAuthority(policy); err != nil {
 		return err
 	}
@@ -287,6 +309,9 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 		return err
 	}
 	if err := self.validateOpeningPrincipal(policy); err != nil {
+		return err
+	}
+	if err := self.validateYuma(ctx, policy); err != nil {
 		return err
 	}
 	if err := self.validatePrincipalEffects(policy); err != nil {
@@ -320,10 +345,16 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 		seen[lot.Id] = true
 	}
 	for _, capture := range self.Captures {
-		if seen[capture.Id] || capture.Id != rootObjectHash(capture.Event) || capture.Event.Name != "EmissionCaptured" || capture.OpeningPrincipalAlpha != nil {
+		if seen[capture.Id] || capture.Id != rootObjectHash(capture.Event) || capture.Event.Name != "EmissionCaptured" || capture.OpeningPrincipalAlpha != nil && capture.PrincipalEffects == nil {
 			return errors.New("economic capture changed original event or invented principal evidence")
 		}
 		seen[capture.Id] = true
+	}
+	if self.Archive == nil || self.archiveView != nil {
+		checked := self
+		if err := checked.reconcileCaptureEffects(ctx, policy, true); err != nil {
+			return err
+		}
 	}
 	for _, claim := range self.Claims {
 		if seen[claim.Id] || claim.Id != rootObjectHash(claim.Event) || claim.Event.Name != "Claimed" {
@@ -363,7 +394,7 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 	if err != nil {
 		return err
 	}
-	if len(raw)+1 > maxRpcReplyBytes {
+	if uint64(len(raw)+1) > operating.headBytes() {
 		return errMonitorEconomicCapacity
 	}
 	return nil
@@ -378,7 +409,7 @@ func economicConservationLotId(projection string, effect nativeExecutionEffect) 
 
 // No amount is reconstructed from timestamp windows. The native observer has
 // already replayed the original job; the parser joins the exact header digest.
-func (self *economicConservationState) appendNative(policy economicConservationPolicy, observation *economicEmissionObservation, now time.Time) error {
+func (self *economicConservationState) appendNative(ctx context.Context, policy economicConservationPolicy, observation *economicEmissionObservation, now time.Time) error {
 	if observation == nil {
 		return nil
 	}
@@ -396,6 +427,9 @@ func (self *economicConservationState) appendNative(policy economicConservationP
 			return errors.New("economic native source did not retain original execution")
 		}
 		if err := self.appendOpeningPrincipal(policy, *outcome); err != nil {
+			return err
+		}
+		if err := self.appendYuma(ctx, policy, *outcome); err != nil {
 			return err
 		}
 		if err := self.appendPrincipalEffects(policy, *outcome); err != nil {

@@ -222,6 +222,12 @@ func validateHistoricalReplayObservations(job historicalReplayJob, trace *histor
 	maximumRecords, maximumBytes := uint64(4096), 2*1024*1024
 	if profile.Schema == historicalNativeProfileSchema {
 		maximumRecords, maximumBytes = 16384, 32*1024*1024
+		for _, rule := range profile.Rules {
+			if historicalYumaPurpose(rule.Purpose) {
+				maximumRecords = 6 * 4096
+				break
+			}
+		}
 	}
 	if trace.ProfileSha256 != historicalReplayDigest(sha256.Sum256(raw)) || trace.SourceReviewSha256 != profile.SourceReviewSha256 || trace.Authority != "caller-supplied-unapproved-callsite-profile" || !trace.OriginalFunctionBodiesPreserved || trace.HostCalls > 65536 || trace.DiscardedOnRollback > maximumRecords || uint64(len(trace.Observations))+trace.DiscardedOnRollback > maximumRecords {
 		return errors.New("historical observation binding, authority or resource bound differs")

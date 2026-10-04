@@ -36,7 +36,7 @@ func proposeEconomicConservationNativeRenewal(ctx context.Context, request econo
 	if request.Schema != "urnetwork-economic-native-approval-request-v1" || !planSha256(request.ReviewSha256) {
 		return proposal, errors.New("economic native proposal requires exact original approval input")
 	}
-	if err := errors.Join(ctx.Err(), request.Policy.validate(), request.Original.validate()); err != nil {
+	if err := errors.Join(ctx.Err(), request.Policy.validate(), request.Policy.validateReference(request.Original)); err != nil {
 		return proposal, err
 	}
 	if request.Policy.Native.Observation.Execution.Producer == nil {
@@ -44,12 +44,12 @@ func proposeEconomicConservationNativeRenewal(ctx context.Context, request econo
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(monitorEconomicReadSeconds(request.Policy.ReadBudgetSeconds))*time.Second)
 	defer cancel()
-	source, raw, err := openMonitorHistoryReader(ctx, request.Original)
+	source, raw, err := request.Policy.openHistoryReader(ctx, request.Original)
 	if err != nil {
 		return proposal, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, source.close()) }()
-	state, err := decodeEconomicConservation(raw, request.Policy)
+	state, err := decodeEconomicConservation(ctx, raw, request.Policy)
 	if err != nil {
 		return proposal, err
 	}

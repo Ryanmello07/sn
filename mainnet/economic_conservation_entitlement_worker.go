@@ -168,7 +168,7 @@ func applyEconomicEntitlementResult(ctx context.Context, policy economicConserva
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Join(err, result.err)
 	}
-	next, err := cloneEconomicConservation(state)
+	next, err := cloneEconomicConservation(state, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -212,14 +212,14 @@ func applyEconomicEntitlementResult(ctx context.Context, policy economicConserva
 			}
 			if err == nil {
 				next.ContentHash = next.hash()
-				err = next.validate(policy)
+				err = next.validate(ctx, policy)
 			}
 			err = economicEntitlementEvidenceError(err)
 		}
 	}
 	if err != nil {
 		// Refusal never removes old facts or manufactures a zero obligation.
-		next, cloneErr := cloneEconomicConservation(state)
+		next, cloneErr := cloneEconomicConservation(state, policy)
 		if cloneErr != nil {
 			return nil, cloneErr
 		}

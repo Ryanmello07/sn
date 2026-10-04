@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
@@ -84,7 +85,7 @@ func (self economicConservationClaimWindow) signingBytes() ([]byte, error) {
 	if self.Schema != economicConservationClaimWindowSchema || !planSha256(self.PolicyHash) || !monitorRolePattern.MatchString(self.Role) || self.Next.Role != self.Role || self.Ordinal == 0 || !planSha256(self.Previous) || !planSha256(self.ReviewSha256) || self.HighestEpoch < 0 || len(self.Retired) > maximumMonitorRetainedClaimEpochs {
 		return nil, errors.New("economic Claim window lacks exact bounded original lineage")
 	}
-	if err := self.Original.validate(); err != nil {
+	if err := self.Original.validateLimit(economicConservationStorageMaximum); err != nil {
 		return nil, err
 	}
 	seen := map[int64]bool{}
@@ -103,6 +104,9 @@ func (self economicConservationClaimWindow) signingBytes() ([]byte, error) {
 }
 
 func (self economicConservationClaimWindow) verify(policy economicConservationPolicy) error {
+	if err := policy.validateReference(self.Original); err != nil {
+		return err
+	}
 	_, original, exists := economicConservationClaimRole(policy, self.Role)
 	if !exists || original.HistoryCatalog == nil {
 		return errors.New("legacy economic Claim policy cannot enroll a window approver")
@@ -260,7 +264,7 @@ func (self *economicConservationArchiveView) setClaimBasis(policy economicConser
 	if err != nil {
 		return err
 	}
-	if len(encoded) > maxRpcReplyBytes {
+	if uint64(len(encoded)) > policy.storageMaximum() {
 		return errors.New("economic Claim predecessor exceeds its separate resident byte profile")
 	}
 	entries := uint64(len(basis.heads) + len(basis.states) + len(basis.eligible))
@@ -410,12 +414,15 @@ func (self *economicConservationState) claimPublicationCode(policy monitorClaimP
 
 // A new signed window is applied only after the exact old combined snapshot
 // is the next archive segment. Plan/apply use the same deterministic derivation.
-func applyEconomicConservationClaimWindows(policy economicConservationPolicy, next *economicConservationState, windows []economicConservationClaimWindow) error {
+func applyEconomicConservationClaimWindows(ctx context.Context, policy economicConservationPolicy, next *economicConservationState, windows []economicConservationClaimWindow) error {
 	if next == nil || next.archiveView == nil || next.archiveView.claimBasis == nil {
 		return errors.New("economic Claim adoption requires original checkpoint admission")
 	}
 	seen := map[string]bool{}
 	for _, window := range windows {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if seen[window.Role] {
 			return errors.New("economic Claim adoption repeats an original role")
 		}
@@ -435,5 +442,5 @@ func applyEconomicConservationClaimWindows(policy economicConservationPolicy, ne
 		next.ClaimWindows = append(next.ClaimWindows, window)
 	}
 	next.ContentHash = next.hash()
-	return next.validate(policy)
+	return next.validate(ctx, policy)
 }

@@ -37,20 +37,21 @@ type monitorEvmFixtureBlock struct {
 }
 
 type monitorEvmFixture struct {
-	mapping       *finalizedMappingFixture
-	services      *monitorServicesFixture
-	policy        monitorEconomicEvmPolicy
-	contract      *abi.ABI
-	blocks        map[uint64]*monitorEvmFixtureBlock
-	byHash        map[string]*monitorEvmFixtureBlock
-	byTransaction map[string]map[string]any
-	url           string
-	ctx           context.Context
-	code          []byte
-	stateLock     sync.Mutex
-	counts        map[string]int
-	fault         func(string, []any, any) (any, bool)
-	unavailable   atomic.Bool
+	mapping        *finalizedMappingFixture
+	services       *monitorServicesFixture
+	policy         monitorEconomicEvmPolicy
+	contract       *abi.ABI
+	blocks         map[uint64]*monitorEvmFixtureBlock
+	byHash         map[string]*monitorEvmFixtureBlock
+	byTransaction  map[string]map[string]any
+	url            string
+	ctx            context.Context
+	code           []byte
+	stateLock      sync.Mutex
+	counts         map[string]int
+	fixtureGetters map[string][]any
+	fault          func(string, []any, any) (any, bool)
+	unavailable    atomic.Bool
 }
 
 func monitorEvmTestLog(t *testing.T, contract *abi.ABI, address common.Address, name string, values ...any) *types.Log {
@@ -291,6 +292,15 @@ func (self *monitorEvmFixture) serve(w http.ResponseWriter, request *http.Reques
 		if err != nil {
 			http.Error(w, "args", 400)
 			return
+		}
+		if values, exists := self.fixtureGetters[method.Name]; exists {
+			encoded, err := method.Outputs.Pack(values...)
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			result = hexutil.Encode(encoded)
+			break
 		}
 		var value any
 		switch method.Name {

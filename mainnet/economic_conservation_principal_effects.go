@@ -58,7 +58,7 @@ func (self *economicConservationState) appendPrincipalEffects(policy economicCon
 		}
 	}
 	value := economicConservationPrincipalExecution{Projection: *outcome.PrincipalEffects, Outcome: outcome}
-	value.Outcome.PrincipalEffects, value.Outcome.OpeningPrincipals = nil, nil
+	value.Outcome.PrincipalEffects, value.Outcome.OpeningPrincipals, value.Outcome.Yuma = nil, nil, nil
 	if self.facts()+value.facts() > policy.MaximumFacts {
 		return errMonitorEconomicCapacity
 	}
@@ -227,6 +227,12 @@ func (self *economicConservationArchiveView) retainPrincipalEffects(original, co
 		}{Boundary: value.Projection.Boundary.Hash, Hash: hash}); err != nil {
 			return err
 		}
+		// Future vault pages may lag this retired native block. Retain the
+		// actual causal input in the bounded, authenticated private index.
+		if err := self.charge(value); err != nil {
+			return err
+		}
+		self.principalExecutions[value.Projection.Boundary.Number] = value
 		self.principalExecutionHashes[value.Projection.Boundary.Hash] = hash
 		self.principalEffects = next
 	}

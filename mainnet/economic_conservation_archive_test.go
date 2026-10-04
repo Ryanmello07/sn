@@ -93,7 +93,7 @@ func (self *economicConservationArchiveFixture) reset(t *testing.T) {
 		t.Fatal(err)
 	}
 	archive := filepath.Join(filepath.Dir(self.source.checkpoint), fmt.Sprintf("conservation-archive-%03d.json", self.sequence))
-	provisionMonitorTestCustody(t, archive)
+	provisionMonitorTestCustodyProfile(t, archive, self.source.policy.storageKind(), int(self.source.policy.storageMaximum()))
 	self.request = economicConservationArchiveRequest{Schema: economicConservationArchiveRequestSchema, Policy: self.source.policy, Original: monitorHistoryReference{Path: self.source.checkpoint, Sha256: monitorReadDigest(raw), Bytes: uint64(len(raw))}, ArchivePath: archive, FutureSegments: 1, FutureIndexEntries: 16, FutureIndexBytes: 4096}
 	fence := monitorHistoryWriterFence{Schema: monitorHistoryWriterFenceSchema, Original: self.request.Original, PolicyHash: self.source.policy.identityHash(), StoppedAndJoined: true}
 	raw, err = json.Marshal(fence)

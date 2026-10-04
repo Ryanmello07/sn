@@ -213,7 +213,7 @@ func admitEconomicConservationNativeFees(ctx context.Context, policy economicCon
 		if _, err := prior.feeSummary(policy); err != nil {
 			return nil, err
 		}
-		return cloneEconomicConservation(prior)
+		return cloneEconomicConservation(prior, policy)
 	}
 	if authority, known := authorities[rootObjectHash(request.Policy)]; !known || request.Policy != authority {
 		return nil, errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic fee request differs from original-key retained policy authority"))
@@ -239,7 +239,7 @@ func appendEconomicConservationNativeFeeEvidence(ctx context.Context, policy eco
 		if retained != value.ContentHash {
 			return nil, errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic completed fee result replaced original evidence"))
 		}
-		return cloneEconomicConservation(prior)
+		return cloneEconomicConservation(prior, policy)
 	}
 	authorities, err := prior.admittedNativeFeePolicies(policy)
 	if err != nil {
@@ -252,7 +252,7 @@ func appendEconomicConservationNativeFeeEvidence(ctx context.Context, policy eco
 	if err != nil {
 		return nil, err
 	}
-	next, err := cloneEconomicConservation(prior)
+	next, err := cloneEconomicConservation(prior, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +269,7 @@ func appendEconomicConservationNativeFeeEvidence(ctx context.Context, policy eco
 	if err != nil {
 		return nil, err
 	}
-	if len(raw)+1 > maxRpcReplyBytes {
+	if uint64(len(raw)+1) > operating.headBytes() {
 		return nil, errMonitorEconomicCapacity
 	}
 	// The archive operation can retire these exact original reports under

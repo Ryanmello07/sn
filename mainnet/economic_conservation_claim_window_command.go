@@ -35,7 +35,7 @@ func proposeEconomicConservationClaimWindow(ctx context.Context, request economi
 	if request.Schema != "urnetwork-economic-claim-window-request-v1" || !planSha256(request.ReviewSha256) || request.Next.Renewal != nil || request.Next.Window != nil {
 		return proposal, errors.New("economic Claim proposal requires explicit independent next expectations")
 	}
-	if err := errors.Join(request.Policy.validate(), request.Original.validate()); err != nil {
+	if err := errors.Join(request.Policy.validate(), request.Policy.validateReference(request.Original)); err != nil {
 		return proposal, err
 	}
 	_, claim, exists := economicConservationClaimRole(request.Policy, request.Next.Role)
@@ -46,12 +46,12 @@ func proposeEconomicConservationClaimWindow(ctx context.Context, request economi
 	if err := request.Next.validate(identityExpectation{NativeChain: network.NativeChain, GenesisHash: network.GenesisHash, EvmChainId: network.EvmChainId}); err != nil {
 		return proposal, err
 	}
-	source, raw, err := openMonitorHistoryReader(ctx, request.Original)
+	source, raw, err := request.Policy.openHistoryReader(ctx, request.Original)
 	if err != nil {
 		return proposal, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, source.close()) }()
-	state, err := decodeEconomicConservation(raw, request.Policy)
+	state, err := decodeEconomicConservation(ctx, raw, request.Policy)
 	if err != nil {
 		return proposal, err
 	}

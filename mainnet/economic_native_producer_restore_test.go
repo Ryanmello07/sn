@@ -172,12 +172,12 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 			source.writePolicy(t)
 			state = newEconomicConservationState(source.policy)
 		}
-		if err := state.appendNative(source.policy, &observation, source.now); err != nil {
+		if err := state.appendNative(ctx, source.policy, &observation, source.now); err != nil {
 			t.Fatal(err)
 		}
 	}
 	state.ContentHash = state.hash()
-	if err := state.validate(source.policy); err != nil {
+	if err := state.validate(ctx, source.policy); err != nil {
 		t.Fatal("original combined checkpoint", err)
 	}
 	raw, err = json.Marshal(state)

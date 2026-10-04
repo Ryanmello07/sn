@@ -40,7 +40,7 @@ func newEconomicConservationNativeRenewalFixture(t *testing.T) (*economicConserv
 	f := &economicConservationArchiveFixture{source: source, ctx: ctx, metadata: metadata}
 	state := newEconomicConservationState(source.policy)
 	state.ContentHash = state.hash()
-	if err := state.validate(source.policy); err != nil {
+	if err := state.validate(ctx, source.policy); err != nil {
 		t.Fatal("original unobserved combined checkpoint", err)
 	}
 	raw, err := json.Marshal(state)

@@ -21,6 +21,7 @@ const maximumMonitorEconomicBytes = 768 * 1024
 // Observation supplies an independently reviewed chain/runtime/generation and
 // first window. Later windows start at the retained cursor and remain bounded.
 type monitorEconomicNativePolicy struct {
+	archiveReferenceBytes  uint64
 	Role                   string                          `json:"role"`
 	HistoryCatalog         *monitorHistoryCatalogPolicy    `json:"history_catalog,omitempty"`
 	RuntimeCatalog         []monitorEconomicRuntimeEntry   `json:"runtime_catalog,omitempty"`
