@@ -43,6 +43,7 @@ type providerWorkDeviceFixture struct {
 	requestClosed chan [16]byte
 	cuts          chan []byte
 	failures      chan error
+	other         http.Handler
 }
 
 // Every route and trust root is local to one fixture and no external egress is
@@ -143,6 +144,10 @@ func (self *providerWorkDeviceFixture) serveHttp(writer http.ResponseWriter, req
 		_ = json.NewEncoder(writer).Encode(receipt)
 		self.cuts <- raw
 	default:
+		if self.other != nil {
+			self.other.ServeHTTP(writer, request)
+			return
+		}
 		// Other device services receive a transient response from this local
 		// fixture. They cannot publish whole-work evidence on another route.
 		writer.WriteHeader(http.StatusServiceUnavailable)
@@ -153,6 +158,12 @@ func (self *providerWorkDeviceFixture) serveHttp(writer http.ResponseWriter, req
 // this owner's TLS roots, finite dial boundary and unrelated extender opt-out
 // differ from ordinary launch settings.
 func (self *providerWorkDeviceFixture) start(t *testing.T) func() {
+	_, close := self.startDevice(t, nil)
+	return close
+}
+
+// Original source tests use the same real constructor and transport owner.
+func (self *providerWorkDeviceFixture) startDevice(t *testing.T, original *ProviderContractCaptureProfile) (*sdk.DeviceLocal, func()) {
 	t.Helper()
 	profile, err := ReadProviderWorkCaptureProfile(t.Context(), self.profilePath, self.profileSha256, true)
 	if err != nil {
@@ -177,7 +188,7 @@ func (self *providerWorkDeviceFixture) start(t *testing.T) func() {
 	settings.KeyMaterial = sdk.NewDeviceLocalKeyMaterial(self.seed, nil, nil)
 	clientId := connect.Id(profile.Providers[0].ClientId)
 	token := providerRegistrationTestToken(t, clientId.String(), "retained-whole-work")
-	device, err := newProviderDeviceLocal(ctx, space, strategy, token, "synthetic original-work provider", settings, profile, "direct", clientId)
+	device, err := newProviderDeviceLocal(ctx, space, strategy, token, "synthetic original-work provider", settings, profile, "direct", clientId, original)
 	if err != nil {
 		cancel()
 		space.Close()
@@ -198,7 +209,7 @@ func (self *providerWorkDeviceFixture) start(t *testing.T) func() {
 		space.Close()
 	}
 	t.Cleanup(close)
-	return close
+	return device, close
 }
 
 // Named positive barriers decide ordering; the deadline only detects deadlock.
