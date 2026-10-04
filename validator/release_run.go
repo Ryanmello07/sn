@@ -605,11 +605,17 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 		return closeErr
 	}
 
+	requests, err := openReleaseProviderAttemptRequests(ctx, cfg, op, ledger, clientID, privateKey)
+	if err != nil {
+		return nil, errors.Join(err, closeResources())
+	}
+	closeConnection := closeResources
+	closeResources = func() error { return errors.Join(closeConnection(), requests.Close()) }
 	engine := NewTrailEngine(clientID, privateKey, transport, NewApiServerKeyRing(api), NewFindProvidersSeedPicker(api, clientID), stats, store, epochFn, TrailEngineConfig{
 		M:                   cfg.Policy.Verify.TrailDepth,
 		StepTimeout:         time.Duration(cfg.Policy.Verify.StepTimeoutSeconds) * time.Second,
 		SeedAttemptInterval: seedAttemptInterval,
-		AttemptLedger:       ledger, AttemptBoundaryResolver: attemptResolver,
+		AttemptLedger:       ledger, AttemptBoundaryResolver: attemptResolver, RequestJournal: requests,
 	})
 	keyHistoryReader, err := NewHTTPClientKeyHistoryReader(op.APIURL, func() string {
 		if cancelled.Load() || ctx.Err() != nil {

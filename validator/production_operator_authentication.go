@@ -354,7 +354,13 @@ func newProductionReleaseOperator(ctx context.Context, cfg *ReleaseConfig, op Op
 			invalid.Close()
 			return errors.Join(releaseStageError("tunnel transport", transport.CloseAndWait(context.Background())), releaseStageError("platform transport", platform.CloseAndWait(context.Background())), releaseStageError("identity client", identity.CloseAndWait(context.Background())), releaseStageError("out-of-band control", outOfBand.CloseAndWait(context.Background())))
 		}
-		owner.engine = NewTrailEngine(clientId, key, transport, NewApiServerKeyRing(api), NewFindProvidersSeedPicker(api, clientId), state.stats, state.store, epochFn, TrailEngineConfig{M: cfg.Policy.Verify.TrailDepth, StepTimeout: time.Duration(cfg.Policy.Verify.StepTimeoutSeconds) * time.Second, SeedAttemptInterval: seedInterval, AttemptLedger: state.ledger, AttemptBoundaryResolver: resolver})
+		requests, err := openReleaseProviderAttemptRequests(service, cfg, op, state.ledger, clientId, key)
+		if err != nil {
+			return err
+		}
+		closeConnection := closeConnected
+		closeConnected = func() error { return errors.Join(closeConnection(), requests.Close()) }
+		owner.engine = NewTrailEngine(clientId, key, transport, NewApiServerKeyRing(api), NewFindProvidersSeedPicker(api, clientId), state.stats, state.store, epochFn, TrailEngineConfig{M: cfg.Policy.Verify.TrailDepth, StepTimeout: time.Duration(cfg.Policy.Verify.StepTimeoutSeconds) * time.Second, SeedAttemptInterval: seedInterval, AttemptLedger: state.ledger, AttemptBoundaryResolver: resolver, RequestJournal: requests})
 		durableCredential.Store(token)
 		owner.ready.Store(true)
 		close(owner.admitted)
