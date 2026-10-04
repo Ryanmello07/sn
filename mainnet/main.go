@@ -236,6 +236,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && args[0] == "observe-native-miner-emission" {
 		return runEconomicEmissionCommand(ctx, args[1:], stdout, stderr)
 	}
+	if len(args) != 0 && args[0] == "observe-economic-conservation" {
+		return runEconomicConservationCommand(ctx, args[1:], stdout, stderr, now, hooks)
+	}
 	if len(args) != 0 && args[0] == "verify-historical-execution" {
 		return runHistoricalReplayCommand(ctx, args[1:], stdout, stderr)
 	}
