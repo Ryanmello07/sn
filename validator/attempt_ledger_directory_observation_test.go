@@ -16,7 +16,7 @@ import (
 
 func TestAttemptLedgerOpenObservationKeepsCauseAndSameOwner(t *testing.T) {
 	for _, stage := range []string{"descriptor", "name"} {
-		t.Run(stage, func(t *testing.T) {
+		func() {
 			path := newAttemptLedgerDiskTestStateDir(t)
 			directory, err := openAttemptLedgerDirectory(path, nil)
 			if err != nil {
@@ -55,13 +55,13 @@ func TestAttemptLedgerOpenObservationKeepsCauseAndSameOwner(t *testing.T) {
 			if err != nil || !bytes.Equal(actual, raw) {
 				t.Fatal("same owner did not recover original bytes", err)
 			}
-		})
+		}()
 	}
 }
 
 func TestAttemptLedgerMarkerObservationResumesExactPublication(t *testing.T) {
 	for _, stage := range []string{"before-rename", "acknowledgement"} {
-		t.Run(stage, func(t *testing.T) {
+		func() {
 			path := newAttemptLedgerDiskTestStateDir(t)
 			directory, err := openAttemptLedgerDirectory(path, nil)
 			if err != nil {
@@ -115,7 +115,7 @@ func TestAttemptLedgerMarkerObservationResumesExactPublication(t *testing.T) {
 			if err != nil || !bytes.Equal(actual, raw) {
 				t.Fatal("resumed publication changed original", err)
 			}
-		})
+		}()
 	}
 }
 

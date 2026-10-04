@@ -24,7 +24,7 @@ func TestStoragePreparationRestorePreservesRuntimeCheckpointGrammar(t *testing.T
 	for _, phase := range []string{"empty", "committed"} {
 		for _, coverage := range []string{"", durablevolume.PreparationCompleteUnion} {
 			for _, grammar := range []string{"canonical", "whitespace", "duplicate"} {
-				t.Run(phase+"/"+coverage+"/"+grammar, func(t *testing.T) {
+				func() {
 					source := newStoragePreparationCommandFixture(t)
 					owner := storagePreparationSnapshotOwner(t, "mainnet-monitor-checkpoint", "monitor.json", maxRpcReplyBytes)
 					storagePreparationOwnerRequest(t, source, "daemon", []durablevolume.PreparationOwner{owner})
@@ -106,7 +106,7 @@ func TestStoragePreparationRestorePreservesRuntimeCheckpointGrammar(t *testing.T
 							t.Fatal("restore changed retained original checkpoint bytes", err)
 						}
 					}
-				})
+				}()
 			}
 		}
 	}

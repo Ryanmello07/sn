@@ -35,6 +35,9 @@ func storagePreparationAdapter(ownerLocal bool) durablevolume.PreparationAdapter
 			return inspectStoragePreparationRestore(ctx, target, owner, inventory, ownerLocal)
 		},
 		RebindRestore: func(ctx context.Context, owner durablevolume.PreparationOwnerPlan, inventory durablevolume.Inventory, original []byte, targets []durablevolume.PreparationSource) ([]byte, error) {
+			if owner.Owner.Kind == storageSdkWorkKind {
+				return rebindStorageSdkWorkRestore(ctx, owner, inventory, original, targets, ownerLocal)
+			}
 			return rebindStoragePreparationMembersRestore(ctx, owner, inventory, original, targets, ownerLocal)
 		},
 	}
