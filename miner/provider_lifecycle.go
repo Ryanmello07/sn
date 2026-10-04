@@ -25,6 +25,7 @@ type providerRunSettings struct {
 	testEgressDialer        *connect.DialContextSettings
 	allowClientRegistration bool
 	adoptLegacyProviderKey  bool
+	closeReportDomainHash   [32]byte
 }
 
 // This owner starts exactly one Serve goroutine after listener admission. Its

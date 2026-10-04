@@ -38,38 +38,41 @@ type economicConservationEntitlementPolicy struct {
 // and the root-authenticated receipt inclusion remain explicitly different
 // authority from independent consensus finality or measured provider usage.
 type economicConservationEntitlementCensus struct {
-	Schema                   string                  `json:"schema"`
-	Entitlement              string                  `json:"entitlement"`
-	Finalization             monitorEconomicEvmEvent `json:"original_finalization"`
-	Commitment               monitorEconomicEvmEvent `json:"original_commitment"`
-	CoordinatorFinalization  monitorEconomicEvmEvent `json:"coordinator_finalization"`
-	CoordinatorCodeHash      string                  `json:"coordinator_code_hash"`
-	CommitmentReceiptsRoot   string                  `json:"commitment_receipts_root"`
-	FinalizationReceiptsRoot string                  `json:"finalization_receipts_root"`
-	RootSigner               string                  `json:"original_root_signer"`
-	OperatorColdkey          string                  `json:"original_operator_coldkey"`
-	OperatorEffectiveEpoch   uint64                  `json:"operator_effective_epoch"`
-	PolicyHash               string                  `json:"original_epoch_policy_hash"`
-	Start                    payoutartifact.Boundary `json:"original_epoch_start"`
-	End                      payoutartifact.Boundary `json:"original_epoch_end"`
-	FundingHash              string                  `json:"original_funding_hash"`
-	Artifact                 payoutartifact.Artifact `json:"original_artifact"`
-	LeafObligationsAlpha     string                  `json:"leaf_obligations_alpha"`
-	FloorResidueAlpha        string                  `json:"floor_residue_alpha"`
-	ContentHash              string                  `json:"content_hash"`
+	WindowClock              *payoutartifact.ClosedWorkWindowClock `json:"original_window_clock,omitempty"`
+	Schema                   string                                `json:"schema"`
+	Entitlement              string                                `json:"entitlement"`
+	Finalization             monitorEconomicEvmEvent               `json:"original_finalization"`
+	Commitment               monitorEconomicEvmEvent               `json:"original_commitment"`
+	CoordinatorFinalization  monitorEconomicEvmEvent               `json:"coordinator_finalization"`
+	CoordinatorCodeHash      string                                `json:"coordinator_code_hash"`
+	CommitmentReceiptsRoot   string                                `json:"commitment_receipts_root"`
+	FinalizationReceiptsRoot string                                `json:"finalization_receipts_root"`
+	RootSigner               string                                `json:"original_root_signer"`
+	OperatorColdkey          string                                `json:"original_operator_coldkey"`
+	OperatorEffectiveEpoch   uint64                                `json:"operator_effective_epoch"`
+	PolicyHash               string                                `json:"original_epoch_policy_hash"`
+	Start                    payoutartifact.Boundary               `json:"original_epoch_start"`
+	End                      payoutartifact.Boundary               `json:"original_epoch_end"`
+	FundingHash              string                                `json:"original_funding_hash"`
+	Artifact                 payoutartifact.Artifact               `json:"original_artifact"`
+	ClosedWork               *economicConservationClosedWork       `json:"original_closed_work,omitempty"`
+	LeafObligationsAlpha     string                                `json:"leaf_obligations_alpha"`
+	FloorResidueAlpha        string                                `json:"floor_residue_alpha"`
+	ContentHash              string                                `json:"content_hash"`
 }
 
 // A complete artifact can become cold while its unclaimed obligation remains
 // active. The exact original snapshot supplies the receipt and leaf index at
 // admission; this compact head is never accepted without that held archive.
 type economicConservationEntitlementReference struct {
-	Original             monitorHistoryReference `json:"original"`
-	ContentHash          string                  `json:"content_hash"`
-	FundingHash          string                  `json:"funding_hash"`
-	Providers            uint64                  `json:"providers"`
-	Leaves               uint64                  `json:"leaves"`
-	LeafObligationsAlpha string                  `json:"leaf_obligations_alpha"`
-	FloorResidueAlpha    string                  `json:"floor_residue_alpha"`
+	ClosedWork           economicConservationClosedWork `json:"original_closed_work,omitzero"`
+	Original             monitorHistoryReference        `json:"original"`
+	ContentHash          string                         `json:"content_hash"`
+	FundingHash          string                         `json:"funding_hash"`
+	Providers            uint64                         `json:"providers"`
+	Leaves               uint64                         `json:"leaves"`
+	LeafObligationsAlpha string                         `json:"leaf_obligations_alpha"`
+	FloorResidueAlpha    string                         `json:"floor_residue_alpha"`
 }
 
 func (self economicConservationEntitlement) censusHash() string {
@@ -98,10 +101,23 @@ func (self *economicConservationEntitlement) retireCensus(reference monitorHisto
 	}
 	value := self.Census
 	self.CensusReference = &economicConservationEntitlementReference{Original: reference, ContentHash: value.ContentHash, FundingHash: value.FundingHash, Providers: uint64(len(value.Artifact.Providers)), Leaves: uint64(len(value.Artifact.Leaves)), LeafObligationsAlpha: value.LeafObligationsAlpha, FloorResidueAlpha: value.FloorResidueAlpha}
+	if value.ClosedWork != nil {
+		self.CensusReference.ClosedWork = *value.ClosedWork
+	}
 	self.Census = nil
 }
 
 type economicConservationEntitlementSummary struct {
+	ClosedWorkWindows                 uint64  `json:"closed_work_windows,omitempty"`
+	ClockMatchedWindows               uint64  `json:"clock_matched_windows,omitempty"`
+	CompleteReportInventories         uint64  `json:"complete_report_inventories,omitempty"`
+	InventoryReports                  uint64  `json:"original_inventory_reports,omitempty"`
+	SignedCloseReports                uint64  `json:"signed_close_reports,omitempty"`
+	RegisteredCloseReports            uint64  `json:"registered_close_reports,omitempty"`
+	CloseAmountJoins                  uint64  `json:"close_amount_joins,omitempty"`
+	ClosedWorkRoots                   uint64  `json:"original_closed_work_roots,omitempty"`
+	ClosedWorkContracts               uint64  `json:"original_closed_work_contracts,omitempty"`
+	ClosedWorkUsageBytes              string  `json:"original_closed_work_usage_bytes,omitempty"`
 	SelectedPools                     uint64  `json:"selected_pools"`
 	FinalizedRoots                    uint64  `json:"finalized_roots"`
 	CompleteRoots                     uint64  `json:"complete_original_roots"`
@@ -194,7 +210,10 @@ func (self *economicConservationEntitlementCensus) validate(ctx context.Context,
 	if !monitorEvmAddress(self.RootSigner) || self.CoordinatorCodeHash != source.CoordinatorCodeHash || !rootCanonicalHash(self.CommitmentReceiptsRoot) || !rootCanonicalHash(self.FinalizationReceiptsRoot) || !rootCanonicalHash(self.OperatorColdkey) || self.OperatorEffectiveEpoch > artifact.Epoch || !rootCanonicalHash(self.PolicyHash) || commit.Name != "OperatorRootCommitted" || commit.Values["epoch"] != record.Epoch || commit.Values["noId"] != record.PoolId || commit.Values["payoutRoot"] != record.PayoutRoot || commit.Values["artifactHash"] != record.ArtifactHash || commit.Values["committer"] != self.RootSigner || !planSha256(commit.ReceiptHash) || !rootCanonicalHash(commit.TransactionHash) || commit.Block.Number < self.End.Number || commit.Block.Number > self.Finalization.Block.Number || final.Name != "OperatorEpochFinalized" || final.Values["epoch"] != record.Epoch || final.Values["noId"] != record.PoolId || final.Values["rootPresent"] != "true" || final.Block != self.Finalization.Block || final.TransactionHash != self.Finalization.TransactionHash || final.ReceiptHash != self.Finalization.ReceiptHash {
 		return errors.New("economic entitlement lost original coordinator authorization or included finalization")
 	}
-	if err := payoutartifact.Verify(artifact); err != nil {
+	if err := payoutartifact.VerifyWithContext(ctx, artifact); err != nil {
+		return err
+	}
+	if err := self.validateClosedWork(ctx); err != nil {
 		return err
 	}
 	total, err := monitorEconomicInteger(*record.Total)
@@ -373,6 +392,9 @@ func (self economicConservationState) entitlementCensusFacts() uint64 {
 	for _, record := range self.Entitlements {
 		if record.Census != nil {
 			count += 1 + uint64(max(len(record.Census.Artifact.Providers), len(record.Census.Artifact.Leaves)))
+			if record.Census.Artifact.ClosedWork != nil {
+				count += uint64(len(record.Census.Artifact.ClosedWork.Records))
+			}
 		} else if record.CensusReference != nil {
 			count++
 		}
@@ -415,6 +437,7 @@ func (self *economicConservationState) entitlementCensusSummary(ctx context.Cont
 			return nil
 		}
 		result.CompleteRoots++
+		result.addClosedWork(record.closedWork())
 		leaves, obligations, residue := record.censusSummary()
 		result.Leaves += leaves
 		var err error
@@ -440,6 +463,7 @@ func (self *economicConservationState) entitlementCensusSummary(ctx context.Cont
 		result.UnknownOriginalRoots += cold.UnknownOriginalRoots
 		result.RootsWithUnattributedFunding += cold.RootsWithUnattributedFunding
 		result.Leaves += cold.Leaves
+		result.mergeClosedWork(cold)
 		var err error
 		result.LeafObligationsAlpha, err = economicConservationSum(result.LeafObligationsAlpha, cold.LeafObligationsAlpha)
 		if err != nil {
@@ -670,6 +694,7 @@ func (self *economicConservationArchiveView) indexColdEntitlement(record economi
 		return nil
 	}
 	value.CompleteRoots++
+	value.addClosedWork(record.closedWork())
 	leaves, obligations, residue := record.censusSummary()
 	value.Leaves += leaves
 	var err error
