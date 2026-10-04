@@ -145,7 +145,8 @@
     "model-c2b-normal-independent-census-20261004.json": "a4a08ff372a1b6436a5cf54c20376357c8dcc347e08c92f2dc98293c1bb2a90f",
     "composed-source-input-readback-20261004.json": "aa9bfbbf118ca2aab6945b69248edabae1e72a7043de7b5edb15bd91fd0d71c7",
     "core-preflight-and-control-rebase-20261004.json": "27925c91b26042e31ecf08c30ab67c43f9879f51a514cf775f843420cf17d41d",
-    "parallel-critical-path-readback-20261004.json": "696a6f868737d51a8d818e1785170d33b2ecdeab06e57ae3f5e8653938b3c661"
+    "parallel-critical-path-readback-20261004.json": "696a6f868737d51a8d818e1785170d33b2ecdeab06e57ae3f5e8653938b3c661",
+    "core-ac65-main-publication-20261004.json": "5638fb788f75d9ae0d6c76493785d34ce7b44edcd658e73febab3e4fc487862c"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",

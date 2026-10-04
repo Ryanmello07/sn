@@ -68,3 +68,5 @@ The [model sampler preexecution finding](model-sampler-source-finding-20261003.j
 The [model continuation admission](model-continuation-adoption-20261003.json) preserves successful preparation and its failed graph attempt while admitting one narrow retry and the full model invocation. Sampler controls pass only their lightweight scope; no full-suite result or requirement closure is claimed.
 
 The [parallel critical-path readback](parallel-critical-path-readback-20261004.json) verifies Core ac65 scoped qualification and the terminal c2b normal/race results. The original two companion-fixture failures remain; corrected405 and receipt-lineage c16 require their own qualification. No full requirement is closed.
+
+The [Core publication](core-ac65-main-publication-20261004.json) records the pushed qualified read-cause fix while retaining the separate final-consumer module adoption and qualification requirement.
