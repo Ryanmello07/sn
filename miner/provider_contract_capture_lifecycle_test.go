@@ -85,6 +85,27 @@ func providerContractOriginalAtTransport(ctx context.Context, directory string, 
 	return nil, errors.New("actual HTTP control took its request before original custody")
 }
 
+// Multiple pending creates from a joined old send owner cannot satisfy the
+// restarted provider's observation. Every accepted request is generation tagged.
+func providerContractAwaitGeneration(t *testing.T, originals <-chan []byte, failures <-chan error, current, retired [16]byte) ([]byte, coreprotocol.OriginalContractRequest) {
+	t.Helper()
+	for range 8 {
+		raw := providerWorkDeviceAwait(t, originals, failures)
+		original, err := coreprotocol.DecodeOriginalContractRequest(t.Context(), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if original.Generation == current {
+			return raw, original
+		}
+		if original.Generation != retired || retired == ([16]byte{}) {
+			t.Fatal("actual original request belongs to an unknown SDK generation")
+		}
+	}
+	t.Fatal("restarted SDK never reached its own original request HTTP boundary")
+	return nil, coreprotocol.OriginalContractRequest{}
+}
+
 func TestProviderOriginalContractActualDeviceRetainsBeforeHTTPAndRestartsSource(t *testing.T) {
 	fixture := newProviderWorkDeviceFixture(t)
 	work := fixture.profile.Providers[0]
@@ -134,9 +155,17 @@ func TestProviderOriginalContractActualDeviceRetainsBeforeHTTPAndRestartsSource(
 				fail(err)
 				return
 			}
-			originals <- retained
+			select {
+			case originals <- retained:
+			case <-request.Context().Done():
+				return
+			}
 			<-request.Context().Done()
-			closed <- decoded.Generation
+			select {
+			case closed <- decoded.Generation:
+			default:
+				fail(errors.New("synthetic original source cancellation census exceeded its bound"))
+			}
 			return
 		}
 		_ = json.NewEncoder(writer).Encode(connect.ConnectControlResult{Pack: base64.StdEncoding.EncodeToString(nil)})
@@ -147,10 +176,9 @@ func TestProviderOriginalContractActualDeviceRetainsBeforeHTTPAndRestartsSource(
 	if !firstDevice.SendSubprotocolBytes(4096, sdk.NewId(), []byte("synthetic first original")) {
 		t.Fatal("actual device did not enqueue the first provider request")
 	}
-	firstRaw := providerWorkDeviceAwait(t, originals, fixture.failures)
-	first, err := coreprotocol.DecodeOriginalContractRequest(t.Context(), firstRaw)
-	if err != nil || first.ClientId != work.ClientId || first.PublicKey != work.PublicKey || first.DomainHash != firstOwner.DomainHash || first.Generation != firstOwner.Generation || first.Generation == original.Providers[0].SourceGeneration {
-		t.Fatal("actual first request substituted source scope for SDK generation", first, err)
+	firstRaw, first := providerContractAwaitGeneration(t, originals, fixture.failures, firstOwner.Generation, [16]byte{})
+	if first.ClientId != work.ClientId || first.PublicKey != work.PublicKey || first.DomainHash != firstOwner.DomainHash || first.Generation == original.Providers[0].SourceGeneration {
+		t.Fatal("actual first request substituted source scope for SDK generation", first)
 	}
 	closeFirst()
 	providerWorkDeviceAwaitGeneration(t, closed, fixture.failures, first.Generation, [16]byte{})
@@ -161,10 +189,9 @@ func TestProviderOriginalContractActualDeviceRetainsBeforeHTTPAndRestartsSource(
 	if secondOwner.Generation == first.Generation || !secondDevice.SendSubprotocolBytes(4096, sdk.NewId(), []byte("synthetic restarted original")) {
 		t.Fatal("actual restarted provider reused generation or lost the send owner")
 	}
-	secondRaw := providerWorkDeviceAwait(t, originals, fixture.failures)
-	second, err := coreprotocol.DecodeOriginalContractRequest(t.Context(), secondRaw)
-	if err != nil || second.Generation != secondOwner.Generation || second.PublicKey != first.PublicKey || second.ClientId != first.ClientId || second.DomainHash != first.DomainHash || second.Generation == original.Providers[0].SourceGeneration {
-		t.Fatal("actual restarted request changed independent source authority", second, err)
+	_, second := providerContractAwaitGeneration(t, originals, fixture.failures, secondOwner.Generation, first.Generation)
+	if second.PublicKey != first.PublicKey || second.ClientId != first.ClientId || second.DomainHash != first.DomainHash || second.Generation == original.Providers[0].SourceGeneration {
+		t.Fatal("actual restarted request changed independent source authority", second)
 	}
 	closeSecond()
 	providerWorkDeviceAwaitGeneration(t, closed, fixture.failures, second.Generation, first.Generation)
