@@ -95,8 +95,14 @@ func VerifyProspectiveWalletMapping(ctx context.Context, mapping *VerifiedWallet
 	if err := statement.VerifyProspectiveSignature(); err != nil {
 		return err
 	}
-	if statement.Prospective.Signer != signer || statement.Prospective.Boundary.Block >= startBlock || statement.ExpiresAt > startUnix || statement.FromEpoch <= statement.Prospective.Boundary.Epoch {
+	if statement.Prospective.Signer != signer || statement.Prospective.Boundary.Block >= startBlock || statement.FromEpoch <= statement.Prospective.Boundary.Epoch {
 		return ErrWalletMappingIntegrity
+	}
+	// Expiry bounds possible acceptance; it is not an original acceptance time.
+	// A legitimately accepted near-boundary consent can therefore be unknown
+	// without contradicting its exact approved identity or earning interval.
+	if statement.ExpiresAt > startUnix {
+		return ErrWalletMappingUnavailable
 	}
 	return ctx.Err()
 }

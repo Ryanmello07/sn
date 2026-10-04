@@ -47,7 +47,7 @@ func TestWalletProspectiveOriginalRequiresPriorApprovedBoundary(t *testing.T) {
 		signer common.Address
 		block  uint64
 		clock  int64
-	}{{signer: common.Address{99}, block: 510, clock: 1400}, {signer: signer, block: 500, clock: 1400}, {signer: signer, block: 510, clock: 1299}} {
+	}{{signer: common.Address{99}, block: 510, clock: 1400}, {signer: signer, block: 500, clock: 1400}} {
 		if err := VerifyProspectiveWalletMapping(t.Context(), value, bad.signer, bad.block, bad.clock); !errors.Is(err, ErrWalletMappingIntegrity) {
 			t.Fatal("foreign or late original became historical consent", bad, err)
 		}
@@ -104,5 +104,23 @@ func TestWalletProspectiveGatePreservesLegacyUnknown(t *testing.T) {
 	}
 	if err := VerifyProspectiveWalletMapping(t.Context(), value, common.Address{1}, 510, 1400); !errors.Is(err, ErrWalletMappingUnavailable) {
 		t.Fatal("legacy wallet possession became historical measurement authority", err)
+	}
+}
+
+// An original challenge may be accepted immediately before the next earning
+// boundary while its remaining expiry crosses that boundary. The challenge
+// alone cannot prove the acceptance time, so that valid case remains unknown.
+func TestWalletProspectiveCrossingExpiryLeavesAcceptanceUnknown(t *testing.T) {
+	_, value, signer := walletProspectiveFixture(t)
+	for _, start := range []int64{1002, 1299} {
+		if err := VerifyProspectiveWalletMapping(t.Context(), value, signer, 510, start); !errors.Is(err, ErrWalletMappingUnavailable) || errors.Is(err, ErrWalletMappingIntegrity) {
+			t.Fatal("possible original early acceptance became corruption or authority", start, err)
+		}
+	}
+	if err := VerifyProspectiveWalletMapping(t.Context(), value, signer, 510, 1300); err != nil {
+		t.Fatal("complete pre-window acceptance interval was refused", err)
+	}
+	if err := VerifyProspectiveWalletMapping(t.Context(), value, common.Address{99}, 510, 1002); !errors.Is(err, ErrWalletMappingIntegrity) {
+		t.Fatal("unknown time hid foreign original authority", err)
 	}
 }
