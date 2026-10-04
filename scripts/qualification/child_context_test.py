@@ -12,8 +12,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from cargo_control import Refused
-from child_context import ChildContext, bind_executable, compiler_census
+from cargo_control import Refused, run_process
+from child_context import ChildContext, bind_executable, compiler_census, replay_process_result
 
 
 class ChildContextTests(unittest.TestCase):
@@ -141,6 +141,66 @@ class ChildContextTests(unittest.TestCase):
         with self.assertRaisesRegex(Refused, "Python interpreter differs"):
             ChildContext(self.cwd, self.environment, {"path": python, "sha256": "0" * 64})
         self.assertFalse((self.root / "probes.jsonl").exists())
+
+    def test_checker_exception_after_wait_replays_exact_flat_result_without_rerunning(self):
+        context = ChildContext(self.cwd, self.environment)
+        context.bind(self.go, self.sha)
+        result = context.run([str(self.go), "body"], self.output, "body", 10)
+        # Reproduce the real integration defect: a checker expected nested
+        # stderr metadata after the actual guard returned flat fields.
+        with self.assertRaises(KeyError):
+            _ = result["stderr"]["path"]
+        path = self.output / "body.process-result.json"
+        self.assertTrue(path.is_file(), "checker failure lost actual joined wait result")
+        retained = json.loads(path.read_text())
+        self.assertEqual(retained["result"]["exit"], 0)
+        self.assertIs(retained["result"]["tree_joined"], True)
+        rows = (self.root / "probes.jsonl").read_bytes()
+        with mock.patch.object(subprocess, "Popen", side_effect=AssertionError("checker replay started a child")):
+            replayed = replay_process_result(result["process_result"])
+        self.assertEqual(replayed["exit"], result["exit"])
+        self.assertEqual(replayed["stdout_sha256"], result["stdout_sha256"])
+        self.assertEqual(replayed["stderr_sha256"], result["stderr_sha256"])
+        self.assertTrue(replayed["tree_joined"] and replayed["context_verified"])
+        self.assertEqual((self.root / "probes.jsonl").read_bytes(), rows)
+        self.assertEqual(len(rows.splitlines()), 1)
+        self.assertIn("not-performed", replayed["test_classification"])
+
+    def test_postcheck_failure_keeps_actual_wait_but_cannot_claim_verified_context(self):
+        context = ChildContext(self.cwd, self.environment)
+        context.bind(self.go, self.sha)
+
+        def replace_after_actual_wait(*args, **kwargs):
+            result = run_process(*args, **kwargs)
+            original = self.root / "original-go"
+            self.go.rename(original)
+            shutil.copyfile(original, self.go)
+            self.go.chmod(0o500)
+            return result
+
+        with self.assertRaisesRegex(Refused, "executable identity changed"):
+            context.run([str(self.go), "body"], self.output, "body", 10,
+                        process_guard=replace_after_actual_wait)
+        path = self.output / "body.process-result.json"
+        reference = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        with self.assertRaisesRegex(Refused, "postcheck is incomplete"):
+            replay_process_result(reference)
+        observed = replay_process_result(reference, require_context_verified=False)
+        self.assertEqual(observed["exit"], 0)
+        self.assertTrue(observed["tree_joined"])
+        self.assertFalse(observed["context_verified"])
+        self.assertEqual(len((self.root / "probes.jsonl").read_text().splitlines()), 1)
+
+    def test_changed_retained_output_and_existing_outcome_cannot_replay_or_restart(self):
+        context = ChildContext(self.cwd, self.environment)
+        context.bind(self.go, self.sha)
+        result = context.run([str(self.go), "body"], self.output, "body", 10)
+        with self.assertRaisesRegex(Refused, "already retains an outcome"):
+            context.run([str(self.go), "body"], self.output, "body", 10)
+        (self.output / "body.stdout").write_text("synthetic altered output\n")
+        with self.assertRaisesRegex(Refused, "retained process output differs"):
+            replay_process_result(result["process_result"])
+        self.assertEqual(len((self.root / "probes.jsonl").read_text().splitlines()), 1)
 
     def test_go_image_entrypoint_executes_bound_dynamic_tool_and_retains_context(self):
         import go_test_image

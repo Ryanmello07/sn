@@ -16,10 +16,78 @@ import shutil
 import stat
 import sys
 
-from cargo_control import MAXIMUM_LOG_BYTES, require, run_process
+from cargo_control import MAXIMUM_LOG_BYTES, bounded_regular_bytes, require, run_process
 
 
 MAXIMUM_EXECUTABLE_BYTES = 512 * 1024 * 1024
+MAXIMUM_PROCESS_RECEIPT_BYTES = 1024 * 1024
+
+
+def durable_json(path, value):
+    """Create one immutable result before downstream checks can discard it."""
+    encoded = (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
+    require(len(encoded) <= MAXIMUM_PROCESS_RECEIPT_BYTES, "process receipt exceeds bound")
+    temporary = path.with_name(path.name + ".pending")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        view = memoryview(encoded)
+        while view:
+            count = os.write(descriptor, view)
+            require(count > 0, "process receipt write made no progress")
+            view = view[count:]
+        os.fchmod(descriptor, 0o400)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    # Publish without replacing an earlier observation under the same label.
+    os.link(temporary, path, follow_symlinks=False)
+    temporary.unlink()
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    return {"path": str(path), "sha256": hashlib.sha256(encoded).hexdigest()}
+
+
+def replay_process_result(reference, require_context_verified=True):
+    """Read the actual retained wait result; this never launches or infers a pass.
+
+    A caller still classifies test events and source/image custody independently.
+    Incomplete postchecks can expose a wait-only result explicitly, never a
+    successfully verified child context.
+    """
+    path = Path(reference["path"])
+    require(path.is_absolute() and path.resolve(strict=True) == path,
+            "process receipt path aliases or is absent")
+    raw = bounded_regular_bytes(path, MAXIMUM_PROCESS_RECEIPT_BYTES)
+    require(hashlib.sha256(raw).hexdigest() == reference["sha256"], "process receipt pin differs")
+    record = json.loads(raw)
+    require(record["schema"] == "urnetwork-qualification-process-wait-v1",
+            "process receipt schema differs")
+    result = record["result"]
+    require(type(result["exit"]) is int and result["tree_joined"] is True,
+            "process receipt lacks an actual joined wait result")
+    label = record["label"]
+    require(re.fullmatch(r"[A-Za-z0-9_.-]{1,96}", label) and
+            path.name == label + ".process-result.json", "process receipt label differs")
+    for stream in ("stdout", "stderr"):
+        log = bounded_regular_bytes(path.parent / (label + "." + stream), MAXIMUM_LOG_BYTES)
+        require(hashlib.sha256(log).hexdigest() == result[stream + "_sha256"],
+                "retained process output differs")
+    verified = path.with_name(label + ".process-context.json")
+    context_verified = False
+    if verified.exists():
+        after = json.loads(bounded_regular_bytes(verified, MAXIMUM_PROCESS_RECEIPT_BYTES))
+        require(after.get("schema") == "urnetwork-qualification-process-context-v1"
+                and after.get("wait_result") == reference
+                and after.get("child_context") == record["child_context"],
+                "process context postcheck differs from actual wait result")
+        context_verified = True
+    require(not require_context_verified or context_verified,
+            "actual wait is retained but child context postcheck is incomplete")
+    return {**result, "process_result": reference, "context_verified": context_verified,
+            "test_classification": "not-performed; actual joined execution only"}
 
 
 def file_identity(info):
@@ -138,11 +206,35 @@ class ChildContext:
         """Use the same frozen context and bounded tree-joining guard for every step."""
         require(isinstance(argv, list) and argv and all(isinstance(arg, str) for arg in argv)
                 and argv[0] in self._executables, "child argv must begin with a bound absolute executable")
+        output = Path(output)
+        require(output.is_absolute() and output.resolve(strict=True) == output
+                and re.fullmatch(r"[A-Za-z0-9_.-]{1,96}", label), "process output or label differs")
+        result_path = output / (label + ".process-result.json")
+        context_path = output / (label + ".process-context.json")
+        require(all(not os.path.lexists(path) for path in (result_path, context_path,
+                    result_path.with_name(result_path.name + ".pending"),
+                    context_path.with_name(context_path.name + ".pending"))),
+                "process label already retains an outcome")
         self.verify()
+        original_context = self.receipt()
         result = process_guard(argv, self.cwd, self._environment.copy(), output, label,
                                timeout, log_limit=log_limit, minimum_free=minimum_free)
+        # Persist the exact guard return before postcheck, shape conversion or
+        # caller classification. A later checker error cannot erase Wait/join.
+        retained = durable_json(result_path, {"schema": "urnetwork-qualification-process-wait-v1",
+            "label": label, "result": result, "child_context": original_context,
+            "executable": copy.deepcopy(self._executables[argv[0]])})
+        for stream in ("stdout", "stderr"):
+            descriptor = os.open(output / (label + "." + stream), os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
         self.verify()
+        durable_json(context_path, {"schema": "urnetwork-qualification-process-context-v1",
+            "wait_result": retained, "child_context": self.receipt()})
         return {**result, "child_context": self.receipt(),
+                "process_result": retained,
                 "executable": copy.deepcopy(self._executables[argv[0]])}
 
     def prepare_go(self, go, expected, output, label="go-context", minimum_free=0,

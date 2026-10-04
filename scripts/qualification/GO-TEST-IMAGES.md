@@ -94,6 +94,19 @@ ambient variables. Retain the context/tool receipts alongside source and
 resource admission. Preserve old frozen runners and receipts; use a new
 runner/output root for a correction.
 
+Each `ChildContext.run` now durably records the exact flat process-guard return
+in `LABEL.process-result.json` immediately after Wait/join, before postchecks or
+caller classification. A separate `LABEL.process-context.json` is written only
+after logs are synced and the child context and tool custody are reverified.
+The returned `process_result` path/hash can be passed to
+`replay_process_result(reference)` after a checker-only failure. Replay verifies
+the retained wait receipt and both output hashes and never starts a child. It
+does not infer a test pass from output counts; source/image custody, exact root
+events, actual exit and join still require their independent checks. A failed
+postcheck preserves wait evidence but default replay refuses to claim verified
+context. Explicit `require_context_verified=False` reads only that limited
+wait observation. Existing result labels cannot be reused for another body.
+
 Use `compiler_census()` for the admission census. It reads actual `/proc` tool
 origins and NUL-separated argv, counts both bare and absolute `go test -c`
 including Go's global `-C` option, and separately reports Go workers and Rust
