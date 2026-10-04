@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -365,6 +366,44 @@ func TestBootstrapPlanBoundsAndSpecialFiles(t *testing.T) {
 	cancel()
 	if _, err := loadBootstrapPlan(ctx, path); err == nil {
 		t.Fatal("canceled plan proceeded")
+	}
+}
+
+// Cancellation wins before file observation, while an actual read failure
+// remains distinct from a successfully observed different input digest.
+func TestPlanInputObservationPreservesCancellationAndReadCauses(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "synthetic-input.json")
+	raw := []byte(`{"synthetic":true}`)
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	expired, expire := context.WithDeadline(t.Context(), time.Unix(1, 0))
+	defer expire()
+	for _, owner := range []struct {
+		ctx   context.Context
+		cause error
+	}{{ctx: canceled, cause: context.Canceled}, {ctx: expired, cause: context.DeadlineExceeded}} {
+		for _, input := range []string{path, path + ".absent"} {
+			actual, digest, err := readPlanFile(owner.ctx, input, 1024)
+			if actual != nil || digest != "" || !errors.Is(err, owner.cause) || errors.Is(err, os.ErrNotExist) || strings.Contains(err.Error(), "differs") {
+				t.Fatal("canceled owner observed a file or lost its cause", input, actual, digest, err)
+			}
+		}
+	}
+	reference := planFileReference{Path: path, Sha256: monitorReadDigest(raw)}
+	if actual, err := readPlanReference(t.Context(), path, reference, 1024); err != nil || !bytes.Equal(actual, raw) {
+		t.Fatal("exact original input was not admitted", err)
+	}
+	reference.Path += ".absent"
+	if actual, err := readPlanReference(t.Context(), path, reference, 1024); actual != nil || !errors.Is(err, os.ErrNotExist) || strings.Contains(err.Error(), "differs") {
+		t.Fatal("unobserved input became an exact digest contradiction", actual, err)
+	}
+	reference.Path = path
+	reference.Sha256 = monitorReadDigest([]byte("synthetic different input"))
+	if actual, err := readPlanReference(t.Context(), path, reference, 1024); actual != nil || err == nil || !strings.Contains(err.Error(), "exact file hash differs") {
+		t.Fatal("successful observation of different bytes lost its refusal", actual, err)
 	}
 }
 

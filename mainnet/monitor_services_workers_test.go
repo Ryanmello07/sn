@@ -127,13 +127,22 @@ func TestMonitorServicesCommandRetainsAdmissionCleanupFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	closed := false
+	terminal := make(chan int, 1)
 	hooks := monitorServiceHooks{afterClose: func(role, kind string, file *os.File) error {
 		_, err := file.Stat()
 		closed = role == "alpha" && kind == "checkpoint" && errors.Is(err, os.ErrClosed)
 		return errors.New("synthetic partial admission close failure")
+	}, afterWorker: func(role string, exit int) {
+		if role == "alpha" {
+			terminal <- exit
+		}
 	}}
 	url, _, _ := monitorServicesBlockedChain(t)
 	run := fixture.start(t, url, hooks)
+	if exit := <-terminal; exit != 3 {
+		t.Fatal("partial owner did not stop its role", exit)
+	}
+	run.cancel()
 	<-run.done
 	if run.exit != 3 || !closed || !strings.Contains(run.stderr.String(), "synthetic partial admission close failure") {
 		t.Fatal("partial admission discarded cleanup failure", run.exit, run.stderr.String())

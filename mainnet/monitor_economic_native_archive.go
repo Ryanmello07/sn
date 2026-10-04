@@ -18,13 +18,14 @@ import (
 // The compact prefix is authenticated against every referenced checkpoint on
 // reopen. It cannot introduce a financial fact independently of those bytes.
 type monitorEconomicNativeArchive struct {
-	Segments        []monitorHistoryReference `json:"segments"`
-	Cursor          economicEmissionBoundary  `json:"cursor"`
-	BatchCount      uint64                    `json:"batch_count"`
-	BatchChainHash  string                    `json:"batch_chain_hash"`
-	ObservedAlpha   string                    `json:"observed_alpha"`
-	ObservedFeesRao string                    `json:"observed_fees_rao"`
-	Events          uint64                    `json:"events"`
+	ExecutionAccounting *nativeExecutionWindow    `json:"execution_accounting,omitempty"`
+	Segments            []monitorHistoryReference `json:"segments"`
+	Cursor              economicEmissionBoundary  `json:"cursor"`
+	BatchCount          uint64                    `json:"batch_count"`
+	BatchChainHash      string                    `json:"batch_chain_hash"`
+	ObservedAlpha       string                    `json:"observed_alpha"`
+	ObservedFeesRao     string                    `json:"observed_fees_rao"`
+	Events              uint64                    `json:"events"`
 }
 
 func decodeMonitorEconomicNativeCheckpoint(raw []byte, policy monitorEconomicNativePolicy) (record monitorEconomicNativeCheckpoint, resultErr error) {
@@ -57,6 +58,18 @@ func decodeMonitorEconomicNativeCheckpoint(raw []byte, policy monitorEconomicNat
 func (self *monitorEconomicNativeArchive) validate(policy monitorEconomicNativePolicy, state *monitorEconomicNativeState) error {
 	if self == nil {
 		return nil
+	}
+	if policy.Observation.Execution == nil {
+		if self.ExecutionAccounting != nil {
+			return errors.New("legacy native archive acquired execution authority")
+		}
+	} else {
+		if self.ExecutionAccounting == nil || state.ExecutionAccounting == nil || self.ExecutionAccounting.Through != self.Cursor {
+			return errors.New("native archive lost its original execution accounting prefix")
+		}
+		if err := nativeExecutionRetains(state.ExecutionAccounting, self.ExecutionAccounting); err != nil {
+			return err
+		}
 	}
 	capacity := state.Catalog.capacity(policy.HistoryCatalog)
 	if len(self.Segments) == 0 || uint64(len(self.Segments)) > capacity.Segments || uint64(len(self.Segments)) > capacity.HeldReaders || self.Cursor.Number <= policy.Observation.From.Number || self.Cursor.Number > state.Cursor.Number || !rootCanonicalHash(self.Cursor.Hash) || self.BatchCount == 0 || self.BatchCount > state.BatchCount || !planSha256(self.BatchChainHash) || self.Events == 0 {
@@ -106,6 +119,10 @@ func compactMonitorEconomicNative(record monitorEconomicNativeCheckpoint, refere
 		return record, errors.New("native archive has no acknowledged events to move")
 	}
 	archive := &monitorEconomicNativeArchive{Cursor: state.Cursor, BatchCount: state.BatchCount, BatchChainHash: state.BatchChainHash, ObservedAlpha: state.ObservedAlpha, ObservedFeesRao: state.ObservedFeesRao, Events: uint64(len(state.History))}
+	if state.ExecutionAccounting != nil {
+		value := *state.ExecutionAccounting
+		archive.ExecutionAccounting = &value
+	}
 	if state.Archive != nil {
 		archive.Segments = append([]monitorHistoryReference(nil), state.Archive.Segments...)
 		if state.Archive.Events > math.MaxUint64-archive.Events {
@@ -141,7 +158,7 @@ func openMonitorEconomicNativeArchive(ctx context.Context, policy monitorEconomi
 	defer func() {
 		if resultErr != nil {
 			for _, owner := range owners {
-				resultErr = errors.Join(resultErr, owner.close())
+				resultErr = monitorAdmissionFailure(resultErr, owner.close())
 			}
 			owners = nil
 		}

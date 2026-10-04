@@ -294,7 +294,7 @@ func TestValidatorCapacityConfigRefusesAuthorityDriftAndRetainsOutputCustody(t *
 		case "preview-digest", "approval-digest":
 			expected = "plan reference exact file hash differs"
 		case "cancel":
-			expected = "plan input context or literal file path is unavailable"
+			expected = context.Canceled.Error()
 		}
 		previewBytes, err := json.Marshal(candidate)
 		if err != nil {

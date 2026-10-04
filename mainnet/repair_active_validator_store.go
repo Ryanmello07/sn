@@ -77,8 +77,11 @@ func (self repairActiveValidatorRecord) validate(approval repairActiveValidatorA
 // The marker binds an independently verified approval; claim failure preserves
 // every artifact for manual reconciliation instead of deleting capacity history.
 func openRepairActiveValidatorStore(ctx context.Context, approval repairActiveValidatorApproval, key string, create bool, now time.Time) (*repairActiveValidatorStore, error) {
-	if ctx == nil || ctx.Err() != nil || now.IsZero() {
+	if ctx == nil || now.IsZero() {
 		return nil, errors.New("active repair store context or clock unavailable")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if err := approval.validate(key); err != nil {
 		return nil, err

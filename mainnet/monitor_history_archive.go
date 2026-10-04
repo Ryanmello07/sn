@@ -52,6 +52,11 @@ type monitorHistorySnapshot struct {
 	readOnly bool
 }
 
+// A private instance barrier can withhold admission after the actual read. It
+// cannot provide bytes or create authority; tests can close the borrowed real
+// lock here to exercise an actual nested cleanup failure without timing races.
+type monitorHistoryAdmissionReadKey struct{}
+
 func openMonitorHistorySnapshot(ctx context.Context, path string, write bool) (_ *monitorHistorySnapshot, resultErr error) {
 	if !monitorHistoryPath(path) {
 		return nil, errors.New("monitor history path must be bounded canonical absolute")
@@ -67,7 +72,7 @@ func openMonitorHistorySnapshot(ctx context.Context, path string, write bool) (_
 	self := &monitorHistorySnapshot{storage: storage, path: path, readOnly: !write}
 	defer func() {
 		if resultErr != nil {
-			resultErr = errors.Join(resultErr, self.close())
+			resultErr = monitorAdmissionFailure(resultErr, self.close())
 		}
 	}()
 	fd, err := storage.openFile(path+".lock", flags, 0)
@@ -131,10 +136,13 @@ func openMonitorHistoryReader(ctx context.Context, reference monitorHistoryRefer
 	}
 	defer func() {
 		if resultErr != nil {
-			resultErr = errors.Join(resultErr, owner.close())
+			resultErr = monitorAdmissionFailure(resultErr, owner.close())
 		}
 	}()
 	raw, present, err := owner.read()
+	if after, ok := ctx.Value(monitorHistoryAdmissionReadKey{}).(func(string, *os.File) error); err == nil && ok && after != nil {
+		err = after(owner.path, owner.lock)
+	}
 	if err != nil {
 		return nil, nil, err
 	}

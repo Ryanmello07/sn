@@ -232,6 +232,9 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	maximumReportBytes := historicalReplayReportLimit
 	if job.ObservationProfile != nil {
 		maximumReportBytes = historicalReplayObservedReportLimit
+		if job.ObservationProfile.Schema == historicalNativeProfileSchema {
+			maximumReportBytes = historicalNativeReportLimit
+		}
 	}
 	output, err := runHistoricalProofWorker(owner, cancel, historicalProofWorkerRequest{Engine: request.Engine, Input: raw, Directory: filepath.Dir(request.Job.Path), MaximumReport: maximumReportBytes}, hooks)
 	if err != nil {

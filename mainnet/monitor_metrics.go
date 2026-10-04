@@ -52,18 +52,18 @@ func openMonitorMetrics(path string, contexts ...context.Context) (*monitorMetri
 	}
 	lock, err := owner.open(filepath.Base(path)+".lock", syscall.O_CREAT|syscall.O_RDWR, 0600)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("open metrics lock: %w", err), owner.close())
+		return nil, monitorAdmissionFailure(fmt.Errorf("open metrics lock: %w", err), owner.close())
 	}
 	self := &monitorMetricsStore{path: path, lock: lock, directory: owner, directoryInfo: info}
 	opened, err := lock.Stat()
 	if err != nil || !opened.Mode().IsRegular() || opened.Mode().Perm()&0077 != 0 {
-		return nil, errors.Join(errors.New("metrics lock is not a private regular file"), err, self.close())
+		return nil, monitorAdmissionFailure(errors.Join(errors.New("metrics lock is not a private regular file"), err), self.close())
 	}
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		return nil, errors.Join(fmt.Errorf("metrics already has an owner: %w", err), self.close())
+		return nil, monitorAdmissionFailure(fmt.Errorf("metrics already has an owner: %w", err), self.close())
 	}
 	if err := self.validateDestination(); err != nil {
-		return nil, errors.Join(err, self.close())
+		return nil, monitorAdmissionFailure(err, self.close())
 	}
 	return self, nil
 }

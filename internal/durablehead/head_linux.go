@@ -624,8 +624,13 @@ func (self *Owner) writeCheckpoint(next Checkpoint, boundary string) error {
 		return errors.Join(ErrUncertain, err)
 	}
 	actual, err = self.readCheckpoint()
-	if err != nil || !bytes.Equal(actual, raw) {
-		return errors.Join(ErrUncertain, err, identityIfDifferent(actual, raw))
+	if err != nil {
+		// A failed acknowledgment read retains the pending write, but cannot
+		// establish different bytes or invalidate the original custody.
+		return errors.Join(ErrUncertain, err)
+	}
+	if !bytes.Equal(actual, raw) {
+		return errors.Join(ErrUncertain, identityIfDifferent(actual, raw))
 	}
 	self.checkpoint, self.checkpointRaw = next, raw
 	return self.admit(true)

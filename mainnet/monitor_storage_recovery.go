@@ -20,7 +20,7 @@ type monitorStorageRecovery struct{ attempts int }
 // before replacing any process-local state. Unrelated roles retain their owners.
 func (self *monitorStorageRecovery) resume(ctx context.Context, role string, close func() error, reopen func() error, hooks monitorServiceHooks) error {
 	if err := close(); err != nil {
-		return err
+		return monitorAdmissionFailure(nil, err)
 	}
 	if self.attempts == monitorStorageReconciliations {
 		return fmt.Errorf("%s storage reconciliation budget exhausted: %w", role, durablehead.ErrUncertain)

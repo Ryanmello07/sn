@@ -117,7 +117,10 @@ func (self *repairValidatorHost) parents(path string, owner uint32) error {
 	}
 	for {
 		info, err := os.Lstat(directory)
-		if err != nil || !info.IsDir() || info.Mode().Perm()&0022 != 0 {
+		if err != nil {
+			return repairValidatorObservationError("cannot inspect validator repair ancestor", err, false)
+		}
+		if !info.IsDir() || info.Mode().Perm()&0022 != 0 {
 			return errors.New("validator repair path has an unprotected ancestor")
 		}
 		stat, ok := info.Sys().(*syscall.Stat_t)
@@ -147,8 +150,11 @@ func (self *repairValidatorHost) pin(ctx context.Context, reference planFileRefe
 // The inspector executes this retained read-only descriptor. A pathname swap
 // after pinning cannot redirect the credential-scoped child to another binary.
 func (self *repairValidatorHost) openPinned(ctx context.Context, reference planFileReference, limit int64, executable bool) (result *os.File, resultErr error) {
-	if ctx == nil || ctx.Err() != nil {
+	if ctx == nil {
 		return nil, errors.New("validator repair release read canceled")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if err := self.parents(reference.Path, self.rootUid); err != nil {
 		return nil, err
@@ -195,7 +201,13 @@ func (self *repairValidatorHost) openPinned(ctx context.Context, reference planF
 	}
 	after, err := file.Stat()
 	named, nameErr := os.Lstat(reference.Path)
-	if err != nil || nameErr != nil || !os.SameFile(before, named) || !os.SameFile(before, after) || before.Mode() != named.Mode() || before.Mode() != after.Mode() || before.Size() != total || before.Size() != after.Size() || before.ModTime() != after.ModTime() || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != reference.Sha256 {
+	if err := errors.Join(
+		repairValidatorObservationError("cannot inspect retained validator repair release", repairValidatorObservation(ctx, "host-pin-stat", err), false),
+		repairValidatorObservationError("cannot inspect named validator repair release", nameErr, true),
+	); err != nil {
+		return nil, err
+	}
+	if !os.SameFile(before, named) || !os.SameFile(before, after) || before.Mode() != named.Mode() || before.Mode() != after.Mode() || before.Size() != total || before.Size() != after.Size() || before.ModTime() != after.ModTime() || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != reference.Sha256 {
 		return nil, errors.New("validator repair release pin changed")
 	}
 	return file, self.parents(reference.Path, self.rootUid)
@@ -206,7 +218,7 @@ func (self *repairValidatorHost) read(ctx context.Context, path string, owner ui
 	if err := self.parents(path, owner); err != nil {
 		return nil, err
 	}
-	return readMonitorServiceFile(ctx, path, limit, private, monitorServiceReadHooks{afterRead: func(file *os.File) error {
+	raw, err := readMonitorServiceFile(ctx, path, limit, private, monitorServiceReadHooks{afterRead: func(file *os.File) error {
 		info, err := file.Stat()
 		if err != nil {
 			return err
@@ -217,6 +229,13 @@ func (self *repairValidatorHost) read(ctx context.Context, path string, owner ui
 		}
 		return nil
 	}})
+	if err != nil {
+		return nil, err
+	}
+	if err := repairValidatorObservation(ctx, "host-read:"+path, nil); err != nil {
+		return nil, repairValidatorObservationError("cannot read validator repair evidence", err, false)
+	}
+	return raw, nil
 }
 
 // Properties are requested explicitly and duplicates/omissions are refused.
@@ -233,8 +252,11 @@ type repairValidatorManager struct {
 
 // Each manager call has its own bounded deadline under caller cancellation.
 func (self *repairValidatorHost) command(ctx context.Context, plan repairValidatorPlan, args ...string) ([]byte, error) {
-	if ctx == nil || ctx.Err() != nil {
+	if ctx == nil {
 		return nil, errors.New("validator repair manager context unavailable")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(plan.CommandTimeoutSeconds)*time.Second)
 	defer cancel()
@@ -262,7 +284,10 @@ func (self *repairValidatorHost) inspectCommand(ctx context.Context, plan repair
 		}
 	}
 	machine, err := self.read(ctx, self.machinePath, self.rootUid, 128, false)
-	if err != nil || strings.TrimSpace(string(machine)) != plan.MachineId {
+	if err != nil {
+		return result, err
+	}
+	if strings.TrimSpace(string(machine)) != plan.MachineId {
 		return result, errors.New("validator repair machine identity differs")
 	}
 	// procfs pseudo-files report size zero; the kernel-owned fixed path has its
@@ -272,7 +297,10 @@ func (self *repairValidatorHost) inspectCommand(ctx context.Context, plan repair
 		return result, err
 	}
 	bootRaw, readErr := io.ReadAll(io.LimitReader(boot, 129))
-	if err := errors.Join(readErr, boot.Close(), ctx.Err()); err != nil || len(bootRaw) > 128 || strings.TrimSpace(string(bootRaw)) != plan.BootId {
+	if err := repairValidatorObservation(ctx, "host-boot-read", errors.Join(readErr, boot.Close())); err != nil {
+		return result, repairValidatorObservationError("cannot read validator repair host boot", err, false)
+	}
+	if len(bootRaw) > 128 || strings.TrimSpace(string(bootRaw)) != plan.BootId {
 		return result, errors.New("validator repair host boot differs")
 	}
 	if err := self.parents(filepath.Join(plan.Unit.StateDirectory, "owned"), plan.Unit.Uid); err != nil {
@@ -297,8 +325,11 @@ func (self *repairValidatorHost) inspectCommand(ctx context.Context, plan repair
 		slices.Sort(properties)
 	}
 	raw, err := self.command(ctx, plan, "--system", "--no-pager", "show", "--all", "--property="+strings.Join(properties, ","), "--", plan.Unit.Name)
-	if err != nil || len(raw) > 32*1024 {
-		return result, errors.Join(errors.New("validator repair manager snapshot unavailable"), err)
+	if err != nil {
+		return result, repairValidatorObservationError("cannot read validator repair manager snapshot", err, false)
+	}
+	if len(raw) > 32*1024 {
+		return result, errors.New("validator repair manager snapshot exceeds its bound")
 	}
 	values := map[string]string{}
 	for _, line := range strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n") {
@@ -341,9 +372,12 @@ func (self *repairValidatorHost) inspectCommand(ctx context.Context, plan repair
 	}
 	for _, dependency := range required {
 		raw, err := self.command(ctx, plan, "--system", "--no-pager", "show", "--all", "--property=Id,LoadState,ActiveState,Job", "--", dependency)
+		if err != nil {
+			return result, repairValidatorObservationError("cannot read validator repair prerequisite", err, false)
+		}
 		lines := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n")
 		slices.Sort(lines)
-		if err != nil || !slices.Equal(lines, []string{"ActiveState=active", "Id=" + dependency, "Job=0", "LoadState=loaded"}) {
+		if !slices.Equal(lines, []string{"ActiveState=active", "Id=" + dependency, "Job=0", "LoadState=loaded"}) {
 			return result, errors.New("validator repair prerequisite is not already active")
 		}
 	}
@@ -368,7 +402,10 @@ func (self *repairValidatorHost) stopped(ctx context.Context, plan repairValidat
 		return errors.New("validator repair cgroup filesystem verifier is unavailable")
 	}
 	filesystem, err := self.cgroupType(self.cgroupRoot)
-	if err != nil || filesystem != unix.CGROUP2_SUPER_MAGIC {
+	if err != nil {
+		return repairValidatorObservationError("cannot read validator repair cgroup filesystem", err, false)
+	}
+	if filesystem != unix.CGROUP2_SUPER_MAGIC {
 		return errors.New("validator repair requires a genuine unified cgroup filesystem")
 	}
 	prior := plan.Previous
@@ -384,7 +421,10 @@ func (self *repairValidatorHost) stopped(ctx context.Context, plan repairValidat
 	if errors.Is(err, os.ErrNotExist) {
 		return ctx.Err()
 	}
-	if err != nil || !info.IsDir() {
+	if err != nil {
+		return repairValidatorObservationError("cannot inspect validator repair cgroup", err, false)
+	}
+	if !info.IsDir() {
 		return errors.New("validator repair cgroup is unavailable")
 	}
 	read := func(name string) ([]byte, error) {
@@ -402,6 +442,9 @@ func (self *repairValidatorHost) stopped(ctx context.Context, plan repairValidat
 	}
 	events, eventsErr := read("cgroup.events")
 	procs, procsErr := read("cgroup.procs")
+	if err := repairValidatorObservation(ctx, "host-cgroup-read", errors.Join(eventsErr, procsErr)); err != nil {
+		return repairValidatorObservationError("cannot read validator repair cgroup population", err, false)
+	}
 	populated := ""
 	for _, line := range strings.Split(strings.TrimSpace(string(events)), "\n") {
 		parts := strings.Fields(line)
@@ -412,8 +455,8 @@ func (self *repairValidatorHost) stopped(ctx context.Context, plan repairValidat
 			populated = parts[1]
 		}
 	}
-	if eventsErr != nil || procsErr != nil || populated != "0" || len(bytes.TrimSpace(procs)) != 0 {
-		return errors.New("validator repair cgroup is populated or unavailable")
+	if populated != "0" || len(bytes.TrimSpace(procs)) != 0 {
+		return errors.New("validator repair cgroup is populated or lacks an empty population witness")
 	}
 	return nil
 }

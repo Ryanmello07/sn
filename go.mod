@@ -200,7 +200,7 @@ require (
 // durable-volume v2 admission, bounded v3 custody inventory and reviewed fresh
 // namespace preparation. They also cover sibling modules'
 // v0.0.0 placeholders without selecting an older local checkout implicitly.
-replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20261003082047-631bcb282d39
+replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20261003195725-2ea8d82ea5cb
 
 replace github.com/urnetwork/sdk => github.com/urnetwork/sdk v0.0.0-20261003032453-9ae95704a230
 

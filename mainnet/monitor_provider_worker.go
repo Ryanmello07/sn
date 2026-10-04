@@ -86,7 +86,7 @@ func openMonitorProviderWorker(ctx context.Context, policy monitorProviderPolicy
 	worker := &monitorProviderWorker{policy: policy, checkpoint: owner}
 	metricOwner, err := openMonitorMetrics(metricsPath, ctx)
 	if err != nil {
-		return nil, errors.Join(err, owner.close())
+		return nil, monitorAdmissionFailure(err, closeMonitorServiceOwners(policy.Role, nil, owner, hooks))
 	}
 	worker.metrics = metricOwner
 	if hooks.afterCheckpointOpen != nil {
@@ -94,7 +94,7 @@ func openMonitorProviderWorker(ctx context.Context, policy monitorProviderPolicy
 	}
 	worker.state, err = worker.load(ctx)
 	if err != nil {
-		return nil, errors.Join(err, closeMonitorServiceOwners(policy.Role, metricOwner, owner, hooks))
+		return nil, monitorAdmissionFailure(err, closeMonitorServiceOwners(policy.Role, metricOwner, owner, hooks))
 	}
 	if hooks.syncDirectory != nil {
 		owner.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(policy.Role, "checkpoint", file) }
@@ -321,7 +321,7 @@ func (self *monitorProviderWorker) run(ctx context.Context, interval time.Durati
 				candidate := &monitorProviderWorker{policy: self.policy, checkpoint: owner}
 				state, err := candidate.load(ctx)
 				if err != nil {
-					return errors.Join(err, owner.close())
+					return monitorAdmissionFailure(err, owner.close())
 				}
 				owner.syncDirectory = prior.syncDirectory
 				self.checkpoint, self.state = owner, state
@@ -329,7 +329,7 @@ func (self *monitorProviderWorker) run(ctx context.Context, interval time.Durati
 				return nil
 			}, hooks)
 			if err != nil {
-				if ctx.Err() != nil {
+				if monitorCanceledCheckpointLoad(ctx, err) {
 					return 0
 				}
 				fmt.Fprintln(stderr, "provider checkpoint continuation:", err)
