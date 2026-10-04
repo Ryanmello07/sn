@@ -264,7 +264,8 @@
     "server-participant5b22-source-root-review-20261004.json": "8b5f0db6fd0666a40ab27e1ee19e9083fae1698301a15502d9dd135c3376e58e",
     "conservation-capturee51-source-and-original-build-readback-20261004.json": "55f57aba6700b8cb39a8b5953d6f9ed6cbdbe86c5540f914c2260f79a52184f2",
     "validatorb6-normal14-independent-body-readback-20261004.json": "c77be24ba0d49f170a398577be80e7ec74df1aac59ed84c49cec28279c7cd169",
-    "funding-public-cache-custody-source-finding-20261004.json": "533bac17c304ef31704d4d920ae237fcfe7b096713fdb2df237aecda91d0c28d"
+    "funding-public-cache-custody-source-finding-20261004.json": "533bac17c304ef31704d4d920ae237fcfe7b096713fdb2df237aecda91d0c28d",
+    "funding72-selected-mathematics-source-review-20261004.json": "502f4f54db1eef2c10b21eeb78e17166bbd2cb4c4dc548b52f0260aa4eaf9b58"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
