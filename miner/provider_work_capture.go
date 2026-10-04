@@ -59,12 +59,11 @@ func ReadProviderWorkCaptureProfile(ctx context.Context, path, expectedSha256 st
 	if path == "" && expectedSha256 == "" && !required {
 		return nil, nil
 	}
-	if !filepath.IsAbs(path) || filepath.Clean(path) != path || len(expectedSha256) != len("sha256:")+64 || !strings.HasPrefix(expectedSha256, "sha256:") || strings.ToLower(expectedSha256) != expectedSha256 {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return nil, errors.New("whole-work launch requires an absolute profile and its reviewed sha256 digest")
 	}
-	expected, err := hex.DecodeString(strings.TrimPrefix(expectedSha256, "sha256:"))
-	if err != nil || len(expected) != sha256.Size {
-		return nil, errors.New("whole-work launch profile digest is malformed")
+	if _, err := providerWorkCaptureDigest(expectedSha256); err != nil {
+		return nil, err
 	}
 	file, err := openProviderCloseReportDomain(path)
 	if err != nil {
@@ -78,8 +77,44 @@ func ReadProviderWorkCaptureProfile(ctx context.Context, path, expectedSha256 st
 	if err := errors.Join(readErr, file.Close(), ctx.Err()); err != nil {
 		return nil, err
 	}
+	result, err := DecodeProviderWorkCaptureProfile(ctx, raw, expectedSha256)
+	if err != nil {
+		return nil, err
+	}
+	if err := result.validateCustody(); err != nil {
+		return nil, err
+	}
+	for _, provider := range result.Providers {
+		if strings.HasPrefix(path, provider.OutboxDirectory+string(filepath.Separator)) {
+			return nil, errors.New("whole-work launch profile overlaps original outbox custody")
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// DecodeProviderWorkCaptureProfile borrows exact independently approved bytes.
+// Offline recovery can inspect their complete scope before original directories
+// are restored. This performs no filesystem access and grants no live custody;
+// launch callers must use ReadProviderWorkCaptureProfile or Validate afterwards.
+func DecodeProviderWorkCaptureProfile(ctx context.Context, raw []byte, expectedSha256 string) (*ProviderWorkCaptureProfile, error) {
+	if ctx == nil {
+		return nil, errors.New("whole-work launch profile requires an owner")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	expected, err := providerWorkCaptureDigest(expectedSha256)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 || len(raw) > maximumProviderWorkCaptureBytes {
+		return nil, errors.New("whole-work launch profile must contain bounded original bytes")
+	}
 	actual := sha256.Sum256(raw)
-	if len(raw) > maximumProviderWorkCaptureBytes || !bytes.Equal(actual[:], expected) {
+	if !bytes.Equal(actual[:], expected) {
 		return nil, errors.New("whole-work launch profile differs from its reviewed original")
 	}
 	if err := protocol.ValidateUniqueJsonKeys(raw); err != nil {
@@ -91,20 +126,39 @@ func ReadProviderWorkCaptureProfile(ctx context.Context, path, expectedSha256 st
 	if err := decoder.Decode(&result); err != nil {
 		return nil, err
 	}
-	if err := result.Validate(); err != nil {
+	if err := result.validateStructure(); err != nil {
 		return nil, err
 	}
-	for _, provider := range result.Providers {
-		if strings.HasPrefix(path, provider.OutboxDirectory+string(filepath.Separator)) {
-			return nil, errors.New("whole-work launch profile overlaps original outbox custody")
-		}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return &result, nil
 }
 
-// Structural admission preserves the full declared roster and requires an
-// already provisioned outbox. No file, request, key or identity is created here.
+// Both byte and descriptor readers require the same exact digest spelling.
+func providerWorkCaptureDigest(expectedSha256 string) ([]byte, error) {
+	if len(expectedSha256) != len("sha256:")+64 || !strings.HasPrefix(expectedSha256, "sha256:") || strings.ToLower(expectedSha256) != expectedSha256 {
+		return nil, errors.New("whole-work launch profile digest is malformed")
+	}
+	expected, err := hex.DecodeString(strings.TrimPrefix(expectedSha256, "sha256:"))
+	if err != nil || len(expected) != sha256.Size {
+		return nil, errors.New("whole-work launch profile digest is malformed")
+	}
+	return expected, nil
+}
+
+// Launch admission preserves the full declared roster and requires an already
+// provisioned outbox. No file, request, key or identity is created here.
 func (self ProviderWorkCaptureProfile) Validate() error {
+	if err := self.validateStructure(); err != nil {
+		return err
+	}
+	return self.validateCustody()
+}
+
+// Recovery borrows this grammar without guessing whether an absent directory
+// is a fresh target, a moved original or lost custody.
+func (self ProviderWorkCaptureProfile) validateStructure() error {
 	endpoint, err := url.Parse(self.ApiUrl)
 	if err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Opaque != "" || endpoint.Fragment != "" || endpoint.Path != "" || endpoint.RawPath != "" {
 		return errors.New("whole-work launch requires an exact https operator origin")
@@ -113,7 +167,6 @@ func (self ProviderWorkCaptureProfile) Validate() error {
 		return errors.New("whole-work launch requires its original request authority and between one and 64 providers")
 	}
 	slotKVs, clientKVs := map[string]bool{}, map[[16]byte]bool{}
-	outboxInfos := make([]os.FileInfo, 0, len(self.Providers))
 	for index, provider := range self.Providers {
 		if provider.Slot == "" || len(provider.Slot) > 96 || strings.TrimSpace(provider.Slot) != provider.Slot || strings.ContainsAny(provider.Slot, "/\\\x00\r\n") || slotKVs[provider.Slot] || provider.ClientId == ([16]byte{}) || clientKVs[provider.ClientId] || provider.PublicKey == ([32]byte{}) || provider.PublicKey == self.RequestPublicKey {
 			return errors.New("whole-work launch provider identity is missing, repeated or shares request signing authority")
@@ -131,6 +184,16 @@ func (self ProviderWorkCaptureProfile) Validate() error {
 				return errors.New("whole-work launch outboxes overlap")
 			}
 		}
+	}
+	return nil
+}
+
+// Only actual launch checks the currently named physical directories. Recovery
+// supplies its own protected original and destination descriptor inventories.
+func (self ProviderWorkCaptureProfile) validateCustody() error {
+	outboxInfos := make([]os.FileInfo, 0, len(self.Providers))
+	for _, provider := range self.Providers {
+		path := provider.OutboxDirectory
 		info, err := os.Lstat(path)
 		if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
 			return errors.Join(errors.New("whole-work launch requires a precreated private original outbox"), err)

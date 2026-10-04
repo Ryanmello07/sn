@@ -84,3 +84,15 @@ production DeviceLocal constructor's actual HTTPS capture, cancellation and
 restart. These are distinct paths, not one successful public-CLI end-to-end
 capture. They are authored but unexecuted at this handoff; previous miner scope
 qualification does not qualify this new feature.
+
+Offline preparation and recovery use
+`DecodeProviderWorkCaptureProfile(ctx, raw, expectedSha256)` after their own
+protected profile read. It verifies the exact reviewed bytes, independent
+authority, complete roster, domains and canonical nonoverlapping paths without
+opening the named outboxes. Recovery must select the exact approved slot and
+match its outbox to the original protected inventory. The decoder grants no live
+custody: launch still uses `ReadProviderWorkCaptureProfile` and its physical
+directory checks. Historical retained cuts use their independently signed
+request's provider key; a later approved launch key cannot rewrite those cuts.
+The three portable decoder test roots are separate, authored and unexecuted;
+the original eight miner and three bootstrap test sources remain unchanged.
