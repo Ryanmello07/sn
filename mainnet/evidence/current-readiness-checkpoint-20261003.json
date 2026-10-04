@@ -307,7 +307,8 @@
     "server5b-controls-root-readback-20261004.json": "46709274c3f480a9afabdfbc36a90b277e26b0a7cf1bac329bc086a257e5d8f9",
     "funding-candidate-f51-root-source-review-20261004.json": "e69d0d1ff377775536bf02af2ddbe0fe8ea0eb1aa11cfda07398a4dc5fb1ffb8",
     "funding-dual-engine-original-failures-source-review-20261004.json": "f8b489af94f75e7b1213895638bf4539329ef7e31ba1b3fb6a210142eb675d9b",
-    "funding-remaining-and-f51-terminal-root-readback-20261004.json": "65839d756ab5c8ffb20b96e4fcef6805ff092d1413ea6a5d26a75ebcaacf52fc"
+    "funding-remaining-and-f51-terminal-root-readback-20261004.json": "65839d756ab5c8ffb20b96e4fcef6805ff092d1413ea6a5d26a75ebcaacf52fc",
+    "funding-8ad5-matched-engines-root-readback-20261004.json": "c9e04178e7efd797215c517b54bb95d7e84c7693d35875f3d963341dbeeef1bd"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
