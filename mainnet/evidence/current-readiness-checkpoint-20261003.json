@@ -314,7 +314,8 @@
     "original-close-pinned-protobuf-root-readback-20261004.json": "061e0a1d32ee64aa71d56290ef6c8cf5246581abb5492ac2c9aad999578fa9b6",
     "server-participant-current-publication-root-readback-20261004.json": "374024c9cd6de3e8ed883053dd0ad99d13ff88430ca3968e5f9bac044af9b615",
     "funding-corrected-proof-four-root-readback-20261004.json": "a9d98df42508b969ff9fdcd776dad85975bd0a4613bc3316262e175cb9136f72",
-    "capture-precompile-3f-root-source-review-20261004.json": "fcd74eff57483326d0c9d722bad3b21ea9f2e84bab6d80c880c0be3b97920222"
+    "capture-precompile-3f-root-source-review-20261004.json": "fcd74eff57483326d0c9d722bad3b21ea9f2e84bab6d80c880c0be3b97920222",
+    "original-capture-seven-rust-controls-root-readback-20261004.json": "91ee60ec5dfade14181b5d81df967b0695574282db6469b1f390f73534dfa1f4"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",

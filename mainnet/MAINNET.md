@@ -26,6 +26,9 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+**October 4 original Rust controls complete:** The [raw seven-control readback](evidence/original-capture-seven-rust-controls-root-readback-20261004.json) verifies21 clean/compile/body phases and seven exact intended assertion failures, with no ignored root and joined children. Retain the original fourteen capture/Yuma assets and successful exporters. Remaining work is affected Go integration, full funding/finality/fee consumers and current release qualification.
+
+
 **October 4 actual vault fixture correction:** The [3f source review](evidence/capture-precompile-3f-root-source-review-20261004.json) confirms a test-only correction: synthetic precompile accounts now have code presence required by Solidity typed void calls, while actual registration, UID lookup and stake movement remain executed by the explicit adapters. Check those actual selector counts and unchanged success/rollback accounting. Qualify the affected vault/capture roots and a fixture-owned omitted-code control; no production contract behavior is weakened.
 
 
