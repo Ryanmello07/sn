@@ -33,6 +33,12 @@ type economicCapturePrecompile struct {
 	shortfall bool
 }
 
+// Keep the synthetic adapters checked against the exact imported VM contract.
+var _ vm.PrecompiledContract = (*economicCapturePrecompile)(nil)
+
+// The pinned VM exposes this diagnostic name separately from execution/gas.
+func (self *economicCapturePrecompile) Name() string { return "synthetic-" + self.kind }
+
 func (self *economicCapturePrecompile) RequiredGas([]byte) uint64 { return 100 }
 
 func (self *economicCapturePrecompile) stake(hotkey common.Hash) *big.Int {
