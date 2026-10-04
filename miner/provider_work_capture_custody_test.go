@@ -46,6 +46,10 @@ func TestProviderWholeWorkActualConstructorRefusesUnpreparedCustody(t *testing.T
 		if device != nil || !errors.Is(err, connect.ErrOriginalWorkOutboxIdentity) {
 			t.Fatal("actual constructor bypassed prepared original custody", indexed, device, err)
 		}
+		capture := settings.ContractManagerSettings.OriginalWorkCapture
+		if capture == nil || capture.PublicKey != profile.Providers[0].PublicKey || capture.RequestPublicKey != profile.RequestPublicKey {
+			t.Fatal("actual runtime capture settings lost independently approved signing keys", indexed, capture)
+		}
 		entries, err := os.ReadDir(directory)
 		if err != nil || !indexed && len(entries) != 0 || indexed && (len(entries) != 1 || entries[0].Name() != connect.OriginalWorkOutboxIndexName) {
 			t.Fatal("failed launch created or replaced original custody", indexed, entries, err)

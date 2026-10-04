@@ -53,8 +53,9 @@ provider slot. Restored custody instead comes from the complete protected
 original inventory and retained signed bytes. Making an empty directory or
 copying selected cut files cannot authorize startup. The shared production
 provider constructor validates prepared custody and signed scope through Core
-before creating the SDK device. Its live worker subsequently acquires and
-monitors its own outbox lease; a later custody change refuses capture.
+before creating the SDK device. Capture and replay retain that same approved
+provider key in their runtime settings. The live worker subsequently acquires
+and monitors its own outbox lease; a later custody change refuses capture.
 
 Swarm members use `whole_work_capture`, `whole_work_capture_sha256`, and
 `require_whole_work_capture`. A top-level swarm `require_whole_work_capture: true`

@@ -281,7 +281,7 @@ func (self *ProviderWorkCaptureProfile) apply(settings *sdk.DeviceLocalSettings,
 			return errors.Join(errors.New("whole-work launch differs from retained provider domain"), err)
 		}
 		settings.ContractManagerSettings.CloseReportDomainHash = domainHash
-		settings.ContractManagerSettings.OriginalWorkCapture = &connect.OriginalWorkCaptureSettings{ApiUrl: self.ApiUrl, OutboxDirectory: provider.OutboxDirectory, RequestPublicKey: self.RequestPublicKey, PollInterval: 15 * time.Second}
+		settings.ContractManagerSettings.OriginalWorkCapture = &connect.OriginalWorkCaptureSettings{ApiUrl: self.ApiUrl, OutboxDirectory: provider.OutboxDirectory, PublicKey: provider.PublicKey, RequestPublicKey: self.RequestPublicKey, PollInterval: 15 * time.Second}
 		settings.ClientKeyRegistrationRequired = true
 		return nil
 	}
