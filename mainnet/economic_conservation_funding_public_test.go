@@ -134,6 +134,9 @@ func newEconomicFundingEntitlementFixture(t *testing.T) (*economicConservationAr
 		receipt.Logs[1] = monitorEvmTestLog(t, vault.contract, common.HexToAddress(vault.policy.Address), "Claimed", big.NewInt(3), big.NewInt(1), [32]byte(common.HexToHash(vault.policy.Coldkeys[0])), big.NewInt(9900), big.NewInt(49), sender)
 		receipt.Logs[2] = monitorEvmTestLog(t, vault.contract, common.HexToAddress(vault.policy.Address), "ClaimPaid", [32]byte(common.HexToHash(vault.policy.Coldkeys[0])), big.NewInt(61), sender)
 	})
+	// Keep the original one-block observation boundary while rebinding the
+	// fixture identity; otherwise the first read skips the missed-root page.
+	vault.policy.BatchBlocks = entitlement.source.policy.Vault.BatchBlocks
 	entitlement.source.policy.Vault = vault.policy
 	f, _ := economicConservationPrincipalFixtureWithSource(t, entitlement.source, "capture", true, func(job *historicalReplayJob) {
 		if len(job.ExtrinsicsHex) != 1 {
@@ -224,6 +227,9 @@ func TestEconomicFundingPublicOriginalIncomeFundsLaterAuthorizedPayment(t *testi
 			receipt.Logs[2] = monitorEvmTestLog(t, vault.contract, address, "ClaimPaid", [32]byte(common.HexToHash(vault.policy.Coldkeys[0])), big.NewInt(3), sender)
 		}
 	})
+	// Keep the original one-block observation boundary while rebinding the
+	// fixture identity; otherwise the first read skips the missed-root page.
+	vault.policy.BatchBlocks = entitlement.source.policy.Vault.BatchBlocks
 	entitlement.source.policy.Vault = vault.policy
 	// This case observes actual contract credit/payment directly, without
 	// borrowing the older fixture's unrelated epoch-one daemon receipt.
