@@ -191,7 +191,8 @@
     "fee-c04-original-race-terminal-root-review-20261004.json": "0bea709fe46acfa66c20b7ffcec3c6ded6c254e9a66b1c997c8879f03e6565d3",
     "principal-dc1-rust-operational-root-adoption-20261004.json": "206fe47130255104fc74d86a7f81a2888f49e8db1cd8f5a41c2713a42494e6b8",
     "principal-dc1-dual-engine-build-root-review-20261004.json": "51b85db2e02bbd2ade1f6a0a6702296b22782a5c3a86964f501e830abb29b63a",
-    "principal-dc1-rust-positives-root-review-20261004.json": "ec5b08ae6d0e59713c95c6c2d7783158c0f06f14ea19540ff3d6159bfbf8f66f"
+    "principal-dc1-rust-positives-root-review-20261004.json": "ec5b08ae6d0e59713c95c6c2d7783158c0f06f14ea19540ff3d6159bfbf8f66f",
+    "principal-dc1-rust-controls-root-review-20261004.json": "7a14c299599211bd097a622a9b66eb13113093aeb4aa3c208838e066ad6470c3"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -312,7 +313,7 @@
       "closed": false,
       "evidence": "fee-revision3e7-source-root-review-20261004.json",
       "requirement": "PH-19",
-      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal/race each48PASS1FAIL,all49 terminal with no timeout; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with operational resource admission and24 exact Rust positives passing plus ten exported jobs; two Rust controls and38 public Go roots/mode remain. Principal-effects986 source-reviewed (48 Go roots/mode,27 Rust roots,eight causal groups); behavioral qualification and actual native-to-vault capture join remain. Full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain."
+      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal/race each48PASS1FAIL,all49 terminal with no timeout; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with operational resource admission and24 exact Rust positives passing plus ten exported jobs; both Rust causal controls qualified;38 public Go roots/mode and six Go causal groups remain. Principal-effects986 source-reviewed (48 Go roots/mode,27 Rust roots,eight causal groups); behavioral qualification and actual native-to-vault capture join remain. Full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain."
     },
     {
       "closed": false,
