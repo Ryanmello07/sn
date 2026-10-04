@@ -265,8 +265,9 @@ func validateEconomicEntitlementFunding(record economicConservationEntitlement) 
 	return nil
 }
 
-// Follow only indexed original edges. A prior epoch's carry is spent once in
-// its own pool; neither a matching amount nor a payment epoch identifies it.
+// Follow only indexed original edges. Carry is spent once in its own pool.
+// Late finalization can consume a newer epoch's already available carry, so
+// original receipt order, not the epoch number, determines its availability.
 func (self *economicConservationState) reconcileEntitlementFunding(ctx context.Context) error {
 	active := make(map[string]economicConservationEntitlement, len(self.Entitlements))
 	captures := make(map[string]economicConservationCapture, len(self.Captures))
@@ -325,8 +326,12 @@ func (self *economicConservationState) reconcileEntitlementFunding(ctx context.C
 				}
 				from, fromErr := monitorEconomicInteger(prior.Epoch)
 				to, toErr := monitorEconomicInteger(record.Epoch)
-				if !exists || prior.PoolId != record.PoolId || fromErr != nil || toErr != nil || from.Cmp(to) >= 0 || prior.CarryEvent == nil {
-					return errors.New("economic carry lost its original earlier epoch and pool receipt")
+				if !exists || prior.PoolId != record.PoolId || fromErr != nil || toErr != nil || from.Cmp(to) == 0 || prior.CarryEvent == nil || record.Finalization == nil {
+					return errors.New("economic carry lost its original source epoch and pool receipt")
+				}
+				carry, final := prior.CarryEvent, record.Finalization
+				if carry.Block.Number > final.Block.Number || carry.Block.Number == final.Block.Number && (carry.Block.Hash != final.Block.Hash || carry.LogIndex >= final.LogIndex || carry.TransactionIndex > final.TransactionIndex || carry.TransactionIndex == final.TransactionIndex && (carry.TransactionHash != final.TransactionHash || carry.ReceiptHash != final.ReceiptHash)) {
+					return errors.New("economic carry was not available before original finalization receipt")
 				}
 				if source.Kind == "root-missed" {
 					if prior.Status != "root-missed" || prior.CarryEvent.Name != "RootMissed" || prior.CarryEvent.Values["carried"] != source.Amount || prior.Funded != source.Amount {

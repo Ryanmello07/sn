@@ -120,7 +120,7 @@ func TestEconomicEntitlementPublicForeignPoolCarryRefusesBeforeRead(t *testing.T
 	reads, claims := f.artifactReads.Load(), f.source.claimReads.Load()
 	var output, diagnostic bytes.Buffer
 	code := runMonitorStorageTestWithHooks(t, ctx, f.source.args(t), &output, &diagnostic, func() time.Time { return f.source.now }, monitorServiceHooks{})
-	if code != 3 || output.Len() != 0 || f.artifactReads.Load() != reads || f.source.claimReads.Load() != claims || !strings.Contains(diagnostic.String(), "earlier epoch and pool receipt") {
+	if code != 3 || output.Len() != 0 || f.artifactReads.Load() != reads || f.source.claimReads.Load() != claims || !strings.Contains(diagnostic.String(), "original source epoch and pool receipt") {
 		t.Fatal("equal-valued carry crossed original operator pool authority", code, diagnostic.String())
 	}
 }

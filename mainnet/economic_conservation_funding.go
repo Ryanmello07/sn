@@ -273,7 +273,8 @@ func (self *economicFundingResolver) capture(id string) (economicFundingCapture,
 }
 
 // Follow original source epochs and pool identity with cycle refusal and memoized
-// cold predecessors. Payment epoch is never used to choose an earning interval.
+// cold predecessors. A delayed old root can consume a newer epoch's carry;
+// original receipt admission establishes that order, never the epoch number.
 func (self *economicFundingResolver) entitlement(id string) (economicFundingEntitlement, error) {
 	if err := self.ctx.Err(); err != nil {
 		return economicFundingEntitlement{}, err
@@ -320,7 +321,7 @@ func (self *economicFundingResolver) entitlement(id string) (economicFundingEnti
 			}
 			from, fromErr := monitorEconomicInteger(prior.Epoch)
 			to, toErr := monitorEconomicInteger(record.Epoch)
-			if fromErr != nil || toErr != nil || prior.Pool != record.PoolId || from.Cmp(to) >= 0 {
+			if fromErr != nil || toErr != nil || prior.Pool != record.PoolId || from.Cmp(to) == 0 {
 				return value, errors.New("economic funding composition moved original source epoch or pool")
 			}
 			part, err = prior.Funding.subset(source.Amount)
