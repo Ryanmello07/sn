@@ -198,7 +198,7 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 		return nil, err
 	}
 	participants := &wholeWorkParticipantVerification{Complete: window.Credited == 0}
-	if window.Credited != 0 && expected.AttributionSigner != (common.Address{}) && expected.AttributionSigner == authority.Signer {
+	if expected.AttributionSigner != (common.Address{}) && expected.AttributionSigner == authority.Signer {
 		participants, err = verifyWholeWorkParticipants(ctx, artifact, authority, owned, contracts, creations)
 		if err != nil {
 			return nil, err
@@ -300,6 +300,14 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("whole work lacks its expected source owner"))
 		}
 		row, exists := rows[id]
+		if _, future := participants.FutureReservations[id]; future {
+			if exists {
+				return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("window includes an independently dated future reservation"))
+			}
+			// A later SDK cut may include work admitted at or after End. Only
+			// the independently bound original reservation can exclude it.
+			continue
+		}
 		if !exists {
 			// A delayed boundary capture can include later admissions, just as
 			// a delayed start can include earlier completions. Neither signed
@@ -342,7 +350,9 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 			}
 		case "open":
 			if sourceErr == nil && sourceHead.Terminal && destinationErr == nil && destinationHead.Terminal {
-				return nil, ErrClosedWorkUnavailable
+				if _, open := participants.OpenThroughEnd[id]; !open {
+					return nil, ErrClosedWorkUnavailable
+				}
 			}
 		case "unassigned_canceled":
 			return nil, ErrClosedWorkUnavailable
