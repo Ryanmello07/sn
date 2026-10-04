@@ -24,14 +24,15 @@ const nativeProducerBoundaryEntries = 4*32768 + 8192 + 128 + 16 + historicalNati
 // These are separate finite deployment dimensions. Growth needs a separately
 // reviewed policy; exhaustion holds the original cursor and never deletes jobs.
 type nativeExecutionProducerPolicy struct {
-	Schema                   string            `json:"schema"`
-	Authority                planFileReference `json:"authority"`
-	CaptureEngine            planFileReference `json:"capture_engine"`
-	Nodes                    string            `json:"parent_trie_nodes_directory"`
-	MaximumJobs              uint64            `json:"maximum_completed_jobs"`
-	MaximumBytes             uint64            `json:"maximum_artifact_bytes"`
-	MaximumEntries           uint64            `json:"maximum_artifact_entries"`
-	MaximumDescendantHeaders uint64            `json:"maximum_descendant_headers"`
+	Schema                   string              `json:"schema"`
+	Authority                planFileReference   `json:"authority"`
+	Renewals                 []planFileReference `json:"renewals,omitempty"`
+	CaptureEngine            planFileReference   `json:"capture_engine"`
+	Nodes                    string              `json:"parent_trie_nodes_directory"`
+	MaximumJobs              uint64              `json:"maximum_completed_jobs"`
+	MaximumBytes             uint64              `json:"maximum_artifact_bytes"`
+	MaximumEntries           uint64              `json:"maximum_artifact_entries"`
+	MaximumDescendantHeaders uint64              `json:"maximum_descendant_headers"`
 }
 
 func (self *nativeExecutionProducerPolicy) validate() error {
@@ -41,7 +42,7 @@ func (self *nativeExecutionProducerPolicy) validate() error {
 	if self.Schema != nativeProducerSchema || !bootstrapRootAbsolutePath(self.Authority.Path) || !planSha256(self.Authority.Sha256) || !bootstrapRootAbsolutePath(self.CaptureEngine.Path) || !planSha256(self.CaptureEngine.Sha256) || !bootstrapRootAbsolutePath(self.Nodes) || self.MaximumJobs == 0 || self.MaximumJobs > 4096 || self.MaximumBytes < 2*nativeProducerBoundaryReserve || self.MaximumBytes > 64*1024*1024*1024 || self.MaximumEntries < 2*nativeProducerBoundaryEntries || self.MaximumEntries > 1024*1024 || self.MaximumDescendantHeaders > 4094 {
 		return errors.New("native producer requires independent authority, original trie source and separate finite job/byte/entry/finality capacities")
 	}
-	return nil
+	return nativeProducerRenewalReferences(self)
 }
 
 // Provider membership is approved once by hotkey and coldkey. UIDs and their
@@ -110,6 +111,9 @@ func loadNativeProducerAuthority(ctx context.Context, policy economicEmissionPol
 	if authority.Schema != nativeProducerAuthoritySchema || authority.Network != policy.Network || authority.Netuid != policy.Netuid || policy.SubnetRegistrationBlock == nil || policy.SubnetGeneration == nil || authority.Registration != *policy.SubnetRegistrationBlock || authority.Generation != *policy.SubnetGeneration || authority.Runtime != policy.Runtime || authority.Runtime.RuntimeSourceCommit != frontierMappingSourceCommit || authority.ReviewSha256 != execution.ReviewSha256 || authority.Profile == nil || authority.Profile.Schema != historicalNativeProfileSchema || monitorReadDigest(profileRaw) != execution.ProfileSha256 || authority.CaptureEngine != producer.CaptureEngine || authority.ReplayEngine != execution.Engine || authority.Directory != execution.Directory || authority.Nodes != producer.Nodes || authority.Nodes != filepath.Join(execution.Directory, "nodes") || authority.MaximumJobs != producer.MaximumJobs || authority.MaximumBytes != producer.MaximumBytes || authority.MaximumEntries != producer.MaximumEntries || authority.MaximumDescendantHeaders != producer.MaximumDescendantHeaders || len(authority.Providers) > int(policy.MaximumUids) {
 		return nil, errors.Join(errRpcIntegrity, errors.New("native producer reusable approval differs from original execution/provider/capacity policy"))
 	}
+	if err := nativeProducerReviewedProfile(authority); err != nil {
+		return nil, errors.Join(errRpcIntegrity, err)
+	}
 	anchor, err := strecovery.NativeExecutionCheckpointIdentity(ctx, policy.Network.GenesisHash, &authority.Checkpoint)
 	if err != nil {
 		return nil, err
@@ -137,15 +141,17 @@ func loadNativeProducerAuthority(ctx context.Context, policy economicEmissionPol
 // certifying a later tip remains paired with its older anchor until all selected
 // children have been accounted. No state is inferred from an artifact directory.
 type nativeExecutionProducerState struct {
-	Schema          string                              `json:"schema"`
-	AuthorityHash   string                              `json:"authority_hash"`
-	Cursor          economicEmissionBoundary            `json:"cursor"`
-	Anchor          strecovery.NativeFinalityCheckpoint `json:"anchor"`
-	Window          *planFileReference                  `json:"certified_window,omitempty"`
-	Certified       *economicEmissionBoundary           `json:"certified_tip,omitempty"`
-	Completed       uint64                              `json:"completed_jobs"`
-	Completion      *planFileReference                  `json:"last_completion,omitempty"`
-	CompletionChain string                              `json:"completion_chain"`
+	Schema             string                                 `json:"schema"`
+	AuthorityHash      string                                 `json:"authority_hash"`
+	AuthorityRevisions []nativeProducerRenewalAcknowledgement `json:"authority_revisions,omitempty"`
+	ResourceForecast   *nativeProducerResourceForecast        `json:"resource_forecast,omitempty"`
+	Cursor             economicEmissionBoundary               `json:"cursor"`
+	Anchor             strecovery.NativeFinalityCheckpoint    `json:"anchor"`
+	Window             *planFileReference                     `json:"certified_window,omitempty"`
+	Certified          *economicEmissionBoundary              `json:"certified_tip,omitempty"`
+	Completed          uint64                                 `json:"completed_jobs"`
+	Completion         *planFileReference                     `json:"last_completion,omitempty"`
+	CompletionChain    string                                 `json:"completion_chain"`
 }
 
 func (self *nativeExecutionProducerState) validate(policy economicEmissionPolicy, cursor economicEmissionBoundary) error {
@@ -155,8 +161,32 @@ func (self *nativeExecutionProducerState) validate(policy economicEmissionPolicy
 		}
 		return nil
 	}
-	if policy.Execution == nil || policy.Execution.Producer == nil || self.Schema != nativeProducerSchema || self.AuthorityHash != policy.Execution.Producer.Authority.Sha256 || self.Cursor != cursor || self.Completed == 0 || self.Completed > policy.Execution.Producer.MaximumJobs || self.Completion == nil || !planSha256(self.Completion.Sha256) || !bootstrapRootAbsolutePath(self.Completion.Path) || !planSha256(self.CompletionChain) || self.Window == nil || self.Certified == nil || !planSha256(self.Window.Sha256) || !bootstrapRootAbsolutePath(self.Window.Path) || self.Certified.Number < cursor.Number || !rootCanonicalHash(self.Certified.Hash) {
+	if policy.Execution == nil || policy.Execution.Producer == nil || self.Schema != nativeProducerSchema || self.Cursor != cursor || self.Completed == 0 || self.Completion == nil || !planSha256(self.Completion.Sha256) || !bootstrapRootAbsolutePath(self.Completion.Path) || !planSha256(self.CompletionChain) || self.Window == nil || self.Certified == nil || !planSha256(self.Window.Sha256) || !bootstrapRootAbsolutePath(self.Window.Path) || self.Certified.Number < cursor.Number || !rootCanonicalHash(self.Certified.Hash) {
 		return errors.Join(errRpcIntegrity, errors.New("native producer retained cursor, certificate or completion lineage differs"))
+	}
+	producer := policy.Execution.Producer
+	if len(self.AuthorityRevisions) > len(producer.Renewals) || len(self.AuthorityRevisions) > maximumNativeProducerRenewals {
+		return errors.Join(errRpcIntegrity, errors.New("native producer removed acknowledged independent renewals"))
+	}
+	authorityHash := producer.Authority.Sha256
+	capacity := nativeProducerCapacity{Jobs: producer.MaximumJobs, Bytes: producer.MaximumBytes, Entries: producer.MaximumEntries, DescendantHeaders: producer.MaximumDescendantHeaders}
+	var priorCompleted, priorBoundary, priorAdopted uint64
+	for index, ack := range self.AuthorityRevisions {
+		if ack.Revision != producer.Renewals[index] || ack.Completed <= priorCompleted || ack.Completed <= priorAdopted || ack.Completed >= self.Completed || ack.After.Number <= priorBoundary || ack.After.Number >= self.Cursor.Number || !rootCanonicalHash(ack.After.Hash) || !planSha256(ack.CompletionChain) || ack.Capacity.Jobs < capacity.Jobs || ack.Capacity.Bytes < capacity.Bytes || ack.Capacity.Entries < capacity.Entries || ack.Capacity.DescendantHeaders < capacity.DescendantHeaders || ack.AdoptedCompleted < ack.Completed || ack.AdoptedCompleted <= priorAdopted || ack.AdoptedCompleted >= self.Completed || ack.AdoptedAfter.Number < ack.After.Number || ack.AdoptedAfter.Number >= self.Cursor.Number || ack.AdoptedAfter.Number-ack.After.Number != ack.AdoptedCompleted-ack.Completed || !rootCanonicalHash(ack.AdoptedAfter.Hash) || !planSha256(ack.AdoptedChain) || ack.FirstCompletion == nil || !bootstrapRootAbsolutePath(ack.FirstCompletion.Path) || !planSha256(ack.FirstCompletion.Sha256) {
+			return errors.Join(errRpcIntegrity, errors.New("native producer changed a retained renewal or its completed predecessor"))
+		}
+		if err := ack.Capacity.validate(); err != nil {
+			return errors.Join(errRpcIntegrity, err)
+		}
+		authorityHash, capacity = ack.Revision.Sha256, ack.Capacity
+		priorCompleted, priorBoundary = ack.Completed, ack.After.Number
+		priorAdopted = ack.AdoptedCompleted
+	}
+	if self.AuthorityHash != authorityHash || self.Completed > capacity.Jobs {
+		return errors.Join(errRpcIntegrity, errors.New("native producer current authority or cumulative job capacity differs"))
+	}
+	if self.ResourceForecast != nil && (self.ResourceForecast.BytesUpperBound < nativeProducerBoundaryReserve || self.ResourceForecast.BytesUpperBound > capacity.Bytes || self.ResourceForecast.EntriesUpperBound < nativeProducerBoundaryEntries || self.ResourceForecast.EntriesUpperBound > capacity.Entries) {
+		return errors.Join(errRpcIntegrity, errors.New("native producer resource forecast differs from its admitted capacity"))
 	}
 	return nil
 }
@@ -164,14 +194,16 @@ func (self *nativeExecutionProducerState) validate(policy economicEmissionPolicy
 // The completion contains raw derivation bindings, never an approval signature.
 // Its hash is checkpointed only after the same verified job has been accounted.
 type nativeProducerCompletion struct {
-	Schema        string                              `json:"schema"`
-	AuthorityHash string                              `json:"authority_hash"`
-	Previous      string                              `json:"previous_completion_chain"`
-	Sequence      uint64                              `json:"sequence"`
-	Input         planFileReference                   `json:"capture_input"`
-	Admission     nativeExecutionAdmission            `json:"admission"`
-	Anchor        strecovery.NativeFinalityCheckpoint `json:"anchor"`
-	Window        planFileReference                   `json:"certified_window"`
-	Certified     economicEmissionBoundary            `json:"certified_tip"`
-	OutcomeHash   string                              `json:"outcome_hash"`
+	Schema           string                                `json:"schema"`
+	AuthorityHash    string                                `json:"authority_hash"`
+	Previous         string                                `json:"previous_completion_chain"`
+	Sequence         uint64                                `json:"sequence"`
+	Input            planFileReference                     `json:"capture_input"`
+	Admission        nativeExecutionAdmission              `json:"admission"`
+	Anchor           strecovery.NativeFinalityCheckpoint   `json:"anchor"`
+	Window           planFileReference                     `json:"certified_window"`
+	Certified        economicEmissionBoundary              `json:"certified_tip"`
+	OutcomeHash      string                                `json:"outcome_hash"`
+	ResourceForecast *nativeProducerResourceForecast       `json:"resource_forecast,omitempty"`
+	Renewal          *nativeProducerRenewalAcknowledgement `json:"renewal_adoption,omitempty"`
 }

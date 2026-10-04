@@ -78,6 +78,13 @@ func newAttemptCutV2SealTestFixtureForOperatorWithEpochOrder(t *testing.T, depth
 // record; a mainnet fixture must not relabel an existing testnet transcript.
 func newAttemptCutV2SealTestFixtureForDomain(t *testing.T, depth, completed, failed int, ledgerBeforeEpoch bool, policy protocol.Policy, identity AttemptLedgerIdentity) *attemptCutV2SealTestFixture {
 	t.Helper()
+	return newAttemptCutV2SealTestFixtureForDomainWithLimits(t, depth, completed, failed, ledgerBeforeEpoch, policy, identity, attemptLedgerDiskTestLimits())
+}
+
+// Foreground workload tests declare all retained and concurrent records before
+// opening their owner. Existing fixtures retain their original small limits.
+func newAttemptCutV2SealTestFixtureForDomainWithLimits(t *testing.T, depth, completed, failed int, ledgerBeforeEpoch bool, policy protocol.Policy, identity AttemptLedgerIdentity, limits AttemptLedgerDiskLimits) *attemptCutV2SealTestFixture {
+	t.Helper()
 	if policy.Verify.TrailDepth != 8 {
 		t.Fatalf("release policy depth = %d, want the existing M8 policy", policy.Verify.TrailDepth)
 	}
@@ -99,7 +106,7 @@ func newAttemptCutV2SealTestFixtureForDomain(t *testing.T, depth, completed, fai
 		ctx = durablefixture.New(t, ctx, state).Context
 		prepareAttemptLedgerCustodyTest(t, ctx, state, identity, key)
 	}
-	ledger, err := NewDiskAttemptLedger(ctx, state, identity, attemptLedgerDiskTestCoordinator, key, attemptLedgerDiskTestLimits())
+	ledger, err := NewDiskAttemptLedger(ctx, state, identity, attemptLedgerDiskTestCoordinator, key, limits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,6 +418,53 @@ func TestAttemptCutV2SealObjectCallbackCanAppend(t *testing.T) {
 		t.Fatalf("callback append crossed captured prefix: head=%+v cut=%+v error=%v", head, cut, err)
 	}
 	assertAttemptCutV2SealTestSuccess(t, fixture, options, cut, verified, fixture.recordTs[:8], 1, 0)
+}
+
+// Raw append alone misses the terminal proof projection's own Walk. Observe
+// the actual iterator gate before running a complete producer in an upload
+// callback, so the old retained-gate path fails immediately without a timeout.
+func TestAttemptCutV2SealCallbackReleasesForegroundProjectionIterator(t *testing.T) {
+	fixture := newAttemptCutV2SealTestFixture(t, 8, 4, 0)
+	store, ok := fixture.ledger.disk.(*attemptRecordStore)
+	if !ok || store == nil {
+		t.Fatal("fixture has no actual disk record store")
+	}
+	options, _ := newAttemptCutV2SealTestOptions(t, fixture)
+	appended, records, proofs := false, 0, 0
+	wrap := func(write AttemptStreamV2ObjectWriter, record bool) AttemptStreamV2ObjectWriter {
+		return func(ctx context.Context, hash string, raw []byte) error {
+			select {
+			case store.walkGate <- struct{}{}:
+				<-store.walkGate
+			default:
+				return errors.New("remote object callback retained the foreground projection iterator")
+			}
+			if record {
+				records++
+				if !appended {
+					appended = true
+					proof, err := fixture.engine.RunTrail(ctx)
+					if err != nil || proof == nil || len(proof.Hops) != 8 {
+						return errors.Join(errors.New("full foreground producer/projection did not complete"), err)
+					}
+				}
+			} else {
+				proofs++
+			}
+			return write(ctx, hash, raw)
+		}
+	}
+	options.WriteRecords = wrap(options.WriteRecords, true)
+	options.WriteProofs = wrap(options.WriteProofs, false)
+	cut, verified, err := SealAttemptCutV2(t.Context(), fixture.ledger, fixture.expected, fixture.policy, fixture.key, fixture.bounds, options)
+	if err != nil || cut == nil || !appended || records == 0 || proofs == 0 {
+		t.Fatal("foreground projection remained blocked by source streaming", err, appended, records, proofs)
+	}
+	head, err := fixture.ledger.Head()
+	if err != nil || cut.LastSequence != 32 || verified.CompleteCount != 4 || head.LastSequence != 40 || cut.Root == head.Root {
+		t.Fatal("foreground projection changed the original captured prefix", cut, head, err)
+	}
+	assertAttemptCutV2SealTestSuccess(t, fixture, options, cut, verified, fixture.recordTs, 4, 0)
 }
 
 // A later cut begins at the exact previously signed root, not sequence one.

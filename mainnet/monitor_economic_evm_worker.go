@@ -81,14 +81,14 @@ func openMonitorEconomicEvmWorker(ctx context.Context, client *rpcClient, policy
 	worker := &monitorEconomicEvmWorker{policy: policy, checkpoint: owner}
 	worker.metrics, err = openMonitorMetrics(metricsPath, ctx)
 	if err != nil {
-		return nil, errors.Join(err, owner.close())
+		return nil, monitorAdmissionFailure(err, closeMonitorServiceOwners(policy.Role, nil, owner, hooks))
 	}
 	if hooks.afterCheckpointOpen != nil {
 		hooks.afterCheckpointOpen(ctx, policy.Role, owner.lock)
 	}
 	worker.state, err = worker.load(ctx)
 	if err != nil {
-		return nil, errors.Join(err, worker.close(hooks))
+		return nil, monitorAdmissionFailure(err, worker.close(hooks))
 	}
 	if hooks.syncDirectory != nil {
 		owner.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(policy.Role, "checkpoint", file) }
@@ -100,7 +100,7 @@ func openMonitorEconomicEvmWorker(ctx context.Context, client *rpcClient, policy
 	}
 	worker.client, err = newRpcClient(client.url, time.Duration(seconds)*time.Second)
 	if err != nil {
-		return nil, errors.Join(err, worker.close(hooks))
+		return nil, monitorAdmissionFailure(err, worker.close(hooks))
 	}
 	worker.client.retryWait = client.retryWait
 	if hooks.rpcWait != nil {
@@ -348,7 +348,7 @@ func (self *monitorEconomicEvmWorker) resume(ctx context.Context, hooks monitorS
 		candidate := &monitorEconomicEvmWorker{policy: self.policy, checkpoint: owner}
 		state, err := candidate.load(ctx)
 		if err != nil {
-			return errors.Join(err, owner.close(), candidate.closeArchive())
+			return monitorAdmissionFailure(err, errors.Join(owner.close(), candidate.closeArchive()))
 		}
 		owner.syncDirectory = prior.syncDirectory
 		self.checkpoint, self.state = owner, state
@@ -457,7 +457,7 @@ func (self *monitorEconomicEvmWorker) run(ctx context.Context, interval time.Dur
 		}
 		if errors.Is(checkpointErr, durablehead.ErrUncertain) {
 			if err := self.resume(ctx, hooks); err != nil {
-				if ctx.Err() != nil {
+				if monitorCanceledCheckpointLoad(ctx, err) {
 					return 0
 				}
 				fmt.Fprintln(stderr, "EVM economic checkpoint continuation:", err)

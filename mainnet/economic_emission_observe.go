@@ -154,6 +154,13 @@ func observeEconomicEmissionCatalog(ctx context.Context, client *rpcClient, poli
 	if !planSha256(policyHash) {
 		return result, errors.New("native incentive exact input SHA256 is missing")
 	}
+	if producer != nil && len(producer.authorities) > 1 {
+		if !renewed || len(catalog) == 0 {
+			catalog = producer.runtimeCatalog()
+		}
+		renewed = true
+		result.RuntimeCatalog = append([]monitorEconomicRuntimeEntry(nil), catalog...)
+	}
 	profiles := []rootReceiptProfile{policy.Runtime}
 	if renewed && len(catalog) != 0 {
 		profiles = nil

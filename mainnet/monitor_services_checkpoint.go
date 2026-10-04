@@ -43,7 +43,7 @@ func openMonitorServiceCheckpoint(path string, expected identityExpectation, pol
 	}
 	info, err := os.Lstat(filepath.Dir(owner.path))
 	if err != nil || !info.IsDir() || info.Mode().Perm()&0022 != 0 {
-		return nil, errors.Join(errors.New("service checkpoint requires a protected directory"), err, owner.close())
+		return nil, monitorAdmissionFailure(errors.Join(errors.New("service checkpoint requires a protected directory"), err), owner.close())
 	}
 	return &monitorServiceCheckpoint{owner: owner, policy: policy, directoryInfo: info}, nil
 }

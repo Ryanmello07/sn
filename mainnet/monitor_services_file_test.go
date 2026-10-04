@@ -180,7 +180,16 @@ func TestMonitorServicesCommandInitialOutageAndCheckpointCorruption(t *testing.T
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	broken := fixture.start(t, url, monitorServiceHooks{})
+	terminal := make(chan int, 1)
+	broken := fixture.start(t, url, monitorServiceHooks{afterWorker: func(role string, exit int) {
+		if role == "alpha" {
+			terminal <- exit
+		}
+	}})
+	if exit := <-terminal; exit != 3 {
+		t.Fatal("corrupt owner did not stop its role", exit)
+	}
+	broken.cancel()
 	<-broken.done
 	if broken.exit != 3 || !strings.Contains(broken.stderr.String(), "snapshot bytes differ from the acknowledged head") {
 		t.Fatal("corrupt continuity was reset", broken.exit, broken.stderr.String())

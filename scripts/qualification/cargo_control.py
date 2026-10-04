@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import selectors
@@ -281,16 +282,71 @@ def fresh_artifact(path, package, crate):
     return selected[0]
 
 
+def classify_rust_output(code, stdout, stderr, selector, expected_assertion=None):
+    """Classify one libtest root; nocapture output may split its status line.
+
+    This authenticates result structure, not executable/source provenance. The
+    caller must retain that separate custody and process-join evidence. Libtest
+    owns the unique stdout census and terminal summary; diagnostics on either
+    stream may supply the intended assertion, but never a second test census.
+    """
+    require(isinstance(stdout, bytes) and isinstance(stderr, bytes)
+            and len(stdout) <= MAXIMUM_LOG_BYTES and len(stderr) <= MAXIMUM_LOG_BYTES,
+            "Rust output exceeds its bounded byte inputs")
+    require(isinstance(selector, str) and 0 < len(selector) <= 4096
+            and not any(value.isspace() for value in selector), "Rust selector is not exact")
+    causal = expected_assertion is not None
+    selected_reason = ("control did not execute exactly the selected failed root" if causal
+                       else "Rust output did not execute exactly the selected root")
+    output = stdout.decode(errors="replace")
+    diagnostic = stderr.decode(errors="replace")
+    run_pattern = r"(?m)^running ([0-9]+) tests?\r?$"
+    root_pattern = r"(?m)^test (\S+) \.\.\.(?:[ \t]|$)"
+    summary_prefix = r"(?m)^test result:"
+    runs = list(re.finditer(run_pattern, output))
+    roots = list(re.finditer(root_pattern, output))
+    require(len(runs) == 1 and runs[0].group(1) == "1"
+            and len(roots) == 1 and roots[0].group(1) == selector
+            and runs[0].end() <= roots[0].start()
+            and not re.search(run_pattern, diagnostic)
+            and not re.search(root_pattern, diagnostic), selected_reason)
+    require(len(re.findall(summary_prefix, output)) == 1
+            and not re.search(summary_prefix, diagnostic),
+            "Rust output requires exactly one official terminal summary")
+    summaries = list(re.finditer(
+        r"(?m)^test result: (ok|FAILED)\. ([0-9]+) passed; ([0-9]+) failed; ([0-9]+) ignored;"
+        r"(?: ([0-9]+) measured; ([0-9]+) filtered out;(?: finished in [0-9]+(?:\.[0-9]+)?s)?)?"
+        r"[ \t]*\r?$", output))
+    require(len(summaries) == 1 and roots[0].end() <= summaries[0].start(),
+            "Rust output requires exactly one complete ordered terminal summary")
+    summary = summaries[0]
+    expected = (101, "FAILED", "0", "1", "0") if causal else (0, "ok", "1", "0", "0")
+    require(type(code) is int and (code, *summary.group(1, 2, 3, 4)) == expected
+            and summary.group(5) in (None, "0"),
+            "Rust exit/count differs from one intended behavioral failure" if causal
+            else "Rust exit/count differs from one positive root without skips")
+    if causal:
+        require(isinstance(expected_assertion, str) and expected_assertion
+                and (expected_assertion in output or expected_assertion in diagnostic),
+                "control did not reach its exact intended assertion")
+    return {"root": selector, "classification": "EXPECTED_BEHAVIORAL_FAILURE" if causal else "PASS",
+            "exit": code, "passed": int(summary.group(2)), "failed": int(summary.group(3)),
+            "ignored": int(summary.group(4)), "measured": int(summary.group(5) or "0"),
+            "filtered_out": int(summary.group(6) or "0"), "summary": summary.group(0).strip()}
+
+
+def classify_rust_root(code, stdout, stderr, selector, expected_assertion=None):
+    """Read bounded immutable result files before classifying a single root."""
+    return classify_rust_output(code, bounded_regular_bytes(stdout, MAXIMUM_LOG_BYTES),
+                                bounded_regular_bytes(stderr, MAXIMUM_LOG_BYTES),
+                                selector, expected_assertion)
+
+
 def classify_test(code, stdout, stderr, selector, expected_assertion):
     """One selected assertion failure is distinct from setup, panic, or timeout."""
-    text = (bounded_regular_bytes(stdout, MAXIMUM_LOG_BYTES) +
-            bounded_regular_bytes(stderr, MAXIMUM_LOG_BYTES)).decode(errors="replace")
-    require("running 1 test" in text and f"test {selector} ... FAILED" in text,
-            "control did not execute exactly the selected failed root")
-    require(code == 101 and "test result: FAILED. 0 passed; 1 failed;" in text,
-            "control exit/count differs from one intended behavioral failure")
-    require(expected_assertion and expected_assertion in text,
+    require(isinstance(expected_assertion, str) and expected_assertion,
             "control did not reach its exact intended assertion")
+    return classify_rust_root(code, stdout, stderr, selector, expected_assertion)
 
 
 def run(recipe_path, output):

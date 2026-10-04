@@ -204,7 +204,7 @@ func openMonitorEconomicEvmArchive(ctx context.Context, policy monitorEconomicEv
 	defer func() {
 		if resultErr != nil {
 			for _, owner := range owners {
-				resultErr = errors.Join(resultErr, owner.close())
+				resultErr = monitorAdmissionFailure(resultErr, owner.close())
 			}
 			owners = nil
 		}

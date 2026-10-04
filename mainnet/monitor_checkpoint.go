@@ -71,16 +71,14 @@ func openMonitorCheckpoint(path string, expected identityExpectation, contexts .
 	}
 	lock, err := directory.open(filepath.Base(path)+".lock", flags, 0600)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("open checkpoint lock: %w", err), directory.close())
+		return nil, monitorAdmissionFailure(fmt.Errorf("open checkpoint lock: %w", err), directory.close())
 	}
 	info, err := lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		lock.Close()
-		return nil, errors.Join(errors.New("checkpoint lock is not a private regular file"), err, directory.close())
+		return nil, monitorAdmissionFailure(errors.Join(errors.New("checkpoint lock is not a private regular file"), err), errors.Join(lock.Close(), directory.close()))
 	}
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		lock.Close()
-		return nil, errors.Join(fmt.Errorf("checkpoint already has an owner: %w", err), directory.close())
+		return nil, monitorAdmissionFailure(fmt.Errorf("checkpoint already has an owner: %w", err), errors.Join(lock.Close(), directory.close()))
 	}
 	if directory.guard != nil {
 		name := filepath.Base(path)
@@ -92,7 +90,7 @@ func openMonitorCheckpoint(path string, expected identityExpectation, contexts .
 			directory.head, err = durablehead.Reconcile(directory.ctx, directory.guard, lock, spec)
 		}
 		if err != nil {
-			return nil, errors.Join(monitorCustodyError(err), lock.Close(), directory.close())
+			return nil, monitorAdmissionFailure(monitorCustodyError(err), errors.Join(lock.Close(), directory.close()))
 		}
 		directory.headName = name
 	}
