@@ -298,7 +298,8 @@
     "funding-fd922-original-exports-two-pass-two-fail-root-readback-20261004.json": "2eeff666c58d2878ce0932628749511efd37376cd07586ebacec693cb3a7403c",
     "funding-capture-extrinsic-framing-source-review-20261004.json": "5d8e0a838c92289b91fc6a207c5e8cd4ca89747afca0f677f0034f6ca03a2115",
     "qualification-scratch72-root-admission-addendum-20261004.json": "f9349a36ce5f22b5b9a71b12ce0ab584755d71389092ae17b67f1993fcd0a1db",
-    "validator-current-e9-three-roots-vet-qualified-root-readback-20261004.json": "76b567a125d20df1dcd1e4917c612ef6501ef8343dd69ac6408b4d6e8b38e481"
+    "validator-current-e9-three-roots-vet-qualified-root-readback-20261004.json": "76b567a125d20df1dcd1e4917c612ef6501ef8343dd69ac6408b4d6e8b38e481",
+    "validator-current-qualified-publication-root-readback-20261004.json": "c7f136d5ffb2e5389ef271b5eefa7ac69d2273c36a926cef5fc3e068d6184747"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
