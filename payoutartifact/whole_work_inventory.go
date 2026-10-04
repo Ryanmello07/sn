@@ -198,9 +198,13 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 	if err != nil {
 		return nil, err
 	}
+	priorCreations, err := verifyWholeWorkPriorCreations(ctx, artifact, domainHash, expected)
+	if err != nil {
+		return nil, err
+	}
 	participants := &wholeWorkParticipantVerification{Complete: window.Credited == 0}
 	if expected.AttributionSigner != (common.Address{}) && expected.AttributionSigner == authority.Signer {
-		participants, err = verifyWholeWorkParticipants(ctx, artifact, authority, owned, contracts, creations)
+		participants, err = verifyWholeWorkParticipants(ctx, artifact, authority, owned, contracts, creations, priorCreations)
 		if err != nil {
 			return nil, err
 		}
@@ -415,7 +419,14 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 	sort.Slice(reconciled, func(i, j int) bool {
 		return bytes.Compare(reconciled[i].ContractId[:], reconciled[j].ContractId[:]) < 0
 	})
-	return &VerifiedWholeWorkInventory{Complete: true, AttributionComplete: participants.Complete, Domain: domain, Epoch: artifact.Epoch, Start: artifact.Start, End: artifact.End, AuthorityHash: authorityHash, InventoryHash: inventoryHash, WindowHash: window.Hash, Contracts: window.Credited + window.Canceled + window.Open, Credited: window.Credited, Canceled: window.Canceled, Open: window.Open, ExpectedProviders: providers, ReconciledContracts: reconciled, Reports: closed}, ctx.Err()
+	var retainedCreations []WholeWorkRetainedCreation
+	if participants.Complete {
+		retainedCreations, err = retainWholeWorkCurrentCreations(ctx, artifact, authority, reconciled, contracts, creations)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &VerifiedWholeWorkInventory{Complete: true, AttributionComplete: participants.Complete, Domain: domain, Epoch: artifact.Epoch, Start: artifact.Start, End: artifact.End, AuthorityHash: authorityHash, InventoryHash: inventoryHash, WindowHash: window.Hash, Contracts: window.Credited + window.Canceled + window.Open, Credited: window.Credited, Canceled: window.Canceled, Open: window.Open, ExpectedProviders: providers, ReconciledContracts: reconciled, RetainedCreations: retainedCreations, Reports: closed}, ctx.Err()
 }
 
 // Public sidecar reads use a strict bounded grammar before any expensive join.

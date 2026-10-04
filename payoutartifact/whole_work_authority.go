@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/urfoundation/sn/protocol"
+	coreprotocol "github.com/urnetwork/connect/protocol"
 )
 
 const WholeWorkAuthoritySchema = "urnetwork-whole-work-authority-v1"
@@ -82,7 +83,16 @@ type WholeWorkExpectation struct {
 	EarningSelection    *WholeWorkEarningSelection `json:"earning_selection,omitempty"`
 	// Derived only from previously verified retained originals in this domain.
 	// It cannot be populated from the current authority's proposed exclusions.
-	PriorContracts []WholeWorkPriorContract `json:"-"`
+	PriorContracts []WholeWorkPriorContract    `json:"-"`
+	PriorCreations []WholeWorkRetainedCreation `json:"-"`
+}
+
+// An independently retained complete admission binds these exact original
+// source bytes to its reconciled checkpoint. Current witnesses cannot add one.
+type WholeWorkRetainedCreation struct {
+	Checkpoint WholeWorkPriorContract            `json:"checkpoint"`
+	Owner      WholeWorkOwner                    `json:"owner"`
+	Original   coreprotocol.OriginalWorkContract `json:"original"`
 }
 
 // The original deployment policy selects earning time independently of the
@@ -139,6 +149,7 @@ type VerifiedWholeWorkInventory struct {
 	Open                uint64
 	ExpectedProviders   []WholeWorkProvider
 	ReconciledContracts []WholeWorkPriorContract
+	RetainedCreations   []WholeWorkRetainedCreation
 	Reports             *VerifiedClosedWorkReports
 }
 
