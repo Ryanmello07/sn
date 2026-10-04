@@ -271,22 +271,27 @@ func TestOwnerRecycleRuntimeReconnectRepeatsCompleteCensus(t *testing.T) {
 	client := &productionTransportTestClient{Client: fixture.chain.API.Client}
 	client.generation.Store(1)
 	fixture.chain.API.Client = client
-	reads, networks := 0, 0
+	_, nextHead := releaseReceiptTestHeader(t, types.Hash(recycleTestId(1200)), 101)
+	reads, networks, finalityReads := 0, 0, 0
 	fixture.before = func(_ context.Context, method string, args []any) error {
 		if method == "system_chain" {
 			networks++
+		}
+		if method == "chain_getHeader" && args[0] == nextHead.Hex() {
+			finalityReads++
 		}
 		if method == "state_getStorage" && args[0] == fixture.keys["cap"] {
 			reads++
 			if reads == 1 {
 				client.generation.Add(1)
+				fixture.headHash, fixture.headNumber = nextHead, 101
 			}
 		}
 		return nil
 	}
 	observed, err := ObserveOwnerRecycleAdmission(t.Context(), fixture.cfg, fixture.chain)
-	if err != nil || reads != 2 || networks != 2 || !reflect.DeepEqual(observed, baseline) {
-		t.Fatalf("reconnect retained a partial owner census: reads=%d networks=%d observed=%+v err=%v", reads, networks, observed, err)
+	if err != nil || reads != 2 || networks != 2 || finalityReads == 0 || !reflect.DeepEqual(observed, baseline) {
+		t.Fatalf("reconnect retained a partial owner census or moved its original block: reads=%d networks=%d finality=%d observed=%+v err=%v", reads, networks, finalityReads, observed, err)
 	}
 }
 
