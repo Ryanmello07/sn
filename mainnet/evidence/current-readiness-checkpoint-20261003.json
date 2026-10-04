@@ -186,7 +186,8 @@
     "principal-dc1-protocol-resource-clarification-root-review-20261004.json": "dc3e67cb2baefcee908aa64c9a6e373599afc3dcdec4859f5d2803a935606234",
     "server1709-receipt-retry-typed-nil-source-finding-20261004.json": "053175499ed7634ded60f3aad8029161778ba9ca3553c2e8c124cc465c8947a0",
     "runtime-observation6fa-short-partition-root-review-20261004.json": "7eb71d1db11448cdee7e8f7a38644a668f1708d2fea0d2b9d67bcc51a9394ceb",
-    "economic-principal-effects986-source-root-review-20261004.json": "4ac668d1e50adbb523bcdc018ce5a7b5e071599e06ba544521b3ee00b1b1344e"
+    "economic-principal-effects986-source-root-review-20261004.json": "4ac668d1e50adbb523bcdc018ce5a7b5e071599e06ba544521b3ee00b1b1344e",
+    "server-receipt4a5-typed-causes-source-root-review-20261004.json": "95a4415b6d7858090b7a96a6b006ddc93e7a0f7807f1f7ce75168acccebfa34d"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -325,7 +326,7 @@
       "closed": false,
       "evidence": "monitor-progress-body-qualification-20261003.json",
       "requirement": "PH-22",
-      "status": "Provider/claim timeout, network, cancellation and body-error scopes qualified normally/race/vet; final all-service join remains. Server bounded-cause31 roots/mode,six vets and six causal groups/mode qualify separately; adjacent native receipt typed-nil successor remains required."
+      "status": "Provider/claim timeout, network, cancellation and body-error scopes qualified normally/race/vet; final all-service join remains. Server bounded-cause31 roots/mode,six vets and six causal groups/mode qualify separately; adjacent native receipt/finality4a5 source reviewed,24 roots/mode,two vets,four causal groups remain unexecuted."
     },
     {
       "closed": false,
