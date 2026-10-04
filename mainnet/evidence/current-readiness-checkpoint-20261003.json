@@ -192,7 +192,8 @@
     "principal-dc1-rust-operational-root-adoption-20261004.json": "206fe47130255104fc74d86a7f81a2888f49e8db1cd8f5a41c2713a42494e6b8",
     "principal-dc1-dual-engine-build-root-review-20261004.json": "51b85db2e02bbd2ade1f6a0a6702296b22782a5c3a86964f501e830abb29b63a",
     "principal-dc1-rust-positives-root-review-20261004.json": "ec5b08ae6d0e59713c95c6c2d7783158c0f06f14ea19540ff3d6159bfbf8f66f",
-    "principal-dc1-rust-controls-root-review-20261004.json": "7a14c299599211bd097a622a9b66eb13113093aeb4aa3c208838e066ad6470c3"
+    "principal-dc1-rust-controls-root-review-20261004.json": "7a14c299599211bd097a622a9b66eb13113093aeb4aa3c208838e066ad6470c3",
+    "principal-dc1-go-fd4-operational-root-adoption-20261004.json": "9d7001e824aae2f590ce8a832ed60d06abe7d735435d74f892e87ecddd5ab268"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
