@@ -199,7 +199,9 @@
     "principal-fixture8d3-incremental-stage-root-review-20261004.json": "3bb030dd1eea7b9910949c77b664f88d845ff0cfffbc949bb0fac96808bf6ffe",
     "native-readonly-restore-mode-source-finding-20261004.json": "6724bd7046d04c635fa7fc5088d56e41ae1255529ce3608979660380d29a307d",
     "yuma-owner-cancellation-source-finding-20261004.json": "b23301a2162f8ef6294e9388de5ccd6ca4d9ead817213699359a5208959cf753",
-    "native-readonly-corec618-source-root-review-20261004.json": "bca835415c2c1564eb4d1068dfba5b89c33b7fce249c0d78362b72e85d452c51"
+    "native-readonly-corec618-source-root-review-20261004.json": "bca835415c2c1564eb4d1068dfba5b89c33b7fce249c0d78362b72e85d452c51",
+    "principal-dc1-go-original-terminal-root-review-20261004.json": "837bcb2780148b0ade59220a4b3e2a278f868f30f0f4a4180be836c59b7177ce",
+    "principal-fixture8d3-operational-adoption-root-review-20261004.json": "b8bbd5c5ba11285c044367c218c86440db28fef4a97674170940af18f415bbdd"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -320,7 +322,7 @@
       "closed": false,
       "evidence": "fee-revision3e7-source-root-review-20261004.json",
       "requirement": "PH-19",
-      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal/race each48PASS1FAIL,all49 terminal with no timeout; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with operational resource admission and24 exact Rust positives passing plus ten exported jobs; both Rust causal controls qualified;Original dc1 Go normal executes38 roots:19PASS19FAIL0SKIP, all failures at fresh fixture root permission custody; reviewed test-only8d3 successor selects19 masked roots plus one deterministic protection/tamper root per mode and one fixture omission per mode. Original race collection and six Go causal groups remain separate. Principal-effects986 source-reviewed (48 Go roots/mode,27 Rust roots,eight causal groups); behavioral qualification and actual native-to-vault capture join remain. Full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain. Unfrozen full Yuma candidate also requires actual owner-context cancellation through repeated validation and bounded arithmetic refusal."
+      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal/race each48PASS1FAIL,all49 terminal with no timeout; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with operational resource admission and24 exact Rust positives passing plus ten exported jobs; both Rust causal controls qualified;Original dc1 Go normal/race each execute38 roots:19PASS19FAIL0SKIP; mainnet vetPASS, all failures at fresh fixture root permission custody; reviewed test-only8d3 successor selects19 masked roots plus one deterministic protection/tamper root per mode and one fixture omission per mode. Original batch is joined; reviewed8d3 incremental actual overlay compilation live after graph/helper preflightPASS. Incremental20-root/mode qualification and six Go causal groups remain separate. Principal-effects986 source-reviewed (48 Go roots/mode,27 Rust roots,eight causal groups); behavioral qualification and actual native-to-vault capture join remain. Full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain. Unfrozen full Yuma candidate also requires actual owner-context cancellation through repeated validation and bounded arithmetic refusal."
     },
     {
       "closed": false,
