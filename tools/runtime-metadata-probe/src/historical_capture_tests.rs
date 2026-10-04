@@ -695,3 +695,7 @@ mod node_profile_tests;
 
 #[path = "historical_capture_heap_tests.rs"]
 mod heap_tests;
+
+#[cfg(target_os = "linux")]
+#[path = "historical_capture_refill_tests.rs"]
+mod refill_tests;
