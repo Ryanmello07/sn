@@ -251,7 +251,8 @@
     "admissionab0-ordinary-terminal-and-drained-root-finding-20261004.json": "9fb9f916f450a6383add548a7bf9f9412aedfbe188933811a0fe99f09e83110e",
     "policy-refusalb1-one-root-and-retained-ordinary-qualified-20261004.json": "309317ec4c36ce3181b2f0afab2be992608edde7cd999f95605c7267e837a846",
     "proof-drained-continuation77-scoped-root-source-review-20261004.json": "15394543e8b0eb0e3930427b9e80fe5fe98e8bcb4e370d0c4b1fdd339e2b9c53",
-    "proof-drained-continuation77-six-root-independent-readback-20261004.json": "c13653ad878bfc5e5d3bf44bbd8cf84636d4266af3fde932b69a297e9218d622"
+    "proof-drained-continuation77-six-root-independent-readback-20261004.json": "c13653ad878bfc5e5d3bf44bbd8cf84636d4266af3fde932b69a297e9218d622",
+    "conservation-populated3a13-composed-source-scope-review-20261004.json": "2bf41d3a8b4e8634acfacf791b478158d04b16f2a93f24aff431d551854895f4"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",

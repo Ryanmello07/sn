@@ -1,5 +1,8 @@
 # Mainnet launch and operations plan
 
+The [populated composed-source review](evidence/conservation-populated3a13-composed-source-scope-review-20261004.json) verifies exact `3a13c69` inputs,174 Go declarations per mode,17 Rust roots and65 exact rebased controls. The join retains the large physical profile, complete restore owners, entitlement census, nonzero populated1,024/2,048-UID workload and corrected drained dispatch. Logical2x reserves must be followed by actual complete serialized-size and host measurements; sparse or zero-stake padding does not establish production capacity. Qualify the composed source separately from retained component results. Native-follow isolation, archive-prefix performance and full native-income-to-entitlement funding conformance remain subsequent implementation joins.
+
+
 The [corrected exporter independent readback](evidence/proof-drained-continuation77-six-root-independent-readback-20261004.json) verifies a fresh Rust test image, six exact passing roots and all22 private hashed exports. This supplies the previously missing five-job proof-drained corpus without weakening the original post-state verifier. Advance the nineteen dependent Go roots using retained exact images; three causal controls and complete joined-source qualification remain separate. The original failed exporter and running long recovery remain retained.
 
 
