@@ -491,7 +491,7 @@ func (self *economicConservationArchiveView) admitEntitlementCensuses(ctx contex
 	if self == nil || self.entitlementVerified == nil || state == nil {
 		return errors.New("economic entitlement verification requires owned admission")
 	}
-	if err := self.check(); err != nil {
+	if err := self.checkAdmission(); err != nil {
 		return err
 	}
 	if err := self.requireOriginalEntitlementCensuses(state); err != nil {
