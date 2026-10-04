@@ -44,31 +44,75 @@ type providerAttemptSourceTestFixture struct {
 	reads        int
 }
 
-// Exact signed metadata accompanies the genuine mock Server's ASSIGN wire.
+// The transport returns a raw ASSIGN/FINAL, while the actual Server retains
+// its typed cached-response envelope inside the signed original receipt.
 func providerAttemptSourceTestReceipt(t *testing.T, seal *attemptCutV2SealTestFixture, scope protocol.ProviderAttemptReceiptScope, request ProviderAttemptRequestRecord, response []byte) protocol.ProviderAttemptReceipt {
 	t.Helper()
-	var envelope struct {
-		Assign *connect.VerifyAssignResult `json:"assign"`
+	var assign connect.VerifyAssignResult
+	var final connect.VerifyFinalResult
+	if err := json.Unmarshal(response, &assign); err != nil {
+		t.Fatal(err)
 	}
-	if err := json.Unmarshal(response, &envelope); err != nil || envelope.Assign == nil {
-		t.Fatal("actual seed response", err)
+	var trailId connect.Id
+	var cached any
+	if assign.TrailId != (connect.Id{}) {
+		trailId = assign.TrailId
+		cached = struct {
+			Assign *connect.VerifyAssignResult `json:"assign,omitempty"`
+		}{Assign: &assign}
+	} else {
+		if err := json.Unmarshal(response, &final); err != nil || final.Proof == nil {
+			t.Fatal("actual final response", err)
+		}
+		trailId = final.Proof.Header.TrailId
+		cached = struct {
+			Final *connect.VerifyFinalResult `json:"final,omitempty"`
+		}{Final: &final}
 	}
-	assign := envelope.Assign
+	cachedRaw, err := json.Marshal(cached)
+	if err != nil {
+		t.Fatal(err)
+	}
 	seal.server.mu.Lock()
-	state := seal.server.trails[assign.TrailId]
-	stamp := state.confirmedAt[0]
-	seal.server.mu.Unlock()
+	state := seal.server.trails[trailId]
 	network := connect.Id{71}
-	body := protocol.ProviderAttemptReceiptBody{Schema: protocol.ProviderAttemptReceiptDomain, Scope: &scope, PreviousDepth: 0, RecoveryMs: stamp, RequestMessage: request.Message, RequestSignature: request.RequestSignature, ResponseJson: string(response), Trail: &protocol.ProviderAttemptReceiptTrail{TrailId: assign.TrailId, ClientId: seal.engine.clientId, Vpk: bytes.Clone(seal.server.validatorVpk), ServerNonce: bytes.Clone(assign.ServerNonce), M: assign.M, ServerKeyId: assign.ServerKeyId, Status: "active", CreateMs: stamp, ActivityMs: stamp, Hops: []*protocol.ProviderAttemptReceiptHop{{ClientId: assign.Trail[0], NetworkId: &network, ConfirmedMs: stamp, Seed: true}}, Pending: &protocol.ProviderAttemptReceiptHop{ClientId: assign.NextHop, NetworkId: &network, AssignedMs: stamp, AssignN: len(seal.server.providers) - 1}}}
+	trail := &protocol.ProviderAttemptReceiptTrail{TrailId: trailId, ClientId: seal.engine.clientId, Vpk: bytes.Clone(state.vpk), ServerNonce: bytes.Clone(state.serverNonce), M: state.m, ServerKeyId: seal.server.serverKeyId, Status: "active", CreateMs: state.confirmedAt[0], ActivityMs: state.confirmedAt[len(state.confirmedAt)-1]}
+	for index, id := range state.confirmed {
+		hop := &protocol.ProviderAttemptReceiptHop{ClientId: id, NetworkId: &network, ConfirmedMs: state.confirmedAt[index], Seed: index == 0}
+		copy(hop.EgressIpHash[:], id[:])
+		if index > 0 {
+			hop.AssignedMs = state.confirmedAt[index-1]
+			hop.AssignN = len(seal.server.providers) - index
+		}
+		trail.Hops = append(trail.Hops, hop)
+	}
+	if state.complete {
+		trail.Status = "complete"
+	} else {
+		trail.Pending = &protocol.ProviderAttemptReceiptHop{ClientId: state.pending, NetworkId: &network, AssignedMs: trail.ActivityMs, AssignN: len(seal.server.providers) - len(state.confirmed)}
+	}
+	seal.server.mu.Unlock()
+	body := protocol.ProviderAttemptReceiptBody{Schema: protocol.ProviderAttemptReceiptDomain, Scope: &scope, PreviousDepth: len(trail.Hops) - 1, RecoveryMs: trail.ActivityMs, RequestMessage: request.Message, RequestSignature: request.RequestSignature, ResponseJson: string(cachedRaw), Trail: trail}
 	raw, err := json.Marshal(body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return protocol.ProviderAttemptReceipt{Body: raw, Signature: ed25519.Sign(seal.server.serverKey, append([]byte(protocol.ProviderAttemptReceiptDomain), raw...))}
+	receipt := protocol.ProviderAttemptReceipt{Body: raw, Signature: ed25519.Sign(seal.server.serverKey, append([]byte(protocol.ProviderAttemptReceiptDomain), raw...))}
+	if _, err := protocol.ValidateProviderAttemptReceipt(&receipt, seal.server.serverKey.Public().(ed25519.PublicKey)); err != nil {
+		t.Fatal("actual original cached response", err)
+	}
+	return receipt
 }
 
 // Select all authorities before producing any cuts or serving witness bytes.
 func newProviderAttemptSourceTestFixture(t *testing.T, failed bool) *providerAttemptSourceTestFixture {
+	t.Helper()
+	return newProviderAttemptSourceTestFixtureWithCompleted(t, failed, false)
+}
+
+// Complete M8 originals and a failed lane share the same independently pinned
+// window. Existing empty/failed callers retain their original scenario.
+func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, completed bool) *providerAttemptSourceTestFixture {
 	t.Helper()
 	self := &providerAttemptSourceTestFixture{windowKey: ed25519.NewKeyFromSeed(bytes.Repeat([]byte{83}, 32))}
 	start := &types.Header{Number: big.NewInt(1), Time: 1700000000, GasLimit: 30000000, Extra: []byte("synthetic-provider-start")}
@@ -89,6 +133,7 @@ func newProviderAttemptSourceTestFixture(t *testing.T, failed bool) *providerAtt
 	}
 	requests := map[*attemptCutV2SealTestFixture]requestFixture{}
 	activeUsed := false
+	completeUsed := false
 	before := func(seal *attemptCutV2SealTestFixture) {
 		identity := ProviderAttemptRequestIdentity{Ledger: seal.ledger.identity, Coordinator: fmt.Sprintf("0x%x", seal.expected.Activation.Domain.Coordinator), ClientId: seal.engine.clientId, PolicyHash: seal.expected.Activation.Domain.PolicyHash}
 		preparation := ProviderAttemptRequestPreparation{Identity: identity, Limits: ProviderAttemptRequestLimits{MaxRecords: 1000, MaxRecordBytes: 8192, MaxJournalBytes: 8 * 1024 * 1024}, Birth: AttemptBoundary{SettlementEpoch: 42, EVMBlock: 1, EVMBlockHash: start.Hash().Hex()}}
@@ -110,8 +155,17 @@ func newProviderAttemptSourceTestFixture(t *testing.T, failed bool) *providerAtt
 		seal.engine.cfg.StepTimeout = time.Minute
 		scope := protocol.ProviderAttemptReceiptScope{Profile: "synthetic", GenesisHash: seal.expected.Activation.Domain.GenesisHash, DeploymentId: seal.ledger.identity.DeploymentID, DeploymentKey: fmt.Sprintf("%d:%s", seal.ledger.identity.ChainID, identity.Coordinator), PolicyHash: identity.PolicyHash, Netuid: uint64(seal.ledger.identity.Netuid), NoId: seal.ledger.identity.NoID}
 		receipts := map[[32]byte]protocol.ProviderAttemptReceipt{}
-		if failed && !activeUsed {
-			activeUsed = true
+		runComplete := completed && !completeUsed && seal.ledger.identity.NoID == 9
+		runFailed := failed && !activeUsed && !runComplete && (!completed || seal.ledger.identity.NoID == 9)
+		if runComplete || runFailed {
+			if runComplete {
+				completeUsed = true
+			} else {
+				activeUsed = true
+			}
+			if runComplete {
+				seal.server.providers = seal.server.providers[:8]
+			}
 			seal.engine.transport = attemptCutV2SealTestTransport(func(ctx context.Context, hop connect.Id, raw []byte) ([]byte, error) {
 				var args struct {
 					TrailId *connect.Id `json:"trail_id"`
@@ -119,7 +173,7 @@ func newProviderAttemptSourceTestFixture(t *testing.T, failed bool) *providerAtt
 				if err := json.Unmarshal(raw, &args); err != nil {
 					return nil, err
 				}
-				if args.TrailId != nil {
+				if args.TrailId != nil && runFailed {
 					return nil, errors.New("synthetic original extend never delivered")
 				}
 				response, err := seal.server.PostVerify(ctx, hop, raw)
@@ -135,7 +189,13 @@ func newProviderAttemptSourceTestFixture(t *testing.T, failed bool) *providerAtt
 				receipts[wire] = receipt
 				return response, nil
 			})
-			if proof, err := seal.engine.RunTrail(t.Context()); err == nil || proof != nil {
+			if runComplete {
+				for index := uint64(0); index < seal.policy.Verify.ReliabilityAMin; index++ {
+					if proof, err := seal.engine.RunTrail(t.Context()); err != nil || proof == nil || len(proof.Hops) != 8 {
+						t.Fatal("actual completed M8 original", err)
+					}
+				}
+			} else if proof, err := seal.engine.RunTrail(t.Context()); err == nil || proof != nil {
 				t.Fatal("actual failed request fixture unexpectedly completed", err)
 			}
 			seal.engine.transport = seal.server
@@ -290,12 +350,45 @@ func newProviderAttemptSourceTestFixture(t *testing.T, failed bool) *providerAtt
 		t.Fatal(err)
 	}
 	providers := []payoutartifact.ProviderInput{}
-	for _, owner := range self.base.owners {
-		for _, fixture := range owner.fixture.operators {
-			for _, record := range requests[fixture.seal].cut.Records {
-				if record.Message[len(connect.VerifyCtx)] == connect.VerifyMsgTypeSeed {
-					for _, state := range fixture.seal.server.trails {
-						providers = append(providers, payoutartifact.ProviderInput{ClientID: [16]byte(state.pending), NetworkID: [16]byte{71}, Coldkey: [32]byte{73}, UsageBytes: 100, Assignments: 1, Eligible: true})
+	if completed {
+		rows := map[connect.Id]*payoutartifact.ProviderInput{}
+		for _, owner := range self.base.owners {
+			for _, fixture := range owner.fixture.operators {
+				if fixture.seal.ledger.identity.NoID != 9 {
+					continue
+				}
+				for _, id := range fixture.seal.server.providers {
+					if rows[id] == nil {
+						rows[id] = &payoutartifact.ProviderInput{ClientID: [16]byte(id), NetworkID: [16]byte{71}, Coldkey: [32]byte{73}, BindingGeneration: 1}
+					}
+				}
+				for _, state := range fixture.seal.server.trails {
+					for _, id := range state.confirmed[1:] {
+						rows[id].Assignments++
+						rows[id].Confirmations++
+					}
+					if !state.complete {
+						rows[state.pending].Assignments++
+					}
+				}
+			}
+		}
+		aMin := authority.Validators[0].Operators[0].Policy.Verify.ReliabilityAMin
+		for _, row := range rows {
+			row.Eligible = row.Assignments >= aMin
+			if row.Eligible {
+				row.UsageBytes = 100
+			}
+			providers = append(providers, *row)
+		}
+	} else {
+		for _, owner := range self.base.owners {
+			for _, fixture := range owner.fixture.operators {
+				for _, record := range requests[fixture.seal].cut.Records {
+					if record.Message[len(connect.VerifyCtx)] == connect.VerifyMsgTypeSeed {
+						for _, state := range fixture.seal.server.trails {
+							providers = append(providers, payoutartifact.ProviderInput{ClientID: [16]byte(state.pending), NetworkID: [16]byte{71}, Coldkey: [32]byte{73}, UsageBytes: 100, Assignments: 1, Eligible: true})
+						}
 					}
 				}
 			}
