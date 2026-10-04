@@ -22,6 +22,8 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+The [funding-cache publication review](evidence/funding-public-cache-custody-source-finding-20261004.json) finds a related WIP owner-fence gap: earlier component admission precedes direct cold-funding map/counter use, and the public summary has no final archive-owner check. Bound summary computation/publication with original owner and cancellation checks; late identity loss must return no accepted projection. Keep private cold admission and its one complete final fence separate so this correction does not restore repeated historical prefix work. Add closed/canceled/replaced-owner and healthy no-reread regressions. This is a source finding assigned to Astra, not a reproduced test failure or completed correction.
+
 The [actual b6 normal validator body](evidence/validatorb6-normal14-independent-body-readback-20261004.json) passes all fourteen selected roots with no failures/skips, exit 0 and joined processes. Root independently counted original test2json events and rechecked the protected image. Race, vet and six causal controls remain separate; preserve the successful normal body while correcting the unrelated mainnet precompile fixture.
 
 The [e51 fixture correction and original four-build readback](evidence/conservation-capturee51-source-and-original-build-readback-20261004.json) verify the actual imported geth1.17 interface, exact six-line insertion, two retained mainnet compile failures and both successful protected validator images. Continue fourteen validator roots per mode using those images; compile only the corrected mainnet package and then resume its 48-root union. Source admission is not corrected execution.
