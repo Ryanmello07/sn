@@ -21,47 +21,48 @@ import (
 const economicConservationRole = "economic-conservation"
 
 type economicConservationSummary struct {
-	Schema                         string                        `json:"schema"`
-	PolicyHash                     string                        `json:"policy_hash"`
-	CheckpointHash                 string                        `json:"checkpoint_hash"`
-	SampleAt                       time.Time                     `json:"sample_at"`
-	NativeCursor                   economicEmissionBoundary      `json:"native_cursor"`
-	VaultCursor                    economicEmissionBoundary      `json:"vault_cursor"`
-	NativeCurrent                  bool                          `json:"native_current"`
-	VaultCurrent                   bool                          `json:"vault_current"`
-	ClaimStatuses                  []string                      `json:"claim_statuses"`
-	NativeIssue                    string                        `json:"native_issue,omitempty"`
-	VaultIssue                     string                        `json:"vault_issue,omitempty"`
-	JoinIssue                      string                        `json:"join_issue,omitempty"`
-	NativeHeld                     bool                          `json:"native_integrity_held"`
-	VaultHeld                      bool                          `json:"vault_integrity_held"`
-	Execution                      *nativeExecutionWindow        `json:"native_execution"`
-	DirectGrossAlpha               *string                       `json:"direct_provider_gross_alpha"`
-	TailGrossAlpha                 *string                       `json:"tail_provider_gross_alpha"`
-	UnroutedGrossAlpha             *string                       `json:"unrouted_provider_gross_alpha"`
-	RewardCollateralAlpha          *string                       `json:"provider_reward_collateral_alpha"`
-	VaultState                     *monitorEconomicEvmSnapshot   `json:"observed_vault_state"`
-	EarningOccurrences             int                           `json:"earning_occurrences"`
-	Captures                       int                           `json:"captures"`
-	MatchedCaptures                int                           `json:"mapped_captures"`
-	AcceptedClaims                 int                           `json:"accepted_claims"`
-	AggregatePayments              int                           `json:"aggregate_payments"`
-	MatchedReceipts                int                           `json:"matched_original_receipts"`
-	FactsRemaining                 uint64                        `json:"facts_remaining"`
-	CapacityWarning                bool                          `json:"capacity_warning"`
-	ArchiveSegments                uint64                        `json:"archive_segments"`
-	ArchiveIndexEntries            uint64                        `json:"archive_index_entries"`
-	ArchiveIndexBytes              uint64                        `json:"archive_index_bytes"`
-	Resources                      economicConservationResources `json:"resources"`
-	OpeningPrincipalAlpha          *string                       `json:"opening_principal_alpha"`
-	NativeFeeWithdrawalRao         *string                       `json:"native_fee_withdrawal_rao"`
-	NativeFeeRefundRao             *string                       `json:"native_fee_refund_rao"`
-	FullQuantizationToleranceAlpha *string                       `json:"full_quantization_tolerance_alpha"`
-	TargetMet                      *bool                         `json:"target_met"`
-	ActualNativeOutcomeVerified    bool                          `json:"actual_native_outcome_verified"`
-	ActivationReady                bool                          `json:"activation_ready"`
-	Authority                      string                        `json:"authority"`
-	MissingEvidence                []string                      `json:"missing_evidence"`
+	AdmittedNativeFees             *economicConservationFeeSummary `json:"admitted_native_fee_census,omitempty"`
+	Schema                         string                          `json:"schema"`
+	PolicyHash                     string                          `json:"policy_hash"`
+	CheckpointHash                 string                          `json:"checkpoint_hash"`
+	SampleAt                       time.Time                       `json:"sample_at"`
+	NativeCursor                   economicEmissionBoundary        `json:"native_cursor"`
+	VaultCursor                    economicEmissionBoundary        `json:"vault_cursor"`
+	NativeCurrent                  bool                            `json:"native_current"`
+	VaultCurrent                   bool                            `json:"vault_current"`
+	ClaimStatuses                  []string                        `json:"claim_statuses"`
+	NativeIssue                    string                          `json:"native_issue,omitempty"`
+	VaultIssue                     string                          `json:"vault_issue,omitempty"`
+	JoinIssue                      string                          `json:"join_issue,omitempty"`
+	NativeHeld                     bool                            `json:"native_integrity_held"`
+	VaultHeld                      bool                            `json:"vault_integrity_held"`
+	Execution                      *nativeExecutionWindow          `json:"native_execution"`
+	DirectGrossAlpha               *string                         `json:"direct_provider_gross_alpha"`
+	TailGrossAlpha                 *string                         `json:"tail_provider_gross_alpha"`
+	UnroutedGrossAlpha             *string                         `json:"unrouted_provider_gross_alpha"`
+	RewardCollateralAlpha          *string                         `json:"provider_reward_collateral_alpha"`
+	VaultState                     *monitorEconomicEvmSnapshot     `json:"observed_vault_state"`
+	EarningOccurrences             int                             `json:"earning_occurrences"`
+	Captures                       int                             `json:"captures"`
+	MatchedCaptures                int                             `json:"mapped_captures"`
+	AcceptedClaims                 int                             `json:"accepted_claims"`
+	AggregatePayments              int                             `json:"aggregate_payments"`
+	MatchedReceipts                int                             `json:"matched_original_receipts"`
+	FactsRemaining                 uint64                          `json:"facts_remaining"`
+	CapacityWarning                bool                            `json:"capacity_warning"`
+	ArchiveSegments                uint64                          `json:"archive_segments"`
+	ArchiveIndexEntries            uint64                          `json:"archive_index_entries"`
+	ArchiveIndexBytes              uint64                          `json:"archive_index_bytes"`
+	Resources                      economicConservationResources   `json:"resources"`
+	OpeningPrincipalAlpha          *string                         `json:"opening_principal_alpha"`
+	NativeFeeWithdrawalRao         *string                         `json:"native_fee_withdrawal_rao"`
+	NativeFeeRefundRao             *string                         `json:"native_fee_refund_rao"`
+	FullQuantizationToleranceAlpha *string                         `json:"full_quantization_tolerance_alpha"`
+	TargetMet                      *bool                           `json:"target_met"`
+	ActualNativeOutcomeVerified    bool                            `json:"actual_native_outcome_verified"`
+	ActivationReady                bool                            `json:"activation_ready"`
+	Authority                      string                          `json:"authority"`
+	MissingEvidence                []string                        `json:"missing_evidence"`
 }
 
 func (self *economicConservationState) summary(policy economicConservationPolicy, nativeCurrent, vaultCurrent bool) (economicConservationSummary, error) {
@@ -77,6 +78,10 @@ func (self *economicConservationState) summary(policy economicConservationPolicy
 	result := economicConservationSummary{Schema: "urnetwork-economic-conservation-sample-v1", PolicyHash: self.PolicyHash, CheckpointHash: self.ContentHash, SampleAt: self.SampleAt, NativeCursor: self.Native.Cursor, VaultCursor: self.Vault.Cursor, NativeCurrent: nativeCurrent, VaultCurrent: vaultCurrent, NativeIssue: self.NativeIssue, VaultIssue: self.VaultIssue, JoinIssue: self.JoinIssue, NativeHeld: self.NativeHeld, VaultHeld: self.VaultHeld, Execution: self.Native.ExecutionAccounting, VaultState: self.Vault.Snapshot, EarningOccurrences: len(self.Lots), Captures: len(self.Captures), AcceptedClaims: len(self.Claims), AggregatePayments: len(self.Payments), FactsRemaining: policy.MaximumFacts - self.facts(), Resources: resources, Authority: "admitted-native-replay-and-owned-rpc-vault-claim-observations", MissingEvidence: []string{"independently-admitted-runtime-build-and-full-quantization", "opening-pool-principal-and-complete-stake-effects", "native-fee-withdrawal-refund-and-precompile-rollback", "independent-vault-finality-and-complete-entitlement-census"}}
 	if self.Archive != nil {
 		result.ArchiveSegments = uint64(len(self.Archive.Segments))
+	}
+	result.AdmittedNativeFees, err = self.feeSummary(policy)
+	if err != nil {
+		return result, err
 	}
 	if self.archiveView != nil {
 		result.ArchiveIndexEntries, result.ArchiveIndexBytes = self.archiveView.entries, self.archiveView.bytes
@@ -345,6 +350,8 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	nativeUrl := flags.String("native-rpc", "", "explicit owned native archive RPC")
 	vaultUrl := flags.String("evm-rpc", "", "explicit owned EVM archive RPC")
 	checkpoint := flags.String("checkpoint", "", "preprovisioned durable monitor checkpoint")
+	feeRequest := flags.String("native-fee-request", "", "optional original fee-verifier request, never a derived amount report")
+	feeRequestPin := flags.String("native-fee-request-sha256", "", "exact sha256:DIGEST of the optional original fee request")
 	follow := flags.Bool("follow", false, "continue from this original retained cursor")
 	interval := flags.Duration("interval", 5*time.Second, "sample interval, 1s through 5m")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 || *policyPath == "" || !planSha256(*policyPin) || *nativeUrl == "" || *vaultUrl == "" || *checkpoint == "" || *interval < time.Second || *interval > 5*time.Minute {
@@ -367,6 +374,10 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	}
 	if err := policy.validate(); err != nil {
 		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	if (*feeRequest == "") != (*feeRequestPin == "") || *feeRequest != "" && (policy.FeeAuthority == nil || !bootstrapRootAbsolutePath(*feeRequest) || !planSha256(*feeRequestPin)) {
+		fmt.Fprintln(stderr, "economic native fees require the original policy authority and exact absolute request pin")
 		return 2
 	}
 	seconds := monitorEconomicReadSeconds(policy.ReadBudgetSeconds)
@@ -422,6 +433,26 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		}
 	}()
 	state.archiveView = archive
+	if *feeRequest != "" {
+		feeCtx, cancel := context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
+		raw, digest, readErr := readBootstrapRootFile(feeCtx, *feeRequest, 64*1024)
+		var request economicNativeFeeRequest
+		if readErr == nil && digest != *feeRequestPin {
+			readErr = errors.New("economic native fee request differs from its exact pin")
+		}
+		if readErr == nil {
+			readErr = decodePlanJson(raw, &request)
+		}
+		if readErr == nil {
+			state, readErr = admitEconomicConservationNativeFees(feeCtx, policy, state, request, time.Duration(seconds)*time.Second, historicalReplayHooks{})
+		}
+		readErr = errors.Join(readErr, feeCtx.Err())
+		cancel()
+		if readErr != nil {
+			fmt.Fprintln(stderr, readErr)
+			return 3
+		}
+	}
 	operating, err := state.operatingPolicy(policy)
 	if err != nil {
 		fmt.Fprintln(stderr, err)

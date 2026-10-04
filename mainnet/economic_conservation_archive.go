@@ -95,6 +95,7 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
+	feeEvidence  map[string]string
 	owners       []*monitorHistorySnapshot
 	resources    economicConservationResources
 	entries      uint64
@@ -110,7 +111,7 @@ type economicConservationArchiveView struct {
 }
 
 func newEconomicConservationArchiveView(resources economicConservationResources) *economicConservationArchiveView {
-	return &economicConservationArchiveView{resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
+	return &economicConservationArchiveView{feeEvidence: map[string]string{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
 }
 
 // The encoded facts and fixed per-entry bookkeeping have separate bounds.
@@ -351,6 +352,9 @@ func economicConservationRetainedIds[T any](values []T, id func(T) string) map[s
 // Admission indexes only the facts removed by the deterministic compaction.
 // An old unresolved record appearing in multiple snapshots is not new income.
 func (self *economicConservationArchiveView) admit(original, compacted *economicConservationState) error {
+	if err := self.retainFeeEvidence(original); err != nil {
+		return err
+	}
 	if original.Renewal != nil {
 		if self.reviews[original.Renewal.ReviewSha256] {
 			return errors.New("economic archive reused an original operational review")

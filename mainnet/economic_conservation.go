@@ -28,6 +28,7 @@ type economicConservationRoute struct {
 }
 
 type economicConservationPolicy struct {
+	FeeAuthority      *economicNativeFeePolicy                `json:"native_fee_authority,omitempty"`
 	Continuation      *economicConservationContinuationPolicy `json:"continuation,omitempty"`
 	Schema            string                                  `json:"schema"`
 	Native            monitorEconomicNativePolicy             `json:"native"`
@@ -49,6 +50,9 @@ func (self economicConservationPolicy) validate() error {
 		return err
 	}
 	if err := self.Continuation.validate(self); err != nil {
+		return err
+	}
+	if err := self.validateFeeAuthority(); err != nil {
 		return err
 	}
 	if self.Native.HistoryCatalog != nil || self.Vault.HistoryCatalog != nil || self.Vault.ResourceRevision != nil {
@@ -174,6 +178,7 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	NativeFees     []economicConservationFeeEvidence        `json:"native_fee_evidence,omitempty"`
 	Archive        *economicConservationArchive             `json:"archive,omitempty"`
 	Renewal        *economicConservationRenewal             `json:"resource_renewal,omitempty"`
 	Schema         string                                   `json:"schema"`
@@ -219,7 +224,7 @@ func (self economicConservationState) hash() string {
 }
 
 func (self economicConservationState) facts() uint64 {
-	return uint64(len(self.Mappings) + len(self.Lots) + len(self.Captures) + len(self.Entitlements) + len(self.Claims) + len(self.Payments) + len(self.Receipts))
+	return uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
 }
 
 func (self economicConservationState) validate(policy economicConservationPolicy) error {
@@ -244,6 +249,9 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 		return errors.New("economic conservation archive adoption is not configured")
 	}
 	if err := self.Archive.validate(policy, &self); err != nil {
+		return err
+	}
+	if _, err := self.feeSummary(policy); err != nil {
 		return err
 	}
 	if self.Vault.BatchCount != 0 && self.OpeningVault == nil {
