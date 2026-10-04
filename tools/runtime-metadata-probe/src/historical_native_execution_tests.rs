@@ -48,13 +48,32 @@ fn fixture_with_principal(
     continuous: bool,
     principal: Option<Option<u64>>,
 ) -> (HistoricalJob, sp_core::storage::Storage) {
-    fixture_with_principal_effects(continuous, principal, None)
+    fixture_with_principal_activation(continuous, principal, principal.is_some())
 }
 
 fn fixture_with_principal_effects(
     continuous: bool,
     principal: Option<Option<u64>>,
     effects: Option<&str>,
+) -> (HistoricalJob, sp_core::storage::Storage) {
+    fixture_with_principal_inputs(continuous, principal, effects, principal.is_some())
+}
+
+fn fixture_with_principal_activation(
+    continuous: bool,
+    principal: Option<Option<u64>>,
+    drained_activation: bool,
+) -> (HistoricalJob, sp_core::storage::Storage) {
+    fixture_with_principal_inputs(continuous, principal, None, drained_activation)
+}
+
+// Both principal families begin from the same proof-drained activation while
+// preserving their original post-state and independent mutation census.
+fn fixture_with_principal_inputs(
+    continuous: bool,
+    principal: Option<Option<u64>>,
+    effects: Option<&str>,
+    drained_activation: bool,
 ) -> (HistoricalJob, sp_core::storage::Storage) {
     let drains = [
         key(b"SubtensorModule", b"PendingServerEmission", true),
@@ -141,6 +160,19 @@ fn fixture_with_principal_effects(
             (call $set (i64.const {owner_key}) (i64.const {owner_value})))"#,
         epoch_key=span(1700,epoch.len()), epoch_value=span(4048,8), events_key=span(1400,events.len()), event_value=span(4800,event.len()), provider_key=span(1500,provider.len()),provider_value=span(4368,24),owner_key=span(1600,owner.len()),owner_value=span(4392,8)));
     let mut body = String::new();
+    if drained_activation {
+        // A combined owner begins after a genuinely drained parent. This
+        // original program accrues the next block's inputs before its epoch;
+        // the parent proof and public RPC initial state both remain zero.
+        declarations.push_str(&segment(1850, &words(&[100])));
+        for index in 0..2 {
+            body.push_str(&format!(
+                "(call $set (i64.const {}) (i64.const {}))",
+                span(1000 + index as u32 * 100, drains[index].len()),
+                span(1850, 8)
+            ));
+        }
+    }
     for index in 0..3 {
         body.push_str(&format!("(local.set $n (i32.wrap_i64 (call $drain (i64.const {})))) (if (i32.ne (i32.load8_u (local.get $n)) (i32.const 1)) (then unreachable)) (if (i32.ne (i32.load8_u offset=1 (local.get $n)) (i32.const 32)) (then unreachable)) (i64.store (i32.const {}) (i64.load offset=2 (local.get $n))) (call $set (i64.const {}) (i64.const {}))",span(1000+index as u32*100,drains[index].len()),4024+index*8,span(1000+index as u32*100,drains[index].len()),span(1800,8)));
     }
@@ -216,9 +248,14 @@ fn fixture_with_principal_effects(
     let code = wasm(&declarations, &body);
     let mut initial = parent_storage(&code);
     for (index, drain) in drains.iter().enumerate() {
-        initial
-            .top
-            .insert(drain.clone(), words(&[[100, 100, 0][index]]));
+        initial.top.insert(
+            drain.clone(),
+            words(&[if drained_activation {
+                0
+            } else {
+                [100, 100, 0][index]
+            }]),
+        );
     }
     initial.top.insert(phase, vec![2]);
     initial.top.insert(events.clone(), vec![0]);
@@ -566,7 +603,7 @@ fn historical_native_principal_exports_original_parent_jobs() {
         );
         jobs.push((name, exported));
     }
-    let mut missing = fixture();
+    let mut missing = fixture_with_principal_activation(false, None, true).0;
     missing.principal_queries = Some(vec![principal::PrincipalQuery {
         hotkey: [0x11; 32],
         coldkey: [0x33; 32],
@@ -651,5 +688,63 @@ fn historical_native_principal_effects_export_original_causal_jobs() {
             file.sync_all().unwrap();
         }
         std::fs::File::open(directory).unwrap().sync_all().unwrap();
+    }
+}
+
+// Read the parent from its actual proof before either engine executes. The
+// original next-block program must still compute and emit the same 9/89 pair.
+#[test]
+fn historical_native_principal_activation_is_proof_drained_before_original_accrual() {
+    let (job, _) = fixture_with_principal(false, Some(Some(14)));
+    let parent: NativeHeader = scale_exact(
+        "parent",
+        &hex_bytes("parent", &job.parent_header_hex, MAXIMUM_HEADER_BYTES).unwrap(),
+    )
+    .unwrap();
+    let nodes = job
+        .proof_nodes_hex
+        .iter()
+        .map(|node| hex_bytes("node", node, MAXIMUM_CODE_BYTES).unwrap());
+    let backend =
+        create_proof_check_backend::<Blake2Hasher>(*parent.state_root(), StorageProof::new(nodes))
+            .unwrap();
+    for item in [
+        b"PendingServerEmission".as_slice(),
+        b"PendingValidatorEmission".as_slice(),
+        b"PendingRootAlphaDivs".as_slice(),
+    ] {
+        assert_eq!(
+            backend
+                .storage(&key(b"SubtensorModule", item, true))
+                .unwrap(),
+            Some(words(&[0])),
+            "original activation parent is not actually drained"
+        );
+    }
+    let captured =
+        super::capture_tests::collect(&job).expect("original accrued activation capture");
+    let exported: HistoricalJob = serde_json::from_str(&captured.job_json).unwrap();
+    let replayed = run(&exported).expect("original accrued activation replay");
+    for report in [&captured.replay, &replayed] {
+        assert!(report.post_state_reproduced);
+        let trace = report.hook_observations.as_ref().unwrap();
+        let epoch = trace
+            .observations
+            .iter()
+            .find(|value| value.purpose == "native-epoch")
+            .unwrap();
+        let emitted = epoch
+            .native
+            .as_ref()
+            .unwrap()
+            .memory
+            .iter()
+            .find(|value| value.name == "emission")
+            .unwrap();
+        assert_eq!(
+            emitted.bytes_hex,
+            encoded(&words(&[9, 89])),
+            "original accrual failed to preserve full source allocation"
+        );
     }
 }
