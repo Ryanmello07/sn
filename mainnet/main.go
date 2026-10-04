@@ -251,6 +251,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if len(args) != 0 && args[0] == "verify-historical-execution" {
 		return runHistoricalReplayCommand(ctx, args[1:], stdout, stderr)
 	}
+	if len(args) != 0 && args[0] == "verify-admitted-native-fees" {
+		return runEconomicNativeFeeEvidenceCommand(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "verify-historical-fee-context" {
 		return runHistoricalFeeContextCommand(ctx, args[1:], stdout, stderr)
 	}
