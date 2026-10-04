@@ -15,6 +15,7 @@ mod yuma_populated_tests;
 mod capture_join_tests;
 
 use super::*;
+use parity_scale_codec as codec;
 use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt, path::Path};
 
 fn key(pallet: &[u8], item: &[u8], subnet: bool) -> Vec<u8> {
