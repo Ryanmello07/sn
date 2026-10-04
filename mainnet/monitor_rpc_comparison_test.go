@@ -347,3 +347,31 @@ func TestMonitorRpcComparisonUnavailablePolicyKeepsChainWorkerAlive(t *testing.T
 		t.Fatalf("missing optional comparison policy stopped or approved chain: code=%d output=%s stderr=%s err=%v", code, output.String(), stderr.String(), err)
 	}
 }
+
+// Approval expiry clips actual read attempts, rather than merely rejecting a
+// result after spending the remainder of a longer generic read budget.
+func TestMonitorRpcComparisonApprovalExpiryBoundsActualAttempt(t *testing.T) {
+	owner, primary, secondary := newMonitorRpcComparisonFixture(t)
+	expiresAt, err := time.Parse(time.RFC3339Nano, owner.policy.ExpiresAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner.now = func() time.Time { return expiresAt.Add(-30 * time.Second) }
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	called := false
+	secondary.client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		called = true
+		deadline, ok := request.Context().Deadline()
+		remaining := time.Until(deadline)
+		if !ok || remaining <= 29*time.Second || remaining > 30*time.Second {
+			t.Fatalf("signed approval did not bound actual attempt: %s", remaining)
+		}
+		cancel()
+		return nil, request.Context().Err()
+	})
+	result := owner.compare(ctx, primary.mapping.nativeHash)
+	if !called || result.Status != "input-unknown" || result.IndependentRpc || result.ActivationAuthority {
+		t.Fatalf("expiry-bounded canceled comparison claimed authority: %+v", result)
+	}
+}

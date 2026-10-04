@@ -301,11 +301,13 @@ func (self *monitorRpcComparison) compare(ctx context.Context, blockHash string)
 	}
 	result.PolicySha256, result.NativeHash = self.policyPin, blockHash
 	result.PrimaryRouteId, result.SecondaryRouteId = self.policy.Primary.RouteId, self.policy.Secondary.RouteId
-	if !self.policy.current(self.now()) {
+	startedAt := self.now()
+	if !self.policy.current(startedAt) {
 		result.Detail = "independent RPC approval is outside its validity window"
 		return result
 	}
-	ownerCtx, cancel := context.WithTimeout(ctx, monitorRpcComparisonBudget)
+	expiresAt, _ := time.Parse(time.RFC3339Nano, self.policy.ExpiresAt)
+	ownerCtx, cancel := context.WithTimeout(ctx, min(monitorRpcComparisonBudget, expiresAt.Sub(startedAt)))
 	defer cancel()
 	finishError := func(err error) monitorRpcComparisonResult {
 		result.Detail = "independent RPC observation unavailable"
