@@ -293,7 +293,8 @@
     "validator-current-e9-image-runner-root-adoption-20261004.json": "2683c9978da83bc02194c5dc19afa7ec7ef118595aff439423b066297ede4d6f",
     "funding-original-export-codec-successor-source-review-20261004.json": "e22cef748621f1cd3cace86fb63e72bfa0c9fc5ac880426b9e53c234cccb47b1",
     "funding-fd922-rebased-controls-root-source-review-20261004.json": "4a17aceaba40c5392b8eb5ec86de4ee9b22daa62c6120fa7a022730fa09ac051",
-    "funding-fd922-original-export-runner-root-adoption-20261004.json": "b698d5bd85521634b4b73396be1002d74d2273656f68734e9dc41f7f71cb24cf"
+    "funding-fd922-original-export-runner-root-adoption-20261004.json": "b698d5bd85521634b4b73396be1002d74d2273656f68734e9dc41f7f71cb24cf",
+    "validator-current-e9-two-image-root-readback-20261004.json": "3b0572ad9bdcaa2cec638175ffa895cd8ce04d00a92e772b65bcc2c32c8bc2fd"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",

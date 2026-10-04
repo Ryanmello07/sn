@@ -22,6 +22,8 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+The [current-release validator image readback](evidence/validator-current-e9-two-image-root-readback-20261004.json) independently verifies successful normal and race compiler exits, joined descendants and exact protected image hashes/inodes. Execute the three affected roots per mode and vet before publication; compilation alone does not close the current-release integration gate.
+
 The [corrected original-export runner](evidence/funding-fd922-original-export-runner-root-adoption-20261004.json) is reviewed and adopted subject to fresh compiler-slot/resource admission. Its four exporter definitions and fourteen output sets exactly retain the original recipe; the only source delta is the reviewed test import. Wait for the current validator compiler to join, then start under the existing2x reserve without another approval round or rebuilding unaffected Go images. Actual compile, exporter bodies and five causal controls remain unproven.
 
 The [five corrected Rust causal controls](evidence/funding-fd922-rebased-controls-root-source-review-20261004.json) reproduce each exact original omission against the corrected source while retaining the codec import. This checks that fixing compilation did not erase the transaction-body, apply-index, Yuma-input, pending-parent or populated-matrix regression tests. Each control still needs a fresh compiling image and its named intended failure; source comparison is not qualification.
