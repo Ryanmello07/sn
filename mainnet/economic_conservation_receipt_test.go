@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -34,7 +35,13 @@ func TestEconomicConservationArchivedReceiptContradictionRefusesPublicReopenAndP
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(f.source.checkpoint, append(raw, '\n'), 0600); err != nil {
+	// Publish through the real physical-head owner so this tests the logical
+	// receipt guard rather than failing an earlier named-inode custody check.
+	writer, err := openMonitorHistorySnapshot(f.ctx, f.source.checkpoint, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := errors.Join(writer.publish(append(raw, '\n'), nil), writer.close()); err != nil {
 		t.Fatal(err)
 	}
 	f.reset(t)
@@ -114,12 +121,16 @@ func TestEconomicConservationPublicReceiptRefreshRetainsFirstArchiveBytes(t *tes
 		t.Fatal(err)
 	}
 	baseline := f.sample(t, monitorServiceHooks{})
+	birth := f.source.state(t).ClaimStates[0].Record.StartedAt
 	for range 3 {
 		f.source.now = f.source.now.Add(time.Second)
 		summary := f.sample(t, monitorServiceHooks{})
 		state := f.source.state(t)
 		if summary.MatchedReceipts != 1 || len(state.Receipts) != 0 || summary.ArchiveIndexEntries != baseline.ArchiveIndexEntries || summary.ArchiveIndexBytes != baseline.ArchiveIndexBytes {
 			t.Fatal("observation refresh replaced original receipt or charged new capacity", summary, state.Receipts)
+		}
+		if state.ClaimStates[0].Record.StartedAt != birth || state.ClaimStates[0].Record.PublishedAt != f.source.now.Format(time.RFC3339Nano) {
+			t.Fatal("receipt refresh changed its original instance birth or lost new publication", state.ClaimStates[0])
 		}
 	}
 	retained, err := os.ReadFile(f.request.ArchivePath)

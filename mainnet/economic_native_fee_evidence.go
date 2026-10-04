@@ -32,6 +32,8 @@ type economicNativeFeePolicy struct {
 
 // Signature admission binds original inputs, including the generated metadata
 // and rollback-aware original callsites. Receipt gas never supplies an amount.
+// V1 signatures are exactly 128 lowercase hexadecimal characters without 0x;
+// public keys and native block hashes retain their separate 0x-prefixed grammar.
 type economicNativeFeeApproval struct {
 	Schema             string `json:"schema"`
 	PolicyHash         string `json:"policy_hash"`

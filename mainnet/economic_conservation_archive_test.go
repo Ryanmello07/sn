@@ -76,7 +76,7 @@ func (self *economicConservationArchiveFixture) sample(t *testing.T, hooks monit
 	var output, diagnostic bytes.Buffer
 	code := runMainWithMonitorHooks(self.ctx, self.source.args(t), &output, &diagnostic, func() time.Time { return self.source.now }, hooks)
 	if code != 0 {
-		t.Fatal("public conservation sample failed", code, diagnostic.String())
+		t.Fatal("public conservation sample failed", code, diagnostic.String(), output.String())
 	}
 	var summary economicConservationSummary
 	if err := decodePlanJson(output.Bytes(), &summary); err != nil {
