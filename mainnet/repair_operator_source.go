@@ -21,7 +21,9 @@ import (
 // The same production resolver selects the first literal/layer/version result.
 // Reading is still under the original protected complete-tree authority.
 func readRepairOperatorResource(ctx context.Context, host *repairValidatorHost, plan repairOperatorHostPlan, root, name string) ([]byte, error) {
-	paths, err := server.ResolveResourcePaths(root, plan.env("WARP_ENV"), name)
+	paths, err := server.ResolveResourcePathsWithAccess(root, plan.env("WARP_ENV"), name, func(operation, path string) error {
+		return inspectRepairOperatorLookupAccess(ctx, host, plan, operation, path)
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -1060,6 +1060,17 @@ func TestRepairOperatorSourceReaderRequiresServiceCredentials(t *testing.T) {
 	f := newRepairOperatorFixture(t)
 	p := f.envelope.original.Plan
 	p.Uid, p.Gid = p.Uid+1000, p.Gid+1000
+	// Candidate lookup is permitted; only the selected file remains unreadable
+	// by this principal, independently of the resolver's directory checks.
+	selected := filepath.Join(p.env("WARP_VAULT_HOME"), "main", "1.0.0", "st.yml")
+	for path := filepath.Dir(selected); ; path = filepath.Dir(path) {
+		if err := os.Chmod(path, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if path == f.base.directory {
+			break
+		}
+	}
 	if raw, err := readRepairOperatorResource(f.ctx(), f.base.host, p, p.env("WARP_VAULT_HOME"), "st.yml"); raw != nil || !errors.Is(err, errRpcIntegrity) {
 		t.Fatal("privileged resource read replaced actual taskworker access", err)
 	}

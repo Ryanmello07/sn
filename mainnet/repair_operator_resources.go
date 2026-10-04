@@ -138,6 +138,69 @@ func inspectRepairOperatorResourceAccess(ctx context.Context, host *repairValida
 	}
 }
 
+// Root's successful path lookup cannot hide a service-credential refusal at an
+// earlier literal or version candidate. The production resolver supplies each
+// exact operation and retains its own precedence and error-handling rules.
+func inspectRepairOperatorLookupAccess(ctx context.Context, host *repairValidatorHost, plan repairOperatorHostPlan, operation, path string) error {
+	if ctx == nil || host == nil {
+		return errors.New("operator resource lookup owner is absent")
+	}
+	if operation != "stat" && operation != "read-dir" || !repairValidatorPath(path) {
+		return errors.Join(errRpcIntegrity, errors.New("operator resource lookup operation differs from its original profile"))
+	}
+	directory := filepath.Dir(path)
+	if operation == "read-dir" {
+		directory = path
+	}
+	parents := []string{}
+	for selected := directory; ; selected = filepath.Dir(selected) {
+		parents = append(parents, selected)
+		if selected == host.trustRoot || selected == filepath.Dir(selected) {
+			break
+		}
+	}
+	slices.Reverse(parents)
+	for _, selected := range parents {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		info, err := os.Lstat(selected)
+		if errors.Is(err, os.ErrNotExist) {
+			// A genuinely absent ancestor belongs to the resolver's ordinary
+			// fallback logic after all earlier search permissions were checked.
+			return ctx.Err()
+		}
+		if err != nil {
+			return repairValidatorObservationError("cannot observe operator resource lookup access", err, true)
+		}
+		state, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return errors.Join(errRpcIntegrity, errors.New("operator resource lookup leaves original directory custody"))
+		}
+		bits := uint32(info.Mode().Perm())
+		if state.Uid == plan.Uid {
+			bits >>= 6
+		} else if state.Gid == plan.Gid {
+			bits >>= 3
+		}
+		required := uint32(1)
+		if operation == "read-dir" && selected == directory {
+			required = 5
+		}
+		if bits&required != required {
+			return errors.Join(errRpcIntegrity, errors.New("operator taskworker credentials cannot traverse an original resource lookup"))
+		}
+		_, aclErr := unix.Getxattr(selected, "system.posix_acl_access", nil)
+		if aclErr == nil {
+			return errors.Join(errRpcIntegrity, errors.New("operator resource lookup has an undeclared access ACL"))
+		}
+		if !errors.Is(aclErr, unix.ENODATA) && !errors.Is(aclErr, unix.ENOTSUP) {
+			return repairValidatorObservationError("cannot observe operator resource lookup access policy", aclErr, false)
+		}
+	}
+	return ctx.Err()
+}
+
 // Every environment interpolation has a signed input. Even an unselected
 // settings fallback cannot introduce an unreviewed environment override.
 func validateRepairOperatorResource(raw []byte, name string, plan repairOperatorHostPlan) error {
