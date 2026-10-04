@@ -85,9 +85,9 @@ func economicConservationClaimFollowCensus(t *testing.T, f *economicConservation
 				hot += units - prior
 			}
 		}
-		// This finite no-producer fixture has five complete live owner fences.
+		// This finite no-producer fixture has four complete live owner fences.
 		// Their units remain inside the unchanged16*128 total foreground limit.
-		if delta["archive-custody-check"] != 5*pages || hot == 0 || hot+delta["archive-custody-check"] > 16*128 {
+		if delta["archive-custody-check"] != 4*pages || hot == 0 || hot+delta["archive-custody-check"] > 16*128 {
 			t.Fatal("Claim follow changed complete custody fences or bounded hot work", pages, index, hot, delta)
 		}
 		if previous != nil && !reflect.DeepEqual(previous, delta) {

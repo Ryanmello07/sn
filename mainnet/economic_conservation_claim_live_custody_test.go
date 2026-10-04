@@ -5,9 +5,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -42,20 +44,21 @@ func economicConservationClaimReplaceHeldArchive(t *testing.T, f *economicConser
 // A completed first sample does not authorize another read after owner loss.
 func TestEconomicConservationClaimNextSampleChecksFreshOriginalCustody(t *testing.T) {
 	f := economicConservationClaimLiveCustodyFixture(t)
-	var appends, events int
+	var events int
+	var reads uint64
 	var retained []byte
 	var output, diagnostic bytes.Buffer
 	ctx, cancel := context.WithCancel(f.ctx)
 	defer cancel()
 	hooks := monitorServiceHooks{
-		beforeEconomicNativeAppend: func(context.Context, context.CancelFunc) { appends++ },
 		afterEvent: func(context.Context, string) {
 			events++
 			if events == 1 {
 				var err error
 				retained, err = os.ReadFile(f.source.checkpoint)
-				if err != nil || appends != 1 {
-					t.Fatal("first real sample did not establish the dependent operation", appends, err)
+				reads = f.source.claimReads.Load()
+				if err != nil || reads == 0 {
+					t.Fatal("first real sample did not establish the dependent operation", reads, err)
 				}
 				economicConservationClaimReplaceHeldArchive(t, f)
 			} else {
@@ -69,13 +72,13 @@ func TestEconomicConservationClaimNextSampleChecksFreshOriginalCustody(t *testin
 	}
 	code := runMainWithMonitorHooks(ctx, append(f.source.args(t), "--follow"), &output, &diagnostic, func() time.Time { return f.source.now }, hooks)
 	current, err := os.ReadFile(f.source.checkpoint)
-	if code == 0 || events != 1 || appends != 1 || err != nil || !bytes.Equal(current, retained) || len(bytes.Split(bytes.TrimSpace(output.Bytes()), []byte{'\n'})) != 1 {
-		t.Fatal("lost original custody reached another dependent sample", code, events, appends, err, diagnostic.String())
+	if code == 0 || events != 1 || f.source.claimReads.Load() != reads || err != nil || !bytes.Equal(current, retained) || len(bytes.Split(bytes.TrimSpace(output.Bytes()), []byte{'\n'})) != 1 {
+		t.Fatal("lost original custody reached another dependent sample", code, events, reads, f.source.claimReads.Load(), err, diagnostic.String())
 	}
 }
 
-// Loss or cancellation occurs after the successful sample fence and actual
-// read join, before native append and the later checkpoint publication fence.
+// Loss or cancellation occurs inside an actual source read after the sample
+// fence. The source's original response then joins before publication.
 func TestEconomicConservationClaimPublicationKeepsOriginalAfterMidSampleFault(t *testing.T) {
 	for _, fault := range []string{"owner-loss", "cancel"} {
 		f := economicConservationClaimLiveCustodyFixture(t)
@@ -83,22 +86,55 @@ func TestEconomicConservationClaimPublicationKeepsOriginalAfterMidSampleFault(t 
 		if err != nil {
 			t.Fatal(err)
 		}
-		ctx, cancel := context.WithCancel(f.ctx)
-		var appends int
-		hooks := monitorServiceHooks{beforeEconomicNativeAppend: func(context.Context, context.CancelFunc) {
-			appends++
+		ctx, cancel := context.WithTimeout(f.ctx, 30*time.Second)
+		entered, proceed := make(chan struct{}), make(chan struct{})
+		var once, released sync.Once
+		release := func() { released.Do(func() { close(proceed) }) }
+		originalFault := f.source.native.chain.fault
+		f.source.native.chain.fault = func(method string, params []json.RawMessage, call int) (any, bool) {
+			if method == "chain_getFinalizedHead" {
+				once.Do(func() { close(entered); <-proceed })
+			}
+			return originalFault(method, params, call)
+		}
+		var output, diagnostic bytes.Buffer
+		done := make(chan int, 1)
+		joined := false
+		defer func() {
+			cancel()
+			release()
+			if !joined {
+				<-done
+			}
+		}()
+		args := f.source.args(t)
+		go func() {
+			done <- runMainWithMonitorHooks(ctx, args, &output, &diagnostic, func() time.Time { return f.source.now }, monitorServiceHooks{})
+		}()
+		select {
+		case <-entered:
 			if fault == "owner-loss" {
 				economicConservationClaimReplaceHeldArchive(t, f)
 			} else {
 				cancel()
 			}
-		}}
-		var output, diagnostic bytes.Buffer
-		code := runMainWithMonitorHooks(ctx, f.source.args(t), &output, &diagnostic, func() time.Time { return f.source.now }, hooks)
+			release()
+		case code := <-done:
+			joined = true
+			t.Fatal("Claim sample did not reach its actual native read", fault, code, diagnostic.String())
+		case <-ctx.Done():
+			cancel()
+			release()
+			<-done
+			joined = true
+			t.Fatal("Claim sample did not join its native read barrier", fault, diagnostic.String())
+		}
+		code := <-done
+		joined = true
 		cancel()
 		current, readErr := os.ReadFile(f.source.checkpoint)
-		if appends != 1 || output.Len() != 0 || readErr != nil || !bytes.Equal(current, original) || fault == "owner-loss" && code == 0 || fault == "cancel" && (code != 0 || strings.Contains(diagnostic.String(), "changed its original")) {
-			t.Fatal("mid-sample fault published a dependent Claim checkpoint", fault, code, appends, readErr, diagnostic.String())
+		if output.Len() != 0 || readErr != nil || !bytes.Equal(current, original) || fault == "owner-loss" && code == 0 || fault == "cancel" && (code != 0 || strings.Contains(diagnostic.String(), "changed its original")) {
+			t.Fatal("mid-sample fault published a dependent Claim checkpoint", fault, code, readErr, diagnostic.String())
 		}
 	}
 }
