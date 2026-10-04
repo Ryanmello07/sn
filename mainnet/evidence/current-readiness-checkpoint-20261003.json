@@ -132,7 +132,8 @@
     "native-recipient-cross-domain-finding-20261004.json": "0207b5671b6c9957d7a94d2d83e9336502d6e4bacfaefc3a9c4d4fe2c49523a7",
     "foreground-successor-race-independent-readback-20261004.json": "2876a2e63bb21e0367e917782740d9a9970d48f1b14c2350d3ec72ea7f64e95d",
     "0e5-sixteen-operative-controls-independent-review-20261004.json": "0bd080062cf5658d0a0060cc19bfdeda4ae84082b8438a40a1115260a2597822",
-    "native-finite-resource-admission-20261004.json": "54fb412aa4acef042b324311b6a78f13e1394c4843029aeca8f7230bd53ee0eb"
+    "native-finite-resource-admission-20261004.json": "54fb412aa4acef042b324311b6a78f13e1394c4843029aeca8f7230bd53ee0eb",
+    "foreground-successor-controls-independent-review-20261004.json": "8f9f284e5852864e983f099c6fe74c956354aa28b0ae03b33bafeab2e5b9f3b1"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -187,7 +188,7 @@
       "closed": false,
       "evidence": "0e5-validator-foreground-failure-source-review-20261003.json",
       "requirement": "PH-08",
-      "status": "Foreground successor2477 passes all20 focused roots normally and under race detection, plus validator vet, including the three original failures. Two causal controls per mode and actual host sizing remain. Original0e5 six passes/three failures per mode retained."
+      "status": "Foreground successor2477 qualified:20 roots per normal/race mode, validator vet, production iterator and fixture-capacity regression controls per mode. Final source integration and actual host sizing remain. Original0e5 failures retained."
     },
     {
       "closed": false,
