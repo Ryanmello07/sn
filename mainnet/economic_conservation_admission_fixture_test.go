@@ -32,8 +32,21 @@ func observeEconomicConservationTestClaims(t *testing.T, ctx context.Context, so
 
 // Observed free space does not enlarge an admitted reserve. Publish a separate
 // fixture declaration carrying both byte and inode forecasts before archiving.
-func economicConservationTestArchiveReserves(t *testing.T, ctx context.Context, metadata string) context.Context {
+func economicConservationTestArchiveReserves(t *testing.T, ctx context.Context, metadata string, profiles ...economicConservationPolicy) context.Context {
 	t.Helper()
+	if len(profiles) > 1 {
+		t.Fatal("archive fixture must select one original physical profile")
+	}
+	maximum := uint64(maxRpcReplyBytes)
+	if len(profiles) == 1 {
+		if err := profiles[0].StorageProfile.validate(); err != nil {
+			t.Fatal(err)
+		}
+		maximum = profiles[0].storageMaximum()
+	}
+	// Reserve two full original segments and two future physical heads, each
+	// at the selected immutable maximum, with the same two-times margin.
+	minimumBytes := max(uint64(64*1024*1024), 2*(2*maximum+2*maximum))
 	reference, present := durablevolume.ReferenceFromContext(ctx)
 	if !present {
 		t.Fatal("original fixture declaration absent")
@@ -43,7 +56,7 @@ func economicConservationTestArchiveReserves(t *testing.T, ctx context.Context, 
 		t.Fatal(err)
 	}
 	for index := range config.Volumes {
-		config.Volumes[index].MinAvailableBytes = max(config.Volumes[index].MinAvailableBytes, 64*1024*1024)
+		config.Volumes[index].MinAvailableBytes = max(config.Volumes[index].MinAvailableBytes, minimumBytes)
 		config.Volumes[index].MinAvailableInodes = max(config.Volumes[index].MinAvailableInodes, 4096)
 	}
 	raw, err := json.Marshal(config)

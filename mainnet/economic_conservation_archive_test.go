@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/urfoundation/sn/internal/durablefixture"
 	"github.com/urnetwork/connect/durablevolume"
 )
 
@@ -28,6 +29,7 @@ type economicConservationArchiveFixture struct {
 	key      ed25519.PrivateKey
 	request  economicConservationArchiveRequest
 	sequence uint64
+	storage  *durablefixture.Fixture
 }
 
 func newEconomicConservationArchiveFixture(t *testing.T, signed bool, configure ...func(*economicConservationFixture)) *economicConservationArchiveFixture {
