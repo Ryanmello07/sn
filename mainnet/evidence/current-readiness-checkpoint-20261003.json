@@ -226,7 +226,10 @@
     "yuma-operational-cause-source-finding-20261004.json": "574f469e46eb074dc894de3bddaac7fedc269f13adfec279b59b64551d30e031",
     "native-restore729c-terminal-root-review-20261004.json": "24ec3dd5ff560f47110fa31a579ae8586c77e2248fa9c9e52dcec92bf1cd6f4c",
     "native-restore425-fixture-source-root-review-20261004.json": "2ebb0dc26487053b8a359c74602e10232a4da1353fd037c1fcb852280ae86719",
-    "principal-activationec242-rust-resource-root-review-20261004.json": "e79220ee0d18990fb6070dee8e031d469205d55c4653546fd654054cebc9cc1e"
+    "principal-activationec242-rust-resource-root-review-20261004.json": "e79220ee0d18990fb6070dee8e031d469205d55c4653546fd654054cebc9cc1e",
+    "native-adoptionade5-composed-source-root-review-20261004.json": "a9c9328eff171a13a7c4f3f41fc68ae06997c50afdbf2de85d016d34e5489334",
+    "native-adoptionade5-rust-terminal-root-review-20261004.json": "fc9f97ef213f9bc58d341f195102e58b6fc41f7af6759db6c23d05795ae1cc00",
+    "yuma-activation-parent-source-finding-20261004.json": "be724e107c4da179913ce24d7f636141ead445d1d4fb668b59e6b1044d26020e"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
