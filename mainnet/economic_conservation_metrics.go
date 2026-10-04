@@ -65,6 +65,17 @@ func renderEconomicConservationMetrics(summary *economicConservationSummary) ([]
 		pendingRoots = value.OriginalEntitlements.PendingRoots
 		heldRoots = value.OriginalEntitlements.HeldRoots + value.OriginalEntitlements.CapacityHeldRoots
 	}
+	// Presence, completeness and a definite result are different facts. In
+	// particular, complete fungible source bounds may still leave provider
+	// credit unresolved; no metric converts the underlying exact amounts.
+	funding := economicConservationFundingSummary{}
+	if value.Funding != nil {
+		funding = *value.Funding
+	}
+	conformance := economicConservationConformance{}
+	if value.Conformance != nil {
+		conformance = *value.Conformance
+	}
 	healthy := summary != nil && value.NativeCurrent && value.VaultCurrent && claimsCurrent && !value.NativePending && !value.NativeFeePending && !value.NativeHeld && !value.VaultHeld && value.NativeIssue == "" && value.VaultIssue == "" && value.NativeFeeIssue == "" && value.JoinIssue == "" && pendingRoots == 0 && heldRoots == 0
 	var output strings.Builder
 	for _, metric := range []struct {
@@ -89,6 +100,19 @@ func renderEconomicConservationMetrics(summary *economicConservationSummary) ([]
 		{name: "target_known", help: "The original economic target has a definite observed result.", value: bit(value.TargetMet != nil)},
 		{name: "target_met", help: "The original economic target is met; meaningful only with target_known and fresh evidence, never activation authority.", value: bit(value.TargetMet != nil && *value.TargetMet)},
 		{name: "complete_evidence", help: "Every required independent economic evidence component is admitted.", value: bit(value.Conformance != nil && value.Conformance.CompleteEvidence)},
+		{name: "funding_present", help: "Original funding composition is present in this sample; sample freshness is required separately.", value: bit(value.Funding != nil)},
+		{name: "funding_captured_complete", help: "All original captured funding sources are accounted for; meaningful only with funding_present.", value: bit(funding.Captured.Complete)},
+		{name: "funding_accepted_complete", help: "All original accepted-claim funding sources are accounted for; meaningful only with funding_present.", value: bit(funding.Accepted.Complete)},
+		{name: "funding_paid_complete", help: "All original paid-transfer funding sources are accounted for; meaningful only with funding_present.", value: bit(funding.Paid.Complete)},
+		{name: "provider_credit_known", help: "Original provider credit has a definite income-only result; complete source bounds alone do not set this bit.", value: bit(funding.NoNonIncomeProviderCredit != nil)},
+		{name: "provider_credit_excludes_non_income", help: "Provider credit excludes non-income; meaningful only with provider_credit_known and fresh evidence.", value: bit(funding.NoNonIncomeProviderCredit != nil && *funding.NoNonIncomeProviderCredit)},
+		{name: "conformance_present", help: "Original conformance assessment is present in this sample; absence is unknown.", value: bit(value.Conformance != nil)},
+		{name: "native_split_known", help: "The complete original native ten/ninety allocation has a definite tolerance result.", value: bit(conformance.NativeSplitWithinTolerance != nil)},
+		{name: "native_split_within_tolerance", help: "Original native allocation is within its exact tolerance; meaningful only with native_split_known and fresh evidence.", value: bit(conformance.NativeSplitWithinTolerance != nil && *conformance.NativeSplitWithinTolerance)},
+		{name: "owner_recycle_known", help: "The original owner ninety-percent allocation has a definite tolerance result.", value: bit(conformance.OwnerRecycleWithinTolerance != nil)},
+		{name: "owner_recycle_within_tolerance", help: "Original owner allocation is within its exact tolerance; meaningful only with owner_recycle_known and fresh evidence.", value: bit(conformance.OwnerRecycleWithinTolerance != nil && *conformance.OwnerRecycleWithinTolerance)},
+		{name: "conformance_missing_evidence", help: "Required evidence categories missing from the original assessment; meaningful only with conformance_present.", value: uint64(len(conformance.Missing))},
+		{name: "conformance_contradictions", help: "Definite original economic contradictions; meaningful only with conformance_present and independent freshness.", value: uint64(len(conformance.Contradictions))},
 		{name: "original_fee_census_complete", help: "Complete original body and fee coverage is admitted.", value: bit(value.OriginalFees != nil && value.OriginalFees.Complete)},
 		{name: "original_finality_complete", help: "Original independent consensus certificates cover the selected obligations.", value: bit(value.OriginalFinality != nil && value.OriginalFinality.Complete)},
 		{name: "provider_measurements_authenticated", help: "Complete original provider measurement authority is admitted.", value: bit(value.OriginalEntitlements != nil && value.OriginalEntitlements.ProviderMeasurementsAuthenticated)},
