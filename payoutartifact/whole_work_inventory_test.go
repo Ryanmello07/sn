@@ -497,11 +497,14 @@ func TestWholeWorkSignedSdkCoverageAloneCannotAuthorizeSqlParticipantAttribution
 	}
 }
 
-func TestWholeWorkOpenAndZeroCanceledContractsRemainExplicit(t *testing.T) {
+// Each disposition retains actual signed SDK inventory, without inventing an
+// original admission or cancellation clock from a publisher's SQL label.
+func wholeWorkNonCreditedFixture(t *testing.T, dispositions ...string) *wholeWorkTestFixture {
+	t.Helper()
 	fixture := newWholeWorkTestFixture(t)
 	fixture.empty(t)
 	domainHash, _ := fixture.authority.Domain.Digest()
-	for index, disposition := range []string{"canceled", "open"} {
+	for index, disposition := range dispositions {
 		id := [16]byte{byte(index + 3)}
 		source, destination := [16]byte{1}, [16]byte{2}
 		stored, _ := proto.Marshal(&coreprotocol.StoredContract{ContractId: id[:], SourceId: source[:], DestinationId: destination[:], TransferByteCount: 100})
@@ -524,6 +527,27 @@ func TestWholeWorkOpenAndZeroCanceledContractsRemainExplicit(t *testing.T) {
 		fixture.changeCut(t, 0, 1, func(c *coreprotocol.OriginalWorkCut) { c.Contracts = append(c.Contracts, record); c.Revision++ })
 		fixture.inventory.Window.Records = append(fixture.inventory.Window.Records, row)
 	}
+	return fixture
+}
+
+func TestWholeWorkOpenNeedsOriginalStateAtBoundary(t *testing.T) {
+	fixture := wholeWorkNonCreditedFixture(t, "open")
+	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
+	if err != nil || value == nil || !value.Complete || value.AttributionComplete || value.Contracts != 1 || value.Open != 1 || value.Credited != 0 || value.Canceled != 0 {
+		t.Fatal("undated open SDK work acquired complete original state authority", value, err)
+	}
+}
+
+func TestWholeWorkCanceledNeedsOriginalCancellationClock(t *testing.T) {
+	fixture := wholeWorkNonCreditedFixture(t, "canceled")
+	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
+	if err != nil || value == nil || !value.Complete || value.AttributionComplete || value.Contracts != 1 || value.Canceled != 1 || value.Credited != 0 || value.Open != 0 {
+		t.Fatal("zero terminal SDK work acquired an original cancellation clock", value, err)
+	}
+}
+
+func TestWholeWorkOpenAndZeroCanceledContractsRemainExplicit(t *testing.T) {
+	fixture := wholeWorkNonCreditedFixture(t, "canceled", "open")
 	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
 	if err != nil || !value.Complete || value.AttributionComplete || value.Contracts != 2 || value.Canceled != 1 || value.Open != 1 || value.Credited != 0 {
 		t.Fatal("explicit non-credit contracts were omitted or credited", value, err)
