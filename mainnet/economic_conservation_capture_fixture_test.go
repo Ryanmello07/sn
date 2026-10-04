@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -114,6 +115,7 @@ func economicCaptureExecuteContract(t *testing.T, fixture *monitorEvmFixture, am
 	if err != nil {
 		t.Fatal(err)
 	}
+	db.SetBalance(origin, uint256.NewInt(100_000_000), tracing.BalanceChangeUnspecified)
 	chain := *params.AllDevChainProtocolChanges
 	chain.ChainID = big.NewInt(964)
 	config := runtime.Config{ChainConfig: &chain, State: db, Origin: origin, BlockNumber: big.NewInt(10), GasLimit: 15_000_000, GasPrice: big.NewInt(2), Value: new(big.Int), BaseFee: big.NewInt(1)}
@@ -134,7 +136,7 @@ func economicCaptureExecuteContract(t *testing.T, fixture *monitorEvmFixture, am
 	}
 	db.SetCode(coordinator, economicCaptureForwarder(address), tracing.CodeChangeUnspecified)
 	stake := &economicCapturePrecompile{kind: "stake", state: db, pool: pool, escrow: escrow, coldkey: coldkey, shortfall: revert}
-	call := func(caller, target common.Address, data []byte, tx common.Hash) ([]byte, uint64, error) {
+	environment := func(caller, target common.Address, tx common.Hash) *vm.EVM {
 		config.Origin = caller
 		env := runtime.NewEnv(&config)
 		rules := chain.Rules(config.BlockNumber, config.Random != nil, config.Time)
@@ -145,7 +147,10 @@ func economicCaptureExecuteContract(t *testing.T, fixture *monitorEvmFixture, am
 		env.SetPrecompiles(precompiles)
 		db.SetTxContext(tx, 0)
 		db.Prepare(rules, caller, common.Address{}, &target, []common.Address{common.HexToAddress("0x804"), common.HexToAddress("0x805"), common.HexToAddress("0x808")}, nil)
-		return env.Call(caller, target, data, config.GasLimit, uint256.NewInt(0))
+		return env
+	}
+	call := func(caller, target common.Address, data []byte, tx common.Hash) ([]byte, uint64, error) {
+		return environment(caller, target, tx).Call(caller, target, data, config.GasLimit, uint256.NewInt(0))
 	}
 	pack := func(method string, values ...any) []byte {
 		data, err := contract.Pack(method, values...)
@@ -198,14 +203,22 @@ func economicCaptureExecuteContract(t *testing.T, fixture *monitorEvmFixture, am
 	before := readSnapshot()
 	beforeRoot := db.IntermediateRoot(true)
 	input := pack("captureEmission", big.NewInt(2), big.NewInt(1))
-	tx, err := types.SignNewTx(key, types.LatestSignerForChainID(big.NewInt(964)), &types.LegacyTx{Nonce: 11, GasPrice: big.NewInt(2), Gas: config.GasLimit, To: &coordinator, Value: new(big.Int), Data: input})
+	signer := types.LatestSignerForChainID(big.NewInt(964))
+	tx, err := types.SignNewTx(key, signer, &types.LegacyTx{Nonce: db.GetNonce(origin), GasPrice: big.NewInt(2), Gas: config.GasLimit, To: &coordinator, Value: new(big.Int), Data: input})
 	if err != nil {
 		t.Fatal(err)
 	}
 	config.BlockNumber = big.NewInt(11)
-	_, gas, callErr := call(origin, coordinator, input, tx.Hash())
-	if (callErr != nil) != revert {
-		t.Fatal("actual original capture success/revert differs", callErr, revert)
+	message, err := core.TransactionToMessage(tx, signer, config.BaseFee)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := core.ApplyMessage(environment(origin, coordinator, tx.Hash()), message, new(core.GasPool).AddGas(config.GasLimit))
+	if err != nil || result == nil || result.Failed() != revert {
+		t.Fatal("actual signed original capture execution differs", err, result, revert)
+	}
+	if revert && (!errors.Is(result.Err, vm.ErrExecutionReverted) || !bytes.Equal(result.ReturnData, crypto.Keccak256([]byte("RuntimeAccountingMismatch()"))[:4])) {
+		t.Fatal("actual original capture missed its precise accounting rollback", result.Err, common.Bytes2Hex(result.ReturnData))
 	}
 	status := uint64(types.ReceiptStatusSuccessful)
 	if revert {
@@ -215,7 +228,7 @@ func economicCaptureExecuteContract(t *testing.T, fixture *monitorEvmFixture, am
 	if logs == nil {
 		logs = []*types.Log{}
 	}
-	receipt := &types.Receipt{Type: types.LegacyTxType, Status: status, CumulativeGasUsed: config.GasLimit - gas, Logs: logs, TxHash: tx.Hash(), GasUsed: config.GasLimit - gas, EffectiveGasPrice: big.NewInt(2), BlockNumber: big.NewInt(11), TransactionIndex: 0}
+	receipt := &types.Receipt{Type: types.LegacyTxType, Status: status, CumulativeGasUsed: result.UsedGas, Logs: logs, TxHash: tx.Hash(), GasUsed: result.UsedGas, EffectiveGasPrice: big.NewInt(2), BlockNumber: big.NewInt(11), TransactionIndex: 0}
 	after := readSnapshot()
 	afterRoot := db.IntermediateRoot(true)
 	for _, number := range []uint64{10, 11, 12, 13} {
