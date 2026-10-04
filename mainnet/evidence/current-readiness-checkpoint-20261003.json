@@ -233,7 +233,8 @@
     "native-yuma-activation79c-source-root-review-20261004.json": "e05e9b6ee0e15c5cc86b2f153dbe7dc2c73d3dcc940c8da1fd22e7354043c545",
     "native-adoptionade5-rust-controls-operational-root-review-20261004.json": "07ca5fa4f8ee709bb228884e27dd52c312aa30dbd885e481651f87670b09483d",
     "native-adoptionade5-rust-controls-terminal-root-review-20261004.json": "61db7917275034c9b79a2e9046ef5426da5204f8537bb22de5c100c4f7e4cf18",
-    "native-vault-captured039-partial-source-root-review-20261004.json": "3b633ec0b2733543d9546ffad58703de312617f56c1e621d5a8df517ef45f321"
+    "native-vault-captured039-partial-source-root-review-20261004.json": "3b633ec0b2733543d9546ffad58703de312617f56c1e621d5a8df517ef45f321",
+    "native-adoptionade5-go-normal-compile-root-review-20261004.json": "0cbd2b02086db1f868560bece8e15fe67d5eff7fa99b071372b0d31cdd3a42d0"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
