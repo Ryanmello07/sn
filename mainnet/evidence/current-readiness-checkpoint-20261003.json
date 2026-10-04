@@ -171,7 +171,9 @@
     "fee-retention121-partial-terminal-root-review-20261004.json": "12479190645923d1499ebff9b1078a0b1860d70cfdc3cd28ac19409832492702",
     "scoped-warm-go-resource-admission-root-review-20261004.json": "05fd341e7b9d8effb5067201aec45593e73717bf5805028cda7ce5608c23cd57",
     "fee663-original-race-timeout-root-review-20261004.json": "1875e732224c1aa168dc0bcaa1e22aeb62281602fed94645d936c643dca75a8f",
-    "fee-retention6580-source-root-review-20261004.json": "455d5df60ffa7f97b417eacaa138924d80af913bf9abcbf9330d0435770934e4"
+    "fee-retention6580-source-root-review-20261004.json": "455d5df60ffa7f97b417eacaa138924d80af913bf9abcbf9330d0435770934e4",
+    "miner-manager-composition549-source-root-review-20261004.json": "01553d3648dbbfe05ae488b35cb1aa8b6042e0907bd24b9d37c64bc064c47198",
+    "fee-revision3e7-source-root-review-20261004.json": "dba17328e3cfc45c40f84e34ea5183dc512044600ddf408fd3e2ad7b5b5c469c"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -290,9 +292,9 @@
     },
     {
       "closed": false,
-      "evidence": "native-profile-final-root-review-20261004.json",
+      "evidence": "fee-revision3e7-source-root-review-20261004.json",
       "requirement": "PH-19",
-      "status": "Continuous native producer b32/Core631 continuation passes all26 phases, including actual engine/exporter/profile checks, seventeen public normal/race roots and remaining recovery/prefix controls; populated capacity inherits six passed phases. SN663 fee normal completes28 pass/18 failed fixtures; c04 correction is source-reviewed with49 roots pending. Fee-retirement eca review finds two masked logical-guard fixtures requiring distinct correction. Current Coread6 composition, signed semantic/resource renewal, opening-principal/full denominator/entitlement witnesses, complete conservation and unattended operational admission remain."
+      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal48PASS1FAIL; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Current composition, opening-principal/execution-effects/full-denominator/entitlement witnesses and unattended operational admission remain."
     },
     {
       "closed": false,
@@ -302,9 +304,9 @@
     },
     {
       "closed": false,
-      "evidence": null,
+      "evidence": "miner-manager-composition549-source-root-review-20261004.json",
       "requirement": "PH-21",
-      "status": "Repair mechanisms exist; durable duplicate/interrupted multi-component repair composition remains."
+      "status": "Existing durable manager repair mechanisms have actual four-manager/96-member HTTP composition source-reviewed at549; fifteen-root normal/race scope, two package compiles/vets and five causal controls remain. SDK/fleet sizing and remaining repair components are unproved."
     },
     {
       "closed": false,
