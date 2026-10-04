@@ -391,13 +391,17 @@ func economicConservationRetainedIds[T any](values []T, id func(T) string) map[s
 // Admission indexes only the facts removed by the deterministic compaction.
 // An old unresolved record appearing in multiple snapshots is not new income.
 func (self *economicConservationArchiveView) admit(original, compacted *economicConservationState) error {
+	retireFees, err := self.indexAdmission(original, compacted)
+	if err != nil {
+		return err
+	}
 	if err := self.retainFeeRevision(original); err != nil {
 		return err
 	}
 	if err := self.retainFeeEvidence(original); err != nil {
 		return err
 	}
-	if compacted.Archive.retiresFees(compacted.Archive.Segments[len(compacted.Archive.Segments)-1]) {
+	if retireFees {
 		if err := self.indexRetiredNativeFees(original, compacted.Archive.NativeFees); err != nil {
 			return err
 		}
@@ -495,6 +499,39 @@ func (self *economicConservationArchiveView) admit(original, compacted *economic
 		self.receipts[key] = receipt
 	}
 	return nil
+}
+
+// Receipt-only legacy indexing has no archive or fee retirement. A declared
+// archive must name valid original segments before any derived index changes;
+// nil operands, empty catalogs and lost custody are errors, never panics.
+func (self *economicConservationArchiveView) indexAdmission(original, compacted *economicConservationState) (bool, error) {
+	if self == nil || original == nil || compacted == nil {
+		return false, errors.New("economic archive index requires original and compacted states")
+	}
+	if err := self.check(); err != nil {
+		return false, err
+	}
+	archive := compacted.Archive
+	if archive == nil {
+		return false, nil
+	}
+	if len(archive.Segments) == 0 {
+		return false, errors.New("economic archive index requires a nonempty original segment catalog")
+	}
+	segments := make(map[string]monitorHistoryReference, len(archive.Segments))
+	for _, reference := range archive.Segments {
+		if err := reference.validate(); err != nil {
+			return false, err
+		}
+		if _, repeated := segments[reference.Path]; repeated {
+			return false, errors.New("economic archive index repeats an original segment")
+		}
+		segments[reference.Path] = reference
+	}
+	if err := archive.validateFeeRetirements(segments); err != nil {
+		return false, err
+	}
+	return archive.retiresFees(archive.Segments[len(archive.Segments)-1]), nil
 }
 
 func openEconomicConservationArchive(ctx context.Context, policy economicConservationPolicy, state *economicConservationState, hooks monitorServiceHooks) (_ *economicConservationArchiveView, resultErr error) {
