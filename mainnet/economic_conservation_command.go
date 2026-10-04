@@ -502,6 +502,7 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	nativeUrl := flags.String("native-rpc", "", "explicit owned native archive RPC")
 	vaultUrl := flags.String("evm-rpc", "", "explicit owned EVM archive RPC")
 	checkpoint := flags.String("checkpoint", "", "preprovisioned durable monitor checkpoint")
+	metricsPath := flags.String("metrics-file", "", "optional preprovisioned durable Prometheus textfile")
 	feeRequest := flags.String("native-fee-request", "", "optional original fee-verifier request, never a derived amount report")
 	feeRequestPin := flags.String("native-fee-request-sha256", "", "exact sha256:DIGEST of the optional original fee request")
 	follow := flags.Bool("follow", false, "continue from this original retained cursor")
@@ -510,10 +511,20 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		fmt.Fprintln(stderr, "observe-economic-conservation requires --policy FILE --policy-sha256 sha256:DIGEST --native-rpc URL --evm-rpc URL --checkpoint FILE")
 		return 2
 	}
+	if *metricsPath != "" && (*metricsPath == *checkpoint || *metricsPath == *policyPath || *metricsPath == *feeRequest) {
+		fmt.Fprintln(stderr, "economic metrics must not replace an original input or checkpoint")
+		return 2
+	}
+	startupRefuse := func(err error) int {
+		if *follow && ctx.Err() == nil && economicConservationStartupPending(err) {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return refuse(err)
+	}
 	raw, digest, err := readPlanFile(ctx, *policyPath, maxRpcReplyBytes)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 3
+		return startupRefuse(err)
 	}
 	if digest != *policyPin {
 		fmt.Fprintln(stderr, "economic conservation policy differs from exact input pin")
@@ -556,11 +567,11 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	network := policy.Native.Observation.Network
 	owner, err := policy.openCheckpoint(ctx, *checkpoint, identityExpectation{NativeChain: network.NativeChain, GenesisHash: network.GenesisHash, EvmChainId: network.EvmChainId})
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 3
+		return startupRefuse(err)
 	}
+	var metrics *monitorMetricsStore
 	defer func() {
-		if err := closeMonitorServiceOwners(economicConservationRole, nil, owner, hooks); err != nil {
+		if err := closeMonitorServiceOwners(economicConservationRole, metrics, owner, hooks); err != nil {
 			fmt.Fprintln(stderr, err)
 			code = 3
 		}
@@ -570,11 +581,11 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	}
 	state, err := loadEconomicConservation(ctx, owner, policy)
 	if err != nil {
-		return refuse(err)
+		return startupRefuse(err)
 	}
 	archive, err := openEconomicConservationArchive(ctx, policy, state, hooks)
 	if err != nil {
-		return refuse(err)
+		return startupRefuse(err)
 	}
 	defer func() {
 		if err := archive.close(); err != nil {
@@ -585,6 +596,18 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	state.archiveView = archive
 	if err := state.validateClaimCheckpointPath(owner.path); err != nil {
 		return refuse(err)
+	}
+	if *metricsPath != "" {
+		metrics, err = openMonitorMetrics(*metricsPath, ctx)
+		if err != nil {
+			return startupRefuse(err)
+		}
+		if hooks.syncDirectory != nil {
+			metrics.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(economicConservationRole, "metrics", file) }
+		}
+		if err := initializeEconomicConservationMetrics(metrics); err != nil {
+			return refuse(err)
+		}
 	}
 
 	operating, err := state.operatingPolicy(policy)
@@ -669,6 +692,14 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		summary, err := state.summary(ctx, policy, nativeCurrent, vaultCurrent)
 		if err != nil {
 			return refuse(err)
+		}
+		if metrics != nil {
+			if err := owner.requireOwner(); err != nil {
+				return refuse(err)
+			}
+			if err := saveEconomicConservationMetrics(metrics, &summary); err != nil {
+				return refuse(err)
+			}
 		}
 		encoded, err := json.Marshal(summary)
 		if err != nil {
