@@ -6,11 +6,54 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/urfoundation/sn/crv4"
 )
+
+// A retained proof can expire before its role callback begins. The existing
+// outer production owner still consumes that typed cause without renewing its
+// total budget or changing the original policy, block or signing view.
+func TestProductionRuntimeRetainedExpiryReentersOriginalReadOwner(t *testing.T) {
+	fixture := newProductionContinuityPolicyTestFixture(t)
+	native := fixture.owner.rpc.native
+	client := &productionTransportTestClient{Client: native.API.Client}
+	client.generation.Store(1)
+	native.API.Client = client
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(t.Context(), native, fixture.hashes[150], fixture.candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.generation.Add(1)
+	owner := &ReleaseSteerer{cfg: fixture.owner.cfg}
+	var budgets []time.Duration
+	owner.productionReadHooks.withTimeout = func(ctx context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
+		budgets = append(budgets, budget)
+		return context.WithTimeout(ctx, budget)
+	}
+	attempts, waits := 0, 0
+	owner.productionReadHooks.wait = func(ctx context.Context, _ time.Duration) error {
+		waits++
+		return ctx.Err()
+	}
+	var observation *ProductionRuntimeContinuityInspection
+	err = owner.productionRead(t.Context(), productionReadPreparation, nil, func(ctx context.Context) error {
+		attempts++
+		if attempts == 1 {
+			return crv4.ValidateRuntimeArtifactOwnerContext(ctx, native, artifact)
+		}
+		var err error
+		observation, err = InspectProductionRuntimeContinuityContext(ctx, native, fixture.owner.cfg, fixture.hashes[150], fixture.policyRaw, fixture.certificateRaw)
+		return err
+	})
+	if err != nil || observation == nil || observation.NativeHash != fixture.hashes[150] || observation.SigningAuthority || attempts != 2 || waits != 1 ||
+		!slices.Equal(budgets, []time.Duration{300 * time.Second, 60 * time.Second, 60 * time.Second}) {
+		t.Fatalf("retained runtime expiry escaped the original bounded production owner: attempts=%d waits=%d budgets=%v observation=%+v err=%v", attempts, waits, budgets, observation, err)
+	}
+}
 
 // The selected block remains the first finalized hash even when the retry sees
 // a newer head. Its independent network identity must be observed twice.
