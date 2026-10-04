@@ -293,6 +293,18 @@ func verifyWholeWorkParticipants(ctx context.Context, artifact *Artifact, author
 		if source != facts.SourceId || destination != facts.DestinationId || reservation.Capacity != facts.ReservedBytes || outcome.Capacity != facts.ReservedBytes || outcome.ReservationHash != reservationHash || ownerNetworkKVs[source] != sourceNetwork || ownerNetworkKVs[destination] != destinationNetwork {
 			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("original reservation or settlement differs from SDK admission"))
 		}
+		if reservation.RequestFrameHash == nil || reservation.UsageOriginIsSource == nil {
+			complete = false
+			continue
+		}
+		admission, err := coreprotocol.DecodeOriginalContractAdmission(ctx, contract.ends[source].OriginalCreation)
+		if err != nil {
+			return nil, errors.Join(ErrClosedWorkIntegrity, err)
+		}
+		request, err := coreprotocol.DecodeOriginalContractRequest(ctx, admission.Request)
+		if err != nil || sha256.Sum256(request.RequestFrame) != *reservation.RequestFrameHash || facts.UsageOriginIsSource != *reservation.UsageOriginIsSource {
+			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("SDK creation reinterprets its original received request or service direction"), err)
+		}
 		closedAt, err := time.Parse(time.RFC3339Nano, row.ClosedAt)
 		originalTime := time.UnixMicro(outcome.ClosedAtUnixMicro)
 		if err != nil || !closedAt.Equal(originalTime) || originalTime.Before(inventory.Clock.StartTime) || !originalTime.Before(inventory.Clock.EndTime) {

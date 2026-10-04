@@ -83,7 +83,7 @@ func ClosedWorkReportDomain(artifact *Artifact) (protocol.ClientKeyHistoryDomain
 // ReservedAmountJoins remains zero without the whole SDK reservation witness.
 // A zero expected root signer grants no registered-key credit.
 func VerifyClosedWorkReports(ctx context.Context, artifact *Artifact, rootSigner common.Address) (*VerifiedClosedWorkReports, error) {
-	return verifyClosedWorkReports(ctx, artifact, rootSigner, nil, nil)
+	return verifyClosedWorkReports(ctx, artifact, rootSigner, nil, nil, nil)
 }
 
 // The whole-work owner supplies reservations reconstructed from the complete
@@ -93,12 +93,21 @@ func verifyWholeWorkReports(ctx context.Context, artifact *Artifact, rootSigner 
 	if reservations == nil {
 		return nil, ErrClosedWorkUnavailable
 	}
-	return verifyClosedWorkReports(ctx, artifact, rootSigner, reservations, expected)
+	return verifyClosedWorkReports(ctx, artifact, rootSigner, reservations, expected, nil)
+}
+
+// The whole-work caller supplies these outcomes only after independently
+// admitted original receipt and reservation replay. A payout row cannot choose.
+func verifyWholeWorkReportsWithOutcomes(ctx context.Context, artifact *Artifact, rootSigner common.Address, reservations map[[16]byte]coreprotocol.OriginalWorkContract, expected []WholeWorkExpectedProvider, outcomes map[[16]byte]protocol.ProviderWorkOutcome) (*VerifiedClosedWorkReports, error) {
+	if reservations == nil {
+		return nil, ErrClosedWorkUnavailable
+	}
+	return verifyClosedWorkReports(ctx, artifact, rootSigner, reservations, expected, outcomes)
 }
 
 // All report validation uses the same path. Independent expected providers may
 // contribute exact zero rows; their absence from earning SQL rows is not a gap.
-func verifyClosedWorkReports(ctx context.Context, artifact *Artifact, rootSigner common.Address, reservations map[[16]byte]coreprotocol.OriginalWorkContract, expected []WholeWorkExpectedProvider) (*VerifiedClosedWorkReports, error) {
+func verifyClosedWorkReports(ctx context.Context, artifact *Artifact, rootSigner common.Address, reservations map[[16]byte]coreprotocol.OriginalWorkContract, expected []WholeWorkExpectedProvider, outcomes map[[16]byte]protocol.ProviderWorkOutcome) (*VerifiedClosedWorkReports, error) {
 	var closedWork *VerifiedClosedWork
 	var err error
 	if reservations == nil {
@@ -292,6 +301,25 @@ func verifyClosedWorkReports(ctx context.Context, artifact *Artifact, rootSigner
 				// absent original outcome remains unknown, never guessed settled.
 				if completeInventory && actual != amount && actual != min(capacity, totals[0]) && actual != min(capacity, totals[1]) {
 					return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("original completed usage differs from every capacity-bounded terminal outcome"))
+				}
+			}
+			if original, proved := outcomes[row.ContractId]; proved && completeInventory {
+				contractId, identityErr := protocol.ParseProviderWorkId(original.ContractId)
+				if identityErr != nil || contractId != row.ContractId || !reserved || original.Capacity != capacity || original.SourceBytes != totals[0] || original.DestinationBytes != totals[1] || !original.SourceComplete || !original.DestinationComplete {
+					return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("original settlement outcome differs from complete reserved report inputs"))
+				}
+				switch original.Outcome {
+				case "settled":
+					amount = min(capacity, totals[0], totals[1])
+				case "dispute_resolved_to_source":
+					amount = min(capacity, totals[0])
+				case "dispute_resolved_to_destination":
+					amount = min(capacity, totals[1])
+				default:
+					return nil, ErrClosedWorkIntegrity
+				}
+				if amount != uint64(*snapshot.ByteCount) {
+					return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("credited usage reinterprets its original selected settlement outcome"))
 				}
 			}
 			if amount == uint64(*snapshot.ByteCount) {

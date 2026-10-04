@@ -81,6 +81,8 @@ type ProviderWorkReservation struct {
 	DestinationNetworkId string                   `json:"destination_network_id"`
 	CreatedAtUnixMicro   int64                    `json:"created_at_unix_micro"`
 	Capacity             uint64                   `json:"capacity"`
+	RequestFrameHash     *[32]byte                `json:"request_frame_hash,omitempty"`
+	UsageOriginIsSource  *bool                    `json:"usage_origin_is_source,omitempty"`
 	SourceHead           ProviderWorkEndpointHead `json:"source_head"`
 	DestinationHead      ProviderWorkEndpointHead `json:"destination_head"`
 	Complete             bool                     `json:"complete"`
@@ -236,6 +238,9 @@ func (self ProviderWorkReceipt) signingBytes(ctx context.Context) ([]byte, error
 		bodies++
 		ids = append(ids, reservation.ContractId, reservation.SourceId, reservation.SourceNetworkId, reservation.DestinationId, reservation.DestinationNetworkId)
 		if reservation.SourceId == reservation.DestinationId || reservation.Capacity > math.MaxInt64 || reservation.SourceHead.ClientId != reservation.SourceId || reservation.SourceHead.NetworkId != reservation.SourceNetworkId || reservation.DestinationHead.ClientId != reservation.DestinationId || reservation.DestinationHead.NetworkId != reservation.DestinationNetworkId {
+			return nil, ErrProviderWorkIntegrity
+		}
+		if reservation.RequestFrameHash != nil && *reservation.RequestFrameHash == ([32]byte{}) {
 			return nil, ErrProviderWorkIntegrity
 		}
 		for _, head := range []ProviderWorkEndpointHead{reservation.SourceHead, reservation.DestinationHead} {

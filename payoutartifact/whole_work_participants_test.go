@@ -123,7 +123,14 @@ func participantAttachOriginals(t *testing.T, fixture *wholeWorkTestFixture) ed2
 		if err != nil {
 			t.Fatal(err)
 		}
+		request, err := coreprotocol.DecodeOriginalContractRequest(t.Context(), admission.Request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		requestHash := sha256.Sum256(request.RequestFrame)
+		originIsSource := facts.UsageOriginIsSource
 		reservation := &protocol.ProviderWorkReservation{ContractId: participantTestId(contract.ContractId), SourceId: participantTestId(facts.SourceId), SourceNetworkId: participantTestId(networkKVs[facts.SourceId]), DestinationId: participantTestId(facts.DestinationId), DestinationNetworkId: participantTestId(networkKVs[facts.DestinationId]), CreatedAtUnixMicro: start.Add(10 * time.Second).UnixMicro(), Capacity: facts.ReservedBytes, SourceHead: headKVs[facts.SourceId], DestinationHead: headKVs[facts.DestinationId], Complete: true}
+		reservation.RequestFrameHash, reservation.UsageOriginIsSource = &requestHash, &originIsSource
 		reservationHash := retain(protocol.ProviderWorkReceipt{Reservation: reservation})
 		streamHash := streamKVs[facts.StreamId]
 		if facts.StreamId != ([16]byte{}) && streamHash == ([32]byte{}) {

@@ -193,7 +193,28 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 	for id, contract := range contracts {
 		reservations[id] = coreprotocol.OriginalWorkContract{ContractId: id, StoredContract: contract.stored}
 	}
-	closed, err := verifyWholeWorkReports(ctx, artifact, expected.ClientKeyRootSigner, reservations, authority.ExpectedProviders)
+	creations, err := verifyWholeWorkCreations(ctx, artifact, domainHash, authority.Owners, contracts)
+	if err != nil {
+		return nil, err
+	}
+	participants := &wholeWorkParticipantVerification{Complete: window.Credited == 0}
+	if window.Credited != 0 && expected.AttributionSigner != (common.Address{}) && expected.AttributionSigner == authority.Signer {
+		participants, err = verifyWholeWorkParticipants(ctx, artifact, authority, owned, contracts, creations)
+		if err != nil {
+			return nil, err
+		}
+		if participants == nil {
+			return nil, ErrClosedWorkUnavailable
+		}
+		if participants.Complete {
+			for _, row := range artifact.ClosedWork.Records {
+				if _, proved := participants.Outcomes[row.ContractId]; !proved {
+					return nil, ErrClosedWorkUnavailable
+				}
+			}
+		}
+	}
+	closed, err := verifyWholeWorkReportsWithOutcomes(ctx, artifact, expected.ClientKeyRootSigner, reservations, authority.ExpectedProviders, participants.Outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -202,9 +223,6 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 	}
 	if closed.CompleteReportInventories != artifact.ClosedWork.Count || closed.ReservedAmountJoins != artifact.ClosedWork.Count {
 		return nil, ErrClosedWorkUnavailable
-	}
-	if _, err := verifyWholeWorkCreations(ctx, artifact, domainHash, authority.Owners, contracts); err != nil {
-		return nil, err
 	}
 	if len(expected.PriorContracts) > MaxClosedWorkRecords {
 		return nil, ErrClosedWorkCapacity
@@ -375,7 +393,7 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 	sort.Slice(reconciled, func(i, j int) bool {
 		return bytes.Compare(reconciled[i].ContractId[:], reconciled[j].ContractId[:]) < 0
 	})
-	return &VerifiedWholeWorkInventory{Complete: true, AttributionComplete: window.Credited == 0, Domain: domain, Epoch: artifact.Epoch, Start: artifact.Start, End: artifact.End, AuthorityHash: authorityHash, InventoryHash: inventoryHash, WindowHash: window.Hash, Contracts: window.Credited + window.Canceled + window.Open, Credited: window.Credited, Canceled: window.Canceled, Open: window.Open, ExpectedProviders: providers, ReconciledContracts: reconciled, Reports: closed}, ctx.Err()
+	return &VerifiedWholeWorkInventory{Complete: true, AttributionComplete: participants.Complete, Domain: domain, Epoch: artifact.Epoch, Start: artifact.Start, End: artifact.End, AuthorityHash: authorityHash, InventoryHash: inventoryHash, WindowHash: window.Hash, Contracts: window.Credited + window.Canceled + window.Open, Credited: window.Credited, Canceled: window.Canceled, Open: window.Open, ExpectedProviders: providers, ReconciledContracts: reconciled, Reports: closed}, ctx.Err()
 }
 
 // Public sidecar reads use a strict bounded grammar before any expensive join.
