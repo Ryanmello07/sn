@@ -55,8 +55,8 @@ func (self economicConservationPolicy) validateYumaCapacity() error {
 	}
 	bytes := authority.MaximumWitnessBytes * authority.HotBlockReserve
 	facts := (1+(authority.MaximumWitnessBytes+31)/32)*authority.HotBlockReserve + 128
-	if bytes+64*1024 > maxRpcReplyBytes || facts > self.MaximumFacts {
-		return fmt.Errorf("economic Yuma complete witness reserve exceeds provisioned checkpoint profile: need %d bytes and %d facts, have %d bytes and %d facts; preserve full census and admit a complete physical head/history/restore profile", bytes+64*1024, facts, maxRpcReplyBytes, self.MaximumFacts)
+	if bytes+64*1024 > self.headBytes() || facts > self.MaximumFacts {
+		return fmt.Errorf("economic Yuma complete witness reserve exceeds provisioned checkpoint profile: need %d bytes and %d facts, have %d bytes and %d facts; preserve full census and admit a complete physical head/history/restore profile", bytes+64*1024, facts, self.headBytes(), self.MaximumFacts)
 	}
 	return nil
 }

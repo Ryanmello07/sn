@@ -5,6 +5,9 @@
 #[path = "historical_native_yuma_tests.rs"]
 mod yuma_tests;
 
+#[path = "historical_native_yuma_capacity_tests.rs"]
+mod yuma_capacity_tests;
+
 #[path = "historical_native_capture_join_tests.rs"]
 mod capture_join_tests;
 
@@ -87,6 +90,7 @@ fn fixture_with_allocation_activation(
     yuma: Option<&str>,
     drained_activation: bool,
 ) -> (HistoricalJob, sp_core::storage::Storage) {
+    let allocation_count = yuma_capacity_tests::count(yuma);
     let capture = effects
         .map(|mode| mode.starts_with("capture"))
         .unwrap_or(false);
@@ -102,8 +106,12 @@ fn fixture_with_allocation_activation(
     let epoch = b"synthetic-native-epoch";
     // Synthetic event indices are deliberately fixture-local. The consumer
     // join below checks accounting; public metadata traversal has its own tests.
-    let mut event = vec![2, 7, 250, 25, 0, 8];
-    event.extend_from_slice(&words(&[9, 89]));
+    let mut event = vec![2, 7, 250, 25, 0];
+    event.extend_from_slice(&codec::Compact(allocation_count as u32).encode());
+    let mut amounts = vec![0; allocation_count];
+    amounts[0] = 9;
+    amounts[1] = 89;
+    event.extend_from_slice(&words(&amounts));
     event.push(0);
     let zero = vec![0; 8];
     let mut declarations =
@@ -291,7 +299,11 @@ fn fixture_with_allocation_activation(
         ));
     }
     if let Some(mode) = yuma {
-        declarations.push_str(&yuma_tests::declarations(mode));
+        declarations.push_str(&yuma_tests::declarations(if allocation_count > 2 {
+            "legacy"
+        } else {
+            mode
+        }));
         declarations = declarations.replace(
             "(func $epoch (export \"native_epoch\")",
             "(func $epoch (export \"native_epoch\") (call $yuma_compute)",
@@ -299,7 +311,12 @@ fn fixture_with_allocation_activation(
         declarations = declarations.replace("(i64.const 8589934592)", "(i64.add (i64.add (i64.load (i32.const 4100)) (i64.load (i32.const 4108))) (i64.add (i64.load (i32.const 4120)) (i64.load (i32.const 4128))))");
         body = body.replace("(call $epoch)", yuma_tests::body());
     }
-    let code = wasm(&declarations, &body);
+    let code = if allocation_count > 2 {
+        yuma_capacity_tests::expand(allocation_count, &mut declarations, &mut body);
+        wasm_with_heap(&declarations, &body, 400000)
+    } else {
+        wasm(&declarations, &body)
+    };
     let mut initial = parent_storage(&code);
     for (index, drain) in drains.iter().enumerate() {
         initial.top.insert(
@@ -446,6 +463,9 @@ fn fixture_with_allocation_activation(
     }
     if yuma.is_some() {
         yuma_tests::profile(&code, &mut profile);
+        if allocation_count > 2 {
+            yuma_capacity_tests::profile(allocation_count, &mut profile);
+        }
     }
     if effects.is_some() {
         profile.principal_storage_prefixes = Some(vec![encoded(principal_key)]);

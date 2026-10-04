@@ -188,7 +188,25 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool) *nativeProdu
 	source.policy.From = economicEmissionBoundary{Number: parentNumber, Hash: nativeExecutionTestHex(job.ParentHash[:])}
 	source.policy.Through = economicEmissionBoundary{Number: childNumber, Hash: nativeExecutionTestHex(job.ChildHash[:])}
 	source.chain.finalized = source.policy.Through.Hash
-	source.incentive(t, 101, 25, 9, 89)
+	allocationCount := 2
+	for _, rule := range job.ObservationProfile.Rules {
+		if rule.Purpose == "native-epoch" {
+			for _, memory := range rule.Memory {
+				if memory.Name == "hotkeys" && memory.Repeat == nil {
+					allocationCount = int(memory.Bytes) / 32
+				}
+			}
+		}
+	}
+	if allocationCount != 2 && allocationCount != 1024 && allocationCount != 2048 {
+		t.Fatal("unsupported actual fixture allocation census", allocationCount)
+	}
+	amounts := make([]uint64, allocationCount)
+	amounts[0], amounts[1] = 9, 89
+	source.incentive(t, 101, 25, amounts...)
+	if allocationCount > 2 {
+		source.policy.MaximumUids = uint16(allocationCount)
+	}
 	source.chain.storageKVs[runtimeCodeStorageKey] = job.RuntimeCodeHex
 	ctx, filePolicy, files := nativeProducerTestFiles(t, nil)
 	if err := files.close(); err != nil {
@@ -286,6 +304,10 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool) *nativeProdu
 		if historicalYumaPurpose(rule.Purpose) {
 			filePolicy.Yuma = &nativeYumaPolicy{Schema: nativeYumaSchema, LayoutSha256: monitorReadDigest([]byte(nativeYumaLayout)), ReviewSha256: monitorReadDigest([]byte("synthetic complete original Yuma source and layout review")), MaximumWitnessBytes: 64 * 1024, HotBlockReserve: 1, MaximumEdges: 64, MaximumOperations: 200000}
 		}
+	}
+	if allocationCount > 2 {
+		filePolicy.Yuma.MaximumWitnessBytes = 24 * 1024 * 1024
+		filePolicy.Yuma.MaximumOperations = 64000000
 	}
 	source.policy.Execution = filePolicy
 	authority := nativeProducerAuthority{Schema: nativeProducerAuthoritySchema, Network: source.policy.Network, Netuid: source.policy.Netuid, Registration: *source.policy.SubnetRegistrationBlock, Generation: *source.policy.SubnetGeneration, From: source.policy.From, Runtime: source.policy.Runtime, ReviewSha256: filePolicy.ReviewSha256, Profile: job.ObservationProfile, CaptureEngine: filePolicy.Producer.CaptureEngine, ReplayEngine: filePolicy.Engine, Directory: filePolicy.Directory, Nodes: filePolicy.Producer.Nodes, MaximumJobs: filePolicy.Producer.MaximumJobs, MaximumBytes: filePolicy.Producer.MaximumBytes, MaximumEntries: filePolicy.Producer.MaximumEntries, Checkpoint: strecovery.NativeFinalityCheckpoint{Schema: strecovery.NativeFinalityCheckpointSchema, CodecProfile: strecovery.NativeFinalityCodecProfile, Genesis: source.policy.Network.GenesisHash, HeaderScale: job.ParentHeaderHex, SetId: 9, LiveState: "live", Authorities: []strecovery.GrandpaAuthority{{PublicKey: nativeExecutionTestHex(consensus.Public().(ed25519.PublicKey)), Weight: 1}}}, Providers: []nativeProducerProvider{{Hotkey: nativeExecutionTestHex(bytes.Repeat([]byte{0x11}, 32)), Coldkey: nativeExecutionTestHex(bytes.Repeat([]byte{0x33}, 32))}}}

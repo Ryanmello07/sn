@@ -43,7 +43,7 @@ func (self economicConservationFeeRevision) signingBytes() ([]byte, error) {
 	if self.Schema != economicConservationFeeRevisionSchema || !planSha256(self.PolicyHash) || self.Ordinal == 0 || !planSha256(self.Previous) || !planSha256(self.ReviewSha256) || self.From == self.To || !economicConservationValidFeePolicy(self.From) || !economicConservationValidFeePolicy(self.To) || self.From.ApprovalPublicKey != self.To.ApprovalPublicKey || self.From.Genesis != self.To.Genesis || self.From.EvmChainId != self.To.EvmChainId {
 		return nil, errors.New("economic fee revision changed the original key/network or lacks exact policy lineage")
 	}
-	if err := self.Original.validate(); err != nil {
+	if err := self.Original.validateLimit(economicConservationStorageMaximum); err != nil {
 		return nil, err
 	}
 	self.Signature = ""
@@ -57,6 +57,9 @@ func (self economicConservationFeeRevision) signingBytes() ([]byte, error) {
 func (self economicConservationFeeRevision) verify(policy economicConservationPolicy) error {
 	if policy.FeeAuthority == nil {
 		return errors.New("legacy conservation policy cannot enroll a fee revision approver")
+	}
+	if err := policy.validateReference(self.Original); err != nil {
+		return err
 	}
 	message, err := self.signingBytes()
 	key, keyErr := rootReceiptHex(policy.FeeAuthority.ApprovalPublicKey, ed25519.PublicKeySize)

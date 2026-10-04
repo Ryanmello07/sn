@@ -171,16 +171,26 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 	}
 	// Warning is explicit before the bounded active owner fills. No warning
 	// grants a larger capacity or discards old/unmatched obligations.
-	result.CapacityWarning = self.facts()*2 >= policy.MaximumFacts || len(raw)*2 >= maxRpcReplyBytes || self.Native.CapacityRemaining*2 <= policy.Native.HistoryEntries || self.Vault.CapacityRemaining*2 <= policy.Vault.HistoryEntries || 2*(result.ArchiveSegments+1) >= resources.ArchiveSegments || 4*result.ArchiveIndexEntries >= resources.IndexEntries || 4*result.ArchiveIndexBytes >= resources.IndexBytes
+	result.CapacityWarning = self.facts()*2 >= policy.MaximumFacts || uint64(len(raw))*2 >= resources.headBytes() || self.Native.CapacityRemaining*2 <= policy.Native.HistoryEntries || self.Vault.CapacityRemaining*2 <= policy.Vault.HistoryEntries || 2*(result.ArchiveSegments+1) >= resources.ArchiveSegments || 4*result.ArchiveIndexEntries >= resources.IndexEntries || 4*result.ArchiveIndexBytes >= resources.IndexBytes
 	return result, nil
 }
 
-func cloneEconomicConservation(value *economicConservationState) (*economicConservationState, error) {
+func cloneEconomicConservation(value *economicConservationState, policies ...economicConservationPolicy) (*economicConservationState, error) {
+	maximum := uint64(maxRpcReplyBytes)
+	if len(policies) > 1 {
+		return nil, errors.New("economic clone requires one original policy")
+	}
+	if len(policies) == 1 {
+		if err := policies[0].StorageProfile.validate(); err != nil {
+			return nil, err
+		}
+		maximum = policies[0].storageMaximum()
+	}
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
 	}
-	if len(raw)+1 > maxRpcReplyBytes {
+	if uint64(len(raw)+1) > maximum {
 		return nil, errMonitorEconomicCapacity
 	}
 	var result economicConservationState
@@ -195,7 +205,7 @@ func loadEconomicConservation(ctx context.Context, owner *monitorCheckpointStore
 	if err := owner.requireOwner(); err != nil {
 		return nil, err
 	}
-	raw, err := owner.directory.read(filepath.Base(owner.path), maxRpcReplyBytes, true)
+	raw, err := owner.directory.read(filepath.Base(owner.path), int(policy.storageMaximum()), true)
 	if monitorCheckpointAbsent(err) {
 		return newEconomicConservationState(policy), nil
 	}
@@ -219,6 +229,11 @@ func loadEconomicConservation(ctx context.Context, owner *monitorCheckpointStore
 }
 
 func saveEconomicConservation(ctx context.Context, owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
+	resources, err := state.resources(policy)
+	if err != nil {
+		return err
+	}
+	maximum := resources.headBytes()
 	if err := state.archiveView.check(); err != nil {
 		return err
 	}
@@ -233,7 +248,7 @@ func saveEconomicConservation(ctx context.Context, owner *monitorCheckpointStore
 	if err != nil {
 		return err
 	}
-	if len(raw)+1 > maxRpcReplyBytes {
+	if uint64(len(raw)+1) > maximum {
 		return errMonitorEconomicCapacity
 	}
 	return errors.Join(owner.directory.publish(filepath.Base(owner.path), append(raw, '\n'), 0600, owner.syncDirectory), owner.requireOwner())
@@ -320,7 +335,7 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 		}
 		return nil, false, false, errors.Join(ctx.Err(), nativeErr, vaultErr, claimErr)
 	}
-	next, err := cloneEconomicConservation(prior)
+	next, err := cloneEconomicConservation(prior, policy)
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -330,7 +345,7 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 		if hooks.beforeEconomicNativeAppend != nil {
 			hooks.beforeEconomicNativeAppend(readCtx, cancel)
 		}
-		candidate, copyErr := cloneEconomicConservation(next)
+		candidate, copyErr := cloneEconomicConservation(next, policy)
 		if copyErr != nil {
 			return nil, false, false, copyErr
 		}
@@ -346,7 +361,7 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 		next.NativeIssue, next.NativeHeld = economicConservationIssue(nativeErr), hardNative
 	}
 	if vaultCurrent && vaultValue != nil {
-		candidate, copyErr := cloneEconomicConservation(next)
+		candidate, copyErr := cloneEconomicConservation(next, policy)
 		if copyErr != nil {
 			return nil, false, false, copyErr
 		}
@@ -376,7 +391,7 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 		}
 		return nil, false, false, errors.Join(ctx.Err(), nativeErr, vaultErr, claimErr)
 	}
-	candidate, err := cloneEconomicConservation(next)
+	candidate, err := cloneEconomicConservation(next, policy)
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -461,7 +476,7 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		}
 	}
 	network := policy.Native.Observation.Network
-	owner, err := openMonitorCheckpoint(*checkpoint, identityExpectation{NativeChain: network.NativeChain, GenesisHash: network.GenesisHash, EvmChainId: network.EvmChainId}, ctx)
+	owner, err := policy.openCheckpoint(ctx, *checkpoint, identityExpectation{NativeChain: network.NativeChain, GenesisHash: network.GenesisHash, EvmChainId: network.EvmChainId})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 3

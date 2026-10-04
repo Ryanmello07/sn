@@ -58,7 +58,7 @@ func (self economicConservationArchivePlan) hash() string {
 }
 
 func decodeEconomicConservation(ctx context.Context, raw []byte, policy economicConservationPolicy) (*economicConservationState, error) {
-	if len(raw) == 0 || len(raw) > maxRpcReplyBytes {
+	if len(raw) == 0 || uint64(len(raw)) > policy.storageMaximum() {
 		return nil, errors.New("economic conservation checkpoint exceeds its fixed byte capacity")
 	}
 	var state economicConservationState
@@ -75,12 +75,12 @@ func validateEconomicConservationArchiveRequest(ctx context.Context, request eco
 	if request.Schema != economicConservationArchiveRequestSchema || request.FutureSegments == 0 || request.FutureSegments > 256 || request.FutureIndexEntries == 0 || request.FutureIndexEntries > 512*1024 || request.FutureIndexBytes == 0 || request.FutureIndexBytes > 128*1024*1024 {
 		return errors.New("economic archive requires separate finite positive resource forecasts")
 	}
-	if err := errors.Join(request.Policy.validate(), request.Original.validate()); err != nil {
+	if err := errors.Join(request.Policy.validate(), request.Policy.validateReference(request.Original)); err != nil {
 		return err
 	}
 	archive := request.Original
 	archive.Path = request.ArchivePath
-	if err := archive.validate(); err != nil {
+	if err := request.Policy.validateReference(archive); err != nil {
 		return err
 	}
 	if monitorHistoryPathsAlias(request.Original.Path, archive.Path) {
@@ -192,7 +192,7 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 		feeSummaryBytes += 2048
 	}
 	plan.RequiredHeadBytes = 2 * (uint64(len(next)) + request.FutureSegments*referenceBytes + feeSummaryBytes)
-	if plan.RequiredSegments > resources.ArchiveSegments || plan.RequiredIndexEntries > resources.IndexEntries || plan.RequiredIndexBytes > resources.IndexBytes || plan.RequiredHeadBytes > maxRpcReplyBytes {
+	if plan.RequiredSegments > resources.ArchiveSegments || plan.RequiredIndexEntries > resources.IndexEntries || plan.RequiredIndexBytes > resources.IndexBytes || plan.RequiredHeadBytes > resources.headBytes() {
 		return plan, nil, errors.New("economic archive requires reviewed capacity for its two-times segment/index/head forecast")
 	}
 	retainedBytes := uint64(0)
@@ -201,7 +201,7 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 		retainedBytes += reference.Bytes
 		paths = append(paths, reference.Path)
 	}
-	plan.RequiredBytes = 2 * (retainedBytes + (request.FutureSegments+1)*maxRpcReplyBytes)
+	plan.RequiredBytes = 2 * (retainedBytes + (request.FutureSegments+1)*request.Policy.storageMaximum())
 	plan.RequiredInodes = 2 * (2*(uint64(len(compacted.Archive.Segments))+request.FutureSegments) + 2)
 	if err := monitorHistoryDeclarationForecast(declaration, paths, plan.RequiredBytes, plan.RequiredInodes); err != nil {
 		return plan, nil, err
@@ -214,7 +214,7 @@ func planEconomicConservationArchive(ctx context.Context, request economicConser
 	if err := validateEconomicConservationArchiveRequest(ctx, request); err != nil {
 		return plan, err
 	}
-	source, raw, err := openMonitorHistoryReader(ctx, request.Original)
+	source, raw, err := request.Policy.openHistoryReader(ctx, request.Original)
 	if err != nil {
 		return plan, err
 	}
@@ -228,7 +228,7 @@ func planEconomicConservationArchive(ctx context.Context, request economicConser
 		return plan, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, prior.close()) }()
-	archive, err := openMonitorHistorySnapshot(ctx, request.ArchivePath, false)
+	archive, err := request.Policy.openHistorySnapshot(ctx, request.ArchivePath, false)
 	if err != nil {
 		return plan, err
 	}
@@ -257,12 +257,12 @@ func applyEconomicConservationArchive(ctx context.Context, plan economicConserva
 	if declaration != plan.Declaration {
 		return errors.New("economic archive durable declaration changed after review")
 	}
-	source, err := openMonitorHistorySnapshot(ctx, plan.Request.Original.Path, true)
+	source, err := plan.Request.Policy.openHistorySnapshot(ctx, plan.Request.Original.Path, true)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, source.close()) }()
-	archive, err := openMonitorHistorySnapshot(ctx, plan.Request.ArchivePath, true)
+	archive, err := plan.Request.Policy.openHistorySnapshot(ctx, plan.Request.ArchivePath, true)
 	if err != nil {
 		return err
 	}

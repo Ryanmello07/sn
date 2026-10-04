@@ -64,7 +64,7 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 	}
 	seen := map[string]monitorHistoryReference{}
 	for _, reference := range self.Segments {
-		if err := reference.validate(); err != nil {
+		if err := policy.validateReference(reference); err != nil {
 			return err
 		}
 		if _, ok := seen[reference.Path]; ok {
@@ -223,10 +223,11 @@ func compactEconomicConservationWithFeeRetirement(ctx context.Context, policy ec
 }
 
 func compactEconomicConservationWithFeeUpdates(ctx context.Context, policy economicConservationPolicy, original *economicConservationState, reference monitorHistoryReference, renewal *economicConservationRenewal, retireFees bool, feeRevision *economicConservationFeeRevision) (*economicConservationState, error) {
-	if err := errors.Join(original.validate(ctx, policy), reference.validate()); err != nil {
+	policy = policy.withStorageProfile()
+	if err := errors.Join(original.validate(ctx, policy), policy.validateReference(reference)); err != nil {
 		return nil, err
 	}
-	next, err := cloneEconomicConservation(original)
+	next, err := cloneEconomicConservation(original, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -558,7 +559,7 @@ func (self *economicConservationArchiveView) indexAdmission(original, compacted 
 	}
 	segments := make(map[string]monitorHistoryReference, len(archive.Segments))
 	for _, reference := range archive.Segments {
-		if err := reference.validate(); err != nil {
+		if err := reference.validateLimit(self.resources.headBytes()); err != nil {
 			return false, err
 		}
 		if _, repeated := segments[reference.Path]; repeated {
@@ -601,7 +602,7 @@ func openEconomicConservationArchive(ctx context.Context, policy economicConserv
 			return nil, err
 		}
 		hooks.beforeHistoryRead(economicConservationRole, "conservation-archive-admission")
-		owner, raw, err := openMonitorHistoryReader(ctx, reference)
+		owner, raw, err := policy.openHistoryReader(ctx, reference)
 		if err != nil {
 			return nil, err
 		}

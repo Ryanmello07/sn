@@ -29,28 +29,37 @@ type economicConservationRoute struct {
 }
 
 type economicConservationPolicy struct {
-	FeeAuthority      *economicNativeFeePolicy                `json:"native_fee_authority,omitempty"`
-	Continuation      *economicConservationContinuationPolicy `json:"continuation,omitempty"`
-	Schema            string                                  `json:"schema"`
-	Native            monitorEconomicNativePolicy             `json:"native"`
-	Vault             monitorEconomicEvmPolicy                `json:"vault"`
-	Claims            []monitorClaimPolicy                    `json:"claims"`
-	Routes            []economicConservationRoute             `json:"routes"`
-	MaximumFacts      uint64                                  `json:"maximum_facts"`
-	ReadBudgetSeconds uint64                                  `json:"read_budget_seconds,omitempty"`
-	resourceBasis     *economicConservationPolicy
+	StorageProfile     *economicConservationStorageProfile `json:"storage_profile,omitempty"`
+	operatingHeadBytes uint64
+	FeeAuthority       *economicNativeFeePolicy                `json:"native_fee_authority,omitempty"`
+	Continuation       *economicConservationContinuationPolicy `json:"continuation,omitempty"`
+	Schema             string                                  `json:"schema"`
+	Native             monitorEconomicNativePolicy             `json:"native"`
+	Vault              monitorEconomicEvmPolicy                `json:"vault"`
+	Claims             []monitorClaimPolicy                    `json:"claims"`
+	Routes             []economicConservationRoute             `json:"routes"`
+	MaximumFacts       uint64                                  `json:"maximum_facts"`
+	ReadBudgetSeconds  uint64                                  `json:"read_budget_seconds,omitempty"`
+	resourceBasis      *economicConservationPolicy
 }
 
 func (self economicConservationPolicy) validate() error {
+	if err := self.StorageProfile.validate(); err != nil {
+		return err
+	}
+	maximumFacts := uint64(8192)
+	if self.StorageProfile != nil {
+		maximumFacts = economicConservationMaximumFacts
+	}
 	network := self.Native.Observation.Network
 	expected := identityExpectation{NativeChain: network.NativeChain, GenesisHash: network.GenesisHash, EvmChainId: network.EvmChainId}
-	if self.Schema != economicConservationPolicySchema || self.Native.Observation.Execution == nil || self.Vault.Network != network || self.Vault.Netuid != self.Native.Observation.Netuid || self.Vault.ContractKind != "settlement-vault" || self.MaximumFacts < 16 || self.MaximumFacts > 8192 || self.ReadBudgetSeconds != 0 && (self.ReadBudgetSeconds < 60 || self.ReadBudgetSeconds > 900) || len(self.Routes) == 0 || len(self.Routes) > rootCensusLimit || len(self.Claims) > maxMonitorClaims {
+	if self.Schema != economicConservationPolicySchema || self.Native.Observation.Execution == nil || self.Vault.Network != network || self.Vault.Netuid != self.Native.Observation.Netuid || self.Vault.ContractKind != "settlement-vault" || self.MaximumFacts < 16 || self.MaximumFacts > maximumFacts || self.ReadBudgetSeconds != 0 && (self.ReadBudgetSeconds < 60 || self.ReadBudgetSeconds > 900) || len(self.Routes) == 0 || len(self.Routes) > rootCensusLimit || len(self.Claims) > maxMonitorClaims {
 		return errors.New("economic conservation requires original native execution, one vault, independent routes and finite resources")
 	}
 	if err := errors.Join(self.Native.validate(expected), self.Vault.validate(expected)); err != nil {
 		return err
 	}
-	if err := self.Continuation.validate(self); err != nil {
+	if err := errors.Join(self.Continuation.validate(self), self.initialResources().validatePolicy(self)); err != nil {
 		return err
 	}
 	if err := self.validateYumaCapacity(); err != nil {
@@ -249,6 +258,7 @@ func (self economicConservationState) facts() uint64 {
 }
 
 func (self economicConservationState) validate(ctx context.Context, policy economicConservationPolicy) error {
+	policy = policy.withStorageProfile()
 	if ctx == nil {
 		return errors.New("economic conservation validation has no lifecycle owner")
 	}
@@ -364,7 +374,7 @@ func (self economicConservationState) validate(ctx context.Context, policy econo
 	if err != nil {
 		return err
 	}
-	if len(raw)+1 > maxRpcReplyBytes {
+	if uint64(len(raw)+1) > operating.headBytes() {
 		return errMonitorEconomicCapacity
 	}
 	return nil

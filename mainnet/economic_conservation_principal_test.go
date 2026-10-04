@@ -42,6 +42,9 @@ func newEconomicConservationPrincipalFixtureWithVault(t *testing.T, name string,
 	if yuma {
 		directory = os.Getenv("URNETWORK_NATIVE_YUMA_FIXTURE_DIR")
 		filename = name + ".json"
+		if strings.HasPrefix(name, "yuma-capacity-") {
+			directory = os.Getenv("URNETWORK_NATIVE_YUMA_CAPACITY_FIXTURE_DIR")
+		}
 	}
 	if directory == "" || os.Getenv("URNETWORK_NATIVE_CAPTURE_ENGINE") == "" || os.Getenv("URNETWORK_NATIVE_EXECUTION_ENGINE") == "" {
 		t.Fatal("principal scope requires explicit real Rust exports and two distinct owned engines")
@@ -125,11 +128,20 @@ func newEconomicConservationPrincipalFixtureWithVault(t *testing.T, name string,
 	f.native.set(t, 100, "PendingServerEmission", make([]byte, 8))
 	if yuma {
 		f.policy.MaximumFacts = 4096
+		if strings.HasPrefix(name, "yuma-capacity-") {
+			f.policy.StorageProfile = economicConservationTestStorageProfile()
+			f.policy.MaximumFacts = economicConservationMaximumFacts
+			f.policy.ReadBudgetSeconds, f.policy.Native.ReadBudgetSeconds = 900, 900
+		}
 	}
 	f.writePolicy(t)
 	// A synthetic volume declaration does not provision a snapshot owner. The
 	// combined checkpoint explicitly starts with an owned absent-head marker.
-	provisionEconomicConservationPrincipalFixture(t, f.checkpoint)
+	if f.policy.StorageProfile == nil {
+		provisionEconomicConservationPrincipalFixture(t, f.checkpoint)
+	} else {
+		provisionMonitorTestCustodyProfile(t, f.checkpoint, f.policy.storageKind(), int(f.policy.storageMaximum()))
+	}
 	storage := durablefixture.New(t, t.Context(), producer.source.policy.Execution.Directory, filepath.Dir(f.checkpoint))
 	storage.Host.SetReserve(4*1024*1024*1024, 1024*1024)
 	producer.ctx = storage.Context
