@@ -1,6 +1,6 @@
 package miner
 
-// Only the finite command's idempotent epoch and pool reads enter this owner.
+// Only idempotent claim epoch and pool reads enter this owner.
 // Signing, submission and wallet mutations never share its retry loop.
 
 import (
@@ -98,7 +98,7 @@ func retryableClaimApiReadCause(err error, depth int, budget *minerReadCauseBudg
 		if !budget.admit(err, depth) {
 			return false
 		}
-		return cause.StatusCode == http.StatusTooManyRequests || cause.StatusCode >= 500 && cause.StatusCode <= 599
+		return cause.StatusCode == http.StatusRequestTimeout || cause.StatusCode == http.StatusTooEarly || cause.StatusCode == http.StatusTooManyRequests || cause.StatusCode >= 500 && cause.StatusCode <= 599
 	case *os.PathError, *url.Error, *net.OpError:
 		return retryableEthRpcCause(err, false, depth, budget)
 	case interface{ Unwrap() []error }:
