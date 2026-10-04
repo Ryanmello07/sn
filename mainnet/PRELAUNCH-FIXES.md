@@ -2,6 +2,26 @@
 
 ## Current execution status — October 4
 
+Mainnet readiness remains unproven. The economic decisions are settled: providers receive 10% of the native miner allocation, 90% is recycled through the owner path, and paid/free completed traffic has equal weight. The October 6 `00:00 UTC` cutoff changes new-earnings attribution; pre-cutoff USDC obligations may finish paying later. Published configuration remains blocked from mainnet activation until the exact deployment package is ready.
+
+| Workstream | Current evidence and next required action | Owner |
+| --- | --- | --- |
+| Runtime read recovery | [Whole-read successor `6fa`](evidence/runtime-observation-owner6fa-source-root-review-20261004.json) is source-reviewed; qualify its fifty-root normal/race union, six package compiles/vets and causal controls. Preserve pinned queries, the shared 300-second retry budget and hard contradictions. | Astra Current implementation; Sol qualification |
+| Manager recovery | [Actual manager composition `549`](evidence/miner-manager-composition `549`-source-root-review-20261004.json) covers four real HTTP managers / 96 synthetic lifetimes at source level; qualify fifteen roots per mode with its required test build tag. Actual SDK and host sizing remain separate. | Astra Current; Sol |
+| Fee retention and policy continuation | [Corrected union `3e7`](evidence/fee-revision3e7-source-root-review-20261004.json) joins signed policy revisions, unknown-fee retention and safe archive admission; qualify fifty-four roots per mode and nine causal controls. Earlier failures and successful bodies stay retained. | Astra Integration; Sol |
+| Complete economic witness | Implement and qualify independently admitted original opening stock, complete execution effects, the native miner allocation denominator/branch/quantization, and the entitlement/root/funding census. A matching selected fee sum or capture amount cannot prove whole 10/90 behavior. | Astra Integration |
+| Claim and volume continuation | Combined Claim-window adoption and complete-owner cross-volume restore are confirmed missing mechanisms. Retain original keys, unresolved epochs, receipts, review lineage and completed owners through adoption/restore. | Astra Current |
+| Unattended operation | Join actual operator capture, replay and monitoring with approved runtime-profile continuity; qualify role isolation and recovery without discarding successful progress. | Astra Current |
+| Server behavior | The complete current model suite remains active on Server `1709` / SN `663` / Core `ad6`. At 06:02 UTC, the observed top-level census was 1,416 passes, 11 skips and no failures; this is not a terminal result. Follow up configured-input and `auto_explain` checks on separate owned fixtures after cleanup. | Sol tests; Astra fixes |
+| Final release | Integrate qualified increments into one exact source/dependency/config package, then verify all 38 PH/MG requirements against their full scopes. [Current checkpoint](evidence/current-readiness-checkpoint-20261003.md) closes none through component evidence alone. | Root integration and review |
+| Production inputs | Mainnet chain/runtime approval, actual operator/validator identities and topology, installed contracts, owner Ledger signing and production restore/activation evidence remain. Code/tests continue independently of these inputs. | Launch preparation |
+
+Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-admission-root-review-20261004.json) for bounded qualification overlap. Recheck before each new phase; preserve the original cumulative baseline and live workload guards. Keep healthy tests running, retain exact successful results, and collect unfinished or affected scopes independently. Neither this admission nor configuration publication signs or activates mainnet.
+
+## Retained component progress — October 4
+
+These dated records preserve source identities, failures and scoped successes. Their older pending descriptions are historical; use the current table and readiness checkpoint for the next action.
+
 The [manager recovery composition](evidence/miner-manager-composition549-source-root-review-20261004.json) is source-reviewed at `549f6926`: four real managers and96 synthetic instance lifetimes exercise durable-prefix reuse, fresh-owner reconciliation, manager-local replacement, write-before-HTTP dispatch and lost-reply recovery. Qualify its fifteen-root normal/race scope and five causal omissions with the required test build tag. This establishes a concrete test path, not SDK registration, resource sizing or full repair closure.
 
 The [corrected signed fee-revision union](evidence/fee-revision3e7-source-root-review-20261004.json) is source-reviewed at `3e7feec7`. It joins the exact reviewed nil/index admission and command-status correction before revision/evidence mutation. Qualify its fifty-four-root normal/race scope and nine controls; keep the unexecuted bb716 precursor and original failures separate. Combined Claim-window adoption and complete-owner cross-volume restore are confirmed missing mechanisms and remain assigned implementation work.
