@@ -71,3 +71,136 @@ fn historical_native_vault_capture_exports_original_transaction_causes() {
         std::fs::File::open(directory).unwrap().sync_all().unwrap();
     }
 }
+
+// The second block is backed by the first block's exact post-state. Two
+// transactions in one block instead retain distinct original Apply indices.
+#[test]
+fn historical_native_vault_capture_exports_original_capture_sequences() {
+    let (same, _) =
+        fixture_with_principal_effects(false, Some(Some(14)), Some("capture-same-block"));
+    let (first, post_storage) =
+        fixture_with_principal_effects(false, Some(Some(14)), Some("capture-next-block"));
+    let code = hex_bytes("sequence code", &first.runtime_code_hex, MAXIMUM_CODE_BYTES).unwrap();
+    let backing = TestExternalities::<Blake2Hasher>::new_with_code_and_state(
+        &code,
+        post_storage,
+        StateVersion::V1,
+    );
+    let (nodes, root) = backing.into_raw_snapshot();
+    let parent: NativeHeader = scale_exact(
+        "parent",
+        &hex_bytes("parent", &first.child_header_hex, MAXIMUM_HEADER_BYTES).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(root, *parent.state_root());
+    let mut second = first.clone();
+    second.parent_header_hex = first.child_header_hex.clone();
+    second.parent_hash = first.child_hash;
+    second.extrinsics_hex = vec![encoded(&vec![0x98; 32].encode())];
+    let child = NativeHeader::new(
+        102,
+        BlakeTwo256::ordered_trie_root(vec![vec![0x98; 32].encode()], StateVersion::V1),
+        root,
+        H256(first.child_hash),
+        Digest::default(),
+    );
+    second.child_header_hex = encoded(&child.encode());
+    second.child_hash = child.hash().0;
+    second.proof_nodes_hex = nodes
+        .into_iter()
+        .map(|(_, (value, _))| encoded(&value))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let mut jobs = Vec::new();
+    for (name, job, stock, amounts, transactions) in [
+        (
+            "capture-same-block",
+            same,
+            "14",
+            vec!["20", "5"],
+            vec![0x99, 0x98],
+        ),
+        ("capture-next-block", first, "14", vec!["20"], vec![0x99]),
+        ("capture-next-block-102", second, "0", vec!["6"], vec![0x98]),
+    ] {
+        let captured =
+            super::super::capture_tests::collect(&job).expect("actual original capture sequence");
+        let exported: HistoricalJob = serde_json::from_str(&captured.job_json).unwrap();
+        let replay = run(&exported).expect("strict original capture sequence replay");
+        for report in [&captured.replay, &replay] {
+            assert!(report.post_state_reproduced);
+            assert_eq!(report.extrinsics, transactions.len());
+            assert_eq!(
+                report.opening_principals.as_ref().unwrap()[0]
+                    .opening_stake_alpha
+                    .as_deref(),
+                Some(stock)
+            );
+            assert_eq!(
+                report.closing_principals.as_ref().unwrap()[0]
+                    .opening_stake_alpha
+                    .as_deref(),
+                Some("0")
+            );
+            let trace = report.hook_observations.as_ref().unwrap();
+            let captures: Vec<_> = trace
+                .observations
+                .iter()
+                .filter(|value| value.purpose == "native-principal-vault-capture")
+                .collect();
+            assert_eq!(
+                captures.len(),
+                amounts.len(),
+                "complete original capture sequence census"
+            );
+            assert_eq!(
+                trace.principal_mutations.as_ref().unwrap().len(),
+                if amounts.len() == 2 { 4 } else { 2 }
+            );
+            for (index, capture) in captures.iter().enumerate() {
+                let native = capture.native.as_ref().unwrap();
+                let phase = [vec![0], (index as u32).to_le_bytes().to_vec()].concat();
+                assert_eq!(
+                    native.execution_phase_hex.as_deref(),
+                    Some(encoded(&phase).as_str()),
+                    "original capture Apply index"
+                );
+                let field = |name| {
+                    &native
+                        .memory
+                        .iter()
+                        .find(|value| value.name == name)
+                        .unwrap()
+                        .bytes_hex
+                };
+                assert_eq!(
+                    field("transaction-hash"),
+                    &encoded(&[transactions[index]; 32])
+                );
+                assert_eq!(
+                    field("before"),
+                    &encoded(&words(&[amounts[index].parse::<u64>().unwrap()]))
+                );
+                assert_eq!(field("after"), &encoded(&words(&[0])));
+            }
+        }
+        jobs.push((name, exported));
+    }
+    if let Some(directory) = std::env::var_os("URNETWORK_NATIVE_VAULT_CAPTURE_SEQUENCE_FIXTURE_OUT")
+    {
+        let directory = Path::new(&directory);
+        assert!(directory.is_absolute() && directory.is_dir());
+        for (name, job) in jobs {
+            let mut file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .mode(0o600)
+                .open(directory.join(format!("principal-{name}.json")))
+                .unwrap();
+            file.write_all(&serde_json::to_vec(&job).unwrap()).unwrap();
+            file.sync_all().unwrap();
+        }
+        std::fs::File::open(directory).unwrap().sync_all().unwrap();
+    }
+}

@@ -95,7 +95,7 @@ func newNativeProducerPublicFixture(t *testing.T) *nativeProducerPublicFixture {
 	return nativeProducerPublicFixtureFrom(t, false)
 }
 
-func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool) *nativeProducerPublicFixture {
+func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool, additionalJobs ...historicalReplayJob) *nativeProducerPublicFixture {
 	t.Helper()
 	capturePath, replayPath, fixturePath := os.Getenv("URNETWORK_NATIVE_CAPTURE_ENGINE"), os.Getenv("URNETWORK_NATIVE_EXECUTION_ENGINE"), os.Getenv("URNETWORK_NATIVE_EXECUTION_FIXTURE")
 	continuationDirectory := os.Getenv("URNETWORK_NATIVE_PRODUCER_FIXTURE")
@@ -126,7 +126,7 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool) *nativeProdu
 	}
 	parent, parentNumber := nativeProducerTestHeader(t, job.ParentHeaderHex, job.ParentHash)
 	child, childNumber := nativeProducerTestHeader(t, job.ChildHeaderHex, job.ChildHash)
-	if parentNumber != 100 || childNumber != 101 || len(job.ExtrinsicsHex) > 1 || len(job.ExtrinsicsHex) == 1 && !job.PrincipalEffects {
+	if parentNumber != 100 || childNumber != 101 || len(job.ExtrinsicsHex) > 2 || len(job.ExtrinsicsHex) != 0 && !job.PrincipalEffects || len(additionalJobs) > 1 || continuous && len(additionalJobs) != 0 {
 		t.Fatal("unexpected original-program fixture shape")
 	}
 	source := newEconomicEmissionFixture(t)
@@ -286,6 +286,21 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool) *nativeProdu
 		}
 		source.chain.finalized = source.chain.byHeight[105]
 		filePolicy.Producer.MaximumDescendantHeaders = 3
+	}
+	for _, current := range additionalJobs {
+		header, number := nativeProducerTestHeader(t, current.ChildHeaderHex, current.ChildHash)
+		if number != 102 || current.ParentHeaderHex != job.ChildHeaderHex || current.ParentHash != job.ChildHash || header.ParentHash != nativeExecutionTestHex(job.ChildHash[:]) || current.RuntimeCodeSha256 != job.RuntimeCodeSha256 || current.RuntimeCodeBlake2b256 != job.RuntimeCodeBlake2b256 || !reflect.DeepEqual(current.ObservationProfile, job.ObservationProfile) || len(current.ExtrinsicsHex) != 1 || !current.PrincipalEffects {
+			t.Fatal("original capture continuation changed its parent, program or body census")
+		}
+		hash := nativeExecutionTestHex(current.ChildHash[:])
+		source.chain.headers[hash], source.chain.byHeight[number], source.chain.bodies[hash] = header, hash, append([]string{}, current.ExtrinsicsHex...)
+		source.storageKVs[hash] = map[string]*string{}
+		for key, value := range source.storageKVs[source.policy.Through.Hash] {
+			source.storageKVs[hash][key] = value
+		}
+		source.incentive(t, number, 25, amounts...)
+		jobs[hash], proofs[nativeExecutionTestHex(current.ParentHash[:])] = current, current.ProofNodesHex
+		certificates[hash] = nativeProducerTestCertificate(t, economicEmissionBoundary{Number: number, Hash: hash}, consensus, 20, 9)
 	}
 	filePolicy.Schema = nativeExecutionPolicySchema
 	filePolicy.ApprovalPublicKey = nativeExecutionTestHex(approval.Public().(ed25519.PublicKey))

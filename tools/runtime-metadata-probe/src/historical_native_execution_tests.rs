@@ -265,7 +265,7 @@ fn fixture_with_allocation_activation(
                     body.push_str(&format!("(i64.store (i32.const 6408) (i64.add (i64.load (i32.const 6408)) (i64.const 1))) (call $set (i64.const {key}) (i64.const {value}))",key=span(2000,principal_key.len()),value=span(6408,8)));
                     if mode=="unclassified" || mode=="capture-unclassified" { body.push_str(&format!("(i64.store (i32.const 6408) (i64.sub (i64.load (i32.const 6408)) (i64.const 1))) (call $set (i64.const {key}) (i64.const {value}))",key=span(2000,principal_key.len()),value=span(6408,8))); }
                 },
-                "earning" | "capture" | "capture-rollback" => (),
+                "earning" | "capture" | "capture-rollback" | "capture-same-block" | "capture-next-block" => (),
                 _ => panic!("unsupported synthetic principal effect mode"),
             }
         }
@@ -274,11 +274,27 @@ fn fixture_with_allocation_activation(
         declarations.push_str(&segment(6600, &phase));
         declarations.push_str(&segment(6700, &[0, 0, 0, 0, 0]));
         declarations.push_str(&segment(6710, &[1]));
+        if effects == Some("capture-next-block") {
+            declarations.push_str(&segment(6720, &[2]));
+            declarations.push_str(&segment(6730, &[0]));
+            // Every actual block begins with a new event vector and the same
+            // initial phase. Its proof still contains the prior committed state.
+            body = format!(
+                "(call $set (i64.const {}) (i64.const {})) (call $set (i64.const {}) (i64.const {})) {}",
+                span(6600, phase.len()), span(6720, 1),
+                span(1400, events.len()), span(6730, 1), body
+            );
+        }
         // The synthetic opaque extrinsic ends in its EVM transaction identity.
         // The original program reads that actual body input; no Go trace peer
         // supplies the captured memory or the committed stake delta.
         for offset in [0, 8, 16, 24] {
-            body.push_str(&format!("(i64.store (i32.const {}) (i64.load (i32.add (local.get 0) (i32.sub (local.get 1) (i32.const {})))))",6500+offset,32-offset));
+            let end = if effects == Some("capture-same-block") {
+                65
+            } else {
+                32
+            };
+            body.push_str(&format!("(i64.store (i32.const {}) (i64.load (i32.add (local.get 0) (i32.sub (local.get 1) (i32.const {})))))",6500+offset,end-offset));
         }
         body.push_str(&format!(
             "(call $set (i64.const {}) (i64.const {}))",
@@ -291,6 +307,17 @@ fn fixture_with_allocation_activation(
         body.push_str(&format!("(local.set $n (i32.wrap_i64 (call $get (i64.const {})))) (call $stake_vault_capture (i64.load offset=2 (local.get $n)))",span(2000,principal_key.len())));
         if effects == Some("capture-rollback") {
             body.push_str("(call $rollback)");
+        }
+        if effects == Some("capture-same-block") {
+            declarations.push_str(&segment(6720, &[0, 1, 0, 0, 0]));
+            body.push_str("(call $stake_deposit (i64.const 5))");
+            for offset in [0, 8, 16, 24] {
+                body.push_str(&format!("(i64.store (i32.const {}) (i64.load (i32.add (local.get 0) (i32.sub (local.get 1) (i32.const {})))))",6500+offset,32-offset));
+            }
+            body.push_str(&format!(
+                "(call $set (i64.const {}) (i64.const {})) (local.set $n (i32.wrap_i64 (call $get (i64.const {})))) (call $stake_vault_capture (i64.load offset=2 (local.get $n)))",
+                span(6600, phase.len()), span(6720, 5), span(2000, principal_key.len())
+            ));
         }
         body.push_str(&format!(
             "(call $set (i64.const {}) (i64.const {}))",
@@ -380,7 +407,9 @@ fn fixture_with_allocation_activation(
         expected.clone(),
         StateVersion::V1,
     );
-    let extrinsics: Vec<Vec<u8>> = if capture {
+    let extrinsics: Vec<Vec<u8>> = if effects == Some("capture-same-block") {
+        vec![vec![0x99; 32].encode(), vec![0x98; 32].encode()]
+    } else if capture {
         vec![vec![0x99; 32].encode()]
     } else {
         Vec::new()
