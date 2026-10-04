@@ -133,7 +133,8 @@
     "foreground-successor-race-independent-readback-20261004.json": "2876a2e63bb21e0367e917782740d9a9970d48f1b14c2350d3ec72ea7f64e95d",
     "0e5-sixteen-operative-controls-independent-review-20261004.json": "0bd080062cf5658d0a0060cc19bfdeda4ae84082b8438a40a1115260a2597822",
     "native-finite-resource-admission-20261004.json": "54fb412aa4acef042b324311b6a78f13e1394c4843029aeca8f7230bd53ee0eb",
-    "foreground-successor-controls-independent-review-20261004.json": "8f9f284e5852864e983f099c6fe74c956354aa28b0ae03b33bafeab2e5b9f3b1"
+    "foreground-successor-controls-independent-review-20261004.json": "8f9f284e5852864e983f099c6fe74c956354aa28b0ae03b33bafeab2e5b9f3b1",
+    "delayed-native-renewal-source-finding-20261004.json": "82c71afafe493279220ed5903260f0d26843c44f0beda21eb9581a45694adbcf"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -182,7 +183,7 @@
       "closed": false,
       "evidence": "0e5-mainnet-normal-independent-readback-20261003.json",
       "requirement": "PH-07",
-      "status": "Frozen0e5 mainnet37 and durablehead6 roots pass normally and under race detection; all three package vets pass. First four normal operative controls reproduce intended old-body assertions. Validator successor and remaining controls remain; original failures retained."
+      "status": "Frozen0e5 mainnet37 and durablehead6 roots pass normally/race; three vets and16 intended old-body controls qualified. Separate foreground2477 correction qualified20 roots per mode, vet and typed controls. Final source integration and complete release qualification remain; original failures retained."
     },
     {
       "closed": false,
