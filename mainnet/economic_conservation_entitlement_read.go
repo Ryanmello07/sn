@@ -226,7 +226,7 @@ func readEconomicEntitlementCensus(ctx context.Context, policy economicConservat
 	}
 	result.LeafObligationsAlpha = allocated.String()
 	result.FloorResidueAlpha = new(big.Int).Sub(total, allocated).String()
-	result.ClosedWork, err = readEconomicClosedWork(ctx, artifact)
+	result.ClosedWork, err = readEconomicClosedWork(ctx, artifact, committer)
 	if err != nil {
 		return nil, economicEntitlementEvidenceError(err)
 	}

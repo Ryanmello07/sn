@@ -107,6 +107,9 @@ func (self *economicConservationEntitlement) retireCensus(reference monitorHisto
 }
 
 type economicConservationEntitlementSummary struct {
+	SignedCloseReports                uint64  `json:"signed_close_reports,omitempty"`
+	RegisteredCloseReports            uint64  `json:"registered_close_reports,omitempty"`
+	CloseAmountJoins                  uint64  `json:"close_amount_joins,omitempty"`
 	ClosedWorkRoots                   uint64  `json:"original_closed_work_roots,omitempty"`
 	ClosedWorkContracts               uint64  `json:"original_closed_work_contracts,omitempty"`
 	ClosedWorkUsageBytes              string  `json:"original_closed_work_usage_bytes,omitempty"`

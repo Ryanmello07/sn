@@ -32,20 +32,22 @@ import (
 
 	"github.com/urfoundation/sn/clientauth"
 	"github.com/urfoundation/sn/crv4"
+	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/ss58"
 )
 
 const ProviderSwarmSchema = "urnetwork-provider-swarm-v1"
 
 type ProviderSwarmMember struct {
-	ID             string `json:"id"`
-	APIURL         string `json:"api_url"`
-	ConnectURL     string `json:"connect_url"`
-	DNSPumpHost    string `json:"dns_pump_host"`
-	StateDir       string `json:"state_dir"`
-	Wallet         string `json:"wallet"`
-	WalletSeedFile string `json:"wallet_seed_file"`
-	SourceIP       string `json:"source_ip"`
+	CloseReportDomain *protocol.ClientKeyHistoryDomain `json:"close_report_domain,omitempty"`
+	ID                string                           `json:"id"`
+	APIURL            string                           `json:"api_url"`
+	ConnectURL        string                           `json:"connect_url"`
+	DNSPumpHost       string                           `json:"dns_pump_host"`
+	StateDir          string                           `json:"state_dir"`
+	Wallet            string                           `json:"wallet"`
+	WalletSeedFile    string                           `json:"wallet_seed_file"`
+	SourceIP          string                           `json:"source_ip"`
 }
 
 type ProviderSwarmConfig struct {
@@ -470,6 +472,10 @@ func swarmMemberDeviceSettings(
 ) *sdk.DeviceLocalSettings {
 	deviceSettings := sdk.DefaultDeviceLocalSettings()
 	deviceSettings.ClientSettings.ClientKeyRegistrationRequired = true
+	if member.CloseReportDomain != nil {
+		// Optional evidence never decides whether this independent provider runs.
+		deviceSettings.ClientSettings.ContractManagerSettings.CloseReportDomainHash, _ = member.CloseReportDomain.Digest()
+	}
 	// One process runs every swarm member, and a host holds one extender
 	// identity and binds the carrier ports once, so no member runs the
 	// provider extender role (connect/EXTENDER.md G1, G2). A standalone

@@ -73,6 +73,7 @@ Usage:
     	[--max-memory=<mem>]
     	[-v...]
     provider provide [--port=<port>]
+		[--close-report-domain=<path>]
 		[--allow-client-registration | --adopt-legacy-provider-key]
         [--api_url=<api_url>]
         [--connect_url=<connect_url>]
@@ -81,6 +82,7 @@ Usage:
         [--max-memory=<mem>]
         [-v...]
     provider auth-provide ([<auth_code>] | --user_auth=<user_auth> [--password=<password>]) [-f]
+		[--close-report-domain=<path>]
 		[--allow-client-registration | --adopt-legacy-provider-key]
     	[--port=<port>]
         [--api_url=<api_url>]
@@ -136,6 +138,7 @@ Usage:
     provider choose_network --show
 
 Options:
+	--close-report-domain=<path>       Optional original client-key policy domain for signed close evidence; absence or refusal leaves evidence unknown without stopping providing.
     --durable-volumes=<path>          Exact external storage declaration; fleet writes require the owner-local schema.
     --durable-volumes-sha256=<hash>   Reviewed sha256: digest; claim daemons require the daemon-volume schema.
     -h --help                        Show this help and exit.
@@ -458,7 +461,13 @@ func provide(opts docopt.Opts) {
 
 	allowClientRegistration, _ := opts.Bool("--allow-client-registration")
 	adoptLegacyProviderKey, _ := opts.Bool("--adopt-legacy-provider-key")
+	domainPath, _ := opts.String("--close-report-domain")
+	domainHash, domainErr := readProviderCloseReportDomain(domainPath)
+	if domainErr != nil {
+		fmt.Fprintf(os.Stderr, "signed close evidence unavailable: %v\n", domainErr)
+	}
 	settings := providerRunSettings{apiUrl: apiUrl, connectUrl: connectUrl, port: port, proxySettings: allProxySettings, memoryPlan: memoryPlan, testEgressDialer: testEgressDialer, allowClientRegistration: allowClientRegistration, adoptLegacyProviderKey: adoptLegacyProviderKey}
+	settings.closeReportDomainHash = domainHash
 	// Preserve the legacy zero exit on daemon completion. Unlike os.Exit, a
 	// normal return releases the signal owner and all owned daemon workers.
 	_ = settings.run(ctx, os.Stdout)
@@ -589,6 +598,7 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		certPem, keyPem, _ := readProviderTlsCertAndKey()
 		extenderKeySeed, _ := readProviderExtenderKeySeed()
 		settings := sdk.DefaultDeviceLocalSettings()
+		settings.ClientSettings.ContractManagerSettings.CloseReportDomainHash = self.closeReportDomainHash
 		settings.KeyMaterial = sdk.NewDeviceLocalKeyMaterial(seed, certPem, keyPem)
 		// the extender identity of this provider (connect/EXTENDER.md B1, G2).
 		// The space keeps no local state, so the seed lives here: without it

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfoundation/sn/payoutartifact"
 )
 
@@ -289,7 +290,7 @@ func (self *HTTPArtifactReader) read(ctx context.Context, epoch uint64, noID uin
 	// Optional original rows are independently reconstructed in both live and
 	// retained HTTP observation readers. Missing/foreign components stay unknown.
 	if artifact.ClosedWork != nil {
-		if _, err := payoutartifact.VerifyClosedWork(ctx, artifact); err != nil && !errors.Is(err, payoutartifact.ErrClosedWorkUnavailable) {
+		if _, err := payoutartifact.VerifyClosedWorkReports(ctx, artifact, common.Address{}); err != nil && !errors.Is(err, payoutartifact.ErrClosedWorkUnavailable) {
 			return nil, err
 		}
 	}

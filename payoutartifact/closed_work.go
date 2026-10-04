@@ -31,9 +31,10 @@ var ErrClosedWorkCapacity = errors.New("original closed-work census exceeds its 
 // Bytes are the exact original jsonb reader surface, not a later reconstructed
 // provider vector. Contract identity and close time disambiguate equal rows.
 type ClosedWorkRecord struct {
-	ContractId [16]byte `json:"contract_id"`
-	ClosedAt   string   `json:"closed_at"`
-	Original   []byte   `json:"original_snapshot"`
+	ContractId      [16]byte `json:"contract_id"`
+	ClosedAt        string   `json:"closed_at"`
+	Original        []byte   `json:"original_snapshot"`
+	OriginalReports []byte   `json:"original_close_reports,omitempty"`
 }
 
 // The producer fills Records and Count in the very same complete SQL snapshot
@@ -98,12 +99,13 @@ func cloneClosedWork(ctx context.Context, census *ClosedWorkCensus) (*ClosedWork
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if len(row.Original) > MaxClosedWorkRecordBytes || len(row.Original) > MaxClosedWorkOriginalBytes-used {
+		if len(row.Original) > MaxClosedWorkRecordBytes || len(row.OriginalReports) > MaxClosedWorkRecordBytes || len(row.Original)+len(row.OriginalReports) > MaxClosedWorkOriginalBytes-used {
 			return nil, ErrClosedWorkCapacity
 		}
-		used += len(row.Original)
+		used += len(row.Original) + len(row.OriginalReports)
 		copy.Records[index] = row
 		copy.Records[index].Original = bytes.Clone(row.Original)
+		copy.Records[index].OriginalReports = bytes.Clone(row.OriginalReports)
 	}
 	return &copy, nil
 }
@@ -233,10 +235,10 @@ func VerifyClosedWork(ctx context.Context, artifact *Artifact) (*VerifiedClosedW
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if len(row.Original) > MaxClosedWorkRecordBytes || len(row.Original) > MaxClosedWorkOriginalBytes-used {
+		if len(row.Original) > MaxClosedWorkRecordBytes || len(row.OriginalReports) > MaxClosedWorkRecordBytes || len(row.Original)+len(row.OriginalReports) > MaxClosedWorkOriginalBytes-used {
 			return nil, ErrClosedWorkCapacity
 		}
-		used += len(row.Original)
+		used += len(row.Original) + len(row.OriginalReports)
 	}
 	if err := VerifyWithContext(ctx, artifact); err != nil {
 		if errors.Is(err, ErrClosedWorkCapacity) || err == context.Canceled || err == context.DeadlineExceeded {
@@ -270,10 +272,10 @@ func VerifyClosedWork(ctx context.Context, artifact *Artifact) (*VerifiedClosedW
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if len(row.Original) > MaxClosedWorkRecordBytes || len(row.Original) > MaxClosedWorkOriginalBytes-originalBytes {
+		if len(row.Original) > MaxClosedWorkRecordBytes || len(row.OriginalReports) > MaxClosedWorkRecordBytes || len(row.Original)+len(row.OriginalReports) > MaxClosedWorkOriginalBytes-originalBytes {
 			return nil, ErrClosedWorkCapacity
 		}
-		originalBytes += len(row.Original)
+		originalBytes += len(row.Original) + len(row.OriginalReports)
 		closed, err := time.Parse(time.RFC3339Nano, row.ClosedAt)
 		if err != nil || row.ClosedAt != closed.UTC().Format(time.RFC3339Nano) || closed.Before(start) || !closed.Before(end) || row.ContractId == ([16]byte{}) || index > 0 && bytes.Compare(census.Records[index-1].ContractId[:], row.ContractId[:]) >= 0 {
 			return nil, ErrClosedWorkIntegrity
