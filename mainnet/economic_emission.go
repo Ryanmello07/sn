@@ -155,6 +155,7 @@ type economicEmissionBlock struct {
 // means the economic target, denominator, payment or finality authority passed.
 type economicEmissionObservation struct {
 	ExecutionWindow             *nativeExecutionWindow        `json:"execution_window,omitempty"`
+	ExecutionProducer           *nativeExecutionProducerState `json:"execution_producer,omitempty"`
 	RuntimeCatalog              []monitorEconomicRuntimeEntry `json:"runtime_catalog,omitempty"`
 	Schema                      string                        `json:"schema"`
 	PolicyHash                  string                        `json:"policy_hash"`

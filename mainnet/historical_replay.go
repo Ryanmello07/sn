@@ -212,7 +212,7 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	}
 	owner, cancel := context.WithTimeout(ctx, request.Budget)
 	defer cancel()
-	raw, digest, err := readBootstrapRootFile(owner, request.Job.Path, historicalReplayJobLimit)
+	raw, digest, err := readBootstrapRootFile(owner, request.Job.Path, historicalNativeJobLimit)
 	if err != nil {
 		return nil, fmt.Errorf("read historical replay job: %w", err)
 	}
@@ -223,7 +223,8 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	if err := decodePlanJson(raw, &job); err != nil {
 		return nil, err
 	}
-	if job.Schema != historicalReplaySchema || len(job.ProofNodesHex) == 0 || len(job.ProofNodesHex) > 8192 || len(job.ExtrinsicsHex) > 16384 || job.ExecutionStateVersion > 1 {
+	maximumJob, maximumNodes, _ := historicalJobLimits(job.ObservationProfile)
+	if len(raw) > maximumJob || job.Schema != historicalReplaySchema || len(job.ProofNodesHex) == 0 || len(job.ProofNodesHex) > maximumNodes || len(job.ExtrinsicsHex) > 16384 || job.ExecutionStateVersion > 1 {
 		return nil, errors.New("historical replay job exceeds declared protocol bounds")
 	}
 	if err := job.ObservationProfile.validate(job); err != nil {
@@ -251,7 +252,8 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 }
 
 func validateHistoricalReplayReport(job historicalReplayJob, raw []byte, report historicalReplayReport) error {
-	if report.Schema != historicalReplaySchema || report.JobSha256 != historicalReplayDigest(sha256.Sum256(raw)) || report.SdkRevision != historicalReplaySdk || (report.HostProfile != "substrate-proof-bounded-storage-v1" && report.HostProfile != "substrate-proof-bounded-hosts-v2") || report.ParentHash != job.ParentHash || report.ChildHash != job.ChildHash || report.RuntimeCodeSha256 != job.RuntimeCodeSha256 || report.Extrinsics != uint64(len(job.ExtrinsicsHex)) || report.ProofNodes != uint64(len(job.ProofNodesHex)) || report.ProofBytes > 24*1024*1024 || report.StorageCalls > 65536 || report.StorageIoBytes > 64*1024*1024 || !report.PostStateReproduced {
+	_, _, maximumProofBytes := historicalJobLimits(job.ObservationProfile)
+	if report.Schema != historicalReplaySchema || report.JobSha256 != historicalReplayDigest(sha256.Sum256(raw)) || report.SdkRevision != historicalReplaySdk || (report.HostProfile != "substrate-proof-bounded-storage-v1" && report.HostProfile != "substrate-proof-bounded-hosts-v2") || report.ParentHash != job.ParentHash || report.ChildHash != job.ChildHash || report.RuntimeCodeSha256 != job.RuntimeCodeSha256 || report.Extrinsics != uint64(len(job.ExtrinsicsHex)) || report.ProofNodes != uint64(len(job.ProofNodesHex)) || report.ProofBytes > uint64(maximumProofBytes) || report.StorageCalls > 65536 || report.StorageIoBytes > 64*1024*1024 || !report.PostStateReproduced {
 		return errors.New("historical replay report differs from exact input or execution profile")
 	}
 	if report.AnchorAuthority != "caller-supplied-unapproved" || report.RuntimeAdmitted || report.NativeFeeDebit != nil || report.NativeFeeWithdrawalRefund || report.ProductionSelection {
@@ -269,10 +271,11 @@ type historicalProofWorkerRequest struct {
 	Directory     string
 	MaximumReport int
 	Nodes         *os.File
+	Feed          *historicalNativeFeed
 }
 
 func runHistoricalProofWorker(owner context.Context, cancel context.CancelFunc, request historicalProofWorkerRequest, hooks historicalReplayHooks) (result []byte, resultErr error) {
-	if request.MaximumReport <= 0 || request.MaximumReport > historicalCaptureReportLimit || len(request.Input) > historicalReplayJobLimit {
+	if request.MaximumReport <= 0 || request.MaximumReport > historicalNativeCaptureReportLimit || len(request.Input) > historicalNativeJobLimit {
 		return nil, errors.New("historical proof worker exceeds its fixed profile")
 	}
 	engine, err := historicalReplayEngine(owner, request.Engine)
@@ -301,11 +304,31 @@ func runHistoricalProofWorker(owner context.Context, cancel context.CancelFunc, 
 	if request.Nodes != nil {
 		argument = "--retained-capture-engine-fd3-nodes-fd5"
 	}
+	var feedPipes *historicalNativeFeedPipes
+	if request.Feed != nil {
+		if request.Nodes == nil {
+			return nil, errors.New("historical proof feed has no owned capture directory")
+		}
+		feedPipes, err = newHistoricalNativeFeedPipes()
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			resultErr = errors.Join(resultErr, feedPipes.closeChild(), feedPipes.closeParent())
+			if resultErr != nil {
+				result = nil
+			}
+		}()
+		argument = "--retained-capture-engine-fd3-nodes-fd5-feed-fd6-fd7"
+	}
 	command := exec.CommandContext(owner, "/proc/self/fd/4", argument)
 	command.Args[0] = "urnetwork-historical-replay-supervisor"
 	command.ExtraFiles = []*os.File{engine, supervisor}
 	if request.Nodes != nil {
 		command.ExtraFiles = append(command.ExtraFiles, request.Nodes)
+	}
+	if feedPipes != nil {
+		command.ExtraFiles = append(command.ExtraFiles, feedPipes.requestWrite, feedPipes.responseRead)
 	}
 	command.Env = []string{"LANG=C", "LC_ALL=C", "RUST_BACKTRACE=0"}
 	command.Dir = request.Directory
@@ -329,10 +352,53 @@ func runHistoricalProofWorker(owner context.Context, cancel context.CancelFunc, 
 	if err := command.Start(); err != nil {
 		return nil, errors.Join(err, owner.Err())
 	}
+	var feedDone chan error
+	var feedCancel context.CancelFunc
+	var stopFeedClose func() bool
+	if feedPipes != nil {
+		feedCtx, localCancel := context.WithCancel(owner)
+		feedCancel = localCancel
+		stopFeedClose = context.AfterFunc(feedCtx, func() { feedPipes.closeParent() })
+		feedDone = make(chan error, 1)
+		childCloseErr := feedPipes.closeChild()
+		go func() {
+			feedErr := childCloseErr
+			if feedErr == nil {
+				feedErr = request.Feed.serve(feedCtx, feedPipes.requestRead, feedPipes.responseWrite)
+			}
+			if feedErr != nil {
+				cancel()
+			}
+			feedDone <- feedErr
+		}()
+	}
 	if hooks.afterStart != nil {
 		hooks.afterStart(owner, command.Process.Pid)
 	}
 	err = command.Wait()
+	if feedDone != nil {
+		var feedErr error
+		if err == nil {
+			// Every descendant is reaped and the parent's writer copy is closed.
+			// Let the final EOF join naturally; cancellation must not race that
+			// successful EOF into a synthetic closed-descriptor failure.
+			select {
+			case feedErr = <-feedDone:
+			case <-owner.Done():
+				feedCancel()
+				feedPipes.closeParent()
+				feedErr = <-feedDone
+			}
+		} else {
+			feedCancel()
+			feedPipes.closeParent()
+			feedErr = <-feedDone
+		}
+		feedCancel()
+		stopFeedClose()
+		closeErr := feedPipes.closeParent()
+		err = errors.Join(err, historicalNativeFeedError(feedErr), closeErr)
+	}
 	// Join before examining any buffer written by os/exec's pipe goroutines.
 	if err := errors.Join(err, stdout.err, stderr.err, owner.Err()); err != nil {
 		return nil, fmt.Errorf("historical replay child refused: %w", err)

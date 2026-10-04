@@ -25,12 +25,13 @@ const nativeExecutionPolicySchema = "urnetwork-native-miner-execution-policy-v1"
 const nativeExecutionAdmissionLimit = 1024 * 1024
 
 type nativeExecutionPolicy struct {
-	Schema            string            `json:"schema"`
-	ApprovalPublicKey string            `json:"approval_ed25519_public_key"`
-	ReviewSha256      string            `json:"runtime_semantics_review_sha256"`
-	ProfileSha256     string            `json:"original_callsite_profile_sha256"`
-	Engine            planFileReference `json:"engine"`
-	Directory         string            `json:"admission_directory"`
+	Schema            string                         `json:"schema"`
+	ApprovalPublicKey string                         `json:"approval_ed25519_public_key"`
+	ReviewSha256      string                         `json:"runtime_semantics_review_sha256"`
+	ProfileSha256     string                         `json:"original_callsite_profile_sha256"`
+	Engine            planFileReference              `json:"engine"`
+	Directory         string                         `json:"admission_directory"`
+	Producer          *nativeExecutionProducerPolicy `json:"producer,omitempty"`
 }
 
 func (self *nativeExecutionPolicy) validate() error {
@@ -40,7 +41,7 @@ func (self *nativeExecutionPolicy) validate() error {
 	if self.Schema != nativeExecutionPolicySchema || !rootCanonicalHash(self.ApprovalPublicKey) || !planSha256(self.ReviewSha256) || !planSha256(self.ProfileSha256) || !bootstrapRootAbsolutePath(self.Engine.Path) || !planSha256(self.Engine.Sha256) || !bootstrapRootAbsolutePath(self.Directory) {
 		return errors.New("native execution requires original independent runtime/layout/engine authority")
 	}
-	return nil
+	return self.Producer.validate()
 }
 
 // An admitted recipient is a registration generation, never merely an event UID.
@@ -111,6 +112,8 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 // it does not excuse Yuma disagreement or grant an economic activation approval.
 type nativeExecutionOutcome struct {
 	Boundary               economicEmissionBoundary   `json:"boundary"`
+	ProducerAuthorityHash  string                     `json:"producer_authority_hash,omitempty"`
+	FinalityProofHash      string                     `json:"finality_proof_hash,omitempty"`
 	AdmissionHash          string                     `json:"admission_hash"`
 	JobHash                string                     `json:"job_hash"`
 	TraceHash              string                     `json:"trace_hash"`
@@ -466,6 +469,13 @@ func observeNativeExecution(ctx context.Context, client *rpcClient, policy econo
 	if policy.Execution == nil {
 		return nil, nil
 	}
+	if policy.Execution.Producer != nil {
+		session, ok := ctx.Value(nativeProducerSessionKey{}).(*nativeProducerSession)
+		if !ok || session == nil {
+			return nil, errors.New("native execution producer session is absent")
+		}
+		return session.observe(ctx, client, block, runtime, metadata)
+	}
 	path := filepath.Join(policy.Execution.Directory, strings.TrimPrefix(block.Boundary.Hash, "0x")+".json")
 	raw, _, err := readPlanFile(ctx, path, nativeExecutionAdmissionLimit)
 	if err != nil {
@@ -503,6 +513,15 @@ func observeNativeExecution(ctx context.Context, client *rpcClient, policy econo
 	report, err := runHistoricalReplay(ctx, historicalReplayRequest{Engine: policy.Execution.Engine, Job: admission.Job, Budget: client.retryWindow}, historicalReplayHooks{})
 	if err != nil {
 		return nil, err
+	}
+	return validateNativeExecutionReplay(policy, admission, block, metadata, job, report)
+}
+
+// Both the legacy signed fixture path and the continuous proof producer use
+// the exact event/layout/amount verifier after their independent admission.
+func validateNativeExecutionReplay(policy economicEmissionPolicy, admission nativeExecutionAdmission, block economicEmissionBlock, metadata *types.Metadata, job historicalReplayJob, report *historicalReplayReport) (*nativeExecutionOutcome, error) {
+	if report == nil || len(job.ExtrinsicsHex) != block.BodyCount {
+		return nil, errors.Join(errRpcIntegrity, errors.New("native execution report or original body count differs"))
 	}
 	if report.HookObservations != nil {
 		for _, record := range report.HookObservations.Observations {

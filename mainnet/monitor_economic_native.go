@@ -86,6 +86,7 @@ func (self monitorEconomicNativeEvent) index() uint64 {
 
 type monitorEconomicNativeState struct {
 	ExecutionAccounting    *nativeExecutionWindow        `json:"execution_accounting,omitempty"`
+	ExecutionProducer      *nativeExecutionProducerState `json:"execution_producer,omitempty"`
 	Archive                *monitorEconomicNativeArchive `json:"archive,omitempty"`
 	Catalog                *monitorHistoryCatalogState   `json:"history_catalog,omitempty"`
 	RuntimeBoundFrom       uint64                        `json:"runtime_bound_from,omitempty"`
@@ -122,6 +123,9 @@ func monitorEconomicInteger(value string) (*big.Int, error) {
 }
 
 func (self *monitorEconomicNativeState) validate(policy monitorEconomicNativePolicy) error {
+	if err := self.ExecutionProducer.validate(policy.Observation, self.Cursor); err != nil {
+		return err
+	}
 	if self.ExecutionAccounting != nil {
 		if policy.Observation.Execution == nil || self.ExecutionAccounting.From != policy.Observation.From || self.ExecutionAccounting.Through != self.Cursor {
 			return errors.New("native accounting lost its original policy or retained cursor")
@@ -339,6 +343,7 @@ func observeMonitorEconomicNative(ctx context.Context, client *rpcClient, policy
 	}
 	width := through - state.Cursor.Number
 	for {
+		windowContext := context.WithValue(ctx, nativeProducerStateKey{}, state.ExecutionProducer)
 		window := policy.Observation
 		window.From, window.Through = state.Cursor, economicEmissionBoundary{Number: state.Cursor.Number + width, Hash: hash}
 		if window.Through.Number != requested.Number {
@@ -346,7 +351,7 @@ func observeMonitorEconomicNative(ctx context.Context, client *rpcClient, policy
 				return nil, err
 			}
 		}
-		observation, err := observeEconomicEmissionCatalog(ctx, client, window, rootObjectHash(window), true, policy.RuntimeCatalog, true)
+		observation, err := observeEconomicEmissionCatalog(windowContext, client, window, rootObjectHash(window), true, policy.RuntimeCatalog, true)
 		if err == nil {
 			if !observation.Complete || observation.Policy.From != state.Cursor || observation.Policy.Through != window.Through || uint64(len(observation.Blocks)) != width {
 				return nil, errors.Join(errRpcIntegrity, errors.New("native economic batch is incomplete or changed its requested range"))
@@ -384,6 +389,22 @@ func (self *monitorEconomicNativeState) append(policy monitorEconomicNativePolic
 			return nil, err
 		}
 		next.ExecutionAccounting = accounting
+		if policy.Observation.Execution.Producer != nil {
+			producer := observation.ExecutionProducer
+			if err := producer.validate(policy.Observation, observation.Policy.Through); err != nil {
+				return nil, err
+			}
+			var previous uint64
+			if self.ExecutionProducer != nil {
+				previous = self.ExecutionProducer.Completed
+			}
+			if producer == nil || producer.Completed != previous+uint64(len(observation.Blocks)) {
+				return nil, errors.New("native producer skipped or repeated original completed jobs")
+			}
+			next.ExecutionProducer = producer
+		} else if observation.ExecutionProducer != nil {
+			return nil, errors.New("legacy native owner cannot enroll an execution producer")
+		}
 	} else if observation.ExecutionWindow != nil {
 		return nil, errors.New("legacy native role received unconfigured execution authority")
 	}
