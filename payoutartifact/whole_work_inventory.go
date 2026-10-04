@@ -12,6 +12,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfoundation/sn/protocol"
@@ -214,7 +215,7 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 			}
 		}
 	}
-	closed, err := verifyWholeWorkReportsWithOutcomes(ctx, artifact, expected.ClientKeyRootSigner, reservations, authority.ExpectedProviders, participants.Outcomes)
+	closed, err := verifyWholeWorkReportsWithOutcomes(ctx, artifact, expected.ClientKeyRootSigner, reservations, authority.ExpectedProviders, participants.Outcomes, expected.EarningSelection)
 	if err != nil {
 		return nil, err
 	}
@@ -372,6 +373,10 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 	if len(rows) != 0 {
 		return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("window includes work outside the independently complete SDK census"))
 	}
+	earningStart, err := verifyWholeWorkEarningSelection(artifact.ClosedWork, expected.EarningSelection)
+	if err != nil {
+		return nil, err
+	}
 	providerKVs := map[[16]byte]WholeWorkProvider{}
 	for _, provider := range authority.ExpectedProviders {
 		providerKVs[provider.ClientId] = WholeWorkProvider{ClientId: provider.ClientId, NetworkId: provider.NetworkId, WalletHeadHash: provider.WalletHeadHash, WalletGeneration: provider.WalletGeneration}
@@ -392,7 +397,13 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 			if !expected || value.NetworkId != network || uint64(*provider.ByteCount) > ^uint64(0)-value.UsageBytes {
 				return nil, ErrClosedWorkIntegrity
 			}
-			value.UsageBytes += uint64(*provider.ByteCount)
+			closedAt, err := time.Parse(time.RFC3339Nano, row.ClosedAt)
+			if err != nil {
+				return nil, ErrClosedWorkIntegrity
+			}
+			if earningStart.IsZero() || !closedAt.Before(earningStart) {
+				value.UsageBytes += uint64(*provider.ByteCount)
+			}
 			providerKVs[id] = value
 		}
 	}

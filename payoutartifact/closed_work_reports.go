@@ -83,7 +83,13 @@ func ClosedWorkReportDomain(artifact *Artifact) (protocol.ClientKeyHistoryDomain
 // ReservedAmountJoins remains zero without the whole SDK reservation witness.
 // A zero expected root signer grants no registered-key credit.
 func VerifyClosedWorkReports(ctx context.Context, artifact *Artifact, rootSigner common.Address) (*VerifiedClosedWorkReports, error) {
-	return verifyClosedWorkReports(ctx, artifact, rootSigner, nil, nil, nil)
+	return verifyClosedWorkReports(ctx, artifact, rootSigner, nil, nil, nil, nil)
+}
+
+// A producer or reader with original independent earning policy may verify its
+// full epoch projection. This still grants no whole-work or participant proof.
+func VerifyClosedWorkReportsWithEarningSelection(ctx context.Context, artifact *Artifact, rootSigner common.Address, selection *WholeWorkEarningSelection) (*VerifiedClosedWorkReports, error) {
+	return verifyClosedWorkReports(ctx, artifact, rootSigner, nil, nil, nil, selection)
 }
 
 // The whole-work owner supplies reservations reconstructed from the complete
@@ -93,27 +99,27 @@ func verifyWholeWorkReports(ctx context.Context, artifact *Artifact, rootSigner 
 	if reservations == nil {
 		return nil, ErrClosedWorkUnavailable
 	}
-	return verifyClosedWorkReports(ctx, artifact, rootSigner, reservations, expected, nil)
+	return verifyClosedWorkReports(ctx, artifact, rootSigner, reservations, expected, nil, nil)
 }
 
 // The whole-work caller supplies these outcomes only after independently
 // admitted original receipt and reservation replay. A payout row cannot choose.
-func verifyWholeWorkReportsWithOutcomes(ctx context.Context, artifact *Artifact, rootSigner common.Address, reservations map[[16]byte]coreprotocol.OriginalWorkContract, expected []WholeWorkExpectedProvider, outcomes map[[16]byte]protocol.ProviderWorkOutcome) (*VerifiedClosedWorkReports, error) {
+func verifyWholeWorkReportsWithOutcomes(ctx context.Context, artifact *Artifact, rootSigner common.Address, reservations map[[16]byte]coreprotocol.OriginalWorkContract, expected []WholeWorkExpectedProvider, outcomes map[[16]byte]protocol.ProviderWorkOutcome, selection *WholeWorkEarningSelection) (*VerifiedClosedWorkReports, error) {
 	if reservations == nil {
 		return nil, ErrClosedWorkUnavailable
 	}
-	return verifyClosedWorkReports(ctx, artifact, rootSigner, reservations, expected, outcomes)
+	return verifyClosedWorkReports(ctx, artifact, rootSigner, reservations, expected, outcomes, selection)
 }
 
 // All report validation uses the same path. Independent expected providers may
 // contribute exact zero rows; their absence from earning SQL rows is not a gap.
-func verifyClosedWorkReports(ctx context.Context, artifact *Artifact, rootSigner common.Address, reservations map[[16]byte]coreprotocol.OriginalWorkContract, expected []WholeWorkExpectedProvider, outcomes map[[16]byte]protocol.ProviderWorkOutcome) (*VerifiedClosedWorkReports, error) {
+func verifyClosedWorkReports(ctx context.Context, artifact *Artifact, rootSigner common.Address, reservations map[[16]byte]coreprotocol.OriginalWorkContract, expected []WholeWorkExpectedProvider, outcomes map[[16]byte]protocol.ProviderWorkOutcome, selection *WholeWorkEarningSelection) (*VerifiedClosedWorkReports, error) {
 	var closedWork *VerifiedClosedWork
 	var err error
 	if reservations == nil {
-		closedWork, err = VerifyClosedWork(ctx, artifact)
+		closedWork, err = verifyClosedWorkWithEarningSelection(ctx, artifact, nil, selection)
 	} else {
-		closedWork, err = verifyClosedWorkWithExpectedProviders(ctx, artifact, expected)
+		closedWork, err = verifyClosedWorkWithEarningSelection(ctx, artifact, expected, selection)
 	}
 	if err != nil {
 		return nil, err

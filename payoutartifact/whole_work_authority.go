@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -74,13 +75,21 @@ type WholeWorkPriorContract struct {
 // These values come from separately admitted policy, never from the witness.
 // An optional hash restricts a policy to one exact independently signed roster.
 type WholeWorkExpectation struct {
-	AuthorityHash       string         `json:"authority_hash,omitempty"`
-	AuthoritySigner     common.Address `json:"authority_signer"`
-	ClientKeyRootSigner common.Address `json:"client_key_root_signer"`
-	AttributionSigner   common.Address `json:"attribution_signer,omitempty"`
+	AuthorityHash       string                     `json:"authority_hash,omitempty"`
+	AuthoritySigner     common.Address             `json:"authority_signer"`
+	ClientKeyRootSigner common.Address             `json:"client_key_root_signer"`
+	AttributionSigner   common.Address             `json:"attribution_signer,omitempty"`
+	EarningSelection    *WholeWorkEarningSelection `json:"earning_selection,omitempty"`
 	// Derived only from previously verified retained originals in this domain.
 	// It cannot be populated from the current authority's proposed exclusions.
 	PriorContracts []WholeWorkPriorContract `json:"-"`
+}
+
+// The original deployment policy selects earning time independently of the
+// publisher. Full epoch originals remain required on both sides of the cutoff.
+type WholeWorkEarningSelection struct {
+	StartTime  time.Time `json:"start_time"`
+	PolicyHash string    `json:"policy_hash"`
 }
 
 // Public transport carries canonical originals and never selects authority.

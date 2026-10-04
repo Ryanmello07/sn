@@ -42,24 +42,26 @@ type ClosedWorkRecord struct {
 // artifact. Count is checked, but is not proof that a dishonest source omitted no
 // database rows; independently trusted provenance remains a separate obligation.
 type ClosedWorkCensus struct {
-	WholeInventory    *WholeWorkInventory `json:"whole_inventory,omitempty"`
-	Schema            string              `json:"schema"`
-	DeploymentId      string              `json:"deployment_id"`
-	ChainId           uint64              `json:"chain_id"`
-	GenesisHash       string              `json:"genesis_hash"`
-	Netuid            uint16              `json:"netuid"`
-	Coordinator       common.Address      `json:"coordinator"`
-	SettlementVault   common.Address      `json:"settlement_vault"`
-	Epoch             uint64              `json:"epoch"`
-	NoId              uint64              `json:"no_id"`
-	PolicyHash        string              `json:"policy_hash"`
-	Start             Boundary            `json:"start"`
-	End               Boundary            `json:"end"`
-	WindowStart       string              `json:"window_start_utc"`
-	WindowEnd         string              `json:"window_end_utc"`
-	EarningPolicyHash string              `json:"earning_policy_sha256,omitempty"`
-	Count             uint64              `json:"contract_count"`
-	Records           []ClosedWorkRecord  `json:"records"`
+	WholeInventory       *WholeWorkInventory `json:"whole_inventory,omitempty"`
+	Schema               string              `json:"schema"`
+	DeploymentId         string              `json:"deployment_id"`
+	ChainId              uint64              `json:"chain_id"`
+	GenesisHash          string              `json:"genesis_hash"`
+	Netuid               uint16              `json:"netuid"`
+	Coordinator          common.Address      `json:"coordinator"`
+	SettlementVault      common.Address      `json:"settlement_vault"`
+	Epoch                uint64              `json:"epoch"`
+	NoId                 uint64              `json:"no_id"`
+	PolicyHash           string              `json:"policy_hash"`
+	Start                Boundary            `json:"start"`
+	End                  Boundary            `json:"end"`
+	WindowStart          string              `json:"window_start_utc"`
+	WindowEnd            string              `json:"window_end_utc"`
+	EarningPolicyHash    string              `json:"earning_policy_sha256,omitempty"`
+	EarningStart         string              `json:"earning_start_utc,omitempty"`
+	EarningSelectionHash string              `json:"earning_selection_sha256,omitempty"`
+	Count                uint64              `json:"contract_count"`
+	Records              []ClosedWorkRecord  `json:"records"`
 }
 
 // These derived facts intentionally cannot assert full authenticated provider
@@ -230,6 +232,12 @@ func VerifyClosedWork(ctx context.Context, artifact *Artifact) (*VerifiedClosedW
 // Only a complete independently admitted provider roster may preserve an idle
 // zero row absent from earning snapshots. The public legacy path stays strict.
 func verifyClosedWorkWithExpectedProviders(ctx context.Context, artifact *Artifact, expected []WholeWorkExpectedProvider) (*VerifiedClosedWork, error) {
+	return verifyClosedWorkWithEarningSelection(ctx, artifact, expected, nil)
+}
+
+// The earning selection changes aggregate usage only. Every original row,
+// participant partition and physical epoch boundary is still verified.
+func verifyClosedWorkWithEarningSelection(ctx context.Context, artifact *Artifact, expected []WholeWorkExpectedProvider, selection *WholeWorkEarningSelection) (*VerifiedClosedWork, error) {
 	if ctx == nil {
 		return nil, errors.New("closed-work verification requires an owner context")
 	}
@@ -273,6 +281,10 @@ func verifyClosedWorkWithExpectedProviders(ctx context.Context, artifact *Artifa
 	if e1 != nil || e2 != nil || !start.Before(end) || census.WindowStart != start.UTC().Format(time.RFC3339Nano) || census.WindowEnd != end.UTC().Format(time.RFC3339Nano) || census.EarningPolicyHash != "" && !canonicalClosedWorkDigest(census.EarningPolicyHash) {
 		return nil, ErrClosedWorkIntegrity
 	}
+	earningStart, err := verifyWholeWorkEarningSelection(census, selection)
+	if err != nil {
+		return nil, err
+	}
 	type amount struct {
 		network [16]byte
 		bytes   uint64
@@ -292,6 +304,7 @@ func verifyClosedWorkWithExpectedProviders(ctx context.Context, artifact *Artifa
 		if err != nil || row.ClosedAt != closed.UTC().Format(time.RFC3339Nano) || closed.Before(start) || !closed.Before(end) || row.ContractId == ([16]byte{}) || index > 0 && bytes.Compare(census.Records[index-1].ContractId[:], row.ContractId[:]) >= 0 {
 			return nil, ErrClosedWorkIntegrity
 		}
+		earns := earningStart.IsZero() || !closed.Before(earningStart)
 		snapshot, err := decodeClosedWorkSnapshot(row, census.Epoch)
 		if err != nil {
 			return nil, err
@@ -324,13 +337,15 @@ func verifyClosedWorkWithExpectedProviders(ctx context.Context, artifact *Artifa
 			}
 			prior = client
 			total += *provider.ByteCount
-			known, exists := providers[client]
-			if exists && known.network != network || uint64(*provider.ByteCount) > math.MaxInt64-known.bytes {
-				return nil, ErrClosedWorkIntegrity
+			if earns {
+				known, exists := providers[client]
+				if exists && known.network != network || uint64(*provider.ByteCount) > math.MaxInt64-known.bytes {
+					return nil, ErrClosedWorkIntegrity
+				}
+				known.network = network
+				known.bytes += uint64(*provider.ByteCount)
+				providers[client] = known
 			}
-			known.network = network
-			known.bytes += uint64(*provider.ByteCount)
-			providers[client] = known
 		}
 		if total != *snapshot.ByteCount {
 			return nil, ErrClosedWorkIntegrity
@@ -338,7 +353,9 @@ func verifyClosedWorkWithExpectedProviders(ctx context.Context, artifact *Artifa
 		if uint64(total) > math.MaxUint64-result.UsageBytes {
 			return nil, ErrClosedWorkIntegrity
 		}
-		result.UsageBytes += uint64(total)
+		if earns {
+			result.UsageBytes += uint64(total)
+		}
 	}
 	if expected == nil && len(providers) != len(artifact.Providers) || result.UsageBytes != artifact.TotalUsageBytes {
 		return nil, fmt.Errorf("%w: original complete usage census differs", ErrClosedWorkIntegrity)
