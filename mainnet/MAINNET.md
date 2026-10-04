@@ -22,6 +22,8 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+The [corrected ABI nine-root normal readback](evidence/coordinator-ab48-nine-normal-independent-readback-20261004.json) independently reproduces all nine passes, including the four original fixture failures, with no skips or failures and joined exit zero. Race and fixture-control results remain pending. Keep this result separate from full funding41 qualification and original failures.
+
 The [original e51 partition readback](evidence/recoverye51-original-partitions-independent-readback-20261004.json) independently verifies all 47 normal roots: 43 pass, four fail, zero skip. It retains sealed race partitions separately and preserves the four original coordinator-fixture failures. Corrected ABI replay must qualify the affected roots; retain unaffected original results with explicit source/dependency joins. The separate 129-history recovery remains incomplete.
 
 The [contextual provider correction](evidence/provider-context-cancellation-source-review-20261004.json) is source-reviewed across 12 changed files and nine deterministic regressions. Actual operation context reaches row copying, payout allocation, Merkle construction and publication/readback without changing legacy grammar. Independent canonical-value neighbors and a public HTTP cancellation-classification regression remain part of qualification.
