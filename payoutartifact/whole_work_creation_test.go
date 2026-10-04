@@ -206,6 +206,31 @@ func TestWholeWorkOriginalRequestCannotEarnAsTwoDifferentReservations(t *testing
 	}
 }
 
+func TestWholeWorkOriginalRequestRejectsConsumerAddedBesideActualEgress(t *testing.T) {
+	fixture := creationEvidenceFixture(t, false)
+	row := &fixture.artifact.ClosedWork.Records[0]
+	snapshot, err := decodeClosedWorkSnapshot(*row, fixture.artifact.Epoch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := decodeClosedWorkSnapshot(fixture.artifact.ClosedWork.Records[1], fixture.artifact.Epoch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	consumer, egress := (*other.Providers)[0], (*snapshot.Providers)[0]
+	half := int64(50)
+	consumer.ByteCount, egress.ByteCount = &half, &half
+	*snapshot.Providers = append((*snapshot.Providers)[:0], consumer, egress)
+	row.Original, err = json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	creationRebuildArtifact(t, fixture)
+	if _, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); !errors.Is(err, ErrClosedWorkIntegrity) {
+		t.Fatal("the original consumer received an equal split beside the true egress", err)
+	}
+}
+
 func TestWholeWorkOriginalStreamRequestRequiresItsActualIntermediary(t *testing.T) {
 	fixture := creationEvidenceFixture(t, false, [16]byte{113})
 	if _, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); !errors.Is(err, ErrClosedWorkIntegrity) {
