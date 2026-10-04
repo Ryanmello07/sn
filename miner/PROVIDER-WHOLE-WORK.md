@@ -3,8 +3,9 @@
 The standalone `provide` / `auth-provide` commands and embedded provider swarm
 configure the real SDK contract manager through a reviewed capture profile.
 The profile supplies an independent window-request public key, the complete
-client-key policy domain, an existing provider client ID and public key, and a
-precreated private outbox. The retained provider seed must match that public key.
+client-key policy domain, an existing provider client ID and public key, and an
+explicitly prepared private outbox. The retained provider seed must match that
+public key.
 Capture mode refuses new client allocation; it never generates a replacement key
 to satisfy a profile.
 
@@ -35,7 +36,7 @@ The JSON schema is `urnetwork-provider-whole-work-capture-v1`. Its fields are:
 | `providers[].client_id` | Existing 16-byte provider client identity. |
 | `providers[].public_key` | Public key derived from the retained provider seed. |
 | `providers[].domain` | Complete original `ClientKeyHistoryDomain` object. |
-| `providers[].outbox_directory` | Canonical absolute, precreated, process-owned `0700` directory. |
+| `providers[].outbox_directory` | Canonical absolute, prepared, process-owned `0700` directory. |
 
 Byte arrays use JSON arrays of integers. Every slot and client ID must be unique;
 outboxes cannot overlap or share physical custody. Request signing authority
@@ -43,6 +44,17 @@ must differ from the provider signing key. Unknown or duplicate fields, changed
 profile bytes, symlinked profile files, missing directories and unsupported
 lifetime-lock platforms are refused. The reader creates no profile, key, identity
 or outbox. The optional close-report domain must agree when it is available.
+
+Before the first SDK launch, accepted offline `storage-prepare` must publish the
+outbox's empty birth checkpoint and original index under its stopped-writer and
+zero-history fence. The SDK outbox preparation owner uses kind
+`sdk-original-work-outbox`, the exact approved capture-profile reference and its
+provider slot. Restored custody instead comes from the complete protected
+original inventory and retained signed bytes. Making an empty directory or
+copying selected cut files cannot authorize startup. The shared production
+provider constructor validates prepared custody and signed scope through Core
+before creating the SDK device. Its live worker subsequently acquires and
+monitors its own outbox lease; a later custody change refuses capture.
 
 Swarm members use `whole_work_capture`, `whole_work_capture_sha256`, and
 `require_whole_work_capture`. A top-level swarm `require_whole_work_capture: true`
@@ -78,7 +90,9 @@ still leaves `activation_ready: false`. Complete roster/window verification,
 Server request/cut custody, actual deployment and financial conformance remain
 separate admission gates.
 
-The source requires Core `7de1d3e8` or its exact joined successor and SDK `9ae95704`.
+The source requires the Core prepared-outbox successor of `7de1d3e8`, including
+`ValidateOriginalWorkOutbox` and `BuildFreshOriginalWorkOutboxCheckpoint`, and
+SDK `9ae95704`.
 New tests cover public CLI refusal, public bootstrap export, and the shared
 production DeviceLocal constructor's actual HTTPS capture, cancellation and
 restart. These are distinct paths, not one successful public-CLI end-to-end
@@ -95,4 +109,8 @@ custody: launch still uses `ReadProviderWorkCaptureProfile` and its physical
 directory checks. Historical retained cuts use their independently signed
 request's provider key; a later approved launch key cannot rewrite those cuts.
 The three portable decoder test roots are separate, authored and unexecuted;
-the original eight miner and three bootstrap test sources remain unchanged.
+decoder commit `ad703e8d` preserved the original eight miner and three bootstrap
+test sources. The prepared-custody successor adds two constructor refusal roots
+and updates the two lifecycle roots' shared fixture to explicitly prepare its
+synthetic birth before its first SDK launch. These revised and added roots are
+also authored and unexecuted.

@@ -290,12 +290,24 @@ func (self *ProviderWorkCaptureProfile) apply(settings *sdk.DeviceLocalSettings,
 
 // Both production provider roles enter this constructor. The evidence worker
 // receives the same owner's dial and trust settings, with its own finite pool.
-func newProviderDeviceLocal(networkSpace *sdk.NetworkSpace, strategySettings *connect.ClientStrategySettings, token, description string, settings *sdk.DeviceLocalSettings, profile *ProviderWorkCaptureProfile, slot string, clientId connect.Id) (*sdk.DeviceLocal, error) {
+func newProviderDeviceLocal(ctx context.Context, networkSpace *sdk.NetworkSpace, strategySettings *connect.ClientStrategySettings, token, description string, settings *sdk.DeviceLocalSettings, profile *ProviderWorkCaptureProfile, slot string, clientId connect.Id) (*sdk.DeviceLocal, error) {
+	if ctx == nil {
+		return nil, errors.New("whole-work provider constructor requires its lifecycle owner")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := profile.apply(settings, slot, clientId); err != nil {
 		return nil, err
 	}
 	var transport *http.Transport
 	if capture := settings.ContractManagerSettings.OriginalWorkCapture; capture != nil {
+		// Admission borrows the exact runtime validator. It never repairs or
+		// initializes missing custody; the live worker reopens its own lease.
+		scope := connect.OriginalWorkOutboxScope{DomainHash: settings.ContractManagerSettings.CloseReportDomainHash, ClientId: [16]byte(clientId), RequestPublicKey: capture.RequestPublicKey}
+		if err := connect.ValidateOriginalWorkOutbox(ctx, capture.OutboxDirectory, scope); err != nil {
+			return nil, err
+		}
 		if strategySettings == nil {
 			return nil, errors.New("whole-work provider transport owner is absent")
 		}

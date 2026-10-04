@@ -482,7 +482,7 @@ func startSwarmMember(ctx context.Context, member ProviderSwarmMember, failed fu
 	logoutSub := api.AddAuthLogoutListener(clientauth.AuthLogoutListenerFunc(func() {
 		failed(errSwarmAuthenticationRejected)
 	}))
-	device, err := newProviderDeviceLocal(networkSpace, strategySettings, byClientJWT, "provider swarm "+runtime.GOOS+" "+RequireVersion(), deviceSettings, workProfile, member.ID, clientId)
+	device, err := newProviderDeviceLocal(memberCtx, networkSpace, strategySettings, byClientJWT, "provider swarm "+runtime.GOOS+" "+RequireVersion(), deviceSettings, workProfile, member.ID, clientId)
 	if err != nil {
 		refreshSub.Close()
 		logoutSub.Close()

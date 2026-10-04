@@ -656,6 +656,7 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		applyProviderMemoryTarget(settings, self.memoryPlan.DeviceMemoryTargetByteCount)
 		settings.ProviderDialContextSettings = self.testEgressDialer
 		device, err := newProviderDeviceLocal(
+			proxyCtx,
 			networkSpace,
 			clientStrategySettings,
 			byClientJwt,

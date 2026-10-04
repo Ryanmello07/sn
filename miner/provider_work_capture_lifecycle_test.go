@@ -50,6 +50,30 @@ type providerWorkDeviceFixture struct {
 func newProviderWorkDeviceFixture(t *testing.T) *providerWorkDeviceFixture {
 	t.Helper()
 	profile, seed := providerWorkCaptureFixture(t)
+	// The stopped synthetic owner explicitly prepares fresh custody before any
+	// SDK exists. Runtime startup cannot reinterpret an empty directory as birth.
+	directory := profile.Providers[0].OutboxDirectory
+	index, err := os.OpenFile(filepath.Join(directory, connect.OriginalWorkOutboxIndexName), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := errors.Join(index.Sync(), index.Close()); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.Open(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint, err := connect.BuildFreshOriginalWorkOutboxCheckpoint(t.Context(), root)
+	if err != nil {
+		t.Fatal(errors.Join(err, root.Close()))
+	}
+	if err := unix.Fsetxattr(int(root.Fd()), connect.OriginalWorkOutboxAttribute, checkpoint, unix.XATTR_CREATE); err != nil {
+		t.Fatal(errors.Join(err, root.Close()))
+	}
+	if err := errors.Join(root.Sync(), root.Close()); err != nil {
+		t.Fatal(err)
+	}
 	self := &providerWorkDeviceFixture{profile: profile, seed: seed, owners: make(chan coreprotocol.OriginalWorkOwnerEnrollment, 8), requests: make(chan [][]byte, 8), requestReads: make(chan [16]byte, 8), requestClosed: make(chan [16]byte, 8), cuts: make(chan []byte, 8), failures: make(chan error, 8)}
 	self.server = httptest.NewTLSServer(http.HandlerFunc(self.serveHttp))
 	t.Cleanup(self.server.Close)
@@ -153,7 +177,7 @@ func (self *providerWorkDeviceFixture) start(t *testing.T) func() {
 	settings.KeyMaterial = sdk.NewDeviceLocalKeyMaterial(self.seed, nil, nil)
 	clientId := connect.Id(profile.Providers[0].ClientId)
 	token := providerRegistrationTestToken(t, clientId.String(), "retained-whole-work")
-	device, err := newProviderDeviceLocal(space, strategy, token, "synthetic original-work provider", settings, profile, "direct", clientId)
+	device, err := newProviderDeviceLocal(ctx, space, strategy, token, "synthetic original-work provider", settings, profile, "direct", clientId)
 	if err != nil {
 		cancel()
 		space.Close()
