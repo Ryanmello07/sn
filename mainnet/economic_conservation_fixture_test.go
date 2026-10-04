@@ -226,9 +226,19 @@ func newEconomicConservationFixture(t *testing.T, twoProviders bool, configureVa
 	t.Cleanup(server.Close)
 	f.policy.Claims = []monitorClaimPolicy{{Role: "claim-conservation", Endpoint: server.URL + "/claim-progress", ExpectedMember: "synthetic-claim", ExpectedPool: pool, FreshnessSeconds: 60, Epochs: []monitorClaimEpochPolicy{{Epoch: 1, ShareBps: 700, AcceptBy: f.now.Add(-time.Minute).Format(time.RFC3339Nano)}}}}
 	root := t.TempDir()
+	protectFreshEconomicConservationTestRoot(t, root)
 	f.path, f.checkpoint = filepath.Join(root, "policy.json"), filepath.Join(root, "checkpoint.json")
 	f.writePolicy(t)
 	return f
+}
+
+// Only the fresh test-owned root is provisioned. Runtime constructors still
+// refuse an unprotected or replaced root, regardless of the process umask.
+func protectFreshEconomicConservationTestRoot(t *testing.T, root string) {
+	t.Helper()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (self *economicConservationFixture) writePolicy(t *testing.T) {
