@@ -129,11 +129,11 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 				return err
 			}
 			err := preparation.check()
-			if err == nil || errors.Is(err, durablevolume.ErrIdentity) || !errors.Is(err, durablevolume.ErrUnavailable) {
+			if err == nil || !errors.Is(err, durablevolume.ErrUnavailable) || !rootMonitorStartupPending(err) {
 				return err
 			}
 			if observationRetries == 64 {
-				return errors.Join(durablevolume.ErrUnavailable, errors.New("passive preparation observation budget exhausted"))
+				return mainnetDurableUnavailable("passive preparation observation budget exhausted", nil)
 			}
 			observationRetries++
 			fmt.Fprintln(stderr, "passive preparation observation unavailable; retrying retained custody")
@@ -144,12 +144,12 @@ func runRootCommandWithPolicy(ctx context.Context, args []string, stdout, stderr
 		}
 	}
 	preparationExit := func(err error) int {
-		if ctx.Err() != nil {
-			return 0
-		}
-		if errors.Is(err, durablevolume.ErrIdentity) {
+		if !rootMonitorStartupPending(err) {
 			fmt.Fprintln(stderr, "passive preparation retained custody is invalid")
 			return 3
+		}
+		if ctx.Err() != nil {
+			return 0
 		}
 		if errors.Is(err, durablevolume.ErrUnavailable) || errors.Is(err, context.DeadlineExceeded) {
 			fmt.Fprintln(stderr, "passive preparation observation remains unavailable")

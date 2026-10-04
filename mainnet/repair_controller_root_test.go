@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -245,11 +246,38 @@ func TestRepairControllerRootRejectsNestedRepairJournal(t *testing.T) {
 	f := newRepairRootPassiveFixture(t)
 	f.envelope.approval.Plan.StatePath = f.root.chain.preparation.childPaths()[0]
 	f.sign()
-	_, manifest := repairControllerRootCommand(t, f)
+	args, manifest := repairControllerRootCommand(t, f)
 	before := mainnetNamespaceTest(t, f.root.host.files.host.trustRoot)
 	_, err := loadRepairControllerEnvelope(f.ctx(), manifest.Entries[0], f.root.host.files.host)
-	if !errors.Is(err, errRpcIntegrity) || f.root.starts != 1 || !reflect.DeepEqual(before, mainnetNamespaceTest(t, f.root.host.files.host.trustRoot)) {
-		t.Fatal("nested repair journal acquired original bootstrap custody", err, f.root.starts)
+	var out, diagnostic bytes.Buffer
+	code := runRepairControllerCommandWithHost(f.ctx(), args, &out, &diagnostic, func() time.Time { return f.root.now }, f.root.host.files.host)
+	if !errors.Is(err, errRpcIntegrity) || code != 2 || !strings.Contains(diagnostic.String(), "write overlaps an original input") || out.Len() != 0 || f.root.starts != 1 || !reflect.DeepEqual(before, mainnetNamespaceTest(t, f.root.host.files.host.trustRoot)) {
+		t.Fatal("public signed nested repair journal acquired original custody", err, code, diagnostic.String(), f.root.starts)
+	}
+}
+
+// A signed incident whose original closure cannot be observed suspends every
+// shared write. Clearing the read fault resumes without a permanent held census.
+func TestRepairControllerRootUnreadableClosureDefersAllSharedOutputs(t *testing.T) {
+	f := newRepairRootPassiveFixture(t)
+	args, manifest := repairControllerRootCommand(t, f)
+	before := mainnetNamespaceTest(t, f.root.host.files.host.trustRoot)
+	faults := 0
+	ctx := context.WithValue(f.ctx(), repairValidatorObservationKey{}, func(operation string) error {
+		if operation == "host-read:"+f.envelope.approval.Plan.OriginalApproval.Path {
+			faults++
+			return syscall.EIO
+		}
+		return nil
+	})
+	var out, diagnostic bytes.Buffer
+	code := runRepairControllerCommandWithHost(ctx, args, &out, &diagnostic, func() time.Time { return f.root.now }, f.root.host.files.host)
+	if code != 1 || faults != 1 || out.Len() != 0 || f.root.starts != 1 || !strings.Contains(diagnostic.String(), "original passive root custody closure is unavailable") || !reflect.DeepEqual(before, mainnetNamespaceTest(t, f.root.host.files.host.trustRoot)) {
+		t.Fatal("unreadable authenticated root closure wrote shared custody", code, faults, diagnostic.String(), f.root.starts)
+	}
+	record := repairControllerRootRun(t, f, args, manifest)
+	if record.Entries[0].Status != "pending" || record.Entries[0].Disposition != "waiting-progress" || !record.Entries[0].Attempted || f.root.starts != 2 {
+		t.Fatal("recoverable closure observation left a permanent hold", record, f.root.starts)
 	}
 }
 
@@ -259,6 +287,9 @@ func TestRepairControllerRootBusyHostReturnsPendingBeforeReadiness(t *testing.T)
 	f := newRepairRootPassiveFixture(t)
 	_, manifest := repairControllerRootCommand(t, f)
 	entered, release := make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	releaseOwner := func() { releaseOnce.Do(func() { close(release) }) }
+	defer releaseOwner()
 	var once sync.Once
 	execute := f.root.host.files.host.execute
 	f.root.host.files.host.execute = func(ctx context.Context, path string, args []string) ([]byte, error) {
@@ -277,21 +308,31 @@ func TestRepairControllerRootBusyHostReturnsPendingBeforeReadiness(t *testing.T)
 	defer cancel()
 	step := repairControllerHostStep(f.root.host.files.host, func() time.Time { return f.root.now })
 	done := make(chan error, 1)
+	joined := false
 	go func() {
 		_, _, err := step(ctx, manifest.Entries[0], false, func() error { return nil })
 		done <- err
 	}()
+	defer func() {
+		releaseOwner()
+		cancel()
+		if !joined {
+			<-done
+		}
+	}()
 	select {
 	case <-entered:
 	case err := <-done:
+		joined = true
 		t.Fatal("root never entered actual readiness", err)
 	case <-ctx.Done():
 		t.Fatal("root readiness barrier was not reached", ctx.Err())
 	}
 	reserved := false
 	status, complete, err := step(ctx, manifest.Entries[0], false, func() error { reserved = true; return nil })
-	close(release)
+	releaseOwner()
 	firstErr := <-done
+	joined = true
 	if status != "original-unit-busy" || complete || !errors.Is(err, errRepairControllerPending) || reserved || !errors.Is(firstErr, errRepairProcessPending) || f.root.starts != 2 {
 		t.Fatal("busy root admitted another readiness or claim owner", status, complete, err, reserved, firstErr, f.root.starts)
 	}

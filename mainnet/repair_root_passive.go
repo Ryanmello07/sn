@@ -61,6 +61,20 @@ type repairRootPassiveEnvelope struct {
 	gid uint32
 }
 
+// A verified incident without its complete original graph cannot establish
+// shared output separation. The cause retains unavailable or hard precedence.
+type repairRootClosureError struct {
+	cause error
+}
+
+// The diagnostic adds no new integrity claim or retry authority.
+func (self *repairRootClosureError) Error() string {
+	return "original passive root custody closure is unavailable: " + self.cause.Error()
+}
+
+// Typed original read and integrity causes remain visible to the controller.
+func (self *repairRootClosureError) Unwrap() error { return self.cause }
+
 // This digest identifies the observed generation and its original continuity.
 // It excludes the new state path, which cannot create another generation claim.
 func (self repairRootPassivePlan) incidentId() string {
@@ -136,7 +150,7 @@ func readRepairProcessOriginal(ctx context.Context, host *repairValidatorHost, r
 
 // The original host signature is independently checked from its actual file.
 // A root repair envelope cannot manufacture a new passive runtime declaration.
-func loadRepairRootPassiveEnvelope(ctx context.Context, raw []byte, key string, host *repairValidatorHost) (*repairRootPassiveEnvelope, error) {
+func loadRepairRootPassiveEnvelope(ctx context.Context, raw []byte, key string, host *repairValidatorHost) (_ *repairRootPassiveEnvelope, resultErr error) {
 	if ctx == nil || host == nil {
 		return nil, errors.New("passive root repair load owner is absent")
 	}
@@ -150,6 +164,15 @@ func loadRepairRootPassiveEnvelope(ctx context.Context, raw []byte, key string, 
 	if err := approval.validate(key); err != nil {
 		return nil, errors.Join(errRpcIntegrity, err)
 	}
+	closureLoaded := false
+	defer func() {
+		if resultErr != nil && !closureLoaded {
+			if rootMonitorStartupPending(resultErr) {
+				resultErr = mainnetDurableUnavailable("cannot observe original root custody closure", resultErr)
+			}
+			resultErr = &repairRootClosureError{cause: resultErr}
+		}
+	}()
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(approval.Plan.timeoutSeconds())*time.Second)
 	defer cancel()
 	originalRaw, err := readRepairProcessOriginal(ctx, host, approval.Plan.OriginalApproval, 64*1024)
@@ -166,10 +189,10 @@ func loadRepairRootPassiveEnvelope(ctx context.Context, raw []byte, key string, 
 	}
 	preparation, err := loadRootPassiveHostPreparation(ctx, original)
 	if err != nil {
-		// Known signed paths remain protected even when a nested read is pending.
 		return self, err
 	}
 	self.preparation = &preparation
+	closureLoaded = true
 	if err := self.validatePaths(); err != nil {
 		return self, errors.Join(errRpcIntegrity, err)
 	}

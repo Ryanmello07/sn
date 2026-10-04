@@ -150,9 +150,14 @@ func runRepairControllerCommandWithHost(ctx context.Context, args []string, stdo
 	}
 	for index, entry := range manifest.Entries {
 		inputs[entry.Approval.Path] = true
-		// A partial root load still exposes its verified original host paths.
-		// The joined step records the actual load error as this entry's outcome.
-		envelope, _ := loadRepairControllerEnvelope(ctx, entry, host)
+		envelope, err := loadRepairControllerEnvelope(ctx, entry, host)
+		var closure *repairRootClosureError
+		if errors.As(err, &closure) {
+			// An authenticated but incomplete graph cannot prove any shared
+			// destination disjoint. No census or metrics owner may open yet.
+			fmt.Fprintln(stderr, err)
+			return repairControllerCommandExit(err)
+		}
 		if envelope.plan.Unit.Name == "" {
 			unitLocks[index] = &sync.Mutex{}
 			continue
