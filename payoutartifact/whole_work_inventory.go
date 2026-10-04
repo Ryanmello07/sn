@@ -299,6 +299,12 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 			// the independently bound original reservation can exclude it.
 			continue
 		}
+		if !exists {
+			// A delayed boundary capture can include later admissions, just as
+			// a delayed start can include earlier completions. Neither signed
+			// cut dates the individual event; do not invent its window or fault.
+			return nil, errors.Join(ErrClosedWorkUnavailable, errors.New("independently inventoried contract lacks original window assignment"))
+		}
 		if _, ok := ownerKVs[contract.source]; !ok {
 			return nil, ErrClosedWorkIntegrity
 		}
@@ -310,12 +316,6 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("whole work lacks its expected source owner"))
 		}
 
-		if !exists {
-			// A delayed boundary capture can include later admissions, just as
-			// a delayed start can include earlier completions. Neither signed
-			// cut dates the individual event; do not invent its window or fault.
-			return nil, errors.Join(ErrClosedWorkUnavailable, errors.New("independently inventoried contract lacks original window assignment"))
-		}
 		destination, destinationPresent := contract.ends[contract.destination]
 		sourceHead, sourceErr := coreprotocol.DecodeOriginalCloseInventory(source.LatestInventory)
 		destinationHead, destinationErr := coreprotocol.DecodeOriginalCloseInventory(destination.LatestInventory)

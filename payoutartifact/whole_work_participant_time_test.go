@@ -253,6 +253,19 @@ func TestWholeWorkLateCutFutureNewPeerDoesNotRequireCurrentEnrollment(t *testing
 	if err != nil || value == nil || !value.Complete || !value.AttributionComplete || value.Contracts != 1 || len(value.ExpectedProviders) != 3 || value.ExpectedProviders[1].UsageBytes != 100 {
 		t.Fatalf("later un-enrolled peer invalidated the original current provider vector: %+v, %v", value, err)
 	}
+	for index, raw := range fixture.inventory.AttributionOriginals {
+		original, err := protocol.DecodeProviderWorkReceipt(t.Context(), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if original.Reservation != nil && original.Reservation.ContractId == participantTestId(id) {
+			fixture.inventory.AttributionOriginals = append(fixture.inventory.AttributionOriginals[:index], fixture.inventory.AttributionOriginals[index+1:]...)
+			break
+		}
+	}
+	if value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); value != nil || !errors.Is(err, ErrClosedWorkUnavailable) || errors.Is(err, ErrClosedWorkIntegrity) {
+		t.Fatal("missing independent future timing invented a current-roster violation", value, err)
+	}
 }
 
 func TestWholeWorkLateTerminalCutUsesOriginalOutcomeToProveOpenAtEnd(t *testing.T) {
