@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/urfoundation/sn/crv4"
@@ -19,7 +18,7 @@ func authenticateOwnerRecycleProductionRuntimeAtContext(ctx context.Context, nat
 	if ctx == nil {
 		return errors.New("production runtime caller context is unavailable")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
 	view, err := crv4.ReadRuntimeObservationContext(ctx, native, func(ctx context.Context) (*crv4.Chain, error) {
 		artifact, number, err := authenticateOwnerRecycleProductionArtifactAtContext(ctx, native, cfg, block, false)
@@ -53,7 +52,7 @@ func authenticateOwnerRecycleProductionArtifactAtContext(ctx context.Context, na
 	if ctx == nil {
 		return crv4.AuthenticatedRuntimeArtifact{}, 0, errors.New("production runtime caller context is unavailable")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
 	type result struct {
 		artifact crv4.AuthenticatedRuntimeArtifact

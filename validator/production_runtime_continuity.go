@@ -15,7 +15,6 @@ import (
 	"io"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/urfoundation/sn/crv4"
@@ -257,7 +256,7 @@ func InspectProductionRuntimeContinuityContext(ctx context.Context, native *crv4
 		!slices.Contains(cfg.Substrate, native.API.Client.URL()) || native.GenesisHash != types.Hash(policy.Policy.GenesisHash) {
 		return nil, errors.New("runtime continuity requires the original non-provisional owned route")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return nil, err

@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"time"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/urfoundation/sn/crv4"
@@ -90,7 +89,7 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 	}
 	approval := envelope.Approval
 	pin := approval.Proposal.Runtime
-	operationCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	operationCtx, cancel := context.WithTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
 	return crv4.ReadRuntimeObservationContext(operationCtx, native, func(ctx context.Context) (*OwnerRecycleAdmissionObservation, error) {
 		call := native.API.Client.CallContext

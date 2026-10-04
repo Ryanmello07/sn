@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/urfoundation/sn/crv4"
@@ -44,7 +43,7 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 	if ctx == nil {
 		return crv4.AuthenticatedRuntimeArtifact{}, nil, errors.New("mainnet runtime observation context is absent")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
 	type result struct {
 		artifact    crv4.AuthenticatedRuntimeArtifact

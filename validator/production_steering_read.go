@@ -6,7 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"reflect"
+	"syscall"
 	"time"
 
 	"github.com/urfoundation/sn/crv4"
@@ -31,8 +35,24 @@ const (
 // Pure unavailable/transport outcomes retain their original cause. Local file
 // and lifecycle errors stay hard even when joined to a missing RPC response.
 func retryableProductionSteeringRead(err error) bool {
-	if err == nil {
+	remaining := 512
+	return retryableProductionSteeringReadBounded(err, false, 0, &remaining)
+}
+
+// Native markers retain their complete private verdict. Every other wrapper
+// and joined reader consumes this same allowance before a leaf can authorize
+// retry, so cycles, nil branches and timeout wrappers cannot hide hard causes.
+func retryableProductionSteeringReadBounded(err error, transportOrigin bool, depth int, remaining *int) bool {
+	if err == nil || depth > 32 || *remaining <= 0 {
 		return false
+	}
+	*remaining--
+	value := reflect.ValueOf(err)
+	switch value.Kind() {
+	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
+		if value.IsNil() {
+			return false
+		}
 	}
 	if crv4.IsSubstrateReadTransportCause(err) {
 		return crv4.RetryableSubstrateReadTransportError(err)
@@ -40,32 +60,46 @@ func retryableProductionSteeringRead(err error) bool {
 	if _, ok := err.(*crv4.ReceiptEvidenceUnavailableError); ok {
 		return true
 	}
-	switch err.(type) {
+	switch cause := err.(type) {
 	case *os.PathError, *TrailFatalError:
+		return false
+	case *url.Error:
+		return retryableProductionSteeringReadBounded(cause.Err, true, depth+1, remaining)
+	case *net.OpError:
+		return retryableProductionSteeringReadBounded(cause.Err, true, depth+1, remaining)
+	case *attemptStreamHttpReadError:
+		return retryableProductionSteeringReadBounded(cause.cause, true, depth+1, remaining)
+	case *chainRpcMissingResponseError:
+		return retryableProductionSteeringReadBounded(cause.cause, true, depth+1, remaining)
+	case *attemptStreamHTTPIncompleteError:
+		return retryableProductionSteeringReadBounded(cause.cause, true, depth+1, remaining)
+	case syscall.Errno:
+		// Standard errno implements Is; its concrete transport taxonomy is
+		// established before the foreign matcher guard below.
+		return RetryableEvidenceTransportError(cause)
+	case interface{ Is(error) bool }, interface{ As(any) bool }:
 		return false
 	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		causes := joined.Unwrap()
-		if len(causes) == 0 {
+		if len(causes) == 0 || len(causes) > 128 || len(causes) > *remaining {
 			return false
 		}
 		for _, cause := range causes {
-			if !retryableProductionSteeringRead(cause) {
+			if !retryableProductionSteeringReadBounded(cause, transportOrigin, depth+1, remaining) {
 				return false
 			}
 		}
 		return true
 	}
-	// A wrapper around a native origin must reach its opaque verdict before
-	// generic transport classification. Independent joined readers above can
-	// each retain their own actual native/EVM/unavailable response cause.
-	if !crv4.HasSubstrateReadTransportCause(err) && RetryableEvidenceTransportError(err) {
-		return true
-	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		return retryableProductionSteeringRead(wrapped.Unwrap())
+		return retryableProductionSteeringReadBounded(wrapped.Unwrap(), transportOrigin, depth+1, remaining)
 	}
-	return false
+	// Only a leaf reaches generic evidence classification. No presence search
+	// can return an incomplete negative and expose a rejected native subtree.
+	leafRemaining := 1
+	retryable, transient := classifyReleaseSnapshotRetryBounded(err, false, false, transportOrigin, 0, &leafRemaining)
+	return retryable && transient
 }
 
 // The real owner has exhausted its bounded read budget. It can poll again;

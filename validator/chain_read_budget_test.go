@@ -252,7 +252,7 @@ func TestChainReadBudgetClassifiesMaximumMissingBatch(t *testing.T) {
 		_, err := collectChainBatchReadResults(batch, make([]hexutil.Bytes, count), indices, make([][]byte, count), nil, nil)
 		failure = errors.Join(failure, err)
 	}
-	if !RetryableEvidenceTransportError(errors.Join(failure, context.DeadlineExceeded)) {
+	if !RetryableEvidenceTransportError(errors.Join(failure, context.DeadlineExceeded)) || !retryableProductionSteeringRead(errors.Join(failure, context.DeadlineExceeded)) {
 		t.Fatal("bounded legitimate batch exhaustion became a hard failure")
 	}
 }
