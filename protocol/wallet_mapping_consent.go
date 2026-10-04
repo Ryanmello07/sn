@@ -26,19 +26,20 @@ var ErrWalletMappingCapacity = errors.New("original wallet mapping exceeds its f
 // The caller signs both the new association and its exact retained predecessor.
 // Acceptance expiry is distinct from the inclusive approved earning epochs.
 type WalletMappingStatement struct {
-	Schema       string                 `json:"schema"`
-	Domain       ClientKeyHistoryDomain `json:"domain"`
-	UserId       [16]byte               `json:"user_id"`
-	ClientId     [16]byte               `json:"client_id"`
-	NetworkId    [16]byte               `json:"network_id"`
-	Coldkey      [32]byte               `json:"coldkey"`
-	Generation   uint64                 `json:"generation"`
-	PreviousHash [32]byte               `json:"previous_hash"`
-	Nonce        [32]byte               `json:"nonce"`
-	IssuedAt     int64                  `json:"issued_at"`
-	ExpiresAt    int64                  `json:"expires_at"`
-	FromEpoch    uint64                 `json:"from_epoch"`
-	ThroughEpoch uint64                 `json:"through_epoch"`
+	Schema       string                           `json:"schema"`
+	Domain       ClientKeyHistoryDomain           `json:"domain"`
+	UserId       [16]byte                         `json:"user_id"`
+	ClientId     [16]byte                         `json:"client_id"`
+	NetworkId    [16]byte                         `json:"network_id"`
+	Coldkey      [32]byte                         `json:"coldkey"`
+	Generation   uint64                           `json:"generation"`
+	PreviousHash [32]byte                         `json:"previous_hash"`
+	Nonce        [32]byte                         `json:"nonce"`
+	IssuedAt     int64                            `json:"issued_at"`
+	ExpiresAt    int64                            `json:"expires_at"`
+	FromEpoch    uint64                           `json:"from_epoch"`
+	ThroughEpoch uint64                           `json:"through_epoch"`
+	Prospective  WalletMappingProspectiveApproval `json:"prospective,omitzero"`
 }
 
 // Fixed canonical bytes make the displayed approval and retained signature the
@@ -47,8 +48,15 @@ func (self WalletMappingStatement) Message() (string, error) {
 	if err := self.Domain.Validate(); err != nil {
 		return "", errors.Join(ErrWalletMappingIntegrity, err)
 	}
-	if self.Schema != WalletMappingConsentSchema || self.UserId == ([16]byte{}) || self.ClientId == ([16]byte{}) || self.NetworkId == ([16]byte{}) || self.Coldkey == ([32]byte{}) || self.Nonce == ([32]byte{}) || self.Generation == 0 || (self.Generation == 1) != (self.PreviousHash == ([32]byte{})) || self.IssuedAt <= 0 || self.ExpiresAt <= self.IssuedAt || self.ExpiresAt-self.IssuedAt > 300 || self.ThroughEpoch < self.FromEpoch || self.ThroughEpoch-self.FromEpoch > 65535 {
+	if self.Schema != WalletMappingConsentSchema && self.Schema != WalletMappingProspectiveSchema || self.UserId == ([16]byte{}) || self.ClientId == ([16]byte{}) || self.NetworkId == ([16]byte{}) || self.Coldkey == ([32]byte{}) || self.Nonce == ([32]byte{}) || self.Generation == 0 || (self.Generation == 1) != (self.PreviousHash == ([32]byte{})) || self.IssuedAt <= 0 || self.ExpiresAt <= self.IssuedAt || self.ExpiresAt-self.IssuedAt > 300 || self.ThroughEpoch < self.FromEpoch || self.ThroughEpoch-self.FromEpoch > 65535 {
 		return "", ErrWalletMappingIntegrity
+	}
+	if self.Schema == WalletMappingConsentSchema {
+		if self.Prospective != (WalletMappingProspectiveApproval{}) {
+			return "", ErrWalletMappingIntegrity
+		}
+	} else if err := self.VerifyProspectiveSignature(); err != nil {
+		return "", err
 	}
 	raw, err := json.Marshal(self)
 	if err != nil || len(raw)+len(WalletMappingConsentPrefix) > MaxWalletMappingMessageBytes {
