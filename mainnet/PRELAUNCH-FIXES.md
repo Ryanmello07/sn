@@ -2,6 +2,8 @@
 
 ## Current execution status — October 4
 
+The [native qualification batch is running](evidence/native-qualification-lease-continuity-20261004.json) with all 66 phases retained. Its initial preflight exposed an expired resource-lock holder before any test ran. Keep cumulative capacity accounting tied to an immutable filesystem baseline and authenticate the current lease holder separately; process renewal must not reset consumed capacity or discard completed work. The corrected runner uses that separation. No terminal qualification result is claimed yet.
+
 The [reviewed source integration](evidence/qualified-base-main-integration-20261004.json) is now on SN main at `4a2c2681`. Its code, tests and module files exactly match the qualified `2477` composition; only current documentation and evidence differ. Original failed results remain retained. The [Connect merge](evidence/connect-upstream-main-integration-20261004.json) is also pushed at `c5b10cc7`, preserving upstream changes and exact qualified restore bytes. SN keeps the qualified Core `2ea` dependency; no new combined-source test result is inferred. Native producer, renewal, conservation and Server model correction qualification are still pending.
 
 The [38-requirement checkpoint](evidence/current-readiness-checkpoint-20261003.md) remains authoritative for scope. Historical receipts below keep their exact source and test conditions. Component qualification does not establish production activation.
