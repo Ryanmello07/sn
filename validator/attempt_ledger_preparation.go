@@ -75,6 +75,9 @@ func (self AttemptLedgerPreparationScope) validate() (ed25519.PublicKey, error) 
 		if err := self.Requests.validate(self.Identity, self.Coordinator); err != nil {
 			return nil, err
 		}
+		if err := ValidateProviderAttemptRequestRootCapacity(self.Limits, self.Requests.Preparation.Limits); err != nil {
+			return nil, err
+		}
 	}
 	public, err := canonicalAttemptHex32("preparation validator public key", self.Identity.ValidatorVPK, false)
 	if err != nil {
