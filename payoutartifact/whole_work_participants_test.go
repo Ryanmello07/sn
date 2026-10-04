@@ -289,7 +289,9 @@ func TestWholeWorkOriginalAdmissionsNeedExplicitAttributionPurpose(t *testing.T)
 	}
 }
 
-func TestWholeWorkOriginalStreamCohortCompletesOnlyActualRequestedMembers(t *testing.T) {
+// Both contracts have one requested intermediary and an equal original split.
+func participantStreamEvidenceFixture(t *testing.T) *wholeWorkTestFixture {
+	t.Helper()
 	fixture := creationEvidenceFixture(t, false, [16]byte{3})
 	participantAddIdleOwner(t, fixture)
 	for index := range fixture.artifact.ClosedWork.Records {
@@ -310,6 +312,11 @@ func TestWholeWorkOriginalStreamCohortCompletesOnlyActualRequestedMembers(t *tes
 	}
 	creationRebuildArtifact(t, fixture)
 	participantAttachOriginals(t, fixture)
+	return fixture
+}
+
+func TestWholeWorkOriginalStreamCohortCompletesOnlyActualRequestedMembers(t *testing.T) {
+	fixture := participantStreamEvidenceFixture(t)
 	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
 	if err != nil || value == nil || !value.Complete || !value.AttributionComplete || value.ExpectedProviders[2].UsageBytes != 100 {
 		t.Fatalf("first original stream cohort did not complete: %+v, %v", value, err)
