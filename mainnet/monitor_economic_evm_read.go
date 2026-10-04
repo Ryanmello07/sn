@@ -28,10 +28,11 @@ import (
 // The mapping preface has its own existing response bounds. This budget covers
 // every retained block body, receipt, code and getter reply in the economic page.
 type monitorEvmReader struct {
-	client   *rpcClient
-	policy   monitorEconomicEvmPolicy
-	contract *abi.ABI
-	used     int
+	entitlementObserver *economicEntitlementReceiptObserver
+	client              *rpcClient
+	policy              monitorEconomicEvmPolicy
+	contract            *abi.ABI
+	used                int
 }
 
 type monitorEvmBlock struct {
@@ -416,6 +417,14 @@ func (self *monitorEvmReader) block(ctx context.Context, header *types.Header) (
 				return result, monitorEvmIntegrity("economic receipt log position is missing, repeated or removed")
 			}
 			logIndex++
+			if observer := self.entitlementObserver; observer != nil && log.Address == observer.address {
+				decoder := monitorEvmReader{contract: observer.contract}
+				event, err := decoder.event(log, receiptHash)
+				if err != nil {
+					return result, err
+				}
+				observer.events = append(observer.events, event)
+			}
 			if log.Address == common.HexToAddress(self.policy.Address) {
 				event, err := self.event(log, receiptHash)
 				if err != nil {

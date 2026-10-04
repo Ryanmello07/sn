@@ -104,6 +104,15 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
+	entitlementEnabled       bool
+	entitlementVerified      map[string]string
+	entitlementOriginal      map[string]string
+	entitlementReferences    map[string]*economicConservationEntitlementReference
+	entitlementRequired      map[string]string
+	entitlementLeaves        map[string]map[string]string
+	entitlementClaimIds      map[string][]string
+	entitlementFundingUses   map[string]string
+	entitlementCold          *economicConservationEntitlementSummary
 	nativeReviews            map[string]bool
 	principalEffects         *economicConservationPrincipalArchive
 	principalExecutionHashes map[string]string
@@ -136,7 +145,7 @@ type economicConservationArchiveView struct {
 }
 
 func newEconomicConservationArchiveView(resources economicConservationResources) *economicConservationArchiveView {
-	return &economicConservationArchiveView{nativeReviews: map[string]bool{}, principalExecutionHashes: map[string]string{}, claimReviews: map[string]bool{}, claimRetired: map[string]*monitorClaimWindowAdmission{}, feePolicies: map[string]economicNativeFeePolicy{}, feeReviews: map[string]bool{}, feeEvidence: map[string]string{}, feeRetired: map[string]string{}, feeTransactions: map[string]historicalFeeContextTransaction{}, feeOrigins: map[string]economicConservationFeeObligation{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
+	return &economicConservationArchiveView{entitlementVerified: map[string]string{}, entitlementOriginal: map[string]string{}, entitlementReferences: map[string]*economicConservationEntitlementReference{}, entitlementRequired: map[string]string{}, entitlementLeaves: map[string]map[string]string{}, entitlementClaimIds: map[string][]string{}, entitlementFundingUses: map[string]string{}, nativeReviews: map[string]bool{}, principalExecutionHashes: map[string]string{}, claimReviews: map[string]bool{}, claimRetired: map[string]*monitorClaimWindowAdmission{}, feePolicies: map[string]economicNativeFeePolicy{}, feeReviews: map[string]bool{}, feeEvidence: map[string]string{}, feeRetired: map[string]string{}, feeTransactions: map[string]historicalFeeContextTransaction{}, feeOrigins: map[string]economicConservationFeeObligation{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
 }
 
 // The encoded facts and fixed per-entry bookkeeping have separate bounds.
@@ -149,7 +158,7 @@ func (self *economicConservationArchiveView) charge(value any) error {
 	bytes := uint64(len(raw)) + 256
 	entryLimit, byteLimit := self.resources.IndexEntries/2, self.resources.IndexBytes/2
 	if self.claimBasisEntries >= entryLimit || self.entries >= entryLimit-self.claimBasisEntries || self.claimBasisBytes > byteLimit || self.bytes > byteLimit-self.claimBasisBytes || bytes > byteLimit-self.claimBasisBytes-self.bytes {
-		return errors.New("economic archive index needs reviewed entry/byte capacity before admission")
+		return errors.Join(errMonitorEconomicCapacity, errors.New("economic archive index needs reviewed entry/byte capacity before admission"))
 	}
 	self.entries++
 	self.bytes += bytes
@@ -388,7 +397,13 @@ func compactEconomicConservationWithFeeUpdates(policy economicConservationPolicy
 	next.Entitlements = nil
 	for _, entitlement := range original.Entitlements {
 		terminal := entitlement.Status == "root-missed" || entitlement.Status == "carried" || entitlement.Status == "finalized" && entitlement.Total != nil && entitlement.Claimed == *entitlement.Total
-		if !terminal || pendingEntitlements[entitlement.Id] {
+		// A fully paid root is still Finalized in the actual contract and may
+		// emit EntitlementExpired later. Keep its compact lifecycle until then.
+		if policy.EntitlementSources != nil && entitlement.Status == "finalized" {
+			terminal = false
+		}
+		if !terminal || pendingEntitlements[entitlement.Id] || policy.EntitlementSources != nil && entitlement.PayoutRoot != "" && entitlement.censusHash() == "" {
+			entitlement.retireCensus(reference)
 			next.Entitlements = append(next.Entitlements, entitlement)
 			continue
 		}
@@ -434,6 +449,9 @@ func economicConservationRetainedIds[T any](values []T, id func(T) string) map[s
 func (self *economicConservationArchiveView) admit(original, compacted *economicConservationState) error {
 	retireFees, err := self.indexAdmission(original, compacted)
 	if err != nil {
+		return err
+	}
+	if err := self.retainEntitlementCensuses(original, compacted); err != nil {
 		return err
 	}
 	if err := self.retainPrincipalEffects(original, compacted); err != nil {
@@ -516,6 +534,12 @@ func (self *economicConservationArchiveView) admit(original, compacted *economic
 		if err := self.charge(claim); err != nil {
 			return err
 		}
+		if self.entitlementEnabled {
+			if err := self.charge([]string{claim.Entitlement, claim.Id}); err != nil {
+				return err
+			}
+			self.entitlementClaimIds[claim.Entitlement] = append(self.entitlementClaimIds[claim.Entitlement], claim.Id)
+		}
 		self.claimKeys[key], self.claims[claim.Id] = claim.Id, claim
 	}
 	retainedEntitlements := economicConservationRetainedIds(compacted.Entitlements, func(value economicConservationEntitlement) string { return value.Id })
@@ -529,7 +553,26 @@ func (self *economicConservationArchiveView) admit(original, compacted *economic
 		if err := self.charge(entitlement); err != nil {
 			return err
 		}
+		if self.entitlementEnabled {
+			if err := self.indexColdEntitlement(entitlement); err != nil {
+				return err
+			}
+			for _, source := range entitlement.Sources {
+				key := source.Kind + "/" + source.Id
+				if prior := self.entitlementFundingUses[key]; prior != "" {
+					if prior != entitlement.Id {
+						return errors.New("economic archived funding was consumed by two original entitlements")
+					}
+					continue
+				}
+				if err := self.charge([]string{key, entitlement.Id}); err != nil {
+					return err
+				}
+				self.entitlementFundingUses[key] = entitlement.Id
+			}
+		}
 		self.entitlements[entitlement.Id] = entitlement
+		delete(self.entitlementRequired, entitlement.Id)
 	}
 	for _, receipt := range original.Receipts {
 		if !economicConservationReceiptArchivable(receipt) {
@@ -600,6 +643,7 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 		return nil, err
 	}
 	view := newEconomicConservationArchiveView(resources)
+	view.entitlementEnabled = policy.EntitlementSources != nil
 	view.claimWork = hooks.economicClaimWork
 	if policy.FeeAuthority != nil {
 		view.feeReviews[policy.FeeAuthority.ReviewSha256] = true
@@ -621,6 +665,14 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 		}
 	}()
 	if state.Archive == nil {
+		if err := view.admitEntitlementCensuses(ctx, policy, state); err != nil {
+			return nil, err
+		}
+		checked := *state
+		checked.archiveView = view
+		if err := checked.reconcileEntitlementLeaves(ctx); err != nil {
+			return nil, err
+		}
 		return view, nil
 	}
 	if err := state.Archive.validate(policy, state); err != nil {
@@ -650,6 +702,9 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 			return nil, errors.New("economic archive omitted or changed its complete predecessor")
 		}
 		original.archiveView = view
+		if err := view.admitEntitlementCensuses(ctx, policy, &original); err != nil {
+			return nil, err
+		}
 		compacted, err := compactEconomicConservationWithFeeRetirement(policy, &original, reference, nil, state.Archive.retiresFees(reference))
 		if err != nil {
 			return nil, err
@@ -679,9 +734,15 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 	}
 	// Check the active head against the admitted original receipt index before
 	// the observer can perform a new source read or publish another snapshot.
+	if err := view.admitEntitlementCensuses(ctx, policy, state); err != nil {
+		return nil, err
+	}
 	checked := *state
 	checked.archiveView = view
 	if err := checked.validate(policy); err != nil {
+		return nil, err
+	}
+	if err := checked.reconcileEntitlementLeaves(ctx); err != nil {
 		return nil, err
 	}
 	return view, errors.Join(ctx.Err(), view.check())

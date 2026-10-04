@@ -21,6 +21,7 @@ import (
 const economicConservationRole = "economic-conservation"
 
 type economicConservationSummary struct {
+	OriginalEntitlements           *economicConservationEntitlementSummary     `json:"original_entitlement_census,omitempty"`
 	PrincipalEffects               *economicConservationPrincipalEffectSummary `json:"original_principal_execution,omitempty"`
 	OpeningPrincipals              *economicConservationPrincipalSummary       `json:"original_opening_principal,omitempty"`
 	NativeFeeIssue                 string                                      `json:"native_fee_issue,omitempty"`
@@ -71,7 +72,7 @@ type economicConservationSummary struct {
 	MissingEvidence                []string                                    `json:"missing_evidence"`
 }
 
-func (self *economicConservationState) summary(policy economicConservationPolicy, nativeCurrent, vaultCurrent bool) (economicConservationSummary, error) {
+func (self *economicConservationState) summary(ctx context.Context, policy economicConservationPolicy, nativeCurrent, vaultCurrent bool) (economicConservationSummary, error) {
 	var err error
 	policy, err = self.operatingPolicy(policy)
 	if err != nil {
@@ -84,6 +85,10 @@ func (self *economicConservationState) summary(policy economicConservationPolicy
 	result := economicConservationSummary{Schema: "urnetwork-economic-conservation-sample-v1", PolicyHash: self.PolicyHash, CheckpointHash: self.ContentHash, SampleAt: self.SampleAt, NativeCursor: self.Native.Cursor, VaultCursor: self.Vault.Cursor, NativeCurrent: nativeCurrent, VaultCurrent: vaultCurrent, NativeIssue: self.NativeIssue, VaultIssue: self.VaultIssue, JoinIssue: self.JoinIssue, NativeHeld: self.NativeHeld, VaultHeld: self.VaultHeld, Execution: self.Native.ExecutionAccounting, VaultState: self.Vault.Snapshot, EarningOccurrences: len(self.Lots), Captures: len(self.Captures), AcceptedClaims: len(self.Claims), AggregatePayments: len(self.Payments), FactsRemaining: policy.MaximumFacts - self.facts(), Resources: resources, Authority: "admitted-native-replay-and-owned-rpc-vault-claim-observations", MissingEvidence: []string{"independently-admitted-runtime-build-and-full-quantization", "opening-pool-principal-and-complete-stake-effects", "native-fee-withdrawal-refund-and-precompile-rollback", "independent-vault-finality-and-complete-entitlement-census"}}
 	if self.Archive != nil {
 		result.ArchiveSegments = uint64(len(self.Archive.Segments))
+	}
+	result.OriginalEntitlements, err = self.entitlementCensusSummary(ctx, policy)
+	if err != nil {
+		return result, err
 	}
 	result.NativeFeeIssue, result.NativeFeeHeldRequest, result.NativeFeePending = self.NativeFeeIssue, self.NativeFeeHeldRequest, self.NativeFeePending
 	result.NativeFeeHeldPolicy = self.NativeFeeHeldPolicy
@@ -210,6 +215,9 @@ func loadEconomicConservation(owner *monitorCheckpointStore, policy economicCons
 }
 
 func saveEconomicConservation(owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
+	if err := state.requireEntitlementHistory(); err != nil {
+		return err
+	}
 	if err := state.requireNativeApprovalHistory(); err != nil {
 		return err
 	}
@@ -250,6 +258,9 @@ func economicConservationIssue(err error) string {
 // Each logical sample owns one deadline. Parallel native/vault/Claim attempts
 // share it, join before publication, and preserve prior domain cursors on error.
 func sampleEconomicConservation(ctx context.Context, policy economicConservationPolicy, prior *economicConservationState, native, vault *rpcClient, now time.Time, hooks monitorServiceHooks) (*economicConservationState, bool, bool, error) {
+	if err := prior.requireEntitlementHistory(); err != nil {
+		return nil, false, false, err
+	}
 	if err := prior.requireNativeApprovalHistory(); err != nil {
 		return nil, false, false, err
 	}
@@ -371,7 +382,11 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 	if err != nil {
 		return nil, false, false, err
 	}
-	if err := candidate.reconcile(policy); err != nil {
+	var fundingErr error
+	if policy.EntitlementSources != nil {
+		fundingErr = candidate.reconcileEntitlementFunding(ctx)
+	}
+	if err := errors.Join(candidate.reconcile(policy), candidate.reconcileEntitlementLeaves(ctx), fundingErr); err != nil {
 		next.JoinIssue = economicConservationIssue(err)
 	} else {
 		candidate.JoinIssue = ""
@@ -490,6 +505,17 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 			}
 		}()
 	}
+	entitlementWorker, err := newEconomicConservationEntitlementWorker(ctx, policy, *vaultUrl, hooks)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 3
+	}
+	defer func() {
+		if err := entitlementWorker.close(); err != nil {
+			fmt.Fprintln(stderr, err)
+			code = 3
+		}
+	}()
 	native.retryWindow = time.Duration(operating.ReadBudgetSeconds) * time.Second
 	vault.retryWindow = native.retryWindow
 	if hooks.syncDirectory != nil {
@@ -497,6 +523,7 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	}
 	for ctx.Err() == nil {
 		feeWorker.start(state)
+		entitlementWorker.start(state)
 		next, nativeCurrent, vaultCurrent, err := sampleEconomicConservation(ctx, policy, state, native, vault, now().UTC(), hooks)
 		if err != nil {
 			if ctx.Err() != nil && monitorOnlyCancellationCauses(err, 0) {
@@ -514,12 +541,23 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		} else if feeWorker != nil {
 			next.NativeFeePending = feeWorker.active
 		}
+		entitlementWorker.start(next)
+		for _, result := range entitlementWorker.take(!*follow) {
+			next, err = applyEconomicEntitlementResult(ctx, policy, next, result)
+			if err != nil {
+				if ctx.Err() != nil && monitorOnlyCancellationCauses(err, 0) {
+					return 0
+				}
+				fmt.Fprintln(stderr, err)
+				return 3
+			}
+		}
 		if err := saveEconomicConservation(owner, policy, next); err != nil {
 			fmt.Fprintln(stderr, err)
 			return 3
 		}
 		state = next
-		summary, err := state.summary(policy, nativeCurrent, vaultCurrent)
+		summary, err := state.summary(ctx, policy, nativeCurrent, vaultCurrent)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return 3
@@ -545,7 +583,7 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 			feeWorker.start(state)
 		}
 		if !*follow {
-			if !nativeCurrent || !vaultCurrent || state.JoinIssue != "" || state.NativeFeeIssue != "" || state.NativeFeePending {
+			if !nativeCurrent || !vaultCurrent || state.JoinIssue != "" || state.NativeFeeIssue != "" || state.NativeFeePending || summary.OriginalEntitlements != nil && summary.OriginalEntitlements.PendingRoots != 0 {
 				return 3
 			}
 			for _, claim := range state.ClaimStates {

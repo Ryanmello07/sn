@@ -28,16 +28,17 @@ type economicConservationRoute struct {
 }
 
 type economicConservationPolicy struct {
-	FeeAuthority      *economicNativeFeePolicy                `json:"native_fee_authority,omitempty"`
-	Continuation      *economicConservationContinuationPolicy `json:"continuation,omitempty"`
-	Schema            string                                  `json:"schema"`
-	Native            monitorEconomicNativePolicy             `json:"native"`
-	Vault             monitorEconomicEvmPolicy                `json:"vault"`
-	Claims            []monitorClaimPolicy                    `json:"claims"`
-	Routes            []economicConservationRoute             `json:"routes"`
-	MaximumFacts      uint64                                  `json:"maximum_facts"`
-	ReadBudgetSeconds uint64                                  `json:"read_budget_seconds,omitempty"`
-	resourceBasis     *economicConservationPolicy
+	EntitlementSources *economicConservationEntitlementPolicy  `json:"original_entitlement_sources,omitempty"`
+	FeeAuthority       *economicNativeFeePolicy                `json:"native_fee_authority,omitempty"`
+	Continuation       *economicConservationContinuationPolicy `json:"continuation,omitempty"`
+	Schema             string                                  `json:"schema"`
+	Native             monitorEconomicNativePolicy             `json:"native"`
+	Vault              monitorEconomicEvmPolicy                `json:"vault"`
+	Claims             []monitorClaimPolicy                    `json:"claims"`
+	Routes             []economicConservationRoute             `json:"routes"`
+	MaximumFacts       uint64                                  `json:"maximum_facts"`
+	ReadBudgetSeconds  uint64                                  `json:"read_budget_seconds,omitempty"`
+	resourceBasis      *economicConservationPolicy
 }
 
 func (self economicConservationPolicy) validate() error {
@@ -53,6 +54,9 @@ func (self economicConservationPolicy) validate() error {
 		return err
 	}
 	if err := self.validatePrincipalAuthority(); err != nil {
+		return err
+	}
+	if err := self.validateEntitlementSources(); err != nil {
 		return err
 	}
 	if err := self.validateFeeAuthority(); err != nil {
@@ -136,16 +140,23 @@ type economicConservationCapture struct {
 }
 
 type economicConservationEntitlement struct {
-	Id           string                        `json:"id"`
-	Epoch        string                        `json:"epoch"`
-	PoolId       string                        `json:"pool_id"`
-	Status       string                        `json:"status"`
-	Funded       string                        `json:"funded_alpha"`
-	Total        *string                       `json:"total_alpha"`
-	Claimed      string                        `json:"claimed_alpha"`
-	PayoutRoot   string                        `json:"payout_root,omitempty"`
-	ArtifactHash string                        `json:"artifact_hash,omitempty"`
-	Sources      []economicConservationBacking `json:"sources"`
+	CarryEvent          *monitorEconomicEvmEvent                  `json:"original_carry_event,omitempty"`
+	Finalization        *monitorEconomicEvmEvent                  `json:"original_finalization,omitempty"`
+	Census              *economicConservationEntitlementCensus    `json:"original_leaf_census,omitempty"`
+	CensusReference     *economicConservationEntitlementReference `json:"original_leaf_census_reference,omitempty"`
+	CensusIssue         string                                    `json:"census_issue,omitempty"`
+	CensusHeld          bool                                      `json:"census_integrity_held,omitempty"`
+	CensusCapacityBasis string                                    `json:"census_capacity_basis,omitempty"`
+	Id                  string                                    `json:"id"`
+	Epoch               string                                    `json:"epoch"`
+	PoolId              string                                    `json:"pool_id"`
+	Status              string                                    `json:"status"`
+	Funded              string                                    `json:"funded_alpha"`
+	Total               *string                                   `json:"total_alpha"`
+	Claimed             string                                    `json:"claimed_alpha"`
+	PayoutRoot          string                                    `json:"payout_root,omitempty"`
+	ArtifactHash        string                                    `json:"artifact_hash,omitempty"`
+	Sources             []economicConservationBacking             `json:"sources"`
 }
 
 type economicConservationClaim struct {
@@ -181,6 +192,7 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	EntitlementReadAfter map[string]string                        `json:"entitlement_read_after,omitempty"`
 	NativeRenewal        *economicConservationNativeRenewal       `json:"native_approval_adoption,omitempty"`
 	PrincipalExecutions  []economicConservationPrincipalExecution `json:"principal_execution_evidence,omitempty"`
 	OpeningPrincipals    *economicConservationOpeningPrincipal    `json:"opening_principal_evidence,omitempty"`
@@ -241,7 +253,7 @@ func (self economicConservationState) facts() uint64 {
 	if self.OpeningPrincipals != nil {
 		principalFacts = uint64(len(self.OpeningPrincipals.Projection.Observations)) + 1
 	}
-	return principalFacts + self.principalEffectFacts() + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
+	return self.entitlementCensusFacts() + principalFacts + self.principalEffectFacts() + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
 }
 
 func (self economicConservationState) validate(policy economicConservationPolicy) error {
@@ -281,6 +293,9 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 		return err
 	}
 	if _, err := self.feeSummary(policy); err != nil {
+		return err
+	}
+	if err := self.validateEntitlementShapes(policy); err != nil {
 		return err
 	}
 	if len(self.NativeFeeIssue) > 2048 || self.NativeFeeHeldRequest != "" && !planSha256(self.NativeFeeHeldRequest) || policy.FeeAuthority == nil && (self.NativeFeeIssue != "" || self.NativeFeeHeldRequest != "" || self.NativeFeePending) {
@@ -525,6 +540,12 @@ func (self *economicConservationState) appendVault(policy economicConservationPo
 			}
 			if err := self.vaultEvent(event, block.Funded); err != nil {
 				return err
+			}
+			if event.Name == "EntitlementFinalized" && policy.EntitlementSources != nil {
+				self.entitlement(event.Values["epoch"], event.Values["noId"]).Finalization = &event
+			}
+			if (event.Name == "RootMissed" || event.Name == "EntitlementExpired") && policy.EntitlementSources != nil {
+				self.entitlement(event.Values["epoch"], event.Values["noId"]).CarryEvent = &event
 			}
 		}
 	}
