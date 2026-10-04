@@ -23,6 +23,7 @@ type ownerTrimRebuildCancelContext struct {
 	checks atomic.Uint64
 }
 
+// Cancel through the real parent before returning the capacity-loop check.
 func (self *ownerTrimRebuildCancelContext) Err() error {
 	if self.checks.Add(1) == 2 {
 		self.cancel()
@@ -34,7 +35,7 @@ func (self *ownerTrimRebuildCancelContext) Err() error {
 // stops. Neither a canceled rebuild nor its empty result establishes a mismatch.
 func TestOwnerTrimGuardReconstructionPreservesStopCause(t *testing.T) {
 	for _, boundary := range []string{"canceled-before", "canceled-during-capacity", "deadline-before"} {
-		t.Run(boundary, func(t *testing.T) {
+		func() {
 			client, fixture, policy, policyHash, retained := newOwnerTrimGuardFixture(t, true)
 			baseline, err := client.readSubnetPreviewAt(t.Context(), policy, policyHash, retained.Census.Observation.Identity.FinalizedHash)
 			if err != nil {
@@ -61,12 +62,12 @@ func TestOwnerTrimGuardReconstructionPreservesStopCause(t *testing.T) {
 			rebuilt, err := rebuildOwnerTrimGuardPlan(ctx, policy, baseline, retained)
 			inflight, _ := fixture.counts()
 			if !errors.Is(err, want) || errors.Is(err, errRpcIntegrity) || !reflect.DeepEqual(rebuilt, ownerTrimPlan{}) || inflight != 0 {
-				t.Fatalf("interrupted reconstruction lost its cause or claimed contradictory history: %v inflight=%d", err, inflight)
+				t.Fatalf("interrupted reconstruction lost its cause or claimed contradictory history: boundary=%s err=%v inflight=%d", boundary, err, inflight)
 			}
 			if observed != nil && (observed.checks.Load() != 2 || observed.Context.Err() != context.Canceled) {
 				t.Fatal("capacity boundary did not cancel the real context", observed.checks.Load())
 			}
-		})
+		}()
 	}
 }
 
@@ -102,7 +103,7 @@ func TestOwnerTrimGuardReconstructionRequiresExactHistoricalPlan(t *testing.T) {
 func TestOwnerTrimGuardReadFailurePreservesOriginalCause(t *testing.T) {
 	for _, phase := range []string{"historical", "current"} {
 		for _, fault := range []string{"transport", "rpc-timeout"} {
-			t.Run(phase+"/"+fault, func(t *testing.T) {
+			func() {
 				client, fixture, policy, policyHash, retained := newOwnerTrimGuardFixture(t, true)
 				base := client.httpClient.Transport
 				block := retained.Census.Observation.Identity.FinalizedHash
@@ -145,7 +146,7 @@ func TestOwnerTrimGuardReadFailurePreservesOriginalCause(t *testing.T) {
 				result, err := client.readOwnerTrimGuard(ctx, policy, policyHash, retained, "recheck")
 				inflight, _ := fixture.counts()
 				if !errors.Is(err, context.Canceled) || errors.Is(err, errRpcIntegrity) || !reflect.DeepEqual(result, ownerTrimGuard{}) || calls.Load() == 0 || waits.Load() == 0 || inflight != 0 {
-					t.Fatalf("read failure lost its stop or acquired integrity authority: %v calls=%d waits=%d inflight=%d", err, calls.Load(), waits.Load(), inflight)
+					t.Fatalf("read failure lost its stop or acquired integrity authority: phase=%s fault=%s err=%v calls=%d waits=%d inflight=%d", phase, fault, err, calls.Load(), waits.Load(), inflight)
 				}
 				if fault == "transport" && !errors.Is(err, original) {
 					t.Fatal("historical/current read lost original transport cause", err)
@@ -154,7 +155,7 @@ func TestOwnerTrimGuardReadFailurePreservesOriginalCause(t *testing.T) {
 				if fault == "rpc-timeout" && (!errors.As(err, &rpcErr) || rpcErr.method != "state_getStorage" || rpcErr.code != -32000 || rpcErr.message != "Request timeout") {
 					t.Fatal("historical/current read lost original RPC timeout cause", err)
 				}
-			})
+			}()
 		}
 	}
 }

@@ -28,44 +28,44 @@ import (
 func TestOwnedSubmissionApprovedHttpsEndpoints(t *testing.T) {
 	pin := rootObjectHash("synthetic public RPC certificate")
 	for _, endpoint := range []string{
-		"https://archive.chain.opentensor.ai", "https://archive.chain.opentensor.ai:443",
-		"https://rpc.example.test:8443/archive", "https://xn--bcher-kva.example",
+		"https://archive.chain.rpc-service.example", "https://archive.chain.rpc-service.example:443",
+		"https://rpc.transport.example:8443/archive", "https://xn--bcher-kva.example",
 		"https://192.0.2.10:443", "http://192.0.2.10:9944", "http://[2001:db8::1]:9944",
 	} {
-		t.Run(endpoint, func(t *testing.T) {
+		func() {
 			route := ownedSubmissionRoute{RpcUrl: endpoint, ReadRetrySeconds: 60, SendTimeoutSeconds: 1}
 			if strings.HasPrefix(endpoint, "https:") {
 				route.TlsSpkiHash = pin
 			}
 			if err := route.validate(); err != nil {
-				t.Fatal("explicit approved endpoint was refused", err)
+				t.Fatal("explicit approved endpoint was refused", endpoint, err)
 			}
-		})
+		}()
 	}
 	for _, endpoint := range []string{
-		"http://archive.chain.opentensor.ai", "http://rpc.example.test:80", "https://localhost",
-		"https://RPC.example.test", "https://rpc.example.test.", "https://rpc..example.test",
-		"https://-rpc.example.test", "https://rpc-.example.test", "https://rpc_example.test",
+		"http://archive.chain.rpc-service.example", "http://rpc.transport.example:80", "https://localhost",
+		"https://RPC.transport.example", "https://rpc.transport.example.", "https://rpc..transport.example",
+		"https://-rpc.transport.example", "https://rpc-.transport.example", "https://rpc_transport.example",
 		"https://b\u00fccher.example", "https://127.1", "https://0177.0.0.1", "https://0x7f000001",
 		"https://192.0.2.10", "https://[::1]", "https://[::ffff:192.0.2.10]:443",
 		"https://0.0.0.0:443", "https://224.0.0.1:443", "https://[fe80::1%25eth0]:443",
-		"https://rpc.example.test:", "https://rpc.example.test:0", "https://rpc.example.test:0443",
-		"https://rpc.example.test:65536", "https://user@rpc.example.test", "https://rpc.example.test?",
-		"https://rpc.example.test?key=x", "https://rpc.example.test#fragment", "https://rpc.example.test/%2fother",
+		"https://rpc.transport.example:", "https://rpc.transport.example:0", "https://rpc.transport.example:0443",
+		"https://rpc.transport.example:65536", "https://user@rpc.transport.example", "https://rpc.transport.example?",
+		"https://rpc.transport.example?key=x", "https://rpc.transport.example#fragment", "https://rpc.transport.example/%2fother",
 		"https://" + strings.Repeat("a", 64) + ".example", "https://" + strings.Repeat("a.", 127) + "test",
 	} {
-		t.Run(endpoint, func(t *testing.T) {
+		func() {
 			route := ownedSubmissionRoute{RpcUrl: endpoint, ReadRetrySeconds: 60, SendTimeoutSeconds: 1}
 			if strings.HasPrefix(endpoint, "https:") {
 				route.TlsSpkiHash = pin
 			}
 			if err := route.validate(); err == nil {
-				t.Fatal("ambiguous or unauthenticated endpoint was admitted")
+				t.Fatal("ambiguous or unauthenticated endpoint was admitted", endpoint)
 			}
-		})
+		}()
 	}
 	for _, pin := range []string{"", "sha256:" + strings.Repeat("0", 64), "sha256:" + strings.Repeat("A", 64)} {
-		route := ownedSubmissionRoute{RpcUrl: "https://archive.chain.opentensor.ai", TlsSpkiHash: pin}
+		route := ownedSubmissionRoute{RpcUrl: "https://archive.chain.rpc-service.example", TlsSpkiHash: pin}
 		if route.validate() == nil {
 			t.Fatal("hostname admitted without canonical nonzero certificate pin", pin)
 		}
@@ -75,7 +75,7 @@ func TestOwnedSubmissionApprovedHttpsEndpoints(t *testing.T) {
 // net/http supplies the default port to DialContext even when the approved URL
 // omits it. Cancellation reaches the dialer without any DNS or network activity.
 func TestOwnedSubmissionApprovedHttpsDefaultPortDialScope(t *testing.T) {
-	route := ownedSubmissionRoute{RpcUrl: "https://archive.chain.opentensor.ai", TlsSpkiHash: rootObjectHash("synthetic pin"), ReadRetrySeconds: 60}
+	route := ownedSubmissionRoute{RpcUrl: "https://archive.chain.rpc-service.example", TlsSpkiHash: rootObjectHash("synthetic pin"), ReadRetrySeconds: 60}
 	client, err := newOwnedSubmissionClient(route)
 	if err != nil {
 		t.Fatal(err)
@@ -84,15 +84,15 @@ func TestOwnedSubmissionApprovedHttpsDefaultPortDialScope(t *testing.T) {
 	transport := client.httpClient.Transport.(*http.Transport)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := transport.DialContext(ctx, "tcp", "archive.chain.opentensor.ai:443"); !errors.Is(err, context.Canceled) {
+	if _, err := transport.DialContext(ctx, "tcp", "archive.chain.rpc-service.example:443"); !errors.Is(err, context.Canceled) {
 		t.Fatal("default HTTPS endpoint did not reach its canceled dial", err)
 	}
-	for _, endpoint := range []string{"archive.chain.opentensor.ai", "archive.chain.opentensor.ai:8443", "other.example.test:443", "127.0.0.1:443"} {
+	for _, endpoint := range []string{"archive.chain.rpc-service.example", "archive.chain.rpc-service.example:8443", "other.transport.example:443", "192.0.2.10:443"} {
 		if _, err := transport.DialContext(ctx, "tcp", endpoint); err == nil || errors.Is(err, context.Canceled) {
 			t.Fatal("unapproved dial escaped the exact endpoint guard", endpoint, err)
 		}
 	}
-	if _, err := transport.DialContext(ctx, "tcp6", "archive.chain.opentensor.ai:443"); err == nil || errors.Is(err, context.Canceled) {
+	if _, err := transport.DialContext(ctx, "tcp6", "archive.chain.rpc-service.example:443"); err == nil || errors.Is(err, context.Canceled) {
 		t.Fatal("unapproved transport escaped the route guard", err)
 	}
 	if transport.Proxy != nil || !transport.DisableKeepAlives || transport.ForceAttemptHTTP2 || transport.TLSClientConfig.InsecureSkipVerify {
@@ -105,7 +105,7 @@ func TestOwnedSubmissionApprovedHttpsDefaultPortDialScope(t *testing.T) {
 func newOwnedSubmissionHttpsFixture(t *testing.T, handler http.Handler, routeChanges ...func(*ownedSubmissionRoute)) (*rpcClient, ownedSubmissionRoute, *http.Transport) {
 	t.Helper()
 	private := ed25519.NewKeyFromSeed([]byte(strings.Repeat("q", ed25519.SeedSize)))
-	template := &x509.Certificate{SerialNumber: big.NewInt(1), DNSNames: []string{"rpc.example.test"},
+	template := &x509.Certificate{SerialNumber: big.NewInt(1), DNSNames: []string{"rpc.transport.example"},
 		NotBefore: time.Unix(0, 0), NotAfter: time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC),
 		KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		IsCA: true, BasicConstraintsValid: true}
@@ -127,7 +127,7 @@ func newOwnedSubmissionHttpsFixture(t *testing.T, handler http.Handler, routeCha
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(certificate.RawSubjectPublicKeyInfo)
-	route := ownedSubmissionRoute{RpcUrl: "https://rpc.example.test:" + port, TlsSpkiHash: "sha256:" + hex.EncodeToString(digest[:]), ReadRetrySeconds: 60, SendTimeoutSeconds: 5}
+	route := ownedSubmissionRoute{RpcUrl: "https://rpc.transport.example:" + port, TlsSpkiHash: "sha256:" + hex.EncodeToString(digest[:]), ReadRetrySeconds: 60, SendTimeoutSeconds: 5}
 	for _, change := range routeChanges {
 		change(&route)
 	}
@@ -157,7 +157,7 @@ func newOwnedSubmissionHttpsFixture(t *testing.T, handler http.Handler, routeCha
 // are each required before even one transaction reaches the application peer.
 func TestOwnedSubmissionApprovedHttpsAuthenticatesActualPeer(t *testing.T) {
 	for _, change := range []string{"none", "spki", "ordinary-trust", "hostname"} {
-		t.Run(change, func(t *testing.T) {
+		func() {
 			var calls atomic.Int64
 			client, route, transport := newOwnedSubmissionHttpsFixture(t, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 				calls.Add(1)
@@ -166,7 +166,7 @@ func TestOwnedSubmissionApprovedHttpsAuthenticatesActualPeer(t *testing.T) {
 				if change == "spki" {
 					route.TlsSpkiHash = rootObjectHash("synthetic different peer key")
 				} else if change == "hostname" {
-					route.RpcUrl = strings.Replace(route.RpcUrl, "rpc.example.test", "other.example.test", 1)
+					route.RpcUrl = strings.Replace(route.RpcUrl, "rpc.transport.example", "other.transport.example", 1)
 				}
 			})
 			if change == "ordinary-trust" {
@@ -178,9 +178,9 @@ func TestOwnedSubmissionApprovedHttpsAuthenticatesActualPeer(t *testing.T) {
 					t.Fatal("approved HTTPS peer failed", hash, err, calls.Load())
 				}
 			} else if !errors.Is(err, errRootSubmissionUncertain) || hash != "" || calls.Load() != 0 {
-				t.Fatal("unauthenticated HTTPS peer received a transaction", hash, err, calls.Load())
+				t.Fatal("unauthenticated HTTPS peer received a transaction", change, hash, err, calls.Load())
 			}
-		})
+		}()
 	}
 }
 
@@ -189,7 +189,7 @@ func TestOwnedSubmissionApprovedHttpsAuthenticatesActualPeer(t *testing.T) {
 func TestOwnedSubmissionApprovedHttpsDoesNotReplayWrites(t *testing.T) {
 	for _, method := range []string{"author_submitExtrinsic", "eth_sendRawTransaction"} {
 		for _, fault := range []string{"redirect", "redirect-retrieval", "overload", "lost-reply", "wrong-hash"} {
-			t.Run(method+"/"+fault, func(t *testing.T) {
+			func() {
 				var calls, redirected atomic.Int64
 				client, route, _ := newOwnedSubmissionHttpsFixture(t, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 					if request.URL.Path != "" && request.URL.Path != "/" {
@@ -224,9 +224,9 @@ func TestOwnedSubmissionApprovedHttpsDoesNotReplayWrites(t *testing.T) {
 				}))
 				hash, err := ownedSubmissionPost(t.Context(), client, route, method, "0x010203", testFinalizedHash)
 				if !errors.Is(err, errRootSubmissionUncertain) || hash != "" || calls.Load() != 1 || redirected.Load() != 0 {
-					t.Fatal("uncertain public RPC write was lost, replayed or redirected", hash, err, calls.Load(), redirected.Load())
+					t.Fatal("uncertain public RPC write was lost, replayed or redirected", method, fault, hash, err, calls.Load(), redirected.Load())
 				}
-			})
+			}()
 		}
 	}
 }
@@ -287,7 +287,7 @@ func TestOwnedSubmissionApprovedHttpsCancellationJoinsRequest(t *testing.T) {
 // New hostname plans retain the existing signed fields and authority domains.
 // Neither old approvals nor newly approved routes permit a URL or pin override.
 func TestBootstrapApprovedHttpsRetainsExactSignedRoute(t *testing.T) {
-	endpoint, pin := "https://archive.chain.opentensor.ai", rootObjectHash("synthetic public certificate")
+	endpoint, pin := "https://archive.chain.rpc-service.example", rootObjectHash("synthetic public certificate")
 	native := newRootSubmissionFixture(t)
 	original := native.config
 	native.config.Approval.RpcUrl, native.config.Approval.TlsSpkiHash = endpoint, pin
