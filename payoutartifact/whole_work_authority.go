@@ -75,6 +75,7 @@ type WholeWorkExpectation struct {
 	AuthorityHash       string         `json:"authority_hash,omitempty"`
 	AuthoritySigner     common.Address `json:"authority_signer"`
 	ClientKeyRootSigner common.Address `json:"client_key_root_signer"`
+	AttributionSigner   common.Address `json:"attribution_signer,omitempty"`
 	// Derived only from previously verified retained originals in this domain.
 	// It cannot be populated from the current authority's proposed exclusions.
 	PriorContracts []WholeWorkPriorContract `json:"-"`
@@ -91,11 +92,12 @@ type WholeWorkOwnerCuts struct {
 // The separate window supports known-empty epochs without inventing a dummy
 // earning row solely to carry original inventory evidence.
 type WholeWorkInventory struct {
-	Schema    string                 `json:"schema"`
-	Authority []byte                 `json:"authority"`
-	Owners    []WholeWorkOwnerCuts   `json:"owners"`
-	Window    *ClosedWorkWindow      `json:"window"`
-	Clock     *ClosedWorkWindowClock `json:"clock"`
+	Schema               string                 `json:"schema"`
+	Authority            []byte                 `json:"authority"`
+	Owners               []WholeWorkOwnerCuts   `json:"owners"`
+	Window               *ClosedWorkWindow      `json:"window"`
+	Clock                *ClosedWorkWindowClock `json:"clock"`
+	AttributionOriginals [][]byte               `json:"attribution_originals,omitempty"`
 }
 
 // Reconstructed provider identities and amounts are joined with independently
@@ -126,6 +128,7 @@ type VerifiedWholeWorkInventory struct {
 	Open                uint64
 	ExpectedProviders   []WholeWorkProvider
 	ReconciledContracts []WholeWorkPriorContract
+	Reports             *VerifiedClosedWorkReports
 }
 
 // Stable canonical bytes bind the entire roster, including its exact ordering.
@@ -283,10 +286,19 @@ func cloneWholeWorkInventory(ctx context.Context, inventory *WholeWorkInventory)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if len(inventory.Owners) > MaxWholeWorkOwners || len(inventory.Authority) > MaxWholeWorkAuthorityBytes {
+	if len(inventory.Owners) > MaxWholeWorkOwners || len(inventory.Authority) > MaxWholeWorkAuthorityBytes || len(inventory.AttributionOriginals) > MaxClosedWorkRecords {
 		return nil, ErrClosedWorkCapacity
 	}
 	used := len(inventory.Authority)
+	for _, raw := range inventory.AttributionOriginals {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if len(raw) > MaxWholeWorkInventoryBytes-used {
+			return nil, ErrClosedWorkCapacity
+		}
+		used += len(raw)
+	}
 	for _, owner := range inventory.Owners {
 		if err := ctx.Err(); err != nil {
 			return nil, err
