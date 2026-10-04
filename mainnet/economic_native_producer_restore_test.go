@@ -49,7 +49,13 @@ func newNativeProducerRestoreFixture(t *testing.T) *nativeProducerRestoreFixture
 // first combined checkpoint; it does not rewrite a previously admitted policy.
 func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, renewal bool, beforeExport ...func(*nativeProducerRestoreFixture)) *nativeProducerRestoreFixture {
 	t.Helper()
+	directory := os.Getenv("URNETWORK_NATIVE_CONSERVATION_FIXTURE")
+	if !filepath.IsAbs(directory) {
+		t.Fatal("combined restore requires original proof-drained contiguous jobs")
+	}
+	t.Setenv("URNETWORK_NATIVE_PRODUCER_FIXTURE", directory)
 	p := nativeProducerPublicFixtureFrom(t, true)
+	p.source.set(t, 100, "PendingServerEmission", make([]byte, 8))
 	f := &economicConservationRestoreFixture{readFiles: nativeProducerRestoreTestFiles}
 	parent := t.TempDir()
 	protectFreshEconomicConservationTestRoot(t, parent)
@@ -152,7 +158,7 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 	source.policy.Vault.Network = result.original.Network
 	source.checkpoint, source.path = filepath.Join(f.sources[0].root, "combined.json"), filepath.Join(f.sources[0].metadata, "economic-policy.json")
 	source.writePolicy(t)
-	f.archive = &economicConservationArchiveFixture{source: source, ctx: ctx, metadata: f.sources[0].metadata}
+	f.archive = &economicConservationArchiveFixture{source: source, ctx: ctx, metadata: economicConservationTestRestoreMetadata(t, f.sources[0])}
 	state := newEconomicConservationState(source.policy)
 	for number := uint64(101); number <= 100+completed; number++ {
 		if state.Native.ExecutionProducer != nil {
@@ -176,6 +182,7 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 			t.Fatal(err)
 		}
 	}
+	observeEconomicConservationTestClaims(t, ctx, source, state)
 	state.ContentHash = state.hash()
 	if err := state.validate(source.policy); err != nil {
 		t.Fatal("original combined checkpoint", err)
@@ -234,6 +241,7 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 	}
 	limits := durablevolume.InventoryLimits{MaxEntries: 8192, MaxBytes: 256 * 1024 * 1024, MaxDepth: 8, MaxOwnerAttributes: 128, MaxOwnerAttributeBytes: 128 * 4096}
 	for index, sourceRoot := range f.sources {
+		requireEconomicConservationTestPreparation(t, sourceRoot)
 		f.files = append(f.files, nativeProducerRestoreTestFiles(t, sourceRoot.root))
 		target := storageSnapshotRestoreTargetWithLimits(t, sourceRoot, ctx, owners[index][0], false, &limits)
 		f.targets = append(f.targets, target)
@@ -259,7 +267,35 @@ func nativeProducerRestoreObservationFixture(t *testing.T, sources []*storagePre
 	for index, source := range sources {
 		roots[index] = source.storage.Roots[0]
 	}
-	return durablefixture.New(t, t.Context(), roots...)
+	physical := durablefixture.New(t, t.Context(), roots...)
+	declaration, err := durablevolume.Load(physical.Reference)
+	if err != nil || len(declaration.Volumes) != 1 {
+		t.Fatal("common fixture observation volume unavailable", err)
+	}
+	for _, source := range sources {
+		raw, err := os.ReadFile(source.requestPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var request durablevolume.PreparationRequest
+		if err := decodeMonitorHistoryInput(raw, &request); err != nil {
+			t.Fatal(err)
+		}
+		// The fixture now observes the common mount, before either target is
+		// prepared. Keep every original owner/path and bind that actual mount.
+		request.MountPath = declaration.Volumes[0].MountPath
+		request.FilesystemUuid = declaration.Volumes[0].FilesystemUuid
+		request.FilesystemType = declaration.Volumes[0].FilesystemType
+		raw, err = json.Marshal(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(source.requestPath, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		source.requestHash = monitorReadDigest(raw)
+	}
+	return physical
 }
 
 func TestNativeProducerRestorePublicCohortResumesOriginalUnacknowledgedJob(t *testing.T) {

@@ -26,19 +26,24 @@ import (
 
 // No VM observation is fabricated for these ordinary authority controls. The
 // empty original checkpoint holds at its admitted boundary throughout them.
-func newEconomicConservationNativeRenewalFixture(t *testing.T) (*economicConservationArchiveFixture, []planFileReference, nativeProducerRenewal) {
+func newEconomicConservationNativeRenewalFixture(t *testing.T, configure ...func(*economicConservationFixture)) (*economicConservationArchiveFixture, []planFileReference, nativeProducerRenewal) {
 	t.Helper()
 	_, native, _, review, _ := nativeRenewalTestInputs(t)
 	references := slices.Clone(native.Execution.Producer.Renewals)
 	native.Execution.Producer.Renewals = nil
 	source := newEconomicConservationFixture(t, false)
 	source.policy.Native.Observation, source.policy.Vault.Network = native, native.Network
+	for _, change := range configure {
+		change(source)
+	}
 	source.writePolicy(t)
 	ctx := monitorTestStorageContext(t, t.Context(), source.args(t))
 	metadata := t.TempDir()
 	protectFreshEconomicConservationTestRoot(t, metadata)
+	ctx = economicConservationTestArchiveReserves(t, ctx, metadata)
 	f := &economicConservationArchiveFixture{source: source, ctx: ctx, metadata: metadata}
 	state := newEconomicConservationState(source.policy)
+	observeEconomicConservationTestClaims(t, ctx, source, state)
 	state.ContentHash = state.hash()
 	if err := state.validate(source.policy); err != nil {
 		t.Fatal("original unobserved combined checkpoint", err)

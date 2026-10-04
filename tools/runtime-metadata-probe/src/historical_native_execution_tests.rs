@@ -436,7 +436,48 @@ fn fixture_with_principal_inputs(
 // the next clears its events and the later blocks reproduce unchanged state.
 #[test]
 fn historical_native_producer_exports_contiguous_original_jobs() {
-    let (first, mut post_storage) = fixture_with_continuation(true);
+    let (first, post_storage) = fixture_with_continuation(true);
+    export_contiguous_jobs(first, post_storage, "URNETWORK_NATIVE_PRODUCER_FIXTURE_OUT");
+}
+
+// Combined accounting starts at the proof-drained parent, before the original
+// next-block accrual. Standalone producer exports retain their original input.
+#[test]
+fn historical_native_conservation_exports_proof_drained_contiguous_jobs() {
+    let (first, post_storage) = fixture_with_principal_activation(true, None, true);
+    let parent: NativeHeader = scale_exact(
+        "parent",
+        &hex_bytes("parent", &first.parent_header_hex, MAXIMUM_HEADER_BYTES).unwrap(),
+    )
+    .unwrap();
+    let nodes = first
+        .proof_nodes_hex
+        .iter()
+        .map(|node| hex_bytes("node", node, MAXIMUM_CODE_BYTES).unwrap());
+    let backend =
+        create_proof_check_backend::<Blake2Hasher>(*parent.state_root(), StorageProof::new(nodes))
+            .unwrap();
+    for item in [
+        b"PendingServerEmission".as_slice(),
+        b"PendingValidatorEmission".as_slice(),
+        b"PendingRootAlphaDivs".as_slice(),
+    ] {
+        assert_eq!(
+            backend.storage(&key(b"SubtensorModule", item, true)).unwrap(),
+            Some(words(&[0])),
+            "combined original activation parent must be proof-drained"
+        );
+    }
+    export_contiguous_jobs(first, post_storage, "URNETWORK_NATIVE_CONSERVATION_FIXTURE_OUT");
+}
+
+// Preserve each original parent proof and execute every linked job before
+// publishing any fixture. Export paths are exclusive, then durably synced.
+fn export_contiguous_jobs(
+    first: HistoricalJob,
+    mut post_storage: sp_core::storage::Storage,
+    output_variable: &str,
+) {
     let mut jobs = vec![first];
     let code = hex_bytes(
         "producer code",
@@ -486,8 +527,19 @@ fn historical_native_producer_exports_contiguous_original_jobs() {
         assert!(report.post_state_reproduced && !report.runtime_admitted);
         let records = &report.hook_observations.as_ref().unwrap().observations;
         assert_eq!(records.len(), if index == 0 { 7 } else { 0 });
+        if index == 0 {
+            let emitted = records[3]
+                .native
+                .as_ref()
+                .unwrap()
+                .memory
+                .iter()
+                .find(|value| value.name == "emission")
+                .unwrap();
+            assert_eq!(emitted.bytes_hex, encoded(&words(&[9, 89])));
+        }
     }
-    if let Some(directory) = std::env::var_os("URNETWORK_NATIVE_PRODUCER_FIXTURE_OUT") {
+    if let Some(directory) = std::env::var_os(output_variable) {
         let directory = Path::new(&directory);
         assert!(directory.is_absolute() && directory.is_dir());
         for (index, job) in jobs.iter().enumerate() {
