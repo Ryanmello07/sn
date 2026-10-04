@@ -135,12 +135,9 @@ func (self *ChainClient) readChainBatch(ctx context.Context, selector rpc.BlockN
 		}
 		callCtx, cancel := self.chainReadAttemptContext(ctx)
 		callErr := self.client.Client().BatchCallContext(callCtx, batch)
-		err := errors.Join(callErr, callCtx.Err())
+		attemptErr := callCtx.Err()
 		cancel()
-		pending := indices
-		if callErr == nil {
-			pending, err = collectChainBatchReadResults(batch, raw, indices, outputs, err)
-		}
+		pending, err := collectChainBatchReadResults(batch, raw, indices, outputs, callErr, attemptErr)
 		if err == nil {
 			return ctx.Err()
 		}
@@ -173,7 +170,10 @@ func (self *ChainClient) readChainBatch(ctx context.Context, selector rpc.BlockN
 
 // A completed batch is inspected even if its attempt deadline has just ended.
 // Cancellation or timeout cannot hide a returned semantic or framing failure.
-func collectChainBatchReadResults(batch []rpc.BatchElem, raw []hexutil.Bytes, indices []int, outputs [][]byte, attemptErr error) ([]int, error) {
+func collectChainBatchReadResults(batch []rpc.BatchElem, raw []hexutil.Bytes, indices []int, outputs [][]byte, callErr, attemptErr error) ([]int, error) {
+	if callErr != nil {
+		return indices, errors.Join(callErr, attemptErr)
+	}
 	pending := make([]int, 0, len(indices))
 	failures := []error{attemptErr}
 	for index, element := range batch {

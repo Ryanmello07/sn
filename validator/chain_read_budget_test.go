@@ -231,7 +231,7 @@ func TestChainReadBudgetLateDeadlinePreservesCompletedBatchFailures(t *testing.T
 	hard := errors.New("synthetic canonical identity conflict")
 	for _, failure := range []error{hard, nil} {
 		batch := []gethrpc.BatchElem{{Error: gethrpc.ErrMissingBatchResponse}, {Error: failure}}
-		_, err := collectChainBatchReadResults(batch, make([]hexutil.Bytes, 2), []int{0, 1}, make([][]byte, 2), context.DeadlineExceeded)
+		_, err := collectChainBatchReadResults(batch, make([]hexutil.Bytes, 2), []int{0, 1}, make([][]byte, 2), nil, context.DeadlineExceeded)
 		if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, gethrpc.ErrMissingBatchResponse) || failure != nil && !errors.Is(err, failure) || RetryableEvidenceTransportError(err) {
 			t.Fatalf("late attempt deadline concealed a completed hard member: %v", err)
 		}
@@ -249,7 +249,7 @@ func TestChainReadBudgetClassifiesMaximumMissingBatch(t *testing.T) {
 			batch[index].Error = gethrpc.ErrMissingBatchResponse
 			indices[index] = index
 		}
-		_, err := collectChainBatchReadResults(batch, make([]hexutil.Bytes, count), indices, make([][]byte, count), nil)
+		_, err := collectChainBatchReadResults(batch, make([]hexutil.Bytes, count), indices, make([][]byte, count), nil, nil)
 		failure = errors.Join(failure, err)
 	}
 	if !RetryableEvidenceTransportError(errors.Join(failure, context.DeadlineExceeded)) {
