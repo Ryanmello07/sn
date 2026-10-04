@@ -1088,3 +1088,26 @@ func TestRepairOperatorStatusUsesActualWarpHostPort(t *testing.T) {
 		t.Fatal("operator postcondition ignored actual WARP host port selection", status, complete, err, f.base.starts)
 	}
 }
+
+// A complete multi-source observation has one original monotonic age bound.
+// A later fresh observation can close the same acknowledged process only.
+func TestRepairOperatorWholeObservationRetainsAgeBound(t *testing.T) {
+	f := newRepairOperatorFixture(t)
+	f.claim()
+	stamp := uint64(150)
+	f.base.host.monotonic = func() (uint64, error) {
+		if f.base.starts != 0 {
+			stamp += uint64(f.envelope.approval.Plan.MaximumSampleAgeSeconds)*1000000 + 1
+		}
+		return stamp, nil
+	}
+	status, complete, err := f.resume()
+	if status != "waiting-progress" || complete || !errors.Is(err, errRepairProcessPending) || f.base.starts != 1 {
+		t.Fatal("operator refreshed a slow original observation or discarded its acknowledged start", status, complete, err, f.base.starts)
+	}
+	f.base.host.monotonic = func() (uint64, error) { return stamp, nil }
+	status, complete, err = f.resume()
+	if err != nil || !complete || f.base.starts != 1 {
+		t.Fatal("operator fresh observation failed to retain its original consumed start", status, complete, err, f.base.starts)
+	}
+}

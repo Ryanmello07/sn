@@ -343,6 +343,13 @@ func (self *repairOperatorCustody) progress(ctx context.Context, startedAt, now 
 	if now.Before(startedAt) {
 		return "", errors.Join(errRpcIntegrity, errors.New("operator process observation clock moved backwards"))
 	}
+	if self.host.monotonic == nil {
+		return "", errors.New("operator process observation clock is unavailable")
+	}
+	observedAt, err := self.host.monotonic()
+	if err != nil {
+		return "", repairValidatorObservationError("cannot read operator observation clock", err, false)
+	}
 	manager, err := self.inspect(ctx)
 	if err != nil {
 		return "", err
@@ -377,6 +384,16 @@ func (self *repairOperatorCustody) progress(ctx context.Context, startedAt, now 
 	}
 	if err := self.ownsStatusSocket(ctx, manager); err != nil {
 		return "", err
+	}
+	closedAt, err := self.host.monotonic()
+	if err != nil {
+		return "", repairValidatorObservationError("cannot close operator observation clock", err, false)
+	}
+	if closedAt < observedAt {
+		return "", errors.Join(errRpcIntegrity, errors.New("operator process observation clock moved backwards"))
+	}
+	if closedAt-observedAt > uint64(self.envelope.approval.Plan.MaximumSampleAgeSeconds)*1000000 {
+		return "", errors.Join(errRepairProcessPending, errors.New("operator complete process and database observation exceeds its original age bound"))
 	}
 	return rootObjectHash(struct {
 		Generation repairValidatorGeneration `json:"generation"`
