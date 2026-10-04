@@ -287,12 +287,22 @@ func TestEconomicConservationNativeRenewalExternalPolicyChangeDoesNotResetOwner(
 	producer := *execution.Producer
 	producer.Renewals, execution.Producer = slices.Clone(references), &producer
 	changed.Native.Observation.Execution = &execution
+	if err := changed.validate(); err != nil || changed.identityHash() == f.source.policy.identityHash() {
+		t.Fatal("external policy fixture did not change valid original authority", err)
+	}
 	path, pin := f.document(t, "unreviewed-outer-policy.json", changed)
 	command := f.source.args(t)
 	command[2], command[4] = path, pin
 	var output, diagnostic bytes.Buffer
-	if code := runMain(f.ctx, command, &output, &diagnostic); code != 3 || output.Len() != 0 || !strings.Contains(diagnostic.String(), "policy basis") || !reflect.DeepEqual(before, mainnetNamespaceTest(t, filepath.Dir(f.source.checkpoint))) {
+	code := runMain(f.ctx, command, &output, &diagnostic)
+	// Either original-policy comparison can refuse first. A retained archive
+	// checks its capacity/review basis before the active checkpoint hash.
+	refusedOriginalBasis := strings.Contains(diagnostic.String(), "policy basis") || strings.Contains(diagnostic.String(), "economic archive changed its original capacity or review basis")
+	if code != 3 || output.Len() != 0 || !refusedOriginalBasis || !reflect.DeepEqual(before, mainnetNamespaceTest(t, filepath.Dir(f.source.checkpoint))) {
 		t.Fatal("changed external config bypassed original combined owner identity", code, diagnostic.String())
+	}
+	if f.source.state(t).PolicyHash != f.source.policy.identityHash() {
+		t.Fatal("refused external policy replaced original checkpoint authority")
 	}
 }
 
