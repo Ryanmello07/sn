@@ -25,6 +25,7 @@ const nativeExecutionPolicySchema = "urnetwork-native-miner-execution-policy-v1"
 const nativeExecutionAdmissionLimit = 1024 * 1024
 
 type nativeExecutionPolicy struct {
+	Yuma              *nativeYumaPolicy              `json:"complete_allocation_authority,omitempty"`
 	Principal         *nativePrincipalPolicy         `json:"opening_principal_authority,omitempty"`
 	Schema            string                         `json:"schema"`
 	ApprovalPublicKey string                         `json:"approval_ed25519_public_key"`
@@ -42,7 +43,7 @@ func (self *nativeExecutionPolicy) validate() error {
 	if self.Schema != nativeExecutionPolicySchema || !rootCanonicalHash(self.ApprovalPublicKey) || !planSha256(self.ReviewSha256) || !planSha256(self.ProfileSha256) || !bootstrapRootAbsolutePath(self.Engine.Path) || !planSha256(self.Engine.Sha256) || !bootstrapRootAbsolutePath(self.Directory) {
 		return errors.New("native execution requires original independent runtime/layout/engine authority")
 	}
-	return errors.Join(self.Producer.validate(), self.Principal.validate())
+	return errors.Join(self.Producer.validate(), self.Principal.validate(), self.Yuma.validate())
 }
 
 // An admitted recipient is a registration generation, never merely an event UID.
@@ -55,6 +56,7 @@ type nativeExecutionRecipient struct {
 }
 
 type nativeExecutionAdmission struct {
+	Yuma              *nativeYumaPolicy          `json:"complete_allocation_authority,omitempty"`
 	Principal         *nativePrincipalPolicy     `json:"opening_principal_authority,omitempty"`
 	Schema            string                     `json:"schema"`
 	Network           planNetwork                `json:"network"`
@@ -90,7 +92,7 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 	if err := expected.validate(); err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(self.Principal, expected.Principal) || self.Schema != nativeExecutionAdmissionSchema || self.Network != policy.Network || self.Netuid != policy.Netuid || self.Registration != *policy.SubnetRegistrationBlock || self.Generation != *policy.SubnetGeneration || self.Child != block.Boundary || self.Parent.Number+1 != self.Child.Number || self.Parent.Hash != block.Header.ParentHash || self.Runtime != runtime || self.Runtime.RuntimeSourceCommit != frontierMappingSourceCommit || self.ReviewSha256 != expected.ReviewSha256 || self.ProfileSha256 != expected.ProfileSha256 || self.EngineSha256 != expected.Engine.Sha256 || self.FinalityAuthority != "independently-reviewed-finalized-boundary" || !bootstrapRootAbsolutePath(self.Job.Path) || !planSha256(self.Job.Sha256) || len(self.Providers) > int(policy.MaximumUids) {
+	if !reflect.DeepEqual(self.Yuma, expected.Yuma) || !reflect.DeepEqual(self.Principal, expected.Principal) || self.Schema != nativeExecutionAdmissionSchema || self.Network != policy.Network || self.Netuid != policy.Netuid || self.Registration != *policy.SubnetRegistrationBlock || self.Generation != *policy.SubnetGeneration || self.Child != block.Boundary || self.Parent.Number+1 != self.Child.Number || self.Parent.Hash != block.Header.ParentHash || self.Runtime != runtime || self.Runtime.RuntimeSourceCommit != frontierMappingSourceCommit || self.ReviewSha256 != expected.ReviewSha256 || self.ProfileSha256 != expected.ProfileSha256 || self.EngineSha256 != expected.Engine.Sha256 || self.FinalityAuthority != "independently-reviewed-finalized-boundary" || !bootstrapRootAbsolutePath(self.Job.Path) || !planSha256(self.Job.Sha256) || len(self.Providers) > int(policy.MaximumUids) {
 		return errors.New("native execution approval differs from original runtime, boundary or economic identity")
 	}
 	seen := map[string]bool{}
@@ -113,6 +115,7 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 // FixedPointTolerance covers the observed final normalization and u64 casts;
 // it does not excuse Yuma disagreement or grant an economic activation approval.
 type nativeExecutionOutcome struct {
+	Yuma                   *nativeYumaProjection               `json:"complete_allocation_witness,omitempty"`
 	PrincipalEffects       *nativePrincipalExecutionProjection `json:"principal_execution_effects,omitempty"`
 	OpeningPrincipals      *nativePrincipalProjection          `json:"opening_principals,omitempty"`
 	RecipientEffects       *nativeExecutionEffectProjection    `json:"recipient_effects,omitempty"`
@@ -149,6 +152,7 @@ func (self nativeExecutionOutcome) hash() string {
 	self.RecipientEffects = nil
 	self.OpeningPrincipals = nil
 	self.PrincipalEffects = nil
+	self.Yuma = nil
 	return rootObjectHash(self)
 }
 
@@ -224,7 +228,7 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 	recipients := []historicalReplayObservation{}
 	for index := range trace.Observations {
 		record := &trace.Observations[index]
-		if historicalPrincipalEffectPurpose(record.Purpose) {
+		if historicalPrincipalEffectPurpose(record.Purpose) || historicalYumaPurpose(record.Purpose) {
 			continue
 		}
 		// The same original runtime callsite can execute for several subnets.
@@ -543,12 +547,12 @@ func observeNativeExecution(ctx context.Context, client *rpcClient, policy econo
 	if err != nil {
 		return nil, err
 	}
-	return validateNativeExecutionReplay(policy, admission, block, metadata, job, report)
+	return validateNativeExecutionReplay(ctx, policy, admission, block, metadata, job, report)
 }
 
 // Both the legacy signed fixture path and the continuous proof producer use
 // the exact event/layout/amount verifier after their independent admission.
-func validateNativeExecutionReplay(policy economicEmissionPolicy, admission nativeExecutionAdmission, block economicEmissionBlock, metadata *types.Metadata, job historicalReplayJob, report *historicalReplayReport) (*nativeExecutionOutcome, error) {
+func validateNativeExecutionReplay(ctx context.Context, policy economicEmissionPolicy, admission nativeExecutionAdmission, block economicEmissionBlock, metadata *types.Metadata, job historicalReplayJob, report *historicalReplayReport) (*nativeExecutionOutcome, error) {
 	if report == nil || len(job.ExtrinsicsHex) != block.BodyCount {
 		return nil, errors.Join(errRpcIntegrity, errors.New("native execution report or original body count differs"))
 	}
@@ -601,6 +605,10 @@ func validateNativeExecutionReplay(policy economicEmissionPolicy, admission nati
 		drains[index] = nativeExecutionDrain{Key: key.Hex(), Fallback: append([]byte(nil), entries[name].Fallback...)}
 	}
 	result, err := deriveNativeExecution(policy, admission, block, job, *report, drains)
+	if err != nil {
+		return nil, errors.Join(errRpcIntegrity, err)
+	}
+	result.Yuma, err = deriveNativeYuma(ctx, policy, admission, report, *result)
 	if err != nil {
 		return nil, errors.Join(errRpcIntegrity, err)
 	}

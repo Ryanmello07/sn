@@ -21,6 +21,7 @@ import (
 const economicConservationRole = "economic-conservation"
 
 type economicConservationSummary struct {
+	Yuma                           *economicConservationYumaSummary            `json:"complete_native_allocation,omitempty"`
 	PrincipalEffects               *economicConservationPrincipalEffectSummary `json:"original_principal_execution,omitempty"`
 	OpeningPrincipals              *economicConservationPrincipalSummary       `json:"original_opening_principal,omitempty"`
 	NativeFeeIssue                 string                                      `json:"native_fee_issue,omitempty"`
@@ -71,7 +72,7 @@ type economicConservationSummary struct {
 	MissingEvidence                []string                                    `json:"missing_evidence"`
 }
 
-func (self *economicConservationState) summary(policy economicConservationPolicy, nativeCurrent, vaultCurrent bool) (economicConservationSummary, error) {
+func (self *economicConservationState) summary(ctx context.Context, policy economicConservationPolicy, nativeCurrent, vaultCurrent bool) (economicConservationSummary, error) {
 	var err error
 	policy, err = self.operatingPolicy(policy)
 	if err != nil {
@@ -87,6 +88,13 @@ func (self *economicConservationState) summary(policy economicConservationPolicy
 	}
 	result.NativeFeeIssue, result.NativeFeeHeldRequest, result.NativeFeePending = self.NativeFeeIssue, self.NativeFeeHeldRequest, self.NativeFeePending
 	result.NativeFeeHeldPolicy = self.NativeFeeHeldPolicy
+	result.Yuma, err = self.yumaSummary(ctx, policy)
+	if err != nil {
+		return result, err
+	}
+	if result.Yuma != nil && result.Yuma.Current {
+		result.FullQuantizationToleranceAlpha = result.Yuma.FullQuantizationTolerance
+	}
 	result.PrincipalEffects, err = self.principalEffectsSummary(policy)
 	if err != nil {
 		return result, err
@@ -178,7 +186,7 @@ func cloneEconomicConservation(value *economicConservationState) (*economicConse
 	return &result, nil
 }
 
-func loadEconomicConservation(owner *monitorCheckpointStore, policy economicConservationPolicy) (*economicConservationState, error) {
+func loadEconomicConservation(ctx context.Context, owner *monitorCheckpointStore, policy economicConservationPolicy) (*economicConservationState, error) {
 	if err := owner.requireOwner(); err != nil {
 		return nil, err
 	}
@@ -193,7 +201,7 @@ func loadEconomicConservation(owner *monitorCheckpointStore, policy economicCons
 	if err := decodePlanJson(raw, &result); err != nil {
 		return nil, err
 	}
-	if err := result.validate(policy); err != nil {
+	if err := result.validate(ctx, policy); err != nil {
 		return nil, err
 	}
 	if result.Renewal != nil && result.Renewal.Original.Path != owner.path {
@@ -205,12 +213,12 @@ func loadEconomicConservation(owner *monitorCheckpointStore, policy economicCons
 	return &result, nil
 }
 
-func saveEconomicConservation(owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
+func saveEconomicConservation(ctx context.Context, owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
 	if err := state.archiveView.check(); err != nil {
 		return err
 	}
 	state.ContentHash = state.hash()
-	if err := state.validate(policy); err != nil {
+	if err := state.validate(ctx, policy); err != nil {
 		return err
 	}
 	if err := owner.requireOwner(); err != nil {
@@ -318,7 +326,7 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 		if copyErr != nil {
 			return nil, false, false, copyErr
 		}
-		nativeErr = candidate.appendNative(policy, nativeValue, now)
+		nativeErr = candidate.appendNative(readCtx, policy, nativeValue, now)
 		if nativeErr == nil {
 			next = candidate
 		} else {
@@ -438,7 +446,7 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	if hooks.afterCheckpointOpen != nil {
 		hooks.afterCheckpointOpen(ctx, economicConservationRole, owner.lock)
 	}
-	state, err := loadEconomicConservation(owner, policy)
+	state, err := loadEconomicConservation(ctx, owner, policy)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 3
@@ -495,12 +503,12 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		} else if feeWorker != nil {
 			next.NativeFeePending = feeWorker.active
 		}
-		if err := saveEconomicConservation(owner, policy, next); err != nil {
+		if err := saveEconomicConservation(ctx, owner, policy, next); err != nil {
 			fmt.Fprintln(stderr, err)
 			return 3
 		}
 		state = next
-		summary, err := state.summary(policy, nativeCurrent, vaultCurrent)
+		summary, err := state.summary(ctx, policy, nativeCurrent, vaultCurrent)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return 3

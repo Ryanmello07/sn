@@ -282,9 +282,15 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool) *nativeProdu
 	if job.PrincipalEffects {
 		filePolicy.Principal.Effects = &nativePrincipalEffectsPolicy{Schema: nativePrincipalEffectsSchema, ReviewSha256: monitorReadDigest([]byte("synthetic complete original stake cause and top-storage review")), StoragePrefixes: job.ObservationProfile.PrincipalStoragePrefixes}
 	}
+	for _, rule := range job.ObservationProfile.Rules {
+		if historicalYumaPurpose(rule.Purpose) {
+			filePolicy.Yuma = &nativeYumaPolicy{Schema: nativeYumaSchema, LayoutSha256: monitorReadDigest([]byte(nativeYumaLayout)), ReviewSha256: monitorReadDigest([]byte("synthetic complete original Yuma source and layout review")), MaximumWitnessBytes: 64 * 1024, HotBlockReserve: 1, MaximumEdges: 64, MaximumOperations: 200000}
+		}
+	}
 	source.policy.Execution = filePolicy
 	authority := nativeProducerAuthority{Schema: nativeProducerAuthoritySchema, Network: source.policy.Network, Netuid: source.policy.Netuid, Registration: *source.policy.SubnetRegistrationBlock, Generation: *source.policy.SubnetGeneration, From: source.policy.From, Runtime: source.policy.Runtime, ReviewSha256: filePolicy.ReviewSha256, Profile: job.ObservationProfile, CaptureEngine: filePolicy.Producer.CaptureEngine, ReplayEngine: filePolicy.Engine, Directory: filePolicy.Directory, Nodes: filePolicy.Producer.Nodes, MaximumJobs: filePolicy.Producer.MaximumJobs, MaximumBytes: filePolicy.Producer.MaximumBytes, MaximumEntries: filePolicy.Producer.MaximumEntries, Checkpoint: strecovery.NativeFinalityCheckpoint{Schema: strecovery.NativeFinalityCheckpointSchema, CodecProfile: strecovery.NativeFinalityCodecProfile, Genesis: source.policy.Network.GenesisHash, HeaderScale: job.ParentHeaderHex, SetId: 9, LiveState: "live", Authorities: []strecovery.GrandpaAuthority{{PublicKey: nativeExecutionTestHex(consensus.Public().(ed25519.PublicKey)), Weight: 1}}}, Providers: []nativeProducerProvider{{Hotkey: nativeExecutionTestHex(bytes.Repeat([]byte{0x11}, 32)), Coldkey: nativeExecutionTestHex(bytes.Repeat([]byte{0x33}, 32))}}}
 	authority.Principal = filePolicy.Principal
+	authority.Yuma = filePolicy.Yuma
 	authority.MaximumDescendantHeaders = filePolicy.Producer.MaximumDescendantHeaders
 	message, err := authority.signingBytes()
 	if err != nil {

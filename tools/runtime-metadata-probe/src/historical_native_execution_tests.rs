@@ -2,6 +2,9 @@
 //! program computes normalization and recipients; the host never accepts a
 //! supplied amount report. These bytes carry no deployed-runtime authority.
 
+#[path = "historical_native_yuma_tests.rs"]
+mod yuma_tests;
+
 use super::*;
 use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt, path::Path};
 
@@ -55,6 +58,15 @@ fn fixture_with_principal_effects(
     continuous: bool,
     principal: Option<Option<u64>>,
     effects: Option<&str>,
+) -> (HistoricalJob, sp_core::storage::Storage) {
+    fixture_with_allocation(continuous, principal, effects, None)
+}
+
+fn fixture_with_allocation(
+    continuous: bool,
+    principal: Option<Option<u64>>,
+    effects: Option<&str>,
+    yuma: Option<&str>,
 ) -> (HistoricalJob, sp_core::storage::Storage) {
     let drains = [
         key(b"SubtensorModule", b"PendingServerEmission", true),
@@ -213,6 +225,15 @@ fn fixture_with_principal_effects(
             }
         }
     }
+    if let Some(mode) = yuma {
+        declarations.push_str(&yuma_tests::declarations(mode));
+        declarations = declarations.replace(
+            "(func $epoch (export \"native_epoch\")",
+            "(func $epoch (export \"native_epoch\") (call $yuma_compute)",
+        );
+        declarations = declarations.replace("(i64.const 8589934592)", "(i64.add (i64.add (i64.load (i32.const 4100)) (i64.load (i32.const 4108))) (i64.add (i64.load (i32.const 4120)) (i64.load (i32.const 4128))))");
+        body = body.replace("(call $epoch)", yuma_tests::body());
+    }
     let code = wasm(&declarations, &body);
     let mut initial = parent_storage(&code);
     for (index, drain) in drains.iter().enumerate() {
@@ -341,6 +362,9 @@ fn fixture_with_principal_effects(
         let mut rule = observation_profile(&code, export, purpose).rules.remove(0);
         rule.memory = fields(&items);
         profile.rules.push(rule);
+    }
+    if yuma.is_some() {
+        yuma_tests::profile(&code, &mut profile);
     }
     if effects.is_some() {
         profile.principal_storage_prefixes = Some(vec![encoded(principal_key)]);

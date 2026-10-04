@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,6 +51,9 @@ func (self economicConservationPolicy) validate() error {
 		return err
 	}
 	if err := self.Continuation.validate(self); err != nil {
+		return err
+	}
+	if err := self.validateYumaCapacity(); err != nil {
 		return err
 	}
 	if err := self.validatePrincipalAuthority(); err != nil {
@@ -181,6 +185,7 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	Yuma                 []economicConservationYumaEvidence       `json:"original_yuma_evidence,omitempty"`
 	PrincipalExecutions  []economicConservationPrincipalExecution `json:"principal_execution_evidence,omitempty"`
 	OpeningPrincipals    *economicConservationOpeningPrincipal    `json:"opening_principal_evidence,omitempty"`
 	FeeRevision          *economicConservationFeeRevision         `json:"native_fee_revision,omitempty"`
@@ -239,10 +244,16 @@ func (self economicConservationState) facts() uint64 {
 	if self.OpeningPrincipals != nil {
 		principalFacts = uint64(len(self.OpeningPrincipals.Projection.Observations)) + 1
 	}
-	return principalFacts + self.principalEffectFacts() + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
+	return principalFacts + self.yumaFacts() + self.principalEffectFacts() + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
 }
 
-func (self economicConservationState) validate(policy economicConservationPolicy) error {
+func (self economicConservationState) validate(ctx context.Context, policy economicConservationPolicy) error {
+	if ctx == nil {
+		return errors.New("economic conservation validation has no lifecycle owner")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if _, err := self.nativeFeeAuthority(policy); err != nil {
 		return err
 	}
@@ -270,6 +281,9 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 		return err
 	}
 	if err := self.validateOpeningPrincipal(policy); err != nil {
+		return err
+	}
+	if err := self.validateYuma(ctx, policy); err != nil {
 		return err
 	}
 	if err := self.validatePrincipalEffects(policy); err != nil {
@@ -358,7 +372,7 @@ func economicConservationLotId(projection string, effect nativeExecutionEffect) 
 
 // No amount is reconstructed from timestamp windows. The native observer has
 // already replayed the original job; the parser joins the exact header digest.
-func (self *economicConservationState) appendNative(policy economicConservationPolicy, observation *economicEmissionObservation, now time.Time) error {
+func (self *economicConservationState) appendNative(ctx context.Context, policy economicConservationPolicy, observation *economicEmissionObservation, now time.Time) error {
 	if observation == nil {
 		return nil
 	}
@@ -376,6 +390,9 @@ func (self *economicConservationState) appendNative(policy economicConservationP
 			return errors.New("economic native source did not retain original execution")
 		}
 		if err := self.appendOpeningPrincipal(policy, *outcome); err != nil {
+			return err
+		}
+		if err := self.appendYuma(ctx, policy, *outcome); err != nil {
 			return err
 		}
 		if err := self.appendPrincipalEffects(policy, *outcome); err != nil {

@@ -230,7 +230,7 @@ func nativeProducerReviewedProfile(authority nativeProducerAuthority) error {
 	if authority.Profile == nil || authority.ReviewSha256 != fmt.Sprintf("sha256:%x", authority.Profile.SourceReviewSha256) {
 		return errors.New("native producer callsite profile names a different original semantic review")
 	}
-	return errors.Join(authority.Profile.validate(historicalReplayJob{RuntimeCodeSha256: authority.Profile.RuntimeCodeSha256}), authority.Principal.validate())
+	return errors.Join(authority.Profile.validate(historicalReplayJob{RuntimeCodeSha256: authority.Profile.RuntimeCodeSha256}), authority.Principal.validate(), authority.Yuma.validate())
 }
 
 func loadNativeProducerAuthorities(ctx context.Context, policy economicEmissionPolicy) ([]nativeProducerReviewedAuthority, error) {

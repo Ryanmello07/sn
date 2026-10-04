@@ -58,7 +58,7 @@ func (self *economicConservationState) appendPrincipalEffects(policy economicCon
 		}
 	}
 	value := economicConservationPrincipalExecution{Projection: *outcome.PrincipalEffects, Outcome: outcome}
-	value.Outcome.PrincipalEffects, value.Outcome.OpeningPrincipals = nil, nil
+	value.Outcome.PrincipalEffects, value.Outcome.OpeningPrincipals, value.Outcome.Yuma = nil, nil, nil
 	if self.facts()+value.facts() > policy.MaximumFacts {
 		return errMonitorEconomicCapacity
 	}

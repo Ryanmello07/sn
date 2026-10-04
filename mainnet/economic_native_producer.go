@@ -366,8 +366,8 @@ func (self *nativeProducerSession) observe(ctx context.Context, client *rpcClien
 	if err != nil {
 		return nil, err
 	}
-	admission := nativeExecutionAdmission{Principal: self.authority.Principal, Schema: nativeExecutionAdmissionSchema, Network: self.policy.Network, Netuid: self.policy.Netuid, Registration: self.authority.Registration, Generation: self.authority.Generation, Parent: self.state.Cursor, Child: block.Boundary, Runtime: runtime, ReviewSha256: self.policy.Execution.ReviewSha256, ProfileSha256: self.policy.Execution.ProfileSha256, EngineSha256: self.policy.Execution.Engine.Sha256, Job: jobRef, Providers: providers, FinalityAuthority: "approved-anchor-and-verified-grandpa-original-execution"}
-	outcome, err := validateNativeExecutionReplay(self.policy, admission, block, metadata, job, report)
+	admission := nativeExecutionAdmission{Yuma: self.authority.Yuma, Principal: self.authority.Principal, Schema: nativeExecutionAdmissionSchema, Network: self.policy.Network, Netuid: self.policy.Netuid, Registration: self.authority.Registration, Generation: self.authority.Generation, Parent: self.state.Cursor, Child: block.Boundary, Runtime: runtime, ReviewSha256: self.policy.Execution.ReviewSha256, ProfileSha256: self.policy.Execution.ProfileSha256, EngineSha256: self.policy.Execution.Engine.Sha256, Job: jobRef, Providers: providers, FinalityAuthority: "approved-anchor-and-verified-grandpa-original-execution"}
+	outcome, err := validateNativeExecutionReplay(ctx, self.policy, admission, block, metadata, job, report)
 	if err != nil {
 		return nil, err
 	}

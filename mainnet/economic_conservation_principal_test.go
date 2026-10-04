@@ -29,16 +29,22 @@ func newEconomicConservationPrincipalFixture(t *testing.T, name string, parentMa
 	if strings.HasPrefix(name, "effects-") {
 		directory = os.Getenv("URNETWORK_NATIVE_PRINCIPAL_EFFECTS_FIXTURE_DIR")
 	}
+	filename := "principal-" + name + ".json"
+	yuma := strings.HasPrefix(name, "yuma-")
+	if yuma {
+		directory = os.Getenv("URNETWORK_NATIVE_YUMA_FIXTURE_DIR")
+		filename = name + ".json"
+	}
 	if directory == "" || os.Getenv("URNETWORK_NATIVE_CAPTURE_ENGINE") == "" || os.Getenv("URNETWORK_NATIVE_EXECUTION_ENGINE") == "" {
 		t.Fatal("principal scope requires explicit real Rust exports and two distinct owned engines")
 	}
 	f := newEconomicConservationFixture(t, false)
-	raw, _, err := readPlanFile(t.Context(), filepath.Join(directory, "principal-"+name+".json"), historicalNativeJobLimit)
+	raw, _, err := readPlanFile(t.Context(), filepath.Join(directory, filename), historicalNativeJobLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var job historicalReplayJob
-	if err := decodePlanJson(raw, &job); err != nil || len(job.PrincipalQueries) != 1 {
+	if err := decodePlanJson(raw, &job); err != nil || !yuma && len(job.PrincipalQueries) != 1 {
 		t.Fatal("principal original job is absent", err)
 	}
 	if change != nil {
@@ -88,11 +94,26 @@ func newEconomicConservationPrincipalFixture(t *testing.T, name string, parentMa
 	t.Setenv("URNETWORK_NATIVE_EXECUTION_FIXTURE", path)
 	producer := newNativeProducerPublicFixture(t)
 	f.native, f.policy.Native.Observation, f.policy.Native.BatchBlocks = producer.source, producer.source.policy, 1
+	if yuma {
+		f.policy.MaximumFacts = 4096
+	}
 	f.writePolicy(t)
+	// A synthetic volume declaration does not provision a snapshot owner. The
+	// combined checkpoint explicitly starts with an owned absent-head marker.
+	provisionEconomicConservationPrincipalFixture(t, f.checkpoint)
 	storage := durablefixture.New(t, t.Context(), producer.source.policy.Execution.Directory, filepath.Dir(f.checkpoint))
 	storage.Host.SetReserve(4*1024*1024*1024, 1024*1024)
 	producer.ctx = storage.Context
-	return &economicConservationArchiveFixture{source: f, ctx: storage.Context, metadata: t.TempDir()}, producer
+	metadata := t.TempDir()
+	protectFreshEconomicConservationTestRoot(t, metadata)
+	return &economicConservationArchiveFixture{source: f, ctx: storage.Context, metadata: metadata}, producer
+}
+
+// Provision only the fresh test fixture. Public observers never recreate a lost
+// lock, reinterpret an empty committed file as absence, or repair its owner.
+func provisionEconomicConservationPrincipalFixture(t *testing.T, checkpoint string) {
+	t.Helper()
+	provisionMonitorTestCustody(t, checkpoint)
 }
 
 // The first positive reaches actual replay and public conservation; the

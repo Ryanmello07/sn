@@ -313,6 +313,11 @@ impl HistoricalObserver {
                         | "native-emission"
                         | "native-miner-credit"
                         | "native-owner-recycle"
+                        | "native-yuma-meta"
+                        | "native-yuma-settings"
+                        | "native-yuma-node"
+                        | "native-yuma-weights"
+                        | "native-yuma-bonds"
                         | "native-principal-deposit"
                         | "native-principal-withdrawal"
                         | "native-principal-refund"
@@ -545,7 +550,19 @@ fn observe_value(
             .expect("observer byte overflow");
         observer.total_records += 1;
         let (maximum_records, maximum_bytes) = if native_profile {
-            (NATIVE_RECORDS, NATIVE_RETAINED_BYTES)
+            (
+                if observer
+                    .profile
+                    .rules
+                    .iter()
+                    .any(|rule| rule.purpose.starts_with("native-yuma-"))
+                {
+                    6 * 4096
+                } else {
+                    NATIVE_RECORDS
+                },
+                NATIVE_RETAINED_BYTES,
+            )
         } else {
             (MAXIMUM_RECORDS, MAXIMUM_RETAINED_BYTES)
         };

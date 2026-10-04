@@ -57,7 +57,7 @@ func (self economicConservationArchivePlan) hash() string {
 	return rootObjectHash(self)
 }
 
-func decodeEconomicConservation(raw []byte, policy economicConservationPolicy) (*economicConservationState, error) {
+func decodeEconomicConservation(ctx context.Context, raw []byte, policy economicConservationPolicy) (*economicConservationState, error) {
 	if len(raw) == 0 || len(raw) > maxRpcReplyBytes {
 		return nil, errors.New("economic conservation checkpoint exceeds its fixed byte capacity")
 	}
@@ -65,7 +65,7 @@ func decodeEconomicConservation(raw []byte, policy economicConservationPolicy) (
 	if err := decodeMonitorHistoryInput(raw, &state); err != nil {
 		return nil, err
 	}
-	return &state, state.validate(policy)
+	return &state, state.validate(ctx, policy)
 }
 
 func validateEconomicConservationArchiveRequest(ctx context.Context, request economicConservationArchiveRequest) error {
@@ -122,7 +122,7 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 	if uint64(len(original)) != request.Original.Bytes || monitorReadDigest(original) != request.Original.Sha256 {
 		return plan, nil, errors.New("economic archive original checkpoint changed after review")
 	}
-	state, err := decodeEconomicConservation(original, request.Policy)
+	state, err := decodeEconomicConservation(ctx, original, request.Policy)
 	if err != nil {
 		return plan, nil, err
 	}
@@ -145,7 +145,7 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 	}
 	archive := request.Original
 	archive.Path = request.ArchivePath
-	compacted, err := compactEconomicConservationWithFeeUpdates(request.Policy, state, archive, request.Renewal, request.RetireNativeFees, request.FeeRevision)
+	compacted, err := compactEconomicConservationWithFeeUpdates(ctx, request.Policy, state, archive, request.Renewal, request.RetireNativeFees, request.FeeRevision)
 	if err != nil {
 		return plan, nil, err
 	}
@@ -219,7 +219,7 @@ func planEconomicConservationArchive(ctx context.Context, request economicConser
 		return plan, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, source.close()) }()
-	state, err := decodeEconomicConservation(raw, request.Policy)
+	state, err := decodeEconomicConservation(ctx, raw, request.Policy)
 	if err != nil {
 		return plan, err
 	}
@@ -283,7 +283,7 @@ func applyEconomicConservationArchive(ctx context.Context, plan economicConserva
 	if archived {
 		original = retained
 	}
-	state, err := decodeEconomicConservation(original, plan.Request.Policy)
+	state, err := decodeEconomicConservation(ctx, original, plan.Request.Policy)
 	if err != nil {
 		return err
 	}
