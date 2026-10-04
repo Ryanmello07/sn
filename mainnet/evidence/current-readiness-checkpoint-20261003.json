@@ -168,7 +168,9 @@
     "runtime-observation-owner6fa-source-root-review-20261004.json": "a615a3021a67bdb91910dc37ea3456d0582dcf100b69f1794bb6bd62e35dfbb6",
     "fee-c04-normal-terminal-root-review-20261004.json": "964de700b4a4156f00210d292be2d029ee8ac20a1cced7747f26a477bafbb4d6",
     "original-key-fee-revision-test-graph-root-review-20261004.json": "f08f92310ef587b4dfd4f6e81c62b63c196d1641cba6cc7f2998e7e416a4970b",
-    "fee-retention121-partial-terminal-root-review-20261004.json": "12479190645923d1499ebff9b1078a0b1860d70cfdc3cd28ac19409832492702"
+    "fee-retention121-partial-terminal-root-review-20261004.json": "12479190645923d1499ebff9b1078a0b1860d70cfdc3cd28ac19409832492702",
+    "scoped-warm-go-resource-admission-root-review-20261004.json": "05fd341e7b9d8effb5067201aec45593e73717bf5805028cda7ce5608c23cd57",
+    "fee663-original-race-timeout-root-review-20261004.json": "1875e732224c1aa168dc0bcaa1e22aeb62281602fed94645d936c643dca75a8f"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
