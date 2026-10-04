@@ -91,9 +91,10 @@ still leaves `activation_ready: false`. Complete roster/window verification,
 Server request/cut custody, actual deployment and financial conformance remain
 separate admission gates.
 
-The source requires the Core prepared-outbox successor of `7de1d3e8`, including
-`ValidateOriginalWorkOutbox` and `BuildFreshOriginalWorkOutboxCheckpoint`, and
-SDK `9ae95704`.
+The source requires Core `77069204`, including `ValidateOriginalWorkOutbox`,
+`BuildFreshOriginalWorkOutboxCheckpoint` and the explicit runtime `PublicKey`,
+plus SDK `9ae95704`. The corresponding SN `storage-prepare` adapter must also be
+included in the final source composition.
 New tests cover public CLI refusal, public bootstrap export, and the shared
 production DeviceLocal constructor's actual HTTPS capture, cancellation and
 restart. These are distinct paths, not one successful public-CLI end-to-end
