@@ -2,6 +2,8 @@
 
 ## Current execution status — October 4
 
+The resilience review now includes runtime-continuity and checkpoint observations: unavailable RPC reads must not be labeled as changed runtime, noncanonical history or regressed finality. Qualify bounded reconnect/reobservation of the same pinned block alongside genuine contradiction controls before current-role admission.
+
 The [current combined Server model attempt](evidence/current-combined-model-build-failure-root-review-20261004.json) is terminal before any test root: `task/metrics.go` calls `errors.New` without importing `errors`. Fixture cleanup succeeds; the original failed compile and separate teardown sampling gap remain. Astra is fixing the import and reviewing adjacent changed-package build seams. Sol must compile the actual complete selected model package before starting its corrected full fixture. A passing dependency enumeration does not establish successful compilation. Preserve the [earlier live observation](evidence/current-combined-model-live-root-readback-20261004.json) as history, not current status.
 
 The [corrected405 payout body scope](evidence/model405-body-teardown-gap-root-review-20261004.json) passes eleven normal and eleven race roots, vet and the four intended fixture-control failures. Its original terminal remains `FAIL_OR_INCOMPLETE`: a Redis process disappeared between container inspection and cgroup read during owned teardown. All494 host-resource samples remain available, and cleanup completes. Retain the single telemetry gap; do not rerun successful tests solely to make the measurement flag green. The next run needs a documented scoped disposition, verified owned cleanup and fresh cumulative resource admission.
