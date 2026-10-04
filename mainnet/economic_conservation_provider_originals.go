@@ -11,6 +11,7 @@ import (
 	"errors"
 	"math"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -62,6 +63,7 @@ type economicProviderAdmitted struct {
 	Measurement   economicConservationProviderMeasurement
 	ClosedWork    economicConservationClosedWork
 	NewContracts  map[[16]byte]payoutartifact.WholeWorkPriorContract
+	NewCreations  map[[16]byte]payoutartifact.WholeWorkRetainedCreation
 }
 
 // The index is private to the held admission owner. An entry selects a retained
@@ -184,39 +186,57 @@ func (self *economicProviderOriginals) bounded(maximum uint64) error {
 // omitted from the proposed exclusion list. Only a published original census
 // may establish prior credit; failed candidate caches cannot acquire that role.
 func (self *economicConservationArchiveView) providerPriorContracts(ctx context.Context, state *economicConservationState, authority *payoutartifact.WholeWorkAuthority, inventory *payoutartifact.WholeWorkInventory) ([]payoutartifact.WholeWorkPriorContract, error) {
-	if self == nil || state == nil || authority == nil || inventory == nil || inventory.Window == nil {
-		return nil, payoutartifact.ErrClosedWorkUnavailable
+	contracts, _, err := self.providerPriorOriginals(ctx, state, authority, inventory, nil)
+	return contracts, err
+}
+
+// Requested stream origins come from independently authenticated source receipts.
+// Lookup visits only those IDs and current contracts, never a historical prefix.
+func (self *economicConservationArchiveView) providerPriorOriginals(ctx context.Context, state *economicConservationState, authority *payoutartifact.WholeWorkAuthority, inventory *payoutartifact.WholeWorkInventory, requested [][16]byte) ([]payoutartifact.WholeWorkPriorContract, []payoutartifact.WholeWorkRetainedCreation, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
 	}
-	candidates := make(map[[16]byte]struct{}, len(inventory.Window.Records)+len(authority.PriorContracts))
+	if self == nil || state == nil || authority == nil || inventory == nil || inventory.Window == nil {
+		return nil, nil, payoutartifact.ErrClosedWorkUnavailable
+	}
+	candidates := make(map[[16]byte]struct{}, len(inventory.Window.Records)+len(authority.PriorContracts)+len(requested))
 	for _, row := range inventory.Window.Records {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		id := row.ContractId
 		if len(id) != 36 || id[8] != '-' || id[13] != '-' || id[18] != '-' || id[23] != '-' || strings.ToLower(id) != id {
-			return nil, payoutartifact.ErrClosedWorkIntegrity
+			return nil, nil, payoutartifact.ErrClosedWorkIntegrity
 		}
 		raw, err := hex.DecodeString(strings.ReplaceAll(id, "-", ""))
 		if err != nil || len(raw) != 16 || [16]byte(raw) == ([16]byte{}) {
-			return nil, payoutartifact.ErrClosedWorkIntegrity
+			return nil, nil, payoutartifact.ErrClosedWorkIntegrity
 		}
 		candidates[[16]byte(raw)] = struct{}{}
 	}
 	for _, proposed := range authority.PriorContracts {
 		candidates[proposed.ContractId] = struct{}{}
 	}
-	if len(candidates) > payoutartifact.MaxClosedWorkRecords {
-		return nil, payoutartifact.ErrClosedWorkCapacity
+	requestedIds := make(map[[16]byte]struct{}, len(requested))
+	for _, id := range requested {
+		if id == ([16]byte{}) {
+			return nil, nil, payoutartifact.ErrClosedWorkIntegrity
+		}
+		candidates[id], requestedIds[id] = struct{}{}, struct{}{}
 	}
+	if len(candidates) > payoutartifact.MaxClosedWorkRecords {
+		return nil, nil, payoutartifact.ErrClosedWorkCapacity
+	}
+	knownCreations := make(map[[16]byte]payoutartifact.WholeWorkRetainedCreation, len(requestedIds))
 	knownContracts := make(map[[16]byte]payoutartifact.WholeWorkPriorContract, len(candidates))
 	for contractId := range candidates {
 		for key := range self.providerContracts[economicProviderContractKey{Domain: authority.Domain, ContractId: contractId}] {
 			if err := ctx.Err(); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			known := self.providerCensuses[key]
 			if known == nil || known.Domain != authority.Domain {
-				return nil, payoutartifact.ErrClosedWorkIntegrity
+				return nil, nil, payoutartifact.ErrClosedWorkIntegrity
 			}
 			id := economicConservationEntitlementId(strconv.FormatUint(known.Epoch, 10), strconv.FormatUint(authority.Domain.NoID, 10))
 			var record economicConservationEntitlement
@@ -230,21 +250,32 @@ func (self *economicConservationArchiveView) providerPriorContracts(ctx context.
 			}
 			original, exists := known.NewContracts[contractId]
 			if !exists || original.ReconciledEpoch != known.Epoch || original.InventoryHash != known.InventoryHash || known.Epoch >= authority.Epoch {
-				return nil, payoutartifact.ErrClosedWorkIntegrity
+				return nil, nil, payoutartifact.ErrClosedWorkIntegrity
 			}
 			if prior, exists := knownContracts[contractId]; exists && prior != original {
-				return nil, payoutartifact.ErrClosedWorkIntegrity
+				return nil, nil, payoutartifact.ErrClosedWorkIntegrity
 			}
 			knownContracts[contractId] = original
+			if _, needed := requestedIds[contractId]; needed {
+				if creation, exists := known.NewCreations[contractId]; exists {
+					if creation.Checkpoint != original || creation.Original.ContractId != contractId {
+						return nil, nil, payoutartifact.ErrClosedWorkIntegrity
+					}
+					if prior, exists := knownCreations[contractId]; exists && !reflect.DeepEqual(prior, creation) {
+						return nil, nil, payoutartifact.ErrClosedWorkIntegrity
+					}
+					knownCreations[contractId] = creation
+				}
+			}
 		}
 	}
 	for _, proposed := range authority.PriorContracts {
 		original, exists := knownContracts[proposed.ContractId]
 		if !exists {
-			return nil, payoutartifact.ErrClosedWorkUnavailable
+			return nil, nil, payoutartifact.ErrClosedWorkUnavailable
 		}
 		if original != proposed {
-			return nil, payoutartifact.ErrClosedWorkIntegrity
+			return nil, nil, payoutartifact.ErrClosedWorkIntegrity
 		}
 	}
 	result := make([]payoutartifact.WholeWorkPriorContract, 0, len(knownContracts))
@@ -254,7 +285,30 @@ func (self *economicConservationArchiveView) providerPriorContracts(ctx context.
 	slices.SortFunc(result, func(a, b payoutartifact.WholeWorkPriorContract) int {
 		return bytes.Compare(a.ContractId[:], b.ContractId[:])
 	})
-	return result, ctx.Err()
+	creations := make([]payoutartifact.WholeWorkRetainedCreation, 0, len(knownCreations))
+	used := 0
+	for _, checkpoint := range result {
+		if original, exists := knownCreations[checkpoint.ContractId]; exists {
+			byteCount := len(original.Original.StoredContract) + len(original.Original.LatestInventory) + len(original.Original.OriginalCreation)
+			if byteCount > payoutartifact.MaxWholeWorkInventoryBytes-used {
+				return nil, nil, payoutartifact.ErrClosedWorkCapacity
+			}
+			used += byteCount
+			creations = append(creations, cloneEconomicProviderCreation(original))
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	return result, creations, nil
+}
+
+// A caller cannot mutate the private original index through a returned witness.
+func cloneEconomicProviderCreation(value payoutartifact.WholeWorkRetainedCreation) payoutartifact.WholeWorkRetainedCreation {
+	value.Original.StoredContract = bytes.Clone(value.Original.StoredContract)
+	value.Original.LatestInventory = bytes.Clone(value.Original.LatestInventory)
+	value.Original.OriginalCreation = bytes.Clone(value.Original.OriginalCreation)
+	return value
 }
 
 // Convert original row authorities only after all expected owners and requests

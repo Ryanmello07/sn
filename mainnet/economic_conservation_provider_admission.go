@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"reflect"
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -56,11 +57,18 @@ func (self *economicConservationArchiveView) verifyProviderOriginals(ctx context
 	if authority.Domain != domain || authority.Epoch != census.Artifact.Epoch || authority.Start != census.Start || authority.End != census.End {
 		return nil, errors.Join(errRpcIntegrity, payoutartifact.ErrClosedWorkIntegrity)
 	}
-	priors, err := self.providerPriorContracts(ctx, state, &authority, originals.Work)
+	expected, err := selected.workExpectation(&census.Artifact, census.RootSigner, nil)
 	if err != nil {
 		return nil, economicProviderEvidenceError(err)
 	}
-	expected, err := selected.workExpectation(&census.Artifact, census.RootSigner, priors)
+	var requested [][16]byte
+	if expected.AttributionSigner != (common.Address{}) && len(originals.Work.AttributionOriginals) != 0 {
+		requested, err = payoutartifact.ReadWholeWorkPriorCreationRequests(ctx, &census.Artifact, originals.Work, expected)
+		if err != nil {
+			return nil, economicProviderEvidenceError(err)
+		}
+	}
+	expected.PriorContracts, expected.PriorCreations, err = self.providerPriorOriginals(ctx, state, &authority, originals.Work, requested)
 	if err != nil {
 		return nil, economicProviderEvidenceError(err)
 	}
@@ -152,6 +160,17 @@ func (self *economicConservationArchiveView) verifyProviderOriginals(ctx context
 			result.NewContracts[contract.ContractId] = contract
 		}
 	}
+	if len(work.RetainedCreations) != 0 {
+		result.NewCreations = make(map[[16]byte]payoutartifact.WholeWorkRetainedCreation, len(work.RetainedCreations))
+		for _, creation := range work.RetainedCreations {
+			id := creation.Original.ContractId
+			checkpoint, exists := result.NewContracts[id]
+			if _, duplicate := result.NewCreations[id]; duplicate || !exists || checkpoint != creation.Checkpoint {
+				return nil, errors.Join(errRpcIntegrity, payoutartifact.ErrClosedWorkIntegrity)
+			}
+			result.NewCreations[id] = cloneEconomicProviderCreation(creation)
+		}
+	}
 	if err := errors.Join(ctx.Err(), self.checkAdmission()); err != nil {
 		return nil, err
 	}
@@ -186,7 +205,7 @@ func (self *economicConservationArchiveView) retainProviderOriginals(ctx context
 	}
 	self.providerCandidate.captureProvider(key, value)
 	if prior := self.providerCensuses[key]; prior != nil {
-		if prior.Measurement != value.Measurement || prior.InventoryHash != value.InventoryHash || prior.ClosedWork != value.ClosedWork {
+		if prior.Measurement != value.Measurement || prior.InventoryHash != value.InventoryHash || prior.ClosedWork != value.ClosedWork || !reflect.DeepEqual(prior.NewContracts, value.NewContracts) || !reflect.DeepEqual(prior.NewCreations, value.NewCreations) {
 			return errors.Join(errRpcIntegrity, errors.New("economic original provider census changed after admission"))
 		}
 		return errors.Join(ctx.Err(), self.checkAdmission())
@@ -215,6 +234,21 @@ func (self *economicConservationArchiveView) retainProviderOriginals(ctx context
 			Key    economicProviderContractKey
 			Census string
 		}{Key: economicProviderContractKey{Domain: value.Domain, ContractId: contract.ContractId}, Census: key}); err != nil {
+			return err
+		}
+	}
+	if len(value.NewCreations) > payoutartifact.MaxClosedWorkRecords {
+		return payoutartifact.ErrClosedWorkCapacity
+	}
+	for id, creation := range value.NewCreations {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		checkpoint, exists := value.NewContracts[id]
+		if !exists || creation.Original.ContractId != id || creation.Checkpoint != checkpoint {
+			return errors.Join(errRpcIntegrity, payoutartifact.ErrClosedWorkIntegrity)
+		}
+		if err := self.charge(creation); err != nil {
 			return err
 		}
 	}
