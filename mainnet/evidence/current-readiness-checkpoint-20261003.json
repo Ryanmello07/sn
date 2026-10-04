@@ -215,7 +215,12 @@
     "principal-fixture4af-launch-root-readback-20261004.json": "c234b6d2a267640d1948e4e2a7fd13c52cd199e41f925d4fd439ea7c948a3ef9",
     "native-restore-a499-positive-operational-root-adoption-20261004.json": "1ebaf41a5966dc0a78be09ace68ba07379796590bbede78eed9ef12d686ff251",
     "native-restore-a499-controls-operational-root-adoption-20261004.json": "cc67d2ba0e36601495f62672ad4d43dc7cb93fca507914d1799853285c8ea9e1",
-    "principal-fixture4af-normal-root-review-20261004.json": "c0c36c118aca805c81fa33b8cf8c9fd08b3ebb9a8e4afeb52f0f033ac943ed6a"
+    "principal-fixture4af-normal-root-review-20261004.json": "c0c36c118aca805c81fa33b8cf8c9fd08b3ebb9a8e4afeb52f0f033ac943ed6a",
+    "native-restore729c-test-types-source-root-review-20261004.json": "c891aa8c458ad7add0273be7d6cc8696b6986f9fef3a8a7beac55617f779aac5",
+    "native-restore729c-positive-operational-root-adoption-20261004.json": "e9fb3e47965f2f714477c84032a51ed13ae760f9a602cdea6ed57f3bcf9d3fb6",
+    "native-restore729c-controls-operational-root-review-20261004.json": "7c52fa2c2ab9d24472cd7bfedd8f314aad3fdbc2e0eb6db09730d25a90bd2715",
+    "native-restore729c-normal-root-review-20261004.json": "6debdde0c07ef065b3437c45e017bfb06a9672cf5413bca2bb8a9fdf9b496a95",
+    "principal-activationec242-source-root-review-20261004.json": "85acd92c683ac3eade72e5ad371f3584d2a5b31edb0e3096f5f3659de4162863"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -334,9 +339,9 @@
     },
     {
       "closed": false,
-      "evidence": "fee-revision3e7-source-root-review-20261004.json",
+      "evidence": "principal-activationec242-source-root-review-20261004.json",
       "requirement": "PH-19",
-      "status": "Economic witness remains incomplete. Retained fee/revision3e7 source targets54roots/mode9controls; earlier successes retained. Original principal Rust24roots/two controls qualify independently. Original dc1 Go38roots/mode finishes19PASS19FAIL0SKIP; incremental8d3 finishes10PASS10FAIL0SKIP per mode and vetPASS, exposing identical missing checkpoint locks. Test-only4af source reviewed12roots/mode/two controls, with corrected recipe and complete inherited test overlay required. Principal-effects986 source reviewed48Go roots/mode27Rust roots/eight controls, behavioral qualification pending. Full native earnings\u2192vault receipts, Yuma/quantization with realistic physical capacity, entitlement/root/funding census and unattended combined operation remain. 4af normal twelve roots:3PASS9FAIL0SKIP; seven actual drained-activation fixture failures and two missing replay diagnostics, race remains separate. Successor must preserve original proof state; no invented drain."
+      "status": "Economic witness incomplete. Original principal Rust24 roots/two controls qualified. Retained 4af normal/race each3PASS9FAIL0SKIP, vetPASS: actual drained activation and lost process diagnostic findings. Successor ec242 source reviewed: genuine proof-drained parent and original next-block accrual, bounded typed child diagnostics;16 Go roots/mode,3 Rust roots and five control groups unqualified. Effects986, full native earnings-to-vault capture, Yuma/quantization realistic capacity, entitlement/root/funding and unattended operation remain."
     },
     {
       "closed": false,
@@ -442,9 +447,9 @@
     },
     {
       "closed": false,
-      "evidence": "current-connect-paired-core-publication-20261003.json",
+      "evidence": "native-restore729c-normal-root-review-20261004.json",
       "requirement": "MG-09",
-      "status": "Recovery core published; capacity and final composed volume/backup/restore rehearsal remain. Core c618 readonly0400/0600 restore scope qualifies ten roots per mode, vet and four causal bodies, and is published with exact qualified code/module bytes retained. Complete nativea499 source reviewed24roots/mode6controls; selected metadata graph joins c618, behavioral execution and original-checkpoint signed native renewal adoption remain. Complete a499 positive and six-control runners reviewed for automatic execution after the current lane joins; no behavior claimed."
+      "status": "Core c618 read-only restore component qualified and published. Original a499 qualification failed six test compilation errors before any bodies. Test-only729 correction normal compile passes; all25 normal roots execute11PASS14FAIL0SKIP. Distinct ancestor-protection and prior-owner-custody setup failures are under repair; race/vet continue independently and controls require successful counterparts. Complete composed native restore, signed renewal adoption, full capacity and production restore rehearsal remain."
     },
     {
       "closed": false,
