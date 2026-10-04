@@ -2,6 +2,8 @@
 
 This replaces stale absent-implementation labels in the earlier [source census](current-requirements-20261003.md), while retaining all 28 PH requirements and ten MG gates. No full requirement is closed by this index. Linked component receipts retain their separate source and test scopes; implementation, publication, composed qualification and live activation remain different states.
 
+Latest scoped updates: [whole-read retry source review](runtime-observation-owner6fa-source-root-review-20261004.json) admits the corrected fifty-root qualification scope; [fee normal terminal review](fee-c04-normal-terminal-root-review-20261004.json) retains forty-eight passes and one test-expectation failure, with the distinct five-root successor reviewed. Neither closes a full requirement.
+
 | Requirement | Current state and remaining work | Component evidence |
 | --- | --- | --- |
 | PH-01 | Recovery implemented; final composed continuation and host restore rehearsal remain. | [paired-metadata-sn-qualification-20261003.json](paired-metadata-sn-qualification-20261003.json) |
