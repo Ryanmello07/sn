@@ -82,8 +82,11 @@ func wholeWorkExportHeaders() (*types.Header, *types.Header) {
 func newWholeWorkExportFixture(t *testing.T, input *Artifact) *wholeWorkTestFixture {
 	t.Helper()
 	startHeader, endHeader := wholeWorkExportHeaders()
+	if input != nil && input.Start.Number == 2 {
+		startHeader.Number, endHeader.Number = big.NewInt(2), big.NewInt(102)
+	}
 	start, end := time.Unix(int64(startHeader.Time), 0).UTC(), time.Unix(int64(endHeader.Time), 0).UTC()
-	if input == nil || input.Start != (Boundary{Number: 1, Hash: startHeader.Hash().Hex()}) || input.End != (Boundary{Number: 101, Hash: endHeader.Hash().Hex()}) || input.Epoch != 42 || input.NoID != 9 || len(input.Providers) < 9 || len(input.Providers) > 128 || input.ReliabilityAMin != 8 {
+	if input == nil || input.Start != (Boundary{Number: startHeader.Number.Uint64(), Hash: startHeader.Hash().Hex()}) || input.End != (Boundary{Number: endHeader.Number.Uint64(), Hash: endHeader.Hash().Hex()}) || input.Epoch != 42 || input.NoID != 9 || len(input.Providers) < 9 || len(input.Providers) > 128 || input.ReliabilityAMin != 8 {
 		t.Fatal("input does not identify the actual completed/failed/idle original trial fixture")
 	}
 	providers := append([]ProviderInput(nil), input.Providers...)
