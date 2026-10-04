@@ -87,11 +87,11 @@ func storageNativeProducerAuthorities(ctx context.Context, scope storageNativePr
 		var raw []byte
 		if scope.ApprovalSources != nil {
 			source := scope.ApprovalSources[index]
-			if source.Bytes == 0 || source.Bytes > nativeProducerAuthorityLimit || source.Reference.Sha256 != reference.Sha256 || !bootstrapRootAbsolutePath(source.Reference.Path) {
+			if source.Bytes == 0 || source.Bytes > uint64(nativeProducerAuthorityMaximum(scope.Policy.Execution.FeeCensus)) || source.Reference.Sha256 != reference.Sha256 || !bootstrapRootAbsolutePath(source.Reference.Path) {
 				return nil, errors.New("native restore approval source differs from its exact original reference")
 			}
 			var err error
-			raw, err = nativeProducerReadApproval(ctx, source.Reference)
+			raw, err = nativeProducerReadApprovalFor(ctx, source.Reference, scope.Policy.Execution.FeeCensus)
 			if err != nil {
 				return nil, err
 			}
