@@ -148,7 +148,7 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 			}
 			active := true
 			if previous, exists := starts[record.ContractId]; exists {
-				if !bytes.Equal(previous.StoredContract, record.StoredContract) {
+				if !bytes.Equal(previous.StoredContract, record.StoredContract) || len(previous.OriginalCreation) != 0 && !bytes.Equal(previous.OriginalCreation, record.OriginalCreation) {
 					return nil, ErrClosedWorkIntegrity
 				}
 				if len(previous.LatestInventory) != 0 {
@@ -171,6 +171,11 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 				contracts[record.ContractId] = contract
 			} else if !bytes.Equal(contract.stored, record.StoredContract) {
 				return nil, ErrClosedWorkIntegrity
+			}
+			if _, exists := contract.ends[expectedOwner.ClientId]; exists {
+				// A later generation cannot overwrite an older owner of carried
+				// work. Its original handoff must be proved before coalescing it.
+				return nil, ErrClosedWorkUnavailable
 			}
 			contract.active = contract.active || active
 			contract.ends[expectedOwner.ClientId] = record
@@ -197,6 +202,9 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 	}
 	if closed.CompleteReportInventories != artifact.ClosedWork.Count || closed.ReservedAmountJoins != artifact.ClosedWork.Count {
 		return nil, ErrClosedWorkUnavailable
+	}
+	if _, err := verifyWholeWorkCreations(ctx, artifact, domainHash, authority.Owners, contracts); err != nil {
+		return nil, err
 	}
 	if len(expected.PriorContracts) > MaxClosedWorkRecords {
 		return nil, ErrClosedWorkCapacity
@@ -272,12 +280,10 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 		}
 		row, exists := rows[id]
 		if !exists {
-			if start, known := contract.starts[contract.source]; known {
-				if head, err := coreprotocol.DecodeOriginalCloseInventory(start.LatestInventory); err == nil && head.Terminal {
-					return nil, ErrClosedWorkUnavailable
-				}
-			}
-			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("window omitted independently inventoried contract"))
+			// A delayed boundary capture can include later admissions, just as
+			// a delayed start can include earlier completions. Neither signed
+			// cut dates the individual event; do not invent its window or fault.
+			return nil, errors.Join(ErrClosedWorkUnavailable, errors.New("independently inventoried contract lacks original window assignment"))
 		}
 		destination, destinationPresent := contract.ends[contract.destination]
 		sourceHead, sourceErr := coreprotocol.DecodeOriginalCloseInventory(source.LatestInventory)

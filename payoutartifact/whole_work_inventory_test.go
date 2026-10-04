@@ -529,7 +529,43 @@ func TestWholeWorkOpenAndZeroCanceledContractsRemainExplicit(t *testing.T) {
 		t.Fatal("explicit non-credit contracts were omitted or credited", value, err)
 	}
 	fixture.inventory.Window.Records = fixture.inventory.Window.Records[1:]
-	if _, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); !errors.Is(err, ErrClosedWorkIntegrity) {
+	if _, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); !errors.Is(err, ErrClosedWorkUnavailable) {
 		t.Fatal("canceled contract was silently removed", err)
+	}
+}
+
+func TestWholeWorkLateBoundaryCutCannotInventAnIndividualContractDate(t *testing.T) {
+	fixture := newWholeWorkTestFixture(t)
+	fixture.empty(t)
+	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
+	if err != nil || value == nil || !value.Complete || value.Contracts != 0 {
+		t.Fatal("initial independently complete empty window was unavailable", value, err)
+	}
+	request, err := coreprotocol.DecodeOriginalWorkRequest(fixture.inventory.Owners[0].EndRequest, fixture.authority.RequestPublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.IssuedAtUnix = fixture.inventory.Clock.EndTime.Unix() + 1
+	request.ExpiresAtUnix = request.IssuedAtUnix + 300
+	request, err = coreprotocol.SignOriginalWorkRequest(request, fixture.requestKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.inventory.Owners[0].EndRequest, err = request.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, source, destination := [16]byte{3}, [16]byte{1}, [16]byte{2}
+	stored, err := proto.Marshal(&coreprotocol.StoredContract{ContractId: id[:], SourceId: source[:], DestinationId: destination[:], TransferByteCount: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.changeCut(t, 0, 1, func(c *coreprotocol.OriginalWorkCut) {
+		c.Revision++
+		c.Contracts = []coreprotocol.OriginalWorkContract{{ContractId: id, StoredContract: stored}}
+	})
+	value, err = VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
+	if value != nil || !errors.Is(err, ErrClosedWorkUnavailable) || errors.Is(err, ErrClosedWorkIntegrity) {
+		t.Fatal("late undated SDK admission invented a complete window or an integrity fault", value, err)
 	}
 }

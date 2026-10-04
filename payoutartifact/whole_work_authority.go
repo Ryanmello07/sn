@@ -140,14 +140,16 @@ func (self WholeWorkAuthority) digest(ctx context.Context) ([32]byte, error) {
 		return [32]byte{}, ErrClosedWorkIntegrity
 	}
 	var prior [16]byte
+	var priorOwner WholeWorkOwner
 	for i, owner := range self.Owners {
 		if err := ctx.Err(); err != nil {
 			return [32]byte{}, err
 		}
-		if owner.ClientId == ([16]byte{}) || owner.NetworkId == ([16]byte{}) || owner.Generation == ([16]byte{}) || owner.PublicKey == ([32]byte{}) || i > 0 && bytes.Compare(prior[:], owner.ClientId[:]) >= 0 {
+		order := bytes.Compare(priorOwner.ClientId[:], owner.ClientId[:])
+		if owner.ClientId == ([16]byte{}) || owner.NetworkId == ([16]byte{}) || owner.Generation == ([16]byte{}) || owner.PublicKey == ([32]byte{}) || i > 0 && (order > 0 || order == 0 && (bytes.Compare(priorOwner.Generation[:], owner.Generation[:]) >= 0 || priorOwner.NetworkId != owner.NetworkId)) {
 			return [32]byte{}, ErrClosedWorkIntegrity
 		}
-		prior = owner.ClientId
+		priorOwner = owner
 	}
 	if len(self.ExpectedProviders) > MaxWholeWorkOwners {
 		return [32]byte{}, ErrClosedWorkCapacity
