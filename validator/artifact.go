@@ -286,6 +286,13 @@ func (self *HTTPArtifactReader) read(ctx context.Context, epoch uint64, noID uin
 	if !strings.EqualFold(artifact.ContentHash, contentHash) {
 		return nil, errors.New("artifact content response does not match history")
 	}
+	// Optional original rows are independently reconstructed in both live and
+	// retained HTTP observation readers. Missing/foreign components stay unknown.
+	if artifact.ClosedWork != nil {
+		if _, err := payoutartifact.VerifyClosedWork(ctx, artifact); err != nil && !errors.Is(err, payoutartifact.ErrClosedWorkUnavailable) {
+			return nil, err
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

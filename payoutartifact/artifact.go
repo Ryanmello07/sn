@@ -61,26 +61,28 @@ type Leaf struct {
 // Artifact is the immutable operator statement validators reconstruct before
 // using its prior-epoch usage total to audit the next demand deposit.
 type Artifact struct {
-	Schema               string          `json:"schema"`
-	DeploymentID         string          `json:"deployment_id"`
-	ChainID              uint64          `json:"chain_id"`
-	GenesisHash          string          `json:"genesis_hash"`
-	Netuid               uint16          `json:"netuid"`
-	Coordinator          common.Address  `json:"coordinator"`
-	SettlementVault      common.Address  `json:"settlement_vault"`
-	Epoch                uint64          `json:"epoch"`
-	NoID                 uint64          `json:"no_id"`
-	PolicyHash           string          `json:"policy_hash"`
-	Start                Boundary        `json:"start"`
-	End                  Boundary        `json:"end"`
-	OperatorSnapshotHash string          `json:"operator_snapshot_hash"`
-	FleetSnapshotHash    string          `json:"fleet_snapshot_hash"`
-	ProviderSnapshotHash string          `json:"provider_snapshot_hash"`
-	ReliabilityAMin      uint64          `json:"reliability_a_min"`
-	Providers            []ProviderInput `json:"providers"`
-	Leaves               []Leaf          `json:"leaves"`
-	PayoutRoot           [32]byte        `json:"payout_root"`
-	TotalUsageBytes      uint64          `json:"total_usage_bytes"`
+	// Optional original database component; legacy signed bytes omit it.
+	ClosedWork           *ClosedWorkCensus `json:"original_closed_work,omitempty"`
+	Schema               string            `json:"schema"`
+	DeploymentID         string            `json:"deployment_id"`
+	ChainID              uint64            `json:"chain_id"`
+	GenesisHash          string            `json:"genesis_hash"`
+	Netuid               uint16            `json:"netuid"`
+	Coordinator          common.Address    `json:"coordinator"`
+	SettlementVault      common.Address    `json:"settlement_vault"`
+	Epoch                uint64            `json:"epoch"`
+	NoID                 uint64            `json:"no_id"`
+	PolicyHash           string            `json:"policy_hash"`
+	Start                Boundary          `json:"start"`
+	End                  Boundary          `json:"end"`
+	OperatorSnapshotHash string            `json:"operator_snapshot_hash"`
+	FleetSnapshotHash    string            `json:"fleet_snapshot_hash"`
+	ProviderSnapshotHash string            `json:"provider_snapshot_hash"`
+	ReliabilityAMin      uint64            `json:"reliability_a_min"`
+	Providers            []ProviderInput   `json:"providers"`
+	Leaves               []Leaf            `json:"leaves"`
+	PayoutRoot           [32]byte          `json:"payout_root"`
+	TotalUsageBytes      uint64            `json:"total_usage_bytes"`
 	// TotalUsers is the operator's attested count of distinct top-level client
 	// identities (users) with contract usage in the epoch window: the same
 	// figure the operator stats feed publishes as a block's `users`. Together
@@ -99,6 +101,7 @@ type Artifact struct {
 
 // BuildInput is the trusted identity and raw-measurement input to Build.
 type BuildInput struct {
+	ClosedWork                              *ClosedWorkCensus
 	DeploymentID, GenesisHash, PolicyHash   string
 	ChainID                                 uint64
 	Netuid                                  uint16
@@ -118,6 +121,10 @@ type BuildInput struct {
 // every proof, and all checked summaries. Provider order is canonicalized by
 // client id.
 func Build(in BuildInput) (*Artifact, error) {
+	closedWork, err := cloneClosedWork(in.ClosedWork)
+	if err != nil {
+		return nil, err
+	}
 	if in.DeploymentID == "" || in.ChainID == 0 || in.Netuid == 0 || in.NoID == 0 || in.Coordinator == (common.Address{}) || in.SettlementVault == (common.Address{}) || !IsDigest(in.GenesisHash, "0x") || !IsDigest(in.PolicyHash, "0x") || !IsDigest(in.Start.Hash, "0x") || !IsDigest(in.End.Hash, "0x") || !IsDigest(in.OperatorSnapshotHash, "sha256:") || !IsDigest(in.FleetSnapshotHash, "sha256:") || in.End.Number < in.Start.Number || in.ReliabilityAMin == 0 {
 		return nil, errors.New("incomplete payout artifact identity/boundary")
 	}
@@ -181,7 +188,8 @@ func Build(in BuildInput) (*Artifact, error) {
 		root, sharesTotal = tree.Root(), 10_000
 	}
 	return &Artifact{
-		Schema: Schema, DeploymentID: in.DeploymentID, ChainID: in.ChainID,
+		ClosedWork: closedWork,
+		Schema:     Schema, DeploymentID: in.DeploymentID, ChainID: in.ChainID,
 		GenesisHash: strings.ToLower(in.GenesisHash), Netuid: in.Netuid,
 		Coordinator: in.Coordinator, SettlementVault: in.SettlementVault,
 		Epoch: in.Epoch, NoID: in.NoID, PolicyHash: strings.ToLower(in.PolicyHash),
@@ -282,6 +290,7 @@ func Verify(artifact *Artifact) error {
 		return errors.New("artifact provider snapshot hash mismatch")
 	}
 	rebuilt, err := Build(BuildInput{
+		ClosedWork:   artifact.ClosedWork,
 		DeploymentID: artifact.DeploymentID, GenesisHash: artifact.GenesisHash,
 		PolicyHash: artifact.PolicyHash, ChainID: artifact.ChainID, Netuid: artifact.Netuid,
 		Coordinator: artifact.Coordinator, SettlementVault: artifact.SettlementVault,

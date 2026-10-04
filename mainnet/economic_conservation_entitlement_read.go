@@ -196,7 +196,7 @@ func readEconomicEntitlementCensus(ctx context.Context, policy economicConservat
 	defer artifactReader.CloseIdleConnections()
 	artifact, err := artifactReader.ReadProviderCensus(ctx, epoch.Uint64(), pool.Uint64(), maximumEconomicEntitlementProviders)
 	if err != nil {
-		if err == validator.ErrArtifactCapacity {
+		if errors.Is(err, validator.ErrArtifactCapacity) || errors.Is(err, payoutartifact.ErrClosedWorkCapacity) {
 			return nil, errMonitorEconomicCapacity
 		}
 		if validator.ArtifactObservationPending(err) || ctx.Err() != nil && monitorOnlyCancellationCauses(err, 0) {
@@ -226,6 +226,10 @@ func readEconomicEntitlementCensus(ctx context.Context, policy economicConservat
 	}
 	result.LeafObligationsAlpha = allocated.String()
 	result.FloorResidueAlpha = new(big.Int).Sub(total, allocated).String()
+	result.ClosedWork, err = readEconomicClosedWork(ctx, artifact)
+	if err != nil {
+		return nil, economicEntitlementEvidenceError(err)
+	}
 	result.ContentHash = result.hash()
 	if err := result.validate(ctx, policy, record); err != nil {
 		return nil, economicEntitlementEvidenceError(err)
