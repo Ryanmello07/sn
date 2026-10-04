@@ -221,7 +221,8 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 	// Catalog paths and hot liabilities share one fixed head. Reserving an
 	// additional worst-case reference for each forecast segment avoids a count
 	// revision accidentally exhausting the serialized owner before publication.
-	referenceBytes, feeSummaryBytes := uint64(maximumMonitorHistoryPath+256), uint64(0)
+	// Admitted control characters can expand each pathname byte sixfold in JSON.
+	referenceBytes, feeSummaryBytes := uint64(6*maximumMonitorHistoryPath+256), uint64(0)
 	if request.RetireNativeFees {
 		// Each future retirement also names its proof segment and retains
 		// one bounded census header, even if this snapshot has no fees yet.
@@ -236,7 +237,17 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 	if request.NativeRenewal != nil {
 		// The next compaction retains the original bounded approval list in
 		// its derived head, in addition to any future signed adoption frame.
-		feeSummaryBytes += uint64(len(request.NativeRenewal.To)) * (maximumMonitorHistoryPath + 128)
+		// Native review paths have their own grammar, so measure the actual
+		// authenticated head instead of assuming monitor pathname limits.
+		head, err := compacted.nativeApprovalHead(request.Policy)
+		if err != nil {
+			return plan, nil, err
+		}
+		raw, err := json.Marshal(head)
+		if err != nil {
+			return plan, nil, err
+		}
+		feeSummaryBytes += uint64(len(raw)) + 256
 	}
 	plan.RequiredHeadBytes = 2 * (uint64(len(next)) + request.FutureSegments*referenceBytes + feeSummaryBytes)
 	if plan.RequiredSegments > resources.ArchiveSegments || plan.RequiredIndexEntries > resources.IndexEntries || plan.RequiredIndexBytes > resources.IndexBytes || plan.RequiredHeadBytes > resources.headBytes() {
