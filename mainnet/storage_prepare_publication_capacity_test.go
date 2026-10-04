@@ -36,14 +36,14 @@ func TestStoragePreparationPublicationRejectsUnexportableDeclaredCapacity(t *tes
 			default:
 				f.profile.MaxFiles = durablevolume.MaximumPhysicalInventoryEntries
 			}
-			if _, err := f.profile.InventoryLimits(); !errors.Is(err, protocol.ErrProviderAttemptsCapacity) {
-				t.Fatal("unexportable declaration acquired a complete inventory forecast", dimension, err)
-			}
 			owner := storagePublicationProfileOwner(t, f.source, f.profile)
 			storagePreparationOwnerRequest(t, f.source, "daemon", []durablevolume.PreparationOwner{owner})
 			var output, diagnostic bytes.Buffer
 			if code := runMain(f.source.ctx, []string{"storage-prepare", "plan", "--request", f.source.requestPath, "--request-sha256", f.source.requestHash}, &output, &diagnostic); code == 0 || !strings.Contains(diagnostic.String(), "provider publication allowance exceeds complete physical inventory capacity") {
 				t.Fatal("public preparation did not refuse the oversized original profile", dimension, code, diagnostic.String())
+			}
+			if _, err := f.profile.InventoryLimits(); !errors.Is(err, protocol.ErrProviderAttemptsCapacity) {
+				t.Fatal("unexportable declaration acquired a complete inventory forecast", dimension, err)
 			}
 			if entries, err := os.ReadDir(f.source.root); err != nil || len(entries) != 0 {
 				t.Fatal("oversized original scope changed the empty target", dimension, err)
