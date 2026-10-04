@@ -303,6 +303,10 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool, additionalJo
 			source.storageKVs[hash][key] = value
 		}
 		source.incentive(t, number, 25, amounts...)
+		// This job executes another real epoch. Its synthetic RPC context must
+		// advance the epoch and completed boundary together with that event.
+		source.set(t, number, "SubnetEpochIndex", nativeExecutionTestWords(9))
+		source.set(t, number, "LastEpochBlock", nativeExecutionTestWords(number))
 		jobs[hash], proofs[nativeExecutionTestHex(current.ParentHash[:])] = current, current.ProofNodesHex
 		certificates[hash] = nativeProducerTestCertificate(t, economicEmissionBoundary{Number: number, Hash: hash}, consensus, 20, 9)
 	}
