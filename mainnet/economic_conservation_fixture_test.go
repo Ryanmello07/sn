@@ -30,14 +30,15 @@ import (
 )
 
 type economicConservationFixture struct {
-	native     *economicEmissionFixture
-	vault      *monitorEvmFixture
-	policy     economicConservationPolicy
-	path       string
-	checkpoint string
-	now        time.Time
-	claimReads atomic.Uint64
-	claimFault atomic.Bool
+	native              *economicEmissionFixture
+	vault               *monitorEvmFixture
+	policy              economicConservationPolicy
+	path                string
+	checkpoint          string
+	now                 time.Time
+	claimReads          atomic.Uint64
+	claimFault          atomic.Bool
+	claimPaymentUnknown atomic.Bool
 }
 
 // Mutated synthetic ABI values must update receipt tries, all descendant
@@ -207,6 +208,9 @@ func newEconomicConservationFixture(t *testing.T, twoProviders bool, configureVa
 		observation := &protocol.ClaimObservation{Schema: protocol.ClaimObservationSchema, EvidenceKind: "signed-receipt", Authority: "configured-rpc-assertion", GenesisStatus: "unverified", Epoch: 1, ObservedAt: f.now.Format(time.RFC3339Nano), Pool: pool, ShareBps: 700, ProofStatus: "contract-accepted", BlockNumber: 11, BlockHash: f.vault.blocks[11].header.Hash().Hex(), TransactionHash: f.vault.blocks[11].transactions[0].Hash().Hex(), Relayer: strings.ToLower(f.vault.blocks[11].receipts[0]["from"].(string)), AcceptedAmountRao: "7", PaymentStatus: "deferred", UnpaidCreditRao: "12"}
 		if f.claimFault.Load() {
 			observation.AcceptedAmountRao = "8"
+		}
+		if f.claimPaymentUnknown.Load() {
+			observation.PaymentStatus, observation.UnpaidCreditRao = "unknown", ""
 		}
 		value := protocol.ClaimProgress{Schema: protocol.ClaimProgressSchema, Member: "synthetic-claim", Status: "active", InstanceId: strings.Repeat("6", 32), StartedAt: f.now.Add(-time.Hour).Format(time.RFC3339Nano), PublishedAt: f.now.Format(time.RFC3339Nano), Sequence: sequence, QueueSha256: strings.Repeat("7", 64), DeclaredPool: &pool, TotalEntries: 1, FinalizedEntries: 1, Entries: []protocol.ClaimProgressEntry{{Epoch: 1, QueueStatus: "finalized", ObservationStatus: "retained", DomainStatus: "match", Observation: observation}}}
 		if err := value.Validate(); err != nil {
