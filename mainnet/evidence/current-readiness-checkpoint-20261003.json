@@ -238,7 +238,8 @@
     "native-adoptionade5-environment-ancestry-root-finding-20261004.json": "91214605331e55c29ec5ffc9c029847bc257d9e51eaf72d90631a9c1c04aba80",
     "native-adoptionade5-go-body-operational-root-review-20261004.json": "28f22bbe8c586e8d535635a94cc01cc8b25b28075bd97465ef542363613ad681",
     "native-adoptionade5-original-terminal-root-readback-20261004.json": "040b9e1c7b6f47b930a580e01b747d54e2c5fadb547fa98c38ca59cc470d3e9b",
-    "conservation-entitlement9a-scoped-source-root-review-20261004.json": "b56bf4de289537e97774aba220404d1ae72e4da1e86ca357ab175842c58bc051"
+    "conservation-entitlement9a-scoped-source-root-review-20261004.json": "b56bf4de289537e97774aba220404d1ae72e4da1e86ca357ab175842c58bc051",
+    "economic-storage5f5-scoped-source-root-review-20261004.json": "232544c51127edd649bd8275bf0a27189ebe2a5e83a75ce874294c359f4f1523"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -357,9 +358,9 @@
     },
     {
       "closed": false,
-      "evidence": "principal-activationec242-source-root-review-20261004.json",
+      "evidence": "conservation-entitlement9a-scoped-source-root-review-20261004.json",
       "requirement": "PH-19",
-      "status": "Economic witness incomplete. Original principal Rust24 roots/two controls qualified. Retained 4af normal/race each3PASS9FAIL0SKIP, vetPASS: actual drained activation and lost process diagnostic findings. Successor ec242 source reviewed: genuine proof-drained parent and original next-block accrual, bounded typed child diagnostics;16 Go roots/mode,3 Rust roots and five control groups unqualified. Effects986, full native earnings-to-vault capture, Yuma/quantization realistic capacity, entitlement/root/funding and unattended operation remain."
+      "status": "Economic witness incomplete. Composed ade5 Rust four positive roots/twelve exports, additive five-job exporter and two causal controls retained. Entitlement9a source reviewed: original committer/complete leaves, earlier-pool carry and cold claims; 32Go roots/mode, vets and seven control groups remain. Capture/Yuma/profile joins, funding composition and unattended operation remain unqualified; source math does not establish10/90 conformance."
     },
     {
       "closed": false,
@@ -465,9 +466,9 @@
     },
     {
       "closed": false,
-      "evidence": "native-restore729c-terminal-root-review-20261004.json",
+      "evidence": "native-adoptionade5-original-terminal-root-readback-20261004.json",
       "requirement": "MG-09",
-      "status": "Core c618 read-only restore component qualified and published. Test-only729 correction compiles; both normal/race25 roots finish11PASS14FAIL0SKIP, vetPASS, all bodies joined. Source-reviewed425 corrects fresh ancestor protection and target preenrollment without changing production;14affected+2new roots/mode remain unqualified. Signed native renewal1fe source reviewed, corrected composed qualification, realistic capacity and production restore rehearsal remain."
+      "status": "Corec618 qualified and published. Composed ade5 exact50Go roots per mode finish7PASS43FAIL0SKIP, vetPASS; all86 original failures report protected ancestry. Same-image protected-environment continuation preserves prior positives and exposes new checkpoint/restore/activation/forecast causes for batched correction. Full largehead5f5 profile source reviewed, not executed. Final current-owner cross-volume restore and production rehearsal remain."
     },
     {
       "closed": false,
