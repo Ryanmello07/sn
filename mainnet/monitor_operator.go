@@ -412,6 +412,13 @@ func (self *monitorOperatorWorker) save() error {
 func readMonitorOperator(ctx context.Context, policy monitorOperatorPolicy, hooks monitorServiceReadHooks) (*stmonitor.Snapshot, string) {
 	raw, err := readMonitorServiceFile(ctx, policy.DatabaseFile, 8192, true, hooks)
 	if err != nil {
+		// A completed protected-file or generation refusal remains an
+		// integrity finding. Missing credentials and incomplete I/O remain
+		// unavailable; neither result supplies a database observation.
+		var classified *monitorServiceReadError
+		if errors.As(err, &classified) && (classified.code == "invalid" || classified.code == "changed") {
+			return nil, classified.code
+		}
 		return nil, "unavailable"
 	}
 	if monitorReadDigest(raw) != policy.DatabaseSha256 {
