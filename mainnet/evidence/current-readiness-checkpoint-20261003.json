@@ -162,7 +162,9 @@
     "fee-retirement-logical-guard-source-finding-20261004.json": "9290afe26ef4f8392c0815c69ad3ce7cfb3c4dffd308c7e57c56e31f0b67da27",
     "runtime-transport-original-race-root-review-20261004.json": "e73997f99a4b80fb61e03136391a6bdf91fa20117b2de100ed4d5904399d68bc",
     "fee-retirement121-source-root-review-20261004.json": "1553056690a45c7881bda451ea11143bf1199ca136fe7f1450915f720091b60d",
-    "current-model-skipped-input-followup-root-review-20261004.json": "7bfabc3c1349a5ac83c632f95038b535aa5cff87baa0049b3bee28aaceda9099"
+    "current-model-skipped-input-followup-root-review-20261004.json": "7bfabc3c1349a5ac83c632f95038b535aa5cff87baa0049b3bee28aaceda9099",
+    "original-key-fee-revision-source-root-review-20261004.json": "70b7c264b5a0ca5b4cb779c21be58d83f7f4c347f723212ca85ba9ff860cb207",
+    "runtime-observation-typed-nil-source-finding-20261004.json": "aa560be49bb33f9da2b31475d9a12c719ee4711dc119ac2878b55a148fe4e413"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
