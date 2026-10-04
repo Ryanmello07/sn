@@ -32,8 +32,8 @@ func runtimeReadMethod(method string) bool {
 	}
 }
 
-// The physical connection must independently report failure. Decoder errors,
-// RPC refusals and any mixed/cyclic/unbounded error graph remain hard.
+// The physical connection or geth's typed peer-close frame must independently
+// report failure. Decoder errors, RPC refusals and mixed graphs remain hard.
 func runtimeReadDisconnected(err error) bool {
 	remaining := 128
 	var visit func(error, int) bool
@@ -119,7 +119,14 @@ func CallRuntimeReadContext(ctx context.Context, client *rpc.Client, result any,
 		if err == nil {
 			return operation.Err()
 		}
-		if operation.Err() != nil || !owner.websocket || owner.failed.Load() <= before || !runtimeReadDisconnected(err) {
+		// A peer's close frame is decoded above net.Conn.Read. Geth releases
+		// request waiters before closing that codec, so neither a failed read
+		// nor its terminal generation is guaranteed to precede this result.
+		// Only geth's direct typed frame may supply this missing physical fact;
+		// its code still passes the bounded classifier below. Client.Close
+		// returns ErrClientQuit and never receives this recovery authority.
+		_, peerClosed := err.(*websocket.CloseError)
+		if operation.Err() != nil || !owner.websocket || owner.failed.Load() <= before && !peerClosed || !runtimeReadDisconnected(err) {
 			return errors.Join(err, operation.Err())
 		}
 		timer := time.NewTimer(delay)

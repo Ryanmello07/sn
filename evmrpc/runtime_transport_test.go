@@ -76,6 +76,105 @@ func TestEvmRuntimeGenerationTracksActualSocketReadRecovery(t *testing.T) {
 	}
 }
 
+// A decoded service-restart frame ends the WebSocket while its underlying
+// TCP read still succeeded. The same read must recover through geth's owner.
+func TestEvmRuntimePeerCloseFrameRepeatsOriginalRead(t *testing.T) {
+	var connections, calls atomic.Int64
+	upgrader := websocket.Upgrader{}
+	joined := make(chan struct{}, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		connection, err := upgrader.Upgrade(writer, request, nil)
+		if err != nil {
+			return
+		}
+		defer func() { connection.Close(); joined <- struct{}{} }()
+		ordinal := connections.Add(1)
+		for {
+			var input struct {
+				Id json.RawMessage `json:"id"`
+			}
+			if err := connection.ReadJSON(&input); err != nil {
+				return
+			}
+			calls.Add(1)
+			if ordinal == 1 {
+				if err := connection.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseServiceRestart, "synthetic-restart"), time.Now().Add(10*time.Second)); err != nil {
+					t.Error(err)
+					return
+				}
+				// Receive the peer acknowledgement before closing the TCP socket;
+				// the decoded frame, not an injected EOF, ends the first read.
+				connection.ReadMessage()
+				return
+			}
+			if err := connection.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": input.Id, "result": "synthetic-network"}); err != nil {
+				return
+			}
+		}
+	}))
+	defer server.Close()
+	client, err := DialContext(t.Context(), "ws"+strings.TrimPrefix(server.URL, "http"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	before, _ := RuntimeTransportGeneration(client.Client())
+	var value string
+	err = CallRuntimeReadContext(t.Context(), client.Client(), &value, "system_chain")
+	after, _ := RuntimeTransportGeneration(client.Client())
+	client.Close()
+	<-joined
+	if err != nil || value != "synthetic-network" || connections.Load() != 2 || calls.Load() != 2 || after <= before {
+		t.Fatalf("peer close frame did not repeat the owned runtime read: connections=%d calls=%d generations=%d/%d value=%q err=%v", connections.Load(), calls.Load(), before, after, value, err)
+	}
+	<-joined
+}
+
+// A caller-requested close releases an outstanding read without dialing or
+// giving a peer-close retry policy authority over this independent lifecycle.
+func TestEvmRuntimeExplicitCloseCannotReconnect(t *testing.T) {
+	var connections, calls atomic.Int64
+	upgrader := websocket.Upgrader{}
+	entered := make(chan struct{})
+	joined := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		connection, err := upgrader.Upgrade(writer, request, nil)
+		if err != nil {
+			return
+		}
+		defer func() { connection.Close(); close(joined) }()
+		connections.Add(1)
+		if _, _, err := connection.ReadMessage(); err != nil {
+			return
+		}
+		calls.Add(1)
+		close(entered)
+		connection.ReadMessage()
+	}))
+	defer server.Close()
+	client, err := DialContext(t.Context(), "ws"+strings.TrimPrefix(server.URL, "http"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	done := make(chan error, 1)
+	go func() {
+		var value string
+		done <- CallRuntimeReadContext(t.Context(), client.Client(), &value, "system_chain")
+	}()
+	select {
+	case <-entered:
+	case err := <-done:
+		t.Fatalf("owned read did not reach explicit close barrier: %v", err)
+	}
+	client.Close()
+	err = <-done
+	<-joined
+	if !errors.Is(err, rpc.ErrClientQuit) || connections.Load() != 1 || calls.Load() != 1 {
+		t.Fatalf("explicit client close acquired reconnect authority: connections=%d calls=%d err=%v", connections.Load(), calls.Load(), err)
+	}
+}
+
 // Every HTTP request keeps the same stateless route epoch. A response parser
 // failure remains hard and neither lookup nor generation creates a retry.
 func TestEvmRuntimeHttpGenerationKeepsStatelessReadProfile(t *testing.T) {
