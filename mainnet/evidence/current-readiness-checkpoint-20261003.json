@@ -255,7 +255,9 @@
     "conservation-populated3a13-composed-source-scope-review-20261004.json": "2bf41d3a8b4e8634acfacf791b478158d04b16f2a93f24aff431d551854895f4",
     "proof-drained-continuation77-three-controls-independent-readback-20261004.json": "45fd7111937262e3bb80062dce14da78682c7baf995687814e9747a38c1b62be",
     "conservation-native-followce78-scoped-root-source-review-20261004.json": "cf37883f12b2bba73b146c4cddcb7f72fb077b664193ca561c573d63de54459a",
-    "admissionab0-dual77-normal19-independent-failure-readback-20261004.json": "97994b444a5af7075162611e12d6d16090d1ece3361b08e8d50b056c7fa60470"
+    "admissionab0-dual77-normal19-independent-failure-readback-20261004.json": "97994b444a5af7075162611e12d6d16090d1ece3361b08e8d50b056c7fa60470",
+    "conservation-follow-historyffe-scoped-source-root-review-20261004.json": "aeeeffdf756fe6a941973ce07fb228beec78fb2b96cd1030c27f3950d6c331d6",
+    "conservation-follow-terminalb6-source-root-review-20261004.json": "63fd2cc372e91ca1949ddbb5f2ce353def792624747d2655ef329a5c005dbee7"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
