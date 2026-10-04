@@ -46,8 +46,6 @@ func rootMonitorStartupPending(err error) bool {
 		switch cause.(type) {
 		case *monitorAdmissionRefusalError, *monitorAdmissionCleanupError, *monitorOutputOwnershipError:
 			return false
-		case interface{ Is(error) bool }, interface{ As(any) bool }:
-			return false
 		}
 		if cause == context.Canceled || cause == context.DeadlineExceeded || cause == durablevolume.ErrBusy || cause == durablevolume.ErrUnavailable {
 			return true
@@ -57,6 +55,12 @@ func rootMonitorStartupPending(err error) bool {
 			case syscall.EAGAIN, syscall.EBUSY, syscall.EIO, syscall.EMFILE, syscall.ENFILE, syscall.ENOMEM, syscall.ENOSPC, syscall.EDQUOT, syscall.EINTR, syscall.ETIMEDOUT:
 				return true
 			}
+			return false
+		}
+		// syscall.Errno has its own standard Is method. Admit only the exact
+		// trusted leaves above before rejecting arbitrary custom classifiers.
+		switch cause.(type) {
+		case interface{ Is(error) bool }, interface{ As(any) bool }:
 			return false
 		}
 		if many, ok := cause.(interface{ Unwrap() []error }); ok {

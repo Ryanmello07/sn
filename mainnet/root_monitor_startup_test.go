@@ -535,3 +535,13 @@ func TestRootMonitorStartupMixedHardCausesRemainTerminal(t *testing.T) {
 		t.Fatal("cancellation hid unresolved cleanup")
 	}
 }
+
+// Standard errno leaves implement Is themselves, but only this exact bounded
+// set denotes unavailable reads; an arbitrary custom classifier gains nothing.
+func TestRootMonitorStartupKnownReadCausesRemainRetryable(t *testing.T) {
+	for _, cause := range []error{syscall.EIO, syscall.EAGAIN, syscall.EBUSY, syscall.EMFILE, syscall.ENFILE, syscall.ENOMEM, syscall.ENOSPC, syscall.EDQUOT, syscall.EINTR, syscall.ETIMEDOUT, durablevolume.ErrBusy, durablevolume.ErrUnavailable, context.DeadlineExceeded, context.Canceled} {
+		if !rootMonitorStartupPending(errors.Join(&os.PathError{Op: "read", Path: "synthetic-policy", Err: cause}, context.DeadlineExceeded)) {
+			t.Fatalf("known bounded read cause became terminal: %v", cause)
+		}
+	}
+}
