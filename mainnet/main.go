@@ -92,7 +92,7 @@ func (self *monitorState) observe(now time.Time, identity chainIdentity, stallAf
 	return "ok", nil
 }
 
-// Wire cancellation once; only owner-signing sign invokes the pinned device adapter.
+// Wire cancellation once; device commands retain their explicit custody gates.
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -170,6 +170,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	}
 	if len(args) != 0 && args[0] == "root-service" {
 		return runRootServiceCommand(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) != 0 && args[0] == "root-capabilities" {
+		return runRootCurrentCapabilitiesCommand(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) != 0 && args[0] == "activate-root-passive" {
 		return runRootPassiveHostCommand(ctx, args[1:], stdout, stderr, now)
@@ -277,6 +280,7 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 		fmt.Fprintln(stderr, "storage reports: sn-mainnet storage-inventory|storage-verify --durable-volumes FILE --durable-volumes-sha256 sha256:DIGEST --root DIR --former-writer-fence FILE --former-writer-fence-sha256 sha256:DIGEST [--inventory FILE --inventory-sha256 sha256:DIGEST]; reports do not authorize restart")
 		fmt.Fprintln(stderr, "owner-local storage reports: storage-owner-inventory|storage-owner-verify selects only the owner-local declaration schema; --max-owner-attributes and --max-owner-attribute-bytes bound retained custody metadata; verification --compare-reviewed-rebound only reports comparison to an explicit target declaration")
 		fmt.Fprintln(stderr, "owner recycle custody: sn-mainnet owner-recycle observe|plan|reserve|export|inspect-request|ledger-plan|sign|import|import-reply|status|reconcile|submit-plan|submit [explicit policy, approval, original action and request pins]")
+		fmt.Fprintln(stderr, "offline root capabilities: sn-mainnet root-capabilities --metadata FILE --metadata-hash 0xHASH --runtime-source-commit COMMIT; call compatibility does not establish current participation or signing authority")
 		fmt.Fprintln(stderr, "offline owner handoff: sn-mainnet owner-signing inspect|sign|reply|verify|ledger-plan --request FILE --accept-request-hash HASH --trim-approval-key HEX --owner-account-id HEX --expected-genesis HEX [owner-local device custody, public response or proof flags]")
 		fmt.Fprintln(stderr, "offline artifacts: sn-mainnet safe-release-verify --version 1.4.1|1.5.0 --variant Safe|SafeL2 --archive ABSOLUTE_FILE")
 		fmt.Fprintln(stderr, "offline successor preparation: bootstrap-chain contract-successor-preview|contract-successor-prepare|contract-successor-resume --config FILE --run-dir DIR --accept-plan-hash HASH --request FILE [exact preparation approval flags]")
