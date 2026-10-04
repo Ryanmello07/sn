@@ -8,6 +8,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"reflect"
@@ -57,6 +60,45 @@ func economicFundingCustodyState(t *testing.T, f *economicConservationArchiveFix
 	})
 	state.archiveView = view
 	return &state, view
+}
+
+// This candidate will observe a later real funding page. Keep the original
+// live native/vault network instead of borrowing the intentionally unobserved
+// synthetic native-renewal fixture. Fee and Claim authority are enrolled before
+// the first owner publication; neither a live policy nor an RPC is relabeled.
+func newEconomicFundingCandidateFixture(t *testing.T) *economicConservationArchiveFixture {
+	t.Helper()
+	request := economicConservationRetirementTestRequest(t, "pair")
+	f := newEconomicConservationArchiveFixture(t, false, func(source *economicConservationFixture) {
+		source.policy.FeeAuthority = &request.Policy
+		key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x75}, ed25519.SeedSize))
+		source.policy.Claims[0].HistoryCatalog = &monitorHistoryCatalogPolicy{Schema: monitorHistoryCatalogPolicySchema, ApprovalPublicKey: "0x" + hex.EncodeToString(key.Public().(ed25519.PublicKey)), ReviewSha256: monitorReadDigest([]byte("synthetic original funding Claim review")), InitialCapacity: monitorHistoryCapacity{Segments: 128, CatalogBytes: maximumMonitorHistoryCatalogBytes, HeldReaders: 128}}
+		source.writePolicy(t)
+	})
+	if f.source.policy.Native.Observation.Network != f.source.native.policy.Network || f.source.policy.Vault.Network != f.source.vault.policy.Network {
+		t.Fatal("candidate fixture changed original live reader network")
+	}
+	original := f.source.state(t)
+	state, err := admitEconomicConservationNativeFees(f.ctx, f.source.policy, &original, request, time.Minute, historicalReplayHooks{})
+	if err != nil || state == nil || len(state.NativeFees) != 1 || len(original.NativeFees) != 0 {
+		t.Fatal("original live fee admission did not preserve its detached proof", err)
+	}
+	if err := state.validate(f.ctx, f.source.policy); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer, err := openMonitorHistorySnapshot(f.ctx, f.source.checkpoint, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := errors.Join(writer.publish(append(raw, '\n'), nil), writer.close()); err != nil {
+		t.Fatal(err)
+	}
+	f.reset(t)
+	return f
 }
 
 // Both an already closed owner and closure after arithmetic must discard all
@@ -194,7 +236,7 @@ func TestEconomicFundingPublicCancellationPublishesNoSummary(t *testing.T) {
 // refusal must discard all of that view's funding/fee mutations; a separately
 // held original and two identical successful retries must remain unchanged.
 func TestEconomicFundingRefusedFeeCandidateCannotMutateOriginalIndex(t *testing.T) {
-	f := newEconomicConservationJoinedAdoptionFixture(t)
+	f := newEconomicFundingCandidateFixture(t)
 	f.request.RetireNativeFees = false
 	f.request.ClaimWindows, f.request.NativeRenewal = nil, nil
 	_, firstArgs := f.plan(t)
@@ -215,10 +257,11 @@ func TestEconomicFundingRefusedFeeCandidateCannotMutateOriginalIndex(t *testing.
 	entries, retainedBytes := held.entries, held.bytes
 	captured, accepted, paid := held.funding.captured, held.funding.accepted, held.funding.paid
 	captureCount, claimCount, paymentCount := held.funding.captureCount, held.funding.claimCount, held.funding.paymentCount
-	next := f.source.policy.Claims[0]
-	next.FreshnessSeconds++
+	// Epoch one now has a matched original receipt and can retire. A later
+	// expectation must advance its original high-water mark, never reuse it.
+	next := economicConservationClaimWindowTestNext(t, f)
 	proposal, code, issue := economicConservationClaimWindowTestPropose(t, f, next, monitorReadDigest([]byte("synthetic isolated funding Claim adoption")))
-	if code != 0 {
+	if code != 0 || len(proposal.Window.Retired) != 1 || proposal.Window.Retired[0].Epoch != 1 || proposal.Window.HighestEpoch != 2 || len(proposal.Window.Next.Epochs) != 1 || proposal.Window.Next.Epochs[0].Epoch != 2 {
 		t.Fatal("candidate isolation original Claim proposal", code, issue)
 	}
 	economicConservationClaimWindowTestSign(t, &proposal.Window)
