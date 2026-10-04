@@ -161,7 +161,9 @@ func newEconomicConservationPrincipalFixtureWithSequence(t *testing.T, name stri
 	producer.ctx = storage.Context
 	metadata := t.TempDir()
 	protectFreshEconomicConservationTestRoot(t, metadata)
-	return &economicConservationArchiveFixture{source: f, ctx: storage.Context, metadata: metadata}, producer
+	ctx := economicConservationTestArchiveReserves(t, storage.Context, metadata)
+	producer.ctx = ctx
+	return &economicConservationArchiveFixture{source: f, ctx: ctx, metadata: metadata}, producer
 }
 
 // Provision only the fresh test fixture. Public observers never recreate a lost

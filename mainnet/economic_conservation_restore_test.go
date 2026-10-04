@@ -142,7 +142,7 @@ func newEconomicConservationRestoreParentFixture(t *testing.T, parent string, ro
 	if err := os.WriteFile(reference.Path, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	f.archive = &economicConservationArchiveFixture{source: source, ctx: durablepath.WithHost(durablevolume.WithReference(t.Context(), reference), physical.Host), metadata: f.sources[0].metadata, key: key}
+	f.archive = &economicConservationArchiveFixture{source: source, ctx: durablepath.WithHost(durablevolume.WithReference(t.Context(), reference), physical.Host), metadata: economicConservationTestRestoreMetadata(t, f.sources[0]), key: key}
 	f.archive.sample(t, monitorServiceHooks{})
 	for index := 0; index < reviews; index++ {
 		f.nextArchive(t, paths[index])
@@ -162,6 +162,7 @@ func newEconomicConservationRestoreParentFixture(t *testing.T, parent string, ro
 	f.request = economicConservationRestoreRequest{Schema: economicConservationRestoreSchema, Policy: source.policy, Original: monitorHistoryReference{Path: source.checkpoint, Sha256: monitorReadDigest(raw), Bytes: uint64(len(raw))}, Limits: durablevolume.PreparationCohortLimits{MaxRoots: uint64(rootCount), MaxPlanBytes: 32 * 1024 * 1024, MaxControlBytes: 64 * 1024 * 1024, MaxEntries: 8192, MaxBytes: 512 * 1024 * 1024, MaxOwnerAttributes: 4096, MaxOwnerAttributeBytes: 16 * 1024 * 1024}}
 	limits := durablevolume.InventoryLimits{MaxEntries: 4096, MaxBytes: 256 * 1024 * 1024, MaxDepth: 4, MaxOwnerAttributes: 2048, MaxOwnerAttributeBytes: 8 * 1024 * 1024}
 	for index, original := range f.sources {
+		requireEconomicConservationTestPreparation(t, original)
 		f.files = append(f.files, bootstrapSuccessorPreparationTestFiles(t, original.root))
 		target := storageSnapshotRestoreTargetWithLimits(t, original, f.archive.ctx, owners[index][0], false, &limits)
 		f.targets = append(f.targets, target)

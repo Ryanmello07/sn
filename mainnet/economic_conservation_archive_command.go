@@ -187,6 +187,9 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 	if err := view.setClaimBasis(request.Policy, state, archive); err != nil {
 		return plan, nil, err
 	}
+	// Fee compaction validates a detached index before admitting the original
+	// segment. Subsequent adoptions must use this now-complete retained view.
+	compacted.archiveView = view
 	if err := applyEconomicConservationClaimWindows(ctx, request.Policy, compacted, request.ClaimWindows); err != nil {
 		return plan, nil, err
 	}
