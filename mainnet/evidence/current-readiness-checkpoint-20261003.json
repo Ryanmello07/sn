@@ -237,7 +237,8 @@
     "native-adoptionade5-go-normal-compile-root-review-20261004.json": "0cbd2b02086db1f868560bece8e15fe67d5eff7fa99b071372b0d31cdd3a42d0",
     "native-adoptionade5-environment-ancestry-root-finding-20261004.json": "91214605331e55c29ec5ffc9c029847bc257d9e51eaf72d90631a9c1c04aba80",
     "native-adoptionade5-go-body-operational-root-review-20261004.json": "28f22bbe8c586e8d535635a94cc01cc8b25b28075bd97465ef542363613ad681",
-    "native-adoptionade5-original-terminal-root-readback-20261004.json": "040b9e1c7b6f47b930a580e01b747d54e2c5fadb547fa98c38ca59cc470d3e9b"
+    "native-adoptionade5-original-terminal-root-readback-20261004.json": "040b9e1c7b6f47b930a580e01b747d54e2c5fadb547fa98c38ca59cc470d3e9b",
+    "conservation-entitlement9a-scoped-source-root-review-20261004.json": "b56bf4de289537e97774aba220404d1ae72e4da1e86ca357ab175842c58bc051"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
