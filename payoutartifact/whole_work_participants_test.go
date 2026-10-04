@@ -244,6 +244,42 @@ func TestWholeWorkOriginalAdmissionsRejectDuplicateReceipt(t *testing.T) {
 	}
 }
 
+// An unavailable source is not permission to stop inspecting other present
+// original bytes. A later contradiction must retain its integrity classification.
+func TestWholeWorkOriginalAdmissionMissingAuthorityCannotHidePresentCorruption(t *testing.T) {
+	fixture := participantEvidenceFixture(t)
+	original, err := protocol.DecodeProviderWorkReceipt(t.Context(), fixture.inventory.AttributionOriginals[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	original.SourceId = participantTestId([16]byte{124})
+	original, err = protocol.SignProviderWorkReceipt(t.Context(), original, ed25519.NewKeyFromSeed(bytes.Repeat([]byte{121}, 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := original.Bytes(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.inventory.AttributionOriginals = append([][]byte{raw}, fixture.inventory.AttributionOriginals...)
+	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
+	if err != nil || value == nil || !value.Complete || value.AttributionComplete {
+		t.Fatalf("unapproved source became attribution or corruption: %+v, %v", value, err)
+	}
+	original, err = protocol.DecodeProviderWorkReceipt(t.Context(), fixture.inventory.AttributionOriginals[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	original.Session.ObservedAtUnixMicro++
+	fixture.inventory.AttributionOriginals[1], err = json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); value != nil || !errors.Is(err, ErrClosedWorkIntegrity) {
+		t.Fatalf("missing authority concealed a present changed original: %+v, %v", value, err)
+	}
+}
+
 func TestWholeWorkOriginalAdmissionsNeedExplicitAttributionPurpose(t *testing.T) {
 	fixture := participantEvidenceFixture(t)
 	fixture.expected.AttributionSigner = common.Address{}

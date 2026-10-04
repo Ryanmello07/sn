@@ -101,6 +101,8 @@ func readWholeWorkParticipantPool(ctx context.Context, domainHash [32]byte, auth
 		pool.authorityKVs[identity] = authority
 	}
 	endpointKVs := map[wholeWorkEndpointIdentity][]protocol.ProviderWorkReceipt{}
+	seenOriginalKVs := map[[32]byte]bool{}
+	var unavailableErr error
 	for _, raw := range originals {
 		original, err := protocol.DecodeProviderWorkReceipt(ctx, raw)
 		if err != nil {
@@ -109,17 +111,27 @@ func readWholeWorkParticipantPool(ctx context.Context, domainHash [32]byte, auth
 		if original.DomainHash != domainHash {
 			return nil, ErrClosedWorkIntegrity
 		}
+		hash := sha256.Sum256(raw)
+		if seenOriginalKVs[hash] {
+			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("duplicate participant original"))
+		}
+		seenOriginalKVs[hash] = true
 		source := wholeWorkSourceIdentity{sourceId: original.SourceId, generation: original.Generation}
 		authority, exists := pool.authorityKVs[source]
 		if !exists {
-			return nil, ErrClosedWorkUnavailable
+			if unavailableErr == nil {
+				unavailableErr = ErrClosedWorkUnavailable
+			}
+			continue
 		}
 		if err := protocol.VerifyProviderWorkReceiptAuthority(ctx, original, authority); err != nil {
+			if errors.Is(err, protocol.ErrProviderWorkUnavailable) {
+				if unavailableErr == nil {
+					unavailableErr = wholeWorkParticipantError(err)
+				}
+				continue
+			}
 			return nil, wholeWorkParticipantError(err)
-		}
-		hash := sha256.Sum256(raw)
-		if _, exists := pool.originalKVs[hash]; exists {
-			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("duplicate participant original"))
 		}
 		pool.originalKVs[hash] = original
 		var idText string
@@ -159,7 +171,7 @@ func readWholeWorkParticipantPool(ctx context.Context, domainHash [32]byte, auth
 			pool.endpointKVs[state.Head.HeadHash] = wholeWorkEndpointProof{source: endpoint.source, state: state}
 		}
 	}
-	return pool, ctx.Err()
+	return pool, errors.Join(unavailableErr, ctx.Err())
 }
 
 // A complete zero-extender state is currently supported. Directory key records
