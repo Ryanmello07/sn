@@ -147,9 +147,19 @@ func (self *economicConservationState) nativeOperatingPolicy(policy economicCons
 	return result, nil
 }
 
-func (self *economicConservationState) requireNativeApprovalHistory() error {
+// Pure lineage presence is separate from the physical fence at each caller's
+// dependent operation. No value from an absent original index is admissible.
+func (self *economicConservationState) validateNativeApprovalHistory() error {
 	if (self.NativeRenewal != nil || self.Archive != nil && self.Archive.NativeApprovalHead != nil) && self.archiveView == nil {
 		return errors.New("economic native dispatch requires admitted original approval history")
+	}
+	return nil
+}
+
+// Standalone users require both lineage admission and fresh original custody.
+func (self *economicConservationState) requireNativeApprovalHistory() error {
+	if err := self.validateNativeApprovalHistory(); err != nil {
+		return err
 	}
 	return self.archiveView.check()
 }

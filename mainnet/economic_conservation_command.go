@@ -270,7 +270,9 @@ func saveEconomicConservation(ctx context.Context, owner *monitorCheckpointStore
 	if err := state.requireEntitlementHistory(); err != nil {
 		return err
 	}
-	if err := state.requireNativeApprovalHistory(); err != nil {
+	// The original lineage must exist; the complete custody fence below is
+	// retained immediately before hashing, validation and publication.
+	if err := state.validateNativeApprovalHistory(); err != nil {
 		return err
 	}
 	if (len(state.ClaimWindows) != 0 || state.Archive != nil && len(state.Archive.ClaimHeads) != 0) && state.archiveView == nil {
@@ -322,7 +324,9 @@ func sampleEconomicConservationWithNativeWorker(ctx context.Context, policy econ
 	if err := prior.requireEntitlementHistory(); err != nil {
 		return nil, false, false, err
 	}
-	if err := prior.requireNativeApprovalHistory(); err != nil {
+	// These presence checks are pure. One complete fence immediately below
+	// protects the dependent policy lookup and source reads.
+	if err := prior.validateNativeApprovalHistory(); err != nil {
 		return nil, false, false, err
 	}
 	if (len(prior.ClaimWindows) != 0 || prior.Archive != nil && len(prior.Archive.ClaimHeads) != 0) && prior.archiveView == nil {
