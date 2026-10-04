@@ -170,7 +170,8 @@
     "original-key-fee-revision-test-graph-root-review-20261004.json": "f08f92310ef587b4dfd4f6e81c62b63c196d1641cba6cc7f2998e7e416a4970b",
     "fee-retention121-partial-terminal-root-review-20261004.json": "12479190645923d1499ebff9b1078a0b1860d70cfdc3cd28ac19409832492702",
     "scoped-warm-go-resource-admission-root-review-20261004.json": "05fd341e7b9d8effb5067201aec45593e73717bf5805028cda7ce5608c23cd57",
-    "fee663-original-race-timeout-root-review-20261004.json": "1875e732224c1aa168dc0bcaa1e22aeb62281602fed94645d936c643dca75a8f"
+    "fee663-original-race-timeout-root-review-20261004.json": "1875e732224c1aa168dc0bcaa1e22aeb62281602fed94645d936c643dca75a8f",
+    "fee-retention6580-source-root-review-20261004.json": "455d5df60ffa7f97b417eacaa138924d80af913bf9abcbf9330d0435770934e4"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
