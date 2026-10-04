@@ -462,7 +462,7 @@ func provide(opts docopt.Opts) {
 	allowClientRegistration, _ := opts.Bool("--allow-client-registration")
 	adoptLegacyProviderKey, _ := opts.Bool("--adopt-legacy-provider-key")
 	domainPath, _ := opts.String("--close-report-domain")
-	domainHash, domainErr := readProviderCloseReportDomain(domainPath)
+	domainHash, domainErr := ReadProviderCloseReportDomain(domainPath)
 	if domainErr != nil {
 		fmt.Fprintf(os.Stderr, "signed close evidence unavailable: %v\n", domainErr)
 	}
@@ -597,8 +597,7 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 
 		certPem, keyPem, _ := readProviderTlsCertAndKey()
 		extenderKeySeed, _ := readProviderExtenderKeySeed()
-		settings := sdk.DefaultDeviceLocalSettings()
-		settings.ClientSettings.ContractManagerSettings.CloseReportDomainHash = self.closeReportDomainHash
+		settings := ProviderDeviceSettings(self.closeReportDomainHash)
 		settings.KeyMaterial = sdk.NewDeviceLocalKeyMaterial(seed, certPem, keyPem)
 		// the extender identity of this provider (connect/EXTENDER.md B1, G2).
 		// The space keeps no local state, so the seed lives here: without it
