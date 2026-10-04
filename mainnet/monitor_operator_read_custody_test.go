@@ -117,6 +117,21 @@ func TestMonitorOperatorCredentialReadKeepsMissingIoAndCancellationUnavailable(t
 	}
 }
 
+// These are the exact owned error shapes emitted by the shared post-read
+// Stat/Lstat branch. An unavailable recheck supplies no replacement proof.
+func TestMonitorOperatorCredentialIncompleteRecheckCannotProveReplacement(t *testing.T) {
+	for _, cause := range []error{syscall.EIO, syscall.ETIMEDOUT, context.Canceled, os.ErrNotExist} {
+		err := errors.Join(&monitorServiceReadError{code: "changed", cause: &os.PathError{Op: "lstat", Path: "/synthetic/credential", Err: cause}}, &monitorServiceReadError{code: "unavailable", cause: syscall.EIO})
+		if code := monitorOperatorFileReadCode(err); code != "unavailable" {
+			t.Fatal("incomplete final metadata read became a proved replacement", cause, code)
+		}
+	}
+	observed := errors.Join(&monitorServiceReadError{code: "changed"}, &monitorServiceReadError{code: "unavailable", cause: syscall.EIO})
+	if code := monitorOperatorFileReadCode(observed); code != "changed" {
+		t.Fatal("separate close failure hid a completed original generation mismatch", code)
+	}
+}
+
 // The actual public multi-role command durably publishes the contradiction
 // without stopping a healthy validator. Restart retains the same incident.
 func TestMonitorOperatorCredentialContradictionPublishesAndPreservesPeer(t *testing.T) {
