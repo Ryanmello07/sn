@@ -289,6 +289,15 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 		if _, reconciled := expectedPriorKVs[id]; reconciled {
 			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("previously reconciled contract was reassigned to another window"))
 		}
+		row, exists := rows[id]
+		if _, future := participants.FutureReservations[id]; future {
+			if exists {
+				return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("window includes an independently dated future reservation"))
+			}
+			// A later SDK cut may include work admitted at or after End. Only
+			// the independently bound original reservation can exclude it.
+			continue
+		}
 		if _, ok := ownerKVs[contract.source]; !ok {
 			return nil, ErrClosedWorkIntegrity
 		}
@@ -299,15 +308,7 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 		if !sourcePresent {
 			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("whole work lacks its expected source owner"))
 		}
-		row, exists := rows[id]
-		if _, future := participants.FutureReservations[id]; future {
-			if exists {
-				return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("window includes an independently dated future reservation"))
-			}
-			// A later SDK cut may include work admitted at or after End. Only
-			// the independently bound original reservation can exclude it.
-			continue
-		}
+
 		if !exists {
 			// A delayed boundary capture can include later admissions, just as
 			// a delayed start can include earlier completions. Neither signed
