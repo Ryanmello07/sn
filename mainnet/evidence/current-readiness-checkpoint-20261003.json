@@ -173,7 +173,8 @@
     "fee663-original-race-timeout-root-review-20261004.json": "1875e732224c1aa168dc0bcaa1e22aeb62281602fed94645d936c643dca75a8f",
     "fee-retention6580-source-root-review-20261004.json": "455d5df60ffa7f97b417eacaa138924d80af913bf9abcbf9330d0435770934e4",
     "miner-manager-composition549-source-root-review-20261004.json": "01553d3648dbbfe05ae488b35cb1aa8b6042e0907bd24b9d37c64bc064c47198",
-    "fee-revision3e7-source-root-review-20261004.json": "dba17328e3cfc45c40f84e34ea5183dc512044600ddf408fd3e2ad7b5b5c469c"
+    "fee-revision3e7-source-root-review-20261004.json": "dba17328e3cfc45c40f84e34ea5183dc512044600ddf408fd3e2ad7b5b5c469c",
+    "second-short-go-body-resource-root-review-20261004.json": "ba3af5f27c839ee129bda99dfd6dd9ee08f1cc9078609957512b9c7eb1b03166"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
