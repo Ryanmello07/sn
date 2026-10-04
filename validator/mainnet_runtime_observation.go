@@ -49,8 +49,9 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 		artifact    crv4.AuthenticatedRuntimeArtifact
 		observation *MainnetRuntimeObservation
 	}
+	var finality runtimeFinalityObservation
 	value, err := crv4.ReadRuntimeObservationContext(ctx, native, func(ctx context.Context) (result, error) {
-		artifact, observation, err := authenticateReleaseMainnetRuntimeAttempt(ctx, native, cfg, &block)
+		artifact, observation, err := authenticateReleaseMainnetRuntimeAttempt(ctx, native, cfg, &block, &finality)
 		return result{artifact: artifact, observation: observation}, err
 	})
 	return value.artifact, value.observation, err
@@ -58,7 +59,7 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 
 // The first selected finalized block remains pinned if its transport expires;
 // fresh network identity and every canonical check still repeat together.
-func authenticateReleaseMainnetRuntimeAttempt(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, selectedBlock *types.Hash) (crv4.AuthenticatedRuntimeArtifact, *MainnetRuntimeObservation, error) {
+func authenticateReleaseMainnetRuntimeAttempt(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, selectedBlock *types.Hash, finality *runtimeFinalityObservation) (crv4.AuthenticatedRuntimeArtifact, *MainnetRuntimeObservation, error) {
 	empty := crv4.AuthenticatedRuntimeArtifact{}
 	if err := validateReleaseMainnetRuntimeHistory(cfg); err != nil {
 		return empty, nil, err
@@ -91,27 +92,27 @@ func authenticateReleaseMainnetRuntimeAttempt(ctx context.Context, native *crv4.
 	if nativeChain != pin.NativeChain || genesis != expectedGenesis || evmChainId != "0x3c4" {
 		return empty, nil, errors.New("mainnet runtime observation fresh chain name/genesis/EVM964 identity differs")
 	}
-	finalized, err := crv4.FinalizedHeadContext(ctx, native)
-	if err != nil {
-		return empty, nil, err
-	}
-	finalizedNumber, _, err := native.ReceiptHeaderAtContext(ctx, finalized)
+	finalized, err := readRuntimeFinalityWitness(ctx, native)
 	if err != nil {
 		return empty, nil, err
 	}
 	if *selectedBlock == (types.Hash{}) {
-		*selectedBlock = finalized
+		*selectedBlock = finalized.hash
 	}
 	block := *selectedBlock
-	number := finalizedNumber
-	if block != finalized {
+	number := finalized.number
+	if block != finalized.hash {
 		number, _, err = native.ReceiptHeaderAtContext(ctx, block)
 		if err != nil {
 			return empty, nil, err
 		}
 	}
-	if number == 0 || number > finalizedNumber {
-		return empty, nil, errors.New("mainnet runtime observation block is not finalized")
+	if number == 0 {
+		return empty, nil, errors.New("mainnet runtime observation block is genesis")
+	}
+	selectedBlockWitness := runtimeFinalityWitness{hash: block, number: number}
+	if err := finality.check(ctx, native, finalized, selectedBlockWitness); err != nil {
+		return empty, nil, err
 	}
 	var selected *releaseMainnetRuntimeApproval
 	for index := range history.approvals {
@@ -124,22 +125,6 @@ func authenticateReleaseMainnetRuntimeAttempt(ctx context.Context, native *crv4.
 	if selected == nil {
 		return empty, nil, errors.New("mainnet runtime observation block is outside every approved interval")
 	}
-	checkCanonical := func(hash types.Hash, height uint64) error {
-		var canonical types.Hash
-		if err := call(ctx, &canonical, "chain_getBlockHash", height); err != nil {
-			return err
-		}
-		if canonical != hash {
-			return errors.New("mainnet runtime observation block is not canonical at its height")
-		}
-		return ctx.Err()
-	}
-	if err := checkCanonical(finalized, finalizedNumber); err != nil {
-		return empty, nil, err
-	}
-	if err := checkCanonical(block, number); err != nil {
-		return empty, nil, err
-	}
 	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, native, block, selected.artifactIdentity())
 	if err != nil {
 		return empty, nil, fmt.Errorf("mainnet runtime observation approval revision %d at %s: %w", selected.Revision, block.Hex(), err)
@@ -147,18 +132,13 @@ func authenticateReleaseMainnetRuntimeAttempt(ctx context.Context, native *crv4.
 	if artifact.CompatibilityProfile != "" {
 		return empty, nil, errors.New("mainnet runtime observation cannot inherit testnet provisional authority")
 	}
-	if err := checkCanonical(block, number); err != nil {
+	if err := finality.close(ctx, native, selectedBlockWitness); err != nil {
 		return empty, nil, err
-	}
-	if block != finalized {
-		if err := checkCanonical(finalized, finalizedNumber); err != nil {
-			return empty, nil, err
-		}
 	}
 	artifact.GenesisHash = genesis
 	return artifact, &MainnetRuntimeObservation{
 		ConfigSha256: attemptHex32(history.configHash), ApprovalSha256: cfg.MainnetRuntimeApprovals[selected.Revision-1].SHA256,
 		Revision: selected.Revision, NativeChain: nativeChain, GenesisHash: genesis, EvmChainId: 964,
-		BlockHash: block, BlockNumber: number, FinalizedHash: finalized, Runtime: selected.artifactIdentity(),
+		BlockHash: block, BlockNumber: number, FinalizedHash: finalized.hash, Runtime: selected.artifactIdentity(),
 	}, nil
 }
