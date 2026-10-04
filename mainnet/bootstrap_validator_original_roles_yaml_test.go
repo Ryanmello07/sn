@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/urfoundation/sn/validator"
+	"gopkg.in/yaml.v3"
 )
 
 // The real public exporter supplies these additions. Fresh synthetic signatures
@@ -112,6 +113,18 @@ func TestBootstrapValidatorOriginalRoleAdoptionRejectsImplicitYamlAliases(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
+	mappingValue := func(node *yaml.Node, key string) *yaml.Node {
+		if node == nil || node.Kind != yaml.MappingNode {
+			t.Fatal("actual role YAML mapping is absent", key)
+		}
+		for index := 0; index < len(node.Content); index += 2 {
+			if node.Content[index].Value == key {
+				return node.Content[index+1]
+			}
+		}
+		t.Fatal("actual role YAML key is absent", key)
+		return nil
+	}
 	for _, spelling := range []struct{ canonical, implicit string }{
 		{canonical: "genesis_hash:", implicit: "genesishash:"},
 		{canonical: "deployment_id:", implicit: "deploymentid:"},
@@ -119,15 +132,36 @@ func TestBootstrapValidatorOriginalRoleAdoptionRejectsImplicitYamlAliases(t *tes
 		{canonical: "policy_hash:", implicit: "policyhash:"},
 		{canonical: "no_id:", implicit: "noid:"},
 	} {
-		changed := bytes.ReplaceAll(original, []byte(spelling.canonical), []byte(spelling.implicit))
-		if bytes.Equal(changed, original) {
-			t.Fatal("missing actual exported YAML key", spelling.canonical)
+		var document yaml.Node
+		if err := yaml.Unmarshal(original, &document); err != nil || len(document.Content) != 1 {
+			t.Fatal("actual role YAML document", err)
+		}
+		operators := mappingValue(document.Content[0], "operators")
+		if operators.Kind != yaml.SequenceNode || len(operators.Content) == 0 {
+			t.Fatal("actual role YAML has no operator sequence")
+		}
+		for _, operator := range operators.Content {
+			scope := mappingValue(operator, "request_receipt_scope")
+			found := false
+			for index := 0; index < len(scope.Content); index += 2 {
+				if scope.Content[index].Value == strings.TrimSuffix(spelling.canonical, ":") {
+					scope.Content[index].Value = strings.TrimSuffix(spelling.implicit, ":")
+					found = true
+				}
+			}
+			if !found {
+				t.Fatal("missing actual exported nested YAML key", spelling.canonical)
+			}
+		}
+		changed, err := yaml.Marshal(&document)
+		if err != nil {
+			t.Fatal(err)
 		}
 		path := filepath.Join(filepath.Dir(adopted[0].path), "implicit-"+strings.TrimSuffix(spelling.implicit, ":")+".yml")
 		if err := os.WriteFile(path, changed, 0600); err != nil {
 			t.Fatal(err)
 		}
-		_, err := validator.LoadReleaseConfig(path)
+		_, err = validator.LoadReleaseConfig(path)
 		if err == nil || !strings.Contains(err.Error(), "field "+strings.TrimSuffix(spelling.implicit, ":")+" not found") {
 			t.Fatal("actual strict role loader accepted an implicit nested YAML alias", spelling.implicit, err)
 		}
