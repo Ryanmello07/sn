@@ -22,6 +22,8 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+The [Server fixture workspace recovery](evidence/server5b-logical-workspace-recovery-review-20261004.json) fixes logical-versus-physical module path admission without rebuilding valid test images. Preflight the exact child helper command, working directory and GOWORK; a model-only graph cannot prove the startup helper resolves. The corrected helper and model graphs pass, and the unchanged 32-root normal/race scope is adopted. Preserve the original zero-body refusal and successful cleanup; actual model execution remains pending.
+
 The [corrected ABI two-mode readback](evidence/coordinator-ab48-nine-two-mode-independent-readback-20261004.json) verifies nine normal and nine race passes, no skips or failures, joined exit zero and exact protected image bytes. The four original fixture failures now pass both modes. Fixture-control/vet and complete funding41 remain separate pending scopes.
 
 The [current-main validator integration](evidence/validator-terminal-current-integration-source-review-20261004.json) contains only the exact two qualified terminal-custody files over current main. Other source and module bytes remain unchanged. Because the current Core/artifact package graph differs from the original qualification, execute the small affected-root normal/race and vet scope before publication; retain the already qualified original bodies and controls.
