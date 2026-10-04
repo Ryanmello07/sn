@@ -11,8 +11,13 @@ The implemented setup action is the native
 `AdminUtils.sudo_trim_to_max_allowed_uids(netuid, max_n)` call for SN25. The
 selected maximum comes from the retained owner-trim review. This command does
 not implement another subnet-owner action or EVM contract signing. The root
-`SetRootWeights` hotkey uses a separate hardware signer; its device model is not
-selected here. Operator demand-deposit wallets remain separate vault-held keys.
+hotkey retains separate hardware custody; its device model is not selected
+here. Reviewed v470 retires `SetRootWeights`, and unchanged registered/staked
+root participation needs no periodic native signature. Any required current
+root lifecycle mutation uses its independently identified owning/staker coldkey
+or admitted proxy; it cannot inherit this owner Ledger or its approval. See
+[current root participation](ROOT-CURRENT-PARTICIPANT.md). Operator demand-deposit
+wallets remain separate vault-held keys.
 
 This increment supplies a real pinned-SDK adapter and deterministic hardware
 boundary fixtures. A concrete Linux SDK build and its separate behavioral

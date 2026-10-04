@@ -75,6 +75,7 @@ type rootCurrentCapabilities struct {
 	Participant                 rootCurrentParticipantStatus      `json:"participant"`
 	UrValidatorRequirement      string                            `json:"ur_validator_requirement"`
 	MutationExecution           string                            `json:"current_root_mutation_execution"`
+	MutationCustodyRequirement  string                            `json:"current_root_mutation_custody_requirement"`
 	PlanningOnly                bool                              `json:"planning_only"`
 	NativeSigning               bool                              `json:"native_signing"`
 	NetworkEffects              bool                              `json:"network_effects"`
@@ -186,11 +187,12 @@ func inspectRootCurrentCapabilities(metadata *types.Metadata, metadataHash, file
 		MetadataHash: metadataHash, MetadataFileHash: fileHash, AuditedMetadataMatched: metadataHash == rootCurrentAuditedMetadataHash,
 		MetadataInterfaceCompatible: true, RootWeightCallStatus: "absent-retired-in-reviewed-source", RetiredClaimControlStatus: "absent-retired-in-reviewed-source",
 		RootWeightsProxy: "denies-all-calls-in-reviewed-source", Calls: []rootCurrentCallCapability{}, PlanningOnly: true,
-		Registration:           rootCurrentRegistrationCapability{FreeCapacityStakeRule: "no-displacement-stake-comparison", FullCapacityStakeRule: "applicant-root-stake-at-least-lowest-nonimmune-member;no-nonimmune-member-refuses-registration", BurnProtection: "root_register-has-no-maximum-burn-argument", CurrentEligibility: "unknown"},
-		Participant:            rootCurrentParticipantStatus{Membership: "unknown", RootStake: "unknown", BasketAccrual: "unknown", Custody: "unknown", ObservationService: "unverified", PeriodicHotkeyCall: "not-required-for-unchanged-accumulation-under-reviewed-source", RootHotkeyDevice: "unspecified-separate-hardware", RootColdkeyDevice: "unspecified-independent-custody", StakeClaimColdkeyDevice: "unspecified-independent-custody"},
-		UrValidatorRequirement: "separate-standard-sn-validator-majority-and-secondary-admissions;root-cannot-count-as-ur-validator",
-		MutationExecution:      "not-implemented;required-only-for-separately-approved-mutations",
-		Blockers:               []string{"CURRENT_RUNTIME_AND_FINALITY_UNVERIFIED", "ROOT_MEMBERSHIP_GENERATION_AND_CAPACITY_UNKNOWN", "ROOT_PRINCIPAL_STAKE_AND_RETENTION_UNKNOWN", "ROOT_BASKET_ACCRUAL_AND_COMPLETE_ENTITLEMENTS_UNKNOWN", "ROOT_COLDKEY_AND_HOTKEY_CUSTODY_UNVERIFIED", "CONTINUOUS_OBSERVATION_AND_REPAIR_UNVERIFIED"},
+		Registration:               rootCurrentRegistrationCapability{FreeCapacityStakeRule: "no-displacement-stake-comparison", FullCapacityStakeRule: "applicant-root-stake-at-least-lowest-nonimmune-member;no-nonimmune-member-refuses-registration", BurnProtection: "root_register-has-no-maximum-burn-argument", CurrentEligibility: "unknown"},
+		Participant:                rootCurrentParticipantStatus{Membership: "unknown", RootStake: "unknown", BasketAccrual: "unknown", Custody: "unknown", ObservationService: "unverified", PeriodicHotkeyCall: "not-required-for-unchanged-accumulation-under-reviewed-source", RootHotkeyDevice: "unspecified-separate-hardware", RootColdkeyDevice: "unspecified-independent-custody", StakeClaimColdkeyDevice: "unspecified-independent-custody"},
+		UrValidatorRequirement:     "separate-standard-sn-validator-majority-and-secondary-admissions;root-cannot-count-as-ur-validator",
+		MutationExecution:          "not-implemented;required-only-for-separately-approved-mutations",
+		MutationCustodyRequirement: "separately-approved-mutations-only;no-native-device-required-for-observation-or-unchanged-participation-under-reviewed-source",
+		Blockers:                   []string{"CURRENT_RUNTIME_AND_FINALITY_UNVERIFIED", "ROOT_MEMBERSHIP_GENERATION_AND_CAPACITY_UNKNOWN", "ROOT_PRINCIPAL_STAKE_AND_RETENTION_UNKNOWN", "ROOT_BASKET_ACCRUAL_AND_COMPLETE_ENTITLEMENTS_UNKNOWN", "CONTINUOUS_OBSERVATION_AND_REPAIR_UNVERIFIED"},
 	}
 	if _, found := callKVs["set_root_weights"]; found {
 		result.RootWeightCallStatus, result.MetadataInterfaceCompatible = "unexpected-present", false

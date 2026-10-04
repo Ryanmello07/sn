@@ -281,6 +281,27 @@ func TestRootCurrentCapabilitiesCapacityAndStakeRemainUnknown(t *testing.T) {
 	}
 }
 
+// Unknown hardware is not an admission gate for an unchanged existing fund.
+// A separately approved mutation still needs its own identified custody path.
+func TestRootCurrentCapabilitiesPassiveNeedsNoMutationCustody(t *testing.T) {
+	_, metadata, digest, fileHash := rootCurrentTestMetadata(t)
+	report, err := inspectRootCurrentCapabilities(metadata, digest, fileHash, rootPassiveSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.MutationCustodyRequirement != "separately-approved-mutations-only;no-native-device-required-for-observation-or-unchanged-participation-under-reviewed-source" || report.MutationExecution != "not-implemented;required-only-for-separately-approved-mutations" {
+		t.Fatal("unchanged participation acquired a mutation custody prerequisite")
+	}
+	for _, blocker := range report.Blockers {
+		if strings.Contains(blocker, "CUSTODY") || strings.Contains(blocker, "SIGN") || strings.Contains(blocker, "WEIGHT") || strings.Contains(blocker, "NONCE") {
+			t.Fatalf("passive participation demands native mutation authority: %s", blocker)
+		}
+	}
+	if report.Participant.Custody != "unknown" || report.Participant.RootColdkeyDevice != "unspecified-independent-custody" || report.Participant.RootHotkeyDevice != "unspecified-separate-hardware" || report.Participant.Membership != "unknown" || report.Participant.RootStake != "unknown" || report.Participant.BasketAccrual != "unknown" || report.ActivationReady || report.NativeSigning || report.NetworkEffects {
+		t.Fatal("removing a false custody gate fabricated hardware or participation evidence")
+	}
+}
+
 // The public route can only read its input and print a non-authoritative report.
 func TestRootCurrentCapabilitiesPublicCommandIsReadOnly(t *testing.T) {
 	raw, _, digest, fileHash := rootCurrentTestMetadata(t)

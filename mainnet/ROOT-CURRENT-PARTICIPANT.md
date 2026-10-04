@@ -17,6 +17,12 @@ or staker coldkey custody, or an explicitly permitted proxy. None of these
 identities inherits the subnet-owner Ledger, which remains owner-local setup
 custody with no Snow access.
 
+Unknown native devices do not block observation or unchanged participation of
+an already registered and staked fund. They remain unknown in the report and
+become execution prerequisites only for a separately approved mutation. The
+participant still needs actual finalized membership, stake and accounting
+evidence; removing an inapplicable device gate supplies none of that evidence.
+
 ## Exact evidence and its scope
 
 This review uses official source commit
