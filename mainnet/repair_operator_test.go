@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -115,6 +116,13 @@ func newRepairOperatorFixture(t *testing.T) *repairOperatorFixture {
 		t.Fatal(err)
 	}
 	p := repairOperatorHostPlan{Role: "synthetic", MachineId: base.approval.Plan.MachineId, BootId: base.approval.Plan.BootId, Unit: planFileReference{Path: filepath.Join(base.directory, "sn-mainnet-operator-synthetic.service")}, Binary: planFileReference{Path: filepath.Join(base.directory, "taskworker")}, Inspector: base.approval.Plan.Unit.Binary, Systemctl: base.approval.Plan.Systemctl, StateDirectory: base.approval.Plan.Unit.StateDirectory, Uid: base.approval.Plan.Unit.Uid, Gid: base.approval.Plan.Unit.Gid, Port: uint16(portNumber), Count: 8, BatchSize: 4, DurableVolumes: *base.approval.Plan.Unit.DurableVolumes, RequiredMounts: base.approval.Plan.RequiredMounts, ActivatedAt: base.now.Add(-time.Hour), Generation: base.approval.Plan.Previous, ExclusiveHostControl: true}
+	storageTransport := base.host.storageCommand
+	base.host.storageCommand = func(ctx context.Context, command *exec.Cmd) error {
+		if command.Path != "/proc/self/fd/3" || len(command.Args) == 0 || command.Args[0] != p.Inspector.Path || len(command.ExtraFiles) != 1 || command.ExtraFiles[0].Name() != p.Inspector.Path {
+			return errors.New("operator storage inspection did not execute the separately pinned SN inspector")
+		}
+		return storageTransport(ctx, command)
+	}
 	p.Binary.Sha256 = monitorReadDigest([]byte("synthetic actual taskworker release\n"))
 	repairValidatorTestWrite(t, p.Binary.Path, []byte("synthetic actual taskworker release\n"), 0755)
 	warp := filepath.Join(base.directory, "warp")
