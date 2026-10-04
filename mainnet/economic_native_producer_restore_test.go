@@ -49,6 +49,16 @@ func newNativeProducerRestoreFixture(t *testing.T) *nativeProducerRestoreFixture
 // first combined checkpoint; it does not rewrite a previously admitted policy.
 func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, renewal bool, beforeExport ...func(*nativeProducerRestoreFixture)) *nativeProducerRestoreFixture {
 	t.Helper()
+	return newNativeProducerRestoreNamespaceFixture(t, completed, renewal, "", beforeExport...)
+}
+
+// Native review and artifact names are selected before the first original
+// signature or execution. Monitor snapshot limits do not define their paths.
+func newNativeProducerRestoreNamespaceFixture(t *testing.T, completed uint64, renewal bool, profile string, beforeExport ...func(*nativeProducerRestoreFixture)) *nativeProducerRestoreFixture {
+	t.Helper()
+	if profile != "" && profile != "approval" && profile != "runtime" {
+		t.Fatal("unknown explicit native restore namespace")
+	}
 	directory := os.Getenv("URNETWORK_NATIVE_CONSERVATION_FIXTURE")
 	if !filepath.IsAbs(directory) {
 		t.Fatal("combined restore requires original proof-drained contiguous jobs")
@@ -127,6 +137,9 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 	// actual independent signature binds them; no restore-time key enrollment.
 	execution := p.source.policy.Execution
 	execution.Directory = filepath.Join(f.sources[1].root, "runtime", "native")
+	if profile == "runtime" {
+		execution.Directory = nativeProducerRestoreLongPath(t, f.sources[1].root, "native")
+	}
 	execution.Producer.Nodes = filepath.Join(execution.Directory, "nodes")
 	if err := os.MkdirAll(execution.Producer.Nodes, 0700); err != nil {
 		t.Fatal(err)
@@ -138,7 +151,14 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 	}
 	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x71}, ed25519.SeedSize))
 	p.authority.Signature = hex.EncodeToString(ed25519.Sign(key, message))
-	execution.Producer.Authority = nativeRenewalTestWrite(t, filepath.Join(f.sources[0].root, "native-approval.json"), p.authority)
+	approvalPath := filepath.Join(f.sources[0].root, "native-approval.json")
+	if profile == "approval" {
+		approvalPath = nativeProducerRestoreLongPath(t, f.sources[0].root, strings.Repeat("a", 250)+".json")
+		if err := os.MkdirAll(filepath.Dir(approvalPath), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	execution.Producer.Authority = nativeRenewalTestWrite(t, approvalPath, p.authority)
 	p.ctx = ctx
 	writePolicy := func() {
 		t.Helper()
@@ -254,6 +274,9 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 		f.request.Original = monitorHistoryReference{Path: source.checkpoint, Sha256: monitorReadDigest(raw), Bytes: uint64(len(raw))}
 	}
 	limits := durablevolume.InventoryLimits{MaxEntries: 8192, MaxBytes: 256 * 1024 * 1024, MaxDepth: 8, MaxOwnerAttributes: 128, MaxOwnerAttributeBytes: 128 * 4096}
+	if profile != "" {
+		limits.MaxDepth = 32
+	}
 	for index, sourceRoot := range f.sources {
 		requireEconomicConservationTestPreparation(t, sourceRoot)
 		f.files = append(f.files, nativeProducerRestoreTestFiles(t, sourceRoot.root))
@@ -267,6 +290,7 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 		if err := decodeMonitorHistoryInput(raw, &request); err != nil {
 			t.Fatal(err)
 		}
+		request.Limits.MaxDepth = limits.MaxDepth
 		request.Owners[0].RestoreCoverage = durablevolume.PreparationCompleteUnion
 		f.request.Preparations = append(f.request.Preparations, request)
 	}

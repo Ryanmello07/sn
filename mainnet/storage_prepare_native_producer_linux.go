@@ -161,12 +161,12 @@ func storageNativeProducerProfile(ctx context.Context, owner durablevolume.Prepa
 	if err != nil {
 		return scope, nil, "", err
 	}
-	prefix, err := filepath.Rel(report.StateRoot.Path, scope.Policy.Execution.Directory)
-	if err != nil || prefix != "." && !storageMonitorTreePath(prefix) {
+	prefix, found := storageNativeRestoreRelative(report.StateRoot.Path, scope.Policy.Execution.Directory)
+	if !found || prefix != "." && !storageNativeRestorePath(prefix) {
 		return scope, nil, "", errors.New("native artifacts moved outside their original declared root")
 	}
 	for index, path := range scope.SharedDirectories {
-		if !storageMonitorTreePath(path) || !strings.HasPrefix(prefix, path+"/") || index > 0 && scope.SharedDirectories[index-1] >= path {
+		if !storageNativeRestorePath(path) || !strings.HasPrefix(prefix, path+"/") || index > 0 && scope.SharedDirectories[index-1] >= path {
 			return scope, nil, "", errors.New("native artifacts may share only exact sorted original ancestors")
 		}
 	}
@@ -270,7 +270,10 @@ func planStorageNativeProducerRestore(ctx context.Context, name string, owner du
 // Read a copied member under its held no-follow ancestry. Both byte digest
 // and named inode are checked; failed reads never become returned mismatches.
 func readStorageNativeProducerMember(ctx context.Context, root *os.File, member durablevolume.PreparationFile) (_ []byte, resultErr error) {
-	parent, err := openStorageMonitorTreeTarget(ctx, root, filepath.Dir(member.Path))
+	if !storageNativeRestorePath(member.Path) {
+		return nil, errors.New("native copied member is outside its bounded original namespace")
+	}
+	parent, err := openStorageNativeRestoreDirectory(ctx, root, filepath.Dir(member.Path))
 	if err != nil {
 		return nil, err
 	}

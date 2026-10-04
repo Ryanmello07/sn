@@ -31,7 +31,7 @@ func storageNativeApprovalMembers(scope storageNativeProducerScope, root string)
 	}
 	references := append([]planFileReference{scope.Policy.Execution.Producer.Authority}, scope.Policy.Execution.Producer.Renewals...)
 	for index, reference := range references {
-		path, found := monitorHistoryRestoreRelative(root, reference.Path)
+		path, found := storageNativeRestoreRelative(root, reference.Path)
 		if found && index < len(scope.Approvals) {
 			members[path] = scope.Approvals[index]
 		}

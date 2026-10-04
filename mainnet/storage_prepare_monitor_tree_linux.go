@@ -279,6 +279,21 @@ func openStorageMonitorTreeTarget(ctx context.Context, root *os.File, directory 
 	if ctx == nil || root == nil || directory != "." && !storageMonitorTreePath(filepath.Join(directory, "head")) {
 		return nil, errors.New("monitor tree inspection requires its borrowed target root")
 	}
+	return openStorageRestoreDirectory(ctx, root, directory)
+}
+
+// Native approvals and artifact roots use the original volume namespace;
+// their copied-source reader retains the same descriptor and custody checks.
+func openStorageNativeRestoreDirectory(ctx context.Context, root *os.File, directory string) (*storageMonitorTreeTarget, error) {
+	if ctx == nil || root == nil || directory != "." && !storageNativeRestorePath(filepath.Join(directory, "head")) {
+		return nil, errors.New("native restore inspection requires its borrowed target root")
+	}
+	return openStorageRestoreDirectory(ctx, root, directory)
+}
+
+// Callers select their fixed bounded namespace before borrowing the root.
+// Traversal keeps real no-follow descriptors and exact original generations.
+func openStorageRestoreDirectory(ctx context.Context, root *os.File, directory string) (_ *storageMonitorTreeTarget, resultErr error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
