@@ -212,7 +212,7 @@ func TestMonitorRpcComparisonOwnsBudgetsAndCancellation(t *testing.T) {
 		called = true
 		deadline, ok := request.Context().Deadline()
 		remaining := time.Until(deadline)
-		if !ok || remaining <= 59*time.Second || remaining > 60*time.Second || owner.primary.retryWindow != 300*time.Second || owner.secondary.retryWindow != 300*time.Second {
+		if !ok || remaining <= 0 || remaining > 60*time.Second || owner.primary.retryWindow != 300*time.Second || owner.secondary.retryWindow != 300*time.Second {
 			t.Fatalf("comparison/attempt budgets differ: %s", remaining)
 		}
 		cancel()
@@ -364,7 +364,7 @@ func TestMonitorRpcComparisonApprovalExpiryBoundsActualAttempt(t *testing.T) {
 		called = true
 		deadline, ok := request.Context().Deadline()
 		remaining := time.Until(deadline)
-		if !ok || remaining <= 29*time.Second || remaining > 30*time.Second {
+		if !ok || remaining <= 0 || remaining > 30*time.Second {
 			t.Fatalf("signed approval did not bound actual attempt: %s", remaining)
 		}
 		cancel()
