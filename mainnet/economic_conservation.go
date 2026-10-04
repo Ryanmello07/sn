@@ -28,13 +28,15 @@ type economicConservationRoute struct {
 }
 
 type economicConservationPolicy struct {
-	Schema            string                      `json:"schema"`
-	Native            monitorEconomicNativePolicy `json:"native"`
-	Vault             monitorEconomicEvmPolicy    `json:"vault"`
-	Claims            []monitorClaimPolicy        `json:"claims"`
-	Routes            []economicConservationRoute `json:"routes"`
-	MaximumFacts      uint64                      `json:"maximum_facts"`
-	ReadBudgetSeconds uint64                      `json:"read_budget_seconds,omitempty"`
+	Continuation      *economicConservationContinuationPolicy `json:"continuation,omitempty"`
+	Schema            string                                  `json:"schema"`
+	Native            monitorEconomicNativePolicy             `json:"native"`
+	Vault             monitorEconomicEvmPolicy                `json:"vault"`
+	Claims            []monitorClaimPolicy                    `json:"claims"`
+	Routes            []economicConservationRoute             `json:"routes"`
+	MaximumFacts      uint64                                  `json:"maximum_facts"`
+	ReadBudgetSeconds uint64                                  `json:"read_budget_seconds,omitempty"`
+	resourceBasis     *economicConservationPolicy
 }
 
 func (self economicConservationPolicy) validate() error {
@@ -44,6 +46,9 @@ func (self economicConservationPolicy) validate() error {
 		return errors.New("economic conservation requires original native execution, one vault, independent routes and finite resources")
 	}
 	if err := errors.Join(self.Native.validate(expected), self.Vault.validate(expected)); err != nil {
+		return err
+	}
+	if err := self.Continuation.validate(self); err != nil {
 		return err
 	}
 	if self.Native.HistoryCatalog != nil || self.Vault.HistoryCatalog != nil || self.Vault.ResourceRevision != nil {
@@ -166,9 +171,11 @@ type economicConservationReceipt struct {
 }
 
 // These finite active facts retain original source identities. Capacity holds
-// before an append and never prunes an unresolved liability. Archive adoption
-// and signed resource renewal for this new combined owner remain separate work.
+// before an append and never prunes an unresolved liability. Archived matched
+// facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	Archive        *economicConservationArchive             `json:"archive,omitempty"`
+	Renewal        *economicConservationRenewal             `json:"resource_renewal,omitempty"`
 	Schema         string                                   `json:"schema"`
 	PolicyHash     string                                   `json:"policy_hash"`
 	Native         monitorEconomicNativeState               `json:"native"`
@@ -195,10 +202,11 @@ type economicConservationState struct {
 	claimIds       map[string]int
 	captureKeys    map[string]bool
 	claimKeys      map[string]bool
+	archiveView    *economicConservationArchiveView
 }
 
 func newEconomicConservationState(policy economicConservationPolicy) *economicConservationState {
-	result := &economicConservationState{Schema: economicConservationSchema, PolicyHash: rootObjectHash(policy), Native: *newMonitorEconomicNativeState(policy.Native), Vault: *newMonitorEconomicEvmState(policy.Vault), Carry: map[string][]economicConservationBacking{}, Credits: map[string]economicConservationCredit{}}
+	result := &economicConservationState{Schema: economicConservationSchema, PolicyHash: policy.identityHash(), Native: *newMonitorEconomicNativeState(policy.Native), Vault: *newMonitorEconomicEvmState(policy.Vault), Carry: map[string][]economicConservationBacking{}, Credits: map[string]economicConservationCredit{}}
 	for _, claim := range policy.Claims {
 		result.ClaimStates = append(result.ClaimStates, *newMonitorClaimState(claim))
 	}
@@ -215,7 +223,11 @@ func (self economicConservationState) facts() uint64 {
 }
 
 func (self economicConservationState) validate(policy economicConservationPolicy) error {
-	if self.Schema != economicConservationSchema || self.PolicyHash != rootObjectHash(policy) || self.ContentHash != self.hash() || len(self.ClaimStates) != len(policy.Claims) || self.facts() > policy.MaximumFacts || len(self.NativeIssue) > 2048 || len(self.VaultIssue) > 2048 || len(self.JoinIssue) > 2048 {
+	operating, err := self.operatingPolicy(policy)
+	if err != nil {
+		return err
+	}
+	if self.Schema != economicConservationSchema || self.PolicyHash != policy.identityHash() || self.ContentHash != self.hash() || len(self.ClaimStates) != len(policy.Claims) || self.facts() > operating.MaximumFacts || len(self.NativeIssue) > 2048 || len(self.VaultIssue) > 2048 || len(self.JoinIssue) > 2048 {
 		return errors.New("economic conservation checkpoint changed original policy, evidence or capacity")
 	}
 	if err := errors.Join(self.Native.validate(policy.Native), self.Vault.validate(policy.Vault)); err != nil {
@@ -226,10 +238,13 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 			return err
 		}
 	}
-	// This owner has not admitted the component archive catalogs. It cannot
-	// import their references without retaining their actual read custody.
-	if self.Native.Archive != nil || self.Native.Catalog != nil || self.Vault.Archive != nil || self.Vault.Catalog != nil {
+	// Component compact summaries borrow only this combined owner's exact
+	// archived checkpoints. They cannot import another role's archive catalog.
+	if self.Native.Catalog != nil || self.Vault.Catalog != nil || self.Archive == nil && (self.Native.Archive != nil || self.Vault.Archive != nil) {
 		return errors.New("economic conservation archive adoption is not configured")
+	}
+	if err := self.Archive.validate(policy, &self); err != nil {
+		return err
 	}
 	if self.Vault.BatchCount != 0 && self.OpeningVault == nil {
 		return errors.New("economic conservation lost its opening vault obligations")
@@ -241,7 +256,7 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 	}
 	seen := map[string]bool{}
 	for _, lot := range self.Lots {
-		if seen[lot.Id] || !planSha256(lot.Id) || lot.Id != economicConservationLotId(lot.ProjectionHash, lot.Effect) || lot.Boundary.Number <= policy.Native.Observation.From.Number || lot.Boundary.Number > self.Native.Cursor.Number || !rootCanonicalHash(lot.Boundary.Hash) || !planSha256(lot.OutcomeHash) || !planSha256(lot.JobHash) {
+		if seen[lot.Id] || self.archiveView != nil && self.archiveView.lotIds[lot.Id] || !planSha256(lot.Id) || lot.Id != economicConservationLotId(lot.ProjectionHash, lot.Effect) || lot.Boundary.Number <= policy.Native.Observation.From.Number || lot.Boundary.Number > self.Native.Cursor.Number || !rootCanonicalHash(lot.Boundary.Hash) || !planSha256(lot.OutcomeHash) || !planSha256(lot.JobHash) {
 			return errors.New("economic conservation repeated or relabelled an earning occurrence")
 		}
 		seen[lot.Id] = true
@@ -319,6 +334,9 @@ func (self *economicConservationState) appendNative(policy economicConservationP
 		}
 		for _, effect := range projection.Effects {
 			lot := economicConservationLot{Id: economicConservationLotId(projection.ContentHash, effect), Boundary: block.Boundary, ProjectionHash: projection.ContentHash, OutcomeHash: outcome.ContentHash, JobHash: outcome.JobHash, EventIndex: *projection.EventIndex, Effect: effect}
+			if self.archiveView != nil && self.archiveView.lotIds[lot.Id] {
+				return errors.New("economic earning occurrence repeats an archived original")
+			}
 			if route, ok := routes[effect.Recipient.Hotkey]; ok {
 				if !effect.Provider || route.Coldkey != effect.Recipient.Coldkey {
 					return errors.New("economic route contradicts original provider generation or reward owner")
@@ -388,6 +406,13 @@ func (self *economicConservationState) entitlement(epoch, pool string) *economic
 		return &self.Entitlements[index]
 	}
 	self.entitlementIds[id] = len(self.Entitlements)
+	if self.archiveView != nil {
+		if prior, ok := self.archiveView.entitlements[id]; ok {
+			prior.Sources = slices.Clone(prior.Sources)
+			self.Entitlements = append(self.Entitlements, prior)
+			return &self.Entitlements[len(self.Entitlements)-1]
+		}
+	}
 	self.Entitlements = append(self.Entitlements, economicConservationEntitlement{Id: id, Epoch: epoch, PoolId: pool, Status: "opening-obligation-unattributed", Funded: "0", Claimed: "0"})
 	return &self.Entitlements[len(self.Entitlements)-1]
 }
@@ -445,7 +470,7 @@ func (self *economicConservationState) vaultEvent(event monitorEconomicEvmEvent,
 	switch event.Name {
 	case "EmissionCaptured":
 		key := economicConservationEntitlementId(epoch, pool)
-		if self.captureKeys[key] {
+		if self.captureKeys[key] || self.archiveView != nil && self.archiveView.captureKeys[key] != "" {
 			return errors.New("economic capture repeated an original epoch or event")
 		}
 		self.captureKeys[key] = true
@@ -524,7 +549,7 @@ func (self *economicConservationState) vaultEvent(event monitorEconomicEvmEvent,
 			status = "original-entitlement-observed"
 		}
 		key := record.Id + "/" + values["coldkey"]
-		if self.claimKeys[key] {
+		if self.claimKeys[key] || self.archiveView != nil && self.archiveView.claimKeys[key] != "" {
 			return errors.New("economic accepted leaf was counted twice")
 		}
 		self.claimKeys[key], self.claimIds[id] = true, len(self.Claims)
@@ -587,6 +612,11 @@ func (self *economicConservationState) reconcile(policy economicConservationPoli
 		mappings[mapping.EvmHash] = mapping
 	}
 	previous := map[string]economicEmissionBoundary{}
+	if self.Archive != nil {
+		for pool, boundary := range self.Archive.PoolBoundaries {
+			previous[pool] = boundary
+		}
+	}
 	blocked := map[string]bool{}
 	usedLots := map[string]bool{}
 	poolLots := map[string][]economicConservationLot{}
@@ -614,6 +644,9 @@ func (self *economicConservationState) reconcile(policy economicConservationPoli
 			return errors.New("economic vault capture differs from independently configured pool hotkey")
 		}
 		mapping, ok := mappings[capture.Event.Block.Hash]
+		if !ok && self.archiveView != nil {
+			mapping, ok = self.archiveView.mappings[capture.Event.Block.Hash]
+		}
 		if !ok || blocked[pool] {
 			capture.Status = "native-mapping-unavailable"
 			blocked[pool] = true
@@ -680,12 +713,25 @@ func (self *economicConservationState) reconcile(policy economicConservationPoli
 				continue
 			}
 			receipt := economicConservationReceipt{Role: claimPolicy.Role, Epoch: epoch.Epoch, Status: "original-receipt-not-yet-observed", Observation: *cloneMonitorClaimObservation(observation)}
-			if claim, ok := claimEvents[claimKey(observation.TransactionHash, observation.BlockHash, fmt.Sprint(epoch.Epoch), observation.Pool.NoId, observation.Pool.Coldkey)]; ok {
+			key := claimKey(observation.TransactionHash, observation.BlockHash, fmt.Sprint(epoch.Epoch), observation.Pool.NoId, observation.Pool.Coldkey)
+			claim, matched := claimEvents[key]
+			if !matched && self.archiveView != nil {
+				archivedId := self.archiveView.claimKeys[economicConservationEntitlementId(fmt.Sprint(epoch.Epoch), observation.Pool.NoId)+"/"+observation.Pool.Coldkey]
+				if archived, exists := self.archiveView.claims[archivedId]; exists && claimKey(archived.Event.TransactionHash, archived.Event.Block.Hash, archived.Event.Values["epoch"], archived.Event.Values["noId"], archived.Event.Values["coldkey"]) == key {
+					claim, matched = archived, true
+				}
+			}
+			if matched {
 				event := claim.Event
 				if event.Values["amount"] != observation.AcceptedAmountRao || event.Values["shareBps"] != fmt.Sprint(observation.ShareBps) || event.Block.Number != observation.BlockNumber {
 					return errors.New("economic original Claim receipt contradicts its checked vault event")
 				}
 				receipt.ClaimId, receipt.Status = claim.Id, "original-acceptance-observed"
+			}
+			if self.archiveView != nil {
+				if previous, ok := self.archiveView.receipts[economicConservationReceiptKey(receipt)]; ok && rootObjectHash(previous) == rootObjectHash(receipt) {
+					continue
+				}
 			}
 			self.Receipts = append(self.Receipts, receipt)
 		}
