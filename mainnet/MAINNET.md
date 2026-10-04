@@ -2,6 +2,8 @@
 
 ## Current execution status — October 4
 
+The [corrected Server1709 compile](evidence/server1709-actual-compile-root-review-20261004.json) passes all six affected packages under the selected SN663/Coread6 graph. This fixes the a2 missing-import build failure; no behavioral root was selected. The corrected complete model fixture is authorized to start automatically. An observer teardown gap remains separately reportable and must not hold or erase an admitted test body.
+
 The resilience review now includes runtime-continuity and checkpoint observations: unavailable RPC reads must not be labeled as changed runtime, noncanonical history or regressed finality. Qualify bounded reconnect/reobservation of the same pinned block alongside genuine contradiction controls before current-role admission.
 
 The [current combined Server model attempt](evidence/current-combined-model-build-failure-root-review-20261004.json) is terminal before any test root: `task/metrics.go` calls `errors.New` without importing `errors`. Fixture cleanup succeeds; the original failed compile and separate teardown sampling gap remain. Astra is fixing the import and reviewing adjacent changed-package build seams. Sol must compile the actual complete selected model package before starting its corrected full fixture. A passing dependency enumeration does not establish successful compilation. Preserve the [earlier live observation](evidence/current-combined-model-live-root-readback-20261004.json) as history, not current status.
