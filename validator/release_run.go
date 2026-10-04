@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -120,8 +121,23 @@ func classifyReleaseSnapshotRetry(err error, siblingCancellation bool) (bool, bo
 // Legacy release callers retain their prior diagnostic compatibility. New
 // evidence retry owners require typed transport origin for eof and no text match.
 func classifyReleaseSnapshotRetryMode(err error, siblingCancellation, legacyText, transportOrigin bool) (bool, bool) {
-	if err == nil {
-		return true, false
+	remaining := 512
+	return classifyReleaseSnapshotRetryBounded(err, siblingCancellation, legacyText, transportOrigin, 0, &remaining)
+}
+
+// Nil, cyclic and excessive cause trees are hard refusals. No custom Is/As
+// method can turn an opaque error into observed transport authority.
+func classifyReleaseSnapshotRetryBounded(err error, siblingCancellation, legacyText, transportOrigin bool, depth int, remaining *int) (bool, bool) {
+	if err == nil || depth > 32 || *remaining <= 0 {
+		return false, false
+	}
+	*remaining--
+	value := reflect.ValueOf(err)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		if value.IsNil() {
+			return false, false
+		}
 	}
 	if _, fileError := err.(*os.PathError); fileError {
 		return false, false
@@ -157,13 +173,13 @@ func classifyReleaseSnapshotRetryMode(err error, siblingCancellation, legacyText
 			return false, false
 		}
 	case *url.Error:
-		return classifyReleaseSnapshotRetryMode(cause.Err, siblingCancellation, legacyText, true)
+		return classifyReleaseSnapshotRetryBounded(cause.Err, siblingCancellation, legacyText, true, depth+1, remaining)
 	case *net.OpError:
-		return classifyReleaseSnapshotRetryMode(cause.Err, siblingCancellation, legacyText, true)
+		return classifyReleaseSnapshotRetryBounded(cause.Err, siblingCancellation, legacyText, true, depth+1, remaining)
 	case *attemptStreamHttpReadError:
-		return classifyReleaseSnapshotRetryMode(cause.cause, siblingCancellation, legacyText, true)
+		return classifyReleaseSnapshotRetryBounded(cause.cause, siblingCancellation, legacyText, true, depth+1, remaining)
 	case *chainRpcMissingResponseError:
-		return classifyReleaseSnapshotRetryMode(cause.cause, siblingCancellation, legacyText, true)
+		return classifyReleaseSnapshotRetryBounded(cause.cause, siblingCancellation, legacyText, true, depth+1, remaining)
 	}
 	if _, observationStatus := err.(*clientKeyObservationHttpStatusError); observationStatus {
 		retryable := retryableClientKeyObservationHttpError(err)
@@ -178,11 +194,11 @@ func classifyReleaseSnapshotRetryMode(err error, siblingCancellation, legacyText
 		return retryable, retryable
 	}
 	if publication, ok := err.(*attemptReplicaPublicationError); ok {
-		return classifyReleaseSnapshotRetryCauses(publication.causes, true, legacyText, transportOrigin)
+		return classifyReleaseSnapshotRetryCauses(publication.causes, true, legacyText, transportOrigin, depth+1, remaining)
 	}
 	if incomplete, ok := err.(*attemptStreamHTTPIncompleteError); ok {
 		if incomplete.cause != nil {
-			return classifyReleaseSnapshotRetryMode(incomplete.cause, siblingCancellation, legacyText, true)
+			return classifyReleaseSnapshotRetryBounded(incomplete.cause, siblingCancellation, legacyText, true, depth+1, remaining)
 		}
 		// Closing an owned sibling after another sibling times out can reach
 		// this exact typed marker before the body observes cancellation. It is
@@ -190,17 +206,16 @@ func classifyReleaseSnapshotRetryMode(err error, siblingCancellation, legacyText
 		return siblingCancellation, false
 	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		return classifyReleaseSnapshotRetryCauses(joined.Unwrap(), siblingCancellation, legacyText, transportOrigin)
+		return classifyReleaseSnapshotRetryCauses(joined.Unwrap(), siblingCancellation, legacyText, transportOrigin, depth+1, remaining)
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
 		cause := wrapped.Unwrap()
 		if cause == nil {
 			return false, false
 		}
-		return classifyReleaseSnapshotRetryMode(cause, siblingCancellation, legacyText, transportOrigin)
+		return classifyReleaseSnapshotRetryBounded(cause, siblingCancellation, legacyText, transportOrigin, depth+1, remaining)
 	}
-	var netErr net.Error
-	if errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary()) {
+	if netErr, ok := err.(net.Error); ok && (netErr.Timeout() || netErr.Temporary()) {
 		return true, true
 	}
 	statusCode := 0
@@ -246,13 +261,13 @@ func classifyReleaseSnapshotRetryMode(err error, siblingCancellation, legacyText
 	return false, false
 }
 
-func classifyReleaseSnapshotRetryCauses(causes []error, siblingCancellation, legacyText, transportOrigin bool) (bool, bool) {
-	if len(causes) == 0 {
+func classifyReleaseSnapshotRetryCauses(causes []error, siblingCancellation, legacyText, transportOrigin bool, depth int, remaining *int) (bool, bool) {
+	if len(causes) == 0 || len(causes) > 128 || len(causes) > *remaining || depth > 32 {
 		return false, false
 	}
 	transient := false
 	for _, cause := range causes {
-		retryable, actualTransient := classifyReleaseSnapshotRetryMode(cause, siblingCancellation, legacyText, transportOrigin)
+		retryable, actualTransient := classifyReleaseSnapshotRetryBounded(cause, siblingCancellation, legacyText, transportOrigin, depth+1, remaining)
 		if !retryable {
 			return false, false
 		}
@@ -971,13 +986,7 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 		settlementEpoch.Store(epoch)
 	}
 	progress.observeSettlement(progress.nextSequence(), runtimeV2.progressSettlement(settlementEpoch.Load()), nil)
-	boundaryCtx := ctx
-	if retainedSetup != nil {
-		// Scope longer reads to shared preparation; trail callers keep their
-		// original deadline and never inherit this private owner context.
-		boundaryCtx = context.WithValue(ctx, provisionalBoundaryReadBudgetKey{}, true)
-	}
-	attemptBoundaryResolver := newReleaseAttemptBoundaryResolver(boundaryCtx, chain, cfg)
+	attemptBoundaryResolver := newReleaseAttemptBoundaryResolver(ctx, chain, cfg)
 	defer attemptBoundaryResolver.close()
 	runtimeV2.publishEpoch = func(epoch uint64) {
 		attemptBoundaryResolver.invalidateLatest()

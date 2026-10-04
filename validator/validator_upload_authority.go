@@ -187,12 +187,10 @@ func (self *ChainClient) ValidatorUploadObserverContext(ctx context.Context) (re
 		Hash      *common.Hash    `json:"hash"`
 		Timestamp *hexutil.Uint64 `json:"timestamp"`
 	}
-	callCtx, cancel := context.WithTimeout(ctx, chainCallTimeout)
-	defer cancel()
-	if err := self.client.Client().CallContext(callCtx, &header, "eth_getBlockByNumber", "finalized", false); err != nil {
-		return result, err
-	}
-	if err := callCtx.Err(); err != nil {
+	if err := self.retryChainRead(ctx, func(callCtx context.Context) error {
+		header = nil
+		return self.client.Client().CallContext(callCtx, &header, "eth_getBlockByNumber", "finalized", false)
+	}); err != nil {
 		return result, err
 	}
 	if header == nil || header.Number == nil || header.Hash == nil || header.Timestamp == nil || *header.Number == 0 || *header.Number > math.MaxInt64 ||
@@ -261,13 +259,11 @@ func (self *ChainClient) ValidatorUploadActivationEventsContext(ctx context.Cont
 		LogIndex    *hexutil.Uint64 `json:"logIndex"`
 		Removed     *bool           `json:"removed"`
 	}
-	callCtx, cancel := context.WithTimeout(ctx, chainCallTimeout)
-	defer cancel()
 	filter := map[string]any{"address": common.Address(deployment.Journal), "fromBlock": hexutil.EncodeUint64(from), "toBlock": hexutil.EncodeUint64(to), "topics": []common.Hash{topic}}
-	if err := self.client.Client().CallContext(callCtx, &rows, "eth_getLogs", filter); err != nil {
-		return nil, err
-	}
-	if err := callCtx.Err(); err != nil {
+	if err := self.retryChainRead(ctx, func(callCtx context.Context) error {
+		rows = nil
+		return self.client.Client().CallContext(callCtx, &rows, "eth_getLogs", filter)
+	}); err != nil {
 		return nil, err
 	}
 	// JSON null is not an authenticated empty range. Geth leaves a nonnil
