@@ -4,6 +4,86 @@
 
 use super::*;
 
+/// Each original capture reads its current stock, then commits one write. Both
+/// host observations remain in the trace; only the independently censused set
+/// is a financial effect. Rollback must discard the complete pair and mutation.
+fn committed_captures(trace: &observer::ObservationReport) -> Vec<&observer::Observation> {
+    let records: Vec<_> = trace
+        .observations
+        .iter()
+        .filter(|value| value.purpose == "native-principal-vault-capture")
+        .collect();
+    assert_eq!(records.len() % 2, 0, "original capture read/write pair absent");
+    let mutations = trace.principal_mutations.as_ref().unwrap();
+    let mut captures = Vec::new();
+    for pair in records.chunks_exact(2) {
+        let (read, write) = (pair[0], pair[1]);
+        assert_eq!(
+            read.operation, "get",
+            "original capture begins with actual read"
+        );
+        assert_eq!(
+            write.operation, "set",
+            "original capture ends with committed write"
+        );
+        assert!(
+            read.ordinal < write.ordinal,
+            "original capture host order changed"
+        );
+        assert_eq!(read.key_hex, write.key_hex);
+        let native = write.native.as_ref().unwrap();
+        let field = |name| {
+            &native
+                .memory
+                .iter()
+                .find(|value| value.name == name)
+                .unwrap()
+                .bytes_hex
+        };
+        let returned = read.storage_return.as_ref().unwrap();
+        assert!(returned.present, "original capture stock read is absent");
+        assert_eq!(
+            returned.value_hex.as_ref(),
+            Some(field("before")),
+            "original capture before amount differs from actual storage read"
+        );
+        assert_eq!(
+            write.value_hex.as_ref(),
+            Some(field("after")),
+            "original capture after amount differs from committed storage bytes"
+        );
+        assert_eq!(
+            read.native.as_ref().unwrap().execution_phase_hex,
+            native.execution_phase_hex,
+            "original capture read/write Apply identity changed"
+        );
+        let matched: Vec<_> = mutations
+            .iter()
+            .filter(|value| value.ordinal == write.ordinal)
+            .collect();
+        assert_eq!(
+            matched.len(), 1,
+            "original capture lacks its unique committed mutation"
+        );
+        let mutation = matched[0];
+        assert_eq!(mutation.operation, write.operation);
+        assert_eq!(mutation.key_hex, write.key_hex);
+        let value = hex_bytes(
+            "captured storage value",
+            write.value_hex.as_ref().unwrap(),
+            8,
+        )
+        .unwrap();
+        assert_eq!(mutation.value_sha256, Some(sha2_256(&value)));
+        assert!(
+            mutations.iter().all(|value| value.ordinal != read.ordinal),
+            "original capture read was counted as a committed mutation"
+        );
+        captures.push(write);
+    }
+    captures
+}
+
 #[test]
 fn historical_native_vault_capture_exports_original_transaction_causes() {
     let mut jobs = Vec::new();
@@ -28,11 +108,7 @@ fn historical_native_vault_capture_exports_original_transaction_causes() {
             let trace = report.hook_observations.as_ref().unwrap();
             assert_eq!(trace.principal_mutations.as_ref().unwrap().len(), committed);
             assert_eq!(trace.discarded_on_rollback, discarded);
-            let captures: Vec<_> = trace
-                .observations
-                .iter()
-                .filter(|value| value.purpose == "native-principal-vault-capture")
-                .collect();
+            let captures = committed_captures(trace);
             assert_eq!(
                 captures.len(),
                 usize::from(name != "capture-rollback"),
@@ -144,11 +220,7 @@ fn historical_native_vault_capture_exports_original_capture_sequences() {
                 Some("0")
             );
             let trace = report.hook_observations.as_ref().unwrap();
-            let captures: Vec<_> = trace
-                .observations
-                .iter()
-                .filter(|value| value.purpose == "native-principal-vault-capture")
-                .collect();
+            let captures = committed_captures(trace);
             assert_eq!(
                 captures.len(),
                 amounts.len(),
