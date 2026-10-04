@@ -205,7 +205,8 @@
     "native-complete-restorea499-source-root-review-20261004.json": "1c590d208c781766fb1cfaa733a62d60fa5b6328807d8de827acdc5e8289c5f3",
     "principal-fixture8d3-normal-root-review-20261004.json": "0de33a34f9e31baa024a8e3680166ca7bec7a26932f7af403087e6be3fdebc43",
     "core-c618-terminal-root-review-20261004.json": "ebf2e73caf79ca12cf4009953fac679d1cca681b27c5de6af041f7f1db15571b",
-    "core-c618-overlap-operational-root-adoption-20261004.json": "139b471e8a63f17ec11865e67b731659e8a533d9e23f769d7301fe765c38deef"
+    "core-c618-overlap-operational-root-adoption-20261004.json": "139b471e8a63f17ec11865e67b731659e8a533d9e23f769d7301fe765c38deef",
+    "principal-fixture4af-source-root-review-20261004.json": "b5388aae0f461c0d0c959d083b164dc69a93b01b9e02c450c8bfba30d5ed18c6"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",

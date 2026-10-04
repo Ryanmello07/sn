@@ -20,6 +20,8 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+The [principal fixture custody source review](evidence/principal-fixture4af-source-root-review-20261004.json) verifies the test-only `4af` successor and nineteen bindings. It provisions the actual checkpoint lock before declaring the synthetic volume, protects fresh archive metadata, and adds public tests that retain a lost lock or empty committed head without repair or extra source reads. Qualify only the ten previously failing roots plus these two new roots per mode, vet and two causal controls. Correct the inherited recipe wording before runner admission; preserve unchanged production/Rust bytes and prior successes.
+
 The [read-only Core terminal review](evidence/core-c618-terminal-root-review-20261004.json) independently verifies 61 input/output bindings, ten exact passing roots in each normal and race mode, vet, and four named causal failures when the old production behavior is restored. Exact private read-only modes survive copy, lost acknowledgements and publication; genuine permission changes remain conflicts. Core `c618` is qualified for this component scope. Publish its module and join the complete native restore `a499` gate; component success does not establish full producer restore or mainnet readiness.
 
 The fixture continuation is terminal: normal and race each retain ten passes and ten identical missing-checkpoint-lock failures, with no skips; vet passes. The next correction must provision the complete actual fixture custody before declaration and distinguish an absent initial head from an empty committed head. Retain successful bodies and qualified Rust assets instead of repeating unaffected work.
