@@ -10,10 +10,15 @@ import (
 	"path/filepath"
 
 	"github.com/urfoundation/sn/protocol"
+	"github.com/urnetwork/connect/durablevolume"
 )
 
 const ProviderAttemptPublicationNamespaceAttribute = "user.urnetwork.validator.publications.v1"
 const ProviderAttemptPublicationNamespaceSchema = "urnetwork-provider-attempt-publication-custody-v1"
+
+// Core's existing complete physical inventory and restore both stop at 1 TiB.
+// This admission ceiling does not enlarge or normalize any approved allowance.
+const ProviderAttemptPublicationMaximumHistoryBytes = uint64(1024 * 1024 * 1024 * 1024)
 
 // The actual runtime config supplies the same full profile as offline approval.
 // Bounds belong to existing evidence settings, not to the files being restored.
@@ -46,8 +51,14 @@ func (self ProviderAttemptPublicationPreparation) Directory() string {
 
 // Validate all original scopes before opening any publication namespace.
 func (self ProviderAttemptPublicationPreparation) Validate() error {
-	if !filepath.IsAbs(self.StateDir) || filepath.Clean(self.StateDir) != self.StateDir || filepath.Dir(self.StateDir) == self.StateDir || self.MaxWindowBytes == 0 || self.MaxWindowBytes > self.MaxHistoryBytes || self.MaxHistoryBytes >= uint64(^uint(0)>>1) || self.MaxFiles == 0 || self.MaxFiles >= uint64(^uint(0)>>1) || len(self.Operators) == 0 {
+	if !filepath.IsAbs(self.StateDir) || filepath.Clean(self.StateDir) != self.StateDir || filepath.Dir(self.StateDir) == self.StateDir || len(self.Operators) == 0 {
 		return errors.New("provider publication requires its fixed directory, complete roster and finite evidence bounds")
+	}
+	// Every final and inert crash file shares these aggregate limits. The
+	// physical inventory also needs its one root entry; no file is omitted to
+	// squeeze a declared namespace into a smaller later restore envelope.
+	if self.MaxWindowBytes == 0 || self.MaxWindowBytes > self.MaxHistoryBytes || self.MaxHistoryBytes > ProviderAttemptPublicationMaximumHistoryBytes || self.MaxHistoryBytes >= uint64(^uint(0)>>1) || self.MaxFiles == 0 || self.MaxFiles >= durablevolume.MaximumPhysicalInventoryEntries {
+		return errors.Join(protocol.ErrProviderAttemptsCapacity, errors.New("provider publication allowance exceeds complete physical inventory capacity"))
 	}
 	noIdKVs := map[uint64]bool{}
 	for _, operator := range self.Operators {
@@ -69,6 +80,17 @@ func (self ProviderAttemptPublicationPreparation) Validate() error {
 		return errors.Join(errors.New("provider publication full approval profile exceeds its finite bound"), err)
 	}
 	return nil
+}
+
+// Forecast the full declared namespace, including inert temporary files, its
+// directory and both bounded root attributes. Historical profiles remain exact:
+// a different allowance needs separately reviewed migration, not a new digest
+// written over the original birth or a reinterpretation of completed windows.
+func (self ProviderAttemptPublicationPreparation) InventoryLimits() (durablevolume.InventoryLimits, error) {
+	if err := self.Validate(); err != nil {
+		return durablevolume.InventoryLimits{}, err
+	}
+	return durablevolume.InventoryLimits{MaxEntries: self.MaxFiles + 1, MaxBytes: self.MaxHistoryBytes, MaxDepth: 1, MaxOwnerAttributes: 2, MaxOwnerAttributeBytes: 2 * 4096}, nil
 }
 
 // This digest covers exact typed approved identity, roster order and capacity.

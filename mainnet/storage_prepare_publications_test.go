@@ -32,7 +32,7 @@ type storagePublicationFixture struct {
 }
 
 // Select the literal runtime child before granting any original root birth.
-func newStoragePublicationFixture(t *testing.T) *storagePublicationFixture {
+func newStoragePublicationPreparationFixture(t *testing.T) *storagePublicationFixture {
 	t.Helper()
 	f := &storagePublicationFixture{source: newStoragePreparationCommandFixture(t)}
 	old := f.source.root
@@ -84,6 +84,13 @@ func newStoragePublicationFixture(t *testing.T) *storagePublicationFixture {
 	f.profile = validator.ProviderAttemptPublicationPreparation{StateDir: filepath.Dir(f.source.root), MaxWindowBytes: 1024 * 1024, MaxHistoryBytes: 4 * 1024 * 1024, MaxFiles: 32, Operators: []validator.ProviderAttemptPublicationOperator{{Preparation: preparation, ReceiptScope: scope}}}
 	f.owner = storagePublicationProfileOwner(t, f.source, f.profile)
 	storagePreparationOwnerRequest(t, f.source, "daemon", []durablevolume.PreparationOwner{f.owner})
+	return f
+}
+
+// Ordinary fixtures publish only after the independent profile is fully set.
+func newStoragePublicationFixture(t *testing.T) *storagePublicationFixture {
+	t.Helper()
+	f := newStoragePublicationPreparationFixture(t)
 	f.ctx = storagePreparationApplyOwnerCommand(t, f.source, "storage-prepare")
 	return f
 }
