@@ -22,6 +22,10 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+The [contextual provider correction](evidence/provider-context-cancellation-source-review-20261004.json) is source-reviewed across 12 changed files and nine deterministic regressions. Actual operation context reaches row copying, payout allocation, Merkle construction and publication/readback without changing legacy grammar. Independent canonical-value neighbors and a public HTTP cancellation-classification regression remain part of qualification.
+
+Corrected `ab48` normal/race mainnet test images compile, but the original Yuma, populated 1,024/2,048-UID and vault-sequence exporters remain source-only. Qualify those actual original-runtime producers before the dependent funding tests; run independent ABI/recovery roots meanwhile and retain explicit unexecuted status for missing assets.
+
 The [qualified validator selected component](evidence/validatorb6-selected-component-qualified-20261004.json) combines fourteen passing roots per mode, vet and all twelve intended causal-control failures. Root independently verified the final nonempty-head lineage and terminal-custody groups. Integrate the exact reviewed validator delta with current source/dependency evidence; broader-history and full release requirements remain open.
 
 The [funding control review](evidence/fundinge0-operative-controls-source-review-20261004.json) verifies eight operative production mutations for original income/carry, retained totals, capital contradictions, tolerance, stale acceptance and owner custody. They remain unexecuted; join the corrected ABI fixture before full funding qualification.

@@ -278,7 +278,8 @@
     "validatorb6-four-controls-independent-readback-20261004.json": "3a23022665b552b95781a593dc1a04bee9260d52aa78fadb6f8a674369ee5746",
     "provider-closed-work-tests-controls-source-review-20261004.json": "de83adbfdbbbdd2bacaf67cbe6864b739e53997869b5966e58656f02574f735a",
     "fundinge0-operative-controls-source-review-20261004.json": "6ed8d4ea8c86b2e18a6b03f9350e85a9281e6ed1714da13298adb6334342013a",
-    "validatorb6-selected-component-qualified-20261004.json": "f4688f15922041c002852f265b9ccc6026d070911d225ae1347483bf5fa1bd70"
+    "validatorb6-selected-component-qualified-20261004.json": "f4688f15922041c002852f265b9ccc6026d070911d225ae1347483bf5fa1bd70",
+    "provider-context-cancellation-source-review-20261004.json": "3378331e5593072e63fced89843f78b25a39cbd0d096e0943f0237d6f6fe2d61"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
