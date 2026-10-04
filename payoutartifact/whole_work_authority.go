@@ -311,7 +311,7 @@ func cloneWholeWorkInventory(ctx context.Context, inventory *WholeWorkInventory)
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if len(raw) > MaxWholeWorkInventoryBytes-used {
+		if len(raw) > protocol.MaximumProviderWorkReceiptBytes || len(raw) > MaxWholeWorkInventoryBytes-used {
 			return nil, ErrClosedWorkCapacity
 		}
 		used += len(raw)

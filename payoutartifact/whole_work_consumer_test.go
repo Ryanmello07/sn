@@ -5,6 +5,8 @@ package payoutartifact
 import (
 	"errors"
 	"testing"
+
+	"github.com/urfoundation/sn/protocol"
 )
 
 // Reserved amounts and complete report chains survive the public whole-work
@@ -31,5 +33,9 @@ func TestWholeWorkAttributionOriginalTransportSharesWitnessCapacity(t *testing.T
 	fixture.inventory.AttributionOriginals = make([][]byte, MaxClosedWorkRecords+1)
 	if value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); value != nil || !errors.Is(err, ErrClosedWorkCapacity) {
 		t.Fatal("optional attribution original count became unbounded", value, err)
+	}
+	fixture.inventory.AttributionOriginals = [][]byte{make([]byte, protocol.MaximumProviderWorkReceiptBytes+1)}
+	if value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); value != nil || !errors.Is(err, ErrClosedWorkCapacity) {
+		t.Fatal("one attribution receipt exceeded its original wire profile", value, err)
 	}
 }
