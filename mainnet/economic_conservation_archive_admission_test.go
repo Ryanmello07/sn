@@ -281,7 +281,7 @@ func TestEconomicConservationArchiveAdmissionClosedIndexCannotSeedNewFacts(t *te
 	if err := view.close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := view.admit(&economicConservationState{}, &economicConservationState{}); !errors.Is(err, os.ErrClosed) {
+	if err := view.admit(t.Context(), &economicConservationState{}, &economicConservationState{}); !errors.Is(err, os.ErrClosed) {
 		t.Fatal("closed original index admitted later descendants", err)
 	}
 	if err := view.admitEntitlementCensuses(f.ctx, f.source.policy, &state); !errors.Is(err, os.ErrClosed) || view.entries != entries || view.bytes != retainedBytes {

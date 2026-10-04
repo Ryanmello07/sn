@@ -75,7 +75,7 @@ func TestEconomicConservationArchiveIndexNeverOverwritesOriginalReceipt(t *testi
 	}
 	view := newEconomicConservationArchiveView(resources)
 	input := &economicConservationState{Receipts: original.Receipts}
-	if err := view.admit(input, &economicConservationState{}); err != nil {
+	if err := view.admit(t.Context(), input, &economicConservationState{}); err != nil {
 		t.Fatal("original index admission", err)
 	}
 	first := original.Receipts[0]
@@ -102,7 +102,7 @@ func TestEconomicConservationArchiveIndexNeverOverwritesOriginalReceipt(t *testi
 			t.Fatal("contradiction must have valid wire grammar", change.name, err)
 		}
 		input.Receipts = []economicConservationReceipt{changed}
-		if err := view.admit(input, &economicConservationState{}); err == nil || !strings.Contains(err.Error(), "archived original Claim receipt contradicts") {
+		if err := view.admit(t.Context(), input, &economicConservationState{}); err == nil || !strings.Contains(err.Error(), "archived original Claim receipt contradicts") {
 			t.Fatal("archive index replaced a different original receipt", change.name, err)
 		}
 		if !reflect.DeepEqual(view.receipts[key], first) || view.entries != entries || view.bytes != retainedBytes {

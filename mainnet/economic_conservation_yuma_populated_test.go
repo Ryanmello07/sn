@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"strings"
 	"testing"
@@ -80,8 +81,23 @@ func economicConservationTestPopulatedYuma(t *testing.T, count int) {
 		t.Fatal("populated original archive failed", code, issue)
 	}
 	second := f.sample(t, monitorServiceHooks{})
-	if second.Yuma == nil || !second.Yuma.Current || second.Yuma.Archived == nil || second.Yuma.Archived.Blocks != 1 || len(second.Yuma.Active) != 0 || *second.Yuma.MinerDenominator != *first.Yuma.MinerDenominator || *second.FullQuantizationToleranceAlpha != *first.FullQuantizationToleranceAlpha || second.TargetMet != nil || second.ActualNativeOutcomeVerified || second.ActivationReady {
+	if second.Yuma == nil || !second.Yuma.Current || second.Yuma.Archived == nil || second.Yuma.Archived.Blocks != 1 || len(second.Yuma.Active) != 0 || *second.Yuma.MinerDenominator != *first.Yuma.MinerDenominator || *second.FullQuantizationToleranceAlpha != *first.FullQuantizationToleranceAlpha || second.ActualNativeOutcomeVerified || second.ActivationReady {
 		t.Fatal("populated original cold restore lost arithmetic or manufactured economic authority", second)
+	}
+	// This populated capacity program deliberately pays every UID, including
+	// unclassified recipients. Unknown membership alone proves no violation.
+	// Its complete original owner branch nevertheless receives far below90%.
+	owner, err := monitorEconomicInteger(second.Execution.OwnerRecycled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	denominator, err := monitorEconomicInteger(*second.Yuma.MinerDenominator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner.Mul(owner, big.NewInt(10))
+	if owner.Cmp(denominator) >= 0 || second.Conformance == nil || second.Conformance.OwnerRecycleWithinTolerance == nil || *second.Conformance.OwnerRecycleWithinTolerance || second.Execution.ResidualEntitlement == "0" || second.TargetMet == nil || *second.TargetMet || second.Conformance.CompleteEvidence {
+		t.Fatal("complete populated owner bound was hidden or partial membership became authority", second)
 	}
 	t.Logf("actual populated witness uids=%d validators=64 wire_bytes=%d head_bytes=%d twofold_witness_bytes=%d twofold_edge_reserve=%d twofold_operation_reserve=%d actual_host_capacity=unmeasured", count, actualBytes, len(raw), forecast.ReservedWitnessBytes, forecast.ReservedEdges, forecast.ReservedOperations)
 }

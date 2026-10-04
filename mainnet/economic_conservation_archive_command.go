@@ -178,7 +178,7 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 		return plan, nil, err
 	}
 	view.resources = resources
-	if err := view.admit(state, compacted); err != nil {
+	if err := view.admit(ctx, state, compacted); err != nil {
 		return plan, nil, err
 	}
 	if err := view.retainClaimWindows(request.Policy, state); err != nil {

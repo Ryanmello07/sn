@@ -22,7 +22,7 @@ func TestEconomicConservationArchiveIndexNilOperandsRefuseBeforeMutation(t *test
 		{original: nil, compacted: &economicConservationState{}},
 		{original: &original, compacted: nil},
 	} {
-		if err := view.admit(check.original, check.compacted); err == nil || !strings.Contains(err.Error(), "requires original and compacted") {
+		if err := view.admit(t.Context(), check.original, check.compacted); err == nil || !strings.Contains(err.Error(), "requires original and compacted") {
 			t.Fatal("nil archive operand did not refuse before indexing", err)
 		}
 		if view.entries != 0 || view.bytes != 0 || len(view.receipts) != 0 || len(view.feeEvidence) != 0 {
@@ -30,7 +30,7 @@ func TestEconomicConservationArchiveIndexNilOperandsRefuseBeforeMutation(t *test
 		}
 	}
 	var absent *economicConservationArchiveView
-	if err := absent.admit(&original, &economicConservationState{}); err == nil {
+	if err := absent.admit(t.Context(), &original, &economicConservationState{}); err == nil {
 		t.Fatal("nil archive owner was accepted")
 	}
 }
@@ -52,7 +52,7 @@ func TestEconomicConservationArchiveIndexMalformedCatalogRefusesBeforeMutation(t
 	} {
 		view := newEconomicConservationArchiveView(resources)
 		before := rootObjectHash(original)
-		if err := view.admit(&original, &economicConservationState{Archive: archive}); err == nil {
+		if err := view.admit(t.Context(), &original, &economicConservationState{Archive: archive}); err == nil {
 			t.Fatal("malformed archive catalog was indexed", archive)
 		}
 		if view.entries != 0 || view.bytes != 0 || len(view.receipts) != 0 || len(view.feeEvidence) != 0 || before != rootObjectHash(original) {
@@ -77,7 +77,7 @@ func TestEconomicConservationArchiveIndexLostCustodyRefusesBeforeMutation(t *tes
 	if err := owner.close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := view.admit(&original, &economicConservationState{}); !errors.Is(err, os.ErrClosed) {
+	if err := view.admit(t.Context(), &original, &economicConservationState{}); !errors.Is(err, os.ErrClosed) {
 		t.Fatal("lost original owner did not refuse archive indexing", err)
 	}
 	if view.entries != 0 || view.bytes != 0 || len(view.receipts) != 0 {
@@ -87,11 +87,11 @@ func TestEconomicConservationArchiveIndexLostCustodyRefusesBeforeMutation(t *tes
 	// idempotent for the first known original, not an implicit fee retirement.
 	view = newEconomicConservationArchiveView(resources)
 	input := &economicConservationState{Receipts: original.Receipts}
-	if err := view.admit(input, &economicConservationState{}); err != nil {
+	if err := view.admit(t.Context(), input, &economicConservationState{}); err != nil {
 		t.Fatal("legacy receipt-only admission", err)
 	}
 	entries, retainedBytes := view.entries, view.bytes
-	if err := view.admit(input, &economicConservationState{}); err != nil || view.entries != entries || view.bytes != retainedBytes || !reflect.DeepEqual(view.receipts[economicConservationReceiptKey(original.Receipts[0])], original.Receipts[0]) {
+	if err := view.admit(t.Context(), input, &economicConservationState{}); err != nil || view.entries != entries || view.bytes != retainedBytes || !reflect.DeepEqual(view.receipts[economicConservationReceiptKey(original.Receipts[0])], original.Receipts[0]) {
 		t.Fatal("known receipt retry changed original identity or capacity", err)
 	}
 }

@@ -110,6 +110,7 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
+	funding                  *economicConservationFundingIndex
 	admission                context.Context
 	closed                   bool
 	entitlementEnabled       bool
@@ -472,9 +473,12 @@ func economicConservationRetainedIds[T any](values []T, id func(T) string) map[s
 
 // Admission indexes only the facts removed by the deterministic compaction.
 // An old unresolved record appearing in multiple snapshots is not new income.
-func (self *economicConservationArchiveView) admit(original, compacted *economicConservationState) error {
+func (self *economicConservationArchiveView) admit(ctx context.Context, original, compacted *economicConservationState) error {
 	retireFees, err := self.indexAdmission(original, compacted)
 	if err != nil {
+		return err
+	}
+	if err := self.retainFundingComposition(ctx, original, compacted); err != nil {
 		return err
 	}
 	if err := self.retainEntitlementCensuses(original, compacted); err != nil {
@@ -748,7 +752,7 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 		if err != nil {
 			return nil, err
 		}
-		if err := view.admit(&original, compacted); err != nil {
+		if err := view.admit(ctx, &original, compacted); err != nil {
 			return nil, err
 		}
 		if err := view.retainClaimWindows(policy, &original); err != nil {
