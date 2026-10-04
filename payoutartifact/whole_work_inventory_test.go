@@ -525,7 +525,7 @@ func TestWholeWorkOpenAndZeroCanceledContractsRemainExplicit(t *testing.T) {
 		fixture.inventory.Window.Records = append(fixture.inventory.Window.Records, row)
 	}
 	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
-	if err != nil || !value.Complete || value.Contracts != 2 || value.Canceled != 1 || value.Open != 1 || value.Credited != 0 {
+	if err != nil || !value.Complete || value.AttributionComplete || value.Contracts != 2 || value.Canceled != 1 || value.Open != 1 || value.Credited != 0 {
 		t.Fatal("explicit non-credit contracts were omitted or credited", value, err)
 	}
 	fixture.inventory.Window.Records = fixture.inventory.Window.Records[1:]

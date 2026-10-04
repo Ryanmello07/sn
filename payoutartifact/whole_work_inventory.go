@@ -354,7 +354,15 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 			if destinationPresent && (destinationErr != nil || !destinationHead.Terminal || destinationHead.CumulativeAckedBytes != 0) {
 				return nil, ErrClosedWorkUnavailable
 			}
+			// A signed zero terminal proves no earned bytes, but carries no
+			// original cancellation clock. SQL cannot supply that missing fact.
+			participants.Complete = false
 		case "open":
+			if _, dated := participants.OpenThroughEnd[id]; !dated {
+				// A late nonterminal SDK cut does not itself place admission
+				// inside this epoch or prove the original state at End.
+				participants.Complete = false
+			}
 			if sourceErr == nil && sourceHead.Terminal && destinationErr == nil && destinationHead.Terminal {
 				if _, open := participants.OpenThroughEnd[id]; !open {
 					return nil, ErrClosedWorkUnavailable
