@@ -245,7 +245,8 @@
     "readiness-requirement-outcome-mapping-correction-20261004.json": "fddd9d0adc97e0df040c87c464721229e6229e98d6c8ee81945c18f1c883fa58",
     "conservation-counterab0-independent-source-review-20261004.json": "35d4fdf93b2d0c861fbb3f9538558e54e5c9de980c4734f116adbd362117b8e9",
     "claim-full128-normal-recovery-independent-readback-20261004.json": "761cee0237bb11b7cd15ffe6907904d9fd9f48a710cdede094aaf2d6069674be",
-    "joined-admissionab0-scoped-source-root-review-20261004.json": "08536bea65499940128dd1a3f5a18e170fbca24f78dc6b43162ca3f570be66d3"
+    "joined-admissionab0-scoped-source-root-review-20261004.json": "08536bea65499940128dd1a3f5a18e170fbca24f78dc6b43162ca3f570be66d3",
+    "admissionab0-normal-race-compile-independent-readback-20261004.json": "068d9fd9b49f32d572fbb3790f454a250a5618b6815e3107ab30ef24f556009c"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
