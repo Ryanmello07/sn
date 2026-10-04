@@ -187,7 +187,8 @@
     "server1709-receipt-retry-typed-nil-source-finding-20261004.json": "053175499ed7634ded60f3aad8029161778ba9ca3553c2e8c124cc465c8947a0",
     "runtime-observation6fa-short-partition-root-review-20261004.json": "7eb71d1db11448cdee7e8f7a38644a668f1708d2fea0d2b9d67bcc51a9394ceb",
     "economic-principal-effects986-source-root-review-20261004.json": "4ac668d1e50adbb523bcdc018ce5a7b5e071599e06ba544521b3ee00b1b1344e",
-    "server-receipt4a5-typed-causes-source-root-review-20261004.json": "95a4415b6d7858090b7a96a6b006ddc93e7a0f7807f1f7ce75168acccebfa34d"
+    "server-receipt4a5-typed-causes-source-root-review-20261004.json": "95a4415b6d7858090b7a96a6b006ddc93e7a0f7807f1f7ce75168acccebfa34d",
+    "fee-c04-original-race-terminal-root-review-20261004.json": "0bea709fe46acfa66c20b7ffcec3c6ded6c254e9a66b1c997c8879f03e6565d3"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -308,7 +309,7 @@
       "closed": false,
       "evidence": "fee-revision3e7-source-root-review-20261004.json",
       "requirement": "PH-19",
-      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal48PASS1FAIL; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with conditional Rust resource admission; behavioral qualification remains. Principal-effects986 source-reviewed (48 Go roots/mode,27 Rust roots,eight causal groups); behavioral qualification and actual native-to-vault capture join remain. Full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain."
+      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal/race each48PASS1FAIL,all49 terminal with no timeout; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with conditional Rust resource admission; behavioral qualification remains. Principal-effects986 source-reviewed (48 Go roots/mode,27 Rust roots,eight causal groups); behavioral qualification and actual native-to-vault capture join remain. Full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain."
     },
     {
       "closed": false,
