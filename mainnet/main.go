@@ -286,7 +286,11 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	expectedChain := flags.String("expected-chain", "", "approved native chain name")
 	expectedGenesis := flags.String("expected-genesis", "", "approved native genesis hash")
 	expectedEvmChainId := flags.Uint64("expected-evm-chain-id", 0, "approved EVM chain ID")
-	retryWindow := flags.Duration("retry-window", 60*time.Second, "total transient retry window per read")
+	defaultRetryWindow := 60 * time.Second
+	if command == "monitor" {
+		defaultRetryWindow = defaultMonitorProgressReadBudget
+	}
+	retryWindow := flags.Duration("retry-window", defaultRetryWindow, "total transient retry window per read")
 	interval := flags.Duration("interval", 30*time.Second, "monitor sampling interval")
 	stallAfter := flags.Duration("stall-after", 5*time.Minute, "finality progress alert threshold")
 	checkpointPath := flags.String("checkpoint", "", "absolute path for a durable monitor finality checkpoint")
@@ -304,6 +308,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 2
+	}
+	if hooks.afterRpcClient != nil {
+		hooks.afterRpcClient(command, client.retryWindow)
 	}
 	expected := identityExpectation{NativeChain: *expectedChain, GenesisHash: *expectedGenesis, EvmChainId: *expectedEvmChainId}
 	checkExpected := command == "monitor" || expected.NativeChain != "" || expected.GenesisHash != "" || expected.EvmChainId != 0
@@ -394,11 +401,11 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 	if checkpointPath != "" {
 		checkpoint, err = openMonitorCheckpoint(checkpointPath, expected, ctx)
 		if err != nil {
-			if ctx.Err() != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
 				return 0
 			}
 			fmt.Fprintln(stderr, "monitor checkpoint:", err)
-			if monitorStoragePending(err) && !errors.Is(err, durablehead.ErrUncertain) {
+			if ctx.Err() == nil && monitorStartupPending(err) {
 				return 1
 			}
 			return 3
@@ -406,12 +413,23 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 		if hooks.afterCheckpointOpen != nil {
 			hooks.afterCheckpointOpen(ctx, "chain", checkpoint.lock)
 		}
-		state, err = checkpoint.load()
+		budget := defaultMonitorProgressReadBudget
+		if client != nil && client.retryWindow > 0 {
+			budget = client.retryWindow
+		}
+		state, err = loadMonitorChainCheckpoint(ctx, checkpoint, budget, stdout, stderr, now, hooks)
 		if err != nil {
 			if monitorCanceledCheckpointLoad(ctx, err) {
 				return 0
 			}
 			fmt.Fprintln(stderr, "monitor checkpoint:", err)
+			if monitorStartupPending(err) {
+				if ctx.Err() != nil {
+					return 0
+				}
+				return 1
+			}
+			publishMonitorAdmission("chain", "quarantined", err, 0, stdout, stderr, now)
 			return 3
 		}
 		if hooks.syncDirectory != nil {
@@ -421,11 +439,11 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 	if metricsPath != "" {
 		metrics, err = openMonitorMetrics(metricsPath, ctx)
 		if err != nil {
-			if ctx.Err() != nil {
+			if monitorCanceledCheckpointLoad(ctx, err) {
 				return 0
 			}
 			fmt.Fprintln(stderr, "monitor metrics:", err)
-			if monitorStoragePending(err) {
+			if ctx.Err() == nil && monitorStartupPending(err) {
 				return 1
 			}
 			return 2
@@ -435,7 +453,7 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 		}
 		for {
 			if err := metrics.initialize(state); err != nil {
-				if ctx.Err() != nil {
+				if monitorCanceledCheckpointLoad(ctx, err) {
 					return 0
 				}
 				fmt.Fprintln(stderr, "initialize monitor metrics:", err)
