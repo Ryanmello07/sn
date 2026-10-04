@@ -279,7 +279,7 @@ func (self *HTTPArtifactReader) read(ctx context.Context, epoch uint64, noID uin
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	artifact, err := payoutartifact.Decode(value)
+	artifact, err := payoutartifact.DecodeWithContext(ctx, value)
 	if err != nil {
 		return nil, fmt.Errorf("artifact integrity: %w", err)
 	}

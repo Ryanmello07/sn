@@ -6,6 +6,7 @@ package payoutartifact
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/hex"
@@ -121,7 +122,19 @@ type BuildInput struct {
 // every proof, and all checked summaries. Provider order is canonicalized by
 // client id.
 func Build(in BuildInput) (*Artifact, error) {
-	closedWork, err := cloneClosedWork(in.ClosedWork)
+	return BuildWithContext(context.Background(), in)
+}
+
+// The actual operation owner cancels cloning, allocation and tree construction.
+// Legacy callers retain the same canonical bytes through the wrapper above.
+func BuildWithContext(ctx context.Context, in BuildInput) (*Artifact, error) {
+	if ctx == nil {
+		return nil, errors.New("artifact construction requires an owner context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	closedWork, err := cloneClosedWork(ctx, in.ClosedWork)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +149,9 @@ func Build(in BuildInput) (*Artifact, error) {
 	var totalUsage, eligibleUsage uint64
 	var priorClientID [16]byte
 	for i := range providers {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		provider := &providers[i]
 		if provider.ClientID == ([16]byte{}) || (i > 0 && bytes.Equal(priorClientID[:], provider.ClientID[:])) {
 			return nil, errors.New("provider client ids must be nonzero and unique")
@@ -153,7 +169,7 @@ func Build(in BuildInput) (*Artifact, error) {
 		}
 		allocations = append(allocations, protocol.ProviderAllocation{ClientID: provider.ClientID, Coldkey: provider.Coldkey, UsageBytes: provider.UsageBytes, ReliabilityPPM: provider.ReliabilityPPM, Eligible: provider.Eligible, HeadExcluded: provider.HeadExcluded})
 	}
-	shares, err := protocol.AllocateShares(allocations)
+	shares, err := protocol.AllocateSharesWithContext(ctx, allocations)
 	if err != nil {
 		if !errors.Is(err, protocol.ErrNoEligibleProviders) {
 			return nil, err
@@ -162,22 +178,31 @@ func Build(in BuildInput) (*Artifact, error) {
 	}
 	merkleLeaves := make([]merkle.Leaf, len(shares))
 	for i, share := range shares {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		merkleLeaves[i] = merkle.PayoutLeaf(share.Coldkey, new(big.Int).SetUint64(share.ShareBPS))
 	}
 	var tree *merkle.Tree
 	if len(merkleLeaves) != 0 {
-		tree, err = merkle.NewTree(merkleLeaves)
+		tree, err = merkle.NewTreeWithContext(ctx, merkleLeaves)
 		if err != nil {
 			return nil, err
 		}
 	}
 	leaves := make([]Leaf, len(shares))
 	for i, share := range shares {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		proof, proofErr := tree.Proof(merkleLeaves[i])
 		if proofErr != nil {
 			return nil, proofErr
 		}
 		leaves[i] = Leaf{Index: uint64(i), ClientID: share.ClientID, Coldkey: share.Coldkey, ShareBPS: share.ShareBPS, Proof: proof}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	createdAt := in.CreatedAt.UTC()
 	if createdAt.IsZero() {
@@ -263,6 +288,18 @@ func Sign(artifact *Artifact, key *ecdsa.PrivateKey) error {
 // Verify reconstructs every derived field and verifies the content identity
 // and recoverable signature. Re-signing a false summary is therefore rejected.
 func Verify(artifact *Artifact) error {
+	return VerifyWithContext(context.Background(), artifact)
+}
+
+// Each original signature/hash step is bounded; collection and arithmetic
+// loops observe the real owner rather than silently using a detached context.
+func VerifyWithContext(ctx context.Context, artifact *Artifact) error {
+	if ctx == nil {
+		return errors.New("artifact verification requires an owner context")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if artifact == nil || artifact.Schema != Schema || artifact.DeploymentID == "" || artifact.ChainID == 0 || artifact.Netuid == 0 || artifact.Coordinator == (common.Address{}) || artifact.SettlementVault == (common.Address{}) || artifact.NoID == 0 || artifact.ReliabilityAMin == 0 || artifact.End.Number < artifact.Start.Number || !IsDigest(artifact.GenesisHash, "0x") || !IsDigest(artifact.PolicyHash, "0x") || !IsDigest(artifact.Start.Hash, "0x") || !IsDigest(artifact.End.Hash, "0x") || !IsDigest(artifact.OperatorSnapshotHash, "sha256:") || !IsDigest(artifact.FleetSnapshotHash, "sha256:") || !IsDigest(artifact.ProviderSnapshotHash, "sha256:") || !IsDigest(artifact.ContentHash, "sha256:") {
 		return errors.New("invalid artifact schema/hash")
 	}
@@ -272,6 +309,9 @@ func Verify(artifact *Artifact) error {
 	}
 	b, err := unsignedBytes(artifact)
 	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	hash := sha256.Sum256(b)
@@ -286,10 +326,13 @@ func Verify(artifact *Artifact) error {
 	if err != nil || crypto.PubkeyToAddress(*publicKey) != artifact.Signer {
 		return errors.New("artifact signer mismatch")
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if SnapshotHash(artifact.Providers) != strings.ToLower(artifact.ProviderSnapshotHash) {
 		return errors.New("artifact provider snapshot hash mismatch")
 	}
-	rebuilt, err := Build(BuildInput{
+	rebuilt, err := BuildWithContext(ctx, BuildInput{
 		ClosedWork:   artifact.ClosedWork,
 		DeploymentID: artifact.DeploymentID, GenesisHash: artifact.GenesisHash,
 		PolicyHash: artifact.PolicyHash, ChainID: artifact.ChainID, Netuid: artifact.Netuid,
@@ -299,26 +342,53 @@ func Verify(artifact *Artifact) error {
 		Providers: artifact.Providers, TotalUsers: artifact.TotalUsers, ReliabilityAMin: artifact.ReliabilityAMin, CreatedAt: createdAt,
 	})
 	if err != nil {
+		if err == context.Canceled || err == context.DeadlineExceeded {
+			return err
+		}
 		return fmt.Errorf("rebuild artifact: %w", err)
 	}
 	if rebuilt.ProviderSnapshotHash != strings.ToLower(artifact.ProviderSnapshotHash) || rebuilt.PayoutRoot != artifact.PayoutRoot || rebuilt.TotalUsageBytes != artifact.TotalUsageBytes || rebuilt.TotalUsers != artifact.TotalUsers || rebuilt.EligibleUsageBytes != artifact.EligibleUsageBytes || rebuilt.ExcludedUsageBytes != artifact.ExcludedUsageBytes || rebuilt.SharesTotalBPS != artifact.SharesTotalBPS || !reflect.DeepEqual(rebuilt.Providers, artifact.Providers) || !reflect.DeepEqual(rebuilt.Leaves, artifact.Leaves) {
 		return errors.New("artifact summary, providers, leaves, or proofs do not reconstruct")
 	}
-	return nil
+	return ctx.Err()
 }
 
 // Bytes verifies and returns the canonical JSON representation.
 func Bytes(artifact *Artifact) ([]byte, error) {
-	if err := Verify(artifact); err != nil {
+	return BytesWithContext(context.Background(), artifact)
+}
+
+// Preserve canonical wire bytes while retaining the reader/publication owner.
+func BytesWithContext(ctx context.Context, artifact *Artifact) ([]byte, error) {
+	if err := VerifyWithContext(ctx, artifact); err != nil {
 		return nil, err
 	}
-	return json.Marshal(artifact)
+	raw, err := json.Marshal(artifact)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return raw, nil
 }
 
 // Decode accepts only the exact canonical JSON emitted by Bytes. Rejecting
 // unknown fields, trailing values, and alternate whitespace prevents a blob
 // from having more than one byte representation for one content identity.
 func Decode(value []byte) (*Artifact, error) {
+	return DecodeWithContext(context.Background(), value)
+}
+
+// The raw transport bound precedes this parser; no collection/math work loses
+// its actual owner when the canonical wire is reconstructed.
+func DecodeWithContext(ctx context.Context, value []byte) (*Artifact, error) {
+	if ctx == nil {
+		return nil, errors.New("artifact decoding requires an owner context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(value))
 	decoder.DisallowUnknownFields()
 	var artifact Artifact
@@ -332,7 +402,7 @@ func Decode(value []byte) (*Artifact, error) {
 		}
 		return nil, fmt.Errorf("decode payout artifact trailer: %w", err)
 	}
-	canonical, err := Bytes(&artifact)
+	canonical, err := BytesWithContext(ctx, &artifact)
 	if err != nil {
 		return nil, err
 	}

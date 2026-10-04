@@ -81,7 +81,7 @@ func (self *ClosedWorkCensus) Sort() {
 }
 
 // Copy caller-owned bytes before an artifact can be signed or published.
-func cloneClosedWork(census *ClosedWorkCensus) (*ClosedWorkCensus, error) {
+func cloneClosedWork(ctx context.Context, census *ClosedWorkCensus) (*ClosedWorkCensus, error) {
 	if census == nil {
 		return nil, nil
 	}
@@ -95,6 +95,9 @@ func cloneClosedWork(census *ClosedWorkCensus) (*ClosedWorkCensus, error) {
 	}
 	used := 0
 	for index, row := range census.Records {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if len(row.Original) > MaxClosedWorkRecordBytes || len(row.Original) > MaxClosedWorkOriginalBytes-used {
 			return nil, ErrClosedWorkCapacity
 		}
@@ -235,8 +238,8 @@ func VerifyClosedWork(ctx context.Context, artifact *Artifact) (*VerifiedClosedW
 		}
 		used += len(row.Original)
 	}
-	if err := Verify(artifact); err != nil {
-		if errors.Is(err, ErrClosedWorkCapacity) {
+	if err := VerifyWithContext(ctx, artifact); err != nil {
+		if errors.Is(err, ErrClosedWorkCapacity) || err == context.Canceled || err == context.DeadlineExceeded {
 			return nil, err
 		}
 		return nil, errors.Join(ErrClosedWorkIntegrity, err)

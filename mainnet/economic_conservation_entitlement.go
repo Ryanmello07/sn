@@ -202,7 +202,7 @@ func (self *economicConservationEntitlementCensus) validate(ctx context.Context,
 	if !monitorEvmAddress(self.RootSigner) || self.CoordinatorCodeHash != source.CoordinatorCodeHash || !rootCanonicalHash(self.CommitmentReceiptsRoot) || !rootCanonicalHash(self.FinalizationReceiptsRoot) || !rootCanonicalHash(self.OperatorColdkey) || self.OperatorEffectiveEpoch > artifact.Epoch || !rootCanonicalHash(self.PolicyHash) || commit.Name != "OperatorRootCommitted" || commit.Values["epoch"] != record.Epoch || commit.Values["noId"] != record.PoolId || commit.Values["payoutRoot"] != record.PayoutRoot || commit.Values["artifactHash"] != record.ArtifactHash || commit.Values["committer"] != self.RootSigner || !planSha256(commit.ReceiptHash) || !rootCanonicalHash(commit.TransactionHash) || commit.Block.Number < self.End.Number || commit.Block.Number > self.Finalization.Block.Number || final.Name != "OperatorEpochFinalized" || final.Values["epoch"] != record.Epoch || final.Values["noId"] != record.PoolId || final.Values["rootPresent"] != "true" || final.Block != self.Finalization.Block || final.TransactionHash != self.Finalization.TransactionHash || final.ReceiptHash != self.Finalization.ReceiptHash {
 		return errors.New("economic entitlement lost original coordinator authorization or included finalization")
 	}
-	if err := payoutartifact.Verify(artifact); err != nil {
+	if err := payoutartifact.VerifyWithContext(ctx, artifact); err != nil {
 		return err
 	}
 	if err := self.validateClosedWork(ctx); err != nil {
