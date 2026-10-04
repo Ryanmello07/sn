@@ -60,31 +60,35 @@ type historicalReplayJob struct {
 	ExecutionStateVersion uint8                               `json:"execution_state_version"`
 	ProofNodesHex         []string                            `json:"proof_nodes_hex"`
 	ObservationProfile    *historicalReplayObservationProfile `json:"observation_profile,omitempty"`
+	PrincipalQueries      []historicalPrincipalQuery          `json:"principal_queries,omitempty"`
+	PrincipalEffects      bool                                `json:"principal_effects,omitempty"`
 }
 
 type historicalReplayReport struct {
-	Schema                    string                        `json:"schema"`
-	JobSha256                 historicalReplayDigest        `json:"job_sha256"`
-	SdkRevision               string                        `json:"sdk_revision"`
-	HostProfile               string                        `json:"host_profile"`
-	ParentHash                historicalReplayDigest        `json:"parent_hash"`
-	ChildHash                 historicalReplayDigest        `json:"child_hash"`
-	ParentStateRoot           historicalReplayDigest        `json:"parent_state_root"`
-	ChildStateRoot            historicalReplayDigest        `json:"child_state_root"`
-	RuntimeCodeSha256         historicalReplayDigest        `json:"runtime_code_sha256"`
-	ProofSha256               historicalReplayDigest        `json:"proof_sha256"`
-	Extrinsics                uint64                        `json:"extrinsics"`
-	ProofNodes                uint64                        `json:"proof_nodes"`
-	ProofBytes                uint64                        `json:"proof_bytes"`
-	StorageCalls              uint64                        `json:"storage_calls"`
-	StorageIoBytes            uint64                        `json:"storage_io_bytes"`
-	PostStateReproduced       bool                          `json:"post_state_reproduced"`
-	AnchorAuthority           string                        `json:"anchor_authority"`
-	RuntimeAdmitted           bool                          `json:"runtime_admitted"`
-	NativeFeeDebit            *string                       `json:"native_fee_debit"`
-	NativeFeeWithdrawalRefund bool                          `json:"native_fee_withdrawal_refund_observed"`
-	ProductionSelection       bool                          `json:"production_selection"`
-	HookObservations          *historicalReplayObservations `json:"hook_observations,omitempty"`
+	Schema                    string                           `json:"schema"`
+	JobSha256                 historicalReplayDigest           `json:"job_sha256"`
+	SdkRevision               string                           `json:"sdk_revision"`
+	HostProfile               string                           `json:"host_profile"`
+	ParentHash                historicalReplayDigest           `json:"parent_hash"`
+	ChildHash                 historicalReplayDigest           `json:"child_hash"`
+	ParentStateRoot           historicalReplayDigest           `json:"parent_state_root"`
+	ChildStateRoot            historicalReplayDigest           `json:"child_state_root"`
+	RuntimeCodeSha256         historicalReplayDigest           `json:"runtime_code_sha256"`
+	ProofSha256               historicalReplayDigest           `json:"proof_sha256"`
+	Extrinsics                uint64                           `json:"extrinsics"`
+	ProofNodes                uint64                           `json:"proof_nodes"`
+	ProofBytes                uint64                           `json:"proof_bytes"`
+	StorageCalls              uint64                           `json:"storage_calls"`
+	StorageIoBytes            uint64                           `json:"storage_io_bytes"`
+	PostStateReproduced       bool                             `json:"post_state_reproduced"`
+	AnchorAuthority           string                           `json:"anchor_authority"`
+	RuntimeAdmitted           bool                             `json:"runtime_admitted"`
+	NativeFeeDebit            *string                          `json:"native_fee_debit"`
+	NativeFeeWithdrawalRefund bool                             `json:"native_fee_withdrawal_refund_observed"`
+	ProductionSelection       bool                             `json:"production_selection"`
+	HookObservations          *historicalReplayObservations    `json:"hook_observations,omitempty"`
+	OpeningPrincipals         []historicalPrincipalObservation `json:"opening_principals,omitempty"`
+	ClosingPrincipals         []historicalPrincipalObservation `json:"closing_principals,omitempty"`
 }
 
 type historicalReplayRequest struct {
@@ -227,7 +231,7 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	if len(raw) > maximumJob || job.Schema != historicalReplaySchema || len(job.ProofNodesHex) == 0 || len(job.ProofNodesHex) > maximumNodes || len(job.ExtrinsicsHex) > 16384 || job.ExecutionStateVersion > 1 {
 		return nil, errors.New("historical replay job exceeds declared protocol bounds")
 	}
-	if err := job.ObservationProfile.validate(job); err != nil {
+	if err := errors.Join(job.ObservationProfile.validate(job), validateHistoricalPrincipalQueries(job.PrincipalQueries), validateHistoricalPrincipalEffectsRequest(job.PrincipalEffects, job.PrincipalQueries)); err != nil {
 		return nil, err
 	}
 	maximumReportBytes := historicalReplayReportLimit
@@ -236,6 +240,12 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 		if job.ObservationProfile.Schema == historicalNativeProfileSchema {
 			maximumReportBytes = historicalNativeReportLimit
 		}
+	}
+	if job.PrincipalQueries != nil {
+		maximumReportBytes += historicalPrincipalReportLimit
+	}
+	if job.PrincipalEffects {
+		maximumReportBytes += historicalPrincipalReportLimit
 	}
 	output, err := runHistoricalProofWorker(owner, cancel, historicalProofWorkerRequest{Engine: request.Engine, Input: raw, Directory: filepath.Dir(request.Job.Path), MaximumReport: maximumReportBytes}, hooks)
 	if err != nil {
@@ -259,7 +269,7 @@ func validateHistoricalReplayReport(job historicalReplayJob, raw []byte, report 
 	if report.AnchorAuthority != "caller-supplied-unapproved" || report.RuntimeAdmitted || report.NativeFeeDebit != nil || report.NativeFeeWithdrawalRefund || report.ProductionSelection {
 		return errors.New("historical replay report claims unestablished runtime, fee or finality authority")
 	}
-	return validateHistoricalReplayObservations(job, report.HookObservations)
+	return errors.Join(validateHistoricalReplayObservations(job, report.HookObservations), validateHistoricalPrincipalReport(job.PrincipalQueries, report.OpeningPrincipals), validateHistoricalClosingPrincipal(job, report))
 }
 
 // Both fixed workers share exact executable custody and joined bounded pipes.

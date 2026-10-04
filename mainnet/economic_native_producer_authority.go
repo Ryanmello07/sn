@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"reflect"
 
 	"github.com/urnetwork/server/strecovery"
 )
@@ -54,6 +55,7 @@ type nativeProducerProvider struct {
 }
 
 type nativeProducerAuthority struct {
+	Principal                *nativePrincipalPolicy              `json:"opening_principal_authority,omitempty"`
 	Schema                   string                              `json:"schema"`
 	Network                  planNetwork                         `json:"network"`
 	Netuid                   uint16                              `json:"netuid"`
@@ -108,7 +110,7 @@ func loadNativeProducerAuthority(ctx context.Context, policy economicEmissionPol
 	if err != nil {
 		return nil, err
 	}
-	if authority.Schema != nativeProducerAuthoritySchema || authority.Network != policy.Network || authority.Netuid != policy.Netuid || policy.SubnetRegistrationBlock == nil || policy.SubnetGeneration == nil || authority.Registration != *policy.SubnetRegistrationBlock || authority.Generation != *policy.SubnetGeneration || authority.Runtime != policy.Runtime || authority.Runtime.RuntimeSourceCommit != frontierMappingSourceCommit || authority.ReviewSha256 != execution.ReviewSha256 || authority.Profile == nil || authority.Profile.Schema != historicalNativeProfileSchema || monitorReadDigest(profileRaw) != execution.ProfileSha256 || authority.CaptureEngine != producer.CaptureEngine || authority.ReplayEngine != execution.Engine || authority.Directory != execution.Directory || authority.Nodes != producer.Nodes || authority.Nodes != filepath.Join(execution.Directory, "nodes") || authority.MaximumJobs != producer.MaximumJobs || authority.MaximumBytes != producer.MaximumBytes || authority.MaximumEntries != producer.MaximumEntries || authority.MaximumDescendantHeaders != producer.MaximumDescendantHeaders || len(authority.Providers) > int(policy.MaximumUids) {
+	if !reflect.DeepEqual(authority.Principal, execution.Principal) || authority.Schema != nativeProducerAuthoritySchema || authority.Network != policy.Network || authority.Netuid != policy.Netuid || policy.SubnetRegistrationBlock == nil || policy.SubnetGeneration == nil || authority.Registration != *policy.SubnetRegistrationBlock || authority.Generation != *policy.SubnetGeneration || authority.Runtime != policy.Runtime || authority.Runtime.RuntimeSourceCommit != frontierMappingSourceCommit || authority.ReviewSha256 != execution.ReviewSha256 || authority.Profile == nil || authority.Profile.Schema != historicalNativeProfileSchema || monitorReadDigest(profileRaw) != execution.ProfileSha256 || authority.CaptureEngine != producer.CaptureEngine || authority.ReplayEngine != execution.Engine || authority.Directory != execution.Directory || authority.Nodes != producer.Nodes || authority.Nodes != filepath.Join(execution.Directory, "nodes") || authority.MaximumJobs != producer.MaximumJobs || authority.MaximumBytes != producer.MaximumBytes || authority.MaximumEntries != producer.MaximumEntries || authority.MaximumDescendantHeaders != producer.MaximumDescendantHeaders || len(authority.Providers) > int(policy.MaximumUids) {
 		return nil, errors.Join(errRpcIntegrity, errors.New("native producer reusable approval differs from original execution/provider/capacity policy"))
 	}
 	if err := nativeProducerReviewedProfile(authority); err != nil {

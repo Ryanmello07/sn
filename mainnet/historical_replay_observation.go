@@ -18,11 +18,12 @@ const historicalReplayObservedReportLimit = 8 * 1024 * 1024
 
 // Field order matches the pinned Rust profile serialization used for its hash.
 type historicalReplayObservationProfile struct {
-	Schema             string                     `json:"schema"`
-	RuntimeCodeSha256  historicalReplayDigest     `json:"runtime_code_sha256"`
-	SourceReviewSha256 historicalReplayDigest     `json:"source_review_sha256"`
-	Rules              []historicalReplayHookRule `json:"rules"`
-	MetadataSha256     *historicalReplayDigest    `json:"metadata_sha256,omitempty"`
+	Schema                   string                     `json:"schema"`
+	RuntimeCodeSha256        historicalReplayDigest     `json:"runtime_code_sha256"`
+	SourceReviewSha256       historicalReplayDigest     `json:"source_review_sha256"`
+	Rules                    []historicalReplayHookRule `json:"rules"`
+	MetadataSha256           *historicalReplayDigest    `json:"metadata_sha256,omitempty"`
+	PrincipalStoragePrefixes []string                   `json:"principal_storage_prefixes,omitempty"`
 }
 
 type historicalReplayHookRule struct {
@@ -101,6 +102,7 @@ type historicalReplayObservations struct {
 	DiscardedOnRollback             uint64                        `json:"discarded_on_rollback"`
 	Observations                    []historicalReplayObservation `json:"observations"`
 	FeeEvents                       *historicalReplayFeeEvents    `json:"fee_events,omitempty"`
+	PrincipalMutations              []historicalPrincipalMutation `json:"principal_mutations,omitempty"`
 }
 
 // Fixed-width address decoding refuses the standard array decoder's implicit
@@ -161,6 +163,12 @@ func (self *historicalReplayObservationProfile) validate(job historicalReplayJob
 	}
 	if (self.Schema != "urnetwork-original-wasm-hook-observation-v1" && self.Schema != historicalNativeProfileSchema) || self.RuntimeCodeSha256 != job.RuntimeCodeSha256 || self.SourceReviewSha256 == (historicalReplayDigest{}) || len(self.Rules) == 0 || len(self.Rules) > 32 || self.MetadataSha256 != nil && *self.MetadataSha256 == (historicalReplayDigest{}) {
 		return errors.New("historical observation profile differs or exceeds bound")
+	}
+	if err := validateHistoricalPrincipalPrefixes(self.PrincipalStoragePrefixes); err != nil {
+		return err
+	}
+	if self.PrincipalStoragePrefixes != nil && self.Schema != historicalNativeProfileSchema {
+		return errors.New("principal storage scope requires native profile")
 	}
 	for index, rule := range self.Rules {
 		if !(historicalReplayPurpose(rule.Purpose) || self.Schema == historicalNativeProfileSchema && historicalNativePurpose(rule.Purpose)) || rule.FunctionBodySha256 == (historicalReplayDigest{}) || rule.OffsetStart >= rule.OffsetEnd {
@@ -273,6 +281,9 @@ func validateHistoricalReplayObservations(job historicalReplayJob, trace *histor
 			return errors.New("historical retained observation bytes exceed bound")
 		}
 		observations[observation.Ordinal] = observation
+	}
+	if err := validateHistoricalPrincipalMutations(profile, trace); err != nil {
+		return err
 	}
 	fees := trace.FeeEvents
 	if profile.MetadataSha256 == nil && fees == nil {
