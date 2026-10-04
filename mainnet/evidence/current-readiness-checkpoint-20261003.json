@@ -272,7 +272,8 @@
     "validatorb6-normal-race14-vet-independent-readback-20261004.json": "e3355d4db83d939268fa3017af2ae6591420af27550c9d686488f9aa8c732a18",
     "entitlemente51-partial-abi-tuple-fixture-finding-20261004.json": "0ac332c7ecd7c7220612fc7e8994afc2caea57b30e0453ac47e6eaf6432755c2",
     "coordinator-tuple-ab48-source-root-review-20261004.json": "ffab51360735d44fc33da289a94123bc0209201e7e0c2855234dba31c420cd70",
-    "provider-closed-work-production-source-review-20261004.json": "d4c007e04d2f662243cb561a2fe300244c9e76d5a4fca59a09f3432b8b7a7c0e"
+    "provider-closed-work-production-source-review-20261004.json": "d4c007e04d2f662243cb561a2fe300244c9e76d5a4fca59a09f3432b8b7a7c0e",
+    "close-report-dropped-identity-source-finding-20261004.json": "30adc86a63f77fbcaf3902b75420b3b4a32cbce211e2154086084ec68fa3ed9c"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
