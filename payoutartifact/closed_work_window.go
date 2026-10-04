@@ -68,7 +68,7 @@ func VerifyWholeWorkWindowClock(ctx context.Context, authority WholeWorkAuthorit
 	if !clock.matchesBoundaries(ctx, authority.Start, authority.End, clock.StartTime, clock.EndTime) {
 		return errors.Join(ErrClosedWorkUnavailable, ctx.Err(), context.Cause(ctx))
 	}
-	return ctx.Err()
+	return errors.Join(ctx.Err(), context.Cause(ctx))
 }
 
 // Boundary-based input avoids manufacturing an unsigned artifact merely to
