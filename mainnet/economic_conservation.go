@@ -178,6 +178,7 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	NativeFeeObligations []economicConservationFeeObligation      `json:"native_fee_obligations,omitempty"`
 	NativeFeeIssue       string                                   `json:"native_fee_issue,omitempty"`
 	NativeFeeHeldRequest string                                   `json:"native_fee_held_request,omitempty"`
 	NativeFeePending     bool                                     `json:"native_fee_pending,omitempty"`

@@ -76,7 +76,7 @@ func TestEconomicConservationPublicFeeRetirementKeepsOriginalProofUnknownsAndRet
 	}
 	after := f.source.state(t)
 	compact, err := os.ReadFile(f.source.checkpoint)
-	if err != nil || len(after.NativeFees) != 0 || after.Archive == nil || !after.Archive.retiresFees(plan.Archive) || !reflect.DeepEqual(expected, after.Archive.NativeFees) || len(compact) >= len(original) {
+	if err != nil || len(after.NativeFees) != 0 || after.Archive == nil || !after.Archive.retiresFees(plan.Archive) || !reflect.DeepEqual(expected, after.Archive.NativeFees) || uint64(len(after.NativeFeeObligations)) != expected.MissingFees || len(compact) >= len(original) {
 		t.Fatal("fee retirement kept proof payload hot or lost exact selected knowledge", err, after.Archive)
 	}
 	if err := os.Remove(request.Context.Job.Path); err != nil {
@@ -129,6 +129,36 @@ func TestEconomicConservationPublicRetiredUnknownFeeCanGainObservedRefund(t *tes
 	summary, code, issue := economicConservationRetirementTestSample(t, f, request)
 	if code != 0 || summary.AdmittedNativeFees == nil || summary.AdmittedNativeFees.SelectedTransactions != before.SelectedTransactions || summary.AdmittedNativeFees.AuthenticatedFees != 1 || summary.AdmittedNativeFees.MissingFees+1 != before.MissingFees || summary.NativeFeeWithdrawalRao != nil || summary.TargetMet != nil {
 		t.Fatal("retirement erased an unknown obligation or blocked actual later fee knowledge", code, issue, summary.AdmittedNativeFees)
+	}
+	if uint64(len(f.source.state(t).NativeFeeObligations)) != before.MissingFees-1 {
+		t.Fatal("new original refund failed to resolve its exact hot obligation")
+	}
+}
+
+func TestEconomicConservationPublicRetiredUnknownFeeMustRemainHot(t *testing.T) {
+	f, _ := newEconomicConservationFeeRetirementFixture(t, "missing")
+	_, args := f.plan(t)
+	if code, issue := f.apply(t, args, &bytes.Buffer{}, monitorServiceHooks{}); code != 0 {
+		t.Fatal(code, issue)
+	}
+	state := f.source.state(t)
+	if len(state.NativeFeeObligations) == 0 || uint64(len(state.NativeFeeObligations)) != state.Archive.NativeFees.MissingFees {
+		t.Fatal("retired unknown fees did not remain hot under original proof identities")
+	}
+	state.NativeFeeObligations = nil
+	state.ContentHash = state.hash()
+	raw, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f.source.checkpoint, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	reads := f.source.claimReads.Load()
+	var output, diagnostic bytes.Buffer
+	code := runMainWithMonitorHooks(f.ctx, f.source.args(t), &output, &diagnostic, func() time.Time { return f.source.now }, monitorServiceHooks{})
+	if code != 3 || output.Len() != 0 || reads != f.source.claimReads.Load() {
+		t.Fatal("restored fee head erased original unknown obligations", code, diagnostic.String())
 	}
 }
 

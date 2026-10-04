@@ -7,7 +7,17 @@ import (
 	"errors"
 	"maps"
 	"reflect"
+	"slices"
 )
+
+// An unresolved selected transaction remains a hot obligation even when its
+// bulky original proof retires. These identities name that exact held proof;
+// an aggregate count or a later unrelated amount cannot resolve the obligation.
+type economicConservationFeeObligation struct {
+	TransactionHash string `json:"transaction_hash"`
+	RequestHash     string `json:"original_request_hash"`
+	EvidenceHash    string `json:"original_evidence_hash"`
+}
 
 func (self *economicConservationFeeSummary) validate() error {
 	if self == nil || self.Census != "original-selected-signed-receipts" || self.OriginalRequests == 0 || !planSha256(self.EvidenceChain) || self.WholeProviderCensus || self.AuthenticatedFees > self.SelectedTransactions || self.MissingFees != self.SelectedTransactions-self.AuthenticatedFees || self.SelectedCensusComplete != (self.SelectedTransactions != 0 && self.MissingFees == 0) {
@@ -109,7 +119,12 @@ func (self *economicConservationArchiveView) indexRetiredNativeFees(original *ec
 				if err := self.charge(transaction); err != nil {
 					return err
 				}
+				origin := economicConservationFeeObligation{TransactionHash: transaction.TransactionHash, RequestHash: request, EvidenceHash: digest}
+				if err := self.charge(origin); err != nil {
+					return err
+				}
 				self.feeTransactions[transaction.TransactionHash] = transaction
+				self.feeOrigins[transaction.TransactionHash] = origin
 			}
 		}
 	}
@@ -145,6 +160,7 @@ func (self *economicConservationState) retireNativeFees(policy economicConservat
 		view.feeEvidence = maps.Clone(original.archiveView.feeEvidence)
 		view.feeRetired = maps.Clone(original.archiveView.feeRetired)
 		view.feeTransactions = maps.Clone(original.archiveView.feeTransactions)
+		view.feeOrigins = maps.Clone(original.archiveView.feeOrigins)
 	}
 	view.resources = resources
 	if err := view.retainFeeEvidence(original); err != nil {
@@ -157,11 +173,54 @@ func (self *economicConservationState) retireNativeFees(policy economicConservat
 	self.Archive.FeeRetirements = append(self.Archive.FeeRetirements, reference)
 	self.Archive.NativeFees = view.feeSummary
 	self.archiveView = view
+	self.NativeFeeObligations = self.pendingNativeFeeObligations()
 	return nil
 }
 
+// A new completed original proof can resolve a retained unknown. It must
+// still pass the normal request, receipt, native-boundary and fee validation
+// before this detached candidate can replace the checkpoint.
+func (self *economicConservationState) pendingNativeFeeObligations() []economicConservationFeeObligation {
+	if self.archiveView == nil {
+		return nil
+	}
+	pending := map[string]economicConservationFeeObligation{}
+	for hash, transaction := range self.archiveView.feeTransactions {
+		if !transaction.FeeAuthenticated {
+			pending[hash] = self.archiveView.feeOrigins[hash]
+		}
+	}
+	for _, retained := range self.NativeFees {
+		if retained.Evidence.Context != nil {
+			for _, transaction := range retained.Evidence.Context.Transactions {
+				if transaction.FeeAuthenticated {
+					delete(pending, transaction.TransactionHash)
+				}
+			}
+		}
+	}
+	var result []economicConservationFeeObligation
+	for _, hash := range slices.Sorted(maps.Keys(pending)) {
+		result = append(result, pending[hash])
+	}
+	return result
+}
+
 func (self *economicConservationState) validateAdmittedFeeArchive() error {
+	previous := ""
+	for _, pending := range self.NativeFeeObligations {
+		if !rootCanonicalHash(pending.TransactionHash) || !planSha256(pending.RequestHash) || !planSha256(pending.EvidenceHash) || pending.TransactionHash <= previous {
+			return errors.New("economic pending native fee lost original proof identity or ordering")
+		}
+		previous = pending.TransactionHash
+	}
+	if self.archiveView != nil && !reflect.DeepEqual(self.NativeFeeObligations, self.pendingNativeFeeObligations()) {
+		return errors.New("economic active head dropped or changed an original unknown fee obligation")
+	}
 	if self.Archive == nil || self.Archive.NativeFees == nil {
+		if len(self.NativeFeeObligations) != 0 {
+			return errors.New("economic active fee obligation lost its retained original proof archive")
+		}
 		if self.archiveView != nil && self.archiveView.feeSummary != nil {
 			return errors.New("economic active head dropped its original archived fee census")
 		}

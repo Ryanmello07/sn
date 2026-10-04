@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"reflect"
@@ -179,7 +180,7 @@ func (self *economicConservationState) feeSummary(policy economicConservationPol
 }
 
 func (self economicConservationState) feeFacts() uint64 {
-	var result uint64
+	result := uint64(len(self.NativeFeeObligations))
 	for _, value := range self.NativeFees {
 		result++
 		if value.Evidence.Context != nil {
@@ -234,18 +235,26 @@ func appendEconomicConservationNativeFeeEvidence(ctx context.Context, policy eco
 	if err != nil {
 		return nil, err
 	}
-	if prior.facts()+1+uint64(len(value.Context.Transactions)) > operating.MaximumFacts {
-		return nil, errMonitorEconomicCapacity
-	}
 	next, err := cloneEconomicConservation(prior)
 	if err != nil {
 		return nil, err
 	}
 	next.NativeFees = append(next.NativeFees, economicConservationFeeEvidence{Request: request, Evidence: *value})
+	next.NativeFeeObligations = next.pendingNativeFeeObligations()
+	if next.facts() > operating.MaximumFacts {
+		return nil, errMonitorEconomicCapacity
+	}
 	if _, err := next.feeSummary(policy); err != nil {
 		return nil, errors.Join(errEconomicNativeFeeIntegrity, err)
 	}
 	next.ContentHash = next.hash()
+	raw, err := json.Marshal(next)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw)+1 > maxRpcReplyBytes {
+		return nil, errMonitorEconomicCapacity
+	}
 	// The archive operation can retire these exact original reports under
 	// retained custody; this live observer never discards a proof to fit.
 	return next, errors.Join(ctx.Err(), prior.archiveView.check())

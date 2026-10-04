@@ -164,7 +164,14 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 	// Catalog paths and hot liabilities share one fixed head. Reserving an
 	// additional worst-case reference for each forecast segment avoids a count
 	// revision accidentally exhausting the serialized owner before publication.
-	plan.RequiredHeadBytes = 2 * (uint64(len(next)) + request.FutureSegments*(maximumMonitorHistoryPath+256))
+	referenceBytes, feeSummaryBytes := uint64(maximumMonitorHistoryPath+256), uint64(0)
+	if request.RetireNativeFees {
+		// Each future retirement also names its proof segment and retains
+		// one bounded census header, even if this snapshot has no fees yet.
+		referenceBytes *= 2
+		feeSummaryBytes = 2048
+	}
+	plan.RequiredHeadBytes = 2 * (uint64(len(next)) + request.FutureSegments*referenceBytes + feeSummaryBytes)
 	if plan.RequiredSegments > resources.ArchiveSegments || plan.RequiredIndexEntries > resources.IndexEntries || plan.RequiredIndexBytes > resources.IndexBytes || plan.RequiredHeadBytes > maxRpcReplyBytes {
 		return plan, nil, errors.New("economic archive requires reviewed capacity for its two-times segment/index/head forecast")
 	}

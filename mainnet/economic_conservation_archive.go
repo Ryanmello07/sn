@@ -103,6 +103,7 @@ type economicConservationArchiveView struct {
 	feeEvidence     map[string]string
 	feeRetired      map[string]string
 	feeTransactions map[string]historicalFeeContextTransaction
+	feeOrigins      map[string]economicConservationFeeObligation
 	feeSummary      *economicConservationFeeSummary
 	owners          []*monitorHistorySnapshot
 	resources       economicConservationResources
@@ -119,7 +120,7 @@ type economicConservationArchiveView struct {
 }
 
 func newEconomicConservationArchiveView(resources economicConservationResources) *economicConservationArchiveView {
-	return &economicConservationArchiveView{feeEvidence: map[string]string{}, feeRetired: map[string]string{}, feeTransactions: map[string]historicalFeeContextTransaction{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
+	return &economicConservationArchiveView{feeEvidence: map[string]string{}, feeRetired: map[string]string{}, feeTransactions: map[string]historicalFeeContextTransaction{}, feeOrigins: map[string]economicConservationFeeObligation{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
 }
 
 // The encoded facts and fixed per-entry bookkeeping have separate bounds.
