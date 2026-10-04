@@ -146,7 +146,8 @@
     "composed-source-input-readback-20261004.json": "aa9bfbbf118ca2aab6945b69248edabae1e72a7043de7b5edb15bd91fd0d71c7",
     "core-preflight-and-control-rebase-20261004.json": "27925c91b26042e31ecf08c30ab67c43f9879f51a514cf775f843420cf17d41d",
     "parallel-critical-path-readback-20261004.json": "696a6f868737d51a8d818e1785170d33b2ecdeab06e57ae3f5e8653938b3c661",
-    "core-ac65-main-publication-20261004.json": "5638fb788f75d9ae0d6c76493785d34ce7b44edcd658e73febab3e4fc487862c"
+    "core-ac65-main-publication-20261004.json": "5638fb788f75d9ae0d6c76493785d34ce7b44edcd658e73febab3e4fc487862c",
+    "native-profile-final-root-review-20261004.json": "64378bc68936bfc50d680790bc92a0d850edeacf1c4d12db34ca468fdcfddb05"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -247,9 +248,9 @@
     },
     {
       "closed": false,
-      "evidence": "server-full-model-terminal-20261003.json",
+      "evidence": "parallel-critical-path-readback-20261004.json",
       "requirement": "PH-16",
-      "status": "Original Server1d3 full model retains1,473 passes/11 skips. Current Server5f full model is terminal:1,507 passes/17 failures/11 skips, no timeout or unfinished roots, owned fixture cleaned up. Expanded correction qualification, exact skipped-input follow-ups remain."
+      "status": "Server5f full model retains1,507 passes/17 failures/11 skips. Corrected c2b normal/race each finish43 passes/two companion-fixture failures; worker roots, vets and six controls qualify. Exact anchor correction405 is executing. Complete corrected model and skipped-input follow-ups remain."
     },
     {
       "closed": false,
@@ -265,9 +266,9 @@
     },
     {
       "closed": false,
-      "evidence": "native-split-conformance-source-finding-20261003.json",
+      "evidence": "native-profile-final-root-review-20261004.json",
       "requirement": "PH-19",
-      "status": "Continuous native producer frozen at SNb32/Server8eb: distinct capture/replay, certified-descendant continuity and retained completion recovery source-reviewed only. Actual Rust/public restart qualification, populated provider capacity, monotonic authority/resource renewal and native/vault/Claim conservation remain."
+      "status": "Continuous native producer original b32/Core631 continuation passes all26 phases, including actual engine/exporter/profile checks, seventeen public normal/race roots and remaining recovery/prefix controls. Populated capacity inherits six passed phases. Current source/Coread6 composition, monotonic authority/resource renewal, complete economic conservation and unattended operational admission remain."
     },
     {
       "closed": false,
