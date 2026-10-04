@@ -404,6 +404,8 @@ fn capture_historical_scoped<S: TrieBackendStorage<Blake2Hasher>>(
     check(canceled, &captured)?;
     // Use the pinned helper's public recorder/StateMachine primitives directly.
     // Converting this owner via AsTrieBackend would discard operation scope.
+    // Execute the block onchain, as strict replay does. The SDK's offchain
+    // context ignores the proved heap-pages override and can change execution.
     let execution = std::panic::catch_unwind(AssertUnwindSafe(|| {
         StateMachine::new(
             &backend,
@@ -413,7 +415,7 @@ fn capture_historical_scoped<S: TrieBackendStorage<Blake2Hasher>>(
             &block.encode(),
             &mut extensions,
             &runtime,
-            CallContext::Offchain,
+            CallContext::Onchain,
         )
         .execute()
     }));

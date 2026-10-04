@@ -14,6 +14,12 @@ separate checks. Consensus seals are retained in the original header identity
 and removed only from the runtime execution input. No seal/finality verifier or
 source-to-code admission is supplied by this backend.
 
+Capture executes `Core_execute_block` in the same onchain context as strict
+replay. In the pinned SDK, an explicit proved `:heappages` value selects static
+memory sizing only in that context; the offchain proof helper ignores it.
+Absent heap overrides retain the bounded dynamic strategy. Heap parity and
+growth regressions are authored but await independent execution.
+
 The executor and trie implementation are pinned to SDK
 `cacb4310f20c7cac83eb3ccd8ed5a5ad4212608a`. A strict adapter runs fallible
 `delta_trie_root` and `child_delta_trie_root` before the SDK root writer. This is

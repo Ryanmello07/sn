@@ -692,3 +692,6 @@ fn historical_capture_retained_directory_uses_content_addressed_nodes_without_wr
 
 #[path = "historical_node_profile_tests.rs"]
 mod node_profile_tests;
+
+#[path = "historical_capture_heap_tests.rs"]
+mod heap_tests;
