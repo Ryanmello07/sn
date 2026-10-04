@@ -43,11 +43,18 @@ type economicConservationRestoreFixture struct {
 // preparation before use. Each root also has an independent explicit co-owner.
 func newEconomicConservationRestoreFixture(t *testing.T, rootCount, reviews int, mutate func(*economicConservationArchiveFixture)) *economicConservationRestoreFixture {
 	t.Helper()
+	return newEconomicConservationRestoreParentFixture(t, t.TempDir(), rootCount, reviews, mutate)
+}
+
+// The explicitly fresh parent belongs to this fixture. Production admission
+// still rejects every unprotected ancestor; no adopted root is chmodded.
+func newEconomicConservationRestoreParentFixture(t *testing.T, parent string, rootCount, reviews int, mutate func(*economicConservationArchiveFixture)) *economicConservationRestoreFixture {
+	t.Helper()
 	if rootCount < 1 || rootCount > 2 || reviews < 1 || reviews > 129 {
 		t.Fatal("invalid explicit combined restore fixture bounds")
 	}
 	f := &economicConservationRestoreFixture{}
-	parent := t.TempDir()
+	protectFreshEconomicConservationTestRoot(t, parent)
 	for _, name := range []string{"a", "b"}[:rootCount] {
 		path := filepath.Join(parent, name, "state")
 		if err := os.MkdirAll(path, 0700); err != nil {

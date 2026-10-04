@@ -88,6 +88,9 @@ func newEconomicConservationPrincipalFixture(t *testing.T, name string, parentMa
 	t.Setenv("URNETWORK_NATIVE_EXECUTION_FIXTURE", path)
 	producer := newNativeProducerPublicFixture(t)
 	f.native, f.policy.Native.Observation, f.policy.Native.BatchBlocks = producer.source, producer.source.policy, 1
+	// Matching exported original parent proofs are actually drained; accrual
+	// occurs in the original next-block program, before its observed epoch.
+	f.native.set(t, 100, "PendingServerEmission", make([]byte, 8))
 	f.writePolicy(t)
 	// A synthetic volume declaration does not provision a snapshot owner. The
 	// combined checkpoint explicitly starts with an owned absent-head marker.

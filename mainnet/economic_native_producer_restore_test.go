@@ -60,7 +60,7 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 		}
 		f.sources = append(f.sources, newStoragePreparationCommandFixtureAt(t, path))
 	}
-	physical := durablefixture.New(t, t.Context(), f.sources[0].root, f.sources[1].root)
+	physical := nativeProducerRestoreObservationFixture(t, f.sources)
 	declaration, err := durablevolume.Load(physical.Reference)
 	if err != nil {
 		t.Fatal(err)
@@ -249,6 +249,17 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 		f.request.Preparations = append(f.request.Preparations, request)
 	}
 	return result
+}
+
+// Only existing observation roots carry the initial durable declaration. The
+// future preparation targets must retain no owner generation until public apply.
+func nativeProducerRestoreObservationFixture(t *testing.T, sources []*storagePreparationCommandFixture) *durablefixture.Fixture {
+	t.Helper()
+	roots := make([]string, len(sources))
+	for index, source := range sources {
+		roots[index] = source.storage.Roots[0]
+	}
+	return durablefixture.New(t, t.Context(), roots...)
 }
 
 func TestNativeProducerRestorePublicCohortResumesOriginalUnacknowledgedJob(t *testing.T) {
@@ -480,7 +491,7 @@ func TestNativeProducerRestorePublicPendingJobCannotReplaceCapturedInput(t *test
 	if err := decodePlanJson([]byte(f.combined.files[1][filepath.Join(directory, "job.json")]), &job); err != nil {
 		t.Fatal(err)
 	}
-	job.ParentHash = "0x" + strings.Repeat("e", 64)
+	job.ParentHash[0] ^= 0x80
 	jobRaw, err := json.Marshal(job)
 	if err != nil {
 		t.Fatal(err)
