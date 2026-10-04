@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfoundation/sn/payoutartifact"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/validator"
@@ -26,12 +27,13 @@ const economicProviderMeasurementPolicySchema = "urnetwork-economic-provider-mea
 // attempt source supplies independent policy/registry/key history. Neither is
 // selected from an artifact or from the observed current database directory.
 type economicProviderMeasurementPolicy struct {
-	Schema                   string                          `json:"schema"`
-	AttributionSigner        string                          `json:"attribution_signer,omitempty"`
-	WholeWorkAuthoritySigner string                          `json:"whole_work_authority_signer"`
-	WalletEndpoint           string                          `json:"wallet_endpoint"`
-	AttemptAuthority         validator.ReleaseEvidenceV2File `json:"attempt_authority"`
-	MaximumOriginalBytes     uint64                          `json:"maximum_original_bytes"`
+	Schema                   string                                   `json:"schema"`
+	AttributionSigner        string                                   `json:"attribution_signer,omitempty"`
+	WholeWorkAuthoritySigner string                                   `json:"whole_work_authority_signer"`
+	EarningIdentity          *payoutartifact.WholeWorkEarningIdentity `json:"earning_identity,omitempty"`
+	WalletEndpoint           string                                   `json:"wallet_endpoint"`
+	AttemptAuthority         validator.ReleaseEvidenceV2File          `json:"attempt_authority"`
+	MaximumOriginalBytes     uint64                                   `json:"maximum_original_bytes"`
 }
 
 // Each chain is independently selected by the signed expected-provider head.
@@ -83,6 +85,12 @@ func (self *economicProviderMeasurementPolicy) validate(policy economicConservat
 	if _, _, err := self.attemptReference(); err != nil {
 		return err
 	}
+	if _, err := self.earningSelection(); err != nil {
+		return err
+	}
+	if identity := self.EarningIdentity; identity != nil && (identity.ChainId != policy.Vault.Network.EvmChainId || identity.GenesisHash != policy.Vault.Network.GenesisHash || identity.Netuid != policy.Vault.Netuid) {
+		return errors.New("economic earning identity differs from the original network policy")
+	}
 	_, err := validator.NewHttpWalletMappingReader(self.WalletEndpoint)
 	return err
 }
@@ -115,6 +123,35 @@ func (self *economicProviderMeasurementPolicy) openAttemptSource(ctx context.Con
 		return nil, err
 	}
 	return validator.NewProviderAttemptAuthoritySource(ctx, reference)
+}
+
+// This independently reviewed identity is stable across readiness revisions.
+// The artifact's declaration never supplies a missing cutoff or policy digest.
+func (self *economicProviderMeasurementPolicy) earningSelection() (*payoutartifact.WholeWorkEarningSelection, error) {
+	if self == nil || self.EarningIdentity == nil {
+		return nil, nil
+	}
+	identity := *self.EarningIdentity
+	if identity.Schema != "urnetwork-provider-payout-transition-v1" || identity.CutoffUtc != "2026-10-06T00:00:00Z" || identity.Attribution != "close_time" || identity.LegacyUsdc != "before_cutoff_only" || identity.Profile != "mainnet" {
+		return nil, errors.New("economic earning identity differs from the approved mainnet transition")
+	}
+	return payoutartifact.NewWholeWorkEarningSelection(identity)
+}
+
+// Live acquisition and cold admission derive every expectation from original
+// policy or independently retained predecessors, never the supplied witness.
+func (self *economicProviderMeasurementPolicy) workExpectation(artifact *payoutartifact.Artifact, rootSigner string, priors []payoutartifact.WholeWorkPriorContract) (payoutartifact.WholeWorkExpectation, error) {
+	if self == nil || artifact == nil {
+		return payoutartifact.WholeWorkExpectation{}, payoutartifact.ErrClosedWorkUnavailable
+	}
+	selection, err := self.earningSelection()
+	if err != nil {
+		return payoutartifact.WholeWorkExpectation{}, err
+	}
+	if identity := self.EarningIdentity; identity != nil && (identity.ChainId != artifact.ChainID || identity.GenesisHash != artifact.GenesisHash || identity.Netuid != artifact.Netuid) {
+		return payoutartifact.WholeWorkExpectation{}, errors.Join(errRpcIntegrity, payoutartifact.ErrClosedWorkIntegrity)
+	}
+	return payoutartifact.WholeWorkExpectation{AttributionSigner: common.HexToAddress(self.AttributionSigner), AuthoritySigner: common.HexToAddress(self.WholeWorkAuthoritySigner), ClientKeyRootSigner: common.HexToAddress(rootSigner), EarningSelection: selection, PriorContracts: priors}, nil
 }
 
 // The selected provider head is independent of both transport and the payout

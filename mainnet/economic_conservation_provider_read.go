@@ -79,7 +79,10 @@ func readEconomicProviderOriginals(ctx context.Context, source economicConservat
 		return nil, nil, err
 	}
 	defer workReader.CloseIdleConnections()
-	expected := payoutartifact.WholeWorkExpectation{AttributionSigner: common.HexToAddress(policy.AttributionSigner), AuthoritySigner: common.HexToAddress(policy.WholeWorkAuthoritySigner), ClientKeyRootSigner: common.HexToAddress(census.RootSigner)}
+	expected, err := policy.workExpectation(&census.Artifact, census.RootSigner, nil)
+	if err != nil {
+		return nil, nil, economicProviderEvidenceError(err)
+	}
 	work, err := workReader.ReadOriginal(ctx, &census.Artifact, expected)
 	if err != nil {
 		return nil, nil, economicProviderEvidenceError(err)

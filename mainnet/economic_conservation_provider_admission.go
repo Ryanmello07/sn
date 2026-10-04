@@ -60,7 +60,11 @@ func (self *economicConservationArchiveView) verifyProviderOriginals(ctx context
 	if err != nil {
 		return nil, economicProviderEvidenceError(err)
 	}
-	work, err := payoutartifact.VerifyWholeWorkInventoryWithWitness(ctx, &census.Artifact, originals.Work, payoutartifact.WholeWorkExpectation{AttributionSigner: common.HexToAddress(selected.AttributionSigner), AuthoritySigner: common.HexToAddress(selected.WholeWorkAuthoritySigner), ClientKeyRootSigner: common.HexToAddress(census.RootSigner), PriorContracts: priors})
+	expected, err := selected.workExpectation(&census.Artifact, census.RootSigner, priors)
+	if err != nil {
+		return nil, economicProviderEvidenceError(err)
+	}
+	work, err := payoutartifact.VerifyWholeWorkInventoryWithWitness(ctx, &census.Artifact, originals.Work, expected)
 	if err != nil {
 		return nil, economicProviderEvidenceError(err)
 	}
