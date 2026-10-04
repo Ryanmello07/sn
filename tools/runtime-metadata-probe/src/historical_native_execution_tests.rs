@@ -8,6 +8,9 @@ mod yuma_tests;
 #[path = "historical_native_yuma_capacity_tests.rs"]
 mod yuma_capacity_tests;
 
+#[path = "historical_native_yuma_populated_tests.rs"]
+mod yuma_populated_tests;
+
 #[path = "historical_native_capture_join_tests.rs"]
 mod capture_join_tests;
 
@@ -340,6 +343,9 @@ fn fixture_with_allocation_activation(
     }
     let code = if allocation_count > 2 {
         yuma_capacity_tests::expand(allocation_count, &mut declarations, &mut body);
+        if yuma_populated_tests::selected(yuma) {
+            yuma_populated_tests::expand(allocation_count, &mut declarations, &mut body);
+        }
         wasm_with_heap(&declarations, &body, 400000)
     } else {
         wasm(&declarations, &body)
@@ -401,6 +407,9 @@ fn fixture_with_allocation_activation(
                     }
             }]),
         );
+    }
+    if yuma_populated_tests::selected(yuma) {
+        yuma_populated_tests::expected(allocation_count, &mut expected);
     }
     let backing = TestExternalities::<Blake2Hasher>::new_with_code_and_state(
         &code,
@@ -494,6 +503,9 @@ fn fixture_with_allocation_activation(
         yuma_tests::profile(&code, &mut profile);
         if allocation_count > 2 {
             yuma_capacity_tests::profile(allocation_count, &mut profile);
+            if yuma_populated_tests::selected(yuma) {
+                yuma_populated_tests::profile(&code, &mut profile);
+            }
         }
     }
     if effects.is_some() {

@@ -211,9 +211,21 @@ func TestEconomicConservationPublicYumaWorkLimitKeepsHealthySiblings(t *testing.
 	reference.Sha256 = monitorReadDigest(raw)
 	f.source.policy.Native.Observation.Execution.Yuma = producer.authority.Yuma
 	f.source.writePolicy(t)
-	summary := f.sample(t, monitorServiceHooks{})
-	if summary.Yuma == nil || summary.Yuma.Current || summary.FullQuantizationToleranceAlpha != nil || len(summary.Yuma.Active) != 1 || !strings.Contains(summary.Yuma.Active[0].Issue, "exceeds admitted finite work") || summary.NativeCursor != f.source.policy.Native.Observation.Through || summary.VaultCursor.Number == f.source.policy.Vault.From.Number {
-		t.Fatal("exhausted allocation arithmetic blocked siblings or invented tolerance", summary)
+	var previous economicConservationSummary
+	for attempt := 0; attempt < 2; attempt++ {
+		var output, diagnostic bytes.Buffer
+		code := runMainWithMonitorHooks(f.ctx, f.source.args(t), &output, &diagnostic, func() time.Time { return f.source.now }, monitorServiceHooks{})
+		var summary economicConservationSummary
+		if err := json.Unmarshal(output.Bytes(), &summary); err != nil {
+			t.Fatal(code, diagnostic.String(), err)
+		}
+		if code != 3 || summary.NativeCurrent || summary.NativeHeld || !summary.VaultCurrent || summary.FullQuantizationToleranceAlpha != nil || !strings.Contains(summary.NativeIssue, "exceeds admitted finite work") || summary.NativeCursor != f.source.policy.Native.Observation.From || summary.VaultCursor.Number == f.source.policy.Vault.From.Number || f.source.claimReads.Load() == 0 {
+			t.Fatal("exhausted allocation arithmetic blocked siblings or invented tolerance", code, summary)
+		}
+		if attempt != 0 && summary.VaultCursor.Number <= previous.VaultCursor.Number {
+			t.Fatal("same-authority arithmetic capacity retry blocked healthy vault advancement", summary)
+		}
+		previous = summary
 	}
 }
 

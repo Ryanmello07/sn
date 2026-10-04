@@ -207,6 +207,11 @@ func (self *nativeYumaArithmetic) ema(input nativeYumaInput, fresh, old nativeYu
 	moving := self.q64(new(big.Rat).Quo(self.q64(nativeYumaUint(input.MovingAverage)), nativeYumaUint(1000000)))
 	alpha := self.sub(nativeYumaUint(1), self.q32(moving))
 	result := make(nativeYumaMatrix, count)
+	// This owner-local cache stores at most 256 pure coefficient evaluations.
+	// Policy settings are immutable within this EMA; all three varying inputs
+	// use canonical exact rational keys and results are copied before reuse.
+	type alphaKey struct{ weight, bond, consensus string }
+	coefficients := map[alphaKey]*big.Rat{}
 	for index := 0; index < count; index++ {
 		if !self.check() {
 			return result
@@ -217,7 +222,19 @@ func (self *nativeYumaArithmetic) ema(input nativeYumaInput, fresh, old nativeYu
 					return result
 				}
 				bond := nativeYumaCellAt(old[index], cell.column)
-				coefficient := self.liquidAlpha(input, cell.value, bond, selected[cell.column])
+				key := alphaKey{weight: cell.value.RatString(), bond: bond.RatString(), consensus: selected[cell.column].RatString()}
+				coefficient, known := coefficients[key]
+				if known {
+					coefficient = new(big.Rat).Set(coefficient)
+				} else {
+					coefficient = self.liquidAlpha(input, cell.value, bond, selected[cell.column])
+					if self.err != nil {
+						return result
+					}
+					if len(coefficients) < 256 {
+						coefficients[key] = new(big.Rat).Set(coefficient)
+					}
+				}
 				decay := self.mul(self.sub(nativeYumaUint(1), coefficient), bond)
 				increment := nativeYumaClamp(self.mul(coefficient, cell.value), new(big.Rat), nativeYumaUint(1))
 				value := nativeYumaClamp(self.add(decay, increment), new(big.Rat), nativeYumaUint(1))
@@ -227,22 +244,56 @@ func (self *nativeYumaArithmetic) ema(input nativeYumaInput, fresh, old nativeYu
 			}
 			continue
 		}
-		values := nativeYumaZeros(count)
-		for _, cell := range fresh[index] {
-			if !self.check(cell.value) {
-				return result
+		// Original rows are sorted and unique. Visit their ordered union,
+		// retaining fresh-before-old arithmetic for each column; every absent
+		// column in the dense source accumulator remains exactly zero.
+		for freshIndex, oldIndex := 0, 0; freshIndex < len(fresh[index]) || oldIndex < len(old[index]); {
+			column := count
+			if freshIndex < len(fresh[index]) {
+				column = fresh[index][freshIndex].column
 			}
-			values[cell.column] = self.add(values[cell.column], self.mul(alpha, cell.value))
-		}
-		for _, cell := range old[index] {
-			if !self.check(cell.value) {
-				return result
+			if oldIndex < len(old[index]) && old[index][oldIndex].column < column {
+				column = old[index][oldIndex].column
 			}
-			values[cell.column] = self.add(values[cell.column], self.mul(self.sub(nativeYumaUint(1), alpha), cell.value))
-		}
-		for column, value := range values {
+			value := new(big.Rat)
+			if freshIndex < len(fresh[index]) && fresh[index][freshIndex].column == column {
+				cell := fresh[index][freshIndex]
+				if !self.check(cell.value) {
+					return result
+				}
+				value = self.add(value, self.mul(alpha, cell.value))
+				freshIndex++
+			}
+			if oldIndex < len(old[index]) && old[index][oldIndex].column == column {
+				cell := old[index][oldIndex]
+				if !self.check(cell.value) {
+					return result
+				}
+				value = self.add(value, self.mul(self.sub(nativeYumaUint(1), alpha), cell.value))
+				oldIndex++
+			}
 			if value.Sign() > 0 {
 				result[index] = append(result[index], nativeYumaCell{column: column, value: value})
+			}
+		}
+	}
+	return result
+}
+
+// Clipping retains a subset of each original row. The omitted dense cells are
+// exactly 0 + ratio*(0-0); signed subtraction and each fixed rounding remain in
+// the original order for every present column, including explicit zero edges.
+func (self *nativeYumaArithmetic) interpolate(weights, clipped nativeYumaMatrix, penalty uint16) nativeYumaMatrix {
+	result := make(nativeYumaMatrix, len(weights))
+	ratio := self.div(nativeYumaUint(uint64(penalty)), nativeYumaUint(65535))
+	for row, cells := range weights {
+		for _, cell := range cells {
+			if !self.check() {
+				return result
+			}
+			value := self.add(cell.value, self.mul(ratio, self.sub(nativeYumaCellAt(clipped[row], cell.column), cell.value)))
+			if value.Sign() > 0 {
+				result[row] = append(result[row], nativeYumaCell{column: cell.column, value: value})
 			}
 		}
 	}
@@ -284,6 +335,9 @@ func evaluateNativeYuma(ctx context.Context, input nativeYumaInput, total uint64
 		}
 	}
 	for index, value := range stake {
+		if a.err != nil {
+			return nil, a.err
+		}
 		if sum.Sign() != 0 {
 			value = a.q64(new(big.Rat).Quo(value, sum))
 		}
@@ -359,15 +413,19 @@ func evaluateNativeYuma(ctx context.Context, input nativeYumaInput, total uint64
 	}
 	consensus := nativeYumaZeros(count)
 	kappa := a.div(nativeYumaUint(uint64(input.Kappa)), nativeYumaUint(65535))
+	medianRows, medianStake := a.medianStake(active)
 	for column := 0; column < count; column++ {
-		scores := nativeYumaZeros(count)
-		for row := 0; row < count; row++ {
+		scores := make([]*big.Rat, len(medianRows))
+		for index, row := range medianRows {
 			if !a.check() {
 				return nil, a.err
 			}
-			scores[row] = nativeYumaCellAt(weights[row], column)
+			scores[index] = nativeYumaCellAt(weights[row], column)
 		}
-		consensus[column] = a.median(active, scores, kappa)
+		consensus[column] = a.medianPrepared(medianStake, scores, kappa)
+		if a.err != nil {
+			return nil, a.err
+		}
 	}
 	clipped := make(nativeYumaMatrix, count)
 	ranks := nativeYumaZeros(count)
@@ -394,20 +452,7 @@ func evaluateNativeYuma(ctx context.Context, input nativeYumaInput, total uint64
 	if input.BondsPenalty == 65535 {
 		weightsForBonds = clipped
 	} else if input.BondsPenalty != 0 {
-		weightsForBonds = make(nativeYumaMatrix, count)
-		ratio := a.div(nativeYumaUint(uint64(input.BondsPenalty)), nativeYumaUint(65535))
-		for row := 0; row < count; row++ {
-			for column := 0; column < count; column++ {
-				if !a.check() {
-					return nil, a.err
-				}
-				old, newValue := nativeYumaCellAt(weights[row], column), nativeYumaCellAt(clipped[row], column)
-				value := a.add(old, a.mul(ratio, a.sub(newValue, old)))
-				if value.Sign() > 0 {
-					weightsForBonds[row] = append(weightsForBonds[row], nativeYumaCell{column: column, value: value})
-				}
-			}
-		}
+		weightsForBonds = a.interpolate(weights, clipped, input.BondsPenalty)
 	}
 	var ema nativeYumaMatrix
 	if input.Yuma3 {
@@ -417,6 +462,9 @@ func evaluateNativeYuma(ctx context.Context, input nativeYumaInput, total uint64
 		delta := make(nativeYumaMatrix, count)
 		for row, cells := range weightsForBonds {
 			for _, cell := range cells {
+				if a.err != nil {
+					return nil, a.err
+				}
 				delta[row] = append(delta[row], nativeYumaCell{column: cell.column, value: a.mul(cell.value, active[row])})
 			}
 		}
@@ -441,10 +489,16 @@ func evaluateNativeYuma(ctx context.Context, input nativeYumaInput, total uint64
 	dividend = a.normalize(dividend)
 	emissionSum := new(big.Rat)
 	for index := range incentive {
+		if a.err != nil {
+			return nil, a.err
+		}
 		emissionSum = a.add(emissionSum, a.add(incentive[index], dividend[index]))
 	}
 	server, validator := nativeYumaCopy(incentive), nativeYumaCopy(dividend)
 	for index := range server {
+		if a.err != nil {
+			return nil, a.err
+		}
 		if emissionSum.Sign() != 0 {
 			server[index] = a.div(server[index], emissionSum)
 			validator[index] = a.div(validator[index], emissionSum)
@@ -462,6 +516,9 @@ func evaluateNativeYuma(ctx context.Context, input nativeYumaInput, total uint64
 	}
 	serverAlpha, validatorAlpha := nativeYumaZeros(count), nativeYumaZeros(count)
 	for index := range server {
+		if a.err != nil {
+			return nil, a.err
+		}
 		serverAlpha[index] = a.convert(new(big.Rat).Mul(server[index], nativeYumaUint(total)), 0, 64, false)
 		validatorAlpha[index] = a.convert(new(big.Rat).Mul(validator[index], nativeYumaUint(total)), 0, 64, false)
 	}

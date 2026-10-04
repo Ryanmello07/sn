@@ -45,6 +45,9 @@ func (self economicConservationPolicy) validateYumaCapacity() error {
 	if err := authority.validate(); err != nil {
 		return err
 	}
+	if authority.Workload != nil && authority.Workload.MaximumUids != uint64(self.Native.Observation.MaximumUids) {
+		return errors.New("economic Yuma populated workload changed the complete original UID capacity")
+	}
 	// Every UID needs three original input record envelopes, a complete epoch
 	// cell, allocation and recipient identities. This is a minimum feasibility
 	// check; MaximumWitnessBytes is independently admitted and enforced on the

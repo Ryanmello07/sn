@@ -52,6 +52,10 @@ func newEconomicConservationPrincipalFixtureWithSequence(t *testing.T, name stri
 	if yuma {
 		directory = os.Getenv("URNETWORK_NATIVE_YUMA_FIXTURE_DIR")
 		filename = name + ".json"
+		if strings.HasPrefix(name, "yuma-populated-") {
+			directory = os.Getenv("URNETWORK_NATIVE_YUMA_POPULATED_FIXTURE_DIR")
+			t.Setenv("URNETWORK_NATIVE_YUMA_POPULATED_EXPECTATION", filepath.Join(directory, name+"-original-events.json"))
+		}
 		if strings.HasPrefix(name, "yuma-capacity-") {
 			directory = os.Getenv("URNETWORK_NATIVE_YUMA_CAPACITY_FIXTURE_DIR")
 		}
@@ -142,7 +146,7 @@ func newEconomicConservationPrincipalFixtureWithSequence(t *testing.T, name stri
 	f.native.set(t, 100, "PendingServerEmission", make([]byte, 8))
 	if yuma {
 		f.policy.MaximumFacts = 4096
-		if strings.HasPrefix(name, "yuma-capacity-") {
+		if strings.HasPrefix(name, "yuma-capacity-") || strings.HasPrefix(name, "yuma-populated-") {
 			f.policy.StorageProfile = economicConservationTestStorageProfile()
 			f.policy.MaximumFacts = economicConservationMaximumFacts
 			f.policy.ReadBudgetSeconds, f.policy.Native.ReadBudgetSeconds = 900, 900
