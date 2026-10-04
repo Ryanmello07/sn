@@ -684,3 +684,6 @@ fn historical_capture_retained_directory_uses_content_addressed_nodes_without_wr
         "node symlink was followed"
     );
 }
+
+#[path = "historical_node_profile_tests.rs"]
+mod node_profile_tests;

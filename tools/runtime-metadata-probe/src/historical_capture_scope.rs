@@ -194,7 +194,11 @@ impl<'a, B: Backend<Blake2Hasher, Error = String>> StorageIterator<Blake2Hasher>
     }
 }
 
-impl<'a, B: Backend<Blake2Hasher, Error = String>> Backend<Blake2Hasher> for ScopedBackend<'a, B> {
+// The associated iterator carries a borrow of B for the operation scope's
+// lifetime. B may itself borrow the retained parent and cancellation state.
+impl<'a, B: Backend<Blake2Hasher, Error = String> + 'a> Backend<Blake2Hasher>
+    for ScopedBackend<'a, B>
+{
     type Error = String;
     type TrieBackendStorage = B::TrieBackendStorage;
     type RawIter = ScopedIterator<'a, B>;
@@ -292,3 +296,7 @@ impl<'a, B: Backend<Blake2Hasher, Error = String>> Backend<Blake2Hasher> for Sco
         self.inner.proof_size()
     }
 }
+
+#[cfg(test)]
+#[path = "historical_capture_scope_tests.rs"]
+mod tests;
