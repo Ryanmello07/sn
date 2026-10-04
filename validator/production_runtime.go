@@ -21,25 +21,28 @@ func authenticateOwnerRecycleProductionRuntimeAtContext(ctx context.Context, nat
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	artifact, number, err := authenticateOwnerRecycleProductionArtifactAtContext(ctx, native, cfg, block, false)
+	view, err := crv4.ReadRuntimeObservationContext(ctx, native, func(ctx context.Context) (*crv4.Chain, error) {
+		artifact, number, err := authenticateOwnerRecycleProductionArtifactAtContext(ctx, native, cfg, block, false)
+		if err != nil {
+			return nil, err
+		}
+		view := *native
+		if err := view.BindValidatorProducerRuntimeArtifactContext(ctx, artifact); err != nil {
+			return nil, err
+		}
+		var canonical types.Hash
+		if err := native.API.Client.CallContext(ctx, &canonical, "chain_getBlockHash", number); err != nil {
+			return nil, err
+		}
+		if canonical != block {
+			return nil, errors.New("production runtime canonical block changed during purpose authentication")
+		}
+		return &view, ctx.Err()
+	})
 	if err != nil {
 		return err
 	}
-	view := *native
-	if err := view.BindValidatorProducerRuntimeArtifactContext(ctx, artifact); err != nil {
-		return err
-	}
-	var canonical types.Hash
-	if err := native.API.Client.CallContext(ctx, &canonical, "chain_getBlockHash", number); err != nil {
-		return err
-	}
-	if canonical != block {
-		return errors.New("production runtime canonical block changed during purpose authentication")
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	*native = view
+	*native = *view
 	return nil
 }
 
@@ -47,6 +50,25 @@ func authenticateOwnerRecycleProductionRuntimeAtContext(ctx context.Context, nat
 // and historical reads. Only the caller selects the authenticated bind purpose;
 // an earlier approved artifact never becomes current signing authority.
 func authenticateOwnerRecycleProductionArtifactAtContext(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, block types.Hash, historical bool) (crv4.AuthenticatedRuntimeArtifact, uint64, error) {
+	if ctx == nil {
+		return crv4.AuthenticatedRuntimeArtifact{}, 0, errors.New("production runtime caller context is unavailable")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	type result struct {
+		artifact crv4.AuthenticatedRuntimeArtifact
+		number   uint64
+	}
+	value, err := crv4.ReadRuntimeObservationContext(ctx, native, func(ctx context.Context) (result, error) {
+		artifact, number, err := authenticateOwnerRecycleProductionArtifactAttempt(ctx, native, cfg, block, historical)
+		return result{artifact: artifact, number: number}, err
+	})
+	return value.artifact, value.number, err
+}
+
+// No production view can join a fresh artifact to an earlier transport's
+// network identity or finalized census. The enclosing read owns all retries.
+func authenticateOwnerRecycleProductionArtifactAttempt(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, block types.Hash, historical bool) (crv4.AuthenticatedRuntimeArtifact, uint64, error) {
 	empty := crv4.AuthenticatedRuntimeArtifact{}
 	if err := validateReleaseProductionRuntimeHistory(cfg); err != nil {
 		return empty, 0, err
@@ -61,8 +83,6 @@ func authenticateOwnerRecycleProductionArtifactAtContext(ctx context.Context, na
 		native.ProvisionalRuntimeCompatibilityEnabled() || !slices.Contains(cfg.Substrate, native.API.Client.URL()) {
 		return empty, 0, errors.New("production runtime requires an approved non-provisional connection and exact block")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return empty, 0, err
 	}

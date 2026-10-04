@@ -28,6 +28,15 @@ type runtimeObservationReadOwner struct {
 	parent context.Context
 }
 
+// The callback performs one complete read-only observation. Reconnect repeats
+// its identity, artifact and closing reads under one original deadline; nested
+// runtime readers share that owner. Callers retain their original block and
+// policy and publish the returned value only after this function succeeds.
+// Signing, submission and durable mutation do not belong in this callback.
+func ReadRuntimeObservationContext[T any](ctx context.Context, chain *Chain, read func(context.Context) (T, error)) (T, error) {
+	return readRuntimeObservation(ctx, chain, read)
+}
+
 // Admission is deliberately one attempt. This read-only wrapper consumes a
 // lost transport observation under a finite deadline, preserving exact pins.
 func ReadRuntimeArtifactAtContext(ctx context.Context, chain *Chain, blockHash types.Hash, allowed ...RuntimeArtifactIdentity) (AuthenticatedRuntimeArtifact, error) {

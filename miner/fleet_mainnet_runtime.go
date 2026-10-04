@@ -127,6 +127,14 @@ func (self *fleetMainnetRuntimeAuthority) artifactIdentity() crv4.RuntimeArtifac
 // header and canonical height around the exact runtime read. A connection
 // carrying testnet compatibility is inadmissible in production.
 func (self *fleetMainnetRuntimeAuthority) authenticateAt(ctx context.Context, chain *crv4.Chain, block types.Hash) (crv4.AuthenticatedRuntimeArtifact, error) {
+	return crv4.ReadRuntimeObservationContext(ctx, chain, func(ctx context.Context) (crv4.AuthenticatedRuntimeArtifact, error) {
+		return self.authenticateAtAttempt(ctx, chain, block)
+	})
+}
+
+// A replacement transport must repeat fresh network identity as well as the
+// artifact; only one complete original-block attempt may leave this boundary.
+func (self *fleetMainnetRuntimeAuthority) authenticateAtAttempt(ctx context.Context, chain *crv4.Chain, block types.Hash) (crv4.AuthenticatedRuntimeArtifact, error) {
 	if ctx == nil {
 		return crv4.AuthenticatedRuntimeArtifact{}, errors.New("fleet runtime context is absent")
 	}

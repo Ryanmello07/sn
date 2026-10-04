@@ -57,29 +57,23 @@ func TestProductionRuntimeTransportExpiryReobservesWithinOriginalBudget(t *testi
 	waits, attempts := 0, 0
 	owner.productionReadHooks.wait = func(ctx context.Context, _ time.Duration) error {
 		waits++
-		if waits > 1 {
-			return errors.New("runtime read retried beyond the forced reconnect")
-		}
-		result, err := InspectProductionRuntimeContinuityContext(ctx, peer.owner.rpc.native, peer.owner.cfg, peer.hashes[150], peer.policyRaw, peer.certificateRaw)
-		if err != nil || result == nil || result.NativeHash != peer.hashes[150] {
-			t.Fatalf("independent runtime peer stopped during owner reconnect: %v", err)
-		}
-		return nil
+		return errors.New("whole runtime observation escaped its original read attempt")
 	}
 	var report *ProductionRuntimeContinuityInspection
 	err := owner.productionRead(t.Context(), productionReadPreparation, nil, func(ctx context.Context) error {
 		attempts++
 		var err error
 		report, err = InspectProductionRuntimeContinuityContext(ctx, native, f.owner.cfg, f.hashes[150], f.policyRaw, f.certificateRaw)
-		if attempts == 1 && (report != nil || !retryableProductionSteeringRead(err)) {
-			t.Fatalf("reconnect became authority contradiction or published a mixed observation: %v", err)
-		}
 		return err
 	})
-	if err != nil || report == nil || !faulted || attempts != 2 || waits != 1 || report.NativeHash != f.hashes[150] ||
-		!slices.Equal(durations, []time.Duration{300 * time.Second, 60 * time.Second, 60 * time.Second}) ||
+	if err != nil || report == nil || !faulted || attempts != 1 || waits != 0 || versionReads != 4 || f.owner.rpc.callKVs["system_chain"] != 2 || report.NativeHash != f.hashes[150] ||
+		!slices.Equal(durations, []time.Duration{300 * time.Second, 60 * time.Second}) ||
 		!bytes.Equal(original, f.owner.cfg.ownerRecycleProduction.encoded) || native.Meta != originalMetadata || native.Runtime != originalRuntime || report.SigningAuthority {
 		t.Fatalf("same-block runtime read did not recover within original owner: attempts=%d waits=%d budgets=%v report=%+v err=%v", attempts, waits, durations, report, err)
+	}
+	result, err := InspectProductionRuntimeContinuityContext(t.Context(), peer.owner.rpc.native, peer.owner.cfg, peer.hashes[150], peer.policyRaw, peer.certificateRaw)
+	if err != nil || result == nil || result.NativeHash != peer.hashes[150] {
+		t.Fatalf("independent runtime peer lost its original authority: %v", err)
 	}
 }
 

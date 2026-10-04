@@ -117,17 +117,7 @@ func TestProductionRuntimeActualWebsocketReconnectReobservesOriginalAuthority(t 
 	}
 	owner.productionReadHooks.wait = func(ctx context.Context, _ time.Duration) error {
 		waits++
-		if waits != 1 {
-			return errors.New("unexpected repeated websocket owner retry")
-		}
-		if err := crv4.ValidateRuntimeArtifactOwnerContext(ctx, peer, peerArtifact); err != nil {
-			t.Fatal("peer lost its retained authority", err)
-		}
-		result, err := InspectProductionRuntimeContinuityContext(ctx, peer, f.owner.cfg, f.hashes[150], f.policyRaw, f.certificateRaw)
-		if err != nil || result == nil || result.NativeHash != f.hashes[150] {
-			t.Fatalf("healthy actual socket peer stopped: %+v %v", result, err)
-		}
-		return nil
+		return errors.New("whole websocket observation escaped its original read attempt")
 	}
 	enabled.Store(true)
 	var report *ProductionRuntimeContinuityInspection
@@ -135,18 +125,19 @@ func TestProductionRuntimeActualWebsocketReconnectReobservesOriginalAuthority(t 
 		attempts++
 		var err error
 		report, err = InspectProductionRuntimeContinuityContext(ctx, native, f.owner.cfg, f.hashes[150], f.policyRaw, f.certificateRaw)
-		if attempts == 1 && (report != nil || !retryableProductionSteeringRead(err)) {
-			t.Fatalf("socket transition escaped as authority or permanent contradiction: %+v %v", report, err)
-		}
 		return err
 	})
 	if err != nil || report == nil || report.NativeHash != f.hashes[150] || report.NativeNumber != 150 || report.SigningAuthority || report.ProductionSelectionInstalled ||
-		!disconnected.Load() || attempts != 2 || waits != 1 || connections.Load() != 3 || native.API != api || native.API.Client != client || native.Meta != metadata || native.Runtime != runtime ||
-		!slices.Equal(budgets, []time.Duration{300 * time.Second, 60 * time.Second, 60 * time.Second}) || !bytes.Equal(originalApproval, f.owner.cfg.ownerRecycleProduction.encoded) ||
+		!disconnected.Load() || attempts != 1 || waits != 0 || connections.Load() != 3 || native.API != api || native.API.Client != client || native.Meta != metadata || native.Runtime != runtime ||
+		!slices.Equal(budgets, []time.Duration{300 * time.Second, 60 * time.Second}) || !bytes.Equal(originalApproval, f.owner.cfg.ownerRecycleProduction.encoded) ||
 		!bytes.Equal(originalPolicy, f.policyRaw) || !bytes.Equal(originalCertificate, f.certificateRaw) {
 		t.Fatalf("production owner failed actual reconnect with retained authority: attempts=%d waits=%d connections=%d budgets=%v report=%+v err=%v", attempts, waits, connections.Load(), budgets, report, err)
 	}
 	if err := crv4.ValidateRuntimeArtifactOwnerContext(t.Context(), peer, peerArtifact); err != nil {
 		t.Fatal(fmt.Errorf("independent socket peer lost original proof: %w", err))
+	}
+	result, err := InspectProductionRuntimeContinuityContext(t.Context(), peer, f.owner.cfg, f.hashes[150], f.policyRaw, f.certificateRaw)
+	if err != nil || result == nil || result.NativeHash != f.hashes[150] {
+		t.Fatalf("healthy actual socket peer lost its original authority: %+v %v", result, err)
 	}
 }
