@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -66,14 +67,23 @@ func newMonitorChainStartupFixture(t *testing.T, malformed bool) *monitorChainSt
 // Checking bytes and the same inode distinguishes recovery from replacement.
 func (self *monitorChainStartupFixture) unchanged(t *testing.T) {
 	t.Helper()
+	if err := self.observationError(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Worker callbacks return observations to their joined test owner; they cannot
+// call Fatal because Goexit would leave the synchronous supervisor waiting.
+func (self *monitorChainStartupFixture) observationError() error {
 	raw, err := os.ReadFile(self.path)
 	if err != nil || !bytes.Equal(raw, self.raw) {
-		t.Fatal("startup changed original checkpoint bytes", err)
+		return errors.Join(errors.New("startup changed original checkpoint bytes"), err)
 	}
 	info, err := os.Stat(self.path)
 	if err != nil || !os.SameFile(self.info, info) {
-		t.Fatal("startup replaced original checkpoint inode", err)
+		return errors.Join(errors.New("startup replaced original checkpoint inode"), err)
 	}
+	return nil
 }
 
 // Public parsing retains the exact prepared paths and a normal finite budget.
@@ -84,25 +94,33 @@ func (self *monitorChainStartupFixture) arguments(url string) []string {
 // A second real flock cannot acquire the still-admitted checkpoint owner.
 func monitorChainStartupRetainedLock(t *testing.T, path string, lock *os.File) {
 	t.Helper()
+	if err := monitorChainStartupLockError(path, lock); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// This real-lock observer returns its error across a callback boundary.
+func monitorChainStartupLockError(path string, lock *os.File) error {
 	if lock == nil {
-		t.Fatal("startup omitted its retained lock")
+		return errors.New("startup omitted its retained lock")
 	}
 	if _, err := lock.Stat(); err != nil {
-		t.Fatal("retry closed the original lock", err)
+		return errors.Join(errors.New("retry closed the original lock"), err)
 	}
 	other, err := os.OpenFile(path+".lock", os.O_RDWR|syscall.O_NOFOLLOW, 0)
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 	conflict := syscall.Flock(int(other.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 	closeErr := other.Close()
 	if !errors.Is(conflict, syscall.EAGAIN) || closeErr != nil {
-		t.Fatal("retry released original exclusive custody", conflict, closeErr)
+		return errors.Join(errors.New("retry released original exclusive custody"), conflict, closeErr)
 	}
+	return nil
 }
 
 // A transient physical fact failure after admission recovers in the same owner.
-// The unchanged finalized sample then reaches the actual local Rpc server once.
+// One actual sample authenticates both its opening and closing finalized head.
 func TestMonitorChainStartupPublicReadFailureRecoversSameCheckpoint(t *testing.T) {
 	f := newMonitorChainStartupFixture(t, false)
 	server, reads := testRpcServerWithEvm(t, "0x3c4", "")
@@ -117,11 +135,18 @@ func TestMonitorChainStartupPublicReadFailureRecoversSameCheckpoint(t *testing.T
 	}}
 	ctx := durablepath.WithHost(parent, host)
 	var lock *os.File
+	var callbackErr error
+	fail := func(err error) error {
+		callbackErr = errors.Join(callbackErr, err)
+		cancel()
+		return err
+	}
 	waits, events := 0, 0
 	hooks := monitorServiceHooks{
 		afterCheckpointOpen: func(_ context.Context, role string, file *os.File) {
 			if role != "chain" {
-				t.Fatal("unexpected chain owner", role)
+				fail(fmt.Errorf("unexpected chain owner %q", role))
+				return
 			}
 			lock = file
 			failing.Store(true)
@@ -129,10 +154,11 @@ func TestMonitorChainStartupPublicReadFailureRecoversSameCheckpoint(t *testing.T
 		rpcWait: func(waitCtx context.Context, role string, delay time.Duration) error {
 			waits++
 			if role != "chain" || waits != 1 || events != 0 || delay != time.Second || waitCtx.Err() != nil || reads("chain_getFinalizedHead") != 0 {
-				t.Fatal("startup retry escaped its unpublished read boundary", role, waits, events, delay, waitCtx.Err())
+				return fail(fmt.Errorf("startup retry escaped its unpublished read boundary: %s %d %d %s %v", role, waits, events, delay, waitCtx.Err()))
 			}
-			f.unchanged(t)
-			monitorChainStartupRetainedLock(t, f.path, lock)
+			if err := errors.Join(f.observationError(), monitorChainStartupLockError(f.path, lock)); err != nil {
+				return fail(err)
+			}
 			failing.Store(false)
 			return nil
 		},
@@ -145,8 +171,11 @@ func TestMonitorChainStartupPublicReadFailureRecoversSameCheckpoint(t *testing.T
 	}
 	var diagnostic bytes.Buffer
 	exit := runMainWithMonitorHooks(ctx, f.arguments(server.URL), io.Discard, &diagnostic, func() time.Time { return f.stamp }, hooks)
-	if exit != 0 || waits != 1 || events != 1 || reads("chain_getFinalizedHead") != 1 {
-		t.Fatal("actual chain startup failed to recover", exit, waits, events, diagnostic.String())
+	if callbackErr != nil {
+		t.Fatal(callbackErr)
+	}
+	if exit != 0 || waits != 1 || events != 1 || reads("chain_getFinalizedHead") != 2 {
+		t.Fatal("actual chain startup failed to recover", exit, waits, events, reads("chain_getFinalizedHead"), diagnostic.String())
 	}
 	if _, err := lock.Stat(); !errors.Is(err, os.ErrClosed) {
 		t.Fatal("returned monitor retained a live checkpoint owner", err)
@@ -198,15 +227,21 @@ func monitorChainStartupLostCustody(t *testing.T, replace bool) {
 	f := newMonitorChainStartupFixture(t, false)
 	server, reads := testRpcServerWithEvm(t, "0x3c4", "")
 	retained := f.path + ".retained"
+	ctx, cancel := context.WithCancel(f.storage.Context)
+	defer cancel()
+	var callbackErr error
 	waits := 0
 	hooks := monitorServiceHooks{
 		afterCheckpointOpen: func(context.Context, string, *os.File) {
 			if err := os.Rename(f.path, retained); err != nil {
-				t.Fatal(err)
+				callbackErr = err
+				cancel()
+				return
 			}
 			if replace {
 				if err := os.WriteFile(f.path, f.raw, 0600); err != nil {
-					t.Fatal(err)
+					callbackErr = err
+					cancel()
 				}
 			}
 		},
@@ -216,7 +251,10 @@ func monitorChainStartupLostCustody(t *testing.T, replace bool) {
 		},
 	}
 	var diagnostic bytes.Buffer
-	exit := runMainWithMonitorHooks(f.storage.Context, f.arguments(server.URL), io.Discard, &diagnostic, func() time.Time { return f.stamp }, hooks)
+	exit := runMainWithMonitorHooks(ctx, f.arguments(server.URL), io.Discard, &diagnostic, func() time.Time { return f.stamp }, hooks)
+	if callbackErr != nil {
+		t.Fatal(callbackErr)
+	}
 	if exit != 3 || waits != 0 || reads("chain_getFinalizedHead") != 0 {
 		t.Fatal("lost retained custody became a fresh observation", exit, waits, diagnostic.String())
 	}
@@ -253,7 +291,7 @@ func TestMonitorChainStartupReadBudgetRetainsOriginalFailure(t *testing.T) {
 	hooks := monitorServiceHooks{rpcWait: func(waitCtx context.Context, role string, delay time.Duration) error {
 		waits++
 		if role != "chain" || delay <= 0 || delay > 10*time.Second || waits > 64 || waitCtx.Err() != nil {
-			t.Fatal("read retry escaped its finite window", role, delay, waits, waitCtx.Err())
+			return fmt.Errorf("read retry escaped its finite window: %s %s %d %v", role, delay, waits, waitCtx.Err())
 		}
 		waited += delay
 		now = now.Add(delay)
@@ -323,18 +361,22 @@ func TestMonitorChainStartupPublicCancellationJoinsReadOwner(t *testing.T) {
 		return nil
 	}}
 	var lock *os.File
+	var callbackErr error
 	waits := 0
 	hooks := monitorServiceHooks{
 		afterCheckpointOpen: func(_ context.Context, _ string, file *os.File) { lock = file; failing.Store(true) },
 		rpcWait: func(waitCtx context.Context, _ string, _ time.Duration) error {
 			waits++
-			monitorChainStartupRetainedLock(t, f.path, lock)
+			callbackErr = monitorChainStartupLockError(f.path, lock)
 			cancel()
-			return waitCtx.Err()
+			return errors.Join(callbackErr, waitCtx.Err())
 		},
 	}
 	var diagnostic bytes.Buffer
 	exit := runMainWithMonitorHooks(durablepath.WithHost(parent, host), f.arguments(server.URL), io.Discard, &diagnostic, func() time.Time { return f.stamp }, hooks)
+	if callbackErr != nil {
+		t.Fatal(callbackErr)
+	}
 	if exit != 0 || waits != 1 || reads("chain_getFinalizedHead") != 0 {
 		t.Fatal("canceled startup did not join its original read", exit, waits, diagnostic.String())
 	}
@@ -365,8 +407,8 @@ func TestMonitorChainStartupPublicPreparedAbsentCheckpointSamples(t *testing.T) 
 	}
 	var diagnostic bytes.Buffer
 	exit := runMainWithMonitorHooks(ctx, f.arguments(server.URL), io.Discard, &diagnostic, func() time.Time { return f.stamp }, hooks)
-	if exit != 0 || waits != 0 || events != 1 || reads("chain_getFinalizedHead") != 1 {
-		t.Fatal("prepared new checkpoint did not admit its actual sample", exit, waits, events, diagnostic.String())
+	if exit != 0 || waits != 0 || events != 1 || reads("chain_getFinalizedHead") != 2 {
+		t.Fatal("prepared new checkpoint did not admit its actual sample", exit, waits, events, reads("chain_getFinalizedHead"), diagnostic.String())
 	}
 	store, err := openMonitorCheckpoint(path, monitorTestExpectation(), storage.Context)
 	if err != nil {
@@ -470,23 +512,28 @@ func monitorChainStartupParsedBudget(t *testing.T, command, configured string, e
 		args = append(args, "--retry-window", configured)
 	}
 	constructed, events := 0, 0
+	var callbackErr error
 	hooks := monitorServiceHooks{
 		afterRpcClient: func(observed string, budget time.Duration) {
 			constructed++
 			if observed != command || budget != expected {
-				t.Fatal("actual parsed Rpc read budget differs", observed, budget, expected)
+				callbackErr = fmt.Errorf("actual parsed Rpc read budget differs: %s %s, expected %s", observed, budget, expected)
+				cancel()
 			}
 		},
 		afterEvent: func(context.Context, string) { events++; cancel() },
 	}
 	var diagnostic bytes.Buffer
 	exit := runMainWithMonitorHooks(ctx, args, io.Discard, &diagnostic, func() time.Time { return f.stamp }, hooks)
+	if callbackErr != nil {
+		t.Fatal(callbackErr)
+	}
 	wantEvents := 0
 	if command == "monitor" {
 		wantEvents = 1
 	}
-	if exit != 0 || constructed != 1 || events != wantEvents || reads("chain_getFinalizedHead") != 1 {
-		t.Fatal("parsed read budget did not reach actual command observation", exit, constructed, events, diagnostic.String())
+	if exit != 0 || constructed != 1 || events != wantEvents || reads("chain_getFinalizedHead") != 2 {
+		t.Fatal("parsed read budget did not reach actual command observation", exit, constructed, events, reads("chain_getFinalizedHead"), diagnostic.String())
 	}
 	f.unchanged(t)
 }
