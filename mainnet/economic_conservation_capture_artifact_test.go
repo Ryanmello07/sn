@@ -17,6 +17,9 @@ func TestEconomicCaptureMaintainedVaultDeploysAndRetainsRollback(t *testing.T) {
 		if result == nil || result.receipt == nil || result.transaction == nil || result.receipt.TxHash != result.transaction.Hash() || !fixture.policy.CaptureIdentity || len(fixture.code) == 0 {
 			t.Fatal("maintained original vault did not execute its signed transaction", reverted, result)
 		}
+		if result.registrationCalls != 1 || result.uidCalls != 1 || result.moveCalls != 1 {
+			t.Fatal("maintained vault omitted original registration, UID or movement", reverted, result)
+		}
 		if reverted {
 			if result.receipt.Status != types.ReceiptStatusFailed || len(result.receipt.Logs) != 0 || result.poolAfter != "20" || result.escrowAfter != "0" || fixture.blocks[11].snapshot.Counters["totalCaptured"] != "0" {
 				t.Fatal("original vault revert retained a transfer or receipt effect", result)

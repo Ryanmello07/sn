@@ -31,6 +31,7 @@ type economicCapturePrecompile struct {
 	escrow    common.Hash
 	coldkey   common.Hash
 	shortfall bool
+	calls     map[string]uint64
 }
 
 // Keep the synthetic adapters checked against the exact imported VM contract.
@@ -55,6 +56,10 @@ func (self *economicCapturePrecompile) Run(input []byte) ([]byte, error) {
 	}
 	selector := func(signature string) bool { return bytes.Equal(input[:4], crypto.Keccak256([]byte(signature))[:4]) }
 	word := func(index int) common.Hash { return common.BytesToHash(input[4+index*32 : 4+(index+1)*32]) }
+	if self.calls == nil {
+		self.calls = map[string]uint64{}
+	}
+	self.calls[common.Bytes2Hex(input[:4])]++
 	switch {
 	case self.kind == "price" && selector("getAlphaPrice(uint16)") && len(input) == 36 && word(0).Big().Cmp(big.NewInt(25)) == 0:
 		return common.BigToHash(big.NewInt(1_000_000_000_000_000_000)).Bytes(), nil
@@ -100,10 +105,13 @@ func economicCaptureForwarder(vault common.Address) []byte {
 }
 
 type economicCaptureContractFixture struct {
-	transaction *types.Transaction
-	receipt     *types.Receipt
-	poolAfter   string
-	escrowAfter string
+	transaction       *types.Transaction
+	receipt           *types.Receipt
+	poolAfter         string
+	escrowAfter       string
+	registrationCalls uint64
+	uidCalls          uint64
+	moveCalls         uint64
 }
 
 // Configure before public servers receive any requests. Snapshots and logs
@@ -157,15 +165,23 @@ func economicCaptureExecuteContractSequence(t *testing.T, fixture *monitorEvmFix
 		t.Fatal("actual original vault deployment failed", err)
 	}
 	db.SetCode(coordinator, economicCaptureForwarder(address), tracing.CodeChangeUnspecified)
+	// Solidity checks code presence before its typed void register/move calls.
+	// These synthetic accounts exist in StateDB; their actual execution remains
+	// the explicit precompile implementation, never the marker bytecode.
+	for _, precompile := range []common.Address{common.HexToAddress("0x804"), common.HexToAddress("0x805"), common.HexToAddress("0x808")} {
+		db.SetCode(precompile, []byte{byte(vm.STOP)}, tracing.CodeChangeUnspecified)
+	}
 	stake := &economicCapturePrecompile{kind: "stake", state: db, pool: pool, escrow: escrow, coldkey: coldkey, shortfall: steps[0].revert}
+	neuron := &economicCapturePrecompile{kind: "neuron", state: db, pool: pool, escrow: escrow, coldkey: coldkey}
+	price := &economicCapturePrecompile{kind: "price", state: db, pool: pool, escrow: escrow, coldkey: coldkey}
 	environment := func(caller, target common.Address, tx common.Hash) *vm.EVM {
 		config.Origin = caller
 		env := runtime.NewEnv(&config)
 		rules := chain.Rules(config.BlockNumber, config.Random != nil, config.Time)
 		precompiles := vm.ActivePrecompiledContracts(rules)
 		precompiles[common.HexToAddress("0x805")] = stake
-		precompiles[common.HexToAddress("0x804")] = &economicCapturePrecompile{kind: "neuron", state: db, pool: pool, escrow: escrow, coldkey: coldkey}
-		precompiles[common.HexToAddress("0x808")] = &economicCapturePrecompile{kind: "price", state: db, pool: pool, escrow: escrow, coldkey: coldkey}
+		precompiles[common.HexToAddress("0x804")] = neuron
+		precompiles[common.HexToAddress("0x808")] = price
 		env.SetPrecompiles(precompiles)
 		db.SetTxContext(tx, 0)
 		db.Prepare(rules, caller, common.Address{}, &target, []common.Address{common.HexToAddress("0x804"), common.HexToAddress("0x805"), common.HexToAddress("0x808")}, nil)
@@ -185,9 +201,15 @@ func economicCaptureExecuteContractSequence(t *testing.T, fixture *monitorEvmFix
 		caller common.Address
 		data   []byte
 	}{{caller: origin, data: pack("setCoordinatorOnce", coordinator)}, {caller: coordinator, data: pack("registerPool", big.NewInt(1), [32]byte(pool), uint64(1))}} {
-		if _, _, err := call(setup.caller, address, setup.data, crypto.Keccak256Hash([]byte{byte(index)})); err != nil {
-			t.Fatal("actual original vault setup failed", index, err)
+		if raw, _, err := call(setup.caller, address, setup.data, crypto.Keccak256Hash([]byte{byte(index)})); err != nil {
+			t.Fatal("actual original vault setup failed", index, err, common.Bytes2Hex(raw), neuron.calls)
 		}
+	}
+	count := func(precompile *economicCapturePrecompile, signature string) uint64 {
+		return precompile.calls[common.Bytes2Hex(crypto.Keccak256([]byte(signature))[:4])]
+	}
+	if count(neuron, "registerLimit(uint16,bytes32,uint64)") != 1 || count(neuron, "getUid(uint16,bytes32)") != 1 {
+		t.Fatal("actual original pool registration bypassed its runtime adapters", neuron.calls)
 	}
 	fixture.fixtureGetters = map[string][]any{}
 	for _, method := range []string{"selfColdkey", "escrowHotkey", "pools"} {
@@ -268,7 +290,7 @@ func economicCaptureExecuteContractSequence(t *testing.T, fixture *monitorEvmFix
 			logs = []*types.Log{}
 		}
 		receipt := &types.Receipt{Type: types.LegacyTxType, Status: status, CumulativeGasUsed: cumulativeGas + result.UsedGas, Logs: logs, TxHash: tx.Hash(), GasUsed: result.UsedGas, EffectiveGasPrice: big.NewInt(2), BlockNumber: new(big.Int).SetUint64(step.block), TransactionIndex: transactionIndex}
-		results = append(results, &economicCaptureContractFixture{transaction: tx, receipt: receipt, poolAfter: stake.stake(pool).String(), escrowAfter: stake.stake(escrow).String()})
+		results = append(results, &economicCaptureContractFixture{transaction: tx, receipt: receipt, poolAfter: stake.stake(pool).String(), escrowAfter: stake.stake(escrow).String(), registrationCalls: count(neuron, "registerLimit(uint16,bytes32,uint64)"), uidCalls: count(neuron, "getUid(uint16,bytes32)"), moveCalls: count(stake, "moveStake(bytes32,bytes32,uint256,uint256,uint256)")})
 		snapshots[step.block], roots[step.block] = readSnapshot(), db.IntermediateRoot(true)
 	}
 	latestSnapshot, latestRoot := before, beforeRoot
