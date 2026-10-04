@@ -5,6 +5,7 @@ package validator
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -265,5 +266,73 @@ func TestProductionRuntimeFinalityContradictionDoesNotRetry(t *testing.T) {
 	var pending *productionSteeringReadWait
 	if err == nil || retryableProductionSteeringRead(err) || errors.As(err, &pending) || attempts != 1 || waits != 0 {
 		t.Fatalf("canonical contradiction acquired retry authority: attempts=%d waits=%d error=%v", attempts, waits, err)
+	}
+}
+
+// The physical RPC can finish returning bytes at the same boundary at which
+// its owner expires. Err and Done agree without a wall-clock sleep.
+type runtimeFinalityLateContext struct {
+	context.Context
+	done  chan struct{}
+	cause error
+}
+
+func (self *runtimeFinalityLateContext) Done() <-chan struct{} { return self.done }
+
+func (self *runtimeFinalityLateContext) Err() error {
+	select {
+	case <-self.done:
+		return self.cause
+	default:
+		return nil
+	}
+}
+
+// Complete wrong canonical bytes remain a hard contradiction when deadline or
+// cancellation arrives before CallContext returns. Matching bytes still cannot
+// publish success, and an RPC error without bytes retains the earlier controls.
+func TestMainnetRuntimeFinalityCompletedHashRetainsLateCancellation(t *testing.T) {
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		for _, changed := range []bool{false, true} {
+			fixture := newMainnetRuntimeTestFixture(t)
+			cfg, err := LoadMainnetRuntimeObservationConfig(fixture.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			late := &runtimeFinalityLateContext{Context: context.Background(), done: make(chan struct{}), cause: cause}
+			faulted := false
+			defer func() {
+				if !faulted {
+					close(late.done)
+				}
+			}()
+			client := fixture.native.API.Client.(*validatorRuntimeIdentityTestClient)
+			call := client.callContext
+			heads := 0
+			client.callContext = func(ctx context.Context, target any, method string, args ...any) error {
+				if method == "chain_getFinalizedHead" {
+					heads++
+				}
+				if heads >= 2 && method == "chain_getBlockHash" && !faulted {
+					hash := mainnetRuntimeTestBlock(150)
+					if changed {
+						hash = types.Hash{0xf1}
+					}
+					if err := setReleaseHistoricalTestResult(target, hash.Hex()); err != nil {
+						return err
+					}
+					faulted = true
+					close(late.done)
+					<-ctx.Done()
+					return nil
+				}
+				return call(ctx, target, method, args...)
+			}
+			got, err := ObserveMainnetRuntimeAtContext(late, fixture.native, cfg, types.Hash{})
+			if !faulted || got != nil || !errors.Is(err, cause) || strings.Contains(err.Error(), "not canonical") != changed ||
+				retryableProductionSteeringRead(err) != (!changed && cause == context.DeadlineExceeded) {
+				t.Fatalf("changed=%t cause=%v completed canonical evidence lost a cause: %+v %v", changed, cause, got, err)
+			}
+		}
 	}
 }

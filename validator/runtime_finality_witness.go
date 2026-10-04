@@ -41,7 +41,9 @@ func readRuntimeWitnessHash(ctx context.Context, native *crv4.Chain, field, meth
 	if err != nil || hash == (types.Hash{}) {
 		return types.Hash{}, errors.Join(fmt.Errorf("runtime observation %s is invalid", field), err)
 	}
-	return hash, ctx.Err()
+	// A completed hash remains evidence even if cancellation arrives just
+	// afterward. The caller compares it before rejecting a late success.
+	return hash, nil
 }
 
 // Complete SCALE header authentication binds the height used by every later
@@ -67,7 +69,7 @@ func checkRuntimeFinalityWitnesses(ctx context.Context, native *crv4.Chain, curr
 			return err
 		}
 		if canonical != witness.hash {
-			return errors.New("runtime observation block is not canonical at its original height")
+			return errors.Join(errors.New("runtime observation block is not canonical at its original height"), ctx.Err())
 		}
 	}
 	for _, witness := range retained {
