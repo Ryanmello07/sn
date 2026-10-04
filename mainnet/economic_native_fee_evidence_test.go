@@ -134,29 +134,27 @@ func TestEconomicNativeFeePublicRevertedCallRetainsSurvivingFee(t *testing.T) {
 
 func TestEconomicNativeFeePublicRefusesChangedSemanticAuthority(t *testing.T) {
 	for _, change := range []string{"signature", "profile", "checkpoint", "engine", "semantics", "parent", "request"} {
-		t.Run(change, func(t *testing.T) {
-			request, approval, key := economicNativeFeeTestRequest(t, "success", "pair")
-			switch change {
-			case "signature":
-				key = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x68}, ed25519.SeedSize))
-			case "profile":
-				request.Policy.ProfileSha256 = "sha256:" + strings.Repeat("13", 32)
-			case "checkpoint":
-				request.Policy.CheckpointSha256 = "sha256:" + strings.Repeat("13", 32)
-			case "engine":
-				request.Policy.EngineSha256 = "sha256:" + strings.Repeat("13", 32)
-			case "semantics":
-				approval.Semantics = "receipt-gas-estimate"
-			case "parent":
-				approval.ParentHash = "0x" + strings.Repeat("13", 32)
-			case "request":
-				approval.ContextRequestHash = "sha256:" + strings.Repeat("13", 32)
-			}
-			economicNativeFeeTestSign(t, &request, &approval, key)
-			if _, code, diagnostic := economicNativeFeeTestRun(t, t.Context(), request); code == 0 {
-				t.Fatal("changed independent native fee authority was accepted", change, diagnostic)
-			}
-		})
+		request, approval, key := economicNativeFeeTestRequest(t, "success", "pair")
+		switch change {
+		case "signature":
+			key = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x68}, ed25519.SeedSize))
+		case "profile":
+			request.Policy.ProfileSha256 = "sha256:" + strings.Repeat("13", 32)
+		case "checkpoint":
+			request.Policy.CheckpointSha256 = "sha256:" + strings.Repeat("13", 32)
+		case "engine":
+			request.Policy.EngineSha256 = "sha256:" + strings.Repeat("13", 32)
+		case "semantics":
+			approval.Semantics = "receipt-gas-estimate"
+		case "parent":
+			approval.ParentHash = "0x" + strings.Repeat("13", 32)
+		case "request":
+			approval.ContextRequestHash = "sha256:" + strings.Repeat("13", 32)
+		}
+		economicNativeFeeTestSign(t, &request, &approval, key)
+		if _, code, diagnostic := economicNativeFeeTestRun(t, t.Context(), request); code == 0 {
+			t.Fatal("changed independent native fee authority was accepted", change, diagnostic)
+		}
 	}
 }
 
