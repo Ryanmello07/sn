@@ -23,9 +23,21 @@ import (
 // The actual body closes before the deterministic injected close outcome.
 type rpcReadOwnerTestBody struct {
 	io.ReadCloser
-	closes     *atomic.Int32
-	closeErr   error
-	afterClose func()
+	closes         *atomic.Int32
+	closeErr       error
+	afterClose     func()
+	readErrorAfter int
+	bytesRead      int
+}
+
+// Preserve a simultaneous byte-limit crossing and physical read failure.
+func (self *rpcReadOwnerTestBody) Read(buffer []byte) (int, error) {
+	n, err := self.ReadCloser.Read(buffer)
+	self.bytesRead += n
+	if self.readErrorAfter > 0 && self.bytesRead >= self.readErrorAfter {
+		err = errors.Join(err, io.ErrUnexpectedEOF)
+	}
+	return n, err
 }
 
 // Count socket-body ownership, then expose the selected late boundary.
@@ -36,6 +48,44 @@ func (self *rpcReadOwnerTestBody) Close() error {
 		self.afterClose()
 	}
 	return errors.Join(err, self.closeErr)
+}
+
+// A physical read failure cannot erase an already observed byte-bound breach.
+func TestRpcReadOwnerHttpOverflowRetainsSimultaneousReadCause(t *testing.T) {
+	var calls, closes atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = io.Copy(io.Discard, request.Body)
+		if calls.Add(1) == 1 {
+			_, _ = io.WriteString(writer, strings.Repeat(" ", 65))
+		} else {
+			_, _ = io.WriteString(writer, `{"jsonrpc":"2.0","id":1,"result":"synthetic-value"}`)
+		}
+	}))
+	defer server.Close()
+	client, err := newRpcClient(server.URL, 300*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := client.httpClient.Transport.(*http.Transport)
+	defer transport.CloseIdleConnections()
+	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		response, err := transport.RoundTrip(request)
+		if err == nil {
+			body := &rpcReadOwnerTestBody{ReadCloser: response.Body, closes: &closes}
+			if calls.Load() == 1 {
+				body.readErrorAfter = 65
+			}
+			response.Body = body
+		}
+		return response, err
+	})
+	waits := 0
+	client.retryWait = func(ctx context.Context, _ time.Duration) error { waits++; return ctx.Err() }
+	var observed string
+	err = client.callBoundedRead(t.Context(), "system_chain", []any{}, &observed, false, 64)
+	if !errors.Is(err, errRpcIntegrity) || !errors.Is(err, io.ErrUnexpectedEOF) || observed != "" || calls.Load() != 1 || closes.Load() != 1 || waits != 0 {
+		t.Fatal("physical error erased observed overflow", observed, calls.Load(), closes.Load(), waits, err)
+	}
 }
 
 // A transport-only close failure discards the completed value and repeats the

@@ -24,14 +24,73 @@ import (
 // Wrap a real socket response while counting its actual close boundary.
 type minerReadOwnerTestBody struct {
 	io.ReadCloser
-	closes *atomic.Int32
+	closes   *atomic.Int32
+	closeErr error
 }
 
 // No later attempt may start while the preceding body is still owned.
 func (self *minerReadOwnerTestBody) Close() error {
 	err := self.ReadCloser.Close()
 	self.closes.Add(1)
-	return err
+	return errors.Join(err, self.closeErr)
+}
+
+// EOF during actual body close has the same physical origin as an interrupted
+// body read. A local-file or mixed hard cause still prohibits another request.
+func TestEthRpcReadHttpRetriesPhysicalCloseAndKeepsHardCauses(t *testing.T) {
+	hard := errors.New("synthetic response integrity failure")
+	for _, test := range []struct {
+		cause    error
+		retry    bool
+		response string
+	}{
+		{cause: io.EOF, retry: true},
+		{cause: io.ErrUnexpectedEOF, retry: true},
+		{cause: errors.Join(io.ErrUnexpectedEOF, hard)},
+		{cause: &os.PathError{Op: "read", Path: "synthetic-response", Err: io.ErrUnexpectedEOF}},
+		{cause: errors.Join(io.EOF, context.Canceled)},
+		{cause: io.ErrUnexpectedEOF, response: `{"jsonrpc":"2.0","id":99,"result":"0x1234"}`},
+		{cause: io.ErrUnexpectedEOF, response: `{"jsonrpc":"2.0","id":1,"result":123}`},
+		{cause: io.ErrUnexpectedEOF, response: `{"jsonrpc":"2.0","id":1,"result":"not-hex"}`},
+		{cause: io.ErrUnexpectedEOF, response: `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"synthetic refusal"}}`},
+		{cause: io.ErrUnexpectedEOF, response: `{"jsonrpc":"2.0",`},
+	} {
+		var calls, closes atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			calls.Add(1)
+			_, _ = io.Copy(io.Discard, request.Body)
+			response := test.response
+			if response == "" {
+				response = `{"jsonrpc":"2.0","id":1,"result":"0x1234"}`
+			}
+			_, _ = io.WriteString(writer, response)
+		}))
+		transport := &http.Transport{Proxy: nil}
+		client := &http.Client{Transport: ethRpcTestTransport(func(request *http.Request) (*http.Response, error) {
+			response, err := transport.RoundTrip(request)
+			if err == nil {
+				var closeErr error
+				if calls.Load() == 1 {
+					closeErr = test.cause
+				}
+				response.Body = &minerReadOwnerTestBody{ReadCloser: response.Body, closes: &closes, closeErr: closeErr}
+			}
+			return response, err
+		})}
+		waits := 0
+		value, err := ethRpcHexResultWithRetry(t.Context(), client, server.URL, "eth_call", []any{"synthetic-pinned-call"}, ethRpcRetryHooks{wait: func(ctx context.Context, _ time.Duration) error {
+			waits++
+			if closes.Load() != calls.Load() {
+				t.Error("physical close had not completed before retry")
+			}
+			return ctx.Err()
+		}})
+		transport.CloseIdleConnections()
+		server.Close()
+		if test.retry && (err != nil || value != "0x1234" || calls.Load() != 2 || waits != 1) || !test.retry && (err == nil || !errors.Is(err, test.cause) || value != "" || calls.Load() != 1 || waits != 0) || closes.Load() != calls.Load() {
+			t.Fatalf("physical close changed read authority: cause=%T retry=%t value=%q calls=%d closes=%d waits=%d err=%v", test.cause, test.retry, value, calls.Load(), closes.Load(), waits, err)
+		}
+	}
 }
 
 // A 250-second outage needs more than the former 64 attempts. The original
