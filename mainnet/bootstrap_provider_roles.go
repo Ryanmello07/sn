@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/urfoundation/sn/miner"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/validator"
 )
@@ -25,44 +26,48 @@ const bootstrapProviderRoleSchema = "urnetwork-mainnet-provider-role-config-v1"
 // Host inventory supplies an explicit operator selection and retained provider
 // state path. It supplies no domain override or new client registration grant.
 type bootstrapProviderRoleRequest struct {
-	Schema          string                      `json:"schema"`
-	PreparationHash string                      `json:"preparation_hash"`
-	Providers       []bootstrapProviderRoleHost `json:"providers"`
+	Schema                  string                      `json:"schema"`
+	PreparationHash         string                      `json:"preparation_hash"`
+	Providers               []bootstrapProviderRoleHost `json:"providers"`
+	RequireWholeWorkCapture bool                        `json:"require_whole_work_capture,omitempty"`
 }
 
 // Route and identity selection are independent. Both routes must match the
 // selected operator in every original signed validator declaration.
 type bootstrapProviderRoleHost struct {
-	Id             string `json:"id"`
-	NoId           uint64 `json:"no_id"`
-	ApiUrl         string `json:"api_url"`
-	ConnectUrl     string `json:"connect_url"`
-	StateDirectory string `json:"state_directory"`
+	Id                 string             `json:"id"`
+	NoId               uint64             `json:"no_id"`
+	ApiUrl             string             `json:"api_url"`
+	ConnectUrl         string             `json:"connect_url"`
+	StateDirectory     string             `json:"state_directory"`
+	WorkCaptureProfile *planFileReference `json:"whole_work_capture_profile,omitempty"`
 }
 
 // Arguments are passed as a vector, never interpreted as shell code. The file
 // is directly consumed by the existing provide/auth-provide domain option.
 type bootstrapProviderRoleLaunch struct {
-	Host             bootstrapProviderRoleHost       `json:"host"`
-	Domain           protocol.ClientKeyHistoryDomain `json:"domain"`
-	DomainHash       string                          `json:"domain_hash"`
-	DomainFile       planFileReference               `json:"domain_file"`
-	Arguments        []string                        `json:"arguments"`
-	Environment      map[string]string               `json:"environment"`
-	EnrollmentDomain protocol.ClientKeyHistoryDomain `json:"client_key_enrollment_domain"`
+	Host                       bootstrapProviderRoleHost       `json:"host"`
+	Domain                     protocol.ClientKeyHistoryDomain `json:"domain"`
+	DomainHash                 string                          `json:"domain_hash"`
+	DomainFile                 planFileReference               `json:"domain_file"`
+	Arguments                  []string                        `json:"arguments"`
+	Environment                map[string]string               `json:"environment"`
+	EnrollmentDomain           protocol.ClientKeyHistoryDomain `json:"client_key_enrollment_domain"`
+	WholeWorkCaptureConfigured bool                            `json:"whole_work_capture_configured"`
 }
 
 // These declarations do not prove installed chain state, registration, full
 // work coverage or financial conformance. Existing role activation stays separate.
 type bootstrapProviderRoleConfig struct {
-	Schema               string                        `json:"schema"`
-	PreparationHash      string                        `json:"preparation_hash"`
-	ContractRolePlanHash string                        `json:"contract_role_plan_hash"`
-	Request              planFileReference             `json:"request"`
-	ProviderDeclarations []bootstrapProviderRoleLaunch `json:"provider_declarations"`
-	ActivationReady      bool                          `json:"activation_ready"`
-	NetworkEffects       bool                          `json:"network_effects"`
-	ContentHash          string                        `json:"content_hash"`
+	Schema                  string                        `json:"schema"`
+	PreparationHash         string                        `json:"preparation_hash"`
+	ContractRolePlanHash    string                        `json:"contract_role_plan_hash"`
+	Request                 planFileReference             `json:"request"`
+	ProviderDeclarations    []bootstrapProviderRoleLaunch `json:"provider_declarations"`
+	RequireWholeWorkCapture bool                          `json:"require_whole_work_capture,omitempty"`
+	ActivationReady         bool                          `json:"activation_ready"`
+	NetworkEffects          bool                          `json:"network_effects"`
+	ContentHash             string                        `json:"content_hash"`
 }
 
 // Every original input is reread and content checked before any output file is
@@ -94,6 +99,9 @@ func loadBootstrapProviderRoleConfig(ctx context.Context, configPath, requestPat
 	}
 	for _, host := range request.Providers {
 		reserved = append(reserved, host.StateDirectory)
+		if host.WorkCaptureProfile != nil {
+			reserved = append(reserved, host.WorkCaptureProfile.Path)
+		}
 	}
 	for _, path := range reserved {
 		if path == outputDirectory || strings.HasPrefix(path, outputDirectory+string(filepath.Separator)) || strings.HasPrefix(outputDirectory, path+string(filepath.Separator)) {
@@ -127,6 +135,8 @@ func loadBootstrapProviderRoleConfig(ctx context.Context, configPath, requestPat
 		}
 	}
 	ids, states := map[string]bool{}, map[string]bool{}
+	requestKeys := map[string][32]byte{}
+	outboxes := map[string]bool{}
 	for _, host := range request.Providers {
 		if err := ctx.Err(); err != nil {
 			return result, err
@@ -154,13 +164,47 @@ func loadBootstrapProviderRoleConfig(ctx context.Context, configPath, requestPat
 		}
 		content := sha256.Sum256(encoded)
 		path := filepath.Join(outputDirectory, host.Id+".close-domain.json")
+		arguments := []string{"provide", "--api_url=" + op.ApiUrl, "--connect_url=" + op.ConnectUrl, "--close-report-domain=" + path}
+		captureConfigured := false
+		if host.WorkCaptureProfile == nil {
+			if request.RequireWholeWorkCapture {
+				return result, errors.New("complete provider launch requires every independently reviewed whole-work capture profile")
+			}
+		} else {
+			// This exact external reference is new request authority. No old
+			// bootstrap approval or artifact signer selects its public key.
+			profile, err := miner.ReadProviderWorkCaptureProfile(ctx, host.WorkCaptureProfile.Path, host.WorkCaptureProfile.Sha256, true)
+			if err != nil {
+				return result, fmt.Errorf("provider launch whole-work original profile: %w", err)
+			}
+			if profile.ApiUrl != op.ApiUrl || len(profile.Providers) != 1 || profile.Providers[0].Slot != "direct" || profile.Providers[0].Domain != domain {
+				return result, errors.New("provider launch whole-work profile differs from original operator, domain or direct role")
+			}
+			if prior, exists := requestKeys[op.ApiUrl]; exists && prior != profile.RequestPublicKey {
+				return result, errors.New("provider launch whole-work request authority differs across the same operator origin")
+			}
+			requestKeys[op.ApiUrl] = profile.RequestPublicKey
+			outbox := profile.Providers[0].OutboxDirectory
+			if outbox == outputDirectory || strings.HasPrefix(outbox, outputDirectory+string(filepath.Separator)) || strings.HasPrefix(outputDirectory, outbox+string(filepath.Separator)) {
+				return result, errors.New("provider launch whole-work outbox overlaps generated public files")
+			}
+			for prior := range outboxes {
+				if prior == outbox || strings.HasPrefix(prior, outbox+string(filepath.Separator)) || strings.HasPrefix(outbox, prior+string(filepath.Separator)) {
+					return result, errors.New("provider launch whole-work outboxes overlap across hosts")
+				}
+			}
+			outboxes[outbox] = true
+			arguments = append(arguments, "--whole-work-capture="+host.WorkCaptureProfile.Path, "--whole-work-capture-sha256="+host.WorkCaptureProfile.Sha256, "--require-whole-work-capture")
+			captureConfigured = true
+		}
 		result.ProviderDeclarations = append(result.ProviderDeclarations, bootstrapProviderRoleLaunch{Host: host, Domain: domain,
 			DomainHash: "sha256:" + hex.EncodeToString(digest[:]), DomainFile: planFileReference{Path: path, Sha256: "sha256:" + hex.EncodeToString(content[:])},
-			Arguments:   []string{"provide", "--api_url=" + op.ApiUrl, "--connect_url=" + op.ConnectUrl, "--close-report-domain=" + path},
+			Arguments: arguments, WholeWorkCaptureConfigured: captureConfigured,
 			Environment: map[string]string{"URNETWORK_STATE_DIR": host.StateDirectory}, EnrollmentDomain: domain})
 	}
 	result.Schema, result.PreparationHash, result.ContractRolePlanHash = bootstrapProviderRoleSchema, preparation.Plan.ContentHash, roles.ContentHash
 	result.Request = planFileReference{Path: requestPath, Sha256: requestHash}
+	result.RequireWholeWorkCapture = request.RequireWholeWorkCapture
 	result.ContentHash = rootObjectHash(result)
 	return result, nil
 }

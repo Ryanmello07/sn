@@ -74,6 +74,8 @@ Usage:
     	[-v...]
     provider provide [--port=<port>]
 		[--close-report-domain=<path>]
+		[--whole-work-capture=<path> --whole-work-capture-sha256=<hash>]
+		[--require-whole-work-capture]
 		[--allow-client-registration | --adopt-legacy-provider-key]
         [--api_url=<api_url>]
         [--connect_url=<connect_url>]
@@ -83,6 +85,8 @@ Usage:
         [-v...]
     provider auth-provide ([<auth_code>] | --user_auth=<user_auth> [--password=<password>]) [-f]
 		[--close-report-domain=<path>]
+		[--whole-work-capture=<path> --whole-work-capture-sha256=<hash>]
+		[--require-whole-work-capture]
 		[--allow-client-registration | --adopt-legacy-provider-key]
     	[--port=<port>]
         [--api_url=<api_url>]
@@ -139,6 +143,9 @@ Usage:
 
 Options:
 	--close-report-domain=<path>       Optional original client-key policy domain for signed close evidence; absence or refusal leaves evidence unknown without stopping providing.
+	--whole-work-capture=<path>        Exact public launch profile for independently signed whole-work requests and retained private outboxes.
+	--whole-work-capture-sha256=<hash>  Independently reviewed sha256: digest of that original launch profile.
+	--require-whole-work-capture       Refuse startup without the complete original capture profile; never allocate replacement client keys.
     --durable-volumes=<path>          Exact external storage declaration; fleet writes require the owner-local schema.
     --durable-volumes-sha256=<hash>   Reviewed sha256: digest; claim daemons require the daemon-volume schema.
     -h --help                        Show this help and exit.
@@ -227,6 +234,21 @@ func Run(args []string) {
 
 	if err != nil {
 		panic(err)
+	}
+	providing, _ := opts.Bool("provide")
+	authProviding, _ := opts.Bool("auth-provide")
+	if providing || authProviding {
+		path, _ := opts.String("--whole-work-capture")
+		digest, _ := opts.String("--whole-work-capture-sha256")
+		required, _ := opts.Bool("--require-whole-work-capture")
+		profile, err := ReadProviderWorkCaptureProfile(context.Background(), path, digest, required)
+		allowRegistration, _ := opts.Bool("--allow-client-registration")
+		if err != nil || profile != nil && allowRegistration {
+			// Complete-profile refusal precedes auth-provide authentication and
+			// the optional startup wallet write as well as provider allocation.
+			fmt.Fprintln(os.Stderr, "whole-work launch requires its reviewed profile, original provider identity and private outbox; no provider started")
+			os.Exit(1)
+		}
 	}
 
 	if proxy, _ := opts.Bool("proxy"); proxy {
@@ -468,9 +490,16 @@ func provide(opts docopt.Opts) {
 	}
 	settings := providerRunSettings{apiUrl: apiUrl, connectUrl: connectUrl, port: port, proxySettings: allProxySettings, memoryPlan: memoryPlan, testEgressDialer: testEgressDialer, allowClientRegistration: allowClientRegistration, adoptLegacyProviderKey: adoptLegacyProviderKey}
 	settings.closeReportDomainHash = domainHash
-	// Preserve the legacy zero exit on daemon completion. Unlike os.Exit, a
-	// normal return releases the signal owner and all owned daemon workers.
-	_ = settings.run(ctx, os.Stdout)
+	settings.workCapturePath, _ = opts.String("--whole-work-capture")
+	settings.workCaptureSha256, _ = opts.String("--whole-work-capture-sha256")
+	settings.requireWorkCapture, _ = opts.Bool("--require-whole-work-capture")
+	// A complete-profile launch must report refusal to its supervisor. The
+	// owned run has joined every child before this process-level exit decision.
+	if err := settings.run(ctx, os.Stdout); err != nil && ctx.Err() == nil && (settings.requireWorkCapture || settings.workCapturePath != "" || settings.workCaptureSha256 != "") {
+		stopSignals()
+		fmt.Fprintln(os.Stderr, "whole-work provider launch refused; restore original profile, identity and outbox custody")
+		os.Exit(1)
+	}
 }
 
 // Each invocation owns its output, status server and provider children. The
@@ -499,6 +528,26 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 	providers := self.proxySettings
 	if len(providers) == 0 {
 		providers = []*connect.ProxySettings{nil}
+	}
+	workProfile, err := ReadProviderWorkCaptureProfile(ctx, self.workCapturePath, self.workCaptureSha256, self.requireWorkCapture)
+	if err != nil {
+		output.observe(providerWorkCaptureRequired, 0, false, err, 0, nil)
+		return err
+	}
+	if workProfile != nil {
+		slots := make([]string, 0, len(providers))
+		for _, proxy := range providers {
+			slots = append(slots, providerRegistrationSlot(proxy))
+		}
+		if err := workProfile.validateRole(self.apiUrl, slots, self.closeReportDomainHash); err != nil {
+			output.observe(providerWorkCaptureRequired, 0, false, err, 0, nil)
+			return err
+		}
+		if self.allowClientRegistration {
+			err := errors.New("whole-work launch requires retained provider identity and cannot allocate registration")
+			output.observe(providerWorkCaptureRequired, 0, false, err, 0, nil)
+			return err
+		}
 	}
 	progressMembers := make([]providerProgressConfigMember, 0, len(providers))
 	for _, proxy := range providers {
@@ -573,7 +622,7 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		}
 
 		seed := keyOwner.Seed()
-		byClientJwt, _, err := authenticateProvider(proxyCtx, api, networkJwtPath, clientJwtPath, keyOwner, providerRegistrationSlot(proxySettings), self.allowClientRegistration, output, index)
+		byClientJwt, clientId, err := authenticateProvider(proxyCtx, api, networkJwtPath, clientJwtPath, keyOwner, providerRegistrationSlot(proxySettings), self.allowClientRegistration, output, index)
 		if err != nil {
 			if proxyCtx.Err() == nil {
 				output.observe(providerStartupRecoveryRequired, index, true, err, 0, nil)
@@ -606,18 +655,21 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		settings.KeyMaterial.SetExtenderKeySeed(extenderKeySeed)
 		applyProviderMemoryTarget(settings, self.memoryPlan.DeviceMemoryTargetByteCount)
 		settings.ProviderDialContextSettings = self.testEgressDialer
-		instanceId := sdk.NewId()
-		device, err := sdk.NewDeviceLocal(
+		device, err := newProviderDeviceLocal(
 			networkSpace,
+			clientStrategySettings,
 			byClientJwt,
 			fmt.Sprintf("provider %s %s", runtime.GOOS, RequireVersion()),
-			"",
-			RequireVersion(),
-			instanceId,
 			settings,
+			workProfile,
+			providerRegistrationSlot(proxySettings),
+			clientId,
 		)
 		if err != nil {
-			panic(err)
+			if workProfile != nil {
+				output.observe(providerWorkCaptureRequired, index, true, err, 0, nil)
+			}
+			return err
 		}
 		defer func() {
 			returnErr = errors.Join(returnErr, device.CloseAndWait(context.Background()))
@@ -666,6 +718,11 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 					}
 				}
 				if result != nil {
+					if workProfile != nil {
+						// A complete launch cannot leave its other declared members
+						// running after one actual owner failed admission.
+						cancel()
+					}
 					output.observe(providerWorkerFailed, uint64(index), true, result, 0, nil)
 				}
 				results <- result
