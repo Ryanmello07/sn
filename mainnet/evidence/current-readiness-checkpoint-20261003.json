@@ -267,7 +267,11 @@
     "funding-public-cache-custody-source-finding-20261004.json": "533bac17c304ef31704d4d920ae237fcfe7b096713fdb2df237aecda91d0c28d",
     "funding72-selected-mathematics-source-review-20261004.json": "502f4f54db1eef2c10b21eeb78e17166bbd2cb4c4dc548b52f0260aa4eaf9b58",
     "conservatione51-two-mainnet-builds-independent-readback-20261004.json": "84362617b339043342b782833350910440f44af6c4bd240317d0b3c01fb71d69",
-    "restore-ade5-normal129-original-timeout-readback-20261004.json": "178427be06944f1aa1af939bff40008c217011f2ba154a0f8d0291d499232b01"
+    "restore-ade5-normal129-original-timeout-readback-20261004.json": "178427be06944f1aa1af939bff40008c217011f2ba154a0f8d0291d499232b01",
+    "fundinge0-custody-source-root-review-20261004.json": "0b7a2e2d2f45134cb25fd5a4f3fb947f251b6f913c2ee73eecd5dac3bdd4bd8e",
+    "validatorb6-normal-race14-vet-independent-readback-20261004.json": "e3355d4db83d939268fa3017af2ae6591420af27550c9d686488f9aa8c732a18",
+    "entitlemente51-partial-abi-tuple-fixture-finding-20261004.json": "0ac332c7ecd7c7220612fc7e8994afc2caea57b30e0453ac47e6eaf6432755c2",
+    "coordinator-tuple-ab48-source-root-review-20261004.json": "ffab51360735d44fc33da289a94123bc0209201e7e0c2855234dba31c420cd70"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
