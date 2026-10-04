@@ -147,7 +147,8 @@
     "core-preflight-and-control-rebase-20261004.json": "27925c91b26042e31ecf08c30ab67c43f9879f51a514cf775f843420cf17d41d",
     "parallel-critical-path-readback-20261004.json": "696a6f868737d51a8d818e1785170d33b2ecdeab06e57ae3f5e8653938b3c661",
     "core-ac65-main-publication-20261004.json": "5638fb788f75d9ae0d6c76493785d34ce7b44edcd658e73febab3e4fc487862c",
-    "native-profile-final-root-review-20261004.json": "64378bc68936bfc50d680790bc92a0d850edeacf1c4d12db34ca468fdcfddb05"
+    "native-profile-final-root-review-20261004.json": "64378bc68936bfc50d680790bc92a0d850edeacf1c4d12db34ca468fdcfddb05",
+    "model405-body-teardown-gap-root-review-20261004.json": "0d50a0ff305747636d5f719483c56be497764cdcced883193d9aea07de346fee"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -248,9 +249,9 @@
     },
     {
       "closed": false,
-      "evidence": "parallel-critical-path-readback-20261004.json",
+      "evidence": "model405-body-teardown-gap-root-review-20261004.json",
       "requirement": "PH-16",
-      "status": "Server5f full model retains1,507 passes/17 failures/11 skips. Corrected c2b normal/race each finish43 passes/two companion-fixture failures; worker roots, vets and six controls qualify. Exact anchor correction405 is executing. Complete corrected model and skipped-input follow-ups remain."
+      "status": "Server5f full model retains1,507 passes/17 failures/11 skips. Corrected405 targeted scope passes eleven roots per normal/race mode, vet and four intended fixture-control failures. Original target terminal retains one Redis teardown telemetry gap; successful bodies are reusable under a scoped disposition. Complete corrected model and skipped-input follow-ups remain."
     },
     {
       "closed": false,
