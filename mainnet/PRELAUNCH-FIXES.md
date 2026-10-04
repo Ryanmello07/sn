@@ -22,6 +22,8 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+The [actual original-export libtest compile](evidence/funding-ab48-original-export-compile-root-finding-20261004.json) fails with five unresolved `codec` namespace references across three fixture source files. No exporter body ran. Repair the imports in a separately frozen successor, retain the original compiler failure, and rerun the unchanged four-export/five-control scope; this is a test-source compile defect, not an RPC or production-runtime failure. Independent component qualification continues.
+
 The [original funding exporter runner review](evidence/funding-ab48-original-export-operational-root-adoption-20261004.json) admits the exact four positive exporter roots after fresh resource and full crate/toolchain/helper checks. Reuse warm dependencies while freshly compiling the package libtest; retain each original output and independent failure, protected image custody and joined descendants. Five causal controls remain separate. This admission supplies no passing execution or measured populated-workload sizing.
 
 The [independently counted Server identity scope](evidence/server5b-selected-model-two-mode-root-readback-20261004.json) passes all 32 selected roots in both normal and race modes with zero failures or skips. Protected images retain exact hashes and inode custody; the fixture exits and joins cleanly, with complete sampled PostgreSQL/Redis coverage. Model vet and three causal-control groups remain before component qualification. Preserve the original workspace refusal beside this successful recovery.
