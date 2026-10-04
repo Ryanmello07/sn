@@ -234,7 +234,10 @@
     "native-adoptionade5-rust-controls-operational-root-review-20261004.json": "07ca5fa4f8ee709bb228884e27dd52c312aa30dbd885e481651f87670b09483d",
     "native-adoptionade5-rust-controls-terminal-root-review-20261004.json": "61db7917275034c9b79a2e9046ef5426da5204f8537bb22de5c100c4f7e4cf18",
     "native-vault-captured039-partial-source-root-review-20261004.json": "3b633ec0b2733543d9546ffad58703de312617f56c1e621d5a8df517ef45f321",
-    "native-adoptionade5-go-normal-compile-root-review-20261004.json": "0cbd2b02086db1f868560bece8e15fe67d5eff7fa99b071372b0d31cdd3a42d0"
+    "native-adoptionade5-go-normal-compile-root-review-20261004.json": "0cbd2b02086db1f868560bece8e15fe67d5eff7fa99b071372b0d31cdd3a42d0",
+    "native-adoptionade5-environment-ancestry-root-finding-20261004.json": "91214605331e55c29ec5ffc9c029847bc257d9e51eaf72d90631a9c1c04aba80",
+    "native-adoptionade5-go-body-operational-root-review-20261004.json": "28f22bbe8c586e8d535635a94cc01cc8b25b28075bd97465ef542363613ad681",
+    "native-adoptionade5-original-terminal-root-readback-20261004.json": "040b9e1c7b6f47b930a580e01b747d54e2c5fadb547fa98c38ca59cc470d3e9b"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
