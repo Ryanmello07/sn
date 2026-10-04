@@ -177,7 +177,10 @@
     "second-short-go-body-resource-root-review-20261004.json": "ba3af5f27c839ee129bda99dfd6dd9ee08f1cc9078609957512b9c7eb1b03166",
     "server1709-complete-model-body-root-review-20261004.json": "6d50c84803b4586dda4c7130fee293054ced5a3c72135c107feb9044c3f5ee72",
     "runtime-observation6fa-six-compiles-root-review-20261004.json": "728a2f4687b2a20f766b8e1eefea683ae4abfab9ab2bffadd7b07ae0afe28198",
-    "runtime-observation6fa-validator-normal-root-review-20261004.json": "60a8eda5ee5ef8624a012768c0aa323b2413f20b7fbf608dd0137e14599864ef"
+    "runtime-observation6fa-validator-normal-root-review-20261004.json": "60a8eda5ee5ef8624a012768c0aa323b2413f20b7fbf608dd0137e14599864ef",
+    "economic-principal-dc1-source-root-review-20261004.json": "0c81af2923305f312bece288e63b810a7a442d75a08ba4eeed3957d267ed75a0",
+    "server1709-bounded-causes-positive-root-review-20261004.json": "da70e298978360e6d51511f94fb27a7e7c92ec25bd6648961409a4584a7d6990",
+    "principal-dc1-rust-resource-root-adoption-20261004.json": "4460f220372c8a7368a0869645b4892ed4dc642fc3f7524c5e0056dea1e66463"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -298,7 +301,7 @@
       "closed": false,
       "evidence": "fee-revision3e7-source-root-review-20261004.json",
       "requirement": "PH-19",
-      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal48PASS1FAIL; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Current composition, opening-principal/execution-effects/full-denominator/entitlement witnesses and unattended operational admission remain."
+      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal48PASS1FAIL; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with conditional Rust resource admission; behavioral qualification remains. Execution effects, full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain."
     },
     {
       "closed": false,
