@@ -289,7 +289,9 @@
     "server5b-selected-model-two-mode-root-readback-20261004.json": "cb0e2931c40ec829edb0e6ce58bc372dfe4388fbbbef959b1d9e5d5617e890c6",
     "close-report-identity-tests-controls-root-review-20261004.json": "ff630b08819bed71d4a8ad17efaedfc8bc35984c97e7492c1304e1ff365088a6",
     "funding-ab48-original-export-operational-root-adoption-20261004.json": "d3c39c3001794480fae38a91f199382420a5f225cf4de58986260f898264c1cf",
-    "funding-ab48-original-export-compile-root-finding-20261004.json": "61b7e8143e5040d1aa9bf68e360bc51a7ed4ab29d2ec44d0e7b19a24994f2f35"
+    "funding-ab48-original-export-compile-root-finding-20261004.json": "61b7e8143e5040d1aa9bf68e360bc51a7ed4ab29d2ec44d0e7b19a24994f2f35",
+    "validator-current-e9-image-runner-root-adoption-20261004.json": "2683c9978da83bc02194c5dc19afa7ec7ef118595aff439423b066297ede4d6f",
+    "funding-original-export-codec-successor-source-review-20261004.json": "e22cef748621f1cd3cace86fb63e72bfa0c9fc5ac880426b9e53c234cccb47b1"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
