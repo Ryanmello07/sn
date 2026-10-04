@@ -79,7 +79,7 @@ func readMonitorTestGauges(t *testing.T, path string) map[string]float64 {
 		}
 		values[fields[0]] = value
 	}
-	if len(values) != 11 || len(raw) > 8*1024 || !bytes.HasSuffix(raw, []byte("\n")) {
+	if len(values) != 14 || len(raw) > 8*1024 || !bytes.HasSuffix(raw, []byte("\n")) {
 		t.Fatalf("unexpected publication shape: %d gauges, %d bytes", len(values), len(raw))
 	}
 	return values
@@ -112,6 +112,14 @@ func TestMonitorMetricsCommandRetainsSuccessThroughOutageAndRecovery(t *testing.
 	events := 0
 	stdout := &monitorMetricsTestWriter{onEvent: func(event monitorEvent) {
 		gauges := readMonitorTestGauges(t, path)
+		for _, name := range []string{"sn_mainnet_monitor_rpc_comparison_status", "sn_mainnet_monitor_independent_rpc", "sn_mainnet_monitor_rpc_comparison_sample_timestamp_seconds"} {
+			if value, present := gauges[name]; !present || value != 0 {
+				t.Fatalf("absent comparison authority gained a metric: %s=%v present=%v", name, value, present)
+			}
+		}
+		if event.RpcComparison == nil || event.RpcComparison.Status != "input-unknown" || event.RpcComparison.IndependentRpc || event.RpcComparison.ObservedAt != "" {
+			t.Fatalf("absent comparison authority became a completed comparison: %+v", event.RpcComparison)
+		}
 		if gauges["sn_mainnet_monitor_sample_timestamp_seconds"] != float64(sampleTime.Unix()) {
 			t.Fatal("sample metric did not precede its event")
 		}
