@@ -61,9 +61,11 @@ func planStorageNativeApprovalRestore(ctx context.Context, name string, owner du
 	if err := decodePlanJson(owner.Inputs, &scope); err != nil {
 		return empty, err
 	}
-	if _, err := storageNativeProducerAuthorities(ctx, scope.Native); err != nil {
+	expanded, _, err := loadStorageNativeProducerScope(ctx, scope.Native)
+	if err != nil {
 		return empty, err
 	}
+	scope.Native = expanded
 	members := storageNativeApprovalMembers(scope.Native, report.StateRoot.Path)
 	if len(members) == 0 {
 		return empty, errors.New("native approval owner has no original signed member")
@@ -107,7 +109,6 @@ func planStorageNativeApprovalRestore(ctx context.Context, name string, owner du
 		return empty, errors.New("native approval restore omitted original member or ancestor")
 	}
 	sort.Slice(result.Files, func(i, j int) bool { return result.Files[i].Path < result.Files[j].Path })
-	var err error
 	result.Census, err = json.Marshal(struct {
 		Schema    string `json:"schema"`
 		Scope     string `json:"scope_hash"`

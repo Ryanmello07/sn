@@ -32,6 +32,7 @@ const storageNativeProducerSchema = "urnetwork-native-execution-artifact-restore
 // They are verified with the original policy key by the runtime's same loader.
 // Checkpoint is an independent original-byte pin, not a newly inferred cursor.
 type storageNativeProducerScope struct {
+	FeePolicyHash     string                              `json:"original_fee_policy_hash,omitempty"`
 	ApprovalSources   []storageNativeApprovalSource       `json:"original_signed_approval_sources,omitempty"`
 	CheckpointStorage *economicConservationStorageProfile `json:"original_checkpoint_storage,omitempty"`
 	Schema            string                              `json:"schema"`
@@ -61,7 +62,9 @@ type storageNativeProducerCensus struct {
 	Bytes         uint64 `json:"bytes"`
 }
 
-func storageNativeProducerAuthorities(ctx context.Context, scope storageNativeProducerScope) ([]nativeProducerReviewedAuthority, error) {
+// A fully expanded policy reaches the unchanged semantic authority reader.
+// Compact fee descriptors are expanded and authenticated by the outer loader.
+func readStorageNativeProducerAuthorities(ctx context.Context, scope storageNativeProducerScope) ([]nativeProducerReviewedAuthority, error) {
 	if ctx == nil || scope.Schema != storageNativeProducerSchema || scope.Policy.Execution == nil || scope.Policy.Execution.Producer == nil {
 		return nil, errors.New("native artifact restore requires its original producer policy")
 	}
@@ -84,29 +87,36 @@ func storageNativeProducerAuthorities(ctx context.Context, scope storageNativePr
 		if index >= len(references) || references[index] != reference {
 			return nil, errors.New("native artifact restore changed approval read order")
 		}
-		var raw []byte
-		if scope.ApprovalSources != nil {
-			source := scope.ApprovalSources[index]
-			if source.Bytes == 0 || source.Bytes > uint64(nativeProducerAuthorityMaximum(scope.Policy.Execution.FeeCensus)) || source.Reference.Sha256 != reference.Sha256 || !bootstrapRootAbsolutePath(source.Reference.Path) {
-				return nil, errors.New("native restore approval source differs from its exact original reference")
-			}
-			var err error
-			raw, err = nativeProducerReadApprovalFor(ctx, source.Reference, scope.Policy.Execution.FeeCensus)
-			if err != nil {
-				return nil, err
-			}
-			if uint64(len(raw)) != source.Bytes {
-				return nil, errors.New("native restore approval source changed original byte count")
-			}
-		} else {
-			raw = scope.Approvals[index]
-		}
+		raw, err := readStorageNativeApproval(ctx, scope, index, reference)
 		index++
-		if len(raw) == 0 || len(raw) > nativeProducerAuthorityMaximum(scope.Policy.Execution.FeeCensus) || monitorReadDigest(raw) != reference.Sha256 {
-			return nil, errors.New("native artifact restore changed original signed approval bytes")
-		}
-		return raw, nil
+		return raw, err
 	})
+}
+
+// Both projection expansion and full signature validation read the same exact
+// bounded source. A later read rechecks custody instead of caching stale bytes.
+func readStorageNativeApproval(ctx context.Context, scope storageNativeProducerScope, index int, reference planFileReference) ([]byte, error) {
+	var raw []byte
+	if scope.ApprovalSources != nil {
+		source := scope.ApprovalSources[index]
+		if source.Bytes == 0 || source.Bytes > uint64(nativeProducerAuthorityMaximum(scope.Policy.Execution.FeeCensus)) || source.Reference.Sha256 != reference.Sha256 || !bootstrapRootAbsolutePath(source.Reference.Path) {
+			return nil, errors.New("native restore approval source differs from its exact original reference")
+		}
+		var err error
+		raw, err = nativeProducerReadApprovalFor(ctx, source.Reference, scope.Policy.Execution.FeeCensus)
+		if err != nil {
+			return nil, err
+		}
+		if uint64(len(raw)) != source.Bytes {
+			return nil, errors.New("native restore approval source changed original byte count")
+		}
+	} else {
+		raw = scope.Approvals[index]
+	}
+	if len(raw) == 0 || len(raw) > nativeProducerAuthorityMaximum(scope.Policy.Execution.FeeCensus) || monitorReadDigest(raw) != reference.Sha256 {
+		return nil, errors.New("native artifact restore changed original signed approval bytes")
+	}
+	return raw, nil
 }
 
 // Names select only the producer's existing grammar. Pending files preserve
@@ -182,7 +192,7 @@ func storageNativeProducerProfile(ctx context.Context, owner durablevolume.Prepa
 	if err := decodePlanJson(owner.Inputs, &scope); err != nil {
 		return scope, nil, "", err
 	}
-	authorities, err := storageNativeProducerAuthorities(ctx, scope)
+	scope, authorities, err := loadStorageNativeProducerScope(ctx, scope)
 	if err != nil {
 		return scope, nil, "", err
 	}

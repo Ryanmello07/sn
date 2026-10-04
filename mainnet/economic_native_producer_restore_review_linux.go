@@ -87,7 +87,11 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 		scope.SharedDirectories = append(scope.SharedDirectories, path)
 	}
 	sort.Strings(scope.SharedDirectories)
-	inputs, err := json.Marshal(scope)
+	compact, err := compactStorageNativeProducerScope(scope)
+	if err != nil {
+		return err
+	}
+	inputs, err := json.Marshal(compact)
 	if err != nil {
 		return err
 	}
@@ -134,7 +138,7 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 		if len(members) == 0 {
 			continue
 		}
-		approvalScope := storageNativeApprovalScope{Native: scope}
+		approvalScope := storageNativeApprovalScope{Native: compact}
 		shared := map[string]bool{}
 		for member := range members {
 			for parent := filepath.Dir(member); parent != "."; parent = filepath.Dir(parent) {
