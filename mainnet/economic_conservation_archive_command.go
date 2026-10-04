@@ -22,6 +22,7 @@ const economicConservationArchiveRequestSchema = "urnetwork-economic-conservatio
 const economicConservationArchivePlanSchema = "urnetwork-economic-conservation-archive-plan-v1"
 
 type economicConservationArchiveRequest struct {
+	RetireNativeFees   bool                         `json:"retire_native_fees,omitempty"`
 	Schema             string                       `json:"schema"`
 	Policy             economicConservationPolicy   `json:"original_policy"`
 	Original           monitorHistoryReference      `json:"original"`
@@ -132,7 +133,7 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 	}
 	archive := request.Original
 	archive.Path = request.ArchivePath
-	compacted, err := compactEconomicConservation(request.Policy, state, archive, request.Renewal)
+	compacted, err := compactEconomicConservationWithFeeRetirement(request.Policy, state, archive, request.Renewal, request.RetireNativeFees)
 	if err != nil {
 		return plan, nil, err
 	}

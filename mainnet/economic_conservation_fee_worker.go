@@ -45,6 +45,11 @@ func (self *economicConservationFeeWorker) start(state *economicConservationStat
 	for _, value := range state.NativeFees {
 		known[value.Evidence.RequestHash] = value.Evidence.ContentHash
 	}
+	if state.archiveView != nil {
+		for request, digest := range state.archiveView.feeRetired {
+			known[request] = digest
+		}
+	}
 	ctx, cancel := context.WithTimeout(self.ctx, self.budget)
 	self.cancel, self.done, self.active = cancel, make(chan struct{}), true
 	done := self.done
@@ -135,11 +140,7 @@ func applyEconomicConservationFeeResult(ctx context.Context, policy economicCons
 		err = errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic fee worker omitted its original request"))
 	}
 	if err == nil && result.known != "" {
-		found := false
-		for _, retained := range state.NativeFees {
-			found = found || retained.Evidence.RequestHash == rootObjectHash(result.request) && retained.Evidence.ContentHash == result.known
-		}
-		if !found {
+		if state.retainedNativeFee(rootObjectHash(result.request)) != result.known {
 			err = errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic retained fee handoff lost original evidence"))
 		}
 	} else if err == nil {

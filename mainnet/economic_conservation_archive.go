@@ -31,6 +31,8 @@ type economicConservationArchivedAmounts struct {
 }
 
 type economicConservationArchive struct {
+	FeeRetirements     []monitorHistoryReference           `json:"native_fee_retirements,omitempty"`
+	NativeFees         *economicConservationFeeSummary     `json:"native_fee_census,omitempty"`
 	Segments           []monitorHistoryReference           `json:"segments"`
 	Resources          economicConservationResources       `json:"resources"`
 	LastRenewalHash    string                              `json:"last_renewal_hash"`
@@ -78,6 +80,9 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 			return errors.New("economic component archive borrowed another owner's history")
 		}
 	}
+	if err := self.validateFeeRetirements(seen); err != nil {
+		return err
+	}
 	for _, amount := range []string{self.Amounts.Direct, self.Amounts.Tail, self.Amounts.Unrouted, self.Amounts.Collateral} {
 		if _, err := monitorEconomicInteger(amount); err != nil {
 			return err
@@ -95,23 +100,26 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
-	feeEvidence  map[string]string
-	owners       []*monitorHistorySnapshot
-	resources    economicConservationResources
-	entries      uint64
-	bytes        uint64
-	mappings     map[string]economicConservationMapping
-	lotIds       map[string]bool
-	captureKeys  map[string]string
-	claimKeys    map[string]string
-	claims       map[string]economicConservationClaim
-	entitlements map[string]economicConservationEntitlement
-	receipts     map[string]economicConservationReceipt
-	reviews      map[string]bool
+	feeEvidence     map[string]string
+	feeRetired      map[string]string
+	feeTransactions map[string]historicalFeeContextTransaction
+	feeSummary      *economicConservationFeeSummary
+	owners          []*monitorHistorySnapshot
+	resources       economicConservationResources
+	entries         uint64
+	bytes           uint64
+	mappings        map[string]economicConservationMapping
+	lotIds          map[string]bool
+	captureKeys     map[string]string
+	claimKeys       map[string]string
+	claims          map[string]economicConservationClaim
+	entitlements    map[string]economicConservationEntitlement
+	receipts        map[string]economicConservationReceipt
+	reviews         map[string]bool
 }
 
 func newEconomicConservationArchiveView(resources economicConservationResources) *economicConservationArchiveView {
-	return &economicConservationArchiveView{feeEvidence: map[string]string{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
+	return &economicConservationArchiveView{feeEvidence: map[string]string{}, feeRetired: map[string]string{}, feeTransactions: map[string]historicalFeeContextTransaction{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
 }
 
 // The encoded facts and fixed per-entry bookkeeping have separate bounds.
@@ -188,6 +196,12 @@ func economicConservationReceiptArchivable(receipt economicConservationReceipt) 
 // Component summaries refer to this combined snapshot; their earlier prefix
 // is retained by the outer complete chain rather than a second owner catalog.
 func compactEconomicConservation(policy economicConservationPolicy, original *economicConservationState, reference monitorHistoryReference, renewal *economicConservationRenewal) (*economicConservationState, error) {
+	return compactEconomicConservationWithFeeRetirement(policy, original, reference, renewal, false)
+}
+
+// Retirement is recorded for this exact snapshot. Earlier snapshots retain
+// their original compaction grammar, including fee reports deliberately hot.
+func compactEconomicConservationWithFeeRetirement(policy economicConservationPolicy, original *economicConservationState, reference monitorHistoryReference, renewal *economicConservationRenewal, retireFees bool) (*economicConservationState, error) {
 	if err := errors.Join(original.validate(policy), reference.validate()); err != nil {
 		return nil, err
 	}
@@ -201,6 +215,7 @@ func compactEconomicConservation(policy economicConservationPolicy, original *ec
 	}
 	archive := &economicConservationArchive{Resources: resources, LastRenewalHash: policy.identityHash(), Native: original.Native.Cursor, Vault: original.Vault.Cursor, PoolBoundaries: map[string]economicEmissionBoundary{}, Amounts: economicConservationArchivedAmounts{Direct: "0", Tail: "0", Unrouted: "0", Collateral: "0"}}
 	if next.Archive != nil {
+		archive.FeeRetirements, archive.NativeFees = slices.Clone(next.Archive.FeeRetirements), next.Archive.NativeFees
 		archive.Segments = slices.Clone(next.Archive.Segments)
 		archive.Counts, archive.Amounts = next.Archive.Counts, next.Archive.Amounts
 		archive.LastRenewalHash, archive.LastRenewalOrdinal = next.Archive.LastRenewalHash, next.Archive.LastRenewalOrdinal
@@ -336,6 +351,11 @@ func compactEconomicConservation(policy economicConservationPolicy, original *ec
 			archive.Counts.Receipts++
 		}
 	}
+	if retireFees && len(original.NativeFees) != 0 {
+		if err := next.retireNativeFees(policy, original, reference); err != nil {
+			return nil, err
+		}
+	}
 	next.entitlementIds, next.claimIds, next.captureKeys, next.claimKeys = nil, nil, nil, nil
 	next.ContentHash = next.hash()
 	return next, next.validate(policy)
@@ -354,6 +374,11 @@ func economicConservationRetainedIds[T any](values []T, id func(T) string) map[s
 func (self *economicConservationArchiveView) admit(original, compacted *economicConservationState) error {
 	if err := self.retainFeeEvidence(original); err != nil {
 		return err
+	}
+	if compacted.Archive.retiresFees(compacted.Archive.Segments[len(compacted.Archive.Segments)-1]) {
+		if err := self.indexRetiredNativeFees(original, compacted.Archive.NativeFees); err != nil {
+			return err
+		}
 	}
 	if original.Renewal != nil {
 		if self.reviews[original.Renewal.ReviewSha256] {
@@ -489,7 +514,7 @@ func openEconomicConservationArchive(ctx context.Context, policy economicConserv
 			return nil, errors.New("economic archive omitted or changed its complete predecessor")
 		}
 		original.archiveView = view
-		compacted, err := compactEconomicConservation(policy, &original, reference, nil)
+		compacted, err := compactEconomicConservationWithFeeRetirement(policy, &original, reference, nil, state.Archive.retiresFees(reference))
 		if err != nil {
 			return nil, err
 		}
