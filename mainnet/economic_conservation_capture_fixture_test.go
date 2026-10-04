@@ -104,6 +104,22 @@ type economicCaptureContractFixture struct {
 // come from real contract calls, then the existing fixture builds exact tries.
 func economicCaptureExecuteContract(t *testing.T, fixture *monitorEvmFixture, amount uint64, revert bool) *economicCaptureContractFixture {
 	t.Helper()
+	return economicCaptureExecuteContractSequence(t, fixture, []economicCaptureContractStep{{amount: amount, block: 11, revert: revert}})[0]
+}
+
+type economicCaptureContractStep struct {
+	amount uint64
+	block  uint64
+	revert bool
+}
+
+// Each step is a separately signed transaction through the retained contract.
+// A supplied intervening stake reflects the independently executed native body.
+func economicCaptureExecuteContractSequence(t *testing.T, fixture *monitorEvmFixture, steps []economicCaptureContractStep) []*economicCaptureContractFixture {
+	t.Helper()
+	if len(steps) < 1 || len(steps) > 2 || steps[0].block != 11 || len(steps) == 2 && steps[1].block != 11 && steps[1].block != 12 {
+		t.Fatal("invalid explicit original capture sequence")
+	}
 	key, err := crypto.HexToECDSA(strings.Repeat("18", 32))
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +151,7 @@ func economicCaptureExecuteContract(t *testing.T, fixture *monitorEvmFixture, am
 		t.Fatal("actual original vault deployment failed", err)
 	}
 	db.SetCode(coordinator, economicCaptureForwarder(address), tracing.CodeChangeUnspecified)
-	stake := &economicCapturePrecompile{kind: "stake", state: db, pool: pool, escrow: escrow, coldkey: coldkey, shortfall: revert}
+	stake := &economicCapturePrecompile{kind: "stake", state: db, pool: pool, escrow: escrow, coldkey: coldkey, shortfall: steps[0].revert}
 	environment := func(caller, target common.Address, tx common.Hash) *vm.EVM {
 		config.Origin = caller
 		env := runtime.NewEnv(&config)
@@ -184,7 +200,7 @@ func economicCaptureExecuteContract(t *testing.T, fixture *monitorEvmFixture, am
 		fixture.fixtureGetters[method] = values
 	}
 	fixture.policy.CaptureIdentity = true
-	stake.setStake(pool, new(big.Int).SetUint64(amount))
+	stake.setStake(pool, new(big.Int).SetUint64(steps[0].amount))
 	readSnapshot := func() monitorEconomicEvmSnapshot {
 		result := monitorEconomicEvmSnapshot{Counters: map[string]string{}, Pools: map[string]string{"1": "0"}, Credits: map[string]string{fixture.policy.Coldkeys[0]: "0"}}
 		for _, name := range []string{"totalCaptured", "totalPaid", "pendingFunding", "outstandingLiability", "escrowAccounted", "liveEscrowStake"} {
@@ -202,50 +218,72 @@ func economicCaptureExecuteContract(t *testing.T, fixture *monitorEvmFixture, am
 	}
 	before := readSnapshot()
 	beforeRoot := db.IntermediateRoot(true)
-	input := pack("captureEmission", big.NewInt(2), big.NewInt(1))
-	signer := types.LatestSignerForChainID(big.NewInt(964))
-	tx, err := types.SignNewTx(key, signer, &types.LegacyTx{Nonce: db.GetNonce(origin), GasPrice: big.NewInt(2), Gas: config.GasLimit, To: &coordinator, Value: new(big.Int), Data: input})
-	if err != nil {
-		t.Fatal(err)
+	results := make([]*economicCaptureContractFixture, 0, len(steps))
+	snapshots := map[uint64]monitorEconomicEvmSnapshot{}
+	roots := map[uint64]common.Hash{}
+	for index, step := range steps {
+		if index != 0 {
+			stake.setStake(pool, new(big.Int).SetUint64(step.amount))
+		}
+		stake.shortfall = step.revert
+		input := pack("captureEmission", big.NewInt(int64(2+index)), big.NewInt(1))
+		signer := types.LatestSignerForChainID(big.NewInt(964))
+		tx, err := types.SignNewTx(key, signer, &types.LegacyTx{Nonce: db.GetNonce(origin), GasPrice: big.NewInt(2), Gas: config.GasLimit / uint64(len(steps)), To: &coordinator, Value: new(big.Int), Data: input})
+		if err != nil {
+			t.Fatal(err)
+		}
+		config.BlockNumber = new(big.Int).SetUint64(step.block)
+		message, err := core.TransactionToMessage(tx, signer, config.BaseFee)
+		if err != nil {
+			t.Fatal(err)
+		}
+		transactionIndex, cumulativeGas := uint(0), uint64(0)
+		for priorIndex, prior := range steps[:index] {
+			if prior.block == step.block {
+				transactionIndex++
+				cumulativeGas += results[priorIndex].receipt.GasUsed
+			}
+		}
+		env := environment(origin, coordinator, tx.Hash())
+		db.SetTxContext(tx.Hash(), int(transactionIndex))
+		result, err := core.ApplyMessage(env, message, new(core.GasPool).AddGas(config.GasLimit-cumulativeGas))
+		if err != nil || result == nil || result.Failed() != step.revert {
+			t.Fatal("actual signed original capture execution differs", err, result, step.revert)
+		}
+		if step.revert && (!errors.Is(result.Err, vm.ErrExecutionReverted) || !bytes.Equal(result.ReturnData, crypto.Keccak256([]byte("RuntimeAccountingMismatch()"))[:4])) {
+			t.Fatal("actual original capture missed its precise accounting rollback", result.Err, common.Bytes2Hex(result.ReturnData))
+		}
+		status := uint64(types.ReceiptStatusSuccessful)
+		if step.revert {
+			status = types.ReceiptStatusFailed
+		}
+		logs := db.GetLogs(tx.Hash(), step.block, common.Hash{}, 0)
+		if logs == nil {
+			logs = []*types.Log{}
+		}
+		receipt := &types.Receipt{Type: types.LegacyTxType, Status: status, CumulativeGasUsed: cumulativeGas + result.UsedGas, Logs: logs, TxHash: tx.Hash(), GasUsed: result.UsedGas, EffectiveGasPrice: big.NewInt(2), BlockNumber: new(big.Int).SetUint64(step.block), TransactionIndex: transactionIndex}
+		results = append(results, &economicCaptureContractFixture{transaction: tx, receipt: receipt, poolAfter: stake.stake(pool).String(), escrowAfter: stake.stake(escrow).String()})
+		snapshots[step.block], roots[step.block] = readSnapshot(), db.IntermediateRoot(true)
 	}
-	config.BlockNumber = big.NewInt(11)
-	message, err := core.TransactionToMessage(tx, signer, config.BaseFee)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := core.ApplyMessage(environment(origin, coordinator, tx.Hash()), message, new(core.GasPool).AddGas(config.GasLimit))
-	if err != nil || result == nil || result.Failed() != revert {
-		t.Fatal("actual signed original capture execution differs", err, result, revert)
-	}
-	if revert && (!errors.Is(result.Err, vm.ErrExecutionReverted) || !bytes.Equal(result.ReturnData, crypto.Keccak256([]byte("RuntimeAccountingMismatch()"))[:4])) {
-		t.Fatal("actual original capture missed its precise accounting rollback", result.Err, common.Bytes2Hex(result.ReturnData))
-	}
-	status := uint64(types.ReceiptStatusSuccessful)
-	if revert {
-		status = types.ReceiptStatusFailed
-	}
-	logs := db.GetLogs(tx.Hash(), 11, common.Hash{}, 0)
-	if logs == nil {
-		logs = []*types.Log{}
-	}
-	receipt := &types.Receipt{Type: types.LegacyTxType, Status: status, CumulativeGasUsed: result.UsedGas, Logs: logs, TxHash: tx.Hash(), GasUsed: result.UsedGas, EffectiveGasPrice: big.NewInt(2), BlockNumber: big.NewInt(11), TransactionIndex: 0}
-	after := readSnapshot()
-	afterRoot := db.IntermediateRoot(true)
+	latestSnapshot, latestRoot := before, beforeRoot
 	for _, number := range []uint64{10, 11, 12, 13} {
 		block := fixture.blocks[number]
 		block.transactions, block.receipts, block.funded = types.Transactions{}, []map[string]any{}, map[string]string{}
 		block.header.TxHash, block.header.ReceiptHash = types.EmptyTxsHash, types.EmptyReceiptsHash
 		block.header.GasUsed, block.header.Bloom = 0, types.Bloom{}
-		block.snapshot, block.header.Root = before.clone(), beforeRoot
-		if number >= 11 {
-			block.snapshot, block.header.Root = after.clone(), afterRoot
+		if snapshot, exists := snapshots[number]; exists {
+			latestSnapshot, latestRoot = snapshot, roots[number]
 		}
-		if number == 11 {
-			block.transactions = types.Transactions{tx}
-			block.header.TxHash = types.DeriveSha(block.transactions, trie.NewStackTrie(nil))
-			block.header.GasUsed = receipt.GasUsed
+		block.snapshot, block.header.Root = latestSnapshot.clone(), latestRoot
+		for index, step := range steps {
+			if step.block != number {
+				continue
+			}
+			actual := results[index]
+			block.transactions = append(block.transactions, actual.transaction)
+			block.header.GasUsed += actual.receipt.GasUsed
 			block.header.GasLimit = config.GasLimit
-			raw, err := json.Marshal(receipt)
+			raw, err := json.Marshal(actual.receipt)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -254,11 +292,13 @@ func economicCaptureExecuteContract(t *testing.T, fixture *monitorEvmFixture, am
 				t.Fatal(err)
 			}
 			fields["from"], fields["to"], fields["contractAddress"] = origin.Hex(), coordinator.Hex(), nil
-			block.receipts = []map[string]any{fields}
+			block.receipts = append(block.receipts, fields)
 		}
+		block.header.TxHash = types.DeriveSha(block.transactions, trie.NewStackTrie(nil))
 	}
 	fixture.policy.Address, fixture.policy.CodeHash, fixture.code = address.Hex(), crypto.Keccak256Hash(code).Hex(), code
 	fixture.policy.FeePayers = []string{origin.Hex()}
+	fixture.unavailableTransaction = results[0].transaction.Hash().Hex()
 	economicConservationTestEvmRehash(t, fixture, nil)
-	return &economicCaptureContractFixture{transaction: tx, receipt: receipt, poolAfter: stake.stake(pool).String(), escrowAfter: stake.stake(escrow).String()}
+	return results
 }

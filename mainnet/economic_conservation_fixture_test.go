@@ -51,35 +51,46 @@ func economicConservationTestEvmRehash(t *testing.T, f *monitorEvmFixture, mutat
 		block := f.blocks[number]
 		block.header.ParentHash = parent
 		if len(block.receipts) != 0 {
-			raw, err := json.Marshal(block.receipts[0])
-			if err != nil {
-				t.Fatal(err)
+			receipts := make(types.Receipts, len(block.receipts))
+			block.header.Bloom = types.Bloom{}
+			for index, fields := range block.receipts {
+				raw, err := json.Marshal(fields)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var receipt types.Receipt
+				if err := json.Unmarshal(raw, &receipt); err != nil {
+					t.Fatal(err)
+				}
+				if mutate != nil {
+					mutate(number, &receipt)
+				}
+				receipt.Bloom = types.CreateBloom(&receipt)
+				for word := range block.header.Bloom {
+					block.header.Bloom[word] |= receipt.Bloom[word]
+				}
+				receipts[index] = &receipt
 			}
-			var receipt types.Receipt
-			if err := json.Unmarshal(raw, &receipt); err != nil {
-				t.Fatal(err)
+			block.header.ReceiptHash = types.DeriveSha(receipts, trie.NewStackTrie(nil))
+			logIndex := uint(0)
+			for index, receipt := range receipts {
+				receipt.BlockHash, receipt.TransactionIndex = block.header.Hash(), uint(index)
+				for _, log := range receipt.Logs {
+					log.BlockHash, log.Index, log.BlockNumber, log.TxHash, log.TxIndex = receipt.BlockHash, logIndex, number, receipt.TxHash, uint(index)
+					logIndex++
+				}
+				raw, err := json.Marshal(receipt)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var fields map[string]any
+				if err := json.Unmarshal(raw, &fields); err != nil {
+					t.Fatal(err)
+				}
+				fields["from"], fields["to"], fields["contractAddress"] = block.receipts[index]["from"], block.receipts[index]["to"], nil
+				block.receipts[index] = fields
+				f.byTransaction[receipt.TxHash.Hex()] = fields
 			}
-			if mutate != nil {
-				mutate(number, &receipt)
-			}
-			receipt.Bloom = types.CreateBloom(&receipt)
-			block.header.ReceiptHash = types.DeriveSha(types.Receipts{&receipt}, trie.NewStackTrie(nil))
-			block.header.Bloom = receipt.Bloom
-			receipt.BlockHash = block.header.Hash()
-			for index, log := range receipt.Logs {
-				log.BlockHash, log.Index, log.BlockNumber, log.TxHash, log.TxIndex = receipt.BlockHash, uint(index), number, receipt.TxHash, 0
-			}
-			raw, err = json.Marshal(receipt)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var fields map[string]any
-			if err := json.Unmarshal(raw, &fields); err != nil {
-				t.Fatal(err)
-			}
-			fields["from"], fields["to"], fields["contractAddress"] = block.receipts[0]["from"], block.receipts[0]["to"], nil
-			block.receipts = []map[string]any{fields}
-			f.byTransaction[receipt.TxHash.Hex()] = fields
 		}
 		f.byHash[block.header.Hash().Hex()] = block
 		parent = block.header.Hash()

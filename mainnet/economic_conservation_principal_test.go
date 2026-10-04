@@ -30,12 +30,22 @@ func newEconomicConservationPrincipalFixture(t *testing.T, name string, parentMa
 
 func newEconomicConservationPrincipalFixtureWithVault(t *testing.T, name string, parentMapping bool, change func(*historicalReplayJob), configureVault ...func(*monitorEvmFixture)) (*economicConservationArchiveFixture, *nativeProducerPublicFixture) {
 	t.Helper()
+	return newEconomicConservationPrincipalFixtureWithSequence(t, name, parentMapping, change, nil, configureVault...)
+}
+
+// A continuation is installed before RPC starts and must extend the exact
+// mapped first job. All ordinary fixtures retain their single original job.
+func newEconomicConservationPrincipalFixtureWithSequence(t *testing.T, name string, parentMapping bool, change func(*historicalReplayJob), next func(historicalReplayJob, *monitorEvmFixture) []historicalReplayJob, configureVault ...func(*monitorEvmFixture)) (*economicConservationArchiveFixture, *nativeProducerPublicFixture) {
+	t.Helper()
 	directory := os.Getenv("URNETWORK_NATIVE_PRINCIPAL_FIXTURE_DIR")
 	if strings.HasPrefix(name, "effects-") {
 		directory = os.Getenv("URNETWORK_NATIVE_PRINCIPAL_EFFECTS_FIXTURE_DIR")
 	}
 	if strings.HasPrefix(name, "capture") {
 		directory = os.Getenv("URNETWORK_NATIVE_VAULT_CAPTURE_FIXTURE_DIR")
+		if name == "capture-same-block" || name == "capture-next-block" {
+			directory = os.Getenv("URNETWORK_NATIVE_VAULT_CAPTURE_SEQUENCE_FIXTURE_DIR")
+		}
 	}
 	filename := "principal-" + name + ".json"
 	yuma := strings.HasPrefix(name, "yuma-")
@@ -122,7 +132,11 @@ func newEconomicConservationPrincipalFixtureWithVault(t *testing.T, name string,
 		t.Fatal(err)
 	}
 	t.Setenv("URNETWORK_NATIVE_EXECUTION_FIXTURE", path)
-	producer := newNativeProducerPublicFixture(t)
+	var additionalJobs []historicalReplayJob
+	if next != nil {
+		additionalJobs = next(job, f.vault)
+	}
+	producer := nativeProducerPublicFixtureFrom(t, false, additionalJobs...)
 	f.native, f.policy.Native.Observation, f.policy.Native.BatchBlocks = producer.source, producer.source.policy, 1
 	// Matching original proof parents are drained before per-block accrual.
 	f.native.set(t, 100, "PendingServerEmission", make([]byte, 8))
