@@ -39,6 +39,7 @@ type economicConservationSummary struct {
 	NativeCurrent                  bool                                        `json:"native_current"`
 	VaultCurrent                   bool                                        `json:"vault_current"`
 	ClaimStatuses                  []string                                    `json:"claim_statuses"`
+	NativePending                  bool                                        `json:"native_pending"`
 	NativeIssue                    string                                      `json:"native_issue,omitempty"`
 	VaultIssue                     string                                      `json:"vault_issue,omitempty"`
 	JoinIssue                      string                                      `json:"join_issue,omitempty"`
@@ -84,7 +85,7 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 	if err != nil {
 		return economicConservationSummary{}, err
 	}
-	result := economicConservationSummary{Schema: "urnetwork-economic-conservation-sample-v1", PolicyHash: self.PolicyHash, CheckpointHash: self.ContentHash, SampleAt: self.SampleAt, NativeCursor: self.Native.Cursor, VaultCursor: self.Vault.Cursor, NativeCurrent: nativeCurrent, VaultCurrent: vaultCurrent, NativeIssue: self.NativeIssue, VaultIssue: self.VaultIssue, JoinIssue: self.JoinIssue, NativeHeld: self.NativeHeld, VaultHeld: self.VaultHeld, Execution: self.Native.ExecutionAccounting, VaultState: self.Vault.Snapshot, EarningOccurrences: len(self.Lots), Captures: len(self.Captures), AcceptedClaims: len(self.Claims), AggregatePayments: len(self.Payments), FactsRemaining: policy.MaximumFacts - self.facts(), Resources: resources, Authority: "admitted-native-replay-and-owned-rpc-vault-claim-observations", MissingEvidence: []string{"independently-admitted-runtime-build-and-full-quantization", "opening-pool-principal-and-complete-stake-effects", "native-fee-withdrawal-refund-and-precompile-rollback", "independent-vault-finality-and-complete-entitlement-census"}}
+	result := economicConservationSummary{Schema: "urnetwork-economic-conservation-sample-v1", PolicyHash: self.PolicyHash, CheckpointHash: self.ContentHash, SampleAt: self.SampleAt, NativeCursor: self.Native.Cursor, VaultCursor: self.Vault.Cursor, NativeCurrent: nativeCurrent, VaultCurrent: vaultCurrent, NativeIssue: self.NativeIssue, NativePending: self.NativePending, VaultIssue: self.VaultIssue, JoinIssue: self.JoinIssue, NativeHeld: self.NativeHeld, VaultHeld: self.VaultHeld, Execution: self.Native.ExecutionAccounting, VaultState: self.Vault.Snapshot, EarningOccurrences: len(self.Lots), Captures: len(self.Captures), AcceptedClaims: len(self.Claims), AggregatePayments: len(self.Payments), FactsRemaining: policy.MaximumFacts - self.facts(), Resources: resources, Authority: "admitted-native-replay-and-owned-rpc-vault-claim-observations", MissingEvidence: []string{"independently-admitted-runtime-build-and-full-quantization", "opening-pool-principal-and-complete-stake-effects", "native-fee-withdrawal-refund-and-precompile-rollback", "independent-vault-finality-and-complete-entitlement-census"}}
 	if self.Archive != nil {
 		result.ArchiveSegments = uint64(len(self.Archive.Segments))
 	}
@@ -283,9 +284,13 @@ func economicConservationIssue(err error) string {
 	return message
 }
 
-// Each logical sample owns one deadline. Parallel native/vault/Claim attempts
-// share it, join before publication, and preserve prior domain cursors on error.
+// A finite sample joins all selected reads. Continuous producer mode has a
+// separate native owner; its complete result joins the latest sibling state.
 func sampleEconomicConservation(ctx context.Context, policy economicConservationPolicy, prior *economicConservationState, native, vault *rpcClient, now time.Time, hooks monitorServiceHooks) (*economicConservationState, bool, bool, error) {
+	return sampleEconomicConservationWithNativeWorker(ctx, policy, prior, native, vault, now, hooks, nil)
+}
+
+func sampleEconomicConservationWithNativeWorker(ctx context.Context, policy economicConservationPolicy, prior *economicConservationState, native, vault *rpcClient, now time.Time, hooks monitorServiceHooks, worker *economicConservationNativeWorker) (*economicConservationState, bool, bool, error) {
 	if err := prior.requireEntitlementHistory(); err != nil {
 		return nil, false, false, err
 	}
@@ -320,7 +325,7 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 	joined.Add(2 + len(policy.Claims))
 	go func() {
 		defer joined.Done()
-		if !prior.NativeHeld {
+		if worker == nil && !prior.NativeHeld {
 			nativeValue, nativeErr = observeMonitorEconomicNative(readCtx, native, policy.Native, &prior.Native)
 		}
 	}()
@@ -348,6 +353,16 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 		}(index, claim)
 	}
 	joined.Wait()
+	nativeObserved := worker == nil
+	if worker != nil {
+		if result, ready := worker.take(); ready {
+			nativeObserved = true
+			if result.nativeHash != rootObjectHash(prior.Native) || result.policyHash != rootObjectHash(policy.Native) {
+				return nil, false, false, errors.Join(errRpcIntegrity, result.err, errors.New("economic native handoff changed its original cursor or admitted policy"))
+			}
+			nativeValue, nativeErr = result.observation, result.err
+		}
+	}
 	// Real integrity observations dominate a simultaneous parent cancellation.
 	hardNative := nativeErr != nil && monitorEconomicNativeReadCode(nativeErr) == "identity-conflict"
 	hardVault := vaultErr != nil && monitorEconomicEvmReadCode(vaultErr) == "identity-conflict"
@@ -370,7 +385,8 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 		return nil, false, false, err
 	}
 	next.SampleAt = now.UTC()
-	nativeCurrent, vaultCurrent := !prior.NativeHeld && nativeErr == nil, !prior.VaultHeld && vaultErr == nil
+	nativeCurrent, vaultCurrent := nativeObserved && !prior.NativeHeld && nativeErr == nil, !prior.VaultHeld && vaultErr == nil
+	next.NativePending = worker != nil && worker.active
 	if nativeCurrent && nativeValue != nil {
 		if hooks.beforeEconomicNativeAppend != nil {
 			hooks.beforeEconomicNativeAppend(readCtx, cancel)
@@ -387,7 +403,7 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 			hardNative = economicConservationAppendHeld(nativeErr)
 		}
 	}
-	if !prior.NativeHeld {
+	if nativeObserved && !prior.NativeHeld {
 		next.NativeIssue, next.NativeHeld = economicConservationIssue(nativeErr), hardNative
 	}
 	if vaultCurrent && vaultValue != nil {
@@ -568,13 +584,26 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	}()
 	native.retryWindow = time.Duration(operating.ReadBudgetSeconds) * time.Second
 	vault.retryWindow = native.retryWindow
+	var nativeWorker *economicConservationNativeWorker
+	if *follow && policy.Native.Observation.Execution.Producer != nil {
+		nativeWorker = newEconomicConservationNativeWorker(ctx, policy, native, hooks)
+		defer func() {
+			if err := nativeWorker.close(); err != nil {
+				fmt.Fprintln(stderr, err)
+				code = 3
+			}
+		}()
+	}
 	if hooks.syncDirectory != nil {
 		owner.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(economicConservationRole, "checkpoint", file) }
 	}
 	for ctx.Err() == nil {
+		if err := nativeWorker.start(state); err != nil {
+			return refuse(err)
+		}
 		feeWorker.start(state)
 		entitlementWorker.start(state)
-		next, nativeCurrent, vaultCurrent, err := sampleEconomicConservation(ctx, policy, state, native, vault, now().UTC(), hooks)
+		next, nativeCurrent, vaultCurrent, err := sampleEconomicConservationWithNativeWorker(ctx, policy, state, native, vault, now().UTC(), hooks, nativeWorker)
 		if err != nil {
 			if ctx.Err() != nil && monitorOnlyCancellationCauses(err, 0) {
 				return 0

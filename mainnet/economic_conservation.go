@@ -237,6 +237,7 @@ type economicConservationState struct {
 	Payments             []economicConservationPayment            `json:"payments"`
 	Receipts             []economicConservationReceipt            `json:"claim_receipts"`
 	SampleAt             time.Time                                `json:"sample_at"`
+	NativePending        bool                                     `json:"native_pending,omitempty"`
 	NativeIssue          string                                   `json:"native_issue,omitempty"`
 	VaultIssue           string                                   `json:"vault_issue,omitempty"`
 	NativeHeld           bool                                     `json:"native_integrity_held"`

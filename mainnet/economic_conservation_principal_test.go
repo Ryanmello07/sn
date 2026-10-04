@@ -37,6 +37,13 @@ func newEconomicConservationPrincipalFixtureWithVault(t *testing.T, name string,
 // mapped first job. All ordinary fixtures retain their single original job.
 func newEconomicConservationPrincipalFixtureWithSequence(t *testing.T, name string, parentMapping bool, change func(*historicalReplayJob), next func(historicalReplayJob, *monitorEvmFixture) []historicalReplayJob, configureVault ...func(*monitorEvmFixture)) (*economicConservationArchiveFixture, *nativeProducerPublicFixture) {
 	t.Helper()
+	return economicConservationPrincipalFixtureWithSource(t, nil, name, parentMapping, change, next, configureVault...)
+}
+
+// Receipt/artifact fixtures may select their complete original public input
+// before constructing the real native job. No admitted header is remapped.
+func economicConservationPrincipalFixtureWithSource(t *testing.T, f *economicConservationFixture, name string, parentMapping bool, change func(*historicalReplayJob), next func(historicalReplayJob, *monitorEvmFixture) []historicalReplayJob, configureVault ...func(*monitorEvmFixture)) (*economicConservationArchiveFixture, *nativeProducerPublicFixture) {
+	t.Helper()
 	directory := os.Getenv("URNETWORK_NATIVE_PRINCIPAL_FIXTURE_DIR")
 	if strings.HasPrefix(name, "effects-") {
 		directory = os.Getenv("URNETWORK_NATIVE_PRINCIPAL_EFFECTS_FIXTURE_DIR")
@@ -63,7 +70,11 @@ func newEconomicConservationPrincipalFixtureWithSequence(t *testing.T, name stri
 	if directory == "" || os.Getenv("URNETWORK_NATIVE_CAPTURE_ENGINE") == "" || os.Getenv("URNETWORK_NATIVE_EXECUTION_ENGINE") == "" {
 		t.Fatal("principal scope requires explicit real Rust exports and two distinct owned engines")
 	}
-	f := newEconomicConservationFixture(t, false, configureVault...)
+	if f == nil {
+		f = newEconomicConservationFixture(t, false, configureVault...)
+	} else if len(configureVault) != 0 {
+		t.Fatal("preselected public fixture cannot also replace original vault inputs")
+	}
 	raw, _, err := readPlanFile(t.Context(), filepath.Join(directory, filename), historicalNativeJobLimit)
 	if err != nil {
 		t.Fatal(err)
