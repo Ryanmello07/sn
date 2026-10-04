@@ -80,6 +80,15 @@ type ValidatorUploadNativeObserver struct {
 // The fixed eight-byte native timestamp is retained only after a final
 // canonical height/hash check. The schedule reader separately proves permit.
 func ValidatorUploadNativeObserverContext(ctx context.Context, native *crv4.Chain, deployment ValidatorUploadDeployment) (result ValidatorUploadNativeObserver, resultErr error) {
+	var selected types.Hash
+	return crv4.ReadRuntimeObservationContext(ctx, native, func(ctx context.Context) (ValidatorUploadNativeObserver, error) {
+		return validatorUploadNativeObserverAttempt(ctx, native, deployment, &selected)
+	})
+}
+
+// Timestamp storage belongs to the same transport as its route and artifact.
+// A replacement repeats those reads while retaining the first finalized block.
+func validatorUploadNativeObserverAttempt(ctx context.Context, native *crv4.Chain, deployment ValidatorUploadDeployment, selected *types.Hash) (result ValidatorUploadNativeObserver, resultErr error) {
 	if ctx == nil || native == nil || native.API == nil || native.API.Client == nil {
 		return result, errors.New("validator staging native observer is unavailable")
 	}
@@ -98,16 +107,29 @@ func ValidatorUploadNativeObserverContext(ctx context.Context, native *crv4.Chai
 	if err := deployment.authenticateNativeRuntimeRouteContext(ctx, native); err != nil {
 		return result, err
 	}
-	hash, err := crv4.FinalizedHeadContext(ctx, native)
+	finalized, err := crv4.FinalizedHeadContext(ctx, native)
 	if err != nil {
 		return result, err
 	}
+	if *selected == (types.Hash{}) {
+		*selected = finalized
+	}
+	hash := *selected
 	number, _, err := native.CanonicalHeaderAtContext(ctx, hash)
 	if err != nil {
 		return result, err
 	}
 	if number == 0 {
 		return result, errors.New("validator staging finalized native header is absent")
+	}
+	if finalized != hash {
+		finalizedNumber, _, err := native.CanonicalHeaderAtContext(ctx, finalized)
+		if err != nil {
+			return result, err
+		}
+		if finalizedNumber < number {
+			return result, errors.New("validator staging native finality regressed")
+		}
 	}
 	allowed, err := deployment.runtimeArtifactsAt(number, false)
 	if err != nil {

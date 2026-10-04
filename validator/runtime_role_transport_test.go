@@ -332,3 +332,36 @@ func TestOwnerRecycleRuntimeReconnectRepeatsDecisionAndActivation(t *testing.T) 
 		t.Fatalf("reconnect mixed decision and activation censuses: decisions=%d activations=%d observed=%+v err=%v", decisionReads, activationReads, observed, err)
 	}
 }
+
+// Fresh timestamp storage cannot carry earlier route authority across a
+// replacement, even when both transports report the same runtime artifact.
+func TestValidatorUploadRuntimeReconnectRepeatsNativeFreshness(t *testing.T) {
+	fixture := newValidatorUploadProductionTestFixture(t)
+	owner := fixture.owner(t)
+	native := fixture.production.rpc.native
+	original := native.API.Client.(*validatorRuntimeIdentityTestClient)
+	call := original.callContext
+	client := &productionTransportTestClient{Client: original}
+	client.generation.Store(1)
+	native.API.Client = client
+	storageReads, networks := 0, 0
+	original.callContext = func(ctx context.Context, target any, method string, args ...any) error {
+		err := call(ctx, target, method, args...)
+		if err == nil && method == "system_chain" {
+			networks++
+		}
+		if err == nil && method == "state_getStorage" {
+			storageReads++
+			if storageReads == 1 {
+				client.generation.Add(1)
+				fixture.production.rpc.genesis = types.Hash{0xf3}
+			}
+		}
+		return err
+	}
+	metadata, runtime := native.Meta, native.Runtime
+	observed, err := ValidatorUploadNativeObserverContext(t.Context(), native, owner.config.Deployment)
+	if err == nil || observed != (ValidatorUploadNativeObserver{}) || storageReads != 1 || networks != 2 || native.Meta != metadata || native.Runtime != runtime {
+		t.Fatalf("upload freshness borrowed the earlier native route: storage=%d networks=%d observation=%+v err=%v", storageReads, networks, observed, err)
+	}
+}

@@ -97,3 +97,78 @@ func TestFleetRuntimeClosingReconnectReturnsFreshOwnedView(t *testing.T) {
 		t.Fatalf("fleet closing reconnect failed the complete owned read: networks=%d canonical=%d view=%+v err=%v", networks, canonicalReads, view, err)
 	}
 }
+
+// Commitment storage completes the runtime observation. A later finalized
+// head does not retarget the block selected before transport replacement.
+func TestFleetCommitmentReconnectRepeatsOriginalBlockRead(t *testing.T) {
+	fixture := newFleetMainnetTestFixture(t)
+	native, err := crv4.DialChainContext(t.Context(), fixture.server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(native.API.Client.Close)
+	client := &fleetRuntimeTransportTestClient{Client: native.API.Client}
+	client.generation.Store(1)
+	native.API.Client = client
+	networks, storageReads := 0, 0
+	client.after = func(method string, args []any) {
+		if method == "system_chain" {
+			networks++
+		}
+		if method == "state_getStorage" {
+			storageReads++
+			if len(args) != 2 || args[1] != fixture.head.Hex() {
+				t.Errorf("commitment read escaped its original block: %v", args)
+			}
+			if storageReads == 2 {
+				client.generation.Add(1)
+				fixture.stateLock.Lock()
+				fixture.finalizedNumber = 101
+				fixture.stateLock.Unlock()
+			}
+		}
+	}
+	metadata, runtime := native.Meta, native.Runtime
+	observed, err := fixture.authority.commitmentFinalized(t.Context(), native, fixture.manifest.Netuid, fixture.manifest.Hotkey)
+	if err != nil || observed == nil || observed.FinalizedAt != 100 || observed.FinalizedHash != fixture.head || storageReads != 4 || networks != 2 || native.Meta != metadata || native.Runtime != runtime {
+		t.Fatalf("commitment replacement did not repeat the original complete read: storage=%d networks=%d observed=%+v err=%v", storageReads, networks, observed, err)
+	}
+}
+
+// Finalized receipt readback is read-only. Replacement cannot borrow its
+// earlier network census and must never submit the already included write.
+func TestFleetCommitmentReceiptReconnectRechecksNetwork(t *testing.T) {
+	fixture := newFleetMainnetTestFixture(t)
+	native, err := crv4.DialChainContext(t.Context(), fixture.server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(native.API.Client.Close)
+	client := &fleetRuntimeTransportTestClient{Client: native.API.Client}
+	client.generation.Store(1)
+	native.API.Client = client
+	networks, storageReads := 0, 0
+	client.after = func(method string, _ []any) {
+		if method == "system_chain" {
+			networks++
+		}
+		if method == "state_getStorage" {
+			storageReads++
+			if storageReads == 2 {
+				client.generation.Add(1)
+				fixture.stateLock.Lock()
+				fixture.genesis = types.Hash{0xf4}
+				fixture.stateLock.Unlock()
+			}
+		}
+	}
+	expected, err := fixture.manifest.CommitmentHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt := &crv4.FinalizedExtrinsic{BlockHash: fixture.head, BlockNumber: 100, ExtrinsicHash: types.Hash{0x61}}
+	observed, err := fixture.authority.commitmentWrite(t.Context(), native, fixture.manifest.Netuid, fixture.manifest.Hotkey, expected, receipt)
+	if err == nil || observed != nil || storageReads != 2 || networks != 2 || fixture.count("author_submitExtrinsic") != 0 {
+		t.Fatalf("receipt replacement borrowed the earlier network: storage=%d networks=%d observed=%+v err=%v", storageReads, networks, observed, err)
+	}
+}
