@@ -305,7 +305,8 @@
     "economic-finality-f7-production-tests-controls-root-review-20261004.json": "8249615e7dc43ab9880395163a6adfdc3b9d34a7b9893af2bd507e86632a36c3",
     "funding-8ad5-original-capture-exporters-pass-root-readback-20261004.json": "d44e25508691654d68d51e589a928bc47b158f492f4541e1bcfde80ed317f964",
     "server5b-controls-root-readback-20261004.json": "46709274c3f480a9afabdfbc36a90b277e26b0a7cf1bac329bc086a257e5d8f9",
-    "funding-candidate-f51-root-source-review-20261004.json": "e69d0d1ff377775536bf02af2ddbe0fe8ea0eb1aa11cfda07398a4dc5fb1ffb8"
+    "funding-candidate-f51-root-source-review-20261004.json": "e69d0d1ff377775536bf02af2ddbe0fe8ea0eb1aa11cfda07398a4dc5fb1ffb8",
+    "funding-dual-engine-original-failures-source-review-20261004.json": "f8b489af94f75e7b1213895638bf4539329ef7e31ba1b3fb6a210142eb675d9b"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
