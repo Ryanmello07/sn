@@ -438,7 +438,7 @@ func mainnetRequiresDurableVolumes(args []string) bool {
 		return len(args) > 1 && args[1] == "sign"
 	case "bootstrap", "bootstrap-chain", "bootstrap-contracts", "root-service", "root-passive-service",
 		"activate-root-passive", "activate-validators", "repair-validator", "repair-active-validator", "owner-recycle",
-		"storage-inventory", "storage-verify", "storage-owner-inventory", "storage-owner-verify", "storage-inspect", "validator-capacity-preview", "monitor-native-archive", "monitor-native-catalog", "monitor-evm-archive", "monitor-evm-catalog", "monitor-claim-archive", "monitor-claim-catalog":
+		"storage-inventory", "storage-verify", "storage-owner-inventory", "storage-owner-verify", "storage-inspect", "validator-capacity-preview", "monitor-native-archive", "monitor-native-catalog", "monitor-evm-archive", "monitor-evm-catalog", "monitor-claim-archive", "monitor-claim-catalog", "observe-economic-conservation", "economic-conservation-archive":
 		return true
 	}
 	return false

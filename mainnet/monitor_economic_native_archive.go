@@ -80,7 +80,7 @@ func (self *monitorEconomicNativeArchive) validate(policy monitorEconomicNativeP
 	}
 	seen := map[string]bool{}
 	for _, reference := range self.Segments {
-		if err := reference.validate(); err != nil {
+		if err := reference.validateLimit(policy.archiveReferenceBytes); err != nil {
 			return err
 		}
 		if seen[reference.Path] || seen[reference.Path+".lock"] {
@@ -108,7 +108,7 @@ func (self *monitorEconomicNativeArchive) validate(policy monitorEconomicNativeP
 // Rollover appends exactly one immutable prefix; it never discards earlier
 // segments or changes a retained incomplete batch's original high-water.
 func compactMonitorEconomicNative(record monitorEconomicNativeCheckpoint, reference monitorHistoryReference, policy monitorEconomicNativePolicy) (monitorEconomicNativeCheckpoint, error) {
-	if err := reference.validate(); err != nil {
+	if err := reference.validateLimit(policy.archiveReferenceBytes); err != nil {
 		return record, err
 	}
 	if err := record.State.validate(policy); err != nil {

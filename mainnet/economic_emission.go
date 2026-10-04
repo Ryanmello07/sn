@@ -63,6 +63,17 @@ func (self economicEmissionPolicy) validate() error {
 		}
 		seen[payer] = true
 	}
+	if self.Execution != nil && self.Execution.Principal != nil {
+		principal := self.Execution.Principal
+		if principal.Parent.Number > self.From.Number || principal.Parent.Number == self.From.Number && principal.Parent.Hash != self.From.Hash {
+			return errors.New("native principal authority replaced its original opening parent")
+		}
+		for _, query := range principal.Queries {
+			if query.Netuid != self.Netuid {
+				return errors.New("native principal authority borrowed another subnet")
+			}
+		}
+	}
 	return self.Execution.validate()
 }
 
@@ -155,6 +166,7 @@ type economicEmissionBlock struct {
 // means the economic target, denominator, payment or finality authority passed.
 type economicEmissionObservation struct {
 	ExecutionWindow             *nativeExecutionWindow        `json:"execution_window,omitempty"`
+	ExecutionProducer           *nativeExecutionProducerState `json:"execution_producer,omitempty"`
 	RuntimeCatalog              []monitorEconomicRuntimeEntry `json:"runtime_catalog,omitempty"`
 	Schema                      string                        `json:"schema"`
 	PolicyHash                  string                        `json:"policy_hash"`
