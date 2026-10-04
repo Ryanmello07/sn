@@ -33,6 +33,7 @@ type repairProcessCustody interface {
 	check(context.Context) error
 	inspect(context.Context) (repairValidatorManager, error)
 	beforeStart(context.Context, time.Time) error
+	start(context.Context) error
 	progress(context.Context, time.Time, time.Time) (string, error)
 	close() error
 }
@@ -358,7 +359,7 @@ func resumeRepairProcess(ctx context.Context, store *repairProcessStore, host *r
 		if err := errors.Join(control.validate(), store.validateOwner(), custody.check(owner), custody.beforeStart(owner, actionAt)); err != nil {
 			return finish("uncertain-consumed-start", err)
 		}
-		if err := host.start(owner, p); err != nil {
+		if err := custody.start(owner); err != nil {
 			return finish("uncertain-consumed-start", err)
 		}
 		manager, err := custody.inspect(owner)

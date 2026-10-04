@@ -28,6 +28,11 @@ func (self *repairRootPassiveEnvelope) open(ctx context.Context, host *repairVal
 	if err != nil {
 		return nil, err
 	}
+	verified := *self
+	verified.preparation = &preparation
+	if err := verified.validatePaths(); err != nil {
+		return nil, errors.Join(errRpcIntegrity, err)
+	}
 	if preparation.Root.PassiveService.CheckpointPath != p.OriginalCheckpoint.Path {
 		return nil, errors.Join(errRpcIntegrity, errors.New("root repair checkpoint differs from original runtime"))
 	}
@@ -167,6 +172,11 @@ func (self *repairRootPassiveCustody) beforeStart(ctx context.Context, now time.
 	}
 	_, err = store.load()
 	return errors.Join(err, store.close(), ctx.Err())
+}
+
+// Root continues through its original executable and storage-inspection gate.
+func (self *repairRootPassiveCustody) start(ctx context.Context) error {
+	return self.host.files.host.start(ctx, self.envelope.profile())
 }
 
 // Fresh local checkpoint progress is attributed only while the acknowledged

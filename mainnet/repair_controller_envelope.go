@@ -16,7 +16,18 @@ import (
 type repairControllerEnvelope struct {
 	validator *repairValidatorApproval
 	active    *repairActiveValidatorApproval
+	process   repairControllerProcess
 	plan      repairValidatorPlan
+}
+
+// Each stopped-process role retains its own signature and original custody.
+// This interface grants no validator action or controller-selected command.
+type repairControllerProcess interface {
+	profile() repairValidatorPlan
+	protectedPaths() []string
+	ready(context.Context, *repairValidatorHost, time.Time) error
+	claim(context.Context, string, *repairValidatorHost, func() time.Time) error
+	resume(context.Context, string, *repairValidatorHost, func() time.Time) (string, bool, error)
 }
 
 // Protected original file bytes and independent manifest key both bind authority.
@@ -51,15 +62,43 @@ func loadRepairControllerEnvelope(ctx context.Context, entry repairControllerEnt
 			return result, errors.Join(errRpcIntegrity, err)
 		}
 		result.active, result.plan = &approval, approval.Plan.Process
+	case "root-passive":
+		process, err := loadRepairRootPassiveEnvelope(ctx, raw, entry.PublicKey, host)
+		if process != nil {
+			result.process, result.plan = process, process.profile()
+		}
+		if err != nil {
+			return result, err
+		}
 	default:
 		return result, errors.Join(errRpcIntegrity, errors.New("repair controller has no adapter for this action"))
 	}
 	return result, host.parents(result.plan.StatePath, host.rootUid)
 }
 
+// Output admission includes every original role input and lifetime marker.
+// Generation claims are protected names, even when two entries share a unit.
+func (self repairControllerEnvelope) protectedPaths() []string {
+	if self.process != nil {
+		return append(self.process.protectedPaths(), repairProcessClaimPath(self.plan))
+	}
+	p := self.plan
+	paths := []string{p.Unit.File.Path, p.Unit.File.Path + ".sn-control.lock", p.Unit.Binary.Path, p.Unit.Config.Path, p.Systemctl.Path, p.MonitorCheckpoint, p.Unit.ProgressFile}
+	if p.Unit.DurableVolumes != nil {
+		paths = append(paths, p.Unit.DurableVolumes.Path)
+	}
+	if self.active != nil {
+		paths = append(paths, self.active.Plan.MonitorServices.Path)
+	}
+	return paths
+}
+
 // Check current incident availability before recording a claim intent. Signed
 // authority remains unchanged while absent or stale monitoring stays pending.
 func (self repairControllerEnvelope) ready(ctx context.Context, host *repairValidatorHost, now time.Time) error {
+	if self.process != nil {
+		return self.process.ready(ctx, host, now)
+	}
 	p := self.plan
 	if now.Before(p.ValidFrom) {
 		return errRepairControllerPending
@@ -111,6 +150,9 @@ func (self repairControllerEnvelope) ready(ctx context.Context, host *repairVali
 // Original claim primitives keep their durable counter and permanent generation
 // markers. The controller must have published its own intent before this call.
 func (self repairControllerEnvelope) claim(ctx context.Context, key string, host *repairValidatorHost, now func() time.Time) (resultErr error) {
+	if self.process != nil {
+		return self.process.claim(ctx, key, host, now)
+	}
 	stamp := now()
 	if err := self.ready(ctx, host, stamp); err != nil {
 		return err
@@ -159,7 +201,9 @@ func (self repairControllerEnvelope) resume(ctx context.Context, key string, hos
 	var status string
 	var complete bool
 	var err error
-	if self.active != nil {
+	if self.process != nil {
+		status, complete, err = self.process.resume(ctx, key, host, now)
+	} else if self.active != nil {
 		var store *repairActiveValidatorStore
 		store, err = openRepairActiveValidatorStore(ctx, *self.active, key, false, now())
 		if err == nil {

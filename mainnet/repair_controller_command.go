@@ -140,32 +140,37 @@ func runRepairControllerCommandWithHost(ctx context.Context, args []string, stdo
 	inputs := map[string]bool{*manifestPath: true}
 	writes := map[string]bool{}
 	for _, path := range []string{*checkpoint, *checkpoint + ".lock", *metricsPath, *metricsPath + ".lock"} {
-		if writes[path] {
-			fmt.Fprintln(stderr, "repair controller output paths overlap")
-			return 2
+		for existing := range writes {
+			if rootPassiveHostPathContains(path, existing) || rootPassiveHostPathContains(existing, path) {
+				fmt.Fprintln(stderr, "repair controller output paths overlap")
+				return 2
+			}
 		}
 		writes[path] = true
 	}
 	for index, entry := range manifest.Entries {
 		inputs[entry.Approval.Path] = true
-		envelope, err := loadRepairControllerEnvelope(ctx, entry, host)
-		if err != nil {
+		// A partial root load still exposes its verified original host paths.
+		// The joined step records the actual load error as this entry's outcome.
+		envelope, _ := loadRepairControllerEnvelope(ctx, entry, host)
+		if envelope.plan.Unit.Name == "" {
 			unitLocks[index] = &sync.Mutex{}
 			continue
 		}
 		p := envelope.plan
 		for _, path := range []string{p.StatePath, p.StatePath + ".lock"} {
-			if writes[path] {
-				fmt.Fprintln(stderr, "repair controller journal paths overlap")
-				return 2
+			for existing := range writes {
+				if rootPassiveHostPathContains(path, existing) || rootPassiveHostPathContains(existing, path) {
+					fmt.Fprintln(stderr, "repair controller journal paths overlap")
+					return 2
+				}
 			}
 			writes[path] = true
 		}
-		for _, path := range []string{p.Unit.File.Path, p.Unit.Binary.Path, p.Unit.Config.Path, p.Systemctl.Path, p.MonitorCheckpoint, p.Unit.ProgressFile} {
-			inputs[path] = true
-		}
-		if envelope.active != nil {
-			inputs[envelope.active.Plan.MonitorServices.Path] = true
+		for _, path := range envelope.protectedPaths() {
+			if path != "" {
+				inputs[path] = true
+			}
 		}
 		if units[p.Unit.Name] == nil {
 			units[p.Unit.Name] = &sync.Mutex{}
@@ -173,9 +178,13 @@ func runRepairControllerCommandWithHost(ctx context.Context, args []string, stdo
 		unitLocks[index] = units[p.Unit.Name]
 	}
 	for path := range writes {
-		if inputs[path] {
-			fmt.Fprintln(stderr, "repair controller write overlaps an original input")
-			return 2
+		for input := range inputs {
+			for _, protected := range []string{input, input + ".lock"} {
+				if rootPassiveHostPathContains(path, protected) || rootPassiveHostPathContains(protected, path) {
+					fmt.Fprintln(stderr, "repair controller write overlaps an original input")
+					return 2
+				}
+			}
 		}
 	}
 	store, record, err := openRepairControllerStore(ctx, *checkpoint, manifest, hash, now())

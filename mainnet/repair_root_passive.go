@@ -53,8 +53,9 @@ type repairRootPassiveApproval struct {
 
 // Loaded exact activation bytes are retained separately from the incident.
 type repairRootPassiveEnvelope struct {
-	approval repairRootPassiveApproval
-	original rootPassiveHostApproval
+	approval    repairRootPassiveApproval
+	original    rootPassiveHostApproval
+	preparation *bootstrapChainPreparation
 	// Only private fixtures vary the real host's root uid and gid.
 	uid uint32
 	gid uint32
@@ -149,6 +150,8 @@ func loadRepairRootPassiveEnvelope(ctx context.Context, raw []byte, key string, 
 	if err := approval.validate(key); err != nil {
 		return nil, errors.Join(errRpcIntegrity, err)
 	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(approval.Plan.timeoutSeconds())*time.Second)
+	defer cancel()
 	originalRaw, err := readRepairProcessOriginal(ctx, host, approval.Plan.OriginalApproval, 64*1024)
 	if err != nil {
 		return nil, err
@@ -160,6 +163,15 @@ func loadRepairRootPassiveEnvelope(ctx context.Context, raw []byte, key string, 
 	self := &repairRootPassiveEnvelope{approval: approval, original: original, uid: host.rootUid, gid: host.rootGid}
 	if err := self.validate(key); err != nil {
 		return nil, errors.Join(errRpcIntegrity, err)
+	}
+	preparation, err := loadRootPassiveHostPreparation(ctx, original)
+	if err != nil {
+		// Known signed paths remain protected even when a nested read is pending.
+		return self, err
+	}
+	self.preparation = &preparation
+	if err := self.validatePaths(); err != nil {
+		return self, errors.Join(errRpcIntegrity, err)
 	}
 	return self, nil
 }
@@ -188,11 +200,20 @@ func (self *repairRootPassiveEnvelope) validate(key string) error {
 	if p.OriginalJournal.Path != original.StatePath || filepath.Dir(p.OriginalCheckpoint.Path) != original.CheckpointDirectory || original.DurableVolumes == nil {
 		return errors.New("passive root repair differs from original process custody")
 	}
+	return self.validatePaths()
+}
+
+// The retained bootstrap graph excludes repair journals and generation markers
+// from every nested authority path before any original owner can be opened.
+func (self *repairRootPassiveEnvelope) validatePaths() error {
+	p := self.approval.Plan
 	protected := self.protectedPaths()
 	for _, effect := range []string{p.StatePath, p.StatePath + ".lock", repairProcessClaimPath(self.profile()), repairProcessClaimPath(self.profile()) + ".lock"} {
 		for _, path := range protected {
-			if rootPassiveHostPathContains(effect, path) || rootPassiveHostPathContains(path, effect) || effect == path+".lock" {
-				return errors.New("passive root repair effect overlaps retained authority")
+			for _, retained := range []string{path, path + ".lock"} {
+				if rootPassiveHostPathContains(effect, retained) || rootPassiveHostPathContains(retained, effect) {
+					return errors.New("passive root repair effect overlaps retained authority")
+				}
 			}
 		}
 	}
@@ -206,6 +227,19 @@ func (self *repairRootPassiveEnvelope) protectedPaths() []string {
 	paths := []string{p.OriginalApproval.Path, p.OriginalJournal.Path, p.OriginalCheckpoint.Path, original.Preparation.Path, original.Runtime.Path, original.Unit.Path, original.Unit.Path + ".sn-control.lock", original.Binary.Path, original.Systemctl.Path, original.CheckpointDirectory, original.DurableVolumes.Path}
 	if p.Predecessor != nil {
 		paths = append(paths, p.Predecessor.Approval.Path, p.Predecessor.Journal.Path)
+	}
+	if self.preparation != nil {
+		preparation := self.preparation
+		config := preparation.Plan.Config
+		paths = append(paths, preparation.Root.ConfigPath, preparation.Root.ServiceInput.Path, config.RootValidator.Approval.Path, config.OwnerTrimPolicy.Path, config.OwnerTrimPlan.Path, config.Contracts.Path, preparation.Contracts.Config.Plan.Artifacts.Path)
+		paths = append(paths, preparation.childPaths()...)
+		for _, role := range config.Validators {
+			paths = append(paths, role.Config.Path)
+		}
+		for _, inspection := range preparation.Plan.ValidatorInspections {
+			paths = append(paths, inspection.DeclaredPaths...)
+			paths = append(paths, inspection.ApprovalReference.Path)
+		}
 	}
 	return paths
 }
