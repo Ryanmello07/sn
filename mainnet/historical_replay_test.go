@@ -67,6 +67,14 @@ func init() {
 		}
 	}
 	switch job.RuntimeCodeHex {
+	case "0xdb":
+		_, _ = os.Stderr.WriteString("principal API refusal; timeout and integrity are diagnostic words only\n" + strings.Repeat("x", 4096))
+		os.Exit(7)
+	case "0xdc":
+		_, _ = os.Stderr.WriteString("principal API execution interrupted\n")
+		_, _ = os.Stdout.WriteString("{\"schema\":")
+		time.Sleep(24 * time.Hour)
+		os.Exit(8)
 	case "0xc0", "0xc1", "0xc2", "0xc3", "0xc4":
 		report.HostProfile = "substrate-proof-bounded-hosts-v2"
 		switch job.RuntimeCodeHex {

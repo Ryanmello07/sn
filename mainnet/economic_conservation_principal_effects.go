@@ -227,6 +227,12 @@ func (self *economicConservationArchiveView) retainPrincipalEffects(original, co
 		}{Boundary: value.Projection.Boundary.Hash, Hash: hash}); err != nil {
 			return err
 		}
+		// Future vault pages may lag this retired native block. Retain the
+		// actual causal input in the bounded, authenticated private index.
+		if err := self.charge(value); err != nil {
+			return err
+		}
+		self.principalExecutions[value.Projection.Boundary.Number] = value
 		self.principalExecutionHashes[value.Projection.Boundary.Hash] = hash
 		self.principalEffects = next
 	}

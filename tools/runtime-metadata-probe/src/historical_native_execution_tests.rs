@@ -5,6 +5,9 @@
 #[path = "historical_native_yuma_tests.rs"]
 mod yuma_tests;
 
+#[path = "historical_native_capture_join_tests.rs"]
+mod capture_join_tests;
+
 use super::*;
 use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt, path::Path};
 
@@ -68,6 +71,19 @@ fn fixture_with_allocation(
     effects: Option<&str>,
     yuma: Option<&str>,
 ) -> (HistoricalJob, sp_core::storage::Storage) {
+    fixture_with_allocation_activation(continuous, principal, effects, yuma, principal.is_some())
+}
+
+fn fixture_with_allocation_activation(
+    continuous: bool,
+    principal: Option<Option<u64>>,
+    effects: Option<&str>,
+    yuma: Option<&str>,
+    drained_activation: bool,
+) -> (HistoricalJob, sp_core::storage::Storage) {
+    let capture = effects
+        .map(|mode| mode.starts_with("capture"))
+        .unwrap_or(false);
     let drains = [
         key(b"SubtensorModule", b"PendingServerEmission", true),
         key(b"SubtensorModule", b"PendingValidatorEmission", true),
@@ -153,6 +169,18 @@ fn fixture_with_allocation(
             (call $set (i64.const {owner_key}) (i64.const {owner_value})))"#,
         epoch_key=span(1700,epoch.len()), epoch_value=span(4048,8), events_key=span(1400,events.len()), event_value=span(4800,event.len()), provider_key=span(1500,provider.len()),provider_value=span(4368,24),owner_key=span(1600,owner.len()),owner_value=span(4392,8)));
     let mut body = String::new();
+    if drained_activation {
+        // Actual parent proof and RPC state start drained. The original next
+        // block accrues inputs before its observed drain and economic epoch.
+        declarations.push_str(&segment(1850, &words(&[100])));
+        for index in 0..2 {
+            body.push_str(&format!(
+                "(call $set (i64.const {}) (i64.const {}))",
+                span(1000 + index as u32 * 100, drains[index].len()),
+                span(1850, 8)
+            ));
+        }
+    }
     for index in 0..3 {
         body.push_str(&format!("(local.set $n (i32.wrap_i64 (call $drain (i64.const {})))) (if (i32.ne (i32.load8_u (local.get $n)) (i32.const 1)) (then unreachable)) (if (i32.ne (i32.load8_u offset=1 (local.get $n)) (i32.const 32)) (then unreachable)) (i64.store (i32.const {}) (i64.load offset=2 (local.get $n))) (call $set (i64.const {}) (i64.const {}))",span(1000+index as u32*100,drains[index].len()),4024+index*8,span(1000+index as u32*100,drains[index].len()),span(1800,8)));
     }
@@ -199,7 +227,10 @@ fn fixture_with_allocation(
             ("deposit", "add"),
             ("withdrawal", "sub"),
             ("refund", "add"),
-        ] {
+        ]
+        .into_iter()
+        .chain(capture.then_some(("vault_capture", "sub")))
+        {
             declarations.push_str(&format!(r#"
               (func $stake_{name} (export "stake_{name}") (param $amount i64)
                 (local $value i32)
@@ -212,18 +243,46 @@ fn fixture_with_allocation(
         if principal.flatten().is_some() {
             body.push_str("(call $stake_earning (i64.load (i32.const 4384)))");
             match mode {
-                "causes" => body.push_str("(call $stake_deposit (i64.const 5)) (call $stake_withdrawal (i64.const 3)) (call $stake_refund (i64.const 2))"),
+                "causes" | "capture-causes" => body.push_str("(call $stake_deposit (i64.const 5)) (call $stake_withdrawal (i64.const 3)) (call $stake_refund (i64.const 2))"),
                 "rollback" => body.push_str("(call $begin) (call $stake_deposit (i64.const 5)) (call $rollback)"),
-                "unclassified" | "residual" => {
+                "unclassified" | "residual" | "capture-unclassified" => {
                     // No selected callsite wraps these actual mutations. The
                     // independent storage census must retain both even at net zero.
                     body.push_str(&format!("(i64.store (i32.const 6408) (i64.add (i64.load (i32.const 6408)) (i64.const 1))) (call $set (i64.const {key}) (i64.const {value}))",key=span(2000,principal_key.len()),value=span(6408,8)));
-                    if mode=="unclassified" { body.push_str(&format!("(i64.store (i32.const 6408) (i64.sub (i64.load (i32.const 6408)) (i64.const 1))) (call $set (i64.const {key}) (i64.const {value}))",key=span(2000,principal_key.len()),value=span(6408,8))); }
+                    if mode=="unclassified" || mode=="capture-unclassified" { body.push_str(&format!("(i64.store (i32.const 6408) (i64.sub (i64.load (i32.const 6408)) (i64.const 1))) (call $set (i64.const {key}) (i64.const {value}))",key=span(2000,principal_key.len()),value=span(6408,8))); }
                 },
-                "earning" => (),
+                "earning" | "capture" | "capture-rollback" => (),
                 _ => panic!("unsupported synthetic principal effect mode"),
             }
         }
+    }
+    if capture {
+        declarations.push_str(&segment(6600, &phase));
+        declarations.push_str(&segment(6700, &[0, 0, 0, 0, 0]));
+        declarations.push_str(&segment(6710, &[1]));
+        // The synthetic opaque extrinsic ends in its EVM transaction identity.
+        // The original program reads that actual body input; no Go trace peer
+        // supplies the captured memory or the committed stake delta.
+        for offset in [0, 8, 16, 24] {
+            body.push_str(&format!("(i64.store (i32.const {}) (i64.load (i32.add (local.get 0) (i32.sub (local.get 1) (i32.const {})))))",6500+offset,32-offset));
+        }
+        body.push_str(&format!(
+            "(call $set (i64.const {}) (i64.const {}))",
+            span(6600, phase.len()),
+            span(6700, 5)
+        ));
+        if effects == Some("capture-rollback") {
+            body.push_str("(call $begin)");
+        }
+        body.push_str(&format!("(local.set $n (i32.wrap_i64 (call $get (i64.const {})))) (call $stake_vault_capture (i64.load offset=2 (local.get $n)))",span(2000,principal_key.len())));
+        if effects == Some("capture-rollback") {
+            body.push_str("(call $rollback)");
+        }
+        body.push_str(&format!(
+            "(call $set (i64.const {}) (i64.const {}))",
+            span(6600, phase.len()),
+            span(6710, 1)
+        ));
     }
     if let Some(mode) = yuma {
         declarations.push_str(&yuma_tests::declarations(mode));
@@ -237,11 +296,16 @@ fn fixture_with_allocation(
     let code = wasm(&declarations, &body);
     let mut initial = parent_storage(&code);
     for (index, drain) in drains.iter().enumerate() {
-        initial
-            .top
-            .insert(drain.clone(), words(&[[100, 100, 0][index]]));
+        initial.top.insert(
+            drain.clone(),
+            words(&[if drained_activation {
+                0
+            } else {
+                [100, 100, 0][index]
+            }]),
+        );
     }
-    initial.top.insert(phase, vec![2]);
+    initial.top.insert(phase.clone(), vec![2]);
     initial.top.insert(events.clone(), vec![0]);
     if let Some(stock) = principal.flatten() {
         initial.top.insert(principal_key.to_vec(), words(&[stock]));
@@ -267,18 +331,25 @@ fn fixture_with_allocation(
     expected.top.insert(provider.to_vec(), words(&[9, 3, 6]));
     expected.top.insert(owner.to_vec(), words(&[89]));
     expected.top.insert(events, [vec![4], event].concat());
+    if capture {
+        expected.top.insert(phase, vec![1]);
+    }
     if let Some(stock) = principal.flatten() {
         expected.top.insert(
             principal_key.to_vec(),
-            words(&[stock
-                + 6
-                + if effects == Some("causes") {
-                    4
-                } else if effects == Some("residual") {
-                    1
-                } else {
-                    0
-                }]),
+            words(&[if capture && effects != Some("capture-rollback") {
+                0
+            } else {
+                stock
+                    + 6
+                    + if effects == Some("causes") {
+                        4
+                    } else if effects == Some("residual") {
+                        1
+                    } else {
+                        0
+                    }
+            }]),
         );
     }
     let backing = TestExternalities::<Blake2Hasher>::new_with_code_and_state(
@@ -286,7 +357,11 @@ fn fixture_with_allocation(
         expected.clone(),
         StateVersion::V1,
     );
-    let extrinsics: Vec<Vec<u8>> = Vec::new();
+    let extrinsics: Vec<Vec<u8>> = if capture {
+        vec![vec![0x99; 32].encode()]
+    } else {
+        Vec::new()
+    };
     let child = NativeHeader::new(
         101,
         BlakeTwo256::ordered_trie_root(extrinsics.clone(), StateVersion::V1),
@@ -368,11 +443,14 @@ fn fixture_with_allocation(
     }
     if effects.is_some() {
         profile.principal_storage_prefixes = Some(vec![encoded(principal_key)]);
-        for name in ["earning", "deposit", "withdrawal", "refund"] {
+        for name in ["earning", "deposit", "withdrawal", "refund"]
+            .into_iter()
+            .chain(capture.then_some("vault_capture"))
+        {
             let mut rule = observation_profile(
                 &code,
                 &format!("stake_{name}"),
-                &format!("native-principal-{name}"),
+                &format!("native-principal-{}", name.replace('_', "-")),
             )
             .rules
             .remove(0);
@@ -383,6 +461,10 @@ fn fixture_with_allocation(
                 ("before", 6400, 8),
                 ("after", 6408, 8),
             ]);
+            if name == "vault_capture" {
+                rule.memory
+                    .extend(fields(&[("transaction-hash", 6500, 32)]));
+            }
             profile.rules.push(rule);
         }
     }
@@ -393,7 +475,7 @@ fn fixture_with_allocation(
             parent_hash: parent.hash().0,
             child_header_hex: encoded(&child.encode()),
             child_hash: child.hash().0,
-            extrinsics_hex: Vec::new(),
+            extrinsics_hex: extrinsics.iter().map(|raw| encoded(raw)).collect(),
             runtime_code_hex: encoded(&code),
             runtime_code_sha256: sha2_256(&code),
             runtime_code_blake2b_256: blake2_256(&code),
@@ -590,7 +672,7 @@ fn historical_native_principal_exports_original_parent_jobs() {
         );
         jobs.push((name, exported));
     }
-    let mut missing = fixture();
+    let mut missing = fixture_with_allocation_activation(false, None, None, None, true).0;
     missing.principal_queries = Some(vec![principal::PrincipalQuery {
         hotkey: [0x11; 32],
         coldkey: [0x33; 32],
@@ -675,5 +757,63 @@ fn historical_native_principal_effects_export_original_causal_jobs() {
             file.sync_all().unwrap();
         }
         std::fs::File::open(directory).unwrap().sync_all().unwrap();
+    }
+}
+
+// Read the parent from its actual proof before either engine executes. The
+// original next-block program must still compute and emit the same 9/89 pair.
+#[test]
+fn historical_native_principal_activation_is_proof_drained_before_original_accrual() {
+    let (job, _) = fixture_with_principal(false, Some(Some(14)));
+    let parent: NativeHeader = scale_exact(
+        "parent",
+        &hex_bytes("parent", &job.parent_header_hex, MAXIMUM_HEADER_BYTES).unwrap(),
+    )
+    .unwrap();
+    let nodes = job
+        .proof_nodes_hex
+        .iter()
+        .map(|node| hex_bytes("node", node, MAXIMUM_CODE_BYTES).unwrap());
+    let backend =
+        create_proof_check_backend::<Blake2Hasher>(*parent.state_root(), StorageProof::new(nodes))
+            .unwrap();
+    for item in [
+        b"PendingServerEmission".as_slice(),
+        b"PendingValidatorEmission".as_slice(),
+        b"PendingRootAlphaDivs".as_slice(),
+    ] {
+        assert_eq!(
+            backend
+                .storage(&key(b"SubtensorModule", item, true))
+                .unwrap(),
+            Some(words(&[0])),
+            "original activation parent is not actually drained"
+        );
+    }
+    let captured =
+        super::capture_tests::collect(&job).expect("original accrued activation capture");
+    let exported: HistoricalJob = serde_json::from_str(&captured.job_json).unwrap();
+    let replayed = run(&exported).expect("original accrued activation replay");
+    for report in [&captured.replay, &replayed] {
+        assert!(report.post_state_reproduced);
+        let trace = report.hook_observations.as_ref().unwrap();
+        let epoch = trace
+            .observations
+            .iter()
+            .find(|value| value.purpose == "native-epoch")
+            .unwrap();
+        let emitted = epoch
+            .native
+            .as_ref()
+            .unwrap()
+            .memory
+            .iter()
+            .find(|value| value.name == "emission")
+            .unwrap();
+        assert_eq!(
+            emitted.bytes_hex,
+            encoded(&words(&[9, 89])),
+            "original accrual failed to preserve full source allocation"
+        );
     }
 }

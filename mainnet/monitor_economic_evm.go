@@ -20,6 +20,7 @@ const maximumMonitorEvmReadBytes = 8 * 1024 * 1024
 // Hashes and identities come from the local review, never from discovered RPC
 // code or observed event labels. EVM heights are not native heights.
 type monitorEconomicEvmPolicy struct {
+	CaptureIdentity   bool                         `json:"original_capture_identity,omitempty"`
 	Role              string                       `json:"role"`
 	Network           planNetwork                  `json:"network"`
 	EvmGenesisHash    string                       `json:"evm_genesis_hash"`
@@ -45,6 +46,9 @@ func monitorEvmAddress(value string) bool {
 }
 
 func (self monitorEconomicEvmPolicy) validate(expected identityExpectation) error {
+	if self.CaptureIdentity && self.ContractKind != "settlement-vault" {
+		return errors.New("economic capture identity requires the original settlement vault")
+	}
 	if err := self.validateResourceRevision(); err != nil {
 		return err
 	}
@@ -92,13 +96,14 @@ func monitorEconomicEvmPaths(checkpoint, metrics, role string) (string, string) 
 // Event values are canonical ABI integers/addresses/bytes, not JSON floating
 // point values. The original receipt and inclusion position remain retained.
 type monitorEconomicEvmEvent struct {
-	Block            economicEmissionBoundary `json:"block"`
-	TransactionHash  string                   `json:"transaction_hash"`
-	TransactionIndex uint64                   `json:"transaction_index"`
-	LogIndex         uint64                   `json:"log_index"`
-	Name             string                   `json:"name"`
-	Values           map[string]string        `json:"values"`
-	ReceiptHash      string                   `json:"receipt_hash"`
+	CaptureIdentity  *monitorEconomicVaultCaptureIdentity `json:"original_capture_identity,omitempty"`
+	Block            economicEmissionBoundary             `json:"block"`
+	TransactionHash  string                               `json:"transaction_hash"`
+	TransactionIndex uint64                               `json:"transaction_index"`
+	LogIndex         uint64                               `json:"log_index"`
+	Name             string                               `json:"name"`
+	Values           map[string]string                    `json:"values"`
+	ReceiptHash      string                               `json:"receipt_hash"`
 }
 
 // Fees concern independently selected senders and included transactions,

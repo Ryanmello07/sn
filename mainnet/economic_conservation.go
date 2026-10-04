@@ -129,14 +129,15 @@ type economicConservationBacking struct {
 }
 
 type economicConservationCapture struct {
-	Id                    string                    `json:"id"`
-	Event                 monitorEconomicEvmEvent   `json:"event"`
-	Native                *economicEmissionBoundary `json:"native,omitempty"`
-	Lots                  []string                  `json:"native_lots"`
-	KnownLiquidAlpha      *string                   `json:"known_native_liquid_alpha"`
-	AmountDifferenceAlpha *string                   `json:"capture_minus_known_liquid_alpha"`
-	OpeningPrincipalAlpha *string                   `json:"opening_principal_alpha"`
-	Status                string                    `json:"status"`
+	PrincipalEffects      *economicConservationCaptureEffects `json:"original_native_capture,omitempty"`
+	Id                    string                              `json:"id"`
+	Event                 monitorEconomicEvmEvent             `json:"event"`
+	Native                *economicEmissionBoundary           `json:"native,omitempty"`
+	Lots                  []string                            `json:"native_lots"`
+	KnownLiquidAlpha      *string                             `json:"known_native_liquid_alpha"`
+	AmountDifferenceAlpha *string                             `json:"capture_minus_known_liquid_alpha"`
+	OpeningPrincipalAlpha *string                             `json:"opening_principal_alpha"`
+	Status                string                              `json:"status"`
 }
 
 type economicConservationEntitlement struct {
@@ -314,10 +315,16 @@ func (self economicConservationState) validate(ctx context.Context, policy econo
 		seen[lot.Id] = true
 	}
 	for _, capture := range self.Captures {
-		if seen[capture.Id] || capture.Id != rootObjectHash(capture.Event) || capture.Event.Name != "EmissionCaptured" || capture.OpeningPrincipalAlpha != nil {
+		if seen[capture.Id] || capture.Id != rootObjectHash(capture.Event) || capture.Event.Name != "EmissionCaptured" || capture.OpeningPrincipalAlpha != nil && capture.PrincipalEffects == nil {
 			return errors.New("economic capture changed original event or invented principal evidence")
 		}
 		seen[capture.Id] = true
+	}
+	if self.Archive == nil || self.archiveView != nil {
+		checked := self
+		if err := checked.reconcileCaptureEffects(ctx, policy, true); err != nil {
+			return err
+		}
 	}
 	for _, claim := range self.Claims {
 		if seen[claim.Id] || claim.Id != rootObjectHash(claim.Event) || claim.Event.Name != "Claimed" {

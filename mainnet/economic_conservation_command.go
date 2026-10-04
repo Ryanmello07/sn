@@ -51,6 +51,7 @@ type economicConservationSummary struct {
 	VaultState                     *monitorEconomicEvmSnapshot                 `json:"observed_vault_state"`
 	EarningOccurrences             int                                         `json:"earning_occurrences"`
 	Captures                       int                                         `json:"captures"`
+	CausallyJoinedCaptures         uint64                                      `json:"original_native_receipt_captures"`
 	MatchedCaptures                int                                         `json:"mapped_captures"`
 	AcceptedClaims                 int                                         `json:"accepted_claims"`
 	AggregatePayments              int                                         `json:"aggregate_payments"`
@@ -117,6 +118,9 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 		result.ClaimStatuses = append(result.ClaimStatuses, state.Status)
 	}
 	for _, capture := range self.Captures {
+		if capture.causalComplete() {
+			result.CausallyJoinedCaptures++
+		}
 		if capture.Native != nil {
 			result.MatchedCaptures++
 		}
@@ -131,6 +135,7 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 		if self.Archive != nil {
 			direct, tail, unrouted, collateral = self.Archive.Amounts.Direct, self.Archive.Amounts.Tail, self.Archive.Amounts.Unrouted, self.Archive.Amounts.Collateral
 			result.EarningOccurrences += int(self.Archive.Counts.Lots)
+			result.CausallyJoinedCaptures += self.Archive.Counts.CausalCaptures
 			result.Captures += int(self.Archive.Counts.Captures)
 			result.MatchedCaptures += int(self.Archive.Counts.Captures)
 			result.AcceptedClaims += int(self.Archive.Counts.Claims)
@@ -361,6 +366,8 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 		return nil, false, false, err
 	}
 	if err := candidate.reconcile(policy); err != nil {
+		next.JoinIssue = economicConservationIssue(err)
+	} else if err := candidate.reconcileCaptureEffects(ctx, policy, false); err != nil {
 		next.JoinIssue = economicConservationIssue(err)
 	} else {
 		candidate.JoinIssue = ""

@@ -126,7 +126,7 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool) *nativeProdu
 	}
 	parent, parentNumber := nativeProducerTestHeader(t, job.ParentHeaderHex, job.ParentHash)
 	child, childNumber := nativeProducerTestHeader(t, job.ChildHeaderHex, job.ChildHash)
-	if parentNumber != 100 || childNumber != 101 || len(job.ExtrinsicsHex) != 0 {
+	if parentNumber != 100 || childNumber != 101 || len(job.ExtrinsicsHex) > 1 || len(job.ExtrinsicsHex) == 1 && !job.PrincipalEffects {
 		t.Fatal("unexpected original-program fixture shape")
 	}
 	source := newEconomicEmissionFixture(t)

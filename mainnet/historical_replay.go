@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -411,7 +412,27 @@ func runHistoricalProofWorker(owner context.Context, cancel context.CancelFunc, 
 	}
 	// Join before examining any buffer written by os/exec's pipe goroutines.
 	if err := errors.Join(err, stdout.err, stderr.err, owner.Err()); err != nil {
-		return nil, fmt.Errorf("historical replay child refused: %w", err)
+		return nil, historicalReplayRefusal(err, stderr.buffer.Bytes())
 	}
 	return stdout.buffer.Bytes(), owner.Err()
+}
+
+// Diagnostic text is bounded context only. The original joined errors retain
+// cancellation, I/O and process exit identity; text never chooses a retry or
+// integrity classification for either capture or replay.
+func historicalReplayRefusal(cause error, diagnostic []byte) error {
+	const maximum = 2048
+	if len(diagnostic) > maximum {
+		diagnostic = diagnostic[:maximum]
+	}
+	text := strings.TrimSpace(strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 {
+			return ' '
+		}
+		return r
+	}, string(diagnostic)))
+	if text == "" {
+		return fmt.Errorf("historical replay child refused: %w", cause)
+	}
+	return fmt.Errorf("historical replay child refused: %w; child diagnostic: %s", cause, text)
 }

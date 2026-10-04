@@ -14,13 +14,14 @@ import (
 )
 
 type economicConservationCounts struct {
-	Mappings     uint64 `json:"mappings"`
-	Lots         uint64 `json:"lots"`
-	Captures     uint64 `json:"captures"`
-	Entitlements uint64 `json:"entitlements"`
-	Claims       uint64 `json:"claims"`
-	Payments     uint64 `json:"payments"`
-	Receipts     uint64 `json:"receipts"`
+	CausalCaptures uint64 `json:"original_native_receipt_captures,omitempty"`
+	Mappings       uint64 `json:"mappings"`
+	Lots           uint64 `json:"lots"`
+	Captures       uint64 `json:"captures"`
+	Entitlements   uint64 `json:"entitlements"`
+	Claims         uint64 `json:"claims"`
+	Payments       uint64 `json:"payments"`
+	Receipts       uint64 `json:"receipts"`
 }
 
 type economicConservationArchivedAmounts struct {
@@ -57,6 +58,9 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 	}
 	if len(self.Segments) == 0 || uint64(len(self.Segments)) > resources.ArchiveSegments || self.Native.Number < policy.Native.Observation.From.Number || self.Native.Number > state.Native.Cursor.Number || self.Vault.Number < policy.Vault.From.Number || self.Vault.Number > state.Vault.Cursor.Number || !rootCanonicalHash(self.Native.Hash) || !rootCanonicalHash(self.Vault.Hash) {
 		return errors.New("economic archive lost original progress or bounded catalog")
+	}
+	if self.Counts.CausalCaptures > self.Counts.Captures {
+		return errors.New("economic archive causal capture count exceeds original captures")
 	}
 	seen := map[string]monitorHistoryReference{}
 	for _, reference := range self.Segments {
@@ -103,6 +107,8 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
+	principalExecutions      map[uint64]economicConservationPrincipalExecution
+	captureEffectHeads       map[string]economicConservationCaptureEffects
 	yuma                     *economicConservationYumaArchive
 	yumaHashes               map[string]string
 	principalEffects         *economicConservationPrincipalArchive
@@ -130,7 +136,7 @@ type economicConservationArchiveView struct {
 }
 
 func newEconomicConservationArchiveView(resources economicConservationResources) *economicConservationArchiveView {
-	return &economicConservationArchiveView{yumaHashes: map[string]string{}, principalExecutionHashes: map[string]string{}, feePolicies: map[string]economicNativeFeePolicy{}, feeReviews: map[string]bool{}, feeEvidence: map[string]string{}, feeRetired: map[string]string{}, feeTransactions: map[string]historicalFeeContextTransaction{}, feeOrigins: map[string]economicConservationFeeObligation{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
+	return &economicConservationArchiveView{principalExecutions: map[uint64]economicConservationPrincipalExecution{}, captureEffectHeads: map[string]economicConservationCaptureEffects{}, yumaHashes: map[string]string{}, principalExecutionHashes: map[string]string{}, feePolicies: map[string]economicNativeFeePolicy{}, feeReviews: map[string]bool{}, feeEvidence: map[string]string{}, feeRetired: map[string]string{}, feeTransactions: map[string]historicalFeeContextTransaction{}, feeOrigins: map[string]economicConservationFeeObligation{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
 }
 
 // The encoded facts and fixed per-entry bookkeeping have separate bounds.
@@ -286,10 +292,13 @@ func compactEconomicConservationWithFeeUpdates(ctx context.Context, policy econo
 		pool := capture.Event.Values["noId"]
 		// A mapped difference is still an unmatched obligation. Keep the
 		// complete unresolved suffix and its lots until evidence resolves it.
-		if blockedPools[pool] || capture.Native == nil || capture.AmountDifferenceAlpha == nil || *capture.AmountDifferenceAlpha != "0" {
+		if blockedPools[pool] || capture.Native == nil || capture.AmountDifferenceAlpha == nil || *capture.AmountDifferenceAlpha != "0" && !capture.causalComplete() {
 			blockedPools[pool] = true
 			next.Captures = append(next.Captures, capture)
 			continue
+		}
+		if capture.causalComplete() {
+			archive.Counts.CausalCaptures++
 		}
 		archive.Counts.Captures++
 		archive.PoolBoundaries[pool] = *capture.Native
@@ -474,6 +483,12 @@ func (self *economicConservationArchiveView) admit(original, compacted *economic
 		}
 		if err := self.charge([]string{key, capture.Id}); err != nil {
 			return err
+		}
+		if capture.causalComplete() {
+			if err := self.charge(capture.PrincipalEffects); err != nil {
+				return err
+			}
+			self.captureEffectHeads[capture.Event.Values["noId"]] = *capture.PrincipalEffects
 		}
 		self.captureKeys[key] = capture.Id
 	}
