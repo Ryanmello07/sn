@@ -70,7 +70,7 @@ func repairActiveValidatorRunning(plan repairValidatorPlan, manager repairValida
 // this incident's margins; another role cannot substitute its source or policy.
 func (self *repairValidatorHost) activeIncident(ctx context.Context, plan repairActiveValidatorPlan, now time.Time, fresh bool) error {
 	p := plan.Process
-	raw, err := self.read(ctx, plan.MonitorServices.Path, p.MonitorUid, maxMonitorFeeServicesBytes, false)
+	raw, err := self.readServicesPolicy(ctx, plan.MonitorServices.Path, p.MonitorUid)
 	if err != nil {
 		return err
 	}

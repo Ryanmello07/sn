@@ -29,7 +29,9 @@ func TestMonitorServicesWholeFeePopulatedFrameUsesExplicitAuthority(t *testing.T
 		t.Fatal("populated service policy lacks its explicit twofold frame", len(raw), err)
 	}
 	f.writePolicy(t)
-	loaded, err := loadMonitorServices(t.Context(), f.policyPath, monitorTestExpectation(), f.checkpointPath, f.metricsPath)
+	expected := monitorTestExpectation()
+	expected.NativeChain = source.policy.Native.Observation.Network.NativeChain
+	loaded, err := loadMonitorServices(t.Context(), f.policyPath, expected, f.checkpointPath, f.metricsPath)
 	if err != nil || loaded == nil || len(loaded.NativeEconomics[0].Observation.Execution.FeeCensus.Participants) != 2*rootCensusLimit {
 		t.Fatal("actual service admission lost complete original fee roster", err)
 	}
@@ -42,7 +44,7 @@ func TestMonitorServicesWholeFeePopulatedFrameUsesExplicitAuthority(t *testing.T
 	if err := os.WriteFile(f.policyPath, raw, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loadMonitorServices(t.Context(), f.policyPath, monitorTestExpectation(), f.checkpointPath, f.metricsPath); err == nil || !strings.Contains(err.Error(), "declared original role frame") {
+	if _, err := loadMonitorServices(t.Context(), f.policyPath, expected, f.checkpointPath, f.metricsPath); err == nil || !strings.Contains(err.Error(), "declared original role frame") {
 		t.Fatal("legacy policy borrowed whole-fee frame", err)
 	}
 }

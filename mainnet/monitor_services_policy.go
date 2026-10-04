@@ -53,7 +53,7 @@ var monitorRolePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 // Policy admission precedes all source workers. The same independent chain
 // identity must describe chain observations and every supplied producer role.
 func loadMonitorServices(ctx context.Context, path string, expected identityExpectation, checkpointPath, metricsPath string) (*monitorServicesPolicy, error) {
-	raw, err := readMonitorServiceFile(ctx, path, maxMonitorFeeServicesBytes, false, monitorServiceReadHooks{})
+	raw, err := readMonitorServicesPolicyFile(ctx, path, monitorServiceReadHooks{})
 	if err != nil {
 		return nil, errors.Join(errors.New("service policy must be bounded protected regular JSON"), err)
 	}
