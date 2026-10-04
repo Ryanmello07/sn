@@ -2,7 +2,7 @@
 
 ## Current execution status — October 4
 
-The [reviewed source integration](evidence/qualified-base-main-integration-20261004.json) is now on SN main at `4a2c2681`. Its code, tests and module files exactly match the qualified `2477` composition; only current documentation and evidence differ. Original failed results remain retained. Connect main advanced upstream during pull, so its refreshed merge remains separate; SN keeps the exact qualified Core `2ea` dependency. Native producer, renewal, conservation and Server model correction qualification are still pending.
+The [reviewed source integration](evidence/qualified-base-main-integration-20261004.json) is now on SN main at `4a2c2681`. Its code, tests and module files exactly match the qualified `2477` composition; only current documentation and evidence differ. Original failed results remain retained. The [Connect merge](evidence/connect-upstream-main-integration-20261004.json) is also pushed at `c5b10cc7`, preserving upstream changes and exact qualified restore bytes. SN keeps the qualified Core `2ea` dependency; no new combined-source test result is inferred. Native producer, renewal, conservation and Server model correction qualification are still pending.
 
 The [38-requirement checkpoint](evidence/current-readiness-checkpoint-20261003.md) remains authoritative for scope. Historical receipts below keep their exact source and test conditions. Component qualification does not establish production activation.
 
