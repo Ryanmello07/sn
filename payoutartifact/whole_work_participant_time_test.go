@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/urfoundation/sn/protocol"
+	coreprotocol "github.com/urnetwork/connect/protocol"
+	"google.golang.org/protobuf/proto"
 )
 
 // Change the independently signed original event clocks before publishing a
@@ -146,6 +148,110 @@ func TestWholeWorkLateCutFuturePeerNetworkDoesNotRewriteCurrentRoster(t *testing
 	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
 	if err != nil || value == nil || !value.Complete || !value.AttributionComplete || value.Contracts != 1 || value.ExpectedProviders[1].NetworkId != ([16]byte{20}) || value.ExpectedProviders[1].UsageBytes != 100 {
 		t.Fatalf("future peer network polluted or invalidated current attribution: %+v, %v", value, err)
+	}
+}
+
+// A late source cut may first observe an unrelated peer after this epoch. The
+// independently dated admission excludes it before current-roster membership.
+func TestWholeWorkLateCutFutureNewPeerDoesNotRequireCurrentEnrollment(t *testing.T) {
+	fixture := participantEvidenceFixture(t)
+	id := fixture.artifact.ClosedWork.Records[1].ContractId
+	futurePeer := [16]byte{4}
+	marshal := func(value proto.Message) []byte {
+		raw, err := proto.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	var requestHash [32]byte
+	fixture.changeCut(t, 0, 1, func(cut *coreprotocol.OriginalWorkCut) {
+		contract := &cut.Contracts[1]
+		admission, err := coreprotocol.DecodeOriginalContractAdmission(t.Context(), contract.OriginalCreation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request, err := coreprotocol.DecodeOriginalContractRequest(t.Context(), admission.Request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var requestFrame, resultFrame coreprotocol.Frame
+		var requested coreprotocol.CreateContract
+		var result coreprotocol.CreateContractResult
+		var stored coreprotocol.StoredContract
+		for _, value := range []struct {
+			raw     []byte
+			message proto.Message
+		}{{raw: request.RequestFrame, message: &requestFrame}, {raw: admission.ResultFrame, message: &resultFrame}, {raw: contract.StoredContract, message: &stored}} {
+			if err := proto.Unmarshal(value.raw, value.message); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := proto.Unmarshal(requestFrame.MessageBytes, &requested); err != nil {
+			t.Fatal(err)
+		}
+		if err := proto.Unmarshal(resultFrame.MessageBytes, &result); err != nil {
+			t.Fatal(err)
+		}
+		stored.DestinationId, requested.DestinationId = futurePeer[:], futurePeer[:]
+		contract.StoredContract = marshal(&stored)
+		requestFrame.MessageBytes = marshal(&requested)
+		request.RequestFrame = marshal(&requestFrame)
+		requestHash = sha256.Sum256(request.RequestFrame)
+		request, err = coreprotocol.SignOriginalContractRequest(t.Context(), request, fixture.ownerKeys[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		admission.Request, err = request.Bytes(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		result.CreateContract, result.Contract.StoredContractBytes = &requested, contract.StoredContract
+		resultFrame.MessageBytes = marshal(&result)
+		admission.ResultFrame = marshal(&resultFrame)
+		admission, err = coreprotocol.SignOriginalContractAdmission(t.Context(), admission, fixture.ownerKeys[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		contract.OriginalCreation, err = admission.Bytes(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	fixture.changeCut(t, 1, 1, func(cut *coreprotocol.OriginalWorkCut) {
+		cut.Contracts = cut.Contracts[:1]
+	})
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{121}, ed25519.SeedSize))
+	for index, raw := range fixture.inventory.AttributionOriginals {
+		original, err := protocol.DecodeProviderWorkReceipt(t.Context(), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if original.Reservation == nil || original.Reservation.ContractId != participantTestId(id) {
+			continue
+		}
+		reservation := original.Reservation
+		reservation.DestinationId, reservation.DestinationNetworkId = participantTestId(futurePeer), participantTestId([16]byte{40})
+		reservation.DestinationHead = protocol.ProviderWorkEndpointHead{ClientId: reservation.DestinationId, NetworkId: reservation.DestinationNetworkId}
+		reservation.RequestFrameHash, reservation.Complete = &requestHash, false
+		original, err = protocol.SignProviderWorkReceipt(t.Context(), original, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixture.inventory.AttributionOriginals[index], err = original.Bytes(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	end := fixture.inventory.Clock.EndTime
+	participantSetOriginalTimes(t, fixture, id, end, end.Add(time.Second))
+	fixture.artifact.ClosedWork.Records = fixture.artifact.ClosedWork.Records[:1]
+	fixture.artifact.ClosedWork.Count = 1
+	fixture.inventory.Window.Records = fixture.inventory.Window.Records[:1]
+	creationRebuildArtifact(t, fixture)
+	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
+	if err != nil || value == nil || !value.Complete || !value.AttributionComplete || value.Contracts != 1 || len(value.ExpectedProviders) != 3 || value.ExpectedProviders[1].UsageBytes != 100 {
+		t.Fatalf("later un-enrolled peer invalidated the original current provider vector: %+v, %v", value, err)
 	}
 }
 
