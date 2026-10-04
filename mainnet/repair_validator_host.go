@@ -35,6 +35,7 @@ type repairValidatorHost struct {
 	cgroupType     func(string) (int64, error)
 	execute        func(context.Context, string, []string) ([]byte, error)
 	storageCommand func(context.Context, *exec.Cmd) error
+	operator       *repairOperatorTransports
 	monotonic      func() (uint64, error)
 }
 
