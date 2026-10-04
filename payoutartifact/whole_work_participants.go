@@ -249,7 +249,7 @@ func (self *wholeWorkParticipantPool) streamParties(ctx context.Context, facts c
 
 // The immutable reservation establishes actual creation time even when a late
 // SDK cut contains later work. Request and direction joins precede that use.
-func (self *wholeWorkParticipantPool) bindReservation(ctx context.Context, contract *wholeWorkContract, facts coreprotocol.OriginalContractCreationFacts, ownerNetworkKVs map[[16]byte][16]byte) (protocol.ProviderWorkReceipt, bool, error) {
+func (self *wholeWorkParticipantPool) bindReservation(ctx context.Context, contract *wholeWorkContract, facts coreprotocol.OriginalContractCreationFacts, ownerNetworkKVs map[[16]byte][16]byte, windowEnd time.Time) (protocol.ProviderWorkReceipt, bool, error) {
 	hash, exists := self.reservationKVs[facts.ContractId]
 	if !exists || contract == nil {
 		return protocol.ProviderWorkReceipt{}, false, nil
@@ -260,8 +260,14 @@ func (self *wholeWorkParticipantPool) bindReservation(ctx context.Context, contr
 	destination, _ := protocol.ParseProviderWorkId(reservation.DestinationId)
 	sourceNetwork, _ := protocol.ParseProviderWorkId(reservation.SourceNetworkId)
 	destinationNetwork, _ := protocol.ParseProviderWorkId(reservation.DestinationNetworkId)
-	if source != facts.SourceId || destination != facts.DestinationId || reservation.Capacity != facts.ReservedBytes || ownerNetworkKVs[source] != sourceNetwork || ownerNetworkKVs[destination] != destinationNetwork {
+	if source != facts.SourceId || destination != facts.DestinationId || reservation.Capacity != facts.ReservedBytes {
 		return protocol.ProviderWorkReceipt{}, false, errors.Join(ErrClosedWorkIntegrity, errors.New("original reservation differs from SDK admission"))
+	}
+	// A future peer may enroll or change networks after this roster's window.
+	// Its independently signed creation time can exclude it without attributing
+	// any bytes or importing that later peer into the current provider universe.
+	if time.UnixMicro(reservation.CreatedAtUnixMicro).Before(windowEnd) && (ownerNetworkKVs[source] != sourceNetwork || ownerNetworkKVs[destination] != destinationNetwork) {
+		return protocol.ProviderWorkReceipt{}, false, errors.Join(ErrClosedWorkIntegrity, errors.New("original in-window reservation differs from its owner networks"))
 	}
 	if reservation.RequestFrameHash == nil || reservation.UsageOriginIsSource == nil || !self.uniqueSourceAt(original) {
 		return original, false, nil
@@ -307,7 +313,7 @@ func verifyWholeWorkParticipants(ctx context.Context, artifact *Artifact, author
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		original, bound, err := pool.bindReservation(ctx, contracts[id], facts, ownerNetworkKVs)
+		original, bound, err := pool.bindReservation(ctx, contracts[id], facts, ownerNetworkKVs, inventory.Clock.EndTime)
 		if err != nil {
 			return nil, err
 		}

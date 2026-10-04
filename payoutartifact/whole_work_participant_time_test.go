@@ -112,6 +112,43 @@ func TestWholeWorkLateCutFutureOnlyWindowRemainsKnownZero(t *testing.T) {
 	}
 }
 
+func TestWholeWorkLateCutFuturePeerNetworkDoesNotRewriteCurrentRoster(t *testing.T) {
+	fixture := participantEvidenceFixture(t)
+	id := fixture.artifact.ClosedWork.Records[1].ContractId
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{121}, ed25519.SeedSize))
+	for index, raw := range fixture.inventory.AttributionOriginals {
+		original, err := protocol.DecodeProviderWorkReceipt(t.Context(), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if original.Reservation == nil || original.Reservation.ContractId != participantTestId(id) {
+			continue
+		}
+		reservation := original.Reservation
+		reservation.DestinationNetworkId = participantTestId([16]byte{40})
+		reservation.DestinationHead = protocol.ProviderWorkEndpointHead{ClientId: reservation.DestinationId, NetworkId: reservation.DestinationNetworkId}
+		reservation.Complete = false
+		original, err = protocol.SignProviderWorkReceipt(t.Context(), original, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixture.inventory.AttributionOriginals[index], err = original.Bytes(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	end := fixture.inventory.Clock.EndTime
+	participantSetOriginalTimes(t, fixture, id, end, end.Add(time.Second))
+	fixture.artifact.ClosedWork.Records = fixture.artifact.ClosedWork.Records[:1]
+	fixture.artifact.ClosedWork.Count = 1
+	fixture.inventory.Window.Records = fixture.inventory.Window.Records[:1]
+	creationRebuildArtifact(t, fixture)
+	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
+	if err != nil || value == nil || !value.Complete || !value.AttributionComplete || value.Contracts != 1 || value.ExpectedProviders[1].NetworkId != ([16]byte{20}) || value.ExpectedProviders[1].UsageBytes != 100 {
+		t.Fatalf("future peer network polluted or invalidated current attribution: %+v, %v", value, err)
+	}
+}
+
 func TestWholeWorkLateTerminalCutUsesOriginalOutcomeToProveOpenAtEnd(t *testing.T) {
 	fixture := participantEvidenceFixture(t)
 	id := fixture.artifact.ClosedWork.Records[1].ContractId
