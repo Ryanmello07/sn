@@ -137,7 +137,8 @@
     "delayed-native-renewal-source-finding-20261004.json": "82c71afafe493279220ed5903260f0d26843c44f0beda21eb9581a45694adbcf",
     "qualified-base-main-integration-20261004.json": "da2ae37c4a27a17b4b5849a26f980c292a0dbd67c8fcae7e8ad42e051d52be2e",
     "connect-upstream-main-integration-20261004.json": "6820d22b15c63bae7500b635f48225ea34762993765771b5105891adda96d5e0",
-    "native-qualification-lease-continuity-20261004.json": "be2c304b1896f036d9c7177d3c125509ff3bac618643ee101e3d7b0dc4663f39"
+    "native-qualification-lease-continuity-20261004.json": "be2c304b1896f036d9c7177d3c125509ff3bac618643ee101e3d7b0dc4663f39",
+    "native-engine-lifetime-failure-20261004.json": "57cadcf24efa526df4c013fb05116804d192fc78f911570d09b4e3a4d8e183b8"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
