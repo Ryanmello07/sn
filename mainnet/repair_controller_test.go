@@ -269,3 +269,50 @@ func TestRepairControllerSharedSoftFailureRetainsRetryableExit(t *testing.T) {
 		t.Fatal("shared observation became terminal or integrity borrowed retry")
 	}
 }
+
+// The first unit cannot finish until an unrelated fifth envelope runs. Four
+// entries for that unit must not occupy every worker behind a blocking lock.
+func TestRepairControllerBusyUnitCannotStarveUnrelatedEnvelope(t *testing.T) {
+	c := repairControllerTestScheduler(t, 5)
+	shared := &sync.Mutex{}
+	for index := range 4 {
+		c.unitLocks[index] = shared
+	}
+	healthy := make(chan struct{})
+	var observed atomic.Bool
+	c.step = func(ctx context.Context, entry repairControllerEntry, attempted bool, reserve func() error) (string, bool, error) {
+		if err := reserve(); err != nil {
+			return "reserve-refused", false, err
+		}
+		if entry.Id == "incident-04" {
+			observed.Store(true)
+			close(healthy)
+			return "resumed-generation-observed", true, nil
+		}
+		select {
+		case <-healthy:
+			return "resumed-generation-observed", true, nil
+		case <-ctx.Done():
+			return "cancelled", false, ctx.Err()
+		}
+	}
+	// This is a deadlock backstop, not the positive ordering assertion: no owner
+	// can release the first unit until the fifth envelope's explicit signal.
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	if err := c.cycle(ctx); err != nil || !observed.Load() || c.record.Entries[4].Status != "completed" {
+		t.Fatal("busy unit starved an unrelated signed envelope", err, observed.Load(), c.record)
+	}
+	busy := 0
+	for _, state := range c.record.Entries[:4] {
+		if state.Disposition == "original-unit-busy" {
+			busy++
+			if state.Attempted {
+				t.Fatal("busy unit acquired a claim intent")
+			}
+		}
+	}
+	if busy == 0 {
+		t.Fatal("same-unit workload did not exercise bounded pending admission")
+	}
+}

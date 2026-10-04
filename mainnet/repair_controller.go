@@ -193,7 +193,12 @@ func (self *repairController) cycle(ctx context.Context) error {
 					}
 					return nil
 				}
-				self.unitLocks[index].Lock()
+				if !self.unitLocks[index].TryLock() {
+					_ = persist(func(value *repairControllerEntryState) {
+						value.Status, value.Cause, value.Disposition = "pending", "pending", "original-unit-busy"
+					})
+					continue
+				}
 				if owner.Err() != nil {
 					self.unitLocks[index].Unlock()
 					return
