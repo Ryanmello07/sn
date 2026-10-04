@@ -240,7 +240,8 @@
     "native-adoptionade5-original-terminal-root-readback-20261004.json": "040b9e1c7b6f47b930a580e01b747d54e2c5fadb547fa98c38ca59cc470d3e9b",
     "conservation-entitlement9a-scoped-source-root-review-20261004.json": "b56bf4de289537e97774aba220404d1ae72e4da1e86ca357ab175842c58bc051",
     "economic-storage5f5-scoped-source-root-review-20261004.json": "232544c51127edd649bd8275bf0a27189ebe2a5e83a75ce874294c359f4f1523",
-    "native-capture263b-sequence-source-root-review-20261004.json": "f65bc5d99b29aa6ea9f14c979e3aabde428f5cdefd3254624cb43d8a9fe03cbb"
+    "native-capture263b-sequence-source-root-review-20261004.json": "f65bc5d99b29aa6ea9f14c979e3aabde428f5cdefd3254624cb43d8a9fe03cbb",
+    "fee-claim-archive-handoff-root-finding-20261004.json": "06af9caa6165536edf9893a1bd7807e3fdbd453d83e1cb7f13ccbfb8787c8763"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
