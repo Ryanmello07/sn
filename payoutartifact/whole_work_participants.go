@@ -192,7 +192,7 @@ func (self *wholeWorkParticipantPool) endpointComplete(original protocol.Provide
 
 // Stream members come from the first actual creation, including when this
 // contract reused that stream or the companion request reverses its endpoints.
-func (self *wholeWorkParticipantPool) streamParties(ctx context.Context, facts coreprotocol.OriginalContractCreationFacts, outcome protocol.ProviderWorkOutcome, contracts map[[16]byte]*wholeWorkContract, creations map[[16]byte]coreprotocol.OriginalContractCreationFacts, parties map[[16]byte][16]byte) (bool, error) {
+func (self *wholeWorkParticipantPool) streamParties(ctx context.Context, facts coreprotocol.OriginalContractCreationFacts, outcome protocol.ProviderWorkOutcome, contracts map[[16]byte]*wholeWorkContract, creations map[[16]byte]coreprotocol.OriginalContractCreationFacts, priorCreations map[[16]byte]wholeWorkPriorCreation, parties map[[16]byte][16]byte) (bool, error) {
 	if facts.StreamId == ([16]byte{}) {
 		if outcome.StreamHash != ([32]byte{}) {
 			return false, ErrClosedWorkIntegrity
@@ -219,23 +219,38 @@ func (self *wholeWorkParticipantPool) streamParties(ctx context.Context, facts c
 	originId, _ := protocol.ParseProviderWorkId(cohort.OriginContractId)
 	origin, exists := creations[originId]
 	contract := contracts[originId]
+	var originalCreation coreprotocol.OriginalWorkContract
+	if exists && contract != nil {
+		originalCreation, exists = contract.ends[origin.SourceId]
+	} else if !exists && contract == nil {
+		// A retired generation supplies only the authenticated stream birth
+		// dependency. It never becomes current work or a current roster member.
+		prior, retained := priorCreations[originId]
+		origin, originalCreation, exists = prior.Facts, prior.Original, retained
+	} else {
+		exists = false
+	}
 	originReservationHash, originReserved := self.reservationKVs[originId]
-	if !exists || contract == nil || !originReserved {
+	if !exists || !originReserved {
 		return false, nil
 	}
-	originReservation := self.originalKVs[originReservationHash].Reservation
+	originReservationOriginal := self.originalKVs[originReservationHash]
+	originReservation := originReservationOriginal.Reservation
+	if !self.uniqueSourceAt(originReservationOriginal) || originReservation.RequestFrameHash == nil || originReservation.UsageOriginIsSource == nil {
+		return false, nil
+	}
 	if cohort.CreatedAtUnixMicro < originReservation.CreatedAtUnixMicro || cohort.CreatedAtUnixMicro > outcome.ClosedAtUnixMicro {
 		return false, nil
 	}
 	if origin.StreamId != facts.StreamId || origin.SourceId != source || origin.DestinationId != destination || len(origin.IntermediaryIds) != len(cohort.Intermediaries) {
 		return false, ErrClosedWorkIntegrity
 	}
-	admission, err := coreprotocol.DecodeOriginalContractAdmission(ctx, contract.ends[contract.source].OriginalCreation)
+	admission, err := coreprotocol.DecodeOriginalContractAdmission(ctx, originalCreation.OriginalCreation)
 	if err != nil {
 		return false, errors.Join(ErrClosedWorkIntegrity, err)
 	}
 	request, err := coreprotocol.DecodeOriginalContractRequest(ctx, admission.Request)
-	if err != nil || sha256.Sum256(request.RequestFrame) != cohort.RequestFrameHash {
+	if err != nil || sha256.Sum256(request.RequestFrame) != cohort.RequestFrameHash || *originReservation.RequestFrameHash != cohort.RequestFrameHash || *originReservation.UsageOriginIsSource != origin.UsageOriginIsSource || originReservation.Capacity != origin.ReservedBytes || originReservation.SourceId != cohort.SourceId || originReservation.DestinationId != cohort.DestinationId {
 		return false, errors.Join(ErrClosedWorkIntegrity, err)
 	}
 	usageOrigin := facts.SourceId
@@ -297,7 +312,7 @@ func (self *wholeWorkParticipantPool) bindReservation(ctx context.Context, contr
 
 // This is the only positive earning-party path: exact original requests,
 // fenced endpoint absence, original stream membership and original settlement.
-func verifyWholeWorkParticipants(ctx context.Context, artifact *Artifact, authority WholeWorkAuthority, inventory *WholeWorkInventory, contracts map[[16]byte]*wholeWorkContract, creations map[[16]byte]coreprotocol.OriginalContractCreationFacts) (*wholeWorkParticipantVerification, error) {
+func verifyWholeWorkParticipants(ctx context.Context, artifact *Artifact, authority WholeWorkAuthority, inventory *WholeWorkInventory, contracts map[[16]byte]*wholeWorkContract, creations map[[16]byte]coreprotocol.OriginalContractCreationFacts, priorCreations map[[16]byte]wholeWorkPriorCreation) (*wholeWorkParticipantVerification, error) {
 	if ctx == nil || artifact == nil || artifact.ClosedWork == nil || inventory == nil || inventory.Clock == nil {
 		return nil, ErrClosedWorkUnavailable
 	}
@@ -420,7 +435,7 @@ func verifyWholeWorkParticipants(ctx context.Context, artifact *Artifact, author
 		if !facts.UsageOriginIsSource {
 			parties = map[[16]byte][16]byte{source: sourceNetwork}
 		}
-		streamComplete, err := pool.streamParties(ctx, facts, *outcome, contracts, creations, parties)
+		streamComplete, err := pool.streamParties(ctx, facts, *outcome, contracts, creations, priorCreations, parties)
 		if err != nil {
 			return nil, err
 		}
