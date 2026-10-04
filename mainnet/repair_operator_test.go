@@ -967,6 +967,11 @@ func TestRepairOperatorSuccessorRetainsAcknowledgedOriginalJournal(t *testing.T)
 					t.Fatal(err)
 				}
 				repairValidatorTestWrite(t, retained.File.Path, nil, 0600)
+				if os.Geteuid() == 0 {
+					if err := os.Chown(retained.File.Path, int(old.original.Plan.Uid), int(old.original.Plan.Gid)); err != nil {
+						t.Fatal(err)
+					}
+				}
 				var state syscall.Stat_t
 				if err := syscall.Stat(retained.File.Path, &state); err != nil {
 					t.Fatal(err)
