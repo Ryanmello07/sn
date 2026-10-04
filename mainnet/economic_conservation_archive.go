@@ -552,7 +552,17 @@ func (self *economicConservationArchiveView) indexAdmission(original, compacted 
 	return archive.retiresFees(archive.Segments[len(archive.Segments)-1]), nil
 }
 
-func openEconomicConservationArchive(ctx context.Context, policy economicConservationPolicy, state *economicConservationState, hooks monitorServiceHooks) (_ *economicConservationArchiveView, resultErr error) {
+func openEconomicConservationArchive(ctx context.Context, policy economicConservationPolicy, state *economicConservationState, hooks monitorServiceHooks) (*economicConservationArchiveView, error) {
+	return readEconomicConservationArchive(ctx, policy, state, hooks, openMonitorHistoryReader)
+}
+
+// Foreground admission retains each original snapshot owner. Offline restore
+// supplies a copied-source reader instead and discards the returned index before
+// producing a preparation request; it cannot turn that index into a live owner.
+func readEconomicConservationArchive(ctx context.Context, policy economicConservationPolicy, state *economicConservationState, hooks monitorServiceHooks, read func(context.Context, monitorHistoryReference) (*monitorHistorySnapshot, []byte, error)) (_ *economicConservationArchiveView, resultErr error) {
+	if state == nil || read == nil {
+		return nil, errors.New("economic history requires an exact current checkpoint and reader")
+	}
 	resources, err := state.resources(policy)
 	if err != nil {
 		return nil, err
@@ -587,11 +597,13 @@ func openEconomicConservationArchive(ctx context.Context, policy economicConserv
 			return nil, err
 		}
 		hooks.beforeHistoryRead(economicConservationRole, "conservation-archive-admission")
-		owner, raw, err := openMonitorHistoryReader(ctx, reference)
+		owner, raw, err := read(ctx, reference)
 		if err != nil {
 			return nil, err
 		}
-		view.owners = append(view.owners, owner)
+		if owner != nil {
+			view.owners = append(view.owners, owner)
+		}
 		var original economicConservationState
 		if err := decodeMonitorHistoryInput(raw, &original); err != nil {
 			return nil, err

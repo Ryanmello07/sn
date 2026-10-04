@@ -363,6 +363,9 @@ func applyEconomicConservationArchive(ctx context.Context, plan economicConserva
 // No signer is loaded here. Operators supply an independently signed optional
 // resource revision in the request, then explicitly apply the exact plan.
 func runEconomicConservationArchive(ctx context.Context, args []string, stdout, stderr io.Writer, hooks monitorServiceHooks) int {
+	if len(args) != 0 && (args[0] == "restore-request" || args[0] == "restore-cohort-plan") {
+		return runEconomicConservationRestore(ctx, args, stdout, stderr, hooks)
+	}
 	if len(args) == 0 || args[0] != "plan" && args[0] != "apply" {
 		fmt.Fprintln(stderr, "usage: economic-conservation-archive plan --request FILE --request-sha256 HASH | apply --plan FILE --plan-sha256 HASH")
 		return 2
