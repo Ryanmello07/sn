@@ -77,7 +77,7 @@ func (self repairControllerManifest) validate() error {
 	}
 	ids := map[string]bool{}
 	for _, entry := range self.Entries {
-		if len(entry.Id) < 1 || len(entry.Id) > 64 || ids[entry.Id] || entry.Kind != "validator" && entry.Kind != "active-validator" && entry.Kind != "root-passive" || !repairValidatorPath(entry.Approval.Path) || !validMonitorReadDigest(entry.Approval.Sha256) || !rootCanonicalHash(entry.PublicKey) {
+		if len(entry.Id) < 1 || len(entry.Id) > 64 || ids[entry.Id] || entry.Kind != "validator" && entry.Kind != "active-validator" && entry.Kind != "root-passive" && entry.Kind != "operator" || !repairValidatorPath(entry.Approval.Path) || !validMonitorReadDigest(entry.Approval.Sha256) || !rootCanonicalHash(entry.PublicKey) {
 			return errors.New("repair controller entry identity, kind or independent pin differs")
 		}
 		for _, character := range entry.Id {

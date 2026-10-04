@@ -70,6 +70,14 @@ func loadRepairControllerEnvelope(ctx context.Context, entry repairControllerEnt
 		if err != nil {
 			return result, err
 		}
+	case "operator":
+		process, err := loadRepairOperatorEnvelope(ctx, raw, entry.PublicKey, host)
+		if process != nil {
+			result.process, result.plan = process, process.profile()
+		}
+		if err != nil {
+			return result, err
+		}
 	default:
 		return result, errors.Join(errRpcIntegrity, errors.New("repair controller has no adapter for this action"))
 	}
