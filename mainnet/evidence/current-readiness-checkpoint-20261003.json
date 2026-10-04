@@ -129,7 +129,8 @@
     "foreground-successor-source-review-20261004.json": "8e554f51dcf1799185b7bbbbb9ec2d961159fd76e0bd7fb051e016aedc452be2",
     "rpc-retry-cause-traversal-finding-20261004.json": "a78089add177bacabb8d1fe3fde1080f7d0dc4179c316a04cc8a20af94bba8f2",
     "foreground-successor-normal-independent-readback-20261004.json": "90ff95902652f2746c018be2d8ab69dddbc7174bdb3af2bf2f7123fbc6b2e225",
-    "native-recipient-cross-domain-finding-20261004.json": "0207b5671b6c9957d7a94d2d83e9336502d6e4bacfaefc3a9c4d4fe2c49523a7"
+    "native-recipient-cross-domain-finding-20261004.json": "0207b5671b6c9957d7a94d2d83e9336502d6e4bacfaefc3a9c4d4fe2c49523a7",
+    "foreground-successor-race-independent-readback-20261004.json": "2876a2e63bb21e0367e917782740d9a9970d48f1b14c2350d3ec72ea7f64e95d"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -184,7 +185,7 @@
       "closed": false,
       "evidence": "0e5-validator-foreground-failure-source-review-20261003.json",
       "requirement": "PH-08",
-      "status": "Foreground successor2477 passes all20 focused normal roots and validator vet, including the three original failures. Race, two causal controls and actual host sizing remain. Original0e5 six passes/three failures per mode retained."
+      "status": "Foreground successor2477 passes all20 focused roots normally and under race detection, plus validator vet, including the three original failures. Two causal controls per mode and actual host sizing remain. Original0e5 six passes/three failures per mode retained."
     },
     {
       "closed": false,
