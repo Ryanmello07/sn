@@ -258,7 +258,8 @@
     "admissionab0-dual77-normal19-independent-failure-readback-20261004.json": "97994b444a5af7075162611e12d6d16090d1ece3361b08e8d50b056c7fa60470",
     "conservation-follow-historyffe-scoped-source-root-review-20261004.json": "aeeeffdf756fe6a941973ce07fb228beec78fb2b96cd1030c27f3950d6c331d6",
     "conservation-follow-terminalb6-source-root-review-20261004.json": "63fd2cc372e91ca1949ddbb5f2ce353def792624747d2655ef329a5c005dbee7",
-    "admissionab0-dual77-two-mode-independent-terminal-readback-20261004.json": "4a04c5f459ed60866eb9b3f3e45bb90e1873b18f93179350165c13818c9d7fb4"
+    "admissionab0-dual77-two-mode-independent-terminal-readback-20261004.json": "4a04c5f459ed60866eb9b3f3e45bb90e1873b18f93179350165c13818c9d7fb4",
+    "admissionab0-reattachment-control-independent-readback-20261004.json": "53f26f4dc06a87f1f312231f93e43c53d7a1581963a369958f5e834895aaeab3"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
