@@ -128,7 +128,8 @@
     "0e5-mainnet-race-independent-readback-20261004.json": "a90af504723444fe7451790341f2d7ffcab726c91efd6abb77070204773671c7",
     "foreground-successor-source-review-20261004.json": "8e554f51dcf1799185b7bbbbb9ec2d961159fd76e0bd7fb051e016aedc452be2",
     "rpc-retry-cause-traversal-finding-20261004.json": "a78089add177bacabb8d1fe3fde1080f7d0dc4179c316a04cc8a20af94bba8f2",
-    "foreground-successor-normal-independent-readback-20261004.json": "90ff95902652f2746c018be2d8ab69dddbc7174bdb3af2bf2f7123fbc6b2e225"
+    "foreground-successor-normal-independent-readback-20261004.json": "90ff95902652f2746c018be2d8ab69dddbc7174bdb3af2bf2f7123fbc6b2e225",
+    "native-recipient-cross-domain-finding-20261004.json": "0207b5671b6c9957d7a94d2d83e9336502d6e4bacfaefc3a9c4d4fe2c49523a7"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
