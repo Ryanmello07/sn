@@ -114,6 +114,7 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
+	providerCandidate        *economicProviderCandidate
 	providerCensuses         map[string]*economicProviderAdmitted
 	providerContracts        map[economicProviderContractKey]map[string]struct{}
 	wholeFees                *economicWholeFeeIndex

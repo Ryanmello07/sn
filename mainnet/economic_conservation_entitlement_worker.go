@@ -191,6 +191,13 @@ func applyEconomicEntitlementResult(ctx context.Context, policy economicConserva
 	if err == nil && result.census == nil {
 		err = monitorEvmIntegrity("economic artifact handoff omitted complete original evidence")
 	}
+	var candidate *economicProviderCandidate
+	if source, exists := policy.entitlementSource(record.PoolId); err == nil && exists && source.ProviderMeasurements != nil {
+		candidate, err = next.archiveView.beginProviderCandidate()
+		if err == nil {
+			defer candidate.finish(false)
+		}
+	}
 	if err == nil {
 		if record.censusHash() != "" && record.censusHash() != result.census.ContentHash {
 			err = monitorEvmIntegrity("economic artifact handoff replaced retained original census")
@@ -221,6 +228,7 @@ func applyEconomicEntitlementResult(ctx context.Context, policy economicConserva
 		}
 	}
 	if err != nil {
+		candidate.finish(false)
 		// Refusal never removes old facts or manufactures a zero obligation.
 		next, cloneErr := cloneEconomicConservation(state, policy)
 		if cloneErr != nil {
@@ -242,6 +250,7 @@ func applyEconomicEntitlementResult(ctx context.Context, policy economicConserva
 		}
 		return next, nil
 	}
+	candidate.finish(true)
 	record.CensusIssue, record.CensusHeld, record.CensusCapacityBasis = "", false, ""
 	return next, nil
 }

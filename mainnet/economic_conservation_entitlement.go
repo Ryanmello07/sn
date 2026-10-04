@@ -668,6 +668,7 @@ func (self *economicConservationArchiveView) admitEntitlementCensuses(ctx contex
 				return err
 			}
 		}
+		self.providerCandidate.captureCensus(key)
 		self.entitlementVerified[key] = binding
 		self.entitlementLeaves[key] = leaves
 	}

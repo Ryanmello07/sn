@@ -180,6 +180,7 @@ func (self *economicConservationArchiveView) retainProviderOriginals(ctx context
 	if value == nil {
 		return nil
 	}
+	self.providerCandidate.captureProvider(key, value)
 	if prior := self.providerCensuses[key]; prior != nil {
 		if prior.Measurement != value.Measurement || prior.InventoryHash != value.InventoryHash || prior.ClosedWork != value.ClosedWork {
 			return errors.Join(errRpcIntegrity, errors.New("economic original provider census changed after admission"))
