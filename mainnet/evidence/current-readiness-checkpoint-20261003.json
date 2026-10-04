@@ -130,7 +130,9 @@
     "rpc-retry-cause-traversal-finding-20261004.json": "a78089add177bacabb8d1fe3fde1080f7d0dc4179c316a04cc8a20af94bba8f2",
     "foreground-successor-normal-independent-readback-20261004.json": "90ff95902652f2746c018be2d8ab69dddbc7174bdb3af2bf2f7123fbc6b2e225",
     "native-recipient-cross-domain-finding-20261004.json": "0207b5671b6c9957d7a94d2d83e9336502d6e4bacfaefc3a9c4d4fe2c49523a7",
-    "foreground-successor-race-independent-readback-20261004.json": "2876a2e63bb21e0367e917782740d9a9970d48f1b14c2350d3ec72ea7f64e95d"
+    "foreground-successor-race-independent-readback-20261004.json": "2876a2e63bb21e0367e917782740d9a9970d48f1b14c2350d3ec72ea7f64e95d",
+    "0e5-sixteen-operative-controls-independent-review-20261004.json": "0bd080062cf5658d0a0060cc19bfdeda4ae84082b8438a40a1115260a2597822",
+    "native-finite-resource-admission-20261004.json": "54fb412aa4acef042b324311b6a78f13e1394c4843029aeca8f7230bd53ee0eb"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
