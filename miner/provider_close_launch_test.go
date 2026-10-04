@@ -22,8 +22,8 @@ func TestProviderLaunchArgumentsSelectActualDomainOption(t *testing.T) {
 // not relabel another provider, and a missing optional domain remains unsigned.
 func TestProviderLaunchDeviceSettingsKeepSeparateDomainOwners(t *testing.T) {
 	first, second := ProviderDeviceSettings([32]byte{71}), ProviderDeviceSettings([32]byte{72})
-	first.ClientSettings.ContractManagerSettings.CloseReportDomainHash[0]++
-	if second.ClientSettings.ContractManagerSettings.CloseReportDomainHash != ([32]byte{72}) || first.ClientSettings == second.ClientSettings || first.ClientSettings.ContractManagerSettings == second.ClientSettings.ContractManagerSettings {
+	first.ClientSettings.ContractManagerSettings.CloseReportDomainHash[0] = 99
+	if second.ClientSettings.ContractManagerSettings.CloseReportDomainHash != ([32]byte{72}) || first.ClientSettings.ContractManagerSettings == second.ClientSettings.ContractManagerSettings {
 		t.Fatal("provider launch shared mutable domain settings")
 	}
 	legacy := ProviderDeviceSettings([32]byte{})
