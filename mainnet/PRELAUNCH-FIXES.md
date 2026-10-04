@@ -2,7 +2,7 @@
 
 ## Current execution status — October 4
 
-Native engine compilation has an [actual retained Rust lifetime failure](evidence/native-engine-lifetime-failure-20261004.json). Astra is correcting the borrowed-backend lifetime contract in a separate successor. Compile every affected native engine and run its real cross-language consumers before accepting this change; a passing Go graph or Go test image does not establish Rust engine compatibility. The original batch continues independent scopes, and recovery must retain completed stages and rerun only affected work.
+The native lifetime successor now compiles both actual engines and passes eight original Rust roots plus the borrowed-backend regression root. Two exporters exposed a separate test-fixture defect: synthetic bulk-memory instructions are unsupported by the pinned node execution profile. Correct the fixtures to that profile rather than broaden the production VM. The original failed batches remain retained; the next continuation reuses compiled engines and runs only affected exporters and unfinished checks.
 
 The [original native qualification batch is terminal](evidence/native-finite66-terminal-independent-review-20261004.json): 20 phases passed, four failed and 42 were not run because their dependencies failed. Both 32-root Server modes, both vets, four Server controls and all six capacity phases passed. The original failed result is retained; corrected native and prefix continuations are next. Its initial preflight exposed an expired resource-lock holder before any test ran. Keep cumulative capacity accounting tied to an immutable filesystem baseline and authenticate the current lease holder separately; process renewal must not reset consumed capacity or discard completed work. The corrected runner uses that separation. The [lease-continuity evidence](evidence/native-qualification-lease-continuity-20261004.json) retains the original launch conditions; resource consumption is not reset for continuation.
 
@@ -30,6 +30,16 @@ The fix authenticates the copied original once under retained custody before tar
 The [finite mixed qualification batch](evidence/mixed-qualification-terminal-20261003.json) has finished all 35 distinct charged phases. Root rehashed 283 artifact bindings, checked the immutable final ledger, and verified that its host lease was released. Sampled cumulative filesystem consumption was 3,692,138,496 bytes against the 24 GiB cap. Preserve the original dependency setup refusal and the four intended regression-control phase failures; completed work is not restarted or discarded. This sampled consumption informs the next workload forecast and does not establish production capacity.
 
 EVM restore SN `42f76551` now passes the selected 848-package dependency graph and compilation. No EVM behavior/race/vet result follows from compilation. The next finite batch must use the completed current-source restore/Claim composition and frozen repair/lineage inputs, with separate forecasts for any database-backed full Server model suite. Historical full-model receipts remain distinct from current Server `5f2edd47`.
+
+## Qualification continuity and node-profile fidelity — October 4
+
+The [qualified Rust result classifier](evidence/rust-output-classifier-integration-20261004.json) is integrated on main. Fourteen unit tests and two original-predicate controls passed. Twelve retained prefix outputs were wrongly rejected because diagnostic JSON interrupted the printed test status; exact root identity, exit code and final one-root census reproduce their success without running them again. All fifteen prefix positives have now passed; four prefix controls remain unfinished. Original failure receipts remain unchanged.
+
+Reading a protected executable may change its access time. Authenticate its inode, content, permissions, ownership, size and modification/change times; do not reject unchanged bytes because access time advanced. The corrected custody checker passed six tests and an original-body control, allowing retained Go images to be reused.
+
+Synthetic runtime fixtures must obey the actual node feature profile. Unsupported instructions should fail explicitly, with parent state and pending work preserved. Qualification should fix an invalid fixture rather than enable unsupported production VM features. Compilation, execution, economic conservation and live runtime authority remain separate results.
+
+Server model correction qualification has been admitted for 45 model roots and one worker root in both normal and race modes, two vets and three regression controls per mode. Use the original cumulative resource baseline and collect all ordinary failures. Run one separately forecast full successor model suite afterward. Astra continues conservation, renewal, retry and source integration work in parallel; none of this establishes deployed mainnet behavior.
 
 ## Evidence sampling must preserve the run — October 3
 
