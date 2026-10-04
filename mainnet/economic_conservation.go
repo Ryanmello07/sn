@@ -178,9 +178,11 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	FeeRevision          *economicConservationFeeRevision         `json:"native_fee_revision,omitempty"`
 	NativeFeeObligations []economicConservationFeeObligation      `json:"native_fee_obligations,omitempty"`
 	NativeFeeIssue       string                                   `json:"native_fee_issue,omitempty"`
 	NativeFeeHeldRequest string                                   `json:"native_fee_held_request,omitempty"`
+	NativeFeeHeldPolicy  string                                   `json:"native_fee_held_policy,omitempty"`
 	NativeFeePending     bool                                     `json:"native_fee_pending,omitempty"`
 	NativeFees           []economicConservationFeeEvidence        `json:"native_fee_evidence,omitempty"`
 	Archive              *economicConservationArchive             `json:"archive,omitempty"`
@@ -232,6 +234,9 @@ func (self economicConservationState) facts() uint64 {
 }
 
 func (self economicConservationState) validate(policy economicConservationPolicy) error {
+	if _, err := self.nativeFeeAuthority(policy); err != nil {
+		return err
+	}
 	operating, err := self.operatingPolicy(policy)
 	if err != nil {
 		return err
@@ -260,6 +265,9 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 	}
 	if len(self.NativeFeeIssue) > 2048 || self.NativeFeeHeldRequest != "" && !planSha256(self.NativeFeeHeldRequest) || policy.FeeAuthority == nil && (self.NativeFeeIssue != "" || self.NativeFeeHeldRequest != "" || self.NativeFeePending) {
 		return errors.New("economic native fee status differs from original policy or resource bound")
+	}
+	if self.NativeFeeHeldPolicy != "" && (!planSha256(self.NativeFeeHeldPolicy) || self.NativeFeeHeldRequest == "" || policy.FeeAuthority == nil) {
+		return errors.New("economic unadmitted fee policy hold lost its exact request")
 	}
 	if self.Vault.BatchCount != 0 && self.OpeningVault == nil {
 		return errors.New("economic conservation lost its opening vault obligations")

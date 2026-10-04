@@ -51,12 +51,16 @@ func (self *economicConservationFeeWorker) start(state *economicConservationStat
 		}
 	}
 	ctx, cancel := context.WithTimeout(self.ctx, self.budget)
+	authorities, authorityErr := state.admittedNativeFeePolicies(self.policy)
 	self.cancel, self.done, self.active = cancel, make(chan struct{}), true
 	done := self.done
 	go func() {
 		defer close(done)
 		defer cancel()
-		result := self.read(ctx, cancel, known)
+		result := economicConservationFeeResult{reference: self.reference, err: authorityErr}
+		if result.err == nil {
+			result = self.read(ctx, cancel, known, authorities)
+		}
 		// Exactly one owned producer uses this slot. Publish even a completed
 		// integrity refusal racing cancellation so cleanup can retain its cause.
 		self.result <- result
@@ -66,7 +70,7 @@ func (self *economicConservationFeeWorker) start(state *economicConservationStat
 	}()
 }
 
-func (self *economicConservationFeeWorker) read(ctx context.Context, cancel context.CancelFunc, known map[string]string) economicConservationFeeResult {
+func (self *economicConservationFeeWorker) read(ctx context.Context, cancel context.CancelFunc, known map[string]string, authorities map[string]economicNativeFeePolicy) economicConservationFeeResult {
 	result := economicConservationFeeResult{reference: self.reference}
 	if self.hooks.beforeNativeFeeRead != nil {
 		self.hooks.beforeNativeFeeRead(ctx, cancel)
@@ -85,14 +89,14 @@ func (self *economicConservationFeeWorker) read(ctx context.Context, cancel cont
 		result.err = errors.Join(errEconomicNativeFeeIntegrity, err)
 		return result
 	}
-	if self.policy.FeeAuthority == nil || request.Policy != *self.policy.FeeAuthority {
-		result.err = errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic fee request differs from original independent policy"))
-		return result
-	}
 	result.request = &request
 	requestHash := rootObjectHash(request)
 	if known[requestHash] != "" {
 		result.known, result.err = known[requestHash], ctx.Err()
+		return result
+	}
+	if authority, known := authorities[rootObjectHash(request.Policy)]; !known || request.Policy != authority {
+		result.err = errors.Join(errEconomicNativeFeeIntegrity, errEconomicNativeFeeUnadmittedPolicy)
 		return result
 	}
 	result.evidence, result.err = runEconomicNativeFeeEvidence(ctx, request, self.budget, self.hooks.nativeFeeReplay)
@@ -151,9 +155,14 @@ func applyEconomicConservationFeeResult(ctx context.Context, policy economicCons
 		next.NativeFeeIssue = economicConservationIssue(err)
 		if errors.Is(err, errEconomicNativeFeeIntegrity) {
 			next.NativeFeeHeldRequest = rootObjectHash(result.reference)
+			next.NativeFeeHeldPolicy = ""
+			if errors.Is(err, errEconomicNativeFeeUnadmittedPolicy) && result.request != nil {
+				next.NativeFeeHeldPolicy = rootObjectHash(result.request.Policy)
+			}
 		}
 	} else {
 		next.NativeFeeIssue, next.NativeFeeHeldRequest = "", ""
+		next.NativeFeeHeldPolicy = ""
 	}
 	next.NativeFeePending = false
 	if ctx.Err() != nil {

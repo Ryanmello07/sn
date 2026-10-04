@@ -23,6 +23,7 @@ const economicConservationRole = "economic-conservation"
 type economicConservationSummary struct {
 	NativeFeeIssue                 string                          `json:"native_fee_issue,omitempty"`
 	NativeFeeHeldRequest           string                          `json:"native_fee_held_request,omitempty"`
+	NativeFeeHeldPolicy            string                          `json:"native_fee_held_policy,omitempty"`
 	NativeFeePending               bool                            `json:"native_fee_pending,omitempty"`
 	AdmittedNativeFees             *economicConservationFeeSummary `json:"admitted_native_fee_census,omitempty"`
 	Schema                         string                          `json:"schema"`
@@ -83,6 +84,7 @@ func (self *economicConservationState) summary(policy economicConservationPolicy
 		result.ArchiveSegments = uint64(len(self.Archive.Segments))
 	}
 	result.NativeFeeIssue, result.NativeFeeHeldRequest, result.NativeFeePending = self.NativeFeeIssue, self.NativeFeeHeldRequest, self.NativeFeePending
+	result.NativeFeeHeldPolicy = self.NativeFeeHeldPolicy
 	result.AdmittedNativeFees, err = self.feeSummary(policy)
 	if err != nil {
 		return result, err
@@ -183,6 +185,9 @@ func loadEconomicConservation(owner *monitorCheckpointStore, policy economicCons
 	}
 	if result.Renewal != nil && result.Renewal.Original.Path != owner.path {
 		return nil, errors.New("economic resource renewal moved the original checkpoint")
+	}
+	if result.FeeRevision != nil && result.FeeRevision.Original.Path != owner.path {
+		return nil, errors.New("economic fee revision moved the original checkpoint")
 	}
 	return &result, nil
 }

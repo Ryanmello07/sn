@@ -59,10 +59,13 @@ func economicConservationSameFee(prior, current historicalFeeContextTransaction)
 // Only admitNativeFees below can add a report: it invokes real proof/replay
 // verification. This function is also used after archive/checkpoint decoding.
 func (self *economicConservationState) feeSummary(policy economicConservationPolicy) (*economicConservationFeeSummary, error) {
+	if _, err := self.nativeFeeAuthority(policy); err != nil {
+		return nil, err
+	}
 	if err := self.validateAdmittedFeeArchive(); err != nil {
 		return nil, err
 	}
-	if self.Archive != nil && self.Archive.NativeFees != nil && self.archiveView == nil {
+	if self.Archive != nil && (self.Archive.NativeFees != nil || self.Archive.FeeRevisionHead != nil) && self.archiveView == nil {
 		// Decoding checks only bounded syntax. Every public owner admits the
 		// full original archive and repeats validation before observing/output.
 		return self.Archive.NativeFees, nil
@@ -91,7 +94,7 @@ func (self *economicConservationState) feeSummary(policy economicConservationPol
 		request, report := retained.Request, retained.Evidence
 		digest := report.ContentHash
 		report.ContentHash = ""
-		if request.Policy != *policy.FeeAuthority || report.Schema != economicNativeFeeEvidenceSchema || report.RequestHash != rootObjectHash(request) || active[report.RequestHash] || requests[report.RequestHash] != "" && requests[report.RequestHash] != digest || !planSha256(report.ApprovalHash) || !planSha256(digest) || rootObjectHash(report) != digest || report.Context == nil || report.Context.RequestHash != rootObjectHash(request.Context) || report.Context.Genesis != policy.FeeAuthority.Genesis || report.Context.EvmChainId != policy.FeeAuthority.EvmChainId || report.SpendingAuthorized || report.WholeBlockCensusComplete {
+		if !self.nativeFeePolicyKnown(policy, request.Policy) || report.Schema != economicNativeFeeEvidenceSchema || report.RequestHash != rootObjectHash(request) || active[report.RequestHash] || requests[report.RequestHash] != "" && requests[report.RequestHash] != digest || !planSha256(report.ApprovalHash) || !planSha256(digest) || rootObjectHash(report) != digest || report.Context == nil || report.Context.RequestHash != rootObjectHash(request.Context) || report.Context.Genesis != policy.FeeAuthority.Genesis || report.Context.EvmChainId != policy.FeeAuthority.EvmChainId || report.SpendingAuthorized || report.WholeBlockCensusComplete {
 			return nil, errors.New("economic retained native fee evidence changed its original request or scope")
 		}
 		if err := request.Context.validate(); err != nil {
@@ -196,10 +199,14 @@ func admitEconomicConservationNativeFees(ctx context.Context, policy economicCon
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if prior == nil || policy.FeeAuthority == nil || request.Policy != *policy.FeeAuthority || prior.PolicyHash != policy.identityHash() {
+	if prior == nil || policy.FeeAuthority == nil || prior.PolicyHash != policy.identityHash() {
 		return nil, errors.New("economic fee request differs from the original conservation authority")
 	}
 	if err := errors.Join(policy.validateFeeAuthority(), prior.archiveView.check()); err != nil {
+		return nil, err
+	}
+	authorities, err := prior.admittedNativeFeePolicies(policy)
+	if err != nil {
 		return nil, err
 	}
 	if prior.retainedNativeFee(rootObjectHash(request)) != "" {
@@ -207,6 +214,9 @@ func admitEconomicConservationNativeFees(ctx context.Context, policy economicCon
 			return nil, err
 		}
 		return cloneEconomicConservation(prior)
+	}
+	if authority, known := authorities[rootObjectHash(request.Policy)]; !known || request.Policy != authority {
+		return nil, errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic fee request differs from original-key retained policy authority"))
 	}
 	value, err := runEconomicNativeFeeEvidence(ctx, request, budget, hooks)
 	if err != nil {
@@ -222,7 +232,7 @@ func appendEconomicConservationNativeFeeEvidence(ctx context.Context, policy eco
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if prior == nil || policy.FeeAuthority == nil || request.Policy != *policy.FeeAuthority || prior.PolicyHash != policy.identityHash() || value == nil || value.Context == nil || value.RequestHash != rootObjectHash(request) {
+	if prior == nil || policy.FeeAuthority == nil || prior.PolicyHash != policy.identityHash() || value == nil || value.Context == nil || value.RequestHash != rootObjectHash(request) {
 		return nil, errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic completed fee result differs from original request authority"))
 	}
 	if retained := prior.retainedNativeFee(value.RequestHash); retained != "" {
@@ -230,6 +240,13 @@ func appendEconomicConservationNativeFeeEvidence(ctx context.Context, policy eco
 			return nil, errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic completed fee result replaced original evidence"))
 		}
 		return cloneEconomicConservation(prior)
+	}
+	authorities, err := prior.admittedNativeFeePolicies(policy)
+	if err != nil {
+		return nil, err
+	}
+	if authority, known := authorities[rootObjectHash(request.Policy)]; !known || request.Policy != authority {
+		return nil, errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic completed fee proof uses an unadmitted retained policy"))
 	}
 	operating, err := prior.operatingPolicy(policy)
 	if err != nil {
