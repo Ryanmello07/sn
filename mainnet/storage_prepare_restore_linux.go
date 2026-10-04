@@ -30,6 +30,10 @@ func planStoragePreparationRestore(ctx context.Context, name string, owner durab
 	switch owner.Kind {
 	case storageSdkWorkKind:
 		return planStorageSdkWorkRestore(ctx, name, owner, report, ownerLocal)
+	case storageOriginalContractKind:
+		return planStorageOriginalContractRestore(ctx, name, owner, report, ownerLocal)
+	case storageProviderPublicationKind:
+		return planStorageProviderPublicationRestore(ctx, name, owner, report, ownerLocal)
 	case storageNativeApprovalKind:
 		return planStorageNativeApprovalRestore(ctx, name, owner, report, ownerLocal)
 	case storageNativeProducerKind:
@@ -65,6 +69,10 @@ func inspectStoragePreparationRestore(ctx context.Context, root *os.File, owner 
 	switch owner.Owner.Kind {
 	case storageSdkWorkKind:
 		return inspectStorageSdkWorkRestore(ctx, root, owner, report, ownerLocal)
+	case storageOriginalContractKind:
+		return inspectStorageOriginalContractRestore(ctx, root, owner, report, ownerLocal)
+	case storageProviderPublicationKind:
+		return inspectStorageProviderPublicationRestore(ctx, root, owner, report, ownerLocal)
 	case storageNativeApprovalKind:
 		return inspectStorageNativeApprovalRestore(ctx, root, owner, report, ownerLocal)
 	case storageNativeProducerKind:

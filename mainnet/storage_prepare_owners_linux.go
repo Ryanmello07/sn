@@ -99,6 +99,10 @@ func buildStoragePreparationFixedOwner(ctx context.Context, staging *os.File, na
 	switch owner.Kind {
 	case storageSdkWorkKind:
 		return buildStorageSdkWork(ctx, staging, name, owner, ownerLocal)
+	case storageOriginalContractKind:
+		return buildStorageOriginalContract(ctx, staging, name, owner, ownerLocal)
+	case storageProviderPublicationKind:
+		return buildStorageProviderPublication(ctx, staging, name, owner, ownerLocal)
 	case "fleet-recovery", "provider-claim-queue":
 		return miner.BuildFreshStoragePreparation(ctx, staging, name, owner, ownerLocal)
 	case "mainnet-successor-local-members", "mainnet-successor-nonce-members":
@@ -153,6 +157,10 @@ func inspectStoragePreparationFixedOwner(ctx context.Context, target *os.File, o
 	switch owner.Owner.Kind {
 	case storageSdkWorkKind:
 		return inspectStorageSdkWork(ctx, target, owner, ownerLocal)
+	case storageOriginalContractKind:
+		return inspectStorageOriginalContract(ctx, target, owner, ownerLocal)
+	case storageProviderPublicationKind:
+		return inspectStorageProviderPublication(ctx, target, owner, ownerLocal)
 	case "fleet-recovery", "provider-claim-queue":
 		return miner.InspectFreshStoragePreparation(ctx, target, owner, ownerLocal)
 	case "mainnet-successor-local-members", "mainnet-successor-nonce-members":

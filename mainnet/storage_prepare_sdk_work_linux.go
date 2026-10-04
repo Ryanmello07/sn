@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -114,81 +113,18 @@ func storageSdkWorkObservation(message string, err error) error {
 	return mainnetDurableUnavailable(message, err)
 }
 
-// Borrowed roots are observed through their descriptor. The outer preparation
-// owner retains ancestry, complete target census and all publication barriers.
+// Borrow the exact approved root without extending its namespace authority.
 func storageSdkWorkRoot(ctx context.Context, root *os.File, expectedPath string) (unix.Stat_t, error) {
-	var stat unix.Stat_t
-	if ctx == nil || root == nil {
-		return stat, errors.New("SDK work inspection requires its borrowed root")
-	}
-	if err := ctx.Err(); err != nil {
-		return stat, err
-	}
-	if err := unix.Fstat(int(root.Fd()), &stat); err != nil {
-		return stat, mainnetDurableUnavailable("cannot inspect SDK outbox root", err)
-	}
-	if root.Name() != expectedPath || stat.Mode&unix.S_IFMT != unix.S_IFDIR || stat.Mode&07777 != 0700 || stat.Uid != uint32(os.Geteuid()) {
-		return stat, errors.Join(durablevolume.ErrIdentity, errors.New("SDK outbox root differs from its approved private logical path"))
-	}
-	return stat, nil
+	return storageOriginalRoot(ctx, root, expectedPath)
 }
 
-// A read owns only its temporary descriptor; its opened and named state must
-// agree before and after bounded I/O. Failed observations precede comparisons.
-func readStorageSdkWorkFile(ctx context.Context, root *os.File, parent unix.Stat_t, member durablevolume.PreparationFile) (raw []byte, observed unix.Stat_t, resultErr error) {
-	defer func() {
-		if resultErr != nil {
-			raw = nil
-		}
-	}()
+// Whole-work records keep their existing fixed limits under shared I/O checks.
+func readStorageSdkWorkFile(ctx context.Context, root *os.File, parent unix.Stat_t, member durablevolume.PreparationFile) ([]byte, unix.Stat_t, error) {
 	maximum := uint64(12 * 1024 * 1024)
 	if member.Path == connect.OriginalWorkOutboxIndexName {
 		maximum = connect.MaximumOriginalWorkOutboxIndexBytes
 	}
-	if ctx == nil || member.Kind != "file" || member.Mode != 0400 && member.Mode != 0600 || member.Path == "" || member.Path == "." || member.Path == ".." || filepath.Base(member.Path) != member.Path || strings.ContainsRune(member.Path, 0) || member.Bytes > maximum {
-		return nil, observed, errors.New("SDK outbox inspection exceeds its fixed file profile")
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, observed, err
-	}
-	fd, err := unix.Openat(int(root.Fd()), member.Path, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
-	if err != nil {
-		return nil, observed, storageSdkWorkObservation("cannot open SDK outbox original", err)
-	}
-	file := os.NewFile(uintptr(fd), member.Path)
-	defer func() { resultErr = errors.Join(resultErr, file.Close()) }()
-	if err := unix.Fstat(fd, &observed); err != nil {
-		return nil, observed, mainnetDurableUnavailable("cannot observe SDK outbox descriptor", err)
-	}
-	if observed.Dev != parent.Dev || observed.Mode&unix.S_IFMT != unix.S_IFREG || observed.Mode&07777 != member.Mode || observed.Uid != parent.Uid || observed.Nlink != 1 || observed.Size < 0 || uint64(observed.Size) != member.Bytes {
-		return nil, observed, errors.Join(durablevolume.ErrIdentity, errors.New("SDK outbox original has changed physical custody"))
-	}
-	raw = make([]byte, int(member.Bytes))
-	for offset := 0; offset < len(raw); {
-		if err := ctx.Err(); err != nil {
-			return nil, observed, err
-		}
-		chunk := raw[offset:min(offset+64*1024, len(raw))]
-		n, err := file.ReadAt(chunk, int64(offset))
-		if err != nil {
-			return nil, observed, mainnetDurableUnavailable("cannot read SDK outbox original", err)
-		}
-		if n != len(chunk) {
-			return nil, observed, mainnetDurableUnavailable("cannot completely read SDK outbox original", io.ErrUnexpectedEOF)
-		}
-		offset += n
-	}
-	var after, named unix.Stat_t
-	if err := unix.Fstat(fd, &after); err != nil {
-		return nil, observed, mainnetDurableUnavailable("cannot reobserve SDK outbox descriptor", err)
-	}
-	if err := unix.Fstatat(int(root.Fd()), member.Path, &named, unix.AT_SYMLINK_NOFOLLOW); err != nil {
-		return nil, observed, storageSdkWorkObservation("cannot reobserve SDK outbox name", err)
-	}
-	if !bootstrapSuccessorMemberSameStat(observed, after) || !bootstrapSuccessorMemberSameStat(after, named) || safeReleaseHash(raw) != member.Sha256 {
-		return nil, observed, errors.Join(durablevolume.ErrIdentity, errors.New("SDK outbox original changed during inspection"))
-	}
-	return raw, observed, ctx.Err()
+	return readStorageOriginalFile(ctx, root, parent, member, maximum)
 }
 
 // The pure SDK helper observes the actual published empty root before birth.
