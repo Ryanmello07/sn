@@ -27,6 +27,7 @@ import (
 // Public selection always uses root-owned releases and the system manager.
 type repairValidatorHost struct {
 	rootUid        uint32
+	rootGid        uint32
 	trustRoot      string
 	machinePath    string
 	bootPath       string
@@ -222,6 +223,12 @@ func (self *repairValidatorHost) read(ctx context.Context, path string, owner ui
 // only their explicit complete-role ingress ceiling is different.
 func (self *repairValidatorHost) readServicesPolicy(ctx context.Context, path string, owner uint32) ([]byte, error) {
 	return self.readProfile(ctx, path, owner, maxMonitorFeeServicesBytes, false, monitorServicePolicyProfile)
+}
+
+// The root monitor's continuing checkpoint has its own retained owner ceiling;
+// this never widens approval, systemd or generic progress-record admission.
+func (self *repairValidatorHost) readRootCheckpoint(ctx context.Context, path string) ([]byte, error) {
+	return self.readProfile(ctx, path, self.rootUid, maxMonitorCheckpointBytes, true, monitorRootCheckpointProfile)
 }
 
 // The selected finite file profile never substitutes for original host custody.

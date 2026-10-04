@@ -38,6 +38,7 @@ type monitorServiceReadProfile uint8
 const (
 	monitorServiceRecordProfile monitorServiceReadProfile = iota
 	monitorServicePolicyProfile
+	monitorRootCheckpointProfile
 )
 
 // Finite reads refuse aliases, special files, oversized data and replacements
@@ -60,6 +61,8 @@ func readMonitorServiceFileProfile(ctx context.Context, path string, limit int64
 	case monitorServiceRecordProfile:
 	case monitorServicePolicyProfile:
 		maximum = maxMonitorFeeServicesBytes
+	case monitorRootCheckpointProfile:
+		maximum = maxMonitorCheckpointBytes
 	default:
 		return nil, &monitorServiceReadError{code: "invalid"}
 	}

@@ -157,7 +157,7 @@ func loadRepairRootPassiveEnvelope(ctx context.Context, raw []byte, key string, 
 	if err := decodePlanJson(originalRaw, &original); err != nil {
 		return nil, errors.Join(errRpcIntegrity, err)
 	}
-	self := &repairRootPassiveEnvelope{approval: approval, original: original}
+	self := &repairRootPassiveEnvelope{approval: approval, original: original, uid: host.rootUid, gid: host.rootGid}
 	if err := self.validate(key); err != nil {
 		return nil, errors.Join(errRpcIntegrity, err)
 	}
@@ -188,10 +188,7 @@ func (self *repairRootPassiveEnvelope) validate(key string) error {
 	if p.OriginalJournal.Path != original.StatePath || filepath.Dir(p.OriginalCheckpoint.Path) != original.CheckpointDirectory || original.DurableVolumes == nil {
 		return errors.New("passive root repair differs from original process custody")
 	}
-	protected := []string{p.OriginalApproval.Path, p.OriginalJournal.Path, original.Preparation.Path, original.Runtime.Path, original.Unit.Path, original.Unit.Path + ".sn-control.lock", original.Binary.Path, original.Systemctl.Path, original.CheckpointDirectory, original.DurableVolumes.Path}
-	if p.Predecessor != nil {
-		protected = append(protected, p.Predecessor.Approval.Path, p.Predecessor.Journal.Path)
-	}
+	protected := self.protectedPaths()
 	for _, effect := range []string{p.StatePath, p.StatePath + ".lock", repairProcessClaimPath(self.profile()), repairProcessClaimPath(self.profile()) + ".lock"} {
 		for _, path := range protected {
 			if rootPassiveHostPathContains(effect, path) || rootPassiveHostPathContains(path, effect) || effect == path+".lock" {
@@ -200,6 +197,17 @@ func (self *repairRootPassiveEnvelope) validate(key string) error {
 		}
 	}
 	return nil
+}
+
+// Controller output validation borrows this actual original closure. The
+// checkpoint directory also protects all of its existing lifetime markers.
+func (self *repairRootPassiveEnvelope) protectedPaths() []string {
+	p, original := self.approval.Plan, self.original.Plan
+	paths := []string{p.OriginalApproval.Path, p.OriginalJournal.Path, p.OriginalCheckpoint.Path, original.Preparation.Path, original.Runtime.Path, original.Unit.Path, original.Unit.Path + ".sn-control.lock", original.Binary.Path, original.Systemctl.Path, original.CheckpointDirectory, original.DurableVolumes.Path}
+	if p.Predecessor != nil {
+		paths = append(paths, p.Predecessor.Approval.Path, p.Predecessor.Journal.Path)
+	}
+	return paths
 }
 
 // A readiness read owns no allowance and joins every borrowed original owner.

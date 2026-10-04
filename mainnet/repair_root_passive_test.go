@@ -32,6 +32,7 @@ type repairRootPassiveFixture struct {
 func newRepairRootPassiveFixture(t *testing.T) *repairRootPassiveFixture {
 	t.Helper()
 	root := newRootPassiveHostFixture(t)
+	root.host.files.host.rootGid = uint32(os.Getegid())
 	root.require("claim", "claimed")
 	root.require("install", "installed")
 	root.require("admit", "admitted-read-only")

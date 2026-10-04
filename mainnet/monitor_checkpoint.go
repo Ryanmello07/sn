@@ -22,6 +22,7 @@ import (
 )
 
 const monitorCheckpointSchema = "urnetwork-mainnet-monitor-checkpoint-v3"
+const maxMonitorCheckpointBytes = 2 * 1024 * 1024
 const monitorCheckpointOutageSchema = "urnetwork-mainnet-monitor-checkpoint-v2"
 const monitorCheckpointLegacySchema = "urnetwork-mainnet-monitor-checkpoint-v1"
 
@@ -51,7 +52,7 @@ type monitorCheckpointStore struct {
 // A process owns one checkpoint for its entire monitoring lifetime. The lock
 // prevents two monitors from alternately replacing the same finality history.
 func openMonitorCheckpoint(path string, expected identityExpectation, contexts ...context.Context) (*monitorCheckpointStore, error) {
-	return openMonitorCheckpointProfile(path, expected, "mainnet-monitor-checkpoint", maxRpcReplyBytes, contexts...)
+	return openMonitorCheckpointProfile(path, expected, "mainnet-monitor-checkpoint", maxMonitorCheckpointBytes, contexts...)
 }
 
 func openMonitorCheckpointProfile(path string, expected identityExpectation, kind string, maximum int, contexts ...context.Context) (*monitorCheckpointStore, error) {
@@ -121,14 +122,14 @@ func (self *monitorCheckpointStore) load() (*monitorState, error) {
 		return nil, err
 	}
 	state := &monitorState{}
-	raw, err := self.directory.read(filepath.Base(self.path), maxRpcReplyBytes, true)
+	raw, err := self.directory.read(filepath.Base(self.path), maxMonitorCheckpointBytes, true)
 	if monitorCheckpointAbsent(err) {
 		return state, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("checkpoint cannot be read within 1 MiB: %w", err)
 	}
-	if len(raw) > maxRpcReplyBytes {
+	if len(raw) > maxMonitorCheckpointBytes {
 		return nil, errors.New("checkpoint cannot be read within 1 MiB")
 	}
 	if err := protocol.ValidateUniqueJsonKeys(raw); err != nil {

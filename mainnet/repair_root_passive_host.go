@@ -139,9 +139,12 @@ func (self *repairRootPassiveCustody) inspect(ctx context.Context) (repairValida
 // Opening the existing owner proves no other monitor still owns this state.
 func (self *repairRootPassiveCustody) beforeStart(ctx context.Context, now time.Time) error {
 	p := self.envelope.approval.Plan
-	raw, err := readRepairProcessOriginal(ctx, self.host.files.host, p.OriginalCheckpoint, maxRpcReplyBytes)
+	raw, err := self.host.files.host.readRootCheckpoint(ctx, p.OriginalCheckpoint.Path)
 	if err != nil {
-		return err
+		return repairValidatorObservationError("cannot read original root checkpoint", err, true)
+	}
+	if monitorReadDigest(raw) != p.OriginalCheckpoint.Sha256 {
+		return errors.Join(errRpcIntegrity, errors.New("root checkpoint differs from original byte pin"))
 	}
 	var record monitorCheckpointRecord
 	if err := decodePlanJson(raw, &record); err != nil {
@@ -170,7 +173,7 @@ func (self *repairRootPassiveCustody) beforeStart(ctx context.Context, now time.
 // generation stays running. Finality remains the observer's original authority.
 func (self *repairRootPassiveCustody) progress(ctx context.Context, startedAt, now time.Time) (string, error) {
 	p := self.envelope.approval.Plan
-	raw, err := self.host.files.host.read(ctx, p.OriginalCheckpoint.Path, self.host.files.host.rootUid, maxRpcReplyBytes, true)
+	raw, err := self.host.files.host.readRootCheckpoint(ctx, p.OriginalCheckpoint.Path)
 	if err != nil {
 		return "", repairValidatorObservationError("cannot read continued root checkpoint", err, true)
 	}
