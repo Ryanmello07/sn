@@ -10,17 +10,18 @@ import os
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "readme")
 os.makedirs(OUT, exist_ok=True)
 
-SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif"
-MONO = "SFMono-Regular,Menlo,Consolas,monospace"
-INK, SUB, FAINT, LINE, PANEL, WHITE = "#0f172a", "#475569", "#94a3b8", "#e2e8f0", "#f8fafc", "#ffffff"
+SANS = "Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
+MONO = "'JetBrains Mono',SFMono-Regular,Menlo,Consolas,monospace"
+INK, SUB, FAINT, LINE, PANEL, WHITE = "#0D0D0D", "#5F5F5F", "#8A8A8A", "#D9DDD9", "#F8F7F5", "#FFFFFF"
+G, GT, DK, PN = "#155E3B", "#E7F0EA", "#14231B", "#F4F4F2"
 # flow palette, matching mechanism.svg: (accent, tint)
-DEP = ("#2563eb", "#eff6ff")   # deposits
-EMI = ("#0d9488", "#f0fdfa")   # emission
-SET = ("#7c3aed", "#f5f3ff")   # settlement / pool tier
-HEAD = ("#0e7490", "#ecfeff")  # head tier
-VAL = ("#d97706", "#fffbeb")   # validation
-RES = ("#dc2626", "#fef2f2")   # reserve
-OWN = ("#64748b", "#f1f5f9")   # owner / neutral
+DEP = (INK, PN)                # deposits (neutral)
+EMI = (G, GT)                  # emission
+SET = (G, GT)                  # settlement / pool tier
+HEAD = (DK, PN)                # head tier
+VAL = ("#8A5A00", "#FBF1DC")   # validation
+RES = ("#C93A3F", "#FBE9EA")   # reserve
+OWN = (SUB, PN)                # owner / neutral
 
 
 def esc(s):
@@ -32,14 +33,14 @@ class Fig:
         self.w, self.h, self.b, self.desc = 900, h, [], desc
         self.marks = set()
         self.k(30, 32, kicker)
-        self.t(30, 58, title, 21, INK, 600)
+        self.t(30, 60, title, 22, INK, 500)
 
     def r(self, x, y, w, h, fill=WHITE, stroke=LINE, rx=10, sw=1.4, dash=None):
         d = f' stroke-dasharray="{dash}"' if dash else ""
         self.b.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{rx}" fill="{fill}" stroke="{stroke}" stroke-width="{sw}"{d}/>')
 
     def t(self, x, y, s, size=13, fill=INK, weight=400, anchor="start", mono=False):
-        f = MONO if mono else SANS
+        f = MONO if mono == "code" else SANS
         self.b.append(f'<text x="{x}" y="{y}" font-family="{f}" font-size="{size}" font-weight="{weight}" fill="{fill}" text-anchor="{anchor}">{esc(s)}</text>')
 
     def k(self, x, y, s, fill=SUB, anchor="start"):
@@ -62,10 +63,12 @@ class Fig:
         return w
 
     def box(self, x, y, w, h, title, lines=(), pal=OWN, bold=False, tsize=14):
-        self.r(x, y, w, h, pal[1] if bold else WHITE, pal[0] if bold else LINE, 10, 1.6 if bold else 1.4)
-        self.t(x + 14, y + 23, title, tsize, pal[0] if bold else INK, 600)
+        neutral = pal[0] in (INK, DK, SUB)
+        hot = bold and not neutral
+        self.r(x, y, w, h, pal[1] if hot else WHITE, pal[0] if hot else LINE, 12, 1.5 if hot else 1.4)
+        self.t(x + 14, y + 23, title, tsize, pal[0] if hot else INK, 600)
         for i, ln in enumerate(lines):
-            self.t(x + 14, y + 43 + i * 17, ln, 11.5, SUB, 400, "start", True)
+            self.t(x + 14, y + 44 + i * 17, ln, 12.5, SUB, 400)
 
     def save(self, name):
         marks = "".join(
@@ -73,7 +76,7 @@ class Fig:
             for c in sorted(self.marks))
         svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {self.w} {self.h}" width="{self.w}" height="{self.h}" role="img" aria-label="{esc(self.desc)}">'
                f'<title>{esc(self.desc)}</title><defs>{marks}</defs>'
-               f'<rect width="{self.w}" height="{self.h}" rx="14" fill="{PANEL}"/>' + "".join(self.b) + "</svg>\n")
+               f'<rect width="{self.w}" height="{self.h}" rx="16" fill="{PANEL}"/>' + "".join(self.b) + "</svg>\n")
         with open(os.path.join(OUT, name), "w") as f:
             f.write(svg)
 
@@ -106,7 +109,7 @@ C = [("1", "Deposits", DEP, ["NO stakes α sized to usage", "→ locked in the r
      ("3", "Settlement", SET, ["vault captures pool emission", "NO commits a payout root", "providers claim with a proof"], "every epoch = 7 days")]
 for i, (n, title, pal, lines, cad) in enumerate(C):
     x = 30 + i * 284
-    f.r(x, 80, 268, 150, WHITE, pal[0], 12, 1.6)
+    f.r(x, 80, 268, 150, WHITE, LINE if pal[0] == INK else pal[0], 12, 1.5)
     f.c(x + 24, 104, 12, pal[0]); f.t(x + 24, 108.5, n, 12, WHITE, 700, "middle")
     f.t(x + 44, 109, title, 15, pal[0], 600)
     for j, ln in enumerate(lines):
@@ -116,18 +119,18 @@ f.save("02-channels.svg")
 
 # ---------------------------------------------------------------- 03 deposits
 f = Fig(400, "Deposits: one-way into the reserve", "Channel 1 · deposits", "A network operator stakes alpha on its deposit hotkey; the coordinator moves the exact amount into the immutable reserve sink, staked on the owner-validator hotkey; nothing ever leaves; cumulative locked alpha sets a cheaper rate tier.")
-f.box(30, 84, 170, 64, "NO coldkey", ["stakes α on its", "deposit hotkey"], DEP)
-f.box(250, 84, 190, 64, "STCoordinator", ["deposit() by the", "NO's deposit signer"], DEP, True)
-f.box(490, 84, 230, 64, "STReserveSink  (immutable)", ["staked on reserve hotkey", "= owner-validator hotkey"], RES, True)
+f.box(30, 84, 170, 72, "NO coldkey", ["stakes α on its", "deposit hotkey"], DEP)
+f.box(250, 84, 190, 72, "STCoordinator", ["deposit() by the", "NO's deposit signer"], DEP, True)
+f.box(490, 84, 230, 72, "STReserveSink  (immutable)", ["staked on reserve hotkey", "= owner-validator hotkey"], RES, True)
 f.a("M200 116H246", DEP[0]); f.a("M440 116H486", RES[0])
 f.t(463, 108, "exact", 10.5, RES[0], 600, "middle", True)
-f.r(750, 84, 120, 64, WHITE, RES[0], 10, 1.4, "4 3")
+f.r(750, 84, 120, 72, WHITE, RES[0], 10, 1.4, "4 3")
 f.t(810, 110, "no outbound", 12, RES[0], 600, "middle"); f.t(810, 128, "code path", 12, RES[0], 600, "middle")
 f.a("M720 116H746", RES[0], 1.6, None, False)
 # dividends loop and consensus weight
-f.a("M560 148V176H650V152", RES[0], 1.6)
+f.a("M560 156V178H650V160", RES[0], 1.6)
 f.t(605, 192, "dividends compound in place", 11, RES[0], 500, "middle", True)
-f.a("M700 148Q740 196 770 206", VAL[0], 1.6, "5 4")
+f.a("M700 156Q740 196 770 206", VAL[0], 1.6, "5 4")
 f.t(790, 226, "adds to the owner", 11, VAL[0], 500, "middle", True)
 f.t(790, 242, "validator's stake weight", 11, VAL[0], 500, "middle", True)
 # tiers
@@ -135,9 +138,9 @@ f.k(30, 196, "Conviction → rate tier (testnet policy-v2)")
 T = [("0 α", "40 α / GiB"), ("≥ 1 α", "32 α / GiB"), ("≥ 10 α", "24 α / GiB")]
 for i, (cv, rate) in enumerate(T):
     x = 30 + i * 150
-    f.r(x, 208, 138, 56, WHITE, DEP[0] if i else LINE, 10, 1.3)
+    f.r(x, 208, 138, 56, WHITE, LINE, 12, 1.3)
     f.t(x + 12, 230, "locked " + cv, 12, SUB, 400, "start", True)
-    f.t(x + 12, 251, rate, 14, DEP[0], 600)
+    f.t(x + 12, 251, rate, 14, G, 600)
 f.t(30, 292, "Required deposit = last epoch's audited usage × the NO's tier rate (tier snapshotted before the epoch).", 12.5, INK)
 f.t(30, 312, "A missing or mismatched deposit sets that NO's pool weight to 0.", 12.5, INK)
 f.r(30, 330, 840, 50, OWN[1], "none", 10, 0)
@@ -227,10 +230,10 @@ for i, (n, tag, pal, lines) in enumerate(K):
     x = 30 + i * 284
     f.box(x, 84, 268, 112, n, lines, pal, True, 14)
     f.chip(x + 254, 104, tag, pal if i == 2 else OWN, "end")
-f.r(598, 222, 272, 56, WHITE, DEP[0], 10, 1.4)
-f.t(612, 244, "owner: 2-of-3 Safe (mainnet)", 12.5, DEP[0], 600)
+f.r(598, 222, 272, 56, WHITE, LINE, 12, 1.4)
+f.t(612, 244, "owner: 2-of-3 Safe (mainnet)", 12.5, INK, 600)
 f.t(612, 263, "timelock ≥ 1 epoch: planned, phase 1", 11.5, SUB, 400, "start", True)
-f.a("M734 222V200", DEP[0])
+f.a("M734 222V200", FAINT)
 f.t(30, 244, "Finalized claims are paid by direct pull to the provider's coldkey.", 12.5, INK)
 f.t(30, 264, "No owner, NO or upgrade can move another party's α.", 12.5, INK)
 f.save("08-custody.svg")
