@@ -180,7 +180,8 @@
     "runtime-observation6fa-validator-normal-root-review-20261004.json": "60a8eda5ee5ef8624a012768c0aa323b2413f20b7fbf608dd0137e14599864ef",
     "economic-principal-dc1-source-root-review-20261004.json": "0c81af2923305f312bece288e63b810a7a442d75a08ba4eeed3957d267ed75a0",
     "server1709-bounded-causes-positive-root-review-20261004.json": "da70e298978360e6d51511f94fb27a7e7c92ec25bd6648961409a4584a7d6990",
-    "principal-dc1-rust-resource-root-adoption-20261004.json": "4460f220372c8a7368a0869645b4892ed4dc642fc3f7524c5e0056dea1e66463"
+    "principal-dc1-rust-resource-root-adoption-20261004.json": "4460f220372c8a7368a0869645b4892ed4dc642fc3f7524c5e0056dea1e66463",
+    "conservation-claim-window7dc-source-root-review-20261004.json": "c4976da650c0fc4c0d8007ce977f6ad0379c54d5d9e826b94b91478acbd7a187"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -265,7 +266,7 @@
       "closed": false,
       "evidence": "native-signed-catalog1b5-qualification-20261003.json",
       "requirement": "PH-13",
-      "status": "Rolling claim policy and archive9 roots qualified; signed catalog12 roots per mode and two operative controls qualified. Full-union restore, claim/EVM archive adapters and two-domain topology remain."
+      "status": "Rolling claim policy and archive9 roots qualified; signed catalog12 roots per mode and two operative controls qualified. Full-union restore, claim/EVM archive adapters and two-domain topology remain. Combined-owner Claim7dc source-reviewed17 roots/mode and seven operative groups; actual qualification and complete-owner cross-volume restore remain."
     },
     {
       "closed": false,
@@ -395,9 +396,9 @@
     },
     {
       "closed": false,
-      "evidence": "claim-consumer-merge-20261003.json",
+      "evidence": "conservation-claim-window7dc-source-root-review-20261004.json",
       "requirement": "MG-07",
-      "status": "Claim observer merged; rolling expectations, complete economic authority, ingestion/alerts/on-call remain."
+      "status": "Claim observer merged; combined-owner rolling expectations source-reviewed at7dc (17 roots/mode,seven controls), qualification pending. Complete economic authority, ingestion/alerts/on-call remain."
     },
     {
       "closed": false,
