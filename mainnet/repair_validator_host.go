@@ -290,6 +290,12 @@ func (self *repairValidatorHost) inspect(ctx context.Context, plan repairValidat
 // Independently approved static profiles share the physical host and manager
 // checks. Callers supply a fixed argument grammar, never command-line input.
 func (self *repairValidatorHost) inspectCommand(ctx context.Context, plan repairValidatorPlan, arguments string, extra map[string]string) (repairValidatorManager, error) {
+	return self.inspectCommandEnvironment(ctx, plan, arguments, extra, "")
+}
+
+// A separately signed process profile may select one exact loaded environment.
+// Validator callers retain the original empty-environment admission above.
+func (self *repairValidatorHost) inspectCommandEnvironment(ctx context.Context, plan repairValidatorPlan, arguments string, extra map[string]string, environment string) (repairValidatorManager, error) {
 	var result repairValidatorManager
 	for _, reference := range []planFileReference{plan.Unit.File, plan.Unit.Binary, plan.Unit.Config, plan.Systemctl} {
 		limit := int64(16 * 1024 * 1024)
@@ -373,6 +379,7 @@ func (self *repairValidatorHost) inspectCommand(ctx context.Context, plan repair
 	for _, key := range []string{"DropInPaths", "ExecStartPre", "ExecStartPost", "ExecStop", "ExecStopPost", "ExecReload", "Environment", "EnvironmentFiles", "PassEnvironment", "RootDirectory", "RootImage", "Wants", "Requisite", "BindsTo", "Conflicts", "OnFailure", "OnSuccess", "Triggers", "TriggeredBy", "PartOf", "Upholds"} {
 		expected[key] = ""
 	}
+	expected["Environment"] = environment
 	for key, value := range expected {
 		if values[key] != value {
 			return result, fmt.Errorf("validator repair loaded unit property differs: %s", key)
