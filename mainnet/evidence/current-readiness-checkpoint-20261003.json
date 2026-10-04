@@ -249,7 +249,8 @@
     "admissionab0-normal-race-compile-independent-readback-20261004.json": "068d9fd9b49f32d572fbb3790f454a250a5618b6815e3107ab30ef24f556009c",
     "admissionab0-normal21-failure-and-b1-source-root-review-20261004.json": "7be195433dd736c48dc3b8e981add6d575a00ce52aaf9e000039b7403dce5df7",
     "admissionab0-ordinary-terminal-and-drained-root-finding-20261004.json": "9fb9f916f450a6383add548a7bf9f9412aedfbe188933811a0fe99f09e83110e",
-    "policy-refusalb1-one-root-and-retained-ordinary-qualified-20261004.json": "309317ec4c36ce3181b2f0afab2be992608edde7cd999f95605c7267e837a846"
+    "policy-refusalb1-one-root-and-retained-ordinary-qualified-20261004.json": "309317ec4c36ce3181b2f0afab2be992608edde7cd999f95605c7267e837a846",
+    "proof-drained-continuation77-scoped-root-source-review-20261004.json": "15394543e8b0eb0e3930427b9e80fe5fe98e8bcb4e370d0c4b1fdd339e2b9c53"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",

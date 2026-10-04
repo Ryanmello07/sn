@@ -1,5 +1,8 @@
 # Mainnet prelaunch fixes
 
+The [corrected proof-drained exporter source review](evidence/proof-drained-continuation77-scoped-root-source-review-20261004.json) verifies the sole test-file change at `77a4ab38`. First-block dispatch uses the independently authenticated absent epoch marker, so a drained parent can execute accrual; later jobs retain that marker and do not repeat emissions. All five expected child roots remain independently constructed, and actual capture plus reduced replay are required before export. Qualify six Rust roots and three causal controls using a fresh libtest image while retaining unchanged qualified engines and Go images. Keep the original failure, successful ordinary roots and live long recovery; dependent Go results remain pending until the corrected corpus exists.
+
+
 ## Current execution status — October 4
 
 The [corrected single-root qualification](evidence/policy-refusalb1-one-root-and-retained-ordinary-qualified-20261004.json) verifies the policy-refusal assertion normally and with race detection at `b1`. Join that narrow result with the twenty unchanged original `ab0` successes per mode; preserve the original20PASS/1FAIL batches and vet result. This establishes the selected ordinary21 scope through retained evidence and one corrected test, rather than redoing every successful body. Dual-engine, long-history, causal-control and final composed-source work remain separate.
