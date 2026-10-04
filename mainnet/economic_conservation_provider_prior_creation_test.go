@@ -27,6 +27,7 @@ func economicProviderPriorCreationFixture() (*economicConservationArchiveView, *
 // The same admitted original survives retirement and is returned as a copy.
 func TestEconomicProviderPriorCreationSurvivesRetirementWithoutProposal(t *testing.T) {
 	view, state, authority, inventory, original := economicProviderPriorCreationFixture()
+	original = cloneEconomicProviderCreation(original)
 	for stage := 0; stage < 2; stage++ {
 		contracts, creations, err := view.providerPriorOriginals(t.Context(), state, authority, inventory, [][16]byte{original.Checkpoint.ContractId})
 		if err != nil || len(contracts) != 1 || contracts[0] != original.Checkpoint || len(creations) != 1 || !reflect.DeepEqual(creations[0], original) {
