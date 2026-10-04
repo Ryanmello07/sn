@@ -25,13 +25,14 @@ const mainnetEvmChainId = 964
 
 // monitorEvent is one JSON line suitable for the existing log/alert pipeline.
 type monitorEvent struct {
-	Schema      string                        `json:"schema"`
-	ObservedAt  string                        `json:"observed_at"`
-	Status      string                        `json:"status"`
-	Severity    string                        `json:"severity,omitempty"`
-	Detail      string                        `json:"detail,omitempty"`
-	Snapshot    *identityEnvelope             `json:"snapshot,omitempty"`
-	Diagnostics *monitorDiagnosticObservation `json:"diagnostics,omitempty"`
+	Schema        string                        `json:"schema"`
+	ObservedAt    string                        `json:"observed_at"`
+	Status        string                        `json:"status"`
+	Severity      string                        `json:"severity,omitempty"`
+	Detail        string                        `json:"detail,omitempty"`
+	Snapshot      *identityEnvelope             `json:"snapshot,omitempty"`
+	Diagnostics   *monitorDiagnosticObservation `json:"diagnostics,omitempty"`
+	RpcComparison *monitorRpcComparisonResult   `json:"rpc_comparison,omitempty"`
 }
 
 // monitorState tracks finalized progress without treating a changing tip as finality.
@@ -296,6 +297,8 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	checkpointPath := flags.String("checkpoint", "", "absolute path for a durable monitor finality checkpoint")
 	metricsPath := flags.String("metrics-file", "", "absolute .prom path for atomic monitor telemetry")
 	servicesPath := flags.String("services", "", "bounded expected service-role policy; requires checkpoint and metrics-file")
+	comparisonPath := flags.String("rpc-comparison-policy", "", "optional private independently approved second-route comparison policy")
+	comparisonPin := flags.String("rpc-comparison-policy-sha256", "", "exact independently admitted comparison policy SHA-256")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *rpcUrl == "" {
 		fmt.Fprintln(stderr, "command requires --rpc and no positional arguments")
 		return 2
@@ -325,6 +328,25 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 	if command == "inspect" && (*checkpointPath != "" || *metricsPath != "" || *servicesPath != "") {
 		fmt.Fprintln(stderr, "--checkpoint, --metrics-file and --services are only valid for monitor")
 		return 2
+	}
+	if (*comparisonPath == "") != (*comparisonPin == "") || command != "monitor" && (*comparisonPath != "" || *comparisonPin != "") {
+		fmt.Fprintln(stderr, "RPC comparison requires both policy flags and the monitor command")
+		return 2
+	}
+	if *comparisonPath != "" {
+		if !bootstrapRootAbsolutePath(*comparisonPath) || !planSha256(*comparisonPin) {
+			fmt.Fprintln(stderr, "RPC comparison requires an absolute policy path and canonical SHA-256 pin")
+			return 2
+		}
+		for _, output := range []string{*checkpointPath, *metricsPath} {
+			if output != "" && (*comparisonPath == output || *comparisonPath == output+".lock") {
+				fmt.Fprintln(stderr, "RPC comparison input must be separate from monitor outputs and locks")
+				return 2
+			}
+		}
+		comparison := &monitorRpcComparisonRequest{path: *comparisonPath, pin: *comparisonPin, primaryUrl: *rpcUrl, expected: expected, now: now}
+		defer comparison.close()
+		ctx = context.WithValue(ctx, monitorRpcComparisonContextKey{}, comparison)
 	}
 	if *metricsPath != "" && *checkpointPath != "" {
 		metrics, metricsErr := resolveMonitorDestination(*metricsPath)
@@ -491,7 +513,8 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 		if ctx.Err() != nil {
 			return 0
 		}
-		event := monitorEvent{Schema: monitorSchema}
+		comparisonResult := unknownMonitorRpcComparison("independent RPC policy or chain observation unavailable")
+		event := monitorEvent{Schema: monitorSchema, RpcComparison: &comparisonResult}
 		var checkpointErr error
 		metricsErr = nil
 		sampleStartedAt := now().UTC()
@@ -554,6 +577,17 @@ func runChainMonitor(ctx context.Context, client *rpcClient, expected identityEx
 						event.Status, event.Severity, event.Detail = "checkpoint-error", "critical", "checkpoint publication unavailable"
 					}
 				}
+			}
+		}
+		if event.Status == "ok" || event.Status == "finality-stalled" {
+			if comparison, ok := ctx.Value(monitorRpcComparisonContextKey{}).(monitorRpcComparisonReader); ok {
+				comparisonResult = comparison.compare(ctx, identity.FinalizedHash)
+			}
+			if ctx.Err() != nil {
+				return 0
+			}
+			if comparisonResult.Status == "disagreement" {
+				event.Severity = "critical"
 			}
 		}
 		terminalObservation := event.Status == "finality-conflict" || event.Status == "rpc-integrity"
