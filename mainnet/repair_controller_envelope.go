@@ -208,7 +208,9 @@ func repairControllerHostStep(host *repairValidatorHost, now func() time.Time) r
 			units[envelope.plan.Unit.Name] = unit
 		}
 		stateLock.Unlock()
-		unit.Lock()
+		if !unit.TryLock() {
+			return "original-unit-busy", false, errRepairControllerPending
+		}
 		defer unit.Unlock()
 		if err := ctx.Err(); err != nil {
 			return "cancelled", false, err
