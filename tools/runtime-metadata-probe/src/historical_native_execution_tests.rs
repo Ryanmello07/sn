@@ -215,10 +215,22 @@ fn fixture_with_allocation_activation(
         // blocks perform no drain/epoch/allocation, rather than fabricating a
         // zero emission or spending the first block's recipient amounts again.
         declarations.push_str(&segment(1900, &[0]));
-        body = format!(
-            "(call $set (i64.const {}) (i64.const {})) (local.set $n (i32.wrap_i64 (call $get (i64.const {})))) (if (i64.ne (i64.load offset=2 (local.get $n)) (i64.const 0)) (then {}))",
-            span(1400, events.len()), span(1900, 1), span(1000, drains[0].len()), body
-        );
+        if drained_activation {
+            // The original pending inputs are zero before first-block accrual.
+            // Their value cannot guard the body that creates them. The original
+            // epoch key is absent only at this fixture's independently proved
+            // opening state and remains present after the first actual epoch.
+            body = format!(
+                "(call $set (i64.const {}) (i64.const {})) (local.set $n (i32.wrap_i64 (call $get (i64.const {})))) (if (i32.eqz (i32.load8_u (local.get $n))) (then {}))",
+                span(1400, events.len()), span(1900, 1), span(1700, epoch.len()), body
+            );
+        } else {
+            // Keep the undrained standalone fixture's original program exact.
+            body = format!(
+                "(call $set (i64.const {}) (i64.const {})) (local.set $n (i32.wrap_i64 (call $get (i64.const {})))) (if (i64.ne (i64.load offset=2 (local.get $n)) (i64.const 0)) (then {}))",
+                span(1400, events.len()), span(1900, 1), span(1000, drains[0].len()), body
+            );
+        }
     }
     let principal_key = b"synthetic-opening-stake";
     if principal.is_some() {
@@ -581,7 +593,12 @@ fn fixture_with_allocation_activation(
 #[test]
 fn historical_native_producer_exports_contiguous_original_jobs() {
     let (first, post_storage) = fixture_with_continuation(true);
-    export_contiguous_jobs(first, post_storage, "URNETWORK_NATIVE_PRODUCER_FIXTURE_OUT");
+    export_contiguous_jobs(
+        first,
+        post_storage,
+        "URNETWORK_NATIVE_PRODUCER_FIXTURE_OUT",
+        false,
+    );
 }
 
 // Combined accounting starts at the proof-drained parent, before the original
@@ -601,18 +618,30 @@ fn historical_native_conservation_exports_proof_drained_contiguous_jobs() {
     let backend =
         create_proof_check_backend::<Blake2Hasher>(*parent.state_root(), StorageProof::new(nodes))
             .unwrap();
+    assert_eq!(
+        backend.storage(b"synthetic-native-epoch").unwrap(),
+        None,
+        "combined original activation parent already contains an epoch"
+    );
     for item in [
         b"PendingServerEmission".as_slice(),
         b"PendingValidatorEmission".as_slice(),
         b"PendingRootAlphaDivs".as_slice(),
     ] {
         assert_eq!(
-            backend.storage(&key(b"SubtensorModule", item, true)).unwrap(),
+            backend
+                .storage(&key(b"SubtensorModule", item, true))
+                .unwrap(),
             Some(words(&[0])),
             "combined original activation parent must be proof-drained"
         );
     }
-    export_contiguous_jobs(first, post_storage, "URNETWORK_NATIVE_CONSERVATION_FIXTURE_OUT");
+    export_contiguous_jobs(
+        first,
+        post_storage,
+        "URNETWORK_NATIVE_CONSERVATION_FIXTURE_OUT",
+        true,
+    );
 }
 
 // Preserve each original parent proof and execute every linked job before
@@ -621,6 +650,7 @@ fn export_contiguous_jobs(
     first: HistoricalJob,
     mut post_storage: sp_core::storage::Storage,
     output_variable: &str,
+    proof_drained: bool,
 ) {
     let mut jobs = vec![first];
     let code = hex_bytes(
@@ -666,12 +696,138 @@ fn export_contiguous_jobs(
         job.proof_nodes_hex = proof.clone();
         jobs.push(job);
     }
+    // Every child root above is built from an independent complete map before
+    // any replay runs. Proof checks also preserve the original first/later
+    // dispatch distinction; returned replay roots never supply expectations.
     for (index, job) in jobs.iter().enumerate() {
-        let report = run(job).expect("contiguous actual native producer job");
+        let parent: NativeHeader = scale_exact(
+            "contiguous parent",
+            &hex_bytes(
+                "contiguous parent",
+                &job.parent_header_hex,
+                MAXIMUM_HEADER_BYTES,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let nodes = job
+            .proof_nodes_hex
+            .iter()
+            .map(|node| hex_bytes("contiguous node", node, MAXIMUM_CODE_BYTES).unwrap());
+        let backend = create_proof_check_backend::<Blake2Hasher>(
+            *parent.state_root(),
+            StorageProof::new(nodes),
+        )
+        .unwrap();
+        assert_eq!(
+            parent.hash().0,
+            job.parent_hash,
+            "contiguous original parent identity changed"
+        );
+        assert_eq!(
+            backend.storage(b"synthetic-native-epoch").unwrap(),
+            if index == 0 {
+                None
+            } else {
+                Some(words(&[200]))
+            },
+            "contiguous original epoch marker is not the first/later proof state"
+        );
+        for (offset, item) in [
+            b"PendingServerEmission".as_slice(),
+            b"PendingValidatorEmission".as_slice(),
+            b"PendingRootAlphaDivs".as_slice(),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert_eq!(
+                backend
+                    .storage(&key(b"SubtensorModule", item, true))
+                    .unwrap(),
+                Some(words(&[if index == 0 && !proof_drained && offset < 2 {
+                    100
+                } else {
+                    0
+                }])),
+                "contiguous original pending parent differs from its activation"
+            );
+        }
+        if index > 0 {
+            assert_eq!(
+                backend
+                    .storage(b"synthetic-native-provider-credit")
+                    .unwrap(),
+                Some(words(&[9, 3, 6])),
+                "empty continuation lost original provider effects"
+            );
+            assert_eq!(
+                backend.storage(b"synthetic-native-owner-recycle").unwrap(),
+                Some(words(&[89])),
+                "empty continuation lost original owner effects"
+            );
+        }
+        let report = run(job).unwrap_or_else(|error| {
+            panic!(
+                "contiguous original block {} failed independently declared post-state: {error}",
+                index + 101
+            )
+        });
         assert!(report.post_state_reproduced && !report.runtime_admitted);
+        if proof_drained {
+            let captured = super::capture_tests::collect(job).unwrap_or_else(|error| {
+                panic!(
+                    "proof-drained original block {} capture failed: {error}",
+                    index + 101
+                )
+            });
+            let exported: HistoricalJob = serde_json::from_str(&captured.job_json).unwrap();
+            assert_eq!(
+                exported.parent_header_hex, job.parent_header_hex,
+                "capture replaced the independently declared parent"
+            );
+            assert_eq!(
+                exported.child_header_hex, job.child_header_hex,
+                "capture replaced the independently declared child"
+            );
+            assert_eq!(
+                exported.runtime_code_sha256, job.runtime_code_sha256,
+                "capture replaced the original drained program"
+            );
+            let replayed = run(&exported).unwrap_or_else(|error| {
+                panic!(
+                    "proof-drained original block {} reduced replay failed: {error}",
+                    index + 101
+                )
+            });
+            for actual in [&captured.replay, &replayed] {
+                assert!(actual.post_state_reproduced && !actual.runtime_admitted);
+                assert_eq!(
+                    actual
+                        .hook_observations
+                        .as_ref()
+                        .unwrap()
+                        .observations
+                        .len(),
+                    if index == 0 { 7 } else { 0 },
+                    "proof-drained capture/replay changed the first/later original census"
+                );
+            }
+        }
         let records = &report.hook_observations.as_ref().unwrap().observations;
-        assert_eq!(records.len(), if index == 0 { 7 } else { 0 });
+        assert_eq!(
+            records.len(),
+            if index == 0 { 7 } else { 0 },
+            "contiguous original first/later observation census changed"
+        );
         if index == 0 {
+            for (offset, amount) in [100u64, 100, 0].into_iter().enumerate() {
+                assert_eq!(
+                    records[offset].storage_return.as_ref().unwrap().value_hex,
+                    Some(encoded(&words(&[amount]))),
+                    "first original epoch did not drain its witnessed next-block accrual"
+                );
+            }
             let emitted = records[3]
                 .native
                 .as_ref()
