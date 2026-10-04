@@ -18,6 +18,7 @@ import (
 // Hooks observe real reads, real durability, and owned waits. None can supply
 // a source record, source match, checkpoint content or metric verdict.
 type monitorServiceHooks struct {
+	economicClaimWork   func(role, stage string, units uint64)
 	beforeNativeFeeRead func(context.Context, context.CancelFunc)
 	afterNativeFeeRead  func(context.Context, error)
 	nativeFeeReplay     historicalReplayHooks

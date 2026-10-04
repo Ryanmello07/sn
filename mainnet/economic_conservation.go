@@ -79,7 +79,7 @@ func (self economicConservationPolicy) validate() error {
 		}
 	}
 	for _, claim := range self.Claims {
-		if claim.Renewal != nil {
+		if claim.Renewal != nil || claim.Window != nil {
 			return errors.New("economic conservation cannot borrow a Claim owner's policy renewal")
 		}
 		if err := claim.validate(expected); err != nil {
@@ -178,6 +178,7 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	ClaimWindows         []economicConservationClaimWindow        `json:"claim_windows,omitempty"`
 	FeeRevision          *economicConservationFeeRevision         `json:"native_fee_revision,omitempty"`
 	NativeFeeObligations []economicConservationFeeObligation      `json:"native_fee_obligations,omitempty"`
 	NativeFeeIssue       string                                   `json:"native_fee_issue,omitempty"`
@@ -248,9 +249,12 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 		return err
 	}
 	for index, claim := range self.ClaimStates {
-		if err := validateMonitorClaimState(policy.Claims[index], claim); err != nil {
+		if err := validateMonitorClaimState(operating.Claims[index], claim); err != nil {
 			return err
 		}
+	}
+	if err := self.validateClaimWindows(policy); err != nil {
+		return err
 	}
 	// Component compact summaries borrow only this combined owner's exact
 	// archived checkpoints. They cannot import another role's archive catalog.
@@ -304,7 +308,7 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 	}
 	seenReceipts := map[string]bool{}
 	claimPolicies := make(map[string]monitorClaimPolicy, len(policy.Claims))
-	for _, claim := range policy.Claims {
+	for _, claim := range operating.Claims {
 		claimPolicies[claim.Role] = claim
 	}
 	for _, receipt := range self.Receipts {

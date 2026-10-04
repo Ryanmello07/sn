@@ -22,17 +22,18 @@ const economicConservationArchiveRequestSchema = "urnetwork-economic-conservatio
 const economicConservationArchivePlanSchema = "urnetwork-economic-conservation-archive-plan-v1"
 
 type economicConservationArchiveRequest struct {
-	FeeRevision        *economicConservationFeeRevision `json:"native_fee_revision,omitempty"`
-	RetireNativeFees   bool                             `json:"retire_native_fees,omitempty"`
-	Schema             string                           `json:"schema"`
-	Policy             economicConservationPolicy       `json:"original_policy"`
-	Original           monitorHistoryReference          `json:"original"`
-	ArchivePath        string                           `json:"archive_path"`
-	FormerWriterFence  planFileReference                `json:"former_writer_fence"`
-	FutureSegments     uint64                           `json:"future_segments"`
-	FutureIndexEntries uint64                           `json:"future_index_entries"`
-	FutureIndexBytes   uint64                           `json:"future_index_bytes"`
-	Renewal            *economicConservationRenewal     `json:"resource_renewal,omitempty"`
+	ClaimWindows       []economicConservationClaimWindow `json:"claim_windows,omitempty"`
+	FeeRevision        *economicConservationFeeRevision  `json:"native_fee_revision,omitempty"`
+	RetireNativeFees   bool                              `json:"retire_native_fees,omitempty"`
+	Schema             string                            `json:"schema"`
+	Policy             economicConservationPolicy        `json:"original_policy"`
+	Original           monitorHistoryReference           `json:"original"`
+	ArchivePath        string                            `json:"archive_path"`
+	FormerWriterFence  planFileReference                 `json:"former_writer_fence"`
+	FutureSegments     uint64                            `json:"future_segments"`
+	FutureIndexEntries uint64                            `json:"future_index_entries"`
+	FutureIndexBytes   uint64                            `json:"future_index_bytes"`
+	Renewal            *economicConservationRenewal      `json:"resource_renewal,omitempty"`
 }
 
 type economicConservationArchivePlan struct {
@@ -102,6 +103,17 @@ func validateEconomicConservationArchiveRequest(ctx context.Context, request eco
 			return err
 		}
 	}
+	if len(request.ClaimWindows) > len(request.Policy.Claims) {
+		return errors.New("economic Claim adoption exceeds original role census")
+	}
+	for _, window := range request.ClaimWindows {
+		if window.Original != request.Original {
+			return errors.New("economic Claim adoption names another original checkpoint")
+		}
+		if err := window.verify(request.Policy); err != nil {
+			return err
+		}
+	}
 	raw, err := readBootstrapChainInput(ctx, request.FormerWriterFence, 16*1024)
 	if err != nil {
 		return err
@@ -157,6 +169,15 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 	if err := view.admit(state, compacted); err != nil {
 		return plan, nil, err
 	}
+	if err := view.retainClaimWindows(request.Policy, state); err != nil {
+		return plan, nil, err
+	}
+	if err := view.setClaimBasis(request.Policy, state, archive); err != nil {
+		return plan, nil, err
+	}
+	if err := applyEconomicConservationClaimWindows(request.Policy, compacted, request.ClaimWindows); err != nil {
+		return plan, nil, err
+	}
 	if request.Renewal != nil && view.reviews[request.Renewal.ReviewSha256] {
 		return plan, nil, errors.New("economic resource renewal reused its original or archived review")
 	}
@@ -174,8 +195,8 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 	}
 	plan = economicConservationArchivePlan{Schema: economicConservationArchivePlanSchema, Request: request, Declaration: declaration, Archive: archive, Next: monitorHistoryReference{Path: request.Original.Path, Bytes: uint64(len(next)), Sha256: monitorReadDigest(next)}, Resources: resources}
 	plan.RequiredSegments = 2 * (uint64(len(compacted.Archive.Segments)) + request.FutureSegments)
-	plan.RequiredIndexEntries = 2 * (view.entries + request.FutureIndexEntries)
-	plan.RequiredIndexBytes = 2 * (view.bytes + request.FutureIndexBytes)
+	plan.RequiredIndexEntries = 2 * (view.entries + view.claimBasisEntries + request.FutureIndexEntries)
+	plan.RequiredIndexBytes = 2 * (view.bytes + view.claimBasisBytes + request.FutureIndexBytes)
 	// Catalog paths and hot liabilities share one fixed head. Reserving an
 	// additional worst-case reference for each forecast segment avoids a count
 	// revision accidentally exhausting the serialized owner before publication.

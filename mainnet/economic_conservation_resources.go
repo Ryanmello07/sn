@@ -51,6 +51,7 @@ func (self economicConservationPolicy) initialResources() economicConservationRe
 func (self economicConservationPolicy) identityHash() string {
 	if self.resourceBasis != nil {
 		self.MaximumFacts, self.ReadBudgetSeconds = self.resourceBasis.MaximumFacts, self.resourceBasis.ReadBudgetSeconds
+		self.Claims = self.resourceBasis.Claims
 	}
 	return rootObjectHash(self)
 }
@@ -141,5 +142,16 @@ func (self *economicConservationState) operatingPolicy(policy economicConservati
 		policy.resourceBasis = &original
 	}
 	policy.MaximumFacts, policy.ReadBudgetSeconds = resources.ActiveFacts, resources.ReadBudgetSeconds
+	heads, err := self.claimHeads(policy)
+	if err != nil {
+		return policy, err
+	}
+	policy.Claims = make([]monitorClaimPolicy, len(heads))
+	for index, head := range heads {
+		policy.Claims[index] = head.Policy
+		if self.archiveView != nil && self.archiveView.claimWork != nil {
+			policy.Claims[index].work = func(stage string, units uint64) { self.archiveView.claimWork(head.Role, stage, units) }
+		}
+	}
 	return policy, nil
 }

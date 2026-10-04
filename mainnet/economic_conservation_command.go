@@ -90,7 +90,8 @@ func (self *economicConservationState) summary(policy economicConservationPolicy
 		return result, err
 	}
 	if self.archiveView != nil {
-		result.ArchiveIndexEntries, result.ArchiveIndexBytes = self.archiveView.entries, self.archiveView.bytes
+		result.ArchiveIndexEntries = self.archiveView.entries + self.archiveView.claimBasisEntries
+		result.ArchiveIndexBytes = self.archiveView.bytes + self.archiveView.claimBasisBytes
 	}
 	for _, state := range self.ClaimStates {
 		result.ClaimStatuses = append(result.ClaimStatuses, state.Status)
@@ -193,6 +194,9 @@ func loadEconomicConservation(owner *monitorCheckpointStore, policy economicCons
 }
 
 func saveEconomicConservation(owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
+	if (len(state.ClaimWindows) != 0 || state.Archive != nil && len(state.Archive.ClaimHeads) != 0) && state.archiveView == nil {
+		return errors.New("economic Claim publication requires admitted original history")
+	}
 	if err := state.archiveView.check(); err != nil {
 		return err
 	}
@@ -227,6 +231,9 @@ func economicConservationIssue(err error) string {
 // Each logical sample owns one deadline. Parallel native/vault/Claim attempts
 // share it, join before publication, and preserve prior domain cursors on error.
 func sampleEconomicConservation(ctx context.Context, policy economicConservationPolicy, prior *economicConservationState, native, vault *rpcClient, now time.Time, hooks monitorServiceHooks) (*economicConservationState, bool, bool, error) {
+	if (len(prior.ClaimWindows) != 0 || prior.Archive != nil && len(prior.Archive.ClaimHeads) != 0) && prior.archiveView == nil {
+		return nil, false, false, errors.New("economic Claim read requires admitted original history")
+	}
 	if err := prior.archiveView.check(); err != nil {
 		return nil, false, false, err
 	}
@@ -274,6 +281,9 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 				clock.wait = func(ctx context.Context, delay time.Duration) error { return hooks.rpcWait(ctx, claim.Role, delay) }
 			}
 			claimValues[index], claimCodes[index] = readMonitorClaimWithBudget(readCtx, client, claim, time.Duration(seconds)*time.Second, clock)
+			if claimCodes[index] == "ok" {
+				claimCodes[index] = prior.claimPublicationCode(claim, claimValues[index])
+			}
 		}(index, claim)
 	}
 	joined.Wait()
