@@ -209,7 +209,8 @@
     "principal-fixture4af-source-root-review-20261004.json": "b5388aae0f461c0d0c959d083b164dc69a93b01b9e02c450c8bfba30d5ed18c6",
     "core-c618-publication-root-review-20261004.json": "1e6dab96c3dee62dfe030c22ef3143fb37c33ce326595be2713b3e039ff81a2f",
     "principal-fixture8d3-terminal-root-review-20261004.json": "5bb3482ebe35e9db3e26c6d7a1b5b854641f42f3fe6d4518e5d70fd61e3e67b6",
-    "principal-fixture4af-effective-stage-root-review-20261004.json": "d2f04fd01e20bcb2faa25224d8bdf6206d4f075dbd780b4fc2e033d12ece5aa0"
+    "principal-fixture4af-effective-stage-root-review-20261004.json": "d2f04fd01e20bcb2faa25224d8bdf6206d4f075dbd780b4fc2e033d12ece5aa0",
+    "native-restore-a499-finite-resource-root-review-20261004.json": "a22d05746f3b0ad711fdc70be5a003d90139818ebb8a8645ca6966d2e5bb009e"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
