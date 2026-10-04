@@ -56,7 +56,7 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 // signature or execution. Monitor snapshot limits do not define their paths.
 func newNativeProducerRestoreNamespaceFixture(t *testing.T, completed uint64, renewal bool, profile string, beforeExport ...func(*nativeProducerRestoreFixture)) *nativeProducerRestoreFixture {
 	t.Helper()
-	if profile != "" && profile != "approval" && profile != "runtime" {
+	if profile != "" && profile != "approval" && profile != "runtime" && profile != "large-approvals" {
 		t.Fatal("unknown explicit native restore namespace")
 	}
 	directory := os.Getenv("URNETWORK_NATIVE_CONSERVATION_FIXTURE")
@@ -145,6 +145,15 @@ func newNativeProducerRestoreNamespaceFixture(t *testing.T, completed uint64, re
 		t.Fatal(err)
 	}
 	p.authority.Directory, p.authority.Nodes = execution.Directory, execution.Producer.Nodes
+	if profile == "large-approvals" {
+		// This is a full approval-document census with the original small
+		// execution fixture. Unobserved additional identities do not claim a
+		// densely populated runtime workload or a production capacity result.
+		p.source.policy.MaximumUids = rootCensusLimit
+		for index := len(p.authority.Providers); index < rootCensusLimit; index++ {
+			p.authority.Providers = append(p.authority.Providers, nativeProducerProvider{Hotkey: fmt.Sprintf("0x%064x", index+65536), Coldkey: fmt.Sprintf("0x%064x", index+131072)})
+		}
+	}
 	message, err := p.authority.signingBytes()
 	if err != nil {
 		t.Fatal(err)

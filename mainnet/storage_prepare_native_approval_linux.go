@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -24,16 +23,30 @@ type storageNativeApprovalScope struct {
 	SharedDirectories []string                   `json:"shared_original_ancestors,omitempty"`
 }
 
-func storageNativeApprovalMembers(scope storageNativeProducerScope, root string) map[string][]byte {
-	members := map[string][]byte{}
+type storageNativeApprovalContent struct {
+	Bytes  uint64
+	Sha256 string
+}
+
+// The semantic loader has already verified these exact original digests.
+// Member census does not embed or reinterpret the large signed documents.
+func storageNativeApprovalMembers(scope storageNativeProducerScope, root string) map[string]storageNativeApprovalContent {
+	members := map[string]storageNativeApprovalContent{}
 	if scope.Policy.Execution == nil || scope.Policy.Execution.Producer == nil {
 		return members
 	}
 	references := append([]planFileReference{scope.Policy.Execution.Producer.Authority}, scope.Policy.Execution.Producer.Renewals...)
 	for index, reference := range references {
 		path, found := storageNativeRestoreRelative(root, reference.Path)
-		if found && index < len(scope.Approvals) {
-			members[path] = scope.Approvals[index]
+		if !found {
+			continue
+		}
+		if scope.ApprovalSources != nil && index < len(scope.ApprovalSources) {
+			source := scope.ApprovalSources[index]
+			members[path] = storageNativeApprovalContent{Bytes: source.Bytes, Sha256: source.Reference.Sha256}
+		} else if scope.ApprovalSources == nil && index < len(scope.Approvals) {
+			raw := scope.Approvals[index]
+			members[path] = storageNativeApprovalContent{Bytes: uint64(len(raw)), Sha256: monitorReadDigest(raw)}
 		}
 	}
 	return members
@@ -70,7 +83,7 @@ func planStorageNativeApprovalRestore(ctx context.Context, name string, owner du
 	result := durablevolume.PreparationOwnerPlan{Owner: owner, StagingName: name}
 	seen := map[string]bool{}
 	for _, entry := range report.Entries {
-		raw, file := members[entry.Path]
+		original, file := members[entry.Path]
 		if !file && !directories[entry.Path] {
 			continue
 		}
@@ -82,7 +95,7 @@ func planStorageNativeApprovalRestore(ctx context.Context, name string, owner du
 		}
 		seen[entry.Path] = true
 		if file {
-			if entry.Kind != "file" || entry.Mode != 0600 && entry.Mode != 0400 || entry.Size != uint64(len(raw)) || entry.Sha256 != monitorReadDigest(raw) {
+			if entry.Kind != "file" || entry.Mode != 0600 && entry.Mode != 0400 || entry.Size != original.Bytes || entry.Sha256 != original.Sha256 {
 				return empty, errors.New("native approval inventory changed original signed bytes")
 			}
 		} else if entry.Kind != "directory" || entry.Mode != 0700 || entry.Size != 0 || entry.Sha256 != "" {
@@ -124,7 +137,8 @@ func inspectStorageNativeApprovalRestore(ctx context.Context, root *os.File, pla
 		if err != nil {
 			return nil, err
 		}
-		if !bytes.Equal(raw, members[member.Path]) {
+		original := members[member.Path]
+		if uint64(len(raw)) != original.Bytes || monitorReadDigest(raw) != original.Sha256 {
 			return nil, errors.New("native restored approval differs from original signed authority")
 		}
 	}
