@@ -43,7 +43,7 @@ func economicNativeFeeTestSign(t *testing.T, request *economicNativeFeeRequest, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	approval.Signature = "0x" + hex.EncodeToString(ed25519.Sign(key, message))
+	approval.Signature = hex.EncodeToString(ed25519.Sign(key, message))
 	raw, err := json.Marshal(approval)
 	if err != nil {
 		t.Fatal(err)

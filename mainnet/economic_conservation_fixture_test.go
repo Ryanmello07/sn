@@ -199,6 +199,8 @@ func newEconomicConservationFixture(t *testing.T, twoProviders bool, configureVa
 	}
 	f.policy.Vault.BatchBlocks = 1
 	pool := protocol.ClaimProgressPool{ChainId: 964, Vault: strings.ToLower(f.vault.policy.Address), NoId: "1", Coldkey: f.vault.policy.Coldkeys[0]}
+	// Publication time advances; one instance retains its original birth time.
+	startedAt := f.now.Add(-time.Hour).Format(time.RFC3339Nano)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		sequence := f.claimReads.Add(1)
 		if request.Method != http.MethodGet || request.URL.Query().Get("id") != "synthetic-claim" {
@@ -212,7 +214,7 @@ func newEconomicConservationFixture(t *testing.T, twoProviders bool, configureVa
 		if f.claimPaymentUnknown.Load() {
 			observation.PaymentStatus, observation.UnpaidCreditRao = "unknown", ""
 		}
-		value := protocol.ClaimProgress{Schema: protocol.ClaimProgressSchema, Member: "synthetic-claim", Status: "active", InstanceId: strings.Repeat("6", 32), StartedAt: f.now.Add(-time.Hour).Format(time.RFC3339Nano), PublishedAt: f.now.Format(time.RFC3339Nano), Sequence: sequence, QueueSha256: strings.Repeat("7", 64), DeclaredPool: &pool, TotalEntries: 1, FinalizedEntries: 1, Entries: []protocol.ClaimProgressEntry{{Epoch: 1, QueueStatus: "finalized", ObservationStatus: "retained", DomainStatus: "match", Observation: observation}}}
+		value := protocol.ClaimProgress{Schema: protocol.ClaimProgressSchema, Member: "synthetic-claim", Status: "active", InstanceId: strings.Repeat("6", 32), StartedAt: startedAt, PublishedAt: f.now.Format(time.RFC3339Nano), Sequence: sequence, QueueSha256: strings.Repeat("7", 64), DeclaredPool: &pool, TotalEntries: 1, FinalizedEntries: 1, Entries: []protocol.ClaimProgressEntry{{Epoch: 1, QueueStatus: "finalized", ObservationStatus: "retained", DomainStatus: "match", Observation: observation}}}
 		if err := value.Validate(); err != nil {
 			http.Error(w, fmt.Sprint(err), 400)
 			return
