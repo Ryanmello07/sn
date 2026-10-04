@@ -438,9 +438,9 @@ fn fixture_with_allocation_activation(
         StateVersion::V1,
     );
     let extrinsics: Vec<Vec<u8>> = if effects == Some("capture-same-block") {
-        vec![vec![0x99; 32].encode(), vec![0x98; 32].encode()]
+        vec![vec![0x99u8; 32].encode(), vec![0x98u8; 32].encode()]
     } else if capture {
-        vec![vec![0x99; 32].encode()]
+        vec![vec![0x99u8; 32].encode()]
     } else {
         Vec::new()
     };

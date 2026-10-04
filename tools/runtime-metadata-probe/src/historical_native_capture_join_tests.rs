@@ -96,10 +96,10 @@ fn historical_native_vault_capture_exports_original_capture_sequences() {
     let mut second = first.clone();
     second.parent_header_hex = first.child_header_hex.clone();
     second.parent_hash = first.child_hash;
-    second.extrinsics_hex = vec![encoded(&vec![0x98; 32].encode())];
+    second.extrinsics_hex = vec![encoded(&vec![0x98u8; 32].encode())];
     let child = NativeHeader::new(
         102,
-        BlakeTwo256::ordered_trie_root(vec![vec![0x98; 32].encode()], StateVersion::V1),
+        BlakeTwo256::ordered_trie_root(vec![vec![0x98u8; 32].encode()], StateVersion::V1),
         root,
         H256(first.child_hash),
         Digest::default(),
@@ -202,5 +202,79 @@ fn historical_native_vault_capture_exports_original_capture_sequences() {
             file.sync_all().unwrap();
         }
         std::fs::File::open(directory).unwrap().sync_all().unwrap();
+    }
+}
+
+/// The complete body is opaque bytes, not a vector of inferred integer words.
+/// Check the independent SCALE frame before relying on capture/replay output.
+#[test]
+fn historical_native_vault_capture_extrinsics_are_exact_opaque_bytes() {
+    for (mode, transactions) in [
+        ("capture", vec![0x99u8]),
+        ("capture-same-block", vec![0x99u8, 0x98u8]),
+        ("capture-next-block", vec![0x99u8]),
+    ] {
+        let (job, _) = fixture_with_principal_effects(false, Some(Some(14)), Some(mode));
+        assert_eq!(job.extrinsics_hex.len(), transactions.len());
+        let mut expected_body = Vec::new();
+        for (raw, transaction) in job.extrinsics_hex.iter().zip(transactions) {
+            let bytes = hex_bytes("fixture extrinsic", raw, MAXIMUM_BLOCK_BYTES).unwrap();
+            let expected = [vec![0x80u8], vec![transaction; 32]].concat();
+            assert_eq!(
+                bytes, expected,
+                "original capture body must encode exact bytes"
+            );
+            let decoded: OpaqueExtrinsic =
+                scale_exact("fixture extrinsic", &bytes).expect("canonical fixture extrinsic");
+            assert_eq!(decoded.encode(), expected);
+            expected_body.push(expected);
+        }
+        let child: NativeHeader = scale_exact(
+            "fixture child",
+            &hex_bytes("fixture child", &job.child_header_hex, MAXIMUM_HEADER_BYTES).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            *child.extrinsics_root(),
+            BlakeTwo256::ordered_trie_root(expected_body, StateVersion::V1),
+            "original capture header must commit the exact byte body"
+        );
+    }
+}
+
+/// Both real entry points reject malformed SCALE before executing original
+/// Wasm. The former inferred-i32 encoding is one explicit regression vector.
+#[test]
+fn historical_native_vault_capture_and_replay_refuse_nonexact_extrinsics() {
+    let (original, _) = fixture_with_principal_effects(false, Some(Some(14)), Some("capture"));
+    let canonical = [vec![0x80u8], vec![0x99u8; 32]].concat();
+    assert_eq!(original.extrinsics_hex, vec![encoded(&canonical)]);
+    let mut trailing = canonical.clone();
+    trailing.push(0);
+    for (name, malformed) in [
+        ("inferred integer words", vec![0x99i32; 32].encode()),
+        ("truncated payload", canonical[..32].to_vec()),
+        ("trailing payload", trailing),
+        (
+            "nonminimal length",
+            [vec![0x81u8, 0], vec![0x99u8; 32]].concat(),
+        ),
+    ] {
+        let mut changed = original.clone();
+        changed.extrinsics_hex = vec![encoded(&malformed)];
+        let capture_error = super::super::capture_tests::collect(&changed)
+            .err()
+            .expect("nonexact capture body was admitted");
+        assert!(
+            capture_error.to_string().contains("capture extrinsic SCALE"),
+            "{name}: {capture_error}"
+        );
+        let replay_error = run(&changed)
+            .err()
+            .expect("nonexact replay body was admitted");
+        assert!(
+            replay_error.to_string().contains("extrinsic SCALE"),
+            "{name}: {replay_error}"
+        );
     }
 }
