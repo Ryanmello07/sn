@@ -111,24 +111,25 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 // FixedPointTolerance covers the observed final normalization and u64 casts;
 // it does not excuse Yuma disagreement or grant an economic activation approval.
 type nativeExecutionOutcome struct {
-	Boundary               economicEmissionBoundary   `json:"boundary"`
-	ProducerAuthorityHash  string                     `json:"producer_authority_hash,omitempty"`
-	FinalityProofHash      string                     `json:"finality_proof_hash,omitempty"`
-	AdmissionHash          string                     `json:"admission_hash"`
-	JobHash                string                     `json:"job_hash"`
-	TraceHash              string                     `json:"trace_hash"`
-	MinerAllocation        string                     `json:"miner_allocation_alpha"`
-	ProviderEntitlement    string                     `json:"provider_entitlement_alpha"`
-	OwnerRecycled          string                     `json:"owner_recycled_alpha"`
-	ResidualEntitlement    string                     `json:"residual_entitlement_alpha"`
-	CollateralCapture      string                     `json:"reward_collateral_capture_alpha"`
-	FixedPointDust         string                     `json:"fixed_point_dust_alpha"`
-	FixedPointTolerance    string                     `json:"fixed_point_tolerance_alpha"`
-	AllocationDifference   string                     `json:"allocation_difference_alpha"`
-	RedirectedToValidators string                     `json:"redirected_to_validators_alpha"`
-	Recipients             []nativeExecutionRecipient `json:"execution_generations"`
-	AmountsAuthenticated   bool                       `json:"amounts_authenticated"`
-	ContentHash            string                     `json:"content_hash"`
+	RecipientEffects       *nativeExecutionEffectProjection `json:"recipient_effects,omitempty"`
+	Boundary               economicEmissionBoundary         `json:"boundary"`
+	ProducerAuthorityHash  string                           `json:"producer_authority_hash,omitempty"`
+	FinalityProofHash      string                           `json:"finality_proof_hash,omitempty"`
+	AdmissionHash          string                           `json:"admission_hash"`
+	JobHash                string                           `json:"job_hash"`
+	TraceHash              string                           `json:"trace_hash"`
+	MinerAllocation        string                           `json:"miner_allocation_alpha"`
+	ProviderEntitlement    string                           `json:"provider_entitlement_alpha"`
+	OwnerRecycled          string                           `json:"owner_recycled_alpha"`
+	ResidualEntitlement    string                           `json:"residual_entitlement_alpha"`
+	CollateralCapture      string                           `json:"reward_collateral_capture_alpha"`
+	FixedPointDust         string                           `json:"fixed_point_dust_alpha"`
+	FixedPointTolerance    string                           `json:"fixed_point_tolerance_alpha"`
+	AllocationDifference   string                           `json:"allocation_difference_alpha"`
+	RedirectedToValidators string                           `json:"redirected_to_validators_alpha"`
+	Recipients             []nativeExecutionRecipient       `json:"execution_generations"`
+	AmountsAuthenticated   bool                             `json:"amounts_authenticated"`
+	ContentHash            string                           `json:"content_hash"`
 }
 
 type nativeExecutionDrain struct {
@@ -136,7 +137,14 @@ type nativeExecutionDrain struct {
 	Fallback []byte
 }
 
-func (self nativeExecutionOutcome) hash() string { self.ContentHash = ""; return rootObjectHash(self) }
+// Existing completions bind the aggregate grammar and the original trace. The
+// separately sealed projection can be derived again without rewriting that
+// original completion or pretending an older result retained recipient amounts.
+func (self nativeExecutionOutcome) hash() string {
+	self.ContentHash = ""
+	self.RecipientEffects = nil
+	return rootObjectHash(self)
+}
 
 func nativeCapture(record historicalReplayObservation, label string, width int) ([]byte, error) {
 	if record.Native == nil || record.Native.ExecutionPhaseHex == nil || *record.Native.ExecutionPhaseHex != "0x02" {
@@ -253,6 +261,7 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 		}
 		result.AmountsAuthenticated = true
 		result.ContentHash = result.hash()
+		result.RecipientEffects = newNativeExecutionEffects(admission.Parent, *result, nil, nil, nil)
 		return result, nil
 	}
 	if len(drains) != len(drainKeys) || epoch == nil || emission == nil || len(block.Events) != 1 || block.Events[0].Kind != "SubtensorModule.IncentiveAlphaEmittedToMiners" {
@@ -357,6 +366,7 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 		providers[provider.Hotkey] = provider
 	}
 	providerTotal, ownerTotal, residualTotal, capturedTotal := new(big.Int), new(big.Int), new(big.Int), new(big.Int)
+	effects := make([]nativeExecutionEffect, 0, len(recipients))
 	for _, record := range recipients {
 		hotkey, err := nativeCapture(record, "hotkey", 32)
 		if err != nil {
@@ -383,6 +393,8 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 		if gross != emitted[uid] {
 			return nil, errors.New("native reward, capture and actual recycling do not conserve original emission")
 		}
+		effect := nativeExecutionEffect{Ordinal: record.Ordinal, Recipient: result.Recipients[uid], Branch: record.Purpose, Gross: fmt.Sprint(gross), Liquid: "0", Collateral: "0", Recycled: "0"}
+		_, effect.Provider = providers[identity.Hotkey]
 		if record.Purpose == "native-owner-recycle" {
 			// The admitted original body/range identifies the owner Recycle
 			// branch, excluding burn, root recycling and separate owner cut.
@@ -394,6 +406,7 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 				return nil, errors.New("native provider is also a runtime owner recycle recipient")
 			}
 			ownerTotal.Add(ownerTotal, new(big.Int).SetUint64(recycled))
+			effect.Recycled = fmt.Sprint(recycled)
 		} else {
 			captured, err := nativeCaptureUint(record, "captured", 8)
 			if err != nil {
@@ -404,12 +417,14 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 				return nil, errors.New("native collateral capture and liquid reward do not conserve original entitlement")
 			}
 			capturedTotal.Add(capturedTotal, new(big.Int).SetUint64(captured))
+			effect.Liquid, effect.Collateral = fmt.Sprint(liquid), fmt.Sprint(captured)
 			if _, provider := providers[identity.Hotkey]; provider {
 				providerTotal.Add(providerTotal, new(big.Int).SetUint64(gross))
 			} else {
 				residualTotal.Add(residualTotal, new(big.Int).SetUint64(gross))
 			}
 		}
+		effects = append(effects, effect)
 	}
 	for _, identity := range result.Recipients {
 		if emitted[identity.Uid] != 0 && !used[identity.Hotkey] {
@@ -419,6 +434,11 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 	result.ProviderEntitlement, result.OwnerRecycled, result.ResidualEntitlement, result.CollateralCapture = providerTotal.String(), ownerTotal.String(), residualTotal.String(), capturedTotal.String()
 	result.AmountsAuthenticated = true
 	result.ContentHash = result.hash()
+	eventIndex, emissionOrdinal := block.Events[0].EventIndex, emission.Ordinal
+	result.RecipientEffects = newNativeExecutionEffects(admission.Parent, *result, &eventIndex, &emissionOrdinal, effects)
+	if err := result.RecipientEffects.validate(*result); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
