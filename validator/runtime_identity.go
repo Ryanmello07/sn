@@ -170,9 +170,27 @@ func authenticatePinnedNativeRuntimeContext(ctx context.Context, chain *crv4.Cha
 	if ctx == nil || chain == nil || chain.API == nil || chain.API.Client == nil {
 		return types.Hash{}, errors.New("native runtime chain is unavailable")
 	}
-	finalized, err := crv4.FinalizedHeadContext(ctx, chain)
+	if isOwnerRecycleProductionConfig(cfg) {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, productionSteeringReadTimeout)
+		defer cancel()
+		ctx = withRuntimeFinalityOwner(ctx)
+	}
+	var finalized types.Hash
+	var err error
+	if isOwnerRecycleProductionConfig(cfg) {
+		finalized, err = readRuntimeWitnessHash(ctx, chain, "finalized head", "chain_getFinalizedHead")
+	} else {
+		finalized, err = crv4.FinalizedHeadContext(ctx, chain)
+	}
 	if err != nil {
 		return types.Hash{}, err
+	}
+	if isOwnerRecycleProductionConfig(cfg) {
+		finalized, err = crv4.SelectFinalityReadBlockContext(ctx, chain, types.Hash{}, finalized)
+		if err != nil {
+			return types.Hash{}, err
+		}
 	}
 	if err := authenticatePinnedNativeRuntimeAtContext(ctx, chain, cfg, finalized); err != nil {
 		return types.Hash{}, err

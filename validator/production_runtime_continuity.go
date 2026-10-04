@@ -258,9 +258,11 @@ func InspectProductionRuntimeContinuityContext(ctx context.Context, native *crv4
 	}
 	ctx, cancel := context.WithTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
+	ctx = withRuntimeFinalityOwner(ctx)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	var finality runtimeFinalityObservation
 	return crv4.ReadRuntimeObservationContext(ctx, native, func(ctx context.Context) (*ProductionRuntimeContinuityInspection, error) {
 		approved, _ := ownerRecycleProductionApproval(cfg)
 		var genesis types.Hash
@@ -278,38 +280,27 @@ func InspectProductionRuntimeContinuityContext(ctx context.Context, native *crv4
 		if genesis != native.GenesisHash || name != approved.Approval.NativeChain || evm != "0x3c4" {
 			return nil, errors.New("runtime continuity fresh network identity differs")
 		}
-		head, err := crv4.FinalizedHeadContext(ctx, native)
+		head, err := readRuntimeFinalityWitness(ctx, native)
 		if err != nil {
 			return nil, err
 		}
 		if block == (types.Hash{}) {
-			block = head
-		}
-		canonicalNumber := func(hash types.Hash) (uint64, error) {
-			number, _, err := native.ReceiptHeaderAtContext(ctx, hash)
+			block, err = crv4.SelectFinalityReadBlockContext(ctx, native, block, head.hash)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
-			var canonical types.Hash
-			if err := call(ctx, &canonical, "chain_getBlockHash", number); err != nil {
-				return 0, err
-			}
-			if canonical != hash {
-				return 0, errors.New("runtime continuity original canonical block changed")
-			}
-			return number, ctx.Err()
 		}
-		headNumber, err := canonicalNumber(head)
-		if err != nil {
-			return nil, err
-		}
-		number, err := canonicalNumber(block)
+		number, _, err := native.ReceiptHeaderAtContext(ctx, block)
 		if err != nil {
 			return nil, err
 		}
 		request := certificate.Result.Request
-		if number == 0 || number > headNumber || number < request.ValidFromNativeBlock || number > request.ValidThroughNativeBlock {
+		if number == 0 || number < request.ValidFromNativeBlock || number > request.ValidThroughNativeBlock {
 			return nil, errors.New("runtime continuity block is outside its finalized certificate window")
+		}
+		selectedBlock := runtimeFinalityWitness{hash: block, number: number}
+		if err := finality.check(ctx, native, head, selectedBlock); err != nil {
+			return nil, err
 		}
 		artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, native, block, request.Artifact)
 		if err != nil {
@@ -318,29 +309,16 @@ func InspectProductionRuntimeContinuityContext(ctx context.Context, native *crv4
 		if err := crv4.ValidateValidatorProducerRuntimeArtifactContext(ctx, native, artifact); err != nil {
 			return nil, err
 		}
-		latest, err := crv4.FinalizedHeadContext(ctx, native)
-		if err != nil {
+		if err := finality.close(ctx, native, selectedBlock); err != nil {
 			return nil, err
 		}
-		latestNumber, err := canonicalNumber(latest)
-		if err != nil {
-			return nil, err
-		}
-		if latestNumber < headNumber {
-			return nil, errors.New("runtime continuity finality regressed")
-		}
-		if _, err := canonicalNumber(head); err != nil {
-			return nil, err
-		}
-		if _, err := canonicalNumber(block); err != nil {
-			return nil, err
-		}
+		latest := finality.latest
 		if _, _, err := verifyProductionRuntimeContinuity(cfg, policyRaw, certificateRaw); err != nil {
 			return nil, err
 		}
 		return &ProductionRuntimeContinuityInspection{PolicySha256: sha256.Sum256(policyRaw), CertificateSha256: sha256.Sum256(certificateRaw),
 			OriginalApprovalSha256: policy.Policy.OriginalApprovalSha256, OriginalConfigHash: policy.Policy.OriginalConfigHash, Artifact: request.Artifact,
-			NativeHash: block, NativeNumber: number, CheckedThroughNativeHash: latest, CheckedThroughNativeNumber: latestNumber,
+			NativeHash: block, NativeNumber: number, CheckedThroughNativeHash: latest.hash, CheckedThroughNativeNumber: latest.number,
 			InterfaceProfile: policy.Policy.InterfaceProfile, EvidenceSha256: certificate.Result.EvidenceSha256,
 			SemanticCertificateAuthenticated: true, ObservationAuthority: "owned-rpc-assertion; signed semantic assertion is not independently replayed proof"}, nil
 	})

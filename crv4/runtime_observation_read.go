@@ -139,6 +139,7 @@ func readRuntimeObservation[T any](ctx context.Context, chain *Chain, read func(
 	// A complete view shares this 300s total, clipped by any enclosing owner.
 	operation, cancel := withTimeout(ctx, substrateRpcReadRetryTimeout)
 	defer cancel()
+	operation = WithFinalityReadOwnerContext(operation)
 	operation = context.WithValue(operation, runtimeObservationReadOwnerKey{}, runtimeObservationReadOwner{api: chain.API, parent: ctx})
 	delay := time.Second
 	for {

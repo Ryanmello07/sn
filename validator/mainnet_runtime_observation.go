@@ -45,6 +45,7 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 	}
 	ctx, cancel := context.WithTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
+	ctx = withRuntimeFinalityOwner(ctx)
 	type result struct {
 		artifact    crv4.AuthenticatedRuntimeArtifact
 		observation *MainnetRuntimeObservation
@@ -97,7 +98,10 @@ func authenticateReleaseMainnetRuntimeAttempt(ctx context.Context, native *crv4.
 		return empty, nil, err
 	}
 	if *selectedBlock == (types.Hash{}) {
-		*selectedBlock = finalized.hash
+		*selectedBlock, err = crv4.SelectFinalityReadBlockContext(ctx, native, *selectedBlock, finalized.hash)
+		if err != nil {
+			return empty, nil, err
+		}
 	}
 	block := *selectedBlock
 	number := finalized.number

@@ -37,6 +37,9 @@ type EVMCheckpointObservation struct {
 // native head, not a delayed history-map update. Authenticate both runtime
 // artifacts before constructing keys; dial-time metadata has no authority.
 func ReadEVMCheckpointAtContext(ctx context.Context, chain *Chain, query EVMCheckpointQuery, allowed ...RuntimeArtifactIdentity) (EVMCheckpointObservation, error) {
+	if ctx == nil {
+		return EVMCheckpointObservation{}, errors.New("EVM/native checkpoint caller context is absent")
+	}
 	if len(allowed) > maximumRuntimeMetadataArtifactsPerChain {
 		return EVMCheckpointObservation{}, errors.New("EVM/native checkpoint runtime allowlist exceeds its bound")
 	}
@@ -106,16 +109,15 @@ func readEvmCheckpointAttempt(ctx context.Context, chain *Chain, query EVMCheckp
 	if parentNumber != query.NativeNumber-1 {
 		return empty, errors.New("EVM/native checkpoint parent height differs")
 	}
-	finalized, err := FinalizedHeadContext(ctx, chain)
+	finalized, finalizedNumber, err := readFinalityReadWitnessContext(ctx, chain, query.NativeHash)
 	if err != nil {
 		return empty, err
 	}
-	finalizedNumber, _, err := chain.CanonicalHeaderAtContext(ctx, finalized)
-	if err != nil {
+	if err := RetainFinalityReadWitnessContext(ctx, chain, query.NativeHash, finalized, finalizedNumber); err != nil {
 		return empty, err
 	}
 	if finalizedNumber < query.NativeNumber {
-		return empty, errors.New("EVM/native checkpoint is not finalized")
+		return empty, &ReceiptEvidenceUnavailableError{BlockHash: query.NativeHash, Field: "finalized head through retained EVM/native checkpoint"}
 	}
 	read := func(head types.Hash, absent bool) (RuntimeArtifactIdentity, error) {
 		artifact, err := AuthenticateRuntimeArtifactAtContext(ctx, chain, head, allowed...)
@@ -157,16 +159,9 @@ func readEvmCheckpointAttempt(ctx context.Context, chain *Chain, query EVMCheckp
 	}
 	// Canonical hashes cannot establish that the opening finality witness is
 	// still finalized after the dependent storage reads.
-	closing, err := FinalizedHeadContext(ctx, chain)
+	closing, closingNumber, err := readFinalityReadWitnessContext(ctx, chain, query.NativeHash)
 	if err != nil {
 		return empty, err
-	}
-	closingNumber, _, err := chain.CanonicalHeaderAtContext(ctx, closing)
-	if err != nil {
-		return empty, err
-	}
-	if closingNumber < finalizedNumber {
-		return empty, errors.New("EVM/native checkpoint finalized head regressed during observation")
 	}
 	for _, boundary := range []struct {
 		hash   types.Hash
@@ -175,6 +170,12 @@ func readEvmCheckpointAttempt(ctx context.Context, chain *Chain, query EVMCheckp
 		if err := chain.CheckCanonicalBlockAtContext(ctx, boundary.hash, boundary.number); err != nil {
 			return empty, err
 		}
+	}
+	if err := RetainFinalityReadWitnessContext(ctx, chain, query.NativeHash, closing, closingNumber); err != nil {
+		return empty, err
+	}
+	if closingNumber < finalizedNumber {
+		return empty, &ReceiptEvidenceUnavailableError{BlockHash: finalized, Field: "finalized head through original EVM/native checkpoint witness"}
 	}
 	return EVMCheckpointObservation{Query: query, NativeParentHash: parent, Runtime: currentRuntime, ParentRuntime: parentRuntime}, ctx.Err()
 }

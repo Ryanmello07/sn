@@ -508,6 +508,7 @@ func (self *Chain) VerifyFinalizedSourceRuntimeContext(ctx context.Context, prep
 	}
 	ctx, cancel := context.WithTimeout(ctx, substrateRpcReadRetryTimeout)
 	defer cancel()
+	ctx = WithFinalityReadOwnerContext(ctx)
 	proof := self.runtimeArtifactProof
 	if proof == nil || proof.blockHash.Hex() != prepared.PreparedAtBlockHash || proof.metadata != self.Meta ||
 		!proof.matches(self, AuthenticatedRuntimeArtifact{BlockHash: proof.blockHash, Version: proof.identity.Version,
@@ -554,6 +555,7 @@ func (self *Chain) verifyFinalizedSourceContext(ctx context.Context, prepared *P
 	// runtime observation. Retrying transport never replaces the receipt.
 	ctx, cancel := context.WithTimeout(ctx, substrateRpcReadRetryTimeout)
 	defer cancel()
+	ctx = WithFinalityReadOwnerContext(ctx)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -573,9 +575,9 @@ func (self *Chain) verifyFinalizedSourceContext(ctx context.Context, prepared *P
 			return err
 		}
 		if canonical != hash {
-			return errors.New("crv4: source receipt or finalized witness is not the canonical native block")
+			return errors.Join(errors.New("crv4: source receipt or finalized witness is not the canonical native block"), ctx.Err())
 		}
-		return ctx.Err()
+		return nil
 	}
 	readFinality := func() (types.Hash, uint64, error) {
 		var encoded string
@@ -596,14 +598,14 @@ func (self *Chain) verifyFinalizedSourceContext(ctx context.Context, prepared *P
 		if err := checkCanonical(hash, number); err != nil {
 			return types.Hash{}, 0, err
 		}
+		if err := CheckRetainedFinalityReadWitnessContext(ctx, self, receipt.BlockHash, hash, number); err != nil {
+			return types.Hash{}, 0, err
+		}
 		return hash, number, nil
 	}
 	finalized, finalizedNumber, err := readFinality()
 	if err != nil {
 		return err
-	}
-	if finalizedNumber < receipt.BlockNumber {
-		return &ReceiptEvidenceUnavailableError{BlockHash: receipt.BlockHash, Field: "finalized head through retained receipt"}
 	}
 	if receipt.BlockHash == finalized && receipt.BlockNumber != finalizedNumber {
 		return errors.New("crv4: source receipt number differs from its authenticated finalized header")
@@ -612,6 +614,12 @@ func (self *Chain) verifyFinalizedSourceContext(ctx context.Context, prepared *P
 		if err := checkCanonical(receipt.BlockHash, receipt.BlockNumber); err != nil {
 			return err
 		}
+	}
+	if err := RetainFinalityReadWitnessContext(ctx, self, receipt.BlockHash, finalized, finalizedNumber); err != nil {
+		return err
+	}
+	if finalizedNumber < receipt.BlockNumber {
+		return &ReceiptEvidenceUnavailableError{BlockHash: receipt.BlockHash, Field: "finalized head through retained receipt"}
 	}
 	verified, err := execution.verifyFinalizedExtrinsicContext(ctx, receipt.BlockHash, receipt.ExtrinsicHash)
 	if err != nil {
@@ -640,9 +648,6 @@ func (self *Chain) verifyFinalizedSourceContext(ctx context.Context, prepared *P
 	if err != nil {
 		return err
 	}
-	if closingNumber < finalizedNumber {
-		return errors.New("crv4: source finalized head regressed during observation")
-	}
 	if closing != finalized {
 		if err := checkCanonical(finalized, finalizedNumber); err != nil {
 			return err
@@ -652,6 +657,12 @@ func (self *Chain) verifyFinalizedSourceContext(ctx context.Context, prepared *P
 		if err := checkCanonical(receipt.BlockHash, receipt.BlockNumber); err != nil {
 			return err
 		}
+	}
+	if err := RetainFinalityReadWitnessContext(ctx, self, receipt.BlockHash, closing, closingNumber); err != nil {
+		return err
+	}
+	if closingNumber < finalizedNumber {
+		return &ReceiptEvidenceUnavailableError{BlockHash: finalized, Field: "finalized head through original source witness"}
 	}
 	return ctx.Err()
 }

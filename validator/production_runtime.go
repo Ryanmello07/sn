@@ -20,6 +20,7 @@ func authenticateOwnerRecycleProductionRuntimeAtContext(ctx context.Context, nat
 	}
 	ctx, cancel := context.WithTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
+	ctx = withRuntimeFinalityOwner(ctx)
 	var finality runtimeFinalityObservation
 	view, err := crv4.ReadRuntimeObservationContext(ctx, native, func(ctx context.Context) (*crv4.Chain, error) {
 		artifact, number, err := authenticateOwnerRecycleProductionArtifactAttempt(ctx, native, cfg, block, false, &finality)
@@ -51,6 +52,7 @@ func authenticateOwnerRecycleProductionArtifactAtContext(ctx context.Context, na
 	}
 	ctx, cancel := context.WithTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
+	ctx = withRuntimeFinalityOwner(ctx)
 	type result struct {
 		artifact crv4.AuthenticatedRuntimeArtifact
 		number   uint64

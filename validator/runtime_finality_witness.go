@@ -24,6 +24,10 @@ type runtimeFinalityObservation struct {
 	latest   runtimeFinalityWitness
 }
 
+func withRuntimeFinalityOwner(ctx context.Context) context.Context {
+	return crv4.WithFinalityReadOwnerContext(ctx)
+}
+
 // Nullable results distinguish a missing RPC response from a returned hash
 // that contradicts the original identity. Short padded hashes are not evidence.
 func readRuntimeWitnessHash(ctx context.Context, native *crv4.Chain, field, method string, args ...any) (types.Hash, error) {
@@ -62,8 +66,13 @@ func readRuntimeFinalityWitness(ctx context.Context, native *crv4.Chain) (runtim
 
 // Check all returned canonical identities before interpreting a lower head as
 // unavailable. A real hash change must not be hidden by lagging finality.
-func checkRuntimeFinalityWitnesses(ctx context.Context, native *crv4.Chain, current runtimeFinalityWitness, retained ...runtimeFinalityWitness) error {
-	for _, witness := range append([]runtimeFinalityWitness{current}, retained...) {
+func checkRuntimeCanonicalWitnesses(ctx context.Context, native *crv4.Chain, block types.Hash, current runtimeFinalityWitness, retained ...runtimeFinalityWitness) error {
+	for _, witness := range retained {
+		if witness.number == current.number && witness.hash != current.hash {
+			return errors.Join(errors.New("runtime observation completed finalized witnesses disagree at the same height"), ctx.Err())
+		}
+	}
+	for index, witness := range append([]runtimeFinalityWitness{current}, retained...) {
 		canonical, err := readRuntimeWitnessHash(ctx, native, "canonical block hash", "chain_getBlockHash", witness.number)
 		if err != nil {
 			return err
@@ -71,13 +80,13 @@ func checkRuntimeFinalityWitnesses(ctx context.Context, native *crv4.Chain, curr
 		if canonical != witness.hash {
 			return errors.Join(errors.New("runtime observation block is not canonical at its original height"), ctx.Err())
 		}
-	}
-	for _, witness := range retained {
-		if current.number < witness.number {
-			return &crv4.ReceiptEvidenceUnavailableError{BlockHash: witness.hash, Field: "finalized head through original runtime witness"}
+		if index == 0 {
+			if err := crv4.CheckRetainedFinalityReadWitnessContext(ctx, native, block, current.hash, current.number); err != nil {
+				return err
+			}
 		}
 	}
-	return ctx.Err()
+	return nil
 }
 
 // Successful checks retain both the first witness and highest admitted head.
@@ -90,8 +99,16 @@ func (self *runtimeFinalityObservation) check(ctx context.Context, native *crv4.
 	if self.latest.hash != (types.Hash{}) && self.latest.hash != current.hash && self.latest.hash != self.original.hash {
 		retained = append(retained, self.latest)
 	}
-	if err := checkRuntimeFinalityWitnesses(ctx, native, current, retained...); err != nil {
+	if err := checkRuntimeCanonicalWitnesses(ctx, native, block.hash, current, retained...); err != nil {
 		return err
+	}
+	if err := crv4.RetainFinalityReadWitnessContext(ctx, native, block.hash, current.hash, current.number); err != nil {
+		return err
+	}
+	for _, witness := range retained {
+		if current.number < witness.number {
+			return errors.Join(&crv4.ReceiptEvidenceUnavailableError{BlockHash: witness.hash, Field: "finalized head through original runtime witness"}, ctx.Err())
+		}
 	}
 	if self.original.hash == (types.Hash{}) {
 		self.original = current

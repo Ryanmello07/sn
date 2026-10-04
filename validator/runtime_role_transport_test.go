@@ -242,11 +242,16 @@ func TestProductionRuntimeContinuityClosingReconnectRechecksNetwork(t *testing.T
 	client := &productionTransportTestClient{Client: native.API.Client}
 	client.generation.Store(1)
 	native.API.Client = client
-	canonicalReads := 0
+	canonicalReads, heads := 0, 0
+	faulted := false
 	fixture.fault = func(_ context.Context, _ any, method string, args ...any) (bool, error) {
+		if method == "chain_getFinalizedHead" {
+			heads++
+		}
 		if method == "chain_getBlockHash" && args[0] == uint64(150) {
 			canonicalReads++
-			if canonicalReads == 5 {
+			if heads >= 2 && !faulted {
+				faulted = true
 				client.generation.Add(1)
 				fixture.owner.rpc.nativeChain = "replacement.example"
 			}
@@ -254,7 +259,7 @@ func TestProductionRuntimeContinuityClosingReconnectRechecksNetwork(t *testing.T
 		return false, nil
 	}
 	observed, err := InspectProductionRuntimeContinuityContext(t.Context(), native, fixture.owner.cfg, fixture.hashes[150], fixture.policyRaw, fixture.certificateRaw)
-	if observed != nil || err == nil || retryableProductionSteeringRead(err) || canonicalReads != 5 || fixture.owner.rpc.callKVs["system_chain"] != 2 {
+	if observed != nil || err == nil || retryableProductionSteeringRead(err) || !faulted || fixture.owner.rpc.callKVs["system_chain"] != 2 {
 		t.Fatalf("continuity certificate borrowed earlier network identity: canonical=%d observed=%+v err=%v", canonicalReads, observed, err)
 	}
 }

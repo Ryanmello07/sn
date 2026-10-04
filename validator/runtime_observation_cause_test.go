@@ -59,13 +59,13 @@ func TestProductionRuntimeContinuityUnavailableCanonicalReadRecovers(t *testing.
 	}
 }
 
-func TestProductionRuntimeContinuityObservedWindowAndRegressionRemainHard(t *testing.T) {
+func TestProductionRuntimeContinuitySeparatesWindowConflictFromLaggingFinality(t *testing.T) {
 	for _, phase := range []string{"window", "regression"} {
 		f := newProductionContinuityPolicyTestFixture(t)
 		f.head = 151
 		selected, expected := f.hashes[149], "outside its finalized certificate window"
 		if phase == "regression" {
-			selected, expected = f.hashes[150], "finality regressed"
+			selected, expected = f.hashes[150], "finalized head through"
 			f.fault = func(_ context.Context, _ any, method string, _ ...any) (bool, error) {
 				if method == "state_getMetadata" {
 					f.head = 149
@@ -74,8 +74,8 @@ func TestProductionRuntimeContinuityObservedWindowAndRegressionRemainHard(t *tes
 			}
 		}
 		result, err := InspectProductionRuntimeContinuityContext(t.Context(), f.owner.rpc.native, f.owner.cfg, selected, f.policyRaw, f.certificateRaw)
-		if err == nil || result != nil || retryableProductionSteeringRead(err) || !strings.Contains(err.Error(), expected) {
-			t.Fatalf("%s returned canonical conflict was not a hard refusal: result=%+v err=%v", phase, result, err)
+		if err == nil || result != nil || retryableProductionSteeringRead(err) != (phase == "regression") || !strings.Contains(err.Error(), expected) {
+			t.Fatalf("%s lost its window/finality cause: result=%+v err=%v", phase, result, err)
 		}
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/urfoundation/sn/crv4"
 )
 
 // Real native header encoding supplies an opening descendant and one later
@@ -60,11 +61,14 @@ func (self *releaseSourceFinalityWitnessFixture) read(_ context.Context, target 
 	switch method {
 	case "chain_getFinalizedHead":
 		hash := self.opening
+		if self.fault == "opening lower" || self.fault == "opening lower changed receipt" {
+			hash = self.source.native.block
+		}
 		if self.heads >= 2 {
 			switch self.fault {
 			case "advanced", "closing orphan", "lost opening canonical", "lost receipt canonical":
 				hash = self.closing
-			case "regressed":
+			case "regressed", "regressed changed opening", "regressed changed receipt":
 				hash = self.receipt.hash
 			}
 		}
@@ -80,7 +84,7 @@ func (self *releaseSourceFinalityWitnessFixture) read(_ context.Context, target 
 		hash := types.Hash{}
 		if args[0] == self.receipt.number+1 {
 			hash = self.opening
-			if self.fault == "opening orphan" || self.fault == "lost opening canonical" && self.heads >= 2 {
+			if self.fault == "opening orphan" || (self.fault == "lost opening canonical" || self.fault == "regressed changed opening") && self.heads >= 2 {
 				hash = types.Hash{99}
 			}
 		} else if args[0] == self.receipt.number+2 {
@@ -88,7 +92,7 @@ func (self *releaseSourceFinalityWitnessFixture) read(_ context.Context, target 
 			if self.fault == "closing orphan" {
 				hash = types.Hash{99}
 			}
-		} else if args[0] == self.receipt.number && self.fault == "lost receipt canonical" && self.heads >= 2 {
+		} else if args[0] == self.receipt.number && (self.fault == "opening lower changed receipt" || (self.fault == "lost receipt canonical" || self.fault == "regressed changed receipt") && self.heads >= 2) {
 			hash = types.Hash{99}
 		}
 		if hash != (types.Hash{}) {
@@ -111,6 +115,10 @@ func TestReleaseSourceFinalityAuthenticatesOpeningAndClosingWitnesses(t *testing
 		wantSuccess := fault == "unchanged" || fault == "advanced"
 		if (err == nil) != wantSuccess || err != nil && RetryableEvidenceTransportError(err) {
 			t.Fatalf("%s original source finality success=%t heads=%d error=%v", fault, wantSuccess, fixture.heads, err)
+		}
+		var unavailable *crv4.ReceiptEvidenceUnavailableError
+		if errors.As(err, &unavailable) != (fault == "regressed") || retryableProductionSteeringRead(err) != (fault == "regressed") {
+			t.Fatalf("%s finality changed pending/canonical class: %v", fault, err)
 		}
 		if fault == "opening orphan" && (fixture.receipt.blocks != 0 || fixture.receipt.eventReads != 0 || fixture.receipt.commitmentReads != 0) {
 			t.Fatalf("orphan finality reached receipt interpretation: blocks=%d events=%d commitments=%d", fixture.receipt.blocks, fixture.receipt.eventReads, fixture.receipt.commitmentReads)
@@ -179,6 +187,83 @@ func TestReleaseSourceFinalityReadSharesOriginalDeadline(t *testing.T) {
 		}
 		if expected.IsZero() {
 			t.Fatal("source receipt deadline control performed no reads")
+		}
+	}
+}
+
+func TestReleaseSourceLowerFinalityChecksOriginalCanonicalHashes(t *testing.T) {
+	for _, fault := range []string{"opening lower", "opening lower changed receipt", "regressed", "regressed changed opening", "regressed changed receipt"} {
+		fixture := newReleaseSourceFinalityWitnessFixture(t, fault)
+		err := fixture.verify(t.Context())
+		pending := fault == "opening lower" || fault == "regressed"
+		var unavailable *crv4.ReceiptEvidenceUnavailableError
+		if err == nil || errors.As(err, &unavailable) != pending || retryableProductionSteeringRead(err) != pending {
+			t.Fatalf("%s hid its completed canonical evidence: %v", fault, err)
+		}
+		if strings.HasPrefix(fault, "opening lower") && fixture.receipt.blocks != 0 {
+			t.Fatal("unfinalized opening receipt reached its body")
+		}
+	}
+}
+
+func TestReleaseSourceFinalityOwnerRetainsSustainedLowerHead(t *testing.T) {
+	fixture := newReleaseSourceFinalityWitnessFixture(t, "regressed")
+	parent, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	ctx := crv4.WithFinalityReadOwnerContext(parent)
+	for attempt := 0; attempt < 2; attempt++ {
+		err := fixture.verify(ctx)
+		var unavailable *crv4.ReceiptEvidenceUnavailableError
+		if !errors.As(err, &unavailable) || !retryableProductionSteeringRead(err) || unavailable.BlockHash != fixture.opening {
+			t.Fatalf("attempt%d forgot original source finality: %v", attempt, err)
+		}
+	}
+	if fixture.receipt.blocks != 1 {
+		t.Fatal("second lower opening reset the retained owner and reread the body")
+	}
+	fixture.fault = "advanced"
+	if err := fixture.verify(ctx); err != nil || fixture.receipt.blocks != 2 || fixture.receipt.submissions != 0 {
+		t.Fatalf("advancing finality did not recover the original signed receipt: %v", err)
+	}
+}
+
+func TestReleaseSourceFinalityOwnerCompletedForkDominatesLateBoundary(t *testing.T) {
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		for _, fork := range []bool{false, true} {
+			fixture := newReleaseSourceFinalityWitnessFixture(t, "unchanged")
+			parent, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+			defer cancel()
+			late := &runtimeFinalityLateContext{Context: parent, done: make(chan struct{}), cause: cause}
+			expired := false
+			defer func() {
+				if !expired {
+					close(late.done)
+				}
+			}()
+			ctx := crv4.WithFinalityReadOwnerContext(late)
+			if err := fixture.verify(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if fork {
+				fixture.openingHeader, fixture.opening = releaseReceiptTestHeader(t, types.Hash{99}, fixture.receipt.number+1)
+			}
+			fixture.releaseSourceFinalityReadFixture.fault = func(ctx context.Context, target any, method string, args ...any) (bool, error) {
+				if err := ctx.Err(); err != nil {
+					return true, err
+				}
+				handled, err := fixture.read(ctx, target, method, args...)
+				if method == "chain_getBlockHash" && args[0] == fixture.receipt.number+1 && err == nil {
+					expired = true
+					close(late.done)
+					<-ctx.Done()
+				}
+				return handled, err
+			}
+			err := fixture.verify(ctx)
+			wantRetry := !fork && errors.Is(cause, context.DeadlineExceeded)
+			if !expired || !errors.Is(err, cause) || strings.Contains(err.Error(), "same height") != fork || retryableProductionSteeringRead(err) != wantRetry || fixture.receipt.blocks != 1 {
+				t.Fatalf("fork=%t cause=%v lost its completed source evidence: %v", fork, cause, err)
+			}
 		}
 	}
 }

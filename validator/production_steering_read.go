@@ -157,6 +157,7 @@ func (self *ReleaseSteerer) productionRead(ctx context.Context, phase production
 	}
 	operation, cancel := withTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
+	operation = withRuntimeFinalityOwner(operation)
 	var lastErr error
 	for {
 		if err := ctx.Err(); err != nil {

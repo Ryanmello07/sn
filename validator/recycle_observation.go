@@ -91,6 +91,8 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 	pin := approval.Proposal.Runtime
 	operationCtx, cancel := context.WithTimeout(ctx, productionSteeringReadTimeout)
 	defer cancel()
+	operationCtx = withRuntimeFinalityOwner(operationCtx)
+	var finality runtimeFinalityObservation
 	return crv4.ReadRuntimeObservationContext(operationCtx, native, func(ctx context.Context) (*OwnerRecycleAdmissionObservation, error) {
 		call := native.API.Client.CallContext
 		var nativeChain, evmChainId string
@@ -107,42 +109,26 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 		if nativeChain != approval.NativeChain || genesis != types.Hash(pin.GenesisHash) || native.GenesisHash != genesis || evmChainId != "0x3c4" {
 			return nil, errors.New("owner-recycle route differs from the independently approved mainnet name, genesis or EVM chain 964")
 		}
-		finalized, err := crv4.FinalizedHeadContext(ctx, native)
+		head, err := readRuntimeFinalityWitness(ctx, native)
 		if err != nil {
 			return nil, err
 		}
-		finalizedNumber, _, err := native.CanonicalHeaderAtContext(ctx, finalized)
-		if err != nil {
-			return nil, err
-		}
-		finalityHash := finalized
-		number := finalizedNumber
 		if requested == (types.Hash{}) {
-			requested = finalized
-		} else {
-			finalized = requested
-			number, _, err = native.ReceiptHeaderAtContext(ctx, finalized)
+			requested, err = crv4.SelectFinalityReadBlockContext(ctx, native, requested, head.hash)
 			if err != nil {
 				return nil, err
 			}
 		}
-		if number > finalizedNumber {
-			return nil, errors.New("owner-recycle census is newer than the current finalized head")
+		finalized := requested
+		number, _, err := native.ReceiptHeaderAtContext(ctx, finalized)
+		if err != nil {
+			return nil, err
 		}
 		if finalized == (types.Hash{}) || number < approval.ValidFromNativeBlock || number > approval.ValidThroughNativeBlock || number > math.MaxUint32 {
 			return nil, errors.New("owner-recycle finalized head is outside the signed observation window")
 		}
-		checkCanonical := func() error {
-			var canonical types.Hash
-			if err := call(ctx, &canonical, "chain_getBlockHash", number); err != nil {
-				return err
-			}
-			if canonical != finalized {
-				return errors.New("owner-recycle finalized census hash is not canonical at its height")
-			}
-			return ctx.Err()
-		}
-		if err := checkCanonical(); err != nil {
+		selectedBlock := runtimeFinalityWitness{hash: finalized, number: number}
+		if err := finality.check(ctx, native, head, selectedBlock); err != nil {
 			return nil, err
 		}
 		expected := crv4.RuntimeArtifactIdentity{Version: pin.Version, CodeHash: releaseHex32(pin.CodeHash), MetadataHash: releaseHex32(pin.MetadataHash)}
@@ -318,10 +304,7 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 		if err != nil {
 			return nil, err
 		}
-		if err := checkCanonical(); err != nil {
-			return nil, err
-		}
-		if err := native.CheckCanonicalBlockAtContext(ctx, finalityHash, finalizedNumber); err != nil {
+		if err := finality.close(ctx, native, selectedBlock); err != nil {
 			return nil, err
 		}
 		proposalHash, err := approval.Proposal.Hash(cfg.Policy)
