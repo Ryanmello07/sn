@@ -919,7 +919,7 @@ func TestRepairOperatorCanceledCensusJoinsBeforeReturning(t *testing.T) {
 // A later signed incident reaches the original activation through the actual
 // previous journal and marker; a merely observed process cannot supply the link.
 func TestRepairOperatorSuccessorRetainsAcknowledgedOriginalJournal(t *testing.T) {
-	for _, kind := range []string{"acknowledged", "unacknowledged", "missing", "reset-quota"} {
+	for _, kind := range []string{"acknowledged", "unacknowledged", "missing", "reset-quota", "lost-original-row"} {
 		f := newRepairOperatorFixture(t)
 		f.claim()
 		if kind == "unacknowledged" {
@@ -941,6 +941,22 @@ func TestRepairOperatorSuccessorRetainsAcknowledgedOriginalJournal(t *testing.T)
 		}
 		f.base.now = f.base.now.Add(time.Minute)
 		plan := old.approval.Plan
+		if kind == "lost-original-row" {
+			image := f.reader.images["operator-one"]
+			image.Intents, image.Attempts = image.Intents[:1], image.Attempts[:3]
+			// The terminal signature still exists in the store, so the real
+			// collector can close its nonce interval while the DB lost custody.
+			archive, err := strecovery.Collect(f.ctx(), f.archive.Selection, f.reader)
+			if err != nil {
+				t.Fatal("successor row-loss fixture cannot form its real census", err)
+			}
+			raw, err := json.Marshal(archive)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan.OriginalCensus = planFileReference{Path: filepath.Join(f.base.directory, "operator-successor-census.json"), Sha256: monitorReadDigest(raw)}
+			repairValidatorTestWrite(t, plan.OriginalCensus.Path, raw, 0600)
+		}
 		plan.OriginalFiles = slices.Clone(plan.OriginalFiles)
 		if kind == "reset-quota" {
 			for index, retained := range plan.OriginalFiles {
