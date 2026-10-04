@@ -250,7 +250,8 @@ func (self *economicEntitlementFixture) serveRpc(w http.ResponseWriter, request 
 			}
 			values = []any{stabi.STCoordinatorOperatorVersion{Coldkey: [32]byte(common.HexToHash("0x" + strings.Repeat("35", 32))), RootSigner: signer, EffectiveEpoch: 1, Active: true}}
 		case "policyAt":
-			values = []any{stabi.STCoordinatorPolicySnapshot{PolicyHash: [32]byte(common.HexToHash(self.artifact.PolicyHash)), RootCommitWindowBlocks: 10}}
+			// ABI uint256 values are concrete zeroes, never absent pointers.
+			values = []any{stabi.STCoordinatorPolicySnapshot{PolicyHash: [32]byte(common.HexToHash(self.artifact.PolicyHash)), RootCommitWindowBlocks: 10, EpochDepositCapRao: big.NewInt(0), CampaignDepositCapRao: big.NewInt(0)}}
 		case "settlementVault":
 			values = []any{common.HexToAddress(self.source.policy.Vault.Address)}
 		case "epochStartBlock":
