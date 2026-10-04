@@ -120,14 +120,28 @@ func reviewEconomicConservationRestore(ctx context.Context, request economicCons
 		}
 		roots = append(roots, root)
 	}
+	var originalRaw []byte
 	if err := validateEconomicConservationRestoreHistory(ctx, request.Policy, request.Original, func(reference monitorHistoryReference) ([]byte, error) {
 		root, err := monitorHistoryRestoreRoot(roots, reference)
 		if err != nil {
 			return nil, err
 		}
-		return root.read(ctx, reference)
+		raw, err := root.read(ctx, reference)
+		if err == nil && reference == request.Original {
+			originalRaw = raw
+		}
+		return raw, err
 	}, hooks); err != nil {
 		return empty, nil, err
+	}
+	if execution := request.Policy.Native.Observation.Execution; execution != nil && execution.Producer != nil {
+		state, err := decodeEconomicConservation(originalRaw, request.Policy)
+		if err != nil {
+			return empty, nil, err
+		}
+		if err := reviewEconomicNativeProducerRestore(ctx, request.Policy.Native.Observation, request.Original, state.Native, roots, declared); err != nil {
+			return empty, nil, err
+		}
 	}
 	for _, root := range roots {
 		if err := root.finish(ctx); err != nil {

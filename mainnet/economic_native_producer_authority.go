@@ -88,6 +88,12 @@ func (self nativeProducerAuthority) signingBytes() ([]byte, error) {
 }
 
 func loadNativeProducerAuthority(ctx context.Context, policy economicEmissionPolicy) (*nativeProducerAuthority, error) {
+	return readNativeProducerAuthority(ctx, policy, nativeProducerReadApproval)
+}
+
+// The restore adapter supplies the same original signed bytes through a copied
+// source reader. Signature, runtime, layout and engine admission remain shared.
+func readNativeProducerAuthority(ctx context.Context, policy economicEmissionPolicy, read func(context.Context, planFileReference) ([]byte, error)) (*nativeProducerAuthority, error) {
 	if policy.Execution == nil || policy.Execution.Producer == nil {
 		return nil, errors.New("native producer is not independently configured")
 	}
@@ -95,11 +101,11 @@ func loadNativeProducerAuthority(ctx context.Context, policy economicEmissionPol
 	if err := execution.validate(); err != nil {
 		return nil, err
 	}
-	raw, digest, err := readPlanFile(ctx, producer.Authority.Path, nativeProducerAuthorityLimit)
+	raw, err := read(ctx, producer.Authority)
 	if err != nil {
 		return nil, err
 	}
-	if digest != producer.Authority.Sha256 {
+	if monitorReadDigest(raw) != producer.Authority.Sha256 {
 		return nil, errors.Join(errRpcIntegrity, errors.New("native producer original approval bytes differ"))
 	}
 	var authority nativeProducerAuthority
@@ -137,6 +143,18 @@ func loadNativeProducerAuthority(ctx context.Context, policy economicEmissionPol
 		return nil, errors.Join(errRpcIntegrity, errors.New("native producer independent authority signature is invalid"))
 	}
 	return &authority, nil
+}
+
+// Exact reads preserve observation errors before comparing returned content.
+func nativeProducerReadApproval(ctx context.Context, reference planFileReference) ([]byte, error) {
+	raw, digest, err := readPlanFile(ctx, reference.Path, nativeProducerAuthorityLimit)
+	if err != nil {
+		return nil, err
+	}
+	if digest != reference.Sha256 {
+		return nil, errors.Join(errRpcIntegrity, errors.New("native producer approval bytes differ from original pin"))
+	}
+	return raw, nil
 }
 
 // This state is committed together with the original economic cursor. A proof

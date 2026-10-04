@@ -234,7 +234,13 @@ func nativeProducerReviewedProfile(authority nativeProducerAuthority) error {
 }
 
 func loadNativeProducerAuthorities(ctx context.Context, policy economicEmissionPolicy) ([]nativeProducerReviewedAuthority, error) {
-	original, err := loadNativeProducerAuthority(ctx, policy)
+	return readNativeProducerAuthorities(ctx, policy, nativeProducerReadApproval)
+}
+
+// Copied approval bytes use the original loader and renewal lineage checks.
+// Restoring custody cannot select another key or reinterpret a signed revision.
+func readNativeProducerAuthorities(ctx context.Context, policy economicEmissionPolicy, read func(context.Context, planFileReference) ([]byte, error)) ([]nativeProducerReviewedAuthority, error) {
+	original, err := readNativeProducerAuthority(ctx, policy, read)
 	if err != nil {
 		return nil, err
 	}
@@ -244,11 +250,11 @@ func loadNativeProducerAuthorities(ctx context.Context, policy economicEmissionP
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		raw, digest, err := readPlanFile(ctx, reference.Path, nativeProducerAuthorityLimit)
+		raw, err := read(ctx, reference)
 		if err != nil {
 			return nil, err
 		}
-		if digest != reference.Sha256 {
+		if monitorReadDigest(raw) != reference.Sha256 {
 			return nil, errors.Join(errRpcIntegrity, errors.New("native producer retained renewal bytes differ"))
 		}
 		var revision nativeProducerRenewal

@@ -28,14 +28,15 @@ import (
 )
 
 type economicConservationRestoreFixture struct {
-	archive  *economicConservationArchiveFixture
-	sources  []*storagePreparationCommandFixture
-	targets  []*storageSnapshotRestoreFixture
-	request  economicConservationRestoreRequest
-	state    economicConservationState
-	files    []map[string]string
-	retained durablevolume.Config
-	future   string
+	archive   *economicConservationArchiveFixture
+	sources   []*storagePreparationCommandFixture
+	targets   []*storageSnapshotRestoreFixture
+	request   economicConservationRestoreRequest
+	state     economicConservationState
+	files     []map[string]string
+	retained  durablevolume.Config
+	future    string
+	readFiles func(*testing.T, string) map[string]string
 }
 
 // All actual and one future archive head are enrolled through public storage
@@ -288,7 +289,11 @@ func (self *economicConservationRestoreFixture) apply(t *testing.T, reference du
 		self.archive.ctx = durablepath.WithHost(durablevolume.WithReference(t.Context(), durablevolume.Reference{Path: path, Sha256: result.DeclarationSha256}), self.sources[0].storage.Host)
 	}
 	for index, target := range self.targets {
-		if files := bootstrapSuccessorPreparationTestFiles(t, target.target.root); !reflect.DeepEqual(files, self.files[index]) {
+		readFiles := self.readFiles
+		if readFiles == nil {
+			readFiles = bootstrapSuccessorPreparationTestFiles
+		}
+		if files := readFiles(t, target.target.root); !reflect.DeepEqual(files, self.files[index]) {
 			t.Fatal("combined restore changed original checkpoint or co-owner bytes", index)
 		}
 	}
