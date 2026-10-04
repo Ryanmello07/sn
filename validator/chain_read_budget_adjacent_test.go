@@ -61,7 +61,7 @@ func TestChainReadBudgetEvidenceReadbackKeepsHardFailureAndCancellation(t *testi
 		for _, cancelOwner := range []bool{false, true} {
 			fixture := newEvidenceTransactionV2Fixture(t, "", nil)
 			ctx, cancel := context.WithCancel(t.Context())
-			attempts := 0
+			attempts, waits := 0, 0
 			hard := errors.New("synthetic exact receipt identity conflict")
 			chain := canonicalReadbackTestClient(t, fixture.chain, func(ctx context.Context, calls []chainBatchRPCRequest) error {
 				for _, call := range calls {
@@ -76,6 +76,7 @@ func TestChainReadBudgetEvidenceReadbackKeepsHardFailureAndCancellation(t *testi
 				return ctx.Err()
 			}, fixture.handler)
 			chain.readRetryHooks.wait = func(context.Context, time.Duration) error {
+				waits++
 				cancel()
 				return nil
 			}
@@ -85,7 +86,7 @@ func TestChainReadBudgetEvidenceReadbackKeepsHardFailureAndCancellation(t *testi
 			if cancelOwner {
 				want = context.Canceled
 			}
-			if result != nil || !errors.Is(err, want) || attempts != 1 || RetryableEvidenceTransportError(err) || fixture.requestCount("eth_sendRawTransaction") != 0 {
+			if result != nil || !errors.Is(err, want) || attempts != 1 || (!cancelOwner && waits != 0) || (cancelOwner && waits != 1) || RetryableEvidenceTransportError(err) || fixture.requestCount("eth_sendRawTransaction") != 0 {
 				t.Fatalf("%s cancel=%t ignored hard owner: attempts=%d result=%v error=%v", method, cancelOwner, attempts, result, err)
 			}
 		}
