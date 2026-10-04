@@ -106,11 +106,14 @@ authority, complete roster, domains and canonical nonoverlapping paths without
 opening the named outboxes. Recovery must select the exact approved slot and
 match its outbox to the original protected inventory. The decoder grants no live
 custody: launch still uses `ReadProviderWorkCaptureProfile` and its physical
-directory checks. Historical retained cuts use their independently signed
-request's provider key; a later approved launch key cannot rewrite those cuts.
+directory checks. Custody admission also requires every retained request's
+provider key to match the exact approved profile. Multiple generations under
+that key can restart; history under a rotated key requires a separately approved
+original profile and key-history gate. A retained leaf cannot authorize a key
+change, and a later approved launch key cannot rewrite those cuts.
 The three portable decoder test roots are separate, authored and unexecuted;
 decoder commit `ad703e8d` preserved the original eight miner and three bootstrap
-test sources. The prepared-custody successor adds two constructor refusal roots
+test sources. The prepared-custody successor adds three constructor refusal roots
 and updates the two lifecycle roots' shared fixture to explicitly prepare its
 synthetic birth before its first SDK launch. These revised and added roots are
 also authored and unexecuted.

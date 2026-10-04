@@ -302,9 +302,19 @@ func newProviderDeviceLocal(ctx context.Context, networkSpace *sdk.NetworkSpace,
 	}
 	var transport *http.Transport
 	if capture := settings.ContractManagerSettings.OriginalWorkCapture; capture != nil {
+		if profile == nil {
+			return nil, errors.New("whole-work provider capture has no independently approved profile")
+		}
+		var publicKey [32]byte
+		for _, provider := range profile.Providers {
+			if provider.Slot == slot {
+				publicKey = provider.PublicKey
+				break
+			}
+		}
 		// Admission borrows the exact runtime validator. It never repairs or
 		// initializes missing custody; the live worker reopens its own lease.
-		scope := connect.OriginalWorkOutboxScope{DomainHash: settings.ContractManagerSettings.CloseReportDomainHash, ClientId: [16]byte(clientId), RequestPublicKey: capture.RequestPublicKey}
+		scope := connect.OriginalWorkOutboxScope{DomainHash: settings.ContractManagerSettings.CloseReportDomainHash, ClientId: [16]byte(clientId), PublicKey: publicKey, RequestPublicKey: capture.RequestPublicKey}
 		if err := connect.ValidateOriginalWorkOutbox(ctx, capture.OutboxDirectory, scope); err != nil {
 			return nil, err
 		}
