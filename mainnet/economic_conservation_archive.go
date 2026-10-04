@@ -111,6 +111,7 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
 	funding                  *economicConservationFundingIndex
+	fundingWork              func(context.Context)
 	admission                context.Context
 	closed                   bool
 	entitlementEnabled       bool
@@ -685,6 +686,7 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 	view.admission = ctx
 	view.entitlementEnabled = policy.EntitlementSources != nil
 	view.claimWork = hooks.economicClaimWork
+	view.fundingWork = hooks.economicFundingWork
 	if policy.FeeAuthority != nil {
 		view.feeReviews[policy.FeeAuthority.ReviewSha256] = true
 	}

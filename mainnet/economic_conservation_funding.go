@@ -416,6 +416,9 @@ func (self *economicFundingResolver) payment(value economicConservationPayment) 
 // Summary callers already hold the admitted archive. Cold counters are built
 // once from removed original facts; active facts are visited once per sample.
 func (self *economicConservationState) fundingSummary(ctx context.Context) (*economicConservationFundingSummary, error) {
+	if err := self.fundingOwner(ctx); err != nil {
+		return nil, err
+	}
 	resolver, err := newEconomicFundingResolver(ctx, self)
 	if err != nil {
 		return nil, err
@@ -476,5 +479,29 @@ func (self *economicConservationState) fundingSummary(ctx context.Context) (*eco
 		value := true
 		result.NoNonIncomeProviderCredit = &value
 	}
-	return result, ctx.Err()
+	if self.archiveView != nil && self.archiveView.fundingWork != nil {
+		self.archiveView.fundingWork(ctx)
+	}
+	if err := self.fundingOwner(ctx); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Public projection checks the original held owners before and after all
+// arithmetic, not on every map lookup. Cold admission uses its private owner
+// context here and still checks the complete held set before it is published.
+func (self *economicConservationState) fundingOwner(ctx context.Context) error {
+	if ctx == nil || self == nil {
+		return errors.New("economic funding lacks original owner context")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if self.archiveView != nil {
+		if err := self.archiveView.checkAdmission(); err != nil {
+			return err
+		}
+	}
+	return ctx.Err()
 }
