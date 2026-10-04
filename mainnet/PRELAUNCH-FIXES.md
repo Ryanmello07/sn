@@ -22,6 +22,8 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+The [closed-work behavioral source review](evidence/provider-closed-work-tests-controls-source-review-20261004.json) covers all 23 new deterministic roots and nine operative control groups. It includes actual paid/free SQL closure, retention migration, operator publication/retry, validator HTTP reconstruction and monitor active/cold evidence. The 50-root selected normal/race scope, six vets and 13 intended causal failures per mode still need execution; source review does not close provider authentication.
+
 The [validator causal-control readback](evidence/validatorb6-four-controls-independent-readback-20261004.json) reproduces four operative groups in both normal and race modes: missing predecessor, unnecessary history reread, omitted cached-lookup custody and partial cache publication. Each modified build compiles and fails at the intended assertion while the original selected positive root passes. Two groups remain; retain the verified eight outcomes without repeating them.
 
 The [Server attribution selected-test runner](evidence/server5b-selected-model-runner-root-review-20261004.json) is reviewed and adopted for 32 exact roots in normal and race modes using protected compiled images and private owned database/cache services. Fresh aggregate resource admission remains mandatory; the original cumulative baseline stays intact. Independent event counts, process joins and service cleanup are required before qualification. This does not qualify the later provider producer or whole Server suite.
