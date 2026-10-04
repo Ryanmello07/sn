@@ -141,7 +141,7 @@ func readEconomicProviderOriginals(ctx context.Context, source economicConservat
 	if err := charge(result.Bindings); err != nil {
 		return nil, nil, err
 	}
-	attempts, err := validator.NewProviderAttemptAuthoritySource(ctx, policy.AttemptAuthority)
+	attempts, err := policy.openAttemptSource(ctx)
 	if err != nil {
 		return nil, nil, economicProviderEvidenceError(err)
 	}

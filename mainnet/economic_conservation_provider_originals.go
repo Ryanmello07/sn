@@ -74,15 +74,47 @@ func (self *economicProviderMeasurementPolicy) validate(policy economicConservat
 	if self == nil {
 		return nil
 	}
-	ref := self.AttemptAuthority
 	if self.AttributionSigner != "" && !monitorEvmAddress(self.AttributionSigner) {
 		return errors.New("economic provider attribution authority is invalid")
 	}
-	if self.Schema != economicProviderMeasurementPolicySchema || !monitorEvmAddress(self.WholeWorkAuthoritySigner) || self.MaximumOriginalBytes == 0 || self.MaximumOriginalBytes > uint64(policy.storageMaximum()) || !filepath.IsAbs(ref.Path) || filepath.Clean(ref.Path) != ref.Path || !planSha256(ref.SHA256) || ref.Bytes == 0 || ref.Bytes > 16*1024*1024 {
+	if self.Schema != economicProviderMeasurementPolicySchema || !monitorEvmAddress(self.WholeWorkAuthoritySigner) || self.MaximumOriginalBytes == 0 || self.MaximumOriginalBytes > uint64(policy.storageMaximum()) {
 		return errors.New("economic provider original authority or finite physical profile is incomplete")
+	}
+	if _, _, err := self.attemptReference(); err != nil {
+		return err
 	}
 	_, err := validator.NewHttpWalletMappingReader(self.WalletEndpoint)
 	return err
+}
+
+// Economic policy retains its canonical sha256: commitment. Only the adapter
+// uses the validator reader's 0x representation; path, length and bytes are exact.
+func (self *economicProviderMeasurementPolicy) attemptReference() (validator.ReleaseEvidenceV2File, [32]byte, error) {
+	if self == nil || !planSha256(self.AttemptAuthority.SHA256) {
+		return validator.ReleaseEvidenceV2File{}, [32]byte{}, errors.New("economic provider attempt authority digest is not canonical")
+	}
+	reference := self.AttemptAuthority
+	if !filepath.IsAbs(reference.Path) || filepath.Clean(reference.Path) != reference.Path {
+		return validator.ReleaseEvidenceV2File{}, [32]byte{}, errors.New("economic provider attempt authority path is not canonical")
+	}
+	digest, err := hex.DecodeString(strings.TrimPrefix(reference.SHA256, "sha256:"))
+	if err != nil || len(digest) != 32 {
+		return validator.ReleaseEvidenceV2File{}, [32]byte{}, errors.New("economic provider attempt authority digest differs")
+	}
+	reference.SHA256 = "0x" + hex.EncodeToString(digest)
+	if err := reference.Validate(16 * 1024 * 1024); err != nil {
+		return validator.ReleaseEvidenceV2File{}, [32]byte{}, err
+	}
+	return reference, [32]byte(digest), nil
+}
+
+// Live acquisition and cold replay use the same exact protected reader seam.
+func (self *economicProviderMeasurementPolicy) openAttemptSource(ctx context.Context) (*validator.ProviderAttemptAuthoritySource, error) {
+	reference, _, err := self.attemptReference()
+	if err != nil {
+		return nil, err
+	}
+	return validator.NewProviderAttemptAuthoritySource(ctx, reference)
 }
 
 // The selected provider head is independent of both transport and the payout

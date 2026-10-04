@@ -109,7 +109,7 @@ func (self *economicConservationArchiveView) verifyProviderOriginals(ctx context
 	}
 	attempts := census.providerAttempts
 	if attempts == nil {
-		reader, err := validator.NewProviderAttemptAuthoritySource(ctx, selected.AttemptAuthority)
+		reader, err := selected.openAttemptSource(ctx)
 		if err != nil {
 			return nil, economicProviderEvidenceError(err)
 		}
@@ -118,8 +118,8 @@ func (self *economicConservationArchiveView) verifyProviderOriginals(ctx context
 			return nil, economicProviderEvidenceError(err)
 		}
 	}
-	authorityBytes, err := hex.DecodeString(selected.AttemptAuthority.SHA256)
-	if err != nil || len(authorityBytes) != 32 || attempts == nil || attempts.OriginalHash != sha256.Sum256(originals.Attempts) || attempts.AuthorityHash != [32]byte(authorityBytes) {
+	_, authorityHash, err := selected.attemptReference()
+	if err != nil || attempts == nil || attempts.OriginalHash != sha256.Sum256(originals.Attempts) || attempts.AuthorityHash != authorityHash {
 		return nil, errors.Join(errRpcIntegrity, protocol.ErrProviderAttemptsIntegrity)
 	}
 	trialValues, err := economicProviderTrialProjection(ctx, &census.Artifact, work, attempts, wallets, bindings)
