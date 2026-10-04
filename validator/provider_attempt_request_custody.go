@@ -31,6 +31,11 @@ func (self *VerifiedProviderAttemptRequestCustody) Checkpoint() ProviderAttemptR
 		pending := *result.Pending
 		result.Pending = &pending
 	}
+	if result.Closed != nil {
+		closed := *result.Closed
+		closed.Signature = slices.Clone(closed.Signature)
+		result.Closed = &closed
+	}
 	return result
 }
 
@@ -64,6 +69,9 @@ func validateProviderAttemptRequestCheckpoint(value ProviderAttemptRequestCheckp
 	if value.Pending != nil && (value.Pending.Bytes == 0 || value.Pending.Bytes >= expected.Limits.MaxRecordBytes || value.Pending.Hash == ([32]byte{})) {
 		return errors.Join(durablevolume.ErrIdentity, errors.New("provider request original pending bound differs"))
 	}
+	if value.Closed != nil && (value.Closed.End.Sequence > value.Committed.Sequence || value.Closed.End.Bytes > value.Committed.Bytes) {
+		return errors.Join(durablevolume.ErrIdentity, errors.New("provider closed request frontier exceeds original committed head"))
+	}
 	return nil
 }
 
@@ -80,10 +88,18 @@ func VerifyProviderAttemptRequestPrefix(ctx context.Context, checkpoint Provider
 	if err := validateProviderAttemptRequestCheckpoint(checkpoint, expected); err != nil {
 		return nil, err
 	}
+	if checkpoint.Closed != nil {
+		if err := verifyProviderAttemptRequestClosedHead(ctx, *checkpoint.Closed, expected); err != nil {
+			return nil, err
+		}
+	}
 	prefix := &io.LimitedReader{R: journal, N: int64(checkpoint.Committed.Bytes)}
 	scanner := bufio.NewScanner(prefix)
 	scanner.Buffer(make([]byte, 1024), int(expected.Limits.MaxRecordBytes))
 	var head ProviderAttemptRequestHead
+	if err := verifyProviderAttemptClosedPrefix(checkpoint.Closed, head); err != nil {
+		return nil, err
+	}
 	var last ProviderAttemptRequestRecord
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
@@ -109,6 +125,9 @@ func VerifyProviderAttemptRequestPrefix(ctx context.Context, checkpoint Provider
 			return nil, err
 		}
 		head = ProviderAttemptRequestHead{Sequence: record.Sequence, Hash: hash, Bytes: head.Bytes + uint64(len(raw)) + 1, LastBoundary: record.Boundary}
+		if err := verifyProviderAttemptClosedPrefix(checkpoint.Closed, head); err != nil {
+			return nil, err
+		}
 		last = record
 	}
 	if err := scanner.Err(); err != nil {
@@ -125,6 +144,7 @@ func VerifyProviderAttemptRequestPrefix(ctx context.Context, checkpoint Provider
 		return nil, protocol.ErrProviderAttemptsCapacity
 	}
 	result := &VerifiedProviderAttemptRequestCustody{checkpoint: checkpoint}
+	result.checkpoint = result.Checkpoint()
 	if len(pending) == 0 {
 		if checkpoint.Pending != nil || len(tail) != 0 {
 			return nil, errors.Join(durablevolume.ErrIdentity, errors.New("provider request pending original is missing"))
@@ -196,7 +216,7 @@ func (self *VerifiedProviderAttemptRequestCustody) ReboundCheckpoint(directory, 
 	if self == nil || !directory.IsDir() || !attemptLedgerPrivateFile(file) {
 		return nil, errors.Join(durablevolume.ErrIdentity, errors.New("provider request restore physical owner differs"))
 	}
-	value := self.checkpoint
+	value := self.Checkpoint()
 	_, directoryInode, err := attemptLedgerLocalFileID(directory)
 	if err != nil {
 		return nil, err

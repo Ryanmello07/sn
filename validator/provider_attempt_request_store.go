@@ -33,6 +33,7 @@ type ProviderAttemptRequestJournal struct {
 	observed    os.FileInfo
 	failure     error
 	dirty       bool
+	active      map[uint64]uint64
 	preparation ProviderAttemptRequestPreparation
 	step        func(string) error
 }
@@ -342,6 +343,9 @@ func (self *ProviderAttemptRequestJournal) Append(ctx context.Context, boundary 
 	if !providerAttemptRequestAtOrAfter(boundary, self.preparation.Birth) {
 		return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, errors.New("provider original request predates original birth"))
 	}
+	if self.checkpoint.Closed != nil && boundary.SettlementEpoch <= self.checkpoint.Closed.Window.Epoch {
+		return nil, errors.Join(protocol.ErrProviderAttemptsUnavailable, errors.New("provider request window is already closed"))
+	}
 	prior := self.checkpoint.Committed
 	record := ProviderAttemptRequestRecord{Schema: ProviderAttemptRequestSchema, Identity: self.identity, Sequence: prior.Sequence + 1, PreviousHash: prior.Hash, Boundary: boundary, Hop: hop, Body: slices.Clone(body), Message: slices.Clone(message), RequestSignature: slices.Clone(signature)}
 	unsigned, err := record.signingBytes()
@@ -377,12 +381,20 @@ func (self *ProviderAttemptRequestJournal) walk(ctx context.Context, visit func(
 	if err := self.check(); err != nil {
 		return err
 	}
+	if self.checkpoint.Closed != nil {
+		if err := verifyProviderAttemptRequestClosedHead(ctx, *self.checkpoint.Closed, self.preparation); err != nil {
+			return err
+		}
+	}
 	if _, err := self.file.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 	scanner := bufio.NewScanner(io.NewSectionReader(self.file, 0, int64(self.checkpoint.Committed.Bytes)))
 	scanner.Buffer(make([]byte, 1024), int(self.limits.MaxRecordBytes))
 	var head ProviderAttemptRequestHead
+	if err := verifyProviderAttemptClosedPrefix(self.checkpoint.Closed, head); err != nil {
+		return err
+	}
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -404,6 +416,9 @@ func (self *ProviderAttemptRequestJournal) walk(ctx context.Context, visit func(
 			return err
 		}
 		head = ProviderAttemptRequestHead{Sequence: record.Sequence, Hash: hash, Bytes: head.Bytes + uint64(len(raw)) + 1, LastBoundary: record.Boundary}
+		if err := verifyProviderAttemptClosedPrefix(self.checkpoint.Closed, head); err != nil {
+			return err
+		}
 		if !providerAttemptRequestAtOrAfter(record.Boundary, self.checkpoint.Birth) {
 			return errors.Join(protocol.ErrProviderAttemptsIntegrity, errors.New("provider original request predates original birth"))
 		}

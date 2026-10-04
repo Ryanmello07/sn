@@ -29,6 +29,12 @@ type providerAttemptWindowTestOwner struct {
 
 // Every operator, including the idle lane, publishes the actual complete batch.
 func newProviderAttemptWindowTestOwner(t *testing.T, seed byte, completed, failed int) *providerAttemptWindowTestOwner {
+	return newProviderAttemptWindowTestOwnerWithRequests(t, seed, completed, failed, nil)
+}
+
+// The hook prepares the real optional request owner before the new fixture's
+// first send; existing terminal-only fixtures keep their exact old path.
+func newProviderAttemptWindowTestOwnerWithRequests(t *testing.T, seed byte, completed, failed int, before func(*attemptCutV2SealTestFixture)) *providerAttemptWindowTestOwner {
 	t.Helper()
 	hotkey, err := crv4.KeypairFromSeed([32]byte{seed})
 	if err != nil {
@@ -43,6 +49,9 @@ func newProviderAttemptWindowTestOwner(t *testing.T, seed byte, completed, faile
 			complete, failure = completed, failed
 		}
 		seal := newAttemptCutV2SealTestFixtureForOperator(t, 8, complete, failure, noId)
+		if before != nil {
+			before(seal)
+		}
 		domain := seal.expected.Activation.Domain
 		activation := protocol.ValidatorEvidenceActivation{Domain: protocol.ValidatorEvidenceActivationDomain{ChainID: domain.ChainID, GenesisHash: domain.GenesisHash, Netuid: domain.Netuid, Coordinator: domain.Coordinator, SettlementVault: domain.SettlementVault, DeploymentIDHash: domain.DeploymentIDHash, PolicyHash: domain.PolicyHash, Epoch: domain.ActivationEpoch}, Hotkey: hotkey.PublicKey(), NoID: noId, VPK: [32]byte(seal.key.Public().(ed25519.PublicKey)), FirstSequence: 1, NativeBlock: 1, NativeHash: [32]byte{19}, EVMBlock: 1, EVMHash: [32]byte{20}}
 		seal.expected.Activation.Domain, err = activation.EvidenceDomain()

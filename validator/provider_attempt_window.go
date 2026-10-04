@@ -41,6 +41,8 @@ type ProviderAttemptWindow struct {
 type ProviderAttemptValidatorOptions struct {
 	Publication ValidatorEvidencePublicationV2ReadOptions
 	Settlement  AttemptSettlementV2Options
+	// Exact original transport bytes only; the full public decoder still runs.
+	RetainedMetadata *[2]ValidatorEvidenceRetainedReplicaV2
 }
 
 // One explicit aggregate allowance bounds the complete cross-validator read;
@@ -232,7 +234,7 @@ func VerifyProviderAttemptWindow(ctx context.Context, candidate ProviderAttemptW
 	_, _ = commitment.Write(windowBytes)
 	for _, member := range members {
 		option := options[member.Hotkey]
-		publication, err := ReadValidatorEvidencePublicationV2(ctx, &member.Manifest, option.Publication)
+		publication, err := readValidatorEvidencePublicationV2(ctx, &member.Manifest, option.Publication, option.RetainedMetadata)
 		if err != nil {
 			return nil, err
 		}

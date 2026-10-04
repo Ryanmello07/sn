@@ -52,7 +52,25 @@ type ProviderAttemptRequestPreparation struct {
 
 // Validate the explicit owner before opening a directory or allocating bytes.
 func (self ProviderAttemptRequestPreparation) Validate() error {
-	return errors.Join(self.Identity.Validate(), self.Limits.Validate(), validateAttemptBoundary(self.Birth))
+	if err := errors.Join(self.Identity.Validate(), self.Limits.Validate(), validateAttemptBoundary(self.Birth)); err != nil {
+		return err
+	}
+	return forecastProviderAttemptRequestCheckpoint(self)
+}
+
+// Original escaped identity bytes must fit the complete future closed/pending
+// checkpoint before birth. No future send can discover an impossible xattr.
+func forecastProviderAttemptRequestCheckpoint(expected ProviderAttemptRequestPreparation) error {
+	var hash [32]byte
+	for index := range hash {
+		hash[index] = 255
+	}
+	boundary := AttemptBoundary{SettlementEpoch: ^uint64(0), EVMBlock: ^uint64(0), EVMBlockHash: "0x" + strings.Repeat("f", 64)}
+	head := ProviderAttemptRequestHead{Sequence: expected.Limits.MaxRecords, Hash: hash, Bytes: expected.Limits.MaxJournalBytes, LastBoundary: boundary}
+	closed := &ProviderAttemptRequestClosedHead{Schema: ProviderAttemptRequestWindowSchema, Preparation: expected, Window: protocol.ValidatorEvidenceWindow{Epoch: ^uint64(0), StartBlock: ^uint64(0) - 1, EndBlock: ^uint64(0), FinalizedBlock: ^uint64(0)}, PreviousCutHash: hash, Begin: head, End: head, RecordsHash: hash, Signature: make([]byte, ed25519.SignatureSize)}
+	value := ProviderAttemptRequestCheckpoint{Schema: ProviderAttemptRequestCheckpointSchema, Identity: expected.Identity, Limits: expected.Limits, Birth: expected.Birth, DirectoryInode: ^uint64(0), FileInode: ^uint64(0), Committed: head, Pending: &ProviderAttemptRequestPending{Bytes: expected.Limits.MaxRecordBytes, Hash: hash}, Closed: closed}
+	_, err := encodeProviderAttemptRequestCheckpoint(value)
+	return err
 }
 
 // Exact wire body and signature remain available for original Server lookup.
@@ -88,14 +106,15 @@ type ProviderAttemptRequestPending struct {
 // Restores may rebind physical inodes only after complete original prefix and
 // pending-file admission. Birth after a window opens cannot prove that window.
 type ProviderAttemptRequestCheckpoint struct {
-	Schema         string                         `json:"schema"`
-	Identity       ProviderAttemptRequestIdentity `json:"identity"`
-	Limits         ProviderAttemptRequestLimits   `json:"limits"`
-	Birth          AttemptBoundary                `json:"birth"`
-	DirectoryInode uint64                         `json:"directory_inode"`
-	FileInode      uint64                         `json:"file_inode"`
-	Committed      ProviderAttemptRequestHead     `json:"committed"`
-	Pending        *ProviderAttemptRequestPending `json:"pending,omitempty"`
+	Schema         string                            `json:"schema"`
+	Identity       ProviderAttemptRequestIdentity    `json:"identity"`
+	Limits         ProviderAttemptRequestLimits      `json:"limits"`
+	Birth          AttemptBoundary                   `json:"birth"`
+	DirectoryInode uint64                            `json:"directory_inode"`
+	FileInode      uint64                            `json:"file_inode"`
+	Committed      ProviderAttemptRequestHead        `json:"committed"`
+	Pending        *ProviderAttemptRequestPending    `json:"pending,omitempty"`
+	Closed         *ProviderAttemptRequestClosedHead `json:"closed,omitempty"`
 }
 
 // Same-height observations must retain the original canonical block hash.
@@ -169,7 +188,9 @@ func VerifyProviderAttemptRequest(ctx context.Context, record ProviderAttemptReq
 	if err := validateAttemptBoundary(record.Boundary); err != nil {
 		return err
 	}
-	if prior.Sequence > 0 && (record.Boundary.SettlementEpoch < prior.LastBoundary.SettlementEpoch || record.Boundary.EVMBlock < prior.LastBoundary.EVMBlock || record.Boundary.EVMBlock == prior.LastBoundary.EVMBlock && record.Boundary.EVMBlockHash != prior.LastBoundary.EVMBlockHash) {
+	// Concurrent trails retain their original pinned block; a later append in
+	// the same epoch may legitimately finish an older-block trail.
+	if prior.Sequence > 0 && (record.Boundary.SettlementEpoch < prior.LastBoundary.SettlementEpoch || record.Boundary.SettlementEpoch > prior.LastBoundary.SettlementEpoch && record.Boundary.EVMBlock < prior.LastBoundary.EVMBlock || record.Boundary.EVMBlock == prior.LastBoundary.EVMBlock && record.Boundary.EVMBlockHash != prior.LastBoundary.EVMBlockHash) {
 		return errors.Join(protocol.ErrProviderAttemptsIntegrity, errors.New("provider request original boundary went backwards"))
 	}
 	key, err := canonicalAttemptHex32("provider request key", identity.Ledger.ValidatorVPK, false)

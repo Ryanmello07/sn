@@ -929,7 +929,11 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 	}
 	var attemptRecord AttemptRecord
 	attemptActive := false
+	var releaseRequest func()
 	defer func() {
+		if releaseRequest != nil {
+			releaseRequest()
+		}
 		if attemptActive {
 			self.stats.abortAttempt()
 		}
@@ -997,6 +1001,12 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 				return owner.Err()
 			}
 			var err error
+			if releaseRequest == nil {
+				releaseRequest, err = journal.beginTrail(owner, attemptRecord.Boundary)
+				if err != nil {
+					return err
+				}
+			}
 			original, err = journal.Append(owner, attemptRecord.Boundary, seedHop, seedBody, seedMessage, seedSignature)
 			return err
 		}

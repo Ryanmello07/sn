@@ -180,6 +180,9 @@ func VerifyProviderAttemptClosedUnreceived(ctx context.Context, value ProviderAt
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := VerifyProviderAttemptRequestClosure(ctx, closure, closure.Scope); err != nil {
+		return err
+	}
 	if len(value.Body) == 0 || len(value.Body) > 4096 || len(value.Signature) != ed25519.SignatureSize {
 		return ErrProviderAttemptsIntegrity
 	}

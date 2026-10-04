@@ -36,5 +36,29 @@ func openReleaseProviderAttemptRequests(ctx context.Context, cfg *ReleaseConfig,
 	if expected.Identity.Ledger != ledger.identity || expected.Identity.ClientId != clientId || expected.Identity.PolicyHash != policyHash || expected.Identity.Coordinator != strings.ToLower(cfg.Coordinator) {
 		return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, errors.New("provider request prepared identity differs from authenticated operator"))
 	}
+	if err := ValidateProviderAttemptRequestRootCapacity(ledger.diskLimits, expected.Limits); err != nil {
+		return nil, err
+	}
 	return OpenProviderAttemptRequestJournal(ctx, op.StateDir, expected, key)
+}
+
+// The shared complete owner cannot promise independent maxima whose sum is
+// larger than the finite Core inventory profile. This is a logical sizing
+// check; physical free capacity and other sibling owners remain independently
+// admitted by the complete production preparation scope.
+func ValidateProviderAttemptRequestRootCapacity(ledger AttemptLedgerDiskLimits, request ProviderAttemptRequestLimits) error {
+	if err := request.Validate(); err != nil {
+		return err
+	}
+	const maximum = uint64(1024 * 1024 * 1024 * 1024)
+	var total uint64
+	// Import receipt reserves six rows; the assignment pending record reserves
+	// one more. Legacy bytes remain retained outside the bounded LevelDB tree.
+	for _, value := range []uint64{ledger.MaxStorageBytes, ledger.MaxLegacyBytes, ledger.MaxRecordBytes, ledger.MaxRecordBytes, ledger.MaxRecordBytes, ledger.MaxRecordBytes, ledger.MaxRecordBytes, ledger.MaxRecordBytes, ledger.MaxRecordBytes, 4096, 4096, 4096, request.MaxJournalBytes, request.MaxRecordBytes, request.MaxRecordBytes, 4096} {
+		if value > maximum-total {
+			return errors.Join(protocol.ErrProviderAttemptsCapacity, errors.New("provider request and assignment owners exceed complete-root byte profile"))
+		}
+		total += value
+	}
+	return nil
 }
