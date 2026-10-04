@@ -28,6 +28,8 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+Future qualification uses the [80GiB cumulative scratch allowance](evidence/qualification-future-scratch80-admission-20261004.json) under the standing automatic budget authorization. Preserve the original113,681,502,208-byte baseline, conservative6GiB phase forecast and2x margin; acquire a live exclusive lease and recheck actual host resources before each phase. Existing running allowances remain unchanged.
+
 **October 4 current signed-close source:** The [current generation readback](evidence/original-close-current-generation-root-readback-20261004.json) verifies global-author Core `7a805bd0` with the same generated tree and wire bytes as the earlier receipt. Actual protocol compilation exposed a test fixture passing a private-key slice as the public-key type; no behavior test ran. Correct the fixture, retain production signing and descriptor bytes, and qualify the real Core/Server/SN join. Generated source and compiler success are separate prerequisites.
 
 **October 4 original Rust controls complete:** The [raw seven-control readback](evidence/original-capture-seven-rust-controls-root-readback-20261004.json) verifies21 clean/compile/body phases and seven exact intended assertion failures, with no ignored root and joined children. Retain the original fourteen capture/Yuma assets and successful exporters. Remaining work is affected Go integration, full funding/finality/fee consumers and current release qualification.
