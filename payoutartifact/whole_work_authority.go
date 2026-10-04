@@ -20,6 +20,7 @@ import (
 const WholeWorkAuthoritySchema = "urnetwork-whole-work-authority-v1"
 const WholeWorkInventorySchema = "urnetwork-whole-work-inventory-v1"
 const MaxWholeWorkOwners = 8192
+const MaxWholeWorkSources = 64
 const MaxWholeWorkAuthorityBytes = 2 * 1024 * 1024
 const MaxWholeWorkInventoryBytes = 8 * 1024 * 1024
 
@@ -34,18 +35,19 @@ type WholeWorkOwner struct {
 // A new signed roster may cover each future epoch under the admitted signer.
 // Every owner, including owners with no work, owes both original boundary cuts.
 type WholeWorkAuthority struct {
-	Schema            string                          `json:"schema"`
-	Domain            protocol.ClientKeyHistoryDomain `json:"domain"`
-	Epoch             uint64                          `json:"epoch"`
-	Start             Boundary                        `json:"start"`
-	End               Boundary                        `json:"end"`
-	RequestPublicKey  [32]byte                        `json:"request_public_key"`
-	ClockProfile      string                          `json:"clock_profile"`
-	PriorContracts    []WholeWorkPriorContract        `json:"prior_contracts"`
-	Owners            []WholeWorkOwner                `json:"owners"`
-	ExpectedProviders []WholeWorkExpectedProvider     `json:"expected_providers"`
-	Signer            common.Address                  `json:"signer"`
-	Signature         [65]byte                        `json:"signature"`
+	Schema            string                                 `json:"schema"`
+	Domain            protocol.ClientKeyHistoryDomain        `json:"domain"`
+	Epoch             uint64                                 `json:"epoch"`
+	Start             Boundary                               `json:"start"`
+	End               Boundary                               `json:"end"`
+	RequestPublicKey  [32]byte                               `json:"request_public_key"`
+	ClockProfile      string                                 `json:"clock_profile"`
+	PriorContracts    []WholeWorkPriorContract               `json:"prior_contracts"`
+	Owners            []WholeWorkOwner                       `json:"owners"`
+	ExpectedProviders []WholeWorkExpectedProvider            `json:"expected_providers"`
+	WorkSources       []protocol.ProviderWorkSourceAuthority `json:"work_sources,omitempty"`
+	Signer            common.Address                         `json:"signer"`
+	Signature         [65]byte                               `json:"signature"`
 }
 
 // The independent authority enumerates providers even when their SDK generated
@@ -141,6 +143,21 @@ func (self WholeWorkAuthority) digest(ctx context.Context) ([32]byte, error) {
 	}
 	if self.Domain.Validate() != nil || self.Schema != WholeWorkAuthoritySchema || self.Start.Number == 0 || self.End.Number <= self.Start.Number || !IsDigest(self.Start.Hash, "0x") || !IsDigest(self.End.Hash, "0x") || self.RequestPublicKey == ([32]byte{}) || self.Signer == (common.Address{}) || self.Owners == nil || len(self.Owners) > MaxWholeWorkOwners {
 		return [32]byte{}, ErrClosedWorkIntegrity
+	}
+	if len(self.WorkSources) > MaxWholeWorkSources {
+		return [32]byte{}, ErrClosedWorkCapacity
+	}
+	domainHash, _ := self.Domain.Digest()
+	priorSource := ""
+	for _, source := range self.WorkSources {
+		if err := ctx.Err(); err != nil {
+			return [32]byte{}, err
+		}
+		identity := source.SourceId + "/" + source.Generation
+		if source.Validate() != nil || source.DomainHash != domainHash || identity <= priorSource {
+			return [32]byte{}, ErrClosedWorkIntegrity
+		}
+		priorSource = identity
 	}
 	var prior [16]byte
 	var priorOwner WholeWorkOwner
