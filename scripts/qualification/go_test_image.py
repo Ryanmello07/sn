@@ -21,8 +21,11 @@ import subprocess
 import sys
 import time
 
+import cargo_control
+import child_context
 from cargo_control import (MAXIMUM_LOG_BYTES, MINIMUM_FREE_BYTES, Refused,
                            bounded_regular_bytes, digest, require, run_process)
+from child_context import ChildContext
 
 
 SCHEMA = "urnetwork-go-test-image-v1"
@@ -157,7 +160,10 @@ def run(recipe_path, output):
     output.mkdir(mode=0o700, parents=False, exist_ok=False)
     receipt = {"schema": SCHEMA, "status": "HARNESS_REFUSAL", "recipe_sha256": recipe_sha,
                "runner_sha256": digest(Path(__file__)),
-               "process_guard_sha256": digest(Path(__file__).with_name("cargo_control.py")),
+               "process_guard_path": str(Path(cargo_control.__file__).resolve()),
+               "process_guard_sha256": digest(Path(cargo_control.__file__).resolve()),
+               "context_guard_path": str(Path(child_context.__file__).resolve()),
+               "context_guard_sha256": digest(Path(child_context.__file__).resolve()),
                "forecast": forecast, "started_unix": time.time(),
                "test_classification": "not-performed; caller must verify selected test events and source/module/build joins"}
     try:
@@ -166,7 +172,7 @@ def run(recipe_path, output):
         environment = os.environ.copy()
         overrides = recipe.get("environment", {})
         require(set(overrides) <= {"PATH", "HOME", "TMPDIR", "GOCACHE", "GOMODCACHE", "GOPROXY",
-                                  "GOSUMDB", "GOTOOLCHAIN", "GOPATH"}, "unreviewed Go fixture environment override")
+                                  "GOSUMDB", "GOENV", "GOTOOLCHAIN", "GOPATH"}, "unreviewed Go fixture environment override")
         environment.update(overrides)
         # Parent compilation flags must not retarget a fixture's own go-list
         # subprocess to the parent module or overlay.
@@ -174,12 +180,24 @@ def run(recipe_path, output):
         environment["GOWORK"] = "off"
         receipt["child_goflags"] = "unset"
         receipt["child_gowork"] = "off"
+        context = ChildContext(cwd, environment, recipe.get("runner_python"))
+        context.bind(output / "go-test", recipe["source_image"]["sha256"])
+        arguments = [str(output / "go-test"), *arguments]
+        if "go_tool" in recipe:
+            tool = recipe["go_tool"]
+            require(isinstance(tool, dict) and set(tool) == {"path", "sha256"},
+                    "Go JSON execution requires an exact Go executable pin")
+            receipt["go_tools"] = context.prepare_go(tool["path"], tool["sha256"], output,
+                                                      minimum_free=floor,
+                                                      log_limit=forecast["log_bytes"])
+            arguments = [receipt["go_tools"]["test2json"]["path"], "-t", *arguments]
         verify_image(receipt["image"]["retained"])
         require(shutil.disk_usage(output).free >= floor + 2 * forecast["log_bytes"],
                 "test logs lack twice the remaining reviewed increment")
-        receipt["execution"] = run_process([str(output / "go-test"), *arguments], cwd, environment,
-                                           output, "test", recipe["timeout_seconds"],
-                                           forecast["log_bytes"], floor)
+        probe_logs = sum(step["log_bytes"] for step in receipt.get("go_tools", {}).get("probes", []))
+        require(probe_logs < forecast["log_bytes"], "tool preflight consumed the reviewed log forecast")
+        receipt["execution"] = context.run(arguments, output, "test", recipe["timeout_seconds"],
+                                             forecast["log_bytes"] - probe_logs, floor)
         verify_image(receipt["image"]["retained"])
         require(read_recipe(recipe_path)[1] == recipe_sha, "test image recipe changed")
         receipt["status"] = "SOURCE_PINNED_EXECUTION_ONLY"

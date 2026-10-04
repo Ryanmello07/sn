@@ -65,3 +65,38 @@ source/module/compile evidence, exact selected-root census and expected causal
 assertions. A chmod or a matching SHA256 alone is insufficient. Existing
 receipts and original images remain immutable; removing a historical duplicate
 requires a separate reference/process audit and an exact retained-byte binding.
+
+For JSON conversion, a new recipe can include `go_tool` with the exact canonical
+Go executable `path` and `sha256`. Declare `PATH`, `GOENV=off` and
+`GOTOOLCHAIN=local` in `environment`. The shared child context resolves
+`test2json` using that Go executable's `tool -n test2json` under the actual test
+cwd and complete child environment. A modern Go release may return an
+executable in GOCACHE. Do not construct a path beneath GOROOT. Both probes must
+join successfully before any test body, and consume the same reviewed log
+budget. The body directly invokes the pinned tool returned by Go.
+
+Launch the Python runner with its reviewed absolute interpreter path. Include
+`runner_python: {"path": "/absolute/actual/python", "sha256": "64_lowercase_hex"}`
+to refuse a different actual interpreter before probing or running a body.
+Receipts bind actual imported helper paths and hashes, interpreter/tool bytes,
+cwd inode and a hash of the complete child environment. The frozen environment
+is used for probes and the body; arbitrary ambient secret values are not
+published. Tool and directory replacement refuses execution even if replacement
+tool bytes match. These checks retain the existing bounded descendant-joining
+process guard and do not qualify selected application tests by themselves.
+
+Custom supervised runners can import `ChildContext` from `child_context.py`,
+construct it once with the complete final child environment, bind reviewed
+executables, and use `prepare_go` followed by `run`. Pass the actual bounded
+`process_guard` callback when using a separately frozen guard. Avoid passing
+the context through a wrapper that rebuilds the environment from its own
+ambient variables. Retain the context/tool receipts alongside source and
+resource admission. Preserve old frozen runners and receipts; use a new
+runner/output root for a correction.
+
+Use `compiler_census()` for the admission census. It reads actual `/proc` tool
+origins and NUL-separated argv, counts both bare and absolute `go test -c`
+including Go's global `-C` option, and separately reports Go workers and Rust
+compilers. A live unobservable compiler is a refusal, not zero compilers. The
+census is sampled evidence; the shared resource lease and fresh capacity checks
+remain required.
