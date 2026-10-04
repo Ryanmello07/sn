@@ -437,3 +437,56 @@ func TestMonitorChainStartupPublicRetryPreservesIndependentPeer(t *testing.T) {
 		t.Fatal("chain retry failed to join or lost its observed cause", run.exit, attempts.Load(), run.stderr.String())
 	}
 }
+
+// Omitting the monitor flag selects the normal five-minute read window at the
+// actual CLI parser and client constructor, before a real successful Rpc read.
+func TestMonitorChainStartupPublicDefaultReadBudgetIsThreeHundredSeconds(t *testing.T) {
+	monitorChainStartupParsedBudget(t, "monitor", "", 300*time.Second)
+}
+
+// The explicit supported one-minute override is retained without normalization.
+func TestMonitorChainStartupPublicExplicitReadBudgetIsPreserved(t *testing.T) {
+	monitorChainStartupParsedBudget(t, "monitor", "60s", 60*time.Second)
+}
+
+// Inspect remains a separate finite command with its established default.
+func TestMonitorChainStartupInspectDefaultReadBudgetIsUnchanged(t *testing.T) {
+	monitorChainStartupParsedBudget(t, "inspect", "", 60*time.Second)
+}
+
+// The private observer receives immutable constructed settings only; it cannot
+// supply a client, skip parsing, shorten a read, or manufacture its response.
+func monitorChainStartupParsedBudget(t *testing.T, command, configured string, expected time.Duration) {
+	t.Helper()
+	f := newMonitorChainStartupFixture(t, false)
+	server, reads := testRpcServerWithEvm(t, "0x3c4", "")
+	ctx, cancel := context.WithCancel(f.storage.Context)
+	defer cancel()
+	args := []string{command, "--rpc", server.URL, "--expected-chain", "Bittensor", "--expected-genesis", testGenesisHash, "--expected-evm-chain-id", "964"}
+	if command == "monitor" {
+		args = append(args, "--checkpoint", f.path)
+	}
+	if configured != "" {
+		args = append(args, "--retry-window", configured)
+	}
+	constructed, events := 0, 0
+	hooks := monitorServiceHooks{
+		afterRpcClient: func(observed string, budget time.Duration) {
+			constructed++
+			if observed != command || budget != expected {
+				t.Fatal("actual parsed Rpc read budget differs", observed, budget, expected)
+			}
+		},
+		afterEvent: func(context.Context, string) { events++; cancel() },
+	}
+	var diagnostic bytes.Buffer
+	exit := runMainWithMonitorHooks(ctx, args, io.Discard, &diagnostic, func() time.Time { return f.stamp }, hooks)
+	wantEvents := 0
+	if command == "monitor" {
+		wantEvents = 1
+	}
+	if exit != 0 || constructed != 1 || events != wantEvents || reads("chain_getFinalizedHead") != 1 {
+		t.Fatal("parsed read budget did not reach actual command observation", exit, constructed, events, diagnostic.String())
+	}
+	f.unchanged(t)
+}

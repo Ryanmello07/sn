@@ -26,6 +26,7 @@ type monitorServiceHooks struct {
 	afterEvent          func(context.Context, string)
 	wait                func(context.Context, string, time.Duration) bool
 	rpcWait             func(context.Context, string, time.Duration) error
+	afterRpcClient      func(command string, readBudget time.Duration)
 	afterCheckpointOpen func(context.Context, string, *os.File)
 	historyRead         func(role, step string)
 }
