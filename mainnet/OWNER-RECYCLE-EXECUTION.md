@@ -20,6 +20,12 @@ an owner-local durable volume and fresh `mainnet-owner-signing` snapshot with th
 same 16 KiB bound as the existing trim signer. Use a separate permanent state
 path for this request.
 
+The exact fresh request fields and public `storage-owner-prepare plan`/`apply`
+commands are in [OWNER-CUSTODY-PREPARATION.md](OWNER-CUSTODY-PREPARATION.md).
+Inspection and Ledger transcript planning can run before that preparation.
+Host action custody uses the separate `storage-prepare` daemon declaration;
+neither a private directory alone nor the other computer's declaration suffices.
+
 `owner-recycle sign` accepts:
 
 - `--request`, `--accept-request-hash`, `--approval-key`, `--owner-account-id`,
@@ -51,6 +57,30 @@ already retained in host custody. Repeating the exact import is safe. A trim
 reply, another request or another signature cannot replace those original bytes.
 The earlier raw public-signature `import` command remains available.
 
+The executable owner-side invocation is:
+
+```sh
+sn-mainnet owner-recycle sign \
+  --request /owner/recycle/request.json \
+  --accept-request-hash sha256:ORIGINAL_REQUEST_CONTENT_HASH \
+  --approval-key 0xINDEPENDENT_ACTION_APPROVAL_KEY \
+  --owner-account-id 0xEXISTING_OWNER_ACCOUNT_ID32 --expected-genesis 0xGENESIS \
+  --owner-state /owner/recycle/custody/device-state.json \
+  --durable-volumes /owner/recycle/durable-volumes.json \
+  --durable-volumes-sha256 sha256:EXACT_OWNER_DECLARATION \
+  --ledger-python /reviewed/python3 \
+  --ledger-helper /owner/recycle/owner_ledger_adapter.py \
+  --ledger-helper-sha256 sha256:REVIEWED_HELPER \
+  --ledger-backend /owner/sdk/bittensor_core.abi3.so \
+  --ledger-backend-sha256 sha256:REVIEWED_NATIVE_EXTENSION \
+  --ledger-app-version 100.0.5 > /owner/recycle/reply.json
+```
+
+All uppercase pins are placeholders for independently delivered values; the app
+version must match the separately qualified installed device. The command uses
+only those owner-local files. Its embedded host state path is an inert namespace
+label and need not exist on the owner's computer.
+
 ## Separate production submission approval
 
 Use `owner-recycle submit-plan` with the original config/action/approval flags,
@@ -73,6 +103,22 @@ original config/action/approval flags and all of:
 - `--submission-policy` and `--submission-policy-sha256` for the signed file.
 - `--submission-approval-key`, supplied independently on every invocation.
 - `--production-authority-hash`, independently matching that approval.
+
+For every host invocation below, also pass the original `--config`,
+`--approval-key`, `--accept-action-hash`, and its paired daemon
+`--durable-volumes`/`--durable-volumes-sha256` flags:
+
+1. `import-reply --accept-request-hash sha256:ORIGINAL_REQUEST_CONTENT_HASH
+   --reply /private/owner-reply.json --reply-sha256 sha256:EXACT_REPLY_FILE`.
+2. `submit-plan --production-authority-hash sha256:INDEPENDENT_PRODUCTION_REVIEW`.
+   Retain its exact template and signing bytes. The default ceiling is one post.
+3. After separate approval, `submit --submission-policy /private/submission.json
+   --submission-policy-sha256 sha256:SIGNED_SUBMISSION_FILE
+   --submission-approval-key 0xINDEPENDENT_SUBMISSION_APPROVAL_KEY
+   --production-authority-hash sha256:INDEPENDENT_PRODUCTION_REVIEW`.
+4. `reconcile` retains and verifies that original transaction's receipt and mode.
+   It needs the original action approval, but neither a device nor submission
+   authority. Continue that original reconciliation after an uncertain post.
 
 Once attached to original custody, the submission policy and ceiling cannot be
 replaced, renewed or increased. The original nonce, era and signature remain
