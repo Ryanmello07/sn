@@ -53,7 +53,13 @@ func (self ValidatorStakeObservation) MeetsNonSelfStakeAndPermit() bool {
 // The API's Validators field is deliberately unused: it applies strict >
 // and omits the registered subnet-owner exception used by actual submission.
 func ReadValidatorStakeAtContext(ctx context.Context, chain *Chain, query ValidatorIdentityQuery, allowed ...RuntimeArtifactIdentity) (ValidatorStakeObservation, error) {
-	return readValidatorStakeAtContext(ctx, chain, query, nil, allowed...)
+	if len(allowed) > maximumRuntimeMetadataArtifactsPerChain {
+		return ValidatorStakeObservation{}, errors.New("validator stake runtime allowlist exceeds its bound")
+	}
+	allowed = append([]RuntimeArtifactIdentity(nil), allowed...)
+	return readRuntimeObservation(ctx, chain, func(ctx context.Context) (ValidatorStakeObservation, error) {
+		return readValidatorStakeAtContext(ctx, chain, query, nil, allowed...)
+	})
 }
 
 // The optional census destination is owned by the full-census reader. Ordinary

@@ -235,7 +235,12 @@ func dialContextSubstrateClient(ctx context.Context, endpoint string) (*contextS
 			owned := standard.Clone()
 			base, closeReadHttp = owned, owned.CloseIdleConnections
 		}
-		client := &http.Client{Transport: &substrateReadHttpTransport{base: base, maximumBytes: substrateReadHttpResponseLimit}}
+		client := &http.Client{
+			Transport: &substrateReadHttpTransport{base: base, maximumBytes: substrateReadHttpResponseLimit},
+			// An approved endpoint cannot silently hand an exact runtime read to
+			// a redirect target. Its response remains visible to the read owner.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		}
 		transport, err = gsrpcgeth.DialHTTPWithClient(endpoint, client)
 	} else {
 		transport, err = gsrpcgeth.DialContext(ctx, endpoint)

@@ -41,6 +41,25 @@ func ObserveMainnetRuntimeAtContext(ctx context.Context, native *crv4.Chain, cfg
 // Fresh network identity and closing canonical checks surround exact artifact
 // authentication, even when immutable metadata is reused from the connection.
 func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, block types.Hash) (crv4.AuthenticatedRuntimeArtifact, *MainnetRuntimeObservation, error) {
+	if ctx == nil {
+		return crv4.AuthenticatedRuntimeArtifact{}, nil, errors.New("mainnet runtime observation context is absent")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	type result struct {
+		artifact    crv4.AuthenticatedRuntimeArtifact
+		observation *MainnetRuntimeObservation
+	}
+	value, err := crv4.ReadRuntimeObservationContext(ctx, native, func(ctx context.Context) (result, error) {
+		artifact, observation, err := authenticateReleaseMainnetRuntimeAttempt(ctx, native, cfg, &block)
+		return result{artifact: artifact, observation: observation}, err
+	})
+	return value.artifact, value.observation, err
+}
+
+// The first selected finalized block remains pinned if its transport expires;
+// fresh network identity and every canonical check still repeat together.
+func authenticateReleaseMainnetRuntimeAttempt(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, selectedBlock *types.Hash) (crv4.AuthenticatedRuntimeArtifact, *MainnetRuntimeObservation, error) {
 	empty := crv4.AuthenticatedRuntimeArtifact{}
 	if err := validateReleaseMainnetRuntimeHistory(cfg); err != nil {
 		return empty, nil, err
@@ -49,8 +68,6 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 		!slices.Contains(cfg.Substrate, native.API.Client.URL()) {
 		return empty, nil, errors.New("mainnet runtime observation requires an approved non-provisional connection and caller context")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return empty, nil, err
 	}
@@ -83,9 +100,10 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 	if err != nil {
 		return empty, nil, err
 	}
-	if block == (types.Hash{}) {
-		block = finalized
+	if *selectedBlock == (types.Hash{}) {
+		*selectedBlock = finalized
 	}
+	block := *selectedBlock
 	number := finalizedNumber
 	if block != finalized {
 		number, _, err = native.ReceiptHeaderAtContext(ctx, block)
@@ -123,7 +141,7 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 	if err := checkCanonical(block, number); err != nil {
 		return empty, nil, err
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, native, block, selected.artifactIdentity())
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, native, block, selected.artifactIdentity())
 	if err != nil {
 		return empty, nil, fmt.Errorf("mainnet runtime observation approval revision %d at %s: %w", selected.Revision, block.Hex(), err)
 	}
