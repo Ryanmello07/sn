@@ -219,6 +219,22 @@ func releaseForegroundSealJoin(t *testing.T, result <-chan releaseForegroundSeal
 	return releaseForegroundSealResult{}
 }
 
+// A source refusal must be reported at its actual boundary, not hidden behind
+// a later wait for replay that can no longer occur. Cleanup still joins once.
+func releaseForegroundSealWait(t *testing.T, boundary <-chan struct{}, result <-chan releaseForegroundSealResult, joined *bool, purpose string) {
+	t.Helper()
+	select {
+	case <-boundary:
+	case outcome := <-result:
+		*joined = true
+		t.Fatalf("sealer returned before %s: %v", purpose, outcome.err)
+	case <-t.Context().Done():
+		t.Fatal(purpose, t.Context().Err())
+	case <-time.After(30 * time.Second):
+		t.Fatal("owned sealer did not reach boundary", purpose)
+	}
+}
+
 // A real foreground proof appends eight original signed rows on the same
 // physical ledger while the sealer retains its already captured prefix.
 func releaseForegroundTrail(t *testing.T, fixture *attemptCutV2SealTestFixture) {
@@ -326,9 +342,9 @@ func TestReleaseForegroundProgressDuringBlockedHttpAndReplay(t *testing.T) {
 			}()
 			for phase := range 2 {
 				if phase == 0 {
-					releaseForegroundWait(t, transport.entered, "actual upload body")
+					releaseForegroundSealWait(t, transport.entered, result, &joined, "actual upload body")
 				} else {
-					releaseForegroundWait(t, cpuEntered, "actual checked record")
+					releaseForegroundSealWait(t, cpuEntered, result, &joined, "actual checked record")
 				}
 				releaseForegroundTrail(t, fixture)
 				releaseForegroundUpload(t, transport, phase)
@@ -393,7 +409,7 @@ func TestReleaseForegroundCancellationJoinsBlockedUploadWithoutLosingAppend(t *t
 			releaseForegroundSealJoin(t, result)
 		}
 	}()
-	releaseForegroundWait(t, transport.entered, "cancelable actual POST")
+	releaseForegroundSealWait(t, transport.entered, result, &joined, "cancelable actual POST")
 	releaseForegroundTrail(t, fixture)
 	cancel()
 	outcome := releaseForegroundSealJoin(t, result)
@@ -422,7 +438,17 @@ func TestReleaseForegroundCancellationJoinsBlockedUploadWithoutLosingAppend(t *t
 // work continues while independent foreground requests run; no verdict is
 // replaced by a fixture and all decoded/checked/indexed rows are counted.
 func TestReleaseForegroundProgressDuringContinuousActualReplay(t *testing.T) {
-	fixture := newAttemptCutV2SealTestFixture(t, 8, 16, 0)
+	// Sixteen retained M8 trails plus one foreground M8 need 136 records.
+	// Admit that exact workload with a 2x count/byte margin before construction;
+	// the original 128-record fixture remains an explicit refusal control below.
+	limits := attemptLedgerDiskTestLimits()
+	limits.MaxRecordCount, limits.MaxTrailCount = 2*17*8, 2*17
+	limits.MaxRawRecordBytes = max(limits.MaxRawRecordBytes, limits.MaxRecordCount*limits.MaxRecordBytes)
+	identity := AttemptLedgerIdentity{DeploymentID: "attempt-cut-v2-sealer-test", ChainID: 945, GenesisHash: attemptHex32([32]byte{4}), Netuid: 521, ValidatorID: 1, ValidatorUID: 7, NoID: 9}
+	fixture := newAttemptCutV2SealTestFixtureForDomainWithLimits(t, 8, 16, 0, false, exactPolicy(t), identity, limits)
+	if fixture.ledger.diskLimits != limits {
+		t.Fatal("foreground workload owner did not retain its declared capacity")
+	}
 	transport := newReleaseForegroundHttp(t, fixture, false)
 	options := transport.sealOptions(t, fixture)
 	cut, _, err := SealAttemptCutV2(t.Context(), fixture.ledger, fixture.expected, fixture.policy, fixture.key, fixture.bounds, options)
@@ -531,6 +557,73 @@ func TestReleaseForegroundProgressDuringContinuousActualReplay(t *testing.T) {
 	}
 	micros := func(value syscall.Timeval) int64 { return value.Sec*1000000 + int64(value.Usec) }
 	t.Logf("actual replay rows=512 rounds=4 foreground_observed_checked=%d elapsed=%s process_user_cpu_us=%d process_system_cpu_us=%d process_total_alloc_bytes=%d scratch_bytes=%d scratch_files=%d http=%+v; process measurements include fixture transports and foreground, not production cgroup sizing", foregroundChecked, time.Since(startedAt), micros(afterUsage.Utime)-micros(beforeUsage.Utime), micros(afterUsage.Stime)-micros(beforeUsage.Stime), afterMemory.TotalAlloc-beforeMemory.TotalAlloc, scratchBytes, scratchFiles, transport.snapshot())
+}
+
+// The original small owner still refuses its seventeenth trail. The extra
+// capacity above is a fixture declaration, not a relaxed production ceiling.
+func TestReleaseForegroundOriginalRecordCeilingStillRefusesAdditionalTrail(t *testing.T) {
+	fixture := newAttemptCutV2SealTestFixture(t, 8, 16, 0)
+	head, err := fixture.ledger.Head()
+	if err != nil || head.LastSequence != 128 || fixture.ledger.diskLimits.MaxRecordCount != 128 {
+		t.Fatal("original workload did not reach its declared record ceiling", head, err)
+	}
+	proof, err := fixture.engine.RunTrail(t.Context())
+	if proof != nil || !errors.Is(err, errAttemptRecordStoreLimit) {
+		t.Fatal("original owner admitted a record beyond its unchanged ceiling", proof, err)
+	}
+	after, err := fixture.ledger.Head()
+	if err != nil || after != head {
+		t.Fatal("capacity refusal changed committed records or root", after, err)
+	}
+	fixture.engine.stats.mu.Lock()
+	active := fixture.engine.stats.activeAttemptCount
+	fixture.engine.stats.mu.Unlock()
+	if active != 0 {
+		t.Fatal("capacity refusal retained a foreground attempt owner", active)
+	}
+}
+
+// Closing the source owner must cancel a held remote POST and join the seal;
+// releasing its iterator between reads must not lose lifetime ownership.
+func TestReleaseForegroundLedgerCloseCancelsAndJoinsHeldUpload(t *testing.T) {
+	fixture := newAttemptCutV2SealTestFixture(t, 8, 4, 0)
+	transport := newReleaseForegroundHttp(t, fixture, true)
+	options := transport.sealOptions(t, fixture)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	result := make(chan releaseForegroundSealResult, 1)
+	go func() {
+		cut, verified, err := SealAttemptCutV2(ctx, fixture.ledger, fixture.expected, fixture.policy, fixture.key, fixture.bounds, options)
+		result <- releaseForegroundSealResult{cut: cut, verified: verified, err: err}
+	}()
+	joined := false
+	defer func() {
+		cancel()
+		transport.allow()
+		if !joined {
+			releaseForegroundSealJoin(t, result)
+		}
+	}()
+	releaseForegroundSealWait(t, transport.entered, result, &joined, "owner-close held POST")
+	closed := make(chan error, 1)
+	go func() { closed <- fixture.ledger.Close() }()
+	outcome := releaseForegroundSealJoin(t, result)
+	joined = true
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatal("source owner close failed", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("source owner did not join its canceled sealer")
+	}
+	releaseForegroundWait(t, transport.postDone, "owner-close HTTP request")
+	if !errors.Is(outcome.err, context.Canceled) || outcome.cut != nil || outcome.verified != (AttemptCutV2ReplayResult{}) {
+		t.Fatal("source close published incomplete remote authority", outcome.err)
+	}
+	if work := transport.snapshot(); work.posts != 1 || work.active != 0 || work.activeBytes != 0 {
+		t.Fatal("source close retained or repeated a remote owner", work)
+	}
 }
 
 // Public upload admission must still reject one extra header byte without
