@@ -29,9 +29,11 @@ type fleetEvmRuntimeSocketFixture struct {
 	server      *httptest.Server
 	connections atomic.Int64
 	headers     atomic.Int64
+	canonical   atomic.Int64
 	networks    atomic.Int64
 	chainIds    atomic.Int64
 	drop        atomic.Bool
+	dropHead    atomic.Bool
 	changed     func()
 	block       atomic.Bool
 	entered     chan struct{}
@@ -74,6 +76,7 @@ func newFleetEvmRuntimeSocketFixture(t *testing.T) *fleetEvmRuntimeSocketFixture
 				return
 			}
 			var input struct {
+				Id     json.RawMessage   `json:"id"`
 				Method string            `json:"method"`
 				Params []json.RawMessage `json:"params"`
 			}
@@ -86,6 +89,14 @@ func newFleetEvmRuntimeSocketFixture(t *testing.T) *fleetEvmRuntimeSocketFixture
 			}
 			if input.Method == "eth_chainId" {
 				self.chainIds.Add(1)
+			}
+			if input.Method == "chain_getBlockHash" && len(input.Params) == 1 && string(input.Params[0]) != "0" {
+				if self.canonical.Add(1) == 2 && self.dropHead.CompareAndSwap(true, false) {
+					if self.changed != nil {
+						self.changed()
+					}
+					return
+				}
 			}
 			if input.Method == "chain_getHeader" {
 				if self.headers.Add(1) == 2 && self.drop.CompareAndSwap(true, false) {
@@ -104,6 +115,7 @@ func newFleetEvmRuntimeSocketFixture(t *testing.T) *fleetEvmRuntimeSocketFixture
 				var block string
 				if len(input.Params) == 0 || json.Unmarshal(input.Params[len(input.Params)-1], &block) != nil || block != self.backend.head.Hex() {
 					t.Errorf("EVM runtime read escaped original native block: %s %s", input.Method, input.Params)
+					connection.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": input.Id, "error": map[string]any{"code": -32000, "message": "runtime query changed its original selected block"}})
 					return
 				}
 			}
@@ -162,6 +174,23 @@ func TestFleetEvmRuntimeActualWebsocketLateReadRepeatsOriginalView(t *testing.T)
 	after, current := evmrpc.RuntimeTransportGeneration(client.Client())
 	if err != nil || !tracked || !current || before == 0 || after <= before || f.connections.Load() != 2 || f.networks.Load() != 2 || f.chainIds.Load() != 2 || f.headers.Load() != 5 || f.backend.count("eth_sendRawTransaction") != 0 {
 		t.Fatalf("actual EVM late reconnect did not repeat original complete view: generations=%d/%d connections=%d networks=%d chains=%d headers=%d err=%v", before, after, f.connections.Load(), f.networks.Load(), f.chainIds.Load(), f.headers.Load(), err)
+	}
+}
+
+// Selection from latest finality happens once. A reconnect during the final
+// canonical check cannot silently retarget a later native block on retry.
+func TestFleetEvmRuntimeWebsocketImplicitHeadRetainsOriginalBlock(t *testing.T) {
+	f := newFleetEvmRuntimeSocketFixture(t)
+	client, err := evmrpc.DialContext(t.Context(), f.endpoint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	f.changed = func() { f.backend.stateLock.Lock(); f.backend.finalizedNumber = 101; f.backend.stateLock.Unlock() }
+	f.dropHead.Store(true)
+	err = f.backend.authority.admitEvmPurpose(t.Context(), client, nil, crv4.FleetFrontierRead)
+	if err != nil || f.connections.Load() != 2 || f.networks.Load() != 2 || f.chainIds.Load() != 2 || f.backend.count("chain_getFinalizedHead") != 1 || f.backend.count("eth_sendRawTransaction") != 0 {
+		t.Fatalf("EVM reconnect retargeted first finalized runtime block: connections=%d networks=%d finality=%d err=%v", f.connections.Load(), f.networks.Load(), f.backend.count("chain_getFinalizedHead"), err)
 	}
 }
 
