@@ -4,13 +4,13 @@ use super::*;
 
 pub(super) fn count(mode: Option<&str>) -> usize {
     match mode {
-        Some("capacity-1024") => 1024,
-        Some("capacity-2048") => 2048,
+        Some("capacity-1024" | "populated-1024") => 1024,
+        Some("capacity-2048" | "populated-2048") => 2048,
         _ => 2,
     }
 }
 
-fn arrays(count: usize) -> Vec<(&'static str, u32, u32, usize)> {
+pub(super) fn arrays(count: usize) -> Vec<(&'static str, u32, u32, usize)> {
     let mut address = 65536u32;
     [
         ("incentive-q32", 4100, 8),

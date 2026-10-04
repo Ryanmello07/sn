@@ -116,6 +116,9 @@ func (self *nativeYumaProjection) calculate(ctx context.Context, netuid uint16, 
 	}
 	input, err := decodeNativeYuma(self.Authority, netuid, self.Boundary, self.Records, *self.Epoch)
 	if err != nil {
+		if errors.Is(err, errMonitorEconomicCapacity) {
+			return err
+		}
 		self.Issue = err.Error()
 		return nil
 	}
@@ -128,6 +131,9 @@ func (self *nativeYumaProjection) calculate(ctx context.Context, netuid uint16, 
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if errors.Is(err, errMonitorEconomicCapacity) {
+			return err
 		}
 		self.Issue = err.Error()
 		return nil
@@ -180,6 +186,9 @@ func (self *nativeYumaProjection) calculate(ctx context.Context, netuid uint16, 
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		if errors.Is(err, errMonitorEconomicCapacity) {
+			return err
+		}
 		self.Issue = err.Error()
 		return nil
 	}
@@ -191,8 +200,7 @@ func (self *nativeYumaProjection) calculate(ctx context.Context, netuid uint16, 
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			self.Issue, self.Allocations = accumulator.err.Error(), nil
-			return nil
+			return accumulator.err
 		}
 		amount := fixed.serverAlpha[index].Num()
 		denominator.Add(denominator, amount)
@@ -203,8 +211,7 @@ func (self *nativeYumaProjection) calculate(ctx context.Context, netuid uint16, 
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			self.Issue, self.Allocations = accumulator.err.Error(), nil
-			return nil
+			return accumulator.err
 		}
 		self.Allocations = append(self.Allocations, nativeYumaAllocation{Uid: node.Uid, Hotkey: node.Hotkey, Registered: node.Registered, ActualMiner: amount.String(), ActualValidator: fixed.validatorAlpha[index].Num().String(), ReferenceMiner: reference.serverAlpha[index].RatString(), ReferenceValidator: reference.validatorAlpha[index].RatString(), AbsoluteMinerError: difference.RatString()})
 	}

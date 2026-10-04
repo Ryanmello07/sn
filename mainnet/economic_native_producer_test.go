@@ -203,6 +203,10 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool, additionalJo
 	}
 	amounts := make([]uint64, allocationCount)
 	amounts[0], amounts[1] = 9, 89
+	populated := nativeYumaTestOriginalEvents(t, job, allocationCount)
+	if populated != nil {
+		amounts = populated.Emissions
+	}
 	source.incentive(t, 101, 25, amounts...)
 	if allocationCount > 2 {
 		source.policy.MaximumUids = uint16(allocationCount)
@@ -323,6 +327,17 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool, additionalJo
 	if allocationCount > 2 {
 		filePolicy.Yuma.MaximumWitnessBytes = 24 * 1024 * 1024
 		filePolicy.Yuma.MaximumOperations = 64000000
+	}
+	if populated != nil {
+		workload := nativeYumaTestWorkload(allocationCount)
+		forecast, err := workload.forecast(15 * 1024 * 1024)
+		if err != nil {
+			t.Fatal(err)
+		}
+		filePolicy.Yuma.Workload = &workload
+		filePolicy.Yuma.MaximumWitnessBytes = 15 * 1024 * 1024
+		filePolicy.Yuma.HotBlockReserve = 2
+		filePolicy.Yuma.MaximumEdges, filePolicy.Yuma.MaximumOperations = forecast.ReservedEdges, forecast.ReservedOperations
 	}
 	source.policy.Execution = filePolicy
 	authority := nativeProducerAuthority{Schema: nativeProducerAuthoritySchema, Network: source.policy.Network, Netuid: source.policy.Netuid, Registration: *source.policy.SubnetRegistrationBlock, Generation: *source.policy.SubnetGeneration, From: source.policy.From, Runtime: source.policy.Runtime, ReviewSha256: filePolicy.ReviewSha256, Profile: job.ObservationProfile, CaptureEngine: filePolicy.Producer.CaptureEngine, ReplayEngine: filePolicy.Engine, Directory: filePolicy.Directory, Nodes: filePolicy.Producer.Nodes, MaximumJobs: filePolicy.Producer.MaximumJobs, MaximumBytes: filePolicy.Producer.MaximumBytes, MaximumEntries: filePolicy.Producer.MaximumEntries, Checkpoint: strecovery.NativeFinalityCheckpoint{Schema: strecovery.NativeFinalityCheckpointSchema, CodecProfile: strecovery.NativeFinalityCodecProfile, Genesis: source.policy.Network.GenesisHash, HeaderScale: job.ParentHeaderHex, SetId: 9, LiveState: "live", Authorities: []strecovery.GrandpaAuthority{{PublicKey: nativeExecutionTestHex(consensus.Public().(ed25519.PublicKey)), Weight: 1}}}, Providers: []nativeProducerProvider{{Hotkey: nativeExecutionTestHex(bytes.Repeat([]byte{0x11}, 32)), Coldkey: nativeExecutionTestHex(bytes.Repeat([]byte{0x33}, 32))}}}

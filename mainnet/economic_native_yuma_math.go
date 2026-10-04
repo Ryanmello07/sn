@@ -26,7 +26,7 @@ func (self *nativeYumaArithmetic) check(values ...*big.Rat) bool {
 	}
 	self.steps++
 	if self.steps > self.maximum {
-		self.err = errors.New("native Yuma arithmetic exceeds admitted finite work")
+		self.err = errors.Join(errMonitorEconomicCapacity, errors.New("native Yuma arithmetic exceeds admitted finite work"))
 		return false
 	}
 	if self.steps%1024 == 0 {
@@ -37,7 +37,7 @@ func (self *nativeYumaArithmetic) check(values ...*big.Rat) bool {
 	}
 	for _, value := range values {
 		if value == nil || value.Num().BitLen() > 8192 || value.Denom().BitLen() > 8192 {
-			self.err = errors.New("native Yuma rational reference exceeds finite precision work")
+			self.err = errors.Join(errMonitorEconomicCapacity, errors.New("native Yuma rational reference exceeds finite precision work"))
 			return false
 		}
 	}
@@ -174,19 +174,35 @@ func nativeYumaCopy(values []*big.Rat) []*big.Rat {
 // the admitted sparse weighted-median helper; sorting into a new tie order is
 // not an equivalent replacement at quantized stake boundaries.
 func (self *nativeYumaArithmetic) median(stakes, scores []*big.Rat, kappa *big.Rat) *big.Rat {
-	var selected []int
+	rows, positive := self.medianStake(stakes)
+	selected := make([]*big.Rat, len(rows))
+	for index, row := range rows {
+		selected[index] = scores[row]
+	}
+	return self.medianPrepared(positive, selected, kappa)
+}
+
+// The original sparse helper selects positive stake in source order and
+// normalizes it once for all columns. Zero-stake rows cannot affect its median.
+func (self *nativeYumaArithmetic) medianStake(stakes []*big.Rat) ([]int, []*big.Rat) {
+	var rows []int
 	var positive []*big.Rat
 	for index, stake := range stakes {
 		if !self.check(stake) {
-			return new(big.Rat)
+			return nil, nil
 		}
 		if stake.Sign() > 0 {
-			selected = append(selected, index)
+			rows = append(rows, index)
 			positive = append(positive, stake)
 		}
 	}
-	positive = self.normalize(positive)
-	indices := make([]int, len(selected))
+	return rows, self.normalize(positive)
+}
+
+// The prepared columns preserve the exact original positive-stake ordering,
+// midpoint pivot, fixed tie arithmetic and source-selected minority threshold.
+func (self *nativeYumaArithmetic) medianPrepared(positive, scores []*big.Rat, kappa *big.Rat) *big.Rat {
+	indices := make([]int, len(positive))
 	sum := new(big.Rat)
 	for index := range indices {
 		indices[index] = index
@@ -194,21 +210,21 @@ func (self *nativeYumaArithmetic) median(stakes, scores []*big.Rat, kappa *big.R
 	}
 	minority := self.sub(sum, kappa)
 	low, high := new(big.Rat), sum
-	for steps := 0; steps <= len(selected); steps++ {
+	for steps := 0; steps <= len(positive); steps++ {
 		if len(indices) == 0 {
 			return new(big.Rat)
 		}
 		if len(indices) == 1 {
-			return new(big.Rat).Set(scores[selected[indices[0]]])
+			return new(big.Rat).Set(scores[indices[0]])
 		}
-		pivot := scores[selected[indices[len(indices)/2]]]
+		pivot := scores[indices[len(indices)/2]]
 		lo, hi := new(big.Rat), new(big.Rat)
 		var lower, upper []int
 		for _, index := range indices {
 			if !self.check() {
 				return new(big.Rat)
 			}
-			comparison := scores[selected[index]].Cmp(pivot)
+			comparison := scores[index].Cmp(pivot)
 			if comparison < 0 {
 				lo = self.add(lo, positive[index])
 				lower = append(lower, index)

@@ -16,23 +16,28 @@ const nativeYumaLayout = "original-integer-stake-graph+uid-ordered-inputs+legacy
 // The original signed execution/producer policy binds the source family and
 // memory-layout review separately from any block's calculated amounts.
 type nativeYumaPolicy struct {
-	Schema              string `json:"schema"`
-	LayoutSha256        string `json:"layout_sha256"`
-	ReviewSha256        string `json:"independent_complete_algorithm_review_sha256"`
-	MaximumWitnessBytes uint64 `json:"maximum_retained_witness_bytes"`
-	HotBlockReserve     uint64 `json:"forecast_hot_original_blocks"`
-	MaximumEdges        uint64 `json:"maximum_edges"`
-	MaximumOperations   uint64 `json:"maximum_arithmetic_operations"`
+	Schema              string              `json:"schema"`
+	LayoutSha256        string              `json:"layout_sha256"`
+	ReviewSha256        string              `json:"independent_complete_algorithm_review_sha256"`
+	MaximumWitnessBytes uint64              `json:"maximum_retained_witness_bytes"`
+	HotBlockReserve     uint64              `json:"forecast_hot_original_blocks"`
+	MaximumEdges        uint64              `json:"maximum_edges"`
+	MaximumOperations   uint64              `json:"maximum_arithmetic_operations"`
+	Workload            *nativeYumaWorkload `json:"populated_workload,omitempty"`
 }
 
 func (self *nativeYumaPolicy) validate() error {
 	if self == nil {
 		return nil
 	}
-	if self.Schema != nativeYumaSchema || self.LayoutSha256 != monitorReadDigest([]byte(nativeYumaLayout)) || !planSha256(self.ReviewSha256) || self.MaximumEdges == 0 || self.MaximumEdges > 262144 || self.MaximumOperations == 0 || self.MaximumOperations > 64000000 || self.MaximumWitnessBytes < 1024 || self.MaximumWitnessBytes > 32*1024*1024 || self.HotBlockReserve == 0 || self.HotBlockReserve > 64 {
+	maximumEdges, maximumOperations := uint64(262144), uint64(64000000)
+	if self.Workload != nil {
+		maximumEdges, maximumOperations = nativeYumaPopulatedMaximumEdges, nativeYumaPopulatedMaximumOperations
+	}
+	if self.Schema != nativeYumaSchema || self.LayoutSha256 != monitorReadDigest([]byte(nativeYumaLayout)) || !planSha256(self.ReviewSha256) || self.MaximumEdges == 0 || self.MaximumEdges > maximumEdges || self.MaximumOperations == 0 || self.MaximumOperations > maximumOperations || self.MaximumWitnessBytes < 1024 || self.MaximumWitnessBytes > 32*1024*1024 || self.HotBlockReserve == 0 || self.HotBlockReserve > 64 {
 		return errors.New("native Yuma lacks independent complete source/layout/finite work authority")
 	}
-	return nil
+	return self.validateWorkload()
 }
 
 func historicalYumaPurpose(purpose string) bool {
@@ -222,7 +227,7 @@ func decodeNativeYuma(policy nativeYumaPolicy, netuid uint16, boundary economicE
 			edges += uint64(len(row))
 		}
 		if edges > policy.MaximumEdges {
-			return input, errors.New("native Yuma edge census exceeds independent finite authority")
+			return input, errors.Join(errMonitorEconomicCapacity, errors.New("native Yuma edge census exceeds independent finite authority"))
 		}
 	}
 	registered, err := nativeCaptureVector(epoch, "registered", count)
@@ -238,5 +243,5 @@ func decodeNativeYuma(policy nativeYumaPolicy, netuid uint16, boundary economicE
 			return input, errors.New("native Yuma input/output UID generation differs")
 		}
 	}
-	return input, nil
+	return input, policy.admitWorkload(input)
 }
