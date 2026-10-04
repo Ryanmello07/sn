@@ -91,6 +91,7 @@ func openMonitorEconomicNativeWorker(ctx context.Context, client *rpcClient, pol
 		value := *policy.Observation.Execution
 		if value.Producer != nil {
 			producer := *value.Producer
+			producer.Renewals = append([]planFileReference(nil), producer.Renewals...)
 			value.Producer = &producer
 		}
 		policy.Observation.Execution = &value
@@ -229,6 +230,7 @@ func monitorEconomicNativeReadCode(err error) string {
 // Only this summary is exported. It does not emit unbounded retained history,
 // arbitrary source labels, or a numeric zero for unproved economic amounts.
 type monitorEconomicNativeSummary struct {
+	ProducerCapacity             *nativeProducerCapacitySummary         `json:"producer_capacity,omitempty"`
 	ExecutionAccounting          *nativeExecutionWindow                 `json:"execution_accounting,omitempty"`
 	ExecutionAuthority           string                                 `json:"execution_authority,omitempty"`
 	ArchivedEvents               uint64                                 `json:"archived_events"`
@@ -281,6 +283,7 @@ func (self *monitorEconomicNativeState) summary(policy monitorEconomicNativePoli
 		summary.ExecutionAuthority = "independently-approved-runtime-layout-and-finalized-boundaries"
 		summary.NativeMinerAllocationAlpha, summary.ProviderEntitlementAlpha, summary.OwnerRecycledAlpha = &value.MinerAllocation, &value.ProviderEntitlement, &value.OwnerRecycled
 	}
+	summary.ProducerCapacity = self.producerCapacity(policy)
 	return summary
 }
 
@@ -350,6 +353,22 @@ func renderMonitorEconomicNativeMetrics(policy monitorEconomicNativePolicy, stat
 		{name: "configured_read_budget_seconds", value: monitorEconomicReadSeconds(policy.ReadBudgetSeconds)},
 	} {
 		fmt.Fprintf(&output, "sn_mainnet_native_economic_%s{role=%q} %v\n", metric.name, policy.Role, metric.value)
+	}
+	if producer := state.producerCapacity(policy); producer != nil {
+		for _, metric := range []struct {
+			name  string
+			value any
+		}{
+			{name: "producer_completed_jobs", value: producer.Completed},
+			{name: "producer_job_capacity", value: producer.Capacity.Jobs},
+			{name: "producer_jobs_remaining", value: producer.JobsRemaining},
+			{name: "producer_acknowledged_renewals", value: producer.AcknowledgedRenewals},
+			{name: "producer_configured_renewals", value: producer.ConfiguredRenewals},
+			{name: "producer_capacity_warning", value: flag(producer.CapacityWarning)},
+			{name: "producer_disk_forecast_known", value: flag(producer.Forecast != nil)},
+		} {
+			fmt.Fprintf(&output, "sn_mainnet_native_economic_%s{role=%q} %v\n", metric.name, policy.Role, metric.value)
+		}
 	}
 	return []byte(output.String())
 }

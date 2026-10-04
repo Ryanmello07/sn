@@ -24,14 +24,16 @@ type nativeProducerStateKey struct{}
 type nativeProducerSessionKey struct{}
 
 type nativeProducerSession struct {
-	files     *nativeProducerFiles
-	authority *nativeProducerAuthority
-	policy    economicEmissionPolicy
-	state     nativeExecutionProducerState
+	files          *nativeProducerFiles
+	authority      *nativeProducerAuthority
+	authorities    []nativeProducerReviewedAuthority
+	originalPolicy economicEmissionPolicy
+	policy         economicEmissionPolicy
+	state          nativeExecutionProducerState
 }
 
 func openNativeProducerSession(ctx context.Context, policy economicEmissionPolicy) (_ *nativeProducerSession, resultErr error) {
-	authority, err := loadNativeProducerAuthority(ctx, policy)
+	authorities, err := loadNativeProducerAuthorities(ctx, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +46,8 @@ func openNativeProducerSession(ctx context.Context, policy economicEmissionPolic
 			resultErr = errors.Join(resultErr, files.close())
 		}
 	}()
-	session := &nativeProducerSession{files: files, authority: authority, policy: policy}
+	authority := &authorities[0].value
+	session := &nativeProducerSession{files: files, authority: authority, authorities: authorities, originalPolicy: policy, policy: policy}
 	retained, _ := ctx.Value(nativeProducerStateKey{}).(*nativeExecutionProducerState)
 	if retained == nil {
 		if policy.From != authority.From {
@@ -55,7 +58,17 @@ func openNativeProducerSession(ctx context.Context, policy economicEmissionPolic
 		if err := retained.validate(policy, policy.From); err != nil {
 			return nil, err
 		}
+		if retained.Cursor.Number < authority.From.Number || retained.Completed != retained.Cursor.Number-authority.From.Number {
+			return nil, errors.Join(errRpcIntegrity, errors.New("native producer cumulative jobs differ from the original approved boundary"))
+		}
 		session.state = *retained
+		session.state.AuthorityRevisions = append([]nativeProducerRenewalAcknowledgement(nil), retained.AuthorityRevisions...)
+		for index, ack := range retained.AuthorityRevisions {
+			selected := authorities[index+1]
+			if err := session.verifyRenewalAcknowledgement(ack, selected); err != nil {
+				return nil, err
+			}
+		}
 		raw, err := files.readReference(*retained.Completion, nativeProducerCompletionLimit)
 		if err != nil {
 			return nil, err
@@ -64,7 +77,7 @@ func openNativeProducerSession(ctx context.Context, policy economicEmissionPolic
 		if err := decodePlanJson(raw, &completion); err != nil {
 			return nil, errors.Join(errRpcIntegrity, err)
 		}
-		if completion.Schema != nativeProducerCompletionSchema || rootObjectHash(completion) != retained.CompletionChain || completion.AuthorityHash != retained.AuthorityHash || completion.Sequence != retained.Completed || completion.Admission.Child != retained.Cursor || completion.Anchor.Hash() != retained.Anchor.Hash() || retained.Window == nil || completion.Window != *retained.Window || retained.Certified == nil || completion.Certified != *retained.Certified {
+		if completion.Schema != nativeProducerCompletionSchema || rootObjectHash(completion) != retained.CompletionChain || completion.AuthorityHash != retained.AuthorityHash || completion.Sequence != retained.Completed || completion.Admission.Child != retained.Cursor || completion.Anchor.Hash() != retained.Anchor.Hash() || retained.Window == nil || completion.Window != *retained.Window || retained.Certified == nil || completion.Certified != *retained.Certified || !reflect.DeepEqual(completion.ResourceForecast, retained.ResourceForecast) {
 			return nil, errors.Join(errRpcIntegrity, errors.New("native producer acknowledged completion no longer matches original checkpoint"))
 		}
 		// The exact last job and proof must still be present. Their absence never
@@ -78,6 +91,9 @@ func openNativeProducerSession(ctx context.Context, policy economicEmissionPolic
 		if _, err := files.readReference(completion.Window, strecovery.MaximumReceiptFinalityBytes); err != nil {
 			return nil, err
 		}
+	}
+	if err := session.useAuthority(len(session.state.AuthorityRevisions)); err != nil {
+		return nil, err
 	}
 	return session, nil
 }
@@ -220,6 +236,9 @@ func nativeProducerRecipients(policy economicEmissionPolicy, authority *nativePr
 // Complete proof capture is atomic per boundary. It never signs an admission;
 // the private admission below is a derived input to the existing amount kernel.
 func (self *nativeProducerSession) observe(ctx context.Context, client *rpcClient, block economicEmissionBlock, runtime rootReceiptProfile, metadata *types.Metadata) (*nativeExecutionOutcome, error) {
+	if err := self.admitRenewal(block, runtime); err != nil {
+		return nil, err
+	}
 	if runtime != self.authority.Runtime {
 		return nil, errors.Join(errRootReceiptProfileUnavailable, errors.New("native producer requires an independently reviewed original runtime"))
 	}
@@ -254,12 +273,7 @@ func (self *nativeProducerSession) observe(ctx context.Context, client *rpcClien
 			return nil, err
 		}
 	}
-	intent := struct {
-		AuthorityHash string                   `json:"authority_hash"`
-		Parent        economicEmissionBoundary `json:"parent"`
-		Child         economicEmissionBoundary `json:"child"`
-		Runtime       rootReceiptProfile       `json:"execution_runtime"`
-	}{AuthorityHash: self.state.AuthorityHash, Parent: self.state.Cursor, Child: block.Boundary, Runtime: runtime}
+	intent := nativeProducerIntent{AuthorityHash: self.state.AuthorityHash, Parent: self.state.Cursor, Child: block.Boundary, Runtime: runtime}
 	intentRaw, err := json.Marshal(intent)
 	if err != nil {
 		return nil, err
@@ -348,10 +362,21 @@ func (self *nativeProducerSession) observe(ctx context.Context, client *rpcClien
 	if err != nil {
 		return nil, err
 	}
-	outcome.ProducerAuthorityHash = self.policy.Execution.Producer.Authority.Sha256
+	outcome.ProducerAuthorityHash = self.state.AuthorityHash
 	outcome.FinalityProofHash = finality.ProofHash
 	outcome.ContentHash = outcome.hash()
 	completion := nativeProducerCompletion{Schema: nativeProducerCompletionSchema, AuthorityHash: self.state.AuthorityHash, Previous: self.state.CompletionChain, Sequence: self.state.Completed + 1, Input: planFileReference{Path: filepath.Join(self.files.path, inputName), Sha256: monitorReadDigest(inputRaw)}, Admission: admission, Anchor: self.state.Anchor, Window: reference, Certified: economicEmissionBoundary{Number: finality.Certified.Number, Hash: finality.Certified.Hash}, OutcomeHash: outcome.ContentHash}
+	completion.ResourceForecast = self.files.forecast
+	if len(self.state.AuthorityRevisions) != 0 {
+		ack := self.state.AuthorityRevisions[len(self.state.AuthorityRevisions)-1]
+		if ack.FirstCompletion == nil {
+			admission := ack.admission()
+			completion.Renewal = &admission
+		}
+	}
+	if retained != nil {
+		completion.ResourceForecast = retained.ResourceForecast
+	}
 	raw, err := json.Marshal(completion)
 	if err != nil {
 		return nil, err
@@ -360,6 +385,9 @@ func (self *nativeProducerSession) observe(ctx context.Context, client *rpcClien
 	if err != nil {
 		return nil, err
 	}
-	self.state = nativeExecutionProducerState{Schema: nativeProducerSchema, AuthorityHash: self.state.AuthorityHash, Cursor: block.Boundary, Anchor: self.state.Anchor, Window: &reference, Certified: &completion.Certified, Completed: completion.Sequence, Completion: &completed, CompletionChain: rootObjectHash(completion)}
+	if completion.Renewal != nil {
+		self.state.AuthorityRevisions[len(self.state.AuthorityRevisions)-1].FirstCompletion = &completed
+	}
+	self.state = nativeExecutionProducerState{Schema: nativeProducerSchema, AuthorityHash: self.state.AuthorityHash, AuthorityRevisions: self.state.AuthorityRevisions, ResourceForecast: completion.ResourceForecast, Cursor: block.Boundary, Anchor: self.state.Anchor, Window: &reference, Certified: &completion.Certified, Completed: completion.Sequence, Completion: &completed, CompletionChain: rootObjectHash(completion)}
 	return outcome, nil
 }

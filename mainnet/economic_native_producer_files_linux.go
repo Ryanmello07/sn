@@ -73,6 +73,7 @@ type nativeProducerFiles struct {
 	directory *durablepath.Directory
 	path      string
 	policy    nativeExecutionProducerPolicy
+	forecast  *nativeProducerResourceForecast
 }
 
 func openNativeProducerFiles(ctx context.Context, execution *nativeExecutionPolicy) (_ *nativeProducerFiles, resultErr error) {
@@ -181,6 +182,13 @@ func (self *nativeProducerFiles) child(relative string, create bool) (_ *os.File
 // One stat census reserves all three dimensions before starting another job.
 // It reads no historical payload and is bounded separately from job count.
 func (self *nativeProducerFiles) admit(relative string) error {
+	return self.admitMargin(1)
+}
+
+func (self *nativeProducerFiles) admitMargin(margin uint64) error {
+	if margin == 0 || margin > 2 {
+		return errors.New("native producer resource margin is invalid")
+	}
 	if err := self.check(); err != nil {
 		return err
 	}
@@ -242,10 +250,14 @@ func (self *nativeProducerFiles) admit(relative string) error {
 	if err := errors.Join(scan(root, 0), root.Close()); err != nil {
 		return err
 	}
-	if used > self.policy.MaximumBytes-nativeProducerBoundaryReserve || entries > self.policy.MaximumEntries-nativeProducerBoundaryEntries {
+	if self.policy.MaximumBytes < margin*nativeProducerBoundaryReserve || self.policy.MaximumEntries < margin*nativeProducerBoundaryEntries || used > self.policy.MaximumBytes-margin*nativeProducerBoundaryReserve || entries > self.policy.MaximumEntries-margin*nativeProducerBoundaryEntries {
 		return errMonitorEconomicCapacity
 	}
-	return self.check()
+	if err := self.check(); err != nil {
+		return err
+	}
+	self.forecast = &nativeProducerResourceForecast{BytesUpperBound: used + nativeProducerBoundaryReserve, EntriesUpperBound: entries + nativeProducerBoundaryEntries}
+	return nil
 }
 
 func nativeProducerPrivateFile(file *os.File, maximum int) error {
