@@ -20,6 +20,11 @@ import (
 func economicNativeFeeTestRequest(t *testing.T, fixture, mode string) (economicNativeFeeRequest, economicNativeFeeApproval, ed25519.PrivateKey) {
 	t.Helper()
 	input, _, job := historicalFeeContextTestFixture(t, fixture, mode)
+	return economicNativeFeeTestRequestForContext(t, input, job)
+}
+
+func economicNativeFeeTestRequestForContext(t *testing.T, input historicalFeeContextRequest, job historicalReplayJob) (economicNativeFeeRequest, economicNativeFeeApproval, ed25519.PrivateKey) {
+	t.Helper()
 	profileRaw, err := json.Marshal(job.ObservationProfile)
 	if err != nil {
 		t.Fatal(err)

@@ -16,6 +16,8 @@ import (
 const economicNativeFeeEvidenceSchema = "urnetwork-admitted-native-fee-evidence-v1"
 const economicNativeFeeApprovalSchema = "urnetwork-native-fee-semantics-approval-v1"
 
+var errEconomicNativeFeeIntegrity = errors.New("native fee original evidence conflict")
+
 // This is an operator-selected trust root, separate from the signed artifact.
 // It must be retained with the consuming owner's original policy identity.
 type economicNativeFeePolicy struct {
@@ -143,9 +145,12 @@ func runEconomicNativeFeeEvidence(ctx context.Context, request economicNativeFee
 			return err
 		}
 		if digest != reference.Sha256 {
-			return errors.New("native fee original input differs from its pin")
+			return errors.Join(errEconomicNativeFeeIntegrity, errors.New("native fee original input differs from its pin"))
 		}
-		return decodePlanJson(raw, value)
+		if err := decodePlanJson(raw, value); err != nil {
+			return errors.Join(errEconomicNativeFeeIntegrity, err)
+		}
+		return nil
 	}
 	var approval economicNativeFeeApproval
 	if err := read(request.Approval, nativeExecutionAdmissionLimit, &approval); err != nil {
@@ -156,7 +161,7 @@ func runEconomicNativeFeeEvidence(ctx context.Context, request economicNativeFee
 		return nil, err
 	}
 	if err := request.validate(approval, job); err != nil {
-		return nil, err
+		return nil, errors.Join(errEconomicNativeFeeIntegrity, err)
 	}
 	joined, err := runHistoricalFeeContext(owner, request.Context, budget, hooks)
 	if err != nil {

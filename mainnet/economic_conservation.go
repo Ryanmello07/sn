@@ -178,36 +178,39 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
-	NativeFees     []economicConservationFeeEvidence        `json:"native_fee_evidence,omitempty"`
-	Archive        *economicConservationArchive             `json:"archive,omitempty"`
-	Renewal        *economicConservationRenewal             `json:"resource_renewal,omitempty"`
-	Schema         string                                   `json:"schema"`
-	PolicyHash     string                                   `json:"policy_hash"`
-	Native         monitorEconomicNativeState               `json:"native"`
-	Vault          monitorEconomicEvmState                  `json:"vault"`
-	ClaimStates    []monitorClaimState                      `json:"claims"`
-	OpeningVault   *monitorEconomicEvmSnapshot              `json:"opening_vault,omitempty"`
-	Mappings       []economicConservationMapping            `json:"native_evm_mappings"`
-	Lots           []economicConservationLot                `json:"native_lots"`
-	Captures       []economicConservationCapture            `json:"captures"`
-	Entitlements   []economicConservationEntitlement        `json:"entitlements"`
-	Carry          map[string][]economicConservationBacking `json:"carry"`
-	Claims         []economicConservationClaim              `json:"accepted_claims"`
-	Credits        map[string]economicConservationCredit    `json:"credits"`
-	Payments       []economicConservationPayment            `json:"payments"`
-	Receipts       []economicConservationReceipt            `json:"claim_receipts"`
-	SampleAt       time.Time                                `json:"sample_at"`
-	NativeIssue    string                                   `json:"native_issue,omitempty"`
-	VaultIssue     string                                   `json:"vault_issue,omitempty"`
-	NativeHeld     bool                                     `json:"native_integrity_held"`
-	VaultHeld      bool                                     `json:"vault_integrity_held"`
-	JoinIssue      string                                   `json:"join_issue,omitempty"`
-	ContentHash    string                                   `json:"content_hash"`
-	entitlementIds map[string]int
-	claimIds       map[string]int
-	captureKeys    map[string]bool
-	claimKeys      map[string]bool
-	archiveView    *economicConservationArchiveView
+	NativeFeeIssue       string                                   `json:"native_fee_issue,omitempty"`
+	NativeFeeHeldRequest string                                   `json:"native_fee_held_request,omitempty"`
+	NativeFeePending     bool                                     `json:"native_fee_pending,omitempty"`
+	NativeFees           []economicConservationFeeEvidence        `json:"native_fee_evidence,omitempty"`
+	Archive              *economicConservationArchive             `json:"archive,omitempty"`
+	Renewal              *economicConservationRenewal             `json:"resource_renewal,omitempty"`
+	Schema               string                                   `json:"schema"`
+	PolicyHash           string                                   `json:"policy_hash"`
+	Native               monitorEconomicNativeState               `json:"native"`
+	Vault                monitorEconomicEvmState                  `json:"vault"`
+	ClaimStates          []monitorClaimState                      `json:"claims"`
+	OpeningVault         *monitorEconomicEvmSnapshot              `json:"opening_vault,omitempty"`
+	Mappings             []economicConservationMapping            `json:"native_evm_mappings"`
+	Lots                 []economicConservationLot                `json:"native_lots"`
+	Captures             []economicConservationCapture            `json:"captures"`
+	Entitlements         []economicConservationEntitlement        `json:"entitlements"`
+	Carry                map[string][]economicConservationBacking `json:"carry"`
+	Claims               []economicConservationClaim              `json:"accepted_claims"`
+	Credits              map[string]economicConservationCredit    `json:"credits"`
+	Payments             []economicConservationPayment            `json:"payments"`
+	Receipts             []economicConservationReceipt            `json:"claim_receipts"`
+	SampleAt             time.Time                                `json:"sample_at"`
+	NativeIssue          string                                   `json:"native_issue,omitempty"`
+	VaultIssue           string                                   `json:"vault_issue,omitempty"`
+	NativeHeld           bool                                     `json:"native_integrity_held"`
+	VaultHeld            bool                                     `json:"vault_integrity_held"`
+	JoinIssue            string                                   `json:"join_issue,omitempty"`
+	ContentHash          string                                   `json:"content_hash"`
+	entitlementIds       map[string]int
+	claimIds             map[string]int
+	captureKeys          map[string]bool
+	claimKeys            map[string]bool
+	archiveView          *economicConservationArchiveView
 }
 
 func newEconomicConservationState(policy economicConservationPolicy) *economicConservationState {
@@ -253,6 +256,9 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 	}
 	if _, err := self.feeSummary(policy); err != nil {
 		return err
+	}
+	if len(self.NativeFeeIssue) > 2048 || self.NativeFeeHeldRequest != "" && !planSha256(self.NativeFeeHeldRequest) || policy.FeeAuthority == nil && (self.NativeFeeIssue != "" || self.NativeFeeHeldRequest != "" || self.NativeFeePending) {
+		return errors.New("economic native fee status differs from original policy or resource bound")
 	}
 	if self.Vault.BatchCount != 0 && self.OpeningVault == nil {
 		return errors.New("economic conservation lost its opening vault obligations")

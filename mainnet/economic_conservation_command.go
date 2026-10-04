@@ -21,6 +21,9 @@ import (
 const economicConservationRole = "economic-conservation"
 
 type economicConservationSummary struct {
+	NativeFeeIssue                 string                          `json:"native_fee_issue,omitempty"`
+	NativeFeeHeldRequest           string                          `json:"native_fee_held_request,omitempty"`
+	NativeFeePending               bool                            `json:"native_fee_pending,omitempty"`
 	AdmittedNativeFees             *economicConservationFeeSummary `json:"admitted_native_fee_census,omitempty"`
 	Schema                         string                          `json:"schema"`
 	PolicyHash                     string                          `json:"policy_hash"`
@@ -79,6 +82,7 @@ func (self *economicConservationState) summary(policy economicConservationPolicy
 	if self.Archive != nil {
 		result.ArchiveSegments = uint64(len(self.Archive.Segments))
 	}
+	result.NativeFeeIssue, result.NativeFeeHeldRequest, result.NativeFeePending = self.NativeFeeIssue, self.NativeFeeHeldRequest, self.NativeFeePending
 	result.AdmittedNativeFees, err = self.feeSummary(policy)
 	if err != nil {
 		return result, err
@@ -433,30 +437,21 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		}
 	}()
 	state.archiveView = archive
-	if *feeRequest != "" {
-		feeCtx, cancel := context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
-		raw, digest, readErr := readBootstrapRootFile(feeCtx, *feeRequest, 64*1024)
-		var request economicNativeFeeRequest
-		if readErr == nil && digest != *feeRequestPin {
-			readErr = errors.New("economic native fee request differs from its exact pin")
-		}
-		if readErr == nil {
-			readErr = decodePlanJson(raw, &request)
-		}
-		if readErr == nil {
-			state, readErr = admitEconomicConservationNativeFees(feeCtx, policy, state, request, time.Duration(seconds)*time.Second, historicalReplayHooks{})
-		}
-		readErr = errors.Join(readErr, feeCtx.Err())
-		cancel()
-		if readErr != nil {
-			fmt.Fprintln(stderr, readErr)
-			return 3
-		}
-	}
+
 	operating, err := state.operatingPolicy(policy)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 3
+	}
+	var feeWorker *economicConservationFeeWorker
+	if *feeRequest != "" {
+		feeWorker = newEconomicConservationFeeWorker(ctx, policy, planFileReference{Path: *feeRequest, Sha256: *feeRequestPin}, time.Duration(operating.ReadBudgetSeconds)*time.Second, hooks)
+		defer func() {
+			if err := feeWorker.close(); err != nil {
+				fmt.Fprintln(stderr, err)
+				code = 3
+			}
+		}()
 	}
 	native.retryWindow = time.Duration(operating.ReadBudgetSeconds) * time.Second
 	vault.retryWindow = native.retryWindow
@@ -464,13 +459,23 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		owner.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(economicConservationRole, "checkpoint", file) }
 	}
 	for ctx.Err() == nil {
+		feeWorker.start(state)
 		next, nativeCurrent, vaultCurrent, err := sampleEconomicConservation(ctx, policy, state, native, vault, now().UTC(), hooks)
 		if err != nil {
-			if ctx.Err() != nil && monitorOnlyCancellationCause(err, ctx.Err(), 0) {
+			if ctx.Err() != nil && monitorOnlyCancellationCauses(err, 0) {
 				return 0
 			}
 			fmt.Fprintln(stderr, err)
 			return 3
+		}
+		if result, ready := feeWorker.take(!*follow); ready {
+			next, err = applyEconomicConservationFeeResult(ctx, policy, next, result)
+			if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 3
+			}
+		} else if feeWorker != nil {
+			next.NativeFeePending = feeWorker.active
 		}
 		if err := saveEconomicConservation(owner, policy, next); err != nil {
 			fmt.Fprintln(stderr, err)
@@ -499,8 +504,11 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		if hooks.afterEvent != nil {
 			hooks.afterEvent(ctx, economicConservationRole)
 		}
+		if *follow {
+			feeWorker.start(state)
+		}
 		if !*follow {
-			if !nativeCurrent || !vaultCurrent || state.JoinIssue != "" {
+			if !nativeCurrent || !vaultCurrent || state.JoinIssue != "" || state.NativeFeeIssue != "" || state.NativeFeePending {
 				return 3
 			}
 			for _, claim := range state.ClaimStates {

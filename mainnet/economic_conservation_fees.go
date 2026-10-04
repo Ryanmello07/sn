@@ -196,6 +196,27 @@ func admitEconomicConservationNativeFees(ctx context.Context, policy economicCon
 	if err != nil {
 		return nil, err
 	}
+	return appendEconomicConservationNativeFeeEvidence(ctx, policy, prior, request, value)
+}
+
+// The independent worker transfers its own completed result here. Only fee
+// fields are merged onto the latest checkpoint; its earlier native/vault view
+// never replaces progress observed while verification was in flight.
+func appendEconomicConservationNativeFeeEvidence(ctx context.Context, policy economicConservationPolicy, prior *economicConservationState, request economicNativeFeeRequest, value *economicNativeFeeEvidence) (*economicConservationState, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if prior == nil || policy.FeeAuthority == nil || request.Policy != *policy.FeeAuthority || prior.PolicyHash != policy.identityHash() || value == nil || value.Context == nil || value.RequestHash != rootObjectHash(request) {
+		return nil, errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic completed fee result differs from original request authority"))
+	}
+	for _, retained := range prior.NativeFees {
+		if retained.Evidence.RequestHash == value.RequestHash {
+			if retained.Evidence.ContentHash != value.ContentHash {
+				return nil, errors.Join(errEconomicNativeFeeIntegrity, errors.New("economic completed fee result replaced original evidence"))
+			}
+			return cloneEconomicConservation(prior)
+		}
+	}
 	operating, err := prior.operatingPolicy(policy)
 	if err != nil {
 		return nil, err
@@ -209,7 +230,7 @@ func admitEconomicConservationNativeFees(ctx context.Context, policy economicCon
 	}
 	next.NativeFees = append(next.NativeFees, economicConservationFeeEvidence{Request: request, Evidence: *value})
 	if _, err := next.feeSummary(policy); err != nil {
-		return nil, err
+		return nil, errors.Join(errEconomicNativeFeeIntegrity, err)
 	}
 	next.ContentHash = next.hash()
 	// Keep complete original proof reports hot across existing compaction. The

@@ -83,7 +83,12 @@ func historicalFeeContextSyntheticPeer(job historicalReplayJob, report *historic
 
 func historicalFeeContextTestFixture(t *testing.T, name, mode string) (historicalFeeContextRequest, *historicalFeeContextFixture, historicalReplayJob) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("testdata", "historical-fee-context", name+".json"))
+	return historicalFeeContextTestFixtureAt(t, filepath.Join("testdata", "historical-fee-context", name+".json"), name, mode)
+}
+
+func historicalFeeContextTestFixtureAt(t *testing.T, path, name, mode string) (historicalFeeContextRequest, *historicalFeeContextFixture, historicalReplayJob) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
