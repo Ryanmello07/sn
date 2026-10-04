@@ -84,6 +84,8 @@ fn fixture_with_continuation(continuous: bool) -> (HistoricalJob, sp_core::stora
     for (address, bytes) in data {
         declarations.push_str(&segment(address, &bytes));
     }
+    // The pinned node excludes bulk-memory instructions. These fixed 32-byte
+    // identity copies use MVP loads/stores over known nonoverlapping ranges.
     declarations.push_str(&format!(r#"
         (func $drain (export "native_drain") (param $key i64) (result i64) (call $get (local.get $key)))
         (func $epoch (export "native_epoch")
@@ -98,15 +100,27 @@ fn fixture_with_continuation(continuous: bool) -> (HistoricalJob, sp_core::stora
             (i64.store (i32.const 4814) (i64.load (i32.const 4168)))
             (call $append (i64.const {events_key}) (i64.const {event_value})))
         (func $provider (export "native_provider")
-            (memory.copy (i32.const 4300) (i32.const 4200) (i32.const 32))
-            (memory.copy (i32.const 4332) (i32.const 4500) (i32.const 32))
+            (i64.store (i32.const 4300) (i64.load (i32.const 4200)))
+            (i64.store (i32.const 4308) (i64.load (i32.const 4208)))
+            (i64.store (i32.const 4316) (i64.load (i32.const 4216)))
+            (i64.store (i32.const 4324) (i64.load (i32.const 4224)))
+            (i64.store (i32.const 4332) (i64.load (i32.const 4500)))
+            (i64.store (i32.const 4340) (i64.load (i32.const 4508)))
+            (i64.store (i32.const 4348) (i64.load (i32.const 4516)))
+            (i64.store (i32.const 4356) (i64.load (i32.const 4524)))
             (i64.store (i32.const 4368) (i64.load (i32.const 4160)))
             (i64.store (i32.const 4376) (i64.const 3))
             (i64.store (i32.const 4384) (i64.sub (i64.load (i32.const 4368)) (i64.load (i32.const 4376))))
             (call $set (i64.const {provider_key}) (i64.const {provider_value})))
         (func $owner (export "native_owner")
-            (memory.copy (i32.const 4300) (i32.const 4232) (i32.const 32))
-            (memory.copy (i32.const 4332) (i32.const 4532) (i32.const 32))
+            (i64.store (i32.const 4300) (i64.load (i32.const 4232)))
+            (i64.store (i32.const 4308) (i64.load (i32.const 4240)))
+            (i64.store (i32.const 4316) (i64.load (i32.const 4248)))
+            (i64.store (i32.const 4324) (i64.load (i32.const 4256)))
+            (i64.store (i32.const 4332) (i64.load (i32.const 4532)))
+            (i64.store (i32.const 4340) (i64.load (i32.const 4540)))
+            (i64.store (i32.const 4348) (i64.load (i32.const 4548)))
+            (i64.store (i32.const 4356) (i64.load (i32.const 4556)))
             (i64.store (i32.const 4368) (i64.load (i32.const 4168)))
             (i64.store (i32.const 4392) (i64.load (i32.const 4368)))
             (call $set (i64.const {owner_key}) (i64.const {owner_value})))"#,
@@ -366,6 +380,24 @@ fn historical_native_execution_exports_actual_original_program_for_go_consumer()
             .bytes_hex,
         encoded(&words(&[9, 89]))
     );
+    for (index, hotkey, coldkey, gross) in [(5, 0x11, 0x33, 9), (6, 0x22, 0x34, 89)] {
+        let memory = &records[index].native.as_ref().unwrap().memory;
+        for (name, expected) in [
+            ("hotkey", vec![hotkey; 32]),
+            ("coldkey", vec![coldkey; 32]),
+            ("gross", words(&[gross])),
+        ] {
+            assert_eq!(
+                memory
+                    .iter()
+                    .find(|value| value.name == name)
+                    .unwrap()
+                    .bytes_hex,
+                encoded(&expected),
+                "original economic recipient identity or amount changed: {name}"
+            );
+        }
+    }
     if let Some(directory) = std::env::var_os("URNETWORK_NATIVE_EXECUTION_FIXTURE_OUT") {
         let directory = Path::new(&directory);
         assert!(directory.is_absolute() && directory.is_dir());
