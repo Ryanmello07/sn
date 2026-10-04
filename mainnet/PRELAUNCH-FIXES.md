@@ -1,5 +1,11 @@
 # Mainnet prelaunch fixes
 
+Qualification scheduling must follow actual workload and resource ownership. A restriction against a second long128/129-history body must not serialize unrelated ordinary dependent tests behind the first. Once exact source/image/export prerequisites and fresh combined resource admission pass, run the ordinary work alongside the retained long body with its original reservation included. Keep per-phase concurrency bounded and retain original outcomes; an unfinished long history is not a prerequisite for independently scoped ordinary roots.
+
+
+The [three drained-exporter causal controls](evidence/proof-drained-continuation77-three-controls-independent-readback-20261004.json) independently reproduce the exact old first-block guard failure, repeated-accrual second-block failure and invalid nonzero opening-parent rejection. Every isolated mutation compiles successfully and reaches its named assertion; setup errors do not count as proof. Together with the six retained positive roots this qualifies the targeted fixture correction, while dependent Go execution and full composed-release acceptance remain separate.
+
+
 The [populated composed-source review](evidence/conservation-populated3a13-composed-source-scope-review-20261004.json) verifies exact `3a13c69` inputs,174 Go declarations per mode,17 Rust roots and65 exact rebased controls. The join retains the large physical profile, complete restore owners, entitlement census, nonzero populated1,024/2,048-UID workload and corrected drained dispatch. Logical2x reserves must be followed by actual complete serialized-size and host measurements; sparse or zero-stake padding does not establish production capacity. Qualify the composed source separately from retained component results. Native-follow isolation, archive-prefix performance and full native-income-to-entitlement funding conformance remain subsequent implementation joins.
 
 
