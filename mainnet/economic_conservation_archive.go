@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
 )
@@ -109,6 +110,8 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
+	admission                context.Context
+	closed                   bool
 	entitlementEnabled       bool
 	entitlementVerified      map[string]string
 	entitlementOriginal      map[string]string
@@ -178,7 +181,13 @@ func (self *economicConservationArchiveView) check() error {
 	if self == nil {
 		return nil
 	}
+	if self.closed {
+		return os.ErrClosed
+	}
 	for _, owner := range self.owners {
+		if self.claimWork != nil {
+			self.claimWork(economicConservationRole, "archive-custody-check", 1)
+		}
 		if err := owner.check(); err != nil {
 			return err
 		}
@@ -187,9 +196,10 @@ func (self *economicConservationArchiveView) check() error {
 }
 
 func (self *economicConservationArchiveView) close() error {
-	if self == nil {
+	if self == nil || self.closed {
 		return nil
 	}
+	self.closed, self.admission = true, nil
 	var result error
 	for _, owner := range self.owners {
 		result = errors.Join(result, owner.close())
@@ -626,7 +636,7 @@ func (self *economicConservationArchiveView) indexAdmission(original, compacted 
 	if self == nil || original == nil || compacted == nil {
 		return false, errors.New("economic archive index requires original and compacted states")
 	}
-	if err := self.check(); err != nil {
+	if err := self.checkAdmission(); err != nil {
 		return false, err
 	}
 	archive := compacted.Archive
@@ -660,7 +670,7 @@ func openEconomicConservationArchive(ctx context.Context, policy economicConserv
 // supplies a copied-source reader instead and discards the returned index before
 // producing a preparation request; it cannot turn that index into a live owner.
 func readEconomicConservationArchive(ctx context.Context, policy economicConservationPolicy, state *economicConservationState, hooks monitorServiceHooks, read func(context.Context, monitorHistoryReference) (*monitorHistorySnapshot, []byte, error)) (_ *economicConservationArchiveView, resultErr error) {
-	if state == nil || read == nil {
+	if ctx == nil || state == nil || read == nil {
 		return nil, errors.New("economic history requires an exact current checkpoint and reader")
 	}
 	resources, err := state.resources(policy)
@@ -668,6 +678,7 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 		return nil, err
 	}
 	view := newEconomicConservationArchiveView(resources)
+	view.admission = ctx
 	view.entitlementEnabled = policy.EntitlementSources != nil
 	view.claimWork = hooks.economicClaimWork
 	if policy.FeeAuthority != nil {
@@ -696,6 +707,9 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 		checked := *state
 		checked.archiveView = view
 		if err := checked.reconcileEntitlementLeaves(ctx); err != nil {
+			return nil, err
+		}
+		if err := view.finishAdmission(); err != nil {
 			return nil, err
 		}
 		return view, nil
@@ -770,5 +784,8 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 	if err := checked.reconcileEntitlementLeaves(ctx); err != nil {
 		return nil, err
 	}
-	return view, errors.Join(ctx.Err(), view.check())
+	if err := view.finishAdmission(); err != nil {
+		return nil, err
+	}
+	return view, nil
 }

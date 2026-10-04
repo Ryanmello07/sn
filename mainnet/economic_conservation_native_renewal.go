@@ -161,7 +161,7 @@ func (self *economicConservationArchiveView) retainNativeApproval(original *econ
 	if self == nil || self.nativeReviews == nil {
 		return errors.New("economic native approval requires an admitted original review index")
 	}
-	if err := self.check(); err != nil {
+	if err := self.checkAdmission(); err != nil {
 		return err
 	}
 	adoption := original.NativeRenewal
