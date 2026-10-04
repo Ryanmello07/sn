@@ -308,7 +308,9 @@ impl HistoricalObserver {
             ) || profile.schema == "urnetwork-original-wasm-native-observation-v2"
                 && matches!(
                     rule.purpose.as_str(),
-                    "native-drain"
+                    "native-fee-exempt"
+                        | "native-fee-refund-zero"
+                        | "native-drain"
                         | "native-epoch"
                         | "native-emission"
                         | "native-miner-credit"

@@ -97,6 +97,13 @@ func newNativeProducerPublicFixture(t *testing.T) *nativeProducerPublicFixture {
 
 func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool, additionalJobs ...historicalReplayJob) *nativeProducerPublicFixture {
 	t.Helper()
+	return nativeProducerPublicFixtureWithFee(t, continuous, nil, additionalJobs...)
+}
+
+// Optional original fee authority is signed before any producer owner opens.
+// Existing fixture families retain their exact nil authority and body bounds.
+func nativeProducerPublicFixtureWithFee(t *testing.T, continuous bool, feePolicy *nativeFeeCensusPolicy, additionalJobs ...historicalReplayJob) *nativeProducerPublicFixture {
+	t.Helper()
 	capturePath, replayPath, fixturePath := os.Getenv("URNETWORK_NATIVE_CAPTURE_ENGINE"), os.Getenv("URNETWORK_NATIVE_EXECUTION_ENGINE"), os.Getenv("URNETWORK_NATIVE_EXECUTION_FIXTURE")
 	continuationDirectory := os.Getenv("URNETWORK_NATIVE_PRODUCER_FIXTURE")
 	if continuous && continuationDirectory != "" {
@@ -126,7 +133,11 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool, additionalJo
 	}
 	parent, parentNumber := nativeProducerTestHeader(t, job.ParentHeaderHex, job.ParentHash)
 	child, childNumber := nativeProducerTestHeader(t, job.ChildHeaderHex, job.ChildHash)
-	if parentNumber != 100 || childNumber != 101 || len(job.ExtrinsicsHex) > 2 || len(job.ExtrinsicsHex) != 0 && !job.PrincipalEffects || len(additionalJobs) > 1 || continuous && len(additionalJobs) != 0 {
+	maximumExtrinsics := 2
+	if feePolicy != nil {
+		maximumExtrinsics = 3
+	}
+	if parentNumber != 100 || childNumber != 101 || len(job.ExtrinsicsHex) > maximumExtrinsics || len(job.ExtrinsicsHex) != 0 && !job.PrincipalEffects && feePolicy == nil || len(additionalJobs) > 1 || continuous && len(additionalJobs) != 0 {
 		t.Fatal("unexpected original-program fixture shape")
 	}
 	source := newEconomicEmissionFixture(t)
@@ -313,6 +324,7 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool, additionalJo
 	filePolicy.Engine = planFileReference{Path: replayPath, Sha256: replayHash}
 	filePolicy.Producer.Schema = nativeProducerSchema
 	filePolicy.Producer.CaptureEngine = planFileReference{Path: capturePath, Sha256: captureHash}
+	filePolicy.FeeCensus = feePolicy
 	if job.PrincipalQueries != nil {
 		filePolicy.Principal = &nativePrincipalPolicy{Schema: historicalPrincipalSchema, Api: historicalPrincipalApi, LayoutSha256: monitorReadDigest([]byte(historicalPrincipalLayout)), ReviewSha256: monitorReadDigest([]byte("synthetic original parent API/layout review")), Parent: source.policy.From, Queries: job.PrincipalQueries}
 	}
@@ -343,6 +355,7 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool, additionalJo
 	authority := nativeProducerAuthority{Schema: nativeProducerAuthoritySchema, Network: source.policy.Network, Netuid: source.policy.Netuid, Registration: *source.policy.SubnetRegistrationBlock, Generation: *source.policy.SubnetGeneration, From: source.policy.From, Runtime: source.policy.Runtime, ReviewSha256: filePolicy.ReviewSha256, Profile: job.ObservationProfile, CaptureEngine: filePolicy.Producer.CaptureEngine, ReplayEngine: filePolicy.Engine, Directory: filePolicy.Directory, Nodes: filePolicy.Producer.Nodes, MaximumJobs: filePolicy.Producer.MaximumJobs, MaximumBytes: filePolicy.Producer.MaximumBytes, MaximumEntries: filePolicy.Producer.MaximumEntries, Checkpoint: strecovery.NativeFinalityCheckpoint{Schema: strecovery.NativeFinalityCheckpointSchema, CodecProfile: strecovery.NativeFinalityCodecProfile, Genesis: source.policy.Network.GenesisHash, HeaderScale: job.ParentHeaderHex, SetId: 9, LiveState: "live", Authorities: []strecovery.GrandpaAuthority{{PublicKey: nativeExecutionTestHex(consensus.Public().(ed25519.PublicKey)), Weight: 1}}}, Providers: []nativeProducerProvider{{Hotkey: nativeExecutionTestHex(bytes.Repeat([]byte{0x11}, 32)), Coldkey: nativeExecutionTestHex(bytes.Repeat([]byte{0x33}, 32))}}}
 	authority.Principal = filePolicy.Principal
 	authority.Yuma = filePolicy.Yuma
+	authority.FeeCensus = filePolicy.FeeCensus
 	authority.MaximumDescendantHeaders = filePolicy.Producer.MaximumDescendantHeaders
 	message, err := authority.signingBytes()
 	if err != nil {

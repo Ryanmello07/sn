@@ -98,6 +98,7 @@ func (self *economicConservationState) appendOpeningPrincipal(policy economicCon
 	value := &economicConservationOpeningPrincipal{Projection: *outcome.OpeningPrincipals, Outcome: outcome}
 	value.Outcome.OpeningPrincipals, value.Outcome.RecipientEffects, value.Outcome.PrincipalEffects = nil, nil, nil
 	value.Outcome.CertifiedWindow = nil
+	value.Outcome.FeeCensus = nil
 	if self.OpeningPrincipals != nil && !reflect.DeepEqual(self.OpeningPrincipals, value) {
 		return errors.New("economic opening principal replaced its original replay")
 	}

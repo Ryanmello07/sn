@@ -65,7 +65,7 @@ type nativeProducerRenewal struct {
 func (self nativeProducerRenewal) signingBytes() ([]byte, error) {
 	self.Signature = ""
 	raw, err := json.Marshal(self)
-	if err != nil || len(raw) > nativeProducerAuthorityLimit {
+	if err != nil || len(raw) > nativeProducerAuthorityMaximum(self.Next.FeeCensus) {
 		return nil, errors.Join(errors.New("native producer renewal exceeds its finite approval frame"), err)
 	}
 	return append([]byte(nativeProducerRenewalSchema+"\x00"), raw...), nil
@@ -230,11 +230,13 @@ func nativeProducerReviewedProfile(authority nativeProducerAuthority) error {
 	if authority.Profile == nil || authority.ReviewSha256 != fmt.Sprintf("sha256:%x", authority.Profile.SourceReviewSha256) {
 		return errors.New("native producer callsite profile names a different original semantic review")
 	}
-	return errors.Join(authority.Profile.validate(historicalReplayJob{RuntimeCodeSha256: authority.Profile.RuntimeCodeSha256}), authority.Principal.validate(), authority.Yuma.validate())
+	return errors.Join(authority.Profile.validate(historicalReplayJob{RuntimeCodeSha256: authority.Profile.RuntimeCodeSha256}), authority.Principal.validate(), authority.Yuma.validate(), authority.FeeCensus.validateProducer(authority))
 }
 
 func loadNativeProducerAuthorities(ctx context.Context, policy economicEmissionPolicy) ([]nativeProducerReviewedAuthority, error) {
-	return readNativeProducerAuthorities(ctx, policy, nativeProducerReadApproval)
+	return readNativeProducerAuthorities(ctx, policy, func(ctx context.Context, reference planFileReference) ([]byte, error) {
+		return nativeProducerReadApprovalFor(ctx, reference, policy.Execution.FeeCensus)
+	})
 }
 
 // Copied approval bytes use the original loader and renewal lineage checks.
@@ -253,6 +255,9 @@ func readNativeProducerAuthorities(ctx context.Context, policy economicEmissionP
 		raw, err := read(ctx, reference)
 		if err != nil {
 			return nil, err
+		}
+		if len(raw) > nativeProducerAuthorityMaximum(policy.Execution.FeeCensus) {
+			return nil, errors.New("native producer renewal exceeds its original document profile")
 		}
 		if monitorReadDigest(raw) != reference.Sha256 {
 			return nil, errors.Join(errRpcIntegrity, errors.New("native producer retained renewal bytes differ"))

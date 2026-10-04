@@ -368,6 +368,7 @@ func (self *nativeProducerSession) observe(ctx context.Context, client *rpcClien
 		return nil, err
 	}
 	admission := nativeExecutionAdmission{Yuma: self.authority.Yuma, Principal: self.authority.Principal, Schema: nativeExecutionAdmissionSchema, Network: self.policy.Network, Netuid: self.policy.Netuid, Registration: self.authority.Registration, Generation: self.authority.Generation, Parent: self.state.Cursor, Child: block.Boundary, Runtime: runtime, ReviewSha256: self.policy.Execution.ReviewSha256, ProfileSha256: self.policy.Execution.ProfileSha256, EngineSha256: self.policy.Execution.Engine.Sha256, Job: jobRef, Providers: providers, FinalityAuthority: "approved-anchor-and-verified-grandpa-original-execution"}
+	admission.FeeCensus = self.authority.FeeCensus
 	outcome, err := validateNativeExecutionReplay(ctx, self.policy, admission, block, metadata, job, report)
 	if err != nil {
 		return nil, err
@@ -378,6 +379,10 @@ func (self *nativeProducerSession) observe(ctx context.Context, client *rpcClien
 	outcome.CertifiedWindow, err = self.finalityProjection(ctx, reference, *outcome, finality)
 	if err != nil {
 		return nil, err
+	}
+	outcome.FeeCensus, err = deriveNativeFeeCensus(ctx, self.authority.FeeCensus, self.state.Cursor, job, report, *outcome)
+	if err != nil {
+		return nil, nativeExecutionDerivationError(err)
 	}
 	completion := nativeProducerCompletion{Schema: nativeProducerCompletionSchema, AuthorityHash: self.state.AuthorityHash, Previous: self.state.CompletionChain, Sequence: self.state.Completed + 1, Input: planFileReference{Path: filepath.Join(self.files.path, inputName), Sha256: monitorReadDigest(inputRaw)}, Admission: admission, Anchor: self.state.Anchor, Window: reference, Certified: economicEmissionBoundary{Number: finality.Certified.Number, Hash: finality.Certified.Hash}, OutcomeHash: outcome.ContentHash}
 	completion.ResourceForecast = self.files.forecast

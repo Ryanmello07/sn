@@ -50,7 +50,7 @@ func historicalNativePointerValid(global *string, offsets []uint32) bool {
 }
 
 func historicalNativePurpose(value string) bool {
-	return value == "native-drain" || value == "native-epoch" || value == "native-emission" || value == "native-miner-credit" || value == "native-owner-recycle" || historicalPrincipalEffectPurpose(value) || historicalYumaPurpose(value)
+	return value == "native-fee-exempt" || value == "native-fee-refund-zero" || value == "native-drain" || value == "native-epoch" || value == "native-emission" || value == "native-miner-credit" || value == "native-owner-recycle" || historicalPrincipalEffectPurpose(value) || historicalYumaPurpose(value)
 }
 
 func validateHistoricalNativeCaptures(rule historicalReplayHookRule) error {

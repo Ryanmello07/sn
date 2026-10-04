@@ -14,6 +14,9 @@ mod yuma_populated_tests;
 #[path = "historical_native_capture_join_tests.rs"]
 mod capture_join_tests;
 
+#[path = "historical_native_fee_census_tests.rs"]
+mod fee_census_tests;
+
 use super::*;
 use parity_scale_codec as codec;
 use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt, path::Path};
@@ -101,6 +104,25 @@ fn fixture_with_allocation_activation(
     effects: Option<&str>,
     yuma: Option<&str>,
     drained_activation: bool,
+) -> (HistoricalJob, sp_core::storage::Storage) {
+    fixture_with_fee_census(
+        continuous,
+        principal,
+        effects,
+        yuma,
+        drained_activation,
+        None,
+    )
+}
+
+// Optional fee observations leave every existing original fixture unchanged.
+fn fixture_with_fee_census(
+    continuous: bool,
+    principal: Option<Option<u64>>,
+    effects: Option<&str>,
+    yuma: Option<&str>,
+    drained_activation: bool,
+    fee_mode: Option<&str>,
 ) -> (HistoricalJob, sp_core::storage::Storage) {
     let allocation_count = yuma_capacity_tests::count(yuma);
     let capture = effects
@@ -362,12 +384,19 @@ fn fixture_with_allocation_activation(
         declarations = declarations.replace("(i64.const 8589934592)", "(i64.add (i64.add (i64.load (i32.const 4100)) (i64.load (i32.const 4108))) (i64.add (i64.load (i32.const 4120)) (i64.load (i32.const 4128))))");
         body = body.replace("(call $epoch)", yuma_tests::body());
     }
+    let fees = fee_mode.map(fee_census_tests::Program::new);
+    if let Some(fees) = &fees {
+        declarations.push_str(&fees.declarations());
+        body.push_str(&fees.body());
+    }
     let code = if allocation_count > 2 {
         yuma_capacity_tests::expand(allocation_count, &mut declarations, &mut body);
         if yuma_populated_tests::selected(yuma) {
             yuma_populated_tests::expand(allocation_count, &mut declarations, &mut body);
         }
         wasm_with_heap(&declarations, &body, 400000)
+    } else if fees.is_some() {
+        wasm_with_heap(&declarations, &body, 60000)
     } else {
         wasm(&declarations, &body)
     };
@@ -384,6 +413,11 @@ fn fixture_with_allocation_activation(
     }
     initial.top.insert(phase.clone(), vec![2]);
     initial.top.insert(events.clone(), vec![0]);
+    if fees.is_some() {
+        initial
+            .top
+            .insert(b"synthetic-original-fee-disposition".to_vec(), vec![1]);
+    }
     if let Some(stock) = principal.flatten() {
         initial.top.insert(principal_key.to_vec(), words(&[stock]));
     }
@@ -407,7 +441,14 @@ fn fixture_with_allocation_activation(
     expected.top.insert(epoch.to_vec(), words(&[200]));
     expected.top.insert(provider.to_vec(), words(&[9, 3, 6]));
     expected.top.insert(owner.to_vec(), words(&[89]));
-    expected.top.insert(events, [vec![4], event].concat());
+    if let Some(fees) = &fees {
+        expected
+            .top
+            .insert(events.clone(), fees.expected_events(&event));
+        expected.top.insert(phase.clone(), vec![1]);
+    } else {
+        expected.top.insert(events, [vec![4], event].concat());
+    }
     if capture {
         expected.top.insert(phase, vec![1]);
     }
@@ -437,7 +478,9 @@ fn fixture_with_allocation_activation(
         expected.clone(),
         StateVersion::V1,
     );
-    let extrinsics: Vec<Vec<u8>> = if effects == Some("capture-same-block") {
+    let extrinsics: Vec<Vec<u8>> = if let Some(fees) = &fees {
+        fees.extrinsics()
+    } else if effects == Some("capture-same-block") {
         vec![vec![0x99u8; 32].encode(), vec![0x98u8; 32].encode()]
     } else if capture {
         vec![vec![0x99u8; 32].encode()]
@@ -555,6 +598,9 @@ fn fixture_with_allocation_activation(
             }
             profile.rules.push(rule);
         }
+    }
+    if let Some(fees) = &fees {
+        fees.profile(&code, &mut profile);
     }
     (
         HistoricalJob {

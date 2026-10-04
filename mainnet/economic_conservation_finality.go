@@ -280,7 +280,7 @@ func (self *economicConservationArchiveView) initialFinality(ctx context.Context
 		return nil, errors.New("economic finality requires the original signed native producer checkpoint")
 	}
 	reference := self.finalityPolicy.Execution.Producer.Authority
-	if len(raw) == 0 || len(raw) > nativeProducerAuthorityLimit || monitorReadDigest(raw) != reference.Sha256 {
+	if len(raw) == 0 || len(raw) > nativeProducerAuthorityMaximum(self.finalityPolicy.Execution.FeeCensus) || monitorReadDigest(raw) != reference.Sha256 {
 		return nil, errors.Join(errRpcIntegrity, errors.New("economic consensus changed its original signed authority bytes"))
 	}
 	if self.finalityAnchor != nil {

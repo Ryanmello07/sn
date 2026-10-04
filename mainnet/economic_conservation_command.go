@@ -21,6 +21,7 @@ import (
 const economicConservationRole = "economic-conservation"
 
 type economicConservationSummary struct {
+	OriginalFees                   *economicWholeFeeSummary                    `json:"original_complete_fee_census,omitempty"`
 	OriginalFinality               *economicConservationFinalitySummary        `json:"original_consensus_coverage,omitempty"`
 	Funding                        *economicConservationFundingSummary         `json:"original_funding_composition,omitempty"`
 	Conformance                    *economicConservationConformance            `json:"observed_economic_conformance,omitempty"`
@@ -119,6 +120,10 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 	result.AdmittedNativeFees, err = self.feeSummary(policy)
 	if err != nil {
 		return result, err
+	}
+	result.OriginalFees, err = self.wholeFeeSummary(ctx, policy)
+	if err != nil {
+		return economicConservationSummary{}, err
 	}
 	if self.archiveView != nil {
 		result.ArchiveIndexEntries = self.archiveView.entries + self.archiveView.claimBasisEntries

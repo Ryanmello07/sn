@@ -37,7 +37,7 @@ func (self *nativeProducerSession) finalityProjection(ctx context.Context, refer
 		return nil, err
 	}
 	if self.finalityApproval == nil {
-		raw, err := nativeProducerReadApproval(ctx, self.originalPolicy.Execution.Producer.Authority)
+		raw, err := nativeProducerReadApprovalFor(ctx, self.originalPolicy.Execution.Producer.Authority, self.originalPolicy.Execution.FeeCensus)
 		if err != nil {
 			return nil, err
 		}

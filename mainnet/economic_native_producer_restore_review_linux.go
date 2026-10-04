@@ -46,7 +46,7 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 					return errors.New("native approval has overlapping original roots")
 				}
 				entry, present := root.entries[path]
-				if !present || entry.Kind != "file" || entry.Size == 0 || entry.Size > nativeProducerAuthorityLimit || entry.Sha256 != reference.Sha256 {
+				if !present || entry.Kind != "file" || entry.Size == 0 || entry.Size > uint64(nativeProducerAuthorityMaximum(policy.Execution.FeeCensus)) || entry.Sha256 != reference.Sha256 {
 					return errors.New("native restore omitted original signed approval member")
 				}
 				approvalRoot = root
@@ -63,7 +63,7 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 					return errors.New("economic restore omits original native approval root")
 				}
 			}
-			raw, err = nativeProducerReadApproval(ctx, reference)
+			raw, err = nativeProducerReadApprovalFor(ctx, reference, policy.Execution.FeeCensus)
 		}
 		if err != nil {
 			return err

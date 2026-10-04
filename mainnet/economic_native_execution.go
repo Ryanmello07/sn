@@ -25,6 +25,7 @@ const nativeExecutionPolicySchema = "urnetwork-native-miner-execution-policy-v1"
 const nativeExecutionAdmissionLimit = 1024 * 1024
 
 type nativeExecutionPolicy struct {
+	FeeCensus         *nativeFeeCensusPolicy         `json:"complete_fee_authority,omitempty"`
 	Yuma              *nativeYumaPolicy              `json:"complete_allocation_authority,omitempty"`
 	Principal         *nativePrincipalPolicy         `json:"opening_principal_authority,omitempty"`
 	Schema            string                         `json:"schema"`
@@ -43,7 +44,10 @@ func (self *nativeExecutionPolicy) validate() error {
 	if self.Schema != nativeExecutionPolicySchema || !rootCanonicalHash(self.ApprovalPublicKey) || !planSha256(self.ReviewSha256) || !planSha256(self.ProfileSha256) || !bootstrapRootAbsolutePath(self.Engine.Path) || !planSha256(self.Engine.Sha256) || !bootstrapRootAbsolutePath(self.Directory) {
 		return errors.New("native execution requires original independent runtime/layout/engine authority")
 	}
-	return errors.Join(self.Producer.validate(), self.Principal.validate(), self.Yuma.validate())
+	if self.FeeCensus != nil && self.Producer == nil {
+		return errors.New("native complete fee authority requires the original continuous producer")
+	}
+	return errors.Join(self.Producer.validate(), self.Principal.validate(), self.Yuma.validate(), self.FeeCensus.validate())
 }
 
 // An admitted recipient is a registration generation, never merely an event UID.
@@ -56,6 +60,7 @@ type nativeExecutionRecipient struct {
 }
 
 type nativeExecutionAdmission struct {
+	FeeCensus         *nativeFeeCensusPolicy     `json:"complete_fee_authority,omitempty"`
 	Yuma              *nativeYumaPolicy          `json:"complete_allocation_authority,omitempty"`
 	Principal         *nativePrincipalPolicy     `json:"opening_principal_authority,omitempty"`
 	Schema            string                     `json:"schema"`
@@ -78,7 +83,7 @@ type nativeExecutionAdmission struct {
 func (self nativeExecutionAdmission) signingBytes() ([]byte, error) {
 	self.Signature = ""
 	raw, err := json.Marshal(self)
-	if err != nil || len(raw) > nativeExecutionAdmissionLimit {
+	if err != nil || len(raw) > nativeProducerAuthorityMaximum(self.FeeCensus) {
 		return nil, errors.Join(errors.New("native execution admission frame exceeds bound"), err)
 	}
 	return append([]byte(nativeExecutionAdmissionSchema+"\x00"), raw...), nil
@@ -91,6 +96,9 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 	}
 	if err := expected.validate(); err != nil {
 		return err
+	}
+	if !reflect.DeepEqual(self.FeeCensus, expected.FeeCensus) {
+		return errors.New("native execution changed original complete fee authority")
 	}
 	if !reflect.DeepEqual(self.Yuma, expected.Yuma) || !reflect.DeepEqual(self.Principal, expected.Principal) || self.Schema != nativeExecutionAdmissionSchema || self.Network != policy.Network || self.Netuid != policy.Netuid || self.Registration != *policy.SubnetRegistrationBlock || self.Generation != *policy.SubnetGeneration || self.Child != block.Boundary || self.Parent.Number+1 != self.Child.Number || self.Parent.Hash != block.Header.ParentHash || self.Runtime != runtime || self.Runtime.RuntimeSourceCommit != frontierMappingSourceCommit || self.ReviewSha256 != expected.ReviewSha256 || self.ProfileSha256 != expected.ProfileSha256 || self.EngineSha256 != expected.Engine.Sha256 || self.FinalityAuthority != "independently-reviewed-finalized-boundary" || !bootstrapRootAbsolutePath(self.Job.Path) || !planSha256(self.Job.Sha256) || len(self.Providers) > int(policy.MaximumUids) {
 		return errors.New("native execution approval differs from original runtime, boundary or economic identity")
@@ -115,6 +123,7 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 // FixedPointTolerance covers the observed final normalization and u64 casts;
 // it does not excuse Yuma disagreement or grant an economic activation approval.
 type nativeExecutionOutcome struct {
+	FeeCensus              *nativeFeeCensusProjection          `json:"original_fee_census,omitempty"`
 	CertifiedWindow        *nativeExecutionFinalityProjection  `json:"original_finality_window,omitempty"`
 	Yuma                   *nativeYumaProjection               `json:"complete_allocation_witness,omitempty"`
 	PrincipalEffects       *nativePrincipalExecutionProjection `json:"principal_execution_effects,omitempty"`
@@ -150,6 +159,7 @@ type nativeExecutionDrain struct {
 // original completion or pretending an older result retained recipient amounts.
 func (self nativeExecutionOutcome) hash() string {
 	self.ContentHash = ""
+	self.FeeCensus = nil
 	self.CertifiedWindow = nil
 	self.RecipientEffects = nil
 	self.OpeningPrincipals = nil
@@ -206,8 +216,11 @@ func nativeCaptureVector(record historicalReplayObservation, label string, count
 // alpha amounts. Read absence, omitted captures or ambiguous order refuse.
 func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecutionAdmission, block economicEmissionBlock, job historicalReplayJob, report historicalReplayReport, drainKeys [3]nativeExecutionDrain) (*nativeExecutionOutcome, error) {
 	profile, trace := job.ObservationProfile, report.HookObservations
-	if profile == nil || profile.Schema != historicalNativeProfileSchema || trace == nil || profile.MetadataSha256 != nil {
+	if profile == nil || profile.Schema != historicalNativeProfileSchema || trace == nil || (profile.MetadataSha256 != nil) != (admission.FeeCensus != nil) {
 		return nil, errors.New("native execution omits its dedicated original-memory profile")
+	}
+	if err := admission.FeeCensus.validate(); err != nil {
+		return nil, err
 	}
 	if !report.PostStateReproduced || "sha256:"+hex.EncodeToString(report.JobSha256[:]) != admission.Job.Sha256 || report.ParentHash != job.ParentHash || report.ChildHash != job.ChildHash || report.RuntimeCodeSha256 != job.RuntimeCodeSha256 {
 		return nil, errors.New("native execution report lacks the exact successful original replay")
@@ -230,6 +243,12 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 	recipients := []historicalReplayObservation{}
 	for index := range trace.Observations {
 		record := &trace.Observations[index]
+		if nativeFeeCensusPurpose(record.Purpose) {
+			if admission.FeeCensus == nil {
+				return nil, errors.New("native execution cannot borrow unapproved complete fee paths")
+			}
+			continue
+		}
 		if historicalPrincipalEffectPurpose(record.Purpose) || historicalYumaPurpose(record.Purpose) {
 			continue
 		}

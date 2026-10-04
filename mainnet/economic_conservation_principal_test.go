@@ -55,6 +55,11 @@ func economicConservationPrincipalFixtureWithSource(t *testing.T, f *economicCon
 		}
 	}
 	filename := "principal-" + name + ".json"
+	wholeFee := strings.HasPrefix(name, "whole-fee-")
+	if wholeFee {
+		directory = os.Getenv("URNETWORK_NATIVE_WHOLE_FEE_FIXTURE_DIR")
+		filename = name + ".json"
+	}
 	yuma := strings.HasPrefix(name, "yuma-")
 	if yuma {
 		directory = os.Getenv("URNETWORK_NATIVE_YUMA_FIXTURE_DIR")
@@ -151,7 +156,11 @@ func economicConservationPrincipalFixtureWithSource(t *testing.T, f *economicCon
 	if next != nil {
 		additionalJobs = next(job, f.vault)
 	}
-	producer := nativeProducerPublicFixtureFrom(t, false, additionalJobs...)
+	var feePolicy *nativeFeeCensusPolicy
+	if wholeFee {
+		feePolicy = nativeWholeFeeTestAuthority(f.policy)
+	}
+	producer := nativeProducerPublicFixtureWithFee(t, false, feePolicy, additionalJobs...)
 	f.native, f.policy.Native.Observation, f.policy.Native.BatchBlocks = producer.source, producer.source.policy, 1
 	// Matching original proof parents are drained before per-block accrual.
 	f.native.set(t, 100, "PendingServerEmission", make([]byte, 8))

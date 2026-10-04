@@ -75,6 +75,9 @@ func (self economicConservationPolicy) validate() error {
 	if err := self.validateFeeAuthority(); err != nil {
 		return err
 	}
+	if err := self.validateWholeFeeAuthority(); err != nil {
+		return err
+	}
 	if self.Native.HistoryCatalog != nil || self.Vault.HistoryCatalog != nil || self.Vault.ResourceRevision != nil {
 		return errors.New("economic conservation requires its own archive/resource adoption; component revisions cannot be borrowed")
 	}
@@ -206,6 +209,7 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	OriginalFees         []nativeFeeCensusProjection              `json:"original_complete_fee_census,omitempty"`
 	FinalityApproval     []byte                                   `json:"original_consensus_approval,omitempty"`
 	FinalityWindows      []nativeExecutionFinalityWindow          `json:"original_consensus_windows,omitempty"`
 	FinalityFrom         *economicEmissionBoundary                `json:"original_consensus_vault_from,omitempty"`
@@ -273,7 +277,7 @@ func (self economicConservationState) facts() uint64 {
 	if self.OpeningPrincipals != nil {
 		principalFacts = uint64(len(self.OpeningPrincipals.Projection.Observations)) + 1
 	}
-	return self.finalityFacts() + self.entitlementCensusFacts() + principalFacts + self.yumaFacts() + self.principalEffectFacts() + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
+	return self.wholeFeeFacts() + self.finalityFacts() + self.entitlementCensusFacts() + principalFacts + self.yumaFacts() + self.principalEffectFacts() + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
 }
 
 func (self economicConservationState) validate(ctx context.Context, policy economicConservationPolicy) error {
@@ -314,6 +318,9 @@ func (self economicConservationState) validate(ctx context.Context, policy econo
 		return err
 	}
 	if err := self.validateFinality(ctx, policy); err != nil {
+		return err
+	}
+	if err := self.validateWholeFees(ctx, policy); err != nil {
 		return err
 	}
 	if err := self.validateOpeningPrincipal(policy); err != nil {
@@ -435,6 +442,9 @@ func (self *economicConservationState) appendNative(ctx context.Context, policy 
 			return errors.New("economic native source did not retain original execution")
 		}
 		if err := self.appendFinality(ctx, policy, *outcome, block); err != nil {
+			return err
+		}
+		if err := self.appendWholeFees(ctx, policy, *outcome, block); err != nil {
 			return err
 		}
 		if err := self.appendOpeningPrincipal(policy, *outcome); err != nil {

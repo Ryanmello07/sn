@@ -187,7 +187,7 @@ func TestEconomicFundingConformanceRefreshDropsStaleAcceptanceAndFeeProjection(t
 		OpeningPrincipals: &economicConservationPrincipalSummary{}, OpeningPrincipalAlpha: &stock,
 		PrincipalEffects:     &economicConservationPrincipalEffectSummary{Current: true},
 		OriginalEntitlements: &economicConservationEntitlementSummary{CompleteObservedCensus: true, ProviderMeasurementsAuthenticated: true, IndependentFinalityAuthenticated: true},
-		AdmittedNativeFees:   &economicConservationFeeSummary{SelectedCensusComplete: true, WholeProviderCensus: true, WithdrawalRao: &zero, RefundRao: &zero},
+		OriginalFees:         &economicWholeFeeSummary{Head: economicWholeFeeHead{Through: boundary}, Complete: true, WithdrawalRao: &zero, RefundRao: &zero},
 	}
 	if err := summary.assessConformance(); err != nil || summary.TargetMet == nil || !*summary.TargetMet || summary.NativeFeeWithdrawalRao == nil || summary.NativeFeeRefundRao == nil || summary.OriginalEntitlements.NativeIncomeFundingAlpha == nil || *summary.OriginalEntitlements.NativeIncomeFundingAlpha != "10" || summary.ActivationReady {
 		t.Fatal("complete internal projection baseline failed", summary, err)
@@ -199,7 +199,7 @@ func TestEconomicFundingConformanceRefreshDropsStaleAcceptanceAndFeeProjection(t
 	summary.Funding.Captured, summary.Funding.Accepted, summary.Funding.Paid = unknown, unknown, unknown
 	summary.Funding.NoNonIncomeProviderCredit = nil
 	summary.OriginalEntitlements.ProviderMeasurementsAuthenticated = false
-	summary.AdmittedNativeFees.SelectedCensusComplete = false
+	summary.OriginalFees.Complete = false
 	if err := summary.assessConformance(); err != nil || summary.TargetMet != nil || summary.NativeFeeWithdrawalRao != nil || summary.NativeFeeRefundRao != nil || summary.OriginalEntitlements.NativeIncomeFundingAlpha != nil || summary.OriginalEntitlements.CapitalFundingAlpha != nil || summary.Conformance.CompleteEvidence {
 		t.Fatal("true-to-unknown retained stale acceptance, fee or income projection", summary, err)
 	}

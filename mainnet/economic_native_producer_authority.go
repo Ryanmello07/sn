@@ -18,9 +18,19 @@ const nativeProducerSchema = "urnetwork-native-execution-producer-v1"
 const nativeProducerAuthoritySchema = "urnetwork-native-execution-producer-authority-v1"
 const nativeProducerCompletionSchema = "urnetwork-native-execution-completion-v1"
 const nativeProducerAuthorityLimit = 1024 * 1024
+const nativeProducerFeeAuthorityLimit = 4 * 1024 * 1024
 const nativeProducerCompletionLimit = 2 * 1024 * 1024
 const nativeProducerBoundaryReserve = 512 * 1024 * 1024
 const nativeProducerBoundaryEntries = 4*32768 + 8192 + 128 + 16 + historicalNativeProofNodes
+
+// Full original provider pairs and their independent fee account roster need
+// a distinct finite frame. Nil authority retains the exact legacy byte bound.
+func nativeProducerAuthorityMaximum(fees *nativeFeeCensusPolicy) int {
+	if fees != nil {
+		return nativeProducerFeeAuthorityLimit
+	}
+	return nativeProducerAuthorityLimit
+}
 
 // These are separate finite deployment dimensions. Growth needs a separately
 // reviewed policy; exhaustion holds the original cursor and never deletes jobs.
@@ -55,6 +65,7 @@ type nativeProducerProvider struct {
 }
 
 type nativeProducerAuthority struct {
+	FeeCensus                *nativeFeeCensusPolicy              `json:"complete_fee_authority,omitempty"`
 	Yuma                     *nativeYumaPolicy                   `json:"complete_allocation_authority,omitempty"`
 	Principal                *nativePrincipalPolicy              `json:"opening_principal_authority,omitempty"`
 	Schema                   string                              `json:"schema"`
@@ -82,14 +93,16 @@ type nativeProducerAuthority struct {
 func (self nativeProducerAuthority) signingBytes() ([]byte, error) {
 	self.Signature = ""
 	raw, err := json.Marshal(self)
-	if err != nil || len(raw) > nativeProducerAuthorityLimit {
+	if err != nil || len(raw) > nativeProducerAuthorityMaximum(self.FeeCensus) {
 		return nil, errors.Join(errors.New("native producer authority exceeds its finite frame"), err)
 	}
 	return append([]byte(nativeProducerAuthoritySchema+"\x00"), raw...), nil
 }
 
 func loadNativeProducerAuthority(ctx context.Context, policy economicEmissionPolicy) (*nativeProducerAuthority, error) {
-	return readNativeProducerAuthority(ctx, policy, nativeProducerReadApproval)
+	return readNativeProducerAuthority(ctx, policy, func(ctx context.Context, reference planFileReference) ([]byte, error) {
+		return nativeProducerReadApprovalFor(ctx, reference, policy.Execution.FeeCensus)
+	})
 }
 
 // The restore adapter supplies the same original signed bytes through a copied
@@ -99,6 +112,9 @@ func readNativeProducerAuthority(ctx context.Context, policy economicEmissionPol
 		return nil, errors.New("native producer is not independently configured")
 	}
 	execution, producer := policy.Execution, policy.Execution.Producer
+	if err := execution.FeeCensus.validate(); err != nil {
+		return nil, err
+	}
 	if err := execution.validate(); err != nil {
 		return nil, err
 	}
@@ -106,12 +122,18 @@ func readNativeProducerAuthority(ctx context.Context, policy economicEmissionPol
 	if err != nil {
 		return nil, err
 	}
+	if len(raw) > nativeProducerAuthorityMaximum(execution.FeeCensus) {
+		return nil, errors.New("native producer original approval exceeds its original document profile")
+	}
 	if monitorReadDigest(raw) != producer.Authority.Sha256 {
 		return nil, errors.Join(errRpcIntegrity, errors.New("native producer original approval bytes differ"))
 	}
 	var authority nativeProducerAuthority
 	if err := decodePlanJson(raw, &authority); err != nil {
 		return nil, errors.Join(errRpcIntegrity, err)
+	}
+	if !reflect.DeepEqual(authority.FeeCensus, execution.FeeCensus) {
+		return nil, errors.Join(errRpcIntegrity, errors.New("native producer changed original fee participant authority"))
 	}
 	profileRaw, err := json.Marshal(authority.Profile)
 	if err != nil {
@@ -148,7 +170,12 @@ func readNativeProducerAuthority(ctx context.Context, policy economicEmissionPol
 
 // Exact reads preserve observation errors before comparing returned content.
 func nativeProducerReadApproval(ctx context.Context, reference planFileReference) ([]byte, error) {
-	raw, digest, err := readPlanFile(ctx, reference.Path, nativeProducerAuthorityLimit)
+	return nativeProducerReadApprovalFor(ctx, reference, nil)
+}
+
+// Source, finality and restore use the same admitted original frame limit.
+func nativeProducerReadApprovalFor(ctx context.Context, reference planFileReference, fees *nativeFeeCensusPolicy) ([]byte, error) {
+	raw, digest, err := readPlanFile(ctx, reference.Path, nativeProducerAuthorityMaximum(fees))
 	if err != nil {
 		return nil, err
 	}

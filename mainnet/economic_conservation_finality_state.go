@@ -41,7 +41,7 @@ func (self economicConservationState) validateFinality(ctx context.Context, poli
 	if original.Execution == nil || original.Execution.Producer == nil {
 		return errors.New("economic consensus census lacks its original producer policy")
 	}
-	if len(self.FinalityApproval) > nativeProducerAuthorityLimit || len(self.FinalityApproval) != 0 && monitorReadDigest(self.FinalityApproval) != original.Execution.Producer.Authority.Sha256 {
+	if len(self.FinalityApproval) > nativeProducerAuthorityMaximum(original.Execution.FeeCensus) || len(self.FinalityApproval) != 0 && monitorReadDigest(self.FinalityApproval) != original.Execution.Producer.Authority.Sha256 {
 		return errors.New("economic consensus retained approval differs from original policy")
 	}
 	if (len(self.FinalityWindows) != 0 || cold != nil && cold.Windows != 0) && len(self.FinalityApproval) == 0 {

@@ -132,10 +132,10 @@ func (self *economicConservationSummary) assessConformance() error {
 	if self.OriginalEntitlements == nil || !self.OriginalEntitlements.IndependentFinalityAuthenticated {
 		result.Missing = append(result.Missing, "independent-vault-and-entitlement-finality")
 	}
-	if self.AdmittedNativeFees == nil || !self.AdmittedNativeFees.SelectedCensusComplete || !self.AdmittedNativeFees.WholeProviderCensus || self.AdmittedNativeFees.WithdrawalRao == nil || self.AdmittedNativeFees.RefundRao == nil {
+	if self.OriginalFees == nil || !self.OriginalFees.Complete || self.OriginalFees.Head.Through != self.NativeCursor || self.OriginalFees.WithdrawalRao == nil || self.OriginalFees.RefundRao == nil {
 		result.Missing = append(result.Missing, "whole-original-provider-native-fee-withdrawal-refund-census")
 	} else {
-		self.NativeFeeWithdrawalRao, self.NativeFeeRefundRao = self.AdmittedNativeFees.WithdrawalRao, self.AdmittedNativeFees.RefundRao
+		self.NativeFeeWithdrawalRao, self.NativeFeeRefundRao = self.OriginalFees.WithdrawalRao, self.OriginalFees.RefundRao
 	}
 	if self.OriginalEntitlements != nil {
 		// This scope counts unique original capture sources, not the sum of

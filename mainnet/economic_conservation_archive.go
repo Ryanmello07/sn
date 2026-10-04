@@ -35,6 +35,7 @@ type economicConservationArchivedAmounts struct {
 }
 
 type economicConservationArchive struct {
+	OriginalFees       *economicWholeFeeHead                   `json:"original_complete_fee_census,omitempty"`
 	Finality           *economicConservationFinalityHead       `json:"original_consensus_head,omitempty"`
 	Yuma               *economicConservationYumaArchive        `json:"original_yuma_summary,omitempty"`
 	NativeApprovalHead *economicConservationNativeApprovalHead `json:"native_approval_head,omitempty"`
@@ -113,6 +114,8 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
+	wholeFees                *economicWholeFeeIndex
+	wholeFeeWork             func(context.Context, uint64)
 	finality                 *economicFinalityIndex
 	finalityVerified         map[string]*economicVerifiedFinalityWindow
 	finalityAnchor           *strecovery.NativeFinalityCheckpoint
@@ -465,6 +468,9 @@ func compactEconomicConservationWithFeeUpdates(ctx context.Context, policy econo
 	if err := next.retireFinality(ctx, original); err != nil {
 		return nil, err
 	}
+	if err := next.retireWholeFees(ctx, original); err != nil {
+		return nil, err
+	}
 	if err := next.retireYuma(); err != nil {
 		return nil, err
 	}
@@ -492,6 +498,9 @@ func (self *economicConservationArchiveView) admit(ctx context.Context, original
 		return err
 	}
 	if err := self.retainFinality(ctx, original, compacted); err != nil {
+		return err
+	}
+	if err := self.retainWholeFees(ctx, original, compacted); err != nil {
 		return err
 	}
 	if err := self.retainFundingComposition(ctx, original, compacted); err != nil {
@@ -731,6 +740,9 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 		checked := *state
 		checked.archiveView = view
 		if err := checked.validateFinality(ctx, policy); err != nil {
+			return nil, err
+		}
+		if err := checked.validateWholeFees(ctx, policy); err != nil {
 			return nil, err
 		}
 		if err := checked.reconcileEntitlementLeaves(ctx); err != nil {

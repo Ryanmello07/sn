@@ -69,6 +69,7 @@ func (self economicConservationPolicy) validateYumaCapacity() error {
 func nativeYumaWitnessBytes(projection nativeYumaProjection, outcome nativeExecutionOutcome) (uint64, error) {
 	outcome.Yuma, outcome.OpeningPrincipals, outcome.PrincipalEffects = nil, nil, nil
 	outcome.CertifiedWindow = nil
+	outcome.FeeCensus = nil
 	raw, err := json.Marshal(economicConservationYumaEvidence{Projection: projection, Outcome: outcome})
 	return uint64(len(raw)), err
 }
@@ -107,6 +108,7 @@ func (self *economicConservationState) appendYuma(ctx context.Context, policy ec
 	value.Outcome.Yuma = nil
 	value.Outcome.OpeningPrincipals = nil
 	value.Outcome.CertifiedWindow = nil
+	value.Outcome.FeeCensus = nil
 	value.Outcome.PrincipalEffects = nil
 	if self.facts()+value.facts() > policy.MaximumFacts {
 		return errMonitorEconomicCapacity

@@ -77,7 +77,7 @@ func storageNativeProducerAuthorities(ctx context.Context, scope storageNativePr
 		}
 		raw := scope.Approvals[index]
 		index++
-		if len(raw) == 0 || len(raw) > nativeProducerAuthorityLimit || monitorReadDigest(raw) != reference.Sha256 {
+		if len(raw) == 0 || len(raw) > nativeProducerAuthorityMaximum(scope.Policy.Execution.FeeCensus) || monitorReadDigest(raw) != reference.Sha256 {
 			return nil, errors.New("native artifact restore changed original signed approval bytes")
 		}
 		return raw, nil
