@@ -112,6 +112,7 @@ type WholeWorkProvider struct {
 // or native outcome. Consumers must still join the other original components.
 type VerifiedWholeWorkInventory struct {
 	Complete            bool
+	AttributionComplete bool
 	Domain              protocol.ClientKeyHistoryDomain
 	Epoch               uint64
 	Start               Boundary

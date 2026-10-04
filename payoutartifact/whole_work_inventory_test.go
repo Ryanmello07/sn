@@ -95,7 +95,8 @@ func newWholeWorkTestFixture(t *testing.T) *wholeWorkTestFixture {
 			if side == 1 {
 				kind = "end"
 			}
-			request, err := coreprotocol.SignOriginalWorkRequest(coreprotocol.OriginalWorkRequest{RequestId: [16]byte{byte(ownerIndex + 41), byte(side + 1)}, DomainHash: domainHash, ClientId: owner.ClientId, Generation: owner.Generation, PublicKey: owner.PublicKey, Epoch: artifact.Epoch, Kind: kind, Block: boundary.Number, BlockHash: cut.BlockHash, IssuedAtUnix: 1000, ExpiresAtUnix: 1300}, requestKey)
+			issuedAt := []time.Time{start, end}[side].Unix()
+			request, err := coreprotocol.SignOriginalWorkRequest(coreprotocol.OriginalWorkRequest{RequestId: [16]byte{byte(ownerIndex + 41), byte(side + 1)}, DomainHash: domainHash, ClientId: owner.ClientId, Generation: owner.Generation, PublicKey: owner.PublicKey, Epoch: artifact.Epoch, Kind: kind, Block: boundary.Number, BlockHash: cut.BlockHash, IssuedAtUnix: issuedAt, ExpiresAtUnix: issuedAt + 300}, requestKey)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -401,6 +402,8 @@ func TestWholeWorkNextWindowRequiresIndependentlyRetainedPriorReconciliation(t *
 				t.Fatal(err)
 			}
 			request.Epoch, request.Block, request.BlockHash = fixture.artifact.Epoch, boundary.Number, [32]byte(commonWholeWorkHash(t, boundary.Hash))
+			request.IssuedAtUnix = []time.Time{start, end}[side].Unix()
+			request.ExpiresAtUnix = request.IssuedAtUnix + 300
 			request, err = coreprotocol.SignOriginalWorkRequest(request, fixture.requestKey)
 			if err != nil {
 				t.Fatal(err)
@@ -426,6 +429,71 @@ func TestWholeWorkNextWindowRequiresIndependentlyRetainedPriorReconciliation(t *
 	fixture.expected.PriorContracts[0].InventoryHash = "sha256:" + strings.Repeat("8a", 32)
 	if _, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); !errors.Is(err, ErrClosedWorkIntegrity) {
 		t.Fatal("foreign prior reconciliation hash admitted", err)
+	}
+}
+
+func TestWholeWorkBoundaryPermissionCannotCaptureBeforeCommittedClock(t *testing.T) {
+	for side := 0; side < 2; side++ {
+		fixture := newWholeWorkTestFixture(t)
+		pair := &fixture.inventory.Owners[0]
+		raw := pair.StartRequest
+		if side == 1 {
+			raw = pair.EndRequest
+		}
+		request, err := coreprotocol.DecodeOriginalWorkRequest(raw, fixture.authority.RequestPublicKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.IssuedAtUnix--
+		request, err = coreprotocol.SignOriginalWorkRequest(request, fixture.requestKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ = request.Bytes()
+		if side == 0 {
+			pair.StartRequest = raw
+		} else {
+			pair.EndRequest = raw
+		}
+		if _, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); !errors.Is(err, ErrClosedWorkIntegrity) {
+			t.Fatal("valid signed permission allowed an early fixed-boundary cut", side, err)
+		}
+	}
+}
+
+func TestWholeWorkPublicVerifierPreservesIndependentlyExpectedZeroProviderRows(t *testing.T) {
+	fixture := newWholeWorkTestFixture(t)
+	fixture.empty(t)
+	old := fixture.artifact
+	created, _ := time.Parse(time.RFC3339Nano, old.CreatedAt)
+	inputs := make([]ProviderInput, 0, len(fixture.authority.ExpectedProviders))
+	for index, provider := range fixture.authority.ExpectedProviders {
+		inputs = append(inputs, ProviderInput{ClientID: provider.ClientId, NetworkID: provider.NetworkId, Coldkey: [32]byte{byte(31 + index)}, Assignments: 1, Confirmations: 0, Eligible: false})
+	}
+	artifact, err := Build(BuildInput{ClosedWork: old.ClosedWork, DeploymentID: old.DeploymentID, GenesisHash: old.GenesisHash, PolicyHash: old.PolicyHash, ChainID: old.ChainID, Netuid: old.Netuid, Coordinator: old.Coordinator, SettlementVault: old.SettlementVault, Epoch: old.Epoch, NoID: old.NoID, Start: old.Start, End: old.End, OperatorSnapshotHash: old.OperatorSnapshotHash, FleetSnapshotHash: old.FleetSnapshotHash, Providers: inputs, ReliabilityAMin: old.ReliabilityAMin, CreatedAt: created})
+	if err != nil {
+		t.Fatal(err)
+	}
+	closedWorkTestSign(t, artifact)
+	if _, err := VerifyClosedWork(t.Context(), artifact); !errors.Is(err, ErrClosedWorkIntegrity) {
+		t.Fatal("legacy component acquired an unadmitted zero-row exception", err)
+	}
+	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), artifact, fixture.inventory, fixture.expected)
+	if err != nil || value == nil || !value.Complete || !value.AttributionComplete || len(value.ExpectedProviders) != 2 || value.ExpectedProviders[0].UsageBytes != 0 || value.ExpectedProviders[1].UsageBytes != 0 {
+		t.Fatal("public whole-work path dropped independently admitted idle or failed-zero rows", value, err)
+	}
+	fixture.authority.ExpectedProviders = fixture.authority.ExpectedProviders[:1]
+	fixture.signAuthority(t)
+	if _, err := VerifyWholeWorkInventoryWithWitness(t.Context(), artifact, fixture.inventory, fixture.expected); !errors.Is(err, ErrClosedWorkIntegrity) {
+		t.Fatal("unadmitted zero provider gained census authority", err)
+	}
+}
+
+func TestWholeWorkSignedSdkCoverageAloneCannotAuthorizeSqlParticipantAttribution(t *testing.T) {
+	fixture := newWholeWorkTestFixture(t)
+	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
+	if err != nil || value == nil || !value.Complete || value.Credited != 2 || value.AttributionComplete {
+		t.Fatal("complete endpoint cuts falsely authorized absent participant and direction originals", value, err)
 	}
 }
 

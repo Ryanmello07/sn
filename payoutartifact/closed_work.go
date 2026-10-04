@@ -224,6 +224,12 @@ func decodeClosedWorkSnapshot(row ClosedWorkRecord, epoch uint64) (*closedWorkSn
 // original rows. This verifies a source component, never reliability/eligibility
 // or whole consumer-work truth merely because the on-chain root agrees.
 func VerifyClosedWork(ctx context.Context, artifact *Artifact) (*VerifiedClosedWork, error) {
+	return verifyClosedWorkWithExpectedProviders(ctx, artifact, nil)
+}
+
+// Only a complete independently admitted provider roster may preserve an idle
+// zero row absent from earning snapshots. The public legacy path stays strict.
+func verifyClosedWorkWithExpectedProviders(ctx context.Context, artifact *Artifact, expected []WholeWorkExpectedProvider) (*VerifiedClosedWork, error) {
 	if ctx == nil {
 		return nil, errors.New("closed-work verification requires an owner context")
 	}
@@ -334,11 +340,26 @@ func VerifyClosedWork(ctx context.Context, artifact *Artifact) (*VerifiedClosedW
 		}
 		result.UsageBytes += uint64(total)
 	}
-	if len(providers) != len(artifact.Providers) || result.UsageBytes != artifact.TotalUsageBytes {
+	if expected == nil && len(providers) != len(artifact.Providers) || result.UsageBytes != artifact.TotalUsageBytes {
 		return nil, fmt.Errorf("%w: original complete usage census differs", ErrClosedWorkIntegrity)
+	}
+	expectedKVs := make(map[[16]byte][16]byte, len(expected))
+	if len(expected) > MaxWholeWorkOwners {
+		return nil, ErrClosedWorkCapacity
+	}
+	for _, provider := range expected {
+		if _, exists := expectedKVs[provider.ClientId]; exists || provider.ClientId == ([16]byte{}) || provider.NetworkId == ([16]byte{}) {
+			return nil, ErrClosedWorkIntegrity
+		}
+		expectedKVs[provider.ClientId] = provider.NetworkId
 	}
 	for _, provider := range artifact.Providers {
 		got, ok := providers[provider.ClientID]
+		if !ok && expected != nil && provider.UsageBytes == 0 {
+			if network, admitted := expectedKVs[provider.ClientID]; admitted && network == provider.NetworkID {
+				continue
+			}
+		}
 		if !ok || got.network != provider.NetworkID || got.bytes != provider.UsageBytes {
 			return nil, fmt.Errorf("%w: original provider identity or usage differs", ErrClosedWorkIntegrity)
 		}

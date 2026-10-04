@@ -79,21 +79,11 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 	if owned.Clock == nil || owned.Clock.HeaderProfile != authority.ClockProfile {
 		return nil, ErrClosedWorkUnavailable
 	}
-	closed, err := VerifyClosedWorkReports(ctx, artifact, expected.ClientKeyRootSigner)
-	if err != nil {
-		return nil, err
-	}
 	window, err := VerifyClosedWorkWindow(ctx, artifact, owned.Window, owned.Clock)
 	if err != nil {
 		return nil, err
 	}
 	if !window.EpochClockMatched {
-		return nil, ErrClosedWorkUnavailable
-	}
-	if closed.Window != nil && SnapshotHash(closed.Window) != SnapshotHash(owned.Window) {
-		return nil, ErrClosedWorkIntegrity
-	}
-	if closed.CompleteReportInventories != artifact.ClosedWork.Count || closed.AmountJoins != artifact.ClosedWork.Count {
 		return nil, ErrClosedWorkUnavailable
 	}
 	if owned.Owners == nil || len(owned.Owners) != len(authority.Owners) {
@@ -113,7 +103,8 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 			request, cut []byte
 			kind         string
 			boundary     Boundary
-		}{{request: originals.StartRequest, cut: originals.Start, kind: "start", boundary: artifact.Start}, {request: originals.EndRequest, cut: originals.End, kind: "end", boundary: artifact.End}} {
+			clockUnix    int64
+		}{{request: originals.StartRequest, cut: originals.Start, kind: "start", boundary: artifact.Start, clockUnix: owned.Clock.StartTime.Unix()}, {request: originals.EndRequest, cut: originals.End, kind: "end", boundary: artifact.End, clockUnix: owned.Clock.EndTime.Unix()}} {
 			if len(original.request) == 0 || len(original.cut) == 0 {
 				return nil, ErrClosedWorkUnavailable
 			}
@@ -128,6 +119,9 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 			hash, e := hex.DecodeString(strings.TrimPrefix(original.boundary.Hash, "0x"))
 			if e != nil || len(hash) != 32 || !request.Matches(cut) || request.Kind != original.kind || cut.DomainHash != domainHash || cut.ClientId != expectedOwner.ClientId || cut.Generation != expectedOwner.Generation || cut.PublicKey != expectedOwner.PublicKey || cut.Epoch != artifact.Epoch || cut.Block != original.boundary.Number || cut.BlockHash != [32]byte(hash) {
 				return nil, ErrClosedWorkIntegrity
+			}
+			if request.IssuedAtUnix < original.clockUnix {
+				return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("SDK cut permission predates its committed boundary"))
 			}
 			if !cut.Complete {
 				return nil, ErrClosedWorkUnavailable
@@ -189,6 +183,20 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 		if len(starts) != 0 {
 			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("SDK end cut omitted retained contract"))
 		}
+	}
+	reservations := make(map[[16]byte]coreprotocol.OriginalWorkContract, len(contracts))
+	for id, contract := range contracts {
+		reservations[id] = coreprotocol.OriginalWorkContract{ContractId: id, StoredContract: contract.stored}
+	}
+	closed, err := verifyWholeWorkReports(ctx, artifact, expected.ClientKeyRootSigner, reservations, authority.ExpectedProviders)
+	if err != nil {
+		return nil, err
+	}
+	if closed.Window != nil && SnapshotHash(closed.Window) != SnapshotHash(owned.Window) {
+		return nil, ErrClosedWorkIntegrity
+	}
+	if closed.CompleteReportInventories != artifact.ClosedWork.Count || closed.ReservedAmountJoins != artifact.ClosedWork.Count {
+		return nil, ErrClosedWorkUnavailable
 	}
 	if len(expected.PriorContracts) > MaxClosedWorkRecords {
 		return nil, ErrClosedWorkCapacity
@@ -358,7 +366,7 @@ func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact
 	sort.Slice(reconciled, func(i, j int) bool {
 		return bytes.Compare(reconciled[i].ContractId[:], reconciled[j].ContractId[:]) < 0
 	})
-	return &VerifiedWholeWorkInventory{Complete: true, Domain: domain, Epoch: artifact.Epoch, Start: artifact.Start, End: artifact.End, AuthorityHash: authorityHash, InventoryHash: inventoryHash, WindowHash: window.Hash, Contracts: window.Credited + window.Canceled + window.Open, Credited: window.Credited, Canceled: window.Canceled, Open: window.Open, ExpectedProviders: providers, ReconciledContracts: reconciled}, ctx.Err()
+	return &VerifiedWholeWorkInventory{Complete: true, AttributionComplete: window.Credited == 0, Domain: domain, Epoch: artifact.Epoch, Start: artifact.Start, End: artifact.End, AuthorityHash: authorityHash, InventoryHash: inventoryHash, WindowHash: window.Hash, Contracts: window.Credited + window.Canceled + window.Open, Credited: window.Credited, Canceled: window.Canceled, Open: window.Open, ExpectedProviders: providers, ReconciledContracts: reconciled}, ctx.Err()
 }
 
 // Public sidecar reads use a strict bounded grammar before any expensive join.
