@@ -121,19 +121,33 @@ type ProviderWorkOutcome struct {
 	DestinationComplete bool     `json:"destination_complete"`
 }
 
+// A live owner observes outcome IS NULL under the same contract fence that
+// publishes the first terminal outcome. The exact boundary is never inferred
+// from a later SQL label, and retries retain this first immutable observation.
+type ProviderWorkOpenObservation struct {
+	ContractId          string   `json:"contract_id"`
+	ReservationHash     [32]byte `json:"reservation_hash"`
+	Epoch               uint64   `json:"epoch"`
+	Block               uint64   `json:"block"`
+	BlockHash           [32]byte `json:"block_hash"`
+	BoundaryUnixMicro   int64    `json:"boundary_unix_micro"`
+	ObservedAtUnixMicro int64    `json:"observed_at_unix_micro"`
+}
+
 // Exactly one body belongs to an original. Signatures bind the full domain and
 // persistent source generation before any public transport or SQL projection.
 type ProviderWorkReceipt struct {
-	Schema      string                      `json:"schema"`
-	DomainHash  [32]byte                    `json:"domain_hash"`
-	SourceId    string                      `json:"source_id"`
-	Generation  string                      `json:"generation"`
-	PublicKey   [32]byte                    `json:"public_key"`
-	Session     *ProviderWorkSessionEvent   `json:"session,omitempty"`
-	Reservation *ProviderWorkReservation    `json:"reservation,omitempty"`
-	Stream      *ProviderWorkStreamCohort   `json:"stream,omitempty"`
-	Outcome     *ProviderWorkOutcome        `json:"outcome,omitempty"`
-	Signature   [ed25519.SignatureSize]byte `json:"signature"`
+	Schema      string                       `json:"schema"`
+	DomainHash  [32]byte                     `json:"domain_hash"`
+	SourceId    string                       `json:"source_id"`
+	Generation  string                       `json:"generation"`
+	PublicKey   [32]byte                     `json:"public_key"`
+	Session     *ProviderWorkSessionEvent    `json:"session,omitempty"`
+	Reservation *ProviderWorkReservation     `json:"reservation,omitempty"`
+	Stream      *ProviderWorkStreamCohort    `json:"stream,omitempty"`
+	Outcome     *ProviderWorkOutcome         `json:"outcome,omitempty"`
+	Open        *ProviderWorkOpenObservation `json:"open,omitempty"`
+	Signature   [ed25519.SignatureSize]byte  `json:"signature"`
 }
 
 // Shared canonical UUID spelling preserves the actual server identifier bytes.
@@ -183,6 +197,8 @@ func (self ProviderWorkReceipt) ObservedUnixMicro() int64 {
 		return self.Stream.CreatedAtUnixMicro
 	case self.Outcome != nil:
 		return self.Outcome.ClosedAtUnixMicro
+	case self.Open != nil:
+		return self.Open.ObservedAtUnixMicro
 	default:
 		return 0
 	}
@@ -268,6 +284,13 @@ func (self ProviderWorkReceipt) signingBytes(ctx context.Context) ([]byte, error
 		switch outcome.Outcome {
 		case "settled", "dispute_resolved_to_source", "dispute_resolved_to_destination":
 		default:
+			return nil, ErrProviderWorkIntegrity
+		}
+	}
+	if open := self.Open; open != nil {
+		bodies++
+		ids = append(ids, open.ContractId)
+		if open.ReservationHash == ([32]byte{}) || open.Epoch > math.MaxInt64 || open.Block == 0 || open.Block > math.MaxInt64 || open.BlockHash == ([32]byte{}) || open.BoundaryUnixMicro <= 0 || open.ObservedAtUnixMicro < open.BoundaryUnixMicro {
 			return nil, ErrProviderWorkIntegrity
 		}
 	}
