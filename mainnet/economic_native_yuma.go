@@ -81,6 +81,7 @@ func deriveNativeYuma(ctx context.Context, policy economicEmissionPolicy, admiss
 			result.Records = append(result.Records, record)
 		}
 	}
+	nativeYumaOwnerStep(ctx, "derive")
 	if err := result.calculate(ctx, policy.Netuid, outcome); err != nil {
 		return nil, err
 	}
@@ -234,6 +235,7 @@ func (self *nativeYumaProjection) validate(ctx context.Context, policy economicE
 		return errors.Join(errMonitorEconomicCapacity, err, errors.New("native Yuma retained original witness exceeds its admitted byte capacity"))
 	}
 	copy := *self
+	nativeYumaOwnerStep(ctx, "validate")
 	if err := copy.calculate(ctx, policy.Netuid, outcome); err != nil {
 		return err
 	}

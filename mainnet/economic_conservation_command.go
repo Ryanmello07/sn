@@ -327,6 +327,9 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 	next.SampleAt = now.UTC()
 	nativeCurrent, vaultCurrent := !prior.NativeHeld && nativeErr == nil, !prior.VaultHeld && vaultErr == nil
 	if nativeCurrent && nativeValue != nil {
+		if hooks.beforeEconomicNativeAppend != nil {
+			hooks.beforeEconomicNativeAppend(readCtx, cancel)
+		}
 		candidate, copyErr := cloneEconomicConservation(next)
 		if copyErr != nil {
 			return nil, false, false, copyErr
@@ -336,7 +339,7 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 			next = candidate
 		} else {
 			nativeCurrent = false
-			hardNative = !errors.Is(nativeErr, errMonitorEconomicCapacity)
+			hardNative = economicConservationAppendHeld(nativeErr)
 		}
 	}
 	if !prior.NativeHeld {
@@ -352,7 +355,7 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 			next = candidate
 		} else {
 			vaultCurrent = false
-			hardVault = !errors.Is(vaultErr, errMonitorEconomicCapacity)
+			hardVault = economicConservationAppendHeld(vaultErr)
 		}
 	}
 	if !prior.VaultHeld {
@@ -360,6 +363,18 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 	}
 	for index, claim := range policy.Claims {
 		next.ClaimStates[index].observe(claim, claimValues[index], claimCodes[index], now.UTC())
+	}
+	// Arithmetic and evidence validation can outlive the read join. Recheck the
+	// actual owner before publishing any candidate made during that work.
+	if ctx.Err() != nil {
+		if !hardNative && !hardVault && !hardClaim {
+			return nil, false, false, ctx.Err()
+		}
+		var claimErr error
+		if hardClaim {
+			claimErr = errors.New("economic Claim source contradicted original authority")
+		}
+		return nil, false, false, errors.Join(ctx.Err(), nativeErr, vaultErr, claimErr)
 	}
 	candidate, err := cloneEconomicConservation(next)
 	if err != nil {
@@ -380,6 +395,13 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 // fee authority has been established. --follow retains this same owner and
 // input policy, with bounded reads and no signing or transaction submission.
 func runEconomicConservationCommand(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time, hooks monitorServiceHooks) (code int) {
+	refuse := func(err error) int {
+		if ctx.Err() != nil && monitorOnlyCancellationCauses(err, 0) {
+			return 0
+		}
+		fmt.Fprintln(stderr, err)
+		return 3
+	}
 	flags := flag.NewFlagSet("observe-economic-conservation", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	policyPath := flags.String("policy", "", "exact independent native/vault/Claim policy file")
@@ -455,13 +477,11 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	}
 	state, err := loadEconomicConservation(ctx, owner, policy)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 3
+		return refuse(err)
 	}
 	archive, err := openEconomicConservationArchive(ctx, policy, state, hooks)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 3
+		return refuse(err)
 	}
 	defer func() {
 		if err := archive.close(); err != nil {
@@ -511,14 +531,12 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 			next.NativeFeePending = feeWorker.active
 		}
 		if err := saveEconomicConservation(ctx, owner, policy, next); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 3
+			return refuse(err)
 		}
 		state = next
 		summary, err := state.summary(ctx, policy, nativeCurrent, vaultCurrent)
 		if err != nil {
-			fmt.Fprintln(stderr, err)
-			return 3
+			return refuse(err)
 		}
 		encoded, err := json.Marshal(summary)
 		if err != nil {

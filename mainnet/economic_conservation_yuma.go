@@ -95,6 +95,7 @@ func (self *economicConservationState) appendYuma(ctx context.Context, policy ec
 		}
 		return nil
 	}
+	nativeYumaOwnerStep(ctx, "append")
 	if err := outcome.Yuma.validate(ctx, policy.Native.Observation, outcome); err != nil {
 		return err
 	}

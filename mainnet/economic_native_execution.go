@@ -606,19 +606,19 @@ func validateNativeExecutionReplay(ctx context.Context, policy economicEmissionP
 	}
 	result, err := deriveNativeExecution(policy, admission, block, job, *report, drains)
 	if err != nil {
-		return nil, errors.Join(errRpcIntegrity, err)
+		return nil, nativeExecutionDerivationError(err)
 	}
 	result.Yuma, err = deriveNativeYuma(ctx, policy, admission, report, *result)
 	if err != nil {
-		return nil, errors.Join(errRpcIntegrity, err)
+		return nil, nativeExecutionDerivationError(err)
 	}
 	result.PrincipalEffects, err = deriveNativePrincipalEffects(policy, admission, job, report, *result)
 	if err != nil {
-		return nil, errors.Join(errRpcIntegrity, err)
+		return nil, nativeExecutionDerivationError(err)
 	}
 	result.OpeningPrincipals, err = deriveNativePrincipal(policy, admission, job, report, *result)
 	if err != nil {
-		return nil, errors.Join(errRpcIntegrity, err)
+		return nil, nativeExecutionDerivationError(err)
 	}
 	return result, nil
 }
