@@ -53,6 +53,7 @@ func RuntimeTransportGeneration(client *rpc.Client) (uint64, bool) {
 		return 0, false
 	}
 	value, ok := runtimeTransports.Load(weak.Make(client))
+	runtime.KeepAlive(client)
 	if !ok {
 		return 0, false
 	}
