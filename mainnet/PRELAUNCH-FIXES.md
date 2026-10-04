@@ -26,6 +26,9 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+**October 4 actual vault fixture correction:** The [3f source review](evidence/capture-precompile-3f-root-source-review-20261004.json) confirms a test-only correction: synthetic precompile accounts now have code presence required by Solidity typed void calls, while actual registration, UID lookup and stake movement remain executed by the explicit adapters. Check those actual selector counts and unchanged success/rollback accounting. Qualify the affected vault/capture roots and a fixture-owned omitted-code control; no production contract behavior is weakened.
+
+
 **October 4 corrected historical worker progress:** The [raw four-root readback](evidence/funding-corrected-proof-four-root-readback-20261004.json) confirms three passes and one RootMissed source-page failure in each mode. The correct `runtime-historical-proof` target resolves the wrong worker invocation; its original-income/later-payment, lost-ack composition and complete Yuma10/90 tests now pass. Keep `runtime-transition-replay` as a distinct protocol worker rather than substituting it by filename similarity. Preserve these six successes; repair the missed-root continuation and the separate real-vault precompile fixture before rerunning affected tests. Full economic acceptance remains incomplete.
 
 
