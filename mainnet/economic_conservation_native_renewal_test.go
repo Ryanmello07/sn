@@ -445,6 +445,19 @@ func TestEconomicConservationNativeRenewalPublicRestoredPendingJobAndRestart(t *
 			t.Fatal("native adoption did not reconcile before original source export", code, issue)
 		}
 	})
+	// The new review is an original external authority input. Restoring an
+	// older-engine pending job cannot excuse losing that adopted exact input.
+	if err := os.Rename(references[0].Path, references[0].Path+".retained"); err != nil {
+		t.Fatal(err)
+	}
+	var output, diagnostic bytes.Buffer
+	if code := runMain(fixture.combined.archive.ctx, fixture.combined.args(t, fixture.combined.request), &output, &diagnostic); code == 0 || output.Len() != 0 || !strings.Contains(diagnostic.String(), "no such file") {
+		t.Fatal("copied combined native adoption lost its exact external review", code, diagnostic.String())
+	}
+	fixture.combined.unchanged(t)
+	if err := os.Rename(references[0].Path+".retained", references[0].Path); err != nil {
+		t.Fatal(err)
+	}
 	fixture.combined.apply(t, fixture.combined.plan(t), true)
 	f, producer := fixture.combined.archive, fixture.producer
 	namespace := mainnetNamespaceTest(t, producer.source.policy.Execution.Directory)
