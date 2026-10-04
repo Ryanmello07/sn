@@ -51,7 +51,13 @@ type ValidatorIdentityObservation struct {
 // on an otherwise immutable Chain. RPC transport response limits remain the
 // transport's responsibility; bounded storage decoding adds no unbounded copy.
 func ReadValidatorIdentityAtContext(ctx context.Context, chain *Chain, query ValidatorIdentityQuery, allowed ...RuntimeArtifactIdentity) (ValidatorIdentityObservation, error) {
-	return readValidatorIdentityWithRuntimeAtContext(ctx, chain, query, nil, allowed...)
+	if len(allowed) > maximumRuntimeMetadataArtifactsPerChain {
+		return ValidatorIdentityObservation{}, errors.New("validator identity runtime allowlist exceeds its bound")
+	}
+	allowed = append([]RuntimeArtifactIdentity(nil), allowed...)
+	return readRuntimeObservation(ctx, chain, func(ctx context.Context) (ValidatorIdentityObservation, error) {
+		return readValidatorIdentityWithRuntimeAtContext(ctx, chain, query, nil, allowed...)
+	})
 }
 
 // A dependent read may require its narrow runtime capability before the first

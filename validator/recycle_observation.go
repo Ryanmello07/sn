@@ -145,7 +145,7 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 		return nil, err
 	}
 	expected := crv4.RuntimeArtifactIdentity{Version: pin.Version, CodeHash: releaseHex32(pin.CodeHash), MetadataHash: releaseHex32(pin.MetadataHash)}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, native, finalized, expected)
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, native, finalized, expected)
 	if err != nil {
 		return nil, fmt.Errorf("read owner-recycle finalized runtime: %w", err)
 	}

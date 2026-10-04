@@ -113,7 +113,7 @@ func ValidatorUploadNativeObserverContext(ctx context.Context, native *crv4.Chai
 	if err != nil {
 		return result, err
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, native, hash, allowed...)
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, native, hash, allowed...)
 	if err != nil {
 		return result, err
 	}

@@ -304,11 +304,14 @@ func InspectProductionRuntimeContinuityContext(ctx context.Context, native *crv4
 		return nil, err
 	}
 	number, err := canonicalNumber(block)
-	request := certificate.Result.Request
-	if err != nil || number == 0 || number > headNumber || number < request.ValidFromNativeBlock || number > request.ValidThroughNativeBlock {
-		return nil, errors.Join(errors.New("runtime continuity block is outside its finalized certificate window"), err)
+	if err != nil {
+		return nil, err
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, native, block, request.Artifact)
+	request := certificate.Result.Request
+	if number == 0 || number > headNumber || number < request.ValidFromNativeBlock || number > request.ValidThroughNativeBlock {
+		return nil, errors.New("runtime continuity block is outside its finalized certificate window")
+	}
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, native, block, request.Artifact)
 	if err != nil {
 		return nil, fmt.Errorf("runtime continuity exact candidate: %w", err)
 	}
@@ -320,8 +323,11 @@ func InspectProductionRuntimeContinuityContext(ctx context.Context, native *crv4
 		return nil, err
 	}
 	latestNumber, err := canonicalNumber(latest)
-	if err != nil || latestNumber < headNumber {
-		return nil, errors.Join(errors.New("runtime continuity finality regressed"), err)
+	if err != nil {
+		return nil, err
+	}
+	if latestNumber < headNumber {
+		return nil, errors.New("runtime continuity finality regressed")
 	}
 	if _, err := canonicalNumber(head); err != nil {
 		return nil, err

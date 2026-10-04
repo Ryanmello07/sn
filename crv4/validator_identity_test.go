@@ -162,7 +162,7 @@ func (self *validatorIdentityTestFixture) publishMetadata(t *testing.T) {
 // Refuses all contextless calls, wrong block arguments, unknown keys and
 // methods outside the reader's read-only transcript.
 func (self *validatorIdentityTestFixture) call(ctx context.Context, result any, method string, args ...any) error {
-	if ctx != self.ctx {
+	if !validatorIdentityTestReadContext(ctx, self.ctx) {
 		return errors.New("validator identity RPC changed caller context")
 	}
 	if err := ctx.Err(); err != nil {
@@ -814,4 +814,21 @@ func TestRuntimeArtifactMetadataValidatorIdentityRejectsCanceledCallerBeforeRPC(
 	if !errors.Is(err, context.Canceled) || observed != (ValidatorIdentityObservation{}) || len(fixture.calls) != 0 {
 		t.Fatalf("already canceled: result=%+v calls=%v error=%v", observed, fixture.calls, err)
 	}
+}
+
+// Owned read children must retain the exact original context and a clipped
+// finite deadline; a contextless replacement cannot satisfy this fixture.
+func validatorIdentityTestReadContext(ctx, original context.Context) bool {
+	if ctx == original {
+		return true
+	}
+	owner, ok := ctx.Value(runtimeObservationReadOwnerKey{}).(runtimeObservationReadOwner)
+	deadline, bounded := ctx.Deadline()
+	if !ok || owner.parent != original || !bounded {
+		return false
+	}
+	if parentDeadline, parentBounded := original.Deadline(); parentBounded && deadline.After(parentDeadline) {
+		return false
+	}
+	return original.Err() == nil || ctx.Err() == original.Err()
 }

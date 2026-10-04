@@ -154,7 +154,7 @@ func authenticateReleaseNativeRuntimeAtContext(ctx context.Context, chain *crv4.
 			allowed = append(allowed, current)
 		}
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, chain, finalized, allowed...)
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, chain, finalized, allowed...)
 	if err != nil {
 		return fmt.Errorf("native runtime at %s is not the configured node-subtensor/%d/%d/%d artifact: %w", finalized.Hex(), cfg.RuntimeSpec, cfg.TransactionVersion, cfg.StateVersion, err)
 	}

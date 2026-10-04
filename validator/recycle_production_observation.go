@@ -53,7 +53,7 @@ func observeOwnerRecycleProductionEligibility(ctx context.Context, cfg *ReleaseC
 	if err := authenticateHistoricalNativeRuntimeAtContext(ctx, &view, cfg, block); err != nil {
 		return nil, err
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, &view, block, releaseRuntimeIdentityV2(cfg))
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, &view, block, releaseRuntimeIdentityV2(cfg))
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func observeOwnerRecycleProductionEligibility(ctx context.Context, cfg *ReleaseC
 	if err != nil {
 		return nil, err
 	}
-	activation, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, &view, activationHash, allowed...)
+	activation, err := crv4.ReadRuntimeArtifactAtContext(ctx, &view, activationHash, allowed...)
 	if err != nil {
 		return nil, err
 	}

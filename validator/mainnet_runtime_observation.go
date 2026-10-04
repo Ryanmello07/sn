@@ -123,7 +123,7 @@ func authenticateReleaseMainnetRuntimeAtContext(ctx context.Context, native *crv
 	if err := checkCanonical(block, number); err != nil {
 		return empty, nil, err
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, native, block, selected.artifactIdentity())
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, native, block, selected.artifactIdentity())
 	if err != nil {
 		return empty, nil, fmt.Errorf("mainnet runtime observation approval revision %d at %s: %w", selected.Revision, block.Hex(), err)
 	}

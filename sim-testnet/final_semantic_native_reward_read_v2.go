@@ -126,7 +126,7 @@ func readFinalNativeRewardAtV2(ctx context.Context, native *crv4.Chain, at Chain
 	if err != nil || finalizedHeader == nil || uint64(finalizedHeader.Number) < at.Number {
 		return nil, errors.Join(errors.New("historical native reward head is not finalized"), err)
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, own, hash, runtime)
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, own, hash, runtime)
 	if err != nil {
 		return nil, err
 	}

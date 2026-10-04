@@ -46,7 +46,7 @@ func readFinalNativeCheckpointV2(ctx context.Context, native *crv4.Chain, evm Ch
 	if result.Identity.Stake.Identity.UID != uid {
 		return result, errors.New("native coverage checkpoint UID differs from original validator")
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, native, nativeHash, runtime)
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, native, nativeHash, runtime)
 	if err != nil {
 		return result, err
 	}

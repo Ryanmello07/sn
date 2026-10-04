@@ -131,7 +131,7 @@ func authenticateOwnerRecycleProductionArtifactAtContext(ctx context.Context, na
 	if err := checkCanonical(block, number); err != nil {
 		return empty, 0, err
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, native, block, expected)
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, native, block, expected)
 	if err != nil {
 		return empty, 0, fmt.Errorf("production runtime at %s: %w", block.Hex(), err)
 	}

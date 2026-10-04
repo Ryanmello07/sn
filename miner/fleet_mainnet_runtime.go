@@ -171,7 +171,7 @@ func (self *fleetMainnetRuntimeAuthority) authenticateAt(ctx context.Context, ch
 	if err := checkCanonical(); err != nil {
 		return crv4.AuthenticatedRuntimeArtifact{}, err
 	}
-	artifact, err := crv4.AuthenticateRuntimeArtifactAtContext(ctx, chain, block, self.artifactIdentities()...)
+	artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, chain, block, self.artifactIdentities()...)
 	if err != nil {
 		return artifact, err
 	}
