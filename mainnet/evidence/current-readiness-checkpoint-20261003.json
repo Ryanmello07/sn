@@ -141,7 +141,9 @@
     "native-engine-lifetime-failure-20261004.json": "57cadcf24efa526df4c013fb05116804d192fc78f911570d09b4e3a4d8e183b8",
     "native-finite66-terminal-independent-review-20261004.json": "b03c8ca70037badd8dbf90cfa02af610b1b5de831dc3643004ecd4cdd8ddc58b",
     "rust-output-classifier-integration-20261004.json": "397e30b9dc08ffbdd6f5a7afa3d756d989ba60ac6bdeaa10f49e923c3ec6c98e",
-    "parallel-qualification-launch-20261004.json": "6558116a9f7fff3626a808d4b01c5f6d4b31b35ef35341f3f4a51019a68106b4"
+    "parallel-qualification-launch-20261004.json": "6558116a9f7fff3626a808d4b01c5f6d4b31b35ef35341f3f4a51019a68106b4",
+    "model-c2b-normal-independent-census-20261004.json": "a4a08ff372a1b6436a5cf54c20376357c8dcc347e08c92f2dc98293c1bb2a90f",
+    "composed-source-input-readback-20261004.json": "aa9bfbbf118ca2aab6945b69248edabae1e72a7043de7b5edb15bd91fd0d71c7"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
