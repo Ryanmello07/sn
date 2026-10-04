@@ -174,7 +174,10 @@
     "fee-retention6580-source-root-review-20261004.json": "455d5df60ffa7f97b417eacaa138924d80af913bf9abcbf9330d0435770934e4",
     "miner-manager-composition549-source-root-review-20261004.json": "01553d3648dbbfe05ae488b35cb1aa8b6042e0907bd24b9d37c64bc064c47198",
     "fee-revision3e7-source-root-review-20261004.json": "dba17328e3cfc45c40f84e34ea5183dc512044600ddf408fd3e2ad7b5b5c469c",
-    "second-short-go-body-resource-root-review-20261004.json": "ba3af5f27c839ee129bda99dfd6dd9ee08f1cc9078609957512b9c7eb1b03166"
+    "second-short-go-body-resource-root-review-20261004.json": "ba3af5f27c839ee129bda99dfd6dd9ee08f1cc9078609957512b9c7eb1b03166",
+    "server1709-complete-model-body-root-review-20261004.json": "6d50c84803b4586dda4c7130fee293054ced5a3c72135c107feb9044c3f5ee72",
+    "runtime-observation6fa-six-compiles-root-review-20261004.json": "728a2f4687b2a20f766b8e1eefea683ae4abfab9ab2bffadd7b07ae0afe28198",
+    "runtime-observation6fa-validator-normal-root-review-20261004.json": "60a8eda5ee5ef8624a012768c0aa323b2413f20b7fbf608dd0137e14599864ef"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -275,9 +278,9 @@
     },
     {
       "closed": false,
-      "evidence": "server1709-complete-model-live-root-review-20261004.json",
+      "evidence": "server1709-complete-model-body-root-review-20261004.json",
       "requirement": "PH-16",
-      "status": "Server5f full model retains1,507 passes/17 failures/11 skips. Corrected405 targeted body scope passes eleven roots per normal/race mode, vet and four intended fixture-control failures, with original Redis teardown telemetry gap retained. Combined a2 fails compilation before any root; corrected1709 passes six-package compilation and its complete model body is active on SN663/Coread6. Preserve successful bodies and report original gaps/skips separately. Complete-suite terminal, skipped-input follow-ups and deployed cutoff adoption remain."
+      "status": "Corrected Server1709 complete model body on SN663/Coread6 finishes1,529PASS11SKIP0FAIL/all1540 roots terminal, test and cleanup exit0. Original post-body PostgreSQL lifecycle telemetry gap remains/resourcequalifiedfalse. Earlier5f/405/a2 failures and scoped successes retained. Skipped-input/auto_explain/current-source-contract followups, changed non-model packages, final release and deployed cutoff adoption remain."
     },
     {
       "closed": false,
@@ -287,9 +290,9 @@
     },
     {
       "closed": false,
-      "evidence": "runtime-transport-original-normal-root-review-20261004.json",
+      "evidence": "runtime-observation6fa-validator-normal-root-review-20261004.json",
       "requirement": "PH-18",
-      "status": "Transport-generation successor f3 compiles three packages and completes normal and race33-root scopes each at32 pass/one actual reconnect failure/no skips. Implicit reconnect invalidates the attempted proof; automatic whole-read reobservation through actual public owners and original pinned budgets is being implemented. Both original f3 results remain retained. Observation-cause successor f89 is source-reviewed; generic all-role capability/current composition remains."
+      "status": "Original f3 normal/race each32PASS1FAIL remain. Exact6fa sixpackages compile and validator normal10/10 passes, including actual WebSocket whole-read recovery with original authority/budget. Remaining40 roots, validator race, six vets and12causal controls remain; final all-role composition unproved."
     },
     {
       "closed": false,
