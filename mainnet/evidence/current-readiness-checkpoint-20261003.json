@@ -195,7 +195,8 @@
     "principal-dc1-rust-controls-root-review-20261004.json": "7a14c299599211bd097a622a9b66eb13113093aeb4aa3c208838e066ad6470c3",
     "principal-dc1-go-fd4-operational-root-adoption-20261004.json": "9d7001e824aae2f590ce8a832ed60d06abe7d735435d74f892e87ecddd5ab268",
     "principal-fixture8d3-source-root-review-20261004.json": "dca14fe8ad1ee4fbef358aea160e95f8a9ce9b14a47b833fa4b5db4137cdae5c",
-    "principal-dc1-go-fd4-operational-adoption-v2-20261004.json": "6b1136f00f368e308485aee924bfe8497c8f08fd53381c441ada4d1f7ddf9756"
+    "principal-dc1-go-fd4-operational-adoption-v2-20261004.json": "6b1136f00f368e308485aee924bfe8497c8f08fd53381c441ada4d1f7ddf9756",
+    "principal-fixture8d3-incremental-stage-root-review-20261004.json": "3bb030dd1eea7b9910949c77b664f88d845ff0cfffbc949bb0fac96808bf6ffe"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
