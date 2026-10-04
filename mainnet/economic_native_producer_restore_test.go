@@ -480,7 +480,7 @@ func TestNativeProducerRestorePublicPendingJobCannotReplaceCapturedInput(t *test
 	if err := decodePlanJson([]byte(f.combined.files[1][filepath.Join(directory, "job.json")]), &job); err != nil {
 		t.Fatal(err)
 	}
-	job.ParentHash = "0x" + strings.Repeat("e", 64)
+	job.ParentHash[0] ^= 0x80
 	jobRaw, err := json.Marshal(job)
 	if err != nil {
 		t.Fatal(err)

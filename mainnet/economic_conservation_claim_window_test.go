@@ -40,7 +40,8 @@ func newEconomicConservationClaimWindowFixture(t *testing.T, full bool, unknownP
 // checked fixture vault event. All127 unresolved expectations remain unchanged.
 func economicConservationClaimWindowTestNext(t *testing.T, f *economicConservationArchiveFixture) monitorClaimPolicy {
 	t.Helper()
-	heads, err := f.source.state(t).claimHeads(f.source.policy)
+	state := f.source.state(t)
+	heads, err := state.claimHeads(f.source.policy)
 	if err != nil || len(heads) != 1 {
 		t.Fatal("current original Claim policy unavailable", err)
 	}
@@ -332,7 +333,7 @@ func TestEconomicConservationClaimWindowCountsResidentPredecessorBeforeEffects(t
 	f := newEconomicConservationClaimWindowFixture(t, true, false)
 	state := f.source.state(t)
 	view := newEconomicConservationArchiveView(f.source.policy.initialResources())
-	if err := view.setClaimBasis(f.source.policy, state, f.request.Original); err != nil {
+	if err := view.setClaimBasis(f.source.policy, &state, f.request.Original); err != nil {
 		t.Fatal(err)
 	}
 	if view.claimBasisEntries < 128 || view.claimBasisBytes < 128*256 {
@@ -345,7 +346,7 @@ func TestEconomicConservationClaimWindowCountsResidentPredecessorBeforeEffects(t
 	entries, bytes := view.entries, view.bytes
 	view.resources.IndexBytes = 2 * (bytes + view.claimBasisBytes)
 	view.resources.IndexEntries = 2 * (entries + view.claimBasisEntries)
-	if err := view.setClaimBasis(f.source.policy, state, f.request.Original); err != nil {
+	if err := view.setClaimBasis(f.source.policy, &state, f.request.Original); err != nil {
 		t.Fatal("exact populated Claim capacity was refused", err)
 	}
 	original = view.claimBasis
@@ -354,12 +355,12 @@ func TestEconomicConservationClaimWindowCountsResidentPredecessorBeforeEffects(t
 	}
 	view.resources.IndexEntries += 2
 	view.resources.IndexBytes--
-	if err := view.setClaimBasis(f.source.policy, state, f.request.Original); err == nil || view.claimBasis != original {
+	if err := view.setClaimBasis(f.source.policy, &state, f.request.Original); err == nil || view.claimBasis != original {
 		t.Fatal("Claim predecessor ignored the exact byte bound or changed admitted basis", err)
 	}
 	view.resources.IndexBytes++
 	view.resources.IndexEntries -= 3
-	if err := view.setClaimBasis(f.source.policy, state, f.request.Original); err == nil || view.claimBasis != original {
+	if err := view.setClaimBasis(f.source.policy, &state, f.request.Original); err == nil || view.claimBasis != original {
 		t.Fatal("Claim predecessor ignored the exact entry bound or changed admitted basis", err)
 	}
 }
