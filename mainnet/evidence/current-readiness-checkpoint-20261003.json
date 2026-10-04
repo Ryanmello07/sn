@@ -273,7 +273,8 @@
     "entitlemente51-partial-abi-tuple-fixture-finding-20261004.json": "0ac332c7ecd7c7220612fc7e8994afc2caea57b30e0453ac47e6eaf6432755c2",
     "coordinator-tuple-ab48-source-root-review-20261004.json": "ffab51360735d44fc33da289a94123bc0209201e7e0c2855234dba31c420cd70",
     "provider-closed-work-production-source-review-20261004.json": "d4c007e04d2f662243cb561a2fe300244c9e76d5a4fca59a09f3432b8b7a7c0e",
-    "close-report-dropped-identity-source-finding-20261004.json": "30adc86a63f77fbcaf3902b75420b3b4a32cbce211e2154086084ec68fa3ed9c"
+    "close-report-dropped-identity-source-finding-20261004.json": "30adc86a63f77fbcaf3902b75420b3b4a32cbce211e2154086084ec68fa3ed9c",
+    "server5b-selected-model-runner-root-review-20261004.json": "0ccd60fb64169baf1336ea38a097b9d2a6e0f282d890c137bc122fea0ea00fc5"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
