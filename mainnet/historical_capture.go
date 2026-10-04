@@ -150,9 +150,8 @@ func runHistoricalCapture(ctx context.Context, request historicalCaptureRequest,
 		}
 	}()
 	maximumReport, _, _ := historicalCaptureLimits(input.ObservationProfile)
-	if input.PrincipalEffects {
-		maximumReport += 2 * historicalPrincipalReportLimit
-	}
+	// The matching Rust profile caps the complete serialized capture, including
+	// both principal boundaries. Replay-only additions do not enlarge this cap.
 	output, err := runHistoricalProofWorker(owner, cancel, historicalProofWorkerRequest{Engine: request.Engine, Input: raw, Directory: filepath.Dir(request.Input.Path), MaximumReport: maximumReport, Nodes: nodes, Feed: request.Feed}, hooks)
 	if err != nil {
 		return nil, err

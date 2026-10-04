@@ -257,10 +257,11 @@ func TestEconomicFundingRefusedFeeCandidateCannotMutateOriginalIndex(t *testing.
 	entries, retainedBytes := held.entries, held.bytes
 	captured, accepted, paid := held.funding.captured, held.funding.accepted, held.funding.paid
 	captureCount, claimCount, paymentCount := held.funding.captureCount, held.funding.claimCount, held.funding.paymentCount
-	next := f.source.policy.Claims[0]
-	next.FreshnessSeconds++
+	// Epoch one now has a matched original receipt and can retire. A later
+	// expectation must advance its original high-water mark, never reuse it.
+	next := economicConservationClaimWindowTestNext(t, f)
 	proposal, code, issue := economicConservationClaimWindowTestPropose(t, f, next, monitorReadDigest([]byte("synthetic isolated funding Claim adoption")))
-	if code != 0 {
+	if code != 0 || len(proposal.Window.Retired) != 1 || proposal.Window.Retired[0].Epoch != 1 || proposal.Window.HighestEpoch != 2 || len(proposal.Window.Next.Epochs) != 1 || proposal.Window.Next.Epochs[0].Epoch != 2 {
 		t.Fatal("candidate isolation original Claim proposal", code, issue)
 	}
 	economicConservationClaimWindowTestSign(t, &proposal.Window)

@@ -144,7 +144,7 @@ func economicCaptureExecuteContractSequence(t *testing.T, fixture *monitorEvmFix
 	contract := fixture.contract
 	var creation []byte
 	for _, artifact := range evmTestRelease(t).Artifacts {
-		if artifact.Name == "STSettlementVault" {
+		if artifact.Name == "SettlementVault" {
 			creation = common.FromHex(artifact.Creation)
 		}
 	}
