@@ -147,7 +147,7 @@ func TestEconomicConservationInitialClaimCensusRequiresActualObservation(t *test
 	before := source.claimReads.Load()
 	observeEconomicConservationTestClaims(t, t.Context(), source, state)
 	state.ContentHash = state.hash()
-	if err := state.validate(source.policy); err != nil || source.claimReads.Load()-before != int64(len(source.policy.Claims)) || len(state.ClaimStates[0].Epochs) != len(source.policy.Claims[0].Epochs) {
+	if err := state.validate(source.policy); err != nil || source.claimReads.Load()-before != uint64(len(source.policy.Claims)) || len(state.ClaimStates[0].Epochs) != len(source.policy.Claims[0].Epochs) {
 		t.Fatal("actual original HTTP observation did not establish bounded Claim census", err)
 	}
 }
