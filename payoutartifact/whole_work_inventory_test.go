@@ -200,6 +200,8 @@ func TestWholeWorkMissingOwnerAndIncompleteCutRemainUnknown(t *testing.T) {
 
 func TestWholeWorkExpectedRosterCannotBeSelectedByArtifactOrReturnedRows(t *testing.T) {
 	fixture := newWholeWorkTestFixture(t)
+	fixture.authorityKey, _ = crypto.HexToECDSA("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	fixture.signAuthority(t)
 	fixture.expected.AuthoritySigner = fixture.artifact.Signer
 	if _, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected); !errors.Is(err, ErrClosedWorkIntegrity) {
 		t.Fatal("publisher authorized its own roster", err)
