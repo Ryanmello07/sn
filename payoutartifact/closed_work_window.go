@@ -34,12 +34,13 @@ type ClosedWorkWindow struct {
 // Only an independently read original epoch boundary may populate this input.
 // No boolean or artifact-supplied assertion can promote it to clock authority.
 type ClosedWorkWindowClock struct {
-	Start       Boundary  `json:"start"`
-	End         Boundary  `json:"end"`
-	StartTime   time.Time `json:"start_time"`
-	EndTime     time.Time `json:"end_time"`
-	StartHeader []byte    `json:"start_header,omitempty"`
-	EndHeader   []byte    `json:"end_header,omitempty"`
+	HeaderProfile string    `json:"header_profile,omitempty"`
+	Start         Boundary  `json:"start"`
+	End           Boundary  `json:"end"`
+	StartTime     time.Time `json:"start_time"`
+	EndTime       time.Time `json:"end_time"`
+	StartHeader   []byte    `json:"start_header,omitempty"`
+	EndHeader     []byte    `json:"end_header,omitempty"`
 }
 
 // Reconstruct timestamps from exact header bytes whose hashes are the original
@@ -57,7 +58,25 @@ func (self *ClosedWorkWindowClock) matches(ctx context.Context, artifact *Artifa
 			return false
 		}
 		var header types.Header
-		if rlp.DecodeBytes(original.raw, &header) != nil || header.Number == nil || !header.Number.IsUint64() || header.Number.Uint64() != original.boundary.Number || header.Hash().Hex() != original.boundary.Hash || header.Time > math.MaxInt64 || !time.Unix(int64(header.Time), 0).UTC().Equal(original.clock) {
+		if rlp.DecodeBytes(original.raw, &header) != nil || header.Number == nil || !header.Number.IsUint64() || header.Number.Uint64() != original.boundary.Number || header.Hash().Hex() != original.boundary.Hash {
+			return false
+		}
+		seconds := header.Time
+		switch self.HeaderProfile {
+		case "":
+		case FrontierWindowClockProfile:
+			content, rest, err := rlp.SplitList(original.raw)
+			count, countErr := rlp.CountValues(content)
+			if err != nil || countErr != nil || len(rest) != 0 || count != 15 {
+				return false
+			}
+			// The existing epoch policy uses the public JSON seconds projection.
+			// Raw Frontier stores milliseconds; their exact remainder stays hashed.
+			seconds /= 1000
+		default:
+			return false
+		}
+		if seconds > math.MaxInt64 || !time.Unix(int64(seconds), 0).UTC().Equal(original.clock) {
 			return false
 		}
 	}

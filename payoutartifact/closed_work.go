@@ -42,23 +42,24 @@ type ClosedWorkRecord struct {
 // artifact. Count is checked, but is not proof that a dishonest source omitted no
 // database rows; independently trusted provenance remains a separate obligation.
 type ClosedWorkCensus struct {
-	Schema            string             `json:"schema"`
-	DeploymentId      string             `json:"deployment_id"`
-	ChainId           uint64             `json:"chain_id"`
-	GenesisHash       string             `json:"genesis_hash"`
-	Netuid            uint16             `json:"netuid"`
-	Coordinator       common.Address     `json:"coordinator"`
-	SettlementVault   common.Address     `json:"settlement_vault"`
-	Epoch             uint64             `json:"epoch"`
-	NoId              uint64             `json:"no_id"`
-	PolicyHash        string             `json:"policy_hash"`
-	Start             Boundary           `json:"start"`
-	End               Boundary           `json:"end"`
-	WindowStart       string             `json:"window_start_utc"`
-	WindowEnd         string             `json:"window_end_utc"`
-	EarningPolicyHash string             `json:"earning_policy_sha256,omitempty"`
-	Count             uint64             `json:"contract_count"`
-	Records           []ClosedWorkRecord `json:"records"`
+	WholeInventory    *WholeWorkInventory `json:"whole_inventory,omitempty"`
+	Schema            string              `json:"schema"`
+	DeploymentId      string              `json:"deployment_id"`
+	ChainId           uint64              `json:"chain_id"`
+	GenesisHash       string              `json:"genesis_hash"`
+	Netuid            uint16              `json:"netuid"`
+	Coordinator       common.Address      `json:"coordinator"`
+	SettlementVault   common.Address      `json:"settlement_vault"`
+	Epoch             uint64              `json:"epoch"`
+	NoId              uint64              `json:"no_id"`
+	PolicyHash        string              `json:"policy_hash"`
+	Start             Boundary            `json:"start"`
+	End               Boundary            `json:"end"`
+	WindowStart       string              `json:"window_start_utc"`
+	WindowEnd         string              `json:"window_end_utc"`
+	EarningPolicyHash string              `json:"earning_policy_sha256,omitempty"`
+	Count             uint64              `json:"contract_count"`
+	Records           []ClosedWorkRecord  `json:"records"`
 }
 
 // These derived facts intentionally cannot assert full authenticated provider
@@ -90,6 +91,11 @@ func cloneClosedWork(ctx context.Context, census *ClosedWorkCensus) (*ClosedWork
 		return nil, ErrClosedWorkCapacity
 	}
 	copy := *census
+	wholeInventory, err := cloneWholeWorkInventory(ctx, census.WholeInventory)
+	if err != nil {
+		return nil, err
+	}
+	copy.WholeInventory = wholeInventory
 	copy.Records = make([]ClosedWorkRecord, len(census.Records))
 	if census.Records == nil {
 		copy.Records = nil

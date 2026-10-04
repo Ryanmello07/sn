@@ -32,6 +32,7 @@ func inventoryArtifact(t *testing.T) (*Artifact, *ecdsa.PrivateKey) {
 		reports := ClosedWorkReports{Schema: ClosedWorkInventoryReportsSchema, Count: 4}
 		for party := 0; party < 2; party++ {
 			var previous [32]byte
+			var previousRegistration [32]byte
 			for step := 0; step < 2; step++ {
 				client := [16]byte{byte(party + 1)}
 				id := [16]byte{byte(index + 20), byte(party + 1), byte(step + 1)}
@@ -54,11 +55,12 @@ func inventoryArtifact(t *testing.T) (*Artifact, *ecdsa.PrivateKey) {
 				}
 				wire, _ := inventory.Bytes()
 				previous = sha256.Sum256(wire)
-				registration := protocol.ClientKeyRegistration{Domain: domain, ClientID: client, NetworkID: [16]byte{byte((party + 1) * 10)}, Generation: uint64(step + 1), Present: true, PublicKey: original.PublicKey, EffectiveBoundary: protocol.ClientKeyEffectiveBoundary{Block: artifact.Start.Number + 1, Hash: [32]byte{byte(20 + step)}, Epoch: artifact.Epoch}}
+				registration := protocol.ClientKeyRegistration{Domain: domain, ClientID: client, NetworkID: [16]byte{byte((party + 1) * 10)}, Generation: uint64(step + 1), PreviousHash: previousRegistration, Present: true, PublicKey: original.PublicKey, EffectiveBoundary: protocol.ClientKeyEffectiveBoundary{Block: artifact.Start.Number + 1, Hash: [32]byte{byte(20 + step)}, Epoch: artifact.Epoch}}
 				if err := protocol.SignClientKeyRegistration(&registration, root); err != nil {
 					t.Fatal(err)
 				}
 				registered, _ := registration.Bytes()
+				previousRegistration = sha256.Sum256(registered)
 				idText := func(id [16]byte) string {
 					return fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:])
 				}

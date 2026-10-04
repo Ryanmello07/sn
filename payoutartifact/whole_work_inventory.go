@@ -1,0 +1,395 @@
+// Whole contract coverage is reconstructed from independently expected SDK
+// generations and both original cuts, then joined with actual report chains.
+package payoutartifact
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"sort"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/urfoundation/sn/protocol"
+	coreprotocol "github.com/urnetwork/connect/protocol"
+)
+
+// Each owner contributes its own exact original; unioning identities alone
+// cannot conceal a missing source, omitted SDK or substituted reservation.
+type wholeWorkContract struct {
+	source      [16]byte
+	destination [16]byte
+	stored      []byte
+	active      bool
+	ends        map[[16]byte]coreprotocol.OriginalWorkContract
+	starts      map[[16]byte]coreprotocol.OriginalWorkContract
+}
+
+// Embedded optional evidence retains the old artifact's signed omission form.
+func VerifyWholeWorkInventory(ctx context.Context, artifact *Artifact, expected WholeWorkExpectation) (*VerifiedWholeWorkInventory, error) {
+	var inventory *WholeWorkInventory
+	if artifact != nil && artifact.ClosedWork != nil {
+		inventory = artifact.ClosedWork.WholeInventory
+	}
+	return VerifyWholeWorkInventoryWithWitness(ctx, artifact, inventory, expected)
+}
+
+// A companion witness is separately signed source evidence. The original
+// artifact is verified unchanged; adding evidence never rewrites its signature.
+func VerifyWholeWorkInventoryWithWitness(ctx context.Context, artifact *Artifact, inventory *WholeWorkInventory, expected WholeWorkExpectation) (*VerifiedWholeWorkInventory, error) {
+	if ctx == nil {
+		return nil, errors.New("whole-work verification requires an owner")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if inventory == nil || inventory.Schema != WholeWorkInventorySchema || artifact == nil || artifact.ClosedWork == nil || expected.AuthoritySigner == (common.Address{}) || expected.ClientKeyRootSigner == (common.Address{}) {
+		return nil, ErrClosedWorkUnavailable
+	}
+	if expected.AuthoritySigner == artifact.Signer {
+		return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("payout publisher cannot select complete SDK authority"))
+	}
+	owned, err := cloneWholeWorkInventory(ctx, inventory)
+	if err != nil {
+		return nil, err
+	}
+	authority, err := DecodeWholeWorkAuthority(ctx, owned.Authority, expected.AuthoritySigner)
+	if err != nil {
+		return nil, err
+	}
+	if authority.ExpectedProviders == nil {
+		return nil, ErrClosedWorkUnavailable
+	}
+	authorityHash := wholeWorkBytesHash(owned.Authority)
+	inventoryHash := SnapshotHash(owned)
+	if expected.AuthorityHash != "" && (!canonicalClosedWorkDigest(expected.AuthorityHash) || expected.AuthorityHash != authorityHash) {
+		return nil, ErrClosedWorkIntegrity
+	}
+	domain, err := ClosedWorkReportDomain(artifact)
+	if err != nil {
+		return nil, err
+	}
+	if authority.Domain != domain || authority.Epoch != artifact.Epoch || authority.Start != artifact.Start || authority.End != artifact.End {
+		return nil, ErrClosedWorkIntegrity
+	}
+	if owned.Clock == nil || owned.Clock.HeaderProfile != authority.ClockProfile {
+		return nil, ErrClosedWorkUnavailable
+	}
+	closed, err := VerifyClosedWorkReports(ctx, artifact, expected.ClientKeyRootSigner)
+	if err != nil {
+		return nil, err
+	}
+	window, err := VerifyClosedWorkWindow(ctx, artifact, owned.Window, owned.Clock)
+	if err != nil {
+		return nil, err
+	}
+	if !window.EpochClockMatched {
+		return nil, ErrClosedWorkUnavailable
+	}
+	if closed.Window != nil && SnapshotHash(closed.Window) != SnapshotHash(owned.Window) {
+		return nil, ErrClosedWorkIntegrity
+	}
+	if closed.CompleteReportInventories != artifact.ClosedWork.Count || closed.AmountJoins != artifact.ClosedWork.Count {
+		return nil, ErrClosedWorkUnavailable
+	}
+	if owned.Owners == nil || len(owned.Owners) != len(authority.Owners) {
+		return nil, ErrClosedWorkUnavailable
+	}
+	domainHash, _ := domain.Digest()
+	ownerKVs := make(map[[16]byte]WholeWorkOwner, len(authority.Owners))
+	contracts := map[[16]byte]*wholeWorkContract{}
+	for index, expectedOwner := range authority.Owners {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		ownerKVs[expectedOwner.ClientId] = expectedOwner
+		originals := owned.Owners[index]
+		var cuts [2]coreprotocol.OriginalWorkCut
+		for side, original := range []struct {
+			request, cut []byte
+			kind         string
+			boundary     Boundary
+		}{{request: originals.StartRequest, cut: originals.Start, kind: "start", boundary: artifact.Start}, {request: originals.EndRequest, cut: originals.End, kind: "end", boundary: artifact.End}} {
+			if len(original.request) == 0 || len(original.cut) == 0 {
+				return nil, ErrClosedWorkUnavailable
+			}
+			request, err := coreprotocol.DecodeOriginalWorkRequest(original.request, authority.RequestPublicKey)
+			if err != nil {
+				return nil, errors.Join(ErrClosedWorkIntegrity, err)
+			}
+			cut, err := coreprotocol.DecodeOriginalWorkCut(ctx, original.cut)
+			if err != nil {
+				return nil, errors.Join(ErrClosedWorkIntegrity, err)
+			}
+			hash, e := hex.DecodeString(strings.TrimPrefix(original.boundary.Hash, "0x"))
+			if e != nil || len(hash) != 32 || !request.Matches(cut) || request.Kind != original.kind || cut.DomainHash != domainHash || cut.ClientId != expectedOwner.ClientId || cut.Generation != expectedOwner.Generation || cut.PublicKey != expectedOwner.PublicKey || cut.Epoch != artifact.Epoch || cut.Block != original.boundary.Number || cut.BlockHash != [32]byte(hash) {
+				return nil, ErrClosedWorkIntegrity
+			}
+			if !cut.Complete {
+				return nil, ErrClosedWorkUnavailable
+			}
+			cuts[side] = cut
+		}
+		if cuts[1].Revision < cuts[0].Revision {
+			return nil, ErrClosedWorkIntegrity
+		}
+		if cuts[1].Revision == cuts[0].Revision && SnapshotHash(cuts[1].Contracts) != SnapshotHash(cuts[0].Contracts) {
+			return nil, ErrClosedWorkIntegrity
+		}
+		starts := make(map[[16]byte]coreprotocol.OriginalWorkContract, len(cuts[0].Contracts))
+		for _, record := range cuts[0].Contracts {
+			starts[record.ContractId] = record
+		}
+		for _, record := range cuts[1].Contracts {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			source, destination, err := record.Parties()
+			if err != nil {
+				return nil, errors.Join(ErrClosedWorkIntegrity, err)
+			}
+			active := true
+			if previous, exists := starts[record.ContractId]; exists {
+				if !bytes.Equal(previous.StoredContract, record.StoredContract) {
+					return nil, ErrClosedWorkIntegrity
+				}
+				if len(previous.LatestInventory) != 0 {
+					before, _ := coreprotocol.DecodeOriginalCloseInventory(previous.LatestInventory)
+					after, e := coreprotocol.DecodeOriginalCloseInventory(record.LatestInventory)
+					if e != nil || after.Sequence < before.Sequence || after.CumulativeAckedBytes < before.CumulativeAckedBytes || (before.Terminal || after.Sequence == before.Sequence) && !bytes.Equal(previous.LatestInventory, record.LatestInventory) {
+						return nil, ErrClosedWorkIntegrity
+					}
+					// A late start capture does not date an already terminal contract.
+					// Only independently approved prior context may exclude it below.
+				}
+				delete(starts, record.ContractId)
+			}
+			contract, exists := contracts[record.ContractId]
+			if !exists {
+				if len(contracts) >= MaxClosedWorkRecords {
+					return nil, ErrClosedWorkCapacity
+				}
+				contract = &wholeWorkContract{source: source, destination: destination, stored: record.StoredContract, ends: map[[16]byte]coreprotocol.OriginalWorkContract{}, starts: map[[16]byte]coreprotocol.OriginalWorkContract{}}
+				contracts[record.ContractId] = contract
+			} else if !bytes.Equal(contract.stored, record.StoredContract) {
+				return nil, ErrClosedWorkIntegrity
+			}
+			contract.active = contract.active || active
+			contract.ends[expectedOwner.ClientId] = record
+		}
+		for _, record := range cuts[0].Contracts {
+			if contract := contracts[record.ContractId]; contract != nil {
+				contract.starts[expectedOwner.ClientId] = record
+			}
+		}
+		if len(starts) != 0 {
+			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("SDK end cut omitted retained contract"))
+		}
+	}
+	if len(expected.PriorContracts) > MaxClosedWorkRecords {
+		return nil, ErrClosedWorkCapacity
+	}
+	expectedPriorKVs := make(map[[16]byte]WholeWorkPriorContract, len(expected.PriorContracts))
+	for _, prior := range expected.PriorContracts {
+		if _, exists := expectedPriorKVs[prior.ContractId]; exists {
+			return nil, ErrClosedWorkIntegrity
+		}
+		expectedPriorKVs[prior.ContractId] = prior
+	}
+	reconciled := make([]WholeWorkPriorContract, 0, len(contracts))
+	for _, prior := range authority.PriorContracts {
+		contract, ok := contracts[prior.ContractId]
+		if !ok || sha256.Sum256(contract.stored) != prior.StoredContractHash {
+			return nil, ErrClosedWorkIntegrity
+		}
+		for _, party := range []struct {
+			id   [16]byte
+			hash [32]byte
+		}{{id: contract.source, hash: prior.SourceInventoryHash}, {id: contract.destination, hash: prior.DestinationInventoryHash}} {
+			start, startOk := contract.starts[party.id]
+			end, endOk := contract.ends[party.id]
+			if party.hash == ([32]byte{}) {
+				if startOk || endOk {
+					return nil, ErrClosedWorkIntegrity
+				}
+				continue
+			}
+			if !startOk || !endOk || sha256.Sum256(start.LatestInventory) != party.hash || sha256.Sum256(end.LatestInventory) != party.hash {
+				return nil, ErrClosedWorkIntegrity
+			}
+			head, err := coreprotocol.DecodeOriginalCloseInventory(end.LatestInventory)
+			if err != nil || !head.Terminal || prior.DestinationInventoryHash == ([32]byte{}) && head.CumulativeAckedBytes != 0 {
+				return nil, ErrClosedWorkIntegrity
+			}
+		}
+		admitted, exists := expectedPriorKVs[prior.ContractId]
+		if !exists {
+			return nil, ErrClosedWorkUnavailable
+		}
+		if admitted != prior {
+			return nil, ErrClosedWorkIntegrity
+		}
+		contract.active = false
+		reconciled = append(reconciled, prior)
+	}
+	rows := make(map[[16]byte]ClosedWorkWindowRecord, len(owned.Window.Records))
+	for _, row := range owned.Window.Records {
+		id, _ := closedWorkId(row.ContractId)
+		rows[id] = row
+	}
+	credited := make(map[[16]byte]ClosedWorkRecord, len(artifact.ClosedWork.Records))
+	for _, row := range artifact.ClosedWork.Records {
+		credited[row.ContractId] = row
+	}
+	for id, contract := range contracts {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if !contract.active {
+			continue
+		}
+		if _, ok := ownerKVs[contract.source]; !ok {
+			return nil, ErrClosedWorkIntegrity
+		}
+		if _, ok := ownerKVs[contract.destination]; !ok {
+			return nil, ErrClosedWorkIntegrity
+		}
+		source, sourcePresent := contract.ends[contract.source]
+		if !sourcePresent {
+			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("whole work lacks its expected source owner"))
+		}
+		row, exists := rows[id]
+		if !exists {
+			if start, known := contract.starts[contract.source]; known {
+				if head, err := coreprotocol.DecodeOriginalCloseInventory(start.LatestInventory); err == nil && head.Terminal {
+					return nil, ErrClosedWorkUnavailable
+				}
+			}
+			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("window omitted independently inventoried contract"))
+		}
+		destination, destinationPresent := contract.ends[contract.destination]
+		sourceHead, sourceErr := coreprotocol.DecodeOriginalCloseInventory(source.LatestInventory)
+		destinationHead, destinationErr := coreprotocol.DecodeOriginalCloseInventory(destination.LatestInventory)
+		switch row.Disposition {
+		case "credited":
+			if sourceErr != nil || destinationErr != nil || !sourceHead.Terminal || !destinationHead.Terminal {
+				return nil, ErrClosedWorkUnavailable
+			}
+			var reports ClosedWorkReports
+			if err := json.Unmarshal(credited[id].OriginalReports, &reports); err != nil {
+				return nil, ErrClosedWorkIntegrity
+			}
+			joined := map[[16]byte]bool{}
+			for _, report := range reports.Reports {
+				if report.Checkpoint == nil || *report.Checkpoint {
+					continue
+				}
+				client, err := closedWorkId(report.ClientId)
+				original, ok := contract.ends[client]
+				if err != nil || !ok || !bytes.Equal(original.LatestInventory, report.Inventory) || report.Party == "source" && client != contract.source || report.Party == "destination" && client != contract.destination {
+					return nil, ErrClosedWorkIntegrity
+				}
+				joined[client] = true
+			}
+			if !joined[contract.source] || !joined[contract.destination] {
+				return nil, ErrClosedWorkUnavailable
+			}
+		case "canceled":
+			if sourceErr != nil || !sourceHead.Terminal || sourceHead.CumulativeAckedBytes != 0 {
+				return nil, ErrClosedWorkUnavailable
+			}
+			if destinationPresent && (destinationErr != nil || !destinationHead.Terminal || destinationHead.CumulativeAckedBytes != 0) {
+				return nil, ErrClosedWorkUnavailable
+			}
+		case "open":
+			if sourceErr == nil && sourceHead.Terminal && destinationErr == nil && destinationHead.Terminal {
+				return nil, ErrClosedWorkUnavailable
+			}
+		case "unassigned_canceled":
+			return nil, ErrClosedWorkUnavailable
+		default:
+			return nil, ErrClosedWorkIntegrity
+		}
+		if row.Disposition == "credited" || row.Disposition == "canceled" {
+			checkpoint := WholeWorkPriorContract{ContractId: id, ReconciledEpoch: artifact.Epoch, InventoryHash: inventoryHash, StoredContractHash: sha256.Sum256(contract.stored), SourceInventoryHash: sha256.Sum256(source.LatestInventory)}
+			if destinationPresent {
+				checkpoint.DestinationInventoryHash = sha256.Sum256(destination.LatestInventory)
+			}
+			reconciled = append(reconciled, checkpoint)
+		}
+		delete(rows, id)
+	}
+	if len(rows) != 0 {
+		return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("window includes work outside the independently complete SDK census"))
+	}
+	providerKVs := map[[16]byte]WholeWorkProvider{}
+	for _, provider := range authority.ExpectedProviders {
+		providerKVs[provider.ClientId] = WholeWorkProvider{ClientId: provider.ClientId, NetworkId: provider.NetworkId, WalletHeadHash: provider.WalletHeadHash, WalletGeneration: provider.WalletGeneration}
+	}
+	for _, row := range artifact.ClosedWork.Records {
+		snapshot, err := decodeClosedWorkSnapshot(row, artifact.Epoch)
+		if err != nil {
+			return nil, err
+		}
+		for _, provider := range *snapshot.Providers {
+			id, _ := closedWorkId(provider.ClientId)
+			network, _ := closedWorkId(provider.NetworkId)
+			owner, ok := ownerKVs[id]
+			if !ok || owner.NetworkId != network {
+				return nil, ErrClosedWorkIntegrity
+			}
+			value, expected := providerKVs[id]
+			if !expected || value.NetworkId != network || uint64(*provider.ByteCount) > ^uint64(0)-value.UsageBytes {
+				return nil, ErrClosedWorkIntegrity
+			}
+			value.UsageBytes += uint64(*provider.ByteCount)
+			providerKVs[id] = value
+		}
+	}
+	providers := make([]WholeWorkProvider, 0, len(providerKVs))
+	for _, provider := range providerKVs {
+		providers = append(providers, provider)
+	}
+	sort.Slice(providers, func(i, j int) bool { return bytes.Compare(providers[i].ClientId[:], providers[j].ClientId[:]) < 0 })
+	sort.Slice(reconciled, func(i, j int) bool {
+		return bytes.Compare(reconciled[i].ContractId[:], reconciled[j].ContractId[:]) < 0
+	})
+	return &VerifiedWholeWorkInventory{Complete: true, Domain: domain, Epoch: artifact.Epoch, Start: artifact.Start, End: artifact.End, AuthorityHash: authorityHash, InventoryHash: inventoryHash, WindowHash: window.Hash, Contracts: window.Credited + window.Canceled + window.Open, Credited: window.Credited, Canceled: window.Canceled, Open: window.Open, ExpectedProviders: providers, ReconciledContracts: reconciled}, ctx.Err()
+}
+
+// Public sidecar reads use a strict bounded grammar before any expensive join.
+func DecodeWholeWorkInventory(ctx context.Context, raw []byte) (*WholeWorkInventory, error) {
+	if ctx == nil {
+		return nil, errors.New("whole-work inventory requires an owner")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 {
+		return nil, ErrClosedWorkUnavailable
+	}
+	if len(raw) > MaxWholeWorkInventoryBytes {
+		return nil, ErrClosedWorkCapacity
+	}
+	if err := protocol.ValidateUniqueJsonKeys(raw); err != nil {
+		return nil, errors.Join(ErrClosedWorkIntegrity, err)
+	}
+	var value WholeWorkInventory
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
+		return nil, errors.Join(ErrClosedWorkIntegrity, err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return nil, ErrClosedWorkIntegrity
+	}
+	if value.Schema != WholeWorkInventorySchema {
+		return nil, ErrClosedWorkUnavailable
+	}
+	return cloneWholeWorkInventory(ctx, &value)
+}
