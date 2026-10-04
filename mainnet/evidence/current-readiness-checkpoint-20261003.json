@@ -229,7 +229,9 @@
     "principal-activationec242-rust-resource-root-review-20261004.json": "e79220ee0d18990fb6070dee8e031d469205d55c4653546fd654054cebc9cc1e",
     "native-adoptionade5-composed-source-root-review-20261004.json": "a9c9328eff171a13a7c4f3f41fc68ae06997c50afdbf2de85d016d34e5489334",
     "native-adoptionade5-rust-terminal-root-review-20261004.json": "fc9f97ef213f9bc58d341f195102e58b6fc41f7af6759db6c23d05795ae1cc00",
-    "yuma-activation-parent-source-finding-20261004.json": "be724e107c4da179913ce24d7f636141ead445d1d4fb668b59e6b1044d26020e"
+    "yuma-activation-parent-source-finding-20261004.json": "be724e107c4da179913ce24d7f636141ead445d1d4fb668b59e6b1044d26020e",
+    "native-yuma-activation79c-source-root-review-20261004.json": "e05e9b6ee0e15c5cc86b2f153dbe7dc2c73d3dcc940c8da1fd22e7354043c545",
+    "native-adoptionade5-rust-controls-operational-root-review-20261004.json": "07ca5fa4f8ee709bb228884e27dd52c312aa30dbd885e481651f87670b09483d"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
