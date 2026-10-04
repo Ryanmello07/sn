@@ -66,3 +66,5 @@ The [35-phase finite mixed batch](mixed-qualification-terminal-20261003.json) is
 The [model sampler preexecution finding](model-sampler-source-finding-20261003.json) retains a test-evidence defect and zero admitted test operations; its correction must preserve the actual full-suite run.
 
 The [model continuation admission](model-continuation-adoption-20261003.json) preserves successful preparation and its failed graph attempt while admitting one narrow retry and the full model invocation. Sampler controls pass only their lightweight scope; no full-suite result or requirement closure is claimed.
+
+The [parallel critical-path readback](parallel-critical-path-readback-20261004.json) verifies Core ac65 scoped qualification and the terminal c2b normal/race results. The original two companion-fixture failures remain; corrected405 and receipt-lineage c16 require their own qualification. No full requirement is closed.
