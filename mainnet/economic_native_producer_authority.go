@@ -20,6 +20,7 @@ const nativeProducerCompletionSchema = "urnetwork-native-execution-completion-v1
 const nativeProducerAuthorityLimit = 1024 * 1024
 const nativeProducerFeeAuthorityLimit = 4 * 1024 * 1024
 const nativeProducerCompletionLimit = 2 * 1024 * 1024
+const nativeProducerFeeCompletionLimit = 4 * 1024 * 1024
 const nativeProducerBoundaryReserve = 512 * 1024 * 1024
 const nativeProducerBoundaryEntries = 4*32768 + 8192 + 128 + 16 + historicalNativeProofNodes
 
@@ -30,6 +31,15 @@ func nativeProducerAuthorityMaximum(fees *nativeFeeCensusPolicy) int {
 		return nativeProducerFeeAuthorityLimit
 	}
 	return nativeProducerAuthorityLimit
+}
+
+// Full original provider generations and fee accounts retain twice their
+// serialized census inside one immutable completion. Legacy owners stay exact.
+func nativeProducerCompletionMaximum(fees *nativeFeeCensusPolicy) int {
+	if fees != nil {
+		return nativeProducerFeeCompletionLimit
+	}
+	return nativeProducerCompletionLimit
 }
 
 // These are separate finite deployment dimensions. Growth needs a separately

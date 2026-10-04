@@ -350,7 +350,7 @@ func validateStorageNativeProducerHistory(ctx context.Context, scope storageNati
 		if err != nil {
 			return err
 		}
-		_, pending, ok := storageNativeProducerMember(path)
+		_, pending, ok := storageNativeProducerMemberFor(path, scope.Policy.Execution.FeeCensus)
 		if !ok {
 			return errors.New("native artifact member has no fixed producer grammar")
 		}

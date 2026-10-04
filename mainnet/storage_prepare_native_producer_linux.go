@@ -122,6 +122,11 @@ func readStorageNativeApproval(ctx context.Context, scope storageNativeProducerS
 // Names select only the producer's existing grammar. Pending files preserve
 // partial writes as unknown bytes; they cannot stand in for completed records.
 func storageNativeProducerMember(path string) (maximum int, pending bool, ok bool) {
+	return storageNativeProducerMemberFor(path, nil)
+}
+
+// The approved original fee scope selects the same frame as live publication.
+func storageNativeProducerMemberFor(path string, fees *nativeFeeCensusPolicy) (maximum int, pending bool, ok bool) {
 	parts := strings.Split(path, "/")
 	if len(parts) == 2 && parts[0] == "nodes" {
 		name := strings.TrimSuffix(parts[1], ".pending")
@@ -144,7 +149,7 @@ func storageNativeProducerMember(path string) (maximum int, pending bool, ok boo
 		case "job.json":
 			return historicalNativeJobLimit, name != parts[1], true
 		case "complete.json":
-			return nativeProducerCompletionLimit, name != parts[1], true
+			return nativeProducerCompletionMaximum(fees), name != parts[1], true
 		}
 		return 0, false, false
 	}
@@ -275,7 +280,7 @@ func planStorageNativeProducerRestore(ctx context.Context, name string, owner du
 				return empty, errors.New("native approval member changed original signed bytes")
 			}
 		} else {
-			maximum, _, recognized := storageNativeProducerMember(entry.Path)
+			maximum, _, recognized := storageNativeProducerMemberFor(entry.Path, scope.Policy.Execution.FeeCensus)
 			if !recognized || entry.Kind != "file" || entry.Mode != 0600 && entry.Mode != 0400 || entry.Size > uint64(maximum) || !planSha256(entry.Sha256) {
 				return empty, errors.New("native artifact member is outside the fixed original grammar or bound")
 			}

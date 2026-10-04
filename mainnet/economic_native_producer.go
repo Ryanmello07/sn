@@ -70,7 +70,7 @@ func openNativeProducerSession(ctx context.Context, policy economicEmissionPolic
 				return nil, err
 			}
 		}
-		raw, err := files.readReference(*retained.Completion, nativeProducerCompletionLimit)
+		raw, err := files.readReference(*retained.Completion, nativeProducerCompletionMaximum(policy.Execution.FeeCensus))
 		if err != nil {
 			return nil, err
 		}
@@ -247,7 +247,7 @@ func (self *nativeProducerSession) observe(ctx context.Context, client *rpcClien
 		return nil, errMonitorEconomicCapacity
 	}
 	directory := fmt.Sprintf("b%010d-%s", block.Boundary.Number, strings.TrimPrefix(block.Boundary.Hash, "0x"))
-	completedRaw, completedErr := self.files.read(filepath.Join(directory, "complete.json"), nativeProducerCompletionLimit)
+	completedRaw, completedErr := self.files.read(filepath.Join(directory, "complete.json"), nativeProducerCompletionMaximum(self.originalPolicy.Execution.FeeCensus))
 	var retained *nativeProducerCompletion
 	if completedErr == nil {
 		var value nativeProducerCompletion
@@ -400,7 +400,7 @@ func (self *nativeProducerSession) observe(ctx context.Context, client *rpcClien
 	if err != nil {
 		return nil, err
 	}
-	completed, err := self.files.publish(filepath.Join(directory, "complete.json"), append(raw, '\n'), nativeProducerCompletionLimit)
+	completed, err := self.files.publish(filepath.Join(directory, "complete.json"), append(raw, '\n'), nativeProducerCompletionMaximum(self.originalPolicy.Execution.FeeCensus))
 	if err != nil {
 		return nil, err
 	}

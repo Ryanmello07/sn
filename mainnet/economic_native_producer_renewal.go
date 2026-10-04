@@ -99,7 +99,7 @@ func (self *nativeProducerSession) verifyRenewalAcknowledgement(ack nativeProduc
 	if ack.Revision != selected.reference || ack.After != review.After || ack.Completed != review.Completed || ack.CompletionChain != review.CompletionChain || ack.Capacity != review.Next.capacity() || ack.FirstCompletion == nil {
 		return errors.Join(errRpcIntegrity, errors.New("native producer acknowledgement changed its original signed renewal"))
 	}
-	raw, err := self.files.readReference(*ack.FirstCompletion, nativeProducerCompletionLimit)
+	raw, err := self.files.readReference(*ack.FirstCompletion, nativeProducerCompletionMaximum(self.originalPolicy.Execution.FeeCensus))
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (self *nativeProducerSession) verifyRenewalAncestor(revision *nativeProduce
 			return err
 		}
 		name := filepath.Join(fmt.Sprintf("b%010d-%s", point.Number, strings.TrimPrefix(point.Hash, "0x")), "complete.json")
-		raw, err := self.files.read(name, nativeProducerCompletionLimit)
+		raw, err := self.files.read(name, nativeProducerCompletionMaximum(self.originalPolicy.Execution.FeeCensus))
 		if err != nil {
 			return err
 		}
