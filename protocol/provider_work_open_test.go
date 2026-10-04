@@ -8,7 +8,6 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
-	"math"
 	"testing"
 )
 
@@ -74,14 +73,12 @@ func TestProviderWorkOpenObservationBindsBoundaryAndIndependentSource(t *testing
 	}
 }
 
-// Invalid physical clocks and unrepresentable SQL boundary identities cannot
-// leave the producer as signed originals. Cancellation returns no receipt.
+// Invalid physical clocks cannot leave the producer as signed originals.
+// Full unsigned boundary identities remain exact, and cancellation publishes none.
 func TestProviderWorkOpenObservationRefusesInvalidClockAndMixedBodies(t *testing.T) {
 	for _, mutate := range []func(*ProviderWorkReceipt){
 		func(v *ProviderWorkReceipt) { v.Open.ReservationHash = [32]byte{} },
-		func(v *ProviderWorkReceipt) { v.Open.Epoch = uint64(math.MaxInt64) + 1 },
 		func(v *ProviderWorkReceipt) { v.Open.Block = 0 },
-		func(v *ProviderWorkReceipt) { v.Open.Block = uint64(math.MaxInt64) + 1 },
 		func(v *ProviderWorkReceipt) { v.Open.BlockHash = [32]byte{} },
 		func(v *ProviderWorkReceipt) { v.Open.BoundaryUnixMicro = 0 },
 		func(v *ProviderWorkReceipt) { v.Open.ObservedAtUnixMicro = v.Open.BoundaryUnixMicro - 1 },
@@ -99,6 +96,10 @@ func TestProviderWorkOpenObservationRefusesInvalidClockAndMixedBodies(t *testing
 	value.Open.ObservedAtUnixMicro = value.Open.BoundaryUnixMicro
 	if _, err := SignProviderWorkReceipt(t.Context(), value, key); err != nil {
 		t.Fatal("exact boundary observation was rejected", err)
+	}
+	value.Open.Epoch, value.Open.Block = ^uint64(0), ^uint64(0)
+	if result, err := SignProviderWorkReceipt(t.Context(), value, key); err != nil || result.Open == nil || result.Open.Epoch != value.Open.Epoch || result.Open.Block != value.Open.Block {
+		t.Fatal("original unsigned boundary identity was narrowed", result, err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

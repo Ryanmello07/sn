@@ -290,7 +290,7 @@ func (self ProviderWorkReceipt) signingBytes(ctx context.Context) ([]byte, error
 	if open := self.Open; open != nil {
 		bodies++
 		ids = append(ids, open.ContractId)
-		if open.ReservationHash == ([32]byte{}) || open.Epoch > math.MaxInt64 || open.Block == 0 || open.Block > math.MaxInt64 || open.BlockHash == ([32]byte{}) || open.BoundaryUnixMicro <= 0 || open.ObservedAtUnixMicro < open.BoundaryUnixMicro {
+		if open.ReservationHash == ([32]byte{}) || open.Block == 0 || open.BlockHash == ([32]byte{}) || open.BoundaryUnixMicro <= 0 || open.ObservedAtUnixMicro < open.BoundaryUnixMicro {
 			return nil, ErrProviderWorkIntegrity
 		}
 	}
